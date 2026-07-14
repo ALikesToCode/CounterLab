@@ -40,6 +40,52 @@ function jsonResponse(payload: unknown, status = 200): Response {
 }
 
 describe("CounterLabApiClient", () => {
+  it("validates configured-but-unproven server capabilities", async () => {
+    const health = {
+      platform: "cloudflare-workers",
+      sample: "available",
+      replay: "available",
+      liveGpt: "configured",
+      liveCodex: "local-runner-required",
+      liveKernel: "local-runner-required",
+      sandbox: "local-runner-required",
+      requestId: "request_1",
+    };
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({ ok: true, data: health }),
+    );
+    const client = new CounterLabApiClient({ fetch: fetcher });
+
+    await expect(client.getHealth()).resolves.toEqual(health);
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/health",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("rejects health responses that claim configured means available", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({
+        ok: true,
+        data: {
+          platform: "cloudflare-workers",
+          sample: "available",
+          replay: "available",
+          liveGpt: "available",
+          liveCodex: "local-runner-required",
+          liveKernel: "local-runner-required",
+          sandbox: "local-runner-required",
+          requestId: "request_1",
+        },
+      }),
+    );
+    const client = new CounterLabApiClient({ fetch: fetcher });
+
+    await expect(client.getHealth()).rejects.toMatchObject({
+      code: "INVALID_API_RESPONSE",
+    });
+  });
+
   it("creates the sample artifact through the validated common envelope", async () => {
     const fetcher = vi.fn<typeof fetch>(async () =>
       jsonResponse({ ok: true, data: artifact }, 201),

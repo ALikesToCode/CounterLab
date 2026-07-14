@@ -174,13 +174,47 @@ test("missing live capabilities are stated without claiming a model call", async
     page.getByRole("heading", { name: "Generate live" }),
   ).toBeVisible();
   await expect(
-    page.getByText(/No live call has been claimed or started/i),
+    page.getByText(/Live reasoning is not configured/i),
   ).toBeVisible();
+  await expect(page.getByText(/No live request has started/i)).toBeVisible();
+  await expect(page.locator("body")).not.toContainText(
+    /OPENAI|GPT-|https?:\/\//i,
+  );
+});
+
+test("configured live reasoning remains unproven until its first request", async ({
+  page,
+}) => {
+  await page.route("**/api/health", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          platform: "cloudflare-workers",
+          sample: "available",
+          replay: "available",
+          liveGpt: "configured",
+          liveCodex: "local-runner-required",
+          liveKernel: "local-runner-required",
+          sandbox: "local-runner-required",
+          requestId: "e2e-health",
+        },
+      }),
+    });
+  });
+  await reset(page);
+  await page.getByRole("button", { name: /Generate live/i }).click();
+
+  await expect(page.getByText(/configured, not yet validated/i)).toBeVisible();
+  await expect(page.getByText(/Local runner required/i)).toBeVisible();
   await expect(
-    page.getByText(
-      /OPENAI_API_KEY · optional OPENAI_BASE_URL · codex login · Docker/i,
-    ),
-  ).toBeVisible();
+    page.getByRole("button", { name: /Start live sample/i }),
+  ).toBeEnabled();
+  await expect(page.locator("body")).not.toContainText(
+    /OPENAI|GPT-|https?:\/\//i,
+  );
 });
 
 test("unsupported notebooks are parsed without execution and cannot advance", async ({

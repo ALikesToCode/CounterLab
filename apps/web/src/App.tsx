@@ -4,6 +4,8 @@ import {
   ApiClientError,
   counterLabApi,
   type ArtifactView,
+  type BeliefTest,
+  type CapabilityHealth,
   type PatchResult,
   type ProofBundle,
   type SessionView,
@@ -14,7 +16,13 @@ import { getRun, sampleArtifact, sampleResult, verifiedReplay } from "./sample";
 
 type Mode = "instant" | "live" | "replay";
 type Stage =
-  "landing" | "claim" | "belief" | "build" | "reality" | "live-setup";
+  | "landing"
+  | "claim"
+  | "belief"
+  | "build"
+  | "reality"
+  | "live-setup"
+  | "live-compile";
 type PredictionChoice = "stays-high" | "falls" | "unsure";
 type TransferState = "locked" | "ready" | "failed" | "passed" | "patched";
 
@@ -130,8 +138,8 @@ function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
           <span className="mode-copy">
             <strong>Generate live</strong>
             <small>
-              Use GPT-5.6 and runtime Codex when local capabilities are
-              available.
+              Use live reasoning and the local compiler when those capabilities
+              are configured.
             </small>
           </span>
           <Mark name="spark" />
@@ -354,6 +362,7 @@ function ClaimScreen({
 
 function BeliefScreen({
   claim,
+  beliefTest,
   confirmed,
   confirm,
   prediction,
@@ -363,6 +372,7 @@ function BeliefScreen({
   stop,
 }: {
   claim: string;
+  beliefTest?: BeliefTest | undefined;
   confirmed: boolean;
   confirm: () => void;
   prediction: PredictionChoice | null;
@@ -371,6 +381,19 @@ function BeliefScreen({
   editClaim: () => void;
   stop: (reason: "rejected" | "insufficient") => void;
 }) {
+  const currentHypothesis =
+    beliefTest?.currentHypothesis.statement ??
+    "The features capture a pattern that generalizes to new customers.";
+  const currentPrediction =
+    beliefTest?.currentHypothesis.predictedOutcome ??
+    "Accuracy should remain near 98% after splitting by customer.";
+  const competingHypothesis =
+    beliefTest?.competingHypothesis.statement ??
+    "The model recognizes the same customer’s identity across random train and test rows.";
+  const competingPrediction =
+    beliefTest?.competingHypothesis.predictedOutcome ??
+    "Accuracy will fall on unseen customers and after identity ablation.";
+
   return (
     <main className="workspace shell">
       <div className="screen-intro compact">
@@ -390,12 +413,9 @@ function BeliefScreen({
       <section className="hypothesis-grid" aria-label="Competing hypotheses">
         <article className="hypothesis current">
           <p className="hypothesis-label">Current hypothesis · H₁</p>
-          <h2>
-            The features capture a pattern that generalizes to new customers.
-          </h2>
+          <h2>{currentHypothesis}</h2>
           <p className="prediction-line">
-            <span>Predicts</span> Accuracy should remain near 98% after
-            splitting by customer.
+            <span>Predicts</span> {currentPrediction}
           </p>
         </article>
         <div className="versus" aria-hidden="true">
@@ -403,45 +423,66 @@ function BeliefScreen({
         </div>
         <article className="hypothesis competing">
           <p className="hypothesis-label">Competing hypothesis · H₂</p>
-          <h2>
-            The model recognizes the same customer&rsquo;s identity across
-            random train and test rows.
-          </h2>
+          <h2>{competingHypothesis}</h2>
           <p className="prediction-line">
-            <span>Predicts</span> Accuracy will fall on unseen customers and
-            after identity ablation.
+            <span>Predicts</span> {competingPrediction}
           </p>
         </article>
       </section>
 
       <section className="evidence-strip" aria-label="Evidence references">
-        <span className="evidence-chip">
-          Cell 3 · source <strong>customer_id encoded</strong>
-        </span>
-        <span className="evidence-chip">
-          Cell 3 · output 0 <strong>98.5% accuracy</strong>
-        </span>
-        <span className="evidence-chip">
-          Schema <strong>480 repeated customers</strong>
-        </span>
+        {beliefTest === undefined ? (
+          <>
+            <span className="evidence-chip">
+              Cell 3 · source <strong>customer_id encoded</strong>
+            </span>
+            <span className="evidence-chip">
+              Cell 3 · output 0 <strong>98.5% accuracy</strong>
+            </span>
+            <span className="evidence-chip">
+              Schema <strong>480 repeated customers</strong>
+            </span>
+          </>
+        ) : (
+          beliefTest.evidenceRefs.slice(0, 3).map((evidence) => (
+            <span className="evidence-chip" key={evidence.hash}>
+              {evidence.cellIndex === undefined
+                ? evidence.kind
+                : `Cell ${evidence.cellIndex}${
+                    evidence.outputIndex === undefined
+                      ? " · source"
+                      : ` · output ${evidence.outputIndex}`
+                  }`}{" "}
+              <strong>{evidence.excerpt}</strong>
+            </span>
+          ))
+        )}
       </section>
 
       <section className="intervention panel">
         <div>
           <p className="eyebrow">Decisive intervention</p>
-          <h2>Hold out entire customers, then remove identity.</h2>
+          <h2>
+            {beliefTest?.decisiveIntervention.description ??
+              "Hold out entire customers, then remove identity."}
+          </h2>
           <p>
-            The model, metric, seed, and target stay fixed. Only split grouping
-            and identity availability change.
+            {beliefTest === undefined
+              ? "The model, metric, seed, and target stay fixed. Only split grouping and identity availability change."
+              : `Keep ${beliefTest.decisiveIntervention.controlledVariables.join(", ")} fixed. Change ${beliefTest.decisiveIntervention.changedVariables.join(", ")}. ${beliefTest.decisiveIntervention.discriminatesBecause}`}
           </p>
         </div>
         <details>
           <summary>Alternatives, limitations, and uncertainty</summary>
           <p>
-            Class imbalance and temporal drift remain alternatives. The
-            available notebook evidence is sufficient to test entity leakage,
-            but this experiment does not establish production performance or
-            causality.
+            {beliefTest === undefined
+              ? "Class imbalance and temporal drift remain alternatives. The available notebook evidence is sufficient to test entity leakage, but this experiment does not establish production performance or causality."
+              : `${beliefTest.alternatives
+                  .map(
+                    (alternative) =>
+                      `${alternative.label}: ${alternative.rationale}`,
+                  )
+                  .join(" ")} ${beliefTest.uncertainty.limitations.join(" ")}`}
           </p>
         </details>
       </section>
@@ -1248,28 +1289,147 @@ function RealityScreen({
   );
 }
 
-function LiveSetup({ fallBack }: { fallBack: (mode: Mode) => void }) {
+function LiveSetup({
+  health,
+  checking,
+  checkError,
+  startLive,
+  retry,
+  fallBack,
+  busy,
+}: {
+  health: CapabilityHealth | null;
+  checking: boolean;
+  checkError: string | null;
+  startLive: () => void;
+  retry: () => void;
+  fallBack: (mode: Mode) => void;
+  busy: boolean;
+}) {
+  const configured = health?.liveGpt === "configured";
   return (
     <main className="workspace shell narrow">
       <div className="screen-intro">
         <p className="eyebrow">Live capability check</p>
         <h1>Generate live</h1>
         <p>
-          Live generation needs a server-side OpenAI key, authenticated Codex
-          CLI, and the local sandbox runner.
+          CounterLab checks capability labels before starting. A configured
+          credential is not treated as valid until the first live Belief Test
+          succeeds.
+        </p>
+      </div>
+      <section className="setup-card panel">
+        {checking ? (
+          <div className="setup-row" role="status">
+            <span className="status-dot pending" />
+            <div>
+              <strong>Checking server configuration</strong>
+              <p>No live request has started.</p>
+            </div>
+          </div>
+        ) : checkError !== null ? (
+          <div className="setup-row" role="alert">
+            <span className="status-dot unavailable" />
+            <div>
+              <strong>Capability check unavailable</strong>
+              <p>{checkError} No live request has started.</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="setup-row">
+              <span
+                className={`status-dot ${configured ? "configured" : "unavailable"}`}
+              />
+              <div>
+                <strong>
+                  {configured
+                    ? "Live reasoning is configured, not yet validated"
+                    : "Live reasoning is not configured"}
+                </strong>
+                <p>
+                  {configured
+                    ? "The first Belief Test request validates the server configuration."
+                    : "No live request has started. Use an offline path, or configure live reasoning on the server."}
+                </p>
+              </div>
+            </div>
+            <div className="setup-row">
+              <span className="status-dot pending" />
+              <div>
+                <strong>Local runner required</strong>
+                <p>
+                  The browser can complete Claim and Belief Test. Lab
+                  compilation remains locked to a separately authenticated local
+                  runner.
+                </p>
+              </div>
+            </div>
+          </>
+        )}
+      </section>
+      <div className="action-cluster">
+        {configured && !checking && checkError === null && (
+          <button
+            className="button button-primary"
+            type="button"
+            disabled={busy}
+            onClick={startLive}
+          >
+            Start live sample <Mark name="arrow" />
+          </button>
+        )}
+        {checkError !== null && (
+          <button
+            className="button button-primary"
+            type="button"
+            onClick={retry}
+          >
+            Check again
+          </button>
+        )}
+        <button
+          className="button button-quiet"
+          type="button"
+          onClick={() => fallBack("instant")}
+        >
+          Try instantly
+        </button>
+        <button
+          className="button button-quiet"
+          type="button"
+          onClick={() => fallBack("replay")}
+        >
+          Replay verified session
+        </button>
+      </div>
+    </main>
+  );
+}
+
+function LiveCompileBoundary({ fallBack }: { fallBack: (mode: Mode) => void }) {
+  return (
+    <main className="workspace shell narrow">
+      <div className="screen-intro">
+        <p className="eyebrow">03 · Compile and verify</p>
+        <h1>Local runner required</h1>
+        <p>
+          Your Prediction Contract is committed. This Cloudflare session does
+          not have the isolated local compiler, kernel, and sandbox required to
+          authorize a Verified Lab.
         </p>
       </div>
       <section className="setup-card panel">
         <div className="setup-row">
           <span className="status-dot unavailable" />
           <div>
-            <strong>Live status is checked server-side</strong>
-            <p>No live call has been claimed or started from this screen.</p>
+            <strong>Compilation did not start</strong>
+            <p>
+              No lab result was produced. Continue with an offline verified
+              path, or run the documented local stack.
+            </p>
           </div>
         </div>
-        <code>
-          OPENAI_API_KEY · optional OPENAI_BASE_URL · codex login · Docker
-        </code>
       </section>
       <div className="action-cluster">
         <button
@@ -1302,9 +1462,21 @@ export function App() {
   const [session, setSession] = useState<SessionView | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [liveHealth, setLiveHealth] = useState<CapabilityHealth | null>(null);
+  const [liveHealthError, setLiveHealthError] = useState<string | null>(null);
+  const [checkingLiveHealth, setCheckingLiveHealth] = useState(false);
   const replay = mode === "replay";
 
   const reportError = (caught: unknown) => {
+    if (
+      caught instanceof ApiClientError &&
+      caught.code === "LIVE_UNAVAILABLE"
+    ) {
+      setError(
+        "Live reasoning is unavailable. Check the server configuration or use an offline path. No live result was produced.",
+      );
+      return;
+    }
     setError(
       caught instanceof ApiClientError
         ? caught.message
@@ -1354,7 +1526,11 @@ export function App() {
         restored.state === "LAB_REJECTED" ||
         restored.state === "LAB_VERIFIED"
       ) {
-        setStage("build");
+        setStage(
+          restored.mode === "live" && restored.verifiedResult === undefined
+            ? "live-compile"
+            : "build",
+        );
       } else {
         setStage("reality");
       }
@@ -1363,10 +1539,29 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const checkLiveCapabilities = async () => {
+    setCheckingLiveHealth(true);
+    setLiveHealthError(null);
+    setLiveHealth(null);
+    try {
+      setLiveHealth(await counterLabApi.getHealth());
+    } catch (caught) {
+      setLiveHealthError(
+        caught instanceof ApiClientError
+          ? "CounterLab could not verify the capability response."
+          : "CounterLab could not reach the capability service.",
+      );
+    } finally {
+      setCheckingLiveHealth(false);
+    }
+  };
+
   const chooseMode = (nextMode: Mode) => {
     setMode(nextMode);
+    setError(null);
     if (nextMode === "live") {
       setStage("live-setup");
+      void checkLiveCapabilities();
       return;
     }
     if (nextMode === "replay") {
@@ -1388,6 +1583,25 @@ export function App() {
       setSession(created);
       window.localStorage.setItem("counterlab.sessionId", created.sessionId);
       window.localStorage.setItem("counterlab.mode", "instant");
+      setStage("claim");
+    });
+  };
+
+  const startLiveSession = () => {
+    if (liveHealth?.liveGpt !== "configured") return;
+    void withRequest(async () => {
+      const sample = await counterLabApi.createSampleArtifact();
+      const created = await counterLabApi.createSession({
+        artifactId: sample.artifactId,
+        mode: "live",
+      });
+      setArtifact(sample);
+      setSession(created);
+      setClaim("");
+      setConfirmed(false);
+      setPrediction(null);
+      window.localStorage.setItem("counterlab.sessionId", created.sessionId);
+      window.localStorage.setItem("counterlab.mode", "live");
       setStage("claim");
     });
   };
@@ -1457,10 +1671,18 @@ export function App() {
       unsure: "I am unsure",
     };
     void withRequest(async () => {
-      await counterLabApi.commitPrediction(session.sessionId, {
-        choice: labels[prediction],
-        confidence: 72,
-      });
+      const committed = await counterLabApi.commitPrediction(
+        session.sessionId,
+        {
+          choice: labels[prediction],
+          confidence: 72,
+        },
+      );
+      setSession(committed);
+      if (mode === "live") {
+        setStage("live-compile");
+        return;
+      }
       const compiled = await counterLabApi.compileLab(session.sessionId);
       setSession(compiled);
       setStage("build");
@@ -1507,6 +1729,7 @@ export function App() {
       {stage === "belief" && (
         <BeliefScreen
           claim={claim}
+          beliefTest={session?.beliefTest}
           confirmed={confirmed}
           confirm={confirmBeliefTest}
           prediction={prediction}
@@ -1571,7 +1794,20 @@ export function App() {
           updateSession={setSession}
         />
       )}
-      {stage === "live-setup" && <LiveSetup fallBack={chooseMode} />}
+      {stage === "live-setup" && (
+        <LiveSetup
+          health={liveHealth}
+          checking={checkingLiveHealth}
+          checkError={liveHealthError}
+          startLive={startLiveSession}
+          retry={() => void checkLiveCapabilities()}
+          fallBack={chooseMode}
+          busy={busy}
+        />
+      )}
+      {stage === "live-compile" && (
+        <LiveCompileBoundary fallBack={chooseMode} />
+      )}
       <footer className="footer shell">
         <span>CounterLab · documented evidence, bounded claims</span>
         <span>Education track · local-first</span>

@@ -234,6 +234,16 @@ pre,
   background: var(--red-soft);
 }
 
+.status-dot.configured {
+  color: var(--aqua);
+  background: var(--aqua-soft);
+}
+
+.status-dot.pending {
+  color: var(--gold);
+  background: var(--gold-soft);
+}
+
 .icon {
   width: 20px;
   height: 20px;
@@ -1330,6 +1340,11 @@ thead th {
 .setup-row {
   display: flex;
   gap: 13px;
+}
+
+.setup-row + .setup-row {
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
 }
 
 .setup-row p {

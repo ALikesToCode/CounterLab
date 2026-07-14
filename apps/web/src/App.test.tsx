@@ -22,6 +22,49 @@ const artifact = {
   createdAt: "2026-07-14T09:00:00.000Z",
 };
 
+const liveBeliefTest = {
+  schemaVersion: "1",
+  id: "belief_live_ui",
+  concept: "entity_leakage",
+  learnerClaim: "The notebook accuracy proves generalization to new customers.",
+  currentHypothesis: {
+    statement: "Live current hypothesis from the submitted claim.",
+    predictedOutcome: "Accuracy remains high for held-out customers.",
+  },
+  competingHypothesis: {
+    statement:
+      "Live competing hypothesis: repeated identity crosses the split.",
+    predictedOutcome: "Accuracy falls when complete customers are held out.",
+  },
+  evidenceRefs: [
+    {
+      kind: "schema",
+      hash: "c".repeat(64),
+      excerpt: "customer_id identifies the evaluation boundary",
+      relevance: "The claim targets unseen customers.",
+    },
+  ],
+  alternatives: [
+    {
+      label: "Metric choice",
+      rationale: "Accuracy can hide class-specific errors.",
+    },
+  ],
+  decisiveIntervention: {
+    id: "live-group-split",
+    description: "Hold out complete customers.",
+    controlledVariables: ["model", "metric", "seed"],
+    changedVariables: ["split boundary"],
+    discriminatesBecause: "The hypotheses predict different held-out accuracy.",
+  },
+  uncertainty: {
+    confidence: 0.88,
+    limitations: ["This test covers the supplied notebook evidence only."],
+    insufficientEvidence: false,
+  },
+  requiresLearnerConfirmation: true,
+};
+
 function session(
   state: string,
   version: number,
@@ -46,22 +89,75 @@ function response(data: unknown, status = 200) {
   });
 }
 
-function installApi() {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+function errorResponse(
+  code: string,
+  message: string,
+  status: number,
+): Response {
+  return new Response(
+    JSON.stringify({ ok: false, error: { code, message, status } }),
+    {
+      status,
+      headers: { "content-type": "application/json" },
+    },
+  );
+}
+
+function installApi(
+  options: {
+    liveGpt?: "configured" | "server-key-required";
+    rejectLiveBelief?: boolean;
+  } = {},
+) {
+  let activeMode: "instant" | "live" = "instant";
+  const fetcher = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
+      if (path === "/api/health") {
+        return response({
+          platform: "cloudflare-workers",
+          sample: "available",
+          replay: "available",
+          liveGpt: options.liveGpt ?? "server-key-required",
+          liveCodex: "local-runner-required",
+          liveKernel: "local-runner-required",
+          sandbox: "local-runner-required",
+          requestId: "request_ui",
+        });
+      }
       if (path === "/api/artifacts") return response(artifact, 201);
-      if (path === "/api/sessions")
-        return response(session("INGESTED", 1), 201);
+      if (path === "/api/sessions") {
+        const body = JSON.parse(String(init?.body)) as {
+          mode: "instant" | "live";
+        };
+        activeMode = body.mode;
+        return response(session("INGESTED", 1, { mode: activeMode }), 201);
+      }
       if (path.endsWith("/belief-test")) {
-        return response(session("BELIEF_TEST_PROPOSED", 2));
+        if (activeMode === "live" && options.rejectLiveBelief) {
+          return errorResponse(
+            "LIVE_UNAVAILABLE",
+            "Responses endpoint authentication failed",
+            503,
+          );
+        }
+        return response(
+          session("BELIEF_TEST_PROPOSED", 2, {
+            mode: activeMode,
+            ...(activeMode === "live" ? { beliefTest: liveBeliefTest } : {}),
+          }),
+        );
       }
       if (path.endsWith("/belief-test/confirm")) {
-        return response(session("BELIEF_TEST_CONFIRMED", 3));
+        return response(
+          session("BELIEF_TEST_CONFIRMED", 3, { mode: activeMode }),
+        );
       }
       if (path.endsWith("/prediction")) {
-        return response(session("PREDICTION_COMMITTED", 4), 201);
+        return response(
+          session("PREDICTION_COMMITTED", 4, { mode: activeMode }),
+          201,
+        );
       }
       if (path.endsWith("/lab/compile")) {
         return response(session("LAB_VERIFIED", 6));
@@ -94,8 +190,10 @@ function installApi() {
       throw new Error(
         `Unexpected UI test request: ${init?.method ?? "GET"} ${path}`,
       );
-    }),
+    },
   );
+  vi.stubGlobal("fetch", fetcher);
+  return fetcher;
 }
 
 const storageValues = new Map<string, string>();
@@ -146,6 +244,108 @@ describe("CounterLab judged flow", () => {
     expect(
       screen.getByRole("button", { name: /replay verified session/i }),
     ).toBeEnabled();
+  });
+
+  it("shows an honest unavailable state when live reasoning is not configured", async () => {
+    const user = userEvent.setup();
+    installApi({ liveGpt: "server-key-required" });
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /generate live/i }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Generate live" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/live reasoning is not configured/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/no live request has started/i),
+    ).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/OPENAI|GPT-|https?:\/\//i);
+  });
+
+  it("starts a configured live sample, renders returned hypotheses, and stops at the local runner", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi({ liveGpt: "configured" });
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /generate live/i }));
+    expect(
+      await screen.findByText(/configured, not yet validated/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/local runner required/i)).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: /start live sample/i }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /what does this result prove/i,
+      }),
+    ).toBeInTheDocument();
+    await user.type(
+      screen.getByLabelText(/your claim/i),
+      "The notebook accuracy proves generalization to new customers.",
+    );
+    await user.click(
+      screen.getByRole("button", { name: /create belief test/i }),
+    );
+
+    expect(
+      await screen.findByText(/live competing hypothesis/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/customer_id identifies/i)).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: /confirm belief test/i }),
+    );
+    await user.click(screen.getByRole("radio", { name: /remain near 98/i }));
+    await user.click(
+      screen.getByRole("button", { name: /commit prediction/i }),
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: /local runner required/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/no lab result was produced/i)).toBeInTheDocument();
+    expect(
+      fetcher.mock.calls.some(([path]) =>
+        String(path).endsWith("/lab/compile"),
+      ),
+    ).toBe(false);
+    expect(
+      fetcher.mock.calls.some(([, init]) =>
+        String(init?.body).includes('"mode":"live"'),
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps the first failed live request provider-neutral and on the claim screen", async () => {
+    const user = userEvent.setup();
+    installApi({ liveGpt: "configured", rejectLiveBelief: true });
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /generate live/i }));
+    await user.click(
+      await screen.findByRole("button", { name: /start live sample/i }),
+    );
+    await user.type(
+      await screen.findByLabelText(/your claim/i),
+      "The notebook accuracy proves generalization to new customers.",
+    );
+    await user.click(
+      screen.getByRole("button", { name: /create belief test/i }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /live reasoning is unavailable/i,
+    );
+    expect(
+      screen.getByRole("heading", { name: /what does this result prove/i }),
+    ).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(
+      /Responses endpoint|OpenAI|GPT-/i,
+    );
   });
 
   it("keeps computed results hidden until an immutable prediction is committed", async () => {

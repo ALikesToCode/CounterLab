@@ -279,7 +279,7 @@ export function createApi(options: ApiOptions = {}) {
         sample: "available" as const,
         replay: "available" as const,
         liveGpt: context.env?.OPENAI_API_KEY?.trim().length
-          ? ("available" as const)
+          ? ("configured" as const)
           : ("server-key-required" as const),
         liveCodex: "local-runner-required" as const,
         liveKernel: "local-runner-required" as const,
@@ -752,6 +752,10 @@ export function createApi(options: ApiOptions = {}) {
       });
     }
     if (error instanceof BeliefAnalystError) {
+      const upstreamStatus = error.details.status;
+      const isAuthenticationFailure =
+        error.code === "LIVE_UNAVAILABLE" &&
+        (upstreamStatus === 401 || upstreamStatus === 403);
       const status =
         error.code === "UNSUPPORTED_ARTIFACT" ||
         error.code === "UNRESOLVED_EVIDENCE" ||
@@ -760,7 +764,10 @@ export function createApi(options: ApiOptions = {}) {
           : error.code === "INVALID_INPUT"
             ? 400
             : 503;
-      return context.json(jsonError(error.code, error.message, status), {
+      const message = isAuthenticationFailure
+        ? "Live reasoning is unavailable. Check the server configuration."
+        : error.message;
+      return context.json(jsonError(error.code, message, status), {
         status: status as 400,
       });
     }

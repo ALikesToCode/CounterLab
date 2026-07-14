@@ -25,6 +25,21 @@ import { z } from "zod";
 
 const NonEmptyString = z.string().trim().min(1);
 
+export const CapabilityHealthSchema = z
+  .object({
+    platform: z.literal("cloudflare-workers"),
+    sample: z.literal("available"),
+    replay: z.literal("available"),
+    liveGpt: z.enum(["configured", "server-key-required"]),
+    liveCodex: z.literal("local-runner-required"),
+    liveKernel: z.literal("local-runner-required"),
+    sandbox: z.literal("local-runner-required"),
+    requestId: NonEmptyString,
+  })
+  .strict();
+
+export type CapabilityHealth = z.infer<typeof CapabilityHealthSchema>;
+
 const ApiErrorEnvelopeSchema = z
   .object({
     ok: z.literal(false),
@@ -240,6 +255,10 @@ export class CounterLabApiClient {
   constructor(options: CounterLabApiClientOptions = {}) {
     this.baseUrl = (options.baseUrl ?? "").replace(/\/+$/, "");
     this.fetcher = options.fetch;
+  }
+
+  getHealth(): Promise<CapabilityHealth> {
+    return this.request("/api/health", CapabilityHealthSchema);
   }
 
   createSampleArtifact(): Promise<ArtifactManifest> {

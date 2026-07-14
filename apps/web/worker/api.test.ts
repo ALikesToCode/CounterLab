@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { ArtifactManifest } from "@counterlab/contracts";
 import type {
@@ -164,6 +164,21 @@ describe("Cloudflare Worker API", () => {
     });
   });
 
+  it("reports a present live credential as configured rather than available", async () => {
+    const response = await api.request("/api/health", undefined, {
+      OPENAI_API_KEY: "configured-but-unvalidated",
+    } as unknown as Env);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        liveGpt: "configured",
+        liveCodex: "local-runner-required",
+      },
+    });
+  });
+
   it("reports live analysis without exposing endpoint configuration", async () => {
     const response = await api.request("/api/health", undefined, {
       OPENAI_API_KEY: "server-only-key",
@@ -174,7 +189,7 @@ describe("Cloudflare Worker API", () => {
     const body = await response.json();
     expect(body).toMatchObject({
       ok: true,
-      data: { liveGpt: "available" },
+      data: { liveGpt: "configured" },
     });
     expect(JSON.stringify(body)).not.toContain("responses.example.test");
     expect(JSON.stringify(body)).not.toContain("configured-model");
@@ -297,6 +312,59 @@ describe("Cloudflare Worker API", () => {
       version: 1,
     });
     expect(await sessionRepository.listEvents(sessionId)).toHaveLength(1);
+  });
+
+  it("returns a neutral typed setup error when the first live request rejects authentication", async () => {
+    const { app, sessionId, sessionRepository } = await sessionHarness("live");
+    const upstream = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            message: "invalid credential",
+            type: "invalid_request_error",
+            param: null,
+            code: "invalid_api_key",
+          },
+        }),
+        {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+
+    try {
+      const response = await app.request(
+        `/api/sessions/${sessionId}/belief-test`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            learnerClaim:
+              "The notebook accuracy proves generalization to new customers.",
+          }),
+        },
+        { OPENAI_API_KEY: "configured-but-invalid" } as unknown as Env,
+      );
+
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toEqual({
+        ok: false,
+        error: {
+          code: "LIVE_UNAVAILABLE",
+          message:
+            "Live reasoning is unavailable. Check the server configuration.",
+          status: 503,
+        },
+      });
+      await expect(sessionRepository.find(sessionId)).resolves.toMatchObject({
+        state: "INGESTED",
+        version: 1,
+      });
+      expect(await sessionRepository.listEvents(sessionId)).toHaveLength(1);
+    } finally {
+      upstream.mockRestore();
+    }
   });
 
   it("rejects an unsafe custom endpoint without advancing the live session", async () => {
