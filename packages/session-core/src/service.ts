@@ -30,7 +30,7 @@ import {
 import type { SessionRepository } from "./repository.js";
 
 const DEFAULT_RUNTIME: IdAndClock = {
-  id: (prefix) => `${prefix}_${globalThis.crypto.randomUUID()}`,
+  id: (prefix) => `${prefix}_${crypto.randomUUID()}`,
   now: () => new Date(),
 };
 
@@ -92,6 +92,11 @@ export class SessionService {
   async proposeBeliefTest(
     sessionId: string,
     beliefTest: unknown,
+    provenance: {
+      actor?: "gpt-5.6" | "system";
+      modelId?: string;
+      promptHash?: string;
+    } = {},
   ): Promise<CounterLabSession> {
     const parsed = BeliefTestSchema.parse(beliefTest);
     return this.transition(
@@ -99,9 +104,15 @@ export class SessionService {
       "BELIEF_TEST_PROPOSED",
       { beliefTest: parsed },
       {
-        actor: "gpt-5.6",
+        actor: provenance.actor ?? "gpt-5.6",
         kind: "belief_test.proposed",
         payload: { beliefTestId: parsed.id },
+        ...(provenance.modelId === undefined
+          ? {}
+          : { modelId: provenance.modelId }),
+        ...(provenance.promptHash === undefined
+          ? {}
+          : { promptHash: provenance.promptHash }),
         outputHashes: [await hashCanonical(parsed)],
       },
     );
@@ -219,7 +230,7 @@ export class SessionService {
           predictionId: parsed.id,
           immutableHash: parsed.immutableHash,
         },
-        outputHashes: [await hashCanonical(parsed)],
+        outputHashes: [parsed.immutableHash, await hashCanonical(parsed)],
       },
     );
   }
@@ -283,7 +294,7 @@ export class SessionService {
         actor: "kernel",
         kind: "experiment.completed",
         payload: { resultHash: parsed.resultHash },
-        outputHashes: [await hashCanonical(parsed)],
+        outputHashes: [parsed.resultHash, await hashCanonical(parsed)],
       },
     );
   }
@@ -338,7 +349,7 @@ export class SessionService {
         actor: "verifier",
         kind: passed ? "transfer.passed" : "transfer.failed",
         payload: { outcome: parsed.outcome, resultHash: parsed.resultHash },
-        outputHashes: [await hashCanonical(parsed)],
+        outputHashes: [parsed.resultHash, await hashCanonical(parsed)],
       },
     );
   }
@@ -395,7 +406,12 @@ export class SessionService {
         actor: "verifier",
         kind: "patch.verified",
         payload: { status: parsed.status, resultHash: parsed.resultHash },
-        outputHashes: [await hashCanonical(parsed)],
+        outputHashes: [
+          parsed.resultHash,
+          parsed.patchHash,
+          parsed.patchedArtifactHash,
+          await hashCanonical(parsed),
+        ],
       },
     );
   }

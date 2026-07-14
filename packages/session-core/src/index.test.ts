@@ -363,6 +363,22 @@ describe("SessionService state machine", () => {
     repository.close();
   });
 
+  it("links authoritative contract hashes from evidence-event outputs", async () => {
+    const { service, repository } = memoryService();
+    await throughExperiment(service);
+
+    const events = await service.listEvents("session-1");
+    expect(
+      events.find((event) => event.kind === "prediction.committed")
+        ?.outputHashes,
+    ).toContain(prediction.immutableHash);
+    expect(
+      events.find((event) => event.kind === "experiment.completed")
+        ?.outputHashes,
+    ).toContain(resultSet.resultHash);
+    repository.close();
+  });
+
   it("prevents a rejected lab from producing results until it is compiled and verified again", async () => {
     const { service, repository } = memoryService();
     await service.createSession({
@@ -410,6 +426,11 @@ describe("SessionService state machine", () => {
 
     await service.startTransfer("session-1");
     await service.recordTransferResult("session-1", passingTransfer);
+    expect(
+      (await service.listEvents("session-1")).find(
+        (event) => event.kind === "transfer.passed",
+      )?.outputHashes,
+    ).toContain(passingTransfer.resultHash);
     await service.startPatchCompilation("session-1");
     expect((await service.getSession("session-1")).state).toBe(
       "PATCH_COMPILING",
@@ -452,6 +473,16 @@ describe("SessionService state machine", () => {
     };
     await service.verifyPatch("session-1", patchResult);
     const eventsBeforeDiff = await service.listEvents("session-1");
+    expect(
+      eventsBeforeDiff.find((event) => event.kind === "patch.verified")
+        ?.outputHashes,
+    ).toEqual(
+      expect.arrayContaining([
+        patchResult.resultHash,
+        patchResult.patchHash,
+        patchResult.patchedArtifactHash,
+      ]),
+    );
     const reasoningDiff = {
       schemaVersion: "1",
       id: "reasoning-1",
