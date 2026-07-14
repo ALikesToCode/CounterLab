@@ -1,25 +1,12 @@
 import rawResult from "../../../fixtures/public/leakage_verified_result.json";
+import {
+  VerifiedResultSetSchema,
+  type VerifiedResultSet,
+} from "@counterlab/contracts";
 
-export type VerifiedRun = {
-  id: string;
-  splitStrategy: string;
-  metrics: { accuracy: number; rocAuc: number };
-  sampleSizes: { train: number; test: number };
-  entityOverlap: { count: number; rate: number };
-  seed: number;
-  dropFeatures: string[];
-};
+export type VerifiedRun = VerifiedResultSet["runs"][number];
 
-export type SampleVerifiedResult = {
-  schemaVersion: string;
-  concept: string;
-  kernelVersion: string;
-  resultHash: string;
-  seed: number;
-  runs: VerifiedRun[];
-};
-
-export const sampleResult = rawResult as SampleVerifiedResult;
+export const sampleResult = VerifiedResultSetSchema.parse(rawResult);
 
 export function getRun(id: string): VerifiedRun {
   const run = sampleResult.runs.find((candidate) => candidate.id === id);
@@ -32,7 +19,8 @@ export function getRun(id: string): VerifiedRun {
 export const sampleArtifact = {
   title: "Customer churn evaluation",
   fileName: "customer_churn_leakage.ipynb",
-  fileSha256: "92ba63894d3c2ffd64ba76324bb7bb2b3afeb0310883a33ed140faf058d03024",
+  fileSha256:
+    "92ba63894d3c2ffd64ba76324bb7bb2b3afeb0310883a33ed140faf058d03024",
   rows: 2880,
   customers: 480,
   evidence: [

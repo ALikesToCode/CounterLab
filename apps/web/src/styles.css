@@ -1,6 +1,13 @@
 :root {
   color-scheme: light;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
   color: #142238;
   background: #f3efe7;
   font-synthesis: none;
@@ -107,11 +114,36 @@ pre,
 .file-chip,
 .event-list time,
 .event-list > li > span {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
 }
 
 .app-frame {
   min-height: 100vh;
+}
+
+.api-error,
+.api-progress {
+  position: fixed;
+  z-index: 20;
+  top: 5.5rem;
+  right: 1.5rem;
+  max-width: min(28rem, calc(100vw - 3rem));
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--paper);
+  box-shadow: 0 0.75rem 2rem rgb(8 27 46 / 12%);
+  font-size: 0.9rem;
+}
+
+.api-error {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.api-progress {
+  color: var(--navy);
 }
 
 .shell {
@@ -294,7 +326,10 @@ pre,
   flex-direction: column;
   justify-content: space-between;
   align-items: flex-start;
-  transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+  transition:
+    transform 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
 }
 
 .mode-card:hover {
@@ -442,7 +477,8 @@ pre,
 
 .file-name {
   color: var(--ink-soft);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
   font-size: 12px;
 }
 
@@ -594,7 +630,9 @@ textarea::placeholder {
   gap: 8px;
   font-weight: 700;
   font-size: 13px;
-  transition: transform 130ms ease, background-color 130ms ease;
+  transition:
+    transform 130ms ease,
+    background-color 130ms ease;
 }
 
 .button:hover:not(:disabled) {
@@ -674,7 +712,8 @@ blockquote {
 
 .hypothesis-label {
   color: var(--purple);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
   font-size: 10px;
   text-transform: uppercase;
 }
@@ -882,7 +921,8 @@ legend {
 
 .step-index {
   color: var(--blue);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
   font-size: 11px;
 }
 
@@ -1058,7 +1098,8 @@ td {
 
 thead th {
   color: var(--ink-soft);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
   font-size: 9px;
   text-transform: uppercase;
 }
@@ -1212,7 +1253,8 @@ thead th {
 .diff-head {
   background: #eee7f5;
   color: var(--purple);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
   text-transform: uppercase;
 }
 

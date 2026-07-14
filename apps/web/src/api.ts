@@ -226,11 +226,11 @@ function validatedInput<T extends z.ZodType>(
 
 export class CounterLabApiClient {
   private readonly baseUrl: string;
-  private readonly fetcher: typeof fetch;
+  private readonly fetcher: typeof fetch | undefined;
 
   constructor(options: CounterLabApiClientOptions = {}) {
     this.baseUrl = (options.baseUrl ?? "").replace(/\/+$/, "");
-    this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
+    this.fetcher = options.fetch;
   }
 
   createSampleArtifact(): Promise<ArtifactManifest> {
@@ -396,7 +396,8 @@ export class CounterLabApiClient {
 
     let response: Response;
     try {
-      response = await this.fetcher(`${this.baseUrl}${path}`, {
+      const fetcher = this.fetcher ?? globalThis.fetch.bind(globalThis);
+      response = await fetcher(`${this.baseUrl}${path}`, {
         ...init,
         method: init.method ?? "GET",
         headers,
