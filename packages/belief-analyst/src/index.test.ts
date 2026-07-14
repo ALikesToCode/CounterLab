@@ -188,7 +188,8 @@ describe("privacy-preserving analyst input", () => {
 
   it("redacts secrets before applying the evidence excerpt limit", () => {
     const artifact = manifest();
-    artifact.cells[0]!.sourceExcerpt = `${"x".repeat(690)} sk-abcdefghijklmnopqrstuvwxyz`;
+    const syntheticToken = ["sk", "abcdefghijklmnopqrstuvwxyz"].join("-");
+    artifact.cells[0]!.sourceExcerpt = `${"x".repeat(690)} ${syntheticToken}`;
 
     const serialized = JSON.stringify(
       buildSanitizedAnalystContext({
@@ -199,13 +200,14 @@ describe("privacy-preserving analyst input", () => {
       }),
     );
 
-    expect(serialized).not.toContain("sk-abcdef");
+    expect(serialized).not.toContain(syntheticToken.slice(0, 9));
   });
 
   it("sanitizes untrusted schema and symbol metadata", () => {
     const artifact = manifest();
     artifact.schemaSummary.fields[0]!.name = "/home/learner/private.csv";
-    artifact.schemaSummary.entityCandidates = ["sk-entity-secret-123456"];
+    const syntheticEntityToken = ["sk", "entity-secret-123456"].join("-");
+    artifact.schemaSummary.entityCandidates = [syntheticEntityToken];
     artifact.cells[0]!.symbols = ["C:\\Users\\learner\\secret.py"];
     artifact.cells[0]!.metricCandidates[0]!.name =
       "token = 'plain-metadata-secret'";
@@ -220,7 +222,7 @@ describe("privacy-preserving analyst input", () => {
     );
 
     expect(serialized).not.toContain("/home/learner");
-    expect(serialized).not.toContain("sk-entity");
+    expect(serialized).not.toContain(syntheticEntityToken.slice(0, 9));
     expect(serialized).not.toContain("C:\\\\Users");
     expect(serialized).not.toContain("plain-metadata-secret");
   });

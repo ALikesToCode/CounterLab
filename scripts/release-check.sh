@@ -12,10 +12,6 @@ PYTHONPATH=services/kernel/src .venv/bin/python scripts/collect-achieved-metrics
 bash scripts/reproduce-session.sh leakage-01
 bash scripts/replay-patch.sh leakage-01
 
-if git ls-files -z | xargs -0 rg -n --no-heading \
-  'sk-[A-Za-z0-9_-]{20,}|-----BEGIN [A-Z ]+PRIVATE KEY-----|OPENAI_API_KEY=[^[:space:]]+'; then
-  echo "Potential secret detected in tracked files." >&2
-  exit 1
-fi
+.venv/bin/python scripts/secret-scan.py
 
 echo "Release checks passed. No tracked secret pattern was detected."
