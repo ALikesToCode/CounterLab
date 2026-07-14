@@ -1,90 +1,94 @@
-# CounterLab delivery plan
+# Task Plan: CounterLab Studio first-prize upgrade
 
 ## Goal
 
-Ship a locally runnable, judge-ready CounterLab P0 whose leakage experiment, learning loop, replay, transfer gate, patch, and proof bundle are backed by deterministic evidence, with live OpenAI and Codex paths that fail honestly when unavailable.
+Upgrade the existing CounterLab release into an honest hosted, artifact-specific
+Studio with strict sample/live/replay separation, a process-capable runner plane,
+two verified concept packs, and a complete public notebook-to-proof journey.
 
-## Current phase
+## Current Phase
 
-Phase 2 — deterministic learning loop
+Phase 2 — Upgrade plan and regression boundary
 
 ## Phases
 
-### Phase 0: Repository discovery and architecture
+### Phase 1: Repository and blocker discovery
 
-- [x] Read `AGENTS.md` and the user build brief.
-- [x] Inspect repository contents, Git state, and primary runtimes.
-- [x] Record initial constraints and milestone architecture.
+- [x] Read the required product, progress, authority, threat, and master documents.
+- [x] Inspect the current API, contracts, session core, parser, analyst, Codex,
+      kernel, verifier, runner, replay, UI, migrations, and tests.
+- [x] Prove each stated blocker in current code/tests.
 - **Status:** complete
 
-### Phase 1: Deterministic evidence spine
+### Phase 2: Upgrade plan and regression boundary
 
-- [x] Write failing Python and TypeScript contract tests and observe the expected failures.
-- [x] Implement fixture generation, safe parser, kernel, canonical hashes, verifier, and mutations.
-- [x] Generate the public notebook from computed output.
-- [x] Pass parser, kernel, determinism, verifier, and mutation gates.
-- [x] Commit as independently reviewable proof-spine slices.
-- **Status:** complete
-
-### Phase 2: Deterministic learning loop
-
-- [ ] Implement contracts, state machine, SQLite event chain, replay, transfer, patch, reasoning diff, and proof bundle.
-- [ ] Implement typed API routes and four-screen Next.js experience.
-- [ ] Pass unit and focused browser tests for the instant and replay paths.
+- [x] Create `docs/FIRST_PRIZE_UPGRADE_PLAN.md` from repository evidence.
+- [x] Add failing tests for sample leakage, concept advertising, and configured
+      runner dead ends.
+- [ ] Separate sample/live/replay contracts and route validation.
 - **Status:** in_progress
 
-### Phase 3: Live analyst and compiler integrations
+### Phase 3: Hosted artifact-specific leakage vertical slice
 
-- [ ] Implement current Responses API structured-output integration and local validation.
-- [ ] Implement Codex App Server stdio compiler, replay, disabled mode, event sanitization, SSE, and bounded repair.
-- [ ] Implement AST and sandbox enforcement with clear setup failures.
+- [ ] Add runner job/event/token contracts and D1 persistence.
+- [ ] Add authenticated runner service/test runner and fixed plan interpreter.
+- [ ] Compile, verify, repair, run, patch, and stream an uploaded leakage notebook.
+- [ ] Add artifact-specific proof and patch download.
 - **Status:** pending
 
-### Phase 4: Transfer-gated patch and judge hardening
+### Phase 4: CounterLab Studio product shell
 
-- [ ] Verify patch isolation and unrelated cell hashes.
-- [ ] Add held-out variants, unsupported paths, accessibility, responsive polish, and Playwright coverage.
-- [ ] Add class-imbalance P0.5 only if all leakage gates pass.
+- [ ] Refactor only product-responsibility boundaries covered by tests.
+- [ ] Add Studio navigation, evidence navigator, agent rail, proof console,
+      history, commands, and interactive leakage controls.
 - **Status:** pending
 
-### Phase 5: Cloudflare and release proof
+### Phase 5: Class imbalance and held-out evidence
 
-- [ ] Use Cloudflare Workers/static assets and D1 for the deployed replay/sample surface where runtime constraints permit.
-- [ ] Run clean-clone, mutation, replay, patch, browser, release, and secret-scan acceptance checks.
-- [ ] Record actual metrics and publish/deploy only after local acceptance evidence.
+- [ ] Implement the imbalance kernel, verifier, transfer, patch, fixture, notebook,
+      mutations, UI controls, and end-to-end path.
+- [ ] Freeze and run the supported/unsupported held-out matrix.
+- [ ] Add learner-pilot protocol and non-fabricated achieved metrics.
 - **Status:** pending
 
-## Key questions
+### Phase 6: Release verification and deployment
 
-1. Can Python 3.14 install the locked pandas/scikit-learn stack, or is a compatible interpreter/uv environment needed?
-2. Is Docker usable by the current user for sandbox checks?
-3. Which currently documented Codex App Server JSONL methods match installed Codex CLI 0.144.4?
-4. Can the full Next.js runtime deploy to Cloudflare, or should the deployed surface intentionally expose only verified replay/sample while live local compilation remains local-only?
+- [ ] Run the full local and clean-clone acceptance matrix.
+- [ ] Run production smoke and a real uploaded live notebook.
+- [ ] Update all required documentation and achieved metrics.
+- [ ] Commit reviewable slices, deploy Cloudflare control/runner planes, and
+      verify the public URL.
+- **Status:** pending
 
-## Decisions made
+## Key Questions
+
+1. Which current notebook patterns contain enough sanitized evidence to compile
+   an artifact-specific fixed plan without raw data or arbitrary generated code?
+2. Can the installed Cloudflare account run the required Container shape, or is
+   an authenticated dedicated runner the compatible release path?
+3. Which session/event schema changes can remain backward compatible with the
+   genuine leakage replay and current proof bundles?
+
+## Decisions Made
 
 | Decision | Rationale |
-|---|---|
-| Proof spine before UI | Required acceptance order; prevents polished but unverified output. |
-| Monorepo with pnpm and a Python package | Matches required boundaries and keeps TypeScript/Python truth ownership explicit. |
-| Deterministic replay is a first-class path | Enables an honest no-secret judged path without fake live model activity. |
-| Cloudflare hosts edge-compatible replay/sample infrastructure | Workers cannot spawn local Codex or execute the Python kernel; those capabilities remain explicitly local/live-only. |
-| Industrial evidence-notebook aesthetic | Visually reinforces CI, lab notebooks, and falsifiable checks without generic dashboard styling. |
+| --- | --- |
+| Preserve the fixed kernel/verifier/parser/evidence chain | They are already proven and remain the numeric/integrity authority. |
+| Start with leakage regression tests | The user explicitly prioritizes eliminating sample leakage before runner/UI expansion. |
+| No generated Python on the hosted path | A fixed plan interpreter gives a smaller, auditable authority surface. |
+| Bind sample authority to sample artifact ID and hash | Identical uploaded bytes remain a live artifact; provenance cannot be inferred from content hash alone. |
 
-## Errors encountered
+## Errors Encountered
 
 | Error | Attempt | Resolution |
-|---|---:|---|
-| Initial combined skill read was truncated | 1 | Re-read each selected skill and RTK file separately before editing. |
-| Findings patch expected a missing template heading | 1 | Inspected the actual file, then patched the existing sections. |
-| pnpm blocked esbuild, sharp, and workerd install scripts | 4 | Current pnpm 11 docs confirm `onlyBuiltDependencies` was removed; replaced it with the reviewed `allowBuilds` map. |
-| pnpm auto-added a duplicate placeholder `allowBuilds` block | 1 | Removed the generated placeholder block after reviewing all three package approvals. |
-| Integrated verifier contract exposed three provenance/type gaps | 1 | Returned exact failures to the verifier slice: input fingerprint control, chart seed/split provenance, and integral sample counts. |
-| Generated public notebook was classified unsupported | 1 | Traced the sole reason to missing harmless stdlib `pathlib` in the parser allowlist; added a failing regression test, fixed the allowlist, and verified the real notebook is `SUPPORTED`. |
-| Multi-file bookkeeping patch had an invalid hunk delimiter | 1 | Reissued the patch with complete context and valid hunk boundaries. |
+| --- | ---: | --- |
+| Initial full `AGENTS.md` output was truncated | 1 | Re-read the file in bounded line ranges. |
+| Worker API remainder output exceeded the available model context | 1 | Re-read `apps/web/worker/api.ts` in chunks of at most 200 lines. |
+| Combined plan/progress patch used stale task-plan table context | 1 | Split the plan document creation from exact-context status updates. |
+| Root Vitest config found no Worker test for a direct `apps/web/worker` filter | 1 | Run the test through `apps/web/vitest.config.ts`. |
+| A combined Git diff command produced output too large for the tool response | 1 | Switched to `git status`, `git diff --stat`, and bounded per-file diffs. |
 
 ## Notes
 
-- The user explicitly authorizes `build`, `dev`, local services, and Cloudflare infrastructure for this task, overriding the repository default prohibition.
-- Never present replay as live or a stored metric as newly computed.
-- Re-read this file before each milestone transition.
+- Re-read this file before every architecture or release decision.
+- Log every failed command and change approach rather than repeating it.
