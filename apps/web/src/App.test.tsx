@@ -234,12 +234,12 @@ describe("CounterLab judged flow", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", {
-        name: "Test what your model really learned.",
+        name: "A model scored 98.5%. Can you trust it?",
       }),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        /make a prediction.*run a fairer test.*use the lesson on a new problem/i,
+        /CounterLab is a guided lesson.*make a prediction.*fairer test.*new problem/i,
       ),
     ).toBeInTheDocument();
     expect(

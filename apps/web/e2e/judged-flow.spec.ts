@@ -58,10 +58,14 @@ test("the first visit explains the lesson before asking for technical knowledge"
 }) => {
   await reset(page);
   await expect(
-    page.getByRole("heading", { name: "Test what your model really learned." }),
+    page.getByRole("heading", {
+      name: "A model scored 98.5%. Can you trust it?",
+    }),
   ).toBeVisible();
   await expect(
-    page.getByText(/make a prediction.*run a fairer test.*new problem/i),
+    page.getByText(
+      /CounterLab is a guided lesson.*make a prediction.*fairer test.*new problem/i,
+    ),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Start the 3-minute lesson/i }),
@@ -132,6 +136,55 @@ test("Try Instantly persists the verified learning loop and exports a valid proo
   expect(consoleErrors).toEqual([]);
 });
 
+test("the lesson keeps one learner decision in focus at a time", async ({
+  page,
+}) => {
+  await startInstant(page);
+  await commitAndOpenResult(page);
+
+  await expect(
+    page.getByRole("heading", { name: /Here.s what changed/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/Which evaluation design matches deployment/i),
+  ).toHaveCount(0);
+
+  await page.getByLabel("Your revised mental model").fill(revision);
+  await page
+    .getByRole("button", { name: /Try the rule on a new problem/i })
+    .click();
+
+  await expect(
+    page.getByRole("heading", { name: /Try your rule on forecasting/i }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => window.scrollY)).toBeLessThan(24);
+  await expect(
+    page.getByRole("heading", { name: /Why the score changed/i }),
+  ).toHaveCount(0);
+
+  await page.getByLabel(/Time-ordered holdout/i).check();
+  await page.getByLabel(/Centered rolling target/i).check();
+  await page.getByRole("button", { name: /Check transfer/i }).click();
+
+  await expect(
+    page.getByRole("heading", { name: /You applied the rule correctly/i }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => window.scrollY)).toBeLessThan(24);
+  await expect(
+    page.getByText(/Which evaluation design matches deployment/i),
+  ).toHaveCount(0);
+
+  await page.getByRole("button", { name: /Verify notebook patch/i }).click();
+  await expect(
+    page.getByRole("heading", { name: /Your learning, before and after/i }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => window.scrollY)).toBeLessThan(24);
+  await expect(page.locator("pre.diff")).not.toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Download proof/i }),
+  ).toBeVisible();
+});
+
 test("prediction is immutable and results do not exist before commitment", async ({
   page,
 }) => {
@@ -146,6 +199,8 @@ test("prediction is immutable and results do not exist before commitment", async
   expect((await before.json()).data.verifiedResult).toBeUndefined();
 
   await page.getByLabel(/Fall materially/i).check();
+  await page.getByLabel(/Confidence/i).fill("88");
+  await expect(page.getByText("88%", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Lock my answer/i }).click();
   await expect(
     page.getByRole("heading", { name: /The result is ready/i }),
@@ -158,6 +213,74 @@ test("prediction is immutable and results do not exist before commitment", async
   );
   expect(overwrite.status()).toBe(409);
   expect((await overwrite.json()).error.code).toBe("ILLEGAL_TRANSITION");
+
+  const committed = await page.request.get(`/api/sessions/${sessionId}`);
+  expect(committed.ok()).toBe(true);
+  expect((await committed.json()).data.prediction.confidence).toBe(88);
+});
+
+test("a learner can use a claim starter and return home", async ({ page }) => {
+  await reset(page);
+  await page
+    .getByRole("button", { name: /Start the 3-minute lesson/i })
+    .click();
+
+  await page.getByRole("button", { name: /Use a starter claim/i }).click();
+  await expect(page.getByLabel("Your claim")).toHaveValue(/new customers/i);
+  await expect(
+    page.getByRole("button", { name: /Compare two explanations/i }),
+  ).toBeEnabled();
+
+  await page.getByRole("button", { name: /Start over/i }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "A model scored 98.5%. Can you trust it?",
+    }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      window.localStorage.getItem("counterlab.sessionId"),
+    ),
+  ).toBeNull();
+});
+
+test("refresh restores the current lesson and the committed prediction", async ({
+  page,
+}) => {
+  await startInstant(page);
+  await page.getByLabel(/Fall materially/i).check();
+  await page.getByLabel(/Confidence/i).fill("88");
+  await page.getByRole("button", { name: /Lock my answer/i }).click();
+  await page.getByRole("button", { name: /Show me what happened/i }).click();
+  await expect(
+    page.getByRole("heading", { name: /Here.s what changed/i }),
+  ).toBeVisible();
+
+  await page.reload();
+
+  await expect(
+    page.getByRole("heading", { name: /Here.s what changed/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /Accuracy falls materially/i }),
+  ).toBeVisible();
+});
+
+test("completed lesson steps open as read-only pages", async ({ page }) => {
+  await startInstant(page);
+  await commitAndOpenResult(page);
+
+  await page.getByRole("button", { name: "Your guess" }).click();
+  await expect(
+    page.getByRole("heading", { name: /Review your prediction/i }),
+  ).toBeVisible();
+  await expect(page.getByText(/saved evidence is read-only/i)).toBeVisible();
+  await expect(page.getByRole("radio")).toHaveCount(0);
+
+  await page.getByRole("button", { name: /Return to current step/i }).click();
+  await expect(
+    page.getByRole("heading", { name: /Here.s what changed/i }),
+  ).toBeVisible();
 });
 
 test("failed transfer keeps the patch locked and a corrected answer unlocks it", async ({
@@ -194,6 +317,12 @@ test("Replay remains visibly labelled for the full reconstructed path", async ({
   await page.getByRole("button", { name: /Continue replay/i }).click();
   await expect(replayBanner).toContainText("Verified replay");
   await page.getByRole("button", { name: /Show me what happened/i }).click();
+  await expect(replayBanner).toContainText("Verified replay");
+  await expect(
+    page.getByRole("heading", { name: /Here.s what changed/i }),
+  ).toBeVisible();
+
+  await page.reload();
   await expect(replayBanner).toContainText("Verified replay");
   await expect(
     page.getByRole("heading", { name: /Here.s what changed/i }),

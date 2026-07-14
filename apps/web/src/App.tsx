@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 
 import {
   ApiClientError,
@@ -25,6 +25,49 @@ type Stage =
   | "live-compile";
 type PredictionChoice = "stays-high" | "falls" | "unsure";
 type TransferState = "locked" | "ready" | "failed" | "passed" | "patched";
+type ReviewStep = "claim" | "belief" | "build" | "reality";
+
+const storageKeys = {
+  sessionId: "counterlab.sessionId",
+  mode: "counterlab.mode",
+  claim: "counterlab.claim",
+  replayStage: "counterlab.replayStage",
+  replayIntro: "counterlab.replayIntro",
+  replayTransferState: "counterlab.replayTransferState",
+  replayRevision: "counterlab.replayRevision",
+} as const;
+
+function storedReplayTransferState(): TransferState {
+  const stored = window.localStorage.getItem(storageKeys.replayTransferState);
+  return stored === "ready" ||
+    stored === "failed" ||
+    stored === "passed" ||
+    stored === "patched"
+    ? stored
+    : "locked";
+}
+
+function resetViewport(focusId?: string) {
+  const root = document.documentElement;
+  const previousScrollBehavior = root.style.scrollBehavior;
+  root.style.setProperty("scroll-behavior", "auto", "important");
+  root.scrollTop = 0;
+  document.body.scrollTop = 0;
+  window.scrollTo(0, 0);
+  if (focusId !== undefined) {
+    document.getElementById(focusId)?.focus({ preventScroll: true });
+  }
+  window.requestAnimationFrame(() => {
+    root.scrollTop = 0;
+    document.body.scrollTop = 0;
+    window.scrollTo(0, 0);
+    if (previousScrollBehavior === "") {
+      root.style.removeProperty("scroll-behavior");
+    } else {
+      root.style.scrollBehavior = previousScrollBehavior;
+    }
+  });
+}
 
 const percent = new Intl.NumberFormat("en-US", {
   style: "percent",
@@ -62,23 +105,50 @@ function ReplayBanner() {
   );
 }
 
-function Header({ mode, stage }: { mode: Mode | null; stage: Stage }) {
+function Header({
+  mode,
+  stage,
+  reviewStep,
+  review,
+  returnToCurrent,
+  restart,
+}: {
+  mode: Mode | null;
+  stage: Stage;
+  reviewStep: ReviewStep | null;
+  review: (step: ReviewStep) => void;
+  returnToCurrent: () => void;
+  restart: () => void;
+}) {
   const proofStages = [
-    { label: "Your idea", stages: ["claim", "live-setup"] },
-    { label: "Your prediction", stages: ["belief"] },
-    { label: "What happened", stages: ["build", "live-compile"] },
-    { label: "Try it again", stages: ["reality"] },
+    {
+      label: "Question",
+      reviewStep: "claim",
+      stages: ["claim", "live-setup"],
+    },
+    { label: "Your guess", reviewStep: "belief", stages: ["belief"] },
+    {
+      label: "Fair test",
+      reviewStep: "build",
+      stages: ["build", "live-compile"],
+    },
+    { label: "Learn & apply", reviewStep: "reality", stages: ["reality"] },
   ] as const;
-  const activeIndex = proofStages.findIndex((item) =>
+  const progressIndex = proofStages.findIndex((item) =>
     item.stages.some((candidate) => candidate === stage),
   );
+  const viewedIndex =
+    reviewStep === null
+      ? progressIndex
+      : proofStages.findIndex((item) => item.reviewStep === reviewStep);
 
   return (
     <header className={`topbar ${stage === "landing" ? "topbar-landing" : ""}`}>
       <button
         className="wordmark"
         type="button"
-        onClick={() => window.location.reload()}
+        aria-label="CounterLab home"
+        onClick={restart}
       >
         <span className="wordmark-mark">C</span>
         <span className="wordmark-copy">
@@ -90,14 +160,22 @@ function Header({ mode, stage }: { mode: Mode | null; stage: Stage }) {
         <>
           <nav className="proof-rail" aria-label="CounterLab proof stages">
             {proofStages.map((item, index) => (
-              <span
-                className={`${index === activeIndex ? "active" : ""} ${index < activeIndex ? "complete" : ""}`}
-                aria-current={index === activeIndex ? "step" : undefined}
+              <button
+                type="button"
+                aria-label={item.label}
+                className={`${index === viewedIndex ? "active" : ""} ${index < progressIndex ? "complete" : ""}`}
+                aria-current={index === viewedIndex ? "step" : undefined}
+                disabled={index > progressIndex}
+                onClick={() =>
+                  index === progressIndex
+                    ? returnToCurrent()
+                    : review(item.reviewStep)
+                }
                 key={item.label}
               >
-                <i>{index < activeIndex ? "✓" : index + 1}</i>
+                <i>{index < progressIndex ? "✓" : index + 1}</i>
                 <b>{item.label}</b>
-              </span>
+              </button>
             ))}
           </nav>
           <div className="topbar-context">
@@ -110,6 +188,13 @@ function Header({ mode, stage }: { mode: Mode | null; stage: Stage }) {
                   : "Instant sample"}
             </span>
           </div>
+          <button
+            className="start-over-control"
+            type="button"
+            onClick={restart}
+          >
+            Start over
+          </button>
         </>
       )}
     </header>
@@ -137,20 +222,19 @@ function LearningGuide({
         <span>{step}</span>
         <strong>{title}</strong>
       </div>
-      <dl>
-        <div>
-          <dt>You have</dt>
-          <dd>{known}</dd>
-        </div>
-        <div>
-          <dt>We need to know</dt>
-          <dd>{unknown}</dd>
-        </div>
-        <div>
-          <dt>Do this now</dt>
-          <dd>{next}</dd>
-        </div>
-      </dl>
+      <div className="guide-action">
+        <span>Your next move</span>
+        <strong>{next}</strong>
+      </div>
+      <details className="guide-context">
+        <summary>Why this step?</summary>
+        <p>
+          <strong>What we know:</strong> {known}
+        </p>
+        <p>
+          <strong>The open question:</strong> {unknown}
+        </p>
+      </details>
     </aside>
   );
 }
@@ -167,10 +251,10 @@ function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
           <p className="lesson-kicker">
             <span>Interactive lesson</span> · about 3 minutes
           </p>
-          <h2>Test what your model really learned.</h2>
+          <h2>A model scored 98.5%. Can you trust it?</h2>
           <p className="learning-promise">
-            Make a prediction. We run a fairer test. Then use the lesson on a
-            new problem.
+            CounterLab is a guided lesson: make a prediction, watch a fairer
+            test, then use the rule on a new problem.
           </p>
           <div className="learning-actions">
             <button
@@ -471,6 +555,17 @@ function ClaimScreen({
             <p>“Because the notebook scored highly, I think the model…”</p>
           </div>
           <label htmlFor="learner-claim">Your claim</label>
+          <button
+            className="claim-starter"
+            type="button"
+            onClick={() =>
+              setClaim(
+                "I think the high score means the model will work for completely new customers.",
+              )
+            }
+          >
+            <Mark name="spark" /> Use a starter claim
+          </button>
           <textarea
             id="learner-claim"
             value={claim}
@@ -502,6 +597,8 @@ function BeliefScreen({
   confirm,
   prediction,
   setPrediction,
+  confidence,
+  setConfidence,
   commitPrediction,
   editClaim,
   stop,
@@ -512,6 +609,8 @@ function BeliefScreen({
   confirm: () => void;
   prediction: PredictionChoice | null;
   setPrediction: (value: PredictionChoice) => void;
+  confidence: number;
+  setConfidence: (value: number) => void;
   commitPrediction: () => void;
   editClaim: () => void;
   stop: (reason: "rejected" | "insufficient") => void;
@@ -738,8 +837,14 @@ function BeliefScreen({
             </label>
           </fieldset>
           <label className="confidence-control">
-            Confidence <strong>72%</strong>
-            <input type="range" min="0" max="100" defaultValue="72" />
+            Confidence <strong>{confidence}%</strong>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={confidence}
+              onChange={(event) => setConfidence(Number(event.target.value))}
+            />
           </label>
           <button
             className="button button-gold"
@@ -1018,6 +1123,151 @@ function ResultTable({ result }: { result: VerifiedResultSet }) {
   );
 }
 
+function ReviewScreen({
+  step,
+  claim,
+  session,
+  result,
+  returnToCurrent,
+  restart,
+}: {
+  step: ReviewStep;
+  claim: string;
+  session: SessionView | null;
+  result: VerifiedResultSet;
+  returnToCurrent: () => void;
+  restart: () => void;
+}) {
+  const random = resultRun(result, "random_row_split");
+  const group = resultRun(result, "customer_group_split");
+  const titles: Record<ReviewStep, string> = {
+    claim: "Review your original question",
+    belief: "Review your prediction",
+    build: "Review the fair test",
+    reality: "Review what you learned",
+  };
+
+  return (
+    <main className="workspace shell lesson-review">
+      <div className="screen-intro compact">
+        <p className="eyebrow">Lesson map · Saved step</p>
+        <h1>{titles[step]}</h1>
+        <p>
+          This is the evidence saved at that point in your lesson. Inspect it
+          without losing your current place.
+        </p>
+      </div>
+
+      <aside className="review-notice" role="note">
+        <Mark name="lock" />
+        <div>
+          <strong>Saved evidence is read-only.</strong>
+          <span>Start a new lesson if you want to make different choices.</span>
+        </div>
+      </aside>
+
+      {step === "claim" && (
+        <section className="review-card panel">
+          <p className="eyebrow">The result you questioned</p>
+          <div className="review-score-row">
+            <strong>{percent.format(random.metrics.accuracy)}</strong>
+            <div>
+              <span>Notebook score</span>
+              <p>Rows from the same customers appeared on both sides.</p>
+            </div>
+          </div>
+          <blockquote>{claim}</blockquote>
+        </section>
+      )}
+
+      {step === "belief" && (
+        <section className="review-card panel">
+          <p className="eyebrow purple">Your committed guess</p>
+          <h2>
+            {session?.prediction?.choice ?? "Prediction not yet committed"}
+          </h2>
+          {session?.prediction !== undefined && (
+            <p className="review-confidence">
+              Confidence <strong>{session.prediction.confidence}%</strong>
+            </p>
+          )}
+          <div className="review-hypotheses">
+            <article>
+              <span>Story A</span>
+              <strong>
+                {session?.beliefTest?.currentHypothesis.statement ??
+                  "The score reflects a reusable pattern."}
+              </strong>
+            </article>
+            <article>
+              <span>Story B</span>
+              <strong>
+                {session?.beliefTest?.competingHypothesis.statement ??
+                  "Repeated customer identity inflated the score."}
+              </strong>
+            </article>
+          </div>
+        </section>
+      )}
+
+      {step === "build" && (
+        <section className="review-card panel">
+          <p className="eyebrow aqua">Verified Lab</p>
+          <h2>CounterLab changed the customer boundary—not the answer.</h2>
+          <ul className="review-checks">
+            <li>
+              <Mark name="check" /> Same model, target, and seed
+            </li>
+            <li>
+              <Mark name="check" /> Zero customer overlap
+            </li>
+            <li>
+              <Mark name="check" /> Repeated result hash
+            </li>
+            <li>
+              <Mark name="check" /> Invalid alternatives rejected
+            </li>
+          </ul>
+        </section>
+      )}
+
+      {step === "reality" && (
+        <section className="review-card panel">
+          <p className="eyebrow gold">Verified lesson</p>
+          <div className="review-result-change">
+            <span>
+              Familiar rows{" "}
+              <strong>{percent.format(random.metrics.accuracy)}</strong>
+            </span>
+            <Mark name="arrow" />
+            <span>
+              New customers{" "}
+              <strong>{percent.format(group.metrics.accuracy)}</strong>
+            </span>
+          </div>
+          <blockquote>
+            {session?.revision ??
+              "Write a reusable rule to complete this lesson."}
+          </blockquote>
+        </section>
+      )}
+
+      <div className="review-actions">
+        <button
+          className="button button-primary"
+          type="button"
+          onClick={returnToCurrent}
+        >
+          Return to current step <Mark name="arrow" />
+        </button>
+        <button className="button button-quiet" type="button" onClick={restart}>
+          Start a new lesson
+        </button>
+      </div>
+    </main>
+  );
+}
+
 function RealityScreen({
   claim,
   prediction,
@@ -1034,14 +1284,20 @@ function RealityScreen({
   const random = resultRun(result, "random_row_split");
   const group = resultRun(result, "customer_group_split");
   const ablation = resultRun(result, "identity_ablation");
-  const [revision, setRevision] = useState(session?.revision ?? "");
+  const [revision, setRevision] = useState(
+    session?.revision ??
+      window.localStorage.getItem(storageKeys.replayRevision) ??
+      "",
+  );
   const initialTransferState: TransferState = session?.patchResult
     ? "patched"
     : session?.transferResult?.outcome === "PASSED"
       ? "passed"
       : session?.revision
         ? "ready"
-        : "locked";
+        : session === null
+          ? storedReplayTransferState()
+          : "locked";
   const [transferState, setTransferState] =
     useState<TransferState>(initialTransferState);
   const [splitChoice, setSplitChoice] = useState("");
@@ -1057,6 +1313,16 @@ function RealityScreen({
   const accuracyGapPoints =
     (random.metrics.accuracy - group.metrics.accuracy) * 100;
   const predictionWasSupported = prediction === "falls";
+
+  useLayoutEffect(() => {
+    resetViewport("lesson-phase-title");
+  }, [transferState]);
+
+  useEffect(() => {
+    if (session !== null) return;
+    window.localStorage.setItem(storageKeys.replayTransferState, transferState);
+    window.localStorage.setItem(storageKeys.replayRevision, revision);
+  }, [revision, session, transferState]);
 
   const runAction = async (operation: () => Promise<void>) => {
     setActionBusy(true);
@@ -1149,11 +1415,354 @@ function RealityScreen({
     URL.revokeObjectURL(url);
   };
 
+  const actionErrorNotice =
+    actionError === null ? null : (
+      <div className="transfer-result rejected" role="alert">
+        <strong>We could not save that step.</strong>
+        <span>{actionError}</span>
+      </div>
+    );
+
+  if (transferState === "patched") {
+    return (
+      <main className="workspace shell reality lesson-phase completion-phase">
+        <div className="screen-intro compact">
+          <p className="eyebrow purple">
+            Lesson complete · Transfer passed · Verified correction
+          </p>
+          <h1 id="lesson-phase-title" tabIndex={-1}>
+            You found the hidden shortcut.
+          </h1>
+          <p>
+            You challenged the score, used the rule on a different problem, and
+            unlocked a correction that passed the same checks.
+          </p>
+        </div>
+
+        <section className="completion-hero" aria-label="Lesson completion">
+          <div className="completion-mark">
+            <Mark name="check" />
+          </div>
+          <div>
+            <span>Reusable rule</span>
+            <h2>The test must match what the model will face in real life.</h2>
+            <p>
+              Hold out whole customers for new-customer claims. Hold out later
+              time periods for forecasting claims.
+            </p>
+          </div>
+          <dl>
+            <div>
+              <dt>Customer test</dt>
+              <dd>0 shared customers</dd>
+            </div>
+            <div>
+              <dt>Forecasting transfer</dt>
+              <dd>Passed</dd>
+            </div>
+            <div>
+              <dt>Notebook correction</dt>
+              <dd>Verified copy</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section className="reasoning-diff panel">
+          <div className="panel-title final-title">
+            <div>
+              <p className="eyebrow purple">Reasoning Diff</p>
+              <h2>Your learning, before and after</h2>
+              <p>One view of what changed in your idea, evidence, and code.</p>
+            </div>
+            <button
+              className="button button-quiet"
+              type="button"
+              disabled={proofBundle === null}
+              onClick={exportProof}
+            >
+              {proofBundle === null ? "Preparing proof" : "Download proof"}
+            </button>
+          </div>
+          <div className="diff-table" role="table" aria-label="Reasoning Diff">
+            <div className="diff-row diff-head" role="row">
+              <span>Dimension</span>
+              <span>Before</span>
+              <span>After</span>
+            </div>
+            <div className="diff-row" role="row">
+              <strong>Belief</strong>
+              <span>{claim}</span>
+              <span>{revision}</span>
+            </div>
+            <div className="diff-row" role="row">
+              <strong>Prediction</strong>
+              <span>
+                {prediction === "stays-high"
+                  ? "Near 98%"
+                  : prediction === "falls"
+                    ? "Material fall"
+                    : "Uncertain"}
+              </span>
+              <span>
+                {percent.format(group.metrics.accuracy)} on new customers
+              </span>
+            </div>
+            <div className="diff-row" role="row">
+              <strong>Code</strong>
+              <span>Random rows + customer identity</span>
+              <span>Whole-customer holdout + identity removed</span>
+            </div>
+            <div className="diff-row" role="row">
+              <strong>Transfer</strong>
+              <span>Rule not yet tested</span>
+              <span>Time-aware forecasting choice passed</span>
+            </div>
+          </div>
+          <details className="verified-patch-details">
+            <summary>See the verified notebook change</summary>
+            <p>
+              Only the supported evaluation cell changed. The original notebook
+              remains untouched.
+            </p>
+            <pre className="diff" aria-label="Verified notebook cell diff">
+              <code>
+                {patch?.diff ??
+                  "Verified replay patch: random rows replaced with customer-group evaluation; customer identity removed."}
+              </code>
+            </pre>
+            <p className="patch-proof">
+              <Mark name="check" /> Cell 3 changed · unrelated source hashes
+              unchanged · group overlap 0 · result reproduced
+            </p>
+          </details>
+          <details className="technical-proof">
+            <summary>Technical proof and reproduction</summary>
+            <pre>
+              <code>{`result_hash=${result.resultHash}\nseed=${result.seed}\nreplay_id=${proofBundle?.replayId ?? verifiedReplay.id}\n./scripts/reproduce-session.sh leakage-01\n./scripts/replay-patch.sh leakage-01`}</code>
+            </pre>
+          </details>
+        </section>
+        {actionErrorNotice}
+      </main>
+    );
+  }
+
+  if (transferState === "passed") {
+    return (
+      <main className="workspace shell reality lesson-phase transfer-passed-phase">
+        <div className="screen-intro compact">
+          <p className="eyebrow aqua">Transfer passed · Patch unlocked</p>
+          <h1 id="lesson-phase-title" tabIndex={-1}>
+            You applied the rule correctly.
+          </h1>
+          <p>
+            You recognized the same evaluation mistake in forecasting, where
+            future information had leaked into the test.
+          </p>
+        </div>
+
+        <section className="transfer-win panel">
+          <div className="transfer-win-seal">
+            <Mark name="check" />
+            <span>Rule transferred</span>
+          </div>
+          <h2>Your notebook correction is ready.</h2>
+          <p>
+            CounterLab teaches before it repairs. Now that you used the rule on
+            a new problem, it can correct a copy of the original notebook.
+          </p>
+          <div className="transfer-win-grid">
+            <article>
+              <span>Customer lesson</span>
+              <strong>Keep each customer on one side</strong>
+            </article>
+            <Mark name="arrow" />
+            <article>
+              <span>Forecasting transfer</span>
+              <strong>Keep later dates out of training</strong>
+            </article>
+          </div>
+          <div className="patch-unlock-row">
+            <div>
+              <span>What the patch will change</span>
+              <strong>Random rows → whole-customer holdout</strong>
+              <small>The original upload will not be overwritten.</small>
+            </div>
+            <button
+              className="button button-gold"
+              type="button"
+              disabled={actionBusy}
+              onClick={compilePatch}
+            >
+              Verify notebook patch <Mark name="arrow" />
+            </button>
+          </div>
+        </section>
+        {actionErrorNotice}
+      </main>
+    );
+  }
+
+  if (transferState === "ready" || transferState === "failed") {
+    return (
+      <main className="workspace shell reality lesson-phase transfer-phase">
+        <div className="screen-intro compact">
+          <p className="eyebrow purple">New problem · No notebook hints</p>
+          <h1 id="lesson-phase-title" tabIndex={-1}>
+            Try your rule on forecasting.
+          </h1>
+          <p>
+            The surface changed from customers to time. Choose the evaluation
+            that matches what will be available when a real prediction is made.
+          </p>
+        </div>
+
+        <section className="lesson-recap" aria-label="Rule carried forward">
+          <div className="recap-score">
+            <span>Customer lesson</span>
+            <strong>
+              {percent.format(random.metrics.accuracy)} →{" "}
+              {percent.format(group.metrics.accuracy)}
+            </strong>
+            <small>when only new customers were tested</small>
+          </div>
+          <div className="recap-rule">
+            <span>Your rule</span>
+            <p>{revision}</p>
+          </div>
+        </section>
+
+        <section className="transfer panel" aria-labelledby="transfer-title">
+          <div className="transfer-heading">
+            <div>
+              <p className="eyebrow">Forecasting challenge</p>
+              <h2 id="transfer-title">
+                What information exists at prediction time?
+              </h2>
+            </div>
+            <span className="locked-chip">
+              <Mark name="lock" /> Fix still locked
+            </span>
+          </div>
+          <div className="case-card">
+            <span className="case-label">Scenario</span>
+            <p>
+              A demand forecast learns from nearby days. Its rolling feature
+              looks both backward and forward, and the notebook randomly mixes
+              dates between training and testing.
+            </p>
+            <p className="plain-warning">
+              In real life, tomorrow&apos;s sales do not exist when today&apos;s
+              prediction is made.
+            </p>
+          </div>
+          <div
+            className="forecast-window"
+            aria-label="Forecast information timeline"
+          >
+            <div className="forecast-labels">
+              <span>Available history</span>
+              <strong>Prediction time</strong>
+              <span>Unavailable future</span>
+            </div>
+            <div className="forecast-track">
+              {[-3, -2, -1, 0, 1, 2, 3].map((day) => (
+                <span
+                  className={day === 0 ? "now" : day > 0 ? "future" : "past"}
+                  key={day}
+                >
+                  {day === 0 ? "NOW" : day > 0 ? `+${day}` : day}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="transfer-questions">
+            <fieldset>
+              <legend>Which evaluation design matches deployment?</legend>
+              <label className="choice">
+                <input
+                  type="radio"
+                  name="transfer-split"
+                  checked={splitChoice === "random"}
+                  onChange={() => setSplitChoice("random")}
+                />
+                <span>
+                  <strong>Random daily rows</strong>
+                  <small>Mix observations from all dates.</small>
+                </span>
+              </label>
+              <label className="choice">
+                <input
+                  type="radio"
+                  name="transfer-split"
+                  checked={splitChoice === "time"}
+                  onChange={() => setSplitChoice("time")}
+                />
+                <span>
+                  <strong>Time-ordered holdout</strong>
+                  <small>Train on earlier dates and test on later dates.</small>
+                </span>
+              </label>
+            </fieldset>
+            <fieldset>
+              <legend>Which feature leaks future information?</legend>
+              <label className="choice">
+                <input
+                  type="radio"
+                  name="transfer-risk"
+                  checked={riskChoice === "price"}
+                  onChange={() => setRiskChoice("price")}
+                />
+                <span>
+                  <strong>Known item price</strong>
+                  <small>Known when the prediction is made.</small>
+                </span>
+              </label>
+              <label className="choice">
+                <input
+                  type="radio"
+                  name="transfer-risk"
+                  checked={riskChoice === "future"}
+                  onChange={() => setRiskChoice("future")}
+                />
+                <span>
+                  <strong>Centered rolling target</strong>
+                  <small>Reads outcomes from later days.</small>
+                </span>
+              </label>
+            </fieldset>
+          </div>
+          <button
+            className="button button-primary"
+            type="button"
+            disabled={!splitChoice || !riskChoice || actionBusy}
+            onClick={checkTransfer}
+          >
+            Check transfer
+          </button>
+          {transferState === "failed" && (
+            <div className="transfer-result rejected" role="status">
+              <strong>Transfer not yet passed.</strong>
+              <span>
+                Use the NOW line: pick a test where training happens before
+                testing, then remove any feature that reads values to the right
+                of NOW. The patch remains locked.
+              </span>
+            </div>
+          )}
+        </section>
+        {actionErrorNotice}
+      </main>
+    );
+  }
+
   return (
     <main className="workspace shell reality">
       <div className="screen-intro compact">
         <p className="eyebrow aqua">Step 4 of 4 · The lesson</p>
-        <h1>Here’s what changed.</h1>
+        <h1 id="lesson-phase-title" tabIndex={-1}>
+          Here’s what changed.
+        </h1>
         <p>
           The model looked excellent on familiar customers. It struggled on
           customers it had never seen.
@@ -1312,241 +1921,7 @@ function RealityScreen({
         </button>
       </section>
 
-      {actionError !== null && (
-        <div className="transfer-result rejected" role="alert">
-          <strong>Evidence was not recorded.</strong>
-          <span>{actionError}</span>
-        </div>
-      )}
-
-      <section
-        className={`transfer panel ${transferState === "locked" ? "is-locked" : ""}`}
-        aria-labelledby="transfer-title"
-      >
-        <div className="transfer-heading">
-          <div>
-            <p className="eyebrow">Fixed transfer · forecasting</p>
-            <h2 id="transfer-title">
-              Can you spot the same mistake in forecasting?
-            </h2>
-          </div>
-          {transferState === "locked" && (
-            <span className="locked-chip">
-              <Mark name="lock" /> Patch locked
-            </span>
-          )}
-        </div>
-        {transferState === "locked" ? (
-          <p className="locked-copy">
-            Record a reusable revision before the forecasting case unlocks.
-          </p>
-        ) : (
-          <>
-            <div className="case-card">
-              <p>
-                A demand forecast uses nearby days—including later days—with{" "}
-                <code>rolling(window=7, center=True)</code> and randomly splits
-                the rows. In real life, later days do not exist when the
-                prediction is made.
-              </p>
-            </div>
-            <div
-              className="forecast-window"
-              aria-label="Forecast information timeline"
-            >
-              <div className="forecast-labels">
-                <span>Earlier observations</span>
-                <strong>Prediction time</strong>
-                <span>Later outcomes</span>
-              </div>
-              <div className="forecast-track">
-                {[-3, -2, -1, 0, 1, 2, 3].map((day) => (
-                  <span
-                    className={day === 0 ? "now" : day > 0 ? "future" : "past"}
-                    key={day}
-                  >
-                    {day === 0 ? "NOW" : day > 0 ? `+${day}` : day}
-                  </span>
-                ))}
-              </div>
-              <p>
-                Choose a test that uses only information available at prediction
-                time.
-              </p>
-            </div>
-            <fieldset>
-              <legend>Which evaluation design matches deployment?</legend>
-              <label className="choice">
-                <input
-                  type="radio"
-                  name="transfer-split"
-                  onChange={() => setSplitChoice("random")}
-                />
-                <span>
-                  <strong>Random daily rows</strong>
-                  <small>Mix observations from all dates.</small>
-                </span>
-              </label>
-              <label className="choice">
-                <input
-                  type="radio"
-                  name="transfer-split"
-                  onChange={() => setSplitChoice("time")}
-                />
-                <span>
-                  <strong>Time-ordered holdout</strong>
-                  <small>Train on earlier dates and test on later dates.</small>
-                </span>
-              </label>
-            </fieldset>
-            <fieldset>
-              <legend>Which feature leaks future information?</legend>
-              <label className="choice">
-                <input
-                  type="radio"
-                  name="transfer-risk"
-                  onChange={() => setRiskChoice("price")}
-                />
-                <span>
-                  <strong>Known item price</strong>
-                </span>
-              </label>
-              <label className="choice">
-                <input
-                  type="radio"
-                  name="transfer-risk"
-                  onChange={() => setRiskChoice("future")}
-                />
-                <span>
-                  <strong>Centered rolling target</strong>
-                </span>
-              </label>
-            </fieldset>
-            <button
-              className="button button-primary"
-              type="button"
-              disabled={!splitChoice || !riskChoice || actionBusy}
-              onClick={checkTransfer}
-            >
-              Check transfer
-            </button>
-            {transferState === "failed" && (
-              <div className="transfer-result rejected" role="status">
-                <strong>Transfer not yet passed.</strong>
-                <span>
-                  The patch stays locked. Revisit what information exists at
-                  prediction time.
-                </span>
-              </div>
-            )}
-            {(transferState === "passed" || transferState === "patched") && (
-              <div className="transfer-result passed" role="status">
-                <Mark name="check" />
-                <strong>Transfer passed.</strong>
-                <span>
-                  You selected a time-aware split and removed future
-                  information.
-                </span>
-              </div>
-            )}
-          </>
-        )}
-      </section>
-
-      {(transferState === "passed" || transferState === "patched") && (
-        <section className="patch panel">
-          <div className="panel-title">
-            <div>
-              <p className="eyebrow gold">Minimal correction</p>
-              <h2>Your notebook fix is unlocked</h2>
-            </div>
-            <span className="verified-chip">
-              <Mark name="check" /> Copied notebook only
-            </span>
-          </div>
-          {transferState === "passed" ? (
-            <button
-              className="button button-gold"
-              type="button"
-              disabled={actionBusy}
-              onClick={compilePatch}
-            >
-              Verify notebook patch <Mark name="arrow" />
-            </button>
-          ) : (
-            <>
-              <pre className="diff" aria-label="Verified notebook cell diff">
-                <code>
-                  {patch?.diff ??
-                    "Verified replay patch: random rows replaced with customer-group evaluation; customer identity removed."}
-                </code>
-              </pre>
-              <p className="patch-proof">
-                <Mark name="check" /> Cell 3 changed · unrelated source hashes
-                unchanged · group overlap 0 · result reproduced
-              </p>
-            </>
-          )}
-        </section>
-      )}
-
-      {transferState === "patched" && (
-        <section className="reasoning-diff panel">
-          <div className="panel-title">
-            <div>
-              <p className="eyebrow purple">Reasoning Diff</p>
-              <h2>Your learning, before and after</h2>
-            </div>
-            <button
-              className="button button-quiet"
-              type="button"
-              disabled={proofBundle === null}
-              onClick={exportProof}
-            >
-              {proofBundle === null ? "Preparing proof" : "Download proof"}
-            </button>
-          </div>
-          <div className="diff-table" role="table" aria-label="Reasoning Diff">
-            <div className="diff-row diff-head" role="row">
-              <span>Dimension</span>
-              <span>Before</span>
-              <span>After</span>
-            </div>
-            <div className="diff-row" role="row">
-              <strong>Belief</strong>
-              <span>{claim}</span>
-              <span>{revision}</span>
-            </div>
-            <div className="diff-row" role="row">
-              <strong>Prediction</strong>
-              <span>
-                {prediction === "stays-high"
-                  ? "Near 98%"
-                  : prediction === "falls"
-                    ? "Material fall"
-                    : "Uncertain"}
-              </span>
-              <span>{percent.format(group.metrics.accuracy)}, verified</span>
-            </div>
-            <div className="diff-row" role="row">
-              <strong>Code</strong>
-              <span>Random rows + customer identity</span>
-              <span>Group holdout + identity removed</span>
-            </div>
-            <div className="diff-row" role="row">
-              <strong>Transfer</strong>
-              <span>Rule not yet tested</span>
-              <span>Time-aware forecasting choice passed</span>
-            </div>
-          </div>
-          <details className="technical-proof">
-            <summary>Technical proof and reproduction</summary>
-            <pre>
-              <code>{`result_hash=${result.resultHash}\nseed=${result.seed}\nreplay_id=${proofBundle?.replayId ?? verifiedReplay.id}\n./scripts/reproduce-session.sh leakage-01\n./scripts/replay-patch.sh leakage-01`}</code>
-            </pre>
-          </details>
-        </section>
-      )}
+      {actionErrorNotice}
     </main>
   );
 }
@@ -1717,6 +2092,8 @@ export function App() {
   const [claim, setClaim] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [prediction, setPrediction] = useState<PredictionChoice | null>(null);
+  const [confidence, setConfidence] = useState(72);
+  const [reviewStep, setReviewStep] = useState<ReviewStep | null>(null);
   const [replayIntro, setReplayIntro] = useState(false);
   const [artifact, setArtifact] = useState<ArtifactView | null>(null);
   const [session, setSession] = useState<SessionView | null>(null);
@@ -1757,19 +2134,50 @@ export function App() {
   };
 
   useEffect(() => {
-    const sessionId = window.localStorage.getItem("counterlab.sessionId");
+    const sessionId = window.localStorage.getItem(storageKeys.sessionId);
     const storedMode = window.localStorage.getItem(
-      "counterlab.mode",
+      storageKeys.mode,
     ) as Mode | null;
-    const storedClaim = window.localStorage.getItem("counterlab.claim");
-    if (sessionId === null || storedMode === null || storedMode === "replay")
+    const storedClaim = window.localStorage.getItem(storageKeys.claim);
+
+    if (storedMode === "replay") {
+      setMode("replay");
+      setReplayIntro(
+        window.localStorage.getItem(storageKeys.replayIntro) !== "false",
+      );
+      setStage(
+        window.localStorage.getItem(storageKeys.replayStage) === "reality"
+          ? "reality"
+          : "build",
+      );
       return;
+    }
+
+    if (sessionId === null || storedMode === null) {
+      if (storedMode === "live") {
+        setMode("live");
+        setStage("live-setup");
+        void checkLiveCapabilities();
+      }
+      return;
+    }
     if (storedClaim !== null) setClaim(storedClaim);
     void withRequest(async () => {
       const restored = await counterLabApi.getSession(sessionId);
       setArtifact(await counterLabApi.getArtifact(restored.artifactId));
       setSession(restored);
       setMode(restored.mode);
+      if (restored.prediction !== undefined) {
+        const savedChoice = restored.prediction.choice.toLowerCase();
+        setPrediction(
+          savedChoice.includes("fall")
+            ? "falls"
+            : savedChoice.includes("unsure")
+              ? "unsure"
+              : "stays-high",
+        );
+        setConfidence(restored.prediction.confidence);
+      }
       setConfirmed(
         restored.state !== "INGESTED" &&
           restored.state !== "BELIEF_TEST_PROPOSED",
@@ -1799,6 +2207,10 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useLayoutEffect(() => {
+    resetViewport();
+  }, [stage]);
+
   const checkLiveCapabilities = async () => {
     setCheckingLiveHealth(true);
     setLiveHealthError(null);
@@ -1818,7 +2230,9 @@ export function App() {
 
   const chooseMode = (nextMode: Mode) => {
     setMode(nextMode);
+    setReviewStep(null);
     setError(null);
+    window.localStorage.setItem(storageKeys.mode, nextMode);
     if (nextMode === "live") {
       setStage("live-setup");
       void checkLiveCapabilities();
@@ -1827,7 +2241,12 @@ export function App() {
     if (nextMode === "replay") {
       void withRequest(async () => {
         await counterLabApi.getReplay("leakage-01");
-        window.localStorage.setItem("counterlab.mode", "replay");
+        setSession(null);
+        setArtifact(null);
+        window.localStorage.setItem(storageKeys.replayStage, "build");
+        window.localStorage.setItem(storageKeys.replayIntro, "true");
+        window.localStorage.removeItem(storageKeys.replayTransferState);
+        window.localStorage.removeItem(storageKeys.replayRevision);
         setReplayIntro(true);
         setStage("build");
       });
@@ -1841,10 +2260,36 @@ export function App() {
       });
       setArtifact(sample);
       setSession(created);
-      window.localStorage.setItem("counterlab.sessionId", created.sessionId);
-      window.localStorage.setItem("counterlab.mode", "instant");
+      window.localStorage.setItem(storageKeys.sessionId, created.sessionId);
       setStage("claim");
     });
+  };
+
+  const restart = () => {
+    Object.values(storageKeys).forEach((key) =>
+      window.localStorage.removeItem(key),
+    );
+    setMode(null);
+    setStage("landing");
+    setClaim("");
+    setConfirmed(false);
+    setPrediction(null);
+    setConfidence(72);
+    setReviewStep(null);
+    setReplayIntro(false);
+    setArtifact(null);
+    setSession(null);
+    setError(null);
+  };
+
+  const review = (step: ReviewStep) => {
+    setReviewStep(step);
+    resetViewport();
+  };
+
+  const returnToCurrent = () => {
+    setReviewStep(null);
+    resetViewport();
   };
 
   const startLiveSession = () => {
@@ -1860,8 +2305,9 @@ export function App() {
       setClaim("");
       setConfirmed(false);
       setPrediction(null);
-      window.localStorage.setItem("counterlab.sessionId", created.sessionId);
-      window.localStorage.setItem("counterlab.mode", "live");
+      setConfidence(72);
+      window.localStorage.setItem(storageKeys.sessionId, created.sessionId);
+      window.localStorage.setItem(storageKeys.mode, "live");
       setStage("claim");
     });
   };
@@ -1871,21 +2317,21 @@ export function App() {
       const uploaded = await counterLabApi.uploadArtifact(file);
       setArtifact(uploaded);
       setSession(null);
-      window.localStorage.removeItem("counterlab.sessionId");
+      window.localStorage.removeItem(storageKeys.sessionId);
       if (uploaded.support.status !== "SUPPORTED") return;
       const created = await counterLabApi.createSession({
         artifactId: uploaded.artifactId,
         mode: "instant",
       });
       setSession(created);
-      window.localStorage.setItem("counterlab.sessionId", created.sessionId);
-      window.localStorage.setItem("counterlab.mode", "instant");
+      window.localStorage.setItem(storageKeys.sessionId, created.sessionId);
+      window.localStorage.setItem(storageKeys.mode, "instant");
     });
   };
 
   const proposeBeliefTest = () => {
     if (session === null) return;
-    window.localStorage.setItem("counterlab.claim", claim);
+    window.localStorage.setItem(storageKeys.claim, claim);
     void withRequest(async () => {
       const updated = await counterLabApi.proposeBeliefTest(session.sessionId, {
         learnerClaim: claim,
@@ -1935,7 +2381,7 @@ export function App() {
         session.sessionId,
         {
           choice: labels[prediction],
-          confidence: 72,
+          confidence,
         },
       );
       setSession(committed);
@@ -1951,6 +2397,7 @@ export function App() {
 
   const openResult = () => {
     if (session === null) {
+      window.localStorage.setItem(storageKeys.replayStage, "reality");
       setStage("reality");
       return;
     }
@@ -1961,10 +2408,22 @@ export function App() {
     });
   };
 
+  const continueReplay = () => {
+    window.localStorage.setItem(storageKeys.replayIntro, "false");
+    setReplayIntro(false);
+  };
+
   return (
     <div className={`app-frame stage-${stage}`}>
       {replay && <ReplayBanner />}
-      <Header mode={mode} stage={stage} />
+      <Header
+        mode={mode}
+        stage={stage}
+        reviewStep={reviewStep}
+        review={review}
+        returnToCurrent={returnToCurrent}
+        restart={restart}
+      />
       {error !== null && (
         <div className="api-error" role="alert">
           {error}
@@ -1975,8 +2434,23 @@ export function App() {
           Recording evidence…
         </div>
       )}
-      {stage === "landing" && <Landing chooseMode={chooseMode} />}
-      {stage === "claim" && (
+      {reviewStep !== null && (
+        <ReviewScreen
+          step={reviewStep}
+          claim={
+            claim ||
+            "The notebook accuracy proves generalization to new customers."
+          }
+          session={session}
+          result={session?.verifiedResult ?? sampleResult}
+          returnToCurrent={returnToCurrent}
+          restart={restart}
+        />
+      )}
+      {reviewStep === null && stage === "landing" && (
+        <Landing chooseMode={chooseMode} />
+      )}
+      {reviewStep === null && stage === "claim" && (
         <ClaimScreen
           artifact={artifact}
           claim={claim}
@@ -1986,7 +2460,7 @@ export function App() {
           busy={busy}
         />
       )}
-      {stage === "belief" && (
+      {reviewStep === null && stage === "belief" && (
         <BeliefScreen
           claim={claim}
           beliefTest={session?.beliefTest}
@@ -1994,12 +2468,15 @@ export function App() {
           confirm={confirmBeliefTest}
           prediction={prediction}
           setPrediction={setPrediction}
+          confidence={confidence}
+          setConfidence={setConfidence}
           commitPrediction={commitPrediction}
           editClaim={() => setStage("claim")}
           stop={stopBeliefTest}
         />
       )}
-      {stage === "build" &&
+      {reviewStep === null &&
+        stage === "build" &&
         mode !== null &&
         (replayIntro ? (
           <main className="workspace shell narrow">
@@ -2034,7 +2511,7 @@ export function App() {
             <button
               className="button button-primary"
               type="button"
-              onClick={() => setReplayIntro(false)}
+              onClick={continueReplay}
             >
               Continue replay <Mark name="arrow" />
             </button>
@@ -2042,7 +2519,7 @@ export function App() {
         ) : (
           <BuildScreen mode={mode} openResult={openResult} />
         ))}
-      {stage === "reality" && (
+      {reviewStep === null && stage === "reality" && (
         <RealityScreen
           claim={
             claim ||
@@ -2054,7 +2531,7 @@ export function App() {
           updateSession={setSession}
         />
       )}
-      {stage === "live-setup" && (
+      {reviewStep === null && stage === "live-setup" && (
         <LiveSetup
           health={liveHealth}
           checking={checkingLiveHealth}
@@ -2065,7 +2542,7 @@ export function App() {
           busy={busy}
         />
       )}
-      {stage === "live-compile" && (
+      {reviewStep === null && stage === "live-compile" && (
         <LiveCompileBoundary fallBack={chooseMode} />
       )}
       <footer className="footer shell">
