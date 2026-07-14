@@ -97,6 +97,7 @@ Phase 3 — Hosted artifact-specific leakage vertical slice
 | Progress update patch used stale formatted table context                                                          |       1 | Re-read the exact table before applying the evidence update.                                                                         |
 | Progress search contained an unescaped shell backtick                                                             |       1 | Re-ran the bounded search with a safe single-quoted pattern.                                                                         |
 | Combined progress/task-plan patch missed a formatted task-plan row                                                |       1 | Split the documentation updates and patched each exact table independently.                                                          |
+| Candidate verification added a verifier event to the reconnect stream                                             |       1 | Updated the cursor regression to require both the file and verifier events.                                                          |
 
 ## Notes
 

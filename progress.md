@@ -181,6 +181,7 @@
 | 2026-07-15 | Progress update patch used stale pre-format table context                                         |       1 | Re-read the formatted table and applied the update against exact context.                                                 |
 | 2026-07-15 | Progress search command contained an unescaped backtick                                           |       1 | Re-ran the bounded search with a single-quoted plain pattern.                                                             |
 | 2026-07-15 | Combined progress/task-plan patch missed the task plan's formatted row                            |       1 | Split the documentation updates and patched each exact formatted table independently.                                     |
+| 2026-07-15 | Candidate verification advanced the reconnect cursor with a verifier event                        |       1 | Updated the regression to require the file event and independent verifier event.                                          |
 
 ## 5-Question Reboot Check
 

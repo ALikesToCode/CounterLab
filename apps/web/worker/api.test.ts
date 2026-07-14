@@ -789,12 +789,35 @@ describe("Cloudflare Worker API", () => {
       ).status,
     ).toBe(201);
 
+    const candidate = await postJson(
+      app,
+      `/api/runner/jobs/${dispatch.job.jobId}/candidate`,
+      { attempt: 1, planSha256: planHash },
+      authorization,
+    );
+    expect(candidate.status).toBe(200);
+    await expect(candidate.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        status: "VERIFIED",
+        canRepair: false,
+        nextCursor: 3,
+        verification: { status: "VERIFIED" },
+      },
+    });
+
     const reconnected = await app.request(
       `/api/sessions/${sessionId}/jobs/${dispatch.job.jobId}/events?after=1`,
     );
     expect(reconnected.status).toBe(200);
     await expect(reconnected.json()).resolves.toMatchObject({
-      data: { events: [{ cursor: 2, kind: "file.created" }], nextCursor: 2 },
+      data: {
+        events: [
+          { cursor: 2, kind: "file.created" },
+          { cursor: 3, kind: "verifier.verified" },
+        ],
+        nextCursor: 3,
+      },
     });
 
     const callbackBody = {
@@ -805,7 +828,7 @@ describe("Cloudflare Worker API", () => {
       stateVersion: dispatch.job.stateVersion,
       status: "VERIFIED" as const,
       outputHashes: [planHash],
-      finalEventCursor: 2,
+      finalEventCursor: 3,
       occurredAt: "2026-07-14T10:00:01.000Z",
     };
     const callback = await postJson(
@@ -885,6 +908,26 @@ describe("Cloudflare Worker API", () => {
       ).status,
     ).toBe(201);
 
+    const candidate = await postJson(
+      harness.app,
+      `/api/runner/jobs/${jobId}/candidate`,
+      { attempt: 1, planSha256: invalidPlanHash },
+      authorization,
+    );
+    expect(candidate.status).toBe(200);
+    await expect(candidate.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        status: "REJECTED",
+        canRepair: true,
+        nextCursor: 1,
+        counterexamples: [
+          { invariant: "structural_schema", expected: "Experiment Plan v2" },
+        ],
+        runnerJob: { status: "REPAIRING", attempt: 2 },
+      },
+    });
+
     const callback = await postJson(
       harness.app,
       `/api/runner/jobs/${jobId}/callback`,
@@ -896,7 +939,7 @@ describe("Cloudflare Worker API", () => {
         stateVersion: harness.dispatch.job.stateVersion,
         status: "VERIFIED",
         outputHashes: [invalidPlanHash],
-        finalEventCursor: 0,
+        finalEventCursor: 1,
         occurredAt: "2026-07-14T10:00:01.000Z",
       },
       authorization,

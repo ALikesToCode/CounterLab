@@ -156,6 +156,12 @@ const TransferSubmissionSchema = z
     evidenceChoices: z.array(z.string().trim().min(1)).max(3),
   })
   .strict();
+const RunnerCandidateSchema = z
+  .object({
+    attempt: z.number().int().positive().max(3),
+    planSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+  })
+  .strict();
 
 const DEFAULT_MAX_NOTEBOOK_BYTES = 10_485_760;
 const ACCEPTED_NOTEBOOK_TYPES = new Set([
@@ -1086,6 +1092,152 @@ export function createApi(options: ApiOptions = {}) {
     return context.json(
       jsonSuccess({ path: generatedPath, sha256: await sha256Text(body) }),
       201,
+    );
+  });
+
+  app.post("/api/runner/jobs/:jobId/resume", async (context) => {
+    const jobId = context.req.param("jobId");
+    const { job } = await authorizeRunner(context, options, jobId);
+    if (job.status !== "REPAIRING") {
+      throw new ApiInputError(
+        "RUNNER_JOB_NOT_REPAIRING",
+        "Only a repairing runner job can resume compilation",
+        409,
+      );
+    }
+    const resumed = await runnerJobService(context, options).transition(
+      jobId,
+      job.jobVersion,
+      "RUNNING",
+      { runnerIdentity: job.runnerIdentity ?? "authenticated-runner" },
+    );
+    return context.json(jsonSuccess({ runnerJob: resumed }));
+  });
+
+  app.post("/api/runner/jobs/:jobId/candidate", async (context) => {
+    const jobId = context.req.param("jobId");
+    const { claims, job } = await authorizeRunner(context, options, jobId);
+    if (job.kind !== "LAB_COMPILE" || job.status !== "RUNNING") {
+      throw new ApiInputError(
+        "RUNNER_CANDIDATE_NOT_ACCEPTED",
+        "Plan candidates are accepted only for an active lab compile job",
+        409,
+      );
+    }
+    const candidate = RunnerCandidateSchema.parse(await readJson(context));
+    if (candidate.attempt !== job.attempt) {
+      throw new ApiInputError(
+        "RUNNER_ATTEMPT_MISMATCH",
+        "Candidate attempt does not match the runner job attempt",
+        409,
+      );
+    }
+    const artifact = await artifacts(context, options).find(job.artifactId);
+    const session = await sessionService(context, options).getSession(
+      job.sessionId,
+    );
+    const planObject = await runnerObjectStore(context, options).get(
+      `${claims.outputPrefix}experiment-plan.json`,
+    );
+    if (
+      artifact === undefined ||
+      session.beliefTest === undefined ||
+      planObject === undefined
+    ) {
+      throw new ApiInputError(
+        "RUNNER_CANDIDATE_LINEAGE_MISSING",
+        "Plan candidate lineage is incomplete",
+        409,
+      );
+    }
+    if ((await sha256Text(planObject.body)) !== candidate.planSha256) {
+      throw new ApiInputError(
+        "RUNNER_OUTPUT_HASH_MISMATCH",
+        "Plan candidate bytes do not match the declared hash",
+        409,
+      );
+    }
+
+    let planInput: unknown = null;
+    try {
+      planInput = JSON.parse(planObject.body) as unknown;
+    } catch {
+      planInput = null;
+    }
+    let report: Awaited<ReturnType<typeof verifyExperimentPlan>>;
+    try {
+      report = await verifyExperimentPlan(planInput, {
+        manifest: artifact.manifest,
+        beliefTest: session.beliefTest,
+      });
+    } catch (error) {
+      if (!(error instanceof PlanVerificationError)) throw error;
+      report = error.report;
+    }
+
+    const jobs = runnerJobService(context, options);
+    let updatedJob = job;
+    if (report.status === "VERIFIED") {
+      updatedJob = await jobs.appendEvent(jobId, updatedJob.jobVersion, {
+        schemaVersion: "1",
+        eventId: requestId(options, "compiler_event"),
+        jobId,
+        cursor: updatedJob.eventCursor + 1,
+        at: requestNow(options).toISOString(),
+        kind: "verifier.verified",
+        invariantCount: report.invariantCount,
+        mutationCount: 0,
+      });
+      return context.json(
+        jsonSuccess({
+          status: "VERIFIED" as const,
+          canRepair: false,
+          counterexamples: [],
+          nextCursor: updatedJob.eventCursor,
+          runnerJob: updatedJob,
+          verification: report,
+        }),
+      );
+    }
+
+    const failed = report.invariants.filter((invariant) => !invariant.passed);
+    const counterexamples = failed.map((invariant) => ({
+      invariant: invariant.name,
+      observed: invariant.observed ?? null,
+      expected: invariant.expected ?? null,
+      counterexample:
+        invariant.counterexample ??
+        `Candidate violated ${invariant.name.replaceAll("_", " ")}.`,
+    }));
+    for (const counterexample of counterexamples) {
+      updatedJob = await jobs.appendEvent(jobId, updatedJob.jobVersion, {
+        schemaVersion: "1",
+        eventId: requestId(options, "compiler_event"),
+        jobId,
+        cursor: updatedJob.eventCursor + 1,
+        at: requestNow(options).toISOString(),
+        kind: "verifier.rejected",
+        ...counterexample,
+      });
+    }
+    const canRepair = updatedJob.attempt < updatedJob.maxAttempts;
+    if (canRepair) {
+      updatedJob = await jobs.transition(
+        jobId,
+        updatedJob.jobVersion,
+        "REPAIRING",
+        { runnerIdentity: updatedJob.runnerIdentity ?? "authenticated-runner" },
+      );
+    }
+    return context.json(
+      jsonSuccess({
+        status: "REJECTED" as const,
+        canRepair,
+        counterexamples,
+        nextCursor: updatedJob.eventCursor,
+        runnerJob: updatedJob,
+        verification: report,
+      }),
     );
   });
 
