@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "1",
+  "id": "forecasting-future-leakage-01",
+  "concept": "future_leakage",
+  "title": "Will this demand forecast work next month?",
+  "scenario": "A retail forecasting notebook predicts daily demand. It builds a centered seven-day target average and evaluates with a shuffled random row holdout. Choose an evaluation strategy and identify the evidence that could make the reported error optimistic.",
+  "codeExcerpt": "df['demand_7d_centered'] = df.groupby('store_id')['demand'].transform(lambda values: values.rolling(7, center=True).mean())\ntrain, test = train_test_split(df, test_size=0.2, random_state=1729, shuffle=True)",
+  "strategyChoices": [
+    {
+      "id": "random_row_holdout",
+      "label": "Keep a shuffled row holdout",
+      "description": "Randomly reserve rows from across the full date range."
+    },
+    {
+      "id": "time_ordered_holdout",
+      "label": "Train on earlier dates; test on later dates",
+      "description": "Choose a cutoff, fit only on observations before it, and evaluate only on later observations."
+    },
+    {
+      "id": "grouped_store_holdout",
+      "label": "Hold out complete stores",
+      "description": "Reserve some stores but continue mixing earlier and later dates."
+    }
+  ],
+  "riskChoices": [
+    {
+      "id": "centered_window_reads_future",
+      "label": "The centered target window reads later demand",
+      "description": "A centered rolling target feature can include observations after the row being predicted."
+    },
+    {
+      "id": "model_is_too_simple",
+      "label": "The model is not complex enough",
+      "description": "The estimator may underfit nonlinear demand patterns."
+    },
+    {
+      "id": "stores_have_different_scales",
+      "label": "Stores sell at different volumes",
+      "description": "Demand magnitudes vary across store locations."
+    }
+  ],
+  "evidenceChips": [
+    {
+      "id": "center_true_uses_later_targets",
+      "label": "`center=True` spans both sides of each date",
+      "excerpt": "rolling(7, center=True).mean() over the target column"
+    },
+    {
+      "id": "random_split_mixes_dates",
+      "label": "The split shuffles dates",
+      "excerpt": "train_test_split(..., shuffle=True)"
+    },
+    {
+      "id": "metric_is_mae",
+      "label": "The report uses mean absolute error",
+      "excerpt": "mean_absolute_error(y_test, prediction)"
+    }
+  ]
+}
