@@ -2,12 +2,16 @@ import {
   ArtifactManifestSchema,
   ExperimentPlanV2Schema,
   HostedVerifiedResultSetV2Schema,
+  PatchPlanV1Schema,
+  PatchResultSchema,
   PublicCompilerEventSchema,
   RunnerCallbackSchema,
   RunnerLabCompileBundleSchema,
   RunnerLabRunBundleSchema,
   RunnerOutputPathSchema,
+  RunnerPatchCompileBundleSchema,
   type BeliefTest,
+  type PatchResult,
   type RunnerCallback,
   type VerifiedResultSet,
 } from "@counterlab/contracts";
@@ -23,9 +27,11 @@ import {
 import { NotebookParseError, parseNotebook } from "@counterlab/notebook-parser";
 import {
   PlanVerificationError,
+  PatchPlanVerificationError,
   ResultVerificationError,
   verifyExperimentPlan,
   verifyHostedResultSet,
+  verifyPatchPlan,
 } from "@counterlab/plan-verifier";
 import {
   ConcurrentRunnerJobUpdateError,
@@ -51,6 +57,7 @@ import patchedNotebookText from "../../../replays/leakage-01/patch/customer_chur
 import patchKernelResult from "../../../replays/leakage-01/patch-kernel-result.json";
 import compilerReplaySummary from "../../../replays/leakage-01/compiler/replay-summary.json";
 import experimentPlanSchema from "../../../packages/contracts/schemas/experiment-plan-v2.schema.json";
+import patchPlanSchema from "../../../packages/contracts/schemas/patch-plan-v1.schema.json";
 import { D1ArtifactStore, type ArtifactStore } from "./artifact-store";
 import {
   ConcurrentD1SessionUpdateError,
@@ -79,6 +86,7 @@ import {
   sampleLabEvidenceHashes,
   sampleLabVerification,
 } from "./sample-proof";
+import { createLiveReasoningProof } from "./live-proof";
 
 type WorkerBindings = Env & {
   OPENAI_API_KEY?: string;
@@ -1039,6 +1047,97 @@ export function createApi(options: ApiOptions = {}) {
     });
   });
 
+  app.get("/api/runner/jobs/:jobId/source", async (context) => {
+    const jobId = context.req.param("jobId");
+    const { claims, job } = await authorizeRunner(context, options, jobId);
+    if (
+      job.kind !== "PATCH_COMPILE" ||
+      (job.status !== "RUNNING" && job.status !== "REPAIRING")
+    ) {
+      throw new ApiInputError(
+        "RUNNER_SOURCE_NOT_PERMITTED",
+        "Source bytes are available only to an active fixed patch job",
+        403,
+      );
+    }
+    const artifact = await artifacts(context, options).find(job.artifactId);
+    if (artifact?.objectKey === undefined) {
+      throw new ApiInputError(
+        "RUNNER_SOURCE_NOT_FOUND",
+        "The scoped source notebook was not found",
+        404,
+      );
+    }
+    const [inputObject, planObject, session] = await Promise.all([
+      runnerObjectStore(context, options).get(claims.inputBundleKey),
+      runnerObjectStore(context, options).get(
+        `${claims.outputPrefix}patch-plan.json`,
+      ),
+      sessionService(context, options).getSession(job.sessionId),
+    ]);
+    if (
+      inputObject === undefined ||
+      planObject === undefined ||
+      session.beliefTest === undefined ||
+      session.verifiedResult === undefined ||
+      session.transferResult?.outcome !== "PASSED"
+    ) {
+      throw new ApiInputError(
+        "PATCH_PLAN_NOT_VERIFIED",
+        "Source bytes remain sealed until the external Patch Plan verifier passes",
+        409,
+      );
+    }
+    try {
+      const bundle = RunnerPatchCompileBundleSchema.parse(
+        JSON.parse(inputObject.body),
+      );
+      await verifyPatchPlan(JSON.parse(planObject.body) as unknown, {
+        sessionId: session.id,
+        manifest: artifact.manifest,
+        beliefTest: session.beliefTest,
+        verifiedResultHash: session.verifiedResult.resultHash,
+        transferResultHash: session.transferResult.resultHash,
+        conceptPackVersion: job.conceptPack.version,
+        allowedTransformations: bundle.patchContract.allowedTransformations,
+        allowedCellIndices: bundle.allowedCellIndices,
+      });
+    } catch (error) {
+      if (
+        error instanceof PatchPlanVerificationError ||
+        error instanceof SyntaxError ||
+        error instanceof ZodError
+      ) {
+        throw new ApiInputError(
+          "PATCH_PLAN_NOT_VERIFIED",
+          "Source bytes remain sealed until the external Patch Plan verifier passes",
+          409,
+        );
+      }
+      throw error;
+    }
+    const source = await runnerObjectStore(context, options).get(
+      artifact.objectKey,
+    );
+    if (
+      source === undefined ||
+      (await sha256Text(source.body)) !== artifact.manifest.fileSha256
+    ) {
+      throw new ApiInputError(
+        "RUNNER_SOURCE_HASH_MISMATCH",
+        "The scoped source notebook does not match the artifact manifest",
+        409,
+      );
+    }
+    return new Response(source.body, {
+      headers: {
+        "content-type": "application/x-ipynb+json; charset=utf-8",
+        "cache-control": "no-store",
+        "content-disposition": "attachment; filename=source-notebook.ipynb",
+      },
+    });
+  });
+
   app.post("/api/runner/jobs/:jobId/start", async (context) => {
     const jobId = context.req.param("jobId");
     const { job } = await authorizeRunner(context, options, jobId);
@@ -1088,7 +1187,12 @@ export function createApi(options: ApiOptions = {}) {
         ? new Set(["experiment-plan.json", "public-rationale.md"])
         : job.kind === "LAB_RUN"
           ? new Set(["verified-result.json"])
-          : new Set(["patch-plan.json", "public-rationale.md"]);
+          : new Set([
+              "patch-plan.json",
+              "public-rationale.md",
+              "patched-notebook.ipynb",
+              "patch-result.json",
+            ]);
     if (!permitted.has(generatedPath)) {
       throw new ApiInputError(
         "RUNNER_OUTPUT_NOT_PERMITTED",
@@ -1096,10 +1200,17 @@ export function createApi(options: ApiOptions = {}) {
         403,
       );
     }
-    const body = await readBoundedText(context, 1_048_576);
+    const body = await readBoundedText(
+      context,
+      generatedPath.endsWith(".ipynb")
+        ? maxNotebookBytes(context)
+        : 1_048_576,
+    );
     const contentType = generatedPath.endsWith(".json")
       ? "application/json"
-      : "text/markdown; charset=utf-8";
+      : generatedPath.endsWith(".ipynb")
+        ? "application/x-ipynb+json; charset=utf-8"
+        : "text/markdown; charset=utf-8";
     await runnerObjectStore(context, options).put(
       `${claims.outputPrefix}${generatedPath}`,
       body,
@@ -1133,10 +1244,13 @@ export function createApi(options: ApiOptions = {}) {
   app.post("/api/runner/jobs/:jobId/candidate", async (context) => {
     const jobId = context.req.param("jobId");
     const { claims, job } = await authorizeRunner(context, options, jobId);
-    if (job.kind !== "LAB_COMPILE" || job.status !== "RUNNING") {
+    if (
+      (job.kind !== "LAB_COMPILE" && job.kind !== "PATCH_COMPILE") ||
+      job.status !== "RUNNING"
+    ) {
       throw new ApiInputError(
         "RUNNER_CANDIDATE_NOT_ACCEPTED",
-        "Plan candidates are accepted only for an active lab compile job",
+        "Plan candidates are accepted only for an active compile job",
         409,
       );
     }
@@ -1153,7 +1267,9 @@ export function createApi(options: ApiOptions = {}) {
       job.sessionId,
     );
     const planObject = await runnerObjectStore(context, options).get(
-      `${claims.outputPrefix}experiment-plan.json`,
+      `${claims.outputPrefix}${
+        job.kind === "LAB_COMPILE" ? "experiment-plan.json" : "patch-plan.json"
+      }`,
     );
     if (
       artifact === undefined ||
@@ -1180,14 +1296,51 @@ export function createApi(options: ApiOptions = {}) {
     } catch {
       planInput = null;
     }
-    let report: Awaited<ReturnType<typeof verifyExperimentPlan>>;
+    let report:
+      | Awaited<ReturnType<typeof verifyExperimentPlan>>
+      | Awaited<ReturnType<typeof verifyPatchPlan>>;
     try {
-      report = await verifyExperimentPlan(planInput, {
-        manifest: artifact.manifest,
-        beliefTest: session.beliefTest,
-      });
+      if (job.kind === "LAB_COMPILE") {
+        report = await verifyExperimentPlan(planInput, {
+          manifest: artifact.manifest,
+          beliefTest: session.beliefTest,
+        });
+      } else {
+        const inputObject = await runnerObjectStore(context, options).get(
+          claims.inputBundleKey,
+        );
+        if (
+          inputObject === undefined ||
+          session.verifiedResult === undefined ||
+          session.transferResult?.outcome !== "PASSED"
+        ) {
+          throw new ApiInputError(
+            "RUNNER_CANDIDATE_LINEAGE_MISSING",
+            "Patch Plan lineage is incomplete",
+            409,
+          );
+        }
+        const bundle = RunnerPatchCompileBundleSchema.parse(
+          JSON.parse(inputObject.body),
+        );
+        report = await verifyPatchPlan(planInput, {
+          sessionId: session.id,
+          manifest: artifact.manifest,
+          beliefTest: session.beliefTest,
+          verifiedResultHash: session.verifiedResult.resultHash,
+          transferResultHash: session.transferResult.resultHash,
+          conceptPackVersion: job.conceptPack.version,
+          allowedTransformations: bundle.patchContract.allowedTransformations,
+          allowedCellIndices: bundle.allowedCellIndices,
+        });
+      }
     } catch (error) {
-      if (!(error instanceof PlanVerificationError)) throw error;
+      if (
+        !(error instanceof PlanVerificationError) &&
+        !(error instanceof PatchPlanVerificationError)
+      ) {
+        throw error;
+      }
       report = error.report;
     }
 
@@ -1329,8 +1482,10 @@ export function createApi(options: ApiOptions = {}) {
     let verification:
       | Awaited<ReturnType<typeof verifyExperimentPlan>>
       | Awaited<ReturnType<typeof verifyHostedResultSet>>
+      | Awaited<ReturnType<typeof verifyPatchPlan>>
       | null = null;
     let verifiedResult: VerifiedResultSet | null = null;
+    let patchResult: PatchResult | null = null;
     let terminalCallback: RunnerCallback = callback;
     if (callback.status === "VERIFIED" && job.kind === "LAB_COMPILE") {
       const artifact = await artifacts(context, options).find(job.artifactId);
@@ -1489,6 +1644,164 @@ export function createApi(options: ApiOptions = {}) {
         }
       }
     }
+    if (callback.status === "VERIFIED" && job.kind === "PATCH_COMPILE") {
+      const [artifact, inputObject, planObject, resultObject, notebookObject] =
+        await Promise.all([
+          artifacts(context, options).find(job.artifactId),
+          runnerObjectStore(context, options).get(claims.inputBundleKey),
+          runnerObjectStore(context, options).get(
+            `${claims.outputPrefix}patch-plan.json`,
+          ),
+          runnerObjectStore(context, options).get(
+            `${claims.outputPrefix}patch-result.json`,
+          ),
+          runnerObjectStore(context, options).get(
+            `${claims.outputPrefix}patched-notebook.ipynb`,
+          ),
+        ]);
+      if (
+        artifact === undefined ||
+        inputObject === undefined ||
+        planObject === undefined ||
+        resultObject === undefined ||
+        notebookObject === undefined ||
+        currentSession.beliefTest === undefined ||
+        currentSession.verifiedResult === undefined ||
+        currentSession.transferResult?.outcome !== "PASSED"
+      ) {
+        terminalCallback = {
+          ...callback,
+          status: "REJECTED",
+          error: {
+            code: "RUNNER_OUTPUT_MISSING",
+            message:
+              "Required Patch Plan lineage or fixed patch output is missing",
+            retryable: false,
+          },
+        };
+      } else {
+        try {
+          const bundle = RunnerPatchCompileBundleSchema.parse(
+            JSON.parse(inputObject.body),
+          );
+          if (
+            bundle.jobId !== jobId ||
+            bundle.sessionId !== job.sessionId ||
+            bundle.artifactManifestHash !== job.artifactManifestHash ||
+            (await hashCanonical(bundle)) !== job.inputHashes.at(-1) ||
+            (await hashCanonical(bundle.artifactManifest)) !==
+              job.artifactManifestHash
+          ) {
+            throw new ApiInputError(
+              "RUNNER_INPUT_LINEAGE_MISMATCH",
+              "Fixed patch input lineage does not match the runner job",
+              409,
+            );
+          }
+          const rawHashes = await Promise.all([
+            sha256Text(planObject.body),
+            sha256Text(resultObject.body),
+            sha256Text(notebookObject.body),
+          ]);
+          if (
+            !rawHashes.every((hash) => callback.outputHashes.includes(hash))
+          ) {
+            throw new ApiInputError(
+              "RUNNER_OUTPUT_HASH_MISMATCH",
+              "Fixed patch bytes do not match the callback hashes",
+              409,
+            );
+          }
+          verification = await verifyPatchPlan(
+            JSON.parse(planObject.body) as unknown,
+            {
+              sessionId: currentSession.id,
+              manifest: artifact.manifest,
+              beliefTest: currentSession.beliefTest,
+              verifiedResultHash: currentSession.verifiedResult.resultHash,
+              transferResultHash: currentSession.transferResult.resultHash,
+              conceptPackVersion: job.conceptPack.version,
+              allowedTransformations:
+                bundle.patchContract.allowedTransformations,
+              allowedCellIndices: bundle.allowedCellIndices,
+            },
+          );
+          const parsedPatch = PatchResultSchema.parse(
+            JSON.parse(resultObject.body),
+          );
+          const { resultHash: _declaredResultHash, ...patchPayload } =
+            parsedPatch;
+          if (
+            parsedPatch.status !== "VERIFIED" ||
+            parsedPatch.sessionId !== currentSession.id ||
+            parsedPatch.generatedAt !== bundle.requestedAt ||
+            parsedPatch.sourceArtifactHash !== artifact.manifest.fileSha256 ||
+            parsedPatch.patchedArtifactHash !== rawHashes[2] ||
+            parsedPatch.patchHash !== (await hashCanonical(parsedPatch.diff)) ||
+            parsedPatch.resultHash !== (await hashCanonical(patchPayload)) ||
+            parsedPatch.modifiedCells.some(
+              (cell) => !bundle.allowedCellIndices.includes(cell),
+            )
+          ) {
+            throw new ApiInputError(
+              "PATCH_RESULT_LINEAGE_MISMATCH",
+              "The fixed patch result does not match its source, Plan, or notebook bytes",
+              409,
+            );
+          }
+          patchResult = parsedPatch;
+          await runnerObjectStore(context, options).put(
+            `patches/${currentSession.id}/patched-notebook.ipynb`,
+            notebookObject.body,
+            "application/x-ipynb+json; charset=utf-8",
+          );
+        } catch (error) {
+          if (error instanceof ApiInputError) {
+            terminalCallback = {
+              ...callback,
+              status: "REJECTED",
+              error: {
+                code: error.code,
+                message: error.message,
+                retryable: false,
+              },
+            };
+          } else if (error instanceof PatchPlanVerificationError) {
+            verification = error.report;
+            terminalCallback = {
+              ...callback,
+              status: "REJECTED",
+              error: {
+                code: "PATCH_PLAN_VERIFIER_REJECTED",
+                message:
+                  "The external Patch Plan verifier rejected the candidate",
+                retryable: false,
+                details: {
+                  failedInvariants: error.report.invariants
+                    .filter((invariant) => !invariant.passed)
+                    .map((invariant) => invariant.name),
+                },
+              },
+            };
+          } else if (
+            error instanceof SyntaxError ||
+            error instanceof ZodError
+          ) {
+            terminalCallback = {
+              ...callback,
+              status: "REJECTED",
+              error: {
+                code: "PATCH_CONTRACT_REJECTED",
+                message: "The fixed patch output contract is invalid",
+                retryable: false,
+              },
+            };
+          } else {
+            throw error;
+          }
+        }
+      }
+    }
 
     const completed = await runnerJobService(context, options).recordCallback(
       terminalCallback,
@@ -1532,6 +1845,99 @@ export function createApi(options: ApiOptions = {}) {
           job.sessionId,
           verifiedResult,
         );
+      } else if (
+        job.kind === "PATCH_COMPILE" &&
+        terminalCallback.status === "VERIFIED" &&
+        verification?.status === "VERIFIED" &&
+        patchResult !== null
+      ) {
+        updatedSession = await service.verifyPatch(job.sessionId, patchResult);
+        const lineage = HostedPlanLineageSchema.parse(
+          currentSession.labVerification,
+        );
+        const [experimentPlanObject, patchPlanObject] = await Promise.all([
+          runnerObjectStore(context, options).get(
+            `runner-output/${lineage.jobId}/experiment-plan.json`,
+          ),
+          runnerObjectStore(context, options).get(
+            `${claims.outputPrefix}patch-plan.json`,
+          ),
+        ]);
+        const artifact = await artifacts(context, options).find(job.artifactId);
+        if (
+          artifact === undefined ||
+          experimentPlanObject === undefined ||
+          patchPlanObject === undefined ||
+          updatedSession.beliefTest === undefined ||
+          updatedSession.verifiedResult === undefined ||
+          updatedSession.transferResult === undefined
+        ) {
+          throw new ApiInputError(
+            "LIVE_PROOF_LINEAGE_MISSING",
+            "Verified patch evidence could not be assembled into a proof",
+            409,
+          );
+        }
+        const experimentPlan = ExperimentPlanV2Schema.parse(
+          JSON.parse(experimentPlanObject.body),
+        );
+        const patchPlan = PatchPlanV1Schema.parse(
+          JSON.parse(patchPlanObject.body),
+        );
+        const [planVerification, patchPlanVerification, evidenceEvents] =
+          await Promise.all([
+            verifyExperimentPlan(experimentPlan, {
+              manifest: artifact.manifest,
+              beliefTest: updatedSession.beliefTest,
+            }),
+            verifyPatchPlan(patchPlan, {
+              sessionId: updatedSession.id,
+              manifest: artifact.manifest,
+              beliefTest: updatedSession.beliefTest,
+              verifiedResultHash: updatedSession.verifiedResult.resultHash,
+              transferResultHash: updatedSession.transferResult.resultHash,
+              conceptPackVersion: job.conceptPack.version,
+              allowedTransformations: [
+                "replace_row_split_with_group_holdout",
+                "exclude_entity_feature",
+              ],
+              allowedCellIndices: patchPlan.targetCells,
+            }),
+            service.listEvents(job.sessionId),
+          ]);
+        const compilerEvents = [
+          ...(await runnerJobService(context, options).listEvents(
+            lineage.jobId,
+            0,
+          )),
+          ...(await runnerJobService(context, options).listEvents(jobId, 0)),
+        ];
+        const proof = createLiveReasoningProof({
+          session: updatedSession,
+          manifest: artifact.manifest,
+          events: evidenceEvents,
+          experimentPlan,
+          planVerification,
+          compilerEvents,
+          patchPlan,
+          patchPlanVerification,
+          issuedAt: requestNow(options).toISOString(),
+          ...(context.env?.COUNTERLAB_SIGNING_KEY === undefined
+            ? {}
+            : { signingKey: context.env.COUNTERLAB_SIGNING_KEY }),
+        });
+        updatedSession = await service.issueReasoningDiff(
+          job.sessionId,
+          proof.reasoningDiff,
+          proof.proofBundle,
+        );
+      } else if (job.kind === "PATCH_COMPILE") {
+        updatedSession = await service.rejectPatch(job.sessionId, {
+          jobId,
+          status: terminalCallback.status,
+          error: terminalCallback.error ?? null,
+          verification,
+        });
       }
     }
     return context.json(
@@ -1791,10 +2197,172 @@ export function createApi(options: ApiOptions = {}) {
     const sourceArtifact = await artifacts(context, options).find(
       current.artifactId,
     );
+    if (current.mode.kind === "live_notebook") {
+      const dispatcher = runnerDispatcher(context, options);
+      if (dispatcher === undefined) {
+        throw new ApiInputError(
+          "LOCAL_RUNNER_REQUIRED",
+          "Live artifact-specific patching requires a configured CounterLab runner",
+          503,
+        );
+      }
+      if (
+        sourceArtifact?.objectKey === undefined ||
+        current.beliefTest === undefined ||
+        current.beliefTest.concept !== "entity_leakage" ||
+        current.verifiedResult?.schemaVersion !== "2" ||
+        current.verifiedResult.concept !== "entity_leakage" ||
+        current.transferResult?.outcome !== "PASSED"
+      ) {
+        throw new ApiInputError(
+          "LIVE_PATCH_CONTRACTS_REQUIRED",
+          "A passed transfer and artifact-bound verified leakage result are required",
+          409,
+        );
+      }
+      const manifestHash = await hashCanonical(sourceArtifact.manifest);
+      if (
+        current.verifiedResult.artifactManifestHash !== manifestHash ||
+        current.patchResult !== undefined
+      ) {
+        throw new ApiInputError(
+          "LIVE_PATCH_LINEAGE_MISMATCH",
+          "The verified result does not match this source notebook",
+          409,
+        );
+      }
+      const allowedCellIndices = sourceArtifact.manifest.cells
+        .filter(
+          (cell) =>
+            cell.type === "code" &&
+            (cell.symbols.includes("train_test_split") ||
+              cell.sourceExcerpt.includes("train_test_split")),
+        )
+        .map((cell) => cell.index)
+        .slice(0, 4);
+      if (allowedCellIndices.length === 0) {
+        throw new ApiInputError(
+          "LIVE_PATCH_UNSUPPORTED",
+          "No supported evaluation cell could be resolved for a minimal patch",
+          409,
+        );
+      }
+      const pack = getConceptPack("entity_leakage");
+      const started = await service.startPatchCompilation(sessionId);
+      const jobId = requestId(options, "runner_job");
+      const bundle = RunnerPatchCompileBundleSchema.parse({
+        schemaVersion: "1",
+        kind: "PATCH_COMPILE",
+        jobId,
+        sessionId,
+        stateVersion: started.version,
+        requestedAt: requestNow(options).toISOString(),
+        artifactManifestHash: manifestHash,
+        artifactManifest: sourceArtifact.manifest,
+        approvedBeliefTest: current.beliefTest,
+        verifiedResultSummary: {
+          schemaVersion: "2",
+          resultHash: current.verifiedResult.resultHash,
+          planId: current.verifiedResult.planId,
+          runIds: current.verifiedResult.runs.map((run) => run.id),
+        },
+        transferSummary: {
+          outcome: "PASSED",
+          resultHash: current.transferResult.resultHash,
+          selectedStrategy: current.transferResult.selectedStrategy,
+          identifiedRisks: current.transferResult.identifiedRisks,
+        },
+        patchContract: {
+          id: pack.patchContract.id,
+          allowedTransformations: pack.patchContract.allowedTransformations,
+        },
+        allowedCellIndices,
+        patchPlanSchema,
+        permittedOutputs: ["patch-plan.json", "public-rationale.md"],
+      });
+      const bundleHash = await hashCanonical(bundle);
+      const inputBundleKey = `runner-input/${jobId}.json`;
+      await runnerObjectStore(context, options).put(
+        inputBundleKey,
+        JSON.stringify(bundle),
+        "application/json",
+      );
+      const jobs = runnerJobService(context, options);
+      const queued = await jobs.createJob({
+        jobId,
+        kind: "PATCH_COMPILE",
+        sessionId,
+        artifactId: sourceArtifact.manifest.artifactId,
+        artifactManifestHash: manifestHash,
+        conceptPack: { id: pack.id, version: pack.version },
+        inputHashes: [
+          manifestHash,
+          current.verifiedResult.resultHash,
+          current.transferResult.resultHash,
+          bundleHash,
+        ],
+        stateVersion: started.version,
+        maxAttempts: 3,
+        timeoutSeconds: 180,
+      });
+      const starting = await jobs.transition(
+        jobId,
+        queued.jobVersion,
+        "STARTING",
+        { runnerIdentity: dispatcher.identity },
+      );
+      const nowEpochSeconds = Math.floor(requestNow(options).getTime() / 1_000);
+      const token = await issueRunnerJobToken(
+        {
+          schemaVersion: "1",
+          audience: "counterlab-runner",
+          tokenId: requestId(options, "runner_token"),
+          jobId,
+          sessionId,
+          artifactManifestHash: manifestHash,
+          inputBundleKey,
+          outputPrefix: `runner-output/${jobId}/`,
+          callbackPath: `/api/runner/jobs/${jobId}/callback`,
+          stateVersion: started.version,
+          issuedAt: nowEpochSeconds,
+          expiresAt: nowEpochSeconds + 300,
+        },
+        runnerSigningKey(context, options),
+      );
+      try {
+        await dispatcher.dispatch({
+          job: starting,
+          token,
+          controlPlaneUrl: new URL(context.req.url).origin,
+        });
+      } catch {
+        await jobs.transition(jobId, starting.jobVersion, "FAILED", {
+          runnerIdentity: dispatcher.identity,
+          error: {
+            code: "RUNNER_DISPATCH_FAILED",
+            message: "The process runner did not accept this patch job",
+            retryable: true,
+          },
+        });
+        await service.rejectPatch(sessionId, {
+          code: "RUNNER_DISPATCH_FAILED",
+          jobId,
+        });
+        throw new ApiInputError(
+          "RUNNER_DISPATCH_FAILED",
+          "The process runner did not accept this patch job",
+          503,
+        );
+      }
+      return context.json(
+        jsonSuccess({ ...statePayload(started), runnerJob: starting }),
+        202,
+      );
+    }
     if (current.mode.kind !== "sample_lesson") {
       throw new ApiInputError(
-        "ARTIFACT_PATCH_MISMATCH",
-        "Live and replay sessions require a patch bound to their source artifact",
+        "REPLAY_READ_ONLY",
+        "Verified replay sessions cannot compile a new patch",
         409,
       );
     }
@@ -1863,6 +2431,57 @@ export function createApi(options: ApiOptions = {}) {
       );
     }
     return context.json(jsonSuccess(session.reasoningDiff));
+  });
+
+  app.get("/api/sessions/:sessionId/patch/download", async (context) => {
+    const sessionId = context.req.param("sessionId");
+    const session = await sessionService(context, options).getSession(
+      sessionId,
+    );
+    if (session.patchResult?.status !== "VERIFIED") {
+      throw new ApiInputError(
+        "PATCH_NOT_READY",
+        "A verified patch is required before download",
+        409,
+      );
+    }
+    const artifact = await artifacts(context, options).find(session.artifactId);
+    if (artifact === undefined) {
+      throw new ApiInputError(
+        "ARTIFACT_NOT_FOUND",
+        "The patch source artifact was not found",
+        404,
+      );
+    }
+    const body =
+      session.mode.kind === "sample_lesson"
+        ? patchedNotebookText
+        : (
+            await runnerObjectStore(context, options).get(
+              `patches/${sessionId}/patched-notebook.ipynb`,
+            )
+          )?.body;
+    if (
+      body === undefined ||
+      (await sha256Text(body)) !== session.patchResult.patchedArtifactHash
+    ) {
+      throw new ApiInputError(
+        "PATCH_BYTES_NOT_FOUND",
+        "The verified patched notebook bytes could not be resolved",
+        404,
+      );
+    }
+    const stem = artifact.manifest.fileName
+      .replace(/\.ipynb$/iu, "")
+      .replace(/[^A-Za-z0-9._-]+/gu, "-")
+      .slice(0, 120);
+    return new Response(body, {
+      headers: {
+        "content-type": "application/x-ipynb+json; charset=utf-8",
+        "content-disposition": `attachment; filename="${stem || "notebook"}.counterlab-patched.ipynb"`,
+        "cache-control": "private, no-store",
+      },
+    });
   });
 
   app.get("/api/sessions/:sessionId/proof-bundle", async (context) => {

@@ -1,0 +1,150 @@
+import {
+  type ArtifactManifest,
+  type EvidenceEvent,
+  type ExperimentPlanV2,
+  type PatchPlanV1,
+  type ProofBundle,
+  type PublicCompilerEvent,
+  type ReasoningDiff,
+} from "@counterlab/contracts";
+import { createProofBundle } from "@counterlab/proof-bundle";
+import type {
+  PatchPlanVerificationReport,
+  PlanVerificationReport,
+} from "@counterlab/plan-verifier";
+import type { CounterLabSession } from "@counterlab/session-core";
+
+function requiredLiveEvidence(session: CounterLabSession) {
+  if (
+    session.mode.kind !== "live_notebook" ||
+    session.beliefTest === undefined ||
+    session.prediction === undefined ||
+    session.verifiedResult?.schemaVersion !== "2" ||
+    session.revision === undefined ||
+    session.transferResult?.outcome !== "PASSED" ||
+    session.patchResult?.status !== "VERIFIED"
+  ) {
+    throw new Error("Live verified session evidence is incomplete");
+  }
+  return {
+    beliefTest: session.beliefTest,
+    prediction: session.prediction,
+    result: session.verifiedResult,
+    revision: session.revision,
+    transfer: session.transferResult,
+    patch: session.patchResult,
+  };
+}
+
+export function createLiveReasoningProof(input: {
+  session: CounterLabSession;
+  manifest: ArtifactManifest;
+  events: EvidenceEvent[];
+  experimentPlan: ExperimentPlanV2;
+  planVerification: PlanVerificationReport;
+  compilerEvents: PublicCompilerEvent[];
+  patchPlan: PatchPlanV1;
+  patchPlanVerification: PatchPlanVerificationReport;
+  issuedAt: string;
+  signingKey?: string;
+}): { reasoningDiff: ReasoningDiff; proofBundle: ProofBundle } {
+  const evidence = requiredLiveEvidence(input.session);
+  const event = (kind: string) => {
+    const found = input.events.find((candidate) => candidate.kind === kind);
+    if (found === undefined)
+      throw new Error(`Evidence event ${kind} is missing`);
+    return found;
+  };
+  const groupRun = evidence.result.runs.find(
+    (run) => run.operation === "leakage.group_holdout",
+  );
+  if (groupRun === undefined) {
+    throw new Error("Live group-holdout result is missing");
+  }
+  const changedCells = evidence.patch.modifiedCells.join(", ");
+  const reasoningDiff: ReasoningDiff = {
+    schemaVersion: "1",
+    id: `reasoning_${crypto.randomUUID()}`,
+    sessionId: input.session.id,
+    dimensions: {
+      belief: {
+        before: evidence.beliefTest.learnerClaim,
+        after: evidence.revision,
+      },
+      prediction: {
+        before: `${evidence.prediction.choice} at ${evidence.prediction.confidence}% confidence`,
+        after: `Group-holdout accuracy ${groupRun.metrics.accuracy.toFixed(3)} with ${groupRun.entityOverlap.count} shared entities`,
+      },
+      code: {
+        before:
+          "Row-wise evaluation allowed repeated entities across the boundary",
+        after: `Verified cells ${changedCells} use group-aware evaluation and exclude the identity feature`,
+      },
+      transfer: {
+        before:
+          "The evaluation-boundary rule had not been applied to forecasting",
+        after:
+          "The fixed evaluator accepted a time-ordered holdout and identified future-looking evidence",
+      },
+    },
+    evidenceEventHashes: [
+      event("prediction.committed").eventHash,
+      event("experiment.completed").eventHash,
+      event("transfer.passed").eventHash,
+      event("patch.verified").eventHash,
+    ],
+    issuedAt: input.issuedAt,
+  };
+  const revisionEvent = event("revision.recorded");
+  const modelEvent = event("belief_test.proposed");
+  const proofBundle = createProofBundle(
+    {
+      schemaVersion: "2",
+      bundleId: `proof_${crypto.randomUUID()}`,
+      sessionId: input.session.id,
+      replayId: null,
+      sessionMode: "live_notebook",
+      createdAt: input.issuedAt,
+      events: input.events,
+      artifactManifest: input.manifest,
+      beliefTest: evidence.beliefTest,
+      predictionContract: evidence.prediction,
+      experimentPlan: input.experimentPlan,
+      planVerification: input.planVerification,
+      publicCompilerEvents: input.compilerEvents,
+      verifiedResultSet: evidence.result,
+      learnerRevision: {
+        text: evidence.revision,
+        recordedAt: revisionEvent.timestamp,
+        eventHash: revisionEvent.eventHash,
+      },
+      transferResult: evidence.transfer,
+      patchPlan: input.patchPlan,
+      patchPlanVerification: input.patchPlanVerification,
+      patchResult: evidence.patch,
+      reasoningDiff,
+      versions: {
+        environment:
+          "Cloudflare Worker control plane and authenticated process runner",
+        dependencies: "pnpm-lock.yaml and pyproject.toml",
+        fixture: evidence.result.fixture.sha256,
+        kernel: evidence.result.kernelVersion,
+        verifier: `${input.planVerification.verifierVersion}; ${input.patchPlanVerification.verifierVersion}`,
+        prompt: modelEvent.promptHash ?? "live-analyst-prompt-not-recorded",
+        model: modelEvent.modelId ?? "configured-live-responses-model",
+        conceptPack: evidence.result.conceptPackVersion,
+      },
+      limitations: [
+        "Verification covers this artifact, the released entity-leakage operations, and the recorded fixed fixture.",
+        "The process boundary and allowlists are engineering controls, not a formal sandbox proof.",
+        "Passing this fixed transfer verifies one task outcome; it does not establish global mastery.",
+      ],
+      reproductionCommands: [
+        "./scripts/test-all.sh",
+        "./scripts/run-mutations.sh leakage",
+      ],
+    },
+    input.signingKey === undefined ? {} : { signingKey: input.signingKey },
+  );
+  return { reasoningDiff, proofBundle };
+}

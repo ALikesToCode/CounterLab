@@ -7,26 +7,32 @@ import { z } from "zod";
 import {
   buildCompileLabPrompt,
   buildCompileHostedExperimentPlanPrompt,
+  buildCompileHostedPatchPlanPrompt,
   buildCompilePatchPrompt,
   buildRepairLabPrompt,
   buildRepairHostedExperimentPlanPrompt,
+  buildRepairHostedPatchPlanPrompt,
 } from "./prompts.js";
 import { redactSecrets, sanitizeAppServerMessage } from "./sanitizer.js";
 import {
   CompileLabInputSchema,
   CompileHostedExperimentPlanInputSchema,
+  CompileHostedPatchPlanInputSchema,
   CompilePatchInputSchema,
   CompilerSetupError,
   RepairLabInputSchema,
   RepairHostedExperimentPlanInputSchema,
+  RepairHostedPatchPlanInputSchema,
   type CodexCompiler,
   type CompileLabInput,
   type CompileHostedExperimentPlanInput,
+  type CompileHostedPatchPlanInput,
   type CompilePatchInput,
   type CompilerEvent,
   type CompilerHealth,
   type RepairLabInput,
   type RepairHostedExperimentPlanInput,
+  type RepairHostedPatchPlanInput,
 } from "./types.js";
 
 const execFileAsync = promisify(execFile);
@@ -559,6 +565,36 @@ export class AppServerCodexCompiler implements CodexCompiler {
     }
     yield* this.run(
       buildRepairHostedExperimentPlanPrompt(input),
+      input.generationDirectory,
+      "repair",
+    );
+  }
+
+  async *compileHostedPatchPlan(
+    raw: CompileHostedPatchPlanInput,
+  ): AsyncIterable<CompilerEvent> {
+    const input = parseInput(CompileHostedPatchPlanInputSchema, raw);
+    yield* this.run(
+      buildCompileHostedPatchPlanPrompt(input),
+      input.generationDirectory,
+      "patch",
+    );
+  }
+
+  async *repairHostedPatchPlan(
+    raw: RepairHostedPatchPlanInput,
+  ): AsyncIterable<CompilerEvent> {
+    const input = parseInput(RepairHostedPatchPlanInputSchema, raw);
+    for (const counterexample of input.verifierCounterexamples) {
+      yield {
+        type: "verifier_counterexample",
+        invariant: counterexample.invariant,
+        observed: counterexample.observed,
+        counterexample: counterexample.counterexample,
+      };
+    }
+    yield* this.run(
+      buildRepairHostedPatchPlanPrompt(input),
       input.generationDirectory,
       "repair",
     );

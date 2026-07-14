@@ -17,10 +17,14 @@ import type {
 } from "@counterlab/session-core";
 import { createEvidenceEvent, hashCanonical } from "@counterlab/session-core";
 
+import sourceNotebookText from "../../../fixtures/notebooks/customer_churn_leakage.ipynb?raw";
+import patchedNotebookText from "../../../replays/leakage-01/patch/customer_churn_leakage.patched.ipynb?raw";
+
 import { api, createApi } from "./api";
 import type { ArtifactStore, StoredArtifact } from "./artifact-store";
 import { ConcurrentD1SessionUpdateError } from "./d1-session-repository";
 import { sampleResult } from "./sample-evidence";
+import { createSamplePatchResult } from "./sample-learning-loop";
 import type {
   RunnerDispatchRequest,
   RunnerDispatcher,
@@ -241,6 +245,7 @@ async function sessionHarness(
 async function saveUploadedArtifact(
   artifactStore: MemoryArtifactStore,
   sampleArtifactId: string,
+  fileSha256 = "a".repeat(64),
 ): Promise<ArtifactManifest> {
   const sample = await artifactStore.find(sampleArtifactId);
   if (sample === undefined) throw new Error("sample artifact is missing");
@@ -248,7 +253,7 @@ async function saveUploadedArtifact(
     ...sample.manifest,
     artifactId: "artifact_uploaded_not_sample",
     fileName: "uploaded_customer_model.ipynb",
-    fileSha256: "a".repeat(64),
+    fileSha256,
   } satisfies ArtifactManifest;
   await artifactStore.save(uploaded, "uploads/not-public.ipynb");
   return uploaded;
@@ -283,11 +288,44 @@ async function seedSession(
     eventId: `event_${session.id}`,
     draft: {
       actor: "system",
-      kind: "session.seeded_for_authority_regression",
+      kind: "session.created",
       payload: { state: session.state, artifactId: session.artifactId },
     },
   });
   await repository.create(session, firstEvent);
+  if (session.beliefTest !== undefined && session.prediction !== undefined) {
+    let previous = firstEvent;
+    const drafts = [
+      {
+        actor: "gpt-5.6" as const,
+        kind: "belief_test.proposed",
+        payload: { beliefTestId: session.beliefTest.id },
+      },
+      {
+        actor: "learner" as const,
+        kind: "belief_test.confirmed",
+        payload: { beliefTestId: session.beliefTest.id },
+      },
+      {
+        actor: "learner" as const,
+        kind: "prediction.committed",
+        payload: { predictionId: session.prediction.id },
+        outputHashes: [session.prediction.immutableHash],
+      },
+    ];
+    for (const draft of drafts) {
+      const evidence = await createEvidenceEvent({
+        sessionId: session.id,
+        sequence: previous.sequence + 1,
+        timestamp,
+        eventId: `event_${session.id}_${previous.sequence + 1}`,
+        previousEventHash: previous.eventHash,
+        draft,
+      });
+      await repository.save(session, session.version, evidence);
+      previous = evidence;
+    }
+  }
 }
 
 async function sha256Text(value: string): Promise<string> {
@@ -536,10 +574,10 @@ describe("Cloudflare Worker API", () => {
       `/api/sessions/${sessionId}/patch/compile`,
     );
 
-    expect(response.status).toBe(409);
+    expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({
       ok: false,
-      error: { code: "ARTIFACT_PATCH_MISMATCH" },
+      error: { code: "LOCAL_RUNNER_REQUIRED" },
     });
     const stored = await harness.sessionRepository.find(sessionId);
     expect(stored?.state).toBe("TRANSFER_PASSED");
@@ -603,6 +641,7 @@ describe("Cloudflare Worker API", () => {
     const uploaded = await saveUploadedArtifact(
       harness.artifactStore,
       harness.artifactId,
+      await sha256Text(sourceNotebookText),
     );
     const sessionId = "session_hosted_plan";
     const predictionBase = {
@@ -628,7 +667,13 @@ describe("Cloudflare Worker API", () => {
 
     const runnerJobs = new MemoryRunnerJobRepository();
     const runnerObjects = new MemoryRunnerObjectStore();
+    await runnerObjects.put(
+      "uploads/not-public.ipynb",
+      sourceNotebookText,
+      "application/x-ipynb+json",
+    );
     const dispatcher = new CapturingRunnerDispatcher();
+    let hostedIdSequence = 0;
     const app = createApi({
       sessionRepository: harness.sessionRepository,
       artifactStore: harness.artifactStore,
@@ -637,7 +682,7 @@ describe("Cloudflare Worker API", () => {
       runnerDispatcher: dispatcher,
       runnerSigningKey: "runner-test-signing-key-that-is-long-enough",
       now: () => new Date("2026-07-14T10:00:00.000Z"),
-      id: (prefix) => `${prefix}_hosted_plan`,
+      id: (prefix) => `${prefix}_hosted_plan_${++hostedIdSequence}`,
     });
 
     const queued = await postJson(
@@ -1028,7 +1073,10 @@ describe("Cloudflare Worker API", () => {
       },
     );
     expect(transferred.status).toBe(200);
-    await expect(transferred.json()).resolves.toMatchObject({
+    const transferredBody = (await transferred.json()) as {
+      data: { transferResult: { resultHash: string } };
+    };
+    expect(transferredBody).toMatchObject({
       data: {
         state: "TRANSFER_PASSED",
         transferResult: {
@@ -1037,6 +1085,199 @@ describe("Cloudflare Worker API", () => {
         },
       },
     });
+
+    const patchQueued = await postJson(
+      app,
+      `/api/sessions/${sessionId}/patch/compile`,
+    );
+    expect(patchQueued.status).toBe(202);
+    const patchQueuedBody = (await patchQueued.json()) as {
+      data: { state: string; runnerJob: RunnerJob };
+    };
+    expect(patchQueuedBody.data).toMatchObject({
+      state: "PATCH_COMPILING",
+      runnerJob: {
+        kind: "PATCH_COMPILE",
+        status: "STARTING",
+        artifactId: uploaded.artifactId,
+      },
+    });
+    expect(dispatcher.dispatched).toHaveLength(3);
+    const patchDispatch = dispatcher.dispatched[2];
+    if (patchDispatch === undefined) {
+      throw new Error("patch runner was not dispatched");
+    }
+    const patchAuthorization = {
+      authorization: `Bearer ${patchDispatch.token}`,
+    };
+    expect(
+      (
+        await app.request(`/api/runner/jobs/${patchDispatch.job.jobId}/start`, {
+          method: "POST",
+          headers: patchAuthorization,
+        })
+      ).status,
+    ).toBe(200);
+    const sourceBeforeVerification = await app.request(
+      `/api/runner/jobs/${patchDispatch.job.jobId}/source`,
+      { headers: patchAuthorization },
+    );
+    expect(sourceBeforeVerification.status).toBe(409);
+
+    const patchPlan = {
+      schemaVersion: "1" as const,
+      planId: "patch_plan_hosted_1",
+      sessionId,
+      concept: "entity_leakage" as const,
+      conceptPackVersion: "2.0.0",
+      artifactManifestHash: manifestHash,
+      sourceArtifactHash: uploaded.fileSha256,
+      transferResultHash: transferredBody.data.transferResult.resultHash,
+      verifiedResultHash: liveResult.resultHash,
+      evidenceRefs: lesson.beliefTest.evidenceRefs,
+      targetCells: [3],
+      entityField: uploaded.schemaSummary.entityCandidates[0],
+      targetField: uploaded.schemaSummary.targetCandidates[0],
+      operations: [
+        {
+          id: "replace_row_split_with_group_holdout" as const,
+          cellIndex: 3,
+          reason: "Evaluate complete customers together.",
+        },
+        {
+          id: "exclude_entity_feature" as const,
+          cellIndex: 3,
+          reason: "Remove customer identity from model features.",
+        },
+      ],
+      preserveUnrelatedCells: true as const,
+      nonClaims: ["This does not establish production performance."],
+    };
+    const patchPlanText = JSON.stringify(patchPlan);
+    const patchPlanFileHash = await sha256Text(patchPlanText);
+    expect(
+      (
+        await app.request(
+          `/api/runner/jobs/${patchDispatch.job.jobId}/outputs/patch-plan.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...patchAuthorization,
+              "content-type": "application/json",
+            },
+            body: patchPlanText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    const patchCandidate = await postJson(
+      app,
+      `/api/runner/jobs/${patchDispatch.job.jobId}/candidate`,
+      { attempt: 1, planSha256: patchPlanFileHash },
+      patchAuthorization,
+    );
+    expect(patchCandidate.status).toBe(200);
+    await expect(patchCandidate.json()).resolves.toMatchObject({
+      data: {
+        status: "VERIFIED",
+        verification: { status: "VERIFIED" },
+      },
+    });
+    const scopedSource = await app.request(
+      `/api/runner/jobs/${patchDispatch.job.jobId}/source`,
+      { headers: patchAuthorization },
+    );
+    expect(scopedSource.status).toBe(200);
+    await expect(scopedSource.text()).resolves.toBe(sourceNotebookText);
+
+    const livePatchResult = await createSamplePatchResult(
+      sessionId,
+      uploaded.fileSha256,
+      "2026-07-14T10:00:00.000Z",
+    );
+    const patchResultText = JSON.stringify(livePatchResult);
+    const patchResultFileHash = await sha256Text(patchResultText);
+    const patchedNotebookFileHash = await sha256Text(patchedNotebookText);
+    expect(
+      (
+        await app.request(
+          `/api/runner/jobs/${patchDispatch.job.jobId}/outputs/patched-notebook.ipynb`,
+          {
+            method: "PUT",
+            headers: {
+              ...patchAuthorization,
+              "content-type": "application/x-ipynb+json",
+            },
+            body: patchedNotebookText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    expect(
+      (
+        await app.request(
+          `/api/runner/jobs/${patchDispatch.job.jobId}/outputs/patch-result.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...patchAuthorization,
+              "content-type": "application/json",
+            },
+            body: patchResultText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    const patchCallback = await postJson(
+      app,
+      `/api/runner/jobs/${patchDispatch.job.jobId}/callback`,
+      {
+        schemaVersion: "1",
+        callbackId: "callback_hosted_patch_1",
+        idempotencyKey: "hosted-patch-complete-1",
+        jobId: patchDispatch.job.jobId,
+        stateVersion: patchDispatch.job.stateVersion,
+        status: "VERIFIED",
+        outputHashes: [
+          patchPlanFileHash,
+          patchedNotebookFileHash,
+          patchResultFileHash,
+        ],
+        finalEventCursor: 1,
+        occurredAt: "2026-07-14T10:00:03.000Z",
+      },
+      patchAuthorization,
+    );
+    expect(patchCallback.status).toBe(200);
+    await expect(patchCallback.json()).resolves.toMatchObject({
+      data: {
+        runnerJob: { status: "VERIFIED" },
+        session: {
+          state: "REASONING_DIFF_ISSUED",
+          artifactId: uploaded.artifactId,
+          patchResult: {
+            sourceArtifactHash: uploaded.fileSha256,
+            patchedArtifactHash: patchedNotebookFileHash,
+          },
+          reasoningDiff: { sessionId, schemaVersion: "1" },
+          proofBundle: {
+            sessionId,
+            schemaVersion: "2",
+            sessionMode: "live_notebook",
+            replayId: null,
+          },
+        },
+        verification: { status: "VERIFIED" },
+      },
+    });
+    const download = await app.request(
+      `/api/sessions/${sessionId}/patch/download`,
+    );
+    expect(download.status).toBe(200);
+    expect(download.headers.get("content-disposition")).toContain(
+      "uploaded_customer_model.counterlab-patched.ipynb",
+    );
+    await expect(download.text()).resolves.toBe(patchedNotebookText);
   });
 
   it("rejects a runner-claimed success when the independent hosted Plan verifier fails", async () => {

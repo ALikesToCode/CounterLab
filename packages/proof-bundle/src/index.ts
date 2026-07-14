@@ -278,6 +278,25 @@ function assertProofReferences(
       "Patch source artifact does not match the Proof Bundle Artifact Manifest",
     );
   }
+  if (draft.schemaVersion === "2") {
+    const manifestHash = hashCanonicalJson(draft.artifactManifest);
+    if (
+      draft.sessionMode !== "live_notebook" ||
+      draft.replayId !== null ||
+      draft.experimentPlan.sessionId !== draft.sessionId ||
+      draft.experimentPlan.beliefTestId !== draft.beliefTest.id ||
+      draft.experimentPlan.artifactManifestHash !== manifestHash ||
+      draft.verifiedResultSet.planId !== draft.experimentPlan.planId ||
+      draft.verifiedResultSet.artifactManifestHash !== manifestHash ||
+      draft.patchPlan.sessionId !== draft.sessionId ||
+      draft.patchPlan.artifactManifestHash !== manifestHash ||
+      draft.patchPlan.verifiedResultHash !==
+        draft.verifiedResultSet.resultHash ||
+      draft.patchPlan.transferResultHash !== draft.transferResult.resultHash
+    ) {
+      throw new Error("Live Proof Bundle lineage does not resolve");
+    }
+  }
 
   for (const evidence of draft.beliefTest.evidenceRefs) {
     let expectedHash: string | undefined;
@@ -324,9 +343,13 @@ function assertProofReferences(
   );
   const requiredOutputHashes = [
     draft.predictionContract.immutableHash,
-    draft.generatedAdapter.sha256,
-    draft.publicTests.reportHash,
-    draft.externalVerifier.reportHash,
+    ...(draft.schemaVersion === "1"
+      ? [
+          draft.generatedAdapter.sha256,
+          draft.publicTests.reportHash,
+          draft.externalVerifier.reportHash,
+        ]
+      : []),
     draft.verifiedResultSet.resultHash,
     draft.transferResult.resultHash,
     draft.patchResult.resultHash,

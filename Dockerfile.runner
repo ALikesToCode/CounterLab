@@ -24,6 +24,7 @@ COPY packages/contracts ./packages/contracts
 COPY packages/codex-client ./packages/codex-client
 COPY services/hosted-runner ./services/hosted-runner
 COPY services/kernel/src ./services/kernel/src
+COPY fixtures/public/customer_churn.csv ./fixtures/public/customer_churn.csv
 
 RUN pnpm install --frozen-lockfile --filter @counterlab/hosted-runner... \
     && /opt/counterlab-venv/bin/pip install --no-cache-dir . \

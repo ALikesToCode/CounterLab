@@ -1,15 +1,19 @@
 import {
   CompileLabInputSchema,
   CompileHostedExperimentPlanInputSchema,
+  CompileHostedPatchPlanInputSchema,
   CompilePatchInputSchema,
   CompilerSetupError,
   RepairLabInputSchema,
   RepairHostedExperimentPlanInputSchema,
+  RepairHostedPatchPlanInputSchema,
   type CompileLabInput,
   type CompileHostedExperimentPlanInput,
+  type CompileHostedPatchPlanInput,
   type CompilePatchInput,
   type RepairLabInput,
   type RepairHostedExperimentPlanInput,
+  type RepairHostedPatchPlanInput,
 } from "./types.js";
 
 const LAB_FILES = [
@@ -21,6 +25,7 @@ const HOSTED_PLAN_OUTPUTS = [
   "experiment-plan.json",
   "public-rationale.md",
 ].sort();
+const HOSTED_PATCH_OUTPUTS = ["patch-plan.json", "public-rationale.md"].sort();
 
 function json(value: unknown): string {
   return JSON.stringify(value, null, 2);
@@ -42,6 +47,16 @@ function validateHostedPlanOutputs(files: string[]): void {
     throw new CompilerSetupError(
       "CODEX_INVALID_INPUT",
       "The hosted compiler may write only experiment-plan.json and public-rationale.md.",
+    );
+  }
+}
+
+function validateHostedPatchOutputs(files: string[]): void {
+  const actual = [...files].sort();
+  if (JSON.stringify(actual) !== JSON.stringify(HOSTED_PATCH_OUTPUTS)) {
+    throw new CompilerSetupError(
+      "CODEX_INVALID_INPUT",
+      "The hosted patch compiler may write only patch-plan.json and public-rationale.md.",
     );
   }
 }
@@ -95,6 +110,72 @@ export function buildRepairHostedExperimentPlanPrompt(
   const base = renderHostedExperimentPlanPrompt(input);
   return `${base}
 This is repair attempt ${input.repairAttempt} of at most 2. Correct only the rejected invariants. Do not weaken the plan schema, change artifact or Belief Test lineage, or add new evidence.
+
+Previous output hashes:
+${json(input.previousOutputHashes)}
+
+Structured external-verifier counterexamples:
+${json(input.verifierCounterexamples)}
+`;
+}
+
+function renderHostedPatchPlanPrompt(
+  input: CompileHostedPatchPlanInput,
+): string {
+  validateHostedPatchOutputs(input.permittedOutputs);
+  return `You are the bounded CounterLab hosted Patch Plan compiler. Select the smallest registered repair after deterministic transfer has passed.
+
+Authority boundary:
+- Write only ${input.permittedOutputs.join(" and ")} in the current generation directory.
+- patch-plan.json is the only authoritative output and must match the supplied schema exactly.
+- public-rationale.md is display-only and never determines patch validity.
+- Do not write notebook code, Python, shell commands, SQL, imports, formulas, result literals, raw paths, or dynamic expressions.
+- Select only the registered transformations and allowed cell indexes below.
+- Copy evidence references only from the approved Belief Test and Artifact Manifest.
+- Preserve unrelated cells and make no claim beyond the verified result and passed transfer.
+- Do not read files, execute notebook cells, inspect environment variables, access parent directories, use the network, or install packages.
+- Finish with concise public status only; do not reveal private reasoning.
+
+Approved Belief Test:
+${json(input.approvedBeliefTest)}
+
+Sanitized Artifact Manifest:
+${json(input.artifactManifest)}
+
+Verified result summary:
+${json(input.verifiedResultSummary)}
+
+Passed deterministic transfer summary:
+${json(input.transferSummary)}
+
+Registered patch contract:
+${json(input.patchContract)}
+
+Allowed cell indexes:
+${json(input.allowedCellIndices)}
+
+Patch Plan JSON Schema:
+${json(input.patchPlanSchema)}
+
+Resource limits:
+${json(input.resourceLimits)}
+`;
+}
+
+export function buildCompileHostedPatchPlanPrompt(
+  raw: CompileHostedPatchPlanInput,
+): string {
+  return renderHostedPatchPlanPrompt(
+    CompileHostedPatchPlanInputSchema.parse(raw),
+  );
+}
+
+export function buildRepairHostedPatchPlanPrompt(
+  raw: RepairHostedPatchPlanInput,
+): string {
+  const input = RepairHostedPatchPlanInputSchema.parse(raw);
+  return `${renderHostedPatchPlanPrompt(input)}
+This is repair attempt ${input.repairAttempt} of at most 2. Correct only the rejected invariants without changing artifact, result, transfer, or evidence lineage.
 
 Previous output hashes:
 ${json(input.previousOutputHashes)}

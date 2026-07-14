@@ -75,6 +75,15 @@ export class HttpRunnerControlPlane implements RunnerControlPlane {
     return RunnerJobInputBundleSchema.parse(await response.json());
   }
 
+  async getSource(): Promise<string> {
+    const response = await this.request(
+      `/api/runner/jobs/${this.jobId()}/source`,
+      { method: "GET" },
+      false,
+    );
+    return response.text();
+  }
+
   async start(): Promise<void> {
     await this.jsonRequest(`/api/runner/jobs/${this.jobId()}/start`, {
       method: "POST",

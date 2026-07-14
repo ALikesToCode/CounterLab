@@ -14,6 +14,7 @@ import { HttpRunnerControlPlane } from "./control-plane-client.js";
 import { HostedRunnerJobProcessor } from "./job-processor.js";
 import { ContainerCodexLaunchBoundary } from "./launch-boundary.js";
 import { PythonFixedKernelExecutor } from "./fixed-kernel.js";
+import { PythonFixedPatchExecutor } from "./fixed-patch.js";
 
 const MAX_REQUEST_BYTES = 16_384;
 
@@ -181,6 +182,14 @@ async function startProductionServer(): Promise<void> {
           pythonExecutable:
             process.env.COUNTERLAB_PYTHON_EXECUTABLE ??
             "/opt/counterlab-venv/bin/python",
+        }),
+        fixedPatch: new PythonFixedPatchExecutor({
+          pythonExecutable:
+            process.env.COUNTERLAB_PYTHON_EXECUTABLE ??
+            "/opt/counterlab-venv/bin/python",
+          fixturePath:
+            process.env.COUNTERLAB_LEAKAGE_FIXTURE_PATH ??
+            "/app/fixtures/public/customer_churn.csv",
         }),
         controlPlane,
       });

@@ -5,20 +5,24 @@ import { join } from "node:path";
 import type {
   CodexCompiler,
   CompileHostedExperimentPlanInput,
+  CompileHostedPatchPlanInput,
   CompileLabInput,
   CompilePatchInput,
   CompilerEvent,
   CompilerHealth,
   RepairHostedExperimentPlanInput,
+  RepairHostedPatchPlanInput,
   RepairLabInput,
 } from "@counterlab/codex-client";
 import {
   RunnerLabCompileBundleSchema,
   RunnerLabRunBundleSchema,
+  RunnerPatchCompileBundleSchema,
   type PublicCompilerEvent,
   type RunnerCallback,
   type RunnerLabCompileBundle,
   type RunnerLabRunBundle,
+  type RunnerPatchCompileBundle,
   type RunnerJobInputBundle,
 } from "@counterlab/contracts";
 import { afterEach, describe, expect, it } from "vitest";
@@ -27,6 +31,7 @@ import {
   HostedRunnerJobProcessor,
   type CandidateDecision,
   type FixedKernelExecutor,
+  type FixedPatchExecutor,
   type RunnerControlPlane,
 } from "./job-processor.js";
 
@@ -235,8 +240,46 @@ async function runBundle(
   });
 }
 
+function patchBundle(jobId = "runner_job_patch_1"): RunnerPatchCompileBundle {
+  const compileBundle = bundle("compile_job_patch");
+  return RunnerPatchCompileBundleSchema.parse({
+    schemaVersion: "1",
+    kind: "PATCH_COMPILE",
+    jobId,
+    sessionId: compileBundle.sessionId,
+    stateVersion: 11,
+    requestedAt: "2026-07-14T10:00:00.000Z",
+    artifactManifestHash: "c".repeat(64),
+    artifactManifest: compileBundle.artifactManifest,
+    approvedBeliefTest: compileBundle.approvedBeliefTest,
+    verifiedResultSummary: {
+      schemaVersion: "2",
+      resultHash: "4".repeat(64),
+      planId: "plan_1",
+      runIds: ["random_rows", "new_accounts", "without_identity"],
+    },
+    transferSummary: {
+      outcome: "PASSED",
+      resultHash: "5".repeat(64),
+      selectedStrategy: "time_ordered_holdout",
+      identifiedRisks: ["centered_window_reads_future"],
+    },
+    patchContract: {
+      id: "leakage-notebook-patch-v2",
+      allowedTransformations: [
+        "replace_row_split_with_group_holdout",
+        "exclude_entity_feature",
+      ],
+    },
+    allowedCellIndices: [1],
+    patchPlanSchema: { type: "object" },
+    permittedOutputs: ["patch-plan.json", "public-rationale.md"],
+  });
+}
+
 class FakeCompiler implements CodexCompiler {
   compileCalls = 0;
+  patchCompileCalls = 0;
   repairCalls: RepairHostedExperimentPlanInput[] = [];
 
   constructor(
@@ -275,6 +318,48 @@ class FakeCompiler implements CodexCompiler {
     };
   }
 
+  async *compileHostedPatchPlan(
+    input: CompileHostedPatchPlanInput,
+  ): AsyncIterable<CompilerEvent> {
+    this.patchCompileCalls += 1;
+    await this.writePatchCandidate(input.generationDirectory);
+    yield {
+      type: "plan_summary",
+      summary: "Plan the minimal notebook repair.",
+    };
+    yield {
+      type: "final_status",
+      status: "completed",
+      threadId: "thread_patch_1",
+      turnId: "turn_patch_1",
+    };
+  }
+
+  async *repairHostedPatchPlan(
+    input: RepairHostedPatchPlanInput,
+  ): AsyncIterable<CompilerEvent> {
+    await this.writePatchCandidate(input.generationDirectory);
+    yield {
+      type: "final_status",
+      status: "completed",
+      threadId: "thread_patch_2",
+      turnId: "turn_patch_2",
+    };
+  }
+
+  private async writePatchCandidate(directory: string): Promise<void> {
+    await writeFile(
+      join(directory, "patch-plan.json"),
+      JSON.stringify(this.plan),
+      "utf8",
+    );
+    await writeFile(
+      join(directory, "public-rationale.md"),
+      "Hold out complete accounts and remove identity.",
+      "utf8",
+    );
+  }
+
   async writeCandidate(directory: string): Promise<void> {
     await writeFile(
       join(directory, "experiment-plan.json"),
@@ -309,6 +394,7 @@ class FakeControlPlane implements RunnerControlPlane {
   starts = 0;
   resumes = 0;
   candidateCalls = 0;
+  source = '{"nbformat":4,"cells":[]}';
 
   constructor(
     private readonly input: RunnerJobInputBundle,
@@ -321,6 +407,9 @@ class FakeControlPlane implements RunnerControlPlane {
   start(): Promise<void> {
     this.starts += 1;
     return Promise.resolve();
+  }
+  getSource(): Promise<string> {
+    return Promise.resolve(this.source);
   }
   resume(): Promise<void> {
     this.resumes += 1;
@@ -345,6 +434,46 @@ class FakeControlPlane implements RunnerControlPlane {
   callback(callback: RunnerCallback): Promise<void> {
     this.callbacks.push(structuredClone(callback));
     return Promise.resolve();
+  }
+}
+
+class FakeFixedPatch implements FixedPatchExecutor {
+  calls: Array<{ source: string; plan: string }> = [];
+
+  run(
+    _bundle: RunnerPatchCompileBundle,
+    sourceNotebook: string,
+    patchPlan: string,
+  ): Promise<{
+    notebookBody: string;
+    patchResultBody: string;
+    patchResultHash: string;
+    durationMs: number;
+  }> {
+    this.calls.push({ source: sourceNotebook, plan: patchPlan });
+    return Promise.resolve({
+      notebookBody: '{"nbformat":4,"cells":[{"source":"fixed"}]}',
+      patchResultBody: JSON.stringify({
+        schemaVersion: "1",
+        id: "patch_1",
+        sessionId: "session_1",
+        status: "VERIFIED",
+        sourceArtifactHash: "e".repeat(64),
+        patchedArtifactHash: "6".repeat(64),
+        patchHash: "7".repeat(64),
+        modifiedCells: [1],
+        diff: "- row split\n+ group holdout",
+        verification: {
+          passed: true,
+          invariants: ["allowed_cell_scope", "zero_group_overlap"],
+          unchangedCellHashes: ["8".repeat(64)],
+        },
+        generatedAt: "2026-07-14T10:00:00.000Z",
+        resultHash: "9".repeat(64),
+      }),
+      patchResultHash: "9".repeat(64),
+      durationMs: 53,
+    });
   }
 }
 
@@ -548,6 +677,41 @@ describe("HostedRunnerJobProcessor", () => {
     expect(controlPlane.callbacks[0]).toMatchObject({
       status: "VERIFIED",
       finalEventCursor: 3,
+    });
+  });
+
+  it("compiles a verified Patch Plan before the fixed patch process sees source bytes", async () => {
+    const patchPlan = { schemaVersion: "1", operations: [] };
+    const compiler = new FakeCompiler(patchPlan);
+    const fixedPatch = new FakeFixedPatch();
+    const controlPlane = new FakeControlPlane(patchBundle(), [
+      { ...verifiedDecision, nextCursor: 4 },
+    ]);
+    const processor = new HostedRunnerJobProcessor({
+      workspaceRoot: await workspace(),
+      compiler,
+      fixedPatch,
+      controlPlane,
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_5`,
+    });
+
+    await processor.run("runner_job_patch_1");
+
+    expect(compiler.patchCompileCalls).toBe(1);
+    expect(compiler.compileCalls).toBe(0);
+    expect(fixedPatch.calls).toEqual([
+      { source: controlPlane.source, plan: JSON.stringify(patchPlan) },
+    ]);
+    expect([...controlPlane.uploads.keys()].sort()).toEqual([
+      "patch-plan.json",
+      "patch-result.json",
+      "patched-notebook.ipynb",
+      "public-rationale.md",
+    ]);
+    expect(controlPlane.callbacks[0]).toMatchObject({
+      status: "VERIFIED",
+      finalEventCursor: 6,
     });
   });
 });

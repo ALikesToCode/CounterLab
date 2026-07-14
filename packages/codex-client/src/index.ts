@@ -27,9 +27,11 @@ export type {
 export {
   buildCompileLabPrompt,
   buildCompileHostedExperimentPlanPrompt,
+  buildCompileHostedPatchPlanPrompt,
   buildCompilePatchPrompt,
   buildRepairLabPrompt,
   buildRepairHostedExperimentPlanPrompt,
+  buildRepairHostedPatchPlanPrompt,
 } from "./prompts.js";
 export { redactSecrets, sanitizeAppServerMessage } from "./sanitizer.js";
 export {
@@ -44,21 +46,25 @@ export type {
 export {
   CompileLabInputSchema,
   CompileHostedExperimentPlanInputSchema,
+  CompileHostedPatchPlanInputSchema,
   CompilePatchInputSchema,
   CompilerEventSchema,
   CompilerSetupError,
   RepairLabInputSchema,
   RepairHostedExperimentPlanInputSchema,
+  RepairHostedPatchPlanInputSchema,
   ResourceLimitsSchema,
 } from "./types.js";
 export type {
   CodexCompiler,
   CompileLabInput,
   CompileHostedExperimentPlanInput,
+  CompileHostedPatchPlanInput,
   CompilePatchInput,
   CompilerEvent,
   CompilerHealth,
   CompilerSetupErrorCode,
   RepairLabInput,
   RepairHostedExperimentPlanInput,
+  RepairHostedPatchPlanInput,
 } from "./types.js";

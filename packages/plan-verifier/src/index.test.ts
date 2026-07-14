@@ -10,8 +10,10 @@ import { hashCanonical } from "@counterlab/session-core";
 
 import {
   PlanVerificationError,
+  PatchPlanVerificationError,
   ResultVerificationError,
   verifyExperimentPlan,
+  verifyPatchPlan,
   verifyHostedResultSet,
 } from "./index.js";
 
@@ -301,5 +303,71 @@ describe("hosted fixed-kernel result verifier", () => {
     await expect(
       verifyHostedResultSet(staleHash, await plan()),
     ).rejects.toThrow(/canonical/i);
+  });
+});
+
+describe("hosted Patch Plan verifier", () => {
+  it("binds the two registered transformations to the evidenced evaluation cell", async () => {
+    const experimentPlan = await plan();
+    const patchPlan = {
+      schemaVersion: "1" as const,
+      planId: "patch_plan_1",
+      sessionId: experimentPlan.sessionId,
+      concept: "entity_leakage" as const,
+      conceptPackVersion: experimentPlan.conceptPackVersion,
+      artifactManifestHash: experimentPlan.artifactManifestHash,
+      sourceArtifactHash: manifest().fileSha256,
+      transferResultHash: "e".repeat(64),
+      verifiedResultHash: "d".repeat(64),
+      evidenceRefs: belief().evidenceRefs,
+      targetCells: [2],
+      entityField: "account_key",
+      targetField: "cancelled",
+      operations: [
+        {
+          id: "replace_row_split_with_group_holdout" as const,
+          cellIndex: 2,
+          reason: "Evaluate complete accounts together.",
+        },
+        {
+          id: "exclude_entity_feature" as const,
+          cellIndex: 2,
+          reason: "Remove the identity shortcut.",
+        },
+      ],
+      preserveUnrelatedCells: true as const,
+      nonClaims: ["This does not establish production performance."],
+    };
+    const context = {
+      sessionId: experimentPlan.sessionId,
+      manifest: manifest(),
+      beliefTest: belief(),
+      verifiedResultHash: "d".repeat(64),
+      transferResultHash: "e".repeat(64),
+      conceptPackVersion: "2.0.0",
+      allowedTransformations: [
+        "replace_row_split_with_group_holdout",
+        "exclude_entity_feature",
+      ] as const,
+      allowedCellIndices: [2],
+    };
+
+    await expect(verifyPatchPlan(patchPlan, context)).resolves.toMatchObject({
+      status: "VERIFIED",
+      verifierVersion: "hosted-patch-plan-verifier-v1",
+    });
+    await expect(
+      verifyPatchPlan(
+        {
+          ...patchPlan,
+          targetCells: [4],
+          operations: patchPlan.operations.map((operation) => ({
+            ...operation,
+            cellIndex: 4,
+          })),
+        },
+        context,
+      ),
+    ).rejects.toBeInstanceOf(PatchPlanVerificationError);
   });
 });

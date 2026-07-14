@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   AppServerCodexCompiler,
   buildCompileHostedExperimentPlanPrompt,
+  buildCompileHostedPatchPlanPrompt,
   buildRepairHostedExperimentPlanPrompt,
   CompilerSetupError,
   DisabledCodexCompiler,
@@ -14,6 +15,7 @@ import {
   type CompilePatchInput,
   type CompilerEvent,
   type CompileHostedExperimentPlanInput,
+  type CompileHostedPatchPlanInput,
   type RepairHostedExperimentPlanInput,
   type RepairLabInput,
 } from "./index.js";
@@ -131,6 +133,42 @@ function hostedPlanInput(): CompileHostedExperimentPlanInput {
     },
     resourceLimits: { wallSeconds: 30, memoryMb: 512, maxRuns: 4 },
     permittedOutputs: ["experiment-plan.json", "public-rationale.md"],
+  };
+}
+
+function hostedPatchInput(): CompileHostedPatchPlanInput {
+  return {
+    sessionId: "session_test",
+    generationDirectory,
+    approvedBeliefTest: {
+      id: "belief_test",
+      concept: "entity_leakage",
+      evidenceRefs: [{ hash: "a".repeat(64), cellIndex: 2 }],
+    },
+    artifactManifest: hostedPlanInput().artifactManifest,
+    verifiedResultSummary: {
+      schemaVersion: "2",
+      resultHash: "c".repeat(64),
+      planId: "plan_1",
+      runIds: ["random_rows", "new_accounts", "without_identity"],
+    },
+    transferSummary: {
+      outcome: "PASSED",
+      resultHash: "d".repeat(64),
+      selectedStrategy: "time_ordered_holdout",
+      identifiedRisks: ["centered_window_reads_future"],
+    },
+    patchContract: {
+      id: "leakage-notebook-patch-v2",
+      allowedTransformations: [
+        "replace_row_split_with_group_holdout",
+        "exclude_entity_feature",
+      ],
+    },
+    allowedCellIndices: [2],
+    patchPlanSchema: { type: "object", required: ["operations"] },
+    resourceLimits: { wallSeconds: 30, memoryMb: 512, maxRuns: 1 },
+    permittedOutputs: ["patch-plan.json", "public-rationale.md"],
   };
 }
 
@@ -366,6 +404,18 @@ describe("hosted plan-only compiler", () => {
       phase: "plan",
       status: "completed",
     });
+  });
+});
+
+describe("hosted patch-plan compiler", () => {
+  it("keeps raw notebook content and executable repairs outside the model turn", () => {
+    const prompt = buildCompileHostedPatchPlanPrompt(hostedPatchInput());
+
+    expect(prompt).toContain("patch-plan.json");
+    expect(prompt).toContain("replace_row_split_with_group_holdout");
+    expect(prompt).toMatch(/do not write notebook code/i);
+    expect(prompt).not.toContain(generationDirectory);
+    expect(prompt).not.toContain("nbformat_minor");
   });
 });
 

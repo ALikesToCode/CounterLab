@@ -10,6 +10,7 @@ import {
   ExperimentPlanV2Schema,
   HostedVerifiedResultSetV2Schema,
   PatchResultSchema,
+  PatchPlanV1Schema,
   PredictionContractSchema,
   ProofBundleSchema,
   ReasoningDiffSchema,
@@ -417,6 +418,46 @@ describe("hosted runner contracts", () => {
         sessionId: "session_crossed",
       }),
     ).toThrow(/lineage/i);
+  });
+
+  it("accepts a source-free hosted patch plan and rejects executable fields", () => {
+    const patchPlan = PatchPlanV1Schema.parse({
+      schemaVersion: "1",
+      planId: "patch_plan_1",
+      sessionId: plan.sessionId,
+      concept: "entity_leakage",
+      conceptPackVersion: "2.0.0",
+      artifactManifestHash: plan.artifactManifestHash,
+      sourceArtifactHash: "f".repeat(64),
+      transferResultHash: "e".repeat(64),
+      verifiedResultHash: "d".repeat(64),
+      evidenceRefs: plan.evidenceRefs,
+      targetCells: [3],
+      entityField: "customer_id",
+      targetField: "churned",
+      operations: [
+        {
+          id: "replace_row_split_with_group_holdout",
+          cellIndex: 3,
+          reason: "Deployment requires performance on unseen customers.",
+        },
+        {
+          id: "exclude_entity_feature",
+          cellIndex: 3,
+          reason: "Customer identity is not a transferable feature.",
+        },
+      ],
+      preserveUnrelatedCells: true,
+      nonClaims: ["This patch does not prove production performance."],
+    });
+
+    expect(patchPlan.operations).toHaveLength(2);
+    expect(() =>
+      PatchPlanV1Schema.parse({
+        ...patchPlan,
+        source: "open('notebook.ipynb')",
+      }),
+    ).toThrow();
   });
 });
 

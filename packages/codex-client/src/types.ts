@@ -142,6 +142,39 @@ export type RepairHostedExperimentPlanInput = z.infer<
   typeof RepairHostedExperimentPlanInputSchema
 >;
 
+export const CompileHostedPatchPlanInputSchema = BaseCompilationSchema.extend({
+  approvedBeliefTest: JsonObjectSchema,
+  artifactManifest: JsonObjectSchema,
+  verifiedResultSummary: JsonObjectSchema,
+  transferSummary: JsonObjectSchema,
+  patchContract: JsonObjectSchema,
+  allowedCellIndices: z.array(z.number().int().nonnegative()).min(1).max(4),
+  patchPlanSchema: JsonObjectSchema,
+  resourceLimits: HostedPlanResourceLimitsSchema,
+  permittedOutputs: z.array(z.string().min(1).max(128)).length(2),
+}).strict();
+
+export type CompileHostedPatchPlanInput = z.infer<
+  typeof CompileHostedPatchPlanInputSchema
+>;
+
+export const RepairHostedPatchPlanInputSchema =
+  CompileHostedPatchPlanInputSchema.extend({
+    repairAttempt: z.union([z.literal(1), z.literal(2)]),
+    verifierCounterexamples: z
+      .array(HostedVerifierCounterexampleSchema)
+      .min(1)
+      .max(24),
+    previousOutputHashes: z.record(
+      z.string(),
+      z.string().regex(/^[a-f0-9]{64}$/i),
+    ),
+  }).strict();
+
+export type RepairHostedPatchPlanInput = z.infer<
+  typeof RepairHostedPatchPlanInputSchema
+>;
+
 export const CompilePatchInputSchema = BaseCompilationSchema.extend({
   approvedBeliefTest: JsonObjectSchema,
   verifiedResult: JsonObjectSchema,
@@ -272,6 +305,12 @@ export interface CodexCompiler {
   ): AsyncIterable<CompilerEvent>;
   repairExperimentPlan(
     input: RepairHostedExperimentPlanInput,
+  ): AsyncIterable<CompilerEvent>;
+  compileHostedPatchPlan(
+    input: CompileHostedPatchPlanInput,
+  ): AsyncIterable<CompilerEvent>;
+  repairHostedPatchPlan(
+    input: RepairHostedPatchPlanInput,
   ): AsyncIterable<CompilerEvent>;
   health(): Promise<CompilerHealth>;
 }

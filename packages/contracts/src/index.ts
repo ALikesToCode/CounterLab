@@ -406,6 +406,67 @@ export const ExperimentPlanV2Schema = z
 
 export type ExperimentPlanV2 = z.infer<typeof ExperimentPlanV2Schema>;
 
+export const PatchOperationIdSchema = z.enum([
+  "replace_row_split_with_group_holdout",
+  "exclude_entity_feature",
+]);
+
+export type PatchOperationId = z.infer<typeof PatchOperationIdSchema>;
+
+export const PatchPlanV1Schema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    planId: NonEmptyString,
+    sessionId: NonEmptyString,
+    concept: z.literal("entity_leakage"),
+    conceptPackVersion: NonEmptyString,
+    artifactManifestHash: Sha256Schema,
+    sourceArtifactHash: Sha256Schema,
+    transferResultHash: Sha256Schema,
+    verifiedResultHash: Sha256Schema,
+    evidenceRefs: z.array(EvidenceRefSchema).min(1).max(6),
+    targetCells: z.array(z.number().int().nonnegative()).min(1).max(4),
+    entityField: NonEmptyString,
+    targetField: NonEmptyString,
+    operations: z
+      .array(
+        z
+          .object({
+            id: PatchOperationIdSchema,
+            cellIndex: z.number().int().nonnegative(),
+            reason: NonEmptyString,
+          })
+          .strict(),
+      )
+      .length(2),
+    preserveUnrelatedCells: z.literal(true),
+    nonClaims: z.array(NonEmptyString).min(1),
+  })
+  .strict()
+  .superRefine((plan, context) => {
+    const operationIds = new Set(plan.operations.map((item) => item.id));
+    if (operationIds.size !== 2) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "patch plan must include each registered operation exactly once",
+        path: ["operations"],
+      });
+    }
+    const targetCells = new Set(plan.targetCells);
+    for (const [index, operation] of plan.operations.entries()) {
+      if (!targetCells.has(operation.cellIndex)) {
+        context.addIssue({
+          code: "custom",
+          message: "patch operation cell must be declared in targetCells",
+          path: ["operations", index, "cellIndex"],
+        });
+      }
+    }
+  });
+
+export type PatchPlanV1 = z.infer<typeof PatchPlanV1Schema>;
+
 export const RunnerJobKindSchema = z.enum([
   "BELIEF_ANALYSIS",
   "LAB_COMPILE",
@@ -570,6 +631,8 @@ export const AllowedGeneratedPathSchema = z.enum([
 export const RunnerOutputPathSchema = z.enum([
   ...AllowedGeneratedPathSchema.options,
   "verified-result.json",
+  "patched-notebook.ipynb",
+  "patch-result.json",
 ]);
 
 export type RunnerOutputPath = z.infer<typeof RunnerOutputPathSchema>;
@@ -1002,9 +1065,74 @@ export const RunnerLabRunBundleSchema = z
 
 export type RunnerLabRunBundle = z.infer<typeof RunnerLabRunBundleSchema>;
 
+export const RunnerPatchCompileBundleSchema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    kind: z.literal("PATCH_COMPILE"),
+    jobId: NonEmptyString,
+    sessionId: NonEmptyString,
+    stateVersion: z.number().int().positive(),
+    requestedAt: z.iso.datetime({ offset: true }),
+    artifactManifestHash: Sha256Schema,
+    artifactManifest: ArtifactManifestSchema,
+    approvedBeliefTest: BeliefTestSchema,
+    verifiedResultSummary: z
+      .object({
+        schemaVersion: z.literal("2"),
+        resultHash: Sha256Schema,
+        planId: NonEmptyString,
+        runIds: z.array(NonEmptyString).min(1).max(8),
+      })
+      .strict(),
+    transferSummary: z
+      .object({
+        outcome: z.literal("PASSED"),
+        resultHash: Sha256Schema,
+        selectedStrategy: NonEmptyString,
+        identifiedRisks: z.array(NonEmptyString).min(1),
+      })
+      .strict(),
+    patchContract: z
+      .object({
+        id: NonEmptyString,
+        allowedTransformations: z
+          .tuple([
+            z.literal("replace_row_split_with_group_holdout"),
+            z.literal("exclude_entity_feature"),
+          ])
+          .readonly(),
+      })
+      .strict(),
+    allowedCellIndices: z.array(z.number().int().nonnegative()).min(1).max(4),
+    patchPlanSchema: z.record(z.string(), z.json()),
+    permittedOutputs: z
+      .tuple([z.literal("patch-plan.json"), z.literal("public-rationale.md")])
+      .readonly(),
+  })
+  .strict()
+  .superRefine((bundle, context) => {
+    if (
+      bundle.approvedBeliefTest.concept !== "entity_leakage" ||
+      !bundle.allowedCellIndices.every((index) =>
+        bundle.artifactManifest.cells.some((cell) => cell.index === index),
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "runner PATCH_COMPILE bundle lineage does not resolve",
+        path: ["allowedCellIndices"],
+      });
+    }
+  });
+
+export type RunnerPatchCompileBundle = z.infer<
+  typeof RunnerPatchCompileBundleSchema
+>;
+
 export const RunnerJobInputBundleSchema = z.discriminatedUnion("kind", [
   RunnerLabCompileBundleSchema,
   RunnerLabRunBundleSchema,
+  RunnerPatchCompileBundleSchema,
 ]);
 
 export type RunnerJobInputBundle = z.infer<typeof RunnerJobInputBundleSchema>;
@@ -1352,7 +1480,7 @@ const VerifierSummarySchema = z
   })
   .strict();
 
-export const ProofBundleDraftSchema = z
+export const ProofBundleV1DraftSchema = z
   .object({
     schemaVersion: VersionOneSchema,
     bundleId: NonEmptyString,
@@ -1400,11 +1528,94 @@ export const ProofBundleDraftSchema = z
   })
   .strict();
 
-export type ProofBundleDraft = z.infer<typeof ProofBundleDraftSchema>;
-
-export const ProofBundleSchema = ProofBundleDraftSchema.extend({
+export const ProofBundleV1Schema = ProofBundleV1DraftSchema.extend({
   integrity: ProofIntegritySchema,
 }).strict();
+
+const ProofVerificationReportSchema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    status: z.enum(["VERIFIED", "REJECTED"]),
+    verifierVersion: NonEmptyString,
+    invariantCount: z.number().int().nonnegative(),
+    invariants: z.array(
+      z
+        .object({
+          name: NonEmptyString,
+          passed: z.boolean(),
+          observed: z.unknown(),
+          expected: z.unknown(),
+          counterexample: z.string().optional(),
+        })
+        .strict(),
+    ),
+  })
+  .passthrough();
+
+export const ProofBundleV2DraftSchema = z
+  .object({
+    schemaVersion: z.literal("2"),
+    bundleId: NonEmptyString,
+    sessionId: NonEmptyString,
+    replayId: z.null(),
+    sessionMode: z.literal("live_notebook"),
+    createdAt: z.iso.datetime({ offset: true }),
+    events: z.array(EvidenceEventSchema).min(1),
+    artifactManifest: ArtifactManifestSchema,
+    beliefTest: BeliefTestSchema,
+    predictionContract: PredictionContractSchema,
+    experimentPlan: ExperimentPlanV2Schema,
+    planVerification: ProofVerificationReportSchema.extend({
+      planHash: Sha256Schema,
+    }),
+    publicCompilerEvents: z.array(PublicCompilerEventSchema),
+    verifiedResultSet: HostedVerifiedResultSetV2Schema,
+    learnerRevision: z
+      .object({
+        text: NonEmptyString,
+        recordedAt: z.iso.datetime({ offset: true }),
+        eventHash: Sha256Schema,
+      })
+      .strict(),
+    transferResult: TransferResultSchema,
+    patchPlan: PatchPlanV1Schema,
+    patchPlanVerification: ProofVerificationReportSchema.extend({
+      planHash: Sha256Schema,
+    }),
+    patchResult: PatchResultSchema,
+    reasoningDiff: ReasoningDiffSchema,
+    versions: z
+      .object({
+        environment: NonEmptyString,
+        dependencies: NonEmptyString,
+        fixture: NonEmptyString,
+        kernel: NonEmptyString,
+        verifier: NonEmptyString,
+        prompt: NonEmptyString,
+        model: NonEmptyString,
+        conceptPack: NonEmptyString,
+      })
+      .strict(),
+    limitations: z.array(NonEmptyString),
+    reproductionCommands: z.array(NonEmptyString).min(1),
+  })
+  .strict();
+
+export const ProofBundleV2Schema = ProofBundleV2DraftSchema.extend({
+  integrity: ProofIntegritySchema,
+}).strict();
+
+export const ProofBundleDraftSchema = z.union([
+  ProofBundleV1DraftSchema,
+  ProofBundleV2DraftSchema,
+]);
+
+export type ProofBundleDraft = z.infer<typeof ProofBundleDraftSchema>;
+
+export const ProofBundleSchema = z.union([
+  ProofBundleV1Schema,
+  ProofBundleV2Schema,
+]);
 
 export type ProofBundle = z.infer<typeof ProofBundleSchema>;
 

@@ -1,11 +1,13 @@
 import {
   ExperimentPlanV2Schema,
   HostedVerifiedResultSetV2Schema,
+  PatchPlanV1Schema,
   type ArtifactManifest,
   type BeliefTest,
   type EvidenceRef,
   type ExperimentPlanV2,
   type HostedVerifiedResultSetV2,
+  type PatchPlanV1,
 } from "@counterlab/contracts";
 import { getConceptPack } from "@counterlab/concept-registry";
 import { hashCanonical } from "@counterlab/session-core";
@@ -99,7 +101,7 @@ async function evidenceResolves(
 }
 
 async function allEvidenceApproved(
-  plan: ExperimentPlanV2,
+  plan: Pick<ExperimentPlanV2, "evidenceRefs">,
   beliefTest: BeliefTest,
   manifest: ArtifactManifest,
 ): Promise<{ passed: boolean; counterexample?: string }> {
@@ -123,6 +125,177 @@ async function allEvidenceApproved(
     }
   }
   return { passed: true };
+}
+
+export type PatchPlanVerificationReport = {
+  schemaVersion: "1";
+  status: "VERIFIED" | "REJECTED";
+  verifierVersion: "hosted-patch-plan-verifier-v1";
+  planHash: string;
+  invariantCount: number;
+  invariants: PlanInvariant[];
+};
+
+export class PatchPlanVerificationError extends Error {
+  constructor(
+    message: string,
+    readonly report: PatchPlanVerificationReport,
+  ) {
+    super(message);
+    this.name = "PatchPlanVerificationError";
+  }
+}
+
+export type PatchPlanVerificationContext = {
+  sessionId: string;
+  manifest: ArtifactManifest;
+  beliefTest: BeliefTest;
+  verifiedResultHash: string;
+  transferResultHash: string;
+  conceptPackVersion: string;
+  allowedTransformations: readonly [
+    "replace_row_split_with_group_holdout",
+    "exclude_entity_feature",
+  ];
+  allowedCellIndices: number[];
+};
+
+export async function verifyPatchPlan(
+  input: unknown,
+  context: PatchPlanVerificationContext,
+): Promise<PatchPlanVerificationReport> {
+  const parsed = PatchPlanV1Schema.safeParse(input);
+  if (!parsed.success) {
+    const report: PatchPlanVerificationReport = {
+      schemaVersion: "1",
+      status: "REJECTED",
+      verifierVersion: "hosted-patch-plan-verifier-v1",
+      planHash: await hashCanonical(input),
+      invariantCount: 1,
+      invariants: [
+        invariant(
+          "structural_schema",
+          false,
+          parsed.error.issues[0]?.message ?? "invalid patch plan",
+          "Patch Plan v1",
+        ),
+      ],
+    };
+    throw new PatchPlanVerificationError(
+      "Patch Plan schema was rejected",
+      report,
+    );
+  }
+  const plan: PatchPlanV1 = parsed.data;
+  const manifestHash = await hashCanonical(context.manifest);
+  const evidence = await allEvidenceApproved(
+    plan,
+    context.beliefTest,
+    context.manifest,
+  );
+  const allowedCells = new Set(context.allowedCellIndices);
+  const targetCells = new Set(plan.targetCells);
+  const targetCellEvidence = context.manifest.cells.filter((cell) =>
+    targetCells.has(cell.index),
+  );
+  const declaredOperations = new Set(plan.operations.map((item) => item.id));
+  const allowedOperations = new Set(context.allowedTransformations);
+  const invariants: PlanInvariant[] = [
+    invariant(
+      "patch_lineage",
+      plan.sessionId === context.sessionId &&
+        plan.artifactManifestHash === manifestHash &&
+        plan.sourceArtifactHash === context.manifest.fileSha256 &&
+        plan.verifiedResultHash === context.verifiedResultHash &&
+        plan.transferResultHash === context.transferResultHash &&
+        plan.conceptPackVersion === context.conceptPackVersion,
+      {
+        sessionId: plan.sessionId,
+        artifactManifestHash: plan.artifactManifestHash,
+        sourceArtifactHash: plan.sourceArtifactHash,
+        verifiedResultHash: plan.verifiedResultHash,
+        transferResultHash: plan.transferResultHash,
+      },
+      {
+        sessionId: context.sessionId,
+        artifactManifestHash: manifestHash,
+        sourceArtifactHash: context.manifest.fileSha256,
+        verifiedResultHash: context.verifiedResultHash,
+        transferResultHash: context.transferResultHash,
+      },
+    ),
+    invariant(
+      "belief_and_evidence_lineage",
+      plan.concept === context.beliefTest.concept &&
+        !context.beliefTest.uncertainty.insufficientEvidence &&
+        evidence.passed,
+      plan.evidenceRefs.map((item) => item.hash),
+      context.beliefTest.evidenceRefs.map((item) => item.hash),
+      evidence.counterexample,
+    ),
+    invariant(
+      "registered_transformations",
+      declaredOperations.size === allowedOperations.size &&
+        [...declaredOperations].every((item) => allowedOperations.has(item)),
+      [...declaredOperations],
+      [...allowedOperations],
+    ),
+    invariant(
+      "allowed_cell_scope",
+      targetCells.size === plan.targetCells.length &&
+        [...targetCells].every((index) => allowedCells.has(index)) &&
+        plan.operations.every((operation) =>
+          targetCells.has(operation.cellIndex),
+        ),
+      plan.targetCells,
+      context.allowedCellIndices,
+    ),
+    invariant(
+      "evaluation_cell_resolved",
+      targetCellEvidence.length === targetCells.size &&
+        targetCellEvidence.some(
+          (cell) =>
+            cell.symbols.includes("train_test_split") ||
+            cell.sourceExcerpt.includes("train_test_split"),
+        ),
+      targetCellEvidence.map((cell) => ({
+        index: cell.index,
+        symbols: cell.symbols,
+      })),
+      "one allowed target cell containing train_test_split",
+    ),
+    invariant(
+      "schema_fields_resolved",
+      context.manifest.schemaSummary.entityCandidates.includes(
+        plan.entityField,
+      ) &&
+        context.manifest.schemaSummary.targetCandidates.includes(
+          plan.targetField,
+        ),
+      { entityField: plan.entityField, targetField: plan.targetField },
+      {
+        entityCandidates: context.manifest.schemaSummary.entityCandidates,
+        targetCandidates: context.manifest.schemaSummary.targetCandidates,
+      },
+    ),
+  ];
+  const report: PatchPlanVerificationReport = {
+    schemaVersion: "1",
+    status: invariants.every((check) => check.passed) ? "VERIFIED" : "REJECTED",
+    verifierVersion: "hosted-patch-plan-verifier-v1",
+    planHash: await hashCanonical(plan),
+    invariantCount: invariants.length,
+    invariants,
+  };
+  if (report.status === "REJECTED") {
+    const failed = invariants.find((check) => !check.passed);
+    throw new PatchPlanVerificationError(
+      failed?.counterexample ??
+        `Patch Plan failed invariant ${failed?.name ?? "unknown"}`,
+      report,
+    );
+  }
+  return report;
 }
 
 export async function verifyExperimentPlan(
