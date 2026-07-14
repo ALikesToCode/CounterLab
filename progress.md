@@ -119,6 +119,16 @@
   - Added callback idempotency and fail-closed behavior: a runner-claimed
     success with an invalid Plan becomes `REJECTED`, releases no experiment
     result, and cannot double-append session evidence on retry.
+  - Added the authenticated hosted-runner process service. It fetches only the
+    scoped sanitized job bundle, starts Codex App Server over stdio, accepts
+    only the Plan and public rationale outputs, submits candidates to the
+    external Worker verifier, and applies at most two structured repairs.
+  - Added the Cloudflare Container deployment boundary and production image.
+    The image contains the pinned Codex CLI and fixed Python kernel, excludes
+    the hidden verifier, demotes Codex turns to UID/GID 10001, and removes the
+    staged authentication file before each model turn.
+  - Built and smoke-tested the production runner image: Codex 0.144.4, fixed
+    kernel import, and the non-root setpriv identity all passed.
 - Files created/modified:
   - `task_plan.md`
   - `findings.md`
@@ -162,6 +172,9 @@
 | Hosted Codex plan compiler                      | plan-only prompt, two repairs, stable stdio | Constrain outputs and reject executable authority                       | 22 Codex-client tests passed; typecheck passed         | pass   |
 | Hosted Worker compile                           | live artifact, scoped token, cursor events  | Verify an artifact-specific Plan without sample authority               | 23 Worker tests passed                                 | pass   |
 | Full `test-all.sh`                              | hosted compile checkpoint                   | Shared, Worker/UI, Python/runner, typecheck, D1 migration, browser      | 122 TS + 45 web + 101 Python + 13 browser passed       | pass   |
+| Hosted runner unit tests                        | process service and control-plane boundary  | Dispatch, auth, repair, output allowlist, launch isolation              | 9 passed                                               | pass   |
+| Runner production image                         | `Dockerfile.runner`                         | Build, pinned Codex, fixed kernel, non-root launch identity             | built; 3 container smoke checks passed                 | pass   |
+| Full `test-all.sh`                              | hosted Container runner checkpoint          | Shared, Worker/UI, Python/runner, typecheck, D1 migration, browser      | 131 TS + 45 web + 101 Python + 13 browser passed       | pass   |
 
 ## Error Log
 
@@ -182,6 +195,13 @@
 | 2026-07-15 | Progress search command contained an unescaped backtick                                           |       1 | Re-ran the bounded search with a single-quoted plain pattern.                                                             |
 | 2026-07-15 | Combined progress/task-plan patch missed the task plan's formatted row                            |       1 | Split the documentation updates and patched each exact formatted table independently.                                     |
 | 2026-07-15 | Candidate verification advanced the reconnect cursor with a verifier event                        |       1 | Updated the regression to require the file event and independent verifier event.                                          |
+| 2026-07-15 | Hosted runner event helper lost variant fields under non-distributive `Omit`                      |       1 | Added a distributive payload type and kept Zod validation at emission.                                                    |
+| 2026-07-15 | Prettier had no parser for the Dockerfile and `.dockerignore`                                     |       1 | Kept them hand-audited and validated them with Docker and Wrangler.                                                       |
+| 2026-07-15 | Container constructor used the default unknown Durable Object props type                          |       1 | Bound it to the Container base class's empty props type.                                                                  |
+| 2026-07-15 | Resuming the prior Docker build referenced an expired process ID                                  |       1 | Verified no image existed, then reran the cached build with concise progress.                                             |
+| 2026-07-15 | Runner image omitted `/usr/sbin`, so the installed `groupadd` command was unreachable             |       1 | Added the standard sbin directories to the explicit production `PATH`.                                                    |
+| 2026-07-15 | Corepack failed on an unresolved Yarn shim in the mixed Node/Python image                          |       1 | Installed the declared `pnpm@11.12.0` directly and removed Corepack from the build.                                       |
+| 2026-07-15 | Full tests found strict JSON parsing incompatible with Prettier's Wrangler JSONC trailing commas   |       1 | Preserved `wrangler.jsonc` as strict JSON, which remains a valid Wrangler configuration.                                  |
 
 ## 5-Question Reboot Check
 

@@ -31,7 +31,7 @@ Phase 3 — Hosted artifact-specific leakage vertical slice
 ### Phase 3: Hosted artifact-specific leakage vertical slice
 
 - [x] Add runner job/event/token contracts and D1 persistence.
-- [ ] Add authenticated runner service/test runner and fixed plan interpreter.
+- [x] Add authenticated runner service/test runner and fixed plan interpreter.
 - [ ] Compile, verify, repair, run, patch, and stream an uploaded leakage notebook.
 - [ ] Add artifact-specific proof and patch download.
 - **Status:** in_progress
@@ -98,6 +98,13 @@ Phase 3 — Hosted artifact-specific leakage vertical slice
 | Progress search contained an unescaped shell backtick                                                             |       1 | Re-ran the bounded search with a safe single-quoted pattern.                                                                         |
 | Combined progress/task-plan patch missed a formatted task-plan row                                                |       1 | Split the documentation updates and patched each exact table independently.                                                          |
 | Candidate verification added a verifier event to the reconnect stream                                             |       1 | Updated the cursor regression to require both the file and verifier events.                                                          |
+| Hosted runner event helper used non-distributive `Omit` over a union                                              |       1 | Added a distributive event-payload type while retaining runtime schema validation.                                                   |
+| Prettier had no parser for the Dockerfile and `.dockerignore`                                                     |       1 | Kept them hand-audited and switched validation to Docker and Wrangler.                                                               |
+| Container constructor used the default unknown Durable Object props type                                          |       1 | Bound the constructor state to the Container base class's empty props type.                                                          |
+| Resuming the truncated Docker build referenced an expired process ID                                              |       1 | Checked image state, then reran the cached build with concise progress to recover the real failure.                                  |
+| Runner image account tools were installed but `/usr/sbin` was absent from `PATH`                                  |       1 | Added standard sbin paths to the explicit production image `PATH`.                                                                   |
+| Corepack failed on a broken Yarn shim after copying Node into the Python base                                     |       1 | Installed the repository-pinned `pnpm@11.12.0` directly and removed Corepack from the image path.                                    |
+| Broad tests found trailing JSONC commas incompatible with the strict deployment-config regression                |       1 | Kept `wrangler.jsonc` valid strict JSON while retaining the supported Wrangler configuration.                                        |
 
 ## Notes
 
