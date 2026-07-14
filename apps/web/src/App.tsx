@@ -64,10 +64,10 @@ function ReplayBanner() {
 
 function Header({ mode, stage }: { mode: Mode | null; stage: Stage }) {
   const proofStages = [
-    { label: "Claim", stages: ["claim", "live-setup"] },
-    { label: "Belief test", stages: ["belief"] },
-    { label: "Verify", stages: ["build", "live-compile"] },
-    { label: "Transfer", stages: ["reality"] },
+    { label: "Your idea", stages: ["claim", "live-setup"] },
+    { label: "Your prediction", stages: ["belief"] },
+    { label: "What happened", stages: ["build", "live-compile"] },
+    { label: "Try it again", stages: ["reality"] },
   ] as const;
   const activeIndex = proofStages.findIndex((item) =>
     item.stages.some((candidate) => candidate === stage),
@@ -83,7 +83,7 @@ function Header({ mode, stage }: { mode: Mode | null; stage: Stage }) {
         <span className="wordmark-mark">C</span>
         <span className="wordmark-copy">
           <strong>CounterLab</strong>
-          <small>CI for understanding</small>
+          <small>Learn from a fair test</small>
         </span>
       </button>
       {stage !== "landing" && (
@@ -139,15 +139,15 @@ function LearningGuide({
       </div>
       <dl>
         <div>
-          <dt>What you know</dt>
+          <dt>You have</dt>
           <dd>{known}</dd>
         </div>
         <div>
-          <dt>Still unknown</dt>
+          <dt>We need to know</dt>
           <dd>{unknown}</dd>
         </div>
         <div>
-          <dt>Your next move</dt>
+          <dt>Do this now</dt>
           <dd>{next}</dd>
         </div>
       </dl>
@@ -158,142 +158,78 @@ function LearningGuide({
 function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
   const random = getRun("random_row_split");
   const grouped = getRun("customer_group_split");
-  const gap = random.metrics.accuracy - grouped.metrics.accuracy;
 
   return (
     <main className="landing">
-      <section className="hero shell">
-        <div className="hero-copy">
+      <section className="learning-hero shell">
+        <div className="learning-hero-copy">
           <h1 className="sr-only">CounterLab</h1>
-          <p className="kicker">
-            <span /> Education track · evidence first
+          <p className="lesson-kicker">
+            <span>Interactive lesson</span> · about 3 minutes
           </p>
-          <h2 className="hero-headline">
-            Let reality
-            <em> review the claim.</em>
-          </h2>
-          <p className="tagline">
-            Chatbots explain. CounterLab lets reality answer.
+          <h2>Test what your model really learned.</h2>
+          <p className="learning-promise">
+            Make a prediction. We run a fairer test. Then use the lesson on a
+            new problem.
           </p>
-          <p className="thesis">
-            A learner sees 98.5% accuracy and claims the model understands new
-            customers. CounterLab locks that prediction, runs the test that can
-            prove it wrong, and withholds the repair until the idea transfers.
-          </p>
-          <div className="hero-cta-row">
+          <div className="learning-actions">
             <button
-              className="button hero-cta"
+              className="button lesson-primary"
               type="button"
+              aria-label="Start the 3-minute lesson — Try instantly"
               onClick={() => chooseMode("instant")}
             >
-              Run the verified case <Mark name="arrow" />
+              Start the 3-minute lesson <Mark name="arrow" />
             </button>
-            <a href="#judge-paths">See the proof chain</a>
           </div>
-          <div className="trust-row" aria-label="Sample guarantees">
+          <div className="lesson-trust" aria-label="Lesson details">
             <span>
-              <Mark name="check" /> No account
+              <Mark name="check" /> No account needed
             </span>
             <span>
-              <Mark name="check" /> Real computed metrics
-            </span>
-            <span>
-              <Mark name="check" /> Replayable proof
+              <Mark name="check" /> Real results, not a quiz answer
             </span>
           </div>
         </div>
 
-        <aside className="proof-console" aria-label="Verified sample preview">
-          <div className="console-topline">
-            <span className="console-lights" aria-hidden="true">
-              <i />
-              <i />
-              <i />
-            </span>
-            <span>VERIFIED SAMPLE · LEAKAGE-01</span>
-            <span className="console-status">
-              <i /> PASS
-            </span>
+        <aside className="lesson-preview" aria-label="Sample lesson preview">
+          <div className="lesson-preview-head">
+            <span>Example: customer churn</span>
+            <span className="lesson-badge">Real computed result</span>
           </div>
-          <div className="console-body">
-            <div className="claim-signal">
-              <span className="console-label">LEARNER CLAIM</span>
-              <p>&ldquo;98.5% proves this works on new customers.&rdquo;</p>
-              <span className="locked-signal">
-                <Mark name="lock" /> Prediction sealed before results
-              </span>
+          <p className="preview-question">
+            Does a high test score mean the model works for new customers?
+          </p>
+          <div className="score-story">
+            <div className="score-card score-before">
+              <span>The notebook says</span>
+              <strong>{percent.format(random.metrics.accuracy)}</strong>
+              <small>rows mixed at random</small>
             </div>
-            <div className="console-intervention">
-              <div className="console-metric baseline">
-                <span>Random rows</span>
-                <strong>{percent.format(random.metrics.accuracy)}</strong>
-                <small>{random.entityOverlap.count} customers overlap</small>
-                <i style={{ width: percent.format(random.metrics.accuracy) }} />
-              </div>
-              <div className="console-divider" aria-hidden="true">
-                <span>RUN INTERVENTION</span>
-                <i />
-              </div>
-              <div className="console-metric decisive">
-                <span>Unseen customers</span>
-                <strong>{percent.format(grouped.metrics.accuracy)}</strong>
-                <small>{grouped.entityOverlap.count} customers overlap</small>
-                <i
-                  style={{ width: percent.format(grouped.metrics.accuracy) }}
-                />
-              </div>
+            <div className="score-arrow" aria-hidden="true">
+              <Mark name="arrow" />
             </div>
-            <div className="console-verdict">
-              <div>
-                <span className="console-label">REALITY CHECK</span>
-                <strong>{percent.format(gap)} generalization gap</strong>
-              </div>
-              <div className="verifier-seal">
-                <Mark name="check" />
-                <span>
-                  <strong>12 / 12</strong>
-                  <small>mutations caught</small>
-                </span>
-              </div>
+            <div className="score-card score-after">
+              <span>New customers</span>
+              <strong>{percent.format(grouped.metrics.accuracy)}</strong>
+              <small>no customer overlap</small>
             </div>
           </div>
-          <div className="console-footer">
-            <span>result {sampleResult.resultHash.slice(0, 12)}…</span>
-            <span>kernel {sampleResult.kernelVersion}</span>
-            <span>seed {random.seed}</span>
-          </div>
+          <p className="preview-lesson">
+            <Mark name="spark" /> Same model. A test that matches the real
+            question.
+          </p>
         </aside>
       </section>
 
-      <section
-        className="proof-spine shell"
-        aria-label="CounterLab proof chain"
-      >
+      <section className="lesson-steps shell" aria-label="How the lesson works">
         {[
+          ["1", "Make a prediction", "Say what you expect before results."],
+          ["2", "See the evidence", "Compare the old test with a fairer one."],
           [
-            "01",
-            "Formalize",
-            "Two competing hypotheses, linked to notebook evidence.",
-          ],
-          [
-            "02",
-            "Commit",
-            "An immutable prediction before any result can render.",
-          ],
-          [
-            "03",
-            "Discriminate",
-            "A fixed kernel changes the variable that separates the beliefs.",
-          ],
-          [
-            "04",
-            "Verify",
-            "A frozen verifier attacks the candidate and rejects stale evidence.",
-          ],
-          [
-            "05",
-            "Transfer",
-            "Only a new-case pass unlocks the smallest notebook repair.",
+            "3",
+            "Apply the lesson",
+            "Solve a different case to unlock the fix.",
           ],
         ].map(([index, title, copy]) => (
           <article key={index}>
@@ -306,85 +242,45 @@ function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
         ))}
       </section>
 
-      <section className="judge-band" id="judge-paths">
-        <div className="shell">
-          <div className="section-heading">
-            <p className="eyebrow">Judge mode</p>
-            <h2 id="choose-path">Choose how to inspect the proof.</h2>
-            <p>
-              Start instantly, generate the reasoning layer live, or audit a
-              stored reject-and-repair trace.
-            </p>
-          </div>
-          <div className="mode-grid" aria-labelledby="choose-path">
-            <button
-              className="mode-card mode-card-primary"
-              type="button"
-              onClick={() => chooseMode("instant")}
-            >
-              <span className="mode-index">01</span>
-              <span className="mode-copy">
-                <strong>Try instantly</strong>
-                <small>
-                  Complete claim → prediction → lab → transfer → verified patch
-                  in under three minutes.
-                </small>
-              </span>
-              <span className="mode-action">
-                Start the case <Mark name="arrow" />
-              </span>
-            </button>
-
-            <button
-              className="mode-card"
-              type="button"
-              onClick={() => chooseMode("live")}
-            >
-              <span className="mode-index">02</span>
-              <span className="mode-copy">
-                <strong>Generate live</strong>
-                <small>
-                  Create an evidence-linked Belief Test from sanitized notebook
-                  context. Local verification stays independently gated.
-                </small>
-              </span>
-              <span className="mode-action">
-                Check capabilities <Mark name="spark" />
-              </span>
-            </button>
-
-            <button
-              className="mode-card"
-              type="button"
-              onClick={() => chooseMode("replay")}
-            >
-              <span className="mode-index">03</span>
-              <span className="mode-copy">
-                <strong>Replay verified session</strong>
-                <small>
-                  Audit a genuine stored rejection, repair, canonical result,
-                  and event hash chain.
-                </small>
-              </span>
-              <span className="mode-action">
-                Open the trace <Mark name="arrow" />
-              </span>
-            </button>
-          </div>
-
-          <div className="support-note">
-            <span>
-              <Mark name="check" /> Jupyter nbformat 4
-            </span>
-            <span>
-              <Mark name="lock" /> No cells execute at intake
-            </span>
-            <span>
-              <Mark name="check" /> Documented scikit-learn subset
-            </span>
-            <span>Bounded claims, explicit limitations</span>
-          </div>
+      <section className="more-paths shell" id="judge-paths">
+        <div className="more-paths-heading">
+          <span>Already know the lesson?</span>
+          <p>Bring a notebook or inspect a recorded run.</p>
         </div>
+        <div className="simple-mode-grid">
+          <button
+            className="simple-mode-card"
+            type="button"
+            aria-label="Test my notebook — Generate live"
+            onClick={() => chooseMode("live")}
+          >
+            <span className="path-icon">A</span>
+            <strong>Test my notebook</strong>
+            <small>Supported Jupyter notebooks</small>
+            <span>
+              Check support <Mark name="arrow" />
+            </span>
+          </button>
+
+          <button
+            className="simple-mode-card"
+            type="button"
+            aria-label="Watch a verified replay — Replay verified session"
+            onClick={() => chooseMode("replay")}
+          >
+            <span className="path-icon">B</span>
+            <strong>Watch a verified replay</strong>
+            <small>See a recorded run from start to finish</small>
+            <span>
+              Watch replay <Mark name="arrow" />
+            </span>
+          </button>
+        </div>
+
+        <p className="plain-support-note">
+          Today CounterLab teaches two machine-learning mistakes in supported
+          Jupyter notebooks. Uploaded cells are read, never run.
+        </p>
       </section>
     </main>
   );
@@ -418,20 +314,17 @@ function ClaimScreen({
   return (
     <main className="workspace shell">
       <div className="screen-intro">
-        <p className="eyebrow">01 · Claim</p>
-        <h1>What does this result prove?</h1>
-        <p>
-          Inspect the notebook evidence, then state the generalization claim you
-          think it supports.
-        </p>
+        <p className="eyebrow">Step 1 of 4 · Your idea</p>
+        <h1>What do you think the score means?</h1>
+        <p>Write one sentence about who you think this model will work for.</p>
       </div>
 
       <LearningGuide
-        step="Claim lens"
-        title="Separate the number from the conclusion."
-        known="The notebook reports accuracy on randomly held-out rows."
-        unknown="Whether that evidence represents customers the model has never encountered."
-        next="State exactly what population you believe the result generalizes to."
+        step="Start here"
+        title="A high score is a result—not yet a conclusion."
+        known="The notebook reports a high score on held-out rows."
+        unknown="Whether it also works for completely new customers."
+        next="Say what you believe the score tells us."
       />
 
       <div className="claim-layout">
@@ -454,7 +347,7 @@ function ClaimScreen({
           {isSample ? (
             <div className="headline-metric">
               <span>{percent.format(random.metrics.accuracy)}</span>
-              <small>reported test accuracy</small>
+              <small>score shown in the notebook</small>
             </div>
           ) : metricCandidates[0] ? (
             <div className="headline-metric">
@@ -473,15 +366,12 @@ function ClaimScreen({
               <>
                 <div className="evidence-row">
                   <span className="evidence-ref">Cell 3 · output 0</span>
-                  <span>
-                    Random row split · n={random.sampleSizes.test} test rows ·
-                    seed {random.seed}
-                  </span>
+                  <span>The test mixed rows from the same customers.</span>
                 </div>
                 <div className="evidence-row">
                   <span className="evidence-ref">Cell 3 · source</span>
                   <span>
-                    <code>customer_id</code> is included in categorical features
+                    The model can use <code>customer_id</code>.
                   </span>
                 </div>
               </>
@@ -556,7 +446,7 @@ function ClaimScreen({
           </details>
           <label className="upload-control">
             <span className="upload-title">
-              <Mark name="spark" /> Try your own notebook
+              <Mark name="spark" /> Use a different notebook
             </span>
             <input
               type="file"
@@ -568,44 +458,24 @@ function ClaimScreen({
               }}
             />
             <small>
-              Jupyter <code>.ipynb</code> · parsed as untrusted data · cells
-              never execute at intake.
+              Jupyter <code>.ipynb</code> only. We inspect cells here; we do not
+              run them.
             </small>
           </label>
         </section>
 
         <section className="claim-form panel" aria-labelledby="claim-prompt">
           <div>
-            <p className="eyebrow">Your interpretation</p>
-            <h2 id="claim-prompt">Make the claim testable</h2>
-            <p>
-              Write what you believe the result says about customers the model
-              has never seen.
-            </p>
-          </div>
-          <div className="claim-scaffold" aria-label="Testable claim recipe">
-            <span>
-              <i>1</i>
-              <b>Evidence</b>
-              <small>Which result?</small>
-            </span>
-            <span>
-              <i>2</i>
-              <b>Conclusion</b>
-              <small>What does it prove?</small>
-            </span>
-            <span>
-              <i>3</i>
-              <b>Population</b>
-              <small>For whom or what?</small>
-            </span>
+            <p className="eyebrow">In your words</p>
+            <h2 id="claim-prompt">Finish this thought</h2>
+            <p>“Because the notebook scored highly, I think the model…”</p>
           </div>
           <label htmlFor="learner-claim">Your claim</label>
           <textarea
             id="learner-claim"
             value={claim}
             onChange={(event) => setClaim(event.target.value)}
-            placeholder="I think this accuracy proves…"
+            placeholder="I think this score means the model will work for…"
             rows={7}
           />
           <div className="form-footer">
@@ -616,7 +486,7 @@ function ClaimScreen({
               disabled={claim.trim().length < 12 || !supported || busy}
               onClick={continueToBelief}
             >
-              Create Belief Test <Mark name="arrow" />
+              Compare two explanations <Mark name="arrow" />
             </button>
           </div>
         </section>
@@ -647,35 +517,30 @@ function BeliefScreen({
   stop: (reason: "rejected" | "insufficient") => void;
 }) {
   const currentHypothesis =
-    beliefTest?.currentHypothesis.statement ??
-    "The features capture a pattern that generalizes to new customers.";
-  const currentPrediction =
-    beliefTest?.currentHypothesis.predictedOutcome ??
-    "Accuracy should remain near 98% after splitting by customer.";
+    "The model learned a useful pattern that will work for new customers.";
+  const currentPrediction = "The score stays close to 98% for new customers.";
   const competingHypothesis =
-    beliefTest?.competingHypothesis.statement ??
-    "The model recognizes the same customer’s identity across random train and test rows.";
+    "The model partly remembers customers it already saw.";
   const competingPrediction =
-    beliefTest?.competingHypothesis.predictedOutcome ??
-    "Accuracy will fall on unseen customers and after identity ablation.";
+    "The score drops for new customers and without customer ID.";
 
   return (
     <main className="workspace shell">
       <div className="screen-intro compact">
-        <p className="eyebrow">02 · Formalize</p>
-        <h1>Belief Test</h1>
+        <p className="eyebrow">Step 2 of 4 · Your prediction</p>
+        <h1>Which explanation fits?</h1>
         <p>
-          Two explanations predict different behavior when customer identity
-          stops crossing the split.
+          Both ideas could explain the high score. A fair test will separate
+          them.
         </p>
       </div>
 
       <LearningGuide
         step="Belief Test"
-        title="Make both explanations risk a prediction."
-        known="Both hypotheses fit the 98.5% notebook headline."
-        unknown="Which one survives when customer identity cannot cross the split."
-        next="Confirm the test, then seal your expectation before results exist."
+        title="Choose before you see the answer."
+        known="Both explanations fit the score we have."
+        unknown="What happens when the test uses only new customers."
+        next="Check the two ideas, then lock your prediction."
         tone="purple"
       />
 
@@ -686,21 +551,35 @@ function BeliefScreen({
 
       <section className="hypothesis-grid" aria-label="Competing hypotheses">
         <article className="hypothesis current">
-          <p className="hypothesis-label">Current hypothesis · H₁</p>
+          <p className="hypothesis-label">Idea A · A useful pattern</p>
           <h2>{currentHypothesis}</h2>
           <p className="prediction-line">
             <span>Predicts</span> {currentPrediction}
           </p>
+          {beliefTest !== undefined && (
+            <details className="analyst-wording">
+              <summary>Show exact analyst wording</summary>
+              <p>{beliefTest.currentHypothesis.statement}</p>
+              <p>{beliefTest.currentHypothesis.predictedOutcome}</p>
+            </details>
+          )}
         </article>
         <div className="versus" aria-hidden="true">
           vs
         </div>
         <article className="hypothesis competing">
-          <p className="hypothesis-label">Competing hypothesis · H₂</p>
+          <p className="hypothesis-label">Idea B · Customer memory</p>
           <h2>{competingHypothesis}</h2>
           <p className="prediction-line">
             <span>Predicts</span> {competingPrediction}
           </p>
+          {beliefTest !== undefined && (
+            <details className="analyst-wording">
+              <summary>Show exact analyst wording</summary>
+              <p>{beliefTest.competingHypothesis.statement}</p>
+              <p>{beliefTest.competingHypothesis.predictedOutcome}</p>
+            </details>
+          )}
         </article>
       </section>
 
@@ -727,7 +606,13 @@ function BeliefScreen({
                       ? " · source"
                       : ` · output ${evidence.outputIndex}`
                   }`}{" "}
-              <strong>{evidence.excerpt}</strong>
+              <strong>
+                {evidence.outputIndex !== undefined
+                  ? "98.5% score shown"
+                  : evidence.kind === "schema"
+                    ? "customer ID marks who must stay together"
+                    : "random split uses customer ID"}
+              </strong>
             </span>
           ))
         )}
@@ -735,15 +620,13 @@ function BeliefScreen({
 
       <section className="intervention panel">
         <div>
-          <p className="eyebrow">Decisive intervention</p>
+          <p className="eyebrow">The fairer test</p>
           <h2>
-            {beliefTest?.decisiveIntervention.description ??
-              "Hold out entire customers, then remove identity."}
+            Keep each customer&apos;s rows together, then remove customer ID.
           </h2>
           <p>
-            {beliefTest === undefined
-              ? "The model, metric, seed, and target stay fixed. Only split grouping and identity availability change."
-              : `Keep ${beliefTest.decisiveIntervention.controlledVariables.join(", ")} fixed. Change ${beliefTest.decisiveIntervention.changedVariables.join(", ")}. ${beliefTest.decisiveIntervention.discriminatesBecause}`}
+            We keep the model the same. We change who appears in the test, then
+            check what happens without customer ID.
           </p>
         </div>
         <details>
@@ -762,12 +645,11 @@ function BeliefScreen({
       </section>
 
       <details className="concept-help panel">
-        <summary>Why is this a discriminating test?</summary>
+        <summary>Why can this test teach us something?</summary>
         <p>
-          A useful experiment makes the competing explanations predict
-          observably different outcomes while holding unrelated choices fixed.
-          If both hypotheses predict the same result, the test cannot teach us
-          which mental model is stronger.
+          If the model learned a reusable pattern, the score should stay high.
+          If it remembers customers, the score should fall. The two ideas now
+          predict different outcomes.
         </p>
       </details>
 
@@ -778,7 +660,7 @@ function BeliefScreen({
             type="button"
             onClick={confirm}
           >
-            Confirm Belief Test <Mark name="check" />
+            These two ideas make sense <Mark name="check" />
           </button>
           <button
             className="button button-quiet"
@@ -810,7 +692,7 @@ function BeliefScreen({
           <div className="prediction-title">
             <div>
               <p className="eyebrow gold">Prediction Contract</p>
-              <h2 id="prediction-heading">Commit before reality answers</h2>
+              <h2 id="prediction-heading">What do you think will happen?</h2>
             </div>
             <Mark name="lock" />
           </div>
@@ -865,7 +747,7 @@ function BeliefScreen({
             disabled={prediction === null}
             onClick={commitPrediction}
           >
-            Commit prediction <Mark name="lock" />
+            Lock my answer and run the test <Mark name="lock" />
           </button>
         </section>
       )}
@@ -874,10 +756,10 @@ function BeliefScreen({
 }
 
 const compilerSteps = [
-  ["Plan", "Experiment contract parsed"],
-  ["Generate", "Three bounded files recorded"],
-  ["Public tests", "Adapter composes fixed kernel"],
-  ["External verifier", "12 named invariants checked"],
+  ["Test planned", "Only the customer boundary will change"],
+  ["Files checked", "Generated work stayed inside its limits"],
+  ["Result repeated", "The same input produced the same answer"],
+  ["Safety checks passed", "Invalid alternatives were rejected"],
 ] as const;
 
 function BuildScreen({
@@ -890,27 +772,27 @@ function BuildScreen({
   return (
     <main className="workspace shell">
       <div className="screen-intro compact">
-        <p className="eyebrow">03 · Compile and verify</p>
-        <h1>Build and verify</h1>
+        <p className="eyebrow">Step 3 of 4 · What happened</p>
+        <h1>The result is ready.</h1>
         <p>
-          Only sanitized plan, file, command, and verifier events appear here.
-          Private reasoning is never relayed.
+          Your answer was locked first. CounterLab has now run and checked the
+          fairer test.
         </p>
       </div>
 
       <LearningGuide
-        step="Verification gate"
-        title="Generated work does not authorize itself."
-        known="Your Prediction Contract is immutable and the candidate is bounded to three files."
-        unknown="Whether the adapter survives public tests, hidden invariants, and active mutations."
-        next="Audit the trace, then open the result only after the verifier grants authority."
+        step="Before the reveal"
+        title="The answer comes from the test, not from the tutor."
+        known="Your prediction cannot be changed."
+        unknown="Whether the score stays high for new customers."
+        next="Review the completed checks, then reveal the result."
         tone="aqua"
       />
 
       <div className="lock-notice">
         <Mark name="lock" />
-        <strong>Prediction locked</strong>
-        <span>Committed before any verified result was revealed.</span>
+        <strong>Your answer is locked</strong>
+        <span>It was saved before any new result was shown.</span>
       </div>
 
       <div className="build-layout">
@@ -918,7 +800,7 @@ function BuildScreen({
           <div className="panel-title">
             <div>
               <p className="eyebrow">Compiler trace</p>
-              <h2 id="pipeline-title">Verified Lab pipeline</h2>
+              <h2 id="pipeline-title">Four checks completed</h2>
             </div>
             <span className="verified-chip">
               <Mark name="check" /> Verified
@@ -939,23 +821,23 @@ function BuildScreen({
             ))}
           </ol>
           <div className="verifier-callout">
-            <p className="eyebrow aqua">Frozen verifier</p>
+            <p className="eyebrow aqua">Independent checks</p>
             <strong>
               {mode === "replay"
-                ? "Later live candidate accepted; rejected run authorized no result"
-                : "Candidate accepted for the documented leakage scope"}
+                ? "A failed run showed no result; a later valid run passed"
+                : "This result is ready for the lesson"}
             </strong>
             <p>
               {mode === "replay"
-                ? "Authenticated App Server trace · 2 capped repairs rejected · later run reproduced the result hash · 12/12 mutations detected"
-                : "Group overlap = 0 · result hash reproduced · chart contract matches payload"}
+                ? "The recording preserves both the rejected attempt and the later passing run."
+                : "No customer appears on both sides of the fairer test, and the result repeats."}
             </p>
           </div>
         </section>
 
-        <aside className="trace panel" aria-labelledby="trace-title">
-          <p className="eyebrow">Event log</p>
-          <h2 id="trace-title">Sanitized evidence</h2>
+        <details className="trace panel technical-trace">
+          <summary id="trace-title">Show technical run details</summary>
+          <p className="eyebrow">Recorded event log</p>
           <ul className="event-list">
             {mode === "replay" ? (
               <>
@@ -1033,20 +915,17 @@ function BuildScreen({
               </div>
             )}
           </dl>
-        </aside>
+        </details>
       </div>
 
       <div className="continue-row">
-        <p>
-          The result is now eligible to render because a verified canonical
-          payload is available.
-        </p>
+        <p>Ready? Compare your prediction with what the test found.</p>
         <button
           className="button button-primary"
           type="button"
           onClick={openResult}
         >
-          Open verified result <Mark name="arrow" />
+          Show me what happened <Mark name="arrow" />
         </button>
       </div>
     </main>
@@ -1273,20 +1152,20 @@ function RealityScreen({
   return (
     <main className="workspace shell reality">
       <div className="screen-intro compact">
-        <p className="eyebrow aqua">04 · Reality and transfer</p>
-        <h1>Verified result</h1>
+        <p className="eyebrow aqua">Step 4 of 4 · The lesson</p>
+        <h1>Here’s what changed.</h1>
         <p>
-          The random split looked excellent. The discriminating tests show what
-          it was measuring.
+          The model looked excellent on familiar customers. It struggled on
+          customers it had never seen.
         </p>
       </div>
 
       <LearningGuide
-        step="Reality check"
-        title="Read the intervention before reading the score."
-        known={`Holding out whole customers removes overlap and changes accuracy by ${accuracyGapPoints.toFixed(1)} points.`}
-        unknown="Whether you can apply the reusable rule to a different leakage surface."
-        next="Revise the rule in your own words, then solve the forecasting transfer."
+        step="What you learned"
+        title="The test must match the people the model will meet."
+        known={`New customers scored ${accuracyGapPoints.toFixed(1)} points lower.`}
+        unknown="Whether you can spot the same mistake in a different problem."
+        next="Write the rule in your words, then try one new case."
         tone="gold"
       />
 
@@ -1300,34 +1179,34 @@ function RealityScreen({
               : "Prediction contradicted"}
           </span>
           <h2>
-            Same model family. {accuracyGapPoints.toFixed(1)} points of hidden
-            optimism.
+            {percent.format(random.metrics.accuracy)} became{" "}
+            {percent.format(group.metrics.accuracy)} on new customers.
           </h2>
           <p>
-            Random rows shared {random.entityOverlap.count} customer identities.
-            Group holdout shared {group.entityOverlap.count}. The deployment
-            question changed the meaning of the score.
+            The first test put {random.entityOverlap.count} of the same
+            customers on both sides. The fairer test shared{" "}
+            {group.entityOverlap.count}.
           </p>
         </div>
         <dl>
           <div>
-            <dt>Changed</dt>
-            <dd>Who may cross the split</dd>
+            <dt>We changed</dt>
+            <dd>Which customers appear in the test</dd>
           </div>
           <div>
-            <dt>Held fixed</dt>
-            <dd>Target · model family · seed</dd>
+            <dt>We kept</dt>
+            <dd>The model, target, and random seed</dd>
           </div>
           <div>
-            <dt>Authority</dt>
-            <dd>Canonical kernel + frozen verifier</dd>
+            <dt>We checked</dt>
+            <dd>Zero overlap and a repeatable result</dd>
           </div>
         </dl>
       </section>
 
       <section className="metric-grid" aria-label="Verified metric cards">
         <article>
-          <p>Random row split</p>
+          <p>Familiar customers mixed in</p>
           <strong>{percent.format(random.metrics.accuracy)}</strong>
           <small>
             n={random.sampleSizes.test} · overlap {random.entityOverlap.count} ·
@@ -1335,7 +1214,7 @@ function RealityScreen({
           </small>
         </article>
         <article className="metric-decisive">
-          <p>Customer group split</p>
+          <p>Only new customers</p>
           <strong>{percent.format(group.metrics.accuracy)}</strong>
           <small>
             n={group.sampleSizes.test} · overlap {group.entityOverlap.count} ·
@@ -1343,7 +1222,7 @@ function RealityScreen({
           </small>
         </article>
         <article>
-          <p>Identity ablation</p>
+          <p>Customer ID removed</p>
           <strong>{percent.format(ablation.metrics.accuracy)}</strong>
           <small>
             n={ablation.sampleSizes.test} · customer_id removed · seed{" "}
@@ -1356,9 +1235,8 @@ function RealityScreen({
         <div className="panel-title">
           <div>
             <p className="eyebrow">Accuracy · higher is better</p>
-            <h2>Same model family, different evidence</h2>
+            <h2>Why the score changed</h2>
           </div>
-          <code>{result.resultHash.slice(0, 12)}…</code>
         </div>
         <div className="overlap-story" aria-label="Entity overlap comparison">
           <div>
@@ -1382,7 +1260,11 @@ function RealityScreen({
           </div>
         </div>
         <ResultBars result={result} />
-        <ResultTable result={result} />
+        <details className="exact-results">
+          <summary>Show exact values and run details</summary>
+          <ResultTable result={result} />
+          <code>result {result.resultHash.slice(0, 12)}…</code>
+        </details>
       </section>
 
       <section className="prediction-observed">
@@ -1408,12 +1290,9 @@ function RealityScreen({
 
       <section className="revision panel">
         <div>
-          <p className="eyebrow">Revise the rule</p>
-          <h2>What will you check next time?</h2>
-          <p>
-            Write a reusable evaluation rule, not a summary of these exact
-            percentages.
-          </p>
+          <p className="eyebrow">In your words</p>
+          <h2>Write the rule you’ll use next time</h2>
+          <p>Focus on how you would split the data—not these exact scores.</p>
         </div>
         <label htmlFor="revision">Your revised mental model</label>
         <textarea
@@ -1429,7 +1308,7 @@ function RealityScreen({
           disabled={revision.trim().length < 20 || actionBusy}
           onClick={recordRevision}
         >
-          Test transfer <Mark name="arrow" />
+          Try the rule on a new problem <Mark name="arrow" />
         </button>
       </section>
 
@@ -1448,7 +1327,7 @@ function RealityScreen({
           <div>
             <p className="eyebrow">Fixed transfer · forecasting</p>
             <h2 id="transfer-title">
-              Will the rule survive a different surface?
+              Can you spot the same mistake in forecasting?
             </h2>
           </div>
           {transferState === "locked" && (
@@ -1465,10 +1344,10 @@ function RealityScreen({
           <>
             <div className="case-card">
               <p>
-                A demand forecast builds a centered rolling target with{" "}
+                A demand forecast uses nearby days—including later days—with{" "}
                 <code>rolling(window=7, center=True)</code> and randomly splits
-                daily rows. The deployment predicts future demand before later
-                targets exist.
+                the rows. In real life, later days do not exist when the
+                prediction is made.
               </p>
             </div>
             <div
@@ -1491,8 +1370,8 @@ function RealityScreen({
                 ))}
               </div>
               <p>
-                Choose an evaluation design using only information that exists
-                at prediction time.
+                Choose a test that uses only information available at prediction
+                time.
               </p>
             </div>
             <fieldset>
@@ -1579,7 +1458,7 @@ function RealityScreen({
           <div className="panel-title">
             <div>
               <p className="eyebrow gold">Minimal correction</p>
-              <h2>Patch unlocked</h2>
+              <h2>Your notebook fix is unlocked</h2>
             </div>
             <span className="verified-chip">
               <Mark name="check" /> Copied notebook only
@@ -1616,7 +1495,7 @@ function RealityScreen({
           <div className="panel-title">
             <div>
               <p className="eyebrow purple">Reasoning Diff</p>
-              <h2>What changed—and what proved it</h2>
+              <h2>Your learning, before and after</h2>
             </div>
             <button
               className="button button-quiet"
@@ -1624,9 +1503,7 @@ function RealityScreen({
               disabled={proofBundle === null}
               onClick={exportProof}
             >
-              {proofBundle === null
-                ? "Proof Bundle finalizing"
-                : "Export Proof Bundle"}
+              {proofBundle === null ? "Preparing proof" : "Download proof"}
             </button>
           </div>
           <div className="diff-table" role="table" aria-label="Reasoning Diff">
@@ -1695,12 +1572,11 @@ function LiveSetup({
   return (
     <main className="workspace shell narrow">
       <div className="screen-intro">
-        <p className="eyebrow">Live capability check</p>
-        <h1>Generate live</h1>
+        <p className="eyebrow">Use your notebook</p>
+        <h1>Test my notebook</h1>
         <p>
-          CounterLab checks capability labels before starting. A configured
-          credential is not treated as valid until the first live Belief Test
-          succeeds.
+          First, CounterLab checks whether this device has the tools needed to
+          create and verify a live lesson.
         </p>
       </div>
       <section className="setup-card panel">
@@ -1708,8 +1584,8 @@ function LiveSetup({
           <div className="setup-row" role="status">
             <span className="status-dot pending" />
             <div>
-              <strong>Checking server configuration</strong>
-              <p>No live request has started.</p>
+              <strong>Checking lesson tools</strong>
+              <p>Your notebook has not been sent.</p>
             </div>
           </div>
         ) : checkError !== null ? (
@@ -1729,24 +1605,23 @@ function LiveSetup({
               <div>
                 <strong>
                   {configured
-                    ? "Live reasoning is configured, not yet validated"
-                    : "Live reasoning is not configured"}
+                    ? "Notebook lesson tools are ready to try"
+                    : "Live notebook lessons are not set up"}
                 </strong>
                 <p>
                   {configured
-                    ? "The first Belief Test request validates the server configuration."
-                    : "No live request has started. Use an offline path, or configure live reasoning on the server."}
+                    ? "The first lesson request confirms that the connection works."
+                    : "Nothing was sent. You can still use the sample lesson or watch the replay."}
                 </p>
               </div>
             </div>
             <div className="setup-row">
               <span className="status-dot pending" />
               <div>
-                <strong>Local runner required</strong>
+                <strong>A local runner is needed for the final lab</strong>
                 <p>
-                  The browser can complete Claim and Belief Test. Lab
-                  compilation remains locked to a separately authenticated local
-                  runner.
+                  You can review the notebook and make a prediction here. The
+                  checked experiment runs only on a separately protected device.
                 </p>
               </div>
             </div>
@@ -1761,7 +1636,7 @@ function LiveSetup({
             disabled={busy}
             onClick={startLive}
           >
-            Start live sample <Mark name="arrow" />
+            Continue with my notebook <Mark name="arrow" />
           </button>
         )}
         {checkError !== null && (
@@ -1778,14 +1653,14 @@ function LiveSetup({
           type="button"
           onClick={() => fallBack("instant")}
         >
-          Try instantly
+          Use the sample lesson
         </button>
         <button
           className="button button-quiet"
           type="button"
           onClick={() => fallBack("replay")}
         >
-          Replay verified session
+          Watch the verified replay
         </button>
       </div>
     </main>
@@ -2195,10 +2070,10 @@ export function App() {
       )}
       <footer className="footer shell">
         <span>
-          <strong>CounterLab</strong> · documented evidence, bounded claims
+          <strong>CounterLab</strong> · learn from a fair test
         </span>
-        <span>Reality over rhetoric · evidence before repair</span>
-        <span>Education track · local-first</span>
+        <span>Chatbots explain. CounterLab lets reality answer.</span>
+        <span>Education demo · Jupyter notebooks</span>
       </footer>
     </div>
   );

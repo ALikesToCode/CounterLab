@@ -226,24 +226,37 @@ afterEach(() => {
 });
 
 describe("CounterLab judged flow", () => {
-  it("offers three honest Judge Mode paths", () => {
+  it("explains the product in plain language and offers three honest paths", () => {
     render(<App />);
 
     expect(
       screen.getByRole("heading", { name: "CounterLab" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Chatbots explain. CounterLab lets reality answer."),
+      screen.getByRole("heading", {
+        name: "Test what your model really learned.",
+      }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /try instantly/i }),
+      screen.getByText(
+        /make a prediction.*run a fairer test.*use the lesson on a new problem/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /start the 3-minute lesson/i }),
     ).toBeEnabled();
     expect(
-      screen.getByRole("button", { name: /generate live/i }),
+      screen.getByRole("button", { name: /test my notebook/i }),
     ).toBeEnabled();
     expect(
-      screen.getByRole("button", { name: /replay verified session/i }),
+      screen.getByRole("button", { name: /watch a verified replay/i }),
     ).toBeEnabled();
+    expect(screen.getByText("Make a prediction")).toBeInTheDocument();
+    expect(screen.getByText("See the evidence")).toBeInTheDocument();
+    expect(screen.getByText("Apply the lesson")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(
+      /formalize|discriminating|canonical|mutation/i,
+    );
   });
 
   it("shows an honest unavailable state when live reasoning is not configured", async () => {
@@ -254,14 +267,12 @@ describe("CounterLab judged flow", () => {
     await user.click(screen.getByRole("button", { name: /generate live/i }));
 
     expect(
-      await screen.findByRole("heading", { name: "Generate live" }),
+      await screen.findByRole("heading", { name: "Test my notebook" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/live reasoning is not configured/i),
+      screen.getByText(/live notebook lessons are not set up/i),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/no live request has started/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/nothing was sent/i)).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(/OPENAI|GPT-|https?:\/\//i);
   });
 
@@ -272,16 +283,16 @@ describe("CounterLab judged flow", () => {
 
     await user.click(screen.getByRole("button", { name: /generate live/i }));
     expect(
-      await screen.findByText(/configured, not yet validated/i),
+      await screen.findByText(/notebook lesson tools are ready to try/i),
     ).toBeInTheDocument();
-    expect(screen.getByText(/local runner required/i)).toBeInTheDocument();
+    expect(screen.getByText(/local runner is needed/i)).toBeInTheDocument();
     await user.click(
-      screen.getByRole("button", { name: /start live sample/i }),
+      screen.getByRole("button", { name: /continue with my notebook/i }),
     );
 
     expect(
       await screen.findByRole("heading", {
-        name: /what does this result prove/i,
+        name: /what do you think the score means/i,
       }),
     ).toBeInTheDocument();
     await user.type(
@@ -289,20 +300,20 @@ describe("CounterLab judged flow", () => {
       "The notebook accuracy proves generalization to new customers.",
     );
     await user.click(
-      screen.getByRole("button", { name: /create belief test/i }),
+      screen.getByRole("button", { name: /compare two explanations/i }),
     );
 
     expect(
       await screen.findByText(/live competing hypothesis/i),
     ).toBeInTheDocument();
-    expect(screen.getByText(/customer_id identifies/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/customer ID marks who must stay together/i),
+    ).toBeInTheDocument();
     await user.click(
-      screen.getByRole("button", { name: /confirm belief test/i }),
+      screen.getByRole("button", { name: /these two ideas make sense/i }),
     );
     await user.click(screen.getByRole("radio", { name: /remain near 98/i }));
-    await user.click(
-      screen.getByRole("button", { name: /commit prediction/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /lock my answer/i }));
 
     expect(
       await screen.findByRole("heading", { name: /local runner required/i }),
@@ -327,21 +338,23 @@ describe("CounterLab judged flow", () => {
 
     await user.click(screen.getByRole("button", { name: /generate live/i }));
     await user.click(
-      await screen.findByRole("button", { name: /start live sample/i }),
+      await screen.findByRole("button", { name: /continue with my notebook/i }),
     );
     await user.type(
       await screen.findByLabelText(/your claim/i),
       "The notebook accuracy proves generalization to new customers.",
     );
     await user.click(
-      screen.getByRole("button", { name: /create belief test/i }),
+      screen.getByRole("button", { name: /compare two explanations/i }),
     );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /live reasoning is unavailable/i,
     );
     expect(
-      screen.getByRole("heading", { name: /what does this result prove/i }),
+      screen.getByRole("heading", {
+        name: /what do you think the score means/i,
+      }),
     ).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(
       /Responses endpoint|OpenAI|GPT-/i,
@@ -355,16 +368,16 @@ describe("CounterLab judged flow", () => {
     await user.click(screen.getByRole("button", { name: /try instantly/i }));
     expect(
       await screen.findByRole("heading", {
-        name: /what does this result prove/i,
+        name: /what do you think the score means/i,
       }),
     ).toBeInTheDocument();
     expect(screen.getByText(/cell 3 · output 0/i)).toBeInTheDocument();
     expect(
-      screen.queryByRole("heading", { name: /verified result/i }),
+      screen.queryByRole("heading", { name: /here.s what changed/i }),
     ).not.toBeInTheDocument();
 
     const continueButton = screen.getByRole("button", {
-      name: /create belief test/i,
+      name: /compare two explanations/i,
     });
     expect(continueButton).toBeDisabled();
     await user.type(
@@ -374,24 +387,24 @@ describe("CounterLab judged flow", () => {
     await user.click(continueButton);
 
     expect(
-      await screen.findByRole("heading", { name: "Belief Test" }),
+      await screen.findByRole("heading", { name: "Which explanation fits?" }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/same customer.s identity/i)).toBeInTheDocument();
+    expect(screen.getByText(/partly remembers customers/i)).toBeInTheDocument();
     expect(
-      screen.queryByRole("heading", { name: /verified result/i }),
+      screen.queryByRole("heading", { name: /here.s what changed/i }),
     ).not.toBeInTheDocument();
 
     await user.click(
-      screen.getByRole("button", { name: /confirm belief test/i }),
+      screen.getByRole("button", { name: /these two ideas make sense/i }),
     );
     await user.click(screen.getByRole("radio", { name: /remain near 98/i }));
-    await user.click(
-      screen.getByRole("button", { name: /commit prediction/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /lock my answer/i }));
 
-    expect(await screen.findByText(/prediction locked/i)).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: /build and verify/i }),
+      await screen.findByText(/your answer is locked/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /the result is ready/i }),
     ).toBeInTheDocument();
   });
 

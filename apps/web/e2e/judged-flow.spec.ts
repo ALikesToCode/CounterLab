@@ -15,37 +15,72 @@ async function reset(page: Page) {
 
 async function startInstant(page: Page) {
   await reset(page);
-  await page.getByRole("button", { name: /Try instantly/i }).click();
+  await page
+    .getByRole("button", { name: /Start the 3-minute lesson/i })
+    .click();
   await expect(
-    page.getByRole("heading", { name: /What does this result prove/i }),
+    page.getByRole("heading", { name: /What do you think the score means/i }),
   ).toBeVisible();
   await page.getByLabel("Your claim").fill(claim);
-  await page.getByRole("button", { name: /Create Belief Test/i }).click();
+  await page.getByRole("button", { name: /Compare two explanations/i }).click();
   await expect(
-    page.getByRole("heading", { name: "Belief Test" }),
+    page.getByRole("heading", { name: "Which explanation fits?" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: /Confirm Belief Test/i }).click();
+  await page
+    .getByRole("button", { name: /These two ideas make sense/i })
+    .click();
 }
 
 async function commitAndOpenResult(page: Page) {
   await page.getByLabel(/Remain near 98%/i).check();
-  await page.getByRole("button", { name: /Commit prediction/i }).click();
+  await page.getByRole("button", { name: /Lock my answer/i }).click();
   await expect(
-    page.getByRole("heading", { name: /Build and verify/i }),
+    page.getByRole("heading", { name: /The result is ready/i }),
   ).toBeVisible();
-  await page.getByRole("button", { name: /Open verified result/i }).click();
+  await page.getByRole("button", { name: /Show me what happened/i }).click();
   await expect(
-    page.getByRole("heading", { name: "Verified result" }),
+    page.getByRole("heading", { name: /Here.s what changed/i }),
   ).toBeVisible();
 }
 
 async function recordRevision(page: Page) {
   await page.getByLabel("Your revised mental model").fill(revision);
-  await page.getByRole("button", { name: /Test transfer/i }).click();
+  await page
+    .getByRole("button", { name: /Try the rule on a new problem/i })
+    .click();
   await expect(
     page.getByText(/Which evaluation design matches deployment/i),
   ).toBeVisible();
 }
+
+test("the first visit explains the lesson before asking for technical knowledge", async ({
+  page,
+}) => {
+  await reset(page);
+  await expect(
+    page.getByRole("heading", { name: "Test what your model really learned." }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/make a prediction.*run a fairer test.*new problem/i),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Start the 3-minute lesson/i }),
+  ).toBeInViewport();
+  await expect(
+    page.getByRole("button", { name: /Test my notebook/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Watch a verified replay/i }),
+  ).toBeVisible();
+
+  const visibleWords = (await page.locator("body").innerText())
+    .trim()
+    .split(/\s+/).length;
+  expect(visibleWords).toBeLessThan(210);
+  await expect(page.locator("body")).not.toContainText(
+    /formalize|discriminating|canonical|mutation/i,
+  );
+});
 
 test("Try Instantly persists the verified learning loop and exports a valid proof", async ({
   page,
@@ -57,7 +92,7 @@ test("Try Instantly persists the verified learning loop and exports a valid proo
 
   await startInstant(page);
   await expect(
-    page.getByRole("heading", { name: "Verified result" }),
+    page.getByRole("heading", { name: /Here.s what changed/i }),
   ).toHaveCount(0);
 
   const sessionId = await page.evaluate(() =>
@@ -75,11 +110,11 @@ test("Try Instantly persists the verified learning loop and exports a valid proo
   await expect(page.getByText(/Transfer passed/i)).toBeVisible();
   await page.getByRole("button", { name: /Verify notebook patch/i }).click();
   await expect(
-    page.getByRole("heading", { name: /What changed—and what proved it/i }),
+    page.getByRole("heading", { name: /Your learning, before and after/i }),
   ).toBeVisible();
 
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Export Proof Bundle/i }).click();
+  await page.getByRole("button", { name: /Download proof/i }).click();
   const download = await downloadPromise;
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
@@ -91,7 +126,7 @@ test("Try Instantly persists the verified learning loop and exports a valid proo
 
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: /What changed—and what proved it/i }),
+    page.getByRole("heading", { name: /Your learning, before and after/i }),
   ).toBeVisible();
   await expect(page.getByText(/Transfer passed/i)).toBeVisible();
   expect(consoleErrors).toEqual([]);
@@ -111,9 +146,9 @@ test("prediction is immutable and results do not exist before commitment", async
   expect((await before.json()).data.verifiedResult).toBeUndefined();
 
   await page.getByLabel(/Fall materially/i).check();
-  await page.getByRole("button", { name: /Commit prediction/i }).click();
+  await page.getByRole("button", { name: /Lock my answer/i }).click();
   await expect(
-    page.getByRole("heading", { name: /Build and verify/i }),
+    page.getByRole("heading", { name: /The result is ready/i }),
   ).toBeVisible();
   const overwrite = await page.request.post(
     `/api/sessions/${sessionId}/prediction`,
@@ -158,10 +193,10 @@ test("Replay remains visibly labelled for the full reconstructed path", async ({
   await expect(replayBanner).toContainText("Verified replay");
   await page.getByRole("button", { name: /Continue replay/i }).click();
   await expect(replayBanner).toContainText("Verified replay");
-  await page.getByRole("button", { name: /Open verified result/i }).click();
+  await page.getByRole("button", { name: /Show me what happened/i }).click();
   await expect(replayBanner).toContainText("Verified replay");
   await expect(
-    page.getByRole("heading", { name: "Verified result" }),
+    page.getByRole("heading", { name: /Here.s what changed/i }),
   ).toBeVisible();
 });
 
@@ -190,12 +225,12 @@ test("missing live capabilities are stated without claiming a model call", async
   await reset(page);
   await page.getByRole("button", { name: /Generate live/i }).click();
   await expect(
-    page.getByRole("heading", { name: "Generate live" }),
+    page.getByRole("heading", { name: "Test my notebook" }),
   ).toBeVisible();
   await expect(
-    page.getByText(/Live reasoning is not configured/i),
+    page.getByText(/Live notebook lessons are not set up/i),
   ).toBeVisible();
-  await expect(page.getByText(/No live request has started/i)).toBeVisible();
+  await expect(page.getByText(/Nothing was sent/i)).toBeVisible();
   await expect(page.locator("body")).not.toContainText(
     /OPENAI|GPT-|https?:\/\//i,
   );
@@ -226,10 +261,12 @@ test("configured live reasoning remains unproven until its first request", async
   await reset(page);
   await page.getByRole("button", { name: /Generate live/i }).click();
 
-  await expect(page.getByText(/configured, not yet validated/i)).toBeVisible();
-  await expect(page.getByText(/Local runner required/i)).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Start live sample/i }),
+    page.getByText(/Notebook lesson tools are ready to try/i),
+  ).toBeVisible();
+  await expect(page.getByText(/local runner is needed/i)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Continue with my notebook/i }),
   ).toBeEnabled();
   await expect(page.locator("body")).not.toContainText(
     /OPENAI|GPT-|https?:\/\//i,
@@ -240,9 +277,11 @@ test("unsupported notebooks are parsed without execution and cannot advance", as
   page,
 }) => {
   await reset(page);
-  await page.getByRole("button", { name: /Try instantly/i }).click();
+  await page
+    .getByRole("button", { name: /Start the 3-minute lesson/i })
+    .click();
   await expect(
-    page.getByRole("heading", { name: /What does this result prove/i }),
+    page.getByRole("heading", { name: /What do you think the score means/i }),
   ).toBeVisible();
   const notebook = {
     cells: [
@@ -267,7 +306,7 @@ test("unsupported notebooks are parsed without execution and cannot advance", as
   await expect(page.getByText(/UNSUPPORTED_MAGIC/i)).toBeVisible();
   await expect(page.getByText(/EXTERNAL_NETWORK_DEPENDENCY/i)).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Create Belief Test/i }),
+    page.getByRole("button", { name: /Compare two explanations/i }),
   ).toBeDisabled();
 });
 
@@ -278,35 +317,41 @@ test("the judged path is keyboard operable with reduced motion", async ({
   await page.emulateMedia({ reducedMotion: "reduce" });
   await reset(page);
 
-  const tryInstant = page.getByRole("button", { name: /Try instantly/i });
+  const tryInstant = page.getByRole("button", {
+    name: /Start the 3-minute lesson/i,
+  });
   await tryInstant.focus();
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("heading", { name: /What does this result prove/i }),
+    page.getByRole("heading", { name: /What do you think the score means/i }),
   ).toBeVisible();
 
   const claimInput = page.getByLabel("Your claim");
   await claimInput.focus();
   await page.keyboard.type(claim);
-  await page.getByRole("button", { name: /Create Belief Test/i }).focus();
+  await page.getByRole("button", { name: /Compare two explanations/i }).focus();
   await page.keyboard.press("Enter");
-  await page.getByRole("button", { name: /Confirm Belief Test/i }).focus();
+  await page
+    .getByRole("button", { name: /These two ideas make sense/i })
+    .focus();
   await page.keyboard.press("Enter");
 
   await page.getByLabel(/Fall materially/i).focus();
   await page.keyboard.press("Space");
-  await page.getByRole("button", { name: /Commit prediction/i }).focus();
+  await page.getByRole("button", { name: /Lock my answer/i }).focus();
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("heading", { name: /Build and verify/i }),
+    page.getByRole("heading", { name: /The result is ready/i }),
   ).toBeVisible();
-  await page.getByRole("button", { name: /Open verified result/i }).focus();
+  await page.getByRole("button", { name: /Show me what happened/i }).focus();
   await page.keyboard.press("Enter");
 
   const revisionInput = page.getByLabel("Your revised mental model");
   await revisionInput.focus();
   await page.keyboard.type(revision);
-  await page.getByRole("button", { name: /Test transfer/i }).focus();
+  await page
+    .getByRole("button", { name: /Try the rule on a new problem/i })
+    .focus();
   await page.keyboard.press("Enter");
   await page.getByLabel(/Time-ordered holdout/i).focus();
   await page.keyboard.press("Space");
@@ -319,7 +364,7 @@ test("the judged path is keyboard operable with reduced motion", async ({
   await page.getByRole("button", { name: /Verify notebook patch/i }).focus();
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("heading", { name: /What changed—and what proved it/i }),
+    page.getByRole("heading", { name: /Your learning, before and after/i }),
   ).toBeVisible();
   expect(
     await page.evaluate(
