@@ -1,5 +1,21 @@
 # Decisions
 
+## 2026-07-14 — Evidence-editorial product surface
+
+- Adopted a two-polarity visual system: near-black evidence instrument for the
+  product promise, bright gridded canvas for the learning workflow.
+- Added a real canonical-result preview to the landing hero so judges can see
+  the problem, intervention, verifier, and provenance before choosing a mode.
+- Added stage-specific learner guidance framed as known, unknown, and next move.
+- Added local variable-font assets through locked packages; the experience has
+  no runtime font CDN dependency.
+- Kept unsupported subjects honest. Broad biology, mathematics, and arbitrary
+  file support still require independent concept packs, deterministic kernels,
+  transfer evaluators, and frozen verifiers before they may be labelled
+  supported.
+- Design rationale and reference synthesis are recorded in
+  `docs/plans/2026-07-14-evidence-editorial-redesign.md`.
+
 ## 2026-07-14 — Establish authority boundaries before product UI
 
 The first implementation milestone is the deterministic leakage evidence spine. No full product UI will be started until the public fixture, safe parser, fixed kernel, canonical hashes, external verifier, and published mutation matrix pass their gates. This keeps visual presentation downstream of verified numeric truth.

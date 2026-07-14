@@ -63,108 +63,329 @@ function ReplayBanner() {
 }
 
 function Header({ mode, stage }: { mode: Mode | null; stage: Stage }) {
+  const proofStages = [
+    { label: "Claim", stages: ["claim", "live-setup"] },
+    { label: "Belief test", stages: ["belief"] },
+    { label: "Verify", stages: ["build", "live-compile"] },
+    { label: "Transfer", stages: ["reality"] },
+  ] as const;
+  const activeIndex = proofStages.findIndex((item) =>
+    item.stages.some((candidate) => candidate === stage),
+  );
+
   return (
-    <header className="topbar">
+    <header className={`topbar ${stage === "landing" ? "topbar-landing" : ""}`}>
       <button
         className="wordmark"
         type="button"
         onClick={() => window.location.reload()}
       >
         <span className="wordmark-mark">C</span>
-        <span>CounterLab</span>
+        <span className="wordmark-copy">
+          <strong>CounterLab</strong>
+          <small>CI for understanding</small>
+        </span>
       </button>
       {stage !== "landing" && (
-        <div className="topbar-context">
-          <span className="eyebrow">Judge mode</span>
-          <span>
-            {mode === "replay"
-              ? "Replay"
-              : mode === "live"
-                ? "Live generation"
-                : "Instant sample"}
-          </span>
-        </div>
+        <>
+          <nav className="proof-rail" aria-label="CounterLab proof stages">
+            {proofStages.map((item, index) => (
+              <span
+                className={`${index === activeIndex ? "active" : ""} ${index < activeIndex ? "complete" : ""}`}
+                aria-current={index === activeIndex ? "step" : undefined}
+                key={item.label}
+              >
+                <i>{index < activeIndex ? "✓" : index + 1}</i>
+                <b>{item.label}</b>
+              </span>
+            ))}
+          </nav>
+          <div className="topbar-context">
+            <span className="mode-light" />
+            <span>
+              {mode === "replay"
+                ? "Replay mode"
+                : mode === "live"
+                  ? "Live generation"
+                  : "Instant sample"}
+            </span>
+          </div>
+        </>
       )}
     </header>
   );
 }
 
-function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
+function LearningGuide({
+  step,
+  title,
+  known,
+  unknown,
+  next,
+  tone = "blue",
+}: {
+  step: string;
+  title: string;
+  known: string;
+  unknown: string;
+  next: string;
+  tone?: "blue" | "purple" | "aqua" | "gold";
+}) {
   return (
-    <main className="landing shell">
-      <section className="hero">
-        <p className="kicker">
-          <span /> CI for understanding
-        </p>
-        <h1>CounterLab</h1>
-        <p className="tagline">
-          Chatbots explain. CounterLab lets reality answer.
-        </p>
-        <p className="thesis">
-          Treat a learner&rsquo;s claim like code: formalize it, run a
-          discriminating test, reject invalid evidence, verify transfer, and
-          only then merge the repair.
-        </p>
-      </section>
+    <aside className={`learning-guide ${tone}`} aria-label={`${step} guide`}>
+      <div className="guide-title">
+        <span>{step}</span>
+        <strong>{title}</strong>
+      </div>
+      <dl>
+        <div>
+          <dt>What you know</dt>
+          <dd>{known}</dd>
+        </div>
+        <div>
+          <dt>Still unknown</dt>
+          <dd>{unknown}</dd>
+        </div>
+        <div>
+          <dt>Your next move</dt>
+          <dd>{next}</dd>
+        </div>
+      </dl>
+    </aside>
+  );
+}
 
-      <section className="mode-grid" aria-labelledby="choose-path">
-        <div className="section-heading">
-          <p className="eyebrow">Judge mode</p>
-          <h2 id="choose-path">Choose a path</h2>
+function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
+  const random = getRun("random_row_split");
+  const grouped = getRun("customer_group_split");
+  const gap = random.metrics.accuracy - grouped.metrics.accuracy;
+
+  return (
+    <main className="landing">
+      <section className="hero shell">
+        <div className="hero-copy">
+          <h1 className="sr-only">CounterLab</h1>
+          <p className="kicker">
+            <span /> Education track · evidence first
+          </p>
+          <h2 className="hero-headline">
+            Let reality
+            <em> review the claim.</em>
+          </h2>
+          <p className="tagline">
+            Chatbots explain. CounterLab lets reality answer.
+          </p>
+          <p className="thesis">
+            A learner sees 98.5% accuracy and claims the model understands new
+            customers. CounterLab locks that prediction, runs the test that can
+            prove it wrong, and withholds the repair until the idea transfers.
+          </p>
+          <div className="hero-cta-row">
+            <button
+              className="button hero-cta"
+              type="button"
+              onClick={() => chooseMode("instant")}
+            >
+              Run the verified case <Mark name="arrow" />
+            </button>
+            <a href="#judge-paths">See the proof chain</a>
+          </div>
+          <div className="trust-row" aria-label="Sample guarantees">
+            <span>
+              <Mark name="check" /> No account
+            </span>
+            <span>
+              <Mark name="check" /> Real computed metrics
+            </span>
+            <span>
+              <Mark name="check" /> Replayable proof
+            </span>
+          </div>
         </div>
 
-        <button
-          className="mode-card mode-card-primary"
-          type="button"
-          onClick={() => chooseMode("instant")}
-        >
-          <span className="mode-index">01</span>
-          <span className="mode-copy">
-            <strong>Try instantly</strong>
-            <small>
-              Complete the verified customer-churn learning loop. No account or
-              secret.
-            </small>
-          </span>
-          <Mark name="arrow" />
-        </button>
-
-        <button
-          className="mode-card"
-          type="button"
-          onClick={() => chooseMode("live")}
-        >
-          <span className="mode-index">02</span>
-          <span className="mode-copy">
-            <strong>Generate live</strong>
-            <small>
-              Use live reasoning and the local compiler when those capabilities
-              are configured.
-            </small>
-          </span>
-          <Mark name="spark" />
-        </button>
-
-        <button
-          className="mode-card"
-          type="button"
-          onClick={() => chooseMode("replay")}
-        >
-          <span className="mode-index">03</span>
-          <span className="mode-copy">
-            <strong>Replay verified session</strong>
-            <small>
-              Reconstruct a stored event chain and genuine verifier trace.
-            </small>
-          </span>
-          <Mark name="arrow" />
-        </button>
+        <aside className="proof-console" aria-label="Verified sample preview">
+          <div className="console-topline">
+            <span className="console-lights" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+            <span>VERIFIED SAMPLE · LEAKAGE-01</span>
+            <span className="console-status">
+              <i /> PASS
+            </span>
+          </div>
+          <div className="console-body">
+            <div className="claim-signal">
+              <span className="console-label">LEARNER CLAIM</span>
+              <p>&ldquo;98.5% proves this works on new customers.&rdquo;</p>
+              <span className="locked-signal">
+                <Mark name="lock" /> Prediction sealed before results
+              </span>
+            </div>
+            <div className="console-intervention">
+              <div className="console-metric baseline">
+                <span>Random rows</span>
+                <strong>{percent.format(random.metrics.accuracy)}</strong>
+                <small>{random.entityOverlap.count} customers overlap</small>
+                <i style={{ width: percent.format(random.metrics.accuracy) }} />
+              </div>
+              <div className="console-divider" aria-hidden="true">
+                <span>RUN INTERVENTION</span>
+                <i />
+              </div>
+              <div className="console-metric decisive">
+                <span>Unseen customers</span>
+                <strong>{percent.format(grouped.metrics.accuracy)}</strong>
+                <small>{grouped.entityOverlap.count} customers overlap</small>
+                <i
+                  style={{ width: percent.format(grouped.metrics.accuracy) }}
+                />
+              </div>
+            </div>
+            <div className="console-verdict">
+              <div>
+                <span className="console-label">REALITY CHECK</span>
+                <strong>{percent.format(gap)} generalization gap</strong>
+              </div>
+              <div className="verifier-seal">
+                <Mark name="check" />
+                <span>
+                  <strong>12 / 12</strong>
+                  <small>mutations caught</small>
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="console-footer">
+            <span>result {sampleResult.resultHash.slice(0, 12)}…</span>
+            <span>kernel {sampleResult.kernelVersion}</span>
+            <span>seed {random.seed}</span>
+          </div>
+        </aside>
       </section>
 
-      <p className="support-note">
-        Supports Jupyter notebooks in the documented scikit-learn classification
-        subset. No cells run at intake.
-      </p>
+      <section
+        className="proof-spine shell"
+        aria-label="CounterLab proof chain"
+      >
+        {[
+          [
+            "01",
+            "Formalize",
+            "Two competing hypotheses, linked to notebook evidence.",
+          ],
+          [
+            "02",
+            "Commit",
+            "An immutable prediction before any result can render.",
+          ],
+          [
+            "03",
+            "Discriminate",
+            "A fixed kernel changes the variable that separates the beliefs.",
+          ],
+          [
+            "04",
+            "Verify",
+            "A frozen verifier attacks the candidate and rejects stale evidence.",
+          ],
+          [
+            "05",
+            "Transfer",
+            "Only a new-case pass unlocks the smallest notebook repair.",
+          ],
+        ].map(([index, title, copy]) => (
+          <article key={index}>
+            <span>{index}</span>
+            <div>
+              <strong>{title}</strong>
+              <p>{copy}</p>
+            </div>
+          </article>
+        ))}
+      </section>
+
+      <section className="judge-band" id="judge-paths">
+        <div className="shell">
+          <div className="section-heading">
+            <p className="eyebrow">Judge mode</p>
+            <h2 id="choose-path">Choose how to inspect the proof.</h2>
+            <p>
+              Start instantly, generate the reasoning layer live, or audit a
+              stored reject-and-repair trace.
+            </p>
+          </div>
+          <div className="mode-grid" aria-labelledby="choose-path">
+            <button
+              className="mode-card mode-card-primary"
+              type="button"
+              onClick={() => chooseMode("instant")}
+            >
+              <span className="mode-index">01</span>
+              <span className="mode-copy">
+                <strong>Try instantly</strong>
+                <small>
+                  Complete claim → prediction → lab → transfer → verified patch
+                  in under three minutes.
+                </small>
+              </span>
+              <span className="mode-action">
+                Start the case <Mark name="arrow" />
+              </span>
+            </button>
+
+            <button
+              className="mode-card"
+              type="button"
+              onClick={() => chooseMode("live")}
+            >
+              <span className="mode-index">02</span>
+              <span className="mode-copy">
+                <strong>Generate live</strong>
+                <small>
+                  Create an evidence-linked Belief Test from sanitized notebook
+                  context. Local verification stays independently gated.
+                </small>
+              </span>
+              <span className="mode-action">
+                Check capabilities <Mark name="spark" />
+              </span>
+            </button>
+
+            <button
+              className="mode-card"
+              type="button"
+              onClick={() => chooseMode("replay")}
+            >
+              <span className="mode-index">03</span>
+              <span className="mode-copy">
+                <strong>Replay verified session</strong>
+                <small>
+                  Audit a genuine stored rejection, repair, canonical result,
+                  and event hash chain.
+                </small>
+              </span>
+              <span className="mode-action">
+                Open the trace <Mark name="arrow" />
+              </span>
+            </button>
+          </div>
+
+          <div className="support-note">
+            <span>
+              <Mark name="check" /> Jupyter nbformat 4
+            </span>
+            <span>
+              <Mark name="lock" /> No cells execute at intake
+            </span>
+            <span>
+              <Mark name="check" /> Documented scikit-learn subset
+            </span>
+            <span>Bounded claims, explicit limitations</span>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }
@@ -204,6 +425,14 @@ function ClaimScreen({
           think it supports.
         </p>
       </div>
+
+      <LearningGuide
+        step="Claim lens"
+        title="Separate the number from the conclusion."
+        known="The notebook reports accuracy on randomly held-out rows."
+        unknown="Whether that evidence represents customers the model has never encountered."
+        next="State exactly what population you believe the result generalizes to."
+      />
 
       <div className="claim-layout">
         <section className="notebook-card" aria-labelledby="artifact-title">
@@ -284,6 +513,22 @@ function ClaimScreen({
               </ul>
             </div>
           )}
+          {artifact !== null && artifact.support.status !== "SUPPORTED" && (
+            <aside
+              className="unsupported-guide"
+              aria-label="Unsupported notebook guidance"
+            >
+              <span>Honest refusal</span>
+              <strong>
+                We parsed the notebook. We will not invent a lab for it.
+              </strong>
+              <p>
+                CounterLab advances only when the evidence resolves to a tested
+                concept pack. Unsupported subjects and dependencies stay visible
+                as limits instead of becoming model guesses.
+              </p>
+            </aside>
+          )}
           <details>
             <summary>Artifact integrity</summary>
             <dl className="provenance-list">
@@ -310,7 +555,9 @@ function ClaimScreen({
             </dl>
           </details>
           <label className="upload-control">
-            <span>Upload another notebook</span>
+            <span className="upload-title">
+              <Mark name="spark" /> Try your own notebook
+            </span>
             <input
               type="file"
               accept=".ipynb,application/x-ipynb+json,application/json"
@@ -321,7 +568,8 @@ function ClaimScreen({
               }}
             />
             <small>
-              Parsed as untrusted data. Cells are never executed at intake.
+              Jupyter <code>.ipynb</code> · parsed as untrusted data · cells
+              never execute at intake.
             </small>
           </label>
         </section>
@@ -334,6 +582,23 @@ function ClaimScreen({
               Write what you believe the result says about customers the model
               has never seen.
             </p>
+          </div>
+          <div className="claim-scaffold" aria-label="Testable claim recipe">
+            <span>
+              <i>1</i>
+              <b>Evidence</b>
+              <small>Which result?</small>
+            </span>
+            <span>
+              <i>2</i>
+              <b>Conclusion</b>
+              <small>What does it prove?</small>
+            </span>
+            <span>
+              <i>3</i>
+              <b>Population</b>
+              <small>For whom or what?</small>
+            </span>
           </div>
           <label htmlFor="learner-claim">Your claim</label>
           <textarea
@@ -404,6 +669,15 @@ function BeliefScreen({
           stops crossing the split.
         </p>
       </div>
+
+      <LearningGuide
+        step="Belief Test"
+        title="Make both explanations risk a prediction."
+        known="Both hypotheses fit the 98.5% notebook headline."
+        unknown="Which one survives when customer identity cannot cross the split."
+        next="Confirm the test, then seal your expectation before results exist."
+        tone="purple"
+      />
 
       <section className="claim-quote" aria-label="Learner claim">
         <span>Your claim</span>
@@ -486,6 +760,16 @@ function BeliefScreen({
           </p>
         </details>
       </section>
+
+      <details className="concept-help panel">
+        <summary>Why is this a discriminating test?</summary>
+        <p>
+          A useful experiment makes the competing explanations predict
+          observably different outcomes while holding unrelated choices fixed.
+          If both hypotheses predict the same result, the test cannot teach us
+          which mental model is stronger.
+        </p>
+      </details>
 
       {!confirmed ? (
         <div className="action-cluster">
@@ -613,6 +897,15 @@ function BuildScreen({
           Private reasoning is never relayed.
         </p>
       </div>
+
+      <LearningGuide
+        step="Verification gate"
+        title="Generated work does not authorize itself."
+        known="Your Prediction Contract is immutable and the candidate is bounded to three files."
+        unknown="Whether the adapter survives public tests, hidden invariants, and active mutations."
+        next="Audit the trace, then open the result only after the verifier grants authority."
+        tone="aqua"
+      />
 
       <div className="lock-notice">
         <Mark name="lock" />
@@ -882,6 +1175,9 @@ function RealityScreen({
   );
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const accuracyGapPoints =
+    (random.metrics.accuracy - group.metrics.accuracy) * 100;
+  const predictionWasSupported = prediction === "falls";
 
   const runAction = async (operation: () => Promise<void>) => {
     setActionBusy(true);
@@ -985,6 +1281,50 @@ function RealityScreen({
         </p>
       </div>
 
+      <LearningGuide
+        step="Reality check"
+        title="Read the intervention before reading the score."
+        known={`Holding out whole customers removes overlap and changes accuracy by ${accuracyGapPoints.toFixed(1)} points.`}
+        unknown="Whether you can apply the reusable rule to a different leakage surface."
+        next="Revise the rule in your own words, then solve the forecasting transfer."
+        tone="gold"
+      />
+
+      <section className="finding-banner" aria-label="Verified finding summary">
+        <div>
+          <span
+            className={predictionWasSupported ? "supported" : "contradicted"}
+          >
+            {predictionWasSupported
+              ? "Prediction supported"
+              : "Prediction contradicted"}
+          </span>
+          <h2>
+            Same model family. {accuracyGapPoints.toFixed(1)} points of hidden
+            optimism.
+          </h2>
+          <p>
+            Random rows shared {random.entityOverlap.count} customer identities.
+            Group holdout shared {group.entityOverlap.count}. The deployment
+            question changed the meaning of the score.
+          </p>
+        </div>
+        <dl>
+          <div>
+            <dt>Changed</dt>
+            <dd>Who may cross the split</dd>
+          </div>
+          <div>
+            <dt>Held fixed</dt>
+            <dd>Target · model family · seed</dd>
+          </div>
+          <div>
+            <dt>Authority</dt>
+            <dd>Canonical kernel + frozen verifier</dd>
+          </div>
+        </dl>
+      </section>
+
       <section className="metric-grid" aria-label="Verified metric cards">
         <article>
           <p>Random row split</p>
@@ -1019,6 +1359,27 @@ function RealityScreen({
             <h2>Same model family, different evidence</h2>
           </div>
           <code>{result.resultHash.slice(0, 12)}…</code>
+        </div>
+        <div className="overlap-story" aria-label="Entity overlap comparison">
+          <div>
+            <span>Random rows</span>
+            <div className="entity-dots shared" aria-hidden="true">
+              {Array.from({ length: 12 }, (_, index) => (
+                <i key={index} />
+              ))}
+            </div>
+            <strong>{random.entityOverlap.count} shared customers</strong>
+          </div>
+          <Mark name="arrow" />
+          <div>
+            <span>Customer groups</span>
+            <div className="entity-dots isolated" aria-hidden="true">
+              {Array.from({ length: 12 }, (_, index) => (
+                <i key={index} />
+              ))}
+            </div>
+            <strong>{group.entityOverlap.count} shared customers</strong>
+          </div>
         </div>
         <ResultBars result={result} />
         <ResultTable result={result} />
@@ -1108,6 +1469,30 @@ function RealityScreen({
                 <code>rolling(window=7, center=True)</code> and randomly splits
                 daily rows. The deployment predicts future demand before later
                 targets exist.
+              </p>
+            </div>
+            <div
+              className="forecast-window"
+              aria-label="Forecast information timeline"
+            >
+              <div className="forecast-labels">
+                <span>Earlier observations</span>
+                <strong>Prediction time</strong>
+                <span>Later outcomes</span>
+              </div>
+              <div className="forecast-track">
+                {[-3, -2, -1, 0, 1, 2, 3].map((day) => (
+                  <span
+                    className={day === 0 ? "now" : day > 0 ? "future" : "past"}
+                    key={day}
+                  >
+                    {day === 0 ? "NOW" : day > 0 ? `+${day}` : day}
+                  </span>
+                ))}
+              </div>
+              <p>
+                Choose an evaluation design using only information that exists
+                at prediction time.
               </p>
             </div>
             <fieldset>
@@ -1702,7 +2087,7 @@ export function App() {
   };
 
   return (
-    <div className="app-frame">
+    <div className={`app-frame stage-${stage}`}>
       {replay && <ReplayBanner />}
       <Header mode={mode} stage={stage} />
       {error !== null && (
@@ -1809,7 +2194,10 @@ export function App() {
         <LiveCompileBoundary fallBack={chooseMode} />
       )}
       <footer className="footer shell">
-        <span>CounterLab · documented evidence, bounded claims</span>
+        <span>
+          <strong>CounterLab</strong> · documented evidence, bounded claims
+        </span>
+        <span>Reality over rhetoric · evidence before repair</span>
         <span>Education track · local-first</span>
       </footer>
     </div>

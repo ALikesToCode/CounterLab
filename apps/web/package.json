@@ -19,6 +19,8 @@
     "@counterlab/notebook-parser": "workspace:*",
     "@counterlab/proof-bundle": "workspace:*",
     "@counterlab/session-core": "workspace:*",
+    "@fontsource-variable/instrument-sans": "^5.2.8",
+    "@fontsource-variable/newsreader": "^5.2.10",
     "hono": "4.12.30",
     "react": "19.2.7",
     "react-dom": "19.2.7"
