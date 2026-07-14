@@ -30,6 +30,11 @@ import {
   createSamplePatchResult,
   evaluateSampleTransfer,
 } from "./sample-learning-loop";
+import {
+  createSampleReasoningProof,
+  sampleLabEvidenceHashes,
+  sampleLabVerification,
+} from "./sample-proof";
 
 type WorkerBindings = Env & {
   OPENAI_API_KEY?: string;
@@ -37,6 +42,7 @@ type WorkerBindings = Env & {
   OPENAI_REASONING_EFFORT?: string;
   COUNTERLAB_CODEX_MODE?: string;
   COUNTERLAB_MAX_NOTEBOOK_BYTES?: string;
+  COUNTERLAB_SIGNING_KEY?: string;
 };
 
 type AppBindings = {
@@ -468,15 +474,21 @@ export function createApi(options: ApiOptions = {}) {
       );
     }
     await service.startLabCompilation(sessionId);
-    const verified = await service.verifyLab(sessionId, {
-      status: "VERIFIED",
-      source:
-        current.mode === "replay"
-          ? "verified-replay-leakage-01"
-          : "stored-approved-leakage-v1",
-      verifierVersion: "leakage-verifier-v1",
-      invariantCount: 12,
-    });
+    const verified = await service.verifyLab(
+      sessionId,
+      {
+        ...sampleLabVerification,
+        source:
+          current.mode === "replay"
+            ? "verified-replay-leakage-01"
+            : "stored-approved-leakage-v1",
+      },
+      [
+        sampleLabEvidenceHashes.adapter,
+        sampleLabEvidenceHashes.publicTests,
+        sampleLabEvidenceHashes.externalVerifier,
+      ],
+    );
     return context.json(jsonSuccess(statePayload(verified)));
   });
 
@@ -542,9 +554,32 @@ export function createApi(options: ApiOptions = {}) {
       );
     }
     const updated = await service.verifyPatch(sessionId, patchResult);
+    const artifact = await artifacts(context, options).find(updated.artifactId);
+    if (artifact === undefined) {
+      throw new ApiInputError(
+        "ARTIFACT_NOT_FOUND",
+        "Session artifact was not found while issuing proof",
+        404,
+      );
+    }
+    const events = await service.listEvents(sessionId);
+    const proof = createSampleReasoningProof({
+      session: updated,
+      manifest: artifact.manifest,
+      events,
+      issuedAt: (options.now?.() ?? new Date()).toISOString(),
+      ...(context.env?.COUNTERLAB_SIGNING_KEY === undefined
+        ? {}
+        : { signingKey: context.env.COUNTERLAB_SIGNING_KEY }),
+    });
+    const issued = await service.issueReasoningDiff(
+      sessionId,
+      proof.reasoningDiff,
+      proof.proofBundle,
+    );
     return context.json(
       jsonSuccess({
-        ...statePayload(updated),
+        ...statePayload(issued),
         patch: patchResult,
         kernelVerification: patchKernelResult,
       }),

@@ -300,18 +300,28 @@ describe("Cloudflare Worker API", () => {
     await expect(patch.json()).resolves.toMatchObject({
       ok: true,
       data: {
-        state: "PATCH_VERIFIED",
+        state: "REASONING_DIFF_ISSUED",
         patch: {
           status: "VERIFIED",
           modifiedCells: [3],
           verification: { passed: true },
+        },
+        reasoningDiff: {
+          schemaVersion: "1",
+          sessionId,
+        },
+        proofBundle: {
+          schemaVersion: "1",
+          sessionId,
+          replayId: "leakage-01",
+          integrity: { mode: "integrity-hashed" },
         },
       },
     });
 
     const session = await sessionRepository.find(sessionId);
     expect(session).toMatchObject({
-      state: "PATCH_VERIFIED",
+      state: "REASONING_DIFF_ISSUED",
       verifiedResult: {
         resultHash:
           "2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0",
@@ -320,7 +330,7 @@ describe("Cloudflare Worker API", () => {
       patchResult: { status: "VERIFIED" },
     });
     const events = await sessionRepository.listEvents(sessionId);
-    expect(events).toHaveLength(12);
+    expect(events).toHaveLength(13);
     expect(events.map((event) => event.kind)).toEqual([
       "session.created",
       "belief_test.proposed",
@@ -334,6 +344,7 @@ describe("Cloudflare Worker API", () => {
       "transfer.passed",
       "patch.compilation_started",
       "patch.verified",
+      "reasoning_diff.issued",
     ]);
     expect(events.at(-1)?.previousEventHash).toBe(events.at(-2)?.eventHash);
 
@@ -343,9 +354,23 @@ describe("Cloudflare Worker API", () => {
       ok: true,
       data: {
         sessionId,
-        state: "PATCH_VERIFIED",
+        state: "REASONING_DIFF_ISSUED",
         revision:
           "Hold out complete entities and remove identity shortcuts before claiming generalization.",
+      },
+    });
+
+    const proof = await app.request(`${route}/proof-bundle`);
+    expect(proof.status).toBe(200);
+    await expect(proof.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        sessionId,
+        replayId: "leakage-01",
+        integrity: {
+          mode: "integrity-hashed",
+          eventChainHead: events[11]?.eventHash,
+        },
       },
     });
   });

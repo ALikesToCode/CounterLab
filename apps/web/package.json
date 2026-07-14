@@ -16,6 +16,7 @@
     "@counterlab/belief-analyst": "workspace:*",
     "@counterlab/contracts": "workspace:*",
     "@counterlab/notebook-parser": "workspace:*",
+    "@counterlab/proof-bundle": "workspace:*",
     "@counterlab/session-core": "workspace:*",
     "hono": "4.12.30",
     "react": "19.2.7",
