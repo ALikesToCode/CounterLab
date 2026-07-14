@@ -8,12 +8,15 @@ import {
   type RepairHostedExperimentPlanInput,
 } from "@counterlab/codex-client";
 import {
+  HostedVerifiedResultSetV2Schema,
   PublicCompilerEventSchema,
   RunnerCallbackSchema,
-  RunnerLabCompileBundleSchema,
+  RunnerJobInputBundleSchema,
   type PublicCompilerEvent,
   type RunnerCallback,
   type RunnerLabCompileBundle,
+  type RunnerLabRunBundle,
+  type RunnerJobInputBundle,
 } from "@counterlab/contracts";
 
 const PLAN_PATH = "experiment-plan.json";
@@ -21,6 +24,7 @@ const RATIONALE_PATH = "public-rationale.md";
 const ALLOWED_OUTPUTS = new Set([PLAN_PATH, RATIONALE_PATH]);
 const MAX_PLAN_BYTES = 524_288;
 const MAX_RATIONALE_BYTES = 65_536;
+const MAX_RESULT_BYTES = 1_048_576;
 
 export type VerifierCounterexample = {
   invariant: string;
@@ -37,7 +41,7 @@ export type CandidateDecision = {
 };
 
 export interface RunnerControlPlane {
-  getInput(): Promise<RunnerLabCompileBundle>;
+  getInput(): Promise<RunnerJobInputBundle>;
   start(): Promise<void>;
   resume(): Promise<void>;
   appendEvent(event: PublicCompilerEvent): Promise<void>;
@@ -49,9 +53,17 @@ export interface RunnerControlPlane {
   callback(callback: RunnerCallback): Promise<void>;
 }
 
+export interface FixedKernelExecutor {
+  run(
+    bundle: RunnerLabRunBundle,
+    workspace: string,
+  ): Promise<{ body: string; durationMs: number }>;
+}
+
 export type HostedRunnerJobProcessorOptions = {
   workspaceRoot: string;
   compiler: CodexCompiler;
+  fixedKernel?: FixedKernelExecutor;
   controlPlane: RunnerControlPlane;
   now?: () => Date;
   id?: (prefix: string) => string;
@@ -90,6 +102,18 @@ function asPublicError(error: unknown): RunnerProcessingError {
       ),
     );
   }
+  if (
+    error instanceof Error &&
+    "code" in error &&
+    typeof error.code === "string" &&
+    error.code.startsWith("KERNEL_")
+  ) {
+    return new RunnerProcessingError(
+      error.code,
+      "The fixed kernel could not complete the bounded Plan execution.",
+      error.code === "KERNEL_PROCESS_FAILED",
+    );
+  }
   return new RunnerProcessingError(
     "RUNNER_INTERNAL",
     "The hosted runner could not complete this job.",
@@ -122,11 +146,11 @@ export class HostedRunnerJobProcessor {
   }
 
   async run(jobId: string): Promise<void> {
-    let bundle: RunnerLabCompileBundle | undefined;
+    let bundle: RunnerJobInputBundle | undefined;
     let cursor = 0;
     let outputHashes: string[] = [];
     try {
-      bundle = RunnerLabCompileBundleSchema.parse(
+      bundle = RunnerJobInputBundleSchema.parse(
         await this.options.controlPlane.getInput(),
       );
       if (bundle.jobId !== jobId) {
@@ -140,6 +164,67 @@ export class HostedRunnerJobProcessor {
       cursor = await this.emit(jobId, cursor, { kind: "job.started" });
 
       const generationDirectory = await this.prepareWorkspace(jobId);
+      if (bundle.kind === "LAB_RUN") {
+        const fixedKernel = this.options.fixedKernel;
+        if (fixedKernel === undefined) {
+          throw new RunnerProcessingError(
+            "FIXED_KERNEL_UNAVAILABLE",
+            "The fixed kernel is unavailable in this runner.",
+            true,
+          );
+        }
+        const executed = await fixedKernel.run(bundle, generationDirectory);
+        if (
+          new TextEncoder().encode(executed.body).byteLength > MAX_RESULT_BYTES
+        ) {
+          throw new RunnerProcessingError(
+            "KERNEL_OUTPUT_POLICY",
+            "The fixed-kernel result exceeded the output limit.",
+            false,
+          );
+        }
+        let rawResult: unknown;
+        try {
+          rawResult = JSON.parse(executed.body) as unknown;
+        } catch {
+          throw new RunnerProcessingError(
+            "KERNEL_OUTPUT_INVALID",
+            "The fixed kernel did not return valid JSON.",
+            false,
+          );
+        }
+        const result = HostedVerifiedResultSetV2Schema.parse(rawResult);
+        const uploaded = await this.options.controlPlane.upload(
+          "verified-result.json",
+          executed.body,
+        );
+        outputHashes = [uploaded.sha256];
+        cursor = await this.emit(jobId, cursor, {
+          kind: "command.completed",
+          label: "Fixed kernel executed the verified Plan",
+          exitCode: 0,
+          durationMs: executed.durationMs,
+          excerpt: `${result.runs.length} fixed run${result.runs.length === 1 ? "" : "s"} completed.`,
+        });
+        cursor = await this.emit(jobId, cursor, {
+          kind: "result.ready",
+          resultHash: result.resultHash,
+        });
+        await this.options.controlPlane.callback(
+          RunnerCallbackSchema.parse({
+            schemaVersion: "1",
+            callbackId: this.id("runner_callback"),
+            idempotencyKey: `${jobId}:verified:${uploaded.sha256}`,
+            jobId,
+            stateVersion: bundle.stateVersion,
+            status: "VERIFIED",
+            outputHashes,
+            finalEventCursor: cursor,
+            occurredAt: this.now().toISOString(),
+          }),
+        );
+        return;
+      }
       const compileInput = this.compileInput(bundle, generationDirectory);
       cursor = await this.consumeCompilerEvents(
         jobId,

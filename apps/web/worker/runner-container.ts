@@ -23,6 +23,7 @@ export class CounterLabRunner extends Container<RunnerContainerEnv> {
       COUNTERLAB_CODEX_HOME_ROOT: "/run/counterlab-codex",
       COUNTERLAB_CODEX_EXECUTABLE: "/usr/local/bin/codex",
       COUNTERLAB_SETPRIV_EXECUTABLE: "/usr/bin/setpriv",
+      COUNTERLAB_PYTHON_EXECUTABLE: "/opt/counterlab-venv/bin/python",
       COUNTERLAB_CODEX_UID: "10001",
       COUNTERLAB_CODEX_GID: "10001",
     };

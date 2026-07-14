@@ -567,6 +567,13 @@ export const AllowedGeneratedPathSchema = z.enum([
   "public-rationale.md",
 ]);
 
+export const RunnerOutputPathSchema = z.enum([
+  ...AllowedGeneratedPathSchema.options,
+  "verified-result.json",
+]);
+
+export type RunnerOutputPath = z.infer<typeof RunnerOutputPathSchema>;
+
 const PublicCompilerEventBase = {
   schemaVersion: z.literal("1"),
   eventId: NonEmptyString,
@@ -955,6 +962,53 @@ export type RunnerLabCompileBundle = z.infer<
   typeof RunnerLabCompileBundleSchema
 >;
 
+export const RunnerLabRunBundleSchema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    kind: z.literal("LAB_RUN"),
+    jobId: NonEmptyString,
+    sessionId: NonEmptyString,
+    stateVersion: z.number().int().positive(),
+    artifactManifestHash: Sha256Schema,
+    artifactManifest: ArtifactManifestSchema,
+    learnerClaim: NonEmptyString,
+    experimentPlan: ExperimentPlanV2Schema,
+    experimentPlanHash: Sha256Schema,
+    fixture: z
+      .object({
+        id: z.enum(["public-leakage-v1", "public-imbalance-v1"]),
+      })
+      .strict(),
+    permittedOutputs: z.tuple([z.literal("verified-result.json")]).readonly(),
+  })
+  .strict()
+  .superRefine((bundle, context) => {
+    const plan = bundle.experimentPlan;
+    if (
+      bundle.sessionId !== plan.sessionId ||
+      bundle.artifactManifestHash !== plan.artifactManifestHash ||
+      (plan.concept === "entity_leakage" &&
+        bundle.fixture.id !== "public-leakage-v1") ||
+      (plan.concept === "class_imbalance" &&
+        bundle.fixture.id !== "public-imbalance-v1")
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "runner LAB_RUN bundle lineage does not resolve",
+        path: ["experimentPlan"],
+      });
+    }
+  });
+
+export type RunnerLabRunBundle = z.infer<typeof RunnerLabRunBundleSchema>;
+
+export const RunnerJobInputBundleSchema = z.discriminatedUnion("kind", [
+  RunnerLabCompileBundleSchema,
+  RunnerLabRunBundleSchema,
+]);
+
+export type RunnerJobInputBundle = z.infer<typeof RunnerJobInputBundleSchema>;
+
 export const EvidenceEventUnsignedSchema = z
   .object({
     schemaVersion: VersionOneSchema.default("1"),
@@ -1028,72 +1082,111 @@ const VerifiedRunSchema = z
   })
   .strict();
 
-export const VerifiedResultSetSchema = z
+const ResultFixtureSchema = z
+  .object({
+    customers: z.number().int().positive(),
+    rows: z.number().int().positive(),
+    sha256: Sha256Schema,
+    targetRate: ProportionSchema,
+  })
+  .strict();
+
+const ResultChartRowSchema = z
+  .object({
+    runId: NonEmptyString,
+    splitStrategy: z.enum(["random", "group", "time"]),
+    accuracy: ProportionSchema,
+    rocAuc: ProportionSchema.nullable(),
+    sampleSize: z.number().int().positive(),
+    seed: z.number().int().nonnegative(),
+  })
+  .strict();
+
+function validateResultCharts(
+  result: {
+    runs: Array<z.infer<typeof VerifiedRunSchema>>;
+    chartData: Array<z.infer<typeof ResultChartRowSchema>>;
+  },
+  context: z.RefinementCtx,
+): void {
+  const runs = new Map(result.runs.map((run) => [run.id, run]));
+  if (runs.size !== result.runs.length) {
+    context.addIssue({
+      code: "custom",
+      message: "verified run IDs must be unique",
+      path: ["runs"],
+    });
+  }
+  for (const [index, chart] of result.chartData.entries()) {
+    const run = runs.get(chart.runId);
+    if (run === undefined) {
+      context.addIssue({
+        code: "custom",
+        message: `chart references unknown run: ${chart.runId}`,
+        path: ["chartData", index, "runId"],
+      });
+      continue;
+    }
+    if (
+      chart.splitStrategy !== run.splitStrategy ||
+      chart.sampleSize !== run.sampleSizes.test ||
+      chart.seed !== run.seed ||
+      chart.accuracy !== run.metrics.accuracy ||
+      chart.rocAuc !== run.metrics.rocAuc
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: `chart data does not match verified run: ${chart.runId}`,
+        path: ["chartData", index],
+      });
+    }
+  }
+}
+
+export const VerifiedResultSetV1Schema = z
   .object({
     schemaVersion: VersionOneSchema,
     concept: z.enum(["entity_leakage", "class_imbalance"]),
-    fixture: z
-      .object({
-        customers: z.number().int().positive(),
-        rows: z.number().int().positive(),
-        sha256: Sha256Schema,
-        targetRate: ProportionSchema,
-      })
-      .strict(),
+    fixture: ResultFixtureSchema,
     kernelVersion: NonEmptyString,
     seed: z.number().int().nonnegative(),
     runs: z.array(VerifiedRunSchema).min(1),
-    chartData: z
-      .array(
-        z
-          .object({
-            runId: NonEmptyString,
-            splitStrategy: z.enum(["random", "group", "time"]),
-            accuracy: ProportionSchema,
-            rocAuc: ProportionSchema.nullable(),
-            sampleSize: z.number().int().positive(),
-            seed: z.number().int().nonnegative(),
-          })
-          .strict(),
-      )
-      .min(1),
+    chartData: z.array(ResultChartRowSchema).min(1),
     resultHash: Sha256Schema,
   })
   .strict()
-  .superRefine((result, context) => {
-    const runs = new Map(result.runs.map((run) => [run.id, run]));
-    if (runs.size !== result.runs.length) {
-      context.addIssue({
-        code: "custom",
-        message: "verified run IDs must be unique",
-        path: ["runs"],
-      });
-    }
-    for (const [index, chart] of result.chartData.entries()) {
-      const run = runs.get(chart.runId);
-      if (run === undefined) {
-        context.addIssue({
-          code: "custom",
-          message: `chart references unknown run: ${chart.runId}`,
-          path: ["chartData", index, "runId"],
-        });
-        continue;
-      }
-      if (
-        chart.splitStrategy !== run.splitStrategy ||
-        chart.sampleSize !== run.sampleSizes.test ||
-        chart.seed !== run.seed ||
-        chart.accuracy !== run.metrics.accuracy ||
-        chart.rocAuc !== run.metrics.rocAuc
-      ) {
-        context.addIssue({
-          code: "custom",
-          message: `chart data does not match verified run: ${chart.runId}`,
-          path: ["chartData", index],
-        });
-      }
-    }
-  });
+  .superRefine(validateResultCharts);
+
+const HostedVerifiedRunSchema = VerifiedRunSchema.extend({
+  operation: FixedOperationIdSchema,
+}).strict();
+
+export const HostedVerifiedResultSetV2Schema = z
+  .object({
+    schemaVersion: z.literal("2"),
+    concept: z.enum(["entity_leakage", "class_imbalance"]),
+    planId: NonEmptyString,
+    sessionId: NonEmptyString,
+    artifactManifestHash: Sha256Schema,
+    conceptPackVersion: NonEmptyString,
+    fixture: ResultFixtureSchema,
+    kernelVersion: NonEmptyString,
+    seed: z.number().int().nonnegative(),
+    runs: z.array(HostedVerifiedRunSchema).min(1),
+    chartData: z.array(ResultChartRowSchema).min(1),
+    resultHash: Sha256Schema,
+  })
+  .strict()
+  .superRefine(validateResultCharts);
+
+export type HostedVerifiedResultSetV2 = z.infer<
+  typeof HostedVerifiedResultSetV2Schema
+>;
+
+export const VerifiedResultSetSchema = z.union([
+  VerifiedResultSetV1Schema,
+  HostedVerifiedResultSetV2Schema,
+]);
 
 export type VerifiedResultSet = z.infer<typeof VerifiedResultSetSchema>;
 

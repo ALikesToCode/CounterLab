@@ -337,6 +337,7 @@ def run_leakage_plan(
         "artifactManifestHash": artifact_manifest_hash,
         "conceptPackVersion": concept_pack_version,
         "kernelVersion": KERNEL_VERSION,
+        "seed": int(runs[0]["seed"]),
         "fixture": {
             "sha256": fixture_hash,
             "rows": len(fixture),

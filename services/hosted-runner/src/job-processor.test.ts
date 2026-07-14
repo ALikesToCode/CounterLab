@@ -14,15 +14,19 @@ import type {
 } from "@counterlab/codex-client";
 import {
   RunnerLabCompileBundleSchema,
+  RunnerLabRunBundleSchema,
   type PublicCompilerEvent,
   type RunnerCallback,
   type RunnerLabCompileBundle,
+  type RunnerLabRunBundle,
+  type RunnerJobInputBundle,
 } from "@counterlab/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
   HostedRunnerJobProcessor,
   type CandidateDecision,
+  type FixedKernelExecutor,
   type RunnerControlPlane,
 } from "./job-processor.js";
 
@@ -151,6 +155,86 @@ function bundle(jobId = "runner_job_1"): RunnerLabCompileBundle {
   });
 }
 
+async function runBundle(
+  jobId = "runner_job_run_1",
+): Promise<RunnerLabRunBundle> {
+  const compileBundle = bundle("compile_job_1");
+  const artifactManifestHash = "c".repeat(64);
+  const experimentPlan = {
+    schemaVersion: "2" as const,
+    planId: "plan_1",
+    sessionId: compileBundle.sessionId,
+    concept: "entity_leakage" as const,
+    conceptPackVersion: "2.0.0",
+    artifactManifestHash,
+    beliefTestId: compileBundle.approvedBeliefTest.id,
+    evidenceRefs: compileBundle.approvedBeliefTest.evidenceRefs,
+    baseline: {
+      concept: "entity_leakage" as const,
+      runId: "random_rows",
+      operation: "leakage.random_row_split" as const,
+      seed: 1729,
+      testFraction: 0.25,
+      entityField: "account_id",
+      dropIdentity: false,
+      model: "logistic_regression" as const,
+    },
+    interventions: [
+      {
+        concept: "entity_leakage" as const,
+        runId: "new_accounts",
+        operation: "leakage.group_holdout" as const,
+        seed: 1729,
+        testFraction: 0.25,
+        entityField: "account_id",
+        dropIdentity: false,
+        model: "logistic_regression" as const,
+      },
+      {
+        concept: "entity_leakage" as const,
+        runId: "without_identity",
+        operation: "leakage.identity_ablation" as const,
+        seed: 1729,
+        testFraction: 0.25,
+        entityField: "account_id",
+        dropIdentity: true,
+        model: "logistic_regression" as const,
+      },
+    ],
+    controlledVariables: ["model", "seed", "test fraction"],
+    changedVariables: ["split boundary", "identity feature"],
+    metrics: ["accuracy", "roc_auc", "entity_overlap_rate"] as const,
+    visualizations: ["metric_comparison", "entity_overlap"] as const,
+    discriminatesBecause: "The fair split removes cross-partition identity.",
+    expectedPatterns: [
+      {
+        hypothesisId: "current" as const,
+        qualitativeOutcome: "Score stays high.",
+      },
+      {
+        hypothesisId: "competing" as const,
+        qualitativeOutcome: "Score falls.",
+      },
+    ],
+    nonClaims: ["This does not establish future production performance."],
+    resourceLimits: { wallSeconds: 30, memoryMb: 512, maxRuns: 4 },
+  };
+  return RunnerLabRunBundleSchema.parse({
+    schemaVersion: "1",
+    kind: "LAB_RUN",
+    jobId,
+    sessionId: compileBundle.sessionId,
+    stateVersion: 7,
+    artifactManifestHash,
+    artifactManifest: compileBundle.artifactManifest,
+    learnerClaim: compileBundle.approvedBeliefTest.learnerClaim,
+    experimentPlan,
+    experimentPlanHash: "9".repeat(64),
+    fixture: { id: "public-leakage-v1" },
+    permittedOutputs: ["verified-result.json"],
+  });
+}
+
 class FakeCompiler implements CodexCompiler {
   compileCalls = 0;
   repairCalls: RepairHostedExperimentPlanInput[] = [];
@@ -227,11 +311,11 @@ class FakeControlPlane implements RunnerControlPlane {
   candidateCalls = 0;
 
   constructor(
-    private readonly input: RunnerLabCompileBundle,
+    private readonly input: RunnerJobInputBundle,
     private readonly decisions: CandidateDecision[],
   ) {}
 
-  getInput(): Promise<RunnerLabCompileBundle> {
+  getInput(): Promise<RunnerJobInputBundle> {
     return Promise.resolve(this.input);
   }
   start(): Promise<void> {
@@ -261,6 +345,65 @@ class FakeControlPlane implements RunnerControlPlane {
   callback(callback: RunnerCallback): Promise<void> {
     this.callbacks.push(structuredClone(callback));
     return Promise.resolve();
+  }
+}
+
+class FakeFixedKernel implements FixedKernelExecutor {
+  calls: RunnerLabRunBundle[] = [];
+
+  async run(input: RunnerLabRunBundle): Promise<{
+    body: string;
+    durationMs: number;
+  }> {
+    this.calls.push(structuredClone(input));
+    const spec = input.experimentPlan.baseline;
+    return {
+      durationMs: 41,
+      body: JSON.stringify({
+        schemaVersion: "2",
+        concept: "entity_leakage",
+        planId: input.experimentPlan.planId,
+        sessionId: input.sessionId,
+        artifactManifestHash: input.artifactManifestHash,
+        conceptPackVersion: input.experimentPlan.conceptPackVersion,
+        fixture: {
+          customers: 480,
+          rows: 2880,
+          sha256: "2".repeat(64),
+          targetRate: 0.49,
+        },
+        kernelVersion: "0.1.0",
+        seed: spec.seed,
+        runs: [
+          {
+            id: spec.runId,
+            operation: spec.operation,
+            splitStrategy: "random",
+            groupBy: null,
+            dropFeatures: [],
+            model: spec.model,
+            seed: spec.seed,
+            inputFingerprint: "2".repeat(64),
+            featureSetFingerprint: "3".repeat(64),
+            metrics: { accuracy: 0.98, rocAuc: 0.99 },
+            sampleSizes: { train: 2160, test: 720 },
+            entityCounts: { train: 360, test: 120 },
+            entityOverlap: { count: 120, rate: 1 },
+          },
+        ],
+        chartData: [
+          {
+            runId: spec.runId,
+            splitStrategy: "random",
+            accuracy: 0.98,
+            rocAuc: 0.99,
+            sampleSize: 720,
+            seed: spec.seed,
+          },
+        ],
+        resultHash: "4".repeat(64),
+      }),
+    };
   }
 }
 
@@ -375,6 +518,36 @@ describe("HostedRunnerJobProcessor", () => {
     expect(controlPlane.callbacks[0]).toMatchObject({
       status: "FAILED",
       error: { code: "RUNNER_OUTPUT_POLICY", retryable: false },
+    });
+  });
+
+  it("executes LAB_RUN through the fixed kernel without a new Codex turn", async () => {
+    const compiler = new FakeCompiler({ schemaVersion: "2" });
+    const kernel = new FakeFixedKernel();
+    const controlPlane = new FakeControlPlane(await runBundle(), []);
+    const processor = new HostedRunnerJobProcessor({
+      workspaceRoot: await workspace(),
+      compiler,
+      fixedKernel: kernel,
+      controlPlane,
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_4`,
+    });
+
+    await processor.run("runner_job_run_1");
+
+    expect(compiler.compileCalls).toBe(0);
+    expect(kernel.calls).toHaveLength(1);
+    expect(controlPlane.candidateCalls).toBe(0);
+    expect([...controlPlane.uploads.keys()]).toEqual(["verified-result.json"]);
+    expect(controlPlane.events.map((event) => event.kind)).toEqual([
+      "job.started",
+      "command.completed",
+      "result.ready",
+    ]);
+    expect(controlPlane.callbacks[0]).toMatchObject({
+      status: "VERIFIED",
+      finalEventCursor: 3,
     });
   });
 });

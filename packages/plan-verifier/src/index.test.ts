@@ -4,10 +4,16 @@ import type {
   ArtifactManifest,
   BeliefTest,
   ExperimentPlanV2,
+  HostedVerifiedResultSetV2,
 } from "@counterlab/contracts";
 import { hashCanonical } from "@counterlab/session-core";
 
-import { PlanVerificationError, verifyExperimentPlan } from "./index.js";
+import {
+  PlanVerificationError,
+  ResultVerificationError,
+  verifyExperimentPlan,
+  verifyHostedResultSet,
+} from "./index.js";
 
 const OUTPUT_HASH = "d".repeat(64);
 
@@ -159,6 +165,61 @@ async function plan(): Promise<ExperimentPlanV2> {
   };
 }
 
+async function result(): Promise<HostedVerifiedResultSetV2> {
+  const experimentPlan = await plan();
+  const fixtureHash = "8".repeat(64);
+  const runs = [experimentPlan.baseline, ...experimentPlan.interventions].map(
+    (spec) => {
+      const group = spec.operation === "leakage.group_holdout";
+      const ablation = spec.operation === "leakage.identity_ablation";
+      return {
+        id: spec.runId,
+        operation: spec.operation,
+        splitStrategy: group ? ("group" as const) : ("random" as const),
+        groupBy: group ? "account_key" : null,
+        dropFeatures: ablation ? ["account_key"] : [],
+        model: spec.model,
+        seed: spec.seed,
+        inputFingerprint: fixtureHash,
+        featureSetFingerprint: ablation ? "6".repeat(64) : "7".repeat(64),
+        metrics: {
+          accuracy: group ? 0.59 : ablation ? 0.61 : 0.985,
+          rocAuc: group ? 0.64 : ablation ? 0.66 : 0.99,
+        },
+        sampleSizes: { train: 1350, test: 450 },
+        entityCounts: { train: 360, test: 120 },
+        entityOverlap: group ? { count: 0, rate: 0 } : { count: 120, rate: 1 },
+      };
+    },
+  );
+  const withoutHash = {
+    schemaVersion: "2" as const,
+    concept: "entity_leakage" as const,
+    planId: experimentPlan.planId,
+    sessionId: experimentPlan.sessionId,
+    artifactManifestHash: experimentPlan.artifactManifestHash,
+    conceptPackVersion: experimentPlan.conceptPackVersion,
+    fixture: {
+      customers: 480,
+      rows: 1800,
+      sha256: fixtureHash,
+      targetRate: 0.49,
+    },
+    kernelVersion: "0.1.0",
+    seed: 1729,
+    runs,
+    chartData: runs.map((run) => ({
+      runId: run.id,
+      splitStrategy: run.splitStrategy,
+      accuracy: run.metrics.accuracy,
+      rocAuc: run.metrics.rocAuc,
+      sampleSize: run.sampleSizes.test,
+      seed: run.seed,
+    })),
+  };
+  return { ...withoutHash, resultHash: await hashCanonical(withoutHash) };
+}
+
 describe("hosted Experiment Plan verifier", () => {
   it("verifies resolved lineage and the complete leakage intervention set", async () => {
     const report = await verifyExperimentPlan(await plan(), {
@@ -210,5 +271,35 @@ describe("hosted Experiment Plan verifier", () => {
         beliefTest: belief(),
       }),
     ).rejects.toThrow(/controlled/i);
+  });
+});
+
+describe("hosted fixed-kernel result verifier", () => {
+  it("verifies canonical output against every declared Plan run", async () => {
+    const report = await verifyHostedResultSet(await result(), await plan());
+
+    expect(report).toMatchObject({
+      status: "VERIFIED",
+      verifierVersion: "hosted-result-verifier-v1",
+    });
+    expect(report.invariants.every((check) => check.passed)).toBe(true);
+  });
+
+  it("rejects overlap, run, or canonical hash drift before releasing results", async () => {
+    const overlap = await result();
+    overlap.runs[1] = {
+      ...overlap.runs[1]!,
+      entityOverlap: { count: 1, rate: 1 / 120 },
+    };
+
+    await expect(
+      verifyHostedResultSet(overlap, await plan()),
+    ).rejects.toBeInstanceOf(ResultVerificationError);
+
+    const staleHash = await result();
+    staleHash.resultHash = "0".repeat(64);
+    await expect(
+      verifyHostedResultSet(staleHash, await plan()),
+    ).rejects.toThrow(/canonical/i);
   });
 });

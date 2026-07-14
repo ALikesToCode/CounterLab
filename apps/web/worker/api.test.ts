@@ -20,6 +20,7 @@ import { createEvidenceEvent, hashCanonical } from "@counterlab/session-core";
 import { api, createApi } from "./api";
 import type { ArtifactStore, StoredArtifact } from "./artifact-store";
 import { ConcurrentD1SessionUpdateError } from "./d1-session-repository";
+import { sampleResult } from "./sample-evidence";
 import type {
   RunnerDispatchRequest,
   RunnerDispatcher,
@@ -505,10 +506,10 @@ describe("Cloudflare Worker API", () => {
       `/api/sessions/${sessionId}/lab/run`,
     );
 
-    expect(response.status).toBe(409);
+    expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({
       ok: false,
-      error: { code: "ARTIFACT_RESULT_MISMATCH" },
+      error: { code: "LOCAL_RUNNER_REQUIRED" },
     });
     const stored = await harness.sessionRepository.find(sessionId);
     expect(stored?.state).toBe("LAB_VERIFIED");
@@ -869,6 +870,144 @@ describe("Cloudflare Worker API", () => {
     });
     expect(await harness.sessionRepository.listEvents(sessionId)).toHaveLength(
       eventCount,
+    );
+
+    const queuedRun = await postJson(app, `/api/sessions/${sessionId}/lab/run`);
+    expect(queuedRun.status).toBe(202);
+    const runBody = (await queuedRun.json()) as {
+      data: { state: string; runnerJob: RunnerJob };
+    };
+    expect(runBody.data).toMatchObject({
+      state: "LAB_VERIFIED",
+      runnerJob: {
+        kind: "LAB_RUN",
+        status: "STARTING",
+        artifactId: uploaded.artifactId,
+      },
+    });
+    expect(dispatcher.dispatched).toHaveLength(2);
+    const runDispatch = dispatcher.dispatched[1];
+    if (runDispatch === undefined) throw new Error("run was not dispatched");
+    const runInput = runnerObjects.objects.get(
+      `runner-input/${runDispatch.job.jobId}.json`,
+    );
+    expect(runInput?.body).toContain('"kind":"LAB_RUN"');
+    expect(runInput?.body).toContain(plan.planId);
+    expect(runInput?.body).not.toContain("nbformat_minor");
+
+    const runAuthorization = {
+      authorization: `Bearer ${runDispatch.token}`,
+    };
+    expect(
+      (
+        await app.request(`/api/runner/jobs/${runDispatch.job.jobId}/start`, {
+          method: "POST",
+          headers: runAuthorization,
+        })
+      ).status,
+    ).toBe(200);
+    const sourceRuns = new Map(
+      sampleResult.runs.map((run) => [run.id, run] as const),
+    );
+    const resultRuns = [plan.baseline, ...plan.interventions].map((spec) => {
+      const sourceId =
+        spec.operation === "leakage.group_holdout"
+          ? "customer_group_split"
+          : spec.operation === "leakage.identity_ablation"
+            ? "identity_ablation"
+            : "random_row_split";
+      const source = sourceRuns.get(sourceId);
+      if (source === undefined) throw new Error("sample source run missing");
+      return {
+        ...source,
+        id: spec.runId,
+        operation: spec.operation,
+        seed: spec.seed,
+        groupBy:
+          spec.operation === "leakage.group_holdout" ? spec.entityField : null,
+        dropFeatures:
+          spec.operation === "leakage.identity_ablation"
+            ? [spec.entityField]
+            : [],
+      };
+    });
+    const resultWithoutHash = {
+      schemaVersion: "2" as const,
+      concept: "entity_leakage" as const,
+      planId: plan.planId,
+      sessionId,
+      artifactManifestHash: manifestHash,
+      conceptPackVersion: plan.conceptPackVersion,
+      fixture: sampleResult.fixture,
+      kernelVersion: sampleResult.kernelVersion,
+      seed: plan.baseline.seed,
+      runs: resultRuns,
+      chartData: resultRuns.map((run) => ({
+        runId: run.id,
+        splitStrategy: run.splitStrategy,
+        accuracy: run.metrics.accuracy,
+        rocAuc: run.metrics.rocAuc,
+        sampleSize: run.sampleSizes.test,
+        seed: run.seed,
+      })),
+    };
+    const liveResult = {
+      ...resultWithoutHash,
+      resultHash: await hashCanonical(resultWithoutHash),
+    };
+    const liveResultText = JSON.stringify(liveResult);
+    const liveResultFileHash = await sha256Text(liveResultText);
+    expect(
+      (
+        await app.request(
+          `/api/runner/jobs/${runDispatch.job.jobId}/outputs/verified-result.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...runAuthorization,
+              "content-type": "application/json",
+            },
+            body: liveResultText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    const runCallback = await postJson(
+      app,
+      `/api/runner/jobs/${runDispatch.job.jobId}/callback`,
+      {
+        schemaVersion: "1",
+        callbackId: "callback_hosted_run_1",
+        idempotencyKey: "hosted-run-complete-1",
+        jobId: runDispatch.job.jobId,
+        stateVersion: runDispatch.job.stateVersion,
+        status: "VERIFIED",
+        outputHashes: [liveResultFileHash],
+        finalEventCursor: 0,
+        occurredAt: "2026-07-14T10:00:02.000Z",
+      },
+      runAuthorization,
+    );
+    expect(runCallback.status).toBe(200);
+    await expect(runCallback.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        runnerJob: { status: "VERIFIED" },
+        session: {
+          state: "EXPERIMENT_COMPLETED",
+          verifiedResult: {
+            schemaVersion: "2",
+            planId: plan.planId,
+            artifactManifestHash: manifestHash,
+          },
+        },
+        verification: { status: "VERIFIED" },
+      },
+    });
+    const liveStored = await harness.sessionRepository.find(sessionId);
+    expect(liveStored?.verifiedResult?.resultHash).toBe(liveResult.resultHash);
+    expect(liveStored?.verifiedResult?.resultHash).not.toBe(
+      sampleResult.resultHash,
     );
   });
 

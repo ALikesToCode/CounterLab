@@ -1,9 +1,11 @@
 import {
   ExperimentPlanV2Schema,
+  HostedVerifiedResultSetV2Schema,
   type ArtifactManifest,
   type BeliefTest,
   type EvidenceRef,
   type ExperimentPlanV2,
+  type HostedVerifiedResultSetV2,
 } from "@counterlab/contracts";
 import { getConceptPack } from "@counterlab/concept-registry";
 import { hashCanonical } from "@counterlab/session-core";
@@ -32,6 +34,25 @@ export class PlanVerificationError extends Error {
   ) {
     super(message);
     this.name = "PlanVerificationError";
+  }
+}
+
+export type ResultVerificationReport = {
+  schemaVersion: "1";
+  status: "VERIFIED" | "REJECTED";
+  verifierVersion: "hosted-result-verifier-v1";
+  resultHash: string;
+  invariantCount: number;
+  invariants: PlanInvariant[];
+};
+
+export class ResultVerificationError extends Error {
+  constructor(
+    message: string,
+    readonly report: ResultVerificationReport,
+  ) {
+    super(message);
+    this.name = "ResultVerificationError";
   }
 }
 
@@ -277,6 +298,191 @@ export async function verifyExperimentPlan(
     throw new PlanVerificationError(
       failed?.counterexample ??
         `Experiment Plan failed invariant ${failed?.name ?? "unknown"}`,
+      report,
+    );
+  }
+  return report;
+}
+
+function resultReport(
+  resultHash: string,
+  invariants: PlanInvariant[],
+): ResultVerificationReport {
+  return {
+    schemaVersion: "1",
+    status: invariants.every((check) => check.passed) ? "VERIFIED" : "REJECTED",
+    verifierVersion: "hosted-result-verifier-v1",
+    resultHash,
+    invariantCount: invariants.length,
+    invariants,
+  };
+}
+
+export async function verifyHostedResultSet(
+  input: unknown,
+  plan: ExperimentPlanV2,
+): Promise<ResultVerificationReport> {
+  const parsed = HostedVerifiedResultSetV2Schema.safeParse(input);
+  if (!parsed.success) {
+    const report = resultReport(await hashCanonical(input), [
+      invariant(
+        "structural_schema",
+        false,
+        parsed.error.issues[0]?.message ?? "invalid result",
+        "Hosted Verified Result Set v2",
+      ),
+    ]);
+    throw new ResultVerificationError(
+      "Hosted result schema was rejected",
+      report,
+    );
+  }
+  const result: HostedVerifiedResultSetV2 = parsed.data;
+  const planRuns = [plan.baseline, ...plan.interventions];
+  type LeakageRunSpec = Extract<
+    (typeof planRuns)[number],
+    { concept: "entity_leakage" }
+  >;
+  const leakageRuns = planRuns.filter(
+    (run): run is LeakageRunSpec => run.concept === "entity_leakage",
+  );
+  const resultById = new Map(result.runs.map((run) => [run.id, run]));
+  const baseline = resultById.get(plan.baseline.runId);
+  const groupSpecs = leakageRuns.filter(
+    (run) => run.operation === "leakage.group_holdout",
+  );
+  const ablationSpecs = leakageRuns.filter(
+    (run) => run.operation === "leakage.identity_ablation",
+  );
+  const runBindings = planRuns.map((spec) => {
+    if (spec.concept !== "entity_leakage") return false;
+    const run = resultById.get(spec.runId);
+    if (run === undefined) return false;
+    const expectedStrategy =
+      spec.operation === "leakage.group_holdout" ? "group" : "random";
+    return (
+      run.operation === spec.operation &&
+      run.seed === spec.seed &&
+      run.model === spec.model &&
+      run.splitStrategy === expectedStrategy &&
+      run.groupBy ===
+        (spec.operation === "leakage.group_holdout" ? spec.entityField : null)
+    );
+  });
+  const groupRuns = groupSpecs
+    .map((spec) => resultById.get(spec.runId))
+    .filter((run) => run !== undefined);
+  const ablationRuns = ablationSpecs
+    .map((spec) => ({ spec, run: resultById.get(spec.runId) }))
+    .filter(
+      (
+        entry,
+      ): entry is {
+        spec: (typeof ablationSpecs)[number];
+        run: HostedVerifiedResultSetV2["runs"][number];
+      } => entry.run !== undefined,
+    );
+  const fixtureFingerprintsMatch = result.runs.every(
+    (run) => run.inputFingerprint === result.fixture.sha256,
+  );
+  const groupZeroOverlap = groupRuns.every(
+    (run) => run.entityOverlap.count === 0 && run.entityOverlap.rate === 0,
+  );
+  const identityRemoved = ablationRuns.every(
+    ({ spec, run }) =>
+      run.dropFeatures.includes(spec.entityField) &&
+      baseline !== undefined &&
+      run.featureSetFingerprint !== baseline.featureSetFingerprint,
+  );
+  const discriminates =
+    baseline !== undefined &&
+    [...groupRuns, ...ablationRuns.map(({ run }) => run)].every(
+      (run) => baseline.metrics.accuracy > run.metrics.accuracy + 0.1,
+    );
+  const { resultHash: _declaredHash, ...canonicalPayload } = result;
+  const canonicalHash = await hashCanonical(canonicalPayload);
+  const invariants: PlanInvariant[] = [
+    invariant(
+      "plan_result_lineage",
+      result.planId === plan.planId &&
+        result.sessionId === plan.sessionId &&
+        result.artifactManifestHash === plan.artifactManifestHash &&
+        result.concept === plan.concept &&
+        result.conceptPackVersion === plan.conceptPackVersion,
+      {
+        planId: result.planId,
+        sessionId: result.sessionId,
+        artifactManifestHash: result.artifactManifestHash,
+      },
+      {
+        planId: plan.planId,
+        sessionId: plan.sessionId,
+        artifactManifestHash: plan.artifactManifestHash,
+      },
+    ),
+    invariant(
+      "declared_runs_only",
+      result.runs.length === planRuns.length &&
+        resultById.size === planRuns.length &&
+        runBindings.every(Boolean),
+      result.runs.map((run) => ({ id: run.id, operation: run.operation })),
+      planRuns.map((run) => ({ id: run.runId, operation: run.operation })),
+    ),
+    invariant(
+      "fixture_fingerprints",
+      fixtureFingerprintsMatch,
+      result.runs.map((run) => run.inputFingerprint),
+      result.fixture.sha256,
+    ),
+    invariant(
+      "zero_group_overlap",
+      groupRuns.length === groupSpecs.length && groupZeroOverlap,
+      groupRuns.map((run) => run.entityOverlap),
+      { count: 0, rate: 0 },
+      groupZeroOverlap
+        ? undefined
+        : "A group holdout shared an entity between train and test.",
+    ),
+    invariant(
+      "baseline_overlap_exists",
+      baseline !== undefined && baseline.entityOverlap.count > 0,
+      baseline?.entityOverlap ?? null,
+      "positive entity overlap in the row-split baseline",
+    ),
+    invariant(
+      "identity_feature_removed",
+      ablationRuns.length === ablationSpecs.length && identityRemoved,
+      ablationRuns.map(({ run }) => ({
+        dropFeatures: run.dropFeatures,
+        featureSetFingerprint: run.featureSetFingerprint,
+      })),
+      "the selected entity field is removed and the fingerprint changes",
+    ),
+    invariant(
+      "discriminating_outcomes",
+      discriminates,
+      result.runs.map((run) => ({
+        id: run.id,
+        accuracy: run.metrics.accuracy,
+      })),
+      "baseline accuracy exceeds group holdout and ablation by more than 0.1",
+    ),
+    invariant(
+      "canonical_result_hash",
+      result.resultHash === canonicalHash,
+      result.resultHash,
+      canonicalHash,
+      result.resultHash === canonicalHash
+        ? undefined
+        : "The result bytes do not match the canonical result hash.",
+    ),
+  ];
+  const report = resultReport(result.resultHash, invariants);
+  if (report.status === "REJECTED") {
+    const failed = invariants.find((check) => !check.passed);
+    throw new ResultVerificationError(
+      failed?.counterexample ??
+        `Hosted result failed invariant ${failed?.name ?? "unknown"}`,
       report,
     );
   }

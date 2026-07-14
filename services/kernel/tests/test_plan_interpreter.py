@@ -11,6 +11,10 @@ from counterlab_kernel.plan import (
     interpret_experiment_plan,
     validate_experiment_plan,
 )
+from counterlab_kernel.hosted_run import (
+    HostedLabRunError,
+    execute_hosted_lab_run,
+)
 
 
 HASH = "b" * 64
@@ -168,3 +172,35 @@ def test_fixed_interpreter_executes_only_declared_runs_deterministically() -> No
     assert first["runs"][1]["entityOverlap"]["count"] == 0
     assert first["resultHash"] == second["resultHash"]
     assert first["planId"] == "plan_live_1"
+    assert first["seed"] == 1729
+
+
+def test_hosted_lab_run_binds_plan_manifest_claim_and_fixture() -> None:
+    experiment_plan = plan()
+    artifact_manifest = manifest()
+    bundle = {
+        "schemaVersion": "1",
+        "kind": "LAB_RUN",
+        "jobId": "job_run_1",
+        "sessionId": "session_live_1",
+        "stateVersion": 6,
+        "artifactManifestHash": sha256_json(artifact_manifest),
+        "artifactManifest": artifact_manifest,
+        "learnerClaim": CLAIM,
+        "experimentPlan": experiment_plan,
+        "experimentPlanHash": sha256_json(experiment_plan),
+        "fixture": {"id": "public-leakage-v1"},
+        "permittedOutputs": ["verified-result.json"],
+    }
+
+    result = execute_hosted_lab_run(bundle)
+
+    assert result["schemaVersion"] == "2"
+    assert result["sessionId"] == bundle["sessionId"]
+    assert result["artifactManifestHash"] == bundle["artifactManifestHash"]
+    assert result["planId"] == experiment_plan["planId"]
+
+    tampered = deepcopy(bundle)
+    tampered["experimentPlanHash"] = "0" * 64
+    with pytest.raises(HostedLabRunError, match="plan hash"):
+        execute_hosted_lab_run(tampered)

@@ -13,6 +13,7 @@ import { z } from "zod";
 import { HttpRunnerControlPlane } from "./control-plane-client.js";
 import { HostedRunnerJobProcessor } from "./job-processor.js";
 import { ContainerCodexLaunchBoundary } from "./launch-boundary.js";
+import { PythonFixedKernelExecutor } from "./fixed-kernel.js";
 
 const MAX_REQUEST_BYTES = 16_384;
 
@@ -176,6 +177,11 @@ async function startProductionServer(): Promise<void> {
       const processor = new HostedRunnerJobProcessor({
         workspaceRoot,
         compiler,
+        fixedKernel: new PythonFixedKernelExecutor({
+          pythonExecutable:
+            process.env.COUNTERLAB_PYTHON_EXECUTABLE ??
+            "/opt/counterlab-venv/bin/python",
+        }),
         controlPlane,
       });
       await processor.run(jobId);

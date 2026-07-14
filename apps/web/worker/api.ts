@@ -1,11 +1,15 @@
 import {
-  AllowedGeneratedPathSchema,
   ArtifactManifestSchema,
+  ExperimentPlanV2Schema,
+  HostedVerifiedResultSetV2Schema,
   PublicCompilerEventSchema,
   RunnerCallbackSchema,
   RunnerLabCompileBundleSchema,
+  RunnerLabRunBundleSchema,
+  RunnerOutputPathSchema,
   type BeliefTest,
   type RunnerCallback,
+  type VerifiedResultSet,
 } from "@counterlab/contracts";
 import {
   ApprovedSampleBeliefAnalyst,
@@ -19,7 +23,9 @@ import {
 import { NotebookParseError, parseNotebook } from "@counterlab/notebook-parser";
 import {
   PlanVerificationError,
+  ResultVerificationError,
   verifyExperimentPlan,
+  verifyHostedResultSet,
 } from "@counterlab/plan-verifier";
 import {
   ConcurrentRunnerJobUpdateError,
@@ -105,6 +111,14 @@ export interface ApiOptions {
 }
 
 const JsonObjectSchema = z.record(z.string(), z.unknown());
+const HostedPlanLineageSchema = z
+  .object({
+    status: z.literal("VERIFIED"),
+    jobId: z.string().trim().min(1),
+    planHash: z.string().regex(/^[a-f0-9]{64}$/u),
+    source: z.literal("hosted-plan-v2"),
+  })
+  .passthrough();
 const CreateArtifactSchema = z.object({ sample: z.literal(true) }).strict();
 const CreateSampleSessionSchema = z
   .object({ sampleId: z.literal("leakage-01") })
@@ -1066,13 +1080,15 @@ export function createApi(options: ApiOptions = {}) {
         409,
       );
     }
-    const generatedPath = AllowedGeneratedPathSchema.parse(
+    const generatedPath = RunnerOutputPathSchema.parse(
       context.req.param("generatedPath"),
     );
     const permitted =
       job.kind === "LAB_COMPILE"
         ? new Set(["experiment-plan.json", "public-rationale.md"])
-        : new Set(["patch-plan.json", "public-rationale.md"]);
+        : job.kind === "LAB_RUN"
+          ? new Set(["verified-result.json"])
+          : new Set(["patch-plan.json", "public-rationale.md"]);
     if (!permitted.has(generatedPath)) {
       throw new ApiInputError(
         "RUNNER_OUTPUT_NOT_PERMITTED",
@@ -1310,8 +1326,11 @@ export function createApi(options: ApiOptions = {}) {
       );
     }
 
-    let verification: Awaited<ReturnType<typeof verifyExperimentPlan>> | null =
-      null;
+    let verification:
+      | Awaited<ReturnType<typeof verifyExperimentPlan>>
+      | Awaited<ReturnType<typeof verifyHostedResultSet>>
+      | null = null;
+    let verifiedResult: VerifiedResultSet | null = null;
     let terminalCallback: RunnerCallback = callback;
     if (callback.status === "VERIFIED" && job.kind === "LAB_COMPILE") {
       const artifact = await artifacts(context, options).find(job.artifactId);
@@ -1374,6 +1393,102 @@ export function createApi(options: ApiOptions = {}) {
         }
       }
     }
+    if (callback.status === "VERIFIED" && job.kind === "LAB_RUN") {
+      const inputObject = await runnerObjectStore(context, options).get(
+        claims.inputBundleKey,
+      );
+      const resultObject = await runnerObjectStore(context, options).get(
+        `${claims.outputPrefix}verified-result.json`,
+      );
+      if (inputObject === undefined || resultObject === undefined) {
+        terminalCallback = {
+          ...callback,
+          status: "REJECTED",
+          error: {
+            code: "RUNNER_OUTPUT_MISSING",
+            message: "Required Plan input or fixed-kernel result is missing",
+            retryable: false,
+          },
+        };
+      } else {
+        const rawResultHash = await sha256Text(resultObject.body);
+        if (!callback.outputHashes.includes(rawResultHash)) {
+          terminalCallback = {
+            ...callback,
+            status: "REJECTED",
+            error: {
+              code: "RUNNER_OUTPUT_HASH_MISMATCH",
+              message:
+                "Fixed-kernel result bytes do not match the callback hashes",
+              retryable: false,
+            },
+          };
+        } else {
+          try {
+            const bundle = RunnerLabRunBundleSchema.parse(
+              JSON.parse(inputObject.body),
+            );
+            if (
+              bundle.jobId !== jobId ||
+              bundle.sessionId !== job.sessionId ||
+              bundle.artifactManifestHash !== job.artifactManifestHash ||
+              (await hashCanonical(bundle)) !== job.inputHashes.at(-1) ||
+              (await hashCanonical(bundle.artifactManifest)) !==
+                job.artifactManifestHash
+            ) {
+              throw new ApiInputError(
+                "RUNNER_INPUT_LINEAGE_MISMATCH",
+                "Fixed-kernel input lineage does not match the runner job",
+                409,
+              );
+            }
+            const result = HostedVerifiedResultSetV2Schema.parse(
+              JSON.parse(resultObject.body),
+            );
+            verification = await verifyHostedResultSet(
+              result,
+              bundle.experimentPlan,
+            );
+            verifiedResult = result;
+          } catch (error) {
+            if (error instanceof ApiInputError) throw error;
+            if (error instanceof ResultVerificationError) {
+              verification = error.report;
+              terminalCallback = {
+                ...callback,
+                status: "REJECTED",
+                error: {
+                  code: "RESULT_VERIFIER_REJECTED",
+                  message:
+                    "The external result verifier rejected the fixed-kernel payload",
+                  retryable: false,
+                  details: {
+                    failedInvariants: error.report.invariants
+                      .filter((invariant) => !invariant.passed)
+                      .map((invariant) => invariant.name),
+                  },
+                },
+              };
+            } else if (
+              error instanceof SyntaxError ||
+              error instanceof ZodError
+            ) {
+              terminalCallback = {
+                ...callback,
+                status: "REJECTED",
+                error: {
+                  code: "RESULT_CONTRACT_REJECTED",
+                  message: "The fixed-kernel result contract is invalid",
+                  retryable: false,
+                },
+              };
+            } else {
+              throw error;
+            }
+          }
+        }
+      }
+    }
 
     const completed = await runnerJobService(context, options).recordCallback(
       terminalCallback,
@@ -1381,8 +1496,10 @@ export function createApi(options: ApiOptions = {}) {
     let updatedSession = currentSession;
     if (!completed.duplicate) {
       if (
+        job.kind === "LAB_COMPILE" &&
         terminalCallback.status === "VERIFIED" &&
-        verification?.status === "VERIFIED"
+        verification?.status === "VERIFIED" &&
+        "planHash" in verification
       ) {
         updatedSession = await service.verifyLab(
           job.sessionId,
@@ -1398,13 +1515,23 @@ export function createApi(options: ApiOptions = {}) {
             ]),
           ],
         );
-      } else {
+      } else if (job.kind === "LAB_COMPILE") {
         updatedSession = await service.rejectLab(job.sessionId, {
           jobId,
           status: terminalCallback.status,
           error: terminalCallback.error ?? null,
           verification,
         });
+      } else if (
+        job.kind === "LAB_RUN" &&
+        terminalCallback.status === "VERIFIED" &&
+        verification?.status === "VERIFIED" &&
+        verifiedResult !== null
+      ) {
+        updatedSession = await service.recordExperimentResult(
+          job.sessionId,
+          verifiedResult,
+        );
       }
     }
     return context.json(
@@ -1430,10 +1557,171 @@ export function createApi(options: ApiOptions = {}) {
     const current = await service.getSession(sessionId);
     requireMutableSession(current);
     const artifact = await artifacts(context, options).find(current.artifactId);
+    if (current.mode.kind === "live_notebook") {
+      const dispatcher = runnerDispatcher(context, options);
+      if (dispatcher === undefined) {
+        throw new ApiInputError(
+          "LOCAL_RUNNER_REQUIRED",
+          "Live fixed-kernel execution requires a configured CounterLab runner",
+          503,
+        );
+      }
+      if (
+        artifact === undefined ||
+        current.beliefTest === undefined ||
+        current.labVerification === undefined
+      ) {
+        throw new ApiInputError(
+          "LIVE_CONTRACTS_REQUIRED",
+          "A verified artifact-specific Plan is required before execution",
+          409,
+        );
+      }
+      const lineage = HostedPlanLineageSchema.safeParse(
+        current.labVerification,
+      );
+      if (!lineage.success) {
+        throw new ApiInputError(
+          "LIVE_PLAN_LINEAGE_MISSING",
+          "The verified Plan lineage is incomplete",
+          409,
+        );
+      }
+      const planObject = await runnerObjectStore(context, options).get(
+        `runner-output/${lineage.data.jobId}/experiment-plan.json`,
+      );
+      if (planObject === undefined) {
+        throw new ApiInputError(
+          "LIVE_PLAN_LINEAGE_MISSING",
+          "The verified Plan bytes could not be resolved",
+          409,
+        );
+      }
+      let plan: z.infer<typeof ExperimentPlanV2Schema>;
+      try {
+        plan = ExperimentPlanV2Schema.parse(JSON.parse(planObject.body));
+        await verifyExperimentPlan(plan, {
+          manifest: artifact.manifest,
+          beliefTest: current.beliefTest,
+        });
+      } catch (error) {
+        if (
+          error instanceof PlanVerificationError ||
+          error instanceof SyntaxError ||
+          error instanceof ZodError
+        ) {
+          throw new ApiInputError(
+            "LIVE_PLAN_REJECTED",
+            "The stored Plan no longer passes independent verification",
+            409,
+          );
+        }
+        throw error;
+      }
+      const manifestHash = await hashCanonical(artifact.manifest);
+      const planHash = await hashCanonical(plan);
+      if (
+        manifestHash !== plan.artifactManifestHash ||
+        planHash !== lineage.data.planHash
+      ) {
+        throw new ApiInputError(
+          "LIVE_PLAN_LINEAGE_MISSING",
+          "The Plan hash does not match the verified artifact lineage",
+          409,
+        );
+      }
+      const jobId = requestId(options, "runner_job");
+      const bundle = RunnerLabRunBundleSchema.parse({
+        schemaVersion: "1",
+        kind: "LAB_RUN",
+        jobId,
+        sessionId,
+        stateVersion: current.version,
+        artifactManifestHash: manifestHash,
+        artifactManifest: artifact.manifest,
+        learnerClaim: current.beliefTest.learnerClaim,
+        experimentPlan: plan,
+        experimentPlanHash: planHash,
+        fixture: { id: "public-leakage-v1" },
+        permittedOutputs: ["verified-result.json"],
+      });
+      const bundleHash = await hashCanonical(bundle);
+      const inputBundleKey = `runner-input/${jobId}.json`;
+      await runnerObjectStore(context, options).put(
+        inputBundleKey,
+        JSON.stringify(bundle),
+        "application/json",
+      );
+      const jobs = runnerJobService(context, options);
+      const queued = await jobs.createJob({
+        jobId,
+        kind: "LAB_RUN",
+        sessionId,
+        artifactId: artifact.manifest.artifactId,
+        artifactManifestHash: manifestHash,
+        conceptPack: {
+          id: plan.concept,
+          version: plan.conceptPackVersion,
+        },
+        inputHashes: [manifestHash, planHash, bundleHash],
+        stateVersion: current.version,
+        maxAttempts: 1,
+        timeoutSeconds: 150,
+      });
+      const starting = await jobs.transition(
+        jobId,
+        queued.jobVersion,
+        "STARTING",
+        { runnerIdentity: dispatcher.identity },
+      );
+      const nowEpochSeconds = Math.floor(requestNow(options).getTime() / 1_000);
+      const token = await issueRunnerJobToken(
+        {
+          schemaVersion: "1",
+          audience: "counterlab-runner",
+          tokenId: requestId(options, "runner_token"),
+          jobId,
+          sessionId,
+          artifactManifestHash: manifestHash,
+          inputBundleKey,
+          outputPrefix: `runner-output/${jobId}/`,
+          callbackPath: `/api/runner/jobs/${jobId}/callback`,
+          stateVersion: current.version,
+          issuedAt: nowEpochSeconds,
+          expiresAt: nowEpochSeconds + 300,
+        },
+        runnerSigningKey(context, options),
+      );
+      try {
+        await dispatcher.dispatch({
+          job: starting,
+          token,
+          controlPlaneUrl: new URL(context.req.url).origin,
+        });
+      } catch {
+        await jobs.transition(jobId, starting.jobVersion, "FAILED", {
+          runnerIdentity: dispatcher.identity,
+          error: {
+            code: "RUNNER_DISPATCH_FAILED",
+            message: "The process runner did not accept this job",
+            retryable: true,
+          },
+        });
+        throw new ApiInputError(
+          "RUNNER_DISPATCH_FAILED",
+          "The process runner did not accept this job",
+          503,
+        );
+      }
+      return context.json(
+        jsonSuccess({ ...statePayload(current), runnerJob: starting }),
+        202,
+      );
+    }
     if (current.mode.kind !== "sample_lesson") {
       throw new ApiInputError(
-        "ARTIFACT_RESULT_MISMATCH",
-        "Live and replay sessions require a result bound to their verified job",
+        "REPLAY_READ_ONLY",
+        "Verified replay sessions cannot start new experiments",
         409,
       );
     }

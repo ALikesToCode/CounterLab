@@ -1,8 +1,8 @@
 import {
-  RunnerLabCompileBundleSchema,
+  RunnerJobInputBundleSchema,
   type PublicCompilerEvent,
   type RunnerCallback,
-  type RunnerLabCompileBundle,
+  type RunnerJobInputBundle,
 } from "@counterlab/contracts";
 import { z } from "zod";
 
@@ -66,13 +66,13 @@ export class HttpRunnerControlPlane implements RunnerControlPlane {
     this.fetcher = options.fetch ?? fetch;
   }
 
-  async getInput(): Promise<RunnerLabCompileBundle> {
+  async getInput(): Promise<RunnerJobInputBundle> {
     const response = await this.request(
       `/api/runner/jobs/${this.jobId()}/input`,
       { method: "GET" },
       false,
     );
-    return RunnerLabCompileBundleSchema.parse(await response.json());
+    return RunnerJobInputBundleSchema.parse(await response.json());
   }
 
   async start(): Promise<void> {

@@ -8,6 +8,7 @@ import {
   EvidenceEventSchema,
   ExperimentPlanSchema,
   ExperimentPlanV2Schema,
+  HostedVerifiedResultSetV2Schema,
   PatchResultSchema,
   PredictionContractSchema,
   ProofBundleSchema,
@@ -16,6 +17,7 @@ import {
   SessionStateSchema,
   PublicCompilerEventSchema,
   RunnerCallbackSchema,
+  RunnerLabRunBundleSchema,
   RunnerJobSchema,
   RunnerJobTokenClaimsSchema,
   TransferResultSchema,
@@ -375,6 +377,47 @@ describe("hosted runner contracts", () => {
       }),
     ).toThrow(/expiration/i);
   });
+
+  it("accepts only artifact-bound fixed-kernel LAB_RUN bundles", () => {
+    const artifact = ArtifactManifestSchema.parse({
+      artifactId: "artifact_live_1",
+      fileName: "uploaded.ipynb",
+      fileSha256: "f".repeat(64),
+      nbformat: 4,
+      support: { status: "SUPPORTED", reasons: [] },
+      cells: [],
+      schemaSummary: {
+        fields: [],
+        rowCount: 2880,
+        entityCandidates: ["customer_id"],
+        targetCandidates: ["churned"],
+      },
+      packageHints: ["sklearn"],
+      createdAt: "2026-07-15T00:00:00.000Z",
+    });
+    const runBundle = RunnerLabRunBundleSchema.parse({
+      schemaVersion: "1",
+      kind: "LAB_RUN",
+      jobId: "job_run_1",
+      sessionId: plan.sessionId,
+      stateVersion: 6,
+      artifactManifestHash: plan.artifactManifestHash,
+      artifactManifest: artifact,
+      learnerClaim: "The high score proves generalization.",
+      experimentPlan: plan,
+      experimentPlanHash: "9".repeat(64),
+      fixture: { id: "public-leakage-v1" },
+      permittedOutputs: ["verified-result.json"],
+    });
+
+    expect(runBundle.kind).toBe("LAB_RUN");
+    expect(() =>
+      RunnerLabRunBundleSchema.parse({
+        ...runBundle,
+        sessionId: "session_crossed",
+      }),
+    ).toThrow(/lineage/i);
+  });
 });
 
 describe("session transitions", () => {
@@ -576,6 +619,56 @@ describe("learning-loop contracts", () => {
         runs: [{ ...result.runs[0], inventedMetric: true }],
       }),
     ).toThrow();
+  });
+
+  it("binds hosted kernel output to its verified plan and artifact", () => {
+    const hosted = HostedVerifiedResultSetV2Schema.parse({
+      schemaVersion: "2",
+      concept: "entity_leakage",
+      planId: "plan_live_1",
+      sessionId: "session_live_1",
+      artifactManifestHash: hash("a"),
+      conceptPackVersion: "2.0.0",
+      kernelVersion: "0.1.0",
+      seed: 1729,
+      fixture: {
+        customers: 480,
+        rows: 2880,
+        sha256: hash("c"),
+        targetRate: 0.49,
+      },
+      runs: [
+        {
+          id: "new_customers",
+          operation: "leakage.group_holdout",
+          splitStrategy: "group",
+          groupBy: "account_id",
+          dropFeatures: [],
+          model: "logistic_regression",
+          seed: 1729,
+          inputFingerprint: hash("c"),
+          featureSetFingerprint: hash("d"),
+          metrics: { accuracy: 0.59, rocAuc: 0.64 },
+          sampleSizes: { train: 2160, test: 720 },
+          entityCounts: { train: 360, test: 120 },
+          entityOverlap: { count: 0, rate: 0 },
+        },
+      ],
+      chartData: [
+        {
+          runId: "new_customers",
+          splitStrategy: "group",
+          accuracy: 0.59,
+          rocAuc: 0.64,
+          sampleSize: 720,
+          seed: 1729,
+        },
+      ],
+      resultHash: hash("e"),
+    });
+
+    expect(hosted.artifactManifestHash).toBe(hash("a"));
+    expect(VerifiedResultSetSchema.parse(hosted).schemaVersion).toBe("2");
   });
 
   it("requires explicit schema versions for transfer, patch, reasoning diff, and events", () => {
