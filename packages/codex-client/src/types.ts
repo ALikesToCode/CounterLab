@@ -217,6 +217,7 @@ export type CompilerSetupErrorCode =
   | "CODEX_TIMEOUT"
   | "CODEX_PROTOCOL_ERROR"
   | "CODEX_PROCESS_EXITED"
+  | "CODEX_ISOLATION_UNAVAILABLE"
   | "CODEX_INVALID_INPUT";
 
 export class CompilerSetupError extends Error {

@@ -15,6 +15,9 @@ import {
 } from "./index.js";
 
 const generationDirectory = "/tmp/counterlab/generated/session_test";
+const unisolatedTestProcess = {
+  allowUnisolatedTestProcess: true as const,
+};
 
 function labInput(): CompileLabInput {
   return {
@@ -294,15 +297,44 @@ describe("fallback compiler implementations", () => {
 });
 
 describe("AppServerCodexCompiler stdio transport", () => {
+  it("fails closed when no generation read-isolation boundary is configured", async () => {
+    const fakeServer = fileURLToPath(
+      new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
+    );
+    const compiler = new AppServerCodexCompiler({
+      command: process.execPath,
+      commandArgs: [fakeServer],
+      timeoutMs: 2_000,
+    });
+
+    await expect(
+      collect(compiler.compileLab(labInput())),
+    ).rejects.toMatchObject({
+      name: "CompilerSetupError",
+      code: "CODEX_ISOLATION_UNAVAILABLE",
+      message: expect.stringMatching(/read-isolation boundary/i),
+    });
+    expect(await compiler.health()).toMatchObject({
+      mode: "live",
+      available: false,
+      reason: expect.stringMatching(/read-isolation boundary/i),
+    });
+  });
+
   it("handshakes, starts a thread and turn, sanitizes events, and omits an unset model", async () => {
     const fakeServer = fileURLToPath(
       new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
     );
     const compiler = new AppServerCodexCompiler({
       command: process.execPath,
-      commandArgs: [fakeServer, "--expect-model-omitted"],
+      commandArgs: [
+        fakeServer,
+        "--expect-model-omitted",
+        "--expect-constrained-turn",
+      ],
       model: undefined,
       timeoutMs: 2_000,
+      ...unisolatedTestProcess,
     });
 
     const events = await collect(compiler.compileLab(labInput()));
@@ -334,6 +366,42 @@ describe("AppServerCodexCompiler stdio transport", () => {
     });
   });
 
+  it("uses the boundary-provided guest workspace for protocol confinement", async () => {
+    const fakeServer = fileURLToPath(
+      new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
+    );
+    const compiler = new AppServerCodexCompiler({
+      command: process.execPath,
+      commandArgs: [
+        fakeServer,
+        "--expect-cwd=/workspace",
+        "--expect-constrained-turn",
+      ],
+      timeoutMs: 2_000,
+      launchBoundary: {
+        async health() {
+          return { available: true as const };
+        },
+        async prepare(request) {
+          expect(request.hostCwd).toBe(generationDirectory);
+          return {
+            command: request.command,
+            args: request.args,
+            environment: request.environment,
+            protocolCwd: "/workspace",
+          };
+        },
+      },
+    });
+
+    const events = await collect(compiler.compileLab(labInput()));
+    expect(events).toContainEqual({
+      type: "status",
+      phase: "generate",
+      status: "completed",
+    });
+  });
+
   it("passes CODEX_MODEL only when explicitly configured", async () => {
     const fakeServer = fileURLToPath(
       new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
@@ -343,6 +411,7 @@ describe("AppServerCodexCompiler stdio transport", () => {
       commandArgs: [fakeServer, "--expect-model=gpt-5.6-codex"],
       model: "gpt-5.6-codex",
       timeoutMs: 2_000,
+      ...unisolatedTestProcess,
     });
 
     const events = await collect(compiler.compileLab(labInput()));
@@ -359,6 +428,7 @@ describe("AppServerCodexCompiler stdio transport", () => {
       command: process.execPath,
       commandArgs: ["-e", "setInterval(() => {}, 1000)"],
       timeoutMs: 50,
+      ...unisolatedTestProcess,
     });
 
     await expect(
@@ -377,6 +447,7 @@ describe("AppServerCodexCompiler stdio transport", () => {
       command: process.execPath,
       commandArgs: [fakeServer, "--request-approval"],
       timeoutMs: 2_000,
+      ...unisolatedTestProcess,
     });
 
     await expect(
@@ -392,6 +463,7 @@ describe("AppServerCodexCompiler stdio transport", () => {
     const compiler = new AppServerCodexCompiler({
       command: "/definitely/not/a/real/codex",
       timeoutMs: 50,
+      ...unisolatedTestProcess,
     });
     const invalid = { ...labInput(), sessionId: "../escape" };
 
@@ -409,6 +481,7 @@ describe("AppServerCodexCompiler stdio transport", () => {
       command: process.execPath,
       commandArgs: [fakeServer, "--failed-turn"],
       timeoutMs: 2_000,
+      ...unisolatedTestProcess,
     });
 
     const events = await collect(compiler.compileLab(labInput()));
@@ -432,6 +505,7 @@ describe("AppServerCodexCompiler stdio transport", () => {
       command: process.execPath,
       commandArgs: [fakeServer],
       timeoutMs: 2_000,
+      ...unisolatedTestProcess,
     });
     const repair: RepairLabInput = {
       ...labInput(),
@@ -470,6 +544,7 @@ describe("AppServerCodexCompiler stdio transport", () => {
       command: process.execPath,
       commandArgs: [fakeServer],
       timeoutMs: 2_000,
+      ...unisolatedTestProcess,
     });
 
     const events = await collect(compiler.compilePatch(patchInput()));
@@ -486,6 +561,7 @@ describe("AppServerCodexCompiler stdio transport", () => {
       healthCommand: process.execPath,
       healthArgs: ["--version"],
       model: "gpt-5.6-codex",
+      ...unisolatedTestProcess,
     });
     expect(await compiler.health()).toMatchObject({
       mode: "live",

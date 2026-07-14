@@ -6,10 +6,17 @@ let selectedModel = "installed-compatible-default";
 const requestApproval = process.argv.includes("--request-approval");
 const failedTurn = process.argv.includes("--failed-turn");
 const expectModelOmitted = process.argv.includes("--expect-model-omitted");
+const expectConstrainedTurn = process.argv.includes(
+  "--expect-constrained-turn",
+);
 const expectedModelArgument = process.argv.find((argument) =>
   argument.startsWith("--expect-model="),
 );
 const expectedModel = expectedModelArgument?.slice("--expect-model=".length);
+const expectedCwdArgument = process.argv.find((argument) =>
+  argument.startsWith("--expect-cwd="),
+);
+const expectedCwd = expectedCwdArgument?.slice("--expect-cwd=".length);
 
 function send(value) {
   process.stdout.write(`${JSON.stringify(value)}\n`);
@@ -44,6 +51,7 @@ lines.on("line", (line) => {
     if (Object.hasOwn(message.params, "model")) {
       selectedModel = message.params.model;
     }
+    if (expectedCwd && message.params.cwd !== expectedCwd) process.exit(6);
     send({
       id: message.id,
       result: {
@@ -54,6 +62,18 @@ lines.on("line", (line) => {
     return;
   }
   if (message.method === "turn/start") {
+    if (expectedCwd && message.params.cwd !== expectedCwd) process.exit(7);
+    if (
+      expectConstrainedTurn &&
+      (message.params.sandboxPolicy?.type !== "workspaceWrite" ||
+        message.params.sandboxPolicy?.networkAccess !== false ||
+        message.params.sandboxPolicy?.excludeSlashTmp !== true ||
+        message.params.sandboxPolicy?.excludeTmpdirEnvVar !== true ||
+        JSON.stringify(message.params.sandboxPolicy?.writableRoots) !==
+          JSON.stringify([message.params.cwd]))
+    ) {
+      process.exit(5);
+    }
     send({ id: message.id, result: { turn: { id: "turn_test" } } });
     if (requestApproval) {
       send({

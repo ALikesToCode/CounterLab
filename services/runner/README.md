@@ -46,6 +46,17 @@ host rejects excess output. Production deployments should additionally use a
 dedicated runner host or stronger microVM/container isolation if the threat
 model extends beyond the hackathon's local single-user boundary.
 
+Generation and execution are separate trust boundaries. The execution runner
+above never mounts Codex credentials. The App Server client now fails closed
+unless an OS-enforced generation launch boundary is supplied; see
+`packages/codex-client/README.md`. A real Bubblewrap probe confirms that an
+exact generation mount can see its approved file while repository, verifier,
+and held-out host paths resolve as missing. Stable Codex authentication is
+currently file-backed in this environment, so CounterLab does not mount that
+credential into the generation namespace. The documented next step is a
+host-owned credential-injecting loopback proxy, not a credential-bearing
+`CODEX_HOME` mount.
+
 ## Verification
 
 Run unit and host-pipeline tests without building an image:

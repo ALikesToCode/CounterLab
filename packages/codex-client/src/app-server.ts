@@ -85,7 +85,33 @@ export type AppServerCodexCompilerOptions = {
   model?: string | undefined;
   timeoutMs?: number;
   environment?: NodeJS.ProcessEnv;
+  launchBoundary?: AppServerLaunchBoundary;
+  /** Fake App Server processes in unit tests only. Rejected outside NODE_ENV=test. */
+  allowUnisolatedTestProcess?: boolean;
 };
+
+export type AppServerLaunchRequest = {
+  command: string;
+  args: string[];
+  environment: NodeJS.ProcessEnv;
+  hostCwd: string;
+};
+
+export type PreparedAppServerLaunch = {
+  command: string;
+  args: string[];
+  environment: NodeJS.ProcessEnv;
+  protocolCwd: string;
+  spawnCwd?: string;
+};
+
+export type AppServerLaunchBoundaryHealth =
+  { available: true } | { available: false; reason: string };
+
+export interface AppServerLaunchBoundary {
+  health(): Promise<AppServerLaunchBoundaryHealth>;
+  prepare(request: AppServerLaunchRequest): Promise<PreparedAppServerLaunch>;
+}
 
 type PendingRequest = {
   resolve(value: unknown): void;
@@ -205,11 +231,13 @@ class AppServerConnection {
     command: string,
     args: string[],
     environment: NodeJS.ProcessEnv,
+    cwd: string | undefined,
     private readonly timeoutMs: number,
   ) {
     try {
       this.process = spawn(command, args, {
         env: environment,
+        ...(cwd ? { cwd } : {}),
         stdio: ["pipe", "pipe", "pipe"],
       });
     } catch (error) {
@@ -422,6 +450,8 @@ export class AppServerCodexCompiler implements CodexCompiler {
   private readonly model: string | undefined;
   private readonly timeoutMs: number;
   private readonly environment: NodeJS.ProcessEnv;
+  private readonly launchBoundary: AppServerLaunchBoundary | undefined;
+  private readonly allowUnisolatedTestProcess: boolean;
 
   constructor(options: AppServerCodexCompilerOptions = {}) {
     this.command = options.command ?? "codex";
@@ -432,9 +462,27 @@ export class AppServerCodexCompiler implements CodexCompiler {
       options.model?.trim() || process.env.CODEX_MODEL?.trim() || undefined;
     this.timeoutMs = options.timeoutMs ?? 120_000;
     this.environment = safeEnvironment(options.environment ?? process.env);
+    this.launchBoundary = options.launchBoundary;
+    this.allowUnisolatedTestProcess =
+      options.allowUnisolatedTestProcess === true;
+    if (this.allowUnisolatedTestProcess && process.env.NODE_ENV !== "test") {
+      throw new CompilerSetupError(
+        "CODEX_ISOLATION_UNAVAILABLE",
+        "Unisolated App Server launch is restricted to fake processes under NODE_ENV=test.",
+      );
+    }
   }
 
   async health(): Promise<CompilerHealth> {
+    const isolationHealth = await this.isolationHealth();
+    if (!isolationHealth.available) {
+      return {
+        mode: "live",
+        available: false,
+        reason: isolationHealth.reason,
+        ...(this.model ? { model: this.model } : {}),
+      };
+    }
     try {
       const { stdout, stderr } = await execFileAsync(
         this.healthCommand,
@@ -497,10 +545,12 @@ export class AppServerCodexCompiler implements CodexCompiler {
     cwd: string,
     phase: "generate" | "repair" | "patch",
   ): AsyncIterable<CompilerEvent> {
+    const launch = await this.prepareLaunch(cwd);
     const connection = new AppServerConnection(
-      this.command,
-      this.commandArgs,
-      this.environment,
+      launch.command,
+      launch.args,
+      launch.environment,
+      launch.spawnCwd,
       this.timeoutMs,
     );
 
@@ -531,7 +581,7 @@ export class AppServerCodexCompiler implements CodexCompiler {
 
       yield { type: "status", phase: "thread", status: "started" };
       const threadParams: Record<string, unknown> = {
-        cwd,
+        cwd: launch.protocolCwd,
         approvalPolicy: "never",
         sandbox: "workspace-write",
         ephemeral: true,
@@ -552,8 +602,15 @@ export class AppServerCodexCompiler implements CodexCompiler {
       const turnParams: Record<string, unknown> = {
         threadId: thread.thread.id,
         input: [{ type: "text", text: prompt, text_elements: [] }],
-        cwd,
+        cwd: launch.protocolCwd,
         approvalPolicy: "never",
+        sandboxPolicy: {
+          type: "workspaceWrite",
+          writableRoots: [launch.protocolCwd],
+          networkAccess: false,
+          excludeSlashTmp: true,
+          excludeTmpdirEnvVar: true,
+        },
       };
       if (this.model) turnParams.model = this.model;
       const turn = TurnStartResponseSchema.parse(
@@ -592,5 +649,45 @@ export class AppServerCodexCompiler implements CodexCompiler {
     } finally {
       connection.close();
     }
+  }
+
+  private async isolationHealth(): Promise<AppServerLaunchBoundaryHealth> {
+    if (this.launchBoundary) return this.launchBoundary.health();
+    if (this.allowUnisolatedTestProcess) return { available: true };
+    return {
+      available: false,
+      reason:
+        "Live Codex requires an OS-enforced generation read-isolation boundary; none is configured.",
+    };
+  }
+
+  private async prepareLaunch(cwd: string): Promise<PreparedAppServerLaunch> {
+    if (this.launchBoundary) {
+      const health = await this.launchBoundary.health();
+      if (!health.available) {
+        throw new CompilerSetupError(
+          "CODEX_ISOLATION_UNAVAILABLE",
+          health.reason,
+        );
+      }
+      return this.launchBoundary.prepare({
+        command: this.command,
+        args: this.commandArgs,
+        environment: this.environment,
+        hostCwd: cwd,
+      });
+    }
+    if (!this.allowUnisolatedTestProcess) {
+      throw new CompilerSetupError(
+        "CODEX_ISOLATION_UNAVAILABLE",
+        "Live Codex requires an OS-enforced generation read-isolation boundary; none is configured.",
+      );
+    }
+    return {
+      command: this.command,
+      args: this.commandArgs,
+      environment: this.environment,
+      protocolCwd: cwd,
+    };
   }
 }
