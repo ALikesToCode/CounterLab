@@ -219,6 +219,7 @@ test("unsupported notebooks are parsed without execution and cannot advance", as
 test("the judged path is keyboard operable with reduced motion", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await reset(page);
 
@@ -267,4 +268,9 @@ test("the judged path is keyboard operable with reduced motion", async ({
   await expect(
     page.getByRole("heading", { name: /What changed—and what proved it/i }),
   ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
 });
