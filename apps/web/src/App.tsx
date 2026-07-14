@@ -27,6 +27,12 @@ type PredictionChoice = "stays-high" | "falls" | "unsure";
 type TransferState = "locked" | "ready" | "failed" | "passed" | "patched";
 type ReviewStep = "claim" | "belief" | "build" | "reality";
 
+function presentationMode(mode: SessionView["mode"]): Mode {
+  if (mode.kind === "sample_lesson") return "instant";
+  if (mode.kind === "verified_replay") return "replay";
+  return "live";
+}
+
 const storageKeys = {
   sessionId: "counterlab.sessionId",
   mode: "counterlab.mode",
@@ -2177,7 +2183,7 @@ export function App() {
       const restored = await counterLabApi.getSession(sessionId);
       setArtifact(await counterLabApi.getArtifact(restored.artifactId));
       setSession(restored);
-      setMode(restored.mode);
+      setMode(presentationMode(restored.mode));
       if (restored.prediction !== undefined) {
         const savedChoice = restored.prediction.choice.toLowerCase();
         setPrediction(
@@ -2206,7 +2212,8 @@ export function App() {
         restored.state === "LAB_VERIFIED"
       ) {
         setStage(
-          restored.mode === "live" && restored.verifiedResult === undefined
+          restored.mode.kind === "live_notebook" &&
+            restored.verifiedResult === undefined
             ? "live-compile"
             : "build",
         );
@@ -2265,9 +2272,8 @@ export function App() {
     }
     void withRequest(async () => {
       const sample = await counterLabApi.createSampleArtifact();
-      const created = await counterLabApi.createSession({
-        artifactId: sample.artifactId,
-        mode: "instant",
+      const created = await counterLabApi.createSampleSession({
+        sampleId: "leakage-01",
       });
       setArtifact(sample);
       setSession(created);
@@ -2306,18 +2312,13 @@ export function App() {
   const startLiveSession = () => {
     if (liveHealth?.liveGpt !== "configured") return;
     void withRequest(async () => {
-      const sample = await counterLabApi.createSampleArtifact();
-      const created = await counterLabApi.createSession({
-        artifactId: sample.artifactId,
-        mode: "live",
-      });
-      setArtifact(sample);
-      setSession(created);
+      setArtifact(null);
+      setSession(null);
       setClaim("");
       setConfirmed(false);
       setPrediction(null);
       setConfidence(72);
-      window.localStorage.setItem(storageKeys.sessionId, created.sessionId);
+      window.localStorage.removeItem(storageKeys.sessionId);
       window.localStorage.setItem(storageKeys.mode, "live");
       setStage("claim");
     });
@@ -2330,13 +2331,13 @@ export function App() {
       setSession(null);
       window.localStorage.removeItem(storageKeys.sessionId);
       if (uploaded.support.status !== "SUPPORTED") return;
-      const created = await counterLabApi.createSession({
+      const created = await counterLabApi.createLiveSession({
         artifactId: uploaded.artifactId,
-        mode: "instant",
       });
       setSession(created);
+      setMode("live");
       window.localStorage.setItem(storageKeys.sessionId, created.sessionId);
-      window.localStorage.setItem(storageKeys.mode, "instant");
+      window.localStorage.setItem(storageKeys.mode, "live");
     });
   };
 

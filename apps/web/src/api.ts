@@ -6,6 +6,7 @@ import {
   PredictionContractSchema,
   ProofBundleSchema,
   ReasoningDiffSchema,
+  SessionModeSchema,
   SessionStateSchema,
   TransferResultSchema,
   VerifiedResultSetSchema,
@@ -63,7 +64,7 @@ function envelopeSchema<T extends z.ZodType>(dataSchema: T) {
 const sessionViewShape = {
   sessionId: NonEmptyString,
   artifactId: NonEmptyString,
-  mode: z.enum(["instant", "live", "replay"]),
+  mode: SessionModeSchema,
   state: SessionStateSchema,
   version: z.number().int().positive(),
   createdAt: z.iso.datetime({ offset: true }),
@@ -119,11 +120,14 @@ const ReplaySchema = z
 
 export type VerifiedReplay = z.infer<typeof ReplaySchema>;
 
-const CreateSessionInputSchema = z
-  .object({
-    artifactId: NonEmptyString,
-    mode: z.enum(["instant", "live", "replay"]),
-  })
+const CreateSampleSessionInputSchema = z
+  .object({ sampleId: z.literal("leakage-01") })
+  .strict();
+const CreateLiveSessionInputSchema = z
+  .object({ artifactId: NonEmptyString })
+  .strict();
+const CreateReplaySessionInputSchema = z
+  .object({ replayId: z.literal("leakage-01") })
   .strict();
 
 const BeliefProposalInputSchema = z
@@ -179,7 +183,15 @@ const TransferInputSchema = z
   })
   .strict();
 
-export type CreateSessionInput = z.input<typeof CreateSessionInputSchema>;
+export type CreateSampleSessionInput = z.input<
+  typeof CreateSampleSessionInputSchema
+>;
+export type CreateLiveSessionInput = z.input<
+  typeof CreateLiveSessionInputSchema
+>;
+export type CreateReplaySessionInput = z.input<
+  typeof CreateReplaySessionInputSchema
+>;
 export type BeliefProposalInput = z.input<typeof BeliefProposalInputSchema>;
 export type BeliefResponseInput = z.input<typeof BeliefResponseInputSchema>;
 export type PredictionInput = z.input<typeof PredictionInputSchema>;
@@ -284,10 +296,28 @@ export class CounterLabApiClient {
     );
   }
 
-  createSession(input: CreateSessionInput): Promise<SessionView> {
-    return this.request("/api/sessions", SessionViewSchema, {
+  createSampleSession(input: CreateSampleSessionInput): Promise<SessionView> {
+    return this.request("/api/sample/sessions", SessionViewSchema, {
       method: "POST",
-      body: JSON.stringify(validatedInput(CreateSessionInputSchema, input)),
+      body: JSON.stringify(
+        validatedInput(CreateSampleSessionInputSchema, input),
+      ),
+    });
+  }
+
+  createLiveSession(input: CreateLiveSessionInput): Promise<SessionView> {
+    return this.request("/api/live/sessions", SessionViewSchema, {
+      method: "POST",
+      body: JSON.stringify(validatedInput(CreateLiveSessionInputSchema, input)),
+    });
+  }
+
+  createReplaySession(input: CreateReplaySessionInput): Promise<SessionView> {
+    return this.request("/api/replay/sessions", SessionViewSchema, {
+      method: "POST",
+      body: JSON.stringify(
+        validatedInput(CreateReplaySessionInputSchema, input),
+      ),
     });
   }
 

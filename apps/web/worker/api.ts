@@ -64,11 +64,14 @@ export interface ApiOptions {
 
 const JsonObjectSchema = z.record(z.string(), z.unknown());
 const CreateArtifactSchema = z.object({ sample: z.literal(true) }).strict();
-const CreateSessionSchema = z
-  .object({
-    artifactId: z.string().trim().min(1),
-    mode: z.enum(["instant", "live", "replay"]),
-  })
+const CreateSampleSessionSchema = z
+  .object({ sampleId: z.literal("leakage-01") })
+  .strict();
+const CreateLiveSessionSchema = z
+  .object({ artifactId: z.string().trim().min(1) })
+  .strict();
+const CreateReplaySessionSchema = z
+  .object({ replayId: z.literal("leakage-01") })
   .strict();
 const BeliefRequestSchema = z
   .object({ learnerClaim: z.string().trim().min(12).max(2000) })
@@ -227,6 +230,7 @@ function requireApprovedSampleArtifact(
   errorCode:
     | "MODE_ARTIFACT_MISMATCH"
     | "ARTIFACT_RESULT_MISMATCH"
+    | "ARTIFACT_TRANSFER_MISMATCH"
     | "ARTIFACT_PATCH_MISMATCH",
 ): void {
   if (
@@ -236,6 +240,18 @@ function requireApprovedSampleArtifact(
     throw new ApiInputError(
       errorCode,
       "Bundled sample evidence is authorized only for the approved sample artifact",
+      409,
+    );
+  }
+}
+
+function requireMutableSession(
+  session: Awaited<ReturnType<SessionService["getSession"]>>,
+): void {
+  if (session.mode.kind === "verified_replay") {
+    throw new ApiInputError(
+      "REPLAY_READ_ONLY",
+      "Verified replay sessions are reconstructed from stored evidence and cannot be mutated",
       409,
     );
   }
@@ -406,8 +422,18 @@ export function createApi(options: ApiOptions = {}) {
     return context.json(jsonSuccess(artifact.manifest));
   });
 
-  app.post("/api/sessions", async (context) => {
-    const input = CreateSessionSchema.parse(await readJson(context));
+  app.post("/api/sample/sessions", async (context) => {
+    const input = CreateSampleSessionSchema.parse(await readJson(context));
+    const artifact = await artifacts(context, options).save(sampleManifest);
+    const session = await sessionService(context, options).createSession({
+      artifactId: artifact.manifest.artifactId,
+      mode: { kind: "sample_lesson", sampleId: input.sampleId },
+    });
+    return context.json(jsonSuccess(statePayload(session)), 201);
+  });
+
+  app.post("/api/live/sessions", async (context) => {
+    const input = CreateLiveSessionSchema.parse(await readJson(context));
     const artifact = await artifacts(context, options).find(input.artifactId);
     if (artifact === undefined) {
       throw new ApiInputError(
@@ -416,10 +442,27 @@ export function createApi(options: ApiOptions = {}) {
         404,
       );
     }
-    if (input.mode === "instant") {
-      requireApprovedSampleArtifact(artifact, "MODE_ARTIFACT_MISMATCH");
+    if (artifact.manifest.artifactId === sampleManifest.artifactId) {
+      throw new ApiInputError(
+        "MODE_ARTIFACT_MISMATCH",
+        "The bundled sample must use the sample lesson route",
+        409,
+      );
     }
-    const session = await sessionService(context, options).createSession(input);
+    const session = await sessionService(context, options).createSession({
+      artifactId: input.artifactId,
+      mode: { kind: "live_notebook" },
+    });
+    return context.json(jsonSuccess(statePayload(session)), 201);
+  });
+
+  app.post("/api/replay/sessions", async (context) => {
+    const input = CreateReplaySessionSchema.parse(await readJson(context));
+    const artifact = await artifacts(context, options).save(sampleManifest);
+    const session = await sessionService(context, options).createSession({
+      artifactId: artifact.manifest.artifactId,
+      mode: { kind: "verified_replay", replayId: input.replayId },
+    });
     return context.json(jsonSuccess(statePayload(session)), 201);
   });
 
@@ -434,6 +477,7 @@ export function createApi(options: ApiOptions = {}) {
     const { learnerClaim } = BeliefRequestSchema.parse(await readJson(context));
     const service = sessionService(context, options);
     const session = await service.getSession(context.req.param("sessionId"));
+    requireMutableSession(session);
     const artifact = await artifacts(context, options).find(session.artifactId);
     if (artifact === undefined) {
       throw new ApiInputError(
@@ -444,7 +488,7 @@ export function createApi(options: ApiOptions = {}) {
     }
 
     const analyst =
-      session.mode === "live"
+      session.mode.kind === "live_notebook"
         ? createLiveBeliefAnalystFromEnv({
             OPENAI_API_KEY: context.env?.OPENAI_API_KEY,
             OPENAI_BASE_URL: context.env?.OPENAI_BASE_URL,
@@ -482,6 +526,7 @@ export function createApi(options: ApiOptions = {}) {
     const input = ConfirmationSchema.parse(await readJson(context));
     const service = sessionService(context, options);
     const sessionId = context.req.param("sessionId");
+    requireMutableSession(await service.getSession(sessionId));
     if (input.action === "confirm") {
       return context.json(
         jsonSuccess(statePayload(await service.confirmBeliefTest(sessionId))),
@@ -517,6 +562,7 @@ export function createApi(options: ApiOptions = {}) {
     const service = sessionService(context, options);
     const sessionId = context.req.param("sessionId");
     const current = await service.getSession(sessionId);
+    requireMutableSession(current);
     if (current.beliefTest === undefined) {
       throw new SessionInputError("A confirmed Belief Test is required");
     }
@@ -549,7 +595,8 @@ export function createApi(options: ApiOptions = {}) {
     const service = sessionService(context, options);
     const sessionId = context.req.param("sessionId");
     const current = await service.getSession(sessionId);
-    if (current.mode === "live") {
+    requireMutableSession(current);
+    if (current.mode.kind === "live_notebook") {
       throw new ApiInputError(
         "LOCAL_RUNNER_REQUIRED",
         "Live Codex compilation requires the local CounterLab runner",
@@ -561,10 +608,7 @@ export function createApi(options: ApiOptions = {}) {
       sessionId,
       {
         ...sampleLabVerification,
-        source:
-          current.mode === "replay"
-            ? "verified-replay-leakage-01"
-            : "stored-approved-leakage-v1",
+        source: "stored-approved-leakage-v1",
       },
       [
         sampleLabEvidenceHashes.adapter,
@@ -586,8 +630,9 @@ export function createApi(options: ApiOptions = {}) {
     const service = sessionService(context, options);
     const sessionId = context.req.param("sessionId");
     const current = await service.getSession(sessionId);
+    requireMutableSession(current);
     const artifact = await artifacts(context, options).find(current.artifactId);
-    if (current.mode !== "instant") {
+    if (current.mode.kind !== "sample_lesson") {
       throw new ApiInputError(
         "ARTIFACT_RESULT_MISMATCH",
         "Live and replay sessions require a result bound to their verified job",
@@ -604,10 +649,10 @@ export function createApi(options: ApiOptions = {}) {
 
   app.post("/api/sessions/:sessionId/revision", async (context) => {
     const { revision } = RevisionSchema.parse(await readJson(context));
-    const updated = await sessionService(context, options).recordRevision(
-      context.req.param("sessionId"),
-      revision,
-    );
+    const service = sessionService(context, options);
+    const sessionId = context.req.param("sessionId");
+    requireMutableSession(await service.getSession(sessionId));
+    const updated = await service.recordRevision(sessionId, revision);
     return context.json(jsonSuccess(statePayload(updated)));
   });
 
@@ -615,6 +660,17 @@ export function createApi(options: ApiOptions = {}) {
     const submission = TransferSubmissionSchema.parse(await readJson(context));
     const service = sessionService(context, options);
     const sessionId = context.req.param("sessionId");
+    const current = await service.getSession(sessionId);
+    requireMutableSession(current);
+    const artifact = await artifacts(context, options).find(current.artifactId);
+    if (current.mode.kind !== "sample_lesson") {
+      throw new ApiInputError(
+        "ARTIFACT_TRANSFER_MISMATCH",
+        "Live sessions require a transfer task selected by their verified concept job",
+        409,
+      );
+    }
+    requireApprovedSampleArtifact(artifact, "ARTIFACT_TRANSFER_MISMATCH");
     await service.startTransfer(sessionId);
     const result = await evaluateSampleTransfer(
       sessionId,
@@ -629,10 +685,11 @@ export function createApi(options: ApiOptions = {}) {
     const service = sessionService(context, options);
     const sessionId = context.req.param("sessionId");
     const current = await service.getSession(sessionId);
+    requireMutableSession(current);
     const sourceArtifact = await artifacts(context, options).find(
       current.artifactId,
     );
-    if (current.mode !== "instant") {
+    if (current.mode.kind !== "sample_lesson") {
       throw new ApiInputError(
         "ARTIFACT_PATCH_MISMATCH",
         "Live and replay sessions require a patch bound to their source artifact",

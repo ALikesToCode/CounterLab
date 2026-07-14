@@ -22,6 +22,13 @@ const artifact = {
   createdAt: "2026-07-14T09:00:00.000Z",
 };
 
+const uploadedArtifact = {
+  ...artifact,
+  artifactId: "artifact_uploaded",
+  fileName: "uploaded_customer_model.ipynb",
+  fileSha256: "a".repeat(64),
+};
+
 const liveBeliefTest = {
   schemaVersion: "1",
   id: "belief_live_ui",
@@ -73,7 +80,7 @@ function session(
   return {
     sessionId: "session_ui",
     artifactId: artifact.artifactId,
-    mode: "instant",
+    mode: { kind: "sample_lesson", sampleId: "leakage-01" },
     state,
     version,
     createdAt: "2026-07-14T09:01:00.000Z",
@@ -110,7 +117,13 @@ function installApi(
     rejectLiveBelief?: boolean;
   } = {},
 ) {
-  let activeMode: "instant" | "live" = "instant";
+  let activeMode:
+    | { kind: "sample_lesson"; sampleId: "leakage-01" }
+    | { kind: "live_notebook" } = {
+    kind: "sample_lesson",
+    sampleId: "leakage-01",
+  };
+  let activeArtifactId = artifact.artifactId;
   const fetcher = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
@@ -126,16 +139,29 @@ function installApi(
           requestId: "request_ui",
         });
       }
-      if (path === "/api/artifacts") return response(artifact, 201);
-      if (path === "/api/sessions") {
-        const body = JSON.parse(String(init?.body)) as {
-          mode: "instant" | "live";
-        };
-        activeMode = body.mode;
+      if (path === "/api/artifacts") {
+        return response(
+          init?.body instanceof FormData ? uploadedArtifact : artifact,
+          201,
+        );
+      }
+      if (path === "/api/sample/sessions") {
+        activeMode = { kind: "sample_lesson", sampleId: "leakage-01" };
         return response(session("INGESTED", 1, { mode: activeMode }), 201);
       }
+      if (path === "/api/live/sessions") {
+        activeMode = { kind: "live_notebook" };
+        activeArtifactId = uploadedArtifact.artifactId;
+        return response(
+          session("INGESTED", 1, {
+            artifactId: activeArtifactId,
+            mode: activeMode,
+          }),
+          201,
+        );
+      }
       if (path.endsWith("/belief-test")) {
-        if (activeMode === "live" && options.rejectLiveBelief) {
+        if (activeMode.kind === "live_notebook" && options.rejectLiveBelief) {
           return errorResponse(
             "LIVE_UNAVAILABLE",
             "Responses endpoint authentication failed",
@@ -144,19 +170,28 @@ function installApi(
         }
         return response(
           session("BELIEF_TEST_PROPOSED", 2, {
+            artifactId: activeArtifactId,
             mode: activeMode,
-            ...(activeMode === "live" ? { beliefTest: liveBeliefTest } : {}),
+            ...(activeMode.kind === "live_notebook"
+              ? { beliefTest: liveBeliefTest }
+              : {}),
           }),
         );
       }
       if (path.endsWith("/belief-test/confirm")) {
         return response(
-          session("BELIEF_TEST_CONFIRMED", 3, { mode: activeMode }),
+          session("BELIEF_TEST_CONFIRMED", 3, {
+            artifactId: activeArtifactId,
+            mode: activeMode,
+          }),
         );
       }
       if (path.endsWith("/prediction")) {
         return response(
-          session("PREDICTION_COMMITTED", 4, { mode: activeMode }),
+          session("PREDICTION_COMMITTED", 4, {
+            artifactId: activeArtifactId,
+            mode: activeMode,
+          }),
           201,
         );
       }
@@ -293,7 +328,7 @@ describe("CounterLab judged flow", () => {
     expect(document.body).not.toHaveTextContent(/OPENAI|GPT-|https?:\/\//i);
   });
 
-  it("starts a configured live sample, renders returned hypotheses, and stops at the local runner", async () => {
+  it("starts a configured live notebook, renders returned hypotheses, and stops at the local runner", async () => {
     const user = userEvent.setup();
     const fetcher = installApi({ liveGpt: "configured" });
     render(<App />);
@@ -311,6 +346,15 @@ describe("CounterLab judged flow", () => {
       await screen.findByRole("heading", {
         name: /what do you think the score means/i,
       }),
+    ).toBeInTheDocument();
+    await user.upload(
+      screen.getByLabelText(/use a different notebook/i),
+      new File(["{}"], uploadedArtifact.fileName, {
+        type: "application/json",
+      }),
+    );
+    expect(
+      await screen.findByText(uploadedArtifact.fileName),
     ).toBeInTheDocument();
     await user.type(
       screen.getByLabelText(/your claim/i),
@@ -342,8 +386,10 @@ describe("CounterLab judged flow", () => {
       ),
     ).toBe(false);
     expect(
-      fetcher.mock.calls.some(([, init]) =>
-        String(init?.body).includes('"mode":"live"'),
+      fetcher.mock.calls.some(
+        ([path, init]) =>
+          String(path) === "/api/live/sessions" &&
+          String(init?.body).includes(uploadedArtifact.artifactId),
       ),
     ).toBe(true);
   });
@@ -356,6 +402,12 @@ describe("CounterLab judged flow", () => {
     await user.click(screen.getByRole("button", { name: /generate live/i }));
     await user.click(
       await screen.findByRole("button", { name: /continue with my notebook/i }),
+    );
+    await user.upload(
+      screen.getByLabelText(/use a different notebook/i),
+      new File(["{}"], uploadedArtifact.fileName, {
+        type: "application/json",
+      }),
     );
     await user.type(
       await screen.findByLabelText(/your claim/i),

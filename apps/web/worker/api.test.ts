@@ -6,6 +6,7 @@ import type { ArtifactManifest } from "@counterlab/contracts";
 import type {
   CounterLabSession,
   EvidenceEvent,
+  SessionMode,
   SessionRepository,
 } from "@counterlab/session-core";
 import { createEvidenceEvent } from "@counterlab/session-core";
@@ -98,7 +99,7 @@ class ConflictSessionRepository extends MemorySessionRepository {
 }
 
 async function sessionHarness(
-  mode: "instant" | "live",
+  mode: "sample" | "live",
   sessionRepository: MemorySessionRepository = new MemorySessionRepository(),
 ) {
   const artifactStore = new MemoryArtifactStore();
@@ -117,14 +118,20 @@ async function sessionHarness(
   const artifactBody = (await artifactResponse.json()) as {
     data: ArtifactManifest;
   };
-  const sessionResponse = await app.request("/api/sessions", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      artifactId: artifactBody.data.artifactId,
-      mode,
-    }),
-  });
+  const sessionResponse =
+    mode === "sample"
+      ? await postJson(app, "/api/sample/sessions", {
+          sampleId: "leakage-01",
+        })
+      : await (async () => {
+          const uploaded = await saveUploadedArtifact(
+            artifactStore,
+            artifactBody.data.artifactId,
+          );
+          return postJson(app, "/api/live/sessions", {
+            artifactId: uploaded.artifactId,
+          });
+        })();
   const sessionBody = (await sessionResponse.json()) as {
     data: { sessionId: string };
   };
@@ -158,7 +165,7 @@ async function seedSession(
   input: {
     id: string;
     artifactId: string;
-    mode: "instant" | "live" | "replay";
+    mode: SessionMode;
     state: CounterLabSession["state"];
     version: number;
   },
@@ -200,27 +207,87 @@ async function postJson(
 }
 
 describe("Cloudflare Worker API", () => {
-  it("rejects a non-sample artifact at the sample-lesson session boundary", async () => {
-    const harness = await sessionHarness("instant");
+  it("creates sample, live, and replay sessions only through mode-specific routes", async () => {
+    const harness = await sessionHarness("sample");
     const uploaded = await saveUploadedArtifact(
       harness.artifactStore,
       harness.artifactId,
     );
 
-    const response = await postJson(harness.app, "/api/sessions", {
-      artifactId: uploaded.artifactId,
-      mode: "instant",
+    const sample = await postJson(harness.app, "/api/sample/sessions", {
+      sampleId: "leakage-01",
+    });
+    expect(sample.status).toBe(201);
+    await expect(sample.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        artifactId: harness.artifactId,
+        mode: { kind: "sample_lesson", sampleId: "leakage-01" },
+      },
     });
 
-    expect(response.status).toBe(409);
+    const live = await postJson(harness.app, "/api/live/sessions", {
+      artifactId: uploaded.artifactId,
+    });
+    expect(live.status).toBe(201);
+    await expect(live.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        artifactId: uploaded.artifactId,
+        mode: { kind: "live_notebook" },
+      },
+    });
+
+    const replay = await postJson(harness.app, "/api/replay/sessions", {
+      replayId: "leakage-01",
+    });
+    expect(replay.status).toBe(201);
+    await expect(replay.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        artifactId: harness.artifactId,
+        mode: { kind: "verified_replay", replayId: "leakage-01" },
+      },
+    });
+  });
+
+  it("rejects cross-mode fields and retires generic mode selection", async () => {
+    const harness = await sessionHarness("sample");
+
+    const crossed = await postJson(harness.app, "/api/live/sessions", {
+      artifactId: harness.artifactId,
+      sampleId: "leakage-01",
+    });
+    expect(crossed.status).toBe(400);
+
+    const generic = await postJson(harness.app, "/api/sessions", {
+      artifactId: harness.artifactId,
+      mode: "instant",
+    });
+    expect(generic.status).toBe(404);
+  });
+
+  it("rejects a non-sample artifact at the sample-lesson session boundary", async () => {
+    const harness = await sessionHarness("sample");
+    const uploaded = await saveUploadedArtifact(
+      harness.artifactStore,
+      harness.artifactId,
+    );
+
+    const response = await postJson(harness.app, "/api/sample/sessions", {
+      sampleId: "leakage-01",
+      artifactId: uploaded.artifactId,
+    });
+
+    expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({
       ok: false,
-      error: { code: "MODE_ARTIFACT_MISMATCH" },
+      error: { code: "VALIDATION_ERROR" },
     });
   });
 
   it("does not grant sample authority to a separately uploaded copy with the same hash", async () => {
-    const harness = await sessionHarness("instant");
+    const harness = await sessionHarness("sample");
     const sample = await harness.artifactStore.find(harness.artifactId);
     if (sample === undefined) throw new Error("sample artifact is missing");
     const copiedManifest = {
@@ -230,20 +297,20 @@ describe("Cloudflare Worker API", () => {
     } satisfies ArtifactManifest;
     await harness.artifactStore.save(copiedManifest, "uploads/copied.ipynb");
 
-    const response = await postJson(harness.app, "/api/sessions", {
+    const response = await postJson(harness.app, "/api/sample/sessions", {
+      sampleId: "leakage-01",
       artifactId: copiedManifest.artifactId,
-      mode: "instant",
     });
 
-    expect(response.status).toBe(409);
+    expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({
       ok: false,
-      error: { code: "MODE_ARTIFACT_MISMATCH" },
+      error: { code: "VALIDATION_ERROR" },
     });
   });
 
   it("never attaches the bundled sample result to a non-sample artifact", async () => {
-    const harness = await sessionHarness("instant");
+    const harness = await sessionHarness("sample");
     const uploaded = await saveUploadedArtifact(
       harness.artifactStore,
       harness.artifactId,
@@ -252,7 +319,7 @@ describe("Cloudflare Worker API", () => {
     await seedSession(harness.sessionRepository, {
       id: sessionId,
       artifactId: uploaded.artifactId,
-      mode: "live",
+      mode: { kind: "live_notebook" },
       state: "LAB_VERIFIED",
       version: 6,
     });
@@ -273,7 +340,7 @@ describe("Cloudflare Worker API", () => {
   });
 
   it("never persists the bundled sample patch for a non-sample artifact", async () => {
-    const harness = await sessionHarness("instant");
+    const harness = await sessionHarness("sample");
     const uploaded = await saveUploadedArtifact(
       harness.artifactStore,
       harness.artifactId,
@@ -282,7 +349,7 @@ describe("Cloudflare Worker API", () => {
     await seedSession(harness.sessionRepository, {
       id: sessionId,
       artifactId: uploaded.artifactId,
-      mode: "live",
+      mode: { kind: "live_notebook" },
       state: "TRANSFER_PASSED",
       version: 10,
     });
@@ -300,6 +367,69 @@ describe("Cloudflare Worker API", () => {
     const stored = await harness.sessionRepository.find(sessionId);
     expect(stored?.state).toBe("TRANSFER_PASSED");
     expect(stored).not.toHaveProperty("patchResult");
+  });
+
+  it("never scores the bundled sample transfer for a live artifact", async () => {
+    const harness = await sessionHarness("sample");
+    const uploaded = await saveUploadedArtifact(
+      harness.artifactStore,
+      harness.artifactId,
+    );
+    const sessionId = "session_uploaded_transfer_guard";
+    await seedSession(harness.sessionRepository, {
+      id: sessionId,
+      artifactId: uploaded.artifactId,
+      mode: { kind: "live_notebook" },
+      state: "REVISION_RECORDED",
+      version: 8,
+    });
+
+    const response = await postJson(
+      harness.app,
+      `/api/sessions/${sessionId}/transfer`,
+      {
+        strategyChoice: "time_ordered_holdout",
+        riskChoice: "centered_window_reads_future",
+        evidenceChoices: ["center_true_uses_later_targets"],
+      },
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "ARTIFACT_TRANSFER_MISMATCH" },
+    });
+    const stored = await harness.sessionRepository.find(sessionId);
+    expect(stored?.state).toBe("REVISION_RECORDED");
+    expect(stored).not.toHaveProperty("transferResult");
+  });
+
+  it("keeps verified replay sessions read-only", async () => {
+    const harness = await sessionHarness("sample");
+    const created = await postJson(harness.app, "/api/replay/sessions", {
+      replayId: "leakage-01",
+    });
+    const body = (await created.json()) as { data: { sessionId: string } };
+
+    const response = await postJson(
+      harness.app,
+      `/api/sessions/${body.data.sessionId}/belief-test`,
+      {
+        learnerClaim:
+          "The notebook accuracy proves generalization to new customers.",
+      },
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "REPLAY_READ_ONLY" },
+    });
+    const stored = await harness.sessionRepository.find(body.data.sessionId);
+    expect(stored?.state).toBe("INGESTED");
+    expect(
+      await harness.sessionRepository.listEvents(body.data.sessionId),
+    ).toHaveLength(1);
   });
 
   it("reports honest edge and local-runner capabilities", async () => {
@@ -350,7 +480,7 @@ describe("Cloudflare Worker API", () => {
   });
 
   it("retrieves stored artifact evidence without returning notebook bytes", async () => {
-    const harness = await sessionHarness("instant");
+    const harness = await sessionHarness("sample");
     const response = await harness.app.request(
       `/api/artifacts/${harness.artifactId}`,
     );
@@ -404,7 +534,7 @@ describe("Cloudflare Worker API", () => {
 
   it("stores approved-sample provenance for an instant Belief Test", async () => {
     const { app, sessionId, sessionRepository } =
-      await sessionHarness("instant");
+      await sessionHarness("sample");
 
     const response = await app.request(
       `/api/sessions/${sessionId}/belief-test`,
@@ -423,7 +553,7 @@ describe("Cloudflare Worker API", () => {
       ok: true,
       data: {
         sessionId,
-        mode: "instant",
+        mode: { kind: "sample_lesson", sampleId: "leakage-01" },
         state: "BELIEF_TEST_PROPOSED",
       },
     });
@@ -554,7 +684,7 @@ describe("Cloudflare Worker API", () => {
 
   it("persists the evidence-gated instant path through a verified patch", async () => {
     const { app, sessionId, sessionRepository } =
-      await sessionHarness("instant");
+      await sessionHarness("sample");
     const route = `/api/sessions/${sessionId}`;
 
     expect(
@@ -691,7 +821,7 @@ describe("Cloudflare Worker API", () => {
 
   it("maps a lost D1 optimistic update to a typed conflict", async () => {
     const repository = new ConflictSessionRepository();
-    const { app, sessionId } = await sessionHarness("instant", repository);
+    const { app, sessionId } = await sessionHarness("sample", repository);
     const route = `/api/sessions/${sessionId}`;
 
     await postJson(app, `${route}/belief-test`, {

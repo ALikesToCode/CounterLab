@@ -25,8 +25,8 @@ Phase 2 — Upgrade plan and regression boundary
 - [x] Create `docs/FIRST_PRIZE_UPGRADE_PLAN.md` from repository evidence.
 - [x] Add failing tests for sample leakage, concept advertising, and configured
       runner dead ends.
-- [ ] Separate sample/live/replay contracts and route validation.
-- **Status:** in_progress
+- [x] Separate sample/live/replay contracts and route validation.
+- **Status:** complete
 
 ### Phase 3: Hosted artifact-specific leakage vertical slice
 
@@ -34,7 +34,7 @@ Phase 2 — Upgrade plan and regression boundary
 - [ ] Add authenticated runner service/test runner and fixed plan interpreter.
 - [ ] Compile, verify, repair, run, patch, and stream an uploaded leakage notebook.
 - [ ] Add artifact-specific proof and patch download.
-- **Status:** pending
+- **Status:** in_progress
 
 ### Phase 4: CounterLab Studio product shell
 
@@ -87,6 +87,8 @@ Phase 2 — Upgrade plan and regression boundary
 | Combined plan/progress patch used stale task-plan table context | 1 | Split the plan document creation from exact-context status updates. |
 | Root Vitest config found no Worker test for a direct `apps/web/worker` filter | 1 | Run the test through `apps/web/vitest.config.ts`. |
 | A combined Git diff command produced output too large for the tool response | 1 | Switched to `git status`, `git diff --stat`, and bounded per-file diffs. |
+| Focused mode-migration test output expanded to a large DOM dump and was truncated | 1 | Used the failure summary and reran individual failing tests after correcting their explicit assumptions. |
+| Repository-wide Prettier check reported 46 pre-existing style issues, mostly generated/replay and unrelated files | 1 | Kept scope reviewable, formatted every changed code file, and used `git diff --check`; the repository-wide backlog remains explicit. |
 
 ## Notes
 

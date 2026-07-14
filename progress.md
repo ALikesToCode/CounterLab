@@ -82,6 +82,14 @@
     cannot acquire the registered sample lesson's authority.
   - Added the strict discriminated `SessionMode` contract for sample lesson,
     live notebook, and verified replay; cross-mode fields are rejected.
+  - Migrated session aggregates, D1/SQLite reads, Worker endpoints, API client,
+    and React restore logic to the discriminated mode contract. Legacy stored
+    strings normalize on read but are rejected for newly created sessions.
+  - Added separate sample/live/replay session routes, retired generic client
+    mode selection, made replays read-only, and blocked sample transfer reuse
+    by live artifacts.
+  - Changed live entry to require an uploaded notebook before creating the live
+    session; the bundled sample is no longer substituted for live analysis.
 - Files created/modified:
   - `task_plan.md`
   - `findings.md`
@@ -105,6 +113,13 @@
 | Web Vitest | authority and runner-capability slice | Preserve Worker/UI/API behavior | 34 passed | pass |
 | Typecheck | authority and mode-contract slice | Strict TypeScript remains valid | passed | pass |
 | CloakBrowser E2E | authority and copy slice | Existing lesson, replay, resume, upload, keyboard paths remain valid | 13 passed in 27.6s | pass |
+| Mode route regressions (red) | pre-migration Worker | Separate mode endpoints and strict cross-mode bodies | 2 expected 404 failures reproduced | pass |
+| Live transfer/replay mutation regressions (red) | pre-guard Worker | Reject sample transfer for live and all replay writes | 2 expected 200-to-409 failures reproduced | pass |
+| Root Vitest | mode-migrated tree | Contracts, persisted state, proof, clients remain green | 106 passed | pass |
+| Web Vitest | mode-migrated tree | Worker, API, and React mode boundaries remain green | 38 passed | pass |
+| Typecheck | mode-migrated tree | Strict TypeScript and Worker types pass | passed | pass |
+| CloakBrowser E2E | mode-migrated tree | Existing 13 judged paths remain green | 13 passed in 27.7s | pass |
+| Repository Prettier check | full repository | No formatting differences | 46 pre-existing/unrelated files reported | fail |
 
 ## Error Log
 
@@ -115,12 +130,14 @@
 | 2026-07-15 | Combined plan/progress patch used stale task-plan table context | 1 | Split document creation from exact-context progress updates. |
 | 2026-07-15 | Root Vitest config excluded the targeted Worker test | 1 | Switched to the web Vitest configuration. |
 | 2026-07-15 | Combined Git diff output exceeded the response budget | 1 | Switched to bounded status, stat, and per-file diff inspection. |
+| 2026-07-15 | Focused mode-migration failures emitted a truncated DOM dump | 1 | Isolated the four failures from the summary and switched to individual reruns. |
+| 2026-07-15 | Repository-wide Prettier check reported 46 existing style differences | 1 | Formatted all changed code and kept unrelated generated/replay files untouched; use diff-local validation for this slice. |
 
 ## 5-Question Reboot Check
 
 | Question | Answer |
 | --- | --- |
-| Where am I? | Phase 2 regression boundary and explicit mode migration. |
+| Where am I? | Phase 3 runner jobs and hosted leakage vertical slice. |
 | Where am I going? | Regression boundary, hosted leakage runner, Studio UX, imbalance, held-out release. |
 | What's the goal? | A real public artifact-specific CounterLab Studio with two verified concepts. |
 | What have I learned? | See `findings.md`. |

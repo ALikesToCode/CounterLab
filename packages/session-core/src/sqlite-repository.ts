@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import {
   type CounterLabSession,
   type EvidenceEvent,
+  normalizeSessionAggregate,
   SessionAlreadyExistsError,
 } from "./domain.js";
 import type { SessionRepository } from "./repository.js";
@@ -111,7 +112,11 @@ export class SqliteSessionRepository implements SessionRepository {
       .get(sessionId) as { aggregate_json: string } | undefined;
     return row === undefined
       ? undefined
-      : (JSON.parse(row.aggregate_json) as CounterLabSession);
+      : normalizeSessionAggregate(
+          JSON.parse(row.aggregate_json) as Omit<CounterLabSession, "mode"> & {
+            mode: unknown;
+          },
+        );
   }
 
   async save(

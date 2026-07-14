@@ -1,5 +1,6 @@
 import {
   SessionAlreadyExistsError,
+  normalizeSessionAggregate,
   type CounterLabSession,
   type EvidenceEvent,
   type SessionRepository,
@@ -58,7 +59,11 @@ export class D1SessionRepository implements SessionRepository {
       .first<{ aggregate_json: string }>();
     return row === null
       ? undefined
-      : (JSON.parse(row.aggregate_json) as CounterLabSession);
+      : normalizeSessionAggregate(
+          JSON.parse(row.aggregate_json) as Omit<CounterLabSession, "mode"> & {
+            mode: unknown;
+          },
+        );
   }
 
   async save(
@@ -108,10 +113,7 @@ export class D1SessionRepository implements SessionRepository {
       eventInsert,
       sessionUpdate,
     ])) as D1Changes[];
-    if (
-      results[0]?.meta?.changes !== 1 ||
-      results[1]?.meta?.changes !== 1
-    ) {
+    if (results[0]?.meta?.changes !== 1 || results[1]?.meta?.changes !== 1) {
       throw new ConcurrentD1SessionUpdateError(session.id);
     }
   }

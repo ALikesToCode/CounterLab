@@ -8,11 +8,30 @@ import {
   type ProofBundle,
   type ReasoningDiff,
   type SessionState,
+  SessionModeSchema,
+  type SessionMode as ContractSessionMode,
   type TransferResult,
   type VerifiedResultSet,
 } from "@counterlab/contracts";
 
-export type SessionMode = "instant" | "live" | "replay";
+export type SessionMode = ContractSessionMode;
+
+export function normalizeSessionMode(value: unknown): SessionMode {
+  if (value === "instant") {
+    return { kind: "sample_lesson", sampleId: "leakage-01" };
+  }
+  if (value === "live") return { kind: "live_notebook" };
+  if (value === "replay") {
+    return { kind: "verified_replay", replayId: "leakage-01" };
+  }
+  return SessionModeSchema.parse(value);
+}
+
+export function normalizeSessionAggregate(
+  value: Omit<CounterLabSession, "mode"> & { mode: unknown },
+): CounterLabSession {
+  return { ...value, mode: normalizeSessionMode(value.mode) };
+}
 
 export type JsonRecord = Record<string, unknown>;
 
@@ -107,7 +126,7 @@ export function createSessionAggregate(input: {
   return {
     id: input.id,
     artifactId: input.artifactId,
-    mode: input.mode,
+    mode: SessionModeSchema.parse(input.mode),
     state: "INGESTED",
     version: 1,
     createdAt: input.timestamp,

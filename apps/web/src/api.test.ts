@@ -25,7 +25,7 @@ const artifact: ArtifactManifest = {
 const session = {
   sessionId: "session_1",
   artifactId: artifact.artifactId,
-  mode: "instant" as const,
+  mode: { kind: "sample_lesson", sampleId: "leakage-01" } as const,
   state: "INGESTED" as const,
   version: 1,
   createdAt: "2026-07-14T10:01:00.000Z",
@@ -122,32 +122,57 @@ describe("CounterLabApiClient", () => {
     expect(new Headers(request?.headers).has("content-type")).toBe(false);
   });
 
-  it("creates and retrieves typed session views", async () => {
+  it("creates mode-specific typed session views and retrieves a session", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(jsonResponse({ ok: true, data: session }, 201))
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            ok: true,
+            data: { ...session, mode: { kind: "live_notebook" } },
+          },
+          201,
+        ),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            ok: true,
+            data: {
+              ...session,
+              mode: { kind: "verified_replay", replayId: "leakage-01" },
+            },
+          },
+          201,
+        ),
+      )
       .mockResolvedValueOnce(jsonResponse({ ok: true, data: session }));
     const client = new CounterLabApiClient({ fetch: fetcher });
 
     await expect(
-      client.createSession({
-        artifactId: artifact.artifactId,
-        mode: "instant",
-      }),
+      client.createSampleSession({ sampleId: "leakage-01" }),
     ).resolves.toEqual(session);
+    await expect(
+      client.createLiveSession({ artifactId: artifact.artifactId }),
+    ).resolves.toMatchObject({ mode: { kind: "live_notebook" } });
+    await expect(
+      client.createReplaySession({ replayId: "leakage-01" }),
+    ).resolves.toMatchObject({
+      mode: { kind: "verified_replay", replayId: "leakage-01" },
+    });
     await expect(client.getSession("session_1")).resolves.toEqual(session);
 
     expect(fetcher.mock.calls[0]).toEqual([
-      "/api/sessions",
+      "/api/sample/sessions",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({
-          artifactId: artifact.artifactId,
-          mode: "instant",
-        }),
+        body: JSON.stringify({ sampleId: "leakage-01" }),
       }),
     ]);
-    expect(fetcher.mock.calls[1]).toEqual([
+    expect(fetcher.mock.calls[1]?.[0]).toBe("/api/live/sessions");
+    expect(fetcher.mock.calls[2]?.[0]).toBe("/api/replay/sessions");
+    expect(fetcher.mock.calls[3]).toEqual([
       "/api/sessions/session_1",
       expect.objectContaining({ method: "GET" }),
     ]);

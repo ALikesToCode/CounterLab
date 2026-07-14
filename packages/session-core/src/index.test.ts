@@ -7,6 +7,7 @@ import { verifyEvidenceChain } from "../../proof-bundle/src/index.js";
 
 import {
   InvalidSessionTransitionError,
+  normalizeSessionMode,
   PredictionAlreadyCommittedError,
   SessionService,
 } from "./index.js";
@@ -213,7 +214,7 @@ async function throughExperiment(service: SessionService) {
   await service.createSession({
     id: "session-1",
     artifactId: "artifact-1",
-    mode: "instant",
+    mode: { kind: "sample_lesson", sampleId: "leakage-01" },
   });
   await service.proposeBeliefTest("session-1", beliefTest);
   await service.confirmBeliefTest("session-1");
@@ -232,12 +233,34 @@ afterEach(() => {
 });
 
 describe("SessionService state machine", () => {
+  it("normalizes legacy persisted modes but rejects them for new sessions", async () => {
+    expect(normalizeSessionMode("instant")).toEqual({
+      kind: "sample_lesson",
+      sampleId: "leakage-01",
+    });
+    expect(normalizeSessionMode("live")).toEqual({ kind: "live_notebook" });
+    expect(normalizeSessionMode("replay")).toEqual({
+      kind: "verified_replay",
+      replayId: "leakage-01",
+    });
+
+    const { service, repository } = memoryService();
+    await expect(
+      service.createSession({
+        id: "legacy-mode-session",
+        artifactId: "artifact-1",
+        mode: "instant" as never,
+      }),
+    ).rejects.toThrow();
+    repository.close();
+  });
+
   it("rejects illegal transitions and never publishes a result before prediction", async () => {
     const { service, repository } = memoryService();
     await service.createSession({
       id: "session-1",
       artifactId: "artifact-1",
-      mode: "instant",
+      mode: { kind: "sample_lesson", sampleId: "leakage-01" },
     });
 
     await expect(
@@ -257,7 +280,7 @@ describe("SessionService state machine", () => {
     await service.createSession({
       id: "session-1",
       artifactId: "artifact-1",
-      mode: "instant",
+      mode: { kind: "sample_lesson", sampleId: "leakage-01" },
     });
     await service.proposeBeliefTest("session-1", beliefTest);
 
@@ -275,7 +298,7 @@ describe("SessionService state machine", () => {
     await service.createSession({
       id: "session-2",
       artifactId: "artifact-1",
-      mode: "instant",
+      mode: { kind: "sample_lesson", sampleId: "leakage-01" },
     });
     await service.proposeBeliefTest("session-2", {
       ...beliefTest,
@@ -292,7 +315,7 @@ describe("SessionService state machine", () => {
     await service.createSession({
       id: "session-3",
       artifactId: "artifact-1",
-      mode: "instant",
+      mode: { kind: "sample_lesson", sampleId: "leakage-01" },
     });
     await service.proposeBeliefTest("session-3", {
       ...beliefTest,
@@ -314,7 +337,7 @@ describe("SessionService state machine", () => {
     await service.createSession({
       id: "session-1",
       artifactId: "artifact-1",
-      mode: "instant",
+      mode: { kind: "sample_lesson", sampleId: "leakage-01" },
     });
 
     await expect(
@@ -329,7 +352,7 @@ describe("SessionService state machine", () => {
     await service.createSession({
       id: "session-1",
       artifactId: "artifact-1",
-      mode: "instant",
+      mode: { kind: "sample_lesson", sampleId: "leakage-01" },
     });
 
     await expect(
@@ -348,7 +371,7 @@ describe("SessionService state machine", () => {
     await service.createSession({
       id: "session-1",
       artifactId: "artifact-1",
-      mode: "instant",
+      mode: { kind: "sample_lesson", sampleId: "leakage-01" },
     });
     await service.proposeBeliefTest("session-1", beliefTest);
     await service.confirmBeliefTest("session-1");
@@ -384,7 +407,7 @@ describe("SessionService state machine", () => {
     await service.createSession({
       id: "session-1",
       artifactId: "artifact-1",
-      mode: "instant",
+      mode: { kind: "sample_lesson", sampleId: "leakage-01" },
     });
     await service.proposeBeliefTest("session-1", beliefTest);
     await service.confirmBeliefTest("session-1");
@@ -393,11 +416,11 @@ describe("SessionService state machine", () => {
 
     const adapterHash = "a".repeat(64);
     const verifierHash = "b".repeat(64);
-    await service.verifyLab(
-      "session-1",
-      { status: "VERIFIED" },
-      [adapterHash, verifierHash, adapterHash],
-    );
+    await service.verifyLab("session-1", { status: "VERIFIED" }, [
+      adapterHash,
+      verifierHash,
+      adapterHash,
+    ]);
     expect(
       (await service.listEvents("session-1")).at(-1)?.outputHashes,
     ).toEqual(expect.arrayContaining([adapterHash, verifierHash]));
@@ -406,7 +429,7 @@ describe("SessionService state machine", () => {
     await second.service.createSession({
       id: "session-2",
       artifactId: "artifact-1",
-      mode: "instant",
+      mode: { kind: "sample_lesson", sampleId: "leakage-01" },
     });
     await second.service.proposeBeliefTest("session-2", {
       ...beliefTest,
@@ -421,11 +444,9 @@ describe("SessionService state machine", () => {
     });
     await second.service.startLabCompilation("session-2");
     await expect(
-      second.service.verifyLab(
-        "session-2",
-        { status: "VERIFIED" },
-        ["not-a-hash"],
-      ),
+      second.service.verifyLab("session-2", { status: "VERIFIED" }, [
+        "not-a-hash",
+      ]),
     ).rejects.toThrow(/SHA-256/);
     repository.close();
     second.repository.close();
@@ -436,7 +457,7 @@ describe("SessionService state machine", () => {
     await service.createSession({
       id: "session-1",
       artifactId: "artifact-1",
-      mode: "instant",
+      mode: { kind: "sample_lesson", sampleId: "leakage-01" },
     });
     await service.proposeBeliefTest("session-1", beliefTest);
     await service.confirmBeliefTest("session-1");
@@ -654,7 +675,7 @@ describe("SqliteSessionRepository", () => {
     await service.createSession({
       id: "session-1",
       artifactId: "artifact-1",
-      mode: "instant",
+      mode: { kind: "sample_lesson", sampleId: "leakage-01" },
     });
     await service.proposeBeliefTest("session-1", beliefTest);
     await service.editBeliefTest("session-1", {
