@@ -212,22 +212,70 @@ export async function hashCanonical(value: unknown): Promise<string> {
 }
 
 export function canonicalJson(value: unknown): string {
-  return JSON.stringify(canonicalValue(value));
+  return JSON.stringify(canonicalValue(value, new WeakSet<object>()));
 }
 
-function canonicalValue(value: unknown): unknown {
+type CanonicalValue =
+  | null
+  | boolean
+  | number
+  | string
+  | CanonicalValue[]
+  | { [key: string]: CanonicalValue };
+
+function canonicalValue(
+  value: unknown,
+  ancestors: WeakSet<object>,
+): CanonicalValue {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new TypeError("canonical JSON does not support non-finite numbers");
+    }
+    return Object.is(value, -0) ? 0 : value;
+  }
   if (Array.isArray(value)) {
-    return value.map((item) => canonicalValue(item));
+    if (ancestors.has(value)) {
+      throw new TypeError("canonical JSON does not support cyclic values");
+    }
+    ancestors.add(value);
+    const normalized: CanonicalValue[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      if (!(index in value)) {
+        throw new TypeError("canonical JSON does not support sparse arrays");
+      }
+      normalized.push(canonicalValue(value[index], ancestors));
+    }
+    ancestors.delete(value);
+    return normalized;
   }
-  if (value !== null && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .filter(([, item]) => item !== undefined)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, item]) => [key, canonicalValue(item)]),
-    );
+  if (typeof value === "object") {
+    const object = value as object;
+    const prototype = Object.getPrototypeOf(object);
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new TypeError("canonical JSON supports only plain objects");
+    }
+    if (ancestors.has(object)) {
+      throw new TypeError("canonical JSON does not support cyclic values");
+    }
+    ancestors.add(object);
+    const normalized: Record<string, CanonicalValue> = {};
+    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+      normalized[key] = canonicalValue(
+        (value as Record<string, unknown>)[key],
+        ancestors,
+      );
+    }
+    ancestors.delete(object);
+    return normalized;
   }
-  return value;
+  throw new TypeError(`canonical JSON does not support ${typeof value} values`);
 }
 
 export function asJsonRecord(value: unknown, label: string): JsonRecord {
