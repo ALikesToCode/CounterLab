@@ -148,6 +148,8 @@ describe("Cloudflare Worker API", () => {
     const body = (await response.json()) as {
       data: {
         replayId: string;
+        modelId: string;
+        compilerTrace: { trace: Array<{ status: string }> };
         result: { resultHash: string; runs: unknown[] };
       };
     };
@@ -156,6 +158,13 @@ describe("Cloudflare Worker API", () => {
       "2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0",
     );
     expect(body.data.result.runs).toHaveLength(3);
+    expect(body.data.modelId).toBe("gpt-5.6-sol");
+    expect(
+      body.data.compilerTrace.trace.some(
+        (event) => event.status === "REJECTED",
+      ),
+    ).toBe(true);
+    expect(body.data.compilerTrace.trace.at(-1)?.status).toBe("VERIFIED");
   });
 
   it("returns a typed error for an unknown replay", async () => {

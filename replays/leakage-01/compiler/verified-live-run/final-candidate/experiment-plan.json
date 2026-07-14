@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "1",
+  "concept": "entity_leakage",
+  "datasetAdapter": "artifact-adapter.py:build_experiment",
+  "competingHypotheses": [
+    "The notebook's random-row test accuracy demonstrates generalization to new customers.",
+    "Customer identity crosses the random split, so the model recognizes customers instead of generalizing to unseen ones."
+  ],
+  "expectedDiscrimination": [
+    {
+      "runId": "random_row_split",
+      "expectedUnderCurrent": "The random-row accuracy should be representative of performance for previously unseen customers.",
+      "expectedUnderCompeting": "Accuracy should remain high because customer identity is shared across the random train and test rows."
+    },
+    {
+      "runId": "customer_group_split",
+      "expectedUnderCurrent": "Accuracy should remain close to the random-row result when complete customers are held out.",
+      "expectedUnderCompeting": "Accuracy should fall materially when complete customers are held out."
+    },
+    {
+      "runId": "identity_ablation",
+      "expectedUnderCurrent": "Removing customer identity should not materially change accuracy if the remaining features carry the generalizable signal.",
+      "expectedUnderCompeting": "Accuracy should fall materially after customer identity is removed from the random-row evaluation."
+    }
+  ],
+  "runs": [
+    {
+      "id": "random_row_split",
+      "split": "random",
+      "model": "logistic_regression",
+      "seed": 1729
+    },
+    {
+      "id": "customer_group_split",
+      "split": "group",
+      "groupBy": "customer_id",
+      "model": "logistic_regression",
+      "seed": 1729
+    },
+    {
+      "id": "identity_ablation",
+      "split": "random",
+      "dropFeatures": [
+        "customer_id"
+      ],
+      "model": "logistic_regression",
+      "seed": 1729
+    }
+  ],
+  "metrics": [
+    "accuracy"
+  ],
+  "views": [
+    "split_metric_comparison",
+    "entity_overlap"
+  ],
+  "invariants": [
+    "all runs use seed 1729",
+    "customer group split uses customer_id as its entity boundary",
+    "identity ablation drops customer_id",
+    "fixed kernel owns splitting, training, metrics, overlap, and canonical results"
+  ],
+  "resourceLimits": {
+    "wallSeconds": 20,
+    "memoryMb": 512,
+    "maxProcesses": 16,
+    "maxFiles": 8,
+    "maxOutputBytes": 262144
+  }
+}

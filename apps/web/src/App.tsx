@@ -519,10 +519,15 @@ function BuildScreen({
           </ol>
           <div className="verifier-callout">
             <p className="eyebrow aqua">Frozen verifier</p>
-            <strong>Candidate accepted for the documented leakage scope</strong>
+            <strong>
+              {mode === "replay"
+                ? "Later live candidate accepted; rejected run authorized no result"
+                : "Candidate accepted for the documented leakage scope"}
+            </strong>
             <p>
-              Group overlap = 0 · result hash reproduced · chart contract
-              matches payload
+              {mode === "replay"
+                ? "Authenticated App Server trace · 2 capped repairs rejected · later run reproduced the result hash · 12/12 mutations detected"
+                : "Group overlap = 0 · result hash reproduced · chart contract matches payload"}
             </p>
           </div>
         </section>
@@ -531,26 +536,53 @@ function BuildScreen({
           <p className="eyebrow">Event log</p>
           <h2 id="trace-title">Sanitized evidence</h2>
           <ul className="event-list">
-            <li>
-              <time>00:00.0</time>
-              <span>plan</span>
-              <p>Loaded approved entity-leakage contract</p>
-            </li>
-            <li>
-              <time>00:00.2</time>
-              <span>file</span>
-              <p>experiment-plan.json</p>
-            </li>
-            <li>
-              <time>00:00.4</time>
-              <span>command</span>
-              <p>public test summary · exit 0</p>
-            </li>
-            <li>
-              <time>00:01.3</time>
-              <span>verifier</span>
-              <p>12 invariants accepted</p>
-            </li>
+            {mode === "replay" ? (
+              <>
+                <li>
+                  <time>02:21</time>
+                  <span>rejected</span>
+                  <p>Unsupported SDK argument · constrained tests exit 20</p>
+                </li>
+                <li>
+                  <time>03:30</time>
+                  <span>repair 1</span>
+                  <p>SDK fixed; exact-file policy found __pycache__</p>
+                </li>
+                <li>
+                  <time>04:40</time>
+                  <span>repair 2</span>
+                  <p>Repair cap reached · rejected run produced no result</p>
+                </li>
+                <li>
+                  <time>01:19</time>
+                  <span>later run</span>
+                  <p>Separate live candidate verified · not called repair 3</p>
+                </li>
+              </>
+            ) : (
+              <>
+                <li>
+                  <time>00:00.0</time>
+                  <span>plan</span>
+                  <p>Loaded approved entity-leakage contract</p>
+                </li>
+                <li>
+                  <time>00:00.2</time>
+                  <span>file</span>
+                  <p>experiment-plan.json</p>
+                </li>
+                <li>
+                  <time>00:00.4</time>
+                  <span>command</span>
+                  <p>public test summary · exit 0</p>
+                </li>
+                <li>
+                  <time>00:01.3</time>
+                  <span>verifier</span>
+                  <p>18 invariants accepted · 12/12 mutations detected</p>
+                </li>
+              </>
+            )}
           </ul>
           <dl className="trace-meta">
             <div>
@@ -567,8 +599,18 @@ function BuildScreen({
             </div>
             <div>
               <dt>Network</dt>
-              <dd>Not required</dd>
+              <dd>
+                {mode === "replay"
+                  ? "Denied in candidate runner"
+                  : "Not required"}
+              </dd>
             </div>
+            {mode === "replay" && (
+              <div>
+                <dt>Generation isolation</dt>
+                <dd>Partial · host-global skill files were readable</dd>
+              </div>
+            )}
           </dl>
         </aside>
       </div>

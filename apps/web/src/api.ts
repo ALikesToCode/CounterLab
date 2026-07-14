@@ -88,6 +88,14 @@ const ReplaySchema = z
     fixtureId: NonEmptyString,
     verifierVersion: NonEmptyString,
     templateCommit: NonEmptyString,
+    compilerTrace: z
+      .object({
+        schemaVersion: z.literal("1"),
+        replayId: NonEmptyString,
+        label: z.literal("Verified replay"),
+        trace: z.array(z.record(z.string(), z.unknown())).min(1),
+      })
+      .passthrough(),
     result: VerifiedResultSetSchema,
     patch: z.record(z.string(), z.unknown()),
   })

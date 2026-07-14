@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "1",
+  "concept": "entity_leakage",
+  "datasetAdapter": "customer_churn",
+  "competingHypotheses": [
+    "The notebook's random-row test accuracy demonstrates generalization to new customers.",
+    "Customer identity crosses the random split, so the model recognizes customers instead of generalizing to unseen ones."
+  ],
+  "expectedDiscrimination": [
+    {
+      "runId": "random_row_split",
+      "expectedUnderCurrent": "Accuracy remains close to the notebook's reported random-row result.",
+      "expectedUnderCompeting": "Accuracy remains high because customer identity is shared across the random split, so this run alone does not establish new-customer generalization."
+    },
+    {
+      "runId": "customer_group_split",
+      "expectedUnderCurrent": "Accuracy remains close to the random-row result when complete customers are held out.",
+      "expectedUnderCompeting": "Accuracy falls materially when complete customers are held out."
+    },
+    {
+      "runId": "identity_ablation",
+      "expectedUnderCurrent": "Accuracy remains close to the random-row result after customer identity is removed.",
+      "expectedUnderCompeting": "Accuracy falls materially after customer identity is removed."
+    }
+  ],
+  "runs": [
+    {
+      "id": "random_row_split",
+      "split": "random",
+      "model": "logistic_regression",
+      "seed": 42
+    },
+    {
+      "id": "customer_group_split",
+      "split": "group",
+      "groupBy": "customer_id",
+      "model": "logistic_regression",
+      "seed": 42
+    },
+    {
+      "id": "identity_ablation",
+      "split": "random",
+      "dropFeatures": [
+        "customer_id"
+      ],
+      "model": "logistic_regression",
+      "seed": 42
+    }
+  ],
+  "metrics": [
+    "accuracy"
+  ],
+  "views": [
+    "accuracy_comparison",
+    "entity_overlap"
+  ],
+  "invariants": [
+    "group_entity_overlap_is_zero",
+    "random_entity_overlap_is_positive",
+    "result_payload_is_canonical_and_deterministic",
+    "metrics_are_kernel_computed"
+  ],
+  "resourceLimits": {
+    "wallSeconds": 20,
+    "memoryMb": 512,
+    "maxProcesses": 16,
+    "maxFiles": 8,
+    "maxOutputBytes": 262144
+  }
+}

@@ -1,7 +1,4 @@
-import {
-  ArtifactManifestSchema,
-  type BeliefTest,
-} from "@counterlab/contracts";
+import { ArtifactManifestSchema, type BeliefTest } from "@counterlab/contracts";
 import {
   ApprovedSampleBeliefAnalyst,
   BeliefAnalystError,
@@ -23,6 +20,7 @@ import { z, ZodError } from "zod";
 
 import patchedNotebookText from "../../../replays/leakage-01/patch/customer_churn_leakage.patched.ipynb?raw";
 import patchKernelResult from "../../../replays/leakage-01/patch-kernel-result.json";
+import compilerReplaySummary from "../../../replays/leakage-01/compiler/replay-summary.json";
 import { D1ArtifactStore, type ArtifactStore } from "./artifact-store";
 import { D1SessionRepository } from "./d1-session-repository";
 import { sampleManifest, sampleResult } from "./sample-evidence";
@@ -70,25 +68,24 @@ const CreateSessionSchema = z
 const BeliefRequestSchema = z
   .object({ learnerClaim: z.string().trim().min(12).max(2000) })
   .strict();
-const ConfirmationSchema = z
-  .discriminatedUnion("action", [
-    z.object({ action: z.literal("confirm") }).strict(),
-    z
-      .object({
-        action: z.literal("edit"),
-        beliefTest: JsonObjectSchema,
-      })
-      .strict(),
-    z
-      .object({ action: z.literal("reject"), reason: z.string().trim().min(1) })
-      .strict(),
-    z
-      .object({
-        action: z.literal("insufficient_evidence"),
-        reason: z.string().trim().min(1),
-      })
-      .strict(),
-  ]);
+const ConfirmationSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("confirm") }).strict(),
+  z
+    .object({
+      action: z.literal("edit"),
+      beliefTest: JsonObjectSchema,
+    })
+    .strict(),
+  z
+    .object({ action: z.literal("reject"), reason: z.string().trim().min(1) })
+    .strict(),
+  z
+    .object({
+      action: z.literal("insufficient_evidence"),
+      reason: z.string().trim().min(1),
+    })
+    .strict(),
+]);
 const PredictionRequestSchema = z
   .object({
     choice: z.string().trim().min(1).max(300),
@@ -155,7 +152,11 @@ async function readJson(
   try {
     return JSON.parse(text);
   } catch {
-    throw new ApiInputError("INVALID_JSON", "Request body is not valid JSON", 400);
+    throw new ApiInputError(
+      "INVALID_JSON",
+      "Request body is not valid JSON",
+      400,
+    );
   }
 }
 
@@ -198,7 +199,9 @@ function artifacts(
   context: Context<AppBindings>,
   options: ApiOptions,
 ): ArtifactStore {
-  return options.artifactStore ?? new D1ArtifactStore(requiredDatabase(context));
+  return (
+    options.artifactStore ?? new D1ArtifactStore(requiredDatabase(context))
+  );
 }
 
 function maxNotebookBytes(context: Context<AppBindings>): number {
@@ -212,7 +215,9 @@ function isFile(value: string | File | null): value is File {
   return value !== null && typeof value !== "string";
 }
 
-function statePayload(session: Awaited<ReturnType<SessionService["getSession"]>>) {
+function statePayload(
+  session: Awaited<ReturnType<SessionService["getSession"]>>,
+) {
   return {
     sessionId: session.id,
     artifactId: session.artifactId,
@@ -221,15 +226,21 @@ function statePayload(session: Awaited<ReturnType<SessionService["getSession"]>>
     version: session.version,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
-    ...(session.beliefTest === undefined ? {} : { beliefTest: session.beliefTest }),
-    ...(session.prediction === undefined ? {} : { prediction: session.prediction }),
+    ...(session.beliefTest === undefined
+      ? {}
+      : { beliefTest: session.beliefTest }),
+    ...(session.prediction === undefined
+      ? {}
+      : { prediction: session.prediction }),
     ...(session.verifiedResult === undefined
       ? {}
       : { verifiedResult: session.verifiedResult }),
     ...(session.transferResult === undefined
       ? {}
       : { transferResult: session.transferResult }),
-    ...(session.patchResult === undefined ? {} : { patchResult: session.patchResult }),
+    ...(session.patchResult === undefined
+      ? {}
+      : { patchResult: session.patchResult }),
     ...(session.revision === undefined ? {} : { revision: session.revision }),
     ...(session.reasoningDiff === undefined
       ? {}
@@ -247,7 +258,10 @@ export function createApi(options: ApiOptions = {}) {
     const requestId = context.req.header("cf-ray") ?? crypto.randomUUID();
     context.set("requestId", requestId);
     context.header("cache-control", "no-store");
-    context.header("content-security-policy", "default-src 'none'; frame-ancestors 'none'");
+    context.header(
+      "content-security-policy",
+      "default-src 'none'; frame-ancestors 'none'",
+    );
     context.header("referrer-policy", "no-referrer");
     context.header("x-content-type-options", "nosniff");
     context.header("x-frame-options", "DENY");
@@ -298,7 +312,11 @@ export function createApi(options: ApiOptions = {}) {
     const form = await context.req.formData();
     const file = form.get("file");
     if (!isFile(file)) {
-      throw new ApiInputError("FILE_REQUIRED", "A notebook file is required", 400);
+      throw new ApiInputError(
+        "FILE_REQUIRED",
+        "A notebook file is required",
+        400,
+      );
     }
     if (!file.name.toLowerCase().endsWith(".ipynb")) {
       throw new ApiInputError(
@@ -371,7 +389,11 @@ export function createApi(options: ApiOptions = {}) {
     const session = await service.getSession(context.req.param("sessionId"));
     const artifact = await artifacts(context, options).find(session.artifactId);
     if (artifact === undefined) {
-      throw new ApiInputError("ARTIFACT_NOT_FOUND", "Session artifact was not found", 404);
+      throw new ApiInputError(
+        "ARTIFACT_NOT_FOUND",
+        "Session artifact was not found",
+        404,
+      );
     }
 
     const analyst =
@@ -379,8 +401,7 @@ export function createApi(options: ApiOptions = {}) {
         ? createLiveBeliefAnalystFromEnv({
             OPENAI_API_KEY: context.env?.OPENAI_API_KEY,
             OPENAI_MODEL: context.env?.OPENAI_MODEL,
-            OPENAI_REASONING_EFFORT:
-              context.env?.OPENAI_REASONING_EFFORT,
+            OPENAI_REASONING_EFFORT: context.env?.OPENAI_REASONING_EFFORT,
           })
         : new ApprovedSampleBeliefAnalyst();
     const result = await analyst.propose({
@@ -414,21 +435,31 @@ export function createApi(options: ApiOptions = {}) {
     const service = sessionService(context, options);
     const sessionId = context.req.param("sessionId");
     if (input.action === "confirm") {
-      return context.json(jsonSuccess(statePayload(await service.confirmBeliefTest(sessionId))));
+      return context.json(
+        jsonSuccess(statePayload(await service.confirmBeliefTest(sessionId))),
+      );
     }
     if (input.action === "edit") {
       return context.json(
-        jsonSuccess(statePayload(await service.editBeliefTest(sessionId, input.beliefTest))),
+        jsonSuccess(
+          statePayload(
+            await service.editBeliefTest(sessionId, input.beliefTest),
+          ),
+        ),
       );
     }
     if (input.action === "reject") {
       return context.json(
-        jsonSuccess(statePayload(await service.rejectBeliefTest(sessionId, input.reason))),
+        jsonSuccess(
+          statePayload(await service.rejectBeliefTest(sessionId, input.reason)),
+        ),
       );
     }
     return context.json(
       jsonSuccess(
-        statePayload(await service.markInsufficientEvidence(sessionId, input.reason)),
+        statePayload(
+          await service.markInsufficientEvidence(sessionId, input.reason),
+        ),
       ),
     );
   });
@@ -448,7 +479,9 @@ export function createApi(options: ApiOptions = {}) {
       sessionId,
       beliefTestId: current.beliefTest.id,
       choice: input.choice,
-      ...(input.numericRange === undefined ? {} : { numericRange: input.numericRange }),
+      ...(input.numericRange === undefined
+        ? {}
+        : { numericRange: input.numericRange }),
       confidence: input.confidence,
       committedAt,
     };
@@ -457,7 +490,9 @@ export function createApi(options: ApiOptions = {}) {
       immutableHash: await hashCanonical(base),
     };
     return context.json(
-      jsonSuccess(statePayload(await service.commitPrediction(sessionId, prediction))),
+      jsonSuccess(
+        statePayload(await service.commitPrediction(sessionId, prediction)),
+      ),
       201,
     );
   });
@@ -500,10 +535,10 @@ export function createApi(options: ApiOptions = {}) {
   });
 
   app.post("/api/sessions/:sessionId/lab/run", async (context) => {
-    const completed = await sessionService(context, options).recordExperimentResult(
-      context.req.param("sessionId"),
-      sampleResult,
-    );
+    const completed = await sessionService(
+      context,
+      options,
+    ).recordExperimentResult(context.req.param("sessionId"), sampleResult);
     return context.json(jsonSuccess(statePayload(completed)));
   });
 
@@ -631,11 +666,12 @@ export function createApi(options: ApiOptions = {}) {
         schemaVersion: "1" as const,
         replayId,
         replay: true as const,
-        recordedAt: "2026-07-14T09:05:00.000Z",
-        modelId: "stored-codex-app-server-trace",
+        recordedAt: compilerReplaySummary.recordedAt,
+        modelId: compilerReplaySummary.modelId,
         fixtureId: "customer-churn-public-v1",
         verifierVersion: "leakage-verifier-v1",
-        templateCommit: "template-leakage-v1",
+        templateCommit: compilerReplaySummary.repositoryCommitAtRun,
+        compilerTrace: compilerReplaySummary,
         result: sampleResult,
         patch: patchKernelResult,
       }),
@@ -670,16 +706,25 @@ export function createApi(options: ApiOptions = {}) {
       );
     }
     if (error instanceof SessionNotFoundError) {
-      return context.json(jsonError("SESSION_NOT_FOUND", error.message, 404), 404);
+      return context.json(
+        jsonError("SESSION_NOT_FOUND", error.message, 404),
+        404,
+      );
     }
     if (
       error instanceof InvalidSessionTransitionError ||
       error instanceof PredictionAlreadyCommittedError
     ) {
-      return context.json(jsonError("ILLEGAL_TRANSITION", error.message, 409), 409);
+      return context.json(
+        jsonError("ILLEGAL_TRANSITION", error.message, 409),
+        409,
+      );
     }
     if (error instanceof SessionInputError) {
-      return context.json(jsonError("SESSION_INPUT_ERROR", error.message, 400), 400);
+      return context.json(
+        jsonError("SESSION_INPUT_ERROR", error.message, 400),
+        400,
+      );
     }
     if (error instanceof NotebookParseError) {
       const status = error.code === "MAXIMUM_SIZE_EXCEEDED" ? 413 : 422;

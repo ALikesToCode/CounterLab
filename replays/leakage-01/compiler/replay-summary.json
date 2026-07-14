@@ -1,0 +1,76 @@
+{
+  "schemaVersion": "1",
+  "replayId": "leakage-01",
+  "label": "Verified replay",
+  "modelId": "gpt-5.6-sol",
+  "codexVersion": "codex-cli 0.144.4",
+  "repositoryCommitAtRun": "4f2f647228304d63ac8b9cba8cdca1dc7a07e192",
+  "publicSdkDocumentationHash": "a280df493bbab2f2d066a805460e3fb39d6ccaf3ed72cae29ae4e8f8677e92a9",
+  "recordedAt": "2026-07-14T11:50:37.947Z",
+  "trace": [
+    {
+      "stage": "generate",
+      "status": "COMPLETED",
+      "run": "rejected-live-run",
+      "durationMs": 141218,
+      "files": [
+        "experiment-plan.json",
+        "artifact-adapter.py",
+        "public_tests.py"
+      ]
+    },
+    {
+      "stage": "external_verifier",
+      "status": "REJECTED",
+      "run": "rejected-live-run",
+      "invariant": "candidate_execution",
+      "counterexample": "Experiment rejected an unsupported dataset_adapter argument during constrained public tests."
+    },
+    {
+      "stage": "repair_1",
+      "status": "REJECTED",
+      "run": "rejected-live-run",
+      "durationMs": 69166,
+      "invariant": "generated_workspace_policy",
+      "counterexample": "The repair left an unexpected __pycache__ directory in the exact-file workspace."
+    },
+    {
+      "stage": "repair_2",
+      "status": "REJECTED",
+      "run": "rejected-live-run",
+      "durationMs": 69531,
+      "invariant": "generated_workspace_policy",
+      "counterexample": "The second and final permitted repair did not remove the existing __pycache__ directory. No result was authorized."
+    },
+    {
+      "stage": "later_generate",
+      "status": "COMPLETED",
+      "run": "verified-live-run",
+      "durationMs": 79355,
+      "note": "A separate later run used corrected public SDK documentation; it is not presented as repair attempt 3."
+    },
+    {
+      "stage": "external_verifier",
+      "status": "VERIFIED",
+      "run": "verified-live-run",
+      "invariants": 18,
+      "mutationsDetected": 12,
+      "mutationsTotal": 12,
+      "resultHash": "2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0"
+    }
+  ],
+  "generationIsolation": {
+    "status": "PARTIAL",
+    "limitation": "The host App Server process read global skill files, so generation-time hidden-verifier unreadability is not proven."
+  },
+  "candidateExecutionIsolation": {
+    "status": "VERIFIED",
+    "properties": [
+      "network denied",
+      "non-root user",
+      "read-only root and workspace",
+      "hidden verifier not mounted",
+      "resource limits recorded"
+    ]
+  }
+}
