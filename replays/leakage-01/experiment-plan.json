@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "1",
+  "concept": "entity_leakage",
+  "datasetAdapter": "customer_churn_v1",
+  "competingHypotheses": [
+    "The random-row test accuracy generalizes to customers the model has never seen.",
+    "Repeated customer identity lets the model exploit a shortcut that does not transfer to new customers."
+  ],
+  "expectedDiscrimination": [
+    {
+      "runId": "random_row_split",
+      "expectedUnderCurrent": "Accuracy remains representative of unseen customers.",
+      "expectedUnderCompeting": "Accuracy is inflated while customer identities overlap."
+    },
+    {
+      "runId": "customer_group_split",
+      "expectedUnderCurrent": "Accuracy remains close to the random-row result.",
+      "expectedUnderCompeting": "Accuracy falls materially with zero customer overlap."
+    },
+    {
+      "runId": "identity_ablation",
+      "expectedUnderCurrent": "Removing identity has little effect.",
+      "expectedUnderCompeting": "Removing identity removes the shortcut and lowers accuracy."
+    }
+  ],
+  "runs": [
+    {
+      "id": "random_row_split",
+      "split": "random",
+      "model": "logistic_regression",
+      "seed": 1729
+    },
+    {
+      "id": "customer_group_split",
+      "split": "group",
+      "groupBy": "customer_id",
+      "model": "logistic_regression",
+      "seed": 1729
+    },
+    {
+      "id": "identity_ablation",
+      "split": "random",
+      "dropFeatures": ["customer_id"],
+      "model": "logistic_regression",
+      "seed": 1729
+    }
+  ],
+  "metrics": ["accuracy", "roc_auc"],
+  "views": ["metric_comparison", "entity_overlap"],
+  "invariants": [
+    "zero_group_overlap",
+    "identity_feature_removed",
+    "declared_variable_control"
+  ],
+  "resourceLimits": {
+    "wallSeconds": 20,
+    "memoryMb": 512,
+    "maxProcesses": 16,
+    "maxFiles": 8,
+    "maxOutputBytes": 262144
+  }
+}
