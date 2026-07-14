@@ -39,6 +39,9 @@ importers:
       '@counterlab/belief-analyst':
         specifier: workspace:*
         version: link:../../packages/belief-analyst
+      '@counterlab/concept-registry':
+        specifier: workspace:*
+        version: link:../../packages/concept-registry
       '@counterlab/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -106,6 +109,9 @@ importers:
 
   packages/belief-analyst:
     dependencies:
+      '@counterlab/concept-registry':
+        specifier: workspace:*
+        version: link:../concept-registry
       '@counterlab/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -121,6 +127,12 @@ importers:
       zod:
         specifier: 4.4.3
         version: 4.4.3
+
+  packages/concept-registry:
+    dependencies:
+      '@counterlab/contracts':
+        specifier: workspace:*
+        version: link:../contracts
 
   packages/contracts:
     dependencies:

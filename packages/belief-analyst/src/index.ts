@@ -6,6 +6,7 @@ import {
   type ArtifactManifest,
   type BeliefTest,
 } from "@counterlab/contracts";
+import { releasedConceptPacks } from "@counterlab/concept-registry";
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -18,15 +19,14 @@ const MAX_CLAIM_CHARACTERS = 4_000;
 const MAX_EVIDENCE_CELLS = 12;
 const MAX_EXCERPT_CHARACTERS = 700;
 
-const conceptInstructions = `Concept Pack: entity_leakage
-- Entity leakage is plausible when repeated entity identifiers or entity-stable shortcuts cross an evaluation boundary.
-- A decisive intervention holds out complete entities while controlling the model, seed, and metric.
-- Identity ablation is supporting evidence, not a substitute for a group split.
-
-Concept Pack: class_imbalance
-- Accuracy can conceal minority-class failure when class prevalence is skewed.
-- A decisive intervention keeps predictions fixed and evaluates class-sensitive metrics and the confusion matrix.
-- Never infer class imbalance without schema or output evidence.`;
+const conceptInstructions = releasedConceptPacks()
+  .map(
+    (pack) =>
+      `Concept Pack: ${pack.id}\n${pack.analystRules.stableInstructions
+        .map((rule) => `- ${rule}`)
+        .join("\n")}`,
+  )
+  .join("\n\n");
 
 export const BELIEF_ANALYST_INSTRUCTIONS = `You are CounterLab's reasoning analyst. Formalize the learner's claim as a Belief Test; do not execute code, invent results, grade mastery, or decide whether generated code is valid.
 

@@ -598,6 +598,57 @@ describe("Cloudflare Worker API", () => {
     expect(await sessionRepository.listEvents(sessionId)).toHaveLength(1);
   });
 
+  it("returns an honest insufficient-evidence Belief Test before any live model call", async () => {
+    const harness = await sessionHarness("sample");
+    const sample = await harness.artifactStore.find(harness.artifactId);
+    if (sample === undefined) throw new Error("sample artifact is missing");
+    const sparseManifest = {
+      ...sample.manifest,
+      artifactId: "artifact_sparse_live",
+      fileName: "sparse.ipynb",
+      fileSha256: "e".repeat(64),
+      cells: [],
+    } satisfies ArtifactManifest;
+    await harness.artifactStore.save(
+      sparseManifest,
+      "uploads/artifact_sparse_live.ipynb",
+    );
+    const created = await postJson(harness.app, "/api/live/sessions", {
+      artifactId: sparseManifest.artifactId,
+    });
+    const body = (await created.json()) as { data: { sessionId: string } };
+
+    const response = await postJson(
+      harness.app,
+      `/api/sessions/${body.data.sessionId}/belief-test`,
+      {
+        learnerClaim:
+          "The notebook accuracy proves generalization to new customers.",
+      },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        state: "BELIEF_TEST_PROPOSED",
+        beliefTest: {
+          concept: "entity_leakage",
+          evidenceRefs: [],
+          uncertainty: { insufficientEvidence: true },
+        },
+      },
+    });
+    const events = await harness.sessionRepository.listEvents(
+      body.data.sessionId,
+    );
+    expect(events.at(-1)).toMatchObject({
+      actor: "system",
+      kind: "belief_test.proposed",
+    });
+    expect(events.at(-1)).not.toHaveProperty("promptHash");
+  });
+
   it("returns a neutral typed setup error when the first live request rejects authentication", async () => {
     const { app, sessionId, sessionRepository } = await sessionHarness("live");
     const upstream = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(

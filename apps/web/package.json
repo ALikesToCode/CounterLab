@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@counterlab/belief-analyst": "workspace:*",
+    "@counterlab/concept-registry": "workspace:*",
     "@counterlab/contracts": "workspace:*",
     "@counterlab/notebook-parser": "workspace:*",
     "@counterlab/proof-bundle": "workspace:*",

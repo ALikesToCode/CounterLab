@@ -4,6 +4,7 @@ import {
   BeliefAnalystError,
   createLiveBeliefAnalystFromEnv,
 } from "@counterlab/belief-analyst";
+import { routeArtifactConcept } from "@counterlab/concept-registry";
 import { NotebookParseError, parseNotebook } from "@counterlab/notebook-parser";
 import {
   InvalidSessionTransitionError,
@@ -487,6 +488,66 @@ export function createApi(options: ApiOptions = {}) {
       );
     }
 
+    const routing = routeArtifactConcept(artifact.manifest);
+    if (routing.kind === "unsupported_artifact") {
+      throw new ApiInputError(
+        "ARTIFACT_UNSUPPORTED",
+        routing.reasons[0]?.message ??
+          "No released concept pack supports this artifact",
+        422,
+      );
+    }
+    if (routing.kind === "choice_required") {
+      throw new ApiInputError(
+        "CONCEPT_CHOICE_REQUIRED",
+        "More than one released concept pack matches this notebook",
+        409,
+      );
+    }
+    if (routing.kind === "insufficient_evidence") {
+      const concept = routing.candidates[0] ?? "entity_leakage";
+      const insufficient: BeliefTest = {
+        schemaVersion: "1",
+        id: `belief_insufficient_${session.id}`,
+        concept,
+        learnerClaim,
+        currentHypothesis: {
+          statement: learnerClaim,
+          predictedOutcome:
+            "The available notebook evidence does not resolve this prediction.",
+        },
+        competingHypothesis: {
+          statement:
+            "A different evaluation boundary may change the reported result.",
+          predictedOutcome:
+            "A decisive result requires visible split and metric evidence.",
+        },
+        evidenceRefs: [],
+        alternatives: [],
+        decisiveIntervention: {
+          id: "collect-supported-evidence",
+          description:
+            "Provide a supported evaluation cell and safe displayed metric before running a counterexperiment.",
+          controlledVariables: [],
+          changedVariables: ["available notebook evidence"],
+          discriminatesBecause:
+            "Without the evaluation design and its output, the competing explanations cannot be distinguished.",
+        },
+        uncertainty: {
+          confidence: 0,
+          limitations: routing.limitations,
+          insufficientEvidence: true,
+        },
+        requiresLearnerConfirmation: true,
+      };
+      const proposed = await service.proposeBeliefTest(
+        session.id,
+        insufficient,
+        { actor: "system", modelId: "concept-router-v1" },
+      );
+      return context.json(jsonSuccess(statePayload(proposed)));
+    }
+
     const analyst =
       session.mode.kind === "live_notebook"
         ? createLiveBeliefAnalystFromEnv({
@@ -500,7 +561,7 @@ export function createApi(options: ApiOptions = {}) {
       sessionId: session.id,
       learnerClaim,
       manifest: artifact.manifest,
-      concept: "entity_leakage",
+      concept: routing.concept,
     });
     const beliefTest: BeliefTest = result.beliefTest;
     const liveProvenance =
