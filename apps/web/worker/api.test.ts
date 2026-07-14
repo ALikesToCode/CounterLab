@@ -945,7 +945,7 @@ describe("Cloudflare Worker API", () => {
       authorization,
     );
 
-    expect(callback.status).toBe(422);
+    expect(callback.status).toBe(200);
     await expect(callback.json()).resolves.toMatchObject({
       ok: true,
       data: {

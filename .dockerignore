@@ -1,0 +1,16 @@
+.git
+.env
+.env.*
+!.env.example
+.venv
+node_modules
+apps/web/dist
+coverage
+data
+generated
+evals/held-out
+replays
+services/kernel/tests
+services/runner
+**/__pycache__
+**/*.pyc

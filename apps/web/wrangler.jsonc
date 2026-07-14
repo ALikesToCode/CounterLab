@@ -23,6 +23,31 @@
       "bucket_name": "counterlab-artifacts"
     }
   ],
+  "containers": [
+    {
+      "class_name": "CounterLabRunner",
+      "image": "../../Dockerfile.runner",
+      "max_instances": 10,
+      "instance_type": "basic",
+      "ssh": {
+        "enabled": false
+      }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "RUNNER",
+        "class_name": "CounterLabRunner"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["CounterLabRunner"]
+    }
+  ],
   "observability": {
     "enabled": true
   }

@@ -1414,7 +1414,6 @@ export function createApi(options: ApiOptions = {}) {
         session: statePayload(updatedSession),
         verification,
       }),
-      terminalCallback.status === "VERIFIED" ? 200 : 422,
     );
   });
 

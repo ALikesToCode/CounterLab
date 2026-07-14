@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && pnpm run types:worker && tsc --noEmit -p tsconfig.worker.json"
   },
   "dependencies": {
+    "@cloudflare/containers": "0.3.7",
     "@counterlab/belief-analyst": "workspace:*",
     "@counterlab/concept-registry": "workspace:*",
     "@counterlab/contracts": "workspace:*",
