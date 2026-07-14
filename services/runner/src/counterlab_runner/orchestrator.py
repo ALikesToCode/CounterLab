@@ -3,7 +3,10 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from .docker import DockerExecutionRecord
 
 
 @dataclass(frozen=True)
@@ -44,10 +47,24 @@ class PipelineOutcome:
     status: Literal["VERIFIED", "REJECTED"]
     failures: tuple[StructuredCounterexample, ...]
     result: dict[str, Any] | None
+    verification: dict[str, object] | None = None
+    execution: "DockerExecutionRecord | None" = None
 
     @classmethod
-    def verified(cls, result: dict[str, Any]) -> "PipelineOutcome":
-        return cls(status="VERIFIED", failures=(), result=result)
+    def verified(
+        cls,
+        result: dict[str, Any],
+        *,
+        verification: dict[str, object] | None = None,
+        execution: "DockerExecutionRecord | None" = None,
+    ) -> "PipelineOutcome":
+        return cls(
+            status="VERIFIED",
+            failures=(),
+            result=result,
+            verification=verification,
+            execution=execution,
+        )
 
     @classmethod
     def rejected(

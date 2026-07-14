@@ -157,6 +157,12 @@ def test_host_pipeline_computes_truth_and_invokes_verifier_outside_container(
     assert outcome.result["resultHash"] == (
         "2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0"
     )
+    assert outcome.verification is not None
+    assert outcome.verification["status"] == "VERIFIED"
+    assert "zero_group_overlap" in outcome.verification["verifiedInvariants"]
+    assert outcome.execution is not None
+    assert outcome.execution.exit_code == 0
+    assert outcome.execution.duration_ms == 17
     assert executor.calls == 1
 
 

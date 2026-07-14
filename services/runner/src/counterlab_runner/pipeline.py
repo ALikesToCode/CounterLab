@@ -219,4 +219,8 @@ class HostCompileVerifyPipeline:
         report = verify_candidate(candidate)
         if report["status"] != "VERIFIED":
             return PipelineOutcome.rejected(sanitize_counterexamples(report))
-        return PipelineOutcome.verified(result)
+        return PipelineOutcome.verified(
+            result,
+            verification=report,
+            execution=execution,
+        )
