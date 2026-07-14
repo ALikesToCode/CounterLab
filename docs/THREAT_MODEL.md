@@ -60,6 +60,13 @@ isolation. Therefore generation-time hidden-verifier unreadability is `PARTIAL`.
 Post-generation candidate execution is separately OS-constrained and verified;
 that does not retroactively prove generation isolation.
 
+Current code prevents another unisolated launch. A real Bubblewrap probe creates
+a root containing only `/usr` and the exact generation workspace and verifies
+that repository, held-out, and hidden-verifier host paths resolve as missing.
+This proves the mount shape, not authenticated end-to-end generation: stable
+Codex authentication is file-backed and would be readable to model-invoked
+commands if mounted into that namespace.
+
 Docker controls are not a formal sandbox proof and inherit host kernel/runtime
 risk. Cloudflare account security, local machine compromise, denial of service
 beyond configured limits, and side channels are outside the hackathon guarantee.
@@ -69,8 +76,8 @@ receive a verified patch.
 
 ## Highest-priority hardening
 
-Run Codex App Server inside an OS boundary that mounts only the generation
-workspace and a minimal authentication/config volume, while restricting model
-network access to required endpoints. Repeat the live trace and demonstrate a
-failed read of hidden verifier/held-out paths before upgrading generation
-isolation from `PARTIAL`.
+Implement the documented host-owned credential-injecting proxy so the isolated
+App Server receives no real credential in files or environment. Then repeat the
+live trace and demonstrate hidden-path `ENOENT`, proxy-only model connectivity,
+no command access to credentials, and the existing no-network candidate
+execution before upgrading generation isolation from `PARTIAL`.

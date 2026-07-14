@@ -136,7 +136,9 @@ Live mode additionally requires:
 - an installed compatible `codex` CLI on `PATH`;
 - working Codex CLI authentication available through `CODEX_HOME`;
 - Docker and the pinned local runner image; and
-- the local orchestration service that creates isolated workspaces and invokes the host verifier.
+- the local orchestration service that creates isolated workspaces and invokes the host verifier; and
+- a credential-safe `AppServerLaunchBoundary`. The current Bubblewrap probe
+  proves the filesystem shape, but no authenticated boundary is enabled.
 
 Focused implementation checks are:
 
@@ -161,10 +163,16 @@ reproduced the canonical result, passed 18 named invariants, and detected 12/12
 published mutations. The UI says plainly that this is a later run, not repair
 attempt 3.
 
-The most important remaining isolation limitation is that
-`AppServerCodexCompiler` starts App Server as a local host process with Codex's
-`workspace-write` policy. The recorded run inspected global skill files outside
-the generation directory. Consequently generation isolation is `PARTIAL` even
-though post-generation candidate execution proves the hidden verifier and
-held-out paths were not mounted. A future accepted live path must add an
-OS-enforced generation boundary and demonstrate hidden-path denial.
+The recorded run used a local host process and inspected global skill files
+outside the generation directory, so its generation isolation remains
+`PARTIAL`. The current `AppServerCodexCompiler` no longer launches that way: it
+requires an injected OS launch boundary and otherwise returns typed
+`CODEX_ISOLATION_UNAVAILABLE`. A real Bubblewrap probe proves that a namespace
+mounting only `/usr` and the exact generation workspace makes the repository,
+verifier, and held-out paths resolve as missing.
+
+That filesystem proof is not yet an authenticated launcher. Stable Codex auth
+is file-backed, and mounting the auth file would make it readable to generated
+commands because workspace-write is not a read allowlist. The credential-safe
+next step is the host proxy design in `packages/codex-client/README.md`; live
+generation remains disabled until it is implemented and independently probed.

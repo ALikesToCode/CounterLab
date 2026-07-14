@@ -27,6 +27,9 @@
       browser-visible health/evidence.
 - [ ] Configured live Responses credential completes a schema-valid Belief Test.
 - [x] Generation isolation remains labelled `PARTIAL` until OS proof exists.
+- [x] Unisolated App Server launch fails closed and a real Bubblewrap probe
+      proves repository/verifier/held-out paths are absent.
+- [ ] Credential-safe isolated App Server launch completes a live turn.
 
 ## Security and quality
 

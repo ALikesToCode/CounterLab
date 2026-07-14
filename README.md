@@ -166,9 +166,12 @@ COUNTERLAB_CODEX_MODE=replay
 COUNTERLAB_SANDBOX_IMAGE=counterlab-runner:local
 ```
 
-Then authenticate the local CLI with `codex login`, ensure Docker is running,
-and use `pnpm run codex:live`. Cloudflare-hosted live lab compilation returns a
-typed local-runner requirement; it never substitutes replay.
+Then authenticate the local CLI with `codex login` and ensure Docker is running.
+`pnpm run codex:live` currently returns typed
+`CODEX_ISOLATION_UNAVAILABLE` unless a trusted credential-safe
+`AppServerLaunchBoundary` is injected; it does not fall back to the old
+unisolated host launch. Cloudflare-hosted live lab compilation returns a typed
+local-runner requirement and never substitutes replay.
 
 For local Vite development, server-only Responses settings are read from the
 repository-root `.env` and bound only to the Worker runtime. For Cloudflare,
@@ -221,10 +224,13 @@ Uploads and generated workspaces stay outside the public web root. Candidate
 execution has no network and receives no credentials.
 
 The recorded host App Server run could inspect global skill files outside its
-generation directory. Therefore generation-time hidden-verifier unreadability
-is currently `PARTIAL`, even though post-generation candidate execution proved
-the verifier and held-out paths were not mounted. This is the highest-risk
-remaining boundary and is documented in [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
+generation directory, so that replay's generation isolation remains `PARTIAL`.
+Current live launches fail closed unless an OS boundary is injected. A real
+Bubblewrap probe now proves repository/verifier/held-out paths are absent from
+the intended generation root, but stable file-backed authentication cannot be
+mounted there without exposing it to generated commands. A host credential
+broker is the highest-risk remaining boundary; see
+[docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
 
 ## How Codex accelerated the build
 

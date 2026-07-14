@@ -56,6 +56,12 @@ GPT may explain verified evidence. It may not fabricate results, execute uploade
 
 The live implementation is `AppServerCodexCompiler` in `packages/codex-client`. It uses the installed Codex App Server over stdio JSONL, performs initialize/initialized, starts a thread and turn, and omits the model field unless `CODEX_MODEL` is configured. The experimental WebSocket transport is outside the critical path.
 
+Launching additionally requires a trusted `AppServerLaunchBoundary` that maps
+the host generation directory to a guest-only protocol path. Without one, the
+compiler fails with `CODEX_ISOLATION_UNAVAILABLE`; unisolated direct spawn is
+available only to fake unit-test processes. The included Bubblewrap probe
+proves the target mount shape but is not an authenticated launcher.
+
 The lab turn is limited to approved belief evidence, public schema/documentation, redacted fixture structure, resource limits, and allowlisted files and commands. The requested generated file set must be exactly:
 
 ```text
@@ -125,7 +131,7 @@ The Vite/Cloudflare deployment is intentionally edge-compatible. It can parse an
 
 Cloudflare Workers do not own the process capabilities required for Codex App Server, Python, Docker, Git worktrees, or native local SQLite. Current Worker health reports those capabilities as `local-runner-required`, and the live lab compile route returns a typed 503 with `LOCAL_RUNNER_REQUIRED`.
 
-The local runner owns live compilation and execution. This split prevents a Cloudflare replay from being presented as a live generation and prevents unavailable process capabilities from degrading into fake success.
+The local runner is the only component permitted to own live compilation and execution. It currently reports setup unavailable until a credential-safe launch boundary is supplied. This split prevents a Cloudflare replay from being presented as a live generation and prevents unavailable process capabilities from degrading into fake success.
 
 ## Replay and disabled authority
 
@@ -145,11 +151,12 @@ labels the later run as a third repair.
   0.144.4. It produced real candidate, event, prompt-hash, verifier, duration,
   exit, and status evidence; it does not establish behavior for every model or
   CLI version.
-- The App Server child currently runs as a local host process with Codex's
-  `workspace-write` policy. The real trace shows that it inspected global skill
-  files outside the generation directory, so generation-time isolation is
-  explicitly `PARTIAL`. Additional OS isolation and a demonstrated hidden-path
-  denial are required before that gate can pass.
+- The recorded App Server child ran as a local host process and inspected global
+  skill files outside the generation directory, so that trace's generation
+  isolation is explicitly `PARTIAL`. Current code prevents another unisolated
+  launch, and a real Bubblewrap probe demonstrates hidden-path denial, but
+  stable file-backed auth still needs a host credential broker before an
+  authenticated isolated turn can pass the gate.
 - Candidate execution is containerized after generation; this does not retroactively strengthen App Server generation isolation.
 - The real Docker smoke and replay reproduction return `VERIFIED` with the
   canonical fixture result hash after exercising the no-network, non-root,

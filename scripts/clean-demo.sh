@@ -68,7 +68,7 @@ else
   echo "Responses live configuration: unavailable (set OPENAI_API_KEY)"
 fi
 if command -v codex >/dev/null 2>&1 && codex login status >/dev/null 2>&1; then
-  echo "Codex CLI: authenticated; use pnpm run codex:live for the local compiler"
+  echo "Codex CLI: authenticated; live compiler still requires a credential-safe isolation boundary"
 else
   echo "Codex CLI: unavailable or unauthenticated (run codex login)"
 fi

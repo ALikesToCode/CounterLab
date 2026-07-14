@@ -2,17 +2,17 @@
 
 ## Components and authority
 
-| Component | Runtime | Responsibility |
-| --- | --- | --- |
-| `apps/web` | Cloudflare Vite Worker + React | UI, typed routes, D1 state, R2 private objects, optional GPT analyst |
-| `packages/contracts` | TypeScript | Zod contracts, JSON Schema, shared result/state types |
-| `packages/notebook-parser` | TypeScript | Non-executing intake and Artifact Manifest |
-| `packages/belief-analyst` | TypeScript/server | Responses API structured Belief Test and deterministic approved fallback |
-| `packages/session-core` | TypeScript | Legal transitions, immutable prediction, event chain |
-| `packages/codex-client` | Local Node | App Server stdio, replay/disabled implementations, event sanitizer |
-| `services/runner` | Local Python + Docker | Workspace/AST policy, candidate execution, repair cap |
-| `services/kernel` | Local Python | Fixture, experiments, transfer, patch, canonical truth, verifier |
-| `packages/proof-bundle` | TypeScript | Hash chain verification, Reasoning Diff, Proof Bundle |
+| Component                  | Runtime                        | Responsibility                                                           |
+| -------------------------- | ------------------------------ | ------------------------------------------------------------------------ |
+| `apps/web`                 | Cloudflare Vite Worker + React | UI, typed routes, D1 state, R2 private objects, optional GPT analyst     |
+| `packages/contracts`       | TypeScript                     | Zod contracts, JSON Schema, shared result/state types                    |
+| `packages/notebook-parser` | TypeScript                     | Non-executing intake and Artifact Manifest                               |
+| `packages/belief-analyst`  | TypeScript/server              | Responses API structured Belief Test and deterministic approved fallback |
+| `packages/session-core`    | TypeScript                     | Legal transitions, immutable prediction, event chain                     |
+| `packages/codex-client`    | Local Node                     | App Server stdio, replay/disabled implementations, event sanitizer       |
+| `services/runner`          | Local Python + Docker          | Workspace/AST policy, candidate execution, repair cap                    |
+| `services/kernel`          | Local Python                   | Fixture, experiments, transfer, patch, canonical truth, verifier         |
+| `packages/proof-bundle`    | TypeScript                     | Hash chain verification, Reasoning Diff, Proof Bundle                    |
 
 ## Request and evidence sequence
 
@@ -66,3 +66,8 @@ payload. Proof Bundles are integrity-hashed; they are called signed only when
 The checked-in replay keeps raw evidence files, a compact browser summary, real
 model/Codex versions, result/adapter hashes, and a visible limitation: host
 generation isolation was partial. Replay never invokes a model.
+
+New live App Server launches require an injected OS boundary and fail closed
+without one. The Bubblewrap probe verifies the intended filesystem shape, while
+the authenticated launcher remains disabled until a host credential broker can
+keep stable file-backed auth outside the model-command namespace.

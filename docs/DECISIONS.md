@@ -53,3 +53,16 @@ URL and canonicalizes it before SDK construction. The hostname and credential
 are never exposed in UI, health, evidence, logs, or replay metadata. All model
 output remains subject to the same local Zod and Artifact Manifest evidence
 checks; a compatible transport does not receive verifier authority.
+
+## 2026-07-14 — Fail closed on generation read isolation
+
+The recorded host Codex traces remain honest evidence, including their partial
+read isolation, but current code will not repeat that launch. Live
+`AppServerCodexCompiler` now requires a trusted launch boundary and otherwise
+returns `CODEX_ISOLATION_UNAVAILABLE`; direct spawning exists only for fake unit
+processes under the test environment. A real Bubblewrap probe proves the
+repository, verifier, and held-out paths are absent from the intended guest
+root. Because stable authentication is file-backed and workspace-write is not a
+read allowlist, the product will not mount that credential merely to turn the
+status green. A host credential-injecting proxy is required before the live gate
+can pass.
