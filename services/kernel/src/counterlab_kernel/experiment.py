@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import pandas as pd
@@ -251,6 +251,109 @@ def run_leakage_experiment(frame: pd.DataFrame, seed: int = 1729) -> dict[str, A
                 "seed": run["seed"],
             }
             for run in runs
+        ],
+    }
+    result["resultHash"] = sha256_json(result)
+    return result
+
+
+def run_leakage_plan(
+    frame: pd.DataFrame,
+    runs: Sequence[Mapping[str, Any]],
+    *,
+    plan_id: str,
+    session_id: str,
+    artifact_manifest_hash: str,
+    concept_pack_version: str,
+) -> dict[str, Any]:
+    """Execute validated leakage run specs through fixed kernel operations only."""
+
+    _validate_fixture(frame)
+    fixture = _sorted_fixture(frame)
+    fixture_hash = sha256_json(_fixture_records(fixture))
+    executed: list[dict[str, Any]] = []
+    for spec in runs:
+        operation = str(spec["operation"])
+        seed = int(spec["seed"])
+        test_fraction = float(spec["testFraction"])
+        entity_label = str(spec["entityField"])
+        positions = list(range(len(fixture)))
+        if operation == "leakage.group_holdout":
+            splitter = GroupShuffleSplit(
+                n_splits=1,
+                test_size=test_fraction,
+                random_state=seed,
+            )
+            train_positions, test_positions = next(
+                splitter.split(fixture, fixture[TARGET], groups=fixture[ENTITY])
+            )
+            split_strategy = "group"
+        elif operation in {
+            "leakage.random_row_split",
+            "leakage.identity_ablation",
+        }:
+            train_positions, test_positions = train_test_split(
+                positions,
+                test_size=test_fraction,
+                random_state=seed,
+                stratify=fixture[TARGET].astype(int),
+            )
+            split_strategy = "random"
+        else:
+            raise ValueError(f"unsupported fixed leakage operation: {operation}")
+
+        train = fixture.iloc[sorted(train_positions)].reset_index(drop=True)
+        test = fixture.iloc[sorted(test_positions)].reset_index(drop=True)
+        drop_identity = bool(spec["dropIdentity"]) or operation == (
+            "leakage.identity_ablation"
+        )
+        executed_run = _run(
+            run_id=str(spec["runId"]),
+            split_strategy=split_strategy,
+            train=train,
+            test=test,
+            drop_features=(ENTITY,) if drop_identity else (),
+            seed=seed,
+            fixture_hash=fixture_hash,
+        )
+        executed_run["operation"] = operation
+        executed_run["groupBy"] = entity_label if split_strategy == "group" else None
+        executed_run["dropFeatures"] = [entity_label] if drop_identity else []
+        displayed_features = [*NUMERIC_FEATURES, "contract_type"]
+        if not drop_identity:
+            displayed_features.append(entity_label)
+        executed_run["featureSetFingerprint"] = sha256_json(
+            sorted(displayed_features)
+        )
+        executed.append(executed_run)
+
+    if not executed:
+        raise ValueError("an experiment plan requires at least one run")
+    result: dict[str, Any] = {
+        "schemaVersion": "2",
+        "concept": "entity_leakage",
+        "planId": plan_id,
+        "sessionId": session_id,
+        "artifactManifestHash": artifact_manifest_hash,
+        "conceptPackVersion": concept_pack_version,
+        "kernelVersion": KERNEL_VERSION,
+        "fixture": {
+            "sha256": fixture_hash,
+            "rows": len(fixture),
+            "customers": int(fixture[ENTITY].nunique()),
+            "targetRate": round(float(fixture[TARGET].mean()), 12),
+        },
+        "runs": executed,
+        "chartData": [
+            {
+                "runId": run["id"],
+                "accuracy": run["metrics"]["accuracy"],
+                "rocAuc": run["metrics"]["rocAuc"],
+                "sampleSize": run["sampleSizes"]["test"],
+                "splitStrategy": run["splitStrategy"],
+                "seed": run["seed"],
+            }
+            for run in executed
         ],
     }
     result["resultHash"] = sha256_json(result)

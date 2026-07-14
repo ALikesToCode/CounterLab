@@ -9,6 +9,7 @@ description = "Deterministic evidence kernel and external verifier for CounterLa
 requires-python = ">=3.12"
 dependencies = [
   "nbformat==5.10.4",
+  "jsonschema==4.26.0",
   "numpy==2.4.6",
   "pandas==2.3.3",
   "scikit-learn==1.9.0",
@@ -26,7 +27,9 @@ package-dir = {"" = "services/kernel/src"}
 [tool.setuptools.packages.find]
 where = ["services/kernel/src"]
 
+[tool.setuptools.package-data]
+counterlab_kernel = ["schemas/*.json"]
+
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"
 testpaths = ["services/kernel/tests"]
-
