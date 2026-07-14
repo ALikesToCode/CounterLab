@@ -18,6 +18,7 @@
     "@counterlab/concept-registry": "workspace:*",
     "@counterlab/contracts": "workspace:*",
     "@counterlab/notebook-parser": "workspace:*",
+    "@counterlab/plan-verifier": "workspace:*",
     "@counterlab/proof-bundle": "workspace:*",
     "@counterlab/session-core": "workspace:*",
     "@fontsource-variable/instrument-sans": "^5.2.8",

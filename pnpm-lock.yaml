@@ -48,6 +48,9 @@ importers:
       '@counterlab/notebook-parser':
         specifier: workspace:*
         version: link:../../packages/notebook-parser
+      '@counterlab/plan-verifier':
+        specifier: workspace:*
+        version: link:../../packages/plan-verifier
       '@counterlab/proof-bundle':
         specifier: workspace:*
         version: link:../../packages/proof-bundle

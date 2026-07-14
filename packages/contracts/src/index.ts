@@ -898,6 +898,63 @@ export const PredictionContractSchema = z
 
 export type PredictionContract = z.infer<typeof PredictionContractSchema>;
 
+export const RunnerLabCompileBundleSchema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    kind: z.literal("LAB_COMPILE"),
+    jobId: NonEmptyString,
+    sessionId: NonEmptyString,
+    stateVersion: z.number().int().positive(),
+    artifactManifestHash: Sha256Schema,
+    approvedBeliefTest: BeliefTestSchema,
+    prediction: PredictionContractSchema,
+    artifactManifest: ArtifactManifestSchema,
+    conceptPack: z
+      .object({
+        id: z.enum(["entity_leakage", "class_imbalance"]),
+        version: NonEmptyString,
+        title: NonEmptyString,
+        allowedOperations: z.array(FixedOperationIdSchema).min(1),
+        allowedMetrics: z.array(AllowedMetricSchema).min(1),
+        allowedVisualizations: z.array(AllowedVisualizationSchema).min(1),
+        verifierInvariants: z.array(NonEmptyString).min(1),
+      })
+      .strict(),
+    experimentPlanSchema: z.record(z.string(), z.json()),
+    resourceLimits: z
+      .object({
+        wallSeconds: z.number().int().positive().max(120),
+        memoryMb: z.number().int().min(128).max(2_048),
+        maxRuns: z.number().int().positive().max(8),
+      })
+      .strict(),
+    permittedOutputs: z
+      .tuple([
+        z.literal("experiment-plan.json"),
+        z.literal("public-rationale.md"),
+      ])
+      .readonly(),
+  })
+  .strict()
+  .superRefine((bundle, context) => {
+    if (
+      bundle.jobId.length === 0 ||
+      bundle.sessionId !== bundle.prediction.sessionId ||
+      bundle.approvedBeliefTest.id !== bundle.prediction.beliefTestId ||
+      bundle.approvedBeliefTest.concept !== bundle.conceptPack.id
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "runner bundle lineage does not resolve",
+        path: ["prediction"],
+      });
+    }
+  });
+
+export type RunnerLabCompileBundle = z.infer<
+  typeof RunnerLabCompileBundleSchema
+>;
+
 export const EvidenceEventUnsignedSchema = z
   .object({
     schemaVersion: VersionOneSchema.default("1"),
