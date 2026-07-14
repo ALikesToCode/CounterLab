@@ -168,6 +168,25 @@ test("Replay remains visibly labelled for the full reconstructed path", async ({
 test("missing live capabilities are stated without claiming a model call", async ({
   page,
 }) => {
+  await page.route("**/api/health", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          platform: "cloudflare-workers",
+          sample: "available",
+          replay: "available",
+          liveGpt: "server-key-required",
+          liveCodex: "local-runner-required",
+          liveKernel: "local-runner-required",
+          sandbox: "local-runner-required",
+          requestId: "e2e-health-missing",
+        },
+      }),
+    });
+  });
   await reset(page);
   await page.getByRole("button", { name: /Generate live/i }).click();
   await expect(
