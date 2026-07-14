@@ -90,6 +90,15 @@
     by live artifacts.
   - Changed live entry to require an uploaded notebook before creating the live
     session; the bundled sample is no longer substituted for live analysis.
+  - Added hosted Runner Job, browser-safe compiler event, callback, token, fixed
+    operation, and Experiment Plan v2 contracts with terminal transition rules.
+  - Added D1 migration 0002 and a repository that atomically persists optimistic
+    jobs, cursor-ordered public events, and append-only callback receipts.
+  - Added short-lived HMAC runner grants bound to one job, manifest, sanitized
+    input object, output prefix, callback path, state version, and expiration.
+  - Generated one Plan v2 JSON Schema into TypeScript and packaged Python
+    locations, then added Python schema/lineage/evidence validation and a fixed
+    leakage plan interpreter with deterministic interactive run configuration.
 - Files created/modified:
   - `task_plan.md`
   - `findings.md`
@@ -120,6 +129,14 @@
 | Typecheck | mode-migrated tree | Strict TypeScript and Worker types pass | passed | pass |
 | CloakBrowser E2E | mode-migrated tree | Existing 13 judged paths remain green | 13 passed in 27.7s | pass |
 | Repository Prettier check | full repository | No formatting differences | 46 pre-existing/unrelated files reported | fail |
+| Runner contracts (red) | pre-contract tree | Plan, job, event, callback, and token schemas exist | 4 expected undefined-schema failures reproduced | pass |
+| Runner job service (red) | pre-service tree | Optimistic jobs, cursors, callbacks | Missing module reproduced | pass |
+| Runner token (red) | pre-token tree | Signed bounded grants | Missing module reproduced | pass |
+| Python Plan interpreter (red) | pre-interpreter tree | Shared schema and fixed execution | Missing module reproduced | pass |
+| Runner contract/service tests | hosted runner substrate | Structural policy, optimistic transitions, event reconnect, idempotency | 21 passed | pass |
+| D1/token tests | hosted runner substrate | D1 atomic persistence and signed grant enforcement | 3 passed | pass |
+| Python Plan/kernel tests | hosted runner substrate | Schema/evidence policy, determinism, unchanged reference hash | 8 passed | pass |
+| Full `test-all.sh` | runner substrate checkpoint | Shared, Worker/UI, Python/runner, typecheck, D1 migration, browser | 113 TS + 41 web + 101 Python + 13 browser passed | pass |
 
 ## Error Log
 
@@ -132,6 +149,7 @@
 | 2026-07-15 | Combined Git diff output exceeded the response budget | 1 | Switched to bounded status, stat, and per-file diff inspection. |
 | 2026-07-15 | Focused mode-migration failures emitted a truncated DOM dump | 1 | Isolated the four failures from the summary and switched to individual reruns. |
 | 2026-07-15 | Repository-wide Prettier check reported 46 existing style differences | 1 | Formatted all changed code and kept unrelated generated/replay files untouched; use diff-local validation for this slice. |
+| 2026-07-15 | Full typecheck rejected the D1 test adapter's `unknown` SQL values and cross-runtime URL overload | 1 | Cast binds to Node `SQLInputValue` and resolved migration files through `fileURLToPath`. |
 
 ## 5-Question Reboot Check
 

@@ -30,7 +30,7 @@ Phase 2 — Upgrade plan and regression boundary
 
 ### Phase 3: Hosted artifact-specific leakage vertical slice
 
-- [ ] Add runner job/event/token contracts and D1 persistence.
+- [x] Add runner job/event/token contracts and D1 persistence.
 - [ ] Add authenticated runner service/test runner and fixed plan interpreter.
 - [ ] Compile, verify, repair, run, patch, and stream an uploaded leakage notebook.
 - [ ] Add artifact-specific proof and patch download.
@@ -77,6 +77,7 @@ Phase 2 — Upgrade plan and regression boundary
 | Start with leakage regression tests | The user explicitly prioritizes eliminating sample leakage before runner/UI expansion. |
 | No generated Python on the hosted path | A fixed plan interpreter gives a smaller, auditable authority surface. |
 | Bind sample authority to sample artifact ID and hash | Identical uploaded bytes remain a live artifact; provenance cannot be inferred from content hash alone. |
+| Make Plan v2 the only hosted executable authority | Codex output is strict JSON; Python validates the generated schema, lineage, and evidence before calling fixed operations. |
 
 ## Errors Encountered
 
@@ -89,6 +90,7 @@ Phase 2 — Upgrade plan and regression boundary
 | A combined Git diff command produced output too large for the tool response | 1 | Switched to `git status`, `git diff --stat`, and bounded per-file diffs. |
 | Focused mode-migration test output expanded to a large DOM dump and was truncated | 1 | Used the failure summary and reran individual failing tests after correcting their explicit assumptions. |
 | Repository-wide Prettier check reported 46 pre-existing style issues, mostly generated/replay and unrelated files | 1 | Kept scope reviewable, formatted every changed code file, and used `git diff --check`; the repository-wide backlog remains explicit. |
+| Full gate found Node/Cloudflare type conflicts in the SQLite-backed D1 test adapter | 1 | Typed SQL binds as `SQLInputValue` and converted `import.meta.url` to a string path before reading migrations. |
 
 ## Notes
 
