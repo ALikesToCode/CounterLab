@@ -203,4 +203,25 @@ describe("parseNotebook", () => {
       expect.arrayContaining(["UNSUPPORTED_MAGIC", "EXTERNAL_NETWORK_DEPENDENCY"]),
     );
   });
+
+  it("accepts pathlib as a harmless standard-library import in the public sample", () => {
+    const withPathlib = notebook({
+      cells: [
+        {
+          cell_type: "code",
+          execution_count: 1,
+          metadata: {},
+          outputs: [],
+          source: ["from pathlib import Path\n", "import pandas as pd\n"],
+        },
+      ],
+    });
+
+    const manifest = parseNotebook(Buffer.from(JSON.stringify(withPathlib)), "sample.ipynb", {
+      maxBytes: 1_000_000,
+    });
+
+    expect(manifest.support).toEqual({ status: "SUPPORTED", reasons: [] });
+    expect(manifest.packageHints).toEqual(["pandas", "pathlib"]);
+  });
 });
