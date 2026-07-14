@@ -259,6 +259,12 @@ describe("AppServerCodexCompiler stdio transport", () => {
       status: "completed",
     });
     expect(events).toContainEqual({
+      type: "status",
+      phase: "thread",
+      status: "completed",
+      detail: "model:installed-compatible-default",
+    });
+    expect(events).toContainEqual({
       type: "plan_summary",
       summary: "Create the constrained adapter.",
     });

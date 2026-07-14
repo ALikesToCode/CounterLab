@@ -545,7 +545,7 @@ export class AppServerCodexCompiler implements CodexCompiler {
         type: "status",
         phase: "thread",
         status: "completed",
-        ...(this.model ? { detail: `model:${thread.model}` } : {}),
+        detail: `model:${thread.model}`,
       };
 
       yield { type: "status", phase, status: "started" };
