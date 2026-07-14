@@ -62,8 +62,8 @@ echo "CounterLab is ready: http://127.0.0.1:5173"
 echo "Kernel health: http://127.0.0.1:8765/health"
 echo "Try Instantly and Replay work without secrets."
 if curl --fail --silent http://127.0.0.1:5173/api/health | \
-  grep -q '"liveGpt":"available"'; then
-  echo "Responses live configuration: available server-side (validated on first request)"
+  grep -q '"liveGpt":"configured"'; then
+  echo "Responses live configuration: configured server-side (validated on first request)"
 else
   echo "Responses live configuration: unavailable (set OPENAI_API_KEY)"
 fi
