@@ -43,3 +43,13 @@ does not prove generation-time hidden-path unreadability. The gate remains
 `PARTIAL`, this limitation is visible in the replay and Proof Bundle, and the
 class-imbalance P0.5 concept is deferred because the constitution forbids
 starting it before every leakage gate passes.
+
+## 2026-07-14 — Keep Responses endpoint configuration provider-neutral
+
+The live Belief Test continues to use the official OpenAI JavaScript SDK and
+Responses API contract, while `OPENAI_BASE_URL` may select a compatible HTTPS
+endpoint. CounterLab accepts a host root, `/v1` base, or full `/v1/responses`
+URL and canonicalizes it before SDK construction. The hostname and credential
+are never exposed in UI, health, evidence, logs, or replay metadata. All model
+output remains subject to the same local Zod and Artifact Manifest evidence
+checks; a compatible transport does not receive verifier authority.

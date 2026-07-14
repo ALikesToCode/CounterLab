@@ -21,7 +21,9 @@ canonical results, patches, event chain, and Proof Bundles.
 - File extension, MIME, and central size limits; bounded JSON bodies.
 - No notebook execution at intake; active outputs omitted.
 - Random server IDs, safe basenames, path containment, private R2 objects.
-- Server-only API key; GPT receives no raw rows, secrets, or client paths.
+- Server-only API key and optional Responses base URL; neither is returned to
+  the browser, stored in evidence, or forwarded to Codex. GPT receives no raw
+  rows, secrets, or client paths.
 - Zod validation and evidence-reference resolution for model output.
 - Legal server-side state transitions and immutable prediction hash.
 - Exact generated file set, regular-file/symlink checks, JSON depth/size limits.
@@ -36,6 +38,12 @@ canonical results, patches, event chain, and Proof Bundles.
   stripped of local paths; reasoning and raw agent prose are dropped.
 - Append-only D1 event table and canonical hash chain; optional HMAC.
 - Release secret-pattern scan.
+
+The custom Responses base URL is operator-controlled configuration. CounterLab
+requires HTTPS except for loopback development, rejects embedded credentials,
+query strings, and fragments, and canonicalizes only host-root, `/v1`, or full
+`/v1/responses` forms. This prevents accidental path ambiguity but does not
+establish trust in an endpoint selected by the operator.
 
 ## Verified attacks
 

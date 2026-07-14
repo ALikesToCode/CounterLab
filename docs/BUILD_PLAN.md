@@ -53,6 +53,8 @@ Each behavioral slice begins with a focused failing test, followed by the minimu
 
 - Scientific Python dependencies must be proven compatible with Python 3.14 or installed with a compatible local interpreter.
 - Codex live mode depends on installed CLI authentication and the documented App Server protocol.
-- GPT live mode requires a server-side `OPENAI_API_KEY`.
+- GPT live mode requires a server-side `OPENAI_API_KEY`. An optional
+  `OPENAI_BASE_URL` selects a compatible `/v1/responses` endpoint without
+  changing product copy, evidence, or provider authority.
 - Hardened generated-code execution requires a working Docker daemon or a documented equivalent local boundary.
 - Cloudflare Workers cannot spawn Codex or the Python kernel; deployed replay/sample behavior and local live behavior remain explicitly distinguished.

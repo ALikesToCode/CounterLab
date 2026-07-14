@@ -489,17 +489,137 @@ function fromWire(value: unknown, input: BeliefAnalystInput): BeliefTest {
   return parsed.data;
 }
 
-class OpenAIResponsesTransport implements ResponsesTransport {
+export function normalizeResponsesBaseURL(
+  configured: string | undefined,
+): string | undefined {
+  const value = configured?.trim();
+  if (value === undefined || value.length === 0) {
+    return undefined;
+  }
+
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new BeliefAnalystError(
+      "CONFIGURATION_ERROR",
+      "OPENAI_BASE_URL must be an absolute Responses endpoint URL",
+    );
+  }
+
+  const loopbackHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
+  const secure = url.protocol === "https:";
+  const localDevelopment =
+    url.protocol === "http:" && loopbackHosts.has(url.hostname);
+  if (!secure && !localDevelopment) {
+    throw new BeliefAnalystError(
+      "CONFIGURATION_ERROR",
+      "OPENAI_BASE_URL must use HTTPS (HTTP is allowed only for loopback development)",
+    );
+  }
+  if (url.username.length > 0 || url.password.length > 0) {
+    throw new BeliefAnalystError(
+      "CONFIGURATION_ERROR",
+      "OPENAI_BASE_URL must not contain credentials",
+    );
+  }
+  if (url.search.length > 0 || url.hash.length > 0) {
+    throw new BeliefAnalystError(
+      "CONFIGURATION_ERROR",
+      "OPENAI_BASE_URL must not contain a query string or fragment",
+    );
+  }
+
+  let pathname = url.pathname.replace(/\/+$/, "");
+  if (pathname.length === 0) {
+    pathname = "/v1";
+  } else if (pathname.endsWith("/v1/responses")) {
+    pathname = pathname.slice(0, -"/responses".length);
+  }
+  if (!pathname.endsWith("/v1")) {
+    throw new BeliefAnalystError(
+      "CONFIGURATION_ERROR",
+      "OPENAI_BASE_URL must be a host root, a /v1 base, or a full /v1/responses endpoint",
+    );
+  }
+  url.pathname = pathname;
+  return url.toString().replace(/\/$/, "");
+}
+
+export type OpenAIResponsesTransportOptions = {
+  apiKey: string;
+  baseURL?: string;
+  fetch?: typeof globalThis.fetch;
+};
+
+export class OpenAIResponsesTransport implements ResponsesTransport {
   private readonly client: OpenAI;
 
-  public constructor(apiKey: string) {
-    this.client = new OpenAI({ apiKey });
+  public constructor(options: OpenAIResponsesTransportOptions) {
+    const baseURL = normalizeResponsesBaseURL(options.baseURL);
+    this.client = new OpenAI({
+      apiKey: options.apiKey,
+      ...(baseURL === undefined ? {} : { baseURL }),
+      ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+    });
   }
 
   public async parse(
     request: ResponsesTransportRequest,
   ): Promise<ResponsesTransportResult> {
-    const response = await this.client.responses.parse(request);
+    let response: Awaited<ReturnType<OpenAI["responses"]["parse"]>>;
+    try {
+      response = await this.client.responses.parse(request);
+    } catch (error) {
+      if (error instanceof BeliefAnalystError) {
+        throw error;
+      }
+      if (error instanceof z.ZodError || error instanceof SyntaxError) {
+        throw new BeliefAnalystError(
+          "INVALID_RESPONSE",
+          "Responses endpoint returned invalid structured output",
+          { category: "structured_output" },
+        );
+      }
+      if (error instanceof OpenAI.APIError) {
+        const status = error.status;
+        if (status === 401 || status === 403) {
+          throw new BeliefAnalystError(
+            "LIVE_UNAVAILABLE",
+            "Responses endpoint authentication failed",
+            { category: "authentication", status },
+          );
+        }
+        if (status === 404) {
+          throw new BeliefAnalystError(
+            "LIVE_UNAVAILABLE",
+            "Responses endpoint or configured model is unavailable",
+            { category: "configuration", status },
+          );
+        }
+        if (status === 429) {
+          throw new BeliefAnalystError(
+            "LIVE_UNAVAILABLE",
+            "Responses endpoint rate limit was reached",
+            { category: "rate_limit", status },
+          );
+        }
+        throw new BeliefAnalystError(
+          "LIVE_UNAVAILABLE",
+          "Responses endpoint rejected the request",
+          {
+            category:
+              status !== undefined && status >= 500 ? "upstream" : "request",
+            ...(status === undefined ? {} : { status }),
+          },
+        );
+      }
+      throw new BeliefAnalystError(
+        "LIVE_UNAVAILABLE",
+        "Responses endpoint request failed",
+        { category: "transport" },
+      );
+    }
     const refusals: string[] = [];
     for (const item of response.output) {
       if (item.type !== "message") {
@@ -522,6 +642,7 @@ class OpenAIResponsesTransport implements ResponsesTransport {
 
 export type LiveBeliefAnalystOptions = {
   apiKey: string;
+  baseURL?: string;
   model?: string;
   reasoningEffort?: ReasoningEffort;
   transport?: ResponsesTransport;
@@ -541,8 +662,13 @@ export class LiveBeliefAnalyst implements BeliefAnalyst {
     }
     this.model = options.model?.trim() || "gpt-5.6";
     this.reasoningEffort = options.reasoningEffort ?? "medium";
+    const baseURL = normalizeResponsesBaseURL(options.baseURL);
     this.transport =
-      options.transport ?? new OpenAIResponsesTransport(options.apiKey);
+      options.transport ??
+      new OpenAIResponsesTransport({
+        apiKey: options.apiKey,
+        ...(baseURL === undefined ? {} : { baseURL }),
+      });
   }
 
   public async health(): Promise<BeliefAnalystHealth> {
@@ -786,6 +912,9 @@ export function createLiveBeliefAnalystFromEnv(
   }
   return new LiveBeliefAnalyst({
     apiKey,
+    ...(env.OPENAI_BASE_URL === undefined
+      ? {}
+      : { baseURL: env.OPENAI_BASE_URL }),
     model: env.OPENAI_MODEL?.trim() || "gpt-5.6",
     reasoningEffort: configuredEffort as ReasoningEffort,
     ...(overrides.transport === undefined

@@ -177,7 +177,9 @@ test("missing live capabilities are stated without claiming a model call", async
     page.getByText(/No live call has been claimed or started/i),
   ).toBeVisible();
   await expect(
-    page.getByText(/OPENAI_API_KEY · codex login · Docker/i),
+    page.getByText(
+      /OPENAI_API_KEY · optional OPENAI_BASE_URL · codex login · Docker/i,
+    ),
   ).toBeVisible();
 });
 
@@ -233,9 +235,7 @@ test("the judged path is keyboard operable with reduced motion", async ({
   const claimInput = page.getByLabel("Your claim");
   await claimInput.focus();
   await page.keyboard.type(claim);
-  await page
-    .getByRole("button", { name: /Create Belief Test/i })
-    .focus();
+  await page.getByRole("button", { name: /Create Belief Test/i }).focus();
   await page.keyboard.press("Enter");
   await page.getByRole("button", { name: /Confirm Belief Test/i }).focus();
   await page.keyboard.press("Enter");

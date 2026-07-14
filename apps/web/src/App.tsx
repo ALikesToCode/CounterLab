@@ -1267,7 +1267,9 @@ function LiveSetup({ fallBack }: { fallBack: (mode: Mode) => void }) {
             <p>No live call has been claimed or started from this screen.</p>
           </div>
         </div>
-        <code>OPENAI_API_KEY · codex login · Docker</code>
+        <code>
+          OPENAI_API_KEY · optional OPENAI_BASE_URL · codex login · Docker
+        </code>
       </section>
       <div className="action-cluster">
         <button

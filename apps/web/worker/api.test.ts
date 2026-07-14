@@ -164,6 +164,22 @@ describe("Cloudflare Worker API", () => {
     });
   });
 
+  it("reports live analysis without exposing endpoint configuration", async () => {
+    const response = await api.request("/api/health", undefined, {
+      OPENAI_API_KEY: "server-only-key",
+      OPENAI_BASE_URL: "https://responses.example.test/v1",
+      OPENAI_MODEL: "configured-model",
+    } as unknown as Env & Record<string, string>);
+
+    const body = await response.json();
+    expect(body).toMatchObject({
+      ok: true,
+      data: { liveGpt: "available" },
+    });
+    expect(JSON.stringify(body)).not.toContain("responses.example.test");
+    expect(JSON.stringify(body)).not.toContain("configured-model");
+  });
+
   it("retrieves stored artifact evidence without returning notebook bytes", async () => {
     const harness = await sessionHarness("instant");
     const response = await harness.app.request(
@@ -275,6 +291,37 @@ describe("Cloudflare Worker API", () => {
         message: "OPENAI_API_KEY is not configured",
         status: 503,
       },
+    });
+    await expect(sessionRepository.find(sessionId)).resolves.toMatchObject({
+      state: "INGESTED",
+      version: 1,
+    });
+    expect(await sessionRepository.listEvents(sessionId)).toHaveLength(1);
+  });
+
+  it("rejects an unsafe custom endpoint without advancing the live session", async () => {
+    const { app, sessionId, sessionRepository } = await sessionHarness("live");
+
+    const response = await app.request(
+      `/api/sessions/${sessionId}/belief-test`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          learnerClaim:
+            "The notebook accuracy proves generalization to new customers.",
+        }),
+      },
+      {
+        OPENAI_API_KEY: "server-only-key",
+        OPENAI_BASE_URL: "http://responses.example.test/v1",
+      } as unknown as Env & Record<string, string>,
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "CONFIGURATION_ERROR", status: 503 },
     });
     await expect(sessionRepository.find(sessionId)).resolves.toMatchObject({
       state: "INGESTED",

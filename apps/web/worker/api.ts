@@ -39,6 +39,7 @@ import {
 
 type WorkerBindings = Env & {
   OPENAI_API_KEY?: string;
+  OPENAI_BASE_URL?: string;
   OPENAI_MODEL?: string;
   OPENAI_REASONING_EFFORT?: string;
   COUNTERLAB_CODEX_MODE?: string;
@@ -277,10 +278,9 @@ export function createApi(options: ApiOptions = {}) {
         platform: "cloudflare-workers" as const,
         sample: "available" as const,
         replay: "available" as const,
-        liveGpt:
-          context.env?.OPENAI_API_KEY === undefined
-            ? ("server-key-required" as const)
-            : ("available" as const),
+        liveGpt: context.env?.OPENAI_API_KEY?.trim().length
+          ? ("available" as const)
+          : ("server-key-required" as const),
         liveCodex: "local-runner-required" as const,
         liveKernel: "local-runner-required" as const,
         sandbox: "local-runner-required" as const,
@@ -417,6 +417,7 @@ export function createApi(options: ApiOptions = {}) {
       session.mode === "live"
         ? createLiveBeliefAnalystFromEnv({
             OPENAI_API_KEY: context.env?.OPENAI_API_KEY,
+            OPENAI_BASE_URL: context.env?.OPENAI_BASE_URL,
             OPENAI_MODEL: context.env?.OPENAI_MODEL,
             OPENAI_REASONING_EFFORT: context.env?.OPENAI_REASONING_EFFORT,
           })

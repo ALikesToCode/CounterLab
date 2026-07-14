@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
+import { zodTextFormat } from "openai/helpers/zod";
 
 import type { ArtifactManifest, BeliefTest } from "@counterlab/contracts";
 
@@ -8,9 +10,11 @@ import {
   BeliefAnalystError,
   DisabledBeliefAnalyst,
   LiveBeliefAnalyst,
+  OpenAIResponsesTransport,
   buildSanitizedAnalystContext,
   createLiveBeliefAnalystFromEnv,
   deriveSafetyIdentifier,
+  normalizeResponsesBaseURL,
   resolveBeliefTestEvidence,
   schemaSummaryHash,
   type ResponsesTransport,
@@ -421,6 +425,145 @@ describe("LiveBeliefAnalyst", () => {
   });
 });
 
+describe("custom Responses endpoint", () => {
+  it("normalizes a provider-neutral v1 base URL", () => {
+    expect(
+      normalizeResponsesBaseURL(" https://responses.example.test/api/v1/ "),
+    ).toBe("https://responses.example.test/api/v1");
+    expect(normalizeResponsesBaseURL("https://responses.example.test")).toBe(
+      "https://responses.example.test/v1",
+    );
+    expect(
+      normalizeResponsesBaseURL("https://responses.example.test/v1/responses"),
+    ).toBe("https://responses.example.test/v1");
+    expect(normalizeResponsesBaseURL(undefined)).toBeUndefined();
+    expect(normalizeResponsesBaseURL("   ")).toBeUndefined();
+  });
+
+  it.each([
+    "http://responses.example.test/v1",
+    "https://user:secret@responses.example.test/v1",
+    "https://responses.example.test/v1?tenant=private",
+    "https://responses.example.test/v1#fragment",
+    "https://responses.example.test/custom-path",
+    "not-a-url",
+  ])("rejects unsafe or malformed base URL %s", (baseURL) => {
+    expect(() => normalizeResponsesBaseURL(baseURL)).toThrowError(
+      expect.objectContaining({ code: "CONFIGURATION_ERROR" }),
+    );
+  });
+
+  it("permits an HTTP loopback base URL for local endpoint tests", () => {
+    expect(normalizeResponsesBaseURL("http://127.0.0.1:8787/v1")).toBe(
+      "http://127.0.0.1:8787/v1",
+    );
+    expect(normalizeResponsesBaseURL("http://localhost:8787/v1")).toBe(
+      "http://localhost:8787/v1",
+    );
+  });
+
+  it("posts through the configured /v1/responses endpoint", async () => {
+    let requestedURL: string | undefined;
+    const fakeFetch: typeof globalThis.fetch = async (input) => {
+      requestedURL =
+        input instanceof Request ? input.url : new URL(input.toString()).href;
+      return new Response(
+        JSON.stringify({
+          id: "resp_custom_1",
+          object: "response",
+          status: "completed",
+          model: "configured-model",
+          output: [
+            {
+              id: "message_1",
+              type: "message",
+              role: "assistant",
+              status: "completed",
+              content: [
+                {
+                  type: "output_text",
+                  text: JSON.stringify({ ok: true }),
+                  annotations: [],
+                },
+              ],
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    };
+    const transport = new OpenAIResponsesTransport({
+      apiKey: "server-only-key",
+      baseURL: "https://responses.example.test/v1",
+      fetch: fakeFetch,
+    });
+
+    const result = await transport.parse({
+      model: "configured-model",
+      instructions: "Return the schema.",
+      input: "{}",
+      text: {
+        format: zodTextFormat(z.object({ ok: z.literal(true) }), "test_result"),
+      },
+      reasoning: { effort: "medium" },
+      store: false,
+      safety_identifier: deriveSafetyIdentifier("session_custom"),
+    });
+
+    expect(requestedURL).toBe("https://responses.example.test/v1/responses");
+    expect(result).toMatchObject({
+      outputParsed: { ok: true },
+      responseId: "resp_custom_1",
+      modelId: "configured-model",
+    });
+  });
+
+  it("returns a provider-neutral typed setup error for endpoint authentication failure", async () => {
+    const transport = new OpenAIResponsesTransport({
+      apiKey: "server-only-key",
+      baseURL: "https://responses.example.test/v1",
+      fetch: async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              message: "upstream-specific authentication details",
+              type: "invalid_request_error",
+              code: "invalid_api_key",
+            },
+          }),
+          { status: 401, headers: { "content-type": "application/json" } },
+        ),
+    });
+
+    let failure: unknown;
+    try {
+      await transport.parse({
+        model: "configured-model",
+        instructions: "Return the schema.",
+        input: "{}",
+        text: {
+          format: zodTextFormat(
+            z.object({ ok: z.literal(true) }),
+            "test_result",
+          ),
+        },
+        reasoning: { effort: "medium" },
+        store: false,
+        safety_identifier: deriveSafetyIdentifier("session_custom"),
+      });
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toMatchObject({
+      code: "LIVE_UNAVAILABLE",
+      message: "Responses endpoint authentication failed",
+      details: { category: "authentication", status: 401 },
+    });
+    expect(JSON.stringify(failure)).not.toContain("upstream-specific");
+  });
+});
+
 describe("sample and disabled analysts", () => {
   it("produces a deterministic, visibly approved sample for the exact fixture", async () => {
     const analyst = new ApprovedSampleBeliefAnalyst();
@@ -508,6 +651,23 @@ describe("sample and disabled analysts", () => {
         OPENAI_API_KEY: "server-only-key",
         OPENAI_REASONING_EFFORT: "maximum",
       }),
+    ).toThrowError(expect.objectContaining({ code: "CONFIGURATION_ERROR" }));
+  });
+
+  it("validates the custom base URL even when a test transport is injected", () => {
+    expect(() =>
+      createLiveBeliefAnalystFromEnv(
+        {
+          OPENAI_API_KEY: "server-only-key",
+          OPENAI_BASE_URL: "http://responses.example.test/v1",
+        },
+        {
+          transport: new CapturingTransport({
+            outputParsed: liveModelOutput(),
+            refusals: [],
+          }),
+        },
+      ),
     ).toThrowError(expect.objectContaining({ code: "CONFIGURATION_ERROR" }));
   });
 });

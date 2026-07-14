@@ -42,6 +42,12 @@ Each arrow narrows authority. Downstream evidence may reject an upstream proposa
 
 The reasoning analyst receives sanitized notebook structure, code/output excerpts, metric candidates, schema summary, support state, learner claim, and concept rules. It does not receive raw fixture rows, local paths, secrets, or the complete notebook unless a future support contract explicitly requires and documents that expansion.
 
+The official SDK may target an operator-configured, Responses-compatible HTTPS
+base URL. Endpoint identity and credentials remain server-only configuration;
+they are not part of prompts, provenance, event payloads, health responses, or
+product branding. The same schema, evidence resolution, refusal handling, and
+state-transition checks apply regardless of endpoint configuration.
+
 Its output is locally validated against the Belief Test schema and every evidence reference must resolve to the Artifact Manifest. `INSUFFICIENT_EVIDENCE` is a valid outcome. A model response cannot advance session state until the learner confirms it.
 
 GPT may explain verified evidence. It may not fabricate results, execute uploaded code, decide whether Codex output passes, or infer global mastery from learner prose.

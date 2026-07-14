@@ -34,11 +34,11 @@ The UI explicitly says the later run is not “repair attempt 3.”
 
 ## Judge Mode
 
-| Path | Meaning | Secrets required |
-| --- | --- | --- |
-| Try instantly | New D1-backed learner session using stored approved artifacts and real fixed-kernel payloads | No |
-| Generate live | GPT-5.6 analyst at the Worker; Codex/Python/Docker compilation on the process-capable local runner | OpenAI key, Codex login, Docker |
-| Replay verified session | Reconstructs checked-in evidence from actual prior runs; always visibly labelled | No |
+| Path                    | Meaning                                                                                            | Secrets required                |
+| ----------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------- |
+| Try instantly           | New D1-backed learner session using stored approved artifacts and real fixed-kernel payloads       | No                              |
+| Generate live           | GPT-5.6 analyst at the Worker; Codex/Python/Docker compilation on the process-capable local runner | OpenAI key, Codex login, Docker |
+| Replay verified session | Reconstructs checked-in evidence from actual prior runs; always visibly labelled                   | No                              |
 
 Replay does not make a new model call. The rejected compiler run authorized no
 result. The displayed result is tied to the separately verified candidate and
@@ -66,6 +66,11 @@ The server defaults to `OPENAI_MODEL=gpt-5.6` and
 `OPENAI_REASONING_EFFORT=medium`, uses `store: false`, hashes the session into a
 safety identifier, and resolves every evidence reference locally. Invalid,
 unsupported, or unresolved output cannot advance state.
+
+`OPENAI_BASE_URL` optionally selects a compatible Responses API endpoint. It is
+server-only and may be configured as an HTTPS host root, a `/v1` base, or the
+full `/v1/responses` endpoint; CounterLab normalizes all three to the SDK base
+and never returns the endpoint in health, events, evidence, or browser state.
 
 ### Runtime Codex generates
 
@@ -153,6 +158,7 @@ Configure server-side values only:
 
 ```dotenv
 OPENAI_API_KEY=
+OPENAI_BASE_URL=
 OPENAI_MODEL=gpt-5.6
 OPENAI_REASONING_EFFORT=medium
 CODEX_MODEL=
@@ -163,6 +169,10 @@ COUNTERLAB_SANDBOX_IMAGE=counterlab-runner:local
 Then authenticate the local CLI with `codex login`, ensure Docker is running,
 and use `pnpm run codex:live`. Cloudflare-hosted live lab compilation returns a
 typed local-runner requirement; it never substitutes replay.
+
+For local Vite development, server-only Responses settings are read from the
+repository-root `.env` and bound only to the Worker runtime. For Cloudflare,
+store the same values as Worker secrets; do not use public `VITE_` variables.
 
 ## Verification and reproduction
 

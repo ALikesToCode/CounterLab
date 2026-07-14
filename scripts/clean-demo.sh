@@ -61,10 +61,11 @@ curl --fail --silent http://127.0.0.1:5173/api/health >/dev/null
 echo "CounterLab is ready: http://127.0.0.1:5173"
 echo "Kernel health: http://127.0.0.1:8765/health"
 echo "Try Instantly and Replay work without secrets."
-if [[ -n "${OPENAI_API_KEY:-}" ]]; then
-  echo "GPT live key: available server-side"
+if curl --fail --silent http://127.0.0.1:5173/api/health | \
+  grep -q '"liveGpt":"available"'; then
+  echo "Responses live configuration: available server-side (validated on first request)"
 else
-  echo "GPT live key: unavailable (set OPENAI_API_KEY)"
+  echo "Responses live configuration: unavailable (set OPENAI_API_KEY)"
 fi
 if command -v codex >/dev/null 2>&1 && codex login status >/dev/null 2>&1; then
   echo "Codex CLI: authenticated; use pnpm run codex:live for the local compiler"

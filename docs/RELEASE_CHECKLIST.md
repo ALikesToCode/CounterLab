@@ -23,6 +23,9 @@
 - [x] Replay banner remains visible across every replay screen.
 - [x] Rejected run, repair cap, and separate verified run are labelled honestly.
 - [x] No private reasoning, secrets, or machine-local paths appear.
+- [x] Custom Responses routing is normalized, server-only, and absent from
+      browser-visible health/evidence.
+- [ ] Configured live Responses credential completes a schema-valid Belief Test.
 - [x] Generation isolation remains labelled `PARTIAL` until OS proof exists.
 
 ## Security and quality
