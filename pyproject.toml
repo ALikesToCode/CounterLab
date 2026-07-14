@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools==82.0.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "counterlab-kernel"
+version = "0.1.0"
+description = "Deterministic evidence kernel and external verifier for CounterLab"
+requires-python = ">=3.12"
+dependencies = [
+  "nbformat==5.10.4",
+  "numpy==2.4.6",
+  "pandas==2.3.3",
+  "scikit-learn==1.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==9.1.1",
+  "pytest-cov==7.0.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "services/kernel/src"}
+
+[tool.setuptools.packages.find]
+where = ["services/kernel/src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers"
+testpaths = ["services/kernel/tests"]
+
