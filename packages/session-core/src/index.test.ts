@@ -382,7 +382,7 @@ describe("SessionService state machine", () => {
   it("links verified compiler evidence without trusting malformed hashes", async () => {
     const { service, repository } = memoryService();
     await service.createSession({
-      sessionId: "session-1",
+      id: "session-1",
       artifactId: "artifact-1",
       mode: "instant",
     });

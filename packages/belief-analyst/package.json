@@ -1,0 +1,14 @@
+{
+  "name": "@counterlab/belief-analyst",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@counterlab/contracts": "workspace:*",
+    "openai": "6.46.0",
+    "zod": "4.4.3"
+  }
+}
