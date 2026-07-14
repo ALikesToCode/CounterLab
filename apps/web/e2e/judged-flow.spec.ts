@@ -112,6 +112,9 @@ test("prediction is immutable and results do not exist before commitment", async
 
   await page.getByLabel(/Fall materially/i).check();
   await page.getByRole("button", { name: /Commit prediction/i }).click();
+  await expect(
+    page.getByRole("heading", { name: /Build and verify/i }),
+  ).toBeVisible();
   const overwrite = await page.request.post(
     `/api/sessions/${sessionId}/prediction`,
     {
