@@ -752,6 +752,24 @@ export type ApiSuccess<T> = {
 export type ApiError = z.infer<typeof ApiErrorSchema>;
 export type ApiResponse<T> = ApiSuccess<T> | ApiError;
 
+export const SessionModeSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("sample_lesson"),
+      sampleId: NonEmptyString,
+    })
+    .strict(),
+  z.object({ kind: z.literal("live_notebook") }).strict(),
+  z
+    .object({
+      kind: z.literal("verified_replay"),
+      replayId: NonEmptyString,
+    })
+    .strict(),
+]);
+
+export type SessionMode = z.infer<typeof SessionModeSchema>;
+
 export const SessionStateSchema = z.enum([
   "INGESTED",
   "BELIEF_TEST_PROPOSED",

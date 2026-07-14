@@ -11,6 +11,7 @@ import {
   PredictionContractSchema,
   ProofBundleSchema,
   ReasoningDiffSchema,
+  SessionModeSchema,
   SessionStateSchema,
   TransferResultSchema,
   VerifiedResultSetSchema,
@@ -196,6 +197,38 @@ describe("ExperimentPlanSchema", () => {
 });
 
 describe("session transitions", () => {
+  it("keeps sample, live notebook, and verified replay modes structurally separate", () => {
+    expect(
+      SessionModeSchema.parse({
+        kind: "sample_lesson",
+        sampleId: "leakage-01",
+      }),
+    ).toEqual({ kind: "sample_lesson", sampleId: "leakage-01" });
+    expect(SessionModeSchema.parse({ kind: "live_notebook" })).toEqual({
+      kind: "live_notebook",
+    });
+    expect(
+      SessionModeSchema.parse({
+        kind: "verified_replay",
+        replayId: "leakage-01",
+      }),
+    ).toEqual({ kind: "verified_replay", replayId: "leakage-01" });
+
+    expect(() =>
+      SessionModeSchema.parse({
+        kind: "sample_lesson",
+        sampleId: "leakage-01",
+        replayId: "leakage-01",
+      }),
+    ).toThrow();
+    expect(() =>
+      SessionModeSchema.parse({ kind: "live_notebook", sampleId: "leakage-01" }),
+    ).toThrow();
+    expect(() =>
+      SessionModeSchema.parse({ kind: "verified_replay" }),
+    ).toThrow();
+  });
+
   it("allows only canonical next states", () => {
     expect(assertTransition("INGESTED", "BELIEF_TEST_PROPOSED")).toBe(
       "BELIEF_TEST_PROPOSED",
