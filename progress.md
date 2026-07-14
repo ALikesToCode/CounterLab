@@ -41,8 +41,7 @@
   - Read session domain/service logic; confirmed strong append-only optimistic
     state handling and found missing artifact/plan/result/patch cross-bindings.
   - Completed SQLite/D1 persistence audit; confirmed atomic optimistic patterns
-    and catalogued the runner/project/event-cursor schema missing from migration
-    0001.
+    and catalogued the runner/project/event-cursor schema missing from migration 0001.
   - Completed notebook parser audit; preserved its intake safety model and
     identified schema-metadata dependence plus imbalance evidence gaps.
   - Completed Belief Analyst audit; confirmed its provider-neutral Responses
@@ -110,6 +109,16 @@
     experiment plan and display-only rationale, receive only structured
     verifier counterexamples, and retain the proven local adapter compiler as a
     separate advanced path.
+  - Added the Cloudflare runner control-plane boundary: private R2 input/output
+    objects, named Container dispatch, scoped job tokens, authenticated start,
+    output, event, and callback routes, plus public cursor reconnect.
+  - Replaced the live compile dead end with an artifact-specific `LAB_COMPILE`
+    job. The Worker binds the bundle to the uploaded manifest, approved Belief
+    Test, immutable prediction, and released concept pack, then independently
+    re-verifies the returned Plan before advancing the session.
+  - Added callback idempotency and fail-closed behavior: a runner-claimed
+    success with an invalid Plan becomes `REJECTED`, releases no experiment
+    result, and cannot double-append session evidence on retry.
 - Files created/modified:
   - `task_plan.md`
   - `findings.md`
@@ -118,61 +127,67 @@
 
 ## Test Results
 
-| Test | Input | Expected | Actual | Status |
-| --- | --- | --- | --- | --- |
-| Root Vitest | pre-upgrade tree | Existing contracts/core/client suites stay green | 104 passed | pass |
-| Web Vitest | pre-upgrade tree | Existing Worker/UI/API suites stay green | 29 passed | pass |
-| Pytest | pre-upgrade tree | Existing kernel/verifier/runner suites stay green | 98 passed | pass |
-| Typecheck | pre-upgrade tree | TypeScript and Worker generated types pass | passed | pass |
-| CloakBrowser E2E | pre-upgrade tree | Existing judged path stays green | 13 passed in 28.3s | pass |
-| Authority regressions (red) | pre-fix Worker/UI | Reproduce all five release blockers | 5 expected failures reproduced | pass |
-| Authority regressions (green) | guarded Worker/UI | Prevent sample lineage leaks and accept configured runner health | 22 passed | pass |
-| Copied-sample authority regression (red) | sample hash with a different artifact ID | Reject copied upload as a sample lesson | Expected 201-to-409 failure reproduced | pass |
-| Copied-sample authority regression (green) | sample ID and hash binding | Reject copied upload as a sample lesson | 1 focused test passed | pass |
-| Root Vitest | authority and mode-contract slice | Preserve all contract/core/client behavior | 105 passed | pass |
-| Web Vitest | authority and runner-capability slice | Preserve Worker/UI/API behavior | 34 passed | pass |
-| Typecheck | authority and mode-contract slice | Strict TypeScript remains valid | passed | pass |
-| CloakBrowser E2E | authority and copy slice | Existing lesson, replay, resume, upload, keyboard paths remain valid | 13 passed in 27.6s | pass |
-| Mode route regressions (red) | pre-migration Worker | Separate mode endpoints and strict cross-mode bodies | 2 expected 404 failures reproduced | pass |
-| Live transfer/replay mutation regressions (red) | pre-guard Worker | Reject sample transfer for live and all replay writes | 2 expected 200-to-409 failures reproduced | pass |
-| Root Vitest | mode-migrated tree | Contracts, persisted state, proof, clients remain green | 106 passed | pass |
-| Web Vitest | mode-migrated tree | Worker, API, and React mode boundaries remain green | 38 passed | pass |
-| Typecheck | mode-migrated tree | Strict TypeScript and Worker types pass | passed | pass |
-| CloakBrowser E2E | mode-migrated tree | Existing 13 judged paths remain green | 13 passed in 27.7s | pass |
-| Repository Prettier check | full repository | No formatting differences | 46 pre-existing/unrelated files reported | fail |
-| Runner contracts (red) | pre-contract tree | Plan, job, event, callback, and token schemas exist | 4 expected undefined-schema failures reproduced | pass |
-| Runner job service (red) | pre-service tree | Optimistic jobs, cursors, callbacks | Missing module reproduced | pass |
-| Runner token (red) | pre-token tree | Signed bounded grants | Missing module reproduced | pass |
-| Python Plan interpreter (red) | pre-interpreter tree | Shared schema and fixed execution | Missing module reproduced | pass |
-| Runner contract/service tests | hosted runner substrate | Structural policy, optimistic transitions, event reconnect, idempotency | 21 passed | pass |
-| D1/token tests | hosted runner substrate | D1 atomic persistence and signed grant enforcement | 3 passed | pass |
-| Python Plan/kernel tests | hosted runner substrate | Schema/evidence policy, determinism, unchanged reference hash | 8 passed | pass |
-| Full `test-all.sh` | runner substrate checkpoint | Shared, Worker/UI, Python/runner, typecheck, D1 migration, browser | 113 TS + 41 web + 101 Python + 13 browser passed | pass |
-| Concept routing | released pack registry | Select supported evidence and refuse unsupported/insufficient artifacts | 3 registry + 30 analyst/registry + 42 web tests passed | pass |
-| Hosted plan verifier | Plan v2 authority boundary | Accept one fully bound plan and reject structured invariant violations | 2 tests passed; typecheck passed | pass |
-| Hosted Codex plan compiler | plan-only prompt, two repairs, stable stdio | Constrain outputs and reject executable authority | 22 Codex-client tests passed; typecheck passed | pass |
+| Test                                            | Input                                       | Expected                                                                | Actual                                                 | Status |
+| ----------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------ | ------ |
+| Root Vitest                                     | pre-upgrade tree                            | Existing contracts/core/client suites stay green                        | 104 passed                                             | pass   |
+| Web Vitest                                      | pre-upgrade tree                            | Existing Worker/UI/API suites stay green                                | 29 passed                                              | pass   |
+| Pytest                                          | pre-upgrade tree                            | Existing kernel/verifier/runner suites stay green                       | 98 passed                                              | pass   |
+| Typecheck                                       | pre-upgrade tree                            | TypeScript and Worker generated types pass                              | passed                                                 | pass   |
+| CloakBrowser E2E                                | pre-upgrade tree                            | Existing judged path stays green                                        | 13 passed in 28.3s                                     | pass   |
+| Authority regressions (red)                     | pre-fix Worker/UI                           | Reproduce all five release blockers                                     | 5 expected failures reproduced                         | pass   |
+| Authority regressions (green)                   | guarded Worker/UI                           | Prevent sample lineage leaks and accept configured runner health        | 22 passed                                              | pass   |
+| Copied-sample authority regression (red)        | sample hash with a different artifact ID    | Reject copied upload as a sample lesson                                 | Expected 201-to-409 failure reproduced                 | pass   |
+| Copied-sample authority regression (green)      | sample ID and hash binding                  | Reject copied upload as a sample lesson                                 | 1 focused test passed                                  | pass   |
+| Root Vitest                                     | authority and mode-contract slice           | Preserve all contract/core/client behavior                              | 105 passed                                             | pass   |
+| Web Vitest                                      | authority and runner-capability slice       | Preserve Worker/UI/API behavior                                         | 34 passed                                              | pass   |
+| Typecheck                                       | authority and mode-contract slice           | Strict TypeScript remains valid                                         | passed                                                 | pass   |
+| CloakBrowser E2E                                | authority and copy slice                    | Existing lesson, replay, resume, upload, keyboard paths remain valid    | 13 passed in 27.6s                                     | pass   |
+| Mode route regressions (red)                    | pre-migration Worker                        | Separate mode endpoints and strict cross-mode bodies                    | 2 expected 404 failures reproduced                     | pass   |
+| Live transfer/replay mutation regressions (red) | pre-guard Worker                            | Reject sample transfer for live and all replay writes                   | 2 expected 200-to-409 failures reproduced              | pass   |
+| Root Vitest                                     | mode-migrated tree                          | Contracts, persisted state, proof, clients remain green                 | 106 passed                                             | pass   |
+| Web Vitest                                      | mode-migrated tree                          | Worker, API, and React mode boundaries remain green                     | 38 passed                                              | pass   |
+| Typecheck                                       | mode-migrated tree                          | Strict TypeScript and Worker types pass                                 | passed                                                 | pass   |
+| CloakBrowser E2E                                | mode-migrated tree                          | Existing 13 judged paths remain green                                   | 13 passed in 27.7s                                     | pass   |
+| Repository Prettier check                       | full repository                             | No formatting differences                                               | 46 pre-existing/unrelated files reported               | fail   |
+| Runner contracts (red)                          | pre-contract tree                           | Plan, job, event, callback, and token schemas exist                     | 4 expected undefined-schema failures reproduced        | pass   |
+| Runner job service (red)                        | pre-service tree                            | Optimistic jobs, cursors, callbacks                                     | Missing module reproduced                              | pass   |
+| Runner token (red)                              | pre-token tree                              | Signed bounded grants                                                   | Missing module reproduced                              | pass   |
+| Python Plan interpreter (red)                   | pre-interpreter tree                        | Shared schema and fixed execution                                       | Missing module reproduced                              | pass   |
+| Runner contract/service tests                   | hosted runner substrate                     | Structural policy, optimistic transitions, event reconnect, idempotency | 21 passed                                              | pass   |
+| D1/token tests                                  | hosted runner substrate                     | D1 atomic persistence and signed grant enforcement                      | 3 passed                                               | pass   |
+| Python Plan/kernel tests                        | hosted runner substrate                     | Schema/evidence policy, determinism, unchanged reference hash           | 8 passed                                               | pass   |
+| Full `test-all.sh`                              | runner substrate checkpoint                 | Shared, Worker/UI, Python/runner, typecheck, D1 migration, browser      | 113 TS + 41 web + 101 Python + 13 browser passed       | pass   |
+| Concept routing                                 | released pack registry                      | Select supported evidence and refuse unsupported/insufficient artifacts | 3 registry + 30 analyst/registry + 42 web tests passed | pass   |
+| Hosted plan verifier                            | Plan v2 authority boundary                  | Accept one fully bound plan and reject structured invariant violations  | 2 tests passed; typecheck passed                       | pass   |
+| Hosted Codex plan compiler                      | plan-only prompt, two repairs, stable stdio | Constrain outputs and reject executable authority                       | 22 Codex-client tests passed; typecheck passed         | pass   |
+| Hosted Worker compile                           | live artifact, scoped token, cursor events  | Verify an artifact-specific Plan without sample authority               | 23 Worker tests passed                                 | pass   |
+| Full `test-all.sh`                              | hosted compile checkpoint                   | Shared, Worker/UI, Python/runner, typecheck, D1 migration, browser      | 122 TS + 45 web + 101 Python + 13 browser passed       | pass   |
 
 ## Error Log
 
-| Timestamp | Error | Attempt | Resolution |
-| --- | --- | ---: | --- |
-| 2026-07-15 | Full `AGENTS.md` output truncated | 1 | Re-read using bounded `sed` ranges. |
-| 2026-07-15 | Worker API remainder output exceeded the available model context | 1 | Switched to bounded reads of at most 200 lines. |
-| 2026-07-15 | Combined plan/progress patch used stale task-plan table context | 1 | Split document creation from exact-context progress updates. |
-| 2026-07-15 | Root Vitest config excluded the targeted Worker test | 1 | Switched to the web Vitest configuration. |
-| 2026-07-15 | Combined Git diff output exceeded the response budget | 1 | Switched to bounded status, stat, and per-file diff inspection. |
-| 2026-07-15 | Focused mode-migration failures emitted a truncated DOM dump | 1 | Isolated the four failures from the summary and switched to individual reruns. |
-| 2026-07-15 | Repository-wide Prettier check reported 46 existing style differences | 1 | Formatted all changed code and kept unrelated generated/replay files untouched; use diff-local validation for this slice. |
-| 2026-07-15 | Full typecheck rejected the D1 test adapter's `unknown` SQL values and cross-runtime URL overload | 1 | Cast binds to Node `SQLInputValue` and resolved migration files through `fileURLToPath`. |
-| 2026-07-15 | Combined App Server source inspection exceeded the response context | 1 | Switched to bounded reads around the compiler implementation. |
-| 2026-07-15 | Hosted compiler typecheck rejected `plan` as an internal run phase | 1 | Extended the validated transport phase union to include hosted plan compilation. |
+| Timestamp  | Error                                                                                             | Attempt | Resolution                                                                                                                |
+| ---------- | ------------------------------------------------------------------------------------------------- | ------: | ------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-15 | Full `AGENTS.md` output truncated                                                                 |       1 | Re-read using bounded `sed` ranges.                                                                                       |
+| 2026-07-15 | Worker API remainder output exceeded the available model context                                  |       1 | Switched to bounded reads of at most 200 lines.                                                                           |
+| 2026-07-15 | Combined plan/progress patch used stale task-plan table context                                   |       1 | Split document creation from exact-context progress updates.                                                              |
+| 2026-07-15 | Root Vitest config excluded the targeted Worker test                                              |       1 | Switched to the web Vitest configuration.                                                                                 |
+| 2026-07-15 | Combined Git diff output exceeded the response budget                                             |       1 | Switched to bounded status, stat, and per-file diff inspection.                                                           |
+| 2026-07-15 | Focused mode-migration failures emitted a truncated DOM dump                                      |       1 | Isolated the four failures from the summary and switched to individual reruns.                                            |
+| 2026-07-15 | Repository-wide Prettier check reported 46 existing style differences                             |       1 | Formatted all changed code and kept unrelated generated/replay files untouched; use diff-local validation for this slice. |
+| 2026-07-15 | Full typecheck rejected the D1 test adapter's `unknown` SQL values and cross-runtime URL overload |       1 | Cast binds to Node `SQLInputValue` and resolved migration files through `fileURLToPath`.                                  |
+| 2026-07-15 | Combined App Server source inspection exceeded the response context                               |       1 | Switched to bounded reads around the compiler implementation.                                                             |
+| 2026-07-15 | Hosted compiler typecheck rejected `plan` as an internal run phase                                |       1 | Extended the validated transport phase union to include hosted plan compilation.                                          |
+| 2026-07-15 | Runner-event API client typecheck found an incorrect error-class name                             |       1 | Used the existing `ApiClientError` contract for local cursor validation.                                                  |
+| 2026-07-15 | Progress update patch used stale pre-format table context                                         |       1 | Re-read the formatted table and applied the update against exact context.                                                 |
+| 2026-07-15 | Progress search command contained an unescaped backtick                                           |       1 | Re-ran the bounded search with a single-quoted plain pattern.                                                             |
+| 2026-07-15 | Combined progress/task-plan patch missed the task plan's formatted row                            |       1 | Split the documentation updates and patched each exact formatted table independently.                                     |
 
 ## 5-Question Reboot Check
 
-| Question | Answer |
-| --- | --- |
-| Where am I? | Phase 3 runner jobs and hosted leakage vertical slice. |
-| Where am I going? | Regression boundary, hosted leakage runner, Studio UX, imbalance, held-out release. |
-| What's the goal? | A real public artifact-specific CounterLab Studio with two verified concepts. |
-| What have I learned? | See `findings.md`. |
-| What have I done? | Re-read constitution and initialized persistent working records. |
+| Question             | Answer                                                                              |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| Where am I?          | Phase 3 runner jobs and hosted leakage vertical slice.                              |
+| Where am I going?    | Regression boundary, hosted leakage runner, Studio UX, imbalance, held-out release. |
+| What's the goal?     | A real public artifact-specific CounterLab Studio with two verified concepts.       |
+| What have I learned? | See `findings.md`.                                                                  |
+| What have I done?    | Re-read constitution and initialized persistent working records.                    |

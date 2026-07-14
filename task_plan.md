@@ -71,28 +71,32 @@ Phase 3 — Hosted artifact-specific leakage vertical slice
 
 ## Decisions Made
 
-| Decision | Rationale |
-| --- | --- |
-| Preserve the fixed kernel/verifier/parser/evidence chain | They are already proven and remain the numeric/integrity authority. |
-| Start with leakage regression tests | The user explicitly prioritizes eliminating sample leakage before runner/UI expansion. |
-| No generated Python on the hosted path | A fixed plan interpreter gives a smaller, auditable authority surface. |
-| Bind sample authority to sample artifact ID and hash | Identical uploaded bytes remain a live artifact; provenance cannot be inferred from content hash alone. |
-| Make Plan v2 the only hosted executable authority | Codex output is strict JSON; Python validates the generated schema, lineage, and evidence before calling fixed operations. |
+| Decision                                                 | Rationale                                                                                                                  |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Preserve the fixed kernel/verifier/parser/evidence chain | They are already proven and remain the numeric/integrity authority.                                                        |
+| Start with leakage regression tests                      | The user explicitly prioritizes eliminating sample leakage before runner/UI expansion.                                     |
+| No generated Python on the hosted path                   | A fixed plan interpreter gives a smaller, auditable authority surface.                                                     |
+| Bind sample authority to sample artifact ID and hash     | Identical uploaded bytes remain a live artifact; provenance cannot be inferred from content hash alone.                    |
+| Make Plan v2 the only hosted executable authority        | Codex output is strict JSON; Python validates the generated schema, lineage, and evidence before calling fixed operations. |
 
 ## Errors Encountered
 
-| Error | Attempt | Resolution |
-| --- | ---: | --- |
-| Initial full `AGENTS.md` output was truncated | 1 | Re-read the file in bounded line ranges. |
-| Worker API remainder output exceeded the available model context | 1 | Re-read `apps/web/worker/api.ts` in chunks of at most 200 lines. |
-| Combined plan/progress patch used stale task-plan table context | 1 | Split the plan document creation from exact-context status updates. |
-| Root Vitest config found no Worker test for a direct `apps/web/worker` filter | 1 | Run the test through `apps/web/vitest.config.ts`. |
-| A combined Git diff command produced output too large for the tool response | 1 | Switched to `git status`, `git diff --stat`, and bounded per-file diffs. |
-| Focused mode-migration test output expanded to a large DOM dump and was truncated | 1 | Used the failure summary and reran individual failing tests after correcting their explicit assumptions. |
-| Repository-wide Prettier check reported 46 pre-existing style issues, mostly generated/replay and unrelated files | 1 | Kept scope reviewable, formatted every changed code file, and used `git diff --check`; the repository-wide backlog remains explicit. |
-| Full gate found Node/Cloudflare type conflicts in the SQLite-backed D1 test adapter | 1 | Typed SQL binds as `SQLInputValue` and converted `import.meta.url` to a string path before reading migrations. |
-| Combined App Server source inspection exceeded the response context | 1 | Re-read only the relevant implementation in bounded line ranges. |
-| Hosted compiler typecheck rejected the new `plan` phase at the reusable transport boundary | 1 | Added `plan` to the existing validated compiler phase union. |
+| Error                                                                                                             | Attempt | Resolution                                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------- | ------: | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Initial full `AGENTS.md` output was truncated                                                                     |       1 | Re-read the file in bounded line ranges.                                                                                             |
+| Worker API remainder output exceeded the available model context                                                  |       1 | Re-read `apps/web/worker/api.ts` in chunks of at most 200 lines.                                                                     |
+| Combined plan/progress patch used stale task-plan table context                                                   |       1 | Split the plan document creation from exact-context status updates.                                                                  |
+| Root Vitest config found no Worker test for a direct `apps/web/worker` filter                                     |       1 | Run the test through `apps/web/vitest.config.ts`.                                                                                    |
+| A combined Git diff command produced output too large for the tool response                                       |       1 | Switched to `git status`, `git diff --stat`, and bounded per-file diffs.                                                             |
+| Focused mode-migration test output expanded to a large DOM dump and was truncated                                 |       1 | Used the failure summary and reran individual failing tests after correcting their explicit assumptions.                             |
+| Repository-wide Prettier check reported 46 pre-existing style issues, mostly generated/replay and unrelated files |       1 | Kept scope reviewable, formatted every changed code file, and used `git diff --check`; the repository-wide backlog remains explicit. |
+| Full gate found Node/Cloudflare type conflicts in the SQLite-backed D1 test adapter                               |       1 | Typed SQL binds as `SQLInputValue` and converted `import.meta.url` to a string path before reading migrations.                       |
+| Combined App Server source inspection exceeded the response context                                               |       1 | Re-read only the relevant implementation in bounded line ranges.                                                                     |
+| Hosted compiler typecheck rejected the new `plan` phase at the reusable transport boundary                        |       1 | Added `plan` to the existing validated compiler phase union.                                                                         |
+| Runner-event API client used an incorrect error-class name                                                        |       1 | Replaced it with the existing typed `ApiClientError` constructor.                                                                    |
+| Progress update patch used stale formatted table context                                                          |       1 | Re-read the exact table before applying the evidence update.                                                                         |
+| Progress search contained an unescaped shell backtick                                                             |       1 | Re-ran the bounded search with a safe single-quoted pattern.                                                                         |
+| Combined progress/task-plan patch missed a formatted task-plan row                                                |       1 | Split the documentation updates and patched each exact table independently.                                                          |
 
 ## Notes
 
