@@ -34,6 +34,8 @@ The implementation uses the requested monorepo boundaries:
 
 The local product owns the full path because runtime Codex and the Python kernel require child processes and OS isolation. Cloudflare will host the edge-compatible judge/replay surface and use D1 for edge persistence where appropriate. Cloud-hosted live compiler/kernel requests must return a typed local-runtime requirement unless a separately verified compute service is configured; they will never pretend to be live.
 
+The Cloudflare deployment uses `@opennextjs/cloudflare` on Workers, not Pages. D1 stores sessions and append-only event metadata; R2 stores uploaded notebooks, patch copies, replays, and Proof Bundles. The Worker may make the server-side Responses API call, but Codex App Server, Docker, Git worktrees, Python, and native SQLite remain on the process-capable local runtime.
+
 ## Milestone gates
 
 1. **Deterministic evidence spine** — stable notebook hashes; real random/group/ablation gap; zero group overlap; equal canonical hashes; all critical mutations caught.

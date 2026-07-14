@@ -6,7 +6,7 @@ Ship a locally runnable, judge-ready CounterLab P0 whose leakage experiment, lea
 
 ## Current phase
 
-Phase 1 — deterministic evidence spine
+Phase 2 — deterministic learning loop
 
 ## Phases
 
@@ -19,19 +19,19 @@ Phase 1 — deterministic evidence spine
 
 ### Phase 1: Deterministic evidence spine
 
-- [ ] Write failing Python and TypeScript contract tests.
-- [ ] Implement fixture generation, safe parser, kernel, canonical hashes, verifier, and mutations.
-- [ ] Generate the public notebook from computed output.
-- [ ] Pass parser, kernel, determinism, verifier, and mutation gates.
-- [ ] Commit as independently reviewable proof-spine slices.
-- **Status:** in_progress
+- [x] Write failing Python and TypeScript contract tests and observe the expected failures.
+- [x] Implement fixture generation, safe parser, kernel, canonical hashes, verifier, and mutations.
+- [x] Generate the public notebook from computed output.
+- [x] Pass parser, kernel, determinism, verifier, and mutation gates.
+- [x] Commit as independently reviewable proof-spine slices.
+- **Status:** complete
 
 ### Phase 2: Deterministic learning loop
 
 - [ ] Implement contracts, state machine, SQLite event chain, replay, transfer, patch, reasoning diff, and proof bundle.
 - [ ] Implement typed API routes and four-screen Next.js experience.
 - [ ] Pass unit and focused browser tests for the instant and replay paths.
-- **Status:** pending
+- **Status:** in_progress
 
 ### Phase 3: Live analyst and compiler integrations
 
@@ -77,6 +77,11 @@ Phase 1 — deterministic evidence spine
 |---|---:|---|
 | Initial combined skill read was truncated | 1 | Re-read each selected skill and RTK file separately before editing. |
 | Findings patch expected a missing template heading | 1 | Inspected the actual file, then patched the existing sections. |
+| pnpm blocked esbuild, sharp, and workerd install scripts | 4 | Current pnpm 11 docs confirm `onlyBuiltDependencies` was removed; replaced it with the reviewed `allowBuilds` map. |
+| pnpm auto-added a duplicate placeholder `allowBuilds` block | 1 | Removed the generated placeholder block after reviewing all three package approvals. |
+| Integrated verifier contract exposed three provenance/type gaps | 1 | Returned exact failures to the verifier slice: input fingerprint control, chart seed/split provenance, and integral sample counts. |
+| Generated public notebook was classified unsupported | 1 | Traced the sole reason to missing harmless stdlib `pathlib` in the parser allowlist; added a failing regression test, fixed the allowlist, and verified the real notebook is `SUPPORTED`. |
+| Multi-file bookkeeping patch had an invalid hunk delimiter | 1 | Reissued the patch with complete context and valid hunk boundaries. |
 
 ## Notes
 
