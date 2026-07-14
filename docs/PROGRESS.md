@@ -1,6 +1,6 @@
 # Progress
 
-Updated: 2026-07-14
+Updated: 2026-07-15
 
 ## Current status
 
@@ -16,6 +16,14 @@ completed a genuine reject-repair-verify run after that revocation. This boundar
 remains version-sensitive and is not claimed as a formal sandbox proof.
 Class-imbalance P0.5 has not started; the completed leakage gates now make that
 the next eligible concept slice rather than a blocker on the leakage release.
+
+The hosted own-notebook leakage path is now complete in the repository through
+artifact-specific patch download and Proof Bundle v2. Codex generates strict,
+source-free Experiment and Patch Plans; the Worker independently verifies both;
+the fixed Python kernel and patch engine own numeric truth and notebook edits.
+The source notebook remains sealed from Codex and is released only to the fixed
+patch process after the Patch Plan passes. Production deployment and one real
+public runner smoke remain not run for this new slice.
 
 The judged surface now uses a plain-first learning studio. The first visit asks
 one concrete question and one recommended three-minute lesson leads the page.
@@ -44,6 +52,8 @@ metrics remain derived from the canonical payload.
 | Codex compile/verify/repair                                     | pass    | Credential-safe Bubblewrap launch, App Server handshake, pre-turn credential revocation, strict generated-file boundary, and host verifier were exercised in a genuine `gpt-5.6-sol` run. The first plan was rejected with a structured `experiment_plan_runs` counterexample; repair 1 passed the exact canonical result hash and 12/12 mutations. Unisolated launches still fail closed. This is not a formal sandbox proof. |
 | Candidate sandbox and hidden-mount boundary                     | pass    | Real Docker reproduction is no-network, non-root, read-only, capability-dropped, resource-bounded, credential-free, and does not mount verifier/held-out paths. This is not a formal sandbox proof.                                                                                                                                                                                                                            |
 | Transfer-gated verified patch                                   | pass    | Failure keeps patch locked; pass unlocks a copied-notebook patch with zero overlap and four unrelated source hashes unchanged.                                                                                                                                                                                                                                                                                                 |
+| Hosted own-notebook leakage loop                                | pass    | Worker/runner integration tests complete artifact-specific Plan compile, independent verification, fixed-kernel execution, transfer, source-sealed Patch Plan, fixed patch, private download, Reasoning Diff, and Proof Bundle v2 without substituting sample result or patch authority.                                                                                                                                         |
+| Hosted runner production deployment                             | not run | The updated Container image builds during `test-all.sh`; the new image/control-plane version has not yet been deployed and smoke-tested at the public URL.                                                                                                                                                                                                                                                                      |
 | Unsupported notebook refusal                                    | pass    | Browser uploads a notebook with unsupported magic/network content, receives typed reasons, and cannot advance.                                                                                                                                                                                                                                                                                                                 |
 | Required local scripts                                          | pass    | `test-all`, mutations, clean demo, session reproduction, patch replay, replay recording, and achieved-metrics generation execute successfully in the working checkout.                                                                                                                                                                                                                                                         |
 | Full release check and secret scan                              | pass    | `./scripts/release-check.sh` passes tests, typecheck, production build, 12 mutations, Docker smoke/reproduction, patch replay, metrics generation, and a scan of every tracked file.                                                                                                                                                                                                                                           |
@@ -54,9 +64,9 @@ metrics remain derived from the canonical payload.
 
 ## Latest verified suite
 
-- Root Vitest: 104 tests passed.
-- Web Vitest: 29 tests passed.
-- Pytest kernel/runner: 98 tests passed.
+- Root Vitest: 142 tests passed.
+- Web Vitest: 45 tests passed.
+- Pytest kernel/runner: 103 tests passed.
 - CloakBrowser Playwright: 13 judged-path tests passed locally and against
   Cloudflare production, including committed-prediction restoration, replay
   restoration with its persistent banner, read-only completed-step review,

@@ -1,5 +1,21 @@
 # Decisions
 
+## 2026-07-15 — Make hosted patch generation plan-only
+
+- Runtime Codex receives the approved Belief Test, sanitized manifest, verified
+  result summary, passed transfer summary, registered patch operations, and
+  allowed cell indices. It may create only `patch-plan.json` and
+  `public-rationale.md`.
+- Uploaded notebook bytes remain private while Codex runs. The Worker reruns the
+  external Patch Plan verifier before the authenticated runner may fetch the
+  one scoped source object.
+- A fixed Python entrypoint applies registered operations to a copied notebook,
+  invokes the proven notebook patch verifier, and returns canonical patch
+  metadata. The original upload is never overwritten.
+- Live sessions use Proof Bundle v2 so artifact-specific Plan, result, patch,
+  compiler events, and verifier lineage are not replaced with replay evidence.
+  Proof Bundle v1 remains compatible with the approved sample and replay.
+
 ## 2026-07-14 — Make lesson progress resumable and reviewable
 
 - The server session remains authoritative for instant/live progress; refresh

@@ -227,6 +227,10 @@ green with explicit labels.
 
 ### Gate 2 — Runner jobs and hosted leakage
 
+Status: **complete in the repository**. The Container-backed test runner now
+completes an artifact-specific Experiment Plan, fixed result, cursor stream,
+and fail-closed callback. Public deployment smoke remains a Gate 5 release task.
+
 1. Add job/token/event/callback/Plan v2 contracts and transition tests.
 2. Add D1 migration/repository with optimistic idempotent callbacks.
 3. Add Container-backed runner service and a deterministic test runner.
@@ -241,6 +245,11 @@ hosted test-runner session; a rejected plan releases no result; refresh/cursor
 reconnect reconstructs the same state.
 
 ### Gate 3 — Artifact-specific patch and Studio experience
+
+Status: **in progress**. Item 1 is complete: Patch Plan v1, source sealing,
+fixed patch execution, private download, and Proof Bundle v2 pass the full
+repository gate. Studio decomposition, interactive controls, history, commands,
+and proof sharing remain.
 
 1. Add deterministic leakage patch support detector, Patch Plan interpreter,
    verifier, R2 download, and Proof Bundle v2.

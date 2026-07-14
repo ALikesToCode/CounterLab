@@ -140,6 +140,19 @@
     `LAB_RUN` job. The hosted runner makes no new model turn, runs only the fixed
     Python module, emits bounded public events, and releases a result only after
     the Worker verifier passes.
+  - Added the hosted artifact-specific patch loop. Codex emits only
+    `patch-plan.json` and display-only rationale; the Worker verifies the Plan,
+    keeps source bytes sealed until that verification succeeds, and gives the
+    source plus Plan to one fixed Python patch entrypoint.
+  - Reused the proven notebook patch verifier as fixed authority, bound its
+    output to the uploaded source hash/session/job, preserved the source, and
+    stored the verified copy privately for an authenticated session download.
+  - Added Proof Bundle v2 and live Reasoning Diff issuance containing the exact
+    uploaded manifest, Experiment Plan, Patch Plan, fixed result, verifier
+    reports, public compiler events, transfer, hashes, and limitations.
+  - Generated Patch Plan v1 JSON Schema into both TypeScript and Python package
+    locations and validated the Plan independently in Zod, JSON Schema, the
+    Worker verifier, and the fixed patch process.
 - Files created/modified:
   - `task_plan.md`
   - `findings.md`
@@ -189,6 +202,8 @@
 | Hosted fixed-kernel result path                 | live uploaded artifact and verified Plan    | Separate LAB_RUN, no Codex turn, independent result verification        | focused Worker, runner, contract, verifier tests pass  | pass   |
 | Runner production image                         | hosted fixed-kernel entrypoint               | Rebuild after Plan execution integration                                | built successfully                                     | pass   |
 | Full `test-all.sh`                              | artifact-specific LAB_RUN checkpoint         | Shared, Worker/UI, Python/runner, typecheck, D1 migration, browser      | 137 TS + 45 web + 102 Python + 13 browser passed       | pass   |
+| Hosted artifact-specific patch                  | uploaded notebook, verified result, passed transfer | Plan-only Codex, sealed source, fixed patch, download, Reasoning Diff/Proof v2 | focused Worker/runner/Python/proof tests passed | pass |
+| Full `test-all.sh`                              | hosted patch and live proof checkpoint        | Shared, Worker/UI, Python/runner, typecheck, D1 migration, Docker image, browser | 142 TS + 45 web + 103 Python + 13 browser passed | pass |
 
 ## Error Log
 
@@ -218,6 +233,9 @@
 | 2026-07-15 | Full tests found strict JSON parsing incompatible with Prettier's Wrangler JSONC trailing commas   |       1 | Preserved `wrangler.jsonc` as strict JSON, which remains a valid Wrangler configuration.                                  |
 | 2026-07-15 | The LAB_RUN contract test referenced a Plan constant outside its describe scope                    |       1 | Moved the lineage test beside the shared hosted Plan fixture.                                                             |
 | 2026-07-15 | Hosted-runner tests imported session-core solely to calculate fixture hashes                       |       1 | Kept the runner dependency boundary narrow and used valid opaque hashes in the unit fixture.                              |
+| 2026-07-15 | Filtered hosted-runner Vitest command used an extra argument separator and found no tests          |       1 | Ran the files through root Vitest with explicit paths.                                                                    |
+| 2026-07-15 | Web Vitest filter was executed from the wrong include root                                          |       1 | Re-ran from `apps/web` using its local Vitest configuration.                                                               |
+| 2026-07-15 | Optional Python `black` formatting probe was unavailable                                           |       1 | Kept the files manually formatted and verified them with pytest and `git diff --check`.                                    |
 | 2026-07-15 | Result-verifier typecheck exposed entity-field assumptions on future imbalance runs                |       1 | Narrowed leakage run specs explicitly before accessing entity-specific fields.                                           |
 
 ## 5-Question Reboot Check

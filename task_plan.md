@@ -32,9 +32,9 @@ Phase 3 — Hosted artifact-specific leakage vertical slice
 
 - [x] Add runner job/event/token contracts and D1 persistence.
 - [x] Add authenticated runner service/test runner and fixed plan interpreter.
-- [ ] Compile, verify, repair, run, patch, and stream an uploaded leakage notebook.
-- [ ] Add artifact-specific proof and patch download.
-- **Status:** in_progress
+- [x] Compile, verify, repair, run, patch, and stream an uploaded leakage notebook.
+- [x] Add artifact-specific proof and patch download.
+- **Status:** complete
 
 ### Phase 4: CounterLab Studio product shell
 
@@ -78,6 +78,7 @@ Phase 3 — Hosted artifact-specific leakage vertical slice
 | No generated Python on the hosted path                   | A fixed plan interpreter gives a smaller, auditable authority surface.                                                     |
 | Bind sample authority to sample artifact ID and hash     | Identical uploaded bytes remain a live artifact; provenance cannot be inferred from content hash alone.                    |
 | Make Plan v2 the only hosted executable authority        | Codex output is strict JSON; Python validates the generated schema, lineage, and evidence before calling fixed operations. |
+| Keep uploaded notebook bytes sealed from Codex           | Codex emits only a source-free Patch Plan; the Worker independently verifies it before a fixed Python operation receives the scoped source bytes. |
 
 ## Errors Encountered
 
@@ -108,6 +109,9 @@ Phase 3 — Hosted artifact-specific leakage vertical slice
 | LAB_RUN contract test referenced a Plan fixture outside its describe scope                                        |       1 | Moved the lineage test into the hosted-runner contract suite that owns the fixture.                                                  |
 | Hosted runner test introduced an unnecessary session-core dependency for hashes                                   |       1 | Used contract-valid opaque hashes and preserved the runner's narrow runtime dependencies.                                            |
 | Result verifier accessed entity fields before narrowing future imbalance run specs                                |       1 | Added an explicit leakage-spec type guard before entity-specific checks.                                                             |
+| Filtered hosted-runner Vitest invocation inserted an extra `--` and found no tests                                 |       1 | Invoked the two files through root Vitest with explicit paths.                                                                       |
+| Web Vitest was invoked from the repository root with an app-relative config                                        |       1 | Ran the Worker suite from `apps/web`, matching its configured include roots.                                                         |
+| Python formatting probe found no optional `black` module in the locked environment                                 |       1 | Kept Python changes manually PEP 8 aligned and relied on pytest plus `git diff --check`; no dependency was added for one check.       |
 
 ## Notes
 
