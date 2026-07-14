@@ -141,14 +141,14 @@ class HostCompileVerifyPipeline:
         except WorkspacePolicyError as exc:
             return _rejected(
                 "generated_workspace_policy",
-                {"code": exc.code},
+                {"code": exc.code, **exc.details},
                 "contained exact generated workspace passing static policy",
                 "The generated workspace was rejected before execution.",
             )
         except DockerExecutionError as exc:
             return _rejected(
                 "candidate_execution",
-                {"code": exc.code},
+                {"code": exc.code, **exc.details},
                 "successful constrained adapter execution",
                 "The candidate did not complete inside the constrained runner.",
             )

@@ -3,7 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from counterlab_runner.docker import DockerExecutionRecord, RunnerLimits
+from counterlab_runner.docker import (
+    DockerExecutionError,
+    DockerExecutionRecord,
+    RunnerLimits,
+)
 from counterlab_runner.pipeline import HostCompileVerifyPipeline
 from counterlab_runner.workspace import create_fresh_workspace
 
@@ -187,6 +191,68 @@ def test_host_pipeline_rejects_adapter_contract_that_diverges_from_plan(
     assert outcome.result is None
     assert outcome.failures[0].invariant == "adapter_matches_plan"
     assert "path" not in repr(outcome.failures)
+
+
+def test_host_pipeline_preserves_bounded_candidate_exit_counterexample(
+    tmp_path: Path,
+) -> None:
+    workspace = create_fresh_workspace(tmp_path / "generated", "session-01")
+    _write_workspace(workspace)
+
+    class RejectedExecutor(_Executor):
+        def execute(self, **_: object) -> DockerExecutionRecord:
+            raise DockerExecutionError(
+                "candidate_exit",
+                {
+                    "exitCode": 1,
+                    "stdoutExcerpt": "",
+                    "stderrExcerpt": "TypeError: unsupported SDK argument",
+                },
+            )
+
+    root = Path(__file__).resolve().parents[3]
+    outcome = HostCompileVerifyPipeline(
+        generated_root=tmp_path / "generated",
+        fixture_path=root / "fixtures/public/customer_churn.csv",
+        executor=RejectedExecutor(_contract()),
+        run_root=tmp_path / "runs",
+    )(workspace)
+
+    assert outcome.status == "REJECTED"
+    assert outcome.failures[0].invariant == "candidate_execution"
+    assert outcome.failures[0].observed == {
+        "code": "candidate_exit",
+        "exitCode": 1,
+        "stdoutExcerpt": "",
+        "stderrExcerpt": "TypeError: unsupported SDK argument",
+    }
+
+
+def test_host_pipeline_preserves_exact_file_set_counterexample(tmp_path: Path) -> None:
+    workspace = create_fresh_workspace(tmp_path / "generated", "session-01")
+    _write_workspace(workspace)
+    (workspace / "unexpected.txt").write_text("extra", encoding="utf-8")
+    root = Path(__file__).resolve().parents[3]
+
+    outcome = HostCompileVerifyPipeline(
+        generated_root=tmp_path / "generated",
+        fixture_path=root / "fixtures/public/customer_churn.csv",
+        executor=_Executor(_contract()),
+        run_root=tmp_path / "runs",
+    )(workspace)
+
+    assert outcome.status == "REJECTED"
+    assert outcome.failures[0].invariant == "generated_workspace_policy"
+    assert outcome.failures[0].observed == {
+        "code": "generated_file_set",
+        "expected": [
+            "artifact-adapter.py",
+            "experiment-plan.json",
+            "public_tests.py",
+        ],
+        "missing": [],
+        "extra": ["unexpected.txt"],
+    }
 
 
 def test_host_pipeline_rejects_false_isolation_probe_without_computed_result(

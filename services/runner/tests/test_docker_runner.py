@@ -223,6 +223,49 @@ def test_executor_kills_named_container_when_wall_clock_expires(
     assert [command[1] for command in commands] == ["run", "kill", "rm"]
 
 
+def test_executor_preserves_bounded_diagnostics_when_container_exits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = tmp_path / "workspace"
+    fixture = tmp_path / "fixture.csv"
+    workspace.mkdir()
+    fixture.write_text("x\n", encoding="utf-8")
+    artifacts = _artifacts(workspace, RunnerLimits())
+
+    def fake_run(command: tuple[str, ...], **_: object) -> subprocess.CompletedProcess[bytes]:
+        output_mount = next(item for item in command if "dst=/output" in item)
+        output = Path(output_mount.split("src=", 1)[1].split(",dst=", 1)[0])
+        (output / "public-tests.stdout").write_text(
+            "public runner output", encoding="utf-8"
+        )
+        (output / "public-tests.stderr").write_text(
+            "TypeError: unsupported SDK argument" + "x" * 5_000,
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(
+            command,
+            23,
+            stdout=b"",
+            stderr=b"",
+        )
+
+    monkeypatch.setattr("counterlab_runner.docker.subprocess.run", fake_run)
+
+    with pytest.raises(DockerExecutionError, match="candidate_exit") as captured:
+        DockerAdapterExecutor(image="counterlab-runner:local").execute(
+            artifacts=artifacts,
+            fixture=fixture,
+            run_root=tmp_path / "runs",
+        )
+
+    assert captured.value.details["exitCode"] == 23
+    assert captured.value.details["stdoutExcerpt"] == "public runner output"
+    assert str(captured.value.details["stderrExcerpt"]).startswith(
+        "TypeError: unsupported SDK argument"
+    )
+    assert len(str(captured.value.details["stderrExcerpt"])) <= 4_000
+
+
 def test_executor_applies_the_approved_plan_output_limit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

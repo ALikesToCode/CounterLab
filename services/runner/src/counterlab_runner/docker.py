@@ -24,6 +24,27 @@ _EXPECTED_OUTPUTS = frozenset(
         "public-tests.stderr",
     }
 )
+_MAX_DIAGNOSTIC_BYTES = 4_000
+
+
+def _diagnostic_excerpt(value: bytes | str | None) -> str:
+    if value is None:
+        return ""
+    text = value.decode("utf-8", errors="replace") if isinstance(value, bytes) else value
+    return text[:_MAX_DIAGNOSTIC_BYTES]
+
+
+def _output_diagnostic(output: Path, name: str, fallback: bytes | str | None) -> str:
+    excerpt = _diagnostic_excerpt(fallback)
+    if excerpt:
+        return excerpt
+    path = output / name
+    if path.is_symlink() or not path.is_file():
+        return ""
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")[:_MAX_DIAGNOSTIC_BYTES]
+    except OSError:
+        return ""
 
 
 class DockerExecutionError(RuntimeError):
@@ -233,7 +254,16 @@ class DockerAdapterExecutor:
         duration_ms = int((time.monotonic() - started) * 1_000)
         if completed.returncode != 0:
             raise DockerExecutionError(
-                "candidate_exit", {"exitCode": completed.returncode}
+                "candidate_exit",
+                {
+                    "exitCode": completed.returncode,
+                    "stdoutExcerpt": _output_diagnostic(
+                        output, "public-tests.stdout", completed.stdout
+                    ),
+                    "stderrExcerpt": _output_diagnostic(
+                        output, "public-tests.stderr", completed.stderr
+                    ),
+                },
             )
 
         entries = self.validate_output_directory(output, limits)
