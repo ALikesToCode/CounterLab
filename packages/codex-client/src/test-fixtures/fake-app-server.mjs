@@ -40,6 +40,17 @@ lines.on("line", (line) => {
     initialized = true;
     return;
   }
+  if (message.method === "account/read") {
+    if (!initialized) process.exit(8);
+    send({
+      id: message.id,
+      result: {
+        account: { type: "chatgpt", planType: "test" },
+        requiresOpenaiAuth: true,
+      },
+    });
+    return;
+  }
   if (message.method === "thread/start") {
     if (!initialized) process.exit(2);
     if (expectModelOmitted && Object.hasOwn(message.params, "model")) {

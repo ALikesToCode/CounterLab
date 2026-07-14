@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import {
   AppServerCodexCompiler,
   buildCompileLabPrompt,
+  createDefaultBubblewrapCodexLaunchBoundary,
   type CompilerEvent,
 } from "../packages/codex-client/src/index.ts";
 import { createLiveCompileInput } from "./live-codex-input.ts";
@@ -35,7 +36,11 @@ async function main(): Promise<void> {
     createdAt: startedAt,
   });
   const promptHash = sha256(buildCompileLabPrompt(input));
-  const compiler = new AppServerCodexCompiler({ timeoutMs: 300_000 });
+  const launchBoundary = await createDefaultBubblewrapCodexLaunchBoundary();
+  const compiler = new AppServerCodexCompiler({
+    launchBoundary,
+    timeoutMs: 300_000,
+  });
   const health = await compiler.health();
   if (!health.available) throw new Error(health.reason);
   if (health.mode !== "live")

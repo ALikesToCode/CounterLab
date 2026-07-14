@@ -77,6 +77,13 @@ const TurnStartResponseSchema = z
   })
   .passthrough();
 
+const AccountReadResponseSchema = z
+  .object({
+    account: z.unknown().nullable(),
+    requiresOpenaiAuth: z.boolean(),
+  })
+  .passthrough();
+
 export type AppServerCodexCompilerOptions = {
   command?: string;
   commandArgs?: string[];
@@ -103,6 +110,8 @@ export type PreparedAppServerLaunch = {
   environment: NodeJS.ProcessEnv;
   protocolCwd: string;
   spawnCwd?: string;
+  revokeCredentials?: () => Promise<void>;
+  dispose?: () => Promise<void>;
 };
 
 export type AppServerLaunchBoundaryHealth =
@@ -577,6 +586,18 @@ export class AppServerCodexCompiler implements CodexCompiler {
       );
       void initialized;
       connection.notify("initialized");
+      if (launch.revokeCredentials) {
+        const account = AccountReadResponseSchema.parse(
+          await connection.request("account/read", { refreshToken: false }),
+        );
+        if (account.requiresOpenaiAuth && account.account === null) {
+          throw new CompilerSetupError(
+            "CODEX_ISOLATION_UNAVAILABLE",
+            "Codex did not load the staged credential before revocation.",
+          );
+        }
+        await launch.revokeCredentials();
+      }
       yield { type: "status", phase: "initialize", status: "completed" };
 
       yield { type: "status", phase: "thread", status: "started" };
@@ -648,6 +669,7 @@ export class AppServerCodexCompiler implements CodexCompiler {
       throw asSetupError(error);
     } finally {
       connection.close();
+      await launch.dispose?.();
     }
   }
 

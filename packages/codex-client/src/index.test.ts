@@ -402,6 +402,37 @@ describe("AppServerCodexCompiler stdio transport", () => {
     });
   });
 
+  it("revokes staged credentials before starting a model thread", async () => {
+    const fakeServer = fileURLToPath(
+      new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
+    );
+    let revoked = false;
+    const compiler = new AppServerCodexCompiler({
+      command: process.execPath,
+      commandArgs: [fakeServer, "--expect-constrained-turn"],
+      timeoutMs: 2_000,
+      launchBoundary: {
+        async health() {
+          return { available: true as const };
+        },
+        async prepare(request) {
+          return {
+            command: request.command,
+            args: request.args,
+            environment: request.environment,
+            protocolCwd: request.hostCwd,
+            async revokeCredentials() {
+              revoked = true;
+            },
+          };
+        },
+      },
+    });
+
+    await collect(compiler.compileLab(labInput()));
+    expect(revoked).toBe(true);
+  });
+
   it("passes CODEX_MODEL only when explicitly configured", async () => {
     const fakeServer = fileURLToPath(
       new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),

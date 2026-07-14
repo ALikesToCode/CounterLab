@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import {
   AppServerCodexCompiler,
   buildRepairLabPrompt,
+  createDefaultBubblewrapCodexLaunchBoundary,
   type CompilerEvent,
   type RepairLabInput,
 } from "../packages/codex-client/src/index.ts";
@@ -85,7 +86,11 @@ async function main(): Promise<void> {
     })),
   };
   const promptHash = sha256(buildRepairLabPrompt(input));
-  const compiler = new AppServerCodexCompiler({ timeoutMs: 300_000 });
+  const launchBoundary = await createDefaultBubblewrapCodexLaunchBoundary();
+  const compiler = new AppServerCodexCompiler({
+    launchBoundary,
+    timeoutMs: 300_000,
+  });
   const health = await compiler.health();
   if (!health.available) throw new Error(health.reason);
 

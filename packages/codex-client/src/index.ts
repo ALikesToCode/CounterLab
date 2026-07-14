@@ -8,6 +8,23 @@ export type {
 } from "./app-server.js";
 export { DisabledCodexCompiler, ReplayCodexCompiler } from "./fallbacks.js";
 export {
+  BubblewrapCodexLaunchBoundary,
+  buildBubblewrapCodexLaunch,
+  createDefaultBubblewrapCodexLaunchBoundary,
+  loadSecureCodexAccessToken,
+  probeBubblewrapCredentialIsolation,
+  stageSecureCodexAuth,
+} from "./credential-boundary.js";
+export type {
+  BubblewrapCodexLaunchBoundaryOptions,
+  BubblewrapCodexLaunchOptions,
+  BubblewrapCodexLaunchPlan,
+  BubblewrapCredentialIsolationProbeOptions,
+  BubblewrapCredentialIsolationProbeResult,
+  DefaultBubblewrapCodexLaunchBoundaryOptions,
+  StagedCodexAuth,
+} from "./credential-boundary.js";
+export {
   buildCompileLabPrompt,
   buildCompilePatchPrompt,
   buildRepairLabPrompt,
