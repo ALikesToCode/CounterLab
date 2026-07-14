@@ -2,18 +2,29 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import type { ArtifactManifest } from "@counterlab/contracts";
+import {
+  type ArtifactManifest,
+  type PublicCompilerEvent,
+  type RunnerCallback,
+  type RunnerJob,
+} from "@counterlab/contracts";
 import type {
   CounterLabSession,
   EvidenceEvent,
+  RunnerJobRepository,
   SessionMode,
   SessionRepository,
 } from "@counterlab/session-core";
-import { createEvidenceEvent } from "@counterlab/session-core";
+import { createEvidenceEvent, hashCanonical } from "@counterlab/session-core";
 
 import { api, createApi } from "./api";
 import type { ArtifactStore, StoredArtifact } from "./artifact-store";
 import { ConcurrentD1SessionUpdateError } from "./d1-session-repository";
+import type {
+  RunnerDispatchRequest,
+  RunnerDispatcher,
+  RunnerObjectStore,
+} from "./runner-control-plane";
 
 class MemorySessionRepository implements SessionRepository {
   private readonly sessions = new Map<string, CounterLabSession>();
@@ -98,6 +109,88 @@ class ConflictSessionRepository extends MemorySessionRepository {
   }
 }
 
+class MemoryRunnerJobRepository implements RunnerJobRepository {
+  private readonly jobs = new Map<string, RunnerJob>();
+  private readonly events = new Map<string, PublicCompilerEvent[]>();
+  private readonly callbacks = new Map<string, RunnerCallback>();
+
+  async create(job: RunnerJob): Promise<void> {
+    this.jobs.set(job.jobId, structuredClone(job));
+  }
+
+  async find(jobId: string): Promise<RunnerJob | undefined> {
+    const job = this.jobs.get(jobId);
+    return job === undefined ? undefined : structuredClone(job);
+  }
+
+  async save(job: RunnerJob, expectedVersion: number): Promise<void> {
+    const current = this.jobs.get(job.jobId);
+    if (current?.jobVersion !== expectedVersion) throw new Error("stale job");
+    this.jobs.set(job.jobId, structuredClone(job));
+  }
+
+  async appendEvent(
+    job: RunnerJob,
+    expectedVersion: number,
+    event: PublicCompilerEvent,
+  ): Promise<void> {
+    await this.save(job, expectedVersion);
+    const events = this.events.get(job.jobId) ?? [];
+    events.push(structuredClone(event));
+    this.events.set(job.jobId, events);
+  }
+
+  async listEvents(
+    jobId: string,
+    afterCursor: number,
+  ): Promise<PublicCompilerEvent[]> {
+    return structuredClone(
+      (this.events.get(jobId) ?? []).filter(
+        (event) => event.cursor > afterCursor,
+      ),
+    );
+  }
+
+  async findCallback(
+    idempotencyKey: string,
+  ): Promise<RunnerCallback | undefined> {
+    const callback = this.callbacks.get(idempotencyKey);
+    return callback === undefined ? undefined : structuredClone(callback);
+  }
+
+  async complete(
+    job: RunnerJob,
+    expectedVersion: number,
+    callback: RunnerCallback,
+  ): Promise<void> {
+    await this.save(job, expectedVersion);
+    this.callbacks.set(callback.idempotencyKey, structuredClone(callback));
+  }
+}
+
+class MemoryRunnerObjectStore implements RunnerObjectStore {
+  readonly objects = new Map<string, { body: string; contentType: string }>();
+
+  put(key: string, body: string, contentType: string): Promise<void> {
+    this.objects.set(key, { body, contentType });
+    return Promise.resolve();
+  }
+
+  get(key: string): Promise<{ body: string; contentType: string } | undefined> {
+    return Promise.resolve(structuredClone(this.objects.get(key)));
+  }
+}
+
+class CapturingRunnerDispatcher implements RunnerDispatcher {
+  readonly identity = "test-runner-v1";
+  readonly dispatched: RunnerDispatchRequest[] = [];
+
+  dispatch(request: RunnerDispatchRequest): Promise<void> {
+    this.dispatched.push(structuredClone(request));
+    return Promise.resolve();
+  }
+}
+
 async function sessionHarness(
   mode: "sample" | "live",
   sessionRepository: MemorySessionRepository = new MemorySessionRepository(),
@@ -168,10 +261,12 @@ async function seedSession(
     mode: SessionMode;
     state: CounterLabSession["state"];
     version: number;
+    patch?: Partial<CounterLabSession>;
   },
 ): Promise<void> {
   const timestamp = "2026-07-14T10:00:00.000Z";
   const session: CounterLabSession = {
+    ...input.patch,
     id: input.id,
     artifactId: input.artifactId,
     mode: input.mode,
@@ -194,14 +289,95 @@ async function seedSession(
   await repository.create(session, firstEvent);
 }
 
+async function sha256Text(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+async function preparedHostedRunner(sessionId: string) {
+  const harness = await sessionHarness("sample");
+  const sampleRoute = `/api/sessions/${harness.sessionId}`;
+  await postJson(harness.app, `${sampleRoute}/belief-test`, {
+    learnerClaim:
+      "The high row-split score proves this model generalizes to new accounts.",
+  });
+  await postJson(harness.app, `${sampleRoute}/belief-test/confirm`, {
+    action: "confirm",
+  });
+  await postJson(harness.app, `${sampleRoute}/prediction`, {
+    choice: "The score will remain high for unseen accounts.",
+    confidence: 77,
+  });
+  const lesson = await harness.sessionRepository.find(harness.sessionId);
+  if (lesson?.beliefTest === undefined || lesson.prediction === undefined) {
+    throw new Error("sample lesson did not create the required contracts");
+  }
+  const uploaded = await saveUploadedArtifact(
+    harness.artifactStore,
+    harness.artifactId,
+  );
+  const { immutableHash: _oldHash, ...predictionBase } = lesson.prediction;
+  const livePredictionBase = {
+    ...predictionBase,
+    id: `prediction_${sessionId}`,
+    sessionId,
+    beliefTestId: lesson.beliefTest.id,
+    committedAt: "2026-07-14T10:00:00.000Z",
+  };
+  const prediction = {
+    ...livePredictionBase,
+    immutableHash: await hashCanonical(livePredictionBase),
+  };
+  await seedSession(harness.sessionRepository, {
+    id: sessionId,
+    artifactId: uploaded.artifactId,
+    mode: { kind: "live_notebook" },
+    state: "PREDICTION_COMMITTED",
+    version: 4,
+    patch: { beliefTest: lesson.beliefTest, prediction },
+  });
+  const runnerJobs = new MemoryRunnerJobRepository();
+  const runnerObjects = new MemoryRunnerObjectStore();
+  const dispatcher = new CapturingRunnerDispatcher();
+  const app = createApi({
+    sessionRepository: harness.sessionRepository,
+    artifactStore: harness.artifactStore,
+    runnerJobRepository: runnerJobs,
+    runnerObjectStore: runnerObjects,
+    runnerDispatcher: dispatcher,
+    runnerSigningKey: "runner-test-signing-key-that-is-long-enough",
+    now: () => new Date("2026-07-14T10:00:00.000Z"),
+    id: (prefix) => `${prefix}_${sessionId}`,
+  });
+  const queued = await postJson(app, `/api/sessions/${sessionId}/lab/compile`);
+  const dispatch = dispatcher.dispatched[0];
+  if (dispatch === undefined) throw new Error("runner was not dispatched");
+  return {
+    ...harness,
+    app,
+    dispatch,
+    lesson,
+    queued,
+    runnerJobs,
+    runnerObjects,
+    uploaded,
+  };
+}
+
 async function postJson(
   app: ReturnType<typeof createApi>,
   path: string,
   body: unknown = {},
+  headers: Record<string, string> = {},
 ) {
   return app.request(path, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...headers },
     body: JSON.stringify(body),
   });
 }
@@ -402,6 +578,348 @@ describe("Cloudflare Worker API", () => {
     const stored = await harness.sessionRepository.find(sessionId);
     expect(stored?.state).toBe("REVISION_RECORDED");
     expect(stored).not.toHaveProperty("transferResult");
+  });
+
+  it("compiles and independently verifies an artifact-specific hosted plan through an authenticated runner job", async () => {
+    const harness = await sessionHarness("sample");
+    const sampleRoute = `/api/sessions/${harness.sessionId}`;
+    await postJson(harness.app, `${sampleRoute}/belief-test`, {
+      learnerClaim:
+        "The high row-split score proves this model generalizes to new accounts.",
+    });
+    await postJson(harness.app, `${sampleRoute}/belief-test/confirm`, {
+      action: "confirm",
+    });
+    await postJson(harness.app, `${sampleRoute}/prediction`, {
+      choice: "The score will remain high for unseen accounts.",
+      confidence: 77,
+    });
+    const lesson = await harness.sessionRepository.find(harness.sessionId);
+    if (lesson?.beliefTest === undefined || lesson.prediction === undefined) {
+      throw new Error("sample lesson did not create the required contracts");
+    }
+
+    const uploaded = await saveUploadedArtifact(
+      harness.artifactStore,
+      harness.artifactId,
+    );
+    const sessionId = "session_hosted_plan";
+    const predictionBase = {
+      ...lesson.prediction,
+      id: "prediction_hosted_plan",
+      sessionId,
+      beliefTestId: lesson.beliefTest.id,
+      committedAt: "2026-07-14T10:00:00.000Z",
+    };
+    delete (predictionBase as Partial<typeof predictionBase>).immutableHash;
+    const prediction = {
+      ...predictionBase,
+      immutableHash: await hashCanonical(predictionBase),
+    };
+    await seedSession(harness.sessionRepository, {
+      id: sessionId,
+      artifactId: uploaded.artifactId,
+      mode: { kind: "live_notebook" },
+      state: "PREDICTION_COMMITTED",
+      version: 4,
+      patch: { beliefTest: lesson.beliefTest, prediction },
+    });
+
+    const runnerJobs = new MemoryRunnerJobRepository();
+    const runnerObjects = new MemoryRunnerObjectStore();
+    const dispatcher = new CapturingRunnerDispatcher();
+    const app = createApi({
+      sessionRepository: harness.sessionRepository,
+      artifactStore: harness.artifactStore,
+      runnerJobRepository: runnerJobs,
+      runnerObjectStore: runnerObjects,
+      runnerDispatcher: dispatcher,
+      runnerSigningKey: "runner-test-signing-key-that-is-long-enough",
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_hosted_plan`,
+    });
+
+    const queued = await postJson(
+      app,
+      `/api/sessions/${sessionId}/lab/compile`,
+    );
+    expect(queued.status).toBe(202);
+    const queuedBody = (await queued.json()) as {
+      data: { state: string; runnerJob: RunnerJob };
+    };
+    expect(queuedBody.data).toMatchObject({
+      state: "LAB_COMPILING",
+      runnerJob: {
+        kind: "LAB_COMPILE",
+        status: "STARTING",
+        artifactId: uploaded.artifactId,
+        conceptPack: { id: "entity_leakage", version: "2.0.0" },
+      },
+    });
+    expect(dispatcher.dispatched).toHaveLength(1);
+    const dispatch = dispatcher.dispatched[0];
+    if (dispatch === undefined) throw new Error("runner was not dispatched");
+    expect(dispatch.job.jobId).toBe(queuedBody.data.runnerJob.jobId);
+    const inputObject = runnerObjects.objects.get(
+      `runner-input/${dispatch.job.jobId}.json`,
+    );
+    expect(inputObject?.contentType).toBe("application/json");
+    expect(inputObject?.body).toContain(uploaded.artifactId);
+    expect(inputObject?.body).not.toContain("nbformat_minor");
+    expect(inputObject?.body).not.toContain("OPENAI_API_KEY");
+    expect(inputObject?.body).not.toContain("uploads/not-public.ipynb");
+
+    const authorization = { authorization: `Bearer ${dispatch.token}` };
+    const started = await app.request(
+      `/api/runner/jobs/${dispatch.job.jobId}/start`,
+      { method: "POST", headers: authorization },
+    );
+    expect(started.status).toBe(200);
+
+    const firstEvent: PublicCompilerEvent = {
+      schemaVersion: "1",
+      eventId: "compiler_event_1",
+      jobId: dispatch.job.jobId,
+      cursor: 1,
+      at: "2026-07-14T10:00:00.000Z",
+      kind: "job.started",
+    };
+    expect(
+      (
+        await postJson(
+          app,
+          `/api/runner/jobs/${dispatch.job.jobId}/events`,
+          firstEvent,
+          authorization,
+        )
+      ).status,
+    ).toBe(201);
+
+    const manifestHash = await hashCanonical(uploaded);
+    const plan = {
+      schemaVersion: "2" as const,
+      planId: "plan_hosted_1",
+      sessionId,
+      concept: "entity_leakage" as const,
+      conceptPackVersion: "2.0.0",
+      artifactManifestHash: manifestHash,
+      beliefTestId: lesson.beliefTest.id,
+      evidenceRefs: lesson.beliefTest.evidenceRefs,
+      baseline: {
+        concept: "entity_leakage" as const,
+        runId: "random_rows",
+        operation: "leakage.random_row_split" as const,
+        seed: 42,
+        testFraction: 0.25,
+        entityField: uploaded.schemaSummary.entityCandidates[0],
+        dropIdentity: false,
+        model: "logistic_regression" as const,
+      },
+      interventions: [
+        {
+          concept: "entity_leakage" as const,
+          runId: "unseen_entities",
+          operation: "leakage.group_holdout" as const,
+          seed: 42,
+          testFraction: 0.25,
+          entityField: uploaded.schemaSummary.entityCandidates[0],
+          dropIdentity: false,
+          model: "logistic_regression" as const,
+        },
+        {
+          concept: "entity_leakage" as const,
+          runId: "without_identity",
+          operation: "leakage.identity_ablation" as const,
+          seed: 42,
+          testFraction: 0.25,
+          entityField: uploaded.schemaSummary.entityCandidates[0],
+          dropIdentity: true,
+          model: "logistic_regression" as const,
+        },
+      ],
+      controlledVariables: ["model", "seed", "test_fraction"],
+      changedVariables: ["split_strategy", "identity_feature"],
+      metrics: ["accuracy", "roc_auc", "entity_overlap_rate"] as const,
+      visualizations: ["metric_comparison", "entity_overlap"] as const,
+      discriminatesBecause:
+        "Holding out complete entities separates memorization from transferable signal.",
+      expectedPatterns: [
+        {
+          hypothesisId: "current" as const,
+          qualitativeOutcome:
+            "Performance remains similarly strong when complete entities are held out.",
+        },
+        {
+          hypothesisId: "competing" as const,
+          qualitativeOutcome:
+            "Performance falls and overlap reaches zero under entity holdout.",
+        },
+      ],
+      nonClaims: ["This does not prove performance for every future account."],
+      resourceLimits: { wallSeconds: 30, memoryMb: 512, maxRuns: 3 },
+    };
+    const planText = JSON.stringify(plan);
+    const planHash = await sha256Text(planText);
+    const uploadedPlan = await app.request(
+      `/api/runner/jobs/${dispatch.job.jobId}/outputs/experiment-plan.json`,
+      {
+        method: "PUT",
+        headers: { ...authorization, "content-type": "application/json" },
+        body: planText,
+      },
+    );
+    expect(uploadedPlan.status).toBe(201);
+    expect(
+      (
+        await postJson(
+          app,
+          `/api/runner/jobs/${dispatch.job.jobId}/events`,
+          {
+            schemaVersion: "1",
+            eventId: "compiler_event_2",
+            jobId: dispatch.job.jobId,
+            cursor: 2,
+            at: "2026-07-14T10:00:00.000Z",
+            kind: "file.created",
+            path: "experiment-plan.json",
+            sha256: planHash,
+          },
+          authorization,
+        )
+      ).status,
+    ).toBe(201);
+
+    const reconnected = await app.request(
+      `/api/sessions/${sessionId}/jobs/${dispatch.job.jobId}/events?after=1`,
+    );
+    expect(reconnected.status).toBe(200);
+    await expect(reconnected.json()).resolves.toMatchObject({
+      data: { events: [{ cursor: 2, kind: "file.created" }], nextCursor: 2 },
+    });
+
+    const callbackBody = {
+      schemaVersion: "1" as const,
+      callbackId: "callback_hosted_1",
+      idempotencyKey: "hosted-plan-complete-1",
+      jobId: dispatch.job.jobId,
+      stateVersion: dispatch.job.stateVersion,
+      status: "VERIFIED" as const,
+      outputHashes: [planHash],
+      finalEventCursor: 2,
+      occurredAt: "2026-07-14T10:00:01.000Z",
+    };
+    const callback = await postJson(
+      app,
+      `/api/runner/jobs/${dispatch.job.jobId}/callback`,
+      callbackBody,
+      authorization,
+    );
+    expect(callback.status).toBe(200);
+    await expect(callback.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        duplicate: false,
+        runnerJob: { status: "VERIFIED", outputHashes: [planHash] },
+        session: { state: "LAB_VERIFIED", artifactId: uploaded.artifactId },
+        verification: { status: "VERIFIED" },
+      },
+    });
+    const stored = await harness.sessionRepository.find(sessionId);
+    expect(stored).toMatchObject({
+      state: "LAB_VERIFIED",
+      artifactId: uploaded.artifactId,
+      labVerification: { status: "VERIFIED" },
+    });
+    expect(stored).not.toHaveProperty("verifiedResult");
+
+    const eventCount = (await harness.sessionRepository.listEvents(sessionId))
+      .length;
+    const duplicate = await postJson(
+      app,
+      `/api/runner/jobs/${dispatch.job.jobId}/callback`,
+      callbackBody,
+      authorization,
+    );
+    expect(duplicate.status).toBe(200);
+    await expect(duplicate.json()).resolves.toMatchObject({
+      data: { duplicate: true, session: { state: "LAB_VERIFIED" } },
+    });
+    expect(await harness.sessionRepository.listEvents(sessionId)).toHaveLength(
+      eventCount,
+    );
+  });
+
+  it("rejects a runner-claimed success when the independent hosted Plan verifier fails", async () => {
+    const sessionId = "session_rejected_hosted_plan";
+    const harness = await preparedHostedRunner(sessionId);
+    expect(harness.queued.status).toBe(202);
+    const jobId = harness.dispatch.job.jobId;
+    const authorization = {
+      authorization: `Bearer ${harness.dispatch.token}`,
+    };
+    expect(
+      (
+        await harness.app.request(`/api/runner/jobs/${jobId}/start`, {
+          method: "POST",
+          headers: authorization,
+        })
+      ).status,
+    ).toBe(200);
+
+    const invalidPlanText = JSON.stringify({
+      schemaVersion: "2",
+      planId: "plan_with_literal_result",
+      literalResult: 0.99,
+    });
+    const invalidPlanHash = await sha256Text(invalidPlanText);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${jobId}/outputs/experiment-plan.json`,
+          {
+            method: "PUT",
+            headers: { ...authorization, "content-type": "application/json" },
+            body: invalidPlanText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+
+    const callback = await postJson(
+      harness.app,
+      `/api/runner/jobs/${jobId}/callback`,
+      {
+        schemaVersion: "1",
+        callbackId: "callback_rejected_hosted_plan",
+        idempotencyKey: "rejected-hosted-plan-1",
+        jobId,
+        stateVersion: harness.dispatch.job.stateVersion,
+        status: "VERIFIED",
+        outputHashes: [invalidPlanHash],
+        finalEventCursor: 0,
+        occurredAt: "2026-07-14T10:00:01.000Z",
+      },
+      authorization,
+    );
+
+    expect(callback.status).toBe(422);
+    await expect(callback.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        runnerJob: {
+          status: "REJECTED",
+          error: { code: "PLAN_VERIFIER_REJECTED" },
+        },
+        session: { state: "LAB_REJECTED" },
+        verification: {
+          status: "REJECTED",
+          invariants: [{ name: "structural_schema", passed: false }],
+        },
+      },
+    });
+    const stored = await harness.sessionRepository.find(sessionId);
+    expect(stored?.state).toBe("LAB_REJECTED");
+    expect(stored).not.toHaveProperty("verifiedResult");
   });
 
   it("keeps verified replay sessions read-only", async () => {

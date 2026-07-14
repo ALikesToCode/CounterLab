@@ -307,6 +307,11 @@ describe("CounterLabApiClient", () => {
         invoke: () => client.getEvents(sessionId),
       },
       {
+        expectedPath: `/api/sessions/${encoded}/jobs/job%2Fone/events?after=4`,
+        expectedMethod: "GET",
+        invoke: () => client.listRunnerEvents(sessionId, "job/one", 4),
+      },
+      {
         expectedPath: `/api/sessions/${encoded}/reasoning-diff`,
         expectedMethod: "GET",
         invoke: () => client.getReasoningDiff(sessionId),
@@ -331,6 +336,16 @@ describe("CounterLabApiClient", () => {
         expect.objectContaining({ method: call.expectedMethod }),
       );
     }
+  });
+
+  it("rejects invalid compiler event cursors before making a request", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const client = new CounterLabApiClient({ fetch: fetcher });
+
+    await expect(
+      client.listRunnerEvents("session_1", "job_1", -1),
+    ).rejects.toMatchObject({ code: "INVALID_EVENT_CURSOR", status: 400 });
+    expect(fetcher).not.toHaveBeenCalled();
   });
 
   it("turns transport failures into typed retryable errors", async () => {

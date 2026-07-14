@@ -5,7 +5,9 @@ import {
   PatchResultSchema,
   PredictionContractSchema,
   ProofBundleSchema,
+  PublicCompilerEventSchema,
   ReasoningDiffSchema,
+  RunnerJobSchema,
   SessionModeSchema,
   SessionStateSchema,
   TransferResultSchema,
@@ -82,6 +84,23 @@ const sessionViewShape = {
 export const SessionViewSchema = z.object(sessionViewShape).strict();
 export type SessionView = z.infer<typeof SessionViewSchema>;
 export type ArtifactView = ArtifactManifest;
+
+const LabCompileResponseSchema = z
+  .object({
+    ...sessionViewShape,
+    runnerJob: RunnerJobSchema.optional(),
+  })
+  .strict();
+export type LabCompileResponse = z.infer<typeof LabCompileResponseSchema>;
+
+const RunnerEventsResponseSchema = z
+  .object({
+    events: z.array(PublicCompilerEventSchema),
+    nextCursor: z.number().int().nonnegative(),
+    terminal: z.boolean(),
+  })
+  .strict();
+export type RunnerEventsResponse = z.infer<typeof RunnerEventsResponseSchema>;
 
 const EventsResponseSchema = z
   .object({ events: z.array(EvidenceEventSchema) })
@@ -374,10 +393,30 @@ export class CounterLabApiClient {
     );
   }
 
-  compileLab(sessionId: string): Promise<SessionView> {
+  compileLab(sessionId: string): Promise<LabCompileResponse> {
     return this.postWithoutInput(
       `/api/sessions/${encodedId(sessionId)}/lab/compile`,
-      SessionViewSchema,
+      LabCompileResponseSchema,
+    );
+  }
+
+  listRunnerEvents(
+    sessionId: string,
+    jobId: string,
+    after = 0,
+  ): Promise<RunnerEventsResponse> {
+    if (!Number.isInteger(after) || after < 0) {
+      return Promise.reject(
+        new ApiClientError({
+          code: "INVALID_EVENT_CURSOR",
+          message: "Event cursor must be a non-negative integer",
+          status: 400,
+        }),
+      );
+    }
+    return this.request(
+      `/api/sessions/${encodedId(sessionId)}/jobs/${encodedId(jobId)}/events?after=${after}`,
+      RunnerEventsResponseSchema,
     );
   }
 
