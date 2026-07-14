@@ -146,6 +146,18 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/plan-verifier:
+    dependencies:
+      '@counterlab/concept-registry':
+        specifier: workspace:*
+        version: link:../concept-registry
+      '@counterlab/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@counterlab/session-core':
+        specifier: workspace:*
+        version: link:../session-core
+
   packages/proof-bundle:
     dependencies:
       '@counterlab/contracts':
