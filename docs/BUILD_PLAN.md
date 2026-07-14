@@ -20,7 +20,7 @@ The user explicitly authorized build, dev-server, local-service, and Cloudflare 
 
 The implementation uses the requested monorepo boundaries:
 
-- `apps/web`: Next.js App Router and strict React/TypeScript product surface.
+- `apps/web`: strict React/TypeScript product surface built with Vite and the official Cloudflare Vite plugin, with a co-deployed Worker API.
 - `services/kernel`: deterministic Python fixtures, metrics, transfer scoring, and canonical result serialization.
 - `packages/contracts`: Zod schemas, JSON Schema export, state transitions, and typed API errors.
 - `packages/notebook-parser`: non-executing notebook intake, output sanitization, stable evidence references, and support classification.
@@ -34,7 +34,7 @@ The implementation uses the requested monorepo boundaries:
 
 The local product owns the full path because runtime Codex and the Python kernel require child processes and OS isolation. Cloudflare will host the edge-compatible judge/replay surface and use D1 for edge persistence where appropriate. Cloud-hosted live compiler/kernel requests must return a typed local-runtime requirement unless a separately verified compute service is configured; they will never pretend to be live.
 
-The Cloudflare deployment uses `@opennextjs/cloudflare` on Workers, not Pages. D1 stores sessions and append-only event metadata; R2 stores uploaded notebooks, patch copies, replays, and Proof Bundles. The Worker may make the server-side Responses API call, but Codex App Server, Docker, Git worktrees, Python, and native SQLite remain on the process-capable local runtime.
+The Cloudflare deployment uses the first-party `@cloudflare/vite-plugin` full-stack React path on Workers. D1 stores sessions and append-only event metadata; R2 stores uploaded notebooks, patch copies, replays, and Proof Bundles. The Worker may make the server-side Responses API call, but Codex App Server, Docker, Git worktrees, Python, and native SQLite remain on the process-capable local runtime.
 
 ## Milestone gates
 

@@ -1,0 +1,68 @@
+# Threat model
+
+## Assets
+
+Server credentials, uploaded notebook bytes, Artifact Manifests, learner
+claims/predictions, generated code, hidden verifier/mutations, held-out fixtures,
+canonical results, patches, event chain, and Proof Bundles.
+
+## Trust boundaries
+
+1. Browser to Worker API.
+2. Untrusted notebook bytes to parser.
+3. Sanitized evidence to GPT.
+4. Approved contract to Codex App Server.
+5. Generated files to host policy and Docker.
+6. Candidate declaration to fixed kernel/verifier.
+7. Stored events to replay/browser.
+
+## Enforced controls
+
+- File extension, MIME, and central size limits; bounded JSON bodies.
+- No notebook execution at intake; active outputs omitted.
+- Random server IDs, safe basenames, path containment, private R2 objects.
+- Server-only API key; GPT receives no raw rows, secrets, or client paths.
+- Zod validation and evidence-reference resolution for model output.
+- Legal server-side state transitions and immutable prediction hash.
+- Exact generated file set, regular-file/symlink checks, JSON depth/size limits.
+- Adapter AST denial of filesystem/environment/dynamic import/eval/exec,
+  subprocess, sockets/HTTP, reflection escape, and metric implementations.
+- Candidate Docker: no network, non-root, read-only root/workspace, dropped
+  capabilities, no-new-privileges, bounded tmpfs, CPU/memory/process/wall/file
+  and output limits, no credentials.
+- Hidden verifier, mutation catalogue, held-out fixtures, and host kernel are not
+  candidate mounts.
+- Browser compiler events are schema-validated, bounded, secret-redacted, and
+  stripped of local paths; reasoning and raw agent prose are dropped.
+- Append-only D1 event table and canonical hash chain; optional HMAC.
+- Release secret-pattern scan.
+
+## Verified attacks
+
+The published mutation suite attacks overlap, stale/hardcoded metrics,
+intervention drift, retained identity, row-order sensitivity, forged hashes,
+stale chart series, escaped network/resource evidence, nondiscriminating plans,
+hidden mounts, and unsupported-case acceptance. All 12 are detected.
+
+## Known limitations
+
+The authenticated host App Server run inspected global skill files outside the
+generation directory. A prompt and `workspace-write` policy do not prove read
+isolation. Therefore generation-time hidden-verifier unreadability is `PARTIAL`.
+Post-generation candidate execution is separately OS-constrained and verified;
+that does not retroactively prove generation isolation.
+
+Docker controls are not a formal sandbox proof and inherit host kernel/runtime
+risk. Cloudflare account security, local machine compromise, denial of service
+beyond configured limits, and side channels are outside the hackathon guarantee.
+An unsigned Proof Bundle detects internal inconsistency but is not a third-party
+signature. Uploaded notebooks outside the exact sample patch contract do not
+receive a verified patch.
+
+## Highest-priority hardening
+
+Run Codex App Server inside an OS boundary that mounts only the generation
+workspace and a minimal authentication/config volume, while restricting model
+network access to required endpoints. Repeat the live trace and demonstrate a
+failed read of hidden verifier/held-out paths before upgrading generation
+isolation from `PARTIAL`.

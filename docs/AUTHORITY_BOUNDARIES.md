@@ -127,14 +127,29 @@ The local runner owns live compilation and execution. This split prevents a Clou
 
 `DisabledCodexCompiler` reports a typed setup error and cannot advance the session. Missing CLI authentication, missing sandbox, or an unsupported runtime are setup states, not verifier passes.
 
-No genuine live Codex candidate or reject-repair trace is currently recorded in this repository. Existing deterministic sample, transfer, and patch artifacts must not be relabelled as a live Codex trace.
+`replays/leakage-01/compiler` contains two authenticated App Server runs. The
+first was rejected after the two-repair cap and authorized no result. A
+separate later run passed the host pipeline and is the candidate associated
+with the verified payload. The replay UI preserves that distinction and never
+labels the later run as a third repair.
 
 ## Known limitations
 
-- The stdio protocol client and sanitizer are implemented and tested, but a credentialed model turn has not yet produced recorded candidate evidence.
-- The App Server child currently runs as a local host process with Codex's `workspace-write` policy. The fresh workspace and prompt constrain intended access and writes, but do not by themselves prove that unrelated host paths are unreadable. Additional OS isolation or a demonstrated hidden-path denial is required for the live acceptance gate.
+- The authenticated App Server run used `gpt-5.6-sol` through Codex CLI
+  0.144.4. It produced real candidate, event, prompt-hash, verifier, duration,
+  exit, and status evidence; it does not establish behavior for every model or
+  CLI version.
+- The App Server child currently runs as a local host process with Codex's
+  `workspace-write` policy. The real trace shows that it inspected global skill
+  files outside the generation directory, so generation-time isolation is
+  explicitly `PARTIAL`. Additional OS isolation and a demonstrated hidden-path
+  denial are required before that gate can pass.
 - Candidate execution is containerized after generation; this does not retroactively strengthen App Server generation isolation.
-- The latest focused runner verification passed all 43 tests. The real Docker smoke path also returned `VERIFIED` with the canonical fixture result hash after exercising the no-network, non-root, read-only boundary.
+- The real Docker smoke and replay reproduction return `VERIFIED` with the
+  canonical fixture result hash after exercising the no-network, non-root,
+  read-only boundary. Current suite totals belong in `docs/PROGRESS.md`, not in
+  this architectural contract.
 - Container controls are implementation evidence, not a formal sandbox proof.
-- Replay mode requires a real stored compiler trace. The current `leakage-01` patch and transfer artifacts do not satisfy that requirement by themselves.
+- Replay mode is backed by the checked-in live compiler traces plus deterministic
+  transfer and patch evidence; replaying them is not a new live run.
 - The Cloudflare deployment cannot execute live Codex or the native kernel and says so through typed health and API errors.

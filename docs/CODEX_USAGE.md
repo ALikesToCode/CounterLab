@@ -12,7 +12,11 @@ CounterLab uses Codex as a bounded artifact compiler. Codex proposes an experime
 | `replay`   | `ReplayCodexCompiler`    | Validates and re-emits stored, already-sanitized compiler events. The first event carries the replay ID, original timestamp, and model so the UI can retain a persistent replay label. |
 | `disabled` | `DisabledCodexCompiler`  | Reports unavailable health and throws a typed `CODEX_DISABLED` setup error when compilation is attempted. It never returns fake success.                                               |
 
-Replay is a transport for actual stored compiler evidence, not permission to manufacture a trace. The repository does not currently contain a recorded live Codex candidate or reject-repair event trace. The existing `leakage-01` files are deterministic transfer and patch evidence; they are not evidence that a live Codex generation ran.
+Replay is a transport for actual stored compiler evidence, not permission to
+manufacture a trace. `replays/leakage-01/compiler` contains an authenticated
+rejected run with two attempted repairs and a separate authenticated verified
+run. It also contains the bounded generated files, prompt hashes, sanitized
+events, command/exit evidence, and external verifier report.
 
 ## Live protocol
 
@@ -144,8 +148,23 @@ PYTHONPATH=services/kernel/src:services/runner/src .venv/bin/python -m pytest se
 
 ## Honest current status
 
-The stdio client, protocol validation, sanitizer, replay/disabled behavior, and constrained prompts are implemented; the focused Codex-client suite passes 14 tests. The installed Codex 0.144.4 initialize handshake has been probed locally. The workspace policy, Docker command construction, host pipeline, and two-repair cap are implemented; all 43 focused runner tests pass. The real Docker smoke path returned `VERIFIED` with the canonical fixture result hash after exercising the no-network, non-root, read-only boundary.
+The stdio client, protocol validation, sanitizer, replay/disabled behavior,
+constrained prompts, workspace policy, Docker execution, host pipeline, and
+two-repair cap are implemented and covered by the release suite.
 
-CounterLab does not yet claim that a live Codex candidate has been generated, rejected, repaired, and preserved as a genuine replay. That acceptance gate remains open until a credentialed live run produces a stored prompt hash, sanitized event trace, artifact hashes, verifier evidence, and final status.
+The stored evidence is deliberately unpolished: the first authenticated
+`gpt-5.6-sol` run failed on an unsupported public SDK constructor. Repair 1
+corrected that contract but created `__pycache__`; repair 2 did not remove the
+existing directory, so the exact-file verifier rejected the run and no result
+was released. A separate later authenticated run produced exactly three files,
+reproduced the canonical result, passed 18 named invariants, and detected 12/12
+published mutations. The UI says plainly that this is a later run, not repair
+attempt 3.
 
-The most important remaining isolation limitation is that `AppServerCodexCompiler` starts the App Server as a local host process with Codex's `workspace-write` policy. The client and fresh workspace constrain intended inputs and writes, but this alone does not prove that the generation process cannot read every unrelated host path. The accepted live path must launch generation inside an additional OS-enforced boundary or otherwise demonstrate hidden-verifier unreadability. Candidate execution is separately containerized after generation.
+The most important remaining isolation limitation is that
+`AppServerCodexCompiler` starts App Server as a local host process with Codex's
+`workspace-write` policy. The recorded run inspected global skill files outside
+the generation directory. Consequently generation isolation is `PARTIAL` even
+though post-generation candidate execution proves the hidden verifier and
+held-out paths were not mounted. A future accepted live path must add an
+OS-enforced generation boundary and demonstrate hidden-path denial.
