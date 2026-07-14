@@ -11,6 +11,8 @@ misconceptions in supported Jupyter notebooks. The P0 concept is entity leakage
 in a synthetic customer-churn notebook; it is not a generic notebook copilot or
 an unrestricted code runner.
 
+**Live judge surface:** <https://counterlab.cserules.workers.dev>
+
 ## The 30-second judged path
 
 1. Choose **Try instantly**.
@@ -134,6 +136,10 @@ Open <http://127.0.0.1:5173>. `clean-demo.sh` installs missing local
 dependencies, initializes local D1, regenerates and checks public fixtures,
 starts the fixed kernel and Vite/Worker app, and prints honest live capability
 status.
+
+The deployed no-secret judge/replay surface is
+<https://counterlab.cserules.workers.dev>. It uses remote D1 and private R2;
+process-bound Codex/Python/Docker capabilities remain explicitly local-only.
 
 For foreground development:
 

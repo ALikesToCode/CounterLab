@@ -29,17 +29,20 @@ leakage gate—including generation isolation—to pass first.
 | Transfer-gated verified patch | pass | Failure keeps patch locked; pass unlocks a copied-notebook patch with zero overlap and four unrelated source hashes unchanged. |
 | Unsupported notebook refusal | pass | Browser uploads a notebook with unsupported magic/network content, receives typed reasons, and cannot advance. |
 | Required local scripts | pass | `test-all`, mutations, clean demo, session reproduction, patch replay, replay recording, and achieved-metrics generation execute successfully in the working checkout. |
-| Full release check and secret scan | not run | Pending after documentation is committed so the tracked-file secret scan covers the release artifacts. |
-| Fresh temporary clone acceptance | not run | Pending final committed release candidate. |
-| Cloudflare replay/sample deployment | not run | D1/R2 resources exist; remote migration, deploy, and production browser verification remain. |
+| Full release check and secret scan | pass | `./scripts/release-check.sh` passes tests, typecheck, production build, 12 mutations, Docker smoke/reproduction, patch replay, metrics generation, and a scan of every tracked file. |
+| Fresh temporary clone acceptance | pass | A no-local Git clone installed locked Node/Python dependencies, applied local D1 migration, ran `clean-demo.sh`, and passed the complete release check. |
+| Accessibility and responsive judged path | pass | A 390×844 CloakBrowser run completes entirely by keyboard with reduced motion, visible semantic controls, and no horizontal overflow; primary text/status contrast pairs are unit-checked at ≥4.5:1. |
+| Cloudflare replay/sample deployment | pass | Remote D1 migration, R2 binding, Worker/assets, health, Try Instantly, upload refusal, Replay, Proof Bundle, and production CloakBrowser paths pass at `https://counterlab.cserules.workers.dev`; version `8ff021f8-2b1e-46d8-9d3a-f86e6c4e1a0c`. |
 | Class-imbalance P0.5 | not run | Deliberately deferred until the partial generation-isolation leakage gate passes. |
 
 ## Latest verified suite
 
 - Root Vitest: 78 tests passed.
-- Web Vitest: 17 tests passed.
+- Web Vitest: 20 tests passed.
 - Pytest kernel/runner: 98 tests passed.
-- CloakBrowser Playwright: 6 judged-path tests passed.
+- CloakBrowser Playwright: 7 judged-path tests passed locally; the same judged
+  flows, including mobile keyboard/reduced-motion completion, pass against the
+  Cloudflare production URL.
 - Mutation matrix: 12/12 detected.
 - Docker replay: canonical result and patch reproduced.
 
