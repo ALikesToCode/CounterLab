@@ -22,7 +22,10 @@ import patchedNotebookText from "../../../replays/leakage-01/patch/customer_chur
 import patchKernelResult from "../../../replays/leakage-01/patch-kernel-result.json";
 import compilerReplaySummary from "../../../replays/leakage-01/compiler/replay-summary.json";
 import { D1ArtifactStore, type ArtifactStore } from "./artifact-store";
-import { D1SessionRepository } from "./d1-session-repository";
+import {
+  ConcurrentD1SessionUpdateError,
+  D1SessionRepository,
+} from "./d1-session-repository";
 import { sampleManifest, sampleResult } from "./sample-evidence";
 import {
   createSamplePatchResult,
@@ -727,7 +730,8 @@ export function createApi(options: ApiOptions = {}) {
     }
     if (
       error instanceof InvalidSessionTransitionError ||
-      error instanceof PredictionAlreadyCommittedError
+      error instanceof PredictionAlreadyCommittedError ||
+      error instanceof ConcurrentD1SessionUpdateError
     ) {
       return context.json(
         jsonError("ILLEGAL_TRANSITION", error.message, 409),

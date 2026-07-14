@@ -11,6 +11,7 @@ import type {
 
 import { api, createApi } from "./api";
 import type { ArtifactStore, StoredArtifact } from "./artifact-store";
+import { ConcurrentD1SessionUpdateError } from "./d1-session-repository";
 
 class MemorySessionRepository implements SessionRepository {
   private readonly sessions = new Map<string, CounterLabSession>();
@@ -76,8 +77,29 @@ class MemoryArtifactStore implements ArtifactStore {
   }
 }
 
-async function sessionHarness(mode: "instant" | "live") {
-  const sessionRepository = new MemorySessionRepository();
+class ConflictSessionRepository extends MemorySessionRepository {
+  private conflict = false;
+
+  enableConflict(): void {
+    this.conflict = true;
+  }
+
+  override async save(
+    session: CounterLabSession,
+    expectedVersion: number,
+    event: EvidenceEvent,
+  ): Promise<void> {
+    if (this.conflict) {
+      throw new ConcurrentD1SessionUpdateError(session.id);
+    }
+    await super.save(session, expectedVersion, event);
+  }
+}
+
+async function sessionHarness(
+  mode: "instant" | "live",
+  sessionRepository: MemorySessionRepository = new MemorySessionRepository(),
+) {
   const artifactStore = new MemoryArtifactStore();
   let idSequence = 0;
   const app = createApi({
@@ -394,6 +416,34 @@ describe("Cloudflare Worker API", () => {
           mode: "integrity-hashed",
           eventChainHead: events[11]?.eventHash,
         },
+      },
+    });
+  });
+
+  it("maps a lost D1 optimistic update to a typed conflict", async () => {
+    const repository = new ConflictSessionRepository();
+    const { app, sessionId } = await sessionHarness("instant", repository);
+    const route = `/api/sessions/${sessionId}`;
+
+    await postJson(app, `${route}/belief-test`, {
+      learnerClaim:
+        "The notebook accuracy proves generalization to new customers.",
+    });
+    await postJson(app, `${route}/belief-test/confirm`, { action: "confirm" });
+    repository.enableConflict();
+
+    const response = await postJson(app, `${route}/prediction`, {
+      choice: "Accuracy remains near 98%",
+      confidence: 100,
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      error: {
+        code: "ILLEGAL_TRANSITION",
+        message: `Session changed during D1 update: ${sessionId}`,
+        status: 409,
       },
     });
   });
