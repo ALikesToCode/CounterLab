@@ -8,9 +8,12 @@ import {
   type CapabilityHealth,
   type PatchResult,
   type ProofBundle,
+  type PublicCompilerEvent,
+  type RunnerJob,
   type SessionView,
   type VerifiedResultSet,
 } from "./api";
+import { useRunnerEvents } from "./hooks/useRunnerEvents";
 
 import { getRun, sampleArtifact, sampleResult, verifiedReplay } from "./sample";
 
@@ -24,7 +27,8 @@ type Stage =
   | "live-setup"
   | "live-compile";
 type PredictionChoice = "stays-high" | "falls" | "unsure";
-type TransferState = "locked" | "ready" | "failed" | "passed" | "patched";
+type TransferState =
+  "locked" | "ready" | "failed" | "passed" | "patching" | "patched";
 type ReviewStep = "claim" | "belief" | "build" | "reality";
 
 function presentationMode(mode: SessionView["mode"]): Mode {
@@ -41,6 +45,8 @@ const storageKeys = {
   replayIntro: "counterlab.replayIntro",
   replayTransferState: "counterlab.replayTransferState",
   replayRevision: "counterlab.replayRevision",
+  activeRunnerJobId: "counterlab.activeRunnerJobId",
+  activeRunnerJobKind: "counterlab.activeRunnerJobKind",
 } as const;
 
 function storedReplayTransferState(): TransferState {
@@ -1043,34 +1049,45 @@ function BuildScreen({
   );
 }
 
-function resultRun(result: VerifiedResultSet, id: string) {
-  const run = result.runs.find((candidate) => candidate.id === id);
+const semanticOperations = {
+  random_row_split: "leakage.random_row_split",
+  customer_group_split: "leakage.group_holdout",
+  identity_ablation: "leakage.identity_ablation",
+} as const;
+
+function resultRun(
+  result: VerifiedResultSet,
+  id: keyof typeof semanticOperations,
+) {
+  const run = result.runs.find(
+    (candidate) =>
+      candidate.id === id ||
+      ("operation" in candidate &&
+        candidate.operation === semanticOperations[id]),
+  );
   if (run === undefined)
-    throw new Error(`Verified result is missing run ${id}`);
+    throw new Error(`Verified result is missing semantic run ${id}`);
   return run;
 }
 
 function ResultBars({ result }: { result: VerifiedResultSet }) {
   const runs = [
-    resultRun(result, "random_row_split"),
-    resultRun(result, "customer_group_split"),
-    resultRun(result, "identity_ablation"),
+    { run: resultRun(result, "random_row_split"), label: "Random rows" },
+    {
+      run: resultRun(result, "customer_group_split"),
+      label: "New customers",
+    },
+    { run: resultRun(result, "identity_ablation"), label: "No identity" },
   ];
   return (
     <div
       className="result-visual"
       role="img"
-      aria-label="Accuracy comparison: random row split 98.5 percent, customer group split 59.4 percent, and identity ablation 67.4 percent"
+      aria-label={`Accuracy comparison: ${runs.map(({ label, run }) => `${label} ${percent.format(run.metrics.accuracy)}`).join(", ")}`}
     >
-      {runs.map((run) => (
+      {runs.map(({ run, label }) => (
         <div className="bar-row" key={run.id}>
-          <span>
-            {run.id === "random_row_split"
-              ? "Random rows"
-              : run.id === "customer_group_split"
-                ? "New customers"
-                : "No identity"}
-          </span>
+          <span>{label}</span>
           <div className="bar-track">
             <span style={{ width: percent.format(run.metrics.accuracy) }} />
           </div>
@@ -1316,6 +1333,8 @@ function RealityScreen({
   );
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [patchJob, setPatchJob] = useState<RunnerJob | null>(null);
+  const patchRunner = useRunnerEvents();
   const accuracyGapPoints =
     (random.metrics.accuracy - group.metrics.accuracy) * 100;
   const predictionWasSupported = prediction === "falls";
@@ -1345,6 +1364,60 @@ function RealityScreen({
       setActionBusy(false);
     }
   };
+
+  const completePatchJob = async (jobId: string) => {
+    if (session === null) return;
+    const completed = await patchRunner.waitForJob({
+      sessionId: session.sessionId,
+      jobId,
+      terminalStates: ["REASONING_DIFF_ISSUED", "PATCH_REJECTED"],
+      onSession: updateSession,
+    });
+    if (
+      completed.state !== "REASONING_DIFF_ISSUED" ||
+      completed.patchResult === undefined
+    ) {
+      setTransferState("passed");
+      throw new ApiClientError({
+        code: "PATCH_REJECTED",
+        message:
+          "The patch verifier rejected this candidate. The original notebook remains unchanged.",
+        status: 409,
+      });
+    }
+    setPatch(completed.patchResult);
+    updateSession(completed);
+    window.localStorage.removeItem(storageKeys.activeRunnerJobId);
+    window.localStorage.removeItem(storageKeys.activeRunnerJobKind);
+    setTransferState("patched");
+    try {
+      setProofBundle(await counterLabApi.getProofBundle(session.sessionId));
+    } catch (caught) {
+      if (!(caught instanceof ApiClientError && caught.status === 409)) {
+        throw caught;
+      }
+    }
+  };
+
+  useEffect(() => {
+    const activeJobId = window.localStorage.getItem(
+      storageKeys.activeRunnerJobId,
+    );
+    const activeJobKind = window.localStorage.getItem(
+      storageKeys.activeRunnerJobKind,
+    );
+    if (
+      session?.state !== "PATCH_COMPILING" ||
+      activeJobId === null ||
+      activeJobKind !== "PATCH_COMPILE"
+    ) {
+      return;
+    }
+    setTransferState("patching");
+    void runAction(() => completePatchJob(activeJobId));
+    // Resume the one persisted patch job once when this session is restored.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.sessionId]);
 
   const recordRevision = () => {
     if (session === null) {
@@ -1394,14 +1467,37 @@ function RealityScreen({
     }
     void runAction(async () => {
       const updated = await counterLabApi.compilePatch(session.sessionId);
-      setPatch(updated.patch);
       updateSession(updated);
-      setTransferState("patched");
-      try {
-        setProofBundle(await counterLabApi.getProofBundle(session.sessionId));
-      } catch (caught) {
-        if (!(caught instanceof ApiClientError && caught.status === 409)) {
-          throw caught;
+      if (updated.patch !== undefined) {
+        setPatch(updated.patch);
+        setTransferState("patched");
+      } else if (updated.runnerJob !== undefined) {
+        setPatchJob(updated.runnerJob);
+        patchRunner.clear();
+        setTransferState("patching");
+        window.localStorage.setItem(
+          storageKeys.activeRunnerJobId,
+          updated.runnerJob.jobId,
+        );
+        window.localStorage.setItem(
+          storageKeys.activeRunnerJobKind,
+          updated.runnerJob.kind,
+        );
+        await completePatchJob(updated.runnerJob.jobId);
+      } else {
+        throw new ApiClientError({
+          code: "PATCH_NOT_STARTED",
+          message: "No verified patch or runner job was returned.",
+          status: 409,
+        });
+      }
+      if (updated.patch !== undefined) {
+        try {
+          setProofBundle(await counterLabApi.getProofBundle(session.sessionId));
+        } catch (caught) {
+          if (!(caught instanceof ApiClientError && caught.status === 409)) {
+            throw caught;
+          }
         }
       }
     });
@@ -1416,7 +1512,7 @@ function RealityScreen({
     );
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `counterlab-${proofBundle.replayId}-proof-bundle.json`;
+    anchor.download = `counterlab-${proofBundle.replayId ?? proofBundle.sessionId}-proof-bundle.json`;
     anchor.click();
     URL.revokeObjectURL(url);
   };
@@ -1428,6 +1524,77 @@ function RealityScreen({
         <span>{actionError}</span>
       </div>
     );
+
+  if (transferState === "patching") {
+    return (
+      <main className="workspace shell reality lesson-phase live-compiler">
+        <div className="screen-intro compact">
+          <p className="eyebrow gold">Patch unlocked · Verifying a copy</p>
+          <h1 id="lesson-phase-title" tabIndex={-1}>
+            Checking every changed notebook cell…
+          </h1>
+          <p>
+            Codex proposes a bounded patch plan. Fixed code applies it to a
+            copy, and the patch verifier checks the conclusion really changed
+            because the evaluation design changed.
+          </p>
+        </div>
+        <section className="live-compiler-grid">
+          <div className="pipeline panel">
+            <div className="panel-title">
+              <div>
+                <p className="eyebrow">Public patch trace</p>
+                <h2>Plan → apply to copy → verify</h2>
+              </div>
+              <span className="runner-state active">
+                <span className="status-dot configured" />
+                {patchJob?.status.replaceAll("_", " ") ?? "STARTING"}
+              </span>
+            </div>
+            <ol className="live-event-list" aria-live="polite">
+              {patchRunner.events.length === 0 && (
+                <li className="active">
+                  <span className="event-mark" />
+                  <div>
+                    <strong>Preparing isolated patch job</strong>
+                    <p>The uploaded notebook remains read-only.</p>
+                  </div>
+                </li>
+              )}
+              {patchRunner.events.map((event) => {
+                const copy = compilerEventCopy(event);
+                return (
+                  <li className={copy.tone} key={event.eventId}>
+                    <span className="event-mark" />
+                    <div>
+                      <strong>{copy.label}</strong>
+                      <p>{copy.detail}</p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+          <aside className="compiler-authority panel">
+            <p className="eyebrow aqua">Patch safety</p>
+            <div>
+              <span>Source</span>
+              <strong>Original upload is never overwritten</strong>
+            </div>
+            <div>
+              <span>Scope</span>
+              <strong>Only evidence-linked evaluation cells may change</strong>
+            </div>
+            <div>
+              <span>Release rule</span>
+              <strong>A rejected patch cannot be downloaded</strong>
+            </div>
+          </aside>
+        </section>
+        {actionErrorNotice}
+      </main>
+    );
+  }
 
   if (transferState === "patched") {
     return (
@@ -1540,6 +1707,15 @@ function RealityScreen({
               <Mark name="check" /> Cell 3 changed · unrelated source hashes
               unchanged · group overlap 0 · result reproduced
             </p>
+            {session?.mode.kind === "live_notebook" && patch !== null && (
+              <a
+                className="button button-gold patch-download"
+                href={counterLabApi.patchDownloadUrl(session.sessionId)}
+                download
+              >
+                Download verified notebook copy <Mark name="arrow" />
+              </a>
+            )}
           </details>
           <details className="technical-proof">
             <summary>Technical proof and reproduction</summary>
@@ -2059,46 +2235,174 @@ function LiveSetup({
   );
 }
 
-function LiveCompileBoundary({ fallBack }: { fallBack: (mode: Mode) => void }) {
+function compilerEventCopy(event: PublicCompilerEvent): {
+  label: string;
+  detail: string;
+  tone: "active" | "verified" | "rejected";
+} {
+  switch (event.kind) {
+    case "job.started":
+      return {
+        label: "Runner started",
+        detail: "A protected runner accepted this one-session job.",
+        tone: "active",
+      };
+    case "plan.summary":
+      return {
+        label: event.title,
+        detail: event.steps.join(" · "),
+        tone: "active",
+      };
+    case "artifact.read":
+      return {
+        label: "Notebook evidence resolved",
+        detail: `${event.evidenceRefs.length} approved reference${event.evidenceRefs.length === 1 ? "" : "s"} linked to exact cells.`,
+        tone: "active",
+      };
+    case "file.created":
+      return {
+        label: `${event.path} created`,
+        detail: `Integrity hash ${event.sha256.slice(0, 12)}…`,
+        tone: "active",
+      };
+    case "diff.updated":
+      return {
+        label: `${event.path} revised`,
+        detail: "A bounded repair changed the generated plan.",
+        tone: "active",
+      };
+    case "command.completed":
+      return {
+        label: event.label,
+        detail: `Exit ${event.exitCode} · ${event.durationMs} ms · ${event.excerpt}`,
+        tone: event.exitCode === 0 ? "verified" : "rejected",
+      };
+    case "verifier.rejected":
+      return {
+        label: `Rejected: ${event.invariant}`,
+        detail: event.counterexample,
+        tone: "rejected",
+      };
+    case "repair.started":
+      return {
+        label: `Repair ${event.attempt} started`,
+        detail:
+          "Only the structured counterexample was returned to the compiler.",
+        tone: "active",
+      };
+    case "verifier.verified":
+      return {
+        label: "External verifier accepted the plan",
+        detail: `${event.invariantCount} invariants · ${event.mutationCount} mutations checked`,
+        tone: "verified",
+      };
+    case "result.ready":
+      return {
+        label: "Fixed-kernel result ready",
+        detail: `Result hash ${event.resultHash.slice(0, 12)}…`,
+        tone: "verified",
+      };
+    case "job.failed":
+      return {
+        label: `Runner stopped: ${event.code}`,
+        detail: event.message,
+        tone: "rejected",
+      };
+  }
+}
+
+function LiveCompileScreen({
+  events,
+  job,
+}: {
+  events: readonly PublicCompilerEvent[];
+  job: RunnerJob | null;
+}) {
+  const repaired = events.some((event) => event.kind === "repair.started");
+  const verified = events.some(
+    (event) =>
+      event.kind === "verifier.verified" || event.kind === "result.ready",
+  );
   return (
-    <main className="workspace shell narrow">
-      <div className="screen-intro">
-        <p className="eyebrow">03 · Compile and verify</p>
-        <h1>Local runner required</h1>
+    <main className="workspace shell live-compiler">
+      <div className="screen-intro compact">
+        <p className="eyebrow">03 · Build and verify</p>
+        <h1>
+          {verified
+            ? "The fair test passed its checks."
+            : "Building your fair test…"}
+        </h1>
         <p>
-          Your Prediction Contract is committed. This Cloudflare session does
-          not have the isolated local compiler, kernel, and sandbox required to
-          authorize a Verified Lab.
+          Your prediction is locked. The compiler can propose a plan, but only
+          the independent verifier can authorize a result.
         </p>
       </div>
-      <section className="setup-card panel">
-        <div className="setup-row">
-          <span className="status-dot unavailable" />
-          <div>
-            <strong>Compilation did not start</strong>
-            <p>
-              No lab result was produced. Continue with an offline verified
-              path, or run the documented local stack.
-            </p>
-          </div>
-        </div>
-      </section>
-      <div className="action-cluster">
-        <button
-          className="button button-primary"
-          type="button"
-          onClick={() => fallBack("instant")}
-        >
-          Try instantly
-        </button>
-        <button
-          className="button button-quiet"
-          type="button"
-          onClick={() => fallBack("replay")}
-        >
-          Replay verified session
-        </button>
+      <div className="lock-notice">
+        <Mark name="lock" />
+        <strong>Your answer is immutable</strong>
+        <span>No experimental value is shown until verification finishes.</span>
       </div>
+      <section className="live-compiler-grid">
+        <div className="pipeline panel">
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow">Public compiler trace</p>
+              <h2>Plan → verify → repair → compute</h2>
+            </div>
+            <span
+              className={`runner-state ${verified ? "verified" : "active"}`}
+            >
+              <span className="status-dot configured" />
+              {job?.status.replaceAll("_", " ") ?? "STARTING"}
+            </span>
+          </div>
+          <ol className="live-event-list" aria-live="polite">
+            {events.length === 0 && (
+              <li className="active">
+                <span className="event-mark" />
+                <div>
+                  <strong>Dispatching protected job</strong>
+                  <p>Waiting for the first sanitized runner event.</p>
+                </div>
+              </li>
+            )}
+            {events.map((event) => {
+              const copy = compilerEventCopy(event);
+              return (
+                <li className={copy.tone} key={event.eventId}>
+                  <span className="event-mark" />
+                  <div>
+                    <strong>{copy.label}</strong>
+                    <p>{copy.detail}</p>
+                    <time>{new Date(event.at).toLocaleTimeString()}</time>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+        <aside className="compiler-authority panel">
+          <p className="eyebrow aqua">Who decides what</p>
+          <div>
+            <span>Codex</span>
+            <strong>Proposes the experiment plan</strong>
+          </div>
+          <div>
+            <span>Verifier</span>
+            <strong>Rejects invalid or irrelevant plans</strong>
+          </div>
+          <div>
+            <span>Fixed kernel</span>
+            <strong>Computes every displayed number</strong>
+          </div>
+          {repaired && (
+            <div className="repair-note">
+              <span>Repair is evidence</span>
+              <strong>The rejected attempt released no result.</strong>
+            </div>
+          )}
+        </aside>
+      </section>
     </main>
   );
 }
@@ -2119,6 +2423,8 @@ export function App() {
   const [liveHealth, setLiveHealth] = useState<CapabilityHealth | null>(null);
   const [liveHealthError, setLiveHealthError] = useState<string | null>(null);
   const [checkingLiveHealth, setCheckingLiveHealth] = useState(false);
+  const [runnerJob, setRunnerJob] = useState<RunnerJob | null>(null);
+  const runner = useRunnerEvents();
   const replay = mode === "replay";
 
   const reportError = (caught: unknown) => {
@@ -2148,6 +2454,112 @@ export function App() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const rememberRunnerJob = (job: RunnerJob) => {
+    setRunnerJob(job);
+    window.localStorage.setItem(storageKeys.activeRunnerJobId, job.jobId);
+    window.localStorage.setItem(storageKeys.activeRunnerJobKind, job.kind);
+  };
+
+  const forgetRunnerJob = () => {
+    window.localStorage.removeItem(storageKeys.activeRunnerJobId);
+    window.localStorage.removeItem(storageKeys.activeRunnerJobKind);
+  };
+
+  const advanceLiveLab = async (startingSession: SessionView) => {
+    const sessionId = startingSession.sessionId;
+    let current: SessionView & { runnerJob?: RunnerJob | undefined } =
+      startingSession;
+    setStage("live-compile");
+
+    if (current.state === "PREDICTION_COMMITTED") {
+      runner.clear();
+      const compiled = await counterLabApi.compileLab(sessionId);
+      setSession(compiled);
+      current = compiled;
+      if (compiled.runnerJob !== undefined)
+        rememberRunnerJob(compiled.runnerJob);
+    }
+
+    if (current.state === "LAB_COMPILING") {
+      const jobId =
+        current.runnerJob?.jobId ??
+        window.localStorage.getItem(storageKeys.activeRunnerJobId);
+      if (jobId === null || jobId === undefined) {
+        throw new ApiClientError({
+          code: "RUNNER_RESUME_TOKEN_MISSING",
+          message:
+            "CounterLab found an active compile but could not reconnect to its public event stream.",
+          status: 409,
+          retryable: true,
+        });
+      }
+      current = await runner.waitForJob({
+        sessionId,
+        jobId,
+        terminalStates: ["LAB_VERIFIED", "LAB_REJECTED"],
+        onSession: setSession,
+      });
+    }
+
+    if (current.state === "LAB_REJECTED") {
+      throw new ApiClientError({
+        code: "LAB_REJECTED",
+        message:
+          "The external verifier rejected this plan. No experimental result was released.",
+        status: 409,
+      });
+    }
+
+    if (
+      current.state === "LAB_VERIFIED" &&
+      window.localStorage.getItem(storageKeys.activeRunnerJobKind) !== "LAB_RUN"
+    ) {
+      const run = await counterLabApi.runLab(sessionId);
+      setSession(run);
+      current = run;
+      if (run.runnerJob !== undefined) rememberRunnerJob(run.runnerJob);
+    }
+
+    if (
+      current.state === "LAB_COMPILING" ||
+      (current.state === "LAB_VERIFIED" && current.verifiedResult === undefined)
+    ) {
+      const jobId =
+        current.runnerJob?.jobId ??
+        window.localStorage.getItem(storageKeys.activeRunnerJobId);
+      if (jobId === null || jobId === undefined) {
+        throw new ApiClientError({
+          code: "RUNNER_RESUME_TOKEN_MISSING",
+          message:
+            "CounterLab found an active kernel run but could not reconnect to its public event stream.",
+          status: 409,
+          retryable: true,
+        });
+      }
+      current = await runner.waitForJob({
+        sessionId,
+        jobId,
+        terminalStates: ["EXPERIMENT_COMPLETED", "LAB_REJECTED"],
+        onSession: setSession,
+      });
+    }
+
+    if (
+      current.state !== "EXPERIMENT_COMPLETED" ||
+      current.verifiedResult === undefined
+    ) {
+      throw new ApiClientError({
+        code: "RESULT_NOT_AUTHORIZED",
+        message:
+          "The fixed kernel did not release a verified result for this session.",
+        status: 409,
+      });
+    }
+    forgetRunnerJob();
+    setSession(current);
+    setStage("build");
   };
 
   useEffect(() => {
@@ -2211,12 +2623,14 @@ export function App() {
         restored.state === "LAB_REJECTED" ||
         restored.state === "LAB_VERIFIED"
       ) {
-        setStage(
+        if (
           restored.mode.kind === "live_notebook" &&
-            restored.verifiedResult === undefined
-            ? "live-compile"
-            : "build",
-        );
+          restored.verifiedResult === undefined
+        ) {
+          await advanceLiveLab(restored);
+        } else {
+          setStage("build");
+        }
       } else {
         setStage("reality");
       }
@@ -2297,6 +2711,8 @@ export function App() {
     setArtifact(null);
     setSession(null);
     setError(null);
+    setRunnerJob(null);
+    runner.clear();
   };
 
   const review = (step: ReviewStep) => {
@@ -2398,7 +2814,7 @@ export function App() {
       );
       setSession(committed);
       if (mode === "live") {
-        setStage("live-compile");
+        await advanceLiveLab(committed);
         return;
       }
       const compiled = await counterLabApi.compileLab(session.sessionId);
@@ -2410,6 +2826,10 @@ export function App() {
   const openResult = () => {
     if (session === null) {
       window.localStorage.setItem(storageKeys.replayStage, "reality");
+      setStage("reality");
+      return;
+    }
+    if (session.verifiedResult !== undefined) {
       setStage("reality");
       return;
     }
@@ -2555,7 +2975,7 @@ export function App() {
         />
       )}
       {reviewStep === null && stage === "live-compile" && (
-        <LiveCompileBoundary fallBack={chooseMode} />
+        <LiveCompileScreen events={runner.events} job={runnerJob} />
       )}
       <footer className="footer shell">
         <span>

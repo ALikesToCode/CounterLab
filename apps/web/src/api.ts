@@ -20,6 +20,8 @@ import {
   type PredictionContract,
   type ProofBundle,
   type ReasoningDiff,
+  type RunnerJob,
+  type PublicCompilerEvent,
   type SessionState,
   type TransferResult,
   type VerifiedResultSet,
@@ -93,6 +95,14 @@ const LabCompileResponseSchema = z
   .strict();
 export type LabCompileResponse = z.infer<typeof LabCompileResponseSchema>;
 
+const RunnerActionResponseSchema = z
+  .object({
+    ...sessionViewShape,
+    runnerJob: RunnerJobSchema.optional(),
+  })
+  .strict();
+export type RunnerActionResponse = z.infer<typeof RunnerActionResponseSchema>;
+
 const RunnerEventsResponseSchema = z
   .object({
     events: z.array(PublicCompilerEventSchema),
@@ -109,10 +119,19 @@ const EventsResponseSchema = z
 const PatchCompileResponseSchema = z
   .object({
     ...sessionViewShape,
-    patch: PatchResultSchema,
-    kernelVerification: z.unknown(),
+    runnerJob: RunnerJobSchema.optional(),
+    patch: PatchResultSchema.optional(),
+    kernelVerification: z.unknown().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((response, context) => {
+    if (response.runnerJob === undefined && response.patch === undefined) {
+      context.addIssue({
+        code: "custom",
+        message: "patch compilation must queue a runner job or return a patch",
+      });
+    }
+  });
 
 const ReplaySchema = z
   .object({
@@ -420,10 +439,10 @@ export class CounterLabApiClient {
     );
   }
 
-  runLab(sessionId: string): Promise<SessionView> {
+  runLab(sessionId: string): Promise<RunnerActionResponse> {
     return this.postWithoutInput(
       `/api/sessions/${encodedId(sessionId)}/lab/run`,
-      SessionViewSchema,
+      RunnerActionResponseSchema,
     );
   }
 
@@ -460,6 +479,10 @@ export class CounterLabApiClient {
       `/api/sessions/${encodedId(sessionId)}/patch/compile`,
       PatchCompileResponseSchema,
     );
+  }
+
+  patchDownloadUrl(sessionId: string): string {
+    return `${this.baseUrl}/api/sessions/${encodedId(sessionId)}/patch/download`;
   }
 
   getEvents(sessionId: string): Promise<EvidenceEvent[]> {
@@ -587,7 +610,9 @@ export type {
   PatchResult,
   PredictionContract,
   ProofBundle,
+  PublicCompilerEvent,
   ReasoningDiff,
+  RunnerJob,
   SessionState,
   TransferResult,
   VerifiedResultSet,

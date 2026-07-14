@@ -72,6 +72,27 @@ const liveBeliefTest = {
   requiresLearnerConfirmation: true,
 };
 
+const operationByRun = {
+  random_row_split: "leakage.random_row_split",
+  customer_group_split: "leakage.group_holdout",
+  identity_ablation: "leakage.identity_ablation",
+} as const;
+
+const liveResult = {
+  ...sampleResult,
+  schemaVersion: "2" as const,
+  planId: "plan_live_ui",
+  sessionId: "session_ui",
+  artifactManifestHash: uploadedArtifact.fileSha256,
+  conceptPackVersion: "1.0.0",
+  runs: sampleResult.runs.map((run) => ({
+    ...run,
+    operation:
+      operationByRun[run.id as keyof typeof operationByRun] ??
+      "leakage.random_row_split",
+  })),
+};
+
 function session(
   state: string,
   version: number,
@@ -196,11 +217,21 @@ function installApi(
         );
       }
       if (path.endsWith("/lab/compile")) {
-        return response(session("LAB_VERIFIED", 6));
+        return response(
+          session("LAB_VERIFIED", 6, {
+            artifactId: activeArtifactId,
+            mode: activeMode,
+          }),
+        );
       }
       if (path.endsWith("/lab/run")) {
         return response(
-          session("EXPERIMENT_COMPLETED", 7, { verifiedResult: sampleResult }),
+          session("EXPERIMENT_COMPLETED", 7, {
+            artifactId: activeArtifactId,
+            mode: activeMode,
+            verifiedResult:
+              activeMode.kind === "live_notebook" ? liveResult : sampleResult,
+          }),
         );
       }
       if (path === "/api/replays/leakage-01") {
@@ -328,16 +359,18 @@ describe("CounterLab judged flow", () => {
     expect(document.body).not.toHaveTextContent(/OPENAI|GPT-|https?:\/\//i);
   });
 
-  it("starts a configured live notebook, renders returned hypotheses, and stops at the local runner", async () => {
+  it("starts a configured live notebook and completes the hosted artifact-specific lab", async () => {
     const user = userEvent.setup();
-    const fetcher = installApi({ liveGpt: "configured" });
+    const fetcher = installApi({ liveGpt: "configured", runner: "configured" });
     render(<App />);
 
     await user.click(screen.getByRole("button", { name: /generate live/i }));
     expect(
       await screen.findByText(/notebook lesson tools are ready to try/i),
     ).toBeInTheDocument();
-    expect(screen.getByText(/local runner is needed/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/hosted notebook runner is ready/i),
+    ).toBeInTheDocument();
     await user.click(
       screen.getByRole("button", { name: /continue with my notebook/i }),
     );
@@ -377,14 +410,17 @@ describe("CounterLab judged flow", () => {
     await user.click(screen.getByRole("button", { name: /lock my answer/i }));
 
     expect(
-      await screen.findByRole("heading", { name: /local runner required/i }),
+      await screen.findByRole("heading", { name: /the result is ready/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/no lab result was produced/i)).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/local runner required/i);
     expect(
       fetcher.mock.calls.some(([path]) =>
         String(path).endsWith("/lab/compile"),
       ),
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      fetcher.mock.calls.some(([path]) => String(path).endsWith("/lab/run")),
+    ).toBe(true);
     expect(
       fetcher.mock.calls.some(
         ([path, init]) =>

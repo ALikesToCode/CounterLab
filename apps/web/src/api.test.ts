@@ -32,6 +32,28 @@ const session = {
   updatedAt: "2026-07-14T10:01:00.000Z",
 };
 
+const runnerJob = {
+  schemaVersion: "1" as const,
+  jobId: "job_1",
+  kind: "LAB_RUN" as const,
+  status: "QUEUED" as const,
+  sessionId: session.sessionId,
+  artifactId: artifact.artifactId,
+  artifactManifestHash: digest("b"),
+  conceptPack: { id: "entity_leakage" as const, version: "1.0.0" },
+  inputHashes: [digest("c")],
+  stateVersion: 8,
+  jobVersion: 1,
+  createdAt: "2026-07-14T10:02:00.000Z",
+  updatedAt: "2026-07-14T10:02:00.000Z",
+  attempt: 0,
+  maxAttempts: 2,
+  runnerIdentity: null,
+  timeoutSeconds: 180,
+  outputHashes: [],
+  eventCursor: 0,
+};
+
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
     status,
@@ -225,6 +247,48 @@ describe("CounterLabApiClient", () => {
     });
   });
 
+  it("accepts queued live lab and patch jobs without substituting sample outputs", async () => {
+    const liveSession = {
+      ...session,
+      mode: { kind: "live_notebook" as const },
+      state: "LAB_VERIFIED" as const,
+      version: 8,
+    };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({ ok: true, data: { ...liveSession, runnerJob } }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ok: true,
+          data: {
+            ...liveSession,
+            state: "TRANSFER_PASSED",
+            version: 12,
+            runnerJob: {
+              ...runnerJob,
+              jobId: "job_patch_1",
+              kind: "PATCH_COMPILE",
+              stateVersion: 12,
+            },
+          },
+        }),
+      );
+    const client = new CounterLabApiClient({ fetch: fetcher });
+
+    await expect(client.runLab(session.sessionId)).resolves.toMatchObject({
+      mode: { kind: "live_notebook" },
+      runnerJob: { kind: "LAB_RUN", status: "QUEUED" },
+    });
+    await expect(client.compilePatch(session.sessionId)).resolves.toMatchObject(
+      {
+        mode: { kind: "live_notebook" },
+        runnerJob: { kind: "PATCH_COMPILE", status: "QUEUED" },
+      },
+    );
+  });
+
   it("maps every learning-loop method to its encoded route without swallowing errors", async () => {
     const fetcher = vi.fn<typeof fetch>(async () =>
       jsonResponse(
@@ -346,6 +410,14 @@ describe("CounterLabApiClient", () => {
       client.listRunnerEvents("session_1", "job_1", -1),
     ).rejects.toMatchObject({ code: "INVALID_EVENT_CURSOR", status: 400 });
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("builds a contained encoded patch download URL", () => {
+    const client = new CounterLabApiClient({ baseUrl: "https://studio.test/" });
+
+    expect(client.patchDownloadUrl("session/with space")).toBe(
+      "https://studio.test/api/sessions/session%2Fwith%20space/patch/download",
+    );
   });
 
   it("turns transport failures into typed retryable errors", async () => {
