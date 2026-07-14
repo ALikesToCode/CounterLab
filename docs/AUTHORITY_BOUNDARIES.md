@@ -1,0 +1,140 @@
+# Authority boundaries
+
+CounterLab separates proposal, computation, verification, and learner judgment. No model is allowed to both create an experiment and declare it valid.
+
+## Responsibility matrix
+
+| Authority                 | Owns                                                                                                    | May produce                                                                                                             | Must not decide or access                                                                                                     |
+| ------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Learner                   | Claim, Belief Test confirmation or rejection, immutable prediction, revision, transfer attempt          | Text claim, confirmation, prediction confidence, reusable rule, fixed transfer choices                                  | Experimental metrics before prediction, verifier outcome, hidden answers                                                      |
+| GPT-5.6 reasoning analyst | Evidence-linked hypothesis formalization                                                                | Schema-valid Belief Test, alternatives, uncertainty, smallest discriminating intervention                               | Cell execution, experimental results, generated-code validity, mastery, patch unlock                                          |
+| Runtime Codex compiler    | Bounded compilation of an approved contract                                                             | Experiment plan, adapter that composes the public SDK, public tests; after transfer, a minimal patch to a notebook copy | Metric formulas, split primitives, transfer scoring, final validity, hidden verifier, held-out data, secrets, original upload |
+| Fixed Python kernel       | Numeric truth for the documented concept                                                                | Splits, preprocessing, model training, metrics, overlap, fingerprints, chart-ready data, transfer scoring               | Learner-model diagnosis, compiler validity, prose grading                                                                     |
+| Local candidate runner    | Static and OS execution policy                                                                          | Workspace-policy result, bounded execution evidence, command duration and exit status                                   | Numeric truth, verifier verdict, credentials, network access                                                                  |
+| Frozen host verifier      | Named falsifiable validity checks                                                                       | `VERIFIED` or `REJECTED`, invariant failures, observed/expected values, minimal counterexamples                         | Repair implementation, learner judgment, model reasoning                                                                      |
+| Cloudflare Worker         | Edge intake, API validation, D1 persistence, sample/replay orchestration, optional server-side GPT call | Typed HTTP responses and explicit availability states                                                                   | Child processes, Codex App Server, native Python kernel, Docker sandbox, pretending replay is live                            |
+| Local orchestrator        | Process-capable live workflow                                                                           | Codex event relay, workspace creation, candidate execution, host verification, repair control                           | Weakening contracts during a session, accepting a rejected candidate                                                          |
+
+## Evidence flow
+
+```text
+untrusted notebook
+  -> safe parser (no execution)
+  -> Artifact Manifest + learner claim
+  -> GPT-5.6 proposal
+  -> learner-confirmed Belief Test
+  -> immutable Prediction Contract
+  -> Runtime Codex compiler proposal
+  -> host workspace and AST policy
+  -> constrained candidate execution
+  -> fixed kernel computation
+  -> frozen host verifier
+  -> verified result or structured rejection
+  -> learner revision and fixed transfer evaluator
+  -> separate patch compiler only after transfer passes
+  -> patch verifier
+  -> Reasoning Diff + Proof Bundle
+```
+
+Each arrow narrows authority. Downstream evidence may reject an upstream proposal; upstream actors cannot override a downstream verifier.
+
+## GPT-5.6 boundary
+
+The reasoning analyst receives sanitized notebook structure, code/output excerpts, metric candidates, schema summary, support state, learner claim, and concept rules. It does not receive raw fixture rows, local paths, secrets, or the complete notebook unless a future support contract explicitly requires and documents that expansion.
+
+Its output is locally validated against the Belief Test schema and every evidence reference must resolve to the Artifact Manifest. `INSUFFICIENT_EVIDENCE` is a valid outcome. A model response cannot advance session state until the learner confirms it.
+
+GPT may explain verified evidence. It may not fabricate results, execute uploaded code, decide whether Codex output passes, or infer global mastery from learner prose.
+
+## Runtime Codex boundary
+
+The live implementation is `AppServerCodexCompiler` in `packages/codex-client`. It uses the installed Codex App Server over stdio JSONL, performs initialize/initialized, starts a thread and turn, and omits the model field unless `CODEX_MODEL` is configured. The experimental WebSocket transport is outside the critical path.
+
+The lab turn is limited to approved belief evidence, public schema/documentation, redacted fixture structure, resource limits, and allowlisted files and commands. The requested generated file set must be exactly:
+
+```text
+experiment-plan.json
+artifact-adapter.py
+public_tests.py
+```
+
+The compiler cannot mark its own output verified. `public_tests.py` is diagnostic evidence only. The fixed host pipeline checks exact workspace contents, validates the plan and AST policy, runs the candidate under OS controls, recomputes results, and asks the external verifier for the authoritative result.
+
+If the verifier rejects a candidate, Codex receives only bounded structured counterexamples. Repair attempts are numbered `1` or `2`; both the TypeScript input contract and Python orchestrator cap repairs at two. A third repair is invalid.
+
+After `TRANSFER_PASSED`, patch compilation uses a separate App Server process/thread and a separate generation directory. It may modify only a named notebook copy and patch metadata within the allowed cell indexes. The original upload is outside its write authority.
+
+## Browser event boundary
+
+App Server protocol messages are not relayed directly. CounterLab emits only validated, sanitized compiler events:
+
+- plan summaries;
+- inspected or changed file names and unified diffs;
+- command summaries and bounded output excerpts;
+- durations, exit codes, and command status;
+- structured verifier counterexamples; and
+- phase and final status.
+
+Reasoning items and deltas, agent-message deltas and completed free-form prose, raw response items, arbitrary tool arguments, secrets, and full local paths are dropped. Unknown messages do not gain UI authority. Recognized messages with invalid shapes fail the compiler rather than being guessed at.
+
+The current package exposes these events as an async iterable. A local HTTP process may encode them as SSE. The Cloudflare Worker does not spawn Codex, so a deployed request for live Codex returns `LOCAL_RUNNER_REQUIRED` rather than an artificial stream.
+
+## Generated workspace and candidate execution boundary
+
+The local runner creates a fresh direct child of a server-controlled generated root. Session IDs are constrained, existing workspaces are rejected, symlinks are rejected, and path containment is checked after resolution.
+
+Before execution, the host requires exactly three bounded regular files, parses the plan with depth and shape limits, and applies the fixed Python AST policy to `artifact-adapter.py`. This policy rejects filesystem APIs, dynamic imports, environment access, evaluation/compilation escapes, subprocesses, sockets/HTTP clients, reflection escape patterns, and direct metric implementations within the documented adapter subset.
+
+The candidate then runs in Docker with no network, read-only root, non-root UID/GID, dropped capabilities, no-new-privileges, process/memory/CPU/wall/output limits, a bounded temporary directory, read-only public inputs, and a dedicated output mount. No application credentials are passed to the container.
+
+Only these targets are mounted for candidate execution:
+
+```text
+/workspace
+/fixtures/customer_churn.csv
+/output
+```
+
+The hidden verifier, mutation catalogue, held-out fixtures, repository secrets, and host kernel source are not candidate mounts. The host independently checks the output file set and recomputes result truth.
+
+This is defense in depth for the documented local scope, not a claim of formal containment or resistance to every container-runtime vulnerability.
+
+## Fixed kernel and verifier boundary
+
+The adapter declares how to compose public SDK operations. It does not calculate accuracy, ROC AUC, entity overlap, or canonical hashes itself. The fixed kernel owns those values and produces the only payload eligible for a verified chart.
+
+The external verifier executes outside the Codex-visible candidate workspace. It checks declared interventions, zero group overlap, identity ablation, canonical reproducibility, active label and row-order mutations, chart provenance, runner evidence, hidden-mount evidence, and supported-case status. A failure yields `REJECTED` and no verified result is released.
+
+Verifier feedback is intentionally lossy: invariant name, observed value, expected value, and a minimal counterexample. Verifier code, mutation implementation, hidden paths, and held-out fixtures never become repair prompt content.
+
+## Transfer and patch boundary
+
+Transfer is scored by a fixed evaluator on a surface-different forecasting task. GPT and Codex do not grade the learner's prose. Before `TRANSFER_PASSED`, the patch endpoint remains locked and no patch compiler turn may start.
+
+After transfer passes, Codex may propose a minimal change to a copy. The patch verifier owns notebook validity, allowed-cell scope, dependency allowlist, zero group overlap, recomputed metric provenance, determinism, and unchanged unrelated-cell hashes. A proposed patch that merely changes the displayed conclusion without changing evaluation design is rejected.
+
+## Cloudflare versus local authority
+
+The Vite/Cloudflare deployment is intentionally edge-compatible. It can parse and persist artifacts, run the deterministic sample/replay product flow, call the OpenAI Responses API server-side when configured, and expose typed health state.
+
+Cloudflare Workers do not own the process capabilities required for Codex App Server, Python, Docker, Git worktrees, or native local SQLite. Current Worker health reports those capabilities as `local-runner-required`, and the live lab compile route returns a typed 503 with `LOCAL_RUNNER_REQUIRED`.
+
+The local runner owns live compilation and execution. This split prevents a Cloudflare replay from being presented as a live generation and prevents unavailable process capabilities from degrading into fake success.
+
+## Replay and disabled authority
+
+`ReplayCodexCompiler` validates stored sanitized compiler events and prepends immutable replay metadata. Replay UIs must keep the replay ID, original timestamp, and model visible for the entire session. Replay evidence has only the authority of its recorded source and integrity chain; replaying it is not a new model run.
+
+`DisabledCodexCompiler` reports a typed setup error and cannot advance the session. Missing CLI authentication, missing sandbox, or an unsupported runtime are setup states, not verifier passes.
+
+No genuine live Codex candidate or reject-repair trace is currently recorded in this repository. Existing deterministic sample, transfer, and patch artifacts must not be relabelled as a live Codex trace.
+
+## Known limitations
+
+- The stdio protocol client and sanitizer are implemented and tested, but a credentialed model turn has not yet produced recorded candidate evidence.
+- The App Server child currently runs as a local host process with Codex's `workspace-write` policy. The fresh workspace and prompt constrain intended access and writes, but do not by themselves prove that unrelated host paths are unreadable. Additional OS isolation or a demonstrated hidden-path denial is required for the live acceptance gate.
+- Candidate execution is containerized after generation; this does not retroactively strengthen App Server generation isolation.
+- The latest focused runner verification passed all 43 tests. The real Docker smoke path also returned `VERIFIED` with the canonical fixture result hash after exercising the no-network, non-root, read-only boundary.
+- Container controls are implementation evidence, not a formal sandbox proof.
+- Replay mode requires a real stored compiler trace. The current `leakage-01` patch and transfer artifacts do not satisfy that requirement by themselves.
+- The Cloudflare deployment cannot execute live Codex or the native kernel and says so through typed health and API errors.
