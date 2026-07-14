@@ -9,13 +9,13 @@ import {
   type EvidenceEventUnsigned,
   type ProofBundle,
   type ProofBundleDraft,
-} from "../../contracts/src/index.js";
+} from "@counterlab/contracts";
 
 export type {
   EvidenceEvent,
   ProofBundle,
   ProofBundleDraft,
-} from "../../contracts/src/index.js";
+} from "@counterlab/contracts";
 
 type CanonicalValue =
   | null
@@ -199,7 +199,10 @@ export type ReplaySnapshot = {
 
 export function reconstructReplay(input: readonly unknown[]): ReplaySnapshot {
   const verified = verifyEvidenceChain(input);
-  const latestPayloadByKind: Record<string, EvidenceEvent["payload"]> = {};
+  const latestPayloadByKind = Object.create(null) as Record<
+    string,
+    EvidenceEvent["payload"]
+  >;
   for (const event of verified.events) {
     latestPayloadByKind[event.kind] = event.payload;
   }
@@ -260,6 +263,47 @@ function assertProofReferences(
       "Prediction Contract does not reference the approved Belief Test",
     );
   }
+  const concepts = [
+    draft.beliefTest.concept,
+    draft.experimentPlan.concept,
+    draft.verifiedResultSet.concept,
+  ];
+  if (new Set(concepts).size !== 1) {
+    throw new Error("Proof Bundle contains mismatched concept lineage");
+  }
+  if (
+    draft.patchResult.sourceArtifactHash !== draft.artifactManifest.fileSha256
+  ) {
+    throw new Error(
+      "Patch source artifact does not match the Proof Bundle Artifact Manifest",
+    );
+  }
+
+  for (const evidence of draft.beliefTest.evidenceRefs) {
+    let expectedHash: string | undefined;
+    if (evidence.kind === "learner_claim") {
+      expectedHash = hashCanonicalJson(draft.beliefTest.learnerClaim);
+    } else if (evidence.kind === "schema") {
+      expectedHash = hashCanonicalJson(draft.artifactManifest.schemaSummary);
+    } else {
+      const cell =
+        evidence.cellIndex === undefined
+          ? undefined
+          : draft.artifactManifest.cells.find(
+              (candidate) => candidate.index === evidence.cellIndex,
+            );
+      if (evidence.kind === "code") {
+        expectedHash = cell?.sourceSha256;
+      } else if (evidence.outputIndex !== undefined) {
+        expectedHash = cell?.outputHashes[evidence.outputIndex];
+      }
+    }
+    if (expectedHash === undefined || evidence.hash !== expectedHash) {
+      throw new Error(
+        `Belief Test evidence does not resolve to the Artifact Manifest: ${evidence.kind}`,
+      );
+    }
+  }
 
   const eventHashes = new Set(chain.events.map((event) => event.eventHash));
   if (!eventHashes.has(draft.learnerRevision.eventHash)) {
@@ -271,6 +315,26 @@ function assertProofReferences(
     if (!eventHashes.has(hash)) {
       throw new Error(
         "Reasoning Diff references an event outside the evidence chain",
+      );
+    }
+  }
+
+  const eventOutputHashes = new Set(
+    chain.events.flatMap((event) => event.outputHashes),
+  );
+  const requiredOutputHashes = [
+    draft.predictionContract.immutableHash,
+    draft.generatedAdapter.sha256,
+    draft.publicTests.reportHash,
+    draft.externalVerifier.reportHash,
+    draft.verifiedResultSet.resultHash,
+    draft.transferResult.resultHash,
+    draft.patchResult.resultHash,
+  ];
+  for (const hash of requiredOutputHashes) {
+    if (!eventOutputHashes.has(hash)) {
+      throw new Error(
+        `Proof Bundle output hash is not linked from the evidence event chain: ${hash}`,
       );
     }
   }
@@ -324,8 +388,17 @@ export function validateProofBundle(
     throw new Error("Proof Bundle content hash does not match its content");
   }
 
+  const signingKey = options.signingKey;
+  if (
+    signingKey !== undefined &&
+    signingKey.length > 0 &&
+    integrity.mode !== "hmac-signed"
+  ) {
+    throw new Error(
+      "A signing key was supplied, but the Proof Bundle is not HMAC-signed",
+    );
+  }
   if (integrity.mode === "hmac-signed") {
-    const signingKey = options.signingKey;
     if (signingKey === undefined || signingKey.length === 0) {
       throw new Error(
         "A signing key is required to validate this HMAC-signed Proof Bundle",

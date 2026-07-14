@@ -285,6 +285,30 @@ export const BeliefTestSchema = z
         path: ["evidenceRefs"],
       });
     }
+    for (const [index, evidence] of beliefTest.evidenceRefs.entries()) {
+      if (
+        (evidence.kind === "code" ||
+          evidence.kind === "metric" ||
+          evidence.kind === "output") &&
+        evidence.cellIndex === undefined
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: `${evidence.kind} evidence requires a cellIndex`,
+          path: ["evidenceRefs", index, "cellIndex"],
+        });
+      }
+      if (
+        (evidence.kind === "metric" || evidence.kind === "output") &&
+        evidence.outputIndex === undefined
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: `${evidence.kind} evidence requires an outputIndex`,
+          path: ["evidenceRefs", index, "outputIndex"],
+        });
+      }
+    }
   });
 
 export type BeliefTest = z.infer<typeof BeliefTestSchema>;

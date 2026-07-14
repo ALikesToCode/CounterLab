@@ -276,6 +276,18 @@ describe("learning-loop contracts", () => {
     expect(() =>
       BeliefTestSchema.parse({ ...beliefTest, unexpected: true }),
     ).toThrow();
+    const unresolvedMetric = {
+      kind: "metric" as const,
+      hash: hash("a"),
+      excerpt: "Test accuracy: 0.9847",
+      relevance: "Missing its exact output location.",
+    };
+    expect(() =>
+      BeliefTestSchema.parse({
+        ...beliefTest,
+        evidenceRefs: [unresolvedMetric],
+      }),
+    ).toThrow(/cellIndex|outputIndex/i);
   });
 
   it("validates immutable prediction metadata and ordered numeric ranges", () => {

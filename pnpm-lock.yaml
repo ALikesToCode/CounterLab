@@ -92,7 +92,11 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
-  packages/proof-bundle: {}
+  packages/proof-bundle:
+    dependencies:
+      '@counterlab/contracts':
+        specifier: workspace:*
+        version: link:../contracts
 
   packages/session-core:
     dependencies:

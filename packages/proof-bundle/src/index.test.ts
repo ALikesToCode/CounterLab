@@ -6,6 +6,7 @@ import {
   createEvidenceEvent,
   createProofBundle,
   exportProofBundle,
+  hashCanonicalJson,
   reconstructReplay,
   validateProofBundle,
   verifyEvidenceChain,
@@ -33,7 +34,17 @@ function eventInput(sequence: number, previousEventHash?: string) {
 
 function chain() {
   const first = createEvidenceEvent(eventInput(1));
-  const second = createEvidenceEvent(eventInput(2, first.eventHash));
+  const second = createEvidenceEvent({
+    ...eventInput(2, first.eventHash),
+    outputHashes: [
+      digest("b"),
+      digest("f"),
+      digest("3"),
+      digest("4"),
+      digest("6"),
+      digest("7"),
+    ],
+  });
   return [first, second];
 }
 
@@ -76,7 +87,9 @@ function draft(events = chain()): ProofBundleDraft {
       evidenceRefs: [
         {
           kind: "learner_claim",
-          hash: digest("2"),
+          hash: hashCanonicalJson(
+            "The result proves new-customer generalization.",
+          ),
           excerpt: "proves new-customer generalization",
           relevance: "Claim under test",
         },
@@ -329,6 +342,17 @@ describe("replay reconstruction", () => {
       "prediction.committed",
     ]);
   });
+
+  it("stores event kinds without allowing prototype-key collisions", () => {
+    const event = createEvidenceEvent({
+      ...eventInput(1),
+      kind: "__proto__",
+    });
+
+    const replay = reconstructReplay([event]);
+    expect(Object.getPrototypeOf(replay.latestPayloadByKind)).toBeNull();
+    expect(replay.latestPayloadByKind["__proto__"]).toEqual(event.payload);
+  });
 });
 
 describe("Proof Bundle integrity", () => {
@@ -371,5 +395,42 @@ describe("Proof Bundle integrity", () => {
     expect(() =>
       validateProofBundle(bundle, { signingKey: "local-test-key" }),
     ).toThrow(/signature/i);
+  });
+
+  it("rejects a signed bundle that was downgraded to an unsigned integrity label", () => {
+    const signed = createProofBundle(draft(), { signingKey: "local-test-key" });
+    const downgraded = {
+      ...signed,
+      integrity: {
+        mode: "integrity-hashed" as const,
+        algorithm: "sha256" as const,
+        contentHash: signed.integrity.contentHash,
+        eventChainHead: signed.integrity.eventChainHead,
+      },
+    };
+
+    expect(() =>
+      validateProofBundle(downgraded, { signingKey: "local-test-key" }),
+    ).toThrow(/signed|signature/i);
+  });
+
+  it("rejects mixed artifact or concept lineage", () => {
+    const wrongArtifact = draft();
+    wrongArtifact.patchResult.sourceArtifactHash = digest("0");
+    expect(() => createProofBundle(wrongArtifact)).toThrow(/source artifact/i);
+
+    const wrongConcept = draft();
+    wrongConcept.experimentPlan.concept = "class_imbalance";
+    expect(() => createProofBundle(wrongConcept)).toThrow(/concept/i);
+  });
+
+  it("rejects unresolved Belief Test evidence and unchained result hashes", () => {
+    const unresolvedEvidence = draft();
+    unresolvedEvidence.beliefTest.evidenceRefs[0]!.hash = digest("0");
+    expect(() => createProofBundle(unresolvedEvidence)).toThrow(/evidence/i);
+
+    const unchainedResult = draft();
+    unchainedResult.verifiedResultSet.resultHash = digest("0");
+    expect(() => createProofBundle(unchainedResult)).toThrow(/event chain/i);
   });
 });
