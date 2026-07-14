@@ -105,6 +105,9 @@ Phase 3 — Hosted artifact-specific leakage vertical slice
 | Runner image account tools were installed but `/usr/sbin` was absent from `PATH`                                  |       1 | Added standard sbin paths to the explicit production image `PATH`.                                                                   |
 | Corepack failed on a broken Yarn shim after copying Node into the Python base                                     |       1 | Installed the repository-pinned `pnpm@11.12.0` directly and removed Corepack from the image path.                                    |
 | Broad tests found trailing JSONC commas incompatible with the strict deployment-config regression                |       1 | Kept `wrangler.jsonc` valid strict JSON while retaining the supported Wrangler configuration.                                        |
+| LAB_RUN contract test referenced a Plan fixture outside its describe scope                                        |       1 | Moved the lineage test into the hosted-runner contract suite that owns the fixture.                                                  |
+| Hosted runner test introduced an unnecessary session-core dependency for hashes                                   |       1 | Used contract-valid opaque hashes and preserved the runner's narrow runtime dependencies.                                            |
+| Result verifier accessed entity fields before narrowing future imbalance run specs                                |       1 | Added an explicit leakage-spec type guard before entity-specific checks.                                                             |
 
 ## Notes
 

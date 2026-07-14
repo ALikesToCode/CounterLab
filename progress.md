@@ -129,6 +129,17 @@
     staged authentication file before each model turn.
   - Built and smoke-tested the production runner image: Codex 0.144.4, fixed
     kernel import, and the non-root setpriv identity all passed.
+  - Added the artifact-bound `LAB_RUN` contract and fixed Python hosted entrypoint.
+    The entrypoint revalidates manifest, Plan, learner-claim, fixture, and
+    canonical hashes before composing registered leakage operations.
+  - Added Verified Result Set v2 without weakening the stored sample v1 contract,
+    plus an independent Worker-side result verifier for Plan lineage, declared
+    runs, fixture fingerprints, group overlap, identity removal, discrimination,
+    chart consistency, and canonical hashing.
+  - Replaced the live result dead boundary with a separate authenticated
+    `LAB_RUN` job. The hosted runner makes no new model turn, runs only the fixed
+    Python module, emits bounded public events, and releases a result only after
+    the Worker verifier passes.
 - Files created/modified:
   - `task_plan.md`
   - `findings.md`
@@ -175,6 +186,9 @@
 | Hosted runner unit tests                        | process service and control-plane boundary  | Dispatch, auth, repair, output allowlist, launch isolation              | 9 passed                                               | pass   |
 | Runner production image                         | `Dockerfile.runner`                         | Build, pinned Codex, fixed kernel, non-root launch identity             | built; 3 container smoke checks passed                 | pass   |
 | Full `test-all.sh`                              | hosted Container runner checkpoint          | Shared, Worker/UI, Python/runner, typecheck, D1 migration, browser      | 131 TS + 45 web + 101 Python + 13 browser passed       | pass   |
+| Hosted fixed-kernel result path                 | live uploaded artifact and verified Plan    | Separate LAB_RUN, no Codex turn, independent result verification        | focused Worker, runner, contract, verifier tests pass  | pass   |
+| Runner production image                         | hosted fixed-kernel entrypoint               | Rebuild after Plan execution integration                                | built successfully                                     | pass   |
+| Full `test-all.sh`                              | artifact-specific LAB_RUN checkpoint         | Shared, Worker/UI, Python/runner, typecheck, D1 migration, browser      | 137 TS + 45 web + 102 Python + 13 browser passed       | pass   |
 
 ## Error Log
 
@@ -202,6 +216,9 @@
 | 2026-07-15 | Runner image omitted `/usr/sbin`, so the installed `groupadd` command was unreachable             |       1 | Added the standard sbin directories to the explicit production `PATH`.                                                    |
 | 2026-07-15 | Corepack failed on an unresolved Yarn shim in the mixed Node/Python image                          |       1 | Installed the declared `pnpm@11.12.0` directly and removed Corepack from the build.                                       |
 | 2026-07-15 | Full tests found strict JSON parsing incompatible with Prettier's Wrangler JSONC trailing commas   |       1 | Preserved `wrangler.jsonc` as strict JSON, which remains a valid Wrangler configuration.                                  |
+| 2026-07-15 | The LAB_RUN contract test referenced a Plan constant outside its describe scope                    |       1 | Moved the lineage test beside the shared hosted Plan fixture.                                                             |
+| 2026-07-15 | Hosted-runner tests imported session-core solely to calculate fixture hashes                       |       1 | Kept the runner dependency boundary narrow and used valid opaque hashes in the unit fixture.                              |
+| 2026-07-15 | Result-verifier typecheck exposed entity-field assumptions on future imbalance runs                |       1 | Narrowed leakage run specs explicitly before accessing entity-specific fields.                                           |
 
 ## 5-Question Reboot Check
 
