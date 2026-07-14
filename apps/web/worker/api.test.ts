@@ -8,6 +8,7 @@ import type {
   EvidenceEvent,
   SessionRepository,
 } from "@counterlab/session-core";
+import { createEvidenceEvent } from "@counterlab/session-core";
 
 import { api, createApi } from "./api";
 import type { ArtifactStore, StoredArtifact } from "./artifact-store";
@@ -129,10 +130,61 @@ async function sessionHarness(
   };
   return {
     app,
+    artifactStore,
     sessionRepository,
     artifactId: artifactBody.data.artifactId,
     sessionId: sessionBody.data.sessionId,
   };
+}
+
+async function saveUploadedArtifact(
+  artifactStore: MemoryArtifactStore,
+  sampleArtifactId: string,
+): Promise<ArtifactManifest> {
+  const sample = await artifactStore.find(sampleArtifactId);
+  if (sample === undefined) throw new Error("sample artifact is missing");
+  const uploaded = {
+    ...sample.manifest,
+    artifactId: "artifact_uploaded_not_sample",
+    fileName: "uploaded_customer_model.ipynb",
+    fileSha256: "a".repeat(64),
+  } satisfies ArtifactManifest;
+  await artifactStore.save(uploaded, "uploads/not-public.ipynb");
+  return uploaded;
+}
+
+async function seedSession(
+  repository: MemorySessionRepository,
+  input: {
+    id: string;
+    artifactId: string;
+    mode: "instant" | "live" | "replay";
+    state: CounterLabSession["state"];
+    version: number;
+  },
+): Promise<void> {
+  const timestamp = "2026-07-14T10:00:00.000Z";
+  const session: CounterLabSession = {
+    id: input.id,
+    artifactId: input.artifactId,
+    mode: input.mode,
+    state: input.state,
+    version: input.version,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+  const firstEvent = await createEvidenceEvent({
+    sessionId: session.id,
+    sequence: 1,
+    timestamp,
+    eventId: `event_${session.id}`,
+    draft: {
+      actor: "system",
+      kind: "session.seeded_for_authority_regression",
+      payload: { state: session.state, artifactId: session.artifactId },
+    },
+  });
+  await repository.create(session, firstEvent);
 }
 
 async function postJson(
@@ -148,6 +200,108 @@ async function postJson(
 }
 
 describe("Cloudflare Worker API", () => {
+  it("rejects a non-sample artifact at the sample-lesson session boundary", async () => {
+    const harness = await sessionHarness("instant");
+    const uploaded = await saveUploadedArtifact(
+      harness.artifactStore,
+      harness.artifactId,
+    );
+
+    const response = await postJson(harness.app, "/api/sessions", {
+      artifactId: uploaded.artifactId,
+      mode: "instant",
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "MODE_ARTIFACT_MISMATCH" },
+    });
+  });
+
+  it("does not grant sample authority to a separately uploaded copy with the same hash", async () => {
+    const harness = await sessionHarness("instant");
+    const sample = await harness.artifactStore.find(harness.artifactId);
+    if (sample === undefined) throw new Error("sample artifact is missing");
+    const copiedManifest = {
+      ...sample.manifest,
+      artifactId: "artifact_uploaded_copy",
+      fileName: "copied_sample.ipynb",
+    } satisfies ArtifactManifest;
+    await harness.artifactStore.save(copiedManifest, "uploads/copied.ipynb");
+
+    const response = await postJson(harness.app, "/api/sessions", {
+      artifactId: copiedManifest.artifactId,
+      mode: "instant",
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "MODE_ARTIFACT_MISMATCH" },
+    });
+  });
+
+  it("never attaches the bundled sample result to a non-sample artifact", async () => {
+    const harness = await sessionHarness("instant");
+    const uploaded = await saveUploadedArtifact(
+      harness.artifactStore,
+      harness.artifactId,
+    );
+    const sessionId = "session_uploaded_result_guard";
+    await seedSession(harness.sessionRepository, {
+      id: sessionId,
+      artifactId: uploaded.artifactId,
+      mode: "live",
+      state: "LAB_VERIFIED",
+      version: 6,
+    });
+
+    const response = await postJson(
+      harness.app,
+      `/api/sessions/${sessionId}/lab/run`,
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "ARTIFACT_RESULT_MISMATCH" },
+    });
+    const stored = await harness.sessionRepository.find(sessionId);
+    expect(stored?.state).toBe("LAB_VERIFIED");
+    expect(stored).not.toHaveProperty("verifiedResult");
+  });
+
+  it("never persists the bundled sample patch for a non-sample artifact", async () => {
+    const harness = await sessionHarness("instant");
+    const uploaded = await saveUploadedArtifact(
+      harness.artifactStore,
+      harness.artifactId,
+    );
+    const sessionId = "session_uploaded_patch_guard";
+    await seedSession(harness.sessionRepository, {
+      id: sessionId,
+      artifactId: uploaded.artifactId,
+      mode: "live",
+      state: "TRANSFER_PASSED",
+      version: 10,
+    });
+
+    const response = await postJson(
+      harness.app,
+      `/api/sessions/${sessionId}/patch/compile`,
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "ARTIFACT_PATCH_MISMATCH" },
+    });
+    const stored = await harness.sessionRepository.find(sessionId);
+    expect(stored?.state).toBe("TRANSFER_PASSED");
+    expect(stored).not.toHaveProperty("patchResult");
+  });
+
   it("reports honest edge and local-runner capabilities", async () => {
     const response = await api.request("/api/health");
 

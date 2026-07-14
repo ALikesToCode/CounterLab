@@ -31,9 +31,9 @@ export const CapabilityHealthSchema = z
     sample: z.literal("available"),
     replay: z.literal("available"),
     liveGpt: z.enum(["configured", "server-key-required"]),
-    liveCodex: z.literal("local-runner-required"),
-    liveKernel: z.literal("local-runner-required"),
-    sandbox: z.literal("local-runner-required"),
+    liveCodex: z.enum(["configured", "local-runner-required"]),
+    liveKernel: z.enum(["configured", "local-runner-required"]),
+    sandbox: z.enum(["configured", "local-runner-required"]),
     requestId: NonEmptyString,
   })
   .strict();

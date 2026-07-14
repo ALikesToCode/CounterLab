@@ -106,6 +106,7 @@ function errorResponse(
 function installApi(
   options: {
     liveGpt?: "configured" | "server-key-required";
+    runner?: "configured" | "local-runner-required";
     rejectLiveBelief?: boolean;
   } = {},
 ) {
@@ -119,9 +120,9 @@ function installApi(
           sample: "available",
           replay: "available",
           liveGpt: options.liveGpt ?? "server-key-required",
-          liveCodex: "local-runner-required",
-          liveKernel: "local-runner-required",
-          sandbox: "local-runner-required",
+          liveCodex: options.runner ?? "local-runner-required",
+          liveKernel: options.runner ?? "local-runner-required",
+          sandbox: options.runner ?? "local-runner-required",
           requestId: "request_ui",
         });
       }
@@ -257,6 +258,22 @@ describe("CounterLab judged flow", () => {
     expect(document.body).not.toHaveTextContent(
       /formalize|discriminating|canonical|mutation/i,
     );
+    expect(document.body).not.toHaveTextContent(
+      /teaches two machine-learning mistakes/i,
+    );
+  });
+
+  it("does not end live notebook analysis at a local boundary when the hosted runner is configured", async () => {
+    const user = userEvent.setup();
+    installApi({ liveGpt: "configured", runner: "configured" });
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /generate live/i }));
+
+    expect(
+      await screen.findByText(/hosted notebook runner is ready/i),
+    ).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/local runner required/i);
   });
 
   it("shows an honest unavailable state when live reasoning is not configured", async () => {

@@ -45,6 +45,7 @@ type WorkerBindings = Env & {
   COUNTERLAB_CODEX_MODE?: string;
   COUNTERLAB_MAX_NOTEBOOK_BYTES?: string;
   COUNTERLAB_SIGNING_KEY?: string;
+  RUNNER?: unknown;
 };
 
 type AppBindings = {
@@ -215,6 +216,31 @@ function maxNotebookBytes(context: Context<AppBindings>): number {
     : DEFAULT_MAX_NOTEBOOK_BYTES;
 }
 
+function runnerCapability(context: Context<AppBindings>) {
+  return context.env?.RUNNER === undefined
+    ? ("local-runner-required" as const)
+    : ("configured" as const);
+}
+
+function requireApprovedSampleArtifact(
+  artifact: Awaited<ReturnType<ArtifactStore["find"]>>,
+  errorCode:
+    | "MODE_ARTIFACT_MISMATCH"
+    | "ARTIFACT_RESULT_MISMATCH"
+    | "ARTIFACT_PATCH_MISMATCH",
+): void {
+  if (
+    artifact?.manifest.artifactId !== sampleManifest.artifactId ||
+    artifact.manifest.fileSha256 !== sampleManifest.fileSha256
+  ) {
+    throw new ApiInputError(
+      errorCode,
+      "Bundled sample evidence is authorized only for the approved sample artifact",
+      409,
+    );
+  }
+}
+
 function isFile(value: string | File | null): value is File {
   return value !== null && typeof value !== "string";
 }
@@ -272,8 +298,9 @@ export function createApi(options: ApiOptions = {}) {
     await next();
   });
 
-  app.get("/api/health", (context) =>
-    context.json(
+  app.get("/api/health", (context) => {
+    const runner = runnerCapability(context);
+    return context.json(
       jsonSuccess({
         platform: "cloudflare-workers" as const,
         sample: "available" as const,
@@ -281,13 +308,13 @@ export function createApi(options: ApiOptions = {}) {
         liveGpt: context.env?.OPENAI_API_KEY?.trim().length
           ? ("configured" as const)
           : ("server-key-required" as const),
-        liveCodex: "local-runner-required" as const,
-        liveKernel: "local-runner-required" as const,
-        sandbox: "local-runner-required" as const,
+        liveCodex: runner,
+        liveKernel: runner,
+        sandbox: runner,
         requestId: context.get("requestId"),
       }),
-    ),
-  );
+    );
+  });
 
   app.post("/api/artifacts", async (context) => {
     const type = (context.req.header("content-type") ?? "").split(";", 1)[0];
@@ -388,6 +415,9 @@ export function createApi(options: ApiOptions = {}) {
         `Artifact ${input.artifactId} was not found`,
         404,
       );
+    }
+    if (input.mode === "instant") {
+      requireApprovedSampleArtifact(artifact, "MODE_ARTIFACT_MISMATCH");
     }
     const session = await sessionService(context, options).createSession(input);
     return context.json(jsonSuccess(statePayload(session)), 201);
@@ -553,10 +583,22 @@ export function createApi(options: ApiOptions = {}) {
   });
 
   app.post("/api/sessions/:sessionId/lab/run", async (context) => {
-    const completed = await sessionService(
-      context,
-      options,
-    ).recordExperimentResult(context.req.param("sessionId"), sampleResult);
+    const service = sessionService(context, options);
+    const sessionId = context.req.param("sessionId");
+    const current = await service.getSession(sessionId);
+    const artifact = await artifacts(context, options).find(current.artifactId);
+    if (current.mode !== "instant") {
+      throw new ApiInputError(
+        "ARTIFACT_RESULT_MISMATCH",
+        "Live and replay sessions require a result bound to their verified job",
+        409,
+      );
+    }
+    requireApprovedSampleArtifact(artifact, "ARTIFACT_RESULT_MISMATCH");
+    const completed = await service.recordExperimentResult(
+      sessionId,
+      sampleResult,
+    );
     return context.json(jsonSuccess(statePayload(completed)));
   });
 
@@ -587,6 +629,17 @@ export function createApi(options: ApiOptions = {}) {
     const service = sessionService(context, options);
     const sessionId = context.req.param("sessionId");
     const current = await service.getSession(sessionId);
+    const sourceArtifact = await artifacts(context, options).find(
+      current.artifactId,
+    );
+    if (current.mode !== "instant") {
+      throw new ApiInputError(
+        "ARTIFACT_PATCH_MISMATCH",
+        "Live and replay sessions require a patch bound to their source artifact",
+        409,
+      );
+    }
+    requireApprovedSampleArtifact(sourceArtifact, "ARTIFACT_PATCH_MISMATCH");
     await service.startPatchCompilation(sessionId);
     const patchResult = await createSamplePatchResult(
       sessionId,

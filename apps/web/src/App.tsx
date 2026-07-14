@@ -362,8 +362,8 @@ function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
         </div>
 
         <p className="plain-support-note">
-          Today CounterLab teaches two machine-learning mistakes in supported
-          Jupyter notebooks. Uploaded cells are read, never run.
+          Today CounterLab supports one released lesson: entity leakage in
+          documented Jupyter notebooks. Uploaded cells are read, never run.
         </p>
       </section>
     </main>
@@ -1944,6 +1944,10 @@ function LiveSetup({
   busy: boolean;
 }) {
   const configured = health?.liveGpt === "configured";
+  const runnerConfigured =
+    health?.liveCodex === "configured" &&
+    health.liveKernel === "configured" &&
+    health.sandbox === "configured";
   return (
     <main className="workspace shell narrow">
       <div className="screen-intro">
@@ -1991,12 +1995,19 @@ function LiveSetup({
               </div>
             </div>
             <div className="setup-row">
-              <span className="status-dot pending" />
+              <span
+                className={`status-dot ${runnerConfigured ? "configured" : "pending"}`}
+              />
               <div>
-                <strong>A local runner is needed for the final lab</strong>
+                <strong>
+                  {runnerConfigured
+                    ? "Hosted notebook runner is ready"
+                    : "A local runner is needed for the final lab"}
+                </strong>
                 <p>
-                  You can review the notebook and make a prediction here. The
-                  checked experiment runs only on a separately protected device.
+                  {runnerConfigured
+                    ? "Plans, verification, and fixed-kernel results can complete in this hosted session."
+                    : "You can review the notebook and make a prediction here. The checked experiment runs only on a separately protected device."}
                 </p>
               </div>
             </div>
