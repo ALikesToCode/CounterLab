@@ -1,7 +1,8 @@
 import { defineConfig } from "@playwright/test";
 
 const port = Number(process.env.COUNTERLAB_E2E_PORT ?? "5173");
-const baseURL = `http://127.0.0.1:${port}`;
+const remoteBaseURL = process.env.COUNTERLAB_E2E_BASE_URL?.replace(/\/$/, "");
+const baseURL = remoteBaseURL ?? `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -19,11 +20,14 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
-  webServer: {
-    command: `pnpm dev --host 127.0.0.1 --port ${port}`,
-    cwd: import.meta.dirname,
-    url: baseURL,
-    reuseExistingServer: true,
-    timeout: 120_000,
-  },
+  webServer:
+    remoteBaseURL === undefined
+      ? {
+          command: `pnpm dev --host 127.0.0.1 --port ${port}`,
+          cwd: import.meta.dirname,
+          url: baseURL,
+          reuseExistingServer: true,
+          timeout: 120_000,
+        }
+      : undefined,
 });
