@@ -1,5 +1,40 @@
 # Decisions
 
+## 2026-07-14 — Revoke staged Codex authentication before the model turn
+
+- The host creates a private temporary Codex home containing only the minimum
+  launch authentication, starts App Server inside the Bubblewrap filesystem
+  boundary, and completes the required handshake.
+- Before `thread/start`, CounterLab deletes every staged credential file and
+  revokes access to the temporary home. Model-invoked commands therefore run
+  after the credential has left the guest filesystem.
+- A genuine installed-App-Server run passed the revocation probe, generated only
+  the three allowed files, received a structured external-verifier rejection,
+  and passed after one repair. Direct or unisolated launches still fail closed.
+- This supersedes the earlier requirement for a separate credential broker for
+  the currently installed App Server lifecycle. It remains a version-sensitive
+  OS boundary, not a formal sandbox proof, and must be requalified after material
+  authentication or protocol changes.
+
+## 2026-07-14 — Make the learning action obvious before exposing proof machinery
+
+- Replaced the dark proof-console landing page with a bright adult-learning
+  studio organized around one question, one action, and one result.
+- The recommended path is now “Start the 3-minute lesson.” Notebook and replay
+  paths remain visible but secondary.
+- Reworded the learner state rail as `Your idea`, `Your prediction`, `What
+happened`, and `Try it again`; technical product terms remain in provenance
+  rather than navigation.
+- Show plain-language hypothesis summaries first. Exact analyst wording,
+  compiler events, result tables, hashes, and reproduction commands are still
+  present behind keyboard-operable disclosures.
+- Added a browser comprehension gate: the landing must keep the primary action
+  in view, remain below 210 visible words, omit proof-system jargon, and avoid
+  horizontal overflow on the judged mobile viewport.
+- Preserved the narrow notebook support contract. Clear copy is not permission
+  to claim biology, mathematics, or arbitrary-file verification without a fixed
+  concept pack and evaluator.
+
 ## 2026-07-14 — Evidence-editorial product surface
 
 - Adopted a two-polarity visual system: near-black evidence instrument for the
