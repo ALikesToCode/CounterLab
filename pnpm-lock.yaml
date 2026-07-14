@@ -33,9 +33,18 @@ importers:
 
   apps/web:
     dependencies:
+      '@counterlab/belief-analyst':
+        specifier: workspace:*
+        version: link:../../packages/belief-analyst
       '@counterlab/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@counterlab/notebook-parser':
+        specifier: workspace:*
+        version: link:../../packages/notebook-parser
+      '@counterlab/session-core':
+        specifier: workspace:*
+        version: link:../../packages/session-core
       hono:
         specifier: 4.12.30
         version: 4.12.30
@@ -79,6 +88,24 @@ importers:
       wrangler:
         specifier: 4.110.0
         version: 4.110.0(@cloudflare/workers-types@5.20260714.1)
+
+  packages/belief-analyst:
+    dependencies:
+      '@counterlab/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      openai:
+        specifier: 6.46.0
+        version: 6.46.0(ws@8.21.0)(zod@4.4.3)
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+
+  packages/codex-client:
+    dependencies:
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
 
   packages/contracts:
     dependencies:

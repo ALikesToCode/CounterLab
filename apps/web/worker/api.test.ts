@@ -2,7 +2,127 @@
 
 import { describe, expect, it } from "vitest";
 
-import { api } from "./api";
+import type { ArtifactManifest } from "@counterlab/contracts";
+import type {
+  CounterLabSession,
+  EvidenceEvent,
+  SessionRepository,
+} from "@counterlab/session-core";
+
+import { api, createApi } from "./api";
+import type { ArtifactStore, StoredArtifact } from "./artifact-store";
+
+class MemorySessionRepository implements SessionRepository {
+  private readonly sessions = new Map<string, CounterLabSession>();
+  private readonly eventLog = new Map<string, EvidenceEvent[]>();
+
+  async create(
+    session: CounterLabSession,
+    firstEvent: EvidenceEvent,
+  ): Promise<void> {
+    this.sessions.set(session.id, structuredClone(session));
+    this.eventLog.set(session.id, [structuredClone(firstEvent)]);
+  }
+
+  async find(sessionId: string): Promise<CounterLabSession | undefined> {
+    const session = this.sessions.get(sessionId);
+    return session === undefined ? undefined : structuredClone(session);
+  }
+
+  async save(
+    session: CounterLabSession,
+    expectedVersion: number,
+    event: EvidenceEvent,
+  ): Promise<void> {
+    const current = this.sessions.get(session.id);
+    if (current === undefined || current.version !== expectedVersion) {
+      throw new Error("stale test session write");
+    }
+    this.sessions.set(session.id, structuredClone(session));
+    const events = this.eventLog.get(session.id) ?? [];
+    events.push(structuredClone(event));
+    this.eventLog.set(session.id, events);
+  }
+
+  async listEvents(sessionId: string): Promise<EvidenceEvent[]> {
+    return structuredClone(this.eventLog.get(sessionId) ?? []);
+  }
+
+  async lastEvent(sessionId: string): Promise<EvidenceEvent | undefined> {
+    return structuredClone(this.eventLog.get(sessionId)?.at(-1));
+  }
+
+  close(): void {}
+}
+
+class MemoryArtifactStore implements ArtifactStore {
+  private readonly artifacts = new Map<string, StoredArtifact>();
+
+  async save(
+    manifest: ArtifactManifest,
+    objectKey?: string,
+  ): Promise<StoredArtifact> {
+    const stored = {
+      manifest: structuredClone(manifest),
+      ...(objectKey === undefined ? {} : { objectKey }),
+    };
+    this.artifacts.set(manifest.artifactId, stored);
+    return structuredClone(stored);
+  }
+
+  async find(artifactId: string): Promise<StoredArtifact | undefined> {
+    const artifact = this.artifacts.get(artifactId);
+    return artifact === undefined ? undefined : structuredClone(artifact);
+  }
+}
+
+async function sessionHarness(mode: "instant" | "live") {
+  const sessionRepository = new MemorySessionRepository();
+  const artifactStore = new MemoryArtifactStore();
+  let idSequence = 0;
+  const app = createApi({
+    sessionRepository,
+    artifactStore,
+    now: () => new Date("2026-07-14T10:00:00.000Z"),
+    id: (prefix) => `${prefix}_${++idSequence}`,
+  });
+  const artifactResponse = await app.request("/api/artifacts", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ sample: true }),
+  });
+  const artifactBody = (await artifactResponse.json()) as {
+    data: ArtifactManifest;
+  };
+  const sessionResponse = await app.request("/api/sessions", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      artifactId: artifactBody.data.artifactId,
+      mode,
+    }),
+  });
+  const sessionBody = (await sessionResponse.json()) as {
+    data: { sessionId: string };
+  };
+  return {
+    app,
+    sessionRepository,
+    sessionId: sessionBody.data.sessionId,
+  };
+}
+
+async function postJson(
+  app: ReturnType<typeof createApi>,
+  path: string,
+  body: unknown = {},
+) {
+  return app.request(path, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
 
 describe("Cloudflare Worker API", () => {
   it("reports honest edge and local-runner capabilities", async () => {
@@ -26,7 +146,10 @@ describe("Cloudflare Worker API", () => {
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
-      data: { replayId: string; result: { resultHash: string; runs: unknown[] } };
+      data: {
+        replayId: string;
+        result: { resultHash: string; runs: unknown[] };
+      };
     };
     expect(body.data.replayId).toBe("leakage-01");
     expect(body.data.result.resultHash).toBe(
@@ -47,5 +170,171 @@ describe("Cloudflare Worker API", () => {
         status: 404,
       },
     });
+  });
+
+  it("stores approved-sample provenance for an instant Belief Test", async () => {
+    const { app, sessionId, sessionRepository } =
+      await sessionHarness("instant");
+
+    const response = await app.request(
+      `/api/sessions/${sessionId}/belief-test`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          learnerClaim:
+            "The notebook accuracy proves generalization to new customers.",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        sessionId,
+        mode: "instant",
+        state: "BELIEF_TEST_PROPOSED",
+      },
+    });
+    const events = await sessionRepository.listEvents(sessionId);
+    expect(events).toHaveLength(2);
+    expect(events[1]).toMatchObject({
+      actor: "system",
+      kind: "belief_test.proposed",
+      modelId: "leakage-customer-churn-belief-v1",
+    });
+    expect(events[1]).not.toHaveProperty("promptHash");
+  });
+
+  it("returns LIVE_UNAVAILABLE without advancing a live session when the key is missing", async () => {
+    const { app, sessionId, sessionRepository } = await sessionHarness("live");
+
+    const response = await app.request(
+      `/api/sessions/${sessionId}/belief-test`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          learnerClaim:
+            "The notebook accuracy proves generalization to new customers.",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      error: {
+        code: "LIVE_UNAVAILABLE",
+        message: "OPENAI_API_KEY is not configured",
+        status: 503,
+      },
+    });
+    await expect(sessionRepository.find(sessionId)).resolves.toMatchObject({
+      state: "INGESTED",
+      version: 1,
+    });
+    expect(await sessionRepository.listEvents(sessionId)).toHaveLength(1);
+  });
+
+  it("persists the evidence-gated instant path through a verified patch", async () => {
+    const { app, sessionId, sessionRepository } =
+      await sessionHarness("instant");
+    const route = `/api/sessions/${sessionId}`;
+
+    expect(
+      (
+        await postJson(app, `${route}/belief-test`, {
+          learnerClaim:
+            "The 98.5% test accuracy proves generalization to new customers.",
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await postJson(app, `${route}/belief-test/confirm`, {
+          action: "confirm",
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await postJson(app, `${route}/prediction`, {
+          choice: "Accuracy remains near 98%",
+          confidence: 72,
+        })
+      ).status,
+    ).toBe(201);
+
+    const duplicatePrediction = await postJson(app, `${route}/prediction`, {
+      choice: "Changed after commitment",
+      confidence: 10,
+    });
+    expect(duplicatePrediction.status).toBe(409);
+
+    expect((await postJson(app, `${route}/lab/compile`)).status).toBe(200);
+    expect((await postJson(app, `${route}/lab/run`)).status).toBe(200);
+    expect(
+      (
+        await postJson(app, `${route}/revision`, {
+          revision:
+            "Hold out complete entities and remove identity shortcuts before claiming generalization.",
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await postJson(app, `${route}/transfer`, {
+          strategyChoice: "time_ordered_holdout",
+          riskChoice: "centered_window_reads_future",
+          evidenceChoices: [
+            "center_true_uses_later_targets",
+            "random_split_mixes_dates",
+          ],
+        })
+      ).status,
+    ).toBe(200);
+    const patch = await postJson(app, `${route}/patch/compile`);
+    expect(patch.status).toBe(200);
+    await expect(patch.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        state: "PATCH_VERIFIED",
+        patch: {
+          status: "VERIFIED",
+          modifiedCells: [3],
+          verification: { passed: true },
+        },
+      },
+    });
+
+    const session = await sessionRepository.find(sessionId);
+    expect(session).toMatchObject({
+      state: "PATCH_VERIFIED",
+      verifiedResult: {
+        resultHash:
+          "2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0",
+      },
+      transferResult: { outcome: "PASSED" },
+      patchResult: { status: "VERIFIED" },
+    });
+    const events = await sessionRepository.listEvents(sessionId);
+    expect(events).toHaveLength(12);
+    expect(events.map((event) => event.kind)).toEqual([
+      "session.created",
+      "belief_test.proposed",
+      "belief_test.confirmed",
+      "prediction.committed",
+      "lab.compilation_started",
+      "lab.verified",
+      "experiment.completed",
+      "revision.recorded",
+      "transfer.started",
+      "transfer.passed",
+      "patch.compilation_started",
+      "patch.verified",
+    ]);
+    expect(events.at(-1)?.previousEventHash).toBe(events.at(-2)?.eventHash);
   });
 });

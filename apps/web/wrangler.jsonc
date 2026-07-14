@@ -1,12 +1,27 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "counterlab",
+  "account_id": "9b0a1524e478000ec9b3ff2da6104d81",
   "main": "worker/index.ts",
   "compatibility_date": "2026-07-14",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "not_found_handling": "single-page-application"
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "counterlab",
+      "database_id": "64caa8fc-b9b6-4393-81fa-d856ff774a36",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ARTIFACTS",
+      "bucket_name": "counterlab-artifacts"
+    }
+  ],
   "observability": {
     "enabled": true
   }

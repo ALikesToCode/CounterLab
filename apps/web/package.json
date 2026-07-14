@@ -9,10 +9,14 @@
     "preview": "vite preview",
     "deploy": "vite build && wrangler deploy",
     "test": "vitest run --config vitest.config.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "types:worker": "wrangler types --config wrangler.jsonc --include-runtime=true",
+    "typecheck": "tsc --noEmit -p tsconfig.json && pnpm run types:worker && tsc --noEmit -p tsconfig.worker.json"
   },
   "dependencies": {
+    "@counterlab/belief-analyst": "workspace:*",
     "@counterlab/contracts": "workspace:*",
+    "@counterlab/notebook-parser": "workspace:*",
+    "@counterlab/session-core": "workspace:*",
     "hono": "4.12.30",
     "react": "19.2.7",
     "react-dom": "19.2.7"
