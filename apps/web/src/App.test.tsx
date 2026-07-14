@@ -285,6 +285,7 @@ beforeEach(() => {
     value: testStorage,
   });
   window.localStorage.clear();
+  window.history.replaceState({}, "", "/");
   installApi();
 });
 
@@ -301,26 +302,28 @@ describe("CounterLab judged flow", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", {
-        name: "A model scored 98.5%. Can you trust it?",
+        name: "Your notebook made a claim. Will it survive a fair test?",
       }),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        /CounterLab is a guided lesson.*make a prediction.*fairer test.*new problem/i,
+        /turns your idea into a prediction.*verified test.*lesson transfers.*repair/i,
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /start the 3-minute lesson/i }),
+      screen.getByRole("button", { name: /analyze a notebook/i }),
     ).toBeEnabled();
     expect(
-      screen.getByRole("button", { name: /test my notebook/i }),
-    ).toBeEnabled();
+      screen
+        .getAllByRole("button", { name: /try the 3-minute sample/i })
+        .every((button) => !button.hasAttribute("disabled")),
+    ).toBe(true);
     expect(
       screen.getByRole("button", { name: /watch a verified replay/i }),
     ).toBeEnabled();
-    expect(screen.getByText("Make a prediction")).toBeInTheDocument();
-    expect(screen.getByText("See the evidence")).toBeInTheDocument();
-    expect(screen.getByText("Apply the lesson")).toBeInTheDocument();
+    expect(screen.getByText("Question the claim")).toBeInTheDocument();
+    expect(screen.getByText("Let reality answer")).toBeInTheDocument();
+    expect(screen.getByText("Transfer, then repair")).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(
       /formalize|discriminating|canonical|mutation/i,
     );
@@ -387,8 +390,8 @@ describe("CounterLab judged flow", () => {
       }),
     );
     expect(
-      await screen.findByText(uploadedArtifact.fileName),
-    ).toBeInTheDocument();
+      (await screen.findAllByText(uploadedArtifact.fileName)).length,
+    ).toBeGreaterThan(0);
     await user.type(
       screen.getByLabelText(/your claim/i),
       "The notebook accuracy proves generalization to new customers.",
@@ -520,9 +523,11 @@ describe("CounterLab judged flow", () => {
     await user.click(
       screen.getByRole("button", { name: /replay verified session/i }),
     );
-    expect(await screen.findByText(/verified replay/i)).toBeInTheDocument();
+    expect(
+      (await screen.findAllByText(/verified replay/i)).length,
+    ).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: /continue replay/i }));
-    expect(screen.getByText(/verified replay/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/verified replay/i).length).toBeGreaterThan(0);
   });
 });

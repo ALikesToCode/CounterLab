@@ -5,6 +5,7 @@ import "@fontsource-variable/newsreader/index.css";
 
 import { App } from "./App";
 import "./styles.css";
+import "./styles/studio.css";
 
 const root = document.getElementById("root");
 

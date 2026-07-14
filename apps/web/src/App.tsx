@@ -14,6 +14,9 @@ import {
   type VerifiedResultSet,
 } from "./api";
 import { useRunnerEvents } from "./hooks/useRunnerEvents";
+import { CounterLabStudio } from "./app/CounterLabStudio";
+import { parseStudioLocation, studioPath } from "./app/AppRouter";
+import type { RecentProject, StudioStage } from "./components/studio/types";
 
 import { getRun, sampleArtifact, sampleResult, verifiedReplay } from "./sample";
 
@@ -261,21 +264,31 @@ function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
         <div className="learning-hero-copy">
           <h1 className="sr-only">CounterLab</h1>
           <p className="lesson-kicker">
-            <span>Interactive lesson</span> · about 3 minutes
+            <span>CounterLab Studio</span> · mental-model debugger for ML
+            notebooks
           </p>
-          <h2>A model scored 98.5%. Can you trust it?</h2>
+          <h2>Your notebook made a claim. Will it survive a fair test?</h2>
           <p className="learning-promise">
-            CounterLab is a guided lesson: make a prediction, watch a fairer
-            test, then use the rule on a new problem.
+            Bring a result you are unsure about. CounterLab turns your idea into
+            a prediction, lets a verified test answer it, checks whether the
+            lesson transfers, and only then unlocks a repair.
           </p>
           <div className="learning-actions">
             <button
               className="button lesson-primary"
               type="button"
-              aria-label="Start the 3-minute lesson — Try instantly"
+              aria-label="Analyze a notebook — Generate live"
+              onClick={() => chooseMode("live")}
+            >
+              Analyze a notebook <Mark name="arrow" />
+            </button>
+            <button
+              className="button lesson-secondary"
+              type="button"
+              aria-label="Try the 3-minute sample — Try instantly"
               onClick={() => chooseMode("instant")}
             >
-              Start the 3-minute lesson <Mark name="arrow" />
+              Try the 3-minute sample
             </button>
           </div>
           <div className="lesson-trust" aria-label="Lesson details">
@@ -283,7 +296,7 @@ function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
               <Mark name="check" /> No account needed
             </span>
             <span>
-              <Mark name="check" /> Real results, not a quiz answer
+              <Mark name="check" /> Uploaded cells are read, never run
             </span>
           </div>
         </div>
@@ -318,14 +331,22 @@ function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
         </aside>
       </section>
 
-      <section className="lesson-steps shell" aria-label="How the lesson works">
+      <section className="lesson-steps shell" aria-label="How CounterLab works">
         {[
-          ["1", "Make a prediction", "Say what you expect before results."],
-          ["2", "See the evidence", "Compare the old test with a fairer one."],
+          [
+            "1",
+            "Question the claim",
+            "Link your idea to exact notebook cells.",
+          ],
+          [
+            "2",
+            "Let reality answer",
+            "Lock a prediction, then run a fair test.",
+          ],
           [
             "3",
-            "Apply the lesson",
-            "Solve a different case to unlock the fix.",
+            "Transfer, then repair",
+            "Use the rule on a new case to unlock a verified copy.",
           ],
         ].map(([index, title, copy]) => (
           <article key={index}>
@@ -340,21 +361,21 @@ function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
 
       <section className="more-paths shell" id="judge-paths">
         <div className="more-paths-heading">
-          <span>Already know the lesson?</span>
-          <p>Bring a notebook or inspect a recorded run.</p>
+          <span>Want to see it before uploading?</span>
+          <p>Take the short sample or inspect a recorded verified run.</p>
         </div>
         <div className="simple-mode-grid">
           <button
             className="simple-mode-card"
             type="button"
-            aria-label="Test my notebook — Generate live"
-            onClick={() => chooseMode("live")}
+            aria-label="Try the 3-minute sample lesson"
+            onClick={() => chooseMode("instant")}
           >
             <span className="path-icon">A</span>
-            <strong>Test my notebook</strong>
-            <small>Supported Jupyter notebooks</small>
+            <strong>Try the sample lesson</strong>
+            <small>No upload, account, or secret needed</small>
             <span>
-              Check support <Mark name="arrow" />
+              Start sample <Mark name="arrow" />
             </span>
           </button>
 
@@ -374,8 +395,8 @@ function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
         </div>
 
         <p className="plain-support-note">
-          Today CounterLab supports one released lesson: entity leakage in
-          documented Jupyter notebooks. Uploaded cells are read, never run.
+          Released support: entity leakage in documented Python/scikit-learn
+          Jupyter notebooks. Unsupported files are refused, not guessed.
         </p>
       </section>
     </main>
@@ -2563,13 +2584,17 @@ export function App() {
   };
 
   useEffect(() => {
-    const sessionId = window.localStorage.getItem(storageKeys.sessionId);
+    const route = parseStudioLocation(window.location.pathname);
+    const sessionId =
+      route.kind === "session" || route.kind === "proof"
+        ? route.id
+        : window.localStorage.getItem(storageKeys.sessionId);
     const storedMode = window.localStorage.getItem(
       storageKeys.mode,
     ) as Mode | null;
     const storedClaim = window.localStorage.getItem(storageKeys.claim);
 
-    if (storedMode === "replay") {
+    if (storedMode === "replay" || route.kind === "replay") {
       setMode("replay");
       setReplayIntro(
         window.localStorage.getItem(storageKeys.replayIntro) !== "false",
@@ -2582,8 +2607,8 @@ export function App() {
       return;
     }
 
-    if (sessionId === null || storedMode === null) {
-      if (storedMode === "live") {
+    if (sessionId === null || (storedMode === null && route.kind !== "proof")) {
+      if (storedMode === "live" || route.kind === "new") {
         setMode("live");
         setStage("live-setup");
         void checkLiveCapabilities();
@@ -2642,6 +2667,18 @@ export function App() {
   useLayoutEffect(() => {
     resetViewport();
   }, [stage]);
+
+  useEffect(() => {
+    const path = studioPath({
+      stage,
+      mode,
+      ...(session === null ? {} : { sessionId: session.sessionId }),
+      completed: session?.state === "REASONING_DIFF_ISSUED",
+    });
+    if (window.location.pathname !== path) {
+      window.history.replaceState({}, "", path);
+    }
+  }, [mode, session, stage]);
 
   const checkLiveCapabilities = async () => {
     setCheckingLiveHealth(true);
@@ -2723,6 +2760,42 @@ export function App() {
   const returnToCurrent = () => {
     setReviewStep(null);
     resetViewport();
+  };
+
+  const openRecentProject = (project: RecentProject) => {
+    window.localStorage.setItem(storageKeys.sessionId, project.sessionId);
+    window.localStorage.setItem(storageKeys.mode, project.mode);
+    window.history.pushState(
+      {},
+      "",
+      `/session/${encodeURIComponent(project.sessionId)}`,
+    );
+    window.location.reload();
+  };
+
+  const downloadCurrentPatch = () => {
+    if (session?.patchResult === undefined) return;
+    const anchor = document.createElement("a");
+    anchor.href = counterLabApi.patchDownloadUrl(session.sessionId);
+    anchor.download = "";
+    anchor.click();
+  };
+
+  const exportCurrentProof = () => {
+    if (session === null || session.state !== "REASONING_DIFF_ISSUED") return;
+    void withRequest(async () => {
+      const proof = await counterLabApi.getProofBundle(session.sessionId);
+      const url = URL.createObjectURL(
+        new Blob([JSON.stringify(proof, null, 2)], {
+          type: "application/json",
+        }),
+      );
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `counterlab-${session.sessionId}-proof-bundle.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    });
   };
 
   const startLiveSession = () => {
@@ -2866,116 +2939,145 @@ export function App() {
           Recording evidence…
         </div>
       )}
-      {reviewStep !== null && (
-        <ReviewScreen
-          step={reviewStep}
-          claim={
-            claim ||
-            "The notebook accuracy proves generalization to new customers."
-          }
-          session={session}
-          result={session?.verifiedResult ?? sampleResult}
-          returnToCurrent={returnToCurrent}
-          restart={restart}
-        />
-      )}
-      {reviewStep === null && stage === "landing" && (
-        <Landing chooseMode={chooseMode} />
-      )}
-      {reviewStep === null && stage === "claim" && (
-        <ClaimScreen
-          artifact={artifact}
-          claim={claim}
-          setClaim={setClaim}
-          continueToBelief={proposeBeliefTest}
-          uploadNotebook={uploadNotebook}
-          busy={busy}
-        />
-      )}
-      {reviewStep === null && stage === "belief" && (
-        <BeliefScreen
-          claim={claim}
-          beliefTest={session?.beliefTest}
-          confirmed={confirmed}
-          confirm={confirmBeliefTest}
-          prediction={prediction}
-          setPrediction={setPrediction}
-          confidence={confidence}
-          setConfidence={setConfidence}
-          commitPrediction={commitPrediction}
-          editClaim={() => setStage("claim")}
-          stop={stopBeliefTest}
-        />
-      )}
-      {reviewStep === null &&
-        stage === "build" &&
-        mode !== null &&
-        (replayIntro ? (
-          <main className="workspace shell narrow">
-            <div className="screen-intro">
-              <p className="eyebrow">Stored evidence chain</p>
-              <h1>Replay verified session</h1>
-              <p>
-                This path reconstructs recorded events and computed payloads. It
-                is not a live model run.
-              </p>
-            </div>
-            <section className="setup-card panel">
-              <dl className="provenance-list">
-                <div>
-                  <dt>Replay</dt>
-                  <dd>{verifiedReplay.id}</dd>
+      {stage === "landing" && <Landing chooseMode={chooseMode} />}
+      {stage !== "landing" && mode !== null && (
+        <CounterLabStudio
+          context={{
+            mode,
+            stage: stage as StudioStage,
+            artifact,
+            session,
+            events: runner.events,
+          }}
+          actions={{
+            newAnalysis: () => chooseMode("live"),
+            showEvidence: () => review("claim"),
+            ...(stage === "belief" && confirmed && prediction !== null
+              ? { lockPrediction: commitPrediction }
+              : {}),
+            ...(stage === "build" ? { runFairTest: openResult } : {}),
+            ...(session?.patchResult === undefined
+              ? {}
+              : {
+                  reviewPatch: () => setStage("reality"),
+                  downloadPatch: downloadCurrentPatch,
+                }),
+            ...(session?.state === "REASONING_DIFF_ISSUED"
+              ? { exportProof: exportCurrentProof }
+              : {}),
+            startOver: restart,
+            openRecent: openRecentProject,
+          }}
+        >
+          {reviewStep !== null && (
+            <ReviewScreen
+              step={reviewStep}
+              claim={
+                claim ||
+                "The notebook accuracy proves generalization to new customers."
+              }
+              session={session}
+              result={session?.verifiedResult ?? sampleResult}
+              returnToCurrent={returnToCurrent}
+              restart={restart}
+            />
+          )}
+          {reviewStep === null && stage === "claim" && (
+            <ClaimScreen
+              artifact={artifact}
+              claim={claim}
+              setClaim={setClaim}
+              continueToBelief={proposeBeliefTest}
+              uploadNotebook={uploadNotebook}
+              busy={busy}
+            />
+          )}
+          {reviewStep === null && stage === "belief" && (
+            <BeliefScreen
+              claim={claim}
+              beliefTest={session?.beliefTest}
+              confirmed={confirmed}
+              confirm={confirmBeliefTest}
+              prediction={prediction}
+              setPrediction={setPrediction}
+              confidence={confidence}
+              setConfidence={setConfidence}
+              commitPrediction={commitPrediction}
+              editClaim={() => setStage("claim")}
+              stop={stopBeliefTest}
+            />
+          )}
+          {reviewStep === null &&
+            stage === "build" &&
+            mode !== null &&
+            (replayIntro ? (
+              <main className="workspace shell narrow">
+                <div className="screen-intro">
+                  <p className="eyebrow">Stored evidence chain</p>
+                  <h1>Replay verified session</h1>
+                  <p>
+                    This path reconstructs recorded events and computed
+                    payloads. It is not a live model run.
+                  </p>
                 </div>
-                <div>
-                  <dt>Model</dt>
-                  <dd>{verifiedReplay.model}</dd>
-                </div>
-                <div>
-                  <dt>Verifier</dt>
-                  <dd>{verifiedReplay.verifier}</dd>
-                </div>
-                <div>
-                  <dt>Commit</dt>
-                  <dd>{verifiedReplay.commit}</dd>
-                </div>
-              </dl>
-            </section>
-            <button
-              className="button button-primary"
-              type="button"
-              onClick={continueReplay}
-            >
-              Continue replay <Mark name="arrow" />
-            </button>
-          </main>
-        ) : (
-          <BuildScreen mode={mode} openResult={openResult} />
-        ))}
-      {reviewStep === null && stage === "reality" && (
-        <RealityScreen
-          claim={
-            claim ||
-            "The notebook accuracy proves generalization to new customers."
-          }
-          prediction={prediction ?? "stays-high"}
-          result={session?.verifiedResult ?? sampleResult}
-          session={session}
-          updateSession={setSession}
-        />
-      )}
-      {reviewStep === null && stage === "live-setup" && (
-        <LiveSetup
-          health={liveHealth}
-          checking={checkingLiveHealth}
-          checkError={liveHealthError}
-          startLive={startLiveSession}
-          retry={() => void checkLiveCapabilities()}
-          fallBack={chooseMode}
-          busy={busy}
-        />
-      )}
-      {reviewStep === null && stage === "live-compile" && (
-        <LiveCompileScreen events={runner.events} job={runnerJob} />
+                <section className="setup-card panel">
+                  <dl className="provenance-list">
+                    <div>
+                      <dt>Replay</dt>
+                      <dd>{verifiedReplay.id}</dd>
+                    </div>
+                    <div>
+                      <dt>Model</dt>
+                      <dd>{verifiedReplay.model}</dd>
+                    </div>
+                    <div>
+                      <dt>Verifier</dt>
+                      <dd>{verifiedReplay.verifier}</dd>
+                    </div>
+                    <div>
+                      <dt>Commit</dt>
+                      <dd>{verifiedReplay.commit}</dd>
+                    </div>
+                  </dl>
+                </section>
+                <button
+                  className="button button-primary"
+                  type="button"
+                  onClick={continueReplay}
+                >
+                  Continue replay <Mark name="arrow" />
+                </button>
+              </main>
+            ) : (
+              <BuildScreen mode={mode} openResult={openResult} />
+            ))}
+          {reviewStep === null && stage === "reality" && (
+            <RealityScreen
+              claim={
+                claim ||
+                "The notebook accuracy proves generalization to new customers."
+              }
+              prediction={prediction ?? "stays-high"}
+              result={session?.verifiedResult ?? sampleResult}
+              session={session}
+              updateSession={setSession}
+            />
+          )}
+          {reviewStep === null && stage === "live-setup" && (
+            <LiveSetup
+              health={liveHealth}
+              checking={checkingLiveHealth}
+              checkError={liveHealthError}
+              startLive={startLiveSession}
+              retry={() => void checkLiveCapabilities()}
+              fallBack={chooseMode}
+              busy={busy}
+            />
+          )}
+          {reviewStep === null && stage === "live-compile" && (
+            <LiveCompileScreen events={runner.events} job={runnerJob} />
+          )}
+        </CounterLabStudio>
       )}
       <footer className="footer shell">
         <span>
