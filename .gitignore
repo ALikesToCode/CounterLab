@@ -16,6 +16,7 @@ test-results/
 data/*.sqlite*
 data/uploads/
 data/generated/
+data/live-runs/
 generated/
 dist/
 *.tsbuildinfo

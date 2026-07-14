@@ -12,7 +12,8 @@
     "test:ts": "vitest run && pnpm --filter @counterlab/web test",
     "test:python": "PYTHONPATH=services/kernel/src .venv/bin/python -m pytest services/kernel/tests",
     "typecheck": "tsc --noEmit && pnpm --filter @counterlab/web run typecheck",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "codex:live": "tsx scripts/run-live-codex.ts"
   },
   "dependencies": {
     "openai": "6.46.0",
@@ -21,6 +22,7 @@
   "devDependencies": {
     "@types/node": "26.1.1",
     "prettier": "3.9.5",
+    "tsx": "4.23.1",
     "typescript": "7.0.2",
     "vitest": "4.1.10",
     "wrangler": "4.110.0"
