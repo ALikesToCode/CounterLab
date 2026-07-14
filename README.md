@@ -205,9 +205,10 @@ These are software/evidence measurements, not learner-study outcomes.
 ## Achieved, failed, and unsupported
 
 Achieved: deterministic kernel and parser, D1 state machine, R2-private upload
-path, immutable prediction, verified-only charts, fixed transfer, patch lock,
-minimal verified sample patch, event hash chain, Proof Bundle, authenticated
-Codex traces, Playwright judge flow, and Cloudflare Vite deployment support.
+path, immutable prediction, resumable lesson navigation, read-only completed-step
+review, verified-only charts, fixed transfer, patch lock, minimal verified sample
+patch, event hash chain, Proof Bundle, authenticated Codex traces, Playwright
+judge flow, and Cloudflare Vite deployment support.
 
 Failed honestly: the first live Codex run used an unsupported SDK argument; two
 repairs then left an unexpected `__pycache__`, so that run remained rejected and

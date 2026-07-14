@@ -12,6 +12,8 @@
 
 - [x] No result before Prediction Contract.
 - [x] Prediction overwrite returns typed 409.
+- [x] Refresh restores the exact committed prediction and current lesson state.
+- [x] Completed stages are read-only; Start over clears the browser checkpoint.
 - [x] Rejected lab cannot create a result.
 - [x] Transfer failure keeps patch locked; pass unlocks it.
 - [x] Original notebook is unchanged; unrelated source hashes match.
@@ -25,11 +27,13 @@
 - [x] No private reasoning, secrets, or machine-local paths appear.
 - [x] Custom Responses routing is normalized, server-only, and absent from
       browser-visible health/evidence.
-- [ ] Configured live Responses credential completes a schema-valid Belief Test.
-- [x] Generation isolation remains labelled `PARTIAL` until OS proof exists.
+- [x] Configured live Responses credential completes a schema-valid,
+      evidence-resolving Belief Test.
+- [x] Generation isolation is scoped to the named Bubblewrap boundary and is not
+      presented as a formal sandbox proof.
 - [x] Unisolated App Server launch fails closed and a real Bubblewrap probe
       proves repository/verifier/held-out paths are absent.
-- [ ] Credential-safe isolated App Server launch completes a live turn.
+- [x] Credential-safe isolated App Server launch completes a live turn.
 
 ## Security and quality
 

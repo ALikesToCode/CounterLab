@@ -1,5 +1,24 @@
 # Decisions
 
+## 2026-07-14 — Make lesson progress resumable and reviewable
+
+- The server session remains authoritative for instant/live progress; refresh
+  derives the visible phase, committed prediction, confidence, revision,
+  transfer outcome, and patch state from that record.
+- Replay has a small browser checkpoint because it intentionally has no mutable
+  server session. The checkpoint preserves its current replay screen and
+  transfer phase, while the persistent replay banner continues to distinguish
+  it from a live run.
+- Completed steps are navigable from the lesson map but render as read-only
+  evidence pages. Immutable predictions and prior evidence are never reopened
+  for editing; making a different choice requires Start over and a new session.
+- The reality/transfer/patch journey uses separate focused phases instead of a
+  single accumulating page. Every phase change resets the viewport and focus so
+  keyboard and pointer users begin at the new question.
+- On small screens the lesson map keeps text labels rather than collapsing to
+  unexplained dots. Design and test rationale are recorded in
+  `docs/plans/2026-07-14-guided-learning-navigation.md`.
+
 ## 2026-07-14 — Revoke staged Codex authentication before the model turn
 
 - The host creates a private temporary Codex home containing only the minimum

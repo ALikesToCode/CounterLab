@@ -58,3 +58,19 @@ Each behavioral slice begins with a focused failing test, followed by the minimu
   changing product copy, evidence, or provider authority.
 - Hardened generated-code execution requires a working Docker daemon or a documented equivalent local boundary.
 - Cloudflare Workers cannot spawn Codex or the Python kernel; deployed replay/sample behavior and local live behavior remain explicitly distinguished.
+
+## 2026-07-14 journey refinement
+
+The judged journey now treats navigation as part of evidence integrity:
+
+- Instant/live refresh restores the current server-authoritative state instead
+  of resetting the learner or reconstructing editable client state.
+- Replay refresh restores a labelled browser checkpoint without presenting it as
+  a new live session.
+- Completed stages are read-only review destinations; future stages remain
+  unavailable and the current stage returns to the active task.
+- Start over is explicit, clears CounterLab browser keys, and creates no hidden
+  rewrite of the prior evidence chain.
+- The final learning sequence is split into evidence and revision, fixed
+  transfer, patch unlock, and completion/Reasoning Diff phases. Each transition
+  has a focused browser assertion for viewport reset and result gating.
