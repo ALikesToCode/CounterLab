@@ -14,6 +14,5 @@
     "noEmit": true,
     "types": ["node", "vitest/globals"]
   },
-  "include": ["apps/**/*.ts", "apps/**/*.tsx", "packages/**/*.ts", "vitest.config.ts"]
+  "include": ["packages/**/*.ts", "vitest.config.ts"]
 }
-

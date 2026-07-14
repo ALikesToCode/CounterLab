@@ -9,9 +9,9 @@
   },
   "scripts": {
     "test": "pnpm test:ts && pnpm test:python",
-    "test:ts": "vitest run",
+    "test:ts": "vitest run && pnpm --filter @counterlab/web test",
     "test:python": "PYTHONPATH=services/kernel/src .venv/bin/python -m pytest services/kernel/tests",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && pnpm --filter @counterlab/web run typecheck",
     "format:check": "prettier --check ."
   },
   "dependencies": {
