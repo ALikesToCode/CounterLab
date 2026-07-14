@@ -11,6 +11,7 @@ fi
 
 cd "${ROOT_DIR}"
 pnpm exec vitest run
+pnpm --filter @counterlab/web test
 PYTHONPATH=services/kernel/src:services/runner/src "${PYTHON_BIN}" -m pytest \
   services/kernel/tests services/runner/tests
 pnpm run typecheck
