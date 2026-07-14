@@ -61,6 +61,21 @@ describe("CounterLabApiClient", () => {
     );
   });
 
+  it("uploads notebooks as multipart data without overriding the boundary", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({ ok: true, data: artifact }, 201),
+    );
+    const client = new CounterLabApiClient({ fetch: fetcher });
+    const file = new File(["{}"], "sample.ipynb", {
+      type: "application/json",
+    });
+
+    await expect(client.uploadArtifact(file)).resolves.toEqual(artifact);
+    const request = fetcher.mock.calls[0]?.[1];
+    expect(request?.body).toBeInstanceOf(FormData);
+    expect(new Headers(request?.headers).has("content-type")).toBe(false);
+  });
+
   it("creates and retrieves typed session views", async () => {
     const fetcher = vi
       .fn<typeof fetch>()

@@ -65,6 +65,7 @@ const sessionViewShape = {
 
 export const SessionViewSchema = z.object(sessionViewShape).strict();
 export type SessionView = z.infer<typeof SessionViewSchema>;
+export type ArtifactView = ArtifactManifest;
 
 const EventsResponseSchema = z
   .object({ events: z.array(EvidenceEventSchema) })
@@ -248,6 +249,22 @@ export class CounterLabApiClient {
     });
   }
 
+  uploadArtifact(file: File): Promise<ArtifactManifest> {
+    const form = new FormData();
+    form.set("file", file, file.name);
+    return this.request("/api/artifacts", ArtifactManifestSchema, {
+      method: "POST",
+      body: form,
+    });
+  }
+
+  getArtifact(artifactId: string): Promise<ArtifactManifest> {
+    return this.request(
+      `/api/artifacts/${encodedId(artifactId)}`,
+      ArtifactManifestSchema,
+    );
+  }
+
   createSession(input: CreateSessionInput): Promise<SessionView> {
     return this.request("/api/sessions", SessionViewSchema, {
       method: "POST",
@@ -395,7 +412,10 @@ export class CounterLabApiClient {
     init: RequestInit = { method: "GET" },
   ): Promise<T> {
     const headers: Record<string, string> = { accept: "application/json" };
-    if (init.body !== undefined) {
+    if (
+      init.body !== undefined &&
+      !(typeof FormData !== "undefined" && init.body instanceof FormData)
+    ) {
       headers["content-type"] = "application/json";
     }
     for (const [name, value] of new Headers(init.headers).entries()) {

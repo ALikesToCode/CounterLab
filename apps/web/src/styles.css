@@ -442,6 +442,7 @@ pre,
 
 .file-chip,
 .verified-chip,
+.support-chip,
 .locked-chip {
   display: inline-flex;
   align-items: center;
@@ -461,6 +462,12 @@ pre,
 .verified-chip {
   background: var(--aqua-soft);
   color: #076469;
+  font-weight: 700;
+}
+
+.support-chip.rejected {
+  background: var(--red-soft);
+  color: var(--red);
   font-weight: 700;
 }
 
@@ -504,6 +511,49 @@ pre,
   display: grid;
   gap: 11px;
   margin-bottom: 24px;
+}
+
+.evidence-empty {
+  margin: 30px 0;
+  padding: 22px 0;
+  border-block: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.support-warning {
+  margin: 20px 0;
+  padding: 14px;
+  border-left: 3px solid var(--red);
+  background: var(--red-soft);
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.support-warning ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.upload-control {
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.upload-control input {
+  max-width: 100%;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12px;
+}
+
+.upload-control small {
+  color: var(--ink-soft);
+  font-weight: 400;
+  line-height: 1.45;
 }
 
 .evidence-row {

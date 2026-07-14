@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   ApiClientError,
   counterLabApi,
+  type ArtifactView,
   type PatchResult,
   type ProofBundle,
   type SessionView,
@@ -161,15 +162,30 @@ function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
 }
 
 function ClaimScreen({
+  artifact,
   claim,
   setClaim,
   continueToBelief,
+  uploadNotebook,
+  busy,
 }: {
+  artifact: ArtifactView | null;
   claim: string;
   setClaim: (claim: string) => void;
   continueToBelief: () => void;
+  uploadNotebook: (file: File) => void;
+  busy: boolean;
 }) {
   const random = getRun("random_row_split");
+  const isSample = artifact?.fileSha256 === sampleArtifact.fileSha256;
+  const metricCandidates =
+    artifact?.cells.flatMap((cell) =>
+      cell.metricCandidates.map((metric) => ({
+        ...metric,
+        cellIndex: cell.index,
+      })),
+    ) ?? [];
+  const supported = artifact?.support.status === "SUPPORTED";
   return (
     <main className="workspace shell">
       <div className="screen-intro">
@@ -185,50 +201,121 @@ function ClaimScreen({
         <section className="notebook-card" aria-labelledby="artifact-title">
           <div className="notebook-topline">
             <span className="file-chip">.ipynb</span>
-            <span className="verified-chip">
-              <Mark name="check" /> Supported
+            <span
+              className={supported ? "verified-chip" : "support-chip rejected"}
+            >
+              {supported && <Mark name="check" />}{" "}
+              {artifact?.support.status ?? "Loading"}
             </span>
           </div>
-          <h2 id="artifact-title">{sampleArtifact.title}</h2>
-          <p className="file-name">{sampleArtifact.fileName}</p>
-          <div className="headline-metric">
-            <span>{percent.format(random.metrics.accuracy)}</span>
-            <small>reported test accuracy</small>
-          </div>
+          <h2 id="artifact-title">
+            {isSample ? sampleArtifact.title : "Uploaded notebook evidence"}
+          </h2>
+          <p className="file-name">
+            {artifact?.fileName ?? "Preparing artifact…"}
+          </p>
+          {isSample ? (
+            <div className="headline-metric">
+              <span>{percent.format(random.metrics.accuracy)}</span>
+              <small>reported test accuracy</small>
+            </div>
+          ) : metricCandidates[0] ? (
+            <div className="headline-metric">
+              <span>{metricCandidates[0].value.toLocaleString()}</span>
+              <small>
+                {metricCandidates[0].name} · displayed notebook output
+              </small>
+            </div>
+          ) : (
+            <p className="evidence-empty">
+              No safe displayed metric was extracted.
+            </p>
+          )}
           <div className="evidence-list">
-            <div className="evidence-row">
-              <span className="evidence-ref">Cell 3 · output 0</span>
-              <span>
-                Random row split · n={random.sampleSizes.test} test rows · seed{" "}
-                {random.seed}
-              </span>
-            </div>
-            <div className="evidence-row">
-              <span className="evidence-ref">Cell 3 · source</span>
-              <span>
-                <code>customer_id</code> is included in categorical features
-              </span>
-            </div>
+            {isSample ? (
+              <>
+                <div className="evidence-row">
+                  <span className="evidence-ref">Cell 3 · output 0</span>
+                  <span>
+                    Random row split · n={random.sampleSizes.test} test rows ·
+                    seed {random.seed}
+                  </span>
+                </div>
+                <div className="evidence-row">
+                  <span className="evidence-ref">Cell 3 · source</span>
+                  <span>
+                    <code>customer_id</code> is included in categorical features
+                  </span>
+                </div>
+              </>
+            ) : (
+              metricCandidates.slice(0, 3).map((metric) => (
+                <div
+                  className="evidence-row"
+                  key={`${metric.cellIndex}-${metric.outputIndex}-${metric.name}`}
+                >
+                  <span className="evidence-ref">
+                    Cell {metric.cellIndex} · output {metric.outputIndex}
+                  </span>
+                  <span>
+                    {metric.name}: {metric.value.toLocaleString()}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
+          {artifact !== null && artifact.support.reasons.length > 0 && (
+            <div className="support-warning" role="status">
+              <strong>Notebook support limits</strong>
+              <ul>
+                {artifact.support.reasons.map((reason) => (
+                  <li key={`${reason.code}-${reason.cellIndex ?? "artifact"}`}>
+                    {reason.code}: {reason.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <details>
             <summary>Artifact integrity</summary>
             <dl className="provenance-list">
               <div>
                 <dt>Rows</dt>
-                <dd>{sampleArtifact.rows.toLocaleString()}</dd>
+                <dd>
+                  {artifact?.schemaSummary.rowCount?.toLocaleString() ??
+                    "Not inferred"}
+                </dd>
               </div>
               <div>
-                <dt>Customers</dt>
-                <dd>{sampleArtifact.customers}</dd>
+                <dt>Entity candidates</dt>
+                <dd>
+                  {artifact?.schemaSummary.entityCandidates.join(", ") ||
+                    "None"}
+                </dd>
               </div>
               <div>
                 <dt>SHA-256</dt>
                 <dd>
-                  <code>{sampleArtifact.fileSha256.slice(0, 16)}…</code>
+                  <code>{artifact?.fileSha256.slice(0, 16) ?? "pending"}…</code>
                 </dd>
               </div>
             </dl>
           </details>
+          <label className="upload-control">
+            <span>Upload another notebook</span>
+            <input
+              type="file"
+              accept=".ipynb,application/x-ipynb+json,application/json"
+              disabled={busy}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) uploadNotebook(file);
+              }}
+            />
+            <small>
+              Parsed as untrusted data. Cells are never executed at intake.
+            </small>
+          </label>
         </section>
 
         <section className="claim-form panel" aria-labelledby="claim-prompt">
@@ -253,7 +340,7 @@ function ClaimScreen({
             <button
               className="button button-primary"
               type="button"
-              disabled={claim.trim().length < 12}
+              disabled={claim.trim().length < 12 || !supported || busy}
               onClick={continueToBelief}
             >
               Create Belief Test <Mark name="arrow" />
@@ -1209,6 +1296,7 @@ export function App() {
   const [confirmed, setConfirmed] = useState(false);
   const [prediction, setPrediction] = useState<PredictionChoice | null>(null);
   const [replayIntro, setReplayIntro] = useState(false);
+  const [artifact, setArtifact] = useState<ArtifactView | null>(null);
   const [session, setSession] = useState<SessionView | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1245,6 +1333,7 @@ export function App() {
     if (storedClaim !== null) setClaim(storedClaim);
     void withRequest(async () => {
       const restored = await counterLabApi.getSession(sessionId);
+      setArtifact(await counterLabApi.getArtifact(restored.artifactId));
       setSession(restored);
       setMode(restored.mode);
       setConfirmed(
@@ -1288,15 +1377,33 @@ export function App() {
       return;
     }
     void withRequest(async () => {
-      const artifact = await counterLabApi.createSampleArtifact();
+      const sample = await counterLabApi.createSampleArtifact();
       const created = await counterLabApi.createSession({
-        artifactId: artifact.artifactId,
+        artifactId: sample.artifactId,
+        mode: "instant",
+      });
+      setArtifact(sample);
+      setSession(created);
+      window.localStorage.setItem("counterlab.sessionId", created.sessionId);
+      window.localStorage.setItem("counterlab.mode", "instant");
+      setStage("claim");
+    });
+  };
+
+  const uploadNotebook = (file: File) => {
+    void withRequest(async () => {
+      const uploaded = await counterLabApi.uploadArtifact(file);
+      setArtifact(uploaded);
+      setSession(null);
+      window.localStorage.removeItem("counterlab.sessionId");
+      if (uploaded.support.status !== "SUPPORTED") return;
+      const created = await counterLabApi.createSession({
+        artifactId: uploaded.artifactId,
         mode: "instant",
       });
       setSession(created);
       window.localStorage.setItem("counterlab.sessionId", created.sessionId);
       window.localStorage.setItem("counterlab.mode", "instant");
-      setStage("claim");
     });
   };
 
@@ -1387,9 +1494,12 @@ export function App() {
       {stage === "landing" && <Landing chooseMode={chooseMode} />}
       {stage === "claim" && (
         <ClaimScreen
+          artifact={artifact}
           claim={claim}
           setClaim={setClaim}
           continueToBelief={proposeBeliefTest}
+          uploadNotebook={uploadNotebook}
+          busy={busy}
         />
       )}
       {stage === "belief" && (

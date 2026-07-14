@@ -108,6 +108,7 @@ async function sessionHarness(mode: "instant" | "live") {
   return {
     app,
     sessionRepository,
+    artifactId: artifactBody.data.artifactId,
     sessionId: sessionBody.data.sessionId,
   };
 }
@@ -139,6 +140,19 @@ describe("Cloudflare Worker API", () => {
         liveKernel: "local-runner-required",
       },
     });
+  });
+
+  it("retrieves stored artifact evidence without returning notebook bytes", async () => {
+    const harness = await sessionHarness("instant");
+    const response = await harness.app.request(
+      `/api/artifacts/${harness.artifactId}`,
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: ArtifactManifest };
+    expect(body.data.artifactId).toBe(harness.artifactId);
+    expect(body.data.support.status).toBe("SUPPORTED");
+    expect(JSON.stringify(body)).not.toContain("nbformat_minor");
   });
 
   it("returns the real verified replay payload", async () => {

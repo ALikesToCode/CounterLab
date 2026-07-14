@@ -16,25 +16,35 @@ async function reset(page: Page) {
 async function startInstant(page: Page) {
   await reset(page);
   await page.getByRole("button", { name: /Try instantly/i }).click();
-  await expect(page.getByRole("heading", { name: /What does this result prove/i })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /What does this result prove/i }),
+  ).toBeVisible();
   await page.getByLabel("Your claim").fill(claim);
   await page.getByRole("button", { name: /Create Belief Test/i }).click();
-  await expect(page.getByRole("heading", { name: "Belief Test" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Belief Test" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: /Confirm Belief Test/i }).click();
 }
 
 async function commitAndOpenResult(page: Page) {
   await page.getByLabel(/Remain near 98%/i).check();
   await page.getByRole("button", { name: /Commit prediction/i }).click();
-  await expect(page.getByRole("heading", { name: /Build and verify/i })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /Build and verify/i }),
+  ).toBeVisible();
   await page.getByRole("button", { name: /Open verified result/i }).click();
-  await expect(page.getByRole("heading", { name: "Verified result" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Verified result" }),
+  ).toBeVisible();
 }
 
 async function recordRevision(page: Page) {
   await page.getByLabel("Your revised mental model").fill(revision);
   await page.getByRole("button", { name: /Test transfer/i }).click();
-  await expect(page.getByText(/Which evaluation design matches deployment/i)).toBeVisible();
+  await expect(
+    page.getByText(/Which evaluation design matches deployment/i),
+  ).toBeVisible();
 }
 
 test("Try Instantly persists the verified learning loop and exports a valid proof", async ({
@@ -46,7 +56,9 @@ test("Try Instantly persists the verified learning loop and exports a valid proo
   });
 
   await startInstant(page);
-  await expect(page.getByRole("heading", { name: "Verified result" })).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Verified result" }),
+  ).toHaveCount(0);
 
   const sessionId = await page.evaluate(() =>
     window.localStorage.getItem("counterlab.sessionId"),
@@ -62,7 +74,9 @@ test("Try Instantly persists the verified learning loop and exports a valid proo
   await page.getByRole("button", { name: /Check transfer/i }).click();
   await expect(page.getByText(/Transfer passed/i)).toBeVisible();
   await page.getByRole("button", { name: /Verify notebook patch/i }).click();
-  await expect(page.getByRole("heading", { name: /What changed—and what proved it/i })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /What changed—and what proved it/i }),
+  ).toBeVisible();
 
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: /Export Proof Bundle/i }).click();
@@ -76,7 +90,9 @@ test("Try Instantly persists the verified learning loop and exports a valid proo
   expect(proof.events).toHaveLength(12);
 
   await page.reload();
-  await expect(page.getByRole("heading", { name: /What changed—and what proved it/i })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /What changed—and what proved it/i }),
+  ).toBeVisible();
   await expect(page.getByText(/Transfer passed/i)).toBeVisible();
   expect(consoleErrors).toEqual([]);
 });
@@ -96,9 +112,12 @@ test("prediction is immutable and results do not exist before commitment", async
 
   await page.getByLabel(/Fall materially/i).check();
   await page.getByRole("button", { name: /Commit prediction/i }).click();
-  const overwrite = await page.request.post(`/api/sessions/${sessionId}/prediction`, {
-    data: { choice: "Accuracy remains near 98%", confidence: 100 },
-  });
+  const overwrite = await page.request.post(
+    `/api/sessions/${sessionId}/prediction`,
+    {
+      data: { choice: "Accuracy remains near 98%", confidence: 100 },
+    },
+  );
   expect(overwrite.status()).toBe(409);
   expect((await overwrite.json()).error.code).toBe("ILLEGAL_TRANSITION");
 });
@@ -114,13 +133,17 @@ test("failed transfer keeps the patch locked and a corrected answer unlocks it",
   await page.getByLabel(/Known item price/i).check();
   await page.getByRole("button", { name: /Check transfer/i }).click();
   await expect(page.getByText(/Transfer not yet passed/i)).toBeVisible();
-  await expect(page.getByRole("button", { name: /Verify notebook patch/i })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /Verify notebook patch/i }),
+  ).toHaveCount(0);
 
   await page.getByLabel(/Time-ordered holdout/i).check();
   await page.getByLabel(/Centered rolling target/i).check();
   await page.getByRole("button", { name: /Check transfer/i }).click();
   await expect(page.getByText(/Transfer passed/i)).toBeVisible();
-  await expect(page.getByRole("button", { name: /Verify notebook patch/i })).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: /Verify notebook patch/i }),
+  ).toBeEnabled();
 });
 
 test("Replay remains visibly labelled for the full reconstructed path", async ({
@@ -134,7 +157,9 @@ test("Replay remains visibly labelled for the full reconstructed path", async ({
   await expect(replayBanner).toContainText("Verified replay");
   await page.getByRole("button", { name: /Open verified result/i }).click();
   await expect(replayBanner).toContainText("Verified replay");
-  await expect(page.getByRole("heading", { name: "Verified result" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Verified result" }),
+  ).toBeVisible();
 });
 
 test("missing live capabilities are stated without claiming a model call", async ({
@@ -142,7 +167,48 @@ test("missing live capabilities are stated without claiming a model call", async
 }) => {
   await reset(page);
   await page.getByRole("button", { name: /Generate live/i }).click();
-  await expect(page.getByRole("heading", { name: "Generate live" })).toBeVisible();
-  await expect(page.getByText(/No live call has been claimed or started/i)).toBeVisible();
-  await expect(page.getByText(/OPENAI_API_KEY · codex login · Docker/i)).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Generate live" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/No live call has been claimed or started/i),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/OPENAI_API_KEY · codex login · Docker/i),
+  ).toBeVisible();
+});
+
+test("unsupported notebooks are parsed without execution and cannot advance", async ({
+  page,
+}) => {
+  await reset(page);
+  await page.getByRole("button", { name: /Try instantly/i }).click();
+  await expect(
+    page.getByRole("heading", { name: /What does this result prove/i }),
+  ).toBeVisible();
+  const notebook = {
+    cells: [
+      {
+        cell_type: "code",
+        execution_count: null,
+        metadata: {},
+        outputs: [],
+        source: ["%load_ext custom_extension\n", "import requests\n"],
+      },
+    ],
+    metadata: {},
+    nbformat: 4,
+    nbformat_minor: 5,
+  };
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "unsupported.ipynb",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(notebook)),
+  });
+
+  await expect(page.getByText(/UNSUPPORTED_MAGIC/i)).toBeVisible();
+  await expect(page.getByText(/EXTERNAL_NETWORK_DEPENDENCY/i)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Create Belief Test/i }),
+  ).toBeDisabled();
 });

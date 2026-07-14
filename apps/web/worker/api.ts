@@ -362,6 +362,20 @@ export function createApi(options: ApiOptions = {}) {
     return context.json(jsonSuccess(manifest), 201);
   });
 
+  app.get("/api/artifacts/:artifactId", async (context) => {
+    const artifact = await artifacts(context, options).find(
+      context.req.param("artifactId"),
+    );
+    if (artifact === undefined) {
+      throw new ApiInputError(
+        "ARTIFACT_NOT_FOUND",
+        `Artifact ${context.req.param("artifactId")} was not found`,
+        404,
+      );
+    }
+    return context.json(jsonSuccess(artifact.manifest));
+  });
+
   app.post("/api/sessions", async (context) => {
     const input = CreateSessionSchema.parse(await readJson(context));
     const artifact = await artifacts(context, options).find(input.artifactId);
