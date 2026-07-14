@@ -194,6 +194,557 @@ export const ExperimentPlanSchema = z
 
 export type ExperimentPlan = z.infer<typeof ExperimentPlanSchema>;
 
+export const EvidenceRefSchema = z
+  .object({
+    cellIndex: z.number().int().nonnegative().optional(),
+    outputIndex: z.number().int().nonnegative().optional(),
+    kind: z.enum(["code", "metric", "schema", "output", "learner_claim"]),
+    hash: Sha256Schema,
+    excerpt: z.string().max(2_000),
+    relevance: NonEmptyString,
+  })
+  .strict()
+  .superRefine((evidence, context) => {
+    if (
+      (evidence.kind === "code" ||
+        evidence.kind === "metric" ||
+        evidence.kind === "output") &&
+      evidence.cellIndex === undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: `${evidence.kind} evidence requires a cellIndex`,
+        path: ["cellIndex"],
+      });
+    }
+    if (
+      (evidence.kind === "metric" || evidence.kind === "output") &&
+      evidence.outputIndex === undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: `${evidence.kind} evidence requires an outputIndex`,
+        path: ["outputIndex"],
+      });
+    }
+  });
+
+export type EvidenceRef = z.infer<typeof EvidenceRefSchema>;
+
+export const FixedOperationIdSchema = z.enum([
+  "leakage.random_row_split",
+  "leakage.group_holdout",
+  "leakage.identity_ablation",
+  "leakage.entity_overlap",
+  "leakage.controlled_comparison",
+  "imbalance.majority_baseline",
+  "imbalance.stratified_holdout",
+  "imbalance.confusion_matrix",
+  "imbalance.threshold_sweep",
+  "imbalance.prevalence_sweep",
+]);
+
+export type FixedOperationId = z.infer<typeof FixedOperationIdSchema>;
+
+export const AllowedMetricSchema = z.enum([
+  "accuracy",
+  "roc_auc",
+  "entity_overlap_rate",
+  "precision",
+  "recall",
+  "f1",
+  "pr_auc",
+  "confusion_matrix",
+  "prevalence",
+]);
+
+export type AllowedMetric = z.infer<typeof AllowedMetricSchema>;
+
+export const AllowedVisualizationSchema = z.enum([
+  "metric_comparison",
+  "entity_overlap",
+  "confusion_matrix",
+  "threshold_curve",
+  "prevalence_sensitivity",
+]);
+
+export type AllowedVisualization = z.infer<typeof AllowedVisualizationSchema>;
+
+const LeakageFixedRunSpecSchema = z
+  .object({
+    concept: z.literal("entity_leakage"),
+    runId: NonEmptyString,
+    operation: z.enum([
+      "leakage.random_row_split",
+      "leakage.group_holdout",
+      "leakage.identity_ablation",
+    ]),
+    seed: z.number().int().nonnegative(),
+    testFraction: z.number().finite().min(0.1).max(0.5),
+    entityField: NonEmptyString,
+    dropIdentity: z.boolean(),
+    model: z.literal("logistic_regression"),
+  })
+  .strict();
+
+const ImbalanceFixedRunSpecSchema = z
+  .object({
+    concept: z.literal("class_imbalance"),
+    runId: NonEmptyString,
+    operation: z.enum([
+      "imbalance.majority_baseline",
+      "imbalance.stratified_holdout",
+      "imbalance.threshold_sweep",
+      "imbalance.prevalence_sweep",
+    ]),
+    seed: z.number().int().nonnegative(),
+    threshold: z.number().finite().min(0.05).max(0.95),
+    prevalenceScenario: z.enum(["observed", "rarer", "more_common"]),
+    model: z.enum(["logistic_regression", "majority_baseline"]),
+  })
+  .strict();
+
+export const FixedRunSpecSchema = z.discriminatedUnion("concept", [
+  LeakageFixedRunSpecSchema,
+  ImbalanceFixedRunSpecSchema,
+]);
+
+export type FixedRunSpec = z.infer<typeof FixedRunSpecSchema>;
+
+export const ExperimentPlanV2Schema = z
+  .object({
+    schemaVersion: z.literal("2"),
+    planId: NonEmptyString,
+    sessionId: NonEmptyString,
+    concept: z.enum(["entity_leakage", "class_imbalance"]),
+    conceptPackVersion: NonEmptyString,
+    artifactManifestHash: Sha256Schema,
+    beliefTestId: NonEmptyString,
+    evidenceRefs: z.array(EvidenceRefSchema).min(1).max(6),
+    baseline: FixedRunSpecSchema,
+    interventions: z.array(FixedRunSpecSchema).min(1).max(7),
+    controlledVariables: z.array(NonEmptyString).min(1),
+    changedVariables: z.array(NonEmptyString).min(1),
+    metrics: z.array(AllowedMetricSchema).min(1),
+    visualizations: z.array(AllowedVisualizationSchema).min(1),
+    discriminatesBecause: NonEmptyString,
+    expectedPatterns: z
+      .array(
+        z
+          .object({
+            hypothesisId: z.enum(["current", "competing"]),
+            qualitativeOutcome: NonEmptyString,
+          })
+          .strict(),
+      )
+      .length(2),
+    nonClaims: z.array(NonEmptyString).min(1),
+    resourceLimits: z
+      .object({
+        wallSeconds: z.number().int().positive().max(120),
+        memoryMb: z.number().int().min(128).max(2_048),
+        maxRuns: z.number().int().positive().max(8),
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((plan, context) => {
+    const runs = [plan.baseline, ...plan.interventions];
+    const runIds = new Set<string>();
+    for (const [index, run] of runs.entries()) {
+      if (run.concept !== plan.concept) {
+        context.addIssue({
+          code: "custom",
+          message: `run concept ${run.concept} does not match plan concept ${plan.concept}`,
+          path:
+            index === 0
+              ? ["baseline", "concept"]
+              : ["interventions", index - 1, "concept"],
+        });
+      }
+      if (runIds.has(run.runId)) {
+        context.addIssue({
+          code: "custom",
+          message: `duplicate run ID: ${run.runId}`,
+          path:
+            index === 0
+              ? ["baseline", "runId"]
+              : ["interventions", index - 1, "runId"],
+        });
+      }
+      runIds.add(run.runId);
+    }
+    if (runs.length > plan.resourceLimits.maxRuns) {
+      context.addIssue({
+        code: "custom",
+        message: "plan exceeds resourceLimits.maxRuns",
+        path: ["resourceLimits", "maxRuns"],
+      });
+    }
+    if (
+      new Set(plan.expectedPatterns.map((pattern) => pattern.hypothesisId))
+        .size !== 2
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "expected patterns must cover current and competing hypotheses",
+        path: ["expectedPatterns"],
+      });
+    }
+    if (
+      plan.expectedPatterns[0]?.qualitativeOutcome.toLowerCase() ===
+      plan.expectedPatterns[1]?.qualitativeOutcome.toLowerCase()
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "expected patterns must be observably different",
+        path: ["expectedPatterns"],
+      });
+    }
+  });
+
+export type ExperimentPlanV2 = z.infer<typeof ExperimentPlanV2Schema>;
+
+export const RunnerJobKindSchema = z.enum([
+  "BELIEF_ANALYSIS",
+  "LAB_COMPILE",
+  "LAB_VERIFY",
+  "LAB_RUN",
+  "PATCH_COMPILE",
+  "PATCH_VERIFY",
+]);
+
+export type RunnerJobKind = z.infer<typeof RunnerJobKindSchema>;
+
+export const RunnerJobStatusSchema = z.enum([
+  "QUEUED",
+  "STARTING",
+  "RUNNING",
+  "AWAITING_APPROVAL",
+  "REPAIRING",
+  "VERIFIED",
+  "REJECTED",
+  "FAILED",
+  "CANCELLED",
+  "TIMED_OUT",
+]);
+
+export type RunnerJobStatus = z.infer<typeof RunnerJobStatusSchema>;
+
+export const RunnerJobErrorSchema = z
+  .object({
+    code: NonEmptyString,
+    message: NonEmptyString,
+    retryable: z.boolean(),
+    details: z.record(z.string(), z.json()).optional(),
+  })
+  .strict();
+
+export type RunnerJobError = z.infer<typeof RunnerJobErrorSchema>;
+
+const terminalRunnerStatuses = new Set<RunnerJobStatus>([
+  "VERIFIED",
+  "REJECTED",
+  "FAILED",
+  "CANCELLED",
+  "TIMED_OUT",
+]);
+
+export const RunnerJobSchema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    jobId: NonEmptyString,
+    kind: RunnerJobKindSchema,
+    status: RunnerJobStatusSchema,
+    sessionId: NonEmptyString,
+    artifactId: NonEmptyString,
+    artifactManifestHash: Sha256Schema,
+    conceptPack: z
+      .object({
+        id: z.enum(["entity_leakage", "class_imbalance"]),
+        version: NonEmptyString,
+      })
+      .strict(),
+    inputHashes: z.array(Sha256Schema).min(1),
+    stateVersion: z.number().int().positive(),
+    jobVersion: z.number().int().positive(),
+    createdAt: z.iso.datetime({ offset: true }),
+    updatedAt: z.iso.datetime({ offset: true }),
+    startedAt: z.iso.datetime({ offset: true }).optional(),
+    completedAt: z.iso.datetime({ offset: true }).optional(),
+    attempt: z.number().int().nonnegative(),
+    maxAttempts: z.number().int().positive().max(3),
+    runnerIdentity: NonEmptyString.nullable(),
+    timeoutSeconds: z.number().int().positive().max(600),
+    outputHashes: z.array(Sha256Schema),
+    error: RunnerJobErrorSchema.optional(),
+    eventCursor: z.number().int().nonnegative(),
+  })
+  .strict()
+  .superRefine((job, context) => {
+    if (job.attempt > job.maxAttempts) {
+      context.addIssue({
+        code: "custom",
+        message: "attempt cannot exceed maxAttempts",
+        path: ["attempt"],
+      });
+    }
+    if (job.status !== "QUEUED" && job.runnerIdentity === null) {
+      context.addIssue({
+        code: "custom",
+        message: "a started job requires runner identity",
+        path: ["runnerIdentity"],
+      });
+    }
+    if (
+      terminalRunnerStatuses.has(job.status) &&
+      job.completedAt === undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "a terminal job requires completedAt",
+        path: ["completedAt"],
+      });
+    }
+    if (job.status === "VERIFIED" && job.outputHashes.length === 0) {
+      context.addIssue({
+        code: "custom",
+        message: "a verified job requires output hashes",
+        path: ["outputHashes"],
+      });
+    }
+  });
+
+export type RunnerJob = z.infer<typeof RunnerJobSchema>;
+
+const runnerTransitions: Readonly<
+  Record<RunnerJobStatus, readonly RunnerJobStatus[]>
+> = {
+  QUEUED: ["STARTING", "FAILED", "CANCELLED", "TIMED_OUT"],
+  STARTING: ["RUNNING", "FAILED", "CANCELLED", "TIMED_OUT"],
+  RUNNING: [
+    "AWAITING_APPROVAL",
+    "REPAIRING",
+    "VERIFIED",
+    "REJECTED",
+    "FAILED",
+    "CANCELLED",
+    "TIMED_OUT",
+  ],
+  AWAITING_APPROVAL: ["RUNNING", "FAILED", "CANCELLED", "TIMED_OUT"],
+  REPAIRING: [
+    "RUNNING",
+    "VERIFIED",
+    "REJECTED",
+    "FAILED",
+    "CANCELLED",
+    "TIMED_OUT",
+  ],
+  VERIFIED: [],
+  REJECTED: [],
+  FAILED: [],
+  CANCELLED: [],
+  TIMED_OUT: [],
+};
+
+export function assertRunnerJobTransition(
+  from: RunnerJobStatus,
+  to: RunnerJobStatus,
+): RunnerJobStatus {
+  if (!runnerTransitions[from].includes(to)) {
+    const suffix = terminalRunnerStatuses.has(from) ? " terminal state" : "";
+    throw new Error(
+      `Cannot transition runner job from${suffix} ${from} to ${to}`,
+    );
+  }
+  return to;
+}
+
+export const AllowedGeneratedPathSchema = z.enum([
+  "experiment-plan.json",
+  "patch-plan.json",
+  "public-rationale.md",
+]);
+
+const PublicCompilerEventBase = {
+  schemaVersion: z.literal("1"),
+  eventId: NonEmptyString,
+  jobId: NonEmptyString,
+  cursor: z.number().int().positive(),
+  at: z.iso.datetime({ offset: true }),
+} as const;
+
+export const PublicCompilerEventSchema = z.discriminatedUnion("kind", [
+  z
+    .object({ ...PublicCompilerEventBase, kind: z.literal("job.started") })
+    .strict(),
+  z
+    .object({
+      ...PublicCompilerEventBase,
+      kind: z.literal("plan.summary"),
+      title: NonEmptyString,
+      steps: z.array(NonEmptyString).min(1).max(12),
+    })
+    .strict(),
+  z
+    .object({
+      ...PublicCompilerEventBase,
+      kind: z.literal("artifact.read"),
+      evidenceRefs: z.array(EvidenceRefSchema).min(1).max(6),
+    })
+    .strict(),
+  z
+    .object({
+      ...PublicCompilerEventBase,
+      kind: z.literal("file.created"),
+      path: AllowedGeneratedPathSchema,
+      sha256: Sha256Schema,
+    })
+    .strict(),
+  z
+    .object({
+      ...PublicCompilerEventBase,
+      kind: z.literal("diff.updated"),
+      path: AllowedGeneratedPathSchema,
+      unifiedDiff: z.string().max(50_000),
+    })
+    .strict(),
+  z
+    .object({
+      ...PublicCompilerEventBase,
+      kind: z.literal("command.completed"),
+      label: NonEmptyString,
+      exitCode: z.number().int(),
+      durationMs: z.number().int().nonnegative(),
+      excerpt: z.string().max(4_000),
+    })
+    .strict(),
+  z
+    .object({
+      ...PublicCompilerEventBase,
+      kind: z.literal("verifier.rejected"),
+      invariant: NonEmptyString,
+      observed: z.json(),
+      expected: z.json(),
+      counterexample: z.string().max(2_000),
+    })
+    .strict(),
+  z
+    .object({
+      ...PublicCompilerEventBase,
+      kind: z.literal("repair.started"),
+      attempt: z.number().int().positive().max(2),
+    })
+    .strict(),
+  z
+    .object({
+      ...PublicCompilerEventBase,
+      kind: z.literal("verifier.verified"),
+      invariantCount: z.number().int().positive(),
+      mutationCount: z.number().int().nonnegative(),
+    })
+    .strict(),
+  z
+    .object({
+      ...PublicCompilerEventBase,
+      kind: z.literal("result.ready"),
+      resultHash: Sha256Schema,
+    })
+    .strict(),
+  z
+    .object({
+      ...PublicCompilerEventBase,
+      kind: z.literal("job.failed"),
+      code: NonEmptyString,
+      message: NonEmptyString,
+    })
+    .strict(),
+]);
+
+export type PublicCompilerEvent = z.infer<typeof PublicCompilerEventSchema>;
+
+export const RunnerCallbackSchema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    callbackId: NonEmptyString,
+    idempotencyKey: NonEmptyString,
+    jobId: NonEmptyString,
+    stateVersion: z.number().int().positive(),
+    status: z.enum([
+      "VERIFIED",
+      "REJECTED",
+      "FAILED",
+      "CANCELLED",
+      "TIMED_OUT",
+    ]),
+    outputHashes: z.array(Sha256Schema),
+    finalEventCursor: z.number().int().nonnegative(),
+    error: RunnerJobErrorSchema.optional(),
+    occurredAt: z.iso.datetime({ offset: true }),
+  })
+  .strict()
+  .superRefine((callback, context) => {
+    if (callback.status === "VERIFIED" && callback.outputHashes.length === 0) {
+      context.addIssue({
+        code: "custom",
+        message: "a verified callback requires output hashes",
+        path: ["outputHashes"],
+      });
+    }
+    if (callback.status === "FAILED" && callback.error === undefined) {
+      context.addIssue({
+        code: "custom",
+        message: "a failed callback requires a typed error",
+        path: ["error"],
+      });
+    }
+  });
+
+export type RunnerCallback = z.infer<typeof RunnerCallbackSchema>;
+
+export const RunnerJobTokenClaimsSchema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    audience: z.literal("counterlab-runner"),
+    tokenId: NonEmptyString,
+    jobId: NonEmptyString,
+    sessionId: NonEmptyString,
+    artifactManifestHash: Sha256Schema,
+    inputBundleKey: z.string().regex(/^runner-input\/[A-Za-z0-9_-]+\.json$/),
+    outputPrefix: z.string().regex(/^runner-output\/[A-Za-z0-9_-]+\/$/),
+    callbackPath: z
+      .string()
+      .regex(/^\/api\/runner\/jobs\/[A-Za-z0-9_-]+\/callback$/),
+    stateVersion: z.number().int().positive(),
+    issuedAt: z.number().int().positive(),
+    expiresAt: z.number().int().positive(),
+  })
+  .strict()
+  .superRefine((claims, context) => {
+    const ttl = claims.expiresAt - claims.issuedAt;
+    if (ttl <= 0 || ttl > 900) {
+      context.addIssue({
+        code: "custom",
+        message: "token expiration must be within 15 minutes of issue time",
+        path: ["expiresAt"],
+      });
+    }
+    if (
+      claims.inputBundleKey !== `runner-input/${claims.jobId}.json` ||
+      claims.outputPrefix !== `runner-output/${claims.jobId}/` ||
+      claims.callbackPath !== `/api/runner/jobs/${claims.jobId}/callback`
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "runner token paths must be bound to the authorized job",
+        path: ["jobId"],
+      });
+    }
+  });
+
+export type RunnerJobTokenClaims = z.infer<typeof RunnerJobTokenClaimsSchema>;
+
 const VersionOneSchema = z.literal("1");
 const JsonObjectSchema = z.record(z.string(), z.json());
 const ProportionSchema = z.number().finite().min(0).max(1);

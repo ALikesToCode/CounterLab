@@ -13,6 +13,7 @@
     "test:python": "PYTHONPATH=services/kernel/src .venv/bin/python -m pytest services/kernel/tests",
     "typecheck": "tsc --noEmit && pnpm --filter @counterlab/web run typecheck",
     "format:check": "prettier --check .",
+    "contracts:generate": "tsx scripts/generate-contract-schemas.ts",
     "codex:live": "tsx scripts/run-live-codex.ts"
   },
   "dependencies": {

@@ -7,17 +7,23 @@ import {
   BeliefTestSchema,
   EvidenceEventSchema,
   ExperimentPlanSchema,
+  ExperimentPlanV2Schema,
   PatchResultSchema,
   PredictionContractSchema,
   ProofBundleSchema,
   ReasoningDiffSchema,
   SessionModeSchema,
   SessionStateSchema,
+  PublicCompilerEventSchema,
+  RunnerCallbackSchema,
+  RunnerJobSchema,
+  RunnerJobTokenClaimsSchema,
   TransferResultSchema,
   VerifiedResultSetSchema,
   apiResponseSchema,
   apiSuccessSchema,
   assertTransition,
+  assertRunnerJobTransition,
 } from "./index.js";
 
 describe("ArtifactManifestSchema", () => {
@@ -196,6 +202,181 @@ describe("ExperimentPlanSchema", () => {
   });
 });
 
+describe("hosted runner contracts", () => {
+  const evidenceRef = {
+    cellIndex: 3,
+    outputIndex: 0,
+    kind: "metric" as const,
+    hash: "b".repeat(64),
+    excerpt: "Test accuracy: 0.9847",
+    relevance: "This is the result interpreted by the learner.",
+  };
+
+  const plan = {
+    schemaVersion: "2",
+    planId: "plan_live_1",
+    sessionId: "session_live_1",
+    concept: "entity_leakage",
+    conceptPackVersion: "2.0.0",
+    artifactManifestHash: "a".repeat(64),
+    beliefTestId: "belief_live_1",
+    evidenceRefs: [evidenceRef],
+    baseline: {
+      concept: "entity_leakage",
+      runId: "random_rows",
+      operation: "leakage.random_row_split",
+      seed: 1729,
+      testFraction: 0.25,
+      entityField: "customer_id",
+      dropIdentity: false,
+      model: "logistic_regression",
+    },
+    interventions: [
+      {
+        concept: "entity_leakage",
+        runId: "new_customers",
+        operation: "leakage.group_holdout",
+        seed: 1729,
+        testFraction: 0.25,
+        entityField: "customer_id",
+        dropIdentity: false,
+        model: "logistic_regression",
+      },
+    ],
+    controlledVariables: ["fixture", "model", "seed"],
+    changedVariables: ["split boundary", "identity feature"],
+    metrics: ["accuracy", "roc_auc", "entity_overlap_rate"],
+    visualizations: ["metric_comparison", "entity_overlap"],
+    discriminatesBecause:
+      "Only the shortcut hypothesis predicts a material drop for new customers.",
+    expectedPatterns: [
+      {
+        hypothesisId: "current",
+        qualitativeOutcome: "Accuracy remains close to the row split.",
+      },
+      {
+        hypothesisId: "competing",
+        qualitativeOutcome: "Accuracy falls when customer overlap is zero.",
+      },
+    ],
+    nonClaims: ["This result does not prove performance on every population."],
+    resourceLimits: { wallSeconds: 30, memoryMb: 512, maxRuns: 4 },
+  } as const;
+
+  it("accepts fixed-operation plan v2 and rejects executable or cross-concept fields", () => {
+    expect(ExperimentPlanV2Schema.parse(plan).schemaVersion).toBe("2");
+    expect(() =>
+      ExperimentPlanV2Schema.parse({ ...plan, shell: "python adapter.py" }),
+    ).toThrow();
+    expect(() =>
+      ExperimentPlanV2Schema.parse({
+        ...plan,
+        interventions: [
+          {
+            concept: "class_imbalance",
+            runId: "threshold",
+            operation: "imbalance.threshold_sweep",
+            seed: 1729,
+            threshold: 0.5,
+            prevalenceScenario: "observed",
+            model: "logistic_regression",
+          },
+        ],
+      }),
+    ).toThrow(/concept/i);
+    expect(() =>
+      ExperimentPlanV2Schema.parse({ ...plan, literalResults: [0.98, 0.59] }),
+    ).toThrow();
+  });
+
+  it("validates optimistic runner jobs and terminal transitions", () => {
+    const job = RunnerJobSchema.parse({
+      schemaVersion: "1",
+      jobId: "job_live_1",
+      kind: "LAB_COMPILE",
+      status: "QUEUED",
+      sessionId: "session_live_1",
+      artifactId: "artifact_live_1",
+      artifactManifestHash: "a".repeat(64),
+      conceptPack: { id: "entity_leakage", version: "2.0.0" },
+      inputHashes: ["b".repeat(64)],
+      stateVersion: 4,
+      jobVersion: 1,
+      createdAt: "2026-07-15T00:00:00.000Z",
+      updatedAt: "2026-07-15T00:00:00.000Z",
+      attempt: 0,
+      maxAttempts: 3,
+      runnerIdentity: null,
+      timeoutSeconds: 90,
+      outputHashes: [],
+      eventCursor: 0,
+    });
+    expect(job.status).toBe("QUEUED");
+    expect(assertRunnerJobTransition("QUEUED", "STARTING")).toBe("STARTING");
+    expect(assertRunnerJobTransition("RUNNING", "REPAIRING")).toBe("REPAIRING");
+    expect(() => assertRunnerJobTransition("VERIFIED", "RUNNING")).toThrow(
+      /terminal/i,
+    );
+  });
+
+  it("keeps browser events allow-listed and runner callbacks hash-bound", () => {
+    const event = PublicCompilerEventSchema.parse({
+      schemaVersion: "1",
+      eventId: "public_event_1",
+      jobId: "job_live_1",
+      cursor: 1,
+      kind: "verifier.rejected",
+      invariant: "zero_group_overlap",
+      observed: 12,
+      expected: 0,
+      counterexample: "customer_004 appears in train and test",
+      at: "2026-07-15T00:00:01.000Z",
+    });
+    expect(event.kind).toBe("verifier.rejected");
+    expect(() =>
+      PublicCompilerEventSchema.parse({ ...event, environment: { KEY: "x" } }),
+    ).toThrow();
+
+    expect(
+      RunnerCallbackSchema.parse({
+        schemaVersion: "1",
+        callbackId: "callback_1",
+        idempotencyKey: "job_live_1:verified:1",
+        jobId: "job_live_1",
+        stateVersion: 4,
+        status: "VERIFIED",
+        outputHashes: ["c".repeat(64)],
+        finalEventCursor: 8,
+        occurredAt: "2026-07-15T00:00:08.000Z",
+      }).status,
+    ).toBe("VERIFIED");
+  });
+
+  it("binds a short-lived token to one job, bundle, output prefix, and callback", () => {
+    const claims = RunnerJobTokenClaimsSchema.parse({
+      schemaVersion: "1",
+      audience: "counterlab-runner",
+      tokenId: "token_job_live_1",
+      jobId: "job_live_1",
+      sessionId: "session_live_1",
+      artifactManifestHash: "a".repeat(64),
+      inputBundleKey: "runner-input/job_live_1.json",
+      outputPrefix: "runner-output/job_live_1/",
+      callbackPath: "/api/runner/jobs/job_live_1/callback",
+      stateVersion: 4,
+      issuedAt: 1_784_070_000,
+      expiresAt: 1_784_070_300,
+    });
+    expect(claims.expiresAt - claims.issuedAt).toBe(300);
+    expect(() =>
+      RunnerJobTokenClaimsSchema.parse({
+        ...claims,
+        expiresAt: claims.issuedAt + 3601,
+      }),
+    ).toThrow(/expiration/i);
+  });
+});
+
 describe("session transitions", () => {
   it("keeps sample, live notebook, and verified replay modes structurally separate", () => {
     expect(
@@ -222,7 +403,10 @@ describe("session transitions", () => {
       }),
     ).toThrow();
     expect(() =>
-      SessionModeSchema.parse({ kind: "live_notebook", sampleId: "leakage-01" }),
+      SessionModeSchema.parse({
+        kind: "live_notebook",
+        sampleId: "leakage-01",
+      }),
     ).toThrow();
     expect(() =>
       SessionModeSchema.parse({ kind: "verified_replay" }),
