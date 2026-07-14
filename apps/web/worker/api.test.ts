@@ -336,5 +336,17 @@ describe("Cloudflare Worker API", () => {
       "patch.verified",
     ]);
     expect(events.at(-1)?.previousEventHash).toBe(events.at(-2)?.eventHash);
+
+    const refreshed = await app.request(route);
+    expect(refreshed.status).toBe(200);
+    await expect(refreshed.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        sessionId,
+        state: "PATCH_VERIFIED",
+        revision:
+          "Hold out complete entities and remove identity shortcuts before claiming generalization.",
+      },
+    });
   });
 });

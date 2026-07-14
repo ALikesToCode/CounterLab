@@ -224,6 +224,13 @@ function statePayload(session: Awaited<ReturnType<SessionService["getSession"]>>
       ? {}
       : { transferResult: session.transferResult }),
     ...(session.patchResult === undefined ? {} : { patchResult: session.patchResult }),
+    ...(session.revision === undefined ? {} : { revision: session.revision }),
+    ...(session.reasoningDiff === undefined
+      ? {}
+      : { reasoningDiff: session.reasoningDiff }),
+    ...(session.proofBundle === undefined
+      ? {}
+      : { proofBundle: session.proofBundle }),
   };
 }
 
@@ -343,6 +350,13 @@ export function createApi(options: ApiOptions = {}) {
     }
     const session = await sessionService(context, options).createSession(input);
     return context.json(jsonSuccess(statePayload(session)), 201);
+  });
+
+  app.get("/api/sessions/:sessionId", async (context) => {
+    const session = await sessionService(context, options).getSession(
+      context.req.param("sessionId"),
+    );
+    return context.json(jsonSuccess(statePayload(session)));
   });
 
   app.post("/api/sessions/:sessionId/belief-test", async (context) => {
@@ -566,7 +580,7 @@ export function createApi(options: ApiOptions = {}) {
       "content-disposition",
       `attachment; filename="counterlab-${session.id}-proof-bundle.json"`,
     );
-    return context.json(session.proofBundle);
+    return context.json(jsonSuccess(session.proofBundle));
   });
 
   app.get("/api/replays/:replayId", (context) => {
