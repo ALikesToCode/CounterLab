@@ -267,7 +267,16 @@ export class SessionService {
   async verifyLab(
     sessionId: string,
     verification: unknown,
+    evidenceHashes: string[] = [],
   ): Promise<CounterLabSession> {
+    const validatedEvidenceHashes = evidenceHashes.map((hash, index) => {
+      if (!/^[a-f0-9]{64}$/.test(hash)) {
+        throw new SessionInputError(
+          `evidenceHashes[${index}] must be a lowercase SHA-256 digest`,
+        );
+      }
+      return hash;
+    });
     return this.transition(
       sessionId,
       "LAB_VERIFIED",
@@ -276,7 +285,10 @@ export class SessionService {
         actor: "verifier",
         kind: "lab.verified",
         payload: asJsonRecord(verification, "verification"),
-        outputHashes: [await hashCanonical(verification)],
+        outputHashes: [
+          ...new Set(validatedEvidenceHashes),
+          await hashCanonical(verification),
+        ],
       },
     );
   }

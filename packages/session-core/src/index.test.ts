@@ -379,6 +379,58 @@ describe("SessionService state machine", () => {
     repository.close();
   });
 
+  it("links verified compiler evidence without trusting malformed hashes", async () => {
+    const { service, repository } = memoryService();
+    await service.createSession({
+      sessionId: "session-1",
+      artifactId: "artifact-1",
+      mode: "instant",
+    });
+    await service.proposeBeliefTest("session-1", beliefTest);
+    await service.confirmBeliefTest("session-1");
+    await service.commitPrediction("session-1", prediction);
+    await service.startLabCompilation("session-1");
+
+    const adapterHash = "a".repeat(64);
+    const verifierHash = "b".repeat(64);
+    await service.verifyLab(
+      "session-1",
+      { status: "VERIFIED" },
+      [adapterHash, verifierHash, adapterHash],
+    );
+    expect(
+      (await service.listEvents("session-1")).at(-1)?.outputHashes,
+    ).toEqual(expect.arrayContaining([adapterHash, verifierHash]));
+
+    const second = memoryService();
+    await second.service.createSession({
+      id: "session-2",
+      artifactId: "artifact-1",
+      mode: "instant",
+    });
+    await second.service.proposeBeliefTest("session-2", {
+      ...beliefTest,
+      id: "belief-2",
+    });
+    await second.service.confirmBeliefTest("session-2");
+    await second.service.commitPrediction("session-2", {
+      ...prediction,
+      id: "prediction-2",
+      sessionId: "session-2",
+      beliefTestId: "belief-2",
+    });
+    await second.service.startLabCompilation("session-2");
+    await expect(
+      second.service.verifyLab(
+        "session-2",
+        { status: "VERIFIED" },
+        ["not-a-hash"],
+      ),
+    ).rejects.toThrow(/SHA-256/);
+    repository.close();
+    second.repository.close();
+  });
+
   it("prevents a rejected lab from producing results until it is compiled and verified again", async () => {
     const { service, repository } = memoryService();
     await service.createSession({
