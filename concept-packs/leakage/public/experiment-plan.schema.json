@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://counterlab.local/schemas/experiment-plan.schema.json",
+  "title": "CounterLab Experiment Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "concept",
+    "datasetAdapter",
+    "competingHypotheses",
+    "expectedDiscrimination",
+    "runs",
+    "metrics",
+    "views",
+    "invariants",
+    "resourceLimits"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "concept": { "const": "entity_leakage" },
+    "datasetAdapter": { "type": "string", "minLength": 1 },
+    "competingHypotheses": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "expectedDiscrimination": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["runId", "expectedUnderCurrent", "expectedUnderCompeting"],
+        "properties": {
+          "runId": { "type": "string", "minLength": 1 },
+          "expectedUnderCurrent": { "type": "string", "minLength": 1 },
+          "expectedUnderCompeting": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "runs": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "split", "model", "seed"],
+        "properties": {
+          "id": {
+            "enum": ["random_row_split", "customer_group_split", "identity_ablation"]
+          },
+          "split": { "enum": ["random", "group", "time"] },
+          "groupBy": { "type": "string" },
+          "dropFeatures": { "type": "array", "items": { "type": "string" } },
+          "model": { "type": "string", "minLength": 1 },
+          "seed": { "type": "integer" }
+        }
+      }
+    },
+    "metrics": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+    "views": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+    "invariants": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+    "resourceLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wallSeconds", "memoryMb", "maxProcesses", "maxFiles", "maxOutputBytes"],
+      "properties": {
+        "wallSeconds": { "type": "integer", "minimum": 1, "maximum": 60 },
+        "memoryMb": { "type": "integer", "minimum": 64, "maximum": 1024 },
+        "maxProcesses": { "type": "integer", "minimum": 1, "maximum": 32 },
+        "maxFiles": { "type": "integer", "minimum": 1, "maximum": 32 },
+        "maxOutputBytes": { "type": "integer", "minimum": 1, "maximum": 1048576 }
+      }
+    }
+  }
+}
