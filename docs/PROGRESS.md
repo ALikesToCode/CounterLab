@@ -16,6 +16,13 @@ host-owned broker.
 Class-imbalance P0.5 has not started because the constitution requires every
 leakage gate—including generation isolation—to pass first.
 
+The judged surface now uses the evidence-editorial redesign: a canonical-result
+proof instrument on the landing page, a persistent four-stage proof rail,
+known/unknown/next-move learner guidance, testable-claim scaffolding, an explicit
+verifier authority boundary, an entity-overlap story, a verified finding
+summary, and a forecasting-time transfer visual. All displayed metrics remain
+derived from the canonical payload.
+
 ## Acceptance matrix
 
 | Gate                                                            | Status  | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -37,7 +44,7 @@ leakage gate—including generation isolation—to pass first.
 | Full release check and secret scan                              | pass    | `./scripts/release-check.sh` passes tests, typecheck, production build, 12 mutations, Docker smoke/reproduction, patch replay, metrics generation, and a scan of every tracked file.                                                                                                                                                                                                                                                    |
 | Fresh temporary clone acceptance                                | pass    | A no-local Git clone installed locked Node/Python dependencies, applied local D1 migration, ran `clean-demo.sh`, and passed the complete release check.                                                                                                                                                                                                                                                                                 |
 | Accessibility and responsive judged path                        | pass    | A 390×844 CloakBrowser run completes entirely by keyboard with reduced motion, visible semantic controls, and no horizontal overflow; primary text/status contrast pairs are unit-checked at ≥4.5:1.                                                                                                                                                                                                                                    |
-| Cloudflare replay/sample deployment                             | pass    | Remote D1 migration, R2 binding, Worker/assets, health, Try Instantly, upload refusal, Replay, Proof Bundle, live capability boundary, and all eight production CloakBrowser paths pass at `https://counterlab.cserules.workers.dev`. Server-only Responses key/base/model/effort secrets are configured; health omits their values and the current credential rejection remains typed. Version `156bc5ea-2f22-45f2-b205-70c21ed1b951`. |
+| Cloudflare replay/sample deployment                             | pass    | Remote D1 migration, R2 binding, Worker/assets, health, redesigned Try Instantly, upload refusal, Replay, Proof Bundle, live capability boundary, and all eight production CloakBrowser paths pass at `https://counterlab.cserules.workers.dev`. Server-only Responses key/base/model/effort secrets are configured; health omits their values and a real production request returns typed `LIVE_UNAVAILABLE` without advancing state or leaking endpoint/model details. Version `1940e119-47bd-41f1-9902-e9baa5c46030`. |
 | Class-imbalance P0.5                                            | not run | Deliberately deferred until the partial generation-isolation leakage gate passes.                                                                                                                                                                                                                                                                                                                                                       |
 
 ## Latest verified suite
