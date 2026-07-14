@@ -26,8 +26,10 @@ export type {
 } from "./credential-boundary.js";
 export {
   buildCompileLabPrompt,
+  buildCompileHostedExperimentPlanPrompt,
   buildCompilePatchPrompt,
   buildRepairLabPrompt,
+  buildRepairHostedExperimentPlanPrompt,
 } from "./prompts.js";
 export { redactSecrets, sanitizeAppServerMessage } from "./sanitizer.js";
 export {
@@ -41,18 +43,22 @@ export type {
 } from "./read-isolation.js";
 export {
   CompileLabInputSchema,
+  CompileHostedExperimentPlanInputSchema,
   CompilePatchInputSchema,
   CompilerEventSchema,
   CompilerSetupError,
   RepairLabInputSchema,
+  RepairHostedExperimentPlanInputSchema,
   ResourceLimitsSchema,
 } from "./types.js";
 export type {
   CodexCompiler,
   CompileLabInput,
+  CompileHostedExperimentPlanInput,
   CompilePatchInput,
   CompilerEvent,
   CompilerHealth,
   CompilerSetupErrorCode,
   RepairLabInput,
+  RepairHostedExperimentPlanInput,
 } from "./types.js";

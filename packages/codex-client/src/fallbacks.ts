@@ -3,10 +3,12 @@ import {
   CompilerSetupError,
   type CodexCompiler,
   type CompileLabInput,
+  type CompileHostedExperimentPlanInput,
   type CompilePatchInput,
   type CompilerEvent,
   type CompilerHealth,
   type RepairLabInput,
+  type RepairHostedExperimentPlanInput,
 } from "./types.js";
 
 type ReplayRecord = {
@@ -50,6 +52,18 @@ export class ReplayCodexCompiler implements CodexCompiler {
     return this.replay();
   }
 
+  compileExperimentPlan(
+    _input: CompileHostedExperimentPlanInput,
+  ): AsyncIterable<CompilerEvent> {
+    return this.replay();
+  }
+
+  repairExperimentPlan(
+    _input: RepairHostedExperimentPlanInput,
+  ): AsyncIterable<CompilerEvent> {
+    return this.replay();
+  }
+
   private async *replay(): AsyncIterable<CompilerEvent> {
     yield {
       type: "replay_metadata",
@@ -81,6 +95,18 @@ export class DisabledCodexCompiler implements CodexCompiler {
   }
 
   async *compilePatch(_input: CompilePatchInput): AsyncIterable<CompilerEvent> {
+    throw new CompilerSetupError("CODEX_DISABLED", this.reason);
+  }
+
+  async *compileExperimentPlan(
+    _input: CompileHostedExperimentPlanInput,
+  ): AsyncIterable<CompilerEvent> {
+    throw new CompilerSetupError("CODEX_DISABLED", this.reason);
+  }
+
+  async *repairExperimentPlan(
+    _input: RepairHostedExperimentPlanInput,
+  ): AsyncIterable<CompilerEvent> {
     throw new CompilerSetupError("CODEX_DISABLED", this.reason);
   }
 }

@@ -1,17 +1,25 @@
 import {
   CompileLabInputSchema,
+  CompileHostedExperimentPlanInputSchema,
   CompilePatchInputSchema,
   CompilerSetupError,
   RepairLabInputSchema,
+  RepairHostedExperimentPlanInputSchema,
   type CompileLabInput,
+  type CompileHostedExperimentPlanInput,
   type CompilePatchInput,
   type RepairLabInput,
+  type RepairHostedExperimentPlanInput,
 } from "./types.js";
 
 const LAB_FILES = [
   "artifact-adapter.py",
   "experiment-plan.json",
   "public_tests.py",
+].sort();
+const HOSTED_PLAN_OUTPUTS = [
+  "experiment-plan.json",
+  "public-rationale.md",
 ].sort();
 
 function json(value: unknown): string {
@@ -26,6 +34,74 @@ function validateLabFiles(files: string[]): void {
       "The lab compiler may write only experiment-plan.json, artifact-adapter.py, and public_tests.py.",
     );
   }
+}
+
+function validateHostedPlanOutputs(files: string[]): void {
+  const actual = [...files].sort();
+  if (JSON.stringify(actual) !== JSON.stringify(HOSTED_PLAN_OUTPUTS)) {
+    throw new CompilerSetupError(
+      "CODEX_INVALID_INPUT",
+      "The hosted compiler may write only experiment-plan.json and public-rationale.md.",
+    );
+  }
+}
+
+function renderHostedExperimentPlanPrompt(
+  input: CompileHostedExperimentPlanInput,
+): string {
+  validateHostedPlanOutputs(input.permittedOutputs);
+  return `You are the bounded CounterLab hosted Experiment Plan compiler. Produce an artifact-specific plan that composes fixed, independently verified operations.
+
+Authority boundary:
+- Write only ${input.permittedOutputs.join(" and ")} in the current generation directory.
+- experiment-plan.json is the only authoritative output. It must match the supplied JSON Schema exactly.
+- public-rationale.md is display-only plain language. It never determines verification, execution, teaching, or pass/fail.
+- The plan must not contain executable source code, shell commands, SQL, arbitrary formulas, literal result values, raw paths, imports, network actions, or dynamic expressions.
+- Do not run shell commands, execute notebook cells, read files, inspect environment variables, access parent directories, use the network, or install packages.
+- Use only the registered operations, metrics, and visualizations listed below.
+- Copy evidence references only from the approved Belief Test and sanitized Artifact Manifest. Do not invent rows, metrics, outputs, support status, or evidence.
+- State expected patterns qualitatively. Never guess numeric results.
+- Finish with only a concise public status; do not reveal private reasoning.
+
+Approved Belief Test:
+${json(input.approvedBeliefTest)}
+
+Sanitized Artifact Manifest:
+${json(input.artifactManifest)}
+
+Selected Concept Pack capabilities:
+${json(input.conceptPack)}
+
+Experiment Plan v2 JSON Schema:
+${json(input.experimentPlanSchema)}
+
+Resource limits that must be copied into the plan:
+${json(input.resourceLimits)}
+`;
+}
+
+export function buildCompileHostedExperimentPlanPrompt(
+  raw: CompileHostedExperimentPlanInput,
+): string {
+  return renderHostedExperimentPlanPrompt(
+    CompileHostedExperimentPlanInputSchema.parse(raw),
+  );
+}
+
+export function buildRepairHostedExperimentPlanPrompt(
+  raw: RepairHostedExperimentPlanInput,
+): string {
+  const input = RepairHostedExperimentPlanInputSchema.parse(raw);
+  const base = renderHostedExperimentPlanPrompt(input);
+  return `${base}
+This is repair attempt ${input.repairAttempt} of at most 2. Correct only the rejected invariants. Do not weaken the plan schema, change artifact or Belief Test lineage, or add new evidence.
+
+Previous output hashes:
+${json(input.previousOutputHashes)}
+
+Structured external-verifier counterexamples:
+${json(input.verifierCounterexamples)}
+`;
 }
 
 function renderCompileLabPrompt(input: CompileLabInput): string {

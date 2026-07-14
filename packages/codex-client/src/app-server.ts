@@ -6,21 +6,27 @@ import { z } from "zod";
 
 import {
   buildCompileLabPrompt,
+  buildCompileHostedExperimentPlanPrompt,
   buildCompilePatchPrompt,
   buildRepairLabPrompt,
+  buildRepairHostedExperimentPlanPrompt,
 } from "./prompts.js";
 import { redactSecrets, sanitizeAppServerMessage } from "./sanitizer.js";
 import {
   CompileLabInputSchema,
+  CompileHostedExperimentPlanInputSchema,
   CompilePatchInputSchema,
   CompilerSetupError,
   RepairLabInputSchema,
+  RepairHostedExperimentPlanInputSchema,
   type CodexCompiler,
   type CompileLabInput,
+  type CompileHostedExperimentPlanInput,
   type CompilePatchInput,
   type CompilerEvent,
   type CompilerHealth,
   type RepairLabInput,
+  type RepairHostedExperimentPlanInput,
 } from "./types.js";
 
 const execFileAsync = promisify(execFile);
@@ -528,6 +534,36 @@ export class AppServerCodexCompiler implements CodexCompiler {
     );
   }
 
+  async *compileExperimentPlan(
+    raw: CompileHostedExperimentPlanInput,
+  ): AsyncIterable<CompilerEvent> {
+    const input = parseInput(CompileHostedExperimentPlanInputSchema, raw);
+    yield* this.run(
+      buildCompileHostedExperimentPlanPrompt(input),
+      input.generationDirectory,
+      "plan",
+    );
+  }
+
+  async *repairExperimentPlan(
+    raw: RepairHostedExperimentPlanInput,
+  ): AsyncIterable<CompilerEvent> {
+    const input = parseInput(RepairHostedExperimentPlanInputSchema, raw);
+    for (const counterexample of input.verifierCounterexamples) {
+      yield {
+        type: "verifier_counterexample",
+        invariant: counterexample.invariant,
+        observed: counterexample.observed,
+        counterexample: counterexample.counterexample,
+      };
+    }
+    yield* this.run(
+      buildRepairHostedExperimentPlanPrompt(input),
+      input.generationDirectory,
+      "repair",
+    );
+  }
+
   async *repairLab(raw: RepairLabInput): AsyncIterable<CompilerEvent> {
     const input = parseInput(RepairLabInputSchema, raw);
     for (const counterexample of input.verifierCounterexamples) {
@@ -552,7 +588,7 @@ export class AppServerCodexCompiler implements CodexCompiler {
   private async *run(
     prompt: string,
     cwd: string,
-    phase: "generate" | "repair" | "patch",
+    phase: "plan" | "generate" | "repair" | "patch",
   ): AsyncIterable<CompilerEvent> {
     const launch = await this.prepareLaunch(cwd);
     const connection = new AppServerConnection(

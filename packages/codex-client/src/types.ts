@@ -63,6 +63,40 @@ export const CompileLabInputSchema = BaseCompilationSchema.extend({
 
 export type CompileLabInput = z.infer<typeof CompileLabInputSchema>;
 
+export const HostedPlanResourceLimitsSchema = z
+  .object({
+    wallSeconds: z.number().int().positive().max(120),
+    memoryMb: z.number().int().min(128).max(2_048),
+    maxRuns: z.number().int().positive().max(8),
+  })
+  .strict();
+
+const HostedConceptPackSchema = z
+  .object({
+    id: z.enum(["entity_leakage", "class_imbalance"]),
+    version: z.string().min(1).max(64),
+    title: z.string().min(1).max(160),
+    allowedOperations: z.array(z.string().min(1).max(128)).min(1).max(16),
+    allowedMetrics: z.array(z.string().min(1).max(64)).min(1).max(16),
+    allowedVisualizations: z.array(z.string().min(1).max(64)).min(1).max(16),
+    verifierInvariants: z.array(z.string().min(1).max(128)).min(1).max(24),
+  })
+  .strict();
+
+export const CompileHostedExperimentPlanInputSchema =
+  BaseCompilationSchema.extend({
+    approvedBeliefTest: JsonObjectSchema,
+    artifactManifest: JsonObjectSchema,
+    conceptPack: HostedConceptPackSchema,
+    experimentPlanSchema: JsonObjectSchema,
+    resourceLimits: HostedPlanResourceLimitsSchema,
+    permittedOutputs: z.array(z.string().min(1).max(128)).length(2),
+  }).strict();
+
+export type CompileHostedExperimentPlanInput = z.infer<
+  typeof CompileHostedExperimentPlanInputSchema
+>;
+
 const VerifierCounterexampleSchema = z
   .object({
     invariant: z.string().min(1).max(128),
@@ -81,6 +115,32 @@ export const RepairLabInputSchema = CompileLabInputSchema.extend({
 }).strict();
 
 export type RepairLabInput = z.infer<typeof RepairLabInputSchema>;
+
+const HostedVerifierCounterexampleSchema = z
+  .object({
+    invariant: z.string().min(1).max(128),
+    observed: JsonValueSchema,
+    expected: JsonValueSchema,
+    counterexample: z.string().min(1).max(2_000),
+  })
+  .strict();
+
+export const RepairHostedExperimentPlanInputSchema =
+  CompileHostedExperimentPlanInputSchema.extend({
+    repairAttempt: z.union([z.literal(1), z.literal(2)]),
+    verifierCounterexamples: z
+      .array(HostedVerifierCounterexampleSchema)
+      .min(1)
+      .max(24),
+    previousOutputHashes: z.record(
+      z.string(),
+      z.string().regex(/^[a-f0-9]{64}$/i),
+    ),
+  }).strict();
+
+export type RepairHostedExperimentPlanInput = z.infer<
+  typeof RepairHostedExperimentPlanInputSchema
+>;
 
 export const CompilePatchInputSchema = BaseCompilationSchema.extend({
   approvedBeliefTest: JsonObjectSchema,
@@ -207,6 +267,12 @@ export interface CodexCompiler {
   compileLab(input: CompileLabInput): AsyncIterable<CompilerEvent>;
   repairLab(input: RepairLabInput): AsyncIterable<CompilerEvent>;
   compilePatch(input: CompilePatchInput): AsyncIterable<CompilerEvent>;
+  compileExperimentPlan(
+    input: CompileHostedExperimentPlanInput,
+  ): AsyncIterable<CompilerEvent>;
+  repairExperimentPlan(
+    input: RepairHostedExperimentPlanInput,
+  ): AsyncIterable<CompilerEvent>;
   health(): Promise<CompilerHealth>;
 }
 

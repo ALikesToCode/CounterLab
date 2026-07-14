@@ -8,7 +8,7 @@ two verified concept packs, and a complete public notebook-to-proof journey.
 
 ## Current Phase
 
-Phase 2 — Upgrade plan and regression boundary
+Phase 3 — Hosted artifact-specific leakage vertical slice
 
 ## Phases
 
@@ -91,6 +91,8 @@ Phase 2 — Upgrade plan and regression boundary
 | Focused mode-migration test output expanded to a large DOM dump and was truncated | 1 | Used the failure summary and reran individual failing tests after correcting their explicit assumptions. |
 | Repository-wide Prettier check reported 46 pre-existing style issues, mostly generated/replay and unrelated files | 1 | Kept scope reviewable, formatted every changed code file, and used `git diff --check`; the repository-wide backlog remains explicit. |
 | Full gate found Node/Cloudflare type conflicts in the SQLite-backed D1 test adapter | 1 | Typed SQL binds as `SQLInputValue` and converted `import.meta.url` to a string path before reading migrations. |
+| Combined App Server source inspection exceeded the response context | 1 | Re-read only the relevant implementation in bounded line ranges. |
+| Hosted compiler typecheck rejected the new `plan` phase at the reusable transport boundary | 1 | Added `plan` to the existing validated compiler phase union. |
 
 ## Notes
 

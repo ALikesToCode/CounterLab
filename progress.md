@@ -99,6 +99,17 @@
   - Generated one Plan v2 JSON Schema into TypeScript and packaged Python
     locations, then added Python schema/lineage/evidence validation and a fixed
     leakage plan interpreter with deterministic interactive run configuration.
+  - Added the release-aware concept-pack registry and evidence-backed concept
+    router; the Worker no longer hardcodes entity leakage and unsupported or
+    insufficient evidence cannot enter model analysis.
+  - Added an independent hosted Plan v2 verifier that binds plans to the
+    approved Belief Test, artifact manifest, concept pack, allow-listed fixed
+    operations, controlled variables, and resolved evidence references.
+  - Extended the stable Codex App Server stdio client with a separate hosted
+    plan-only compile/repair interface. Hosted turns can create only the strict
+    experiment plan and display-only rationale, receive only structured
+    verifier counterexamples, and retain the proven local adapter compiler as a
+    separate advanced path.
 - Files created/modified:
   - `task_plan.md`
   - `findings.md`
@@ -137,6 +148,9 @@
 | D1/token tests | hosted runner substrate | D1 atomic persistence and signed grant enforcement | 3 passed | pass |
 | Python Plan/kernel tests | hosted runner substrate | Schema/evidence policy, determinism, unchanged reference hash | 8 passed | pass |
 | Full `test-all.sh` | runner substrate checkpoint | Shared, Worker/UI, Python/runner, typecheck, D1 migration, browser | 113 TS + 41 web + 101 Python + 13 browser passed | pass |
+| Concept routing | released pack registry | Select supported evidence and refuse unsupported/insufficient artifacts | 3 registry + 30 analyst/registry + 42 web tests passed | pass |
+| Hosted plan verifier | Plan v2 authority boundary | Accept one fully bound plan and reject structured invariant violations | 2 tests passed; typecheck passed | pass |
+| Hosted Codex plan compiler | plan-only prompt, two repairs, stable stdio | Constrain outputs and reject executable authority | 22 Codex-client tests passed; typecheck passed | pass |
 
 ## Error Log
 
@@ -150,6 +164,8 @@
 | 2026-07-15 | Focused mode-migration failures emitted a truncated DOM dump | 1 | Isolated the four failures from the summary and switched to individual reruns. |
 | 2026-07-15 | Repository-wide Prettier check reported 46 existing style differences | 1 | Formatted all changed code and kept unrelated generated/replay files untouched; use diff-local validation for this slice. |
 | 2026-07-15 | Full typecheck rejected the D1 test adapter's `unknown` SQL values and cross-runtime URL overload | 1 | Cast binds to Node `SQLInputValue` and resolved migration files through `fileURLToPath`. |
+| 2026-07-15 | Combined App Server source inspection exceeded the response context | 1 | Switched to bounded reads around the compiler implementation. |
+| 2026-07-15 | Hosted compiler typecheck rejected `plan` as an internal run phase | 1 | Extended the validated transport phase union to include hosted plan compilation. |
 
 ## 5-Question Reboot Check
 
