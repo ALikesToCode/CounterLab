@@ -175,6 +175,60 @@ describe("sanitizeAppServerMessage", () => {
     ]);
   });
 
+  it("removes machine-local paths from command summaries and diff headers", () => {
+    const [command] = sanitizeAppServerMessage({
+      method: "item/completed",
+      params: {
+        threadId: "thread_1",
+        turnId: "turn_1",
+        item: {
+          type: "commandExecution",
+          id: "command_1",
+          command:
+            "/bin/bash -lc 'sed /home/person/.codex/skills/example/SKILL.md && python /tmp/private/check.py'",
+          cwd: "/home/person/project",
+          processId: null,
+          source: "agent",
+          status: "completed",
+          commandActions: [],
+          aggregatedOutput: "ok",
+          exitCode: 0,
+          durationMs: 2,
+        },
+      },
+    });
+    expect(command?.type).toBe("command");
+    if (command?.type === "command") {
+      expect(command.command).not.toContain("/home/person");
+      expect(command.command).not.toContain("/tmp/private");
+      expect(command.command).toContain("[local-path]");
+      expect(command.command).toContain("[temp-path]");
+    }
+
+    const [diff] = sanitizeAppServerMessage({
+      method: "turn/diff/updated",
+      params: {
+        threadId: "thread_1",
+        turnId: "turn_1",
+        diff: [
+          "diff --git a/data/live-runs/session/artifact-adapter.py b/data/live-runs/session/artifact-adapter.py",
+          "--- a/data/live-runs/session/artifact-adapter.py",
+          "+++ b/data/live-runs/session/artifact-adapter.py",
+          "@@ -1 +1 @@",
+          "-old",
+          "+new",
+        ].join("\n"),
+      },
+    });
+    expect(diff?.type).toBe("file_change");
+    if (diff?.type === "file_change") {
+      expect(diff.unifiedDiff).not.toContain("data/live-runs");
+      expect(diff.unifiedDiff).toContain(
+        "diff --git a/artifact-adapter.py b/artifact-adapter.py",
+      );
+    }
+  });
+
   it("rejects malformed protocol notifications instead of guessing", () => {
     expect(() =>
       sanitizeAppServerMessage({

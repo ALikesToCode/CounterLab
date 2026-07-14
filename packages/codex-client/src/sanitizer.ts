@@ -131,12 +131,27 @@ function safeFileName(path: string): string {
   return basename(path.replaceAll("\\", "/"));
 }
 
-function sanitizeDiff(diff: string): string {
-  const pathSanitized = redactSecrets(diff).replace(
-    /^(---|\+\+\+)\s+([^\t\n]+)(.*)$/gm,
-    (_match, prefix: string, path: string, suffix: string) =>
-      `${prefix} ${safeFileName(path)}${suffix}`,
+function sanitizeCommand(command: string): string {
+  return excerpt(
+    command
+      .replace(/\/(?:home|Users)\/[^\s'";|&]+/g, "[local-path]")
+      .replace(/\/tmp\/[^\s'";|&]+/g, "[temp-path]"),
+    1_024,
   );
+}
+
+function sanitizeDiff(diff: string): string {
+  const pathSanitized = redactSecrets(diff)
+    .replace(
+      /^diff --git a\/([^\n]+) b\/([^\n]+)$/gm,
+      (_match, before: string, after: string) =>
+        `diff --git a/${safeFileName(before)} b/${safeFileName(after)}`,
+    )
+    .replace(
+      /^(---|\+\+\+)\s+([^\t\n]+)(.*)$/gm,
+      (_match, prefix: string, path: string, suffix: string) =>
+        `${prefix} ${safeFileName(path)}${suffix}`,
+    );
   return pathSanitized.length <= 64_000
     ? pathSanitized
     : `${pathSanitized.slice(0, 63_999)}…`;
@@ -235,7 +250,7 @@ export function sanitizeAppServerMessage(message: unknown): CompilerEvent[] {
         return [
           {
             type: "command",
-            command: excerpt(item.command, 1_024),
+            command: sanitizeCommand(item.command),
             outputExcerpt: excerpt(item.aggregatedOutput),
             durationMs: item.durationMs,
             exitCode: item.exitCode,
