@@ -215,3 +215,56 @@ test("unsupported notebooks are parsed without execution and cannot advance", as
     page.getByRole("button", { name: /Create Belief Test/i }),
   ).toBeDisabled();
 });
+
+test("the judged path is keyboard operable with reduced motion", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await reset(page);
+
+  const tryInstant = page.getByRole("button", { name: /Try instantly/i });
+  await tryInstant.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("heading", { name: /What does this result prove/i }),
+  ).toBeVisible();
+
+  const claimInput = page.getByLabel("Your claim");
+  await claimInput.focus();
+  await page.keyboard.type(claim);
+  await page
+    .getByRole("button", { name: /Create Belief Test/i })
+    .focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: /Confirm Belief Test/i }).focus();
+  await page.keyboard.press("Enter");
+
+  await page.getByLabel(/Fall materially/i).focus();
+  await page.keyboard.press("Space");
+  await page.getByRole("button", { name: /Commit prediction/i }).focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("heading", { name: /Build and verify/i }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /Open verified result/i }).focus();
+  await page.keyboard.press("Enter");
+
+  const revisionInput = page.getByLabel("Your revised mental model");
+  await revisionInput.focus();
+  await page.keyboard.type(revision);
+  await page.getByRole("button", { name: /Test transfer/i }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByLabel(/Time-ordered holdout/i).focus();
+  await page.keyboard.press("Space");
+  await page.getByLabel(/Centered rolling target/i).focus();
+  await page.keyboard.press("Space");
+  await page.getByRole("button", { name: /Check transfer/i }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText(/Transfer passed/i)).toBeVisible();
+
+  await page.getByRole("button", { name: /Verify notebook patch/i }).focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("heading", { name: /What changed—and what proved it/i }),
+  ).toBeVisible();
+});
