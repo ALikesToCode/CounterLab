@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "vite build && wrangler deploy",
+    "test:e2e": "playwright test",
     "test": "vitest run --config vitest.config.ts",
     "types:worker": "wrangler types --config wrangler.jsonc --include-runtime=true",
     "typecheck": "tsc --noEmit -p tsconfig.json && pnpm run types:worker && tsc --noEmit -p tsconfig.worker.json"
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.44.0",
+    "@playwright/test": "1.61.1",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.2",
     "@testing-library/user-event": "14.6.1",

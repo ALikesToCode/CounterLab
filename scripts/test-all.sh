@@ -11,6 +11,7 @@ fi
 
 cd "${ROOT_DIR}"
 pnpm exec vitest run
-PYTHONPATH=services/kernel/src "${PYTHON_BIN}" -m pytest services/kernel/tests
-pnpm exec tsc --noEmit
-
+PYTHONPATH=services/kernel/src:services/runner/src "${PYTHON_BIN}" -m pytest \
+  services/kernel/tests services/runner/tests
+pnpm run typecheck
+bash scripts/test-e2e.sh
