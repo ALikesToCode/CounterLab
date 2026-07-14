@@ -21,7 +21,7 @@ export interface TransferSubmission {
   evidenceChoices: string[];
 }
 
-export async function evaluateSampleTransfer(
+export async function evaluateLeakageTransfer(
   sessionId: string,
   submission: TransferSubmission,
   evaluatedAt: string,
@@ -66,6 +66,8 @@ export async function evaluateSampleTransfer(
     resultHash: await hashCanonical(base),
   });
 }
+
+export const evaluateSampleTransfer = evaluateLeakageTransfer;
 
 type KernelPatchResult = {
   patchedSha256: string;

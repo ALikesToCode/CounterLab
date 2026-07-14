@@ -72,7 +72,7 @@ import {
 import { sampleManifest, sampleResult } from "./sample-evidence";
 import {
   createSamplePatchResult,
-  evaluateSampleTransfer,
+  evaluateLeakageTransfer,
 } from "./sample-learning-loop";
 import {
   createSampleReasoningProof,
@@ -1749,16 +1749,32 @@ export function createApi(options: ApiOptions = {}) {
     const current = await service.getSession(sessionId);
     requireMutableSession(current);
     const artifact = await artifacts(context, options).find(current.artifactId);
-    if (current.mode.kind !== "sample_lesson") {
+    if (current.mode.kind === "verified_replay") {
       throw new ApiInputError(
-        "ARTIFACT_TRANSFER_MISMATCH",
-        "Live sessions require a transfer task selected by their verified concept job",
+        "REPLAY_READ_ONLY",
+        "Verified replay sessions cannot submit a new transfer answer",
         409,
       );
     }
-    requireApprovedSampleArtifact(artifact, "ARTIFACT_TRANSFER_MISMATCH");
+    if (current.mode.kind === "sample_lesson") {
+      requireApprovedSampleArtifact(artifact, "ARTIFACT_TRANSFER_MISMATCH");
+    } else {
+      const manifestHash =
+        artifact === undefined ? null : await hashCanonical(artifact.manifest);
+      if (
+        current.verifiedResult?.schemaVersion !== "2" ||
+        current.verifiedResult.concept !== "entity_leakage" ||
+        current.verifiedResult.artifactManifestHash !== manifestHash
+      ) {
+        throw new ApiInputError(
+          "LIVE_RESULT_REQUIRED",
+          "An artifact-bound verified leakage result is required before transfer",
+          409,
+        );
+      }
+    }
     await service.startTransfer(sessionId);
-    const result = await evaluateSampleTransfer(
+    const result = await evaluateLeakageTransfer(
       sessionId,
       submission,
       (options.now?.() ?? new Date()).toISOString(),

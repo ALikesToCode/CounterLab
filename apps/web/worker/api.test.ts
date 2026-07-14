@@ -546,7 +546,7 @@ describe("Cloudflare Worker API", () => {
     expect(stored).not.toHaveProperty("patchResult");
   });
 
-  it("never scores the bundled sample transfer for a live artifact", async () => {
+  it("never scores transfer for a live artifact without an artifact-bound result", async () => {
     const harness = await sessionHarness("sample");
     const uploaded = await saveUploadedArtifact(
       harness.artifactStore,
@@ -574,7 +574,7 @@ describe("Cloudflare Worker API", () => {
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({
       ok: false,
-      error: { code: "ARTIFACT_TRANSFER_MISMATCH" },
+      error: { code: "LIVE_RESULT_REQUIRED" },
     });
     const stored = await harness.sessionRepository.find(sessionId);
     expect(stored?.state).toBe("REVISION_RECORDED");
@@ -1009,6 +1009,34 @@ describe("Cloudflare Worker API", () => {
     expect(liveStored?.verifiedResult?.resultHash).not.toBe(
       sampleResult.resultHash,
     );
+
+    const revised = await postJson(app, `/api/sessions/${sessionId}/revision`, {
+      revision:
+        "Evaluation units must match deployment units, so complete accounts must be held out together.",
+    });
+    expect(revised.status).toBe(200);
+    const transferred = await postJson(
+      app,
+      `/api/sessions/${sessionId}/transfer`,
+      {
+        strategyChoice: "time_ordered_holdout",
+        riskChoice: "centered_window_reads_future",
+        evidenceChoices: [
+          "center_true_uses_later_targets",
+          "random_split_mixes_dates",
+        ],
+      },
+    );
+    expect(transferred.status).toBe(200);
+    await expect(transferred.json()).resolves.toMatchObject({
+      data: {
+        state: "TRANSFER_PASSED",
+        transferResult: {
+          outcome: "PASSED",
+          evaluatorVersion: "counterlab-transfer-v1",
+        },
+      },
+    });
   });
 
   it("rejects a runner-claimed success when the independent hosted Plan verifier fails", async () => {
