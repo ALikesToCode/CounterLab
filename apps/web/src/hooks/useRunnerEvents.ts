@@ -22,6 +22,7 @@ export type MonitorRunnerJobInput = {
   signal?: AbortSignal;
   pollIntervalMs?: number;
   maxPolls?: number;
+  terminalProjectionGracePolls?: number;
   api?: RunnerEventsApi;
   onEvents?: (events: readonly PublicCompilerEvent[], cursor: number) => void;
   onSession?: (session: SessionView) => void;
@@ -57,11 +58,13 @@ export async function monitorRunnerJob({
   signal,
   pollIntervalMs = 750,
   maxPolls = 320,
+  terminalProjectionGracePolls = 12,
   api = counterLabApi,
   onEvents,
   onSession,
 }: MonitorRunnerJobInput): Promise<SessionView> {
   let cursor = after;
+  let verifiedTerminalPolls = 0;
   for (let poll = 0; poll < maxPolls; poll += 1) {
     if (signal?.aborted) throw signal.reason;
     const page = await api.listRunnerEvents(sessionId, jobId, cursor);
@@ -84,12 +87,32 @@ export async function monitorRunnerJob({
           retryable: page.jobError.retryable,
         });
       }
+      if (failure !== undefined) {
+        throw new ApiClientError({
+          code: failure.code,
+          message: failure.message,
+          status: 409,
+        });
+      }
+      if (
+        page.jobStatus === "VERIFIED" &&
+        verifiedTerminalPolls < terminalProjectionGracePolls
+      ) {
+        verifiedTerminalPolls += 1;
+        await wait(pollIntervalMs, signal);
+        continue;
+      }
       throw new ApiClientError({
-        code: failure?.code ?? "RUNNER_TERMINATED",
+        code:
+          page.jobStatus === "VERIFIED"
+            ? "RUNNER_SESSION_PROJECTION_TIMEOUT"
+            : "RUNNER_TERMINATED",
         message:
-          failure?.message ??
-          `Runner job ended before the session reached ${terminalStates.join(" or ")}.`,
+          page.jobStatus === "VERIFIED"
+            ? `The verified runner job did not reconcile to ${terminalStates.join(" or ")} within the bounded wait window.`
+            : `Runner job ended before the session reached ${terminalStates.join(" or ")}.`,
         status: 409,
+        retryable: page.jobStatus === "VERIFIED",
       });
     }
     await wait(pollIntervalMs, signal);

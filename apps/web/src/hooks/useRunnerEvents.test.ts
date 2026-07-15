@@ -66,6 +66,64 @@ describe("monitorRunnerJob", () => {
     );
   });
 
+  it("reconciles a verified job before the session projection catches up", async () => {
+    const api = {
+      listRunnerEvents: vi.fn().mockResolvedValue({
+        events: [],
+        nextCursor: 4,
+        terminal: true,
+        jobStatus: "VERIFIED" as const,
+      }),
+      getSession: vi
+        .fn()
+        .mockResolvedValueOnce(liveSession)
+        .mockResolvedValueOnce({
+          ...liveSession,
+          state: "LAB_VERIFIED",
+          version: 5,
+        }),
+    };
+
+    await expect(
+      monitorRunnerJob({
+        sessionId: liveSession.sessionId,
+        jobId: "job_1",
+        terminalStates: ["LAB_VERIFIED"],
+        pollIntervalMs: 0,
+        api,
+      }),
+    ).resolves.toMatchObject({ state: "LAB_VERIFIED", version: 5 });
+    expect(api.getSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("fails closed when a verified job never reaches the session projection", async () => {
+    const api = {
+      listRunnerEvents: vi.fn().mockResolvedValue({
+        events: [],
+        nextCursor: 4,
+        terminal: true,
+        jobStatus: "VERIFIED" as const,
+      }),
+      getSession: vi.fn().mockResolvedValue(liveSession),
+    };
+
+    await expect(
+      monitorRunnerJob({
+        sessionId: liveSession.sessionId,
+        jobId: "job_1",
+        terminalStates: ["LAB_VERIFIED"],
+        pollIntervalMs: 0,
+        terminalProjectionGracePolls: 1,
+        api,
+      }),
+    ).rejects.toMatchObject({
+      code: "RUNNER_SESSION_PROJECTION_TIMEOUT",
+      retryable: true,
+      status: 409,
+    });
+    expect(api.getSession).toHaveBeenCalledTimes(2);
+  });
+
   it("fails closed when a terminal job has not authorized a requested state", async () => {
     const api = {
       listRunnerEvents: vi.fn().mockResolvedValue({
