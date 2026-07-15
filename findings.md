@@ -396,6 +396,84 @@ be stale. Verify them against the current tree before making decisions.
 | --- | --- |
 | Treat current user priority order as the implementation sequence | It directly addresses known false authority before adding surface area. |
 | Keep replay immutable and visibly separate | A replay can demonstrate genuine evidence but cannot satisfy live artifact-specific gates. |
+| Reuse jobs only when session, artifact, kind, and state version match | This makes submission idempotency explicit without suppressing a legitimate retry after a failed job advances session state. |
+| Implement cancellation through the Worker and process boundary | A browser-only polling abort does not cancel scientific work or prevent a late result. |
+| Register only observed fixed-ML authority before new engines | CounterLab kernel, NumPy, pandas, and scikit-learn own current computation. SciPy remains transitive/SBOM-only until a reviewed adapter uses it. |
+
+## v5.1 production authority audit
+
+- The deployed Worker and Container binding are current and healthy, remote D1
+  migrations are applied, and previously recorded untouched leakage and
+  imbalance sessions include artifact-bound live analyst, compiler, kernel,
+  transfer, patch, reasoning, and Proof Bundle evidence.
+- Public `/ready` currently resolves to SPA HTML and `/api/ready` is absent.
+  Container health exists only on the internal runner route; Worker health
+  reports configuration by binding/secret presence rather than probing the
+  process plane.
+- Event APIs reconnect from a nonzero cursor, but browser refresh restarts from
+  cursor zero. `CANCELLED` is a legal terminal status with no public route or
+  runner abort. Callback idempotency is strong, while submission idempotency is
+  implicit and lacks a reusable-job query or production double-submit proof.
+- Both production patch downloads open as nbformat 4 notebooks, and both
+  existing Proof Bundle v2 downloads validate. The portable `.counterlab`
+  Proof Capsule required by v5.1 does not exist yet.
+- Public assets and inspected compiler streams contained none of the tested
+  credential, private-key, raw-notebook, or private-reasoning patterns.
+- The current production smoke script fails closed and executes sample,
+  replay, leakage, and imbalance journeys, but it emits prose only. It does not
+  preserve a JSON report binding deployment, timestamps, stages, concepts, and
+  result/download hashes.
+
+## v5.1 scientific-engine audit
+
+- Production currently runs Python 3.12.13 with NumPy 2.4.6, SciPy 1.18.0,
+  scikit-learn 1.9.0, and pandas 2.3.3. SciPy is installed transitively rather
+  than declared directly. Local development uses Python 3.14.5.
+- A no-network `solve_ivp` health probe matched the 100 m analytic vacuum impact
+  time to approximately 8.9e-16 seconds for that specific environment. This is
+  an engine health observation, not a released educational result.
+- NumPy, SciPy, and scikit-learn each initialized 24 compute threads in the
+  inspected runner. Fixed child environments do not yet cap BLAS/OpenMP
+  threads, so resource determinism is incomplete.
+- The existing production image is approximately 747 MB; installed NumPy,
+  SciPy, and scikit-learn directories are approximately 68, 138, and 48 MiB.
+- The supplied registry JSON Schema file is absent. The repository also lacks
+  a scientific-engine registry, collected license notices, repository-level
+  SBOM, hash-locked Python artifacts, engine drift fixtures, and health report.
+- Admission recommendation: register current pinned NumPy and scikit-learn;
+  make SciPy 1.18.0 direct and use it for bounded ODEs/constants; admit Pint as
+  a unit validator, SymPy only for fixed/test oracles, and Hypothesis only as a
+  test generator when physics begins. Defer Vega-Lite unless the existing
+  renderer is insufficient, and omit Rapier, Pyodide, NetworkX, math.js, and
+  chemistry engines from the critical path.
+- Base images use tags rather than digests, `requirements.lock.txt` has no
+  artifact hashes, and the primary runner Dockerfile has no final non-root
+  `USER`. These are release-governance risks to close before physics.
+
+## v5.1 production authority closure
+
+- Worker `ae01fe03-731f-4939-849f-e8f4eaec7f51` and Container version 10/image
+  digest `sha256:2b15a35b7f938d754467cadabf8a2f12d085c4436d5f28791cb6add6d2b7bbe1`
+  passed one exact-version smoke from 2026-07-15T13:20:35Z through
+  2026-07-15T13:31:38Z.
+- All seven stages passed: public readiness, capability, public-secret scan,
+  sample, replay, untouched live leakage, and untouched live imbalance.
+- Leakage proved compile reuse, nonzero-cursor reconnect, scoped cancellation
+  with no result, duplicate-cancel reuse, fixed result, transfer-gated patch,
+  patched-notebook download, and proof validation.
+- The smoke exposed one real lost-dispatch recovery defect before the final
+  pass. Regression-first repair now redelivers one ambiguous/5xx dispatch using
+  the same job authority, never retries a definitive 4xx, and reacquires a
+  missing fixed result after refresh even when an old run checkpoint exists.
+- The Worker retains the P-256 private signing key; the deployed secret list no
+  longer contains the legacy symmetric signing secret. The Container receives
+  only the public verification key.
+- `docs/PRODUCTION_SMOKE.json` is byte-identical to the generated report and has
+  SHA-256 `d74795a13034293483a1a0375d3906643a3dd2ba3472d8fae3498b6894430bb2`.
+- The earlier audit findings about missing readiness, cancellation, cursor
+  persistence, duplicate-action proof, and JSON evidence are resolved. Browser
+  history navigation, scientific contracts, and v5.1 product simplification
+  remain separate pending work.
 
 ## Issues Encountered
 
@@ -419,4 +497,27 @@ be stale. Verify them against the current tree before making decisions.
 
 ## Visual/Browser Findings
 
-- None yet.
+- The read-only v5.1 UX audit confirmed strong existing authority cues: the
+  current product keeps sample/live/replay labels visible, requires approval of
+  sanitized analyst input, uses immutable prediction controls, binds displayed
+  leakage and imbalance values to verified fixed-kernel runs, preserves an
+  accessible results table, honors reduced motion, and renders its existing
+  generated proof through a constrained action-free component catalogue.
+- The checked-in experience does not yet implement the v5.1 learner model:
+  there is no chat-first question surface, six-stage vocabulary, tri-state
+  verdict, Boundary Map, Experiment Theater, guided/challenge mode, or `/judge`
+  route. The permanent Agent Rail and Proof Console also conflict with the
+  required collapsed Activity and Evidence & proof disclosures.
+- Accessibility debt is measurable rather than cosmetic: many Studio labels
+  render at 8--12 px, several stage/command controls are below 44 px, there is
+  no skip link, top-level stage changes do not restore focus, the command
+  palette lacks a focus trap/return path, and proof tabs do not implement the
+  ARIA tab keyboard pattern.
+- Async browser resilience is incomplete: the event cursor lives only in React
+  state and reconnect helpers restart from zero; no learner-visible cancel
+  action exists; duplicate submission, async-phase refresh, and browser
+  back/forward are not covered end-to-end.
+- Performance is currently unmeasured. The audit found no Web Vitals
+  instrumentation or route-level lazy loading; `App.tsx` and the accumulated
+  global styles remain large conflict surfaces that should be split by product
+  responsibility only after authority contracts are stable.

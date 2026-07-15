@@ -61,3 +61,12 @@ an honest patch refusal when its source shape is outside that patch contract.
 Generic `.py` upload, arbitrary datasets, arbitrary packages, package install,
 voice/screenshot intake, non-Python kernels, remote data access, custom binary
 outputs, and “works for any notebook” claims are outside the submission scope.
+
+## Learner language and current contract versions
+
+The v5.1 learner journey uses one vocabulary: **Question, Prediction, Test,
+Boundary, Apply, Repair**. Existing persisted Belief Test, Experiment Plan, and
+Proof Bundle artifacts remain valid legacy-compatible contracts until their
+versioned Belief Spec v2, Experiment IR v5, and Proof Capsule v2 adapters ship.
+This vocabulary update does not enlarge the supported notebook family or turn
+an explanation into verified evidence.

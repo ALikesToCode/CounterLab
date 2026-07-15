@@ -204,3 +204,32 @@ can pass.
 - Do not call the deterministic probe GPT/Codex plan-generation success. Keep
   human review `PENDING` and preserve the Random Forest patch refusal as a
   documented contract limit.
+
+## 2026-07-15 — Keep runner signing authority asymmetric
+
+- The Worker retains the P-256 private key and signs short-lived, purpose-bound
+  job capabilities.
+- The Container receives only the derived public verification key. The former
+  symmetric `COUNTERLAB_RUNNER_SIGNING_KEY` secret was removed from production.
+- Generated commands, the browser, and persisted public events receive neither
+  signing material nor model credentials.
+
+## 2026-07-15 — Recover ambiguous dispatches without duplicating authority
+
+- Treat an unanswered or 5xx Container dispatch acknowledgement as ambiguous,
+  not as proof that the named job was never accepted.
+- Redeliver the same scoped job once. Never retry a definitive 4xx rejection.
+- On refresh, idempotently reacquire an authoritative fixed run when the
+  session is verified but no signed result exists, even if an earlier run
+  checkpoint is present. A rejected or timed-out job still releases no result.
+
+## 2026-07-15 — Close the v5.1 public production authority gate with exact evidence
+
+- Bind production claims to Worker
+  `ae01fe03-731f-4939-849f-e8f4eaec7f51`, Container version 10, and image digest
+  `sha256:2b15a35b7f938d754467cadabf8a2f12d085c4436d5f28791cb6add6d2b7bbe1`.
+- Require readiness, capability, public-secret scan, sample, replay, untouched
+  leakage, and untouched imbalance to pass in one fail-closed smoke run.
+- Commit the sanitized report byte-for-byte as `docs/PRODUCTION_SMOKE.json`;
+  later deployments must generate new evidence rather than inheriting this
+  release's authority.

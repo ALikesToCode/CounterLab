@@ -2,6 +2,11 @@
 
 Updated: 2026-07-15
 
+This document records the completed CounterLab Studio upgrade and its remaining
+held-out/study limitation. The active v5.1 phase order and scientific-engine
+work are tracked in `task_plan.md`; pending v5.1 contracts are not retroactively
+claimed here.
+
 ## Release objective
 
 CounterLab Studio is a mental-model debugger that turns a learner's notebook
@@ -95,9 +100,10 @@ Use a Cloudflare Container attached to the Worker through a Container-backed
 Durable Object. The configured account and Wrangler version support Containers.
 
 - One named Container instance per runner job provides stable job affinity.
-- The Worker issues a short-lived HMAC job token bound to one job, session,
+- The Worker issues a short-lived P-256-signed job token bound to one job, session,
   artifact manifest hash, input bundle, output prefix, callback route, state
-  version, and expiration.
+  version, origin, purpose, and expiration. The Worker retains the private key;
+  the Container receives only the public verification key.
 - The Container exposes an internal authenticated HTTP job API and never exposes
   its filesystem publicly.
 - Runtime Codex uses the existing stable stdio JSONL App Server client.
@@ -109,9 +115,10 @@ Durable Object. The configured account and Wrangler version support Containers.
 - A fixed Python interpreter composes registered concept-pack operations. It
   does not execute model-authored Python, shell, SQL, formulas, imports, paths,
   or network actions.
-- During Codex generation, outbound access is restricted to the configured
-  model endpoint through a trusted boundary. Verification and kernel phases run
-  with outbound internet denied.
+- During Codex generation, credentials are staged for initialization and
+  revoked before the generated turn. Phase-specific outbound filtering for the
+  later fixed verification/kernel processes remains a v5.1 hardening gate and
+  is not claimed by the current production evidence.
 - Container disk is treated as ephemeral. Every authoritative input/output is
   hash-bound and stored in D1/R2.
 
@@ -234,9 +241,9 @@ green with explicit labels.
 
 ### Gate 2 — Runner jobs and hosted leakage
 
-Status: **complete in the repository**. The Container-backed runner now
+Status: **complete in production**. The Container-backed runner now
 completes an artifact-specific Experiment Plan, fixed result, cursor stream,
-and fail-closed callback. Public deployment smoke remains a Gate 5 release task.
+and fail-closed callback. Exact-version production smoke passed both concepts.
 
 1. Add job/token/event/callback/Plan v2 contracts and transition tests.
 2. Add D1 migration/repository with optimistic idempotent callbacks.
@@ -298,9 +305,9 @@ Status: **partial**. Held-out v2 records 10/10 safe intake/routing decisions and
 7/8 fixed full-loop completions without source edits; the Random Forest case is
 honestly refused by the logistic-only non-sample patch contract. The learner
 pilot protocol/randomization/analysis harness is ready with no participant
-outcomes claimed. New-version Playwright, production runner smoke, deployment,
-and clean-clone release checks remain not run because this agent is prohibited
-from starting dev/build commands without user action.
+outcomes claimed. Deployment and exact production runner smoke now pass; the
+final v5.1 clean-clone, accessibility, performance, and release gates remain
+pending.
 
 1. Freeze four leakage, four imbalance, and two unsupported held-out notebooks.
 2. Generate machine and human held-out matrices from actual runs.
@@ -323,7 +330,8 @@ targets or simulated learner outcomes.
   and Wrangler 4.110.0 are installed.
 - The Cloudflare account is logged in and Container-enabled. CounterLab D1/R2
   bindings and the Container-backed Durable Object are configured in
-  `wrangler.jsonc`; the upgraded image has not yet been deployed or smoke-tested.
+  `wrangler.jsonc`; Worker `ae01fe03-731f-4939-849f-e8f4eaec7f51` and Container
+  version 10 passed exact-version production smoke.
 - Cloudflare Containers are beta, use ephemeral disk, deploy with rolling image
   rollout, and require Workers Paid usage.
 - Live Belief analysis requires the existing server-side key and optional custom

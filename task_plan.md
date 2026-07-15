@@ -10,7 +10,7 @@ authority, replay compatibility, fixed kernels, or existing verifiers.
 
 ## Current phase
 
-Phase 1 — public production authority gate (`in_progress`).
+Phase 2 — install and propagate v5.1 constitution (`in_progress`).
 
 ## Lead-owned critical surfaces
 
@@ -39,20 +39,20 @@ code, `apps/web/src/App.tsx`, or global CSS.
 
 ### Phase 1 — public production authority gate
 
-- [ ] Audit `/ready`, deployment/image binding, D1 migrations, and secret-safe
+- [x] Audit `/ready`, deployment/image binding, D1 migrations, and secret-safe
       capability reporting.
-- [ ] Prove live leakage and imbalance end to end.
-- [ ] Prove cursor reconnect, cancellation, duplicate-job idempotency, artifact
+- [x] Prove live leakage and imbalance end to end.
+- [x] Prove cursor reconnect, cancellation, duplicate-job idempotency, artifact
       and proof downloads, and public-event sanitization.
-- [ ] Make `scripts/production-smoke.sh` emit a secret-free JSON stage report.
-- **Status:** in progress
+- [x] Make `scripts/production-smoke.sh` emit a secret-free JSON stage report.
+- **Status:** complete
 
 ### Phase 2 — install and propagate v5.1 constitution
 
-- [ ] Merge the complete v5.1 execution constitution into root `AGENTS.md`.
+- [x] Merge the complete v5.1 execution constitution into root `AGENTS.md`.
 - [ ] Update decisions, upgrade plan, support contract, diagrams, vocabulary,
       and release checklist without deleting legacy contracts.
-- **Status:** pending
+- **Status:** in progress
 
 ### Phase 2A — scientific-engine registry and dependency governance
 
@@ -188,9 +188,9 @@ code, `apps/web/src/App.tsx`, or global CSS.
 
 | Workstream | Scope | Shared critical files | Status |
 | --- | --- | --- | --- |
-| Production authority audit | Read-only routes, smoke, runner capability audit | none | pending |
-| Scientific engine candidate audit | Official docs, versions, licenses, deployment implications | none | pending |
-| UX/accessibility baseline audit | Read-only product and browser-test audit | none | pending |
+| Production authority audit | Read-only routes, smoke, runner capability audit | none | complete; lead findings recorded |
+| Scientific engine candidate audit | Official docs, versions, licenses, deployment implications | none | complete; lead findings recorded |
+| UX/accessibility baseline audit | Read-only product and browser-test audit | none | complete; lead findings recorded |
 
 ## Errors encountered
 
@@ -198,6 +198,8 @@ code, `apps/web/src/App.tsx`, or global CSS.
 | --- | ---: | --- |
 | Existing planning files described the completed pre-v5 Studio upgrade | 1 | Rebased the persistent plan on the v5.1 phase order; prior history remains in Git. |
 | First combined planning-file patch used the wrong historical `progress.md` heading | 1 | Read the exact headings and split the updates by file. |
+| Combined runner-job, Worker API, and D1 repository read exceeded the response budget | 1 | Use bounded symbol searches and reads of at most 200 lines. |
+| R2 readiness probe branch was missing one closing brace | 1 | Focused API rerun passed, then 173 root + 82 web tests and typecheck passed. |
 
 ## Operating notes
 

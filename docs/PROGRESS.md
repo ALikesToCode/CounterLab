@@ -25,9 +25,13 @@ copy.
 
 The production control plane is deployed at
 `https://counterlab.cserules.workers.dev` as Worker version
-`06c96067-a679-41ba-8487-fb2ad781c316`. Runner version 9 uses image digest
-`sha256:167a207956b5efc6b28702d905d2eafaad8e0502da75e3df1de3a38a9927a636`;
-Cloudflare reported all 7 instances healthy during the release smoke.
+`ae01fe03-731f-4939-849f-e8f4eaec7f51`. Container version 10 uses image
+digest
+`sha256:2b15a35b7f938d754467cadabf8a2f12d085c4436d5f28791cb6add6d2b7bbe1`.
+The exact-version production smoke completed all seven stages at
+`2026-07-15T13:31:38Z`; its byte-for-byte report is committed as
+`docs/PRODUCTION_SMOKE.json` with SHA-256
+`d74795a13034293483a1a0375d3906643a3dd2ba3472d8fae3498b6894430bb2`.
 
 ## Acceptance matrix
 
@@ -37,7 +41,7 @@ Cloudflare reported all 7 instances healthy during the release smoke.
 | Safe notebook intake and evidence references | pass    | Parser tests cover bounded input, no execution, active-output sanitization, stable hashes, exact cells/outputs, and typed refusal.                                                                                                        |
 | Live schema-constrained Belief Test          | pass    | Real configured Responses call returned a valid class-imbalance Belief Test with three locally resolved evidence references; invalid/unresolved output is rejected in tests.                                                              |
 | Live analyst preview and approval            | pass    | Live calls require a hash-bound preview of the exact sanitized packet; sensitive-looking evidence requires explicit approval, and claim/artifact changes invalidate it.                                                                  |
-| Runner job/token/callback/event cursor model | pass    | D1 repository, optimistic transitions, single-job signed tokens, callback idempotency, cursor reconnect, and browser-safe event schemas pass integration tests.                                                                           |
+| Runner job/token/callback/event cursor model | pass    | D1 repository, optimistic transitions, Worker-held P-256 private signing, Container public-key verification, callback idempotency, cursor reconnect, scoped cancellation, recoverable dispatch acknowledgement, and browser-safe event schemas pass tests and production smoke. |
 | Artifact-specific hosted Experiment Plan     | pass    | Worker/runner integration compiles and independently verifies typed v2 Plans; rejected candidates release no result.                                                                                                                      |
 | Fixed hosted result and cross-language hash  | pass    | Python v2 result hashes now use browser-compatible canonical JSON while legacy v1/replay hashes remain stable; TypeScript result verification passes both concepts.                                                                       |
 | Entity-leakage lab and mutations             | pass    | Computed random 0.984722, group 0.594444, ablation 0.673611, zero group overlap; 12/12 published mutations detected.                                                                                                                      |
@@ -52,17 +56,19 @@ Cloudflare reported all 7 instances healthy during the release smoke.
 | Held-out intake/routing                      | pass    | `counterlab-held-out-v2`: 10/10 cases pass; four leakage, four imbalance, two unsupported.                                                                                                                                                |
 | Held-out fixed full-loop completion          | partial | 7/8 supported notebooks complete Plan verification → fixed result → transfer → verified patch without source edits. Random Forest reaches result/transfer then receives `PATCH_ESTIMATOR_OUTSIDE_CONTRACT`. Human review remains pending. |
 | Learner pilot                                | partial | Paired-crossover protocol, consent/privacy note, randomization, schema, and analysis script exist. No participants or learner outcomes are claimed.                                                                                       |
-| TypeScript/Web/Python suites                 | pass    | Current-worktree and fresh-clone release gates each passed 170 root TypeScript, 79 web, and 136 Python tests plus root/web/Worker typechecks.                                                                                              |
+| TypeScript/Web/Python suites                 | pass    | The last full local gate passed 179 root TypeScript, 99 web, and 136 Python tests. After the dispatch-recovery change, all 101 web tests and strict web/Worker typechecks passed; a new full release rerun is still required before the v5.1 release claim. |
 | New-version browser E2E                      | pass    | 13 local CloakBrowser journeys passed; two credentialed live journeys were correctly skipped locally. Production separately passed sample/replay (2/2) and untouched leakage/imbalance live flows (2/2), including patch and Proof Bundle downloads. |
-| Container image build and production deploy | pass    | Worker `06c96067-a679-41ba-8487-fb2ad781c316` and runner version 9 are deployed; Cloudflare reported 7/7 healthy instances for the pinned production image digest.                                                                          |
-| Production live runner smoke                | pass    | Both untouched supported notebooks completed live artifact-specific analysis, compile/verify, fixed runs, interactive control, transfer, verified patch, and proof download. A completed compile resumed from cursor 10 with events 11–20. |
+| Container image build and production deploy | pass    | Worker `ae01fe03-731f-4939-849f-e8f4eaec7f51` and Container version 10 are deployed with the exact digest above. A post-smoke snapshot reported 3 active/healthy and 0 failed instances; health is explicitly time-bound. |
+| Production live runner smoke                | pass    | Exact-version smoke passed readiness, capability, public secret scan, sample, replay, untouched leakage, and untouched imbalance. Leakage additionally proved nonzero-cursor reconnect, compile reuse, acknowledged cancellation without result, duplicate-cancel reuse, patch download, and proof validation. |
 | One-command local demo                      | pass    | `./scripts/clean-demo.sh` regenerated both fixtures, passed 5 focused tests, confirmed current local D1 migrations, and served healthy kernel and Worker endpoints before its exact processes were stopped.                               |
-| Clean-clone/release check/secret scan       | pass    | A fresh temporary clone installed both locked dependency sets and passed `./scripts/release-check.sh`; the final scan found no repository secret pattern across 334 files.                                                               |
+| Clean-clone/release check/secret scan       | partial | The pre-hardening Studio tree passed a fresh-clone release check and 334-file scan. The current v5.1 tree has not yet rerun the final clean-clone, SBOM, dependency, and secret gates. |
 
 ## Latest verified commands
 
-- `./scripts/release-check.sh` — passed in the current worktree and a fresh temporary clone: 170 root TypeScript, 79 web, 136 Python, 13 local browser journeys with 2 credentialed live skips, both 12/12 mutation matrices, sandbox smoke, production build, replay reproduction, patch verification, and a 334-file secret scan.
-- `./scripts/production-smoke.sh` against `https://counterlab.cserules.workers.dev` — capability and public-asset secret checks passed; sample/replay 2/2 and real untouched leakage/imbalance 2/2 passed.
+- `./scripts/production-smoke.sh https://counterlab.cserules.workers.dev` — exact Worker version `ae01fe03-731f-4939-849f-e8f4eaec7f51`; all seven stages passed, including two genuine untouched live notebooks. Evidence: `docs/PRODUCTION_SMOKE.json`.
+- `pnpm --filter @counterlab/web test -- --run` after dispatch recovery — 101/101 web tests passed; strict web and Worker typechecks passed.
+- `./scripts/test-all.sh` before the final dispatch-recovery slice — 179 root TypeScript, 99 web, 136 Python, and 13 local browser journeys passed with 2 credentialed live skips. A current full rerun remains a release action.
+- Historical pre-hardening `./scripts/release-check.sh` and fresh-clone runs passed their then-current locked tree; they are not substituted for the pending v5.1 release rerun.
 - `./scripts/clean-demo.sh` — 5 focused tests passed; local kernel and Worker health responses were verified independently.
 - `pnpm run held-out:run` — intake 10/10; fixed completion 7/8, with the allowlist refusal recorded rather than bypassed.
 - `./scripts/reproduce-session.sh leakage-01` — reproduced canonical result `2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0`, 12/12 mutations, and verified patch.

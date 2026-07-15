@@ -11,7 +11,7 @@ CounterLab separates proposal, computation, verification, and learner judgment. 
 | Runtime Codex compiler    | Bounded compilation of an approved contract                                                    | Hosted Experiment/Patch Plans and display-only rationale; advanced local adapter/public tests             | Metric formulas, executable hosted code, transfer scoring, final validity, hidden verifier, held-out data, secrets, upload bytes |
 | Fixed Python kernel       | Numeric truth for the documented concept                                                       | Splits, preprocessing, model training, metrics, overlap, fingerprints, chart-ready data, transfer scoring | Learner-model diagnosis, compiler validity, prose grading                                                                        |
 | Local candidate runner    | Static and OS execution policy                                                                 | Workspace-policy result, bounded execution evidence, command duration and exit status                     | Numeric truth, verifier verdict, credentials, network access                                                                     |
-| Frozen host verifier      | Named falsifiable validity checks                                                              | `VERIFIED` or `REJECTED`, invariant failures, observed/expected values, minimal counterexamples           | Repair implementation, learner judgment, model reasoning                                                                         |
+| Frozen host verifier      | Named falsifiable validity checks                                                              | Current `VERIFIED` or `REJECTED`, invariant failures, observed/expected values, minimal counterexamples   | Repair implementation, learner judgment, model reasoning                                                                         |
 | Cloudflare Worker         | Intake, API validation, D1/R2 control plane, sample/replay, analyst, job dispatch              | Typed responses, scoped runner jobs/tokens, validated callbacks, reconnectable public events              | Child processes, direct filesystem access, accepting runner self-attestation, pretending replay is live                          |
 | Container runner          | Process-capable hosted workflow                                                                | Codex stdio relay, source-free Plan files, fixed interpreter/patch process evidence                       | D1/R2 credentials, unrelated objects, browser secrets, weakening verifier contracts                                              |
 | Advanced local runner     | Adapter-code proof                                                                             | AST/workspace policy, no-network candidate evidence, host verification                                    | Weakening contracts during a session, accepting a rejected candidate                                                             |
@@ -25,10 +25,9 @@ untrusted notebook
   -> GPT-5.6 proposal
   -> learner-confirmed Belief Test
   -> immutable Prediction Contract
-  -> Runtime Codex compiler proposal
-  -> host workspace and AST policy
-  -> constrained candidate execution
-  -> fixed kernel computation
+  -> Runtime Codex source-free Plan proposal
+  -> structural + concept Plan verification
+  -> fixed allow-listed Plan interpreter and kernel
   -> frozen host verifier
   -> verified result or structured rejection
   -> learner revision and fixed transfer evaluator
@@ -38,6 +37,12 @@ untrusted notebook
 ```
 
 Each arrow narrows authority. Downstream evidence may reject an upstream proposal; upstream actors cannot override a downstream verifier.
+
+The advanced local adapter proof follows a separate path through AST/workspace
+policy and no-network candidate execution. Hosted Studio never silently falls
+back to that code-authored path. The v5.1 epistemic tri-state
+`SUPPORTS | INCONCLUSIVE | REJECTED` is a pending contract migration; this
+document does not relabel the current binary verifier as already tri-state.
 
 ## GPT-5.6 boundary
 
@@ -141,7 +146,10 @@ Verifier feedback is intentionally lossy: invariant name, observed value, expect
 
 ## Transfer and patch boundary
 
-Transfer is scored by a fixed evaluator on a surface-different forecasting task. GPT and Codex do not grade the learner's prose. Before `TRANSFER_PASSED`, the patch endpoint remains locked and no patch compiler turn may start.
+Transfer is scored by a fixed evaluator: forecasting/future leakage for the
+entity-leakage pack and rare manufacturing defects for the imbalance pack. GPT
+and Codex do not grade the learner's prose. Before `TRANSFER_PASSED`, the patch
+endpoint remains locked and no patch compiler turn may start.
 
 After transfer passes, Codex may propose a minimal change to a copy. The patch verifier owns notebook validity, allowed-cell scope, dependency allowlist, zero group overlap, recomputed metric provenance, determinism, and unchanged unrelated-cell hashes. A proposed patch that merely changes the displayed conclusion without changing evaluation design is rejected.
 
@@ -184,10 +192,10 @@ labels the later run as a third repair.
   CLI version.
 - The recorded App Server child ran as a local host process and inspected global
   skill files outside the generation directory, so that trace's generation
-  isolation is explicitly `PARTIAL`. Current code prevents another unisolated
-  launch, and a real Bubblewrap probe demonstrates hidden-path denial, but
-  stable file-backed auth still needs a host credential broker before an
-  authenticated isolated turn can pass the gate.
+  isolation is explicitly `PARTIAL`. That replay remains historical evidence,
+  not hosted authority. The hosted source-free Plan runner stages credentials
+  for App Server initialization and revokes them before `thread/start`; child
+  commands receive neither model credentials nor signing material.
 - Candidate execution is containerized after generation; this does not retroactively strengthen App Server generation isolation.
 - The real Docker smoke and replay reproduction return `VERIFIED` with the
   canonical fixture result hash after exercising the no-network, non-root,
@@ -196,6 +204,10 @@ labels the later run as a third repair.
 - Container controls are implementation evidence, not a formal sandbox proof.
 - Replay mode is backed by the checked-in live compiler traces plus deterministic
   transfer and patch evidence; replaying them is not a new live run.
-- The Container-backed hosted runner is implemented and covered by integration
-  tests, but the upgraded image has not yet completed a production smoke at the
-  public URL; hosted live availability remains unclaimed until that deployment.
+- The Container-backed hosted runner completed exact-version production smoke
+  for untouched leakage and imbalance on Worker
+  `ae01fe03-731f-4939-849f-e8f4eaec7f51`; evidence is committed in
+  `docs/PRODUCTION_SMOKE.json`.
+- The hosted Container still requires outbound access for live model
+  compilation. Phase-specific network denial for later fixed-process work has
+  not yet been demonstrated and is not claimed.

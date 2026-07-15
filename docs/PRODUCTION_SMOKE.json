@@ -1,0 +1,105 @@
+{
+  "baseUrl": "https://counterlab.cserules.workers.dev",
+  "completedAt": "2026-07-15T13:31:38.290830Z",
+  "deployment": {
+    "containerImageDigest": "sha256:2b15a35b7f938d754467cadabf8a2f12d085c4436d5f28791cb6add6d2b7bbe1",
+    "workerVersion": "ae01fe03-731f-4939-849f-e8f4eaec7f51"
+  },
+  "privacy": {
+    "containsPrivateReasoning": false,
+    "containsRawNotebookBytes": false,
+    "containsSecrets": false
+  },
+  "schemaVersion": "1",
+  "stages": [
+    {
+      "completedAt": "2026-07-15T13:20:37.050749Z",
+      "evidence": {
+        "responseSha256": "64399860ecae4a7a7220c7ae87a45622b523fa26e723e1a7025ab775f83fa4b6"
+      },
+      "id": "public-readiness",
+      "mode": "control_plane",
+      "startedAt": "2026-07-15T13:20:36.030446Z",
+      "status": "PASSED"
+    },
+    {
+      "completedAt": "2026-07-15T13:20:37.454490Z",
+      "evidence": {
+        "responseSha256": "ad3629dd392e7f5edc1b7f46b0bbfb1fd80c02075bd756274f0a3183c9d3db71"
+      },
+      "id": "capability-health",
+      "mode": "control_plane",
+      "startedAt": "2026-07-15T13:20:37.145476Z",
+      "status": "PASSED"
+    },
+    {
+      "completedAt": "2026-07-15T13:20:39.919005Z",
+      "evidence": {
+        "documentSha256": "388c7056ebe4697409cf4307d82ef941fe6c8d9e171a85fd3f84f26bb2c9c290"
+      },
+      "id": "public-secret-scan",
+      "mode": "control_plane",
+      "startedAt": "2026-07-15T13:20:37.547089Z",
+      "status": "PASSED"
+    },
+    {
+      "completedAt": "2026-07-15T13:20:59.345065Z",
+      "evidence": {},
+      "id": "sample-lesson",
+      "mode": "sample",
+      "startedAt": "2026-07-15T13:20:40.015218Z",
+      "status": "PASSED"
+    },
+    {
+      "completedAt": "2026-07-15T13:21:02.882796Z",
+      "evidence": {},
+      "id": "verified-replay",
+      "mode": "replay",
+      "startedAt": "2026-07-15T13:20:59.422889Z",
+      "status": "PASSED"
+    },
+    {
+      "completedAt": "2026-07-15T13:26:03.729381Z",
+      "concept": "entity_leakage",
+      "evidence": {
+        "cancellationAcknowledged": true,
+        "cancelledWithoutResult": true,
+        "duplicateCancelReused": true,
+        "duplicateCompileReused": true,
+        "eventChainHead": "7d640ecd08347c54cd05a669ffa24e167ff424ec133429237dc08fb7ec83eed0",
+        "patchResultHash": "18d7afaecd1fc01b4dd49133e467278e5724bc141324bb569a707d00d1a4992b",
+        "patchedNotebookSha256": "40db2ba23a003fe0d0718b1837e4382ee638d937d78abf07262f9d51a1096e77",
+        "planHash": "922be22675fa76f6af71b64d56592a4ff1aad38edfa24eb449466b381e62fa08",
+        "proofBundleSha256": "e0b41693e0660e6e1b196e3e4b33f9f141de82efe9b85d4582a4115fc7d72416",
+        "proofContentHash": "33c6286d01b480b3a29a8d29c75edf616ac6e669466bb758be7b01e271cd076f",
+        "reconnectedFromCursor": true,
+        "resultHash": "810d644dea40d31636e43dae40a112e2b442eb01c0ae653e289b7cd80155fa80",
+        "sourceArtifactHash": "2bd07100f1794cc78d0a70e8b82f08c498a3093d705f9aabb4f5d0c362ea891f"
+      },
+      "id": "live-leakage",
+      "mode": "live_notebook",
+      "startedAt": "2026-07-15T13:21:02.959342Z",
+      "status": "PASSED"
+    },
+    {
+      "completedAt": "2026-07-15T13:31:38.188852Z",
+      "concept": "class_imbalance",
+      "evidence": {
+        "eventChainHead": "1889f5c5a74c1577c48e6573ed09ed3e4a8a5087d23249c97504153724557c8a",
+        "patchResultHash": "b115821a9c4f463e52f81867df9b04b3bc4042e823f2c1a7b3f14ad2ae122190",
+        "patchedNotebookSha256": "30a054210e52b767f4d031aca07bfaea3aee049011910e80579ad10a7bd35a88",
+        "planHash": "00e917b05e9d81c390aa7e3c316ebb0f4978e8900b0b6ddc935132b81ecb94e0",
+        "proofBundleSha256": "8abc5f7642f9063b3bf99c938f3e15d80d747551a67afd7a89c04382f9306de4",
+        "proofContentHash": "4a53cdc0acf151f4562ce105f4531018760dc74fc9af8424a545547afd58b62b",
+        "resultHash": "d4c81a3295bddd0f700c635767802fa7661e75845982fe705fcf5a22a5b78ef2",
+        "sourceArtifactHash": "c389cda219e6a982ad924465d962e40b33a1354bed92dd843f37b39624f9b70c"
+      },
+      "id": "live-imbalance",
+      "mode": "live_notebook",
+      "startedAt": "2026-07-15T13:26:03.827493Z",
+      "status": "PASSED"
+    }
+  ],
+  "startedAt": "2026-07-15T13:20:35.967964Z",
+  "status": "PASSED"
+}

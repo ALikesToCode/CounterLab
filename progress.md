@@ -9,7 +9,8 @@
 - Rebased `task_plan.md` onto the non-negotiable v5.1 phase order.
 - Confirmed the repository began this phase with no uncommitted files.
 - Logged and corrected one stale-context planning-file patch failure.
-- No new v5.1 engineering or release claim has been made yet.
+- At the opening checkpoint, no new v5.1 engineering or release claim had been
+  made; the entries below record the subsequent work.
 - Read the current README, progress matrix, and decision history. Recorded the
   already-proven production evidence and identified stale v5 vocabulary and one
   contradictory deployment sentence for Phase 2 documentation repair.
@@ -28,7 +29,44 @@
   verification, and the 334-file secret scan passed.
 - Refreshed `docs/HELD_OUT_RESULTS.json` from that real baseline run; only the
   execution timestamp and measured durations changed.
-- Phase 0 baseline is complete. Phase 1 production-authority audit is active.
+- Phase 0 baseline is complete. Phase 1 production authority is now closed by
+  exact deployment evidence; Phase 2 documentation propagation is active.
+- Completed the read-only production audit against the live Worker, Container,
+  D1, stored live leakage/imbalance evidence, downloads, event cursors, and
+  public assets. It confirmed current live authority and isolated four missing
+  gates: a public readiness proxy, real cancellation, explicit active-job
+  reuse, and a machine-readable production smoke report.
+- Added regression tests first. They failed against the old behavior exactly as
+  expected: `/ready` returned 404, a repeated compile returned 409, the runner
+  had no readiness/cancel methods, the process service had no abort signal, and
+  the job service had no state-bound lookup or idempotent cancel operation.
+- Implemented state-bound active job reuse for live compile/patch jobs, a
+  fail-closed public `/ready`, signed runner-token verification inside the
+  process plane, scoped cancellation through Worker → dispatcher → hosted
+  runner, optimistic/idempotent `CANCELLED` persistence, and abort propagation
+  into Codex/fixed-process execution.
+- Moved runner-token signing/verification into shared session core so both the
+  Worker and process plane enforce the same contract. The Worker retains the
+  P-256 private signing key; the Container receives only the derived public
+  verification key. Generated child commands receive neither signing material
+  nor model credentials.
+- Focused verification after the implementation: 42 root runner/compiler tests
+  passed; 37 Worker/D1/dispatcher/deployment tests passed; strict repository
+  TypeScript passed.
+- Broad verification after cancellation propagation: 173 root TypeScript tests
+  and 82 Worker/UI tests passed; strict repository TypeScript passed. The new
+  active-turn cancellation regression completes in about 56 ms instead of
+  waiting for the 5-second App Server timeout.
+- Deployed Worker `ae01fe03-731f-4939-849f-e8f4eaec7f51` with Container version
+  10 and image digest
+  `sha256:2b15a35b7f938d754467cadabf8a2f12d085c4436d5f28791cb6add6d2b7bbe1`.
+- Exact-version production smoke passed readiness, capability, public-secret
+  scan, sample, replay, untouched leakage, and untouched imbalance. Leakage
+  additionally proved cursor reconnect, cancellation without result, duplicate
+  action reuse, patch download, and Proof Bundle validation.
+- Committed the byte-identical, secret-free report as
+  `docs/PRODUCTION_SMOKE.json` (SHA-256
+  `d74795a13034293483a1a0375d3906643a3dd2ba3472d8fae3498b6894430bb2`).
 
 The historical Studio progress below remains evidence for the pre-v5.1 release,
 not proof that new v5.1 gates pass.
@@ -270,13 +308,30 @@ not proof that new v5.1 gates pass.
 | 2026-07-15 | Web Vitest filter was executed from the wrong include root                                          |       1 | Re-ran from `apps/web` using its local Vitest configuration.                                                               |
 | 2026-07-15 | Optional Python `black` formatting probe was unavailable                                           |       1 | Kept the files manually formatted and verified them with pytest and `git diff --check`.                                    |
 | 2026-07-15 | Result-verifier typecheck exposed entity-field assumptions on future imbalance runs                |       1 | Narrowed leakage run specs explicitly before accessing entity-specific fields.                                           |
+| 2026-07-15 | Combined runner-job, Worker API, and D1 repository inspection exceeded one response budget           |       1 | Returned to bounded reads of no more than 200 lines around each relevant symbol.                                          |
+| 2026-07-15 | Shared runner-token move exposed TypeScript 7's stricter `BufferSource` generic                       |       1 | Returned a concrete `Uint8Array<ArrayBuffer>` from base64 decoding; full typecheck passed.                                 |
+| 2026-07-15 | First broad Worker run found a missing brace in the new R2 readiness probe                            |       1 | Repaired the bounded branch, reran its focused API test, then reran all 255 TypeScript/Worker tests and typecheck.           |
+
+## v5.1 delegated audit evidence
+
+| Workstream | Scope | Verification | Result | Status |
+| --- | --- | --- | --- | --- |
+| UX/accessibility baseline | Existing React shell, Studio components, hooks, styles, browser coverage | 6 focused Vitest files / 23 tests; strict web TypeScript | 23 passed; typecheck passed; no files changed | pass |
+| Production authority audit | Deployed Worker/Container/D1, two live concepts, events, downloads, scripts | Exact-version seven-stage production smoke plus focused recovery tests | All stages passed; committed report binds deployment and evidence hashes | pass |
+| Scientific engine audit | Current image/manifests plus official source, license, version, size, determinism evidence | local/image `pip check`; no-network SciPy health probe; thread inspection | dependency health passed; registry/SBOM/hash locks/thread policy absent | partial |
+
+The audit also recorded the v5.1 gaps now sequenced behind the production
+authority and scientific-contract gates: chat-first entry, six-stage learner
+vocabulary, tri-state verdict, Boundary Map, progressive disclosure, `/judge`,
+minimum type/target sizes, focus management, cursor persistence, cancellation,
+async browser journeys, and measured performance.
 
 ## 5-Question Reboot Check
 
 | Question             | Answer                                                                              |
 | -------------------- | ----------------------------------------------------------------------------------- |
-| Where am I?          | Phase 3 runner jobs and hosted leakage vertical slice.                              |
-| Where am I going?    | Regression boundary, hosted leakage runner, Studio UX, imbalance, held-out release. |
+| Where am I?          | Phase 2 constitution propagation, then scientific-engine governance.                |
+| Where am I going?    | Versioned scientific contracts, scorer, verifier, Boundary Map, and simpler UX.     |
 | What's the goal?     | A real public artifact-specific CounterLab Studio with two verified concepts.       |
 | What have I learned? | See `findings.md`.                                                                  |
-| What have I done?    | Re-read constitution and initialized persistent working records.                    |
+| What have I done?    | Closed the exact public authority gate and preserved its signed/hash evidence.       |

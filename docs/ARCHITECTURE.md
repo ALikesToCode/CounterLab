@@ -49,10 +49,13 @@ and patch copies outside public assets.
 
 Workers can call a configured Responses-compatible API server-side. Process work
 is dispatched to a Container-backed Durable Object; the Worker itself never
-spawns Codex or Python. D1 runner jobs use optimistic versions and idempotent
-callbacks. Short-lived signed tokens bind one job to one manifest/input object,
-one output prefix, one callback, and an expiration. Sanitized public events are
-append-only and reconnect from an event cursor.
+spawns Codex or Python. D1 runner jobs use optimistic versions, semantic
+request identity, idempotent callbacks, scoped cancellation, and recoverable
+dispatch acknowledgement. Short-lived P-256 tokens bind one job to one
+manifest/input object, purpose, origin, output prefix, callback, state version,
+and expiration. The Worker retains the private key; the Container receives only
+the public verification key. Sanitized public events are append-only and
+reconnect from a persisted browser cursor.
 
 The Container starts Codex App Server over stable stdio JSONL. Codex can write
 only `experiment-plan.json`, `patch-plan.json`, and `public-rationale.md`. The
@@ -95,7 +98,18 @@ That limitation belongs to the advanced local adapter proof and its recorded
 replay. Hosted Studio uses source-free Plans in the dedicated runner plane; it
 does not silently route through the adapter workspace.
 
-New live App Server launches require an injected OS boundary and fail closed
-without one. The Bubblewrap probe verifies the intended filesystem shape, while
-the authenticated launcher remains disabled until a host credential broker can
-keep stable file-backed auth outside the model-command namespace.
+New advanced-local App Server launches require an injected OS boundary and fail
+closed without one. The Bubblewrap probe verifies the intended filesystem
+shape. Hosted source-free compilation instead stages credentials for App Server
+initialization, revokes them before `thread/start`, and never exposes signing or
+model credentials to generated child commands.
+
+## v5.1 migration boundary
+
+The deployed architecture above currently uses Belief Test, Experiment Plan,
+binary Plan verification, and Proof Bundle contracts. Belief Spec v2,
+Experiment IR v5, the fixed discrimination scorer, epistemic tri-state verdict,
+Boundary Map, scientific-engine registry, and Proof Capsule v2 are additive
+versioned migrations. Existing signed artifacts remain readable through
+adapters; documentation must not imply those pending contracts already own
+production authority.

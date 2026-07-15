@@ -77,6 +77,13 @@ critical path, but the Container runtime, Codex CLI, configured model endpoint,
 and Cloudflare control plane remain operational dependencies. Short-lived runner
 tokens narrow authority; they do not make the system formally capability-secure.
 
+Runner capabilities are signed with a Worker-held P-256 private key and verified
+with a public key in the Container. Tokens bind job, purpose, input/output
+lineage, callback, state version, origin, and expiry. Ambiguous dispatches may
+redeliver only the same job authority; definitive 4xx rejections are not retried.
+Cancellation terminalizes authority before best-effort process cleanup, and
+callbacks/events remain idempotent and cursor-addressable.
+
 The sensitive-looking excerpt detector is deliberately conservative and cannot
 guarantee data classification. Learners remain responsible for reviewing the
 exact sanitized preview before approving a live request.
@@ -91,8 +98,11 @@ honest patch refusal even when intake and the fixed lab are supported.
 
 ## Highest-priority hardening
 
-Implement the documented host-owned credential-injecting proxy so the isolated
-App Server receives no real credential in files or environment. Then repeat the
-live trace and demonstrate hidden-path `ENOENT`, proxy-only model connectivity,
-no command access to credentials, and the existing no-network candidate
-execution before upgrading generation isolation from `PARTIAL`.
+Keep the historical local replay labelled `PARTIAL`; do not spend the release
+critical path pretending it is the hosted runner. For hosted execution, add and
+test phase-specific outbound filtering after model compilation, non-root fixed
+children with process/file/CPU limits, deterministic single-thread numeric
+settings, pinned base images and hash-locked Python artifacts, and scientific
+engine/SBOM/license drift gates. Requalify staged-auth revocation after every
+Codex CLI protocol change. Until those checks execute, no formal sandbox or
+fully no-network hosted-process claim is made.

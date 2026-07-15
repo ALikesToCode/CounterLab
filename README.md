@@ -1,8 +1,8 @@
 # CounterLab
 
-**CounterLab is CI for understanding.** It treats a learner's claim like code:
-formalize it, commit a prediction, run a discriminating test, reject invalid
-evidence, verify transfer, and only then merge the repair.
+**Ask like chat. Prove it like science.** CounterLab is a scientific debugger
+for beliefs: it formalizes a claim, commits a prediction, runs a discriminating
+test, refuses invalid evidence, verifies transfer, and only then unlocks repair.
 
 > Chatbots explain. CounterLab lets reality answer.
 
@@ -166,10 +166,12 @@ dependencies, initializes local D1, regenerates and checks public fixtures,
 starts the fixed kernel and Vite/Worker app, and prints honest live capability
 status.
 
-The deployed no-secret judge/replay surface is
-<https://counterlab.cserules.workers.dev>. The repository now includes the
-Container runner binding and image; the upgraded image still requires a fresh
-deployment and production smoke before hosted live capability is claimed.
+The deployed surface is <https://counterlab.cserules.workers.dev>. Exact-version
+production smoke passed sample, replay, and untouched live leakage/imbalance on
+Worker `ae01fe03-731f-4939-849f-e8f4eaec7f51` with Container image
+`sha256:2b15a35b7f938d754467cadabf8a2f12d085c4436d5f28791cb6add6d2b7bbe1`.
+The secret-free evidence is committed in
+[docs/PRODUCTION_SMOKE.json](docs/PRODUCTION_SMOKE.json).
 
 For foreground development:
 
@@ -192,8 +194,9 @@ COUNTERLAB_SANDBOX_IMAGE=counterlab-runner:local
 COUNTERLAB_ADMIN_DIAGNOSTIC_SECRET=
 ```
 
-For hosted mode, configure the Worker/Container secrets and runner signing key;
-the App Server remains internal to the Container and uses stdio JSONL. For the
+For hosted mode, configure the Worker secrets and P-256 runner signing private
+key; only its public verification key is injected into the Container. The App
+Server remains internal to the Container and uses stdio JSONL. For the
 advanced local adapter proof, authenticate the local CLI with `codex login` and
 ensure Docker is running. A missing runner, model credential, or isolation
 boundary produces a typed setup error and never falls back to sample or replay.
@@ -246,7 +249,8 @@ Achieved: deterministic kernel and parser, D1 state machine, R2-private upload
 path, immutable prediction, resumable lesson navigation, read-only completed-step
 review, verified-only charts, fixed transfer, patch lock, minimal verified sample
 patch, event hash chain, Proof Bundle, authenticated Codex traces, Playwright
-judge flow, and Cloudflare Vite deployment support.
+judge flow, and artifact-specific hosted leakage and imbalance through the
+Cloudflare Vite/Worker/Container deployment.
 
 Failed honestly: the first live Codex run used an unsupported SDK argument; two
 repairs then left an unexpected `__pycache__`, so that run remained rejected and
@@ -263,14 +267,13 @@ Raw rows and notebook bytes are not sent to GPT. API keys stay server-side.
 Uploads and generated workspaces stay outside the public web root. Candidate
 execution has no network and receives no credentials.
 
-The recorded host App Server run could inspect global skill files outside its
-generation directory, so that replay's generation isolation remains `PARTIAL`.
-Current live launches fail closed unless an OS boundary is injected. A real
-Bubblewrap probe now proves repository/verifier/held-out paths are absent from
-the intended generation root, but stable file-backed authentication cannot be
-mounted there without exposing it to generated commands. A host credential
-broker is the highest-risk remaining boundary; see
-[docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
+The recorded local host App Server replay could inspect global skill files
+outside its generation directory, so that replay remains labelled `PARTIAL`.
+The hosted source-free Plan path is separate: credentials are staged only for
+App Server initialization and revoked before the generated turn; generated
+child commands receive neither model credentials nor signing authority. The
+Container still needs outbound access for live model compilation, and formal
+sandbox proof is not claimed; see [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
 
 ## How Codex accelerated the build
 
