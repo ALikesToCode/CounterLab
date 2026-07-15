@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -24,12 +24,13 @@ describe("ContainerCodexLaunchBoundary", () => {
   it("stages credentials for initialization, drops privileges, and revokes before the turn", async () => {
     const workspaceRoot = await root();
     const workspace = join(workspaceRoot, "job_1");
+    const codexHomeRoot = await root();
     const boundary = new ContainerCodexLaunchBoundary({
       authJson: JSON.stringify({
         tokens: { access_token: "access-token-long-enough-for-test" },
       }),
       workspaceRoot,
-      codexHomeRoot: await root(),
+      codexHomeRoot,
       codexExecutable: process.execPath,
       setprivExecutable: "/usr/bin/setpriv",
       uid: process.getuid?.() ?? 1000,
@@ -49,6 +50,10 @@ describe("ContainerCodexLaunchBoundary", () => {
       },
       hostCwd: workspace,
     });
+
+    expect((await stat(workspaceRoot)).mode & 0o777).toBe(0o711);
+    expect((await stat(codexHomeRoot)).mode & 0o777).toBe(0o711);
+    expect((await stat(workspace)).mode & 0o777).toBe(0o700);
 
     expect(prepared.command).toBe("/usr/bin/setpriv");
     expect(prepared.args).toContain(`--reuid=${process.getuid?.() ?? 1000}`);

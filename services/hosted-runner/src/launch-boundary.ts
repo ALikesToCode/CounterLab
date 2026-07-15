@@ -101,6 +101,17 @@ export class ContainerCodexLaunchBoundary implements AppServerLaunchBoundary {
   ): Promise<PreparedAppServerLaunch> {
     const health = await this.health();
     if (!health.available) throw isolationError(health.reason);
+    try {
+      await Promise.all([
+        chmod(this.options.workspaceRoot, 0o711),
+        chmod(this.options.codexHomeRoot, 0o711),
+      ]);
+    } catch (error) {
+      throw isolationError(
+        "Container Codex private roots cannot grant traverse-only access.",
+        error,
+      );
+    }
     const workspaceRoot = await realpath(resolve(this.options.workspaceRoot));
     const workspace = await realpath(resolve(request.hostCwd));
     if (!isContained(workspaceRoot, workspace)) {
