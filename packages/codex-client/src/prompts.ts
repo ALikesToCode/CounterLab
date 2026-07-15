@@ -78,6 +78,14 @@ Authority boundary:
 - State expected patterns qualitatively. Never guess numeric results.
 - Finish with only a concise public status; do not reveal private reasoning.
 
+Required immutable lineage (copy these values exactly):
+${json({
+  sessionId: input.sessionId,
+  artifactManifestHash: input.artifactManifestHash,
+  beliefTestId: input.approvedBeliefTest.id,
+  conceptPackVersion: input.conceptPack.version,
+})}
+
 Approved Belief Test:
 ${json(input.approvedBeliefTest)}
 
@@ -86,6 +94,9 @@ ${json(input.artifactManifest)}
 
 Selected Concept Pack capabilities:
 ${json(input.conceptPack)}
+
+Public Plan composition requirements:
+${json(input.conceptPack.planRequirements)}
 
 Experiment Plan v2 JSON Schema:
 ${json(input.experimentPlanSchema)}
@@ -109,7 +120,10 @@ export function buildRepairHostedExperimentPlanPrompt(
   const input = RepairHostedExperimentPlanInputSchema.parse(raw);
   const base = renderHostedExperimentPlanPrompt(input);
   return `${base}
-This is repair attempt ${input.repairAttempt} of at most 2. Correct only the rejected invariants. Do not weaken the plan schema, change artifact or Belief Test lineage, or add new evidence.
+This is repair attempt ${input.repairAttempt} of at most 2. Correct only the rejected invariants. Preserve every field that was not rejected. Do not weaken the plan schema, change artifact or Belief Test lineage, or add new evidence.
+
+Previous candidate Plan to amend:
+${json(input.previousCandidatePlan)}
 
 Previous output hashes:
 ${json(input.previousOutputHashes)}

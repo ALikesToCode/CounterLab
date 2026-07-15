@@ -477,6 +477,7 @@ export class HostedRunnerJobProcessor {
           repairAttempt: repairAttempt as 1 | 2,
           verifierCounterexamples: decision.counterexamples,
           previousOutputHashes: uploaded.outputHashByPath,
+          previousCandidatePlan: uploaded.primaryPlan,
         };
         cursor = await this.consumeCompilerEvents(
           jobId,
@@ -547,6 +548,7 @@ export class HostedRunnerJobProcessor {
   ): CompileHostedExperimentPlanInput {
     return {
       sessionId: bundle.sessionId,
+      artifactManifestHash: bundle.artifactManifestHash,
       generationDirectory,
       approvedBeliefTest: bundle.approvedBeliefTest,
       artifactManifest: bundle.artifactManifest,
@@ -558,6 +560,7 @@ export class HostedRunnerJobProcessor {
         allowedMetrics: [...bundle.conceptPack.allowedMetrics],
         allowedVisualizations: [...bundle.conceptPack.allowedVisualizations],
         verifierInvariants: [...bundle.conceptPack.verifierInvariants],
+        planRequirements: [...bundle.conceptPack.planRequirements],
       },
       experimentPlanSchema: bundle.experimentPlanSchema,
       resourceLimits: bundle.resourceLimits,
@@ -679,6 +682,7 @@ export class HostedRunnerJobProcessor {
     planHash: string;
     outputHashes: string[];
     outputHashByPath: Record<string, string>;
+    primaryPlan: unknown;
   }> {
     const entries = await readdir(directory, { withFileTypes: true });
     const names = entries.map((entry) => entry.name).sort();
@@ -696,6 +700,7 @@ export class HostedRunnerJobProcessor {
 
     let cursor = initialCursor;
     const outputHashByPath: Record<string, string> = {};
+    let primaryPlan: unknown;
     for (const path of [primaryPlanPath, RATIONALE_PATH] as const) {
       const absolutePath = join(directory, path);
       assertContained(directory, absolutePath);
@@ -715,6 +720,13 @@ export class HostedRunnerJobProcessor {
         );
       }
       const body = await readFile(absolutePath, "utf8");
+      if (path === primaryPlanPath) {
+        try {
+          primaryPlan = JSON.parse(body) as unknown;
+        } catch {
+          primaryPlan = body;
+        }
+      }
       const uploaded = await this.options.controlPlane.upload(path, body);
       outputHashByPath[path] = uploaded.sha256;
       cursor = await this.emit(jobId, cursor, {
@@ -736,6 +748,7 @@ export class HostedRunnerJobProcessor {
       planHash,
       outputHashes: Object.values(outputHashByPath),
       outputHashByPath,
+      primaryPlan,
     };
   }
 

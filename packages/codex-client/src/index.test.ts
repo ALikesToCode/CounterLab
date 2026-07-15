@@ -89,6 +89,7 @@ function patchInput(): CompilePatchInput {
 function hostedPlanInput(): CompileHostedExperimentPlanInput {
   return {
     sessionId: "session_test",
+    artifactManifestHash: "e".repeat(64),
     generationDirectory,
     approvedBeliefTest: {
       id: "belief_test",
@@ -129,6 +130,10 @@ function hostedPlanInput(): CompileHostedExperimentPlanInput {
       allowedMetrics: ["accuracy", "roc_auc", "entity_overlap_rate"],
       allowedVisualizations: ["metric_comparison", "entity_overlap"],
       verifierInvariants: ["resolved_evidence", "zero_group_overlap"],
+      planRequirements: [
+        "Use exactly one group holdout with identity retained.",
+        "Use exactly one identity ablation with identity removed.",
+      ],
     },
     experimentPlanSchema: {
       type: "object",
@@ -385,6 +390,11 @@ describe("hosted plan-only compiler", () => {
 
     expect(prompt).toContain("account_id");
     expect(prompt).toContain("artifactManifestHash");
+    expect(prompt).toContain('"sessionId": "session_test"');
+    expect(prompt).toContain(`"artifactManifestHash": "${"e".repeat(64)}"`);
+    expect(prompt).toContain(
+      "Use exactly one group holdout with identity retained.",
+    );
     expect(prompt).toContain("experiment-plan.json");
     expect(prompt).toContain("public-rationale.md");
     expect(prompt).toMatch(/must not contain executable source code/i);
@@ -410,6 +420,11 @@ describe("hosted plan-only compiler", () => {
         "experiment-plan.json": "c".repeat(64),
         "public-rationale.md": "d".repeat(64),
       },
+      previousCandidatePlan: {
+        schemaVersion: "2",
+        planId: "plan_previous",
+        sessionId: "session_test",
+      },
       verifierCounterexamples: [
         {
           invariant: "zero_group_overlap",
@@ -424,6 +439,8 @@ describe("hosted plan-only compiler", () => {
     expect(prompt).toContain("repair attempt 2 of at most 2");
     expect(prompt).toContain("zero_group_overlap");
     expect(prompt).toContain("Three account IDs occur in both partitions.");
+    expect(prompt).toContain('"planId": "plan_previous"');
+    expect(prompt).toMatch(/preserve every field that was not rejected/i);
     expect(prompt).not.toContain("hidden verifier source");
   });
 

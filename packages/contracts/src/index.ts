@@ -1117,6 +1117,7 @@ export const RunnerLabCompileBundleSchema = z
         allowedMetrics: z.array(AllowedMetricSchema).min(1),
         allowedVisualizations: z.array(AllowedVisualizationSchema).min(1),
         verifierInvariants: z.array(NonEmptyString).min(1),
+        planRequirements: z.array(NonEmptyString).min(1).max(16),
       })
       .strict(),
     experimentPlanSchema: z.record(z.string(), z.json()),

@@ -153,6 +153,10 @@ function bundle(jobId = "runner_job_1"): RunnerLabCompileBundle {
       allowedMetrics: ["accuracy", "roc_auc", "entity_overlap_rate"],
       allowedVisualizations: ["metric_comparison", "entity_overlap"],
       verifierInvariants: ["zero_group_overlap"],
+      planRequirements: [
+        "Use exactly one group holdout with identity retained.",
+        "Use exactly one identity ablation with identity removed.",
+      ],
     },
     experimentPlanSchema: { type: "object" },
     resourceLimits: { wallSeconds: 45, memoryMb: 768, maxRuns: 4 },
@@ -646,6 +650,11 @@ describe("HostedRunnerJobProcessor", () => {
     expect(compiler.repairCalls[0]?.verifierCounterexamples).toEqual(
       rejected.counterexamples,
     );
+    expect(compiler.repairCalls[0]).toMatchObject({
+      sessionId: "session_1",
+      artifactManifestHash: "c".repeat(64),
+      previousCandidatePlan: { schemaVersion: "2" },
+    });
     expect(JSON.stringify(compiler.repairCalls[0])).not.toContain(
       "verifier source",
     );

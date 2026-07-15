@@ -1111,6 +1111,7 @@ export function createApi(options: ApiOptions = {}) {
           allowedMetrics: pack.allowedMetrics,
           allowedVisualizations: pack.allowedVisualizations,
           verifierInvariants: pack.verifierContract.invariants,
+          planRequirements: pack.experimentPlanRules,
         },
         experimentPlanSchema,
         resourceLimits: { wallSeconds: 45, memoryMb: 768, maxRuns: 4 },

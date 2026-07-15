@@ -80,11 +80,13 @@ const HostedConceptPackSchema = z
     allowedMetrics: z.array(z.string().min(1).max(64)).min(1).max(16),
     allowedVisualizations: z.array(z.string().min(1).max(64)).min(1).max(16),
     verifierInvariants: z.array(z.string().min(1).max(128)).min(1).max(24),
+    planRequirements: z.array(z.string().min(1).max(512)).min(1).max(16),
   })
   .strict();
 
 export const CompileHostedExperimentPlanInputSchema =
   BaseCompilationSchema.extend({
+    artifactManifestHash: z.string().regex(/^[a-f0-9]{64}$/i),
     approvedBeliefTest: JsonObjectSchema,
     artifactManifest: JsonObjectSchema,
     conceptPack: HostedConceptPackSchema,
@@ -136,6 +138,7 @@ export const RepairHostedExperimentPlanInputSchema =
       z.string(),
       z.string().regex(/^[a-f0-9]{64}$/i),
     ),
+    previousCandidatePlan: JsonValueSchema,
   }).strict();
 
 export type RepairHostedExperimentPlanInput = z.infer<

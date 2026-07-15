@@ -34,6 +34,7 @@ export interface ConceptPackDefinition {
   allowedOperations: readonly FixedOperationId[];
   allowedMetrics: readonly AllowedMetric[];
   allowedVisualizations: readonly AllowedVisualization[];
+  experimentPlanRules: readonly string[];
   verifierContract: {
     id: string;
     invariants: readonly string[];
@@ -301,6 +302,12 @@ const leakagePack = Object.freeze({
   ],
   allowedMetrics: ["accuracy", "roc_auc", "entity_overlap_rate"],
   allowedVisualizations: ["metric_comparison", "entity_overlap"],
+  experimentPlanRules: [
+    "Use leakage.random_row_split exactly once as the baseline with identity retained.",
+    "Use leakage.group_holdout exactly once with the same seed, model, test fraction, entity field, and identity setting as the baseline.",
+    "Use leakage.identity_ablation exactly once with the same seed, model, test fraction, and entity field as the baseline, changing only dropIdentity to true.",
+    "The baseline and both interventions must use one entity field resolved from the Artifact Manifest.",
+  ],
   verifierContract: {
     id: "leakage-plan-verifier-v2",
     invariants: [
@@ -370,6 +377,13 @@ const imbalancePack = Object.freeze({
     "confusion_matrix",
     "threshold_curve",
     "prevalence_sensitivity",
+  ],
+  experimentPlanRules: [
+    "Use imbalance.majority_baseline exactly once as the baseline with model majority_baseline and observed prevalence.",
+    "Use exactly one imbalance.stratified_holdout, one imbalance.threshold_sweep, and one imbalance.prevalence_sweep intervention.",
+    "Use logistic_regression for all non-baseline runs and one shared seed for every run.",
+    "Change only threshold in the threshold sweep, then keep that threshold fixed while changing prevalence in the prevalence sweep.",
+    "Include every registered imbalance metric and visualization exactly once.",
   ],
   verifierContract: {
     id: "imbalance-plan-verifier-v1",
