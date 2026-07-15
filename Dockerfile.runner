@@ -1,35 +1,70 @@
-FROM node:22-bookworm-slim AS node-runtime
+FROM python:3.12-slim-bookworm@sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b AS python-builder
 
-FROM python:3.12-slim-bookworm
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /build
+
+COPY LICENSE requirements.build.lock.txt pyproject.toml ./
+COPY services/kernel/src ./services/kernel/src
+
+RUN python -m venv /opt/counterlab-build-venv \
+    && /opt/counterlab-build-venv/bin/pip install --require-hashes --only-binary=:all: -r requirements.build.lock.txt \
+    && /opt/counterlab-build-venv/bin/pip wheel --no-build-isolation --no-deps --wheel-dir /wheelhouse .
+
+FROM node:22-bookworm-slim@sha256:d415caac2f1f77b98caaf9415c5f807e14bc8d7bdea62561ea2fef4fbd08a73c AS node-runtime
+
+ENV COREPACK_HOME=/opt/corepack
+
+RUN corepack enable pnpm \
+    && corepack prepare pnpm@11.12.0 --activate
+
+FROM python:3.12-slim-bookworm@sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b
 
 ENV DEBIAN_FRONTEND=noninteractive \
+    BLIS_NUM_THREADS=1 \
+    COREPACK_HOME=/opt/corepack \
+    MKL_NUM_THREADS=1 \
+    NUMEXPR_NUM_THREADS=1 \
+    OMP_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    VECLIB_MAXIMUM_THREADS=1 \
     PATH=/opt/counterlab-venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 COPY --from=node-runtime /usr/local/ /usr/local/
+COPY --from=node-runtime /opt/corepack/ /opt/corepack/
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends ca-certificates passwd util-linux \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 counterlab-codex \
     && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin counterlab-codex \
-    && npm install --global @openai/codex@0.144.4 pnpm@11.12.0 \
     && python -m venv /opt/counterlab-venv
 
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json vitest.config.ts pyproject.toml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json vitest.config.ts pyproject.toml requirements.runner.lock.txt ./
 COPY packages/contracts ./packages/contracts
 COPY packages/codex-client ./packages/codex-client
 COPY packages/session-core ./packages/session-core
 COPY services/hosted-runner ./services/hosted-runner
-COPY services/kernel/src ./services/kernel/src
 COPY fixtures/public/customer_churn.csv ./fixtures/public/customer_churn.csv
 COPY fixtures/public/fraud_rare_event.csv ./fixtures/public/fraud_rare_event.csv
+COPY --from=python-builder /wheelhouse/ /tmp/counterlab-wheelhouse/
 
 RUN pnpm install --frozen-lockfile --filter @counterlab/hosted-runner... \
-    && /opt/counterlab-venv/bin/pip install --no-cache-dir . \
+    && mkdir -p /opt/codex \
+    && cp -a /app/node_modules/.pnpm/@openai+codex@0.144.4-linux-x64/node_modules/@openai/codex/vendor/x86_64-unknown-linux-musl/. /opt/codex/ \
+    && chmod -R a+rX /opt/codex \
+    && ln -s /opt/codex/bin/codex /usr/local/bin/codex \
+    && /opt/counterlab-venv/bin/pip install --no-cache-dir --require-hashes --only-binary=:all: -r requirements.runner.lock.txt \
+    && /opt/counterlab-venv/bin/pip install --no-cache-dir --no-deps --no-index --find-links=/tmp/counterlab-wheelhouse counterlab-kernel==0.1.0 \
+    && /opt/counterlab-venv/bin/pip check \
+    && rm -rf /tmp/counterlab-wheelhouse \
     && mkdir -p /work/jobs /run/counterlab-codex \
     && chmod 700 /work/jobs /run/counterlab-codex \
     && chmod -R go-rwx /app

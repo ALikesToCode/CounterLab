@@ -1,0 +1,47 @@
+# CounterLab authoritative runner runtime.
+# Python 3.12 / Linux amd64 wheels resolved inside the pinned production base.
+# Install with: pip install --require-hashes --only-binary=:all: -r requirements.runner.lock.txt
+attrs==26.1.0 \
+    --hash=sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309
+fastjsonschema==2.21.2 \
+    --hash=sha256:1c797122d0a86c5cace2e54bf4e819c36223b552017172f32c5c024a6b77e463
+joblib==1.5.3 \
+    --hash=sha256:5fc3c5039fc5ca8c0276333a188bbd59d6b7ab37fe6632daa76bc7f9ec18e713
+jsonschema==4.26.0 \
+    --hash=sha256:d489f15263b8d200f8387e64b4c3a75f06629559fb73deb8fdfb525f2dab50ce
+jsonschema-specifications==2025.9.1 \
+    --hash=sha256:98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe
+jupyter_core==5.9.1 \
+    --hash=sha256:ebf87fdc6073d142e114c72c9e29a9d7ca03fad818c5d300ce2adc1fb0743407
+narwhals==2.24.0 \
+    --hash=sha256:42fdedf44e5b2ca7505630d45b4ac3058f38d8485cba9fe1652ca23152df7489
+nbformat==5.10.4 \
+    --hash=sha256:3b48d6c8fbca4b299bf3982ea7db1af21580e4fec269ad087b9e81588891200b
+numpy==2.4.6 \
+    --hash=sha256:90f9849678c75fe7afa2d348ac842c168b0a4d3d61919687216dfc547976d853
+pandas==2.3.3 \
+    --hash=sha256:b3d11d2fda7eb164ef27ffc14b4fcab16a80e1ce67e9f57e19ec0afaf715ba89
+platformdirs==4.10.0 \
+    --hash=sha256:fb516cdb12eb0d857d0cd85a7c57cea4d060bee4578d6cf5a14dfdf8cbf8784a
+python-dateutil==2.9.0.post0 \
+    --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
+pytz==2026.2 \
+    --hash=sha256:04156e608bee23d3792fd45c94ae47fae1036688e75032eea2e3bf0323d1f126
+referencing==0.37.0 \
+    --hash=sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231
+rpds-py==2026.6.3 \
+    --hash=sha256:ecabd69db66de867690f9797f2f8fa27ba501bbc24540cbdbdc649cd15888ba6
+scikit-learn==1.9.0 \
+    --hash=sha256:056c92bb67ad4c28463c2f2653d9701449201e7e7a9e94e321be0f71c4fef2b8
+scipy==1.18.0 \
+    --hash=sha256:1f55797419e16e7f30cf88ffb3113ce0467f00cfe3f70d5c281730b21769bfc2
+six==1.17.0 \
+    --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274
+threadpoolctl==3.6.0 \
+    --hash=sha256:43a0b8fd5a2928500110039e43a5eed8480b918967083ea48dc3ab9f13c4a7fb
+traitlets==5.15.1 \
+    --hash=sha256:770a53705f84b81ac107e83a1b3328ff2dae16094d8fc3cfc004e4b22dfd8e92
+typing_extensions==4.16.0 \
+    --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
+tzdata==2026.3 \
+    --hash=sha256:dc096730c87af6cab1b171c9d532be840741ff5d459015e7f6947bd7d7e54931

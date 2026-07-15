@@ -6,6 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "counterlab-kernel"
 version = "0.1.0"
 description = "Deterministic evidence kernel and external verifier for CounterLab"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
   "nbformat==5.10.4",
