@@ -2872,6 +2872,7 @@ export function createApi(options: ApiOptions = {}) {
         stateVersion: started.version,
         requestedAt: requestNow(options).toISOString(),
         artifactManifestHash: manifestHash,
+        conceptPackVersion: pack.version,
         artifactManifest: sourceArtifact.manifest,
         approvedBeliefTest: current.beliefTest,
         verifiedResultSummary: {

@@ -339,6 +339,7 @@ export class HostedRunnerJobProcessor {
             repairAttempt: repairAttempt as 1 | 2,
             verifierCounterexamples: decision.counterexamples,
             previousOutputHashes: uploaded.outputHashByPath,
+            previousCandidatePlan: uploaded.primaryPlan,
           };
           cursor = await this.consumeCompilerEvents(
             jobId,
@@ -574,6 +575,9 @@ export class HostedRunnerJobProcessor {
   ): CompileHostedPatchPlanInput {
     return {
       sessionId: bundle.sessionId,
+      artifactManifestHash: bundle.artifactManifestHash,
+      sourceArtifactHash: bundle.artifactManifest.fileSha256,
+      conceptPackVersion: bundle.conceptPackVersion,
       generationDirectory,
       approvedBeliefTest: bundle.approvedBeliefTest,
       artifactManifest: bundle.artifactManifest,

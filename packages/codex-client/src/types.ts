@@ -146,6 +146,9 @@ export type RepairHostedExperimentPlanInput = z.infer<
 >;
 
 export const CompileHostedPatchPlanInputSchema = BaseCompilationSchema.extend({
+  artifactManifestHash: z.string().regex(/^[a-f0-9]{64}$/i),
+  sourceArtifactHash: z.string().regex(/^[a-f0-9]{64}$/i),
+  conceptPackVersion: z.string().min(1).max(64),
   approvedBeliefTest: JsonObjectSchema,
   artifactManifest: JsonObjectSchema,
   verifiedResultSummary: JsonObjectSchema,
@@ -172,6 +175,7 @@ export const RepairHostedPatchPlanInputSchema =
       z.string(),
       z.string().regex(/^[a-f0-9]{64}$/i),
     ),
+    previousCandidatePlan: JsonValueSchema,
   }).strict();
 
 export type RepairHostedPatchPlanInput = z.infer<

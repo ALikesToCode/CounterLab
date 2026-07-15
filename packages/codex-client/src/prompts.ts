@@ -150,6 +150,16 @@ Authority boundary:
 - Do not read files, execute notebook cells, inspect environment variables, access parent directories, use the network, or install packages.
 - Finish with concise public status only; do not reveal private reasoning.
 
+Required immutable lineage (copy these values exactly):
+${json({
+  sessionId: input.sessionId,
+  conceptPackVersion: input.conceptPackVersion,
+  artifactManifestHash: input.artifactManifestHash,
+  sourceArtifactHash: input.sourceArtifactHash,
+  verifiedResultHash: input.verifiedResultSummary.resultHash,
+  transferResultHash: input.transferSummary.resultHash,
+})}
+
 Approved Belief Test:
 ${json(input.approvedBeliefTest)}
 
@@ -189,7 +199,10 @@ export function buildRepairHostedPatchPlanPrompt(
 ): string {
   const input = RepairHostedPatchPlanInputSchema.parse(raw);
   return `${renderHostedPatchPlanPrompt(input)}
-This is repair attempt ${input.repairAttempt} of at most 2. Correct only the rejected invariants without changing artifact, result, transfer, or evidence lineage.
+This is repair attempt ${input.repairAttempt} of at most 2. Correct only the rejected invariants and preserve every field that was not rejected. Do not change artifact, result, transfer, or evidence lineage.
+
+Previous candidate Patch Plan to amend:
+${json(input.previousCandidatePlan)}
 
 Previous output hashes:
 ${json(input.previousOutputHashes)}

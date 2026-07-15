@@ -255,6 +255,7 @@ function patchBundle(jobId = "runner_job_patch_1"): RunnerPatchCompileBundle {
     stateVersion: 11,
     requestedAt: "2026-07-14T10:00:00.000Z",
     artifactManifestHash: "c".repeat(64),
+    conceptPackVersion: "2.0.0",
     artifactManifest: compileBundle.artifactManifest,
     approvedBeliefTest: compileBundle.approvedBeliefTest,
     verifiedResultSummary: {
@@ -286,6 +287,7 @@ class FakeCompiler implements CodexCompiler {
   compileCalls = 0;
   patchCompileCalls = 0;
   repairCalls: RepairHostedExperimentPlanInput[] = [];
+  patchRepairCalls: RepairHostedPatchPlanInput[] = [];
 
   constructor(
     private readonly plan: Record<string, unknown>,
@@ -353,6 +355,7 @@ class FakeCompiler implements CodexCompiler {
   async *repairHostedPatchPlan(
     input: RepairHostedPatchPlanInput,
   ): AsyncIterable<CompilerEvent> {
+    this.patchRepairCalls.push(input);
     await this.writePatchCandidate(input.generationDirectory);
     yield {
       type: "final_status",
@@ -752,6 +755,48 @@ describe("HostedRunnerJobProcessor", () => {
       status: "VERIFIED",
       finalEventCursor: 6,
       operationalMetrics: { patchDurationMs: 53 },
+    });
+  });
+
+  it("repairs a Patch Plan from its previous candidate and exact lineage", async () => {
+    const patchPlan = { schemaVersion: "1", planId: "patch_previous" };
+    const compiler = new FakeCompiler(patchPlan);
+    const fixedPatch = new FakeFixedPatch();
+    const rejected: CandidateDecision = {
+      status: "REJECTED",
+      canRepair: true,
+      nextCursor: 4,
+      verifierDurationMs: 5,
+      counterexamples: [
+        {
+          invariant: "allowed_cell_scope",
+          observed: [3],
+          expected: [1],
+          counterexample: "Cell 3 is outside the approved patch scope.",
+        },
+      ],
+    };
+    const controlPlane = new FakeControlPlane(patchBundle(), [
+      rejected,
+      { ...verifiedDecision, nextCursor: 8 },
+    ]);
+    const processor = new HostedRunnerJobProcessor({
+      workspaceRoot: await workspace(),
+      compiler,
+      fixedPatch,
+      controlPlane,
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_6`,
+    });
+
+    await processor.run("runner_job_patch_1");
+
+    expect(compiler.patchRepairCalls[0]).toMatchObject({
+      sessionId: "session_1",
+      artifactManifestHash: "c".repeat(64),
+      sourceArtifactHash: "e".repeat(64),
+      conceptPackVersion: "2.0.0",
+      previousCandidatePlan: patchPlan,
     });
   });
 });

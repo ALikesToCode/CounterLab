@@ -1233,6 +1233,7 @@ export const RunnerPatchCompileBundleSchema = z
     stateVersion: z.number().int().positive(),
     requestedAt: z.iso.datetime({ offset: true }),
     artifactManifestHash: Sha256Schema,
+    conceptPackVersion: NonEmptyString,
     artifactManifest: ArtifactManifestSchema,
     approvedBeliefTest: BeliefTestSchema,
     verifiedResultSummary: z

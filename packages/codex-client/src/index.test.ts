@@ -10,6 +10,7 @@ import {
   buildCompileHostedExperimentPlanPrompt,
   buildCompileHostedPatchPlanPrompt,
   buildRepairHostedExperimentPlanPrompt,
+  buildRepairHostedPatchPlanPrompt,
   CompilerSetupError,
   DisabledCodexCompiler,
   ReplayCodexCompiler,
@@ -147,6 +148,9 @@ function hostedPlanInput(): CompileHostedExperimentPlanInput {
 function hostedPatchInput(): CompileHostedPatchPlanInput {
   return {
     sessionId: "session_test",
+    artifactManifestHash: "e".repeat(64),
+    sourceArtifactHash: "b".repeat(64),
+    conceptPackVersion: "2.0.0",
     generationDirectory,
     approvedBeliefTest: {
       id: "belief_test",
@@ -514,9 +518,40 @@ describe("hosted patch-plan compiler", () => {
 
     expect(prompt).toContain("patch-plan.json");
     expect(prompt).toContain("replace_row_split_with_group_holdout");
+    expect(prompt).toContain('"sessionId": "session_test"');
+    expect(prompt).toContain(`"artifactManifestHash": "${"e".repeat(64)}"`);
+    expect(prompt).toContain(`"verifiedResultHash": "${"c".repeat(64)}"`);
+    expect(prompt).toContain(`"transferResultHash": "${"d".repeat(64)}"`);
     expect(prompt).toMatch(/do not write notebook code/i);
     expect(prompt).not.toContain(generationDirectory);
     expect(prompt).not.toContain("nbformat_minor");
+  });
+
+  it("repairs the prior Patch Plan without rebuilding resolved lineage", () => {
+    const prompt = buildRepairHostedPatchPlanPrompt({
+      ...hostedPatchInput(),
+      repairAttempt: 1,
+      previousOutputHashes: {
+        "patch-plan.json": "1".repeat(64),
+        "public-rationale.md": "2".repeat(64),
+      },
+      previousCandidatePlan: {
+        schemaVersion: "1",
+        planId: "patch_plan_previous",
+        sessionId: "session_test",
+      },
+      verifierCounterexamples: [
+        {
+          invariant: "allowed_cell_scope",
+          observed: [3],
+          expected: [2],
+          counterexample: "Cell 3 is outside the approved patch scope.",
+        },
+      ],
+    });
+
+    expect(prompt).toContain('"planId": "patch_plan_previous"');
+    expect(prompt).toMatch(/preserve every field that was not rejected/i);
   });
 });
 
