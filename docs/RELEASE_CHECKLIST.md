@@ -1,8 +1,7 @@
 # Release checklist
 
-Checked boxes are supported by the current worktree's recorded command output.
-Production/browser/build boxes deliberately remain open until the upgraded
-Worker/Container is exercised.
+Checked boxes are supported by recorded command output from the current
+worktree, a fresh temporary clone, and the deployed Worker/Container.
 
 ## Authority and concepts
 
@@ -50,38 +49,37 @@ Worker/Container is exercised.
 - [x] Constrained generated proof UI has no actions or validity authority.
 - [x] Secret-protected operational diagnostics aggregate timing, repairs,
       tokens, concept/support, and failures without private identifiers.
-- [ ] Upgraded Container image deployed with secrets and migration.
-- [ ] One untouched live leakage notebook completes on the public URL.
-- [ ] One untouched live imbalance notebook completes on the public URL.
-- [ ] Public event reconnect, patch download, proof share, and no-secret check
+- [x] Upgraded Container image deployed with secrets and migration.
+- [x] One untouched live leakage notebook completes on the public URL.
+- [x] One untouched live imbalance notebook completes on the public URL.
+- [x] Public event reconnect, patch download, proof share, and no-secret check
       pass against production.
 
 ## Release commands
 
-- [x] `pnpm test` — 164 root TypeScript, 76 web, 90 Python.
+- [x] `pnpm test` — 170 root TypeScript, 79 web, 136 Python.
 - [x] `pnpm run typecheck`.
 - [x] `pnpm run held-out:run`.
 - [x] `pnpm run format:check`.
-- [x] `python3 scripts/secret-scan.py` — 333 repository files.
-- [x] Fifteen Playwright journeys discovered, including opt-in real hosted
-      leakage and imbalance flows; this is test discovery, not browser
-      execution.
-- [ ] `./scripts/test-all.sh` on the current version (includes browser E2E).
-- [ ] `./scripts/clean-demo.sh` on the current version.
-- [ ] `./scripts/reproduce-session.sh leakage-01` on the current version.
+- [x] `python3 scripts/secret-scan.py` — 334 repository files.
+- [x] Thirteen local CloakBrowser journeys passed; the two credentialed live
+      journeys were skipped locally and passed separately against production.
+- [x] `./scripts/test-all.sh` on the current version (includes browser E2E).
+- [x] `./scripts/clean-demo.sh` on the current version.
+- [x] `./scripts/reproduce-session.sh leakage-01` on the current version.
 - [x] `./scripts/replay-patch.sh leakage-01` — verified patch, group overlap 0.
-- [ ] `./scripts/release-check.sh` on the current version (includes build and
+- [x] `./scripts/release-check.sh` on the current version (includes build and
       secret scan).
-- [ ] Fresh temporary clone release check.
+- [x] Fresh temporary clone release check with locked Node and Python installs.
 
 ## Browser/accessibility
 
-- [ ] Try the 3-minute sample in CloakBrowser.
-- [ ] Live own-notebook leakage and imbalance flows with the configured runner.
-- [ ] Persistent replay label and refresh/event reconnect.
-- [ ] Mobile 390px completion, keyboard-only completion, reduced motion, focus,
+- [x] Try the 3-minute sample in CloakBrowser.
+- [x] Live own-notebook leakage and imbalance flows with the configured runner.
+- [x] Persistent replay label and refresh/event reconnect.
+- [x] Mobile 390px completion, keyboard-only completion, reduced motion, focus,
       contrast, and no horizontal overflow.
 
-The current AGENTS instructions prohibit this agent from running `dev` or
-`build`; the unchecked browser/build/deploy items require a user-started server
-or explicit permission.
+Production release identifiers and the residual held-out limitation are recorded
+in `docs/PROGRESS.md`; no learner-study outcome or formal sandbox proof is
+claimed.

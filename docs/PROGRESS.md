@@ -23,6 +23,12 @@ and resolved all three evidence references to exact notebook cells/outputs. The
 custom base URL remains server-only and provider-neutral in product state and
 copy.
 
+The production control plane is deployed at
+`https://counterlab.cserules.workers.dev` as Worker version
+`06c96067-a679-41ba-8487-fb2ad781c316`. Runner version 9 uses image digest
+`sha256:167a207956b5efc6b28702d905d2eafaad8e0502da75e3df1de3a38a9927a636`;
+Cloudflare reported all 7 instances healthy during the release smoke.
+
 ## Acceptance matrix
 
 | Gate                                         | Status  | Current evidence                                                                                                                                                                                                                          |
@@ -46,32 +52,31 @@ copy.
 | Held-out intake/routing                      | pass    | `counterlab-held-out-v2`: 10/10 cases pass; four leakage, four imbalance, two unsupported.                                                                                                                                                |
 | Held-out fixed full-loop completion          | partial | 7/8 supported notebooks complete Plan verification → fixed result → transfer → verified patch without source edits. Random Forest reaches result/transfer then receives `PATCH_ESTIMATOR_OUTSIDE_CONTRACT`. Human review remains pending. |
 | Learner pilot                                | partial | Paired-crossover protocol, consent/privacy note, randomization, schema, and analysis script exist. No participants or learner outcomes are claimed.                                                                                       |
-| TypeScript/Web/Python suites                 | pass    | `pnpm test`: 164 root TypeScript, 76 web, and 90 Python tests passed. `pnpm run typecheck` passed including generated Worker types.                                                                                                       |
-| New-version browser E2E                      | not run | Fifteen CloakBrowser journeys are defined, including opt-in real hosted leakage and imbalance flows. The current AGENTS instructions prohibit this agent from starting `dev` or `build`; a user-started server or explicit permission is required. |
-| Container image build and production deploy  | not run | Runner image/binding are implemented; the upgraded image has not been built/deployed in this worktree because build commands are prohibited.                                                                                              |
-| Production live runner smoke                 | not run | The existing public deployment predates this Container upgrade. Do not treat its current health as proof of the new runner.                                                                                                               |
-| Clean-clone/release check/secret scan        | partial | Secret scan passed across 333 repository files. The full release/clean-clone script also invokes prohibited build/E2E steps and therefore awaits user execution/permission.                                                              |
+| TypeScript/Web/Python suites                 | pass    | Current-worktree and fresh-clone release gates each passed 170 root TypeScript, 79 web, and 136 Python tests plus root/web/Worker typechecks.                                                                                              |
+| New-version browser E2E                      | pass    | 13 local CloakBrowser journeys passed; two credentialed live journeys were correctly skipped locally. Production separately passed sample/replay (2/2) and untouched leakage/imbalance live flows (2/2), including patch and Proof Bundle downloads. |
+| Container image build and production deploy | pass    | Worker `06c96067-a679-41ba-8487-fb2ad781c316` and runner version 9 are deployed; Cloudflare reported 7/7 healthy instances for the pinned production image digest.                                                                          |
+| Production live runner smoke                | pass    | Both untouched supported notebooks completed live artifact-specific analysis, compile/verify, fixed runs, interactive control, transfer, verified patch, and proof download. A completed compile resumed from cursor 10 with events 11–20. |
+| One-command local demo                      | pass    | `./scripts/clean-demo.sh` regenerated both fixtures, passed 5 focused tests, confirmed current local D1 migrations, and served healthy kernel and Worker endpoints before its exact processes were stopped.                               |
+| Clean-clone/release check/secret scan       | pass    | A fresh temporary clone installed both locked dependency sets and passed `./scripts/release-check.sh`; the final scan found no repository secret pattern across 334 files.                                                               |
 
 ## Latest verified commands
 
-- `pnpm test` — 164 root TypeScript, 76 web, 90 Python passed.
-- `pnpm run typecheck` — root, web, and Worker typechecks passed.
-- `pnpm exec vitest run --config evals/held-out/vitest.config.ts` — 6 tests passed.
-- `pnpm run held-out:run` — intake 10/10; fixed completion 7/8.
-- `./scripts/run-mutations.sh leakage` and `imbalance` — 12/12 detected in each matrix.
-- `pnpm --filter @counterlab/web exec playwright test --config playwright.config.ts --list` — 15 CloakBrowser journeys discovered; execution not claimed.
-- `pnpm run format:check` — passed.
-- `python3 scripts/secret-scan.py` — passed across 333 repository files.
+- `./scripts/release-check.sh` — passed in the current worktree and a fresh temporary clone: 170 root TypeScript, 79 web, 136 Python, 13 local browser journeys with 2 credentialed live skips, both 12/12 mutation matrices, sandbox smoke, production build, replay reproduction, patch verification, and a 334-file secret scan.
+- `./scripts/production-smoke.sh` against `https://counterlab.cserules.workers.dev` — capability and public-asset secret checks passed; sample/replay 2/2 and real untouched leakage/imbalance 2/2 passed.
+- `./scripts/clean-demo.sh` — 5 focused tests passed; local kernel and Worker health responses were verified independently.
+- `pnpm run held-out:run` — intake 10/10; fixed completion 7/8, with the allowlist refusal recorded rather than bypassed.
+- `./scripts/reproduce-session.sh leakage-01` — reproduced canonical result `2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0`, 12/12 mutations, and verified patch.
 - `./scripts/replay-patch.sh leakage-01` — `PATCH VERIFIED`, group overlap 0.
-- `PYTHONPATH=services/kernel/src .venv/bin/python scripts/collect-achieved-metrics.py` — regenerated `docs/ACHIEVED_METRICS.json` from fixed kernels/verifiers.
+- Protected production diagnostic probe — unauthenticated 401, authenticated 200, aggregate-only schema.
+- Production event cursor probe — a verified 20-event live compile returned events 11–20 when resumed with `after=10`.
 - `pnpm run belief:live:verify` — real configured analyst output validated and resolved; approximately 99 seconds on this environment.
 
 ## Highest-risk remaining issue
 
-The highest release risk is operational rather than hidden sample authority: the
-new Container runner has comprehensive in-repository integration coverage but no
-fresh public deployment/browser smoke. The next authorized action must build and
-deploy that exact image, run one untouched live artifact through the public URL,
-reconnect its event stream, download its patch/proof, scan for secrets, and then
-record the resulting deployment identifier. Cloudflare Containers remain a beta
-runtime and no formal sandbox claim is made.
+The highest remaining risk is upstream Runtime Codex turn intermittency. The
+runner now fails closed, restarts only before material compiler output, caps the
+restart budget at three turns, revokes staged credentials after initialization,
+and exposes a typed retry path. Production smoke proved both first-attempt
+success and recovery after a failed compile, but this cannot remove upstream
+availability risk. Cloudflare Containers remain a beta runtime, and no formal
+sandbox proof is claimed.
