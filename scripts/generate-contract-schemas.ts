@@ -5,6 +5,8 @@ import { z } from "zod";
 
 import {
   BeliefSpecV2Schema,
+  EpistemicObservationV1Schema,
+  EvidenceVerdictSchema,
   ExperimentPlanV2Schema,
   PatchPlanV1Schema,
 } from "../packages/contracts/src/index.js";
@@ -27,6 +29,18 @@ const schemas = [
     destinations: [
       resolve(root, "packages/contracts/schemas/belief-spec-v2.schema.json"),
     ],
+  },
+  {
+    fileName: "epistemic-observation-v1.schema.json",
+    id: "https://counterlab.dev/schemas/epistemic-observation-v1.schema.json",
+    title: "CounterLab epistemic observation v1",
+    schema: EpistemicObservationV1Schema,
+  },
+  {
+    fileName: "evidence-verdict-v1.schema.json",
+    id: "https://counterlab.dev/schemas/evidence-verdict-v1.schema.json",
+    title: "CounterLab evidence verdict v1",
+    schema: EvidenceVerdictSchema,
   },
   {
     fileName: "experiment-ir-v5.schema.json",

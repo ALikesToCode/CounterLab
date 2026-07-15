@@ -9,6 +9,8 @@ import {
   ConceptIdSchema,
   ConceptRoutingDecisionSchema,
   EvidenceEventSchema,
+  EpistemicObservationV1Schema,
+  EvidenceVerdictSchema,
   ExperimentPlanSchema,
   ExperimentPlanV2Schema,
   HostedVerifiedResultSetV2Schema,
@@ -35,6 +37,115 @@ import {
   assertRunnerJobTransition,
   migrateBeliefTestV1ToV2,
 } from "./index.js";
+
+describe("epistemic evidence contracts", () => {
+  const observation = {
+    schemaVersion: "1",
+    irHash: "a".repeat(64),
+    resultHash: "b".repeat(64),
+    selectedCandidateId: "group-holdout",
+    technicalVerification: {
+      status: "VERIFIED",
+      reportHash: "c".repeat(64),
+    },
+    changedVariableIds: ["split_strategy"],
+    controlBindings: [
+      {
+        controlId: "model",
+        beforeHash: "d".repeat(64),
+        afterHash: "d".repeat(64),
+      },
+    ],
+    observableBindings: [
+      {
+        observableId: "accuracy",
+        resultPath: "/runs/group_split/accuracy",
+        resultHash: "b".repeat(64),
+      },
+    ],
+    outcome: {
+      kind: "HYPOTHESIS_PATTERN",
+      hypothesisId: "competing",
+      patternId: "leakage.material-gap",
+    },
+    scope: "unseen customers in the documented fixture",
+    learnerFacingClaims: [
+      "Zero entity overlap was verified for the group holdout run.",
+    ],
+  } as const;
+
+  it("accepts a signed-result observation without raw result values", () => {
+    expect(EpistemicObservationV1Schema.parse(observation)).toEqual(
+      observation,
+    );
+  });
+
+  it("accepts supports, inconclusive, and rejected verdicts", () => {
+    expect(
+      EvidenceVerdictSchema.parse({
+        schemaVersion: "1",
+        kind: "SUPPORTS",
+        hypothesisId: "competing",
+        scope: observation.scope,
+        resultHash: observation.resultHash,
+        irHash: observation.irHash,
+        technicalReportHash: observation.technicalVerification.reportHash,
+        verifierVersion: "epistemic-verifier-v1",
+      }).kind,
+    ).toBe("SUPPORTS");
+    expect(
+      EvidenceVerdictSchema.parse({
+        schemaVersion: "1",
+        kind: "INCONCLUSIVE",
+        reasonCode: "OUTCOME_BETWEEN_DECISIVE_PATTERNS",
+        nextExperimentId: "group-holdout-plus-ablation",
+        scope: observation.scope,
+        resultHash: observation.resultHash,
+        irHash: observation.irHash,
+        technicalReportHash: observation.technicalVerification.reportHash,
+        verifierVersion: "epistemic-verifier-v1",
+      }).kind,
+    ).toBe("INCONCLUSIVE");
+    expect(
+      EvidenceVerdictSchema.parse({
+        schemaVersion: "1",
+        kind: "REJECTED",
+        findingIds: ["finding_1"],
+        resultReleased: false,
+        irHash: observation.irHash,
+        technicalReportHash: observation.technicalVerification.reportHash,
+        verifierVersion: "epistemic-verifier-v1",
+      }).kind,
+    ).toBe("REJECTED");
+  });
+
+  it("fails closed on unresolved result paths and rejected result release", () => {
+    expect(() =>
+      EpistemicObservationV1Schema.parse({
+        ...observation,
+        observableBindings: [
+          {
+            observableId: "accuracy",
+            resultPath: "../../hidden/result.json",
+            resultHash: observation.resultHash,
+          },
+        ],
+      }),
+    ).toThrow();
+    expect(() =>
+      EvidenceVerdictSchema.parse({
+        schemaVersion: "1",
+        kind: "REJECTED",
+        findingIds: ["finding_1"],
+        resultReleased: true,
+        resultHash: observation.resultHash,
+        irHash: observation.irHash,
+        technicalReportHash: observation.technicalVerification.reportHash,
+        verifierVersion: "epistemic-verifier-v1",
+      }),
+    ).toThrow();
+  });
+});
 
 describe("ArtifactManifestSchema", () => {
   it("accepts a supported manifest with exact evidence metadata", () => {

@@ -1,0 +1,160 @@
+{
+  "$id": "https://counterlab.dev/schemas/evidence-verdict-v1.schema.json",
+  "title": "CounterLab evidence verdict v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "const": "1"
+        },
+        "irHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "technicalReportHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "verifierVersion": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+        },
+        "kind": {
+          "type": "string",
+          "const": "SUPPORTS"
+        },
+        "hypothesisId": {
+          "type": "string",
+          "enum": [
+            "current",
+            "competing"
+          ]
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "resultHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "irHash",
+        "technicalReportHash",
+        "verifierVersion",
+        "kind",
+        "hypothesisId",
+        "scope",
+        "resultHash"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "const": "1"
+        },
+        "irHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "technicalReportHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "verifierVersion": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+        },
+        "kind": {
+          "type": "string",
+          "const": "INCONCLUSIVE"
+        },
+        "reasonCode": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{0,95}$"
+        },
+        "nextExperimentId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "resultHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "irHash",
+        "technicalReportHash",
+        "verifierVersion",
+        "kind",
+        "reasonCode",
+        "scope",
+        "resultHash"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "const": "1"
+        },
+        "irHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "technicalReportHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "verifierVersion": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+        },
+        "kind": {
+          "type": "string",
+          "const": "REJECTED"
+        },
+        "findingIds": {
+          "minItems": 1,
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+          }
+        },
+        "resultReleased": {
+          "type": "boolean",
+          "const": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "irHash",
+        "technicalReportHash",
+        "verifierVersion",
+        "kind",
+        "findingIds",
+        "resultReleased"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

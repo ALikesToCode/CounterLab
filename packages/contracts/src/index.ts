@@ -319,6 +319,161 @@ export const AllowedVisualizationSchema = z.enum([
 
 export type AllowedVisualization = z.infer<typeof AllowedVisualizationSchema>;
 
+const EpistemicTokenIdSchema = z
+  .string()
+  .trim()
+  .regex(
+    /^[a-z][a-z0-9._:-]{0,95}$/,
+    "expected a bounded lowercase contract token",
+  );
+const EpistemicReasonCodeSchema = z
+  .string()
+  .regex(/^[A-Z][A-Z0-9_]{0,95}$/, "expected an uppercase reason code");
+const SignedResultPathSchema = z
+  .string()
+  .max(256)
+  .regex(
+    /^\/(?:[A-Za-z0-9_-]+)(?:\/[A-Za-z0-9_-]+)*$/,
+    "expected a bounded signed-result JSON pointer",
+  );
+
+const TechnicalVerificationBindingSchema = z
+  .object({
+    status: z.enum(["VERIFIED", "REJECTED"]),
+    reportHash: Sha256Schema,
+  })
+  .strict();
+
+const ControlBindingSchema = z
+  .object({
+    controlId: EpistemicTokenIdSchema,
+    beforeHash: Sha256Schema,
+    afterHash: Sha256Schema,
+  })
+  .strict();
+
+const ObservableBindingSchema = z
+  .object({
+    observableId: AllowedMetricSchema,
+    resultPath: SignedResultPathSchema,
+    resultHash: Sha256Schema,
+  })
+  .strict();
+
+const EpistemicOutcomeSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("HYPOTHESIS_PATTERN"),
+      hypothesisId: z.enum(["current", "competing"]),
+      patternId: EpistemicTokenIdSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("INCONCLUSIVE"),
+      conditionId: EpistemicTokenIdSchema,
+      nextExperimentId: EpistemicTokenIdSchema.optional(),
+    })
+    .strict(),
+  z.object({ kind: z.literal("UNRESOLVED") }).strict(),
+]);
+
+export const EpistemicObservationV1Schema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    irHash: Sha256Schema,
+    resultHash: Sha256Schema,
+    selectedCandidateId: EpistemicTokenIdSchema,
+    technicalVerification: TechnicalVerificationBindingSchema,
+    changedVariableIds: z.array(EpistemicTokenIdSchema).max(12),
+    controlBindings: z.array(ControlBindingSchema).min(1).max(20),
+    observableBindings: z.array(ObservableBindingSchema).min(1).max(20),
+    outcome: EpistemicOutcomeSchema,
+    boundaryBinding: z
+      .object({
+        sweepId: EpistemicTokenIdSchema,
+        resultPath: SignedResultPathSchema,
+        resultHash: Sha256Schema,
+      })
+      .strict()
+      .optional(),
+    scope: NonEmptyString.max(500),
+    learnerFacingClaims: z.array(NonEmptyString.max(500)).max(8),
+  })
+  .strict()
+  .superRefine((observation, context) => {
+    const controlIds = new Set<string>();
+    for (const [index, binding] of observation.controlBindings.entries()) {
+      if (controlIds.has(binding.controlId)) {
+        context.addIssue({
+          code: "custom",
+          message: `duplicate control binding: ${binding.controlId}`,
+          path: ["controlBindings", index, "controlId"],
+        });
+      }
+      controlIds.add(binding.controlId);
+    }
+    const observableIds = new Set<string>();
+    for (const [index, binding] of observation.observableBindings.entries()) {
+      if (observableIds.has(binding.observableId)) {
+        context.addIssue({
+          code: "custom",
+          message: `duplicate observable binding: ${binding.observableId}`,
+          path: ["observableBindings", index, "observableId"],
+        });
+      }
+      observableIds.add(binding.observableId);
+    }
+  });
+
+export type EpistemicObservationV1 = z.infer<
+  typeof EpistemicObservationV1Schema
+>;
+
+export const EpistemicFindingCodeSchema = z.enum([
+  "NON_DISCRIMINATING_EXPERIMENT",
+  "CONFOUNDED_INTERVENTION",
+  "MISSING_DECISIVE_PATTERN",
+  "UNRESOLVED_OUTCOME",
+  "CLAIM_EXCEEDS_EVIDENCE",
+  "INCONCLUSIVE_NOT_REPRESENTED",
+  "BOUNDARY_SWEEP_UNAUTHORIZED",
+  "RESULT_BINDING_MISMATCH",
+  "TECHNICAL_VERIFICATION_FAILED",
+]);
+
+export type EpistemicFindingCode = z.infer<typeof EpistemicFindingCodeSchema>;
+
+const EvidenceVerdictBaseSchema = z.object({
+  schemaVersion: z.literal("1"),
+  irHash: Sha256Schema,
+  technicalReportHash: Sha256Schema,
+  verifierVersion: EpistemicTokenIdSchema,
+});
+
+export const EvidenceVerdictSchema = z.discriminatedUnion("kind", [
+  EvidenceVerdictBaseSchema.extend({
+    kind: z.literal("SUPPORTS"),
+    hypothesisId: z.enum(["current", "competing"]),
+    scope: NonEmptyString.max(500),
+    resultHash: Sha256Schema,
+  }).strict(),
+  EvidenceVerdictBaseSchema.extend({
+    kind: z.literal("INCONCLUSIVE"),
+    reasonCode: EpistemicReasonCodeSchema,
+    nextExperimentId: EpistemicTokenIdSchema.optional(),
+    scope: NonEmptyString.max(500),
+    resultHash: Sha256Schema,
+  }).strict(),
+  EvidenceVerdictBaseSchema.extend({
+    kind: z.literal("REJECTED"),
+    findingIds: z.array(EpistemicTokenIdSchema).min(1).max(20),
+    resultReleased: z.literal(false),
+  }).strict(),
+]);
+
+export type EvidenceVerdict = z.infer<typeof EvidenceVerdictSchema>;
+
 const LeakageFixedRunSpecSchema = z
   .object({
     concept: z.literal("entity_leakage"),

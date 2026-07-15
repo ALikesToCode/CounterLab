@@ -1,0 +1,237 @@
+{
+  "$id": "https://counterlab.dev/schemas/epistemic-observation-v1.schema.json",
+  "title": "CounterLab epistemic observation v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1"
+    },
+    "irHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "resultHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "selectedCandidateId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+    },
+    "technicalVerification": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "VERIFIED",
+            "REJECTED"
+          ]
+        },
+        "reportHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "status",
+        "reportHash"
+      ],
+      "additionalProperties": false
+    },
+    "changedVariableIds": {
+      "maxItems": 12,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+      }
+    },
+    "controlBindings": {
+      "minItems": 1,
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "controlId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+          },
+          "beforeHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "afterHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "controlId",
+          "beforeHash",
+          "afterHash"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "observableBindings": {
+      "minItems": 1,
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "observableId": {
+            "type": "string",
+            "enum": [
+              "accuracy",
+              "roc_auc",
+              "entity_overlap_rate",
+              "precision",
+              "recall",
+              "f1",
+              "pr_auc",
+              "confusion_matrix",
+              "prevalence"
+            ]
+          },
+          "resultPath": {
+            "type": "string",
+            "maxLength": 256,
+            "pattern": "^\\/(?:[A-Za-z0-9_-]+)(?:\\/[A-Za-z0-9_-]+)*$"
+          },
+          "resultHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "observableId",
+          "resultPath",
+          "resultHash"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "outcome": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "HYPOTHESIS_PATTERN"
+            },
+            "hypothesisId": {
+              "type": "string",
+              "enum": [
+                "current",
+                "competing"
+              ]
+            },
+            "patternId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+            }
+          },
+          "required": [
+            "kind",
+            "hypothesisId",
+            "patternId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "INCONCLUSIVE"
+            },
+            "conditionId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+            },
+            "nextExperimentId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+            }
+          },
+          "required": [
+            "kind",
+            "conditionId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "UNRESOLVED"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "boundaryBinding": {
+      "type": "object",
+      "properties": {
+        "sweepId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+        },
+        "resultPath": {
+          "type": "string",
+          "maxLength": 256,
+          "pattern": "^\\/(?:[A-Za-z0-9_-]+)(?:\\/[A-Za-z0-9_-]+)*$"
+        },
+        "resultHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "sweepId",
+        "resultPath",
+        "resultHash"
+      ],
+      "additionalProperties": false
+    },
+    "scope": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "learnerFacingClaims": {
+      "maxItems": 8,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "irHash",
+    "resultHash",
+    "selectedCandidateId",
+    "technicalVerification",
+    "changedVariableIds",
+    "controlBindings",
+    "observableBindings",
+    "outcome",
+    "scope",
+    "learnerFacingClaims"
+  ],
+  "additionalProperties": false
+}
