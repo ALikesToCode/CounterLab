@@ -50,13 +50,32 @@ import sys
 payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
 if payload.pop("schemaVersion", None) != "1":
     raise SystemExit("live smoke evidence schema is invalid")
-if payload.pop("concept", None) != sys.argv[2]:
+concept = payload.pop("concept", None)
+if concept != sys.argv[2]:
     raise SystemExit("live smoke evidence concept is invalid")
+authority_keys = {
+    "duplicateCompileReused",
+    "reconnectedFromCursor",
+    "cancellationAcknowledged",
+    "cancelledWithoutResult",
+    "duplicateCancelReused",
+}
+authority = {
+    key: payload.pop(key)
+    for key in list(payload)
+    if key in authority_keys
+}
+if concept == "entity_leakage":
+    if set(authority) != authority_keys or not all(value is True for value in authority.values()):
+        raise SystemExit("live leakage authority checks are incomplete")
+elif authority:
+    raise SystemExit("unexpected authority checks for this concept")
 if not payload or any(
     not isinstance(value, str) or re.fullmatch(r"[a-f0-9]{64}", value) is None
     for value in payload.values()
 ):
     raise SystemExit("live smoke evidence hashes are invalid")
+payload.update(authority)
 print(json.dumps(payload, separators=(",", ":")))
 PY
 }

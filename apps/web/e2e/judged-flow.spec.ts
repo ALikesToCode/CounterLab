@@ -24,6 +24,13 @@ async function writeLiveSmokeEvidence(
   concept: "entity_leakage" | "class_imbalance",
   proofBody: string,
   patchedNotebookPath: string,
+  authorityChecks?: {
+    duplicateCompileReused: boolean;
+    reconnectedFromCursor: boolean;
+    cancellationAcknowledged: boolean;
+    cancelledWithoutResult: boolean;
+    duplicateCancelReused: boolean;
+  },
 ): Promise<void> {
   const destination = process.env.COUNTERLAB_E2E_EVIDENCE_PATH;
   if (destination === undefined || destination.length === 0) return;
@@ -45,12 +52,59 @@ async function writeLiveSmokeEvidence(
         proofBundleSha256: sha256(proofBody),
         proofContentHash: proof.integrity.contentHash,
         eventChainHead: proof.integrity.eventChainHead,
+        ...authorityChecks,
       },
       null,
       2,
     )}\n`,
     { encoding: "utf8", mode: 0o600 },
   );
+}
+
+type BrowserRunnerCheckpoint = {
+  sessionId: string;
+  jobId: string;
+  cursor: number;
+};
+
+async function browserRunnerCheckpoint(
+  page: Page,
+): Promise<BrowserRunnerCheckpoint | null> {
+  return page.evaluate(() => {
+    const sessionId = window.localStorage.getItem("counterlab.sessionId");
+    if (sessionId === null) return null;
+    const activeBody = window.localStorage.getItem(
+      `counterlab.activeRunnerJob.${encodeURIComponent(sessionId)}`,
+    );
+    if (activeBody === null) return null;
+    try {
+      const active = JSON.parse(activeBody) as {
+        sessionId?: unknown;
+        jobId?: unknown;
+      };
+      if (active.sessionId !== sessionId || typeof active.jobId !== "string") {
+        return null;
+      }
+      const eventBody = window.localStorage.getItem(
+        `counterlab.runnerEvents.${encodeURIComponent(sessionId)}.${encodeURIComponent(active.jobId)}`,
+      );
+      if (eventBody === null) return null;
+      const eventSnapshot = JSON.parse(eventBody) as { cursor?: unknown };
+      if (
+        typeof eventSnapshot.cursor !== "number" ||
+        eventSnapshot.cursor <= 0
+      ) {
+        return null;
+      }
+      return {
+        sessionId,
+        jobId: active.jobId,
+        cursor: eventSnapshot.cursor,
+      };
+    } catch {
+      return null;
+    }
+  });
 }
 
 async function reset(page: Page) {
@@ -682,6 +736,88 @@ test("a configured hosted runner completes an untouched leakage notebook", async
   await page.getByLabel(/Confidence/i).fill("84");
   await page.getByRole("button", { name: /Lock my answer/i }).click();
 
+  await expect
+    .poll(async () => (await browserRunnerCheckpoint(page))?.cursor ?? 0, {
+      timeout: 120_000,
+      message: "the live compiler should persist a nonzero public cursor",
+    })
+    .toBeGreaterThan(0);
+  const initialCheckpoint = await browserRunnerCheckpoint(page);
+  expect(initialCheckpoint).not.toBeNull();
+
+  const duplicateCompile = await page.evaluate(async (sessionId) => {
+    const response = await fetch(
+      `/api/sessions/${encodeURIComponent(sessionId)}/lab/compile`,
+      { method: "POST" },
+    );
+    return { status: response.status, body: await response.json() };
+  }, initialCheckpoint!.sessionId);
+  expect(duplicateCompile.status).toBe(202);
+  expect(duplicateCompile.body).toMatchObject({
+    ok: true,
+    data: {
+      reused: true,
+      runnerJob: { jobId: initialCheckpoint!.jobId },
+    },
+  });
+
+  const resumedRequest = page.waitForRequest(
+    (request) => {
+      const url = new URL(request.url());
+      return (
+        url.pathname.includes(`/jobs/${initialCheckpoint!.jobId}/events`) &&
+        Number(url.searchParams.get("after")) > 0
+      );
+    },
+    { timeout: 60_000 },
+  );
+  await page.reload();
+  const resumedAfter = Number(
+    new URL((await resumedRequest).url()).searchParams.get("after"),
+  );
+  expect(resumedAfter).toBeGreaterThan(0);
+  await expect(
+    page.getByRole("button", { name: /Cancel this test/i }),
+  ).toBeVisible();
+
+  const cancelResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().includes(`/jobs/${initialCheckpoint!.jobId}/cancel`),
+  );
+  await page.getByRole("button", { name: /Cancel this test/i }).click();
+  const cancelBody = await (await cancelResponse).json();
+  expect(cancelBody).toMatchObject({
+    ok: true,
+    data: {
+      state: "LAB_REJECTED",
+      runnerAcknowledged: true,
+      runnerJob: { status: "CANCELLED" },
+    },
+  });
+  expect(cancelBody.data.verifiedResult).toBeUndefined();
+  await expect(
+    page.getByRole("heading", { name: /The runner stopped safely/i }),
+  ).toBeVisible();
+
+  const duplicateCancel = await page.evaluate(async ({ sessionId, jobId }) => {
+    const response = await fetch(
+      `/api/sessions/${encodeURIComponent(sessionId)}/jobs/${encodeURIComponent(jobId)}/cancel`,
+      { method: "POST" },
+    );
+    return { status: response.status, body: await response.json() };
+  }, initialCheckpoint!);
+  expect(duplicateCancel.status).toBe(200);
+  expect(duplicateCancel.body).toMatchObject({
+    ok: true,
+    data: {
+      reused: true,
+      runnerJob: { status: "CANCELLED" },
+    },
+  });
+
+  await page.getByRole("button", { name: /Retry protected compile/i }).click();
+
   await waitForVerifiedLiveCompile(page);
   await page.getByRole("button", { name: /Show me what happened/i }).click();
   await expect(
@@ -741,6 +877,13 @@ test("a configured hosted runner completes an untouched leakage notebook", async
     "entity_leakage",
     proofBody,
     patchedNotebookPath!,
+    {
+      duplicateCompileReused: duplicateCompile.body.data.reused === true,
+      reconnectedFromCursor: resumedAfter > 0,
+      cancellationAcknowledged: cancelBody.data.runnerAcknowledged === true,
+      cancelledWithoutResult: cancelBody.data.verifiedResult === undefined,
+      duplicateCancelReused: duplicateCancel.body.data.reused === true,
+    },
   );
 });
 

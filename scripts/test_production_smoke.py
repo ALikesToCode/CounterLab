@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import http.server
+import json
 import pathlib
 import subprocess
 import sys
@@ -46,6 +47,15 @@ def _scanner_source() -> str:
         encoding="utf-8"
     )
     marker = 'python3 - "${BASE_URL}" "${TMP_DIR}" <<\'PY\'\n'
+    start = script.index(marker) + len(marker)
+    return script[start : script.index("\nPY\n", start)]
+
+
+def _live_evidence_source() -> str:
+    script = pathlib.Path(__file__).with_name("production-smoke.sh").read_text(
+        encoding="utf-8"
+    )
+    marker = 'python3 - "$1" "$2" <<\'PY\'\n'
     start = script.index(marker) + len(marker)
     return script[start : script.index("\nPY\n", start)]
 
@@ -169,6 +179,69 @@ def test_smoke_report_rejects_conflicts_secrets_and_credential_urls() -> None:
             )
 
 
+def test_live_leakage_evidence_requires_every_operational_authority_check() -> None:
+    authority = {
+        "duplicateCompileReused": True,
+        "reconnectedFromCursor": True,
+        "cancellationAcknowledged": True,
+        "cancelledWithoutResult": True,
+        "duplicateCancelReused": True,
+    }
+    with tempfile.TemporaryDirectory() as destination:
+        path = pathlib.Path(destination) / "live-evidence.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "schemaVersion": "1",
+                    "concept": "entity_leakage",
+                    "resultHash": "a" * 64,
+                    **authority,
+                }
+            ),
+            encoding="utf-8",
+        )
+        accepted = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                _live_evidence_source(),
+                str(path),
+                "entity_leakage",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert accepted.returncode == 0, accepted.stderr
+        assert json.loads(accepted.stdout)["reconnectedFromCursor"] is True
+
+        path.write_text(
+            json.dumps(
+                {
+                    "schemaVersion": "1",
+                    "concept": "entity_leakage",
+                    "resultHash": "a" * 64,
+                    **{**authority, "cancelledWithoutResult": False},
+                }
+            ),
+            encoding="utf-8",
+        )
+        rejected = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                _live_evidence_source(),
+                str(path),
+                "entity_leakage",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert rejected.returncode != 0
+        assert "authority checks are incomplete" in rejected.stderr
+
+
 def test_production_smoke_wires_readiness_modes_and_json_release_evidence() -> None:
     script = pathlib.Path(__file__).with_name("production-smoke.sh").read_text(
         encoding="utf-8"
@@ -180,6 +253,14 @@ def test_production_smoke_wires_readiness_modes_and_json_release_evidence() -> N
     assert "Production stage" in script
     assert 'local evidence_json="${7:-}"' in script
     assert 'evidence_json="{}"' in script
+    for authority_check in (
+        "duplicateCompileReused",
+        "reconnectedFromCursor",
+        "cancellationAcknowledged",
+        "cancelledWithoutResult",
+        "duplicateCancelReused",
+    ):
+        assert authority_check in script
     for stage_id in (
         "public-readiness",
         "capability-health",
