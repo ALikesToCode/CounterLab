@@ -319,4 +319,24 @@ describe("concept-pack registry", () => {
       );
     }
   });
+
+  it("deep-freezes every released authority graph", () => {
+    for (const pack of releasedConceptPacks()) {
+      expect(Object.isFrozen(pack)).toBe(true);
+      expect(Object.isFrozen(pack.scientificMethod)).toBe(true);
+      expect(Object.isFrozen(pack.scientificMethod.scoringPolicy)).toBe(true);
+      expect(Object.isFrozen(pack.scientificMethod.epistemic)).toBe(true);
+      expect(Object.isFrozen(pack.scientificMethod.epistemic.policy)).toBe(
+        true,
+      );
+      expect(
+        Object.isFrozen(pack.scientificMethod.epistemic.policy.approvedClaims),
+      ).toBe(true);
+      expect(() => {
+        (
+          pack.scientificMethod.epistemic.policy.approvedClaims as string[]
+        ).push("Untrusted widened claim");
+      }).toThrow();
+    }
+  });
 });

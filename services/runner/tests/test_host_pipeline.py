@@ -159,7 +159,7 @@ def test_host_pipeline_computes_truth_and_invokes_verifier_outside_container(
     assert outcome.status == "VERIFIED"
     assert outcome.result is not None
     assert outcome.result["resultHash"] == (
-        "2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0"
+        "a6ae7652e04e4d70196f991c63b8f7bcb3b76f8c4ab833d3ce2b626df0ab6c94"
     )
     assert outcome.verification is not None
     assert outcome.verification["status"] == "VERIFIED"

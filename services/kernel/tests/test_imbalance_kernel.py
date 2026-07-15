@@ -41,6 +41,14 @@ def test_fixed_kernel_exposes_why_accuracy_is_insufficient() -> None:
     assert lower["predictedPositiveRate"] > model["predictedPositiveRate"]  # type: ignore[operator]
     assert rarer["prevalence"] < lower["prevalence"]  # type: ignore[operator]
     assert rarer["metrics"]["precision"] <= lower["metrics"]["precision"]  # type: ignore[index,operator]
+    assert model["scoreFingerprint"] == lower["scoreFingerprint"]
+    assert model["evaluationSetFingerprint"] == lower["evaluationSetFingerprint"]
+    assert model["evaluationSetFingerprint"] == majority["evaluationSetFingerprint"]
+    assert rarer["evaluationSetFingerprint"] != lower["evaluationSetFingerprint"]
+    assert rarer["scoreFingerprint"] != lower["scoreFingerprint"]
+    assert model["pipelineFingerprint"] == lower["pipelineFingerprint"]
+    assert model["pipelineFingerprint"] == rarer["pipelineFingerprint"]
+    assert majority["pipelineFingerprint"] != model["pipelineFingerprint"]
 
     for run in result["runs"]:
         matrix = run["confusionMatrix"]

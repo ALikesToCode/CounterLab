@@ -6,10 +6,15 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from .artifacts import generate_public_artifacts
-from .canonical import canonical_json
+from .canonical import canonical_json, sha256_json
 from .experiment import run_leakage_experiment
 from .fixture import generate_leakage_fixture
-from .imbalance import generate_imbalance_fixture, run_imbalance_experiment
+from .imbalance import (
+    canonical_imbalance_run_specs,
+    generate_imbalance_fixture,
+    run_imbalance_experiment,
+    run_imbalance_plan,
+)
 from .imbalance_transfer import evaluate_manufacturing_transfer
 from .imbalance_verifier import (
     critical_imbalance_mutations,
@@ -48,8 +53,18 @@ def _mutations_command(args: argparse.Namespace) -> int:
         verifier = verify_candidate
     elif args.concept == "imbalance":
         seed = 2603 if args.seed is None else args.seed
-        reference = run_imbalance_experiment(
-            generate_imbalance_fixture(seed=seed), seed=seed
+        reference = run_imbalance_plan(
+            generate_imbalance_fixture(seed=seed),
+            canonical_imbalance_run_specs(seed),
+            plan_id="mutation-reference-imbalance-v2",
+            session_id="mutation-benchmark",
+            artifact_manifest_hash=sha256_json(
+                {
+                    "fixture": "public-imbalance-v1",
+                    "purpose": "mutation-reference",
+                }
+            ),
+            concept_pack_version="1.0.0",
         )
         mutations = critical_imbalance_mutations(reference)
         verifier = verify_imbalance_candidate

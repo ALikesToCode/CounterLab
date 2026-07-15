@@ -199,6 +199,7 @@ async function result(
         seed: spec.seed,
         inputFingerprint: fixtureHash,
         featureSetFingerprint: ablation ? "6".repeat(64) : "7".repeat(64),
+        pipelineFingerprint: "5".repeat(64),
         metrics: {
           accuracy: group ? 0.59 : ablation ? 0.61 : 0.985,
           rocAuc: group ? 0.64 : ablation ? 0.66 : 0.99,
@@ -404,13 +405,25 @@ describe("hosted Experiment Plan verifier", () => {
         prevalence: rounded((matrix.fn + matrix.tp) / total),
         predictedPositiveRate: rounded((matrix.fp + matrix.tp) / total),
         featureSetFingerprint: "8".repeat(64),
+        pipelineFingerprint:
+          spec.model === "majority_baseline" ? "1".repeat(64) : "2".repeat(64),
+        evaluationSetFingerprint:
+          spec.prevalenceScenario === "observed"
+            ? "3".repeat(64)
+            : "4".repeat(64),
+        scoreFingerprint:
+          spec.model === "majority_baseline"
+            ? "5".repeat(64)
+            : spec.prevalenceScenario === "observed"
+              ? "6".repeat(64)
+              : "7".repeat(64),
         inputFingerprint: fixtureHash,
       };
     };
     const allSpecs = [imbalancePlan.baseline, ...imbalancePlan.interventions];
     const runs = [
       resultRun(allSpecs[0]!, { tn: 1446, fp: 0, fn: 54, tp: 0 }, 0.036, 0.5),
-      resultRun(allSpecs[1]!, { tn: 1420, fp: 26, fn: 35, tp: 19 }, 0.24, 0.81),
+      resultRun(allSpecs[1]!, { tn: 1420, fp: 26, fn: 25, tp: 29 }, 0.3, 0.81),
       resultRun(allSpecs[2]!, { tn: 1350, fp: 96, fn: 20, tp: 34 }, 0.24, 0.81),
       resultRun(allSpecs[3]!, { tn: 1420, fp: 26, fn: 17, tp: 10 }, 0.17, 0.81),
     ];
@@ -448,7 +461,7 @@ describe("hosted Experiment Plan verifier", () => {
     };
     await expect(
       verifyHostedResultSet(imbalanceResult, imbalancePlan as ExperimentPlanV2),
-    ).resolves.toMatchObject({ status: "VERIFIED", invariantCount: 8 });
+    ).resolves.toMatchObject({ status: "VERIFIED", invariantCount: 10 });
 
     const staleImbalance = { ...imbalanceResult, resultHash: "0".repeat(64) };
     await expect(

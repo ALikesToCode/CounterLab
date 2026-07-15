@@ -532,6 +532,7 @@ class FakeFixedKernel implements FixedKernelExecutor {
             seed: spec.seed,
             inputFingerprint: "2".repeat(64),
             featureSetFingerprint: "3".repeat(64),
+            pipelineFingerprint: "5".repeat(64),
             metrics: { accuracy: 0.98, rocAuc: 0.99 },
             sampleSizes: { train: 2160, test: 720 },
             entityCounts: { train: 360, test: 120 },

@@ -15,6 +15,10 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from .canonical import sha256_json, sha256_json_browser
+from .sklearn_fingerprint import (
+    sklearn_feature_binding_fingerprint,
+    sklearn_pipeline_fingerprint,
+)
 
 
 KERNEL_VERSION = "0.1.0"
@@ -29,8 +33,6 @@ NUMERIC_FEATURES = (
 )
 CATEGORICAL_FEATURES = (ENTITY, "contract_type")
 REQUIRED_COLUMNS = (ROW_ID, *NUMERIC_FEATURES, *CATEGORICAL_FEATURES, TARGET)
-
-
 def _validate_fixture(frame: pd.DataFrame) -> None:
     missing = sorted(set(REQUIRED_COLUMNS).difference(frame.columns))
     if missing:
@@ -145,6 +147,8 @@ def _run(
     ]
     feature_names = [name for name in feature_names if name not in drop_features]
     pipeline = _model_pipeline(feature_names, seed)
+    pipeline_fingerprint = sklearn_pipeline_fingerprint(pipeline)
+    feature_binding_fingerprint = sklearn_feature_binding_fingerprint(pipeline)
     pipeline.fit(train[feature_names], train[TARGET].astype(int))
 
     predicted = pipeline.predict(test[feature_names])
@@ -167,7 +171,8 @@ def _run(
         "entityOverlap": overlap,
         "sampleSizes": {"train": len(train), "test": len(test)},
         "entityCounts": {"train": train_entities, "test": test_entities},
-        "featureSetFingerprint": sha256_json(sorted(feature_names)),
+        "featureSetFingerprint": feature_binding_fingerprint,
+        "pipelineFingerprint": pipeline_fingerprint,
         "inputFingerprint": fixture_hash,
     }
 

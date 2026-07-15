@@ -1,4 +1,5 @@
 import {
+  ArtifactManifestSchema,
   ExperimentPlanV2Schema,
   HostedVerifiedResultSetV2Schema,
   PatchPlanV1Schema,
@@ -13,7 +14,24 @@ import {
   type PatchPlanV1,
 } from "@counterlab/contracts";
 import { getConceptPack } from "@counterlab/concept-registry";
+import {
+  ExperimentIRV5Schema,
+  projectExperimentIRV5ToPlanV2,
+} from "@counterlab/experiment-ir";
 import { hashCanonical } from "@counterlab/session-core";
+
+import {
+  EpistemicPresentationV1Schema,
+  evaluateVerifiedEpistemicEvidence,
+  technicalFailureEpistemicReport,
+  type EpistemicVerificationReport,
+} from "./epistemic.js";
+
+export { EpistemicPresentationV1Schema };
+export type {
+  EpistemicFinding,
+  EpistemicVerificationReport,
+} from "./epistemic.js";
 
 export type PlanInvariant = {
   name: string;
@@ -77,10 +95,34 @@ function invariant(
   return {
     name,
     passed,
-    observed,
-    expected,
+    observed: canonicalDiagnosticValue(observed),
+    expected: canonicalDiagnosticValue(expected),
     ...(counterexample === undefined ? {} : { counterexample }),
   };
+}
+
+function canonicalDiagnosticValue(value: unknown): unknown {
+  if (value === undefined) return null;
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : String(value);
+  }
+  if (Array.isArray(value)) return value.map(canonicalDiagnosticValue);
+  if (typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nested]) => [
+        key,
+        canonicalDiagnosticValue(nested),
+      ]),
+    );
+  }
+  return String(value);
 }
 
 async function evidenceResolves(
@@ -696,6 +738,7 @@ function resultReport(
 async function verifyImbalanceHostedResult(
   result: HostedImbalanceVerifiedResultSetV2,
   plan: ExperimentPlanV2,
+  requireDecisiveOutcome: boolean,
 ): Promise<ResultVerificationReport> {
   type ImbalanceRunSpec = Extract<
     ExperimentPlanV2["baseline"],
@@ -768,6 +811,23 @@ async function verifyImbalanceHostedResult(
     prevalence.prevalenceScenario !== threshold.prevalenceScenario &&
     prevalence.prevalence !== threshold.prevalence &&
     prevalence.inputFingerprint === threshold.inputFingerprint;
+  const fixedControlFingerprints =
+    majority !== undefined &&
+    stratified !== undefined &&
+    threshold !== undefined &&
+    prevalence !== undefined &&
+    majority.evaluationSetFingerprint === stratified.evaluationSetFingerprint &&
+    stratified.evaluationSetFingerprint ===
+      threshold.evaluationSetFingerprint &&
+    prevalence.evaluationSetFingerprint !==
+      threshold.evaluationSetFingerprint &&
+    stratified.scoreFingerprint === threshold.scoreFingerprint &&
+    stratified.pipelineFingerprint === threshold.pipelineFingerprint &&
+    threshold.pipelineFingerprint === prevalence.pipelineFingerprint;
+  const legacyOutcome =
+    getConceptPack(
+      "class_imbalance",
+    ).scientificMethod.epistemic.classifyOutcome(result);
   const { resultHash: _declaredHash, ...canonicalPayload } = result;
   const canonicalHash = await hashCanonical(canonicalPayload);
   const invariants: PlanInvariant[] = [
@@ -841,6 +901,35 @@ async function verifyImbalanceHostedResult(
       "changed deployment prevalence on the same fixture",
     ),
     invariant(
+      "fixed_control_fingerprints",
+      fixedControlFingerprints,
+      {
+        evaluationSets: result.runs.map((run) => ({
+          id: run.id,
+          fingerprint: run.evaluationSetFingerprint,
+        })),
+        scores: {
+          stratified: stratified?.scoreFingerprint,
+          threshold: threshold?.scoreFingerprint,
+        },
+        pipelines: result.runs.map((run) => ({
+          id: run.id,
+          fingerprint: run.pipelineFingerprint,
+        })),
+      },
+      "same evaluation set and score vector for threshold comparison; same logistic pipeline across model runs",
+    ),
+    ...(requireDecisiveOutcome
+      ? [
+          invariant(
+            "discriminating_outcomes",
+            legacyOutcome.kind === "HYPOTHESIS_PATTERN",
+            legacyOutcome,
+            "a fixed Subject Pack hypothesis pattern",
+          ),
+        ]
+      : []),
+    invariant(
       "canonical_result_hash",
       result.resultHash === canonicalHash,
       result.resultHash,
@@ -862,9 +951,10 @@ async function verifyImbalanceHostedResult(
   return report;
 }
 
-export async function verifyHostedResultSet(
+async function verifyHostedResultSetInternal(
   input: unknown,
   plan: ExperimentPlanV2,
+  requireDecisiveOutcome: boolean,
 ): Promise<ResultVerificationReport> {
   const parsed = HostedVerifiedResultSetV2Schema.safeParse(input);
   if (!parsed.success) {
@@ -886,6 +976,7 @@ export async function verifyHostedResultSet(
     return verifyImbalanceHostedResult(
       parsedResult as HostedImbalanceVerifiedResultSetV2,
       plan,
+      requireDecisiveOutcome,
     );
   }
   const result = parsedResult as HostedLeakageVerifiedResultSetV2;
@@ -911,13 +1002,25 @@ export async function verifyHostedResultSet(
     if (run === undefined) return false;
     const expectedStrategy =
       spec.operation === "leakage.group_holdout" ? "group" : "random";
+    const expectedDropFeatures = spec.dropIdentity ? [spec.entityField] : [];
     return (
       run.operation === spec.operation &&
       run.seed === spec.seed &&
       run.model === spec.model &&
       run.splitStrategy === expectedStrategy &&
       run.groupBy ===
-        (spec.operation === "leakage.group_holdout" ? spec.entityField : null)
+        (spec.operation === "leakage.group_holdout"
+          ? spec.entityField
+          : null) &&
+      run.dropFeatures.length === expectedDropFeatures.length &&
+      run.dropFeatures.every((feature) =>
+        expectedDropFeatures.includes(feature),
+      ) &&
+      (baseline === undefined ||
+        run.pipelineFingerprint === baseline.pipelineFingerprint) &&
+      (spec.dropIdentity ||
+        baseline === undefined ||
+        run.featureSetFingerprint === baseline.featureSetFingerprint)
     );
   });
   const groupRuns = groupSpecs
@@ -947,6 +1050,7 @@ export async function verifyHostedResultSet(
   );
   const discriminates =
     baseline !== undefined &&
+    groupRuns.length > 0 &&
     [...groupRuns, ...ablationRuns.map(({ run }) => run)].every(
       (run) => baseline.metrics.accuracy > run.metrics.accuracy + 0.1,
     );
@@ -1010,14 +1114,31 @@ export async function verifyHostedResultSet(
       "the selected entity field is removed and the fingerprint changes",
     ),
     invariant(
-      "discriminating_outcomes",
-      discriminates,
+      "bounded_kernel_outcomes",
+      result.runs.every(
+        (run) =>
+          Number.isFinite(run.metrics.accuracy) &&
+          (run.metrics.rocAuc === null || Number.isFinite(run.metrics.rocAuc)),
+      ),
       result.runs.map((run) => ({
         id: run.id,
         accuracy: run.metrics.accuracy,
       })),
-      "baseline accuracy exceeds group holdout and ablation by more than 0.1",
+      "finite bounded metrics emitted by the fixed kernel",
     ),
+    ...(requireDecisiveOutcome
+      ? [
+          invariant(
+            "discriminating_outcomes",
+            discriminates,
+            result.runs.map((run) => ({
+              id: run.id,
+              accuracy: run.metrics.accuracy,
+            })),
+            "baseline accuracy exceeds group holdout and ablation by more than 0.1",
+          ),
+        ]
+      : []),
     invariant(
       "canonical_result_hash",
       result.resultHash === canonicalHash,
@@ -1038,6 +1159,85 @@ export async function verifyHostedResultSet(
     );
   }
   return report;
+}
+
+/**
+ * Legacy hosted release seam. Until a live session carries Belief Spec v2 and
+ * Experiment IR v5 end to end, direct Worker callbacks remain restricted to a
+ * decisive Subject Pack outcome. The epistemic authority path below may
+ * release a declared INCONCLUSIVE verdict after independently validating the
+ * same bytes.
+ */
+export async function verifyHostedResultSet(
+  input: unknown,
+  plan: ExperimentPlanV2,
+): Promise<ResultVerificationReport> {
+  return verifyHostedResultSetInternal(input, plan, true);
+}
+
+export interface VerifyEpistemicEvidenceInput {
+  artifactManifest: unknown;
+  sessionId: unknown;
+  beliefSpec: unknown;
+  ir: unknown;
+  result: unknown;
+  presentation: unknown;
+}
+
+export async function verifyEpistemicEvidence(
+  input: VerifyEpistemicEvidenceInput,
+): Promise<EpistemicVerificationReport> {
+  assertExactEpistemicInput(input);
+  const artifactManifest = ArtifactManifestSchema.parse(input.artifactManifest);
+  if (typeof input.sessionId !== "string" || input.sessionId.trim() === "") {
+    throw new TypeError("epistemic verification sessionId must be non-empty");
+  }
+  const sessionId = input.sessionId.trim();
+  const ir = ExperimentIRV5Schema.parse(input.ir);
+  const presentation = EpistemicPresentationV1Schema.parse(input.presentation);
+  const executionPlan = projectExperimentIRV5ToPlanV2(ir);
+  let technicalReport: ResultVerificationReport;
+  try {
+    technicalReport = await verifyHostedResultSetInternal(
+      input.result,
+      executionPlan,
+      false,
+    );
+  } catch (error) {
+    if (error instanceof ResultVerificationError) {
+      return technicalFailureEpistemicReport(ir, error.report);
+    }
+    throw error;
+  }
+  return evaluateVerifiedEpistemicEvidence({
+    artifactManifest,
+    sessionId,
+    beliefSpec: input.beliefSpec,
+    ir,
+    result: input.result,
+    technicalReport,
+    presentation,
+  });
+}
+
+function assertExactEpistemicInput(input: VerifyEpistemicEvidenceInput): void {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) {
+    throw new TypeError("epistemic verification input must be an object");
+  }
+  const expected = new Set([
+    "artifactManifest",
+    "sessionId",
+    "beliefSpec",
+    "ir",
+    "result",
+    "presentation",
+  ]);
+  const keys = Object.keys(input as unknown as Record<string, unknown>);
+  if (keys.length !== expected.size || keys.some((key) => !expected.has(key))) {
+    throw new TypeError(
+      "epistemic verification input contains missing or unknown fields",
+    );
+  }
 }
 
 export async function verifyInteractiveResultSet(

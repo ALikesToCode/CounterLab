@@ -7,10 +7,14 @@ from typing import Any
 import nbformat
 import pandas as pd
 
-from .canonical import canonical_json
+from .canonical import canonical_json, sha256_json_browser
 from .experiment import run_leakage_experiment
 from .fixture import generate_leakage_fixture
-from .imbalance import generate_imbalance_fixture, run_imbalance_experiment
+from .imbalance import (
+    generate_imbalance_fixture,
+    run_imbalance_experiment,
+    run_imbalance_plan,
+)
 
 CREATED_AT = "2026-07-14T00:00:00.000Z"
 
@@ -287,12 +291,100 @@ def _imbalance_sample_notebook(
     return notebook
 
 
+def _epistemic_imbalance_runs(
+    stratified_threshold: float,
+) -> list[dict[str, object]]:
+    return [
+        {
+            "runId": "majority",
+            "operation": "imbalance.majority_baseline",
+            "model": "majority_baseline",
+            "seed": 2603,
+            "threshold": 0.5,
+            "prevalenceScenario": "observed",
+        },
+        {
+            "runId": "stratified",
+            "operation": "imbalance.stratified_holdout",
+            "model": "logistic_regression",
+            "seed": 2603,
+            "threshold": stratified_threshold,
+            "prevalenceScenario": "observed",
+        },
+        {
+            "runId": "threshold",
+            "operation": "imbalance.threshold_sweep",
+            "model": "logistic_regression",
+            "seed": 2603,
+            "threshold": 0.25,
+            "prevalenceScenario": "observed",
+        },
+        {
+            "runId": "prevalence",
+            "operation": "imbalance.prevalence_sweep",
+            "model": "logistic_regression",
+            "seed": 2603,
+            "threshold": 0.25,
+            "prevalenceScenario": "rarer",
+        },
+    ]
+
+
+def _epistemic_imbalance_manifest() -> dict[str, Any]:
+    return {
+        "artifactId": "artifact-imbalance-epistemic-v2",
+        "fileName": "rare-event-epistemic.ipynb",
+        "fileSha256": "c" * 64,
+        "nbformat": 4,
+        "support": {"status": "SUPPORTED", "reasons": []},
+        "cells": [
+            {
+                "index": 4,
+                "type": "code",
+                "sourceSha256": "d" * 64,
+                "sourceExcerpt": (
+                    "model = LogisticRegression(class_weight=None)\n"
+                    "X_train, X_test, y_train, y_test = train_test_split(...)\n"
+                    "print(accuracy_score(y_test, predictions))"
+                ),
+                "executionCount": 5,
+                "outputHashes": ["a" * 64],
+                "symbols": [
+                    "LogisticRegression",
+                    "accuracy_score",
+                    "class_weight",
+                    "train_test_split",
+                ],
+                "metricCandidates": [
+                    {"name": "accuracy", "value": 0.99, "outputIndex": 0}
+                ],
+            }
+        ],
+        "schemaSummary": {
+            "fields": [
+                {
+                    "name": "fraud",
+                    "inferredType": "integer",
+                    "privacyClass": "target",
+                }
+            ],
+            "rowCount": 6_000,
+            "entityCandidates": [],
+            "targetCandidates": ["fraud"],
+        },
+        "packageHints": ["sklearn"],
+        "createdAt": CREATED_AT,
+    }
+
+
 def generate_public_artifacts(root: Path, *, seed: int = 1729) -> dict[str, str]:
     root = Path(root)
     fixture_dir = root / "fixtures" / "public"
     notebook_dir = root / "fixtures" / "notebooks"
+    held_out_dir = root / "fixtures" / "held-out"
     fixture_dir.mkdir(parents=True, exist_ok=True)
     notebook_dir.mkdir(parents=True, exist_ok=True)
+    held_out_dir.mkdir(parents=True, exist_ok=True)
 
     frame = generate_leakage_fixture(seed=seed)
     sort_columns = [column for column in ("observation_id", "customer_id") if column in frame]
@@ -333,6 +425,36 @@ def generate_public_artifacts(root: Path, *, seed: int = 1729) -> dict[str, str]
         f"{imbalance_notebook_text.rstrip()}\n", encoding="utf-8"
     )
 
+    epistemic_manifest = _epistemic_imbalance_manifest()
+    epistemic_manifest_path = held_out_dir / "imbalance_epistemic_manifest.json"
+    epistemic_manifest_path.write_text(
+        f"{canonical_json(epistemic_manifest)}\n", encoding="utf-8"
+    )
+    epistemic_manifest_hash = sha256_json_browser(epistemic_manifest)
+    epistemic_results: dict[str, dict[str, Any]] = {}
+    for verdict_region, threshold in (
+        ("competing", 0.5),
+        ("inconclusive", 0.45),
+    ):
+        epistemic_result = run_imbalance_plan(
+            imbalance_frame,
+            _epistemic_imbalance_runs(threshold),
+            plan_id="plan-imbalance-1",
+            session_id="session-imbalance-1",
+            artifact_manifest_hash=epistemic_manifest_hash,
+            concept_pack_version="1.0.0",
+        )
+        epistemic_path = (
+            held_out_dir / f"imbalance_epistemic_{verdict_region}_v2.json"
+        )
+        epistemic_path.write_text(
+            f"{canonical_json(epistemic_result)}\n", encoding="utf-8"
+        )
+        epistemic_results[verdict_region] = {
+            "path": str(epistemic_path),
+            "resultHash": epistemic_result["resultHash"],
+        }
+
     return {
         "fixturePath": str(fixture_path),
         "notebookPath": str(notebook_path),
@@ -342,4 +464,16 @@ def generate_public_artifacts(root: Path, *, seed: int = 1729) -> dict[str, str]
         "imbalanceNotebookPath": str(imbalance_notebook_path),
         "imbalanceResultPath": str(imbalance_result_path),
         "imbalanceResultHash": imbalance_result["resultHash"],
+        "imbalanceEpistemicCompetingPath": epistemic_results["competing"]["path"],
+        "imbalanceEpistemicCompetingHash": epistemic_results["competing"][
+            "resultHash"
+        ],
+        "imbalanceEpistemicInconclusivePath": epistemic_results["inconclusive"][
+            "path"
+        ],
+        "imbalanceEpistemicInconclusiveHash": epistemic_results["inconclusive"][
+            "resultHash"
+        ],
+        "imbalanceEpistemicManifestPath": str(epistemic_manifest_path),
+        "imbalanceEpistemicManifestHash": epistemic_manifest_hash,
     }

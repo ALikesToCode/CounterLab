@@ -29,6 +29,18 @@
       "expectedInvariant": "declared_variable_control"
     },
     {
+      "id": "threshold-score-fingerprint-drift",
+      "expectedInvariant": "declared_variable_control"
+    },
+    {
+      "id": "threshold-evaluation-fingerprint-drift",
+      "expectedInvariant": "declared_variable_control"
+    },
+    {
+      "id": "prevalence-pipeline-fingerprint-drift",
+      "expectedInvariant": "declared_variable_control"
+    },
+    {
       "id": "stale-chart-metric",
       "expectedInvariant": "chart_payload_matches"
     },
@@ -43,6 +55,22 @@
     {
       "id": "changed-intervention-seed",
       "expectedInvariant": "declared_variable_control"
+    },
+    {
+      "id": "missing-artifact-manifest-lineage",
+      "expectedInvariant": "result_contract"
+    },
+    {
+      "id": "malformed-artifact-manifest-lineage",
+      "expectedInvariant": "result_contract"
+    },
+    {
+      "id": "stripped-control-fingerprints",
+      "expectedInvariant": "result_contract"
+    },
+    {
+      "id": "mixed-run-contract-versions",
+      "expectedInvariant": "result_contract"
     }
   ]
 }

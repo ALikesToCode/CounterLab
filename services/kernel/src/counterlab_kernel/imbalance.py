@@ -24,6 +24,10 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from .canonical import sha256_json, sha256_json_browser
+from .sklearn_fingerprint import (
+    sklearn_feature_binding_fingerprint,
+    sklearn_pipeline_fingerprint,
+)
 
 
 IMBALANCE_KERNEL_VERSION = "0.1.0"
@@ -47,6 +51,12 @@ REQUIRED_OPERATIONS = (
     "imbalance.stratified_holdout",
     "imbalance.threshold_sweep",
     "imbalance.prevalence_sweep",
+)
+MAJORITY_BASELINE_FINGERPRINT = sha256_json(
+    {
+        "estimator": "fixed_majority_baseline",
+        "predictedClass": 0,
+    }
 )
 
 
@@ -223,20 +233,35 @@ def _execute_run(
     scenario = str(spec["prevalenceScenario"])
     seed = int(spec["seed"])
     test = _scenario_test(observed_test, scenario, seed=seed)
+    estimator = _model(seed)
+    feature_binding_fingerprint = sklearn_feature_binding_fingerprint(estimator)
 
     if operation == "imbalance.majority_baseline":
         if model_name != "majority_baseline":
             raise ValueError("majority baseline operation requires majority_baseline")
         probabilities = np.zeros(len(test), dtype=float)
+        pipeline_fingerprint = MAJORITY_BASELINE_FINGERPRINT
     else:
         if model_name != "logistic_regression":
             raise ValueError(f"{operation} requires logistic_regression")
-        estimator = _model(seed)
+        pipeline_fingerprint = sklearn_pipeline_fingerprint(estimator)
         estimator.fit(train[list(FEATURES)], train[TARGET].astype(int))
         probabilities = estimator.predict_proba(test[list(FEATURES)])[:, 1]
 
     predicted = (probabilities >= threshold).astype(int)
     actual = test[TARGET].astype(int).to_numpy()
+    evaluation_set_fingerprint = sha256_json(
+        [
+            {"caseId": str(case_id), "target": int(target)}
+            for case_id, target in zip(test[ROW_ID], actual, strict=True)
+        ]
+    )
+    score_fingerprint = sha256_json(
+        [
+            {"caseId": str(case_id), "score": round(float(score), 12)}
+            for case_id, score in zip(test[ROW_ID], probabilities, strict=True)
+        ]
+    )
     tn, fp, fn, tp = (
         int(value) for value in confusion_matrix(actual, predicted, labels=[0, 1]).ravel()
     )
@@ -266,7 +291,10 @@ def _execute_run(
         },
         "prevalence": round(float(test[TARGET].mean()), 12),
         "predictedPositiveRate": round(float(predicted.mean()), 12),
-        "featureSetFingerprint": sha256_json(sorted(FEATURES)),
+        "featureSetFingerprint": feature_binding_fingerprint,
+        "pipelineFingerprint": pipeline_fingerprint,
+        "evaluationSetFingerprint": evaluation_set_fingerprint,
+        "scoreFingerprint": score_fingerprint,
         "inputFingerprint": fixture_hash,
     }
 
@@ -337,7 +365,9 @@ def _result(
     return result
 
 
-def _canonical_run_specs(seed: int) -> list[dict[str, object]]:
+def canonical_imbalance_run_specs(seed: int) -> list[dict[str, object]]:
+    """Return the fixed public run contract used by the imbalance kernel."""
+
     return [
         {
             "runId": "majority_baseline",
@@ -379,7 +409,7 @@ def run_imbalance_experiment(
 ) -> dict[str, Any]:
     """Run majority, stratified, threshold, and prevalence comparisons."""
 
-    return _result(frame, _canonical_run_specs(seed), schema_version="1")
+    return _result(frame, canonical_imbalance_run_specs(seed), schema_version="1")
 
 
 def run_imbalance_plan(
@@ -412,6 +442,7 @@ __all__ = [
     "DEFAULT_IMBALANCE_SEED",
     "IMBALANCE_KERNEL_VERSION",
     "REQUIRED_OPERATIONS",
+    "canonical_imbalance_run_specs",
     "generate_imbalance_fixture",
     "run_imbalance_experiment",
     "run_imbalance_plan",

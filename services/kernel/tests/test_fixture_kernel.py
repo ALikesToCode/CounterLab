@@ -35,6 +35,8 @@ def test_kernel_exposes_identity_shortcut_with_real_computed_metrics() -> None:
     assert 0.50 < ablation["metrics"]["accuracy"] < 0.85
     assert random_split["entityOverlap"]["count"] > 0
     assert group_split["entityOverlap"] == {"count": 0, "rate": 0.0}
+    assert random_split["pipelineFingerprint"] == group_split["pipelineFingerprint"]
+    assert random_split["pipelineFingerprint"] == ablation["pipelineFingerprint"]
 
 
 def test_canonical_result_hash_is_repeatable_and_row_order_invariant() -> None:
@@ -44,4 +46,3 @@ def test_canonical_result_hash_is_repeatable_and_row_order_invariant() -> None:
 
     assert first["resultHash"] == second["resultHash"]
     assert first == second
-

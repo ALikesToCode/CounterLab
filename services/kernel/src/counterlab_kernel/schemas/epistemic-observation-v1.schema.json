@@ -25,10 +25,7 @@
       "properties": {
         "status": {
           "type": "string",
-          "enum": [
-            "VERIFIED",
-            "REJECTED"
-          ]
+          "const": "VERIFIED"
         },
         "reportHash": {
           "type": "string",

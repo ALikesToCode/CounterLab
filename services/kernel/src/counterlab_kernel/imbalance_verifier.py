@@ -7,12 +7,12 @@ import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from .canonical import sha256_json
+from .canonical import sha256_json, sha256_json_browser
 from .imbalance import REQUIRED_OPERATIONS
 
 
 _METRICS = ("accuracy", "precision", "recall", "f1", "prAuc", "rocAuc")
-_RUN_KEYS = frozenset(
+_LEGACY_RUN_KEYS = frozenset(
     {
         "id",
         "operation",
@@ -29,6 +29,9 @@ _RUN_KEYS = frozenset(
         "featureSetFingerprint",
         "inputFingerprint",
     }
+)
+_RUN_KEYS = _LEGACY_RUN_KEYS.union(
+    {"pipelineFingerprint", "evaluationSetFingerprint", "scoreFingerprint"}
 )
 _TOLERANCE = 2e-10
 
@@ -177,9 +180,12 @@ def _contract_failure(candidate: object) -> dict[str, object] | None:
             "typed finite fixture provenance",
             "Fixture provenance contains invalid values.",
         )
-    if candidate["schemaVersion"] == "2" and not all(
-        isinstance(candidate.get(key), str) and bool(candidate[key])
-        for key in ("planId", "sessionId", "conceptPackVersion")
+    if candidate["schemaVersion"] == "2" and (
+        not all(
+            isinstance(candidate.get(key), str) and bool(candidate[key])
+            for key in ("planId", "sessionId", "conceptPackVersion")
+        )
+        or not _is_hash(candidate.get("artifactManifestHash"))
     ):
         return _failure(
             "result_contract",
@@ -191,9 +197,14 @@ def _contract_failure(candidate: object) -> dict[str, object] | None:
 
 
 def _run_contract_failure(
-    operation: str, run: Mapping[str, Any]
+    operation: str, run: Mapping[str, Any], *, schema_version: str
 ) -> dict[str, object] | None:
-    if set(run) != _RUN_KEYS:
+    approved_contracts = (
+        {_RUN_KEYS}
+        if schema_version == "2"
+        else {_LEGACY_RUN_KEYS, _RUN_KEYS}
+    )
+    if set(run) not in approved_contracts:
         return _failure(
             "result_contract",
             {
@@ -239,6 +250,17 @@ def _run_contract_failure(
         or not _is_number(run.get("predictedPositiveRate"))
         or not _is_hash(run.get("featureSetFingerprint"))
         or not _is_hash(run.get("inputFingerprint"))
+        or (
+            set(run) == _RUN_KEYS
+            and not all(
+                _is_hash(run.get(name))
+                for name in (
+                    "pipelineFingerprint",
+                    "evaluationSetFingerprint",
+                    "scoreFingerprint",
+                )
+            )
+        )
     ):
         return _failure(
             "result_contract",
@@ -314,10 +336,23 @@ def verify_imbalance_candidate(candidate: object) -> dict[str, object]:
             "limitations": [],
         }
     verified.append("required_operations")
+    schema_version = str(candidate["schemaVersion"])
     for operation, run in indexed.items():
-        failure = _run_contract_failure(operation, run)
+        failure = _run_contract_failure(
+            operation, run, schema_version=schema_version
+        )
         if failure is not None:
             _append(failures, failure)
+    if schema_version == "1" and len({frozenset(run) for run in indexed.values()}) > 1:
+        _append(
+            failures,
+            _failure(
+                "result_contract",
+                "mixed legacy and fingerprinted run contracts",
+                "one uniform v1 run contract",
+                "A legacy result cannot selectively omit control fingerprints.",
+            ),
+        )
     if failures:
         return {
             "schemaVersion": "1",
@@ -486,6 +521,21 @@ def verify_imbalance_candidate(candidate: object) -> dict[str, object]:
     shared_seeds = {run["seed"] for run in indexed.values()} == {candidate["seed"]}
     shared_inputs = {run["inputFingerprint"] for run in indexed.values()} == {fixture["sha256"]}
     shared_features = len({run["featureSetFingerprint"] for run in indexed.values()}) == 1
+    fingerprint_contract_present = all(set(run) == _RUN_KEYS for run in indexed.values())
+    fingerprint_controls = (
+        not fingerprint_contract_present
+        or (
+            model["scoreFingerprint"] == threshold["scoreFingerprint"]
+            and model["evaluationSetFingerprint"]
+            == threshold["evaluationSetFingerprint"]
+            == majority["evaluationSetFingerprint"]
+            and prevalence["evaluationSetFingerprint"]
+            != threshold["evaluationSetFingerprint"]
+            and model["pipelineFingerprint"]
+            == threshold["pipelineFingerprint"]
+            == prevalence["pipelineFingerprint"]
+        )
+    )
     controls_ok = (
         shared_seeds
         and shared_inputs
@@ -494,6 +544,7 @@ def verify_imbalance_candidate(candidate: object) -> dict[str, object]:
         and model["classCounts"] == threshold["classCounts"]
         and model["sampleSizes"] == threshold["sampleSizes"]
         and prevalence["classCounts"]["train"] == threshold["classCounts"]["train"]
+        and fingerprint_controls
     )
     if controls_ok:
         verified.append("declared_variable_control")
@@ -502,7 +553,12 @@ def verify_imbalance_candidate(candidate: object) -> dict[str, object]:
             failures,
             _failure(
                 "declared_variable_control",
-                {"sharedSeeds": shared_seeds, "sharedInputs": shared_inputs, "sharedFeatures": shared_features},
+                {
+                    "sharedSeeds": shared_seeds,
+                    "sharedInputs": shared_inputs,
+                    "sharedFeatures": shared_features,
+                    "fingerprintControls": fingerprint_controls,
+                },
                 "only model, threshold, or evaluation prevalence changes as declared",
                 "An undeclared variable changed across the comparison.",
             ),
@@ -541,7 +597,12 @@ def verify_imbalance_candidate(candidate: object) -> dict[str, object]:
         )
 
     canonical = {key: value for key, value in candidate.items() if key != "resultHash"}
-    if candidate["resultHash"] == sha256_json(canonical):
+    canonical_hash = (
+        sha256_json_browser(canonical)
+        if candidate["schemaVersion"] == "2"
+        else sha256_json(canonical)
+    )
+    if candidate["resultHash"] == canonical_hash:
         verified.append("canonical_result_hash")
     else:
         _append(
@@ -549,7 +610,7 @@ def verify_imbalance_candidate(candidate: object) -> dict[str, object]:
             _failure(
                 "canonical_result_hash",
                 candidate["resultHash"],
-                sha256_json(canonical),
+                canonical_hash,
                 "The canonical result hash does not cover the supplied payload.",
             ),
         )
@@ -567,8 +628,11 @@ def verify_imbalance_candidate(candidate: object) -> dict[str, object]:
 
 
 def _rehash(candidate: dict[str, Any]) -> None:
-    candidate["resultHash"] = sha256_json(
-        {key: value for key, value in candidate.items() if key != "resultHash"}
+    canonical = {key: value for key, value in candidate.items() if key != "resultHash"}
+    candidate["resultHash"] = (
+        sha256_json_browser(canonical)
+        if candidate.get("schemaVersion") == "2"
+        else sha256_json(canonical)
     )
 
 
@@ -663,6 +727,27 @@ def critical_imbalance_mutations(
         lambda candidate: run(candidate, "imbalance.prevalence_sweep").update({"inputFingerprint": "0" * 64}),
     )
     add(
+        "threshold-score-fingerprint-drift",
+        "declared_variable_control",
+        lambda candidate: run(candidate, "imbalance.threshold_sweep").update(
+            {"scoreFingerprint": "0" * 64}
+        ),
+    )
+    add(
+        "threshold-evaluation-fingerprint-drift",
+        "declared_variable_control",
+        lambda candidate: run(candidate, "imbalance.threshold_sweep").update(
+            {"evaluationSetFingerprint": "0" * 64}
+        ),
+    )
+    add(
+        "prevalence-pipeline-fingerprint-drift",
+        "declared_variable_control",
+        lambda candidate: run(candidate, "imbalance.prevalence_sweep").update(
+            {"pipelineFingerprint": "0" * 64}
+        ),
+    )
+    add(
         "stale-chart-metric",
         "chart_payload_matches",
         lambda candidate: candidate["chartData"][1].update({"recall": 0.99}),
@@ -683,6 +768,43 @@ def critical_imbalance_mutations(
         "declared_variable_control",
         lambda candidate: run(candidate, "imbalance.threshold_sweep").update({"seed": 99}),
     )
+    if reference.get("schemaVersion") == "2":
+        add(
+            "missing-artifact-manifest-lineage",
+            "result_contract",
+            lambda candidate: candidate.pop("artifactManifestHash"),
+        )
+        add(
+            "malformed-artifact-manifest-lineage",
+            "result_contract",
+            lambda candidate: candidate.update(
+                {"artifactManifestHash": "not-a-sha256"}
+            ),
+        )
+
+        def strip_control_fingerprints(candidate: dict[str, Any]) -> None:
+            for candidate_run in candidate["runs"]:
+                candidate_run.pop("pipelineFingerprint")
+                candidate_run.pop("evaluationSetFingerprint")
+                candidate_run.pop("scoreFingerprint")
+
+        add(
+            "stripped-control-fingerprints",
+            "result_contract",
+            strip_control_fingerprints,
+        )
+
+        def mix_run_contract_versions(candidate: dict[str, Any]) -> None:
+            candidate_run = candidate["runs"][0]
+            candidate_run.pop("pipelineFingerprint")
+            candidate_run.pop("evaluationSetFingerprint")
+            candidate_run.pop("scoreFingerprint")
+
+        add(
+            "mixed-run-contract-versions",
+            "result_contract",
+            mix_run_contract_versions,
+        )
     return mutations
 
 

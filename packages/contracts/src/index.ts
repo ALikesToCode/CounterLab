@@ -339,7 +339,7 @@ const SignedResultPathSchema = z
 
 const TechnicalVerificationBindingSchema = z
   .object({
-    status: z.enum(["VERIFIED", "REJECTED"]),
+    status: z.literal("VERIFIED"),
     reportHash: Sha256Schema,
   })
   .strict();
@@ -1920,6 +1920,7 @@ const VerifiedRunSchema = z
     seed: z.number().int().nonnegative(),
     inputFingerprint: Sha256Schema,
     featureSetFingerprint: Sha256Schema,
+    pipelineFingerprint: Sha256Schema.optional(),
     metrics: z
       .object({
         accuracy: ProportionSchema,
@@ -2024,6 +2025,7 @@ export const VerifiedResultSetV1Schema = z
 
 const HostedLeakageVerifiedRunSchema = VerifiedRunSchema.extend({
   operation: FixedOperationIdSchema,
+  pipelineFingerprint: Sha256Schema,
 }).strict();
 
 const HostedLeakageVerifiedResultSetV2Schema = z
@@ -2100,6 +2102,9 @@ const HostedImbalanceVerifiedRunSchema = z
     prevalence: ProportionSchema,
     predictedPositiveRate: ProportionSchema,
     featureSetFingerprint: Sha256Schema,
+    pipelineFingerprint: Sha256Schema,
+    evaluationSetFingerprint: Sha256Schema,
+    scoreFingerprint: Sha256Schema,
     inputFingerprint: Sha256Schema,
   })
   .strict();

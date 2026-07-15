@@ -8,9 +8,12 @@ import pandas as pd
 import pytest
 from jsonschema import Draft202012Validator
 
+from counterlab_kernel.canonical import sha256_json_browser
 from counterlab_kernel.imbalance import (
+    canonical_imbalance_run_specs,
     generate_imbalance_fixture,
     run_imbalance_experiment,
+    run_imbalance_plan,
 )
 from counterlab_kernel.imbalance_verifier import (
     critical_imbalance_mutations,
@@ -71,7 +74,14 @@ def test_public_sdk_allows_only_the_four_fixed_interventions() -> None:
 
 
 def test_hidden_verifier_catalogue_matches_executable_invariants_and_mutations() -> None:
-    reference = run_imbalance_experiment(generate_imbalance_fixture())
+    reference = run_imbalance_plan(
+        generate_imbalance_fixture(),
+        canonical_imbalance_run_specs(2603),
+        plan_id="mutation-reference-imbalance-v2",
+        session_id="mutation-benchmark",
+        artifact_manifest_hash="a" * 64,
+        concept_pack_version="1.0.0",
+    )
     report = verify_imbalance_candidate(reference)
     invariants = json.loads(
         (VERIFIER / "invariants.json").read_text(encoding="utf-8")
@@ -112,3 +122,68 @@ def test_public_fixture_result_and_notebook_outputs_share_computed_truth() -> No
     )
     assert f"{majority['metrics']['accuracy']:.6f}" in stored_text
     assert f"{majority['metrics']['recall']:.6f}" in stored_text
+
+
+@pytest.mark.parametrize(
+    ("file_name", "stratified_threshold"),
+    [
+        ("imbalance_epistemic_competing_v2.json", 0.5),
+        ("imbalance_epistemic_inconclusive_v2.json", 0.45),
+    ],
+)
+def test_epistemic_v2_goldens_are_recomputed_by_the_fixed_kernel(
+    file_name: str, stratified_threshold: float
+) -> None:
+    runs = [
+        {
+            "runId": "majority",
+            "operation": "imbalance.majority_baseline",
+            "model": "majority_baseline",
+            "seed": 2603,
+            "threshold": 0.5,
+            "prevalenceScenario": "observed",
+        },
+        {
+            "runId": "stratified",
+            "operation": "imbalance.stratified_holdout",
+            "model": "logistic_regression",
+            "seed": 2603,
+            "threshold": stratified_threshold,
+            "prevalenceScenario": "observed",
+        },
+        {
+            "runId": "threshold",
+            "operation": "imbalance.threshold_sweep",
+            "model": "logistic_regression",
+            "seed": 2603,
+            "threshold": 0.25,
+            "prevalenceScenario": "observed",
+        },
+        {
+            "runId": "prevalence",
+            "operation": "imbalance.prevalence_sweep",
+            "model": "logistic_regression",
+            "seed": 2603,
+            "threshold": 0.25,
+            "prevalenceScenario": "rarer",
+        },
+    ]
+    manifest = json.loads(
+        (FIXTURES / "held-out/imbalance_epistemic_manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    computed = run_imbalance_plan(
+        generate_imbalance_fixture(),
+        runs,
+        plan_id="plan-imbalance-1",
+        session_id="session-imbalance-1",
+        artifact_manifest_hash=sha256_json_browser(manifest),
+        concept_pack_version="1.0.0",
+    )
+    stored = json.loads(
+        (FIXTURES / "held-out" / file_name).read_text(encoding="utf-8")
+    )
+
+    assert stored == computed
+    assert verify_imbalance_candidate(stored)["status"] == "VERIFIED"

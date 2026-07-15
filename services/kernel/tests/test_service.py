@@ -40,7 +40,7 @@ def test_kernel_service_exposes_health_and_only_the_fixed_public_run() -> None:
         )
         assert run_status == 200
         assert run["data"]["resultHash"] == (  # type: ignore[index]
-            "2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0"
+            "a6ae7652e04e4d70196f991c63b8f7bcb3b76f8c4ab833d3ce2b626df0ab6c94"
         )
 
         refused_status, refused = _request(

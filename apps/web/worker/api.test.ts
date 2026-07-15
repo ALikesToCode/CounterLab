@@ -734,7 +734,7 @@ async function imbalanceVerifiedResult(plan: ExperimentPlanV2) {
   const featureHash = "f".repeat(64);
   const confusionByOperation = {
     "imbalance.majority_baseline": { tn: 1460, fp: 0, fn: 40, tp: 0 },
-    "imbalance.stratified_holdout": { tn: 1450, fp: 10, fn: 28, tp: 12 },
+    "imbalance.stratified_holdout": { tn: 1450, fp: 10, fn: 32, tp: 8 },
     "imbalance.threshold_sweep": { tn: 1400, fp: 60, fn: 15, tp: 25 },
     "imbalance.prevalence_sweep": { tn: 1400, fp: 60, fn: 7, tp: 13 },
   } as const;
@@ -781,6 +781,18 @@ async function imbalanceVerifiedResult(plan: ExperimentPlanV2) {
       prevalence: rounded((matrix.fn + matrix.tp) / total),
       predictedPositiveRate: rounded((matrix.fp + matrix.tp) / total),
       featureSetFingerprint: featureHash,
+      pipelineFingerprint:
+        spec.model === "majority_baseline" ? "1".repeat(64) : "2".repeat(64),
+      evaluationSetFingerprint:
+        spec.prevalenceScenario === "observed"
+          ? "3".repeat(64)
+          : "4".repeat(64),
+      scoreFingerprint:
+        spec.model === "majority_baseline"
+          ? "5".repeat(64)
+          : spec.prevalenceScenario === "observed"
+            ? "6".repeat(64)
+            : "7".repeat(64),
       inputFingerprint: fixtureHash,
     };
   });
@@ -1012,13 +1024,95 @@ describe("Cloudflare Worker API", () => {
       `runner-input/${dispatch.job.jobId}.json`,
     );
     expect(input).toBeDefined();
-    expect(
-      RunnerLabRunBundleSchema.parse(JSON.parse(input!.body)),
-    ).toMatchObject({
+    const bundle = RunnerLabRunBundleSchema.parse(JSON.parse(input!.body));
+    expect(bundle).toMatchObject({
       purpose: "AUTHORITATIVE",
       fixture: { id: "public-imbalance-v1" },
       experimentPlan: { concept: "class_imbalance" },
     });
+
+    const authorization = { authorization: `Bearer ${dispatch.token}` };
+    expect(
+      (
+        await app.request(`/api/runner/jobs/${dispatch.job.jobId}/start`, {
+          method: "POST",
+          headers: authorization,
+        })
+      ).status,
+    ).toBe(200);
+    const verified = await imbalanceVerifiedResult(bundle.experimentPlan);
+    if (verified.concept !== "class_imbalance") {
+      throw new Error("expected an imbalance result");
+    }
+    const changedRuns = verified.runs.map((run) =>
+      run.operation === "imbalance.threshold_sweep"
+        ? { ...run, scoreFingerprint: "0".repeat(64) }
+        : run,
+    );
+    const { resultHash: _resultHash, ...resultWithoutHash } = verified;
+    const tamperedResult = {
+      ...resultWithoutHash,
+      runs: changedRuns,
+      resultHash: await hashCanonical({
+        ...resultWithoutHash,
+        runs: changedRuns,
+      }),
+    };
+    const resultText = JSON.stringify(tamperedResult);
+    const resultFileHash = await sha256Text(resultText);
+    expect(
+      (
+        await app.request(
+          `/api/runner/jobs/${dispatch.job.jobId}/outputs/verified-result.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...authorization,
+              "content-type": "application/json",
+            },
+            body: resultText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    const callback = await postJson(
+      app,
+      `/api/runner/jobs/${dispatch.job.jobId}/callback`,
+      {
+        schemaVersion: "1",
+        callbackId: "callback_imbalance_fingerprint_drift",
+        idempotencyKey: "imbalance-fingerprint-drift-1",
+        jobId: dispatch.job.jobId,
+        stateVersion: dispatch.job.stateVersion,
+        status: "VERIFIED",
+        outputHashes: [resultFileHash],
+        finalEventCursor: 0,
+        occurredAt: "2026-07-14T10:00:02.000Z",
+      },
+      authorization,
+    );
+    expect(callback.status).toBe(200);
+    await expect(callback.json()).resolves.toMatchObject({
+      data: {
+        runnerJob: {
+          status: "REJECTED",
+          error: { code: "RESULT_VERIFIER_REJECTED" },
+        },
+        session: { state: "LAB_VERIFIED" },
+        verification: {
+          status: "REJECTED",
+          invariants: expect.arrayContaining([
+            expect.objectContaining({
+              name: "fixed_control_fingerprints",
+              passed: false,
+            }),
+          ]),
+        },
+      },
+    });
+    const stored = await sessionRepository.find(sessionId);
+    expect(stored?.state).toBe("LAB_VERIFIED");
+    expect(stored).not.toHaveProperty("verifiedResult");
   });
 
   it("dispatches bounded threshold and prevalence controls through the fixed imbalance plan", async () => {
@@ -3239,7 +3333,7 @@ describe("Cloudflare Worker API", () => {
       state: "REASONING_DIFF_ISSUED",
       verifiedResult: {
         resultHash:
-          "2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0",
+          "a6ae7652e04e4d70196f991c63b8f7bcb3b76f8c4ab833d3ce2b626df0ab6c94",
       },
       transferResult: { outcome: "PASSED" },
       patchResult: { status: "VERIFIED" },

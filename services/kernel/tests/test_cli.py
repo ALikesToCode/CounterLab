@@ -45,7 +45,7 @@ def test_imbalance_mutations_command_prints_the_verified_matrix(tmp_path: Path) 
 
     assert completed.returncode == 0, completed.stderr
     assert "threshold-does-not-change-outcome" in completed.stdout
-    assert "12/12 critical mutations detected" in completed.stdout
+    assert "19/19 critical mutations detected" in completed.stdout
 
 
 def test_generate_command_creates_reproducible_public_assets(tmp_path: Path) -> None:
@@ -56,6 +56,12 @@ def test_generate_command_creates_reproducible_public_assets(tmp_path: Path) -> 
     assert (tmp_path / "fixtures/notebooks/customer_churn_leakage.ipynb").exists()
     assert (tmp_path / "fixtures/public/fraud_rare_event.csv").exists()
     assert (tmp_path / "fixtures/notebooks/fraud_class_imbalance.ipynb").exists()
+    assert (
+        tmp_path / "fixtures/held-out/imbalance_epistemic_competing_v2.json"
+    ).exists()
+    assert (
+        tmp_path / "fixtures/held-out/imbalance_epistemic_inconclusive_v2.json"
+    ).exists()
 
 
 def test_transfer_command_runs_the_fixed_evaluator(tmp_path: Path) -> None:

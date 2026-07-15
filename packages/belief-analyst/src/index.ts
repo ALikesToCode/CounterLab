@@ -19,7 +19,7 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 
 export const APPROVED_LEAKAGE_SAMPLE_SHA256 =
-  "92ba63894d3c2ffd64ba76324bb7bb2b3afeb0310883a33ed140faf058d03024";
+  "d0e9f3238753f1ca55534446d83e36041590f31c607a011def3f1d0db3a5bbc9";
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const MAX_CLAIM_CHARACTERS = 4_000;

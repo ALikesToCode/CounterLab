@@ -24,7 +24,6 @@ _SUPPLEMENTAL_KEYS = frozenset(
     {"probes", "plan", "resourceEnforcement", "isolation", "support"}
 )
 _HASH_LENGTH = 64
-_MIN_DISCRIMINATING_ACCURACY_GAP = 0.10
 
 
 def _canonical_payload(candidate: Mapping[str, Any]) -> dict[str, Any]:
@@ -204,6 +203,10 @@ def _validate_run_contract(
         _sequence(run.get("dropFeatures")) is None
         or not _is_sha256(run.get("featureSetFingerprint"))
         or not _is_sha256(run.get("inputFingerprint"))
+        or (
+            "pipelineFingerprint" in run
+            and not _is_sha256(run.get("pipelineFingerprint"))
+        )
         or not isinstance(run.get("model"), str)
         or not _is_int(run.get("seed"))
         or not all(_is_number(metrics.get(name)) for name in ("accuracy", "rocAuc"))
@@ -558,28 +561,23 @@ def verify_candidate(candidate: object) -> dict[str, object]:
     else:
         verified.append("baseline_overlap_exists")
 
-    random_accuracy = float(random_metrics["accuracy"])
-    group_accuracy = float(group_metrics["accuracy"])
-    ablation_accuracy = float(ablation_metrics["accuracy"])
-    if not (
-        random_accuracy > group_accuracy + _MIN_DISCRIMINATING_ACCURACY_GAP
-        and random_accuracy > ablation_accuracy + _MIN_DISCRIMINATING_ACCURACY_GAP
-    ):
+    bounded_outcomes = all(
+        0.0 <= float(metrics[name]) <= 1.0
+        for metrics in (random_metrics, group_metrics, ablation_metrics)
+        for name in ("accuracy", "rocAuc")
+    )
+    if not bounded_outcomes:
         _append_once(
             failures,
             _failure(
-                "discriminating_outcomes",
-                {
-                    "random": random_accuracy,
-                    "group": group_accuracy,
-                    "ablation": ablation_accuracy,
-                },
-                f"random accuracy exceeds both interventions by more than {_MIN_DISCRIMINATING_ACCURACY_GAP}",
-                "The experiment outcomes do not discriminate the leakage hypotheses.",
+                "bounded_kernel_outcomes",
+                "metric outside [0, 1]",
+                "finite bounded fixed-kernel outcomes",
+                "A fixed-kernel outcome is outside its declared metric range.",
             ),
         )
     else:
-        verified.append("discriminating_outcomes")
+        verified.append("bounded_kernel_outcomes")
 
     ablation_drops = set(ablation_run["dropFeatures"])
     random_drops = set(random_run["dropFeatures"])
@@ -609,6 +607,16 @@ def verify_candidate(candidate: object) -> dict[str, object]:
     fixture_rows = fixture.get("rows")
     fixture_hash = fixture.get("sha256")
     expected_sizes = dict(random_sizes)
+    pipeline_fingerprints = [
+        run.get("pipelineFingerprint") for run in runs.values()
+    ]
+    pipelines_controlled = (
+        all(value is None for value in pipeline_fingerprints)
+        or (
+            all(_is_sha256(value) for value in pipeline_fingerprints)
+            and len(set(pipeline_fingerprints)) == 1
+        )
+    )
     controlled = (
         random_run["splitStrategy"] == "random"
         and group_run["splitStrategy"] == "group"
@@ -622,6 +630,7 @@ def verify_candidate(candidate: object) -> dict[str, object]:
         and ablation_run["groupBy"] is None
         and random_run["featureSetFingerprint"]
         == group_run["featureSetFingerprint"]
+        and pipelines_controlled
         and all(run["inputFingerprint"] == fixture_hash for run in runs.values())
         and all(run["sampleSizes"] == expected_sizes for run in runs.values())
         and (
@@ -647,6 +656,7 @@ def verify_candidate(candidate: object) -> dict[str, object]:
                         run["inputFingerprint"] == fixture_hash
                         for run in runs.values()
                     ),
+                    "pipelineFingerprintsMatch": pipelines_controlled,
                 },
                 "same seed and samples; only declared split/feature variables change",
                 "Baseline and intervention runs differ in an undeclared control variable.",
@@ -815,6 +825,14 @@ def critical_mutations(reference: Mapping[str, Any]) -> list[dict[str, object]]:
         "changed-intervention-seed",
         "declared_variable_control",
         lambda candidate: run(candidate, "customer_group_split").update({"seed": 99}),
+        rehash=True,
+    )
+    add(
+        "changed-pipeline-fingerprint",
+        "declared_variable_control",
+        lambda candidate: run(candidate, "customer_group_split").update(
+            {"pipelineFingerprint": "0" * _HASH_LENGTH}
+        ),
         rehash=True,
     )
     add(

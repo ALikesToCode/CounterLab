@@ -41,7 +41,10 @@ export interface SubjectPackEpistemicAdapter {
     candidate: CandidateExperiment,
     result: HostedVerifiedResultSetV2,
   ): EpistemicControlValues[];
-  resolveObservablePath(observableId: AllowedMetric): string | undefined;
+  resolveObservablePath(
+    observableId: AllowedMetric,
+    result: HostedVerifiedResultSetV2,
+  ): string | undefined;
 }
 
 export interface ConceptPackDefinition {
@@ -92,7 +95,15 @@ const leakageScoringPolicy = ExperimentScoringPolicySchema.parse({
     "leakage.controlled_comparison",
   ],
   requiredOperationIds: ["leakage.group_holdout"],
-  requiredControlIds: ["model", "seed", "test_fraction"],
+  requiredControlIds: [
+    "model",
+    "seed",
+    "test_fraction",
+    "entity_field",
+    "primary_identity_setting",
+    "preprocessing",
+    "model_hyperparameters",
+  ],
   allowedChangedVariableIds: ["split_strategy", "identity_feature"],
   requiredObservableIds: ["accuracy", "entity_overlap_rate"],
   allowedObservableIds: ["accuracy", "roc_auc", "entity_overlap_rate"],
@@ -168,8 +179,8 @@ const leakageEpistemicPolicy = EpistemicVerifierPolicyV1Schema.parse({
   concept: "entity_leakage",
   allowedScopes: ["unseen customers in the documented fixture"],
   observableResultPathPrefixes: [
-    { observableId: "accuracy", prefixes: ["/chartData"] },
-    { observableId: "roc_auc", prefixes: ["/chartData"] },
+    { observableId: "accuracy", prefixes: ["/runs"] },
+    { observableId: "roc_auc", prefixes: ["/runs"] },
     { observableId: "entity_overlap_rate", prefixes: ["/runs"] },
   ],
   boundarySweeps: [
@@ -204,14 +215,14 @@ const imbalanceEpistemicPolicy = EpistemicVerifierPolicyV1Schema.parse({
   concept: "class_imbalance",
   allowedScopes: ["rare-event detection in the documented fixture"],
   observableResultPathPrefixes: [
-    { observableId: "accuracy", prefixes: ["/chartData"] },
-    { observableId: "precision", prefixes: ["/chartData"] },
-    { observableId: "recall", prefixes: ["/chartData"] },
-    { observableId: "f1", prefixes: ["/chartData"] },
-    { observableId: "pr_auc", prefixes: ["/chartData"] },
-    { observableId: "roc_auc", prefixes: ["/chartData"] },
+    { observableId: "accuracy", prefixes: ["/runs"] },
+    { observableId: "precision", prefixes: ["/runs"] },
+    { observableId: "recall", prefixes: ["/runs"] },
+    { observableId: "f1", prefixes: ["/runs"] },
+    { observableId: "pr_auc", prefixes: ["/runs"] },
+    { observableId: "roc_auc", prefixes: ["/runs"] },
     { observableId: "confusion_matrix", prefixes: ["/runs"] },
-    { observableId: "prevalence", prefixes: ["/chartData"] },
+    { observableId: "prevalence", prefixes: ["/runs"] },
   ],
   boundarySweeps: [
     {
@@ -246,6 +257,7 @@ function classifyLeakageOutcome(
     return { kind: "UNRESOLVED" };
   }
   const optimismGap = baseline.metrics.accuracy - group.metrics.accuracy;
+  if (optimismGap < -0.02) return { kind: "UNRESOLVED" };
   if (optimismGap >= 0.1) {
     return {
       kind: "HYPOTHESIS_PATTERN",
@@ -280,15 +292,14 @@ function classifyImbalanceOutcome(
   if (majority === undefined || evaluated === undefined) {
     return { kind: "UNRESOLVED" };
   }
-  const prLift = evaluated.metrics.prAuc - evaluated.prevalence;
-  if (evaluated.metrics.recall >= 0.5 && prLift >= 0.1) {
+  if (evaluated.metrics.recall >= 0.5 && evaluated.metrics.f1 >= 0.35) {
     return {
       kind: "HYPOTHESIS_PATTERN",
       hypothesisId: "current",
       patternId: "imbalance.useful-minority-detection",
     };
   }
-  if (evaluated.metrics.recall <= 0.2 || prLift <= 0.03) {
+  if (evaluated.metrics.recall <= 0.2) {
     return {
       kind: "HYPOTHESIS_PATTERN",
       hypothesisId: "competing",
@@ -304,17 +315,34 @@ function classifyImbalanceOutcome(
 
 function leakageControlValues(
   candidate: CandidateExperiment,
+  result: HostedVerifiedResultSetV2,
 ): EpistemicControlValues[] {
   const runs = [candidate.baseline, ...candidate.interventions];
+  const primaryRuns = runs.filter(
+    (run) => run.operation !== "leakage.identity_ablation",
+  );
+  const resultRuns =
+    result.concept === "entity_leakage"
+      ? new Map(result.runs.map((run) => [run.id, run]))
+      : new Map();
   return candidate.heldConstantIds.map((controlId) => ({
     controlId,
-    values: runs.map((run) => {
-      if (run.concept !== "entity_leakage") return undefined;
-      if (controlId === "model") return run.model;
-      if (controlId === "seed") return run.seed;
-      if (controlId === "test_fraction") return run.testFraction;
-      return undefined;
-    }),
+    values: (controlId === "primary_identity_setting" ? primaryRuns : runs).map(
+      (run) => {
+        if (run.concept !== "entity_leakage") return undefined;
+        if (controlId === "model") return run.model;
+        if (controlId === "seed") return run.seed;
+        if (controlId === "test_fraction") return run.testFraction;
+        if (controlId === "entity_field") return run.entityField;
+        if (controlId === "primary_identity_setting") return run.dropIdentity;
+        if (
+          controlId === "preprocessing" ||
+          controlId === "model_hyperparameters"
+        )
+          return resultRuns.get(run.runId)?.pipelineFingerprint;
+        return undefined;
+      },
+    ),
   }));
 }
 
@@ -323,6 +351,15 @@ function imbalanceControlValues(
   result: HostedVerifiedResultSetV2,
 ): EpistemicControlValues[] {
   const runs = [candidate.baseline, ...candidate.interventions];
+  const thresholdComparisonRuns =
+    result.concept === "class_imbalance"
+      ? result.runs.filter((run) =>
+          [
+            "imbalance.stratified_holdout",
+            "imbalance.threshold_sweep",
+          ].includes(run.operation),
+        )
+      : [];
   return candidate.heldConstantIds.map((controlId) => ({
     controlId,
     values:
@@ -330,23 +367,70 @@ function imbalanceControlValues(
         ? runs.map((run) => run.seed)
         : result.concept !== "class_imbalance"
           ? []
-          : result.runs.map((run) => {
-              if (controlId === "model_scores") return run.inputFingerprint;
-              if (controlId === "evaluation_set") {
-                return `${run.inputFingerprint}:${run.sampleSizes.train}:${run.sampleSizes.test}`;
-              }
+          : thresholdComparisonRuns.map((run) => {
+              if (controlId === "model_scores") return run.scoreFingerprint;
+              if (controlId === "evaluation_set")
+                return run.evaluationSetFingerprint;
               return undefined;
             }),
   }));
 }
 
-function observablePathFor(
-  policy: EpistemicVerifierPolicyV1,
+function leakageObservablePath(
   observableId: AllowedMetric,
+  result: HostedVerifiedResultSetV2,
 ): string | undefined {
-  return policy.observableResultPathPrefixes.find(
-    (binding) => binding.observableId === observableId,
-  )?.prefixes[0];
+  if (result.concept !== "entity_leakage") return undefined;
+  const runIndices = result.runs
+    .map((run, index) => ({ run, index }))
+    .filter(({ run }) => run.operation === "leakage.group_holdout")
+    .map(({ index }) => index);
+  if (runIndices.length !== 1) return undefined;
+  const runIndex = runIndices[0]!;
+  if (observableId === "accuracy") {
+    return `/runs/${runIndex}/metrics/accuracy`;
+  }
+  if (observableId === "roc_auc") {
+    return `/runs/${runIndex}/metrics/rocAuc`;
+  }
+  if (observableId === "entity_overlap_rate") {
+    return `/runs/${runIndex}/entityOverlap/rate`;
+  }
+  return undefined;
+}
+
+function imbalanceObservablePath(
+  observableId: AllowedMetric,
+  result: HostedVerifiedResultSetV2,
+): string | undefined {
+  if (result.concept !== "class_imbalance") return undefined;
+  const operation =
+    observableId === "prevalence"
+      ? "imbalance.prevalence_sweep"
+      : "imbalance.stratified_holdout";
+  const runIndices = result.runs
+    .map((run, index) => ({ run, index }))
+    .filter(({ run }) => run.operation === operation)
+    .map(({ index }) => index);
+  if (runIndices.length !== 1) return undefined;
+  const runIndex = runIndices[0]!;
+  const metricFields: Partial<Record<AllowedMetric, string>> = {
+    accuracy: "accuracy",
+    precision: "precision",
+    recall: "recall",
+    f1: "f1",
+    pr_auc: "prAuc",
+    roc_auc: "rocAuc",
+  };
+  const field = metricFields[observableId];
+  if (field !== undefined) return `/runs/${runIndex}/metrics/${field}`;
+  if (observableId === "confusion_matrix") {
+    return `/runs/${runIndex}/confusionMatrix`;
+  }
+  if (observableId === "prevalence") {
+    return `/runs/${runIndex}/prevalence`;
+  }
+  return undefined;
 }
 
 function leakageSupport(manifest: ArtifactManifest): SupportDetection {
@@ -575,7 +659,7 @@ function imbalanceSupport(manifest: ArtifactManifest): SupportDetection {
   };
 }
 
-const leakagePack = Object.freeze({
+const leakagePack = deepFreeze({
   id: "entity_leakage",
   version: "2.0.0",
   releaseStatus: "released",
@@ -613,8 +697,7 @@ const leakagePack = Object.freeze({
       policy: leakageEpistemicPolicy,
       classifyOutcome: classifyLeakageOutcome,
       resolveControlValues: leakageControlValues,
-      resolveObservablePath: (observableId) =>
-        observablePathFor(leakageEpistemicPolicy, observableId),
+      resolveObservablePath: leakageObservablePath,
     },
   },
   verifierContract: {
@@ -642,7 +725,7 @@ const leakagePack = Object.freeze({
   forbiddenClaims: leakageForbiddenClaims,
 } satisfies ConceptPackDefinition);
 
-const imbalancePack = Object.freeze({
+const imbalancePack = deepFreeze({
   id: "class_imbalance",
   version: "1.0.0",
   releaseStatus: "released",
@@ -698,8 +781,7 @@ const imbalancePack = Object.freeze({
       policy: imbalanceEpistemicPolicy,
       classifyOutcome: classifyImbalanceOutcome,
       resolveControlValues: imbalanceControlValues,
-      resolveObservablePath: (observableId) =>
-        observablePathFor(imbalanceEpistemicPolicy, observableId),
+      resolveObservablePath: imbalanceObservablePath,
     },
   },
   verifierContract: {
@@ -730,6 +812,23 @@ const imbalancePack = Object.freeze({
   approvedClaims: imbalanceApprovedClaims,
   forbiddenClaims: imbalanceForbiddenClaims,
 } satisfies ConceptPackDefinition);
+
+function deepFreeze<T>(value: T, seen = new WeakSet<object>()): T {
+  if (
+    (typeof value !== "object" || value === null) &&
+    typeof value !== "function"
+  ) {
+    return value;
+  }
+  const object = value as object;
+  if (seen.has(object)) return value;
+  seen.add(object);
+  for (const key of Reflect.ownKeys(object)) {
+    const nested = (object as Record<PropertyKey, unknown>)[key];
+    deepFreeze(nested, seen);
+  }
+  return Object.freeze(value);
+}
 
 const registry = new Map<ConceptId, ConceptPackDefinition>([
   [leakagePack.id, leakagePack],

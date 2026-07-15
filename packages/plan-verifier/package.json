@@ -9,6 +9,9 @@
   "dependencies": {
     "@counterlab/concept-registry": "workspace:*",
     "@counterlab/contracts": "workspace:*",
-    "@counterlab/session-core": "workspace:*"
+    "@counterlab/experiment-ir": "workspace:*",
+    "@counterlab/experiment-scorer": "workspace:*",
+    "@counterlab/session-core": "workspace:*",
+    "zod": "4.4.3"
   }
 }
