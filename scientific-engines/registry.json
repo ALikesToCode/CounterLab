@@ -1,0 +1,205 @@
+{
+  "schemaVersion": "1",
+  "engines": [
+    {
+      "id": "counterlab-fixed-ml-kernel",
+      "domain": "machine_learning",
+      "packageName": "counterlab-kernel",
+      "exactVersion": "0.1.0",
+      "sourceUrl": "https://github.com/ALikesToCode/CounterLab",
+      "licenseId": "MIT",
+      "licenseFileHash": "4280a28f28fccb8e7653bbd5ecf70470d4a269849b13e60a6d490204cd476cd1",
+      "runtime": "server_python",
+      "roles": ["authoritative_solver"],
+      "capabilities": [
+        "canonical_result_serialization",
+        "fixed_class_imbalance_operations",
+        "fixed_entity_leakage_operations"
+      ],
+      "allowedOperationIds": [
+        "imbalance.confusion_matrix",
+        "imbalance.majority_baseline",
+        "imbalance.prevalence_sweep",
+        "imbalance.stratified_holdout",
+        "imbalance.threshold_sweep",
+        "leakage.controlled_comparison",
+        "leakage.entity_overlap",
+        "leakage.group_holdout",
+        "leakage.identity_ablation",
+        "leakage.random_row_split"
+      ],
+      "networkPolicy": "denied",
+      "deterministicProfile": {
+        "seedPolicy": "Each Subject Pack supplies an explicit frozen integer seed.",
+        "threadPolicy": "BLAS and OpenMP thread pools are fixed to one in the runner image.",
+        "toleranceProfileId": "counterlab-ml-f64-v1",
+        "hardwareNotes": [
+          "Released hashes are verified on the pinned Linux amd64 runner.",
+          "Published metric values are normalized to twelve decimal places."
+        ]
+      },
+      "resourceLimits": {
+        "maxSeconds": 150,
+        "maxMemoryMb": 1024,
+        "maxOutputBytes": 8388608
+      },
+      "validation": {
+        "oracleStrategyIds": ["ml-independent-fixtures-v1"],
+        "goldenFixtureIds": ["ml-kernel-golden-v1"],
+        "metamorphicPropertyIds": ["ml-row-order-invariance-v1"],
+        "upgradeDriftFixtureIds": ["ml-engine-upgrade-drift-v1"]
+      },
+      "attribution": "CounterLab contributors; MIT license.",
+      "integrityHash": "3f13367643fc86f185f9d43d9233367c624e2af34d739833954ee922bcb02079"
+    },
+    {
+      "id": "numpy",
+      "domain": "machine_learning",
+      "packageName": "numpy",
+      "exactVersion": "2.4.6",
+      "sourceUrl": "https://github.com/numpy/numpy/tree/v2.4.6",
+      "licenseId": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0",
+      "licenseFileHash": "4860083caa0de2ac3292ca98bd074bd8f45d8b32624e37b1e70a240bff61e488",
+      "runtime": "server_python",
+      "roles": ["authoritative_solver"],
+      "capabilities": [
+        "bounded_numeric_arrays",
+        "deterministic_seeded_numeric_primitives"
+      ],
+      "allowedOperationIds": [
+        "imbalance.confusion_matrix",
+        "imbalance.majority_baseline",
+        "imbalance.prevalence_sweep",
+        "imbalance.stratified_holdout",
+        "imbalance.threshold_sweep",
+        "leakage.controlled_comparison",
+        "leakage.entity_overlap",
+        "leakage.group_holdout",
+        "leakage.identity_ablation",
+        "leakage.random_row_split"
+      ],
+      "networkPolicy": "denied",
+      "deterministicProfile": {
+        "seedPolicy": "CounterLab passes an explicit Subject Pack seed.",
+        "threadPolicy": "OpenBLAS is fixed to one thread.",
+        "toleranceProfileId": "counterlab-ml-f64-v1",
+        "hardwareNotes": [
+          "The installed wheel targets Linux amd64.",
+          "No cross-hardware byte-identity claim is made."
+        ]
+      },
+      "resourceLimits": {
+        "maxSeconds": 150,
+        "maxMemoryMb": 1024,
+        "maxOutputBytes": 8388608
+      },
+      "validation": {
+        "oracleStrategyIds": ["ml-independent-fixtures-v1"],
+        "goldenFixtureIds": ["ml-kernel-golden-v1"],
+        "metamorphicPropertyIds": ["ml-row-order-invariance-v1"],
+        "upgradeDriftFixtureIds": ["ml-engine-upgrade-drift-v1"]
+      },
+      "attribution": "NumPy Developers; BSD-3-Clause and bundled third-party notices.",
+      "integrityHash": "dc8bb46c0ffa8db280e4ff2bfd2e71fbafce92488dabeca78dab787d138d6187"
+    },
+    {
+      "id": "pandas",
+      "domain": "machine_learning",
+      "packageName": "pandas",
+      "exactVersion": "2.3.3",
+      "sourceUrl": "https://github.com/pandas-dev/pandas/tree/v2.3.3",
+      "licenseId": "BSD-3-Clause",
+      "licenseFileHash": "3a7c6c317811be6c67da119ea1a8e8e98c118d430b820aa61a34d5f89b55c777",
+      "runtime": "server_python",
+      "roles": ["authoritative_solver"],
+      "capabilities": [
+        "bounded_tabular_transforms",
+        "canonical_fixture_ingestion"
+      ],
+      "allowedOperationIds": [
+        "imbalance.confusion_matrix",
+        "imbalance.majority_baseline",
+        "imbalance.prevalence_sweep",
+        "imbalance.stratified_holdout",
+        "imbalance.threshold_sweep",
+        "leakage.controlled_comparison",
+        "leakage.entity_overlap",
+        "leakage.group_holdout",
+        "leakage.identity_ablation",
+        "leakage.random_row_split"
+      ],
+      "networkPolicy": "denied",
+      "deterministicProfile": {
+        "seedPolicy": "CounterLab canonicalizes row order before fixed seeded operations.",
+        "threadPolicy": "Numerical dependencies are fixed to one thread.",
+        "toleranceProfileId": "counterlab-ml-f64-v1",
+        "hardwareNotes": [
+          "Tabular fingerprints normalize field and row order within the supported fixture contract."
+        ]
+      },
+      "resourceLimits": {
+        "maxSeconds": 150,
+        "maxMemoryMb": 1024,
+        "maxOutputBytes": 8388608
+      },
+      "validation": {
+        "oracleStrategyIds": ["ml-independent-fixtures-v1"],
+        "goldenFixtureIds": ["ml-kernel-golden-v1"],
+        "metamorphicPropertyIds": ["ml-row-order-invariance-v1"],
+        "upgradeDriftFixtureIds": ["ml-engine-upgrade-drift-v1"]
+      },
+      "attribution": "pandas development team; BSD-3-Clause license.",
+      "integrityHash": "0fcdc3bbc31c208f68bec693cc12ba422c62fb26bbfb02a24600fcc81f93a369"
+    },
+    {
+      "id": "scikit-learn",
+      "domain": "machine_learning",
+      "packageName": "scikit-learn",
+      "exactVersion": "1.9.0",
+      "sourceUrl": "https://github.com/scikit-learn/scikit-learn/tree/1.9.0",
+      "licenseId": "BSD-3-Clause",
+      "licenseFileHash": "8752dfe82d4a768e76ee309b202e7b33906d1ea9004d68cc61564391cc6b1a96",
+      "runtime": "server_python",
+      "roles": ["authoritative_solver"],
+      "capabilities": [
+        "fixed_classification_metrics",
+        "fixed_group_and_stratified_splits",
+        "fixed_logistic_regression_pipeline"
+      ],
+      "allowedOperationIds": [
+        "imbalance.confusion_matrix",
+        "imbalance.majority_baseline",
+        "imbalance.prevalence_sweep",
+        "imbalance.stratified_holdout",
+        "imbalance.threshold_sweep",
+        "leakage.controlled_comparison",
+        "leakage.entity_overlap",
+        "leakage.group_holdout",
+        "leakage.identity_ablation",
+        "leakage.random_row_split"
+      ],
+      "networkPolicy": "denied",
+      "deterministicProfile": {
+        "seedPolicy": "Every splitter and estimator receives the Subject Pack seed.",
+        "threadPolicy": "OpenMP and BLAS thread pools are fixed to one.",
+        "toleranceProfileId": "counterlab-ml-f64-v1",
+        "hardwareNotes": [
+          "The fixed estimator, preprocessing, seed, and hyperparameters are held constant across compared runs."
+        ]
+      },
+      "resourceLimits": {
+        "maxSeconds": 150,
+        "maxMemoryMb": 1024,
+        "maxOutputBytes": 8388608
+      },
+      "validation": {
+        "oracleStrategyIds": ["ml-independent-fixtures-v1"],
+        "goldenFixtureIds": ["ml-kernel-golden-v1"],
+        "metamorphicPropertyIds": ["ml-row-order-invariance-v1"],
+        "upgradeDriftFixtureIds": ["ml-engine-upgrade-drift-v1"]
+      },
+      "attribution": "scikit-learn developers; BSD-3-Clause license.",
+      "integrityHash": "0834fa84d379c5ad0d447986fb6be8aa2263c367ba5e85cce00d0962248ea0ec"
+    }
+  ]
+}

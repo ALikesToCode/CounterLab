@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "1",
+  "evidenceKind": "installed-engine-integrity",
+  "engineId": "numpy",
+  "packageName": "numpy",
+  "exactVersion": "2.4.6",
+  "environmentId": "counterlab-runner-linux-amd64-v2",
+  "imageDigest": "sha256:67682290a02e8b94e4522511242a3196f1a4f116eb187e22274abece2740b7a2",
+  "sourceBinding": {
+    "status": "BOUND",
+    "commit": "6e27bd021ce39ea5d65b8d921825c7964c157fde",
+    "ociLabel": "org.opencontainers.image.revision"
+  },
+  "artifact": {
+    "sha256": "90f9849678c75fe7afa2d348ac842c168b0a4d3d61919687216dfc547976d853",
+    "lockPath": "requirements.runner.lock.txt",
+    "installPolicy": "pip --require-hashes --only-binary=:all:"
+  },
+  "installed": {
+    "metadataSha256": "b082c52ccbe3b880bae177c35171b52ed6c947f3ad71e3762f2723f60a411de0",
+    "recordSha256": "9bed6e9df8a704c9adc367b576a68d664520edc04121412da2d6afaacf14f287",
+    "licenseExpression": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0",
+    "licenseSha256": "4860083caa0de2ac3292ca98bd074bd8f45d8b32624e37b1e70a240bff61e488"
+  },
+  "releaseGate": {
+    "status": "VERIFIED",
+    "limitations": [
+      "Floating-point authority is limited to the documented Linux amd64 tolerance profile."
+    ]
+  }
+}

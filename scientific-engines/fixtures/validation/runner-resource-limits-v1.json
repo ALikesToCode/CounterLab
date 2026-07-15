@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1",
+  "evidenceId": "runner-resource-limits-v1",
+  "kind": "resource_profile",
+  "cloudflareInstanceType": "basic",
+  "container": {
+    "vcpu": 0.25,
+    "memoryMb": 1024,
+    "diskMb": 4000
+  },
+  "job": {
+    "wallSeconds": 150,
+    "maximumAutomaticRepairs": 2,
+    "networkPolicyForGeneratedArtifacts": "denied",
+    "generatedCodeExecution": "not used in the hosted plan compiler"
+  },
+  "source": "https://developers.cloudflare.com/containers/platform-details/limits/"
+}

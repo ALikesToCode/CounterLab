@@ -1,0 +1,199 @@
+{
+  "schemaVersion": "1",
+  "subjectPacks": [
+    {
+      "subjectPackId": "class_imbalance",
+      "subjectPackVersion": "1.0.0",
+      "operationAuthorities": [
+        {
+          "operationId": "imbalance.confusion_matrix",
+          "authoritativeEngineIds": [
+            "counterlab-fixed-ml-kernel",
+            "numpy",
+            "pandas",
+            "scikit-learn"
+          ]
+        },
+        {
+          "operationId": "imbalance.majority_baseline",
+          "authoritativeEngineIds": [
+            "counterlab-fixed-ml-kernel",
+            "numpy",
+            "pandas",
+            "scikit-learn"
+          ]
+        },
+        {
+          "operationId": "imbalance.prevalence_sweep",
+          "authoritativeEngineIds": [
+            "counterlab-fixed-ml-kernel",
+            "numpy",
+            "pandas",
+            "scikit-learn"
+          ]
+        },
+        {
+          "operationId": "imbalance.stratified_holdout",
+          "authoritativeEngineIds": [
+            "counterlab-fixed-ml-kernel",
+            "numpy",
+            "pandas",
+            "scikit-learn"
+          ]
+        },
+        {
+          "operationId": "imbalance.threshold_sweep",
+          "authoritativeEngineIds": [
+            "counterlab-fixed-ml-kernel",
+            "numpy",
+            "pandas",
+            "scikit-learn"
+          ]
+        }
+      ],
+      "roles": {
+        "authoritativeSolver": {
+          "kind": "ENGINE",
+          "engineIds": [
+            "counterlab-fixed-ml-kernel",
+            "numpy",
+            "pandas",
+            "scikit-learn"
+          ]
+        },
+        "referenceOracle": {
+          "kind": "INTERNAL",
+          "authorityId": "counterlab-independent-fixtures",
+          "exactVersion": "1.0.0",
+          "integrityEvidenceId": "internal-oracle-integrity-v1",
+          "integrityHash": "2f6437d00023494998a780cdeebec8e6366bc9eca3f753bd3e6583a53fe6a633",
+          "validationEvidenceIds": ["ml-independent-fixtures-v1"],
+          "reason": "Independent simple fixtures and primitive count checks validate the fixed outputs."
+        },
+        "unitValidator": {
+          "kind": "NOT_APPLICABLE",
+          "reason": "The released class-imbalance pack has no physical-unit boundary."
+        },
+        "renderer": {
+          "kind": "INTERNAL",
+          "authorityId": "counterlab-signed-result-renderer",
+          "exactVersion": "1.0.0",
+          "integrityEvidenceId": "internal-renderer-integrity-v1",
+          "integrityHash": "86ced2be40bbef3d486b32b10a290469c0228c3d7460ca4efc615c4bc2fe92d3",
+          "validationEvidenceIds": ["signed-result-binding-v1"],
+          "reason": "Fixed React blocks render only signed canonical result paths."
+        },
+        "propertyTestGenerator": {
+          "kind": "INTERNAL",
+          "authorityId": "counterlab-mutation-matrix",
+          "exactVersion": "1.0.0",
+          "integrityEvidenceId": "internal-mutations-integrity-v1",
+          "integrityHash": "1abe9160292229da6edb11ed4a680c26a9c00edc63399c785b3b3ecfe5241172",
+          "validationEvidenceIds": ["ml-row-order-invariance-v1"],
+          "reason": "The frozen mutation catalogue exercises verifier and determinism properties."
+        },
+        "secondaryComparator": {
+          "kind": "NOT_APPLICABLE",
+          "reason": "No second implementation is presented as independent authority for this pack."
+        }
+      }
+    },
+    {
+      "subjectPackId": "entity_leakage",
+      "subjectPackVersion": "2.0.0",
+      "operationAuthorities": [
+        {
+          "operationId": "leakage.controlled_comparison",
+          "authoritativeEngineIds": [
+            "counterlab-fixed-ml-kernel",
+            "numpy",
+            "pandas",
+            "scikit-learn"
+          ]
+        },
+        {
+          "operationId": "leakage.entity_overlap",
+          "authoritativeEngineIds": [
+            "counterlab-fixed-ml-kernel",
+            "numpy",
+            "pandas",
+            "scikit-learn"
+          ]
+        },
+        {
+          "operationId": "leakage.group_holdout",
+          "authoritativeEngineIds": [
+            "counterlab-fixed-ml-kernel",
+            "numpy",
+            "pandas",
+            "scikit-learn"
+          ]
+        },
+        {
+          "operationId": "leakage.identity_ablation",
+          "authoritativeEngineIds": [
+            "counterlab-fixed-ml-kernel",
+            "numpy",
+            "pandas",
+            "scikit-learn"
+          ]
+        },
+        {
+          "operationId": "leakage.random_row_split",
+          "authoritativeEngineIds": [
+            "counterlab-fixed-ml-kernel",
+            "numpy",
+            "pandas",
+            "scikit-learn"
+          ]
+        }
+      ],
+      "roles": {
+        "authoritativeSolver": {
+          "kind": "ENGINE",
+          "engineIds": [
+            "counterlab-fixed-ml-kernel",
+            "numpy",
+            "pandas",
+            "scikit-learn"
+          ]
+        },
+        "referenceOracle": {
+          "kind": "INTERNAL",
+          "authorityId": "counterlab-independent-fixtures",
+          "exactVersion": "1.0.0",
+          "integrityEvidenceId": "internal-oracle-integrity-v1",
+          "integrityHash": "2f6437d00023494998a780cdeebec8e6366bc9eca3f753bd3e6583a53fe6a633",
+          "validationEvidenceIds": ["ml-independent-fixtures-v1"],
+          "reason": "Independent simple fixtures and primitive overlap checks validate the fixed outputs."
+        },
+        "unitValidator": {
+          "kind": "NOT_APPLICABLE",
+          "reason": "The released entity-leakage pack has no physical-unit boundary."
+        },
+        "renderer": {
+          "kind": "INTERNAL",
+          "authorityId": "counterlab-signed-result-renderer",
+          "exactVersion": "1.0.0",
+          "integrityEvidenceId": "internal-renderer-integrity-v1",
+          "integrityHash": "86ced2be40bbef3d486b32b10a290469c0228c3d7460ca4efc615c4bc2fe92d3",
+          "validationEvidenceIds": ["signed-result-binding-v1"],
+          "reason": "Fixed React blocks render only signed canonical result paths."
+        },
+        "propertyTestGenerator": {
+          "kind": "INTERNAL",
+          "authorityId": "counterlab-mutation-matrix",
+          "exactVersion": "1.0.0",
+          "integrityEvidenceId": "internal-mutations-integrity-v1",
+          "integrityHash": "1abe9160292229da6edb11ed4a680c26a9c00edc63399c785b3b3ecfe5241172",
+          "validationEvidenceIds": ["ml-row-order-invariance-v1"],
+          "reason": "The frozen mutation catalogue exercises verifier and determinism properties."
+        },
+        "secondaryComparator": {
+          "kind": "NOT_APPLICABLE",
+          "reason": "No second implementation is presented as independent authority for this pack."
+        }
+      }
+    }
+  ]
+}

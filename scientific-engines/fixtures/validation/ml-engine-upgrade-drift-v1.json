@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1",
+  "evidenceId": "ml-engine-upgrade-drift-v1",
+  "kind": "upgrade_drift_fixture",
+  "environmentId": "counterlab-runner-linux-amd64-v2",
+  "engineVersions": {
+    "counterlab-fixed-ml-kernel": "0.1.0",
+    "numpy": "2.4.6",
+    "pandas": "2.3.3",
+    "scikit-learn": "1.9.0",
+    "scipy-transitive": "1.18.0"
+  },
+  "toleranceProfileId": "counterlab-ml-f64-v1",
+  "expectedResultHashes": {
+    "entity-leakage": "2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0",
+    "class-imbalance": "90723d4dd1b73d42133646cf937f05befc731a8e4dbf0ff4c68ad51ddffdd0ef"
+  },
+  "upgradeRule": "Any engine or runtime change requires rerunning both golden fixtures, mutation matrices, held-out notebooks, and production smoke before promotion."
+}

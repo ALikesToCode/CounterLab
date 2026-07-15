@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1",
+  "evidenceId": "counterlab-fixed-ml-kernel-health-v1",
+  "kind": "health_report",
+  "engineId": "counterlab-fixed-ml-kernel",
+  "environmentId": "counterlab-runner-linux-amd64-v2",
+  "imageDigest": "sha256:67682290a02e8b94e4522511242a3196f1a4f116eb187e22274abece2740b7a2",
+  "observedVersion": "0.1.0",
+  "checks": {
+    "pipCheck": "PASSED",
+    "leakageResultHash": "2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0",
+    "imbalanceResultHash": "90723d4dd1b73d42133646cf937f05befc731a8e4dbf0ff4c68ad51ddffdd0ef",
+    "repeatedRunHashEquality": "PASSED"
+  }
+}

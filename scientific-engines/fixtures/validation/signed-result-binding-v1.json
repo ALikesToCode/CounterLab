@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1",
+  "evidenceId": "signed-result-binding-v1",
+  "kind": "golden_fixture",
+  "rule": "Learner-visible metrics and charts bind only to paths in a verified canonical result payload.",
+  "codePaths": [
+    "apps/web/src/App.tsx",
+    "apps/web/src/components/studio/GeneratedProofView.tsx",
+    "apps/web/src/components/lesson/InteractiveImbalanceLab.tsx"
+  ],
+  "tests": [
+    "apps/web/src/App.test.tsx",
+    "apps/web/src/components/studio/GeneratedProofView.test.tsx",
+    "apps/web/src/components/lesson/InteractiveImbalanceLab.test.tsx"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1",
+  "evidenceId": "pandas-health-v1",
+  "kind": "health_report",
+  "engineId": "pandas",
+  "environmentId": "counterlab-runner-linux-amd64-v2",
+  "imageDigest": "sha256:67682290a02e8b94e4522511242a3196f1a4f116eb187e22274abece2740b7a2",
+  "observedVersion": "2.3.3",
+  "checks": {
+    "import": "PASSED",
+    "canonicalFixtureFingerprints": "PASSED",
+    "rowOrderMetamorphicProperty": "PASSED"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "1",
+  "tools": [
+    {
+      "id": "syft",
+      "exactVersion": "1.44.0",
+      "sourceUrl": "https://github.com/anchore/syft/releases/tag/v1.44.0",
+      "licenseId": "Apache-2.0",
+      "platform": "linux/amd64",
+      "releaseCommit": "8cb78ce40ced6a731fb83f2a491a67444f541bf1",
+      "archiveSha256": "0e91737aee2b5baf1d255b959630194a302335d848ff97bb07921eb6205b5f5a",
+      "binarySha256": "23d4e25a32026ab27351c3c044a40bcc51311c00b8bb990aa204bec4b0bb19cd",
+      "checksumManifestSha256": "fa24ce6cafe6edbdba166414ce79de8142fbc217f8167e418dfb09e5aedfbf4e"
+    },
+    {
+      "id": "cyclonedx-bom",
+      "exactVersion": "7.3.0",
+      "sourceUrl": "https://github.com/CycloneDX/cyclonedx-python/releases/tag/v7.3.0",
+      "licenseId": "Apache-2.0",
+      "platform": "python/3.12",
+      "lockPath": "requirements.sbom.lock.txt",
+      "lockSha256": "ed6a8ddfde42de85504e8e5ff5f2df7e20b02a03ff6d0bd9c70beefad4ebc3c0"
+    },
+    {
+      "id": "grype",
+      "exactVersion": "0.112.0",
+      "sourceUrl": "https://github.com/anchore/grype/releases/tag/v0.112.0",
+      "licenseId": "Apache-2.0",
+      "platform": "linux/amd64",
+      "releaseCommit": "244f2a10a5668078fcf771454bbd832b3a5b9e8a",
+      "archiveSha256": "acb14a030010fe9bdb9594b4ae108d9d14ef2f926d936aa0916dc62c89c058ea",
+      "binarySha256": "d515f53bd5ee4930e144c6ea14a2659084763c336a1833b723db0b05080fcaf5",
+      "checksumManifestSha256": "6294bee2e41b4af0c6f603b049b836b8dab25e39dac12343c7b69dfa9e7f1399"
+    },
+    {
+      "id": "pnpm",
+      "exactVersion": "11.12.0",
+      "sourceUrl": "https://github.com/pnpm/pnpm/releases/tag/v11.12.0",
+      "licenseId": "MIT",
+      "platform": "node/22",
+      "integrity": "sha512-820a6fbd0d9f04c226638002aead1e45340a9139dd5dc077c1d83ef44aa2481c8eb6637b4c9aa696a3c7e35ba818e49cf27213e5f2b91138d09b7a3e26e898ba"
+    }
+  ]
+}

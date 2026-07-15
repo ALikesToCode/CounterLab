@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1",
+  "evidenceId": "ml-row-order-invariance-v1",
+  "kind": "metamorphic_property",
+  "properties": [
+    {
+      "id": "leakage-row-order-invariance",
+      "transformation": "Deterministically reorder fixture rows before execution.",
+      "expected": "Canonical input fingerprint and result hash remain unchanged.",
+      "testPath": "services/kernel/tests/test_fixture_kernel.py"
+    },
+    {
+      "id": "imbalance-row-order-invariance",
+      "transformation": "Deterministically reorder the rare-event fixture before execution.",
+      "expected": "Canonical input fingerprint and result hash remain unchanged.",
+      "testPath": "services/kernel/tests/test_imbalance_kernel.py"
+    }
+  ]
+}

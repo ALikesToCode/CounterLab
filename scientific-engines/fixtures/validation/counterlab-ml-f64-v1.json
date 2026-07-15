@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1",
+  "evidenceId": "counterlab-ml-f64-v1",
+  "kind": "tolerance_profile",
+  "floatSerialization": "Round published metric values to 12 decimal places before canonical JSON hashing.",
+  "threadPolicy": {
+    "blas": 1,
+    "openmp": 1,
+    "environmentVariables": [
+      "BLIS_NUM_THREADS=1",
+      "MKL_NUM_THREADS=1",
+      "NUMEXPR_NUM_THREADS=1",
+      "OMP_NUM_THREADS=1",
+      "OPENBLAS_NUM_THREADS=1",
+      "VECLIB_MAXIMUM_THREADS=1"
+    ]
+  },
+  "supportedPlatform": "linux/amd64",
+  "nonClaim": "Byte-identical floating-point outputs are not claimed on untested hardware or runtimes."
+}

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "1",
+  "evidenceKind": "installed-engine-integrity",
+  "engineId": "counterlab-fixed-ml-kernel",
+  "packageName": "counterlab-kernel",
+  "exactVersion": "0.1.0",
+  "environmentId": "counterlab-runner-linux-amd64-v2",
+  "imageDigest": "sha256:67682290a02e8b94e4522511242a3196f1a4f116eb187e22274abece2740b7a2",
+  "sourceBinding": {
+    "status": "BOUND",
+    "commit": "6e27bd021ce39ea5d65b8d921825c7964c157fde",
+    "ociLabel": "org.opencontainers.image.revision"
+  },
+  "artifact": {
+    "sha256": "a2a9cb3b5068a1e8c29fcb210b96b63879ad6c2c2255dc8734e4de1bc2426f61",
+    "pathInImage": "/opt/counterlab-wheelhouse/counterlab_kernel-0.1.0-py3-none-any.whl",
+    "buildLockSha256": "a943400c196804b44ed052d1fd54a1751d77a16583e0e355a4b9e4c08a9761c0",
+    "reproducibility": "Two clean builder executions produced byte-identical wheels."
+  },
+  "installed": {
+    "metadataSha256": "016947c264f91f5b03239c58b4465c05a4f7a9cd7f278ead21427065d0fcaeb9",
+    "recordSha256": "cacdb123dcde2de6519746a7f74371e24a920d3ff422836524f4316f888da87b",
+    "licenseExpression": "MIT",
+    "licenseSha256": "4280a28f28fccb8e7653bbd5ecf70470d4a269849b13e60a6d490204cd476cd1"
+  },
+  "releaseGate": {
+    "status": "VERIFIED",
+    "limitations": [
+      "Authority is limited to the registered fixed ML operations and fixtures."
+    ]
+  }
+}

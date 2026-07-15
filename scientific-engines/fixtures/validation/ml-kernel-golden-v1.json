@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "1",
+  "evidenceId": "ml-kernel-golden-v1",
+  "kind": "golden_fixture",
+  "environmentId": "counterlab-runner-linux-amd64-v2",
+  "fixtures": [
+    {
+      "subjectPackId": "entity-leakage",
+      "fixturePath": "fixtures/public/customer_churn.csv",
+      "fileSha256": "1dce2a5d78769fbe699b24641237fcd56fb1b425b7f21a82fdc131af3c88d836",
+      "canonicalInputFingerprint": "5c482f39e4e948a92dab61bf9c9f5c6577fbe9fc688fd597c9fefd785ee1be70",
+      "seed": 1729,
+      "resultHash": "2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0",
+      "checks": {
+        "randomAccuracy": 0.984722222222,
+        "groupAccuracy": 0.594444444444,
+        "identityAblationAccuracy": 0.673611111111,
+        "groupEntityOverlap": 0
+      }
+    },
+    {
+      "subjectPackId": "class-imbalance",
+      "fixturePath": "fixtures/public/fraud_rare_event.csv",
+      "fileSha256": "0364810d00eedcdad39b0528b8dd8b3b7cc5fdd06dbb74890869a6f27db266af",
+      "canonicalInputFingerprint": "7974fe5744c4f9f2e8a31817791dac09ba9efb17cc88a4aa3383ae333e92ad7f",
+      "seed": 2603,
+      "resultHash": "90723d4dd1b73d42133646cf937f05befc731a8e4dbf0ff4c68ad51ddffdd0ef",
+      "checks": {
+        "majorityAccuracy": 0.989333333333,
+        "majorityRecall": 0,
+        "stratifiedPrAuc": 0.19639318021,
+        "lowerThresholdRecall": 0.3125
+      }
+    }
+  ]
+}

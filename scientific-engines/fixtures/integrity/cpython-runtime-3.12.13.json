@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1",
+  "evidenceKind": "runtime-integrity",
+  "runtimeId": "cpython",
+  "exactVersion": "3.12.13",
+  "environmentId": "counterlab-runner-linux-amd64-v2",
+  "imageDigest": "sha256:67682290a02e8b94e4522511242a3196f1a4f116eb187e22274abece2740b7a2",
+  "baseImage": {
+    "reference": "python:3.12-slim-bookworm@sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b",
+    "platform": "linux/amd64"
+  },
+  "installedLicenseSha256": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf",
+  "releaseGate": {
+    "status": "VERIFIED",
+    "limitations": [
+      "The multi-architecture base manifest is pinned; Cloudflare and local release builds target linux/amd64."
+    ]
+  }
+}

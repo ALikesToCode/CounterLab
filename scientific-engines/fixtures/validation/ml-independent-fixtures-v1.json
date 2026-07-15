@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1",
+  "evidenceId": "ml-independent-fixtures-v1",
+  "kind": "oracle_strategy",
+  "strategy": [
+    "Compare kernel outputs against independently constructed small fixtures.",
+    "Recompute overlap and confusion totals from primitive labels and identifiers.",
+    "Require the frozen verifier to recompute canonical result hashes."
+  ],
+  "testFiles": [
+    "services/kernel/tests/test_fixture_kernel.py",
+    "services/kernel/tests/test_imbalance_kernel.py",
+    "services/kernel/tests/test_verifier.py",
+    "services/kernel/tests/test_imbalance_verifier.py"
+  ],
+  "nonClaim": "Independent fixtures validate released operations; they do not establish correctness for arbitrary notebooks or models."
+}

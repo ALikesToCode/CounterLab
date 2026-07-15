@@ -1,0 +1,79 @@
+{
+  "schemaVersion": "1",
+  "generatedAt": "2026-07-15T15:47:28Z",
+  "environmentId": "counterlab-runner-linux-amd64-v2",
+  "environmentKind": "local_candidate",
+  "sourceCommit": "6e27bd021ce39ea5d65b8d921825c7964c157fde",
+  "registryHash": "aa702bf0586ffbb1d5ab23253ff7c894fba78b6383aeca8880035ba24e3b6340",
+  "bindingsHash": "723009ad42eb0f030c045c051f5dd0b6a3997db37caac4932bc9587781e4c3b8",
+  "platform": {
+    "os": "linux",
+    "architecture": "amd64"
+  },
+  "runtimes": [
+    {
+      "id": "cpython",
+      "exactVersion": "3.12.13",
+      "sourceUrl": "https://www.python.org/downloads/release/python-31213/",
+      "licenseId": "Python-2.0",
+      "licenseFileHash": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf"
+    }
+  ],
+  "installedEngines": [
+    {
+      "engineId": "counterlab-fixed-ml-kernel",
+      "packageName": "counterlab-kernel",
+      "exactVersion": "0.1.0",
+      "artifactSha256": "a2a9cb3b5068a1e8c29fcb210b96b63879ad6c2c2255dc8734e4de1bc2426f61",
+      "healthEvidenceId": "counterlab-fixed-ml-kernel-health-v1",
+      "toleranceProfileId": "counterlab-ml-f64-v1"
+    },
+    {
+      "engineId": "numpy",
+      "packageName": "numpy",
+      "exactVersion": "2.4.6",
+      "artifactSha256": "90f9849678c75fe7afa2d348ac842c168b0a4d3d61919687216dfc547976d853",
+      "healthEvidenceId": "numpy-health-v1",
+      "toleranceProfileId": "counterlab-ml-f64-v1"
+    },
+    {
+      "engineId": "pandas",
+      "packageName": "pandas",
+      "exactVersion": "2.3.3",
+      "artifactSha256": "b3d11d2fda7eb164ef27ffc14b4fcab16a80e1ce67e9f57e19ec0afaf715ba89",
+      "healthEvidenceId": "pandas-health-v1",
+      "toleranceProfileId": "counterlab-ml-f64-v1"
+    },
+    {
+      "engineId": "scikit-learn",
+      "packageName": "scikit-learn",
+      "exactVersion": "1.9.0",
+      "artifactSha256": "056c92bb67ad4c28463c2f2653d9701449201e7e7a9e94e321be0f71c4fef2b8",
+      "healthEvidenceId": "scikit-learn-health-v1",
+      "toleranceProfileId": "counterlab-ml-f64-v1"
+    }
+  ],
+  "container": {
+    "imageDigest": "sha256:67682290a02e8b94e4522511242a3196f1a4f116eb187e22274abece2740b7a2",
+    "vcpu": 0.25,
+    "memoryMb": 1024,
+    "diskMb": 4000
+  },
+  "resourceLimitProfileId": "runner-resource-limits-v1",
+  "lockHashes": {
+    "requirements-build-lock": "a943400c196804b44ed052d1fd54a1751d77a16583e0e355a4b9e4c08a9761c0",
+    "requirements-runner-lock": "961930b7d94e84996c38c3974bdbb2d09e445ff92717100da7719f19bfd41181",
+    "requirements-sbom-lock": "ed6a8ddfde42de85504e8e5ff5f2df7e20b02a03ff6d0bd9c70beefad4ebc3c0",
+    "pnpm-lock": "da5405cf965c39875bafe5e96e250c5118ca7971f1fb5cd78ee9b67b9a5e16ec",
+    "sbom-tool-lock": "dc29492a2e4b4390c192cdda30ccac892b760485a2e816b30b8b5e18148cb864"
+  },
+  "sbomHashes": {
+    "node-sbom": "1614dafa5aac250b33824e14666fa49441a4bb5f548dbbd4bb2e6a679be801e1",
+    "python-sbom": "24f1d2cf673e8ac7c45289d3fbbc900f609ca53430b4166597b493fac8debc54",
+    "runner-container-sbom": "9e88e173c3f15bfebf785717948b8356a8ea547391557b844296cdc67d1e671b"
+  },
+  "sbomManifestEvidenceId": "sbom-manifest-v1",
+  "sbomManifestHash": "6b638ffc552805faf902c633ed96498ea675dc879e0a5b02a2bbd01b7026cb9a",
+  "vulnerabilityReportEvidenceId": "vulnerability-report-v1",
+  "vulnerabilityReportHash": "eff9811762df6396ec8d9995a85169041318725ad1a79c254b71663763916d68"
+}
