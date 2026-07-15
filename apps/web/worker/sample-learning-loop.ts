@@ -69,6 +69,63 @@ export async function evaluateLeakageTransfer(
 
 export const evaluateSampleTransfer = evaluateLeakageTransfer;
 
+const IMBALANCE_EXPECTED_STRATEGY = "cost_aware_threshold";
+const IMBALANCE_EXPECTED_RISK = "minority_false_negative_cost";
+const IMBALANCE_REQUIRED_EVIDENCE = new Set([
+  "confusion_matrix_exposes_misses",
+  "prevalence_shift_changes_precision",
+]);
+
+export async function evaluateImbalanceTransfer(
+  sessionId: string,
+  submission: TransferSubmission,
+  evaluatedAt: string,
+): Promise<TransferResult> {
+  const selected = new Set(submission.evidenceChoices);
+  const checks = [
+    {
+      invariant: "ASYMMETRIC_ERROR_COST",
+      passed:
+        submission.strategyChoice === IMBALANCE_EXPECTED_STRATEGY &&
+        submission.riskChoice === IMBALANCE_EXPECTED_RISK,
+      evidence:
+        "Missing a rare manufacturing defect has a different cost from inspecting a false alarm, so the threshold must reflect that asymmetry.",
+    },
+    {
+      invariant: "PREVALENCE_SENSITIVE_METRIC",
+      passed: selected.has("prevalence_shift_changes_precision"),
+      evidence:
+        "Precision changes when defect prevalence changes even when conditional model behavior is held fixed.",
+    },
+    {
+      invariant: "EVIDENCE_GROUNDED",
+      passed: [...IMBALANCE_REQUIRED_EVIDENCE].every((item) =>
+        selected.has(item),
+      ),
+      evidence:
+        "The confusion matrix exposes missed defects and the prevalence scenario explains why accuracy alone does not transfer.",
+    },
+  ];
+  const outcome = checks.every((check) => check.passed) ? "PASSED" : "FAILED";
+  const base = {
+    schemaVersion: "1" as const,
+    id: `transfer_${crypto.randomUUID()}`,
+    sessionId,
+    taskId: "manufacturing-defect-transfer-01",
+    outcome,
+    selectedStrategy: submission.strategyChoice,
+    identifiedRisks: [submission.riskChoice],
+    evidenceChoices: [...selected].sort(),
+    checks,
+    evaluatorVersion: "counterlab-imbalance-transfer-v1",
+    evaluatedAt,
+  };
+  return TransferResultSchema.parse({
+    ...base,
+    resultHash: await hashCanonical(base),
+  });
+}
+
 type KernelPatchResult = {
   patchedSha256: string;
   metadataHash: string;

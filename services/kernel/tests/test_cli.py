@@ -40,9 +40,45 @@ def test_mutations_command_prints_matrix_and_fails_if_a_mutation_escapes(tmp_pat
     assert "Summary:" in completed.stdout
 
 
+def test_imbalance_mutations_command_prints_the_verified_matrix(tmp_path: Path) -> None:
+    completed = _run_cli("mutations", "--concept", "imbalance", cwd=tmp_path)
+
+    assert completed.returncode == 0, completed.stderr
+    assert "threshold-does-not-change-outcome" in completed.stdout
+    assert "12/12 critical mutations detected" in completed.stdout
+
+
 def test_generate_command_creates_reproducible_public_assets(tmp_path: Path) -> None:
     completed = _run_cli("generate", "--root", str(tmp_path), "--seed", "1729", cwd=tmp_path)
 
     assert completed.returncode == 0, completed.stderr
     assert (tmp_path / "fixtures/public/customer_churn.csv").exists()
     assert (tmp_path / "fixtures/notebooks/customer_churn_leakage.ipynb").exists()
+    assert (tmp_path / "fixtures/public/fraud_rare_event.csv").exists()
+    assert (tmp_path / "fixtures/notebooks/fraud_class_imbalance.ipynb").exists()
+
+
+def test_transfer_command_runs_the_fixed_evaluator(tmp_path: Path) -> None:
+    output_path = tmp_path / "transfer.json"
+    completed = _run_cli(
+        "transfer",
+        "--concept",
+        "imbalance",
+        "--decision",
+        "reject_accuracy_only",
+        "--metric",
+        "recall_and_pr_auc",
+        "--evidence",
+        "zero_true_positives",
+        "--evidence",
+        "rare_base_rate",
+        "--output",
+        str(output_path),
+        cwd=tmp_path,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["outcome"] == "TRANSFER_PASSED"
+    assert payload["patchUnlocked"] is True
+    assert payload["resultHash"] in completed.stdout

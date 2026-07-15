@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "1",
+  "id": "manufacturing-defect-imbalance-01",
+  "concept": "class_imbalance_transfer",
+  "title": "Would this inspection model catch rare defects?",
+  "scenario": "A factory evaluated 20,000 parts, including 200 defective parts. The model predicted every part as acceptable and reports 99% accuracy. Decide whether that evidence supports deployment and select the evidence needed to evaluate the rare defective class.",
+  "resultExcerpt": "accuracy = 0.99\nconfusion_matrix = [[19800, 0], [200, 0]]",
+  "decisionChoices": [
+    {
+      "id": "approve_high_accuracy",
+      "label": "Approve because accuracy is 99%",
+      "description": "Treat overall correctness as sufficient evidence."
+    },
+    {
+      "id": "reject_accuracy_only",
+      "label": "Reject the accuracy-only conclusion",
+      "description": "Check performance on defective parts and choose a decision threshold based on the cost of missed defects."
+    },
+    {
+      "id": "collect_more_negatives",
+      "label": "Collect only more acceptable parts",
+      "description": "Increase the already dominant negative class."
+    }
+  ],
+  "metricChoices": [
+    {
+      "id": "accuracy",
+      "label": "Accuracy only",
+      "description": "Report the fraction of all parts classified correctly."
+    },
+    {
+      "id": "recall_and_pr_auc",
+      "label": "Defect recall and PR-AUC",
+      "description": "Measure recovered defects and ranking quality relative to the rare-class base rate."
+    },
+    {
+      "id": "negative_specificity",
+      "label": "Acceptable-part specificity",
+      "description": "Measure only performance on the dominant class."
+    }
+  ],
+  "evidenceChips": [
+    {
+      "id": "zero_true_positives",
+      "label": "The confusion matrix has zero true positives",
+      "excerpt": "defective row: [200 missed, 0 caught]"
+    },
+    {
+      "id": "rare_base_rate",
+      "label": "Defects are only 1% of evaluated parts",
+      "excerpt": "200 / 20,000 = 0.01 prevalence"
+    },
+    {
+      "id": "many_true_negatives",
+      "label": "19,800 acceptable parts were classified correctly",
+      "excerpt": "acceptable row: [19,800 correct, 0 false alarms]"
+    }
+  ]
+}

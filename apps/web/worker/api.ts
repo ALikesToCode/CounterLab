@@ -2,6 +2,8 @@ import {
   ArtifactManifestSchema,
   ExperimentPlanV2Schema,
   HostedVerifiedResultSetV2Schema,
+  InteractiveImbalanceRunRequestSchema,
+  InteractiveLeakageRunRequestSchema,
   PatchPlanV1Schema,
   PatchResultSchema,
   PublicCompilerEventSchema,
@@ -11,6 +13,7 @@ import {
   RunnerOutputPathSchema,
   RunnerPatchCompileBundleSchema,
   type BeliefTest,
+  type ExperimentPlanV2,
   type PatchResult,
   type RunnerCallback,
   type VerifiedResultSet,
@@ -18,6 +21,7 @@ import {
 import {
   ApprovedSampleBeliefAnalyst,
   BeliefAnalystError,
+  buildSanitizedAnalystContext,
   createLiveBeliefAnalystFromEnv,
 } from "@counterlab/belief-analyst";
 import {
@@ -31,6 +35,8 @@ import {
   ResultVerificationError,
   verifyExperimentPlan,
   verifyHostedResultSet,
+  verifyInteractiveLeakageExperimentPlan,
+  verifyInteractiveResultSet,
   verifyPatchPlan,
 } from "@counterlab/plan-verifier";
 import {
@@ -66,6 +72,7 @@ import {
 import { D1RunnerJobRepository } from "./d1-runner-job-repository";
 import {
   CloudflareContainerRunnerDispatcher,
+  HttpRunnerDispatcher,
   R2RunnerObjectStore,
   isRunnerContainerBinding,
   type RunnerDispatcher,
@@ -79,6 +86,7 @@ import {
 import { sampleManifest, sampleResult } from "./sample-evidence";
 import {
   createSamplePatchResult,
+  evaluateImbalanceTransfer,
   evaluateLeakageTransfer,
 } from "./sample-learning-loop";
 import {
@@ -87,16 +95,24 @@ import {
   sampleLabVerification,
 } from "./sample-proof";
 import { createLiveReasoningProof } from "./live-proof";
+import {
+  loadOperationalDiagnostics,
+  type OperationalDiagnostics,
+} from "./operational-diagnostics";
 
 type WorkerBindings = Env & {
+  CODEX_AUTH_JSON?: string;
   OPENAI_API_KEY?: string;
   OPENAI_BASE_URL?: string;
   OPENAI_MODEL?: string;
   OPENAI_REASONING_EFFORT?: string;
+  OPENAI_TIMEOUT_MS?: string;
   COUNTERLAB_CODEX_MODE?: string;
   COUNTERLAB_MAX_NOTEBOOK_BYTES?: string;
   COUNTERLAB_SIGNING_KEY?: string;
   COUNTERLAB_RUNNER_SIGNING_KEY?: string;
+  COUNTERLAB_RUNNER_BASE_URL?: string;
+  COUNTERLAB_ADMIN_DIAGNOSTIC_SECRET?: string;
   RUNNER?: unknown;
 };
 
@@ -114,6 +130,8 @@ export interface ApiOptions {
   runnerObjectStore?: RunnerObjectStore;
   runnerDispatcher?: RunnerDispatcher;
   runnerSigningKey?: string;
+  adminDiagnosticSecret?: string;
+  operationalDiagnostics?: () => Promise<OperationalDiagnostics>;
   now?: () => Date;
   id?: (prefix: string) => string;
 }
@@ -138,7 +156,14 @@ const CreateReplaySessionSchema = z
   .object({ replayId: z.literal("leakage-01") })
   .strict();
 const BeliefRequestSchema = z
-  .object({ learnerClaim: z.string().trim().min(12).max(2000) })
+  .object({
+    learnerClaim: z.string().trim().min(12).max(2000),
+    previewHash: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/u)
+      .optional(),
+    sensitiveContentApproved: z.boolean().optional(),
+  })
   .strict();
 const ConfirmationSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("confirm") }).strict(),
@@ -198,6 +223,16 @@ function jsonSuccess<T>(data: T) {
 
 function jsonError(code: string, message: string, status: number) {
   return { ok: false as const, error: { code, message, status } };
+}
+
+function constantTimeEqual(left: string, right: string): boolean {
+  const length = Math.max(left.length, right.length);
+  let difference = left.length ^ right.length;
+  for (let index = 0; index < length; index += 1) {
+    difference |=
+      (left.charCodeAt(index) || 0) ^ (right.charCodeAt(index) || 0);
+  }
+  return difference === 0;
 }
 
 function contentLength(context: Context<AppBindings>): number | undefined {
@@ -337,7 +372,16 @@ function runnerDispatcher(
   options: ApiOptions,
 ): RunnerDispatcher | undefined {
   if (options.runnerDispatcher !== undefined) return options.runnerDispatcher;
-  return isRunnerContainerBinding(context.env?.RUNNER)
+  const processRunnerURL = context.env?.COUNTERLAB_RUNNER_BASE_URL?.trim();
+  if (processRunnerURL !== undefined && processRunnerURL.length > 0) {
+    try {
+      return new HttpRunnerDispatcher({ baseURL: processRunnerURL });
+    } catch {
+      return undefined;
+    }
+  }
+  return isRunnerContainerBinding(context.env?.RUNNER) &&
+    (context.env?.CODEX_AUTH_JSON?.trim().length ?? 0) > 0
     ? new CloudflareContainerRunnerDispatcher(context.env.RUNNER)
     : undefined;
 }
@@ -425,7 +469,11 @@ function runnerCapability(
   context: Context<AppBindings>,
   options: ApiOptions = {},
 ) {
-  return runnerDispatcher(context, options) === undefined
+  const signingKey =
+    options.runnerSigningKey ?? context.env?.COUNTERLAB_RUNNER_SIGNING_KEY;
+  return runnerDispatcher(context, options) === undefined ||
+    signingKey === undefined ||
+    signingKey.length < 32
     ? ("local-runner-required" as const)
     : ("configured" as const);
 }
@@ -535,6 +583,43 @@ export function createApi(options: ApiOptions = {}) {
         requestId: context.get("requestId"),
       }),
     );
+  });
+
+  app.get("/api/admin/diagnostics", async (context) => {
+    const configured = (
+      options.adminDiagnosticSecret ??
+      context.env?.COUNTERLAB_ADMIN_DIAGNOSTIC_SECRET ??
+      ""
+    ).trim();
+    if (configured.length < 32) {
+      return context.json(
+        jsonError("NOT_FOUND", "The requested resource was not found", 404),
+        404,
+      );
+    }
+    const authorization = context.req.header("authorization") ?? "";
+    const presented = authorization.startsWith("Bearer ")
+      ? authorization.slice("Bearer ".length)
+      : "";
+    if (!constantTimeEqual(presented, configured)) {
+      return context.json(
+        jsonError(
+          "ADMIN_AUTH_REQUIRED",
+          "Administrative authorization failed",
+          401,
+        ),
+        401,
+      );
+    }
+    const generatedAt = requestNow(options).toISOString();
+    const diagnostics =
+      options.operationalDiagnostics === undefined
+        ? await loadOperationalDiagnostics(
+            requiredDatabase(context),
+            generatedAt,
+          )
+        : await options.operationalDiagnostics();
+    return context.json(jsonSuccess(diagnostics));
   });
 
   app.post("/api/artifacts", async (context) => {
@@ -678,8 +763,76 @@ export function createApi(options: ApiOptions = {}) {
     return context.json(jsonSuccess(statePayload(session)));
   });
 
+  app.post("/api/sessions/:sessionId/belief-test/preview", async (context) => {
+    const { learnerClaim } = BeliefRequestSchema.pick({
+      learnerClaim: true,
+    }).parse(await readJson(context));
+    const service = sessionService(context, options);
+    const session = await service.getSession(context.req.param("sessionId"));
+    requireMutableSession(session);
+    if (session.mode.kind !== "live_notebook") {
+      throw new ApiInputError(
+        "LIVE_PREVIEW_MODE_REQUIRED",
+        "Sanitized analyst preview is available only for live notebook sessions",
+        409,
+      );
+    }
+    if (session.state !== "INGESTED") {
+      throw new ApiInputError(
+        "LIVE_PREVIEW_STATE_INVALID",
+        "Sanitized analyst preview must be created before the Belief Test",
+        409,
+      );
+    }
+    const artifact = await artifacts(context, options).find(session.artifactId);
+    if (artifact === undefined) {
+      throw new ApiInputError(
+        "ARTIFACT_NOT_FOUND",
+        "Session artifact was not found",
+        404,
+      );
+    }
+    const routing = routeArtifactConcept(artifact.manifest);
+    if (routing.kind !== "selected") {
+      throw new ApiInputError(
+        routing.kind === "choice_required"
+          ? "CONCEPT_CHOICE_REQUIRED"
+          : routing.kind === "unsupported_artifact"
+            ? "ARTIFACT_UNSUPPORTED"
+            : "INSUFFICIENT_EVIDENCE",
+        routing.kind === "choice_required"
+          ? "More than one released concept pack matches this notebook"
+          : routing.kind === "unsupported_artifact"
+            ? (routing.reasons[0]?.message ??
+              "No released concept pack supports this artifact")
+            : "The notebook does not contain enough resolved evidence for a live analyst call",
+        routing.kind === "choice_required" ? 409 : 422,
+      );
+    }
+    const sanitizedContent = buildSanitizedAnalystContext({
+      sessionId: session.id,
+      learnerClaim,
+      manifest: artifact.manifest,
+      concept: routing.concept,
+    });
+    const serialized = JSON.stringify(sanitizedContent);
+    return context.json(
+      jsonSuccess({
+        schemaVersion: "1" as const,
+        concept: routing.concept,
+        conceptTitle: getConceptPack(routing.concept).title,
+        previewHash: await hashCanonical(sanitizedContent),
+        requiresSensitiveApproval:
+          serialized.includes("[REDACTED_SECRET]") ||
+          serialized.includes("[REDACTED_PATH]"),
+        sanitizedContent,
+      }),
+    );
+  });
+
   app.post("/api/sessions/:sessionId/belief-test", async (context) => {
-    const { learnerClaim } = BeliefRequestSchema.parse(await readJson(context));
+    const input = BeliefRequestSchema.parse(await readJson(context));
+    const { learnerClaim } = input;
     const service = sessionService(context, options);
     const session = await service.getSession(context.req.param("sessionId"));
     requireMutableSession(session);
@@ -752,6 +905,37 @@ export function createApi(options: ApiOptions = {}) {
       return context.json(jsonSuccess(statePayload(proposed)));
     }
 
+    if (session.mode.kind === "live_notebook") {
+      const sanitizedContent = buildSanitizedAnalystContext({
+        sessionId: session.id,
+        learnerClaim,
+        manifest: artifact.manifest,
+        concept: routing.concept,
+      });
+      const expectedPreviewHash = await hashCanonical(sanitizedContent);
+      if (input.previewHash !== expectedPreviewHash) {
+        throw new ApiInputError(
+          "SANITIZED_PREVIEW_REQUIRED",
+          "Review the current sanitized analyst preview before starting live reasoning",
+          409,
+        );
+      }
+      const serialized = JSON.stringify(sanitizedContent);
+      const containsSensitiveRedaction =
+        serialized.includes("[REDACTED_SECRET]") ||
+        serialized.includes("[REDACTED_PATH]");
+      if (
+        containsSensitiveRedaction &&
+        input.sensitiveContentApproved !== true
+      ) {
+        throw new ApiInputError(
+          "SENSITIVE_CONTENT_APPROVAL_REQUIRED",
+          "Explicit approval is required because sensitive-looking content was redacted",
+          409,
+        );
+      }
+    }
+
     const analyst =
       session.mode.kind === "live_notebook"
         ? createLiveBeliefAnalystFromEnv({
@@ -759,6 +943,7 @@ export function createApi(options: ApiOptions = {}) {
             OPENAI_BASE_URL: context.env?.OPENAI_BASE_URL,
             OPENAI_MODEL: context.env?.OPENAI_MODEL,
             OPENAI_REASONING_EFFORT: context.env?.OPENAI_REASONING_EFFORT,
+            OPENAI_TIMEOUT_MS: context.env?.OPENAI_TIMEOUT_MS,
           })
         : new ApprovedSampleBeliefAnalyst();
     const result = await analyst.propose({
@@ -1202,9 +1387,7 @@ export function createApi(options: ApiOptions = {}) {
     }
     const body = await readBoundedText(
       context,
-      generatedPath.endsWith(".ipynb")
-        ? maxNotebookBytes(context)
-        : 1_048_576,
+      generatedPath.endsWith(".ipynb") ? maxNotebookBytes(context) : 1_048_576,
     );
     const contentType = generatedPath.endsWith(".json")
       ? "application/json"
@@ -1296,6 +1479,7 @@ export function createApi(options: ApiOptions = {}) {
     } catch {
       planInput = null;
     }
+    const verifierStartedAt = performance.now();
     let report:
       | Awaited<ReturnType<typeof verifyExperimentPlan>>
       | Awaited<ReturnType<typeof verifyPatchPlan>>;
@@ -1343,6 +1527,10 @@ export function createApi(options: ApiOptions = {}) {
       }
       report = error.report;
     }
+    const verifierDurationMs = Math.max(
+      0,
+      Math.round(performance.now() - verifierStartedAt),
+    );
 
     const jobs = runnerJobService(context, options);
     let updatedJob = job;
@@ -1363,6 +1551,7 @@ export function createApi(options: ApiOptions = {}) {
           canRepair: false,
           counterexamples: [],
           nextCursor: updatedJob.eventCursor,
+          verifierDurationMs,
           runnerJob: updatedJob,
           verification: report,
         }),
@@ -1404,6 +1593,7 @@ export function createApi(options: ApiOptions = {}) {
         canRepair,
         counterexamples,
         nextCursor: updatedJob.eventCursor,
+        verifierDurationMs,
         runnerJob: updatedJob,
         verification: report,
       }),
@@ -1413,7 +1603,8 @@ export function createApi(options: ApiOptions = {}) {
   app.get("/api/sessions/:sessionId/jobs/:jobId/events", async (context) => {
     const sessionId = context.req.param("sessionId");
     const jobId = context.req.param("jobId");
-    const job = await runnerJobService(context, options).getJob(jobId);
+    const jobs = runnerJobService(context, options);
+    const job = await jobs.expireIfTimedOut(jobId);
     if (job.sessionId !== sessionId) {
       throw new ApiInputError(
         "RUNNER_JOB_SESSION_MISMATCH",
@@ -1430,14 +1621,13 @@ export function createApi(options: ApiOptions = {}) {
         400,
       );
     }
-    const events = await runnerJobService(context, options).listEvents(
-      jobId,
-      after,
-    );
+    const events = await jobs.listEvents(jobId, after);
     return context.json(
       jsonSuccess({
         events,
         nextCursor: events.at(-1)?.cursor ?? after,
+        jobStatus: job.status,
+        ...(job.error === undefined ? {} : { jobError: job.error }),
         terminal: [
           "VERIFIED",
           "REJECTED",
@@ -1485,6 +1675,7 @@ export function createApi(options: ApiOptions = {}) {
       | Awaited<ReturnType<typeof verifyPatchPlan>>
       | null = null;
     let verifiedResult: VerifiedResultSet | null = null;
+    let interactiveRun = false;
     let patchResult: PatchResult | null = null;
     let terminalCallback: RunnerCallback = callback;
     if (callback.status === "VERIFIED" && job.kind === "LAB_COMPILE") {
@@ -1583,6 +1774,7 @@ export function createApi(options: ApiOptions = {}) {
             const bundle = RunnerLabRunBundleSchema.parse(
               JSON.parse(inputObject.body),
             );
+            interactiveRun = bundle.purpose === "INTERACTIVE";
             if (
               bundle.jobId !== jobId ||
               bundle.sessionId !== job.sessionId ||
@@ -1600,10 +1792,16 @@ export function createApi(options: ApiOptions = {}) {
             const result = HostedVerifiedResultSetV2Schema.parse(
               JSON.parse(resultObject.body),
             );
-            verification = await verifyHostedResultSet(
-              result,
-              bundle.experimentPlan,
-            );
+            verification =
+              bundle.purpose === "INTERACTIVE"
+                ? result.concept === "class_imbalance"
+                  ? await verifyHostedResultSet(result, bundle.experimentPlan)
+                  : await verifyInteractiveResultSet(
+                      result,
+                      bundle.experimentPlan,
+                      bundle.experimentPlan.baseline.runId,
+                    )
+                : await verifyHostedResultSet(result, bundle.experimentPlan);
             verifiedResult = result;
           } catch (error) {
             if (error instanceof ApiInputError) throw error;
@@ -1837,6 +2035,7 @@ export function createApi(options: ApiOptions = {}) {
         });
       } else if (
         job.kind === "LAB_RUN" &&
+        !interactiveRun &&
         terminalCallback.status === "VERIFIED" &&
         verification?.status === "VERIFIED" &&
         verifiedResult !== null
@@ -1897,10 +2096,8 @@ export function createApi(options: ApiOptions = {}) {
               verifiedResultHash: updatedSession.verifiedResult.resultHash,
               transferResultHash: updatedSession.transferResult.resultHash,
               conceptPackVersion: job.conceptPack.version,
-              allowedTransformations: [
-                "replace_row_split_with_group_holdout",
-                "exclude_entity_feature",
-              ],
+              allowedTransformations: getConceptPack(patchPlan.concept)
+                .patchContract.allowedTransformations,
               allowedCellIndices: patchPlan.targetCells,
             }),
             service.listEvents(job.sessionId),
@@ -2040,6 +2237,7 @@ export function createApi(options: ApiOptions = {}) {
       const bundle = RunnerLabRunBundleSchema.parse({
         schemaVersion: "1",
         kind: "LAB_RUN",
+        purpose: "AUTHORITATIVE",
         jobId,
         sessionId,
         stateVersion: current.version,
@@ -2048,7 +2246,12 @@ export function createApi(options: ApiOptions = {}) {
         learnerClaim: current.beliefTest.learnerClaim,
         experimentPlan: plan,
         experimentPlanHash: planHash,
-        fixture: { id: "public-leakage-v1" },
+        fixture: {
+          id:
+            plan.concept === "class_imbalance"
+              ? "public-imbalance-v1"
+              : "public-leakage-v1",
+        },
         permittedOutputs: ["verified-result.json"],
       });
       const bundleHash = await hashCanonical(bundle);
@@ -2139,6 +2342,392 @@ export function createApi(options: ApiOptions = {}) {
     return context.json(jsonSuccess(statePayload(completed)));
   });
 
+  app.post("/api/sessions/:sessionId/lab/interactive", async (context) => {
+    const configuration = z
+      .union([
+        InteractiveLeakageRunRequestSchema,
+        InteractiveImbalanceRunRequestSchema,
+      ])
+      .parse(await readJson(context));
+    const service = sessionService(context, options);
+    const sessionId = context.req.param("sessionId");
+    const current = await service.getSession(sessionId);
+    if (
+      current.mode.kind !== "live_notebook" ||
+      current.verifiedResult === undefined ||
+      current.beliefTest === undefined ||
+      current.verifiedResult.concept !== current.beliefTest.concept ||
+      ("concept" in configuration &&
+        configuration.concept !== current.beliefTest.concept) ||
+      (!("concept" in configuration) &&
+        current.beliefTest.concept !== "entity_leakage")
+    ) {
+      throw new ApiInputError(
+        "INTERACTIVE_LAB_NOT_READY",
+        "A completed live result for this interactive concept is required",
+        409,
+      );
+    }
+    const dispatcher = runnerDispatcher(context, options);
+    if (dispatcher === undefined) {
+      throw new ApiInputError(
+        "LOCAL_RUNNER_REQUIRED",
+        "Interactive fixed-kernel execution requires a configured CounterLab runner",
+        503,
+      );
+    }
+    const artifact = await artifacts(context, options).find(current.artifactId);
+    const lineage = HostedPlanLineageSchema.safeParse(current.labVerification);
+    if (artifact === undefined || !lineage.success) {
+      throw new ApiInputError(
+        "LIVE_PLAN_LINEAGE_MISSING",
+        "The verified Plan lineage is incomplete",
+        409,
+      );
+    }
+    if (
+      !("concept" in configuration) &&
+      !artifact.manifest.schemaSummary.entityCandidates.includes(
+        configuration.entityField,
+      )
+    ) {
+      throw new ApiInputError(
+        "INTERACTIVE_ENTITY_UNRESOLVED",
+        "The selected entity field is not an artifact candidate",
+        422,
+      );
+    }
+    const planObject = await runnerObjectStore(context, options).get(
+      `runner-output/${lineage.data.jobId}/experiment-plan.json`,
+    );
+    if (planObject === undefined) {
+      throw new ApiInputError(
+        "LIVE_PLAN_LINEAGE_MISSING",
+        "The verified Plan bytes could not be resolved",
+        409,
+      );
+    }
+    const plan = ExperimentPlanV2Schema.parse(JSON.parse(planObject.body));
+    if (plan.concept !== current.beliefTest.concept) {
+      throw new ApiInputError(
+        "INTERACTIVE_CONCEPT_MISMATCH",
+        "The verified Plan does not match the session concept",
+        409,
+      );
+    }
+    const manifestHash = await hashCanonical(artifact.manifest);
+    const basePlanHash = await hashCanonical(plan);
+    if (
+      manifestHash !== plan.artifactManifestHash ||
+      basePlanHash !== lineage.data.planHash
+    ) {
+      throw new ApiInputError(
+        "LIVE_PLAN_LINEAGE_MISSING",
+        "The Plan hash does not match the verified artifact lineage",
+        409,
+      );
+    }
+    const configurationHash = await hashCanonical({
+      schemaVersion: "1",
+      basePlanHash,
+      configuration,
+    });
+    let selectedRunId: string;
+    const interactivePlan = ExperimentPlanV2Schema.parse(
+      "concept" in configuration
+        ? (() => {
+            const thresholdRun = plan.interventions.find(
+              (run) => run.operation === "imbalance.threshold_sweep",
+            );
+            const prevalenceRun = plan.interventions.find(
+              (run) => run.operation === "imbalance.prevalence_sweep",
+            );
+            if (
+              plan.concept !== "class_imbalance" ||
+              thresholdRun?.concept !== "class_imbalance" ||
+              prevalenceRun?.concept !== "class_imbalance"
+            ) {
+              throw new ApiInputError(
+                "INTERACTIVE_PLAN_INCOMPLETE",
+                "The verified imbalance Plan is missing registered controls",
+                409,
+              );
+            }
+            selectedRunId = `interactive_${configurationHash.slice(0, 16)}`;
+            const scenario =
+              configuration.prevalenceScenario === "observed"
+                ? "rarer"
+                : configuration.prevalenceScenario;
+            return {
+              ...plan,
+              planId: `interactive_plan_${configurationHash.slice(0, 16)}`,
+              interventions: plan.interventions.map((run) => {
+                if (run.operation === "imbalance.threshold_sweep") {
+                  return {
+                    ...run,
+                    runId:
+                      configuration.prevalenceScenario === "observed"
+                        ? selectedRunId
+                        : run.runId,
+                    threshold: configuration.threshold,
+                    prevalenceScenario: "observed" as const,
+                  };
+                }
+                if (run.operation === "imbalance.prevalence_sweep") {
+                  return {
+                    ...run,
+                    runId:
+                      configuration.prevalenceScenario === "observed"
+                        ? run.runId
+                        : selectedRunId,
+                    threshold: configuration.threshold,
+                    prevalenceScenario: scenario,
+                  };
+                }
+                return run;
+              }),
+              controlledVariables: [
+                "fixture",
+                "model score",
+                "stratified holdout",
+                "seed",
+              ],
+              changedVariables: ["decision threshold", "deployment prevalence"],
+            };
+          })()
+        : (() => {
+            selectedRunId = `interactive_${configurationHash.slice(0, 16)}`;
+            const targetOperation =
+              configuration.splitStrategy === "group"
+                ? "leakage.group_holdout"
+                : configuration.identityAblation
+                  ? "leakage.identity_ablation"
+                  : "leakage.random_row_split";
+            const configureRun = <T extends ExperimentPlanV2["baseline"]>(
+              run: T,
+            ): T =>
+              (run.operation === targetOperation
+                ? {
+                    ...run,
+                    runId: selectedRunId,
+                    entityField: configuration.entityField,
+                    dropIdentity: configuration.identityAblation,
+                    testFraction: configuration.testFraction,
+                  }
+                : run) as T;
+            return {
+              ...plan,
+              planId: `interactive_plan_${configurationHash.slice(0, 16)}`,
+              baseline: configureRun(plan.baseline),
+              interventions: plan.interventions.map(configureRun),
+              controlledVariables: [
+                "fixture",
+                "model",
+                "preprocessing",
+                "seed",
+              ],
+              changedVariables: [
+                "split strategy",
+                "identity feature",
+                "test fraction",
+              ],
+            };
+          })(),
+    );
+    if ("concept" in configuration) {
+      await verifyExperimentPlan(interactivePlan, {
+        manifest: artifact.manifest,
+        beliefTest: current.beliefTest,
+      });
+    } else {
+      await verifyInteractiveLeakageExperimentPlan(
+        interactivePlan,
+        plan,
+        configuration,
+        { manifest: artifact.manifest, beliefTest: current.beliefTest },
+      );
+    }
+    const planHash = await hashCanonical(interactivePlan);
+    const jobId = requestId(options, "runner_job");
+    const bundle = RunnerLabRunBundleSchema.parse({
+      schemaVersion: "1",
+      kind: "LAB_RUN",
+      purpose: "INTERACTIVE",
+      jobId,
+      sessionId,
+      stateVersion: current.version,
+      artifactManifestHash: manifestHash,
+      artifactManifest: artifact.manifest,
+      learnerClaim: current.beliefTest.learnerClaim,
+      experimentPlan: interactivePlan,
+      experimentPlanHash: planHash,
+      fixture: {
+        id:
+          interactivePlan.concept === "class_imbalance"
+            ? "public-imbalance-v1"
+            : "public-leakage-v1",
+      },
+      permittedOutputs: ["verified-result.json"],
+    });
+    const bundleHash = await hashCanonical(bundle);
+    const inputBundleKey = `runner-input/${jobId}.json`;
+    await runnerObjectStore(context, options).put(
+      inputBundleKey,
+      JSON.stringify(bundle),
+      "application/json",
+    );
+    const jobs = runnerJobService(context, options);
+    const queued = await jobs.createJob({
+      jobId,
+      kind: "LAB_RUN",
+      sessionId,
+      artifactId: artifact.manifest.artifactId,
+      artifactManifestHash: manifestHash,
+      conceptPack: {
+        id: interactivePlan.concept,
+        version: interactivePlan.conceptPackVersion,
+      },
+      inputHashes: [manifestHash, planHash, configurationHash, bundleHash],
+      stateVersion: current.version,
+      maxAttempts: 1,
+      timeoutSeconds: 150,
+    });
+    const starting = await jobs.transition(
+      jobId,
+      queued.jobVersion,
+      "STARTING",
+      { runnerIdentity: dispatcher.identity },
+    );
+    const nowEpochSeconds = Math.floor(requestNow(options).getTime() / 1_000);
+    const token = await issueRunnerJobToken(
+      {
+        schemaVersion: "1",
+        audience: "counterlab-runner",
+        tokenId: requestId(options, "runner_token"),
+        jobId,
+        sessionId,
+        artifactManifestHash: manifestHash,
+        inputBundleKey,
+        outputPrefix: `runner-output/${jobId}/`,
+        callbackPath: `/api/runner/jobs/${jobId}/callback`,
+        stateVersion: current.version,
+        issuedAt: nowEpochSeconds,
+        expiresAt: nowEpochSeconds + 300,
+      },
+      runnerSigningKey(context, options),
+    );
+    try {
+      await dispatcher.dispatch({
+        job: starting,
+        token,
+        controlPlaneUrl: new URL(context.req.url).origin,
+      });
+    } catch {
+      await jobs.transition(jobId, starting.jobVersion, "FAILED", {
+        runnerIdentity: dispatcher.identity,
+        error: {
+          code: "RUNNER_DISPATCH_FAILED",
+          message: "The process runner did not accept this job",
+          retryable: true,
+        },
+      });
+      throw new ApiInputError(
+        "RUNNER_DISPATCH_FAILED",
+        "The process runner did not accept this job",
+        503,
+      );
+    }
+    return context.json(
+      jsonSuccess({
+        ...statePayload(current),
+        runnerJob: starting,
+        selectedRunId,
+        configurationHash,
+      }),
+      202,
+    );
+  });
+
+  app.get("/api/sessions/:sessionId/jobs/:jobId/result", async (context) => {
+    const sessionId = context.req.param("sessionId");
+    const jobId = context.req.param("jobId");
+    const job = await runnerJobService(context, options).getJob(jobId);
+    if (job.sessionId !== sessionId || job.kind !== "LAB_RUN") {
+      throw new ApiInputError(
+        "RUNNER_JOB_SESSION_MISMATCH",
+        "Interactive result does not belong to this session",
+        404,
+      );
+    }
+    if (job.status !== "VERIFIED") {
+      throw new ApiInputError(
+        "INTERACTIVE_RESULT_NOT_READY",
+        "The interactive result has not passed verification",
+        409,
+      );
+    }
+    const [inputObject, resultObject] = await Promise.all([
+      runnerObjectStore(context, options).get(`runner-input/${jobId}.json`),
+      runnerObjectStore(context, options).get(
+        `runner-output/${jobId}/verified-result.json`,
+      ),
+    ]);
+    if (inputObject === undefined || resultObject === undefined) {
+      throw new ApiInputError(
+        "RUNNER_OUTPUT_MISSING",
+        "The verified interactive result is missing",
+        409,
+      );
+    }
+    const bundle = RunnerLabRunBundleSchema.parse(JSON.parse(inputObject.body));
+    if (bundle.purpose !== "INTERACTIVE" || bundle.sessionId !== sessionId) {
+      throw new ApiInputError(
+        "INTERACTIVE_RESULT_LINEAGE_MISMATCH",
+        "The result is not an interactive run for this session",
+        409,
+      );
+    }
+    const rawHash = await sha256Text(resultObject.body);
+    if (!job.outputHashes.includes(rawHash)) {
+      throw new ApiInputError(
+        "RUNNER_OUTPUT_HASH_MISMATCH",
+        "Interactive result bytes do not match the callback hash",
+        409,
+      );
+    }
+    const result = HostedVerifiedResultSetV2Schema.parse(
+      JSON.parse(resultObject.body),
+    );
+    const selectedRunId =
+      [
+        bundle.experimentPlan.baseline,
+        ...bundle.experimentPlan.interventions,
+      ].find((run) => run.runId.startsWith("interactive_"))?.runId ?? "";
+    if (selectedRunId.length === 0) {
+      throw new ApiInputError(
+        "INTERACTIVE_RESULT_LINEAGE_MISMATCH",
+        "The selected interactive run could not be resolved",
+        409,
+      );
+    }
+    const verification =
+      result.concept === "class_imbalance"
+        ? await verifyHostedResultSet(result, bundle.experimentPlan)
+        : await verifyInteractiveResultSet(
+            result,
+            bundle.experimentPlan,
+            selectedRunId,
+          );
+    return context.json(
+      jsonSuccess({
+        result,
+        selectedRunId,
+        configurationHash: job.inputHashes.at(-2),
+        verification,
+      }),
+    );
+  });
+
   app.post("/api/sessions/:sessionId/revision", async (context) => {
     const { revision } = RevisionSchema.parse(await readJson(context));
     const service = sessionService(context, options);
@@ -2169,22 +2758,23 @@ export function createApi(options: ApiOptions = {}) {
         artifact === undefined ? null : await hashCanonical(artifact.manifest);
       if (
         current.verifiedResult?.schemaVersion !== "2" ||
-        current.verifiedResult.concept !== "entity_leakage" ||
+        current.beliefTest === undefined ||
+        current.verifiedResult.concept !== current.beliefTest.concept ||
         current.verifiedResult.artifactManifestHash !== manifestHash
       ) {
         throw new ApiInputError(
           "LIVE_RESULT_REQUIRED",
-          "An artifact-bound verified leakage result is required before transfer",
+          "An artifact-bound verified result is required before transfer",
           409,
         );
       }
     }
     await service.startTransfer(sessionId);
-    const result = await evaluateLeakageTransfer(
-      sessionId,
-      submission,
-      (options.now?.() ?? new Date()).toISOString(),
-    );
+    const evaluatedAt = (options.now?.() ?? new Date()).toISOString();
+    const result =
+      current.beliefTest?.concept === "class_imbalance"
+        ? await evaluateImbalanceTransfer(sessionId, submission, evaluatedAt)
+        : await evaluateLeakageTransfer(sessionId, submission, evaluatedAt);
     const updated = await service.recordTransferResult(sessionId, result);
     return context.json(jsonSuccess(statePayload(updated)));
   });
@@ -2209,14 +2799,13 @@ export function createApi(options: ApiOptions = {}) {
       if (
         sourceArtifact?.objectKey === undefined ||
         current.beliefTest === undefined ||
-        current.beliefTest.concept !== "entity_leakage" ||
         current.verifiedResult?.schemaVersion !== "2" ||
-        current.verifiedResult.concept !== "entity_leakage" ||
+        current.verifiedResult.concept !== current.beliefTest.concept ||
         current.transferResult?.outcome !== "PASSED"
       ) {
         throw new ApiInputError(
           "LIVE_PATCH_CONTRACTS_REQUIRED",
-          "A passed transfer and artifact-bound verified leakage result are required",
+          "A passed transfer and artifact-bound verified result are required",
           409,
         );
       }
@@ -2232,12 +2821,27 @@ export function createApi(options: ApiOptions = {}) {
         );
       }
       const allowedCellIndices = sourceArtifact.manifest.cells
-        .filter(
-          (cell) =>
-            cell.type === "code" &&
-            (cell.symbols.includes("train_test_split") ||
-              cell.sourceExcerpt.includes("train_test_split")),
-        )
+        .filter((cell) => {
+          if (cell.type !== "code") return false;
+          const evidence = new Set(cell.symbols);
+          if (
+            evidence.has("train_test_split") ||
+            cell.sourceExcerpt.includes("train_test_split")
+          ) {
+            return true;
+          }
+          return (
+            current.beliefTest?.concept === "class_imbalance" &&
+            [
+              "accuracy_score",
+              "classification_report",
+              "confusion_matrix",
+            ].some(
+              (symbol) =>
+                evidence.has(symbol) || cell.sourceExcerpt.includes(symbol),
+            )
+          );
+        })
         .map((cell) => cell.index)
         .slice(0, 4);
       if (allowedCellIndices.length === 0) {
@@ -2247,7 +2851,7 @@ export function createApi(options: ApiOptions = {}) {
           409,
         );
       }
-      const pack = getConceptPack("entity_leakage");
+      const pack = getConceptPack(current.beliefTest.concept);
       const started = await service.startPatchCompilation(sessionId);
       const jobId = requestId(options, "runner_job");
       const bundle = RunnerPatchCompileBundleSchema.parse({

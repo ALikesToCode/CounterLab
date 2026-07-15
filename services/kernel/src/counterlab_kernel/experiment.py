@@ -14,7 +14,7 @@ from sklearn.model_selection import GroupShuffleSplit, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from .canonical import sha256_json
+from .canonical import sha256_json, sha256_json_browser
 
 
 KERNEL_VERSION = "0.1.0"
@@ -357,5 +357,5 @@ def run_leakage_plan(
             for run in executed
         ],
     }
-    result["resultHash"] = sha256_json(result)
+    result["resultHash"] = sha256_json_browser(result)
     return result

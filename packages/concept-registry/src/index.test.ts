@@ -60,6 +60,52 @@ function manifest(overrides: Partial<ArtifactManifest> = {}): ArtifactManifest {
   };
 }
 
+function imbalanceManifest(
+  overrides: Partial<ArtifactManifest> = {},
+): ArtifactManifest {
+  return manifest({
+    cells: [
+      {
+        index: 2,
+        type: "code",
+        sourceSha256: "e".repeat(64),
+        sourceExcerpt:
+          "positive_rate = y.mean()\nX_train, X_test = train_test_split(X, y, stratify=y)",
+        executionCount: 2,
+        outputHashes: ["f".repeat(64)],
+        symbols: ["train_test_split", "value_counts", "stratify"],
+        metricCandidates: [
+          { name: "positive_rate", value: 0.035, outputIndex: 0 },
+        ],
+      },
+      {
+        index: 4,
+        type: "code",
+        sourceSha256: "1".repeat(64),
+        sourceExcerpt:
+          "print(accuracy_score(y_test, predictions))\nprint(classification_report(y_test, predictions))",
+        executionCount: 4,
+        outputHashes: ["2".repeat(64)],
+        symbols: ["accuracy_score", "classification_report"],
+        metricCandidates: [{ name: "accuracy", value: 0.965, outputIndex: 0 }],
+      },
+    ],
+    schemaSummary: {
+      fields: [
+        {
+          name: "is_defective",
+          inferredType: "binary",
+          privacyClass: "target",
+        },
+      ],
+      rowCount: 4_000,
+      entityCandidates: [],
+      targetCandidates: ["is_defective"],
+    },
+    ...overrides,
+  });
+}
+
 describe("concept-pack registry", () => {
   it("routes a supported leakage notebook using evidence rather than column names", () => {
     const decision = routeArtifactConcept(manifest());
@@ -93,12 +139,136 @@ describe("concept-pack registry", () => {
     });
   });
 
+  it("routes rare-event metric evidence to the class-imbalance pack", () => {
+    const decision = routeArtifactConcept(imbalanceManifest());
+
+    expect(decision).toMatchObject({
+      kind: "selected",
+      concept: "class_imbalance",
+      conceptPackVersion: "1.0.0",
+    });
+    if (decision.kind !== "selected") throw new Error("expected selection");
+    expect(decision.evidence).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ cellIndex: 2, outputIndex: 0 }),
+        expect.objectContaining({ cellIndex: 4, outputIndex: 0 }),
+      ]),
+    );
+  });
+
+  it("requires a learner choice when leakage and imbalance evidence both resolve", () => {
+    const ambiguous = imbalanceManifest({
+      schemaSummary: {
+        ...imbalanceManifest().schemaSummary,
+        entityCandidates: ["machine_id"],
+      },
+    });
+    const decision = routeArtifactConcept(ambiguous);
+
+    expect(decision).toMatchObject({ kind: "choice_required" });
+    if (decision.kind !== "choice_required") throw new Error("expected choice");
+    expect(decision.candidates.map((candidate) => candidate.concept)).toEqual([
+      "entity_leakage",
+      "class_imbalance",
+    ]);
+  });
+
+  it("does not infer imbalance from accuracy without rare-event evidence", () => {
+    const artifact = imbalanceManifest({
+      cells: [
+        {
+          index: 2,
+          type: "code",
+          sourceSha256: "3".repeat(64),
+          sourceExcerpt: "train_test_split(X, y)",
+          executionCount: 2,
+          outputHashes: ["4".repeat(64)],
+          symbols: ["train_test_split", "accuracy_score"],
+          metricCandidates: [{ name: "accuracy", value: 0.96, outputIndex: 0 }],
+        },
+      ],
+    });
+
+    expect(routeArtifactConcept(artifact)).toMatchObject({
+      kind: "insufficient_evidence",
+      candidates: ["class_imbalance"],
+    });
+  });
+
+  it("does not treat class-specific reporting as proof that a class is rare", () => {
+    const artifact = imbalanceManifest({
+      cells: [
+        {
+          index: 2,
+          type: "code",
+          sourceSha256: "5".repeat(64),
+          sourceExcerpt:
+            "X_train, X_test = train_test_split(X, y, stratify=y)\nclassification_report(y_test, predictions)",
+          executionCount: 2,
+          outputHashes: ["6".repeat(64)],
+          symbols: [
+            "train_test_split",
+            "accuracy_score",
+            "classification_report",
+          ],
+          metricCandidates: [{ name: "accuracy", value: 0.81, outputIndex: 0 }],
+        },
+      ],
+    });
+
+    expect(routeArtifactConcept(artifact)).toMatchObject({
+      kind: "insufficient_evidence",
+      candidates: ["class_imbalance"],
+    });
+  });
+
+  it("routes explicit rare-class context with displayed class-specific metrics", () => {
+    const artifact = imbalanceManifest({
+      cells: [
+        {
+          index: 0,
+          type: "markdown",
+          sourceSha256: "7".repeat(64),
+          sourceExcerpt:
+            "The positive class is uncommon, so accuracy can hide minority failures.",
+          outputHashes: [],
+          symbols: [],
+          metricCandidates: [],
+        },
+        {
+          index: 2,
+          type: "code",
+          sourceSha256: "8".repeat(64),
+          sourceExcerpt:
+            "train_test_split(X, y, stratify=y)\nclassification_report(y_test, predictions)",
+          executionCount: 2,
+          outputHashes: ["9".repeat(64)],
+          symbols: ["train_test_split", "f1_score"],
+          metricCandidates: [
+            { name: "precision", value: 0.61, outputIndex: 0 },
+            { name: "recall", value: 0.37, outputIndex: 0 },
+            { name: "f1_score", value: 0.46, outputIndex: 0 },
+          ],
+        },
+      ],
+    });
+
+    expect(routeArtifactConcept(artifact)).toMatchObject({
+      kind: "selected",
+      concept: "class_imbalance",
+    });
+  });
+
   it("advertises only packs that are release ready", () => {
     expect(releasedConceptPacks().map((pack) => pack.id)).toEqual([
       "entity_leakage",
+      "class_imbalance",
     ]);
     expect(getConceptPack("entity_leakage").allowedOperations).toContain(
       "leakage.group_holdout",
+    );
+    expect(getConceptPack("class_imbalance").allowedOperations).toContain(
+      "imbalance.prevalence_sweep",
     );
   });
 });

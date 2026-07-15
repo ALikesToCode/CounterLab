@@ -327,6 +327,45 @@ describe("sanitizeAppServerMessage", () => {
     }
   });
 
+  it("captures the current turn token usage as private compiler telemetry", () => {
+    expect(
+      sanitizeAppServerMessage({
+        method: "thread/tokenUsage/updated",
+        params: {
+          threadId: "thread_1",
+          turnId: "turn_1",
+          tokenUsage: {
+            last: {
+              inputTokens: 120,
+              cachedInputTokens: 80,
+              outputTokens: 35,
+              reasoningOutputTokens: 12,
+              totalTokens: 155,
+            },
+            total: {
+              inputTokens: 320,
+              cachedInputTokens: 180,
+              outputTokens: 70,
+              reasoningOutputTokens: 24,
+              totalTokens: 390,
+            },
+            modelContextWindow: 200_000,
+          },
+        },
+      }),
+    ).toEqual([
+      {
+        type: "usage",
+        inputTokens: 120,
+        cachedInputTokens: 80,
+        outputTokens: 35,
+        reasoningOutputTokens: 12,
+        totalTokens: 155,
+        modelContextWindow: 200_000,
+      },
+    ]);
+  });
+
   it("rejects malformed protocol notifications instead of guessing", () => {
     expect(() =>
       sanitizeAppServerMessage({

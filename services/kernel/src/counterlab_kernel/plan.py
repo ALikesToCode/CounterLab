@@ -13,6 +13,7 @@ from jsonschema import Draft202012Validator
 
 from .canonical import sha256_json
 from .experiment import run_leakage_plan
+from .imbalance import REQUIRED_OPERATIONS, run_imbalance_plan
 
 
 SCHEMA_PATH = (
@@ -117,6 +118,59 @@ def validate_experiment_plan(
             raise ExperimentPlanValidationError(
                 "experiment plan entity field is not an artifact candidate"
             )
+    if candidate["concept"] == "class_imbalance":
+        target_candidates = set(manifest["schemaSummary"]["targetCandidates"])
+        if not target_candidates:
+            raise ExperimentPlanValidationError(
+                "class imbalance plan requires an artifact target candidate"
+            )
+        by_operation = {run["operation"]: run for run in runs}
+        if len(by_operation) != len(runs) or set(by_operation) != set(
+            REQUIRED_OPERATIONS
+        ):
+            raise ExperimentPlanValidationError(
+                "class imbalance plan requires all fixed operations exactly once"
+            )
+        majority = by_operation["imbalance.majority_baseline"]
+        stratified = by_operation["imbalance.stratified_holdout"]
+        threshold = by_operation["imbalance.threshold_sweep"]
+        prevalence = by_operation["imbalance.prevalence_sweep"]
+        if (
+            majority["model"] != "majority_baseline"
+            or majority["threshold"] != 0.5
+            or majority["prevalenceScenario"] != "observed"
+        ):
+            raise ExperimentPlanValidationError(
+                "majority baseline operation must use its fixed observed contract"
+            )
+        if (
+            stratified["model"] != "logistic_regression"
+            or stratified["threshold"] != 0.5
+            or stratified["prevalenceScenario"] != "observed"
+        ):
+            raise ExperimentPlanValidationError(
+                "stratified holdout operation must use its fixed observed contract"
+            )
+        if (
+            threshold["model"] != "logistic_regression"
+            or threshold["prevalenceScenario"] != "observed"
+            or threshold["threshold"] == stratified["threshold"]
+        ):
+            raise ExperimentPlanValidationError(
+                "threshold sweep operation must change only the decision threshold"
+            )
+        if (
+            prevalence["model"] != "logistic_regression"
+            or prevalence["prevalenceScenario"] == "observed"
+            or prevalence["threshold"] != threshold["threshold"]
+        ):
+            raise ExperimentPlanValidationError(
+                "prevalence sweep operation must change only deployment prevalence"
+            )
+        if len({run["seed"] for run in runs}) != 1:
+            raise ExperimentPlanValidationError(
+                "class imbalance operations must use the same seed"
+            )
     patterns = candidate["expectedPatterns"]
     if {pattern["hypothesisId"] for pattern in patterns} != {
         "current",
@@ -150,13 +204,23 @@ def interpret_experiment_plan(
         manifest,
         learner_claim=learner_claim,
     )
+    runs = [validated["baseline"], *validated["interventions"]]
+    if validated["concept"] == "class_imbalance":
+        return run_imbalance_plan(
+            fixture,
+            runs,
+            plan_id=validated["planId"],
+            session_id=validated["sessionId"],
+            artifact_manifest_hash=validated["artifactManifestHash"],
+            concept_pack_version=validated["conceptPackVersion"],
+        )
     if validated["concept"] != "entity_leakage":
         raise ExperimentPlanValidationError(
             f"no fixed interpreter is registered for {validated['concept']}"
         )
     return run_leakage_plan(
         fixture,
-        [validated["baseline"], *validated["interventions"]],
+        runs,
         plan_id=validated["planId"],
         session_id=validated["sessionId"],
         artifact_manifest_hash=validated["artifactManifestHash"],

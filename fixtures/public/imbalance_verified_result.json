@@ -1,0 +1,185 @@
+{
+  "chartData": [
+    {
+      "accuracy": 0.989333333333,
+      "f1": 0.0,
+      "operation": "imbalance.majority_baseline",
+      "prAuc": 0.010666666667,
+      "precision": 0.0,
+      "predictedPositiveRate": 0.0,
+      "prevalence": 0.010666666667,
+      "prevalenceScenario": "observed",
+      "recall": 0.0,
+      "rocAuc": 0.5,
+      "runId": "majority_baseline",
+      "sampleSize": 1500,
+      "seed": 2603,
+      "threshold": 0.5
+    },
+    {
+      "accuracy": 0.988666666667,
+      "f1": 0.190476190476,
+      "operation": "imbalance.stratified_holdout",
+      "prAuc": 0.19639318021,
+      "precision": 0.4,
+      "predictedPositiveRate": 0.003333333333,
+      "prevalence": 0.010666666667,
+      "prevalenceScenario": "observed",
+      "recall": 0.125,
+      "rocAuc": 0.882117587601,
+      "runId": "stratified_model",
+      "sampleSize": 1500,
+      "seed": 2603,
+      "threshold": 0.5
+    },
+    {
+      "accuracy": 0.982,
+      "f1": 0.27027027027,
+      "operation": "imbalance.threshold_sweep",
+      "prAuc": 0.19639318021,
+      "precision": 0.238095238095,
+      "predictedPositiveRate": 0.014,
+      "prevalence": 0.010666666667,
+      "prevalenceScenario": "observed",
+      "recall": 0.3125,
+      "rocAuc": 0.882117587601,
+      "runId": "lower_threshold",
+      "sampleSize": 1500,
+      "seed": 2603,
+      "threshold": 0.25
+    },
+    {
+      "accuracy": 0.985924932976,
+      "f1": 0.222222222222,
+      "operation": "imbalance.prevalence_sweep",
+      "prAuc": 0.12680156221,
+      "precision": 0.157894736842,
+      "predictedPositiveRate": 0.01273458445,
+      "prevalence": 0.005361930295,
+      "prevalenceScenario": "rarer",
+      "recall": 0.375,
+      "rocAuc": 0.825134770889,
+      "runId": "rarer_prevalence",
+      "sampleSize": 1492,
+      "seed": 2603,
+      "threshold": 0.25
+    }
+  ],
+  "concept": "class_imbalance",
+  "fixture": {
+    "positives": 65,
+    "prevalence": 0.010833333333,
+    "rows": 6000,
+    "sha256": "7974fe5744c4f9f2e8a31817791dac09ba9efb17cc88a4aa3383ae333e92ad7f"
+  },
+  "kernelVersion": "0.1.0",
+  "resultHash": "90723d4dd1b73d42133646cf937f05befc731a8e4dbf0ff4c68ad51ddffdd0ef",
+  "runs": [
+    {
+      "classCounts": {
+        "test": { "negative": 1484, "positive": 16 },
+        "train": { "negative": 4451, "positive": 49 }
+      },
+      "confusionMatrix": { "fn": 16, "fp": 0, "tn": 1484, "tp": 0 },
+      "featureSetFingerprint": "3620591a28266e8ad8663fb04530c7d495852100131d2c19d81fb5f33ad3ea02",
+      "id": "majority_baseline",
+      "inputFingerprint": "7974fe5744c4f9f2e8a31817791dac09ba9efb17cc88a4aa3383ae333e92ad7f",
+      "metrics": {
+        "accuracy": 0.989333333333,
+        "f1": 0.0,
+        "prAuc": 0.010666666667,
+        "precision": 0.0,
+        "recall": 0.0,
+        "rocAuc": 0.5
+      },
+      "model": "majority_baseline",
+      "operation": "imbalance.majority_baseline",
+      "predictedPositiveRate": 0.0,
+      "prevalence": 0.010666666667,
+      "prevalenceScenario": "observed",
+      "sampleSizes": { "test": 1500, "train": 4500 },
+      "seed": 2603,
+      "threshold": 0.5
+    },
+    {
+      "classCounts": {
+        "test": { "negative": 1484, "positive": 16 },
+        "train": { "negative": 4451, "positive": 49 }
+      },
+      "confusionMatrix": { "fn": 14, "fp": 3, "tn": 1481, "tp": 2 },
+      "featureSetFingerprint": "3620591a28266e8ad8663fb04530c7d495852100131d2c19d81fb5f33ad3ea02",
+      "id": "stratified_model",
+      "inputFingerprint": "7974fe5744c4f9f2e8a31817791dac09ba9efb17cc88a4aa3383ae333e92ad7f",
+      "metrics": {
+        "accuracy": 0.988666666667,
+        "f1": 0.190476190476,
+        "prAuc": 0.19639318021,
+        "precision": 0.4,
+        "recall": 0.125,
+        "rocAuc": 0.882117587601
+      },
+      "model": "logistic_regression",
+      "operation": "imbalance.stratified_holdout",
+      "predictedPositiveRate": 0.003333333333,
+      "prevalence": 0.010666666667,
+      "prevalenceScenario": "observed",
+      "sampleSizes": { "test": 1500, "train": 4500 },
+      "seed": 2603,
+      "threshold": 0.5
+    },
+    {
+      "classCounts": {
+        "test": { "negative": 1484, "positive": 16 },
+        "train": { "negative": 4451, "positive": 49 }
+      },
+      "confusionMatrix": { "fn": 11, "fp": 16, "tn": 1468, "tp": 5 },
+      "featureSetFingerprint": "3620591a28266e8ad8663fb04530c7d495852100131d2c19d81fb5f33ad3ea02",
+      "id": "lower_threshold",
+      "inputFingerprint": "7974fe5744c4f9f2e8a31817791dac09ba9efb17cc88a4aa3383ae333e92ad7f",
+      "metrics": {
+        "accuracy": 0.982,
+        "f1": 0.27027027027,
+        "prAuc": 0.19639318021,
+        "precision": 0.238095238095,
+        "recall": 0.3125,
+        "rocAuc": 0.882117587601
+      },
+      "model": "logistic_regression",
+      "operation": "imbalance.threshold_sweep",
+      "predictedPositiveRate": 0.014,
+      "prevalence": 0.010666666667,
+      "prevalenceScenario": "observed",
+      "sampleSizes": { "test": 1500, "train": 4500 },
+      "seed": 2603,
+      "threshold": 0.25
+    },
+    {
+      "classCounts": {
+        "test": { "negative": 1484, "positive": 8 },
+        "train": { "negative": 4451, "positive": 49 }
+      },
+      "confusionMatrix": { "fn": 5, "fp": 16, "tn": 1468, "tp": 3 },
+      "featureSetFingerprint": "3620591a28266e8ad8663fb04530c7d495852100131d2c19d81fb5f33ad3ea02",
+      "id": "rarer_prevalence",
+      "inputFingerprint": "7974fe5744c4f9f2e8a31817791dac09ba9efb17cc88a4aa3383ae333e92ad7f",
+      "metrics": {
+        "accuracy": 0.985924932976,
+        "f1": 0.222222222222,
+        "prAuc": 0.12680156221,
+        "precision": 0.157894736842,
+        "recall": 0.375,
+        "rocAuc": 0.825134770889
+      },
+      "model": "logistic_regression",
+      "operation": "imbalance.prevalence_sweep",
+      "predictedPositiveRate": 0.01273458445,
+      "prevalence": 0.005361930295,
+      "prevalenceScenario": "rarer",
+      "sampleSizes": { "test": 1492, "train": 4500 },
+      "seed": 2603,
+      "threshold": 0.25
+    }
+  ],
+  "schemaVersion": "1",
+  "seed": 2603
+}

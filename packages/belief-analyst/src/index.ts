@@ -5,8 +5,12 @@ import {
   BeliefTestSchema,
   type ArtifactManifest,
   type BeliefTest,
+  type ConceptId,
 } from "@counterlab/contracts";
-import { releasedConceptPacks } from "@counterlab/concept-registry";
+import {
+  getConceptPack,
+  releasedConceptPacks,
+} from "@counterlab/concept-registry";
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -132,7 +136,7 @@ export type BeliefAnalystInput = {
   sessionId: string;
   learnerClaim: string;
   manifest: ArtifactManifest;
-  concept: "entity_leakage" | "class_imbalance";
+  concept: ConceptId;
 };
 
 export type BeliefAnalystHealth =
@@ -199,7 +203,12 @@ export interface ResponsesTransport {
 
 type SanitizedAnalystContext = {
   learnerClaim: string;
-  concept: "entity_leakage" | "class_imbalance";
+  concept: ConceptId;
+  conceptPack: {
+    id: ConceptId;
+    version: string;
+    learnerQuestion: string;
+  };
   support: {
     status: ArtifactManifest["support"]["status"];
     reasons: Array<{ code: string; message: string; cellIndex?: number }>;
@@ -308,6 +317,7 @@ export function buildSanitizedAnalystContext(
   input: BeliefAnalystInput,
 ): SanitizedAnalystContext {
   const manifest = validateAnalystInput(input);
+  const conceptPack = getConceptPack(input.concept);
   const evidenceCells = manifest.cells
     .filter(
       (cell) =>
@@ -332,6 +342,11 @@ export function buildSanitizedAnalystContext(
   return {
     learnerClaim: sanitizeText(input.learnerClaim, MAX_CLAIM_CHARACTERS),
     concept: input.concept,
+    conceptPack: {
+      id: conceptPack.id,
+      version: conceptPack.version,
+      learnerQuestion: conceptPack.learnerQuestion,
+    },
     support: {
       status: manifest.support.status,
       reasons: manifest.support.reasons.slice(0, 8).map((reason) => ({
@@ -550,7 +565,24 @@ export type OpenAIResponsesTransportOptions = {
   apiKey: string;
   baseURL?: string;
   fetch?: typeof globalThis.fetch;
+  timeoutMs?: number;
 };
+
+export function normalizeResponsesTimeout(
+  configured: string | undefined,
+): number {
+  const fallback = 180_000;
+  if (configured === undefined || configured.trim().length === 0)
+    return fallback;
+  const parsed = Number(configured);
+  if (!Number.isInteger(parsed) || parsed < 10_000 || parsed > 300_000) {
+    throw new BeliefAnalystError(
+      "CONFIGURATION_ERROR",
+      "OPENAI_TIMEOUT_MS must be an integer from 10000 to 300000",
+    );
+  }
+  return parsed;
+}
 
 export class OpenAIResponsesTransport implements ResponsesTransport {
   private readonly client: OpenAI;
@@ -561,6 +593,8 @@ export class OpenAIResponsesTransport implements ResponsesTransport {
       apiKey: options.apiKey,
       ...(baseURL === undefined ? {} : { baseURL }),
       ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+      maxRetries: 0,
+      timeout: options.timeoutMs ?? 180_000,
     });
   }
 
@@ -579,6 +613,18 @@ export class OpenAIResponsesTransport implements ResponsesTransport {
           "INVALID_RESPONSE",
           "Responses endpoint returned invalid structured output",
           { category: "structured_output" },
+        );
+      }
+      if (error instanceof OpenAI.APIConnectionError) {
+        throw new BeliefAnalystError(
+          "LIVE_UNAVAILABLE",
+          "Responses endpoint request failed",
+          {
+            category:
+              error instanceof OpenAI.APIConnectionTimeoutError
+                ? "timeout"
+                : "transport",
+          },
         );
       }
       if (error instanceof OpenAI.APIError) {
@@ -645,6 +691,7 @@ export type LiveBeliefAnalystOptions = {
   baseURL?: string;
   model?: string;
   reasoningEffort?: ReasoningEffort;
+  timeoutMs?: number;
   transport?: ResponsesTransport;
 };
 
@@ -668,6 +715,9 @@ export class LiveBeliefAnalyst implements BeliefAnalyst {
       new OpenAIResponsesTransport({
         apiKey: options.apiKey,
         ...(baseURL === undefined ? {} : { baseURL }),
+        ...(options.timeoutMs === undefined
+          ? {}
+          : { timeoutMs: options.timeoutMs }),
       });
   }
 
@@ -917,6 +967,7 @@ export function createLiveBeliefAnalystFromEnv(
       : { baseURL: env.OPENAI_BASE_URL }),
     model: env.OPENAI_MODEL?.trim() || "gpt-5.6",
     reasoningEffort: configuredEffort as ReasoningEffort,
+    timeoutMs: normalizeResponsesTimeout(env.OPENAI_TIMEOUT_MS),
     ...(overrides.transport === undefined
       ? {}
       : { transport: overrides.transport }),

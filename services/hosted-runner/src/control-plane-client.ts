@@ -13,6 +13,7 @@ const CandidateDecisionSchema = z
     status: z.enum(["VERIFIED", "REJECTED"]),
     canRepair: z.boolean(),
     nextCursor: z.number().int().nonnegative(),
+    verifierDurationMs: z.number().int().nonnegative(),
     counterexamples: z.array(
       z
         .object({
@@ -56,10 +57,7 @@ export class HttpRunnerControlPlane implements RunnerControlPlane {
     this.baseUrl = new URL(options.controlPlaneUrl);
     if (
       this.baseUrl.protocol !== "https:" &&
-      !(
-        process.env.NODE_ENV === "test" &&
-        ["127.0.0.1", "localhost"].includes(this.baseUrl.hostname)
-      )
+      !["127.0.0.1", "localhost", "::1"].includes(this.baseUrl.hostname)
     ) {
       throw new Error("Runner control plane must use HTTPS");
     }

@@ -17,7 +17,11 @@ export type NotebookParseErrorCode =
 export class NotebookParseError extends Error {
   readonly code: NotebookParseErrorCode;
 
-  constructor(code: NotebookParseErrorCode, message: string, options?: ErrorOptions) {
+  constructor(
+    code: NotebookParseErrorCode,
+    message: string,
+    options?: ErrorOptions,
+  ) {
     super(message, options);
     this.name = "NotebookParseError";
     this.code = code;
@@ -40,7 +44,13 @@ const ACTIVE_MIME_TYPES = new Set([
   "application/vnd.jupyter.widget-view+json",
 ]);
 const SAFE_MIME_TYPES = ["text/plain", "application/json"] as const;
-const NETWORK_PACKAGES = new Set(["aiohttp", "httpx", "requests", "socket", "urllib3"]);
+const NETWORK_PACKAGES = new Set([
+  "aiohttp",
+  "httpx",
+  "requests",
+  "socket",
+  "urllib3",
+]);
 const SUPPORTED_PACKAGES = new Set([
   "collections",
   "counterlab_sdk",
@@ -105,7 +115,9 @@ function joinedText(value: unknown): string | undefined {
 }
 
 function assertBoundedDepth(value: unknown, maxDepth: number): void {
-  const pending: Array<{ value: unknown; depth: number }> = [{ value, depth: 1 }];
+  const pending: Array<{ value: unknown; depth: number }> = [
+    { value, depth: 1 },
+  ];
   while (pending.length > 0) {
     const current = pending.pop();
     if (current === undefined) break;
@@ -116,7 +128,8 @@ function assertBoundedDepth(value: unknown, maxDepth: number): void {
       );
     }
     if (Array.isArray(current.value)) {
-      for (const child of current.value) pending.push({ value: child, depth: current.depth + 1 });
+      for (const child of current.value)
+        pending.push({ value: child, depth: current.depth + 1 });
     } else if (isRecord(current.value)) {
       for (const child of Object.values(current.value)) {
         pending.push({ value: child, depth: current.depth + 1 });
@@ -140,31 +153,48 @@ function packageHints(source: string): string[] {
   const hints = new Set<string>();
   for (const line of source.split(/\r?\n/)) {
     const fromMatch = /^\s*from\s+([A-Za-z_][\w.]*)\s+import\b/.exec(line);
-    if (fromMatch?.[1] !== undefined) hints.add(fromMatch[1].split(".")[0] ?? fromMatch[1]);
+    if (fromMatch?.[1] !== undefined)
+      hints.add(fromMatch[1].split(".")[0] ?? fromMatch[1]);
 
     const importMatch = /^\s*import\s+(.+)$/.exec(line);
     if (importMatch?.[1] === undefined) continue;
     for (const imported of importMatch[1].split(",")) {
-      const moduleName = imported.trim().split(/\s+as\s+/i)[0]?.split(".")[0];
-      if (moduleName !== undefined && /^[A-Za-z_]\w*$/.test(moduleName)) hints.add(moduleName);
+      const moduleName = imported
+        .trim()
+        .split(/\s+as\s+/i)[0]
+        ?.split(".")[0];
+      if (moduleName !== undefined && /^[A-Za-z_]\w*$/.test(moduleName))
+        hints.add(moduleName);
     }
   }
   return [...hints].sort();
 }
 
 function symbols(source: string): string[] {
-  return KNOWN_SYMBOLS.filter((symbol) => new RegExp(`\\b${symbol}\\b`).test(source));
+  return KNOWN_SYMBOLS.filter((symbol) =>
+    new RegExp(`\\b${symbol}\\b`).test(source),
+  );
 }
 
-function metricCandidates(value: unknown, outputIndex: number): Array<{
+function metricCandidates(
+  value: unknown,
+  outputIndex: number,
+): Array<{
   name: string;
   value: number;
   outputIndex: number;
 }> {
-  const candidates: Array<{ name: string; value: number; outputIndex: number }> = [];
+  const candidates: Array<{
+    name: string;
+    value: number;
+    outputIndex: number;
+  }> = [];
   const seen = new Set<string>();
   const add = (name: string, rawValue: number, percent = false): void => {
-    const normalizedName = name.toLowerCase().replace(/[\s-]+/g, "_").replace("rocauc", "roc_auc");
+    const normalizedName = name
+      .toLowerCase()
+      .replace(/[\s-]+/g, "_")
+      .replace("rocauc", "roc_auc");
     const key = `${normalizedName}:${outputIndex}`;
     if (!Number.isFinite(rawValue) || seen.has(key)) return;
     seen.add(key);
@@ -200,13 +230,17 @@ function metricCandidates(value: unknown, outputIndex: number): Array<{
 }
 
 function normalizeCreatedAt(value: unknown): string | undefined {
-  if (typeof value !== "string" || !Number.isFinite(Date.parse(value))) return undefined;
+  if (typeof value !== "string" || !Number.isFinite(Date.parse(value)))
+    return undefined;
   return new Date(value).toISOString();
 }
 
-function readSchemaSummary(metadata: JsonRecord): ArtifactManifest["schemaSummary"] | undefined {
+function readSchemaSummary(
+  metadata: JsonRecord,
+): ArtifactManifest["schemaSummary"] | undefined {
   const counterlab = metadata.counterlab;
-  if (!isRecord(counterlab) || !isRecord(counterlab.schemaSummary)) return undefined;
+  if (!isRecord(counterlab) || !isRecord(counterlab.schemaSummary))
+    return undefined;
   const summary = counterlab.schemaSummary;
   if (
     !Array.isArray(summary.fields) ||
@@ -234,8 +268,10 @@ function readSchemaSummary(metadata: JsonRecord): ArtifactManifest["schemaSummar
     ];
   });
   if (fields.length !== summary.fields.length) return undefined;
-  if (!summary.entityCandidates.every((value) => typeof value === "string")) return undefined;
-  if (!summary.targetCandidates.every((value) => typeof value === "string")) return undefined;
+  if (!summary.entityCandidates.every((value) => typeof value === "string"))
+    return undefined;
+  if (!summary.targetCandidates.every((value) => typeof value === "string"))
+    return undefined;
   if (
     summary.rowCount !== undefined &&
     (!Number.isInteger(summary.rowCount) || (summary.rowCount as number) < 0)
@@ -245,7 +281,9 @@ function readSchemaSummary(metadata: JsonRecord): ArtifactManifest["schemaSummar
 
   return {
     fields,
-    ...(typeof summary.rowCount === "number" ? { rowCount: summary.rowCount } : {}),
+    ...(typeof summary.rowCount === "number"
+      ? { rowCount: summary.rowCount }
+      : {}),
     entityCandidates: summary.entityCandidates as string[],
     targetCandidates: summary.targetCandidates as string[],
   };
@@ -257,7 +295,10 @@ export function parseNotebook(
   options: ParseNotebookOptions,
 ): ArtifactManifest {
   if (!Number.isInteger(options.maxBytes) || options.maxBytes <= 0) {
-    throw new NotebookParseError("INVALID_OPTIONS", "maxBytes must be a positive integer");
+    throw new NotebookParseError(
+      "INVALID_OPTIONS",
+      "maxBytes must be a positive integer",
+    );
   }
   if (bytes.byteLength > options.maxBytes) {
     throw new NotebookParseError(
@@ -270,16 +311,25 @@ export function parseNotebook(
   try {
     parsed = JSON.parse(Buffer.from(bytes).toString("utf8"));
   } catch (error) {
-    throw new NotebookParseError("INVALID_JSON", "Notebook is not valid JSON", { cause: error });
+    throw new NotebookParseError("INVALID_JSON", "Notebook is not valid JSON", {
+      cause: error,
+    });
   }
 
   const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
   if (!Number.isInteger(maxDepth) || maxDepth <= 0) {
-    throw new NotebookParseError("INVALID_OPTIONS", "maxDepth must be a positive integer");
+    throw new NotebookParseError(
+      "INVALID_OPTIONS",
+      "maxDepth must be a positive integer",
+    );
   }
   assertBoundedDepth(parsed, maxDepth);
 
-  if (!isRecord(parsed) || !Array.isArray(parsed.cells) || typeof parsed.nbformat !== "number") {
+  if (
+    !isRecord(parsed) ||
+    !Array.isArray(parsed.cells) ||
+    typeof parsed.nbformat !== "number"
+  ) {
     throw new NotebookParseError(
       "INVALID_NOTEBOOK",
       "Notebook must contain a numeric nbformat and a cells array",
@@ -292,8 +342,14 @@ export function parseNotebook(
     severity: "partial" | "unsupported",
     reason: SupportReason,
   ): void => {
-    const target = severity === "unsupported" ? unsupportedReasons : partialReasons;
-    if (!target.some((item) => item.code === reason.code && item.cellIndex === reason.cellIndex)) {
+    const target =
+      severity === "unsupported" ? unsupportedReasons : partialReasons;
+    if (
+      !target.some(
+        (item) =>
+          item.code === reason.code && item.cellIndex === reason.cellIndex,
+      )
+    ) {
       target.push(reason);
     }
   };
@@ -328,7 +384,10 @@ export function parseNotebook(
 
     const source = joinedText(rawCell.source) ?? "";
     const rawType = rawCell.cell_type;
-    const type = rawType === "code" || rawType === "markdown" || rawType === "raw" ? rawType : "raw";
+    const type =
+      rawType === "code" || rawType === "markdown" || rawType === "raw"
+        ? rawType
+        : "raw";
     if (type !== rawType) {
       addReason("unsupported", {
         code: "UNSUPPORTED_CELL_TYPE",
@@ -344,7 +403,8 @@ export function parseNotebook(
     }
 
     const activeSource =
-      type !== "code" && /<(?:script|iframe|object|embed)\b|javascript\s*:/i.test(source);
+      type !== "code" &&
+      /<(?:script|iframe|object|embed)\b|javascript\s*:/i.test(source);
     if (activeSource) {
       addReason("partial", {
         code: "ACTIVE_CELL_CONTENT_REMOVED",
@@ -373,7 +433,8 @@ export function parseNotebook(
     if (type === "code" && /^\s*(?:%{1,2}|!)/m.test(source)) {
       addReason("unsupported", {
         code: "UNSUPPORTED_MAGIC",
-        message: "Notebook magics and shell escapes are outside the support contract",
+        message:
+          "Notebook magics and shell escapes are outside the support contract",
         cellIndex: index,
       });
     }
@@ -402,24 +463,36 @@ export function parseNotebook(
             continue;
           }
           outputHashes.push(
-            sha256(canonicalJson({ outputType: "stream", mimeType: "text/plain", value: text })),
+            sha256(
+              canonicalJson({
+                outputType: "stream",
+                mimeType: "text/plain",
+                value: text,
+              }),
+            ),
           );
           metrics.push(...metricCandidates(text, outputIndex));
           continue;
         }
 
         if (
-          (output.output_type === "display_data" || output.output_type === "execute_result") &&
+          (output.output_type === "display_data" ||
+            output.output_type === "execute_result") &&
           isRecord(output.data)
         ) {
           for (const mimeType of Object.keys(output.data)) {
             if (ACTIVE_MIME_TYPES.has(mimeType)) {
               addReason("partial", {
                 code: "ACTIVE_OUTPUT_REMOVED",
-                message: "Active HTML, JavaScript, SVG, or widget output was omitted",
+                message:
+                  "Active HTML, JavaScript, SVG, or widget output was omitted",
                 cellIndex: index,
               });
-            } else if (!SAFE_MIME_TYPES.includes(mimeType as (typeof SAFE_MIME_TYPES)[number])) {
+            } else if (
+              !SAFE_MIME_TYPES.includes(
+                mimeType as (typeof SAFE_MIME_TYPES)[number],
+              )
+            ) {
               addReason("partial", {
                 code: "BINARY_OUTPUT_REMOVED",
                 message: `Non-text output was omitted: ${mimeType}`,
@@ -431,7 +504,8 @@ export function parseNotebook(
           for (const mimeType of SAFE_MIME_TYPES) {
             if (!(mimeType in output.data)) continue;
             const rawValue = output.data[mimeType];
-            const value = mimeType === "text/plain" ? joinedText(rawValue) : rawValue;
+            const value =
+              mimeType === "text/plain" ? joinedText(rawValue) : rawValue;
             if (value === undefined) {
               addReason("partial", {
                 code: "UNSAFE_OUTPUT_REMOVED",
@@ -441,7 +515,13 @@ export function parseNotebook(
               continue;
             }
             outputHashes.push(
-              sha256(canonicalJson({ outputType: output.output_type, mimeType, value })),
+              sha256(
+                canonicalJson({
+                  outputType: output.output_type,
+                  mimeType,
+                  value,
+                }),
+              ),
             );
             metrics.push(...metricCandidates(value, outputIndex));
           }
@@ -485,7 +565,9 @@ export function parseNotebook(
     });
   }
 
-  const counterlabMetadata = isRecord(metadata.counterlab) ? metadata.counterlab : {};
+  const counterlabMetadata = isRecord(metadata.counterlab)
+    ? metadata.counterlab
+    : {};
   const createdAt =
     normalizeCreatedAt(counterlabMetadata.createdAt) ??
     normalizeCreatedAt(options.createdAt) ??

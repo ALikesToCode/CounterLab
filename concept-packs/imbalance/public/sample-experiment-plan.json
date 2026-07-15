@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "1",
+  "concept": "class_imbalance",
+  "runs": [
+    {
+      "id": "majority_baseline",
+      "operation": "imbalance.majority_baseline",
+      "model": "majority_baseline",
+      "threshold": 0.5,
+      "prevalenceScenario": "observed",
+      "seed": 2603
+    },
+    {
+      "id": "stratified_model",
+      "operation": "imbalance.stratified_holdout",
+      "model": "logistic_regression",
+      "threshold": 0.5,
+      "prevalenceScenario": "observed",
+      "seed": 2603
+    },
+    {
+      "id": "lower_threshold",
+      "operation": "imbalance.threshold_sweep",
+      "model": "logistic_regression",
+      "threshold": 0.25,
+      "prevalenceScenario": "observed",
+      "seed": 2603
+    },
+    {
+      "id": "rarer_prevalence",
+      "operation": "imbalance.prevalence_sweep",
+      "model": "logistic_regression",
+      "threshold": 0.25,
+      "prevalenceScenario": "rarer",
+      "seed": 2603
+    }
+  ],
+  "metrics": [
+    "accuracy",
+    "precision",
+    "recall",
+    "f1",
+    "pr_auc",
+    "roc_auc",
+    "confusion_matrix",
+    "prevalence"
+  ],
+  "views": [
+    "metric_comparison",
+    "confusion_matrix",
+    "threshold_curve",
+    "prevalence_sensitivity"
+  ],
+  "invariants": [
+    "confusion_metric_consistency",
+    "majority_baseline_behavior",
+    "threshold_tradeoff",
+    "prevalence_sensitivity"
+  ],
+  "resourceLimits": { "wallSeconds": 30, "memoryMb": 512, "maxRuns": 4 }
+}

@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "1",
+  "concept": "class_imbalance",
+  "mutations": [
+    {
+      "id": "missing-prevalence-run",
+      "expectedInvariant": "required_operations"
+    },
+    { "id": "metric-outside-unit-range", "expectedInvariant": "metric_ranges" },
+    {
+      "id": "stale-confusion-matrix",
+      "expectedInvariant": "confusion_metric_consistency"
+    },
+    {
+      "id": "majority-claims-minority-recall",
+      "expectedInvariant": "majority_baseline_behavior"
+    },
+    { "id": "minority-signal-erased", "expectedInvariant": "minority_signal" },
+    {
+      "id": "threshold-does-not-change-outcome",
+      "expectedInvariant": "threshold_tradeoff"
+    },
+    {
+      "id": "prevalence-does-not-change",
+      "expectedInvariant": "prevalence_sensitivity"
+    },
+    {
+      "id": "fixture-fingerprint-drift",
+      "expectedInvariant": "declared_variable_control"
+    },
+    {
+      "id": "stale-chart-metric",
+      "expectedInvariant": "chart_payload_matches"
+    },
+    {
+      "id": "forged-result-hash",
+      "expectedInvariant": "canonical_result_hash"
+    },
+    {
+      "id": "unstratified-train-counts",
+      "expectedInvariant": "stratified_holdout"
+    },
+    {
+      "id": "changed-intervention-seed",
+      "expectedInvariant": "declared_variable_control"
+    }
+  ]
+}

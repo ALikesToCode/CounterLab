@@ -93,6 +93,13 @@ export type RunnerJobTransitionPatch = {
 type RunnerClock = { now(): Date };
 
 const DEFAULT_CLOCK: RunnerClock = { now: () => new Date() };
+const TERMINAL_JOB_STATUSES = new Set<RunnerJobStatus>([
+  "VERIFIED",
+  "REJECTED",
+  "FAILED",
+  "CANCELLED",
+  "TIMED_OUT",
+]);
 
 export class RunnerJobService {
   private readonly clock: RunnerClock;
@@ -128,6 +135,22 @@ export class RunnerJobService {
     return structuredClone(job);
   }
 
+  async expireIfTimedOut(jobId: string): Promise<RunnerJob> {
+    const current = await this.getJob(jobId);
+    if (TERMINAL_JOB_STATUSES.has(current.status)) return current;
+    const deadlineBase = Date.parse(current.startedAt ?? current.createdAt);
+    const deadline = deadlineBase + current.timeoutSeconds * 1_000;
+    if (this.clock.now().getTime() < deadline) return current;
+    return this.transition(current.jobId, current.jobVersion, "TIMED_OUT", {
+      runnerIdentity: current.runnerIdentity ?? "control-plane-timeout",
+      error: {
+        code: "RUNNER_JOB_TIMED_OUT",
+        message: `Runner job exceeded its ${current.timeoutSeconds} second deadline`,
+        retryable: true,
+      },
+    });
+  }
+
   async transition(
     jobId: string,
     expectedVersion: number,
@@ -140,13 +163,7 @@ export class RunnerJobService {
     }
     assertRunnerJobTransition(current.status, to);
     const timestamp = this.clock.now().toISOString();
-    const terminal = [
-      "VERIFIED",
-      "REJECTED",
-      "FAILED",
-      "CANCELLED",
-      "TIMED_OUT",
-    ].includes(to);
+    const terminal = TERMINAL_JOB_STATUSES.has(to);
     const next = RunnerJobSchema.parse({
       ...current,
       status: to,

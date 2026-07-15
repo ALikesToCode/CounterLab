@@ -2,12 +2,14 @@ import type {
   AllowedMetric,
   AllowedVisualization,
   ArtifactManifest,
+  ConceptId,
+  ConceptRoutingDecision,
   EvidenceRef,
   FixedOperationId,
-  SupportReason,
+  PatchOperationId,
 } from "@counterlab/contracts";
 
-export type ConceptId = "entity_leakage" | "class_imbalance";
+export type { ConceptId, ConceptRoutingDecision } from "@counterlab/contracts";
 
 export type SupportDetection = {
   supported: boolean;
@@ -42,39 +44,11 @@ export interface ConceptPackDefinition {
   };
   patchContract: {
     id: string;
-    allowedTransformations: readonly string[];
+    allowedTransformations: readonly PatchOperationId[];
   };
   approvedClaims: readonly string[];
   forbiddenClaims: readonly string[];
 }
-
-export type ConceptRoutingDecision =
-  | {
-      kind: "selected";
-      concept: ConceptId;
-      conceptPackVersion: string;
-      confidence: number;
-      evidence: EvidenceRef[];
-      limitations: string[];
-    }
-  | {
-      kind: "choice_required";
-      candidates: Array<{
-        concept: ConceptId;
-        conceptPackVersion: string;
-        confidence: number;
-        evidence: EvidenceRef[];
-      }>;
-    }
-  | {
-      kind: "insufficient_evidence";
-      candidates: ConceptId[];
-      limitations: string[];
-    }
-  | {
-      kind: "unsupported_artifact";
-      reasons: SupportReason[];
-    };
 
 function leakageSupport(manifest: ArtifactManifest): SupportDetection {
   const splitCell = manifest.cells.find(
@@ -144,6 +118,164 @@ function leakageSupport(manifest: ArtifactManifest): SupportDetection {
   };
 }
 
+const RARE_EVENT_SIGNAL =
+  /class[_\s-]?weight|class[_\s-]?imbalanc|rare[_\s-]?event|minority[_\s-]?class|DummyClassifier|most_frequent/iu;
+const CLASS_SPECIFIC_SIGNAL =
+  /average_precision|precision_recall|classification_report|confusion_matrix|value_counts|predict_proba/iu;
+const PREVALENCE_METRIC =
+  /prevalence|positive[_\s-]?rate|minority[_\s-]?rate|target[_\s-]?rate/iu;
+const RARE_EVENT_LANGUAGE =
+  /\brare\b|\buncommon\b|minority[_\s-]?(?:class|failures?)|positive class.{0,40}(?:rare|uncommon)/iu;
+
+function metricEvidence(
+  cell: ArtifactManifest["cells"][number],
+  metric: ArtifactManifest["cells"][number]["metricCandidates"][number],
+  relevance: string,
+): EvidenceRef | undefined {
+  const outputHash = cell.outputHashes[metric.outputIndex];
+  if (outputHash === undefined) return undefined;
+  return {
+    cellIndex: cell.index,
+    outputIndex: metric.outputIndex,
+    kind: "metric",
+    hash: outputHash,
+    excerpt: `${metric.name}: ${metric.value}`,
+    relevance,
+  };
+}
+
+function imbalanceSupport(manifest: ArtifactManifest): SupportDetection {
+  const splitCell = manifest.cells.find(
+    (cell) =>
+      cell.symbols.includes("train_test_split") ||
+      /train_test_split/iu.test(cell.sourceExcerpt),
+  );
+  const signalText = (cell: ArtifactManifest["cells"][number]) =>
+    `${cell.sourceExcerpt}\n${cell.symbols.join("\n")}`;
+  const rareEventCell = manifest.cells.find((cell) =>
+    RARE_EVENT_SIGNAL.test(signalText(cell)),
+  );
+  const signalCell =
+    rareEventCell ??
+    manifest.cells.find(
+      (cell) =>
+        cell.type === "code" && CLASS_SPECIFIC_SIGNAL.test(signalText(cell)),
+    );
+  const metricCells = manifest.cells.filter(
+    (cell) => cell.metricCandidates.length > 0 && cell.outputHashes.length > 0,
+  );
+  const headline = metricCells
+    .flatMap((cell) =>
+      cell.metricCandidates.map((metric) => ({ cell, metric })),
+    )
+    .find(({ metric }) => /accuracy/iu.test(metric.name));
+  const classSpecificMetric = metricCells
+    .flatMap((cell) =>
+      cell.metricCandidates.map((metric) => ({ cell, metric })),
+    )
+    .find(({ metric }) =>
+      /^(?:precision|recall|f1(?:_score)?|pr[_\s-]?auc|average_precision)$/iu.test(
+        metric.name,
+      ),
+    );
+  const displayedMetric = headline ?? classSpecificMetric;
+  const prevalence = metricCells
+    .flatMap((cell) =>
+      cell.metricCandidates.map((metric) => ({ cell, metric })),
+    )
+    .find(
+      ({ metric }) =>
+        PREVALENCE_METRIC.test(metric.name) &&
+        metric.value > 0 &&
+        metric.value < 1 &&
+        Math.min(metric.value, 1 - metric.value) <= 0.2,
+    );
+  const hasTarget = manifest.schemaSummary.targetCandidates.length > 0;
+  const hasExplicitRareLanguage = manifest.cells.some((cell) =>
+    RARE_EVENT_LANGUAGE.test(cell.sourceExcerpt),
+  );
+  const hasRareEventEvidence =
+    prevalence !== undefined ||
+    rareEventCell !== undefined ||
+    (hasExplicitRareLanguage && classSpecificMetric !== undefined);
+  const evidence: EvidenceRef[] = [];
+
+  if (signalCell !== undefined) {
+    evidence.push({
+      cellIndex: signalCell.index,
+      kind: "code",
+      hash: signalCell.sourceSha256,
+      excerpt: signalCell.sourceExcerpt.slice(0, 240),
+      relevance:
+        "This cell contains class-specific or rare-event evaluation evidence.",
+    });
+  }
+  if (prevalence !== undefined) {
+    const reference = metricEvidence(
+      prevalence.cell,
+      prevalence.metric,
+      "The displayed target prevalence establishes a rare class.",
+    );
+    if (reference !== undefined) evidence.push(reference);
+  }
+  if (displayedMetric !== undefined) {
+    const reference = metricEvidence(
+      displayedMetric.cell,
+      displayedMetric.metric,
+      headline === undefined
+        ? "This is a displayed class-specific result relevant to the learner's claim."
+        : "This is the aggregate result interpreted by the learner.",
+    );
+    if (
+      reference !== undefined &&
+      !evidence.some((candidate) => candidate.hash === reference.hash)
+    ) {
+      evidence.push(reference);
+    }
+  }
+
+  const limitations = [
+    ...(hasTarget ? [] : ["No prediction target is identified in the schema."]),
+    ...(splitCell === undefined
+      ? ["No supported evaluation split is visible in notebook evidence."]
+      : []),
+    ...(displayedMetric === undefined
+      ? [
+          "No displayed supported classification metric is available as claim evidence.",
+        ]
+      : []),
+    ...(prevalence === undefined && hasRareEventEvidence
+      ? [
+          "No numeric prevalence candidate resolves; rarity is supported only by explicit notebook evaluation context.",
+        ]
+      : []),
+    ...(hasRareEventEvidence
+      ? []
+      : [
+          "Accuracy alone does not establish class imbalance; rare-event prevalence or class-specific evidence is required.",
+        ]),
+  ];
+  const supported =
+    hasTarget &&
+    splitCell !== undefined &&
+    displayedMetric !== undefined &&
+    hasRareEventEvidence;
+  return {
+    supported,
+    confidence: supported
+      ? prevalence !== undefined && signalCell !== undefined
+        ? 0.92
+        : 0.86
+      : hasTarget && splitCell !== undefined && displayedMetric !== undefined
+        ? 0.56
+        : hasTarget && hasRareEventEvidence
+          ? 0.42
+          : 0,
+    evidence: evidence.slice(0, 3),
+    limitations,
+  };
+}
+
 const leakagePack = Object.freeze({
   id: "entity_leakage",
   version: "2.0.0",
@@ -200,8 +332,84 @@ const leakagePack = Object.freeze({
   ],
 } satisfies ConceptPackDefinition);
 
+const imbalancePack = Object.freeze({
+  id: "class_imbalance",
+  version: "1.0.0",
+  releaseStatus: "released",
+  title: "Class imbalance and metric choice",
+  learnerQuestion:
+    "Does the reported metric show that the rare class is detected at a useful operating point?",
+  supportDetector: imbalanceSupport,
+  analystRules: {
+    stableInstructions: [
+      "High accuracy on a rare-event target must be compared with a majority baseline before it is treated as useful evidence.",
+      "A decisive evaluation uses a stratified holdout and reports the confusion matrix, precision, recall, F1, and PR-AUC with contextual ROC-AUC.",
+      "Threshold and prevalence sweeps test whether the conclusion survives a changed operating point or deployment base rate.",
+    ],
+    requiredEvidenceKinds: ["code", "metric"],
+  },
+  allowedOperations: [
+    "imbalance.majority_baseline",
+    "imbalance.stratified_holdout",
+    "imbalance.confusion_matrix",
+    "imbalance.threshold_sweep",
+    "imbalance.prevalence_sweep",
+  ],
+  allowedMetrics: [
+    "accuracy",
+    "precision",
+    "recall",
+    "f1",
+    "pr_auc",
+    "roc_auc",
+    "confusion_matrix",
+    "prevalence",
+  ],
+  allowedVisualizations: [
+    "metric_comparison",
+    "confusion_matrix",
+    "threshold_curve",
+    "prevalence_sensitivity",
+  ],
+  verifierContract: {
+    id: "imbalance-plan-verifier-v1",
+    invariants: [
+      "resolved_evidence",
+      "minority_prevalence_measured",
+      "stratified_holdout",
+      "majority_baseline",
+      "confusion_matrix_consistent",
+      "threshold_sweep",
+      "prevalence_sweep",
+      "deterministic_result",
+    ],
+  },
+  transferTask: {
+    id: "manufacturing-rare-defect-v1",
+    title: "Choose evidence for a rare manufacturing defect alert",
+  },
+  patchContract: {
+    id: "imbalance-notebook-patch-v1",
+    allowedTransformations: [
+      "stratify_classification_holdout",
+      "add_majority_baseline",
+      "replace_accuracy_only_evaluation",
+    ],
+  },
+  approvedClaims: [
+    "This verified run reports class-specific performance for the documented fixture, split, threshold, and prevalence.",
+    "The fixed majority baseline and confusion-matrix totals were verified for this run.",
+  ],
+  forbiddenClaims: [
+    "High accuracy alone proves the rare class is detected well.",
+    "This threshold is optimal for every deployment prevalence or cost tradeoff.",
+    "This proves the learner has mastered class imbalance.",
+  ],
+} satisfies ConceptPackDefinition);
+
 const registry = new Map<ConceptId, ConceptPackDefinition>([
   [leakagePack.id, leakagePack],
+  [imbalancePack.id, imbalancePack],
 ]);
 
 export function getConceptPack(id: ConceptId): ConceptPackDefinition {

@@ -2,173 +2,319 @@
   "$id": "https://counterlab.dev/schemas/patch-plan-v1.schema.json",
   "title": "CounterLab hosted Patch Plan v1",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {
-    "schemaVersion": {
-      "type": "string",
-      "const": "1"
-    },
-    "planId": {
-      "type": "string",
-      "minLength": 1
-    },
-    "sessionId": {
-      "type": "string",
-      "minLength": 1
-    },
-    "concept": {
-      "type": "string",
-      "const": "entity_leakage"
-    },
-    "conceptPackVersion": {
-      "type": "string",
-      "minLength": 1
-    },
-    "artifactManifestHash": {
-      "type": "string",
-      "pattern": "^[a-f0-9]{64}$"
-    },
-    "sourceArtifactHash": {
-      "type": "string",
-      "pattern": "^[a-f0-9]{64}$"
-    },
-    "transferResultHash": {
-      "type": "string",
-      "pattern": "^[a-f0-9]{64}$"
-    },
-    "verifiedResultHash": {
-      "type": "string",
-      "pattern": "^[a-f0-9]{64}$"
-    },
-    "evidenceRefs": {
-      "minItems": 1,
-      "maxItems": 6,
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "cellIndex": {
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "const": "1"
+        },
+        "planId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conceptPackVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifactManifestHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sourceArtifactHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "transferResultHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "verifiedResultHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "evidenceRefs": {
+          "minItems": 1,
+          "maxItems": 6,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "cellIndex": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "outputIndex": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["code", "metric", "schema", "output", "learner_claim"]
+              },
+              "hash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "excerpt": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "relevance": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": ["kind", "hash", "excerpt", "relevance"],
+            "additionalProperties": false
+          }
+        },
+        "targetCells": {
+          "minItems": 1,
+          "maxItems": 4,
+          "type": "array",
+          "items": {
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991
-          },
-          "outputIndex": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "code",
-              "metric",
-              "schema",
-              "output",
-              "learner_claim"
-            ]
-          },
-          "hash": {
-            "type": "string",
-            "pattern": "^[a-f0-9]{64}$"
-          },
-          "excerpt": {
-            "type": "string",
-            "maxLength": 2000
-          },
-          "relevance": {
+          }
+        },
+        "preserveUnrelatedCells": {
+          "type": "boolean",
+          "const": true
+        },
+        "nonClaims": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
             "type": "string",
             "minLength": 1
           }
         },
-        "required": [
-          "kind",
-          "hash",
-          "excerpt",
-          "relevance"
-        ],
-        "additionalProperties": false
-      }
+        "concept": {
+          "type": "string",
+          "const": "entity_leakage"
+        },
+        "entityField": {
+          "type": "string",
+          "minLength": 1
+        },
+        "targetField": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operations": {
+          "minItems": 2,
+          "maxItems": 2,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "enum": [
+                  "replace_row_split_with_group_holdout",
+                  "exclude_entity_feature",
+                  "stratify_classification_holdout",
+                  "add_majority_baseline",
+                  "replace_accuracy_only_evaluation"
+                ]
+              },
+              "cellIndex": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": ["id", "cellIndex", "reason"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "planId",
+        "sessionId",
+        "conceptPackVersion",
+        "artifactManifestHash",
+        "sourceArtifactHash",
+        "transferResultHash",
+        "verifiedResultHash",
+        "evidenceRefs",
+        "targetCells",
+        "preserveUnrelatedCells",
+        "nonClaims",
+        "concept",
+        "entityField",
+        "targetField",
+        "operations"
+      ],
+      "additionalProperties": false
     },
-    "targetCells": {
-      "minItems": 1,
-      "maxItems": 4,
-      "type": "array",
-      "items": {
-        "type": "integer",
-        "minimum": 0,
-        "maximum": 9007199254740991
-      }
-    },
-    "entityField": {
-      "type": "string",
-      "minLength": 1
-    },
-    "targetField": {
-      "type": "string",
-      "minLength": 1
-    },
-    "operations": {
-      "minItems": 2,
-      "maxItems": 2,
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "enum": [
-              "replace_row_split_with_group_holdout",
-              "exclude_entity_feature"
-            ]
-          },
-          "cellIndex": {
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "const": "1"
+        },
+        "planId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conceptPackVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifactManifestHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sourceArtifactHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "transferResultHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "verifiedResultHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "evidenceRefs": {
+          "minItems": 1,
+          "maxItems": 6,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "cellIndex": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "outputIndex": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["code", "metric", "schema", "output", "learner_claim"]
+              },
+              "hash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "excerpt": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "relevance": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": ["kind", "hash", "excerpt", "relevance"],
+            "additionalProperties": false
+          }
+        },
+        "targetCells": {
+          "minItems": 1,
+          "maxItems": 4,
+          "type": "array",
+          "items": {
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991
-          },
-          "reason": {
+          }
+        },
+        "preserveUnrelatedCells": {
+          "type": "boolean",
+          "const": true
+        },
+        "nonClaims": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
             "type": "string",
             "minLength": 1
           }
         },
-        "required": [
-          "id",
-          "cellIndex",
-          "reason"
-        ],
-        "additionalProperties": false
-      }
-    },
-    "preserveUnrelatedCells": {
-      "type": "boolean",
-      "const": true
-    },
-    "nonClaims": {
-      "minItems": 1,
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      }
+        "concept": {
+          "type": "string",
+          "const": "class_imbalance"
+        },
+        "targetField": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operations": {
+          "minItems": 3,
+          "maxItems": 3,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "enum": [
+                  "replace_row_split_with_group_holdout",
+                  "exclude_entity_feature",
+                  "stratify_classification_holdout",
+                  "add_majority_baseline",
+                  "replace_accuracy_only_evaluation"
+                ]
+              },
+              "cellIndex": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": ["id", "cellIndex", "reason"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "planId",
+        "sessionId",
+        "conceptPackVersion",
+        "artifactManifestHash",
+        "sourceArtifactHash",
+        "transferResultHash",
+        "verifiedResultHash",
+        "evidenceRefs",
+        "targetCells",
+        "preserveUnrelatedCells",
+        "nonClaims",
+        "concept",
+        "targetField",
+        "operations"
+      ],
+      "additionalProperties": false
     }
-  },
-  "required": [
-    "schemaVersion",
-    "planId",
-    "sessionId",
-    "concept",
-    "conceptPackVersion",
-    "artifactManifestHash",
-    "sourceArtifactHash",
-    "transferResultHash",
-    "verifiedResultHash",
-    "evidenceRefs",
-    "targetCells",
-    "entityField",
-    "targetField",
-    "operations",
-    "preserveUnrelatedCells",
-    "nonClaims"
-  ],
-  "additionalProperties": false
+  ]
 }

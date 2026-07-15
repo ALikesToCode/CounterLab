@@ -6,6 +6,7 @@ import type { ArtifactManifest, BeliefTest } from "@counterlab/contracts";
 
 import {
   APPROVED_LEAKAGE_SAMPLE_SHA256,
+  BELIEF_ANALYST_INSTRUCTIONS,
   ApprovedSampleBeliefAnalyst,
   BeliefAnalystError,
   DisabledBeliefAnalyst,
@@ -15,6 +16,7 @@ import {
   createLiveBeliefAnalystFromEnv,
   deriveSafetyIdentifier,
   normalizeResponsesBaseURL,
+  normalizeResponsesTimeout,
   resolveBeliefTestEvidence,
   schemaSummaryHash,
   type ResponsesTransport,
@@ -123,6 +125,107 @@ function liveModelOutput(
     },
     requiresLearnerConfirmation: true as const,
     ...overrides,
+  };
+}
+
+function imbalanceManifest(): ArtifactManifest {
+  return manifest({
+    fileSha256: digest("8"),
+    cells: [
+      {
+        index: 1,
+        type: "code",
+        sourceSha256: digest("c"),
+        sourceExcerpt:
+          "positive_rate = y.mean()\ntrain_test_split(X, y, stratify=y)",
+        executionCount: 1,
+        outputHashes: [digest("d")],
+        symbols: ["train_test_split", "value_counts", "stratify"],
+        metricCandidates: [
+          { name: "positive_rate", value: 0.03, outputIndex: 0 },
+        ],
+      },
+      {
+        index: 3,
+        type: "code",
+        sourceSha256: digest("e"),
+        sourceExcerpt:
+          "accuracy_score(y_test, prediction)\nclassification_report(y_test, prediction)",
+        executionCount: 3,
+        outputHashes: [digest("f")],
+        symbols: ["accuracy_score", "classification_report"],
+        metricCandidates: [{ name: "accuracy", value: 0.97, outputIndex: 0 }],
+      },
+    ],
+    schemaSummary: {
+      fields: [
+        {
+          name: "is_defective",
+          inferredType: "binary",
+          privacyClass: "target",
+        },
+      ],
+      rowCount: 4_000,
+      entityCandidates: [],
+      targetCandidates: ["is_defective"],
+    },
+  });
+}
+
+function imbalanceModelOutput(artifact = imbalanceManifest()) {
+  return {
+    schemaVersion: "1" as const,
+    id: "belief_imbalance_live_1",
+    concept: "class_imbalance" as const,
+    learnerClaim: "The high accuracy proves rare defects are detected well.",
+    currentHypothesis: {
+      statement: "High accuracy means rare defects are detected reliably.",
+      predictedOutcome: "Recall remains high for the positive class.",
+    },
+    competingHypothesis: {
+      statement: "Accuracy is dominated by the majority non-defect class.",
+      predictedOutcome:
+        "A majority baseline is competitive while positive-class recall is low.",
+    },
+    evidenceRefs: [
+      {
+        cellIndex: 1,
+        outputIndex: 0,
+        kind: "metric" as const,
+        hash: artifact.cells[0]!.outputHashes[0]!,
+        excerpt: "positive_rate: 0.03",
+        relevance: "The displayed target prevalence establishes rarity.",
+      },
+      {
+        cellIndex: 3,
+        outputIndex: 0,
+        kind: "metric" as const,
+        hash: artifact.cells[1]!.outputHashes[0]!,
+        excerpt: "accuracy: 0.97",
+        relevance: "The learner interpreted this aggregate metric.",
+      },
+    ],
+    alternatives: [
+      {
+        label: "Threshold choice",
+        rationale: "The operating threshold changes precision and recall.",
+      },
+    ],
+    decisiveIntervention: {
+      id: "majority-and-threshold-comparison",
+      description:
+        "Compare the model with a majority baseline and inspect class-specific outcomes.",
+      controlledVariables: ["fixture", "split", "seed"],
+      changedVariables: ["baseline", "decision threshold"],
+      discriminatesBecause:
+        "Only the competing hypothesis predicts high accuracy alongside weak positive-class detection.",
+    },
+    uncertainty: {
+      confidence: 0.9,
+      limitations: ["Deployment prevalence may differ from this notebook."],
+      insufficientEvidence: false,
+    },
+    requiresLearnerConfirmation: true as const,
   };
 }
 
@@ -423,9 +526,52 @@ describe("LiveBeliefAnalyst", () => {
     ).rejects.toMatchObject({ code: "UNSUPPORTED_ARTIFACT" });
     expect(transport.request).toBeUndefined();
   });
+
+  it("uses the released imbalance rules and validates an imbalance Belief Test", async () => {
+    const artifact = imbalanceManifest();
+    const transport = new CapturingTransport({
+      outputParsed: imbalanceModelOutput(artifact),
+      refusals: [],
+      responseId: "resp_imbalance_1",
+      modelId: "configured-model",
+    });
+    const analyst = new LiveBeliefAnalyst({
+      apiKey: "server-only-key",
+      model: "configured-model",
+      transport,
+    });
+
+    const result = await analyst.propose({
+      sessionId: "session_imbalance_1",
+      learnerClaim: "The high accuracy proves rare defects are detected well.",
+      manifest: artifact,
+      concept: "class_imbalance",
+    });
+
+    expect(result.beliefTest.concept).toBe("class_imbalance");
+    expect(BELIEF_ANALYST_INSTRUCTIONS).toContain(
+      "Concept Pack: class_imbalance",
+    );
+    expect(BELIEF_ANALYST_INSTRUCTIONS).toContain("majority baseline");
+    expect(JSON.parse(transport.request!.input)).toMatchObject({
+      concept: "class_imbalance",
+      conceptPack: { id: "class_imbalance", version: "1.0.0" },
+    });
+  });
 });
 
 describe("custom Responses endpoint", () => {
+  it("allows a bounded timeout for slower reasoning-compatible endpoints", () => {
+    expect(normalizeResponsesTimeout(undefined)).toBe(180_000);
+    expect(normalizeResponsesTimeout("240000")).toBe(240_000);
+    expect(() => normalizeResponsesTimeout("5000")).toThrowError(
+      expect.objectContaining({ code: "CONFIGURATION_ERROR" }),
+    );
+    expect(() => normalizeResponsesTimeout("unbounded")).toThrowError(
+      expect.objectContaining({ code: "CONFIGURATION_ERROR" }),
+    );
+  });
+
   it("normalizes a provider-neutral v1 base URL", () => {
     expect(
       normalizeResponsesBaseURL(" https://responses.example.test/api/v1/ "),
@@ -561,6 +707,37 @@ describe("custom Responses endpoint", () => {
       details: { category: "authentication", status: 401 },
     });
     expect(JSON.stringify(failure)).not.toContain("upstream-specific");
+  });
+
+  it("classifies connection failures as transport errors instead of request rejections", async () => {
+    const transport = new OpenAIResponsesTransport({
+      apiKey: "server-only-key",
+      baseURL: "https://responses.example.test/v1",
+      fetch: async () => {
+        throw new TypeError("connection refused by private upstream hostname");
+      },
+    });
+
+    await expect(
+      transport.parse({
+        model: "configured-model",
+        instructions: "Return the schema.",
+        input: "{}",
+        text: {
+          format: zodTextFormat(
+            z.object({ ok: z.literal(true) }),
+            "test_result",
+          ),
+        },
+        reasoning: { effort: "medium" },
+        store: false,
+        safety_identifier: deriveSafetyIdentifier("session_custom"),
+      }),
+    ).rejects.toMatchObject({
+      code: "LIVE_UNAVAILABLE",
+      message: "Responses endpoint request failed",
+      details: { category: "transport" },
+    });
   });
 });
 

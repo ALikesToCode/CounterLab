@@ -96,6 +96,30 @@ const TurnCompletedSchema = z
   })
   .strict();
 
+const TokenUsageBreakdownSchema = z
+  .object({
+    inputTokens: z.number().int().nonnegative(),
+    cachedInputTokens: z.number().int().nonnegative(),
+    outputTokens: z.number().int().nonnegative(),
+    reasoningOutputTokens: z.number().int().nonnegative(),
+    totalTokens: z.number().int().nonnegative(),
+  })
+  .strict();
+
+const ThreadTokenUsageUpdatedSchema = z
+  .object({
+    threadId: z.string().min(1).max(256),
+    turnId: z.string().min(1).max(256),
+    tokenUsage: z
+      .object({
+        last: TokenUsageBreakdownSchema,
+        total: TokenUsageBreakdownSchema,
+        modelContextWindow: z.number().int().positive().nullable().optional(),
+      })
+      .strict(),
+  })
+  .strict();
+
 const ErrorNotificationSchema = ThreadCoordinatesSchema.extend({
   error: z.object({ message: z.string() }).passthrough(),
   willRetry: z.boolean(),
@@ -292,6 +316,17 @@ export function sanitizeAppServerMessage(message: unknown): CompilerEvent[] {
           ...(notification.turn.error?.message
             ? { error: excerpt(notification.turn.error.message, 1_000) }
             : {}),
+        },
+      ];
+    }
+    case "thread/tokenUsage/updated": {
+      const notification = parse(ThreadTokenUsageUpdatedSchema, params);
+      return [
+        {
+          type: "usage",
+          ...notification.tokenUsage.last,
+          modelContextWindow:
+            notification.tokenUsage.modelContextWindow ?? null,
         },
       ];
     }

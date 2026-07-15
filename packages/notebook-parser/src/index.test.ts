@@ -15,7 +15,10 @@ const notebook = (overrides: Record<string, unknown> = {}) => ({
           text: "Random split accuracy: 0.991\n",
         },
       ],
-      source: ["from sklearn.model_selection import train_test_split\n", "print('Random split accuracy: 0.991')"],
+      source: [
+        "from sklearn.model_selection import train_test_split\n",
+        "print('Random split accuracy: 0.991')",
+      ],
     },
   ],
   metadata: {
@@ -23,7 +26,11 @@ const notebook = (overrides: Record<string, unknown> = {}) => ({
       createdAt: "2026-07-14T00:00:00.000Z",
       schemaSummary: {
         fields: [
-          { name: "customer_id", inferredType: "categorical", privacyClass: "entity_identifier" },
+          {
+            name: "customer_id",
+            inferredType: "categorical",
+            privacyClass: "entity_identifier",
+          },
           { name: "churned", inferredType: "integer", privacyClass: "target" },
         ],
         rowCount: 2400,
@@ -31,7 +38,11 @@ const notebook = (overrides: Record<string, unknown> = {}) => ({
         targetCandidates: ["churned"],
       },
     },
-    kernelspec: { name: "python3", display_name: "Python 3", language: "python" },
+    kernelspec: {
+      name: "python3",
+      display_name: "Python 3",
+      language: "python",
+    },
   },
   nbformat: 4,
   nbformat_minor: 5,
@@ -41,8 +52,12 @@ const notebook = (overrides: Record<string, unknown> = {}) => ({
 describe("parseNotebook", () => {
   it("returns stable cell and output evidence hashes without executing code", () => {
     const bytes = Buffer.from(JSON.stringify(notebook()));
-    const first = parseNotebook(bytes, "customer-churn.ipynb", { maxBytes: 1_000_000 });
-    const second = parseNotebook(bytes, "customer-churn.ipynb", { maxBytes: 1_000_000 });
+    const first = parseNotebook(bytes, "customer-churn.ipynb", {
+      maxBytes: 1_000_000,
+    });
+    const second = parseNotebook(bytes, "customer-churn.ipynb", {
+      maxBytes: 1_000_000,
+    });
 
     expect(first).toEqual(second);
     expect(first.support.status).toBe("SUPPORTED");
@@ -72,19 +87,27 @@ describe("parseNotebook", () => {
       ],
     });
 
-    const manifest = parseNotebook(Buffer.from(JSON.stringify(active)), "active.ipynb", {
-      maxBytes: 1_000_000,
-    });
+    const manifest = parseNotebook(
+      Buffer.from(JSON.stringify(active)),
+      "active.ipynb",
+      {
+        maxBytes: 1_000_000,
+      },
+    );
 
     expect(manifest.support.status).toBe("PARTIAL");
-    expect(manifest.support.reasons.some((reason) => reason.code === "ACTIVE_OUTPUT_REMOVED")).toBe(true);
+    expect(
+      manifest.support.reasons.some(
+        (reason) => reason.code === "ACTIVE_OUTPUT_REMOVED",
+      ),
+    ).toBe(true);
     expect(manifest.cells[0]?.outputHashes).toEqual([]);
   });
 
   it("rejects oversized notebooks before parsing", () => {
-    expect(() => parseNotebook(Buffer.from("{}"), "large.ipynb", { maxBytes: 1 })).toThrow(
-      /maximum size/i,
-    );
+    expect(() =>
+      parseNotebook(Buffer.from("{}"), "large.ipynb", { maxBytes: 1 }),
+    ).toThrow(/maximum size/i);
   });
 
   it("hashes only canonical safe MIME data and retains safe fallbacks", () => {
@@ -110,9 +133,13 @@ describe("parseNotebook", () => {
       ],
     });
 
-    const manifest = parseNotebook(Buffer.from(JSON.stringify(withMimeData)), "mime.ipynb", {
-      maxBytes: 1_000_000,
-    });
+    const manifest = parseNotebook(
+      Buffer.from(JSON.stringify(withMimeData)),
+      "mime.ipynb",
+      {
+        maxBytes: 1_000_000,
+      },
+    );
 
     expect(manifest.support.status).toBe("PARTIAL");
     expect(manifest.cells[0]?.outputHashes).toHaveLength(2);
@@ -193,14 +220,21 @@ describe("parseNotebook", () => {
       ],
     });
 
-    const manifest = parseNotebook(Buffer.from(JSON.stringify(unsafe)), "../escape.ipynb", {
-      maxBytes: 1_000_000,
-    });
+    const manifest = parseNotebook(
+      Buffer.from(JSON.stringify(unsafe)),
+      "../escape.ipynb",
+      {
+        maxBytes: 1_000_000,
+      },
+    );
 
     expect(manifest.fileName).toBe("escape.ipynb");
     expect(manifest.support.status).toBe("UNSUPPORTED");
     expect(manifest.support.reasons.map((reason) => reason.code)).toEqual(
-      expect.arrayContaining(["UNSUPPORTED_MAGIC", "EXTERNAL_NETWORK_DEPENDENCY"]),
+      expect.arrayContaining([
+        "UNSUPPORTED_MAGIC",
+        "EXTERNAL_NETWORK_DEPENDENCY",
+      ]),
     );
   });
 
@@ -217,9 +251,13 @@ describe("parseNotebook", () => {
       ],
     });
 
-    const manifest = parseNotebook(Buffer.from(JSON.stringify(withPathlib)), "sample.ipynb", {
-      maxBytes: 1_000_000,
-    });
+    const manifest = parseNotebook(
+      Buffer.from(JSON.stringify(withPathlib)),
+      "sample.ipynb",
+      {
+        maxBytes: 1_000_000,
+      },
+    );
 
     expect(manifest.support).toEqual({ status: "SUPPORTED", reasons: [] });
     expect(manifest.packageHints).toEqual(["pandas", "pathlib"]);

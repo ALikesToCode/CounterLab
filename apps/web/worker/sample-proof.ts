@@ -66,7 +66,8 @@ export function createSampleReasoningProof(input: {
   const evidence = requiredSessionEvidence(input.session);
   const event = (kind: string) => {
     const found = input.events.find((candidate) => candidate.kind === kind);
-    if (found === undefined) throw new Error(`Evidence event ${kind} is missing`);
+    if (found === undefined)
+      throw new Error(`Evidence event ${kind} is missing`);
     return found;
   };
   const groupRun = evidence.result.runs.find(
@@ -136,7 +137,10 @@ export function createSampleReasoningProof(input: {
       publicTests: {
         passed: publicTestsValue.passed,
         failed: publicTestsValue.failed,
-        command: requiredString(publicTestsValue.command, "public test command"),
+        command: requiredString(
+          publicTestsValue.command,
+          "public test command",
+        ),
         reportHash: publicTestsReportHash,
       },
       externalVerifier: {
@@ -155,12 +159,14 @@ export function createSampleReasoningProof(input: {
       patchResult: evidence.patch,
       reasoningDiff,
       versions: {
-        environment: "Cloudflare Worker with recorded local Docker runner evidence",
+        environment:
+          "Cloudflare Worker with recorded local Docker runner evidence",
         dependencies: "pnpm-lock.yaml and requirements.lock.txt",
         fixture: evidence.result.fixture.sha256,
         kernel: evidence.result.kernelVersion,
         verifier: "leakage-verifier-v1",
-        prompt: modelEvent.promptHash ?? modelEvent.modelId ?? "approved-sample-v1",
+        prompt:
+          modelEvent.promptHash ?? modelEvent.modelId ?? "approved-sample-v1",
         model: modelEvent.modelId ?? "approved-sample-v1",
         template: requiredGitObject(labVerificationValue.commitHash),
       },

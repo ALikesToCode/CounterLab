@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1",
+  "concept": "class_imbalance",
+  "requiredInvariants": [
+    "result_contract",
+    "required_operations",
+    "metric_ranges",
+    "confusion_metric_consistency",
+    "majority_baseline_behavior",
+    "minority_signal",
+    "threshold_tradeoff",
+    "prevalence_sensitivity",
+    "declared_variable_control",
+    "stratified_holdout",
+    "chart_payload_matches",
+    "canonical_result_hash"
+  ]
+}

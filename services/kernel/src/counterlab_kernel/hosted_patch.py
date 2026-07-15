@@ -17,6 +17,8 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 from .canonical import canonical_json, sha256_json
+from .imbalance_patching import compile_imbalance_notebook_patch
+from .leakage_patching import compile_leakage_notebook_patch
 from .patching import compile_sample_notebook_patch
 from .transfer import evaluate_forecasting_transfer
 
@@ -27,14 +29,18 @@ _MAX_NOTEBOOK_BYTES = 10 * 1024 * 1024
 _PATCH_SCHEMA_PATH = (
     Path(__file__).resolve().parent / "schemas" / "patch-plan-v1.schema.json"
 )
-_PATCH_OPERATIONS = frozenset(
-    {
+_PATCH_OPERATIONS = {
+    "entity_leakage": frozenset({
         "replace_row_split_with_group_holdout",
         "exclude_entity_feature",
-    }
-)
-_PATCH_PLAN_KEYS = frozenset(
-    {
+    }),
+    "class_imbalance": frozenset({
+        "stratify_classification_holdout",
+        "add_majority_baseline",
+        "replace_accuracy_only_evaluation",
+    }),
+}
+_PATCH_PLAN_BASE_KEYS = frozenset({
         "schemaVersion",
         "planId",
         "sessionId",
@@ -46,13 +52,11 @@ _PATCH_PLAN_KEYS = frozenset(
         "verifiedResultHash",
         "evidenceRefs",
         "targetCells",
-        "entityField",
         "targetField",
         "operations",
         "preserveUnrelatedCells",
         "nonClaims",
-    }
-)
+})
 
 
 class HostedPatchError(ValueError):
@@ -89,8 +93,14 @@ def _validate_patch_plan(
         raise HostedPatchError(
             f"Patch Plan schema rejected {location}: {first.message}"
         )
-    extra = sorted(set(plan).difference(_PATCH_PLAN_KEYS))
-    missing = sorted(_PATCH_PLAN_KEYS.difference(plan))
+    concept = plan.get("concept")
+    if concept not in _PATCH_OPERATIONS:
+        raise HostedPatchError("Patch Plan concept has no registered patch engine")
+    expected_keys = _PATCH_PLAN_BASE_KEYS.union(
+        {"entityField"} if concept == "entity_leakage" else set()
+    )
+    extra = sorted(set(plan).difference(expected_keys))
+    missing = sorted(expected_keys.difference(plan))
     if extra or missing:
         raise HostedPatchError(
             f"Patch Plan fields are invalid: missing={missing}, extra={extra}"
@@ -103,9 +113,9 @@ def _validate_patch_plan(
     transfer_summary = _mapping(bundle.get("transferSummary"), "transferSummary")
     if (
         plan.get("schemaVersion") != "1"
-        or plan.get("concept") != "entity_leakage"
         or plan.get("sessionId") != bundle.get("sessionId")
-        or plan.get("conceptPackVersion") != "2.0.0"
+        or plan.get("conceptPackVersion")
+        != ("2.0.0" if concept == "entity_leakage" else "1.0.0")
         or plan.get("artifactManifestHash") != manifest_hash
         or plan.get("sourceArtifactHash") != manifest.get("fileSha256")
         or plan.get("verifiedResultHash") != result_summary.get("resultHash")
@@ -137,18 +147,30 @@ def _validate_patch_plan(
         reason = item.get("reason")
         if (
             not isinstance(operation_id, str)
-            or operation_id not in _PATCH_OPERATIONS
+            or operation_id not in _PATCH_OPERATIONS[concept]
             or item.get("cellIndex") not in target_cells
             or not isinstance(reason, str)
             or not reason.strip()
         ):
             raise HostedPatchError("Patch Plan contains an unregistered operation")
         operation_ids.append(operation_id)
-    if len(operation_ids) != 2 or set(operation_ids) != _PATCH_OPERATIONS:
+    if set(operation_ids) != _PATCH_OPERATIONS[concept] or len(operation_ids) != len(
+        _PATCH_OPERATIONS[concept]
+    ):
         raise HostedPatchError("Patch Plan must compose each registered operation once")
 
-    if plan.get("entityField") != "customer_id" or plan.get("targetField") != "churned":
-        raise HostedPatchError("No fixed patch operation is registered for these fields")
+    schema_summary = _mapping(manifest.get("schemaSummary"), "schemaSummary")
+    target_candidates = _sequence(
+        schema_summary.get("targetCandidates"), "targetCandidates"
+    )
+    if plan.get("targetField") not in target_candidates:
+        raise HostedPatchError("Patch Plan target field does not resolve to the manifest")
+    if concept == "entity_leakage":
+        entity_candidates = _sequence(
+            schema_summary.get("entityCandidates"), "entityCandidates"
+        )
+        if plan.get("entityField") not in entity_candidates:
+            raise HostedPatchError("Patch Plan entity field does not resolve to the manifest")
 
     cells = {
         cell.get("index"): cell
@@ -223,23 +245,56 @@ def execute_hosted_patch(
     source_path = source_directory / "uploaded-notebook.ipynb"
     source_path.write_bytes(source_notebook)
 
-    # The Worker already verified and bound TRANSFER_PASSED to this job. The
-    # existing patch engine independently requires the canonical deterministic
-    # transfer result, so reconstruct it from the fixed evaluator here.
-    transfer_result = evaluate_forecasting_transfer(
-        strategy_choice="time_ordered_holdout",
-        risk_choice="centered_window_reads_future",
-        evidence_choices=[
-            "center_true_uses_later_targets",
-            "random_split_mixes_dates",
-        ],
-    )
-    compiled = compile_sample_notebook_patch(
-        original_notebook=source_path,
-        fixture_csv=Path(fixture_csv),
-        output_dir=patch_directory,
-        transfer_result=transfer_result,
-    )
+    concept = str(patch_plan["concept"])
+    schema_summary = _mapping(manifest.get("schemaSummary"), "schemaSummary")
+    excluded_fields = [
+        str(field.get("name"))
+        for field in _sequence(schema_summary.get("fields"), "schemaSummary.fields")
+        if isinstance(field, Mapping)
+        and field.get("privacyClass") in {"row_identifier", "entity_identifier"}
+    ]
+    target_cells = _sequence(patch_plan.get("targetCells"), "targetCells")
+    if len(target_cells) != 1:
+        raise HostedPatchError(
+            "the fixed patch engine supports one resolved evaluation cell"
+        )
+    if concept == "entity_leakage":
+        # Independently reconstruct the authentic deterministic transfer pass.
+        transfer_result = evaluate_forecasting_transfer(
+            strategy_choice="time_ordered_holdout",
+            risk_choice="centered_window_reads_future",
+            evidence_choices=[
+                "center_true_uses_later_targets",
+                "random_split_mixes_dates",
+            ],
+        )
+        compiled = compile_sample_notebook_patch(
+            original_notebook=source_path,
+            fixture_csv=Path(fixture_csv),
+            output_dir=patch_directory,
+            transfer_result=transfer_result,
+        )
+        if compiled.get("status") != "VERIFIED":
+            compiled = compile_leakage_notebook_patch(
+                original_notebook=source_path,
+                fixture_csv=Path(fixture_csv),
+                output_dir=patch_directory,
+                transfer_passed=True,
+                target_cell=int(target_cells[0]),
+                entity_field=str(patch_plan["entityField"]),
+                target_field=str(patch_plan["targetField"]),
+                excluded_fields=excluded_fields,
+            )
+    else:
+        compiled = compile_imbalance_notebook_patch(
+            original_notebook=source_path,
+            fixture_csv=Path(fixture_csv),
+            output_dir=patch_directory,
+            transfer_passed=True,
+            target_cell=int(target_cells[0]),
+            target_field=str(patch_plan["targetField"]),
+            excluded_fields=excluded_fields,
+        )
     if compiled.get("status") != "VERIFIED" or compiled.get("verified") is not True:
         message = compiled.get("message", "fixed patch verification rejected the source")
         raise HostedPatchError(str(message))

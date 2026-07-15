@@ -181,6 +181,7 @@ def test_hosted_lab_run_binds_plan_manifest_claim_and_fixture() -> None:
     bundle = {
         "schemaVersion": "1",
         "kind": "LAB_RUN",
+        "purpose": "AUTHORITATIVE",
         "jobId": "job_run_1",
         "sessionId": "session_live_1",
         "stateVersion": 6,

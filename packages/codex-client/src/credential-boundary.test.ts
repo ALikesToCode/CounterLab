@@ -109,7 +109,10 @@ describe("Codex credential boundary", () => {
       expect(staged.guestAuthSource).not.toBe(fixture.authFile);
       writeFileSync(join(staged.directory, "state.sqlite"), "sensitive-state");
       mkdirSync(join(staged.directory, "log"));
-      writeFileSync(join(staged.directory, "log", "session.log"), "sensitive-log");
+      writeFileSync(
+        join(staged.directory, "log", "session.log"),
+        "sensitive-log",
+      );
       await staged.revoke();
       expect(existsSync(staged.guestAuthSource)).toBe(false);
       expect(existsSync(staged.directory)).toBe(true);
@@ -287,9 +290,7 @@ describe("Codex credential boundary", () => {
   it.runIf(existsSync("/usr/bin/bwrap"))(
     "proves a command cannot inherit the token or inspect the parent environment",
     async () => {
-      const root = mkdtempSync(
-        join(tmpdir(), "counterlab-credential-probe-"),
-      );
+      const root = mkdtempSync(join(tmpdir(), "counterlab-credential-probe-"));
       const workspace = join(root, "workspace");
       const hidden = join(root, "hidden-verifier");
       mkdirSync(workspace);

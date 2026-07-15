@@ -55,13 +55,53 @@ export function createLiveReasoningProof(input: {
       throw new Error(`Evidence event ${kind} is missing`);
     return found;
   };
-  const groupRun = evidence.result.runs.find(
-    (run) => run.operation === "leakage.group_holdout",
-  );
-  if (groupRun === undefined) {
-    throw new Error("Live group-holdout result is missing");
-  }
   const changedCells = evidence.patch.modifiedCells.join(", ");
+  let observedResult: string;
+  let codeBefore: string;
+  let codeAfter: string;
+  let transferBefore: string;
+  let transferAfter: string;
+  let conceptLimitation: string;
+  let mutationCommand: string;
+  if (evidence.result.concept === "entity_leakage") {
+    const groupRun = evidence.result.runs.find(
+      (run) => run.operation === "leakage.group_holdout",
+    );
+    if (groupRun === undefined) {
+      throw new Error("Live group-holdout result is missing");
+    }
+    observedResult = `Group-holdout accuracy ${groupRun.metrics.accuracy.toFixed(3)} with ${groupRun.entityOverlap.count} shared entities`;
+    codeBefore =
+      "Row-wise evaluation allowed repeated entities across the boundary";
+    codeAfter = `Verified cells ${changedCells} use group-aware evaluation and exclude the identity feature`;
+    transferBefore =
+      "The evaluation-boundary rule had not been applied to forecasting";
+    transferAfter =
+      "The fixed evaluator accepted a time-ordered holdout and identified future-looking evidence";
+    conceptLimitation =
+      "Verification covers this artifact and the released entity-leakage operations.";
+    mutationCommand = "./scripts/run-mutations.sh leakage";
+  } else {
+    const thresholdRun = evidence.result.runs.find(
+      (run) => run.operation === "imbalance.threshold_sweep",
+    );
+    const majorityRun = evidence.result.runs.find(
+      (run) => run.operation === "imbalance.majority_baseline",
+    );
+    if (thresholdRun === undefined || majorityRun === undefined) {
+      throw new Error("Live class-imbalance comparison is missing");
+    }
+    observedResult = `At threshold ${thresholdRun.threshold.toFixed(2)}, recall is ${(thresholdRun.metrics.recall * 100).toFixed(1)}%; the majority baseline reaches ${(majorityRun.metrics.accuracy * 100).toFixed(1)}% accuracy while detecting no positive cases`;
+    codeBefore = "Accuracy-only evaluation hid the minority-class failure mode";
+    codeAfter = `Verified cells ${changedCells} use a stratified holdout, computed majority baseline, confusion counts, and minority metrics`;
+    transferBefore =
+      "The metric-choice rule had not been applied under asymmetric defect costs";
+    transferAfter =
+      "The fixed evaluator accepted a cost-aware threshold and evidence that exposes missed defects";
+    conceptLimitation =
+      "Verification covers this artifact and the released class-imbalance operations; it does not choose a production threshold.";
+    mutationCommand = "./scripts/run-mutations.sh imbalance";
+  }
   const reasoningDiff: ReasoningDiff = {
     schemaVersion: "1",
     id: `reasoning_${crypto.randomUUID()}`,
@@ -73,18 +113,15 @@ export function createLiveReasoningProof(input: {
       },
       prediction: {
         before: `${evidence.prediction.choice} at ${evidence.prediction.confidence}% confidence`,
-        after: `Group-holdout accuracy ${groupRun.metrics.accuracy.toFixed(3)} with ${groupRun.entityOverlap.count} shared entities`,
+        after: observedResult,
       },
       code: {
-        before:
-          "Row-wise evaluation allowed repeated entities across the boundary",
-        after: `Verified cells ${changedCells} use group-aware evaluation and exclude the identity feature`,
+        before: codeBefore,
+        after: codeAfter,
       },
       transfer: {
-        before:
-          "The evaluation-boundary rule had not been applied to forecasting",
-        after:
-          "The fixed evaluator accepted a time-ordered holdout and identified future-looking evidence",
+        before: transferBefore,
+        after: transferAfter,
       },
     },
     evidenceEventHashes: [
@@ -135,14 +172,11 @@ export function createLiveReasoningProof(input: {
         conceptPack: evidence.result.conceptPackVersion,
       },
       limitations: [
-        "Verification covers this artifact, the released entity-leakage operations, and the recorded fixed fixture.",
+        conceptLimitation,
         "The process boundary and allowlists are engineering controls, not a formal sandbox proof.",
         "Passing this fixed transfer verifies one task outcome; it does not establish global mastery.",
       ],
-      reproductionCommands: [
-        "./scripts/test-all.sh",
-        "./scripts/run-mutations.sh leakage",
-      ],
+      reproductionCommands: ["./scripts/test-all.sh", mutationCommand],
     },
     input.signingKey === undefined ? {} : { signingKey: input.signingKey },
   );

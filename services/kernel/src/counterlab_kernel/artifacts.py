@@ -10,6 +10,7 @@ import pandas as pd
 from .canonical import canonical_json
 from .experiment import run_leakage_experiment
 from .fixture import generate_leakage_fixture
+from .imbalance import generate_imbalance_fixture, run_imbalance_experiment
 
 CREATED_AT = "2026-07-14T00:00:00.000Z"
 
@@ -152,6 +153,140 @@ def _sample_notebook(frame: pd.DataFrame, result: dict[str, Any]) -> nbformat.No
     return notebook
 
 
+def _imbalance_schema_summary(frame: pd.DataFrame) -> dict[str, Any]:
+    fields = []
+    for name, dtype in frame.dtypes.items():
+        if name == "fraud":
+            inferred_type = "binary"
+            privacy_class = "target"
+        elif name == "case_id":
+            inferred_type = "categorical"
+            privacy_class = "row_identifier"
+        elif pd.api.types.is_numeric_dtype(dtype):
+            inferred_type = "number"
+            privacy_class = "feature"
+        else:
+            inferred_type = "categorical"
+            privacy_class = "feature"
+        fields.append(
+            {
+                "name": str(name),
+                "inferredType": inferred_type,
+                "privacyClass": privacy_class,
+            }
+        )
+    return {
+        "fields": fields,
+        "rowCount": int(len(frame)),
+        "entityCandidates": [],
+        "targetCandidates": ["fraud"],
+    }
+
+
+def _imbalance_sample_notebook(
+    frame: pd.DataFrame, result: dict[str, Any]
+) -> nbformat.NotebookNode:
+    model_run = _run(result, "stratified_model")
+    majority_run = _run(result, "majority_baseline")
+    prevalence = float(result["fixture"]["prevalence"])
+
+    notebook = nbformat.v4.new_notebook()
+    notebook["nbformat"] = 4
+    notebook["nbformat_minor"] = 5
+    notebook["metadata"] = {
+        "kernelspec": {
+            "display_name": "Python 3",
+            "language": "python",
+            "name": "python3",
+        },
+        "language_info": {"name": "python", "version": "3.14"},
+        "counterlab": {
+            "createdAt": CREATED_AT,
+            "fixtureSeed": result["seed"],
+            "resultHash": result["resultHash"],
+            "schemaSummary": _imbalance_schema_summary(frame),
+            "storedOutputSource": "counterlab-kernel",
+        },
+    }
+    notebook["cells"] = [
+        nbformat.v4.new_markdown_cell(
+            "# Fraud screening: does 99% accuracy mean useful detection?\n\n"
+            "This public sample reports aggregate accuracy on a rare-event target.",
+            id="imbalance-intro",
+        ),
+        nbformat.v4.new_code_cell(
+            "from pathlib import Path\n"
+            "import pandas as pd\n\n"
+            "data_path = Path('../public/fraud_rare_event.csv')\n"
+            "df = pd.read_csv(data_path)\n"
+            "positive_rate = df['fraud'].mean()\n"
+            "print(f'Rows: {len(df)}')\n"
+            "print(f'Positive rate: {positive_rate:.4%}')",
+            execution_count=1,
+            id="load-rare-event-fixture",
+            outputs=[
+                nbformat.v4.new_output(
+                    "stream",
+                    name="stdout",
+                    text=(
+                        f"Rows: {len(frame)}\n"
+                        f"Positive rate: {prevalence:.4%}\n"
+                    ),
+                )
+            ],
+        ),
+        nbformat.v4.new_markdown_cell(
+            "## Reported evaluation\n\n"
+            "The notebook uses a stratified holdout but reports only accuracy.",
+            id="imbalance-evaluation-note",
+        ),
+        nbformat.v4.new_code_cell(
+            "from sklearn.compose import ColumnTransformer\n"
+            "from sklearn.linear_model import LogisticRegression\n"
+            "from sklearn.metrics import accuracy_score\n"
+            "from sklearn.model_selection import train_test_split\n"
+            "from sklearn.pipeline import Pipeline\n"
+            "from sklearn.preprocessing import OneHotEncoder, StandardScaler\n\n"
+            "X = df.drop(columns=['fraud', 'case_id'])\n"
+            "y = df['fraud']\n"
+            "categorical = ['channel']\n"
+            "numeric = [column for column in X.columns if column not in categorical]\n"
+            "preprocess = ColumnTransformer([\n"
+            "    ('numeric', StandardScaler(), numeric),\n"
+            "    ('categorical', OneHotEncoder(handle_unknown='ignore'), categorical),\n"
+            "])\n"
+            "X_train, X_test, y_train, y_test = train_test_split(\n"
+            "    X, y, test_size=0.25, random_state=2603, stratify=y\n"
+            ")\n"
+            "model = Pipeline([\n"
+            "    ('preprocess', preprocess),\n"
+            "    ('model', LogisticRegression(class_weight={0: 1, 1: 3}, random_state=2603)),\n"
+            "])\n"
+            "model.fit(X_train, y_train)\n"
+            "prediction = model.predict(X_test)\n"
+            "print(f'Test accuracy: {accuracy_score(y_test, prediction):.6f}')",
+            execution_count=2,
+            id="accuracy-only-evaluation",
+            outputs=[
+                nbformat.v4.new_output(
+                    "stream",
+                    name="stdout",
+                    text=(
+                        f"Test accuracy: {model_run['metrics']['accuracy']:.6f}\n"
+                        f"Majority baseline accuracy: {majority_run['metrics']['accuracy']:.6f}\n"
+                        f"Majority baseline recall: {majority_run['metrics']['recall']:.6f}\n"
+                    ),
+                )
+            ],
+        ),
+        nbformat.v4.new_markdown_cell(
+            "**Learner claim to test:** Nearly 99% test accuracy proves this classifier catches rare fraud.",
+            id="imbalance-learner-claim",
+        ),
+    ]
+    return notebook
+
+
 def generate_public_artifacts(root: Path, *, seed: int = 1729) -> dict[str, str]:
     root = Path(root)
     fixture_dir = root / "fixtures" / "public"
@@ -172,9 +307,39 @@ def generate_public_artifacts(root: Path, *, seed: int = 1729) -> dict[str, str]
     notebook_text = nbformat.writes(_sample_notebook(stable_frame, result), version=4)
     notebook_path.write_text(f"{notebook_text.rstrip()}\n", encoding="utf-8")
 
+    imbalance_frame = generate_imbalance_fixture()
+    stable_imbalance_frame = imbalance_frame.sort_values(
+        "case_id", kind="mergesort"
+    ).reset_index(drop=True)
+    imbalance_fixture_path = fixture_dir / "fraud_rare_event.csv"
+    stable_imbalance_frame.to_csv(
+        imbalance_fixture_path,
+        index=False,
+        float_format="%.12g",
+        lineterminator="\n",
+    )
+    stored_imbalance_frame = pd.read_csv(imbalance_fixture_path)
+    imbalance_result = run_imbalance_experiment(stored_imbalance_frame)
+    imbalance_result_path = fixture_dir / "imbalance_verified_result.json"
+    imbalance_notebook_path = notebook_dir / "fraud_class_imbalance.ipynb"
+    imbalance_result_path.write_text(
+        f"{canonical_json(imbalance_result)}\n", encoding="utf-8"
+    )
+    imbalance_notebook_text = nbformat.writes(
+        _imbalance_sample_notebook(stored_imbalance_frame, imbalance_result),
+        version=4,
+    )
+    imbalance_notebook_path.write_text(
+        f"{imbalance_notebook_text.rstrip()}\n", encoding="utf-8"
+    )
+
     return {
         "fixturePath": str(fixture_path),
         "notebookPath": str(notebook_path),
         "resultPath": str(result_path),
         "resultHash": result["resultHash"],
+        "imbalanceFixturePath": str(imbalance_fixture_path),
+        "imbalanceNotebookPath": str(imbalance_notebook_path),
+        "imbalanceResultPath": str(imbalance_result_path),
+        "imbalanceResultHash": imbalance_result["resultHash"],
     }

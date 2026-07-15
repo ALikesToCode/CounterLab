@@ -264,6 +264,17 @@ export const CompilerEventSchema = z.discriminatedUnion("type", [
     .strict(),
   z
     .object({
+      type: z.literal("usage"),
+      inputTokens: z.number().int().nonnegative(),
+      cachedInputTokens: z.number().int().nonnegative(),
+      outputTokens: z.number().int().nonnegative(),
+      reasoningOutputTokens: z.number().int().nonnegative(),
+      totalTokens: z.number().int().nonnegative(),
+      modelContextWindow: z.number().int().positive().nullable(),
+    })
+    .strict(),
+  z
+    .object({
       type: z.literal("replay_metadata"),
       replayId: z.string().min(1).max(128),
       recordedAt: z.string().datetime(),

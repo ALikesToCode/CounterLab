@@ -187,9 +187,12 @@ async function startProductionServer(): Promise<void> {
           pythonExecutable:
             process.env.COUNTERLAB_PYTHON_EXECUTABLE ??
             "/opt/counterlab-venv/bin/python",
-          fixturePath:
+          leakageFixturePath:
             process.env.COUNTERLAB_LEAKAGE_FIXTURE_PATH ??
             "/app/fixtures/public/customer_churn.csv",
+          imbalanceFixturePath:
+            process.env.COUNTERLAB_IMBALANCE_FIXTURE_PATH ??
+            "/app/fixtures/public/fraud_rare_event.csv",
         }),
         controlPlane,
       });

@@ -107,6 +107,37 @@ function service(repository = new MemoryRunnerJobRepository()) {
 }
 
 describe("RunnerJobService", () => {
+  it("expires a stalled non-terminal job from its start deadline", async () => {
+    const repository = new MemoryRunnerJobRepository();
+    let now = new Date("2026-07-15T00:00:00.000Z");
+    const jobs = new RunnerJobService(repository, { now: () => now });
+    const queued = await jobs.createJob({
+      ...jobInput(),
+      timeoutSeconds: 30,
+    });
+    const starting = await jobs.transition(
+      queued.jobId,
+      queued.jobVersion,
+      "STARTING",
+      { runnerIdentity: "runner-container-test" },
+    );
+
+    now = new Date("2026-07-15T00:00:29.000Z");
+    await expect(jobs.expireIfTimedOut(starting.jobId)).resolves.toMatchObject({
+      status: "STARTING",
+    });
+
+    now = new Date("2026-07-15T00:00:30.000Z");
+    await expect(jobs.expireIfTimedOut(starting.jobId)).resolves.toMatchObject({
+      status: "TIMED_OUT",
+      completedAt: "2026-07-15T00:00:30.000Z",
+      error: {
+        code: "RUNNER_JOB_TIMED_OUT",
+        retryable: true,
+      },
+    });
+  });
+
   it("creates and advances an optimistic job without allowing stale writes", async () => {
     const harness = service();
     const queued = await harness.service.createJob(jobInput());

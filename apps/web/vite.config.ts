@@ -4,6 +4,11 @@ import { fileURLToPath } from "node:url";
 import { defineConfig, loadEnv } from "vite";
 
 const SERVER_ONLY_ENV_KEYS = [
+  "CODEX_AUTH_JSON",
+  "CODEX_MODEL",
+  "COUNTERLAB_ADMIN_DIAGNOSTIC_SECRET",
+  "COUNTERLAB_RUNNER_BASE_URL",
+  "COUNTERLAB_RUNNER_SIGNING_KEY",
   "OPENAI_API_KEY",
   "OPENAI_BASE_URL",
   "OPENAI_MODEL",
@@ -15,7 +20,7 @@ export default defineConfig(({ command, mode }) => {
   const rootEnvironment = loadEnv(mode, repositoryRoot, "");
   const localServerBindings = Object.fromEntries(
     SERVER_ONLY_ENV_KEYS.flatMap((key) => {
-      const value = rootEnvironment[key]?.trim();
+      const value = (process.env[key] ?? rootEnvironment[key])?.trim();
       return value === undefined || value.length === 0 ? [] : [[key, value]];
     }),
   );

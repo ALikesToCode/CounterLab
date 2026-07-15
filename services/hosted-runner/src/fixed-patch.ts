@@ -51,7 +51,8 @@ function runFixedProcess(
 
 export type PythonFixedPatchExecutorOptions = {
   pythonExecutable?: string;
-  fixturePath?: string;
+  leakageFixturePath?: string;
+  imbalanceFixturePath?: string;
   runProcess?: FixedPatchProcessRunner;
 };
 
@@ -75,14 +76,18 @@ async function assertBoundedFile(
 
 export class PythonFixedPatchExecutor implements FixedPatchExecutor {
   private readonly pythonExecutable: string;
-  private readonly fixturePath: string;
+  private readonly leakageFixturePath: string;
+  private readonly imbalanceFixturePath: string;
   private readonly runProcess: FixedPatchProcessRunner;
 
   constructor(options: PythonFixedPatchExecutorOptions = {}) {
     this.pythonExecutable =
       options.pythonExecutable ?? "/opt/counterlab-venv/bin/python";
-    this.fixturePath =
-      options.fixturePath ?? "/app/fixtures/public/customer_churn.csv";
+    this.leakageFixturePath =
+      options.leakageFixturePath ?? "/app/fixtures/public/customer_churn.csv";
+    this.imbalanceFixturePath =
+      options.imbalanceFixturePath ??
+      "/app/fixtures/public/fraud_rare_event.csv";
     this.runProcess = options.runProcess ?? runFixedProcess;
   }
 
@@ -134,6 +139,10 @@ export class PythonFixedPatchExecutor implements FixedPatchExecutor {
     ]);
 
     const startedAt = performance.now();
+    const fixturePath =
+      bundle.approvedBeliefTest.concept === "class_imbalance"
+        ? this.imbalanceFixturePath
+        : this.leakageFixturePath;
     try {
       await this.runProcess(
         this.pythonExecutable,
@@ -147,7 +156,7 @@ export class PythonFixedPatchExecutor implements FixedPatchExecutor {
           "--source",
           sourcePath,
           "--fixture",
-          this.fixturePath,
+          fixturePath,
           "--output-notebook",
           notebookOutputPath,
           "--output-result",

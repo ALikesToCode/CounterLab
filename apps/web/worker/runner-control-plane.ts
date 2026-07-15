@@ -24,6 +24,67 @@ export type RunnerContainerBinding = {
   getByName(name: string): RunnerInstance;
 };
 
+export type HttpRunnerDispatcherOptions = {
+  baseURL: string;
+  fetch?: typeof globalThis.fetch;
+};
+
+function normalizeRunnerBaseURL(configured: string): string {
+  let url: URL;
+  try {
+    url = new URL(configured);
+  } catch {
+    throw new Error("Runner base URL must be an absolute URL");
+  }
+  const loopback = new Set(["localhost", "127.0.0.1", "[::1]"]).has(
+    url.hostname,
+  );
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) {
+    throw new Error(
+      "Runner base URL must use HTTPS outside loopback development",
+    );
+  }
+  if (url.username.length > 0 || url.password.length > 0) {
+    throw new Error("Runner base URL must not contain credentials");
+  }
+  if (url.search.length > 0 || url.hash.length > 0) {
+    throw new Error("Runner base URL must not contain a query or fragment");
+  }
+  if (url.pathname !== "/" && url.pathname !== "") {
+    throw new Error("Runner base URL must not contain a path");
+  }
+  return url.origin;
+}
+
+export class HttpRunnerDispatcher implements RunnerDispatcher {
+  readonly identity = "counterlab-process-runner-v1";
+  private readonly baseURL: string;
+  private readonly fetcher: typeof globalThis.fetch;
+
+  constructor(options: HttpRunnerDispatcherOptions) {
+    this.baseURL = normalizeRunnerBaseURL(options.baseURL);
+    this.fetcher = options.fetch ?? globalThis.fetch;
+  }
+
+  async dispatch(request: RunnerDispatchRequest): Promise<void> {
+    const response = await this.fetcher(`${this.baseURL}/jobs`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${request.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        schemaVersion: "1",
+        jobId: request.job.jobId,
+        controlPlaneUrl: request.controlPlaneUrl,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`Runner dispatch failed with status ${response.status}`);
+    }
+  }
+}
+
 export function isRunnerContainerBinding(
   value: unknown,
 ): value is RunnerContainerBinding {

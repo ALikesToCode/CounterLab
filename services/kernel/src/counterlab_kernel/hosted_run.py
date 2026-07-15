@@ -10,6 +10,7 @@ from typing import Any
 
 from .canonical import canonical_json, sha256_json
 from .fixture import generate_leakage_fixture
+from .imbalance import generate_imbalance_fixture
 from .plan import ExperimentPlanValidationError, interpret_experiment_plan
 
 
@@ -18,6 +19,7 @@ _BUNDLE_KEYS = frozenset(
     {
         "schemaVersion",
         "kind",
+        "purpose",
         "jobId",
         "sessionId",
         "stateVersion",
@@ -53,6 +55,8 @@ def execute_hosted_lab_run(bundle: Mapping[str, Any]) -> dict[str, Any]:
         )
     if bundle.get("schemaVersion") != "1" or bundle.get("kind") != "LAB_RUN":
         raise HostedLabRunError("hosted LAB_RUN bundle kind is invalid")
+    if bundle.get("purpose") not in {"AUTHORITATIVE", "INTERACTIVE"}:
+        raise HostedLabRunError("hosted LAB_RUN purpose is invalid")
     if bundle.get("permittedOutputs") != ["verified-result.json"]:
         raise HostedLabRunError("hosted LAB_RUN output policy is invalid")
 
@@ -69,19 +73,29 @@ def execute_hosted_lab_run(bundle: Mapping[str, Any]) -> dict[str, Any]:
         or plan.get("artifactManifestHash") != manifest_hash
     ):
         raise HostedLabRunError("experiment plan lineage does not match LAB_RUN job")
-    if plan.get("concept") != "entity_leakage":
+    concept = plan.get("concept")
+    if concept not in {"entity_leakage", "class_imbalance"}:
         raise HostedLabRunError("no hosted fixed runner is registered for this concept")
-    if fixture.get("id") != "public-leakage-v1":
-        raise HostedLabRunError("fixture is not registered for entity leakage")
+    expected_fixture = {
+        "entity_leakage": "public-leakage-v1",
+        "class_imbalance": "public-imbalance-v1",
+    }[concept]
+    if fixture.get("id") != expected_fixture:
+        raise HostedLabRunError(f"fixture is not registered for {concept}")
     learner_claim = bundle.get("learnerClaim")
     if not isinstance(learner_claim, str) or not learner_claim.strip():
         raise HostedLabRunError("learner claim is required")
 
     try:
+        fixed_fixture = (
+            generate_leakage_fixture()
+            if concept == "entity_leakage"
+            else generate_imbalance_fixture()
+        )
         return interpret_experiment_plan(
             plan,
             manifest,
-            generate_leakage_fixture(),
+            fixed_fixture,
             learner_claim=learner_claim,
         )
     except ExperimentPlanValidationError as error:

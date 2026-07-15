@@ -11,6 +11,10 @@ const GitObjectIdSchema = z
   );
 const NonEmptyString = z.string().trim().min(1);
 
+export const ConceptIdSchema = z.enum(["entity_leakage", "class_imbalance"]);
+
+export type ConceptId = z.infer<typeof ConceptIdSchema>;
+
 export const SupportReasonSchema = z
   .object({
     code: NonEmptyString,
@@ -231,6 +235,51 @@ export const EvidenceRefSchema = z
 
 export type EvidenceRef = z.infer<typeof EvidenceRefSchema>;
 
+const ConceptRouteCandidateSchema = z
+  .object({
+    concept: ConceptIdSchema,
+    conceptPackVersion: NonEmptyString,
+    confidence: z.number().finite().min(0).max(1),
+    evidence: z.array(EvidenceRefSchema).min(1).max(3),
+  })
+  .strict();
+
+export const ConceptRoutingDecisionSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("selected"),
+      concept: ConceptIdSchema,
+      conceptPackVersion: NonEmptyString,
+      confidence: z.number().finite().min(0).max(1),
+      evidence: z.array(EvidenceRefSchema).min(1).max(3),
+      limitations: z.array(NonEmptyString),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("choice_required"),
+      candidates: z.array(ConceptRouteCandidateSchema).min(2),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("insufficient_evidence"),
+      candidates: z.array(ConceptIdSchema).min(1),
+      limitations: z.array(NonEmptyString).min(1),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("unsupported_artifact"),
+      reasons: z.array(SupportReasonSchema).min(1),
+    })
+    .strict(),
+]);
+
+export type ConceptRoutingDecision = z.infer<
+  typeof ConceptRoutingDecisionSchema
+>;
+
 export const FixedOperationIdSchema = z.enum([
   "leakage.random_row_split",
   "leakage.group_holdout",
@@ -409,43 +458,74 @@ export type ExperimentPlanV2 = z.infer<typeof ExperimentPlanV2Schema>;
 export const PatchOperationIdSchema = z.enum([
   "replace_row_split_with_group_holdout",
   "exclude_entity_feature",
+  "stratify_classification_holdout",
+  "add_majority_baseline",
+  "replace_accuracy_only_evaluation",
 ]);
 
 export type PatchOperationId = z.infer<typeof PatchOperationIdSchema>;
 
-export const PatchPlanV1Schema = z
+const PatchPlanBaseShape = {
+  schemaVersion: z.literal("1"),
+  planId: NonEmptyString,
+  sessionId: NonEmptyString,
+  conceptPackVersion: NonEmptyString,
+  artifactManifestHash: Sha256Schema,
+  sourceArtifactHash: Sha256Schema,
+  transferResultHash: Sha256Schema,
+  verifiedResultHash: Sha256Schema,
+  evidenceRefs: z.array(EvidenceRefSchema).min(1).max(6),
+  targetCells: z.array(z.number().int().nonnegative()).min(1).max(4),
+  preserveUnrelatedCells: z.literal(true),
+  nonClaims: z.array(NonEmptyString).min(1),
+} as const;
+
+const PatchOperationSchema = z
   .object({
-    schemaVersion: z.literal("1"),
-    planId: NonEmptyString,
-    sessionId: NonEmptyString,
+    id: PatchOperationIdSchema,
+    cellIndex: z.number().int().nonnegative(),
+    reason: NonEmptyString,
+  })
+  .strict();
+
+function validatePatchCellScope(
+  plan: {
+    targetCells: number[];
+    operations: Array<{ cellIndex: number }>;
+  },
+  context: z.RefinementCtx,
+) {
+  const targetCells = new Set(plan.targetCells);
+  for (const [index, operation] of plan.operations.entries()) {
+    if (!targetCells.has(operation.cellIndex)) {
+      context.addIssue({
+        code: "custom",
+        message: "patch operation cell must be declared in targetCells",
+        path: ["operations", index, "cellIndex"],
+      });
+    }
+  }
+}
+
+const LeakagePatchPlanV1Schema = z
+  .object({
+    ...PatchPlanBaseShape,
     concept: z.literal("entity_leakage"),
-    conceptPackVersion: NonEmptyString,
-    artifactManifestHash: Sha256Schema,
-    sourceArtifactHash: Sha256Schema,
-    transferResultHash: Sha256Schema,
-    verifiedResultHash: Sha256Schema,
-    evidenceRefs: z.array(EvidenceRefSchema).min(1).max(6),
-    targetCells: z.array(z.number().int().nonnegative()).min(1).max(4),
     entityField: NonEmptyString,
     targetField: NonEmptyString,
-    operations: z
-      .array(
-        z
-          .object({
-            id: PatchOperationIdSchema,
-            cellIndex: z.number().int().nonnegative(),
-            reason: NonEmptyString,
-          })
-          .strict(),
-      )
-      .length(2),
-    preserveUnrelatedCells: z.literal(true),
-    nonClaims: z.array(NonEmptyString).min(1),
+    operations: z.array(PatchOperationSchema).length(2),
   })
   .strict()
   .superRefine((plan, context) => {
     const operationIds = new Set(plan.operations.map((item) => item.id));
-    if (operationIds.size !== 2) {
+    const expected = new Set([
+      "replace_row_split_with_group_holdout",
+      "exclude_entity_feature",
+    ]);
+    if (
+      operationIds.size !== expected.size ||
+      [...operationIds].some((operation) => !expected.has(operation))
+    ) {
       context.addIssue({
         code: "custom",
         message:
@@ -453,17 +533,42 @@ export const PatchPlanV1Schema = z
         path: ["operations"],
       });
     }
-    const targetCells = new Set(plan.targetCells);
-    for (const [index, operation] of plan.operations.entries()) {
-      if (!targetCells.has(operation.cellIndex)) {
-        context.addIssue({
-          code: "custom",
-          message: "patch operation cell must be declared in targetCells",
-          path: ["operations", index, "cellIndex"],
-        });
-      }
-    }
+    validatePatchCellScope(plan, context);
   });
+
+const ImbalancePatchPlanV1Schema = z
+  .object({
+    ...PatchPlanBaseShape,
+    concept: z.literal("class_imbalance"),
+    targetField: NonEmptyString,
+    operations: z.array(PatchOperationSchema).length(3),
+  })
+  .strict()
+  .superRefine((plan, context) => {
+    const operationIds = new Set(plan.operations.map((item) => item.id));
+    const expected = new Set([
+      "stratify_classification_holdout",
+      "add_majority_baseline",
+      "replace_accuracy_only_evaluation",
+    ]);
+    if (
+      operationIds.size !== expected.size ||
+      [...operationIds].some((operation) => !expected.has(operation))
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "imbalance patch plan must include each registered operation exactly once",
+        path: ["operations"],
+      });
+    }
+    validatePatchCellScope(plan, context);
+  });
+
+export const PatchPlanV1Schema = z.discriminatedUnion("concept", [
+  LeakagePatchPlanV1Schema,
+  ImbalancePatchPlanV1Schema,
+]);
 
 export type PatchPlanV1 = z.infer<typeof PatchPlanV1Schema>;
 
@@ -734,6 +839,29 @@ export const PublicCompilerEventSchema = z.discriminatedUnion("kind", [
 
 export type PublicCompilerEvent = z.infer<typeof PublicCompilerEventSchema>;
 
+export const RunnerOperationalMetricsSchema = z
+  .object({
+    compilerDurationMs: z.number().int().nonnegative(),
+    verifierDurationMs: z.number().int().nonnegative(),
+    kernelDurationMs: z.number().int().nonnegative(),
+    patchDurationMs: z.number().int().nonnegative(),
+    repairAttempts: z.number().int().nonnegative().max(2),
+    planTokenUsage: z
+      .object({
+        inputTokens: z.number().int().nonnegative(),
+        cachedInputTokens: z.number().int().nonnegative(),
+        outputTokens: z.number().int().nonnegative(),
+        reasoningOutputTokens: z.number().int().nonnegative(),
+        totalTokens: z.number().int().nonnegative(),
+      })
+      .strict(),
+  })
+  .strict();
+
+export type RunnerOperationalMetrics = z.infer<
+  typeof RunnerOperationalMetricsSchema
+>;
+
 export const RunnerCallbackSchema = z
   .object({
     schemaVersion: z.literal("1"),
@@ -751,6 +879,7 @@ export const RunnerCallbackSchema = z
     outputHashes: z.array(Sha256Schema),
     finalEventCursor: z.number().int().nonnegative(),
     error: RunnerJobErrorSchema.optional(),
+    operationalMetrics: RunnerOperationalMetricsSchema.optional(),
     occurredAt: z.iso.datetime({ offset: true }),
   })
   .strict()
@@ -1025,10 +1154,39 @@ export type RunnerLabCompileBundle = z.infer<
   typeof RunnerLabCompileBundleSchema
 >;
 
+export const InteractiveLeakageRunRequestSchema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    splitStrategy: z.enum(["random", "group"]),
+    entityField: NonEmptyString,
+    identityAblation: z.boolean(),
+    testFraction: z.number().finite().min(0.1).max(0.5),
+  })
+  .strict();
+
+export type InteractiveLeakageRunRequest = z.infer<
+  typeof InteractiveLeakageRunRequestSchema
+>;
+
+export const InteractiveImbalanceRunRequestSchema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    concept: z.literal("class_imbalance"),
+    threshold: z.number().finite().min(0.05).max(0.45),
+    prevalenceScenario: z.enum(["observed", "rarer", "more_common"]),
+    metricFocus: z.enum(["precision", "recall", "f1", "pr_auc"]),
+  })
+  .strict();
+
+export type InteractiveImbalanceRunRequest = z.infer<
+  typeof InteractiveImbalanceRunRequestSchema
+>;
+
 export const RunnerLabRunBundleSchema = z
   .object({
     schemaVersion: z.literal("1"),
     kind: z.literal("LAB_RUN"),
+    purpose: z.enum(["AUTHORITATIVE", "INTERACTIVE"]),
     jobId: NonEmptyString,
     sessionId: NonEmptyString,
     stateVersion: z.number().int().positive(),
@@ -1096,10 +1254,9 @@ export const RunnerPatchCompileBundleSchema = z
       .object({
         id: NonEmptyString,
         allowedTransformations: z
-          .tuple([
-            z.literal("replace_row_split_with_group_holdout"),
-            z.literal("exclude_entity_feature"),
-          ])
+          .array(PatchOperationIdSchema)
+          .min(2)
+          .max(3)
           .readonly(),
       })
       .strict(),
@@ -1111,8 +1268,25 @@ export const RunnerPatchCompileBundleSchema = z
   })
   .strict()
   .superRefine((bundle, context) => {
+    const expectedTransformations =
+      bundle.approvedBeliefTest.concept === "entity_leakage"
+        ? new Set<PatchOperationId>([
+            "replace_row_split_with_group_holdout",
+            "exclude_entity_feature",
+          ])
+        : new Set<PatchOperationId>([
+            "stratify_classification_holdout",
+            "add_majority_baseline",
+            "replace_accuracy_only_evaluation",
+          ]);
+    const transformations = new Set(
+      bundle.patchContract.allowedTransformations,
+    );
     if (
-      bundle.approvedBeliefTest.concept !== "entity_leakage" ||
+      transformations.size !== expectedTransformations.size ||
+      [...transformations].some(
+        (operation) => !expectedTransformations.has(operation),
+      ) ||
       !bundle.allowedCellIndices.every((index) =>
         bundle.artifactManifest.cells.some((cell) => cell.index === index),
       )
@@ -1274,7 +1448,7 @@ function validateResultCharts(
 export const VerifiedResultSetV1Schema = z
   .object({
     schemaVersion: VersionOneSchema,
-    concept: z.enum(["entity_leakage", "class_imbalance"]),
+    concept: z.literal("entity_leakage"),
     fixture: ResultFixtureSchema,
     kernelVersion: NonEmptyString,
     seed: z.number().int().nonnegative(),
@@ -1285,14 +1459,14 @@ export const VerifiedResultSetV1Schema = z
   .strict()
   .superRefine(validateResultCharts);
 
-const HostedVerifiedRunSchema = VerifiedRunSchema.extend({
+const HostedLeakageVerifiedRunSchema = VerifiedRunSchema.extend({
   operation: FixedOperationIdSchema,
 }).strict();
 
-export const HostedVerifiedResultSetV2Schema = z
+const HostedLeakageVerifiedResultSetV2Schema = z
   .object({
     schemaVersion: z.literal("2"),
-    concept: z.enum(["entity_leakage", "class_imbalance"]),
+    concept: z.literal("entity_leakage"),
     planId: NonEmptyString,
     sessionId: NonEmptyString,
     artifactManifestHash: Sha256Schema,
@@ -1300,12 +1474,164 @@ export const HostedVerifiedResultSetV2Schema = z
     fixture: ResultFixtureSchema,
     kernelVersion: NonEmptyString,
     seed: z.number().int().nonnegative(),
-    runs: z.array(HostedVerifiedRunSchema).min(1),
+    runs: z.array(HostedLeakageVerifiedRunSchema).min(1),
     chartData: z.array(ResultChartRowSchema).min(1),
     resultHash: Sha256Schema,
   })
   .strict()
   .superRefine(validateResultCharts);
+
+export type HostedLeakageVerifiedResultSetV2 = z.infer<
+  typeof HostedLeakageVerifiedResultSetV2Schema
+>;
+
+const ImbalanceMetricsSchema = z
+  .object({
+    accuracy: ProportionSchema,
+    precision: ProportionSchema,
+    recall: ProportionSchema,
+    f1: ProportionSchema,
+    prAuc: ProportionSchema,
+    rocAuc: ProportionSchema,
+  })
+  .strict();
+
+const ClassCountsSchema = z
+  .object({
+    negative: z.number().int().nonnegative(),
+    positive: z.number().int().nonnegative(),
+  })
+  .strict();
+
+const HostedImbalanceVerifiedRunSchema = z
+  .object({
+    id: NonEmptyString,
+    operation: z.enum([
+      "imbalance.majority_baseline",
+      "imbalance.stratified_holdout",
+      "imbalance.threshold_sweep",
+      "imbalance.prevalence_sweep",
+    ]),
+    model: z.enum(["majority_baseline", "logistic_regression"]),
+    seed: z.number().int().nonnegative(),
+    threshold: ProportionSchema,
+    prevalenceScenario: z.enum(["observed", "rarer", "more_common"]),
+    metrics: ImbalanceMetricsSchema,
+    confusionMatrix: z
+      .object({
+        tn: z.number().int().nonnegative(),
+        fp: z.number().int().nonnegative(),
+        fn: z.number().int().nonnegative(),
+        tp: z.number().int().nonnegative(),
+      })
+      .strict(),
+    sampleSizes: z
+      .object({
+        train: z.number().int().positive(),
+        test: z.number().int().positive(),
+      })
+      .strict(),
+    classCounts: z
+      .object({ train: ClassCountsSchema, test: ClassCountsSchema })
+      .strict(),
+    prevalence: ProportionSchema,
+    predictedPositiveRate: ProportionSchema,
+    featureSetFingerprint: Sha256Schema,
+    inputFingerprint: Sha256Schema,
+  })
+  .strict();
+
+const ImbalanceResultChartRowSchema = z
+  .object({
+    runId: NonEmptyString,
+    operation: z.enum([
+      "imbalance.majority_baseline",
+      "imbalance.stratified_holdout",
+      "imbalance.threshold_sweep",
+      "imbalance.prevalence_sweep",
+    ]),
+    accuracy: ProportionSchema,
+    precision: ProportionSchema,
+    recall: ProportionSchema,
+    f1: ProportionSchema,
+    prAuc: ProportionSchema,
+    rocAuc: ProportionSchema,
+    prevalence: ProportionSchema,
+    predictedPositiveRate: ProportionSchema,
+    sampleSize: z.number().int().positive(),
+    threshold: ProportionSchema,
+    prevalenceScenario: z.enum(["observed", "rarer", "more_common"]),
+    seed: z.number().int().nonnegative(),
+  })
+  .strict();
+
+const HostedImbalanceVerifiedResultSetV2Schema = z
+  .object({
+    schemaVersion: z.literal("2"),
+    concept: z.literal("class_imbalance"),
+    planId: NonEmptyString,
+    sessionId: NonEmptyString,
+    artifactManifestHash: Sha256Schema,
+    conceptPackVersion: NonEmptyString,
+    fixture: z
+      .object({
+        sha256: Sha256Schema,
+        rows: z.number().int().positive(),
+        positives: z.number().int().positive(),
+        prevalence: ProportionSchema,
+      })
+      .strict(),
+    kernelVersion: NonEmptyString,
+    seed: z.number().int().nonnegative(),
+    runs: z.array(HostedImbalanceVerifiedRunSchema).min(1),
+    chartData: z.array(ImbalanceResultChartRowSchema).min(1),
+    resultHash: Sha256Schema,
+  })
+  .strict()
+  .superRefine((result, context) => {
+    const runs = new Map(result.runs.map((run) => [run.id, run]));
+    if (runs.size !== result.runs.length) {
+      context.addIssue({
+        code: "custom",
+        message: "verified run IDs must be unique",
+        path: ["runs"],
+      });
+    }
+    for (const [index, chart] of result.chartData.entries()) {
+      const run = runs.get(chart.runId);
+      if (
+        run === undefined ||
+        chart.operation !== run.operation ||
+        chart.sampleSize !== run.sampleSizes.test ||
+        chart.seed !== run.seed ||
+        chart.threshold !== run.threshold ||
+        chart.prevalenceScenario !== run.prevalenceScenario ||
+        chart.accuracy !== run.metrics.accuracy ||
+        chart.precision !== run.metrics.precision ||
+        chart.recall !== run.metrics.recall ||
+        chart.f1 !== run.metrics.f1 ||
+        chart.prAuc !== run.metrics.prAuc ||
+        chart.rocAuc !== run.metrics.rocAuc ||
+        chart.prevalence !== run.prevalence ||
+        chart.predictedPositiveRate !== run.predictedPositiveRate
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: `chart data does not match verified run: ${chart.runId}`,
+          path: ["chartData", index],
+        });
+      }
+    }
+  });
+
+export type HostedImbalanceVerifiedResultSetV2 = z.infer<
+  typeof HostedImbalanceVerifiedResultSetV2Schema
+>;
+
+export const HostedVerifiedResultSetV2Schema = z.union([
+  HostedLeakageVerifiedResultSetV2Schema,
+  HostedImbalanceVerifiedResultSetV2Schema,
+]);
 
 export type HostedVerifiedResultSetV2 = z.infer<
   typeof HostedVerifiedResultSetV2Schema
@@ -1317,6 +1643,9 @@ export const VerifiedResultSetSchema = z.union([
 ]);
 
 export type VerifiedResultSet = z.infer<typeof VerifiedResultSetSchema>;
+export type LeakageVerifiedResultSet =
+  z.infer<typeof VerifiedResultSetV1Schema> | HostedLeakageVerifiedResultSetV2;
+export type ImbalanceVerifiedResultSet = HostedImbalanceVerifiedResultSetV2;
 
 export const TransferResultSchema = z
   .object({

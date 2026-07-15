@@ -39,7 +39,12 @@ describe("Worker runtime boundary", () => {
 
   it("rejects values that proof-bundle canonical JSON cannot represent", () => {
     const sparse = new Array(1);
-    const invalidValues = [{ value: undefined }, [undefined], { value: Number.NaN }, sparse];
+    const invalidValues = [
+      { value: undefined },
+      [undefined],
+      { value: Number.NaN },
+      sparse,
+    ];
 
     for (const value of invalidValues) {
       expect(() => canonicalJson(value)).toThrow(TypeError);

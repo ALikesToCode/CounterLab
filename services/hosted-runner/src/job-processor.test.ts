@@ -227,6 +227,7 @@ async function runBundle(
   return RunnerLabRunBundleSchema.parse({
     schemaVersion: "1",
     kind: "LAB_RUN",
+    purpose: "AUTHORITATIVE",
     jobId,
     sessionId: compileBundle.sessionId,
     stateVersion: 7,
@@ -298,10 +299,20 @@ class FakeCompiler implements CodexCompiler {
     await this.writeCandidate(input.generationDirectory);
     yield { type: "plan_summary", summary: "Build the fair comparison." };
     yield {
+      type: "usage",
+      inputTokens: 120,
+      cachedInputTokens: 80,
+      outputTokens: 35,
+      reasoningOutputTokens: 12,
+      totalTokens: 155,
+      modelContextWindow: 200_000,
+    };
+    yield {
       type: "final_status",
       status: "completed",
       threadId: "thread_1",
       turnId: "turn_1",
+      durationMs: 87,
     };
   }
 
@@ -541,6 +552,7 @@ const verifiedDecision: CandidateDecision = {
   canRepair: false,
   nextCursor: 4,
   counterexamples: [],
+  verifierDurationMs: 8,
 };
 
 afterEach(async () => {
@@ -584,6 +596,18 @@ describe("HostedRunnerJobProcessor", () => {
     expect(controlPlane.callbacks[0]).toMatchObject({
       status: "VERIFIED",
       finalEventCursor: 4,
+      operationalMetrics: {
+        compilerDurationMs: 87,
+        verifierDurationMs: 8,
+        repairAttempts: 0,
+        planTokenUsage: {
+          inputTokens: 120,
+          cachedInputTokens: 80,
+          outputTokens: 35,
+          reasoningOutputTokens: 12,
+          totalTokens: 155,
+        },
+      },
     });
   });
 
@@ -593,6 +617,7 @@ describe("HostedRunnerJobProcessor", () => {
       status: "REJECTED",
       canRepair: true,
       nextCursor: 3,
+      verifierDurationMs: 11,
       counterexamples: [
         {
           invariant: "zero_group_overlap",
@@ -627,6 +652,10 @@ describe("HostedRunnerJobProcessor", () => {
     expect(controlPlane.callbacks[0]).toMatchObject({
       status: "VERIFIED",
       finalEventCursor: 7,
+      operationalMetrics: {
+        repairAttempts: 1,
+        verifierDurationMs: 19,
+      },
     });
   });
 
@@ -677,6 +706,7 @@ describe("HostedRunnerJobProcessor", () => {
     expect(controlPlane.callbacks[0]).toMatchObject({
       status: "VERIFIED",
       finalEventCursor: 3,
+      operationalMetrics: { kernelDurationMs: 41 },
     });
   });
 
@@ -712,6 +742,7 @@ describe("HostedRunnerJobProcessor", () => {
     expect(controlPlane.callbacks[0]).toMatchObject({
       status: "VERIFIED",
       finalEventCursor: 6,
+      operationalMetrics: { patchDurationMs: 53 },
     });
   });
 });

@@ -41,9 +41,7 @@ export class D1ArtifactStore implements ArtifactStore {
 
   async find(artifactId: string): Promise<StoredArtifact | undefined> {
     const row = await this.database
-      .prepare(
-        "SELECT manifest_json, object_key FROM artifacts WHERE id = ?",
-      )
+      .prepare("SELECT manifest_json, object_key FROM artifacts WHERE id = ?")
       .bind(artifactId)
       .first<{ manifest_json: string; object_key: string | null }>();
     if (row === null) return undefined;

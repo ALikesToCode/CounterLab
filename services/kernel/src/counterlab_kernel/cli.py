@@ -9,7 +9,14 @@ from .artifacts import generate_public_artifacts
 from .canonical import canonical_json
 from .experiment import run_leakage_experiment
 from .fixture import generate_leakage_fixture
+from .imbalance import generate_imbalance_fixture, run_imbalance_experiment
+from .imbalance_transfer import evaluate_manufacturing_transfer
+from .imbalance_verifier import (
+    critical_imbalance_mutations,
+    verify_imbalance_candidate,
+)
 from .verifier import critical_mutations, verify_candidate
+from .transfer import evaluate_forecasting_transfer
 
 
 def _write_result(output: Path, result: dict[str, Any]) -> None:
@@ -32,14 +39,27 @@ def _generate_command(args: argparse.Namespace) -> int:
 
 
 def _mutations_command(args: argparse.Namespace) -> int:
-    if args.concept != "leakage":
+    if args.concept == "leakage":
+        seed = 1729 if args.seed is None else args.seed
+        reference = run_leakage_experiment(
+            generate_leakage_fixture(seed=seed), seed=seed
+        )
+        mutations = critical_mutations(reference)
+        verifier = verify_candidate
+    elif args.concept == "imbalance":
+        seed = 2603 if args.seed is None else args.seed
+        reference = run_imbalance_experiment(
+            generate_imbalance_fixture(seed=seed), seed=seed
+        )
+        mutations = critical_imbalance_mutations(reference)
+        verifier = verify_imbalance_candidate
+    else:
         print(f"Unsupported concept: {args.concept}")
         return 2
-    reference = run_leakage_experiment(generate_leakage_fixture(seed=args.seed), seed=args.seed)
     rows: list[tuple[str, str, str]] = []
     escaped = 0
-    for mutation in critical_mutations(reference):
-        report = verify_candidate(mutation["candidate"])
+    for mutation in mutations:
+        report = verifier(mutation["candidate"])
         detected = report["status"] == "REJECTED" and mutation["expectedInvariant"] in {
             failure["invariant"] for failure in report["failures"]
         }
@@ -54,6 +74,30 @@ def _mutations_command(args: argparse.Namespace) -> int:
         print(f"{mutation_id:<{width}}  {invariant}  {state}")
     print(f"Summary: {len(rows) - escaped}/{len(rows)} critical mutations detected")
     return 1 if escaped else 0
+
+
+def _transfer_command(args: argparse.Namespace) -> int:
+    if args.concept == "leakage":
+        if args.strategy is None or args.risk is None:
+            raise ValueError("leakage transfer requires --strategy and --risk")
+        result = evaluate_forecasting_transfer(
+            strategy_choice=args.strategy,
+            risk_choice=args.risk,
+            evidence_choices=args.evidence,
+        )
+    elif args.concept == "imbalance":
+        if args.decision is None or args.metric is None:
+            raise ValueError("imbalance transfer requires --decision and --metric")
+        result = evaluate_manufacturing_transfer(
+            decision_choice=args.decision,
+            metric_choice=args.metric,
+            evidence_choices=args.evidence,
+        )
+    else:
+        raise ValueError(f"unsupported transfer concept: {args.concept}")
+    _write_result(args.output, result)
+    print(f"{result['outcome']} {result['resultHash']}")
+    return 0 if result["passed"] else 1
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -72,8 +116,20 @@ def _parser() -> argparse.ArgumentParser:
 
     mutations = subcommands.add_parser("mutations", help="run the published critical mutation matrix")
     mutations.add_argument("--concept", default="leakage")
-    mutations.add_argument("--seed", type=int, default=1729)
+    mutations.add_argument("--seed", type=int)
     mutations.set_defaults(handler=_mutations_command)
+
+    transfer = subcommands.add_parser(
+        "transfer", help="score one fixed transfer task without a model"
+    )
+    transfer.add_argument("--concept", choices=("leakage", "imbalance"), required=True)
+    transfer.add_argument("--strategy")
+    transfer.add_argument("--risk")
+    transfer.add_argument("--decision")
+    transfer.add_argument("--metric")
+    transfer.add_argument("--evidence", action="append", default=[])
+    transfer.add_argument("--output", type=Path, required=True)
+    transfer.set_defaults(handler=_transfer_command)
     return parser
 
 

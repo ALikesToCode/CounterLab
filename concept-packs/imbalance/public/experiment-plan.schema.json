@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://counterlab.local/schemas/imbalance-experiment-plan.schema.json",
+  "title": "CounterLab public class-imbalance plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "concept",
+    "runs",
+    "metrics",
+    "views",
+    "invariants",
+    "resourceLimits"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "concept": { "const": "class_imbalance" },
+    "runs": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "operation",
+          "model",
+          "threshold",
+          "prevalenceScenario",
+          "seed"
+        ],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "operation": {
+            "enum": [
+              "imbalance.majority_baseline",
+              "imbalance.stratified_holdout",
+              "imbalance.threshold_sweep",
+              "imbalance.prevalence_sweep"
+            ]
+          },
+          "model": { "enum": ["majority_baseline", "logistic_regression"] },
+          "threshold": { "type": "number", "minimum": 0.05, "maximum": 0.95 },
+          "prevalenceScenario": {
+            "enum": ["observed", "rarer", "more_common"]
+          },
+          "seed": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "metrics": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "accuracy",
+          "precision",
+          "recall",
+          "f1",
+          "pr_auc",
+          "roc_auc",
+          "confusion_matrix",
+          "prevalence"
+        ]
+      },
+      "minItems": 1
+    },
+    "views": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "metric_comparison",
+          "confusion_matrix",
+          "threshold_curve",
+          "prevalence_sensitivity"
+        ]
+      },
+      "minItems": 1
+    },
+    "invariants": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    },
+    "resourceLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wallSeconds", "memoryMb", "maxRuns"],
+      "properties": {
+        "wallSeconds": { "type": "integer", "minimum": 1, "maximum": 60 },
+        "memoryMb": { "type": "integer", "minimum": 128, "maximum": 1024 },
+        "maxRuns": { "const": 4 }
+      }
+    }
+  }
+}

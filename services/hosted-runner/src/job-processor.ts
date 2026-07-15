@@ -21,6 +21,7 @@ import {
   type RunnerLabRunBundle,
   type RunnerPatchCompileBundle,
   type RunnerJobInputBundle,
+  type RunnerOperationalMetrics,
 } from "@counterlab/contracts";
 
 const PLAN_PATH = "experiment-plan.json";
@@ -44,6 +45,7 @@ export type CandidateDecision = {
   canRepair: boolean;
   nextCursor: number;
   counterexamples: VerifierCounterexample[];
+  verifierDurationMs: number;
 };
 
 export interface RunnerControlPlane {
@@ -96,6 +98,23 @@ type PublicCompilerEventPayload = PublicCompilerEvent extends infer Event
     ? Omit<Event, "schemaVersion" | "eventId" | "jobId" | "cursor" | "at">
     : never
   : never;
+
+function emptyOperationalMetrics(): RunnerOperationalMetrics {
+  return {
+    compilerDurationMs: 0,
+    verifierDurationMs: 0,
+    kernelDurationMs: 0,
+    patchDurationMs: 0,
+    repairAttempts: 0,
+    planTokenUsage: {
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      outputTokens: 0,
+      reasoningOutputTokens: 0,
+      totalTokens: 0,
+    },
+  };
+}
 
 class RunnerProcessingError extends Error {
   constructor(
@@ -183,6 +202,7 @@ export class HostedRunnerJobProcessor {
     let bundle: RunnerJobInputBundle | undefined;
     let cursor = 0;
     let outputHashes: string[] = [];
+    const operationalMetrics = emptyOperationalMetrics();
     try {
       bundle = RunnerJobInputBundleSchema.parse(
         await this.options.controlPlane.getInput(),
@@ -208,6 +228,7 @@ export class HostedRunnerJobProcessor {
           );
         }
         const executed = await fixedKernel.run(bundle, generationDirectory);
+        operationalMetrics.kernelDurationMs = executed.durationMs;
         if (
           new TextEncoder().encode(executed.body).byteLength > MAX_RESULT_BYTES
         ) {
@@ -254,6 +275,7 @@ export class HostedRunnerJobProcessor {
             status: "VERIFIED",
             outputHashes,
             finalEventCursor: cursor,
+            operationalMetrics,
             occurredAt: this.now().toISOString(),
           }),
         );
@@ -277,6 +299,7 @@ export class HostedRunnerJobProcessor {
           cursor,
           this.options.compiler.compileHostedPatchPlan(compileInput),
           PATCH_PLAN_OUTPUTS,
+          operationalMetrics,
         );
         let uploaded = await this.validateAndUpload(
           jobId,
@@ -291,6 +314,7 @@ export class HostedRunnerJobProcessor {
           attempt: 1,
           planSha256: uploaded.planHash,
         });
+        operationalMetrics.verifierDurationMs += decision.verifierDurationMs;
         cursor = decision.nextCursor;
         for (
           let repairAttempt = 1;
@@ -304,6 +328,7 @@ export class HostedRunnerJobProcessor {
               false,
             );
           }
+          operationalMetrics.repairAttempts = repairAttempt;
           cursor = await this.emit(jobId, cursor, {
             kind: "repair.started",
             attempt: repairAttempt,
@@ -320,6 +345,7 @@ export class HostedRunnerJobProcessor {
             cursor,
             this.options.compiler.repairHostedPatchPlan(repairInput),
             PATCH_PLAN_OUTPUTS,
+            operationalMetrics,
           );
           uploaded = await this.validateAndUpload(
             jobId,
@@ -334,6 +360,7 @@ export class HostedRunnerJobProcessor {
             attempt: repairAttempt + 1,
             planSha256: uploaded.planHash,
           });
+          operationalMetrics.verifierDurationMs += decision.verifierDurationMs;
           cursor = decision.nextCursor;
         }
         const patchPlan = await readFile(
@@ -347,6 +374,7 @@ export class HostedRunnerJobProcessor {
           patchPlan,
           generationDirectory,
         );
+        operationalMetrics.patchDurationMs = patched.durationMs;
         const patchResult = PatchResultSchema.parse(
           JSON.parse(patched.patchResultBody),
         );
@@ -396,6 +424,7 @@ export class HostedRunnerJobProcessor {
             status: "VERIFIED",
             outputHashes,
             finalEventCursor: cursor,
+            operationalMetrics,
             occurredAt: this.now().toISOString(),
           }),
         );
@@ -407,6 +436,7 @@ export class HostedRunnerJobProcessor {
         cursor,
         this.options.compiler.compileExperimentPlan(compileInput),
         LAB_PLAN_OUTPUTS,
+        operationalMetrics,
       );
       let uploaded = await this.validateAndUpload(
         jobId,
@@ -421,6 +451,7 @@ export class HostedRunnerJobProcessor {
         attempt: 1,
         planSha256: uploaded.planHash,
       });
+      operationalMetrics.verifierDurationMs += decision.verifierDurationMs;
       cursor = decision.nextCursor;
 
       for (
@@ -435,6 +466,7 @@ export class HostedRunnerJobProcessor {
             false,
           );
         }
+        operationalMetrics.repairAttempts = repairAttempt;
         cursor = await this.emit(jobId, cursor, {
           kind: "repair.started",
           attempt: repairAttempt,
@@ -451,6 +483,7 @@ export class HostedRunnerJobProcessor {
           cursor,
           this.options.compiler.repairExperimentPlan(repairInput),
           LAB_PLAN_OUTPUTS,
+          operationalMetrics,
         );
         uploaded = await this.validateAndUpload(
           jobId,
@@ -465,6 +498,7 @@ export class HostedRunnerJobProcessor {
           attempt: repairAttempt + 1,
           planSha256: uploaded.planHash,
         });
+        operationalMetrics.verifierDurationMs += decision.verifierDurationMs;
         cursor = decision.nextCursor;
       }
 
@@ -478,6 +512,7 @@ export class HostedRunnerJobProcessor {
           status: "VERIFIED",
           outputHashes,
           finalEventCursor: cursor,
+          operationalMetrics,
           occurredAt: this.now().toISOString(),
         }),
       );
@@ -499,6 +534,7 @@ export class HostedRunnerJobProcessor {
             message: publicError.publicMessage,
             retryable: publicError.retryable,
           },
+          operationalMetrics,
           occurredAt: this.now().toISOString(),
         }),
       );
@@ -570,6 +606,7 @@ export class HostedRunnerJobProcessor {
     initialCursor: number,
     events: AsyncIterable<CompilerEvent>,
     allowedOutputs: ReadonlySet<string>,
+    operationalMetrics: RunnerOperationalMetrics,
   ): Promise<number> {
     let cursor = initialCursor;
     let completed = false;
@@ -609,7 +646,16 @@ export class HostedRunnerJobProcessor {
           excerpt: event.outputExcerpt,
         });
       } else if (event.type === "final_status") {
+        operationalMetrics.compilerDurationMs += event.durationMs ?? 0;
         completed = event.status === "completed" || event.status === "verified";
+      } else if (event.type === "usage") {
+        operationalMetrics.planTokenUsage.inputTokens += event.inputTokens;
+        operationalMetrics.planTokenUsage.cachedInputTokens +=
+          event.cachedInputTokens;
+        operationalMetrics.planTokenUsage.outputTokens += event.outputTokens;
+        operationalMetrics.planTokenUsage.reasoningOutputTokens +=
+          event.reasoningOutputTokens;
+        operationalMetrics.planTokenUsage.totalTokens += event.totalTokens;
       }
     }
     if (!completed) {

@@ -173,7 +173,9 @@ async function readSecureCodexAuth(
       );
     }
     if (metadata.size <= 0 || metadata.size > MAX_AUTH_FILE_BYTES) {
-      throw isolationError("The Codex auth file size is outside the safe limit.");
+      throw isolationError(
+        "The Codex auth file size is outside the safe limit.",
+      );
     }
     const raw = await handle.readFile({ encoding: "utf8" });
     const parsed = CodexAuthSchema.safeParse(JSON.parse(raw) as unknown);
@@ -185,7 +187,10 @@ async function readSecureCodexAuth(
     return { accessToken: parsed.data.tokens.access_token, raw };
   } catch (error) {
     if (error instanceof CompilerSetupError) throw error;
-    throw isolationError("The Codex auth file could not be read securely.", error);
+    throw isolationError(
+      "The Codex auth file could not be read securely.",
+      error,
+    );
   } finally {
     await handle?.close();
   }
@@ -226,13 +231,11 @@ export async function stageSecureCodexAuth(
           await rm(join(directory, entry), { force: true, recursive: true });
         }
       } catch (error) {
-        if (
-          !(
-            error instanceof Error &&
-            "code" in error &&
-            error.code === "ENOENT"
-          )
-        ) {
+        if (!(
+          error instanceof Error &&
+          "code" in error &&
+          error.code === "ENOENT"
+        )) {
           throw isolationError("Codex auth revocation failed.", error);
         }
       }
@@ -302,11 +305,7 @@ export function buildBubblewrapCodexLaunch(
       "/lib64",
       "--dir",
       "/etc",
-      ...NETWORK_RUNTIME_MOUNTS.flatMap((path) => [
-        "--ro-bind",
-        path,
-        path,
-      ]),
+      ...NETWORK_RUNTIME_MOUNTS.flatMap((path) => ["--ro-bind", path, path]),
       "--dev",
       "/dev",
       "--proc",
@@ -357,14 +356,10 @@ export function buildBubblewrapCodexLaunch(
   };
 }
 
-export class BubblewrapCodexLaunchBoundary
-  implements AppServerLaunchBoundary
-{
+export class BubblewrapCodexLaunchBoundary implements AppServerLaunchBoundary {
   private readonly ptraceScopePath: string;
 
-  constructor(
-    private readonly options: BubblewrapCodexLaunchBoundaryOptions,
-  ) {
+  constructor(private readonly options: BubblewrapCodexLaunchBoundaryOptions) {
     this.ptraceScopePath =
       options.ptraceScopePath ?? "/proc/sys/kernel/yama/ptrace_scope";
   }
@@ -423,10 +418,7 @@ export class BubblewrapCodexLaunchBoundary
     try {
       await Promise.all([
         access(this.options.bwrapPath, constants.X_OK),
-        access(
-          `${this.options.codexPackageRoot}/bin/codex.js`,
-          constants.R_OK,
-        ),
+        access(`${this.options.codexPackageRoot}/bin/codex.js`, constants.R_OK),
         access(
           join(this.options.codexPackageRoot, codexNativeRelativePath()),
           constants.X_OK,

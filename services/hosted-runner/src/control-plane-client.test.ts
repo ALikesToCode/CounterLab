@@ -22,6 +22,7 @@ describe("HttpRunnerControlPlane", () => {
           status: "VERIFIED",
           canRepair: false,
           nextCursor: 4,
+          verifierDurationMs: 9,
           counterexamples: [],
         });
       }
@@ -77,5 +78,18 @@ describe("HttpRunnerControlPlane", () => {
     const error = await client.start().catch((caught) => caught);
     expect(String(error)).not.toContain("top-secret-token");
     expect(error).toMatchObject({ status: 401 });
+  });
+
+  it("permits a loopback control plane in production local-runner mode", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    expect(
+      () =>
+        new HttpRunnerControlPlane({
+          controlPlaneUrl: "http://localhost:8787",
+          jobId: "job_local",
+          token: "scoped-local-token",
+        }),
+    ).not.toThrow();
+    vi.unstubAllEnvs();
   });
 });

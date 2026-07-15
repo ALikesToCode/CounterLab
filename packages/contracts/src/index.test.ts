@@ -5,10 +5,14 @@ import {
   ApiErrorSchema,
   ArtifactManifestSchema,
   BeliefTestSchema,
+  ConceptIdSchema,
+  ConceptRoutingDecisionSchema,
   EvidenceEventSchema,
   ExperimentPlanSchema,
   ExperimentPlanV2Schema,
   HostedVerifiedResultSetV2Schema,
+  InteractiveImbalanceRunRequestSchema,
+  InteractiveLeakageRunRequestSchema,
   PatchResultSchema,
   PatchPlanV1Schema,
   PredictionContractSchema,
@@ -202,6 +206,54 @@ describe("ExperimentPlanSchema", () => {
         ],
       }),
     ).toThrow(/run/i);
+  });
+});
+
+describe("concept routing contracts", () => {
+  it("accepts an evidence-linked class-imbalance selection", () => {
+    const decision = ConceptRoutingDecisionSchema.parse({
+      kind: "selected",
+      concept: "class_imbalance",
+      conceptPackVersion: "1.0.0",
+      confidence: 0.92,
+      evidence: [
+        {
+          cellIndex: 2,
+          outputIndex: 0,
+          kind: "metric",
+          hash: "a".repeat(64),
+          excerpt: "positive_rate: 0.03",
+          relevance: "The positive class is rare in the displayed evidence.",
+        },
+      ],
+      limitations: ["Displayed prevalence may not match deployment."],
+    });
+
+    expect(decision.kind).toBe("selected");
+    if (decision.kind !== "selected") throw new Error("expected selection");
+    expect(ConceptIdSchema.parse(decision.concept)).toBe("class_imbalance");
+  });
+
+  it("requires multiple candidates for a choice and reasons for unsupported evidence", () => {
+    const candidate = {
+      concept: "class_imbalance",
+      conceptPackVersion: "1.0.0",
+      confidence: 0.91,
+      evidence: [],
+    } as const;
+
+    expect(() =>
+      ConceptRoutingDecisionSchema.parse({
+        kind: "choice_required",
+        candidates: [candidate],
+      }),
+    ).toThrow();
+    expect(() =>
+      ConceptRoutingDecisionSchema.parse({
+        kind: "unsupported_artifact",
+        reasons: [],
+      }),
+    ).toThrow();
   });
 });
 
@@ -399,6 +451,7 @@ describe("hosted runner contracts", () => {
     const runBundle = RunnerLabRunBundleSchema.parse({
       schemaVersion: "1",
       kind: "LAB_RUN",
+      purpose: "AUTHORITATIVE",
       jobId: "job_run_1",
       sessionId: plan.sessionId,
       stateVersion: 6,
@@ -412,12 +465,59 @@ describe("hosted runner contracts", () => {
     });
 
     expect(runBundle.kind).toBe("LAB_RUN");
+    expect(runBundle.purpose).toBe("AUTHORITATIVE");
     expect(() =>
       RunnerLabRunBundleSchema.parse({
         ...runBundle,
         sessionId: "session_crossed",
       }),
     ).toThrow(/lineage/i);
+  });
+
+  it("bounds interactive leakage controls before a runner job is created", () => {
+    expect(
+      InteractiveLeakageRunRequestSchema.parse({
+        schemaVersion: "1",
+        splitStrategy: "group",
+        entityField: "account_key",
+        identityAblation: true,
+        testFraction: 0.25,
+      }),
+    ).toMatchObject({ splitStrategy: "group", testFraction: 0.25 });
+    expect(() =>
+      InteractiveLeakageRunRequestSchema.parse({
+        schemaVersion: "1",
+        splitStrategy: "random",
+        entityField: "account_key",
+        identityAblation: false,
+        testFraction: 0.9,
+      }),
+    ).toThrow();
+  });
+
+  it("bounds interactive class-imbalance controls before a runner job is created", () => {
+    expect(
+      InteractiveImbalanceRunRequestSchema.parse({
+        schemaVersion: "1",
+        concept: "class_imbalance",
+        threshold: 0.25,
+        prevalenceScenario: "more_common",
+        metricFocus: "recall",
+      }),
+    ).toMatchObject({
+      threshold: 0.25,
+      prevalenceScenario: "more_common",
+      metricFocus: "recall",
+    });
+    expect(() =>
+      InteractiveImbalanceRunRequestSchema.parse({
+        schemaVersion: "1",
+        concept: "class_imbalance",
+        threshold: 0.5,
+        prevalenceScenario: "rarer",
+        metricFocus: "accuracy",
+      }),
+    ).toThrow();
   });
 
   it("accepts a source-free hosted patch plan and rejects executable fields", () => {
@@ -456,6 +556,57 @@ describe("hosted runner contracts", () => {
       PatchPlanV1Schema.parse({
         ...patchPlan,
         source: "open('notebook.ipynb')",
+      }),
+    ).toThrow();
+  });
+
+  it("accepts only the three registered source-free imbalance patch operations", () => {
+    const imbalancePatch = {
+      schemaVersion: "1",
+      planId: "patch_plan_imbalance_1",
+      sessionId: plan.sessionId,
+      concept: "class_imbalance",
+      conceptPackVersion: "1.0.0",
+      artifactManifestHash: plan.artifactManifestHash,
+      sourceArtifactHash: "f".repeat(64),
+      transferResultHash: "e".repeat(64),
+      verifiedResultHash: "d".repeat(64),
+      evidenceRefs: plan.evidenceRefs,
+      targetCells: [3],
+      targetField: "fraud",
+      operations: [
+        {
+          id: "stratify_classification_holdout",
+          cellIndex: 3,
+          reason: "Preserve the rare-class rate across train and test.",
+        },
+        {
+          id: "add_majority_baseline",
+          cellIndex: 3,
+          reason: "Measure whether accuracy beats the trivial classifier.",
+        },
+        {
+          id: "replace_accuracy_only_evaluation",
+          cellIndex: 3,
+          reason:
+            "Report confusion counts and minority metrics at a documented threshold.",
+        },
+      ],
+      preserveUnrelatedCells: true,
+      nonClaims: ["This patch does not choose a production threshold."],
+    };
+
+    expect(PatchPlanV1Schema.parse(imbalancePatch)).toMatchObject({
+      concept: "class_imbalance",
+      targetField: "fraud",
+      operations: expect.arrayContaining([
+        expect.objectContaining({ id: "add_majority_baseline" }),
+      ]),
+    });
+    expect(() =>
+      PatchPlanV1Schema.parse({
+        ...imbalancePatch,
+        operations: imbalancePatch.operations.slice(0, 2),
       }),
     ).toThrow();
   });
@@ -653,6 +804,9 @@ describe("learning-loop contracts", () => {
       resultHash: hash("e"),
     });
 
+    if (result.concept !== "entity_leakage") {
+      throw new Error("expected an entity-leakage result");
+    }
     expect(result.runs[0]?.entityOverlap.count).toBe(0);
     expect(() =>
       VerifiedResultSetSchema.parse({
@@ -710,6 +864,77 @@ describe("learning-loop contracts", () => {
 
     expect(hosted.artifactManifestHash).toBe(hash("a"));
     expect(VerifiedResultSetSchema.parse(hosted).schemaVersion).toBe("2");
+  });
+
+  it("validates a hosted class-imbalance result without leakage-only fields", () => {
+    const hosted = HostedVerifiedResultSetV2Schema.parse({
+      schemaVersion: "2",
+      concept: "class_imbalance",
+      planId: "plan_imbalance_1",
+      sessionId: "session_imbalance_1",
+      artifactManifestHash: hash("a"),
+      conceptPackVersion: "1.0.0",
+      kernelVersion: "0.1.0",
+      seed: 2603,
+      fixture: {
+        sha256: hash("b"),
+        rows: 6000,
+        positives: 214,
+        prevalence: 0.035666666667,
+      },
+      runs: [
+        {
+          id: "majority_baseline",
+          operation: "imbalance.majority_baseline",
+          model: "majority_baseline",
+          seed: 2603,
+          threshold: 0.5,
+          prevalenceScenario: "observed",
+          metrics: {
+            accuracy: 0.964,
+            precision: 0,
+            recall: 0,
+            f1: 0,
+            prAuc: 0.036,
+            rocAuc: 0.5,
+          },
+          confusionMatrix: { tn: 1446, fp: 0, fn: 54, tp: 0 },
+          sampleSizes: { train: 4500, test: 1500 },
+          classCounts: {
+            train: { negative: 4339, positive: 161 },
+            test: { negative: 1446, positive: 54 },
+          },
+          prevalence: 0.036,
+          predictedPositiveRate: 0,
+          featureSetFingerprint: hash("c"),
+          inputFingerprint: hash("b"),
+        },
+      ],
+      chartData: [
+        {
+          runId: "majority_baseline",
+          operation: "imbalance.majority_baseline",
+          accuracy: 0.964,
+          precision: 0,
+          recall: 0,
+          f1: 0,
+          prAuc: 0.036,
+          rocAuc: 0.5,
+          prevalence: 0.036,
+          predictedPositiveRate: 0,
+          sampleSize: 1500,
+          threshold: 0.5,
+          prevalenceScenario: "observed",
+          seed: 2603,
+        },
+      ],
+      resultHash: hash("d"),
+    });
+
+    expect(hosted.concept).toBe("class_imbalance");
+    if (hosted.concept === "class_imbalance") {
+      expect(hosted.runs[0]?.confusionMatrix.fn).toBe(54);
+    }
   });
 
   it("requires explicit schema versions for transfer, patch, reasoning diff, and events", () => {

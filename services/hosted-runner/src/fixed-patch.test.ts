@@ -28,7 +28,8 @@ describe("PythonFixedPatchExecutor", () => {
     }> = [];
     const executor = new PythonFixedPatchExecutor({
       pythonExecutable: "/fixed/python",
-      fixturePath: "/fixed/public.csv",
+      leakageFixturePath: "/fixed/leakage.csv",
+      imbalanceFixturePath: "/fixed/imbalance.csv",
       runProcess: async (command, args, options) => {
         calls.push({ command, args, options });
         const notebookOutput = args[args.indexOf("--output-notebook") + 1]!;
@@ -60,7 +61,9 @@ describe("PythonFixedPatchExecutor", () => {
     });
 
     const result = await executor.run(
-      {} as RunnerPatchCompileBundle,
+      {
+        approvedBeliefTest: { concept: "entity_leakage" },
+      } as RunnerPatchCompileBundle,
       '{"cells":[]}',
       '{"schemaVersion":"1"}',
       workspace,
@@ -80,7 +83,7 @@ describe("PythonFixedPatchExecutor", () => {
           "--source",
           join(workspace, "source-notebook.ipynb"),
           "--fixture",
-          "/fixed/public.csv",
+          "/fixed/leakage.csv",
           "--output-notebook",
           join(workspace, "patched-notebook.ipynb"),
           "--output-result",
@@ -97,5 +100,56 @@ describe("PythonFixedPatchExecutor", () => {
         },
       }),
     ]);
+  });
+
+  it("selects the fixed class-imbalance fixture from the bound concept", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "counterlab-patch-job-"));
+    workspaces.push(workspace);
+    let selectedFixture = "";
+    const executor = new PythonFixedPatchExecutor({
+      leakageFixturePath: "/fixed/leakage.csv",
+      imbalanceFixturePath: "/fixed/imbalance.csv",
+      runProcess: async (_command, args) => {
+        selectedFixture = args[args.indexOf("--fixture") + 1]!;
+        await writeFile(
+          args[args.indexOf("--output-notebook") + 1]!,
+          '{"cells":[]}\n',
+          "utf8",
+        );
+        await writeFile(
+          args[args.indexOf("--output-result") + 1]!,
+          JSON.stringify({
+            schemaVersion: "1",
+            id: "patch_job_2",
+            sessionId: "session_2",
+            status: "VERIFIED",
+            sourceArtifactHash: "a".repeat(64),
+            patchedArtifactHash: "b".repeat(64),
+            patchHash: "c".repeat(64),
+            modifiedCells: [3],
+            diff: "diff",
+            verification: {
+              passed: true,
+              invariants: ["MINORITY_METRICS_RECOMPUTED"],
+              unchangedCellHashes: ["d".repeat(64)],
+            },
+            generatedAt: "2026-07-15T00:00:00.000Z",
+            resultHash: "e".repeat(64),
+          }),
+          "utf8",
+        );
+      },
+    });
+
+    await executor.run(
+      {
+        approvedBeliefTest: { concept: "class_imbalance" },
+      } as RunnerPatchCompileBundle,
+      '{"cells":[]}',
+      '{"schemaVersion":"1"}',
+      workspace,
+    );
+
+    expect(selectedFixture).toBe("/fixed/imbalance.csv");
   });
 });
