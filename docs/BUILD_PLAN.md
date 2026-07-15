@@ -32,9 +32,18 @@ The implementation uses the requested monorepo boundaries:
 - `fixtures`, `evals`, and `replays`: generated public assets, held-out inputs, seeded mutations, and genuine recorded evidence.
 - `data`: SQLite and private local artifacts outside the web root.
 
-The local product owns the full path because runtime Codex and the Python kernel require child processes and OS isolation. Cloudflare will host the edge-compatible judge/replay surface and use D1 for edge persistence where appropriate. Cloud-hosted live compiler/kernel requests must return a typed local-runtime requirement unless a separately verified compute service is configured; they will never pretend to be live.
+The Cloudflare deployment uses the first-party `@cloudflare/vite-plugin`
+full-stack React path. D1 stores sessions, jobs, callbacks, and append-only
+events; R2 stores private notebook bytes, scoped input bundles, Plans, results,
+patch copies, and Proof Bundles. A Container-backed Durable Object supplies the
+process plane: Codex App Server uses stdio JSONL, while fixed Python interprets
+source-free Plans and creates copied-notebook patches. The Worker retains final
+Plan/result verification authority and issues short-lived single-job tokens.
 
-The Cloudflare deployment uses the first-party `@cloudflare/vite-plugin` full-stack React path on Workers. D1 stores sessions and append-only event metadata; R2 stores uploaded notebooks, patch copies, replays, and Proof Bundles. The Worker may make the server-side Responses API call, but Codex App Server, Docker, Git worktrees, Python, and native SQLite remain on the process-capable local runtime.
+Hosted generation never executes model-authored Python. Codex writes only
+`experiment-plan.json`, `patch-plan.json`, and display-only
+`public-rationale.md`; registered fixed operations own numeric truth. The older
+adapter compiler remains a separately labelled advanced local proof.
 
 ## Milestone gates
 
@@ -57,7 +66,17 @@ Each behavioral slice begins with a focused failing test, followed by the minimu
   `OPENAI_BASE_URL` selects a compatible `/v1/responses` endpoint without
   changing product copy, evidence, or provider authority.
 - Hardened generated-code execution requires a working Docker daemon or a documented equivalent local boundary.
-- Cloudflare Workers cannot spawn Codex or the Python kernel; deployed replay/sample behavior and local live behavior remain explicitly distinguished.
+- Cloudflare Workers do not spawn Codex or Python directly; the bound Container
+  is the explicit process boundary. Missing Container, model, or signing
+  configuration fails with a typed live-unavailable state and never silently
+  selects sample or replay.
+- The first-party Cloudflare Vite plugin can run configured Containers during
+  local Vite development when a Docker-compatible engine is available. Remote
+  runner callbacks require HTTPS; loopback HTTP is accepted only for local
+  runner development.
+- The current worktree has not built or deployed the upgraded Container because
+  the active repository instructions prohibit this agent from running `build`
+  or `dev` without user action.
 
 ## 2026-07-14 journey refinement
 

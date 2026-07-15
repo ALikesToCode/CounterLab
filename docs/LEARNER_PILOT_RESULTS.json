@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1",
+  "status": "NO_DATA",
+  "analyzedAt": "2026-07-14T22:57:06.090Z",
+  "participantCount": 0,
+  "completedSessionCount": 0,
+  "metrics": null,
+  "limitations": [
+    "No consented learner-pilot session records were supplied; no learner outcome is claimed."
+  ]
+}

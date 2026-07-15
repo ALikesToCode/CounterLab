@@ -1,63 +1,87 @@
 # Release checklist
 
-## Evidence spine
+Checked boxes are supported by the current worktree's recorded command output.
+Production/browser/build boxes deliberately remain open until the upgraded
+Worker/Container is exercised.
 
-- [x] Public fixture/notebook regenerate without diff.
-- [x] Sample manifest hash and cell/output references match the committed values.
-- [x] Random/group/ablation ordering and broad ranges pass.
-- [x] Group overlap is zero and canonical hash reproduces.
+## Authority and concepts
+
+- [x] Sample/live/replay are discriminated in contracts and routes.
+- [x] Non-sample artifacts cannot receive sample Belief Tests, results, patches,
+      or replay metadata.
+- [x] Entity leakage and class imbalance are both registered end to end.
+- [x] Unsupported and insufficient-evidence artifacts fail honestly.
+- [x] Source-free Plan schemas reject code, commands, formulas, paths, and
+      literal results.
+- [x] A rejected Plan releases no result; a failed transfer releases no patch.
+
+## Deterministic evidence
+
+- [x] Leakage fixture/notebook and canonical v1 replay hash reproduce.
+- [x] Random/group/ablation ranges and zero group overlap pass.
 - [x] `./scripts/run-mutations.sh leakage` reports 12/12.
+- [x] Imbalance fixture/notebook, confusion metrics, threshold and prevalence
+      response pass.
+- [x] `./scripts/run-mutations.sh imbalance` reports 12/12.
+- [x] Python v2 result hashes match Worker canonicalization.
+- [x] Held-out intake/routing is 10/10 and fixed full-loop completion is 7/8
+      with the failure documented.
 
-## Learning loop
+## Learning and patch loop
 
-- [x] No result before Prediction Contract.
-- [x] Prediction overwrite returns typed 409.
-- [x] Refresh restores the exact committed prediction and current lesson state.
-- [x] Completed stages are read-only; Start over clears the browser checkpoint.
-- [x] Rejected lab cannot create a result.
-- [x] Transfer failure keeps patch locked; pass unlocks it.
-- [x] Original notebook is unchanged; unrelated source hashes match.
-- [x] Reasoning Diff and Proof Bundle validate after refresh.
+- [x] Prediction is immutable and no result exists before commitment.
+- [x] Refresh restoration, recent sessions, completed-stage review, and Start
+      over have React/API tests.
+- [x] Interactive controls dispatch fixed verified configurations.
+- [x] Leakage and manufacturing transfers are deterministic and model-free.
+- [x] Both patch engines edit copies, preserve unrelated cells, recompute
+      outputs, and reject seeded patch mutations.
+- [x] Reasoning Diff and Proof Bundle bind artifact/Plan/result/transfer/patch.
 
-## Live and replay
+## Live integrations
 
-- [x] Missing GPT/Codex capability is explicit.
-- [x] Replay banner remains visible across every replay screen.
-- [x] Rejected run, repair cap, and separate verified run are labelled honestly.
-- [x] No private reasoning, secrets, or machine-local paths appear.
-- [x] Custom Responses routing is normalized, server-only, and absent from
-      browser-visible health/evidence.
-- [x] Configured live Responses credential completes a schema-valid,
-      evidence-resolving Belief Test.
-- [x] Generation isolation is scoped to the named Bubblewrap boundary and is not
-      presented as a formal sandbox proof.
-- [x] Unisolated App Server launch fails closed and a real Bubblewrap probe
-      proves repository/verifier/held-out paths are absent.
-- [x] Credential-safe isolated App Server launch completes a live turn.
+- [x] Custom Responses base URL is normalized server-side and never exposed.
+- [x] A real configured live Belief Test returned schema-valid,
+      evidence-resolving output.
+- [x] Live analysis requires an exact sanitized preview hash and learner
+      approval; sensitive-looking excerpts require a second confirmation.
+- [x] Runner jobs, tokens, callbacks, event cursors, and sanitized events pass
+      integration tests.
+- [x] Constrained generated proof UI has no actions or validity authority.
+- [x] Secret-protected operational diagnostics aggregate timing, repairs,
+      tokens, concept/support, and failures without private identifiers.
+- [ ] Upgraded Container image deployed with secrets and migration.
+- [ ] One untouched live leakage notebook completes on the public URL.
+- [ ] One untouched live imbalance notebook completes on the public URL.
+- [ ] Public event reconnect, patch download, proof share, and no-secret check
+      pass against production.
 
-## Security and quality
+## Release commands
 
-- [x] Upload size/type/extension and unsupported cases are exercised.
-- [x] AST and real Docker smoke pass.
-- [x] Candidate network/user/mount/resource evidence is present.
-- [x] Keyboard path, focus, contrast, reduced motion and responsive layout checked.
-- [x] Secret scan passes; `.env.example` contains no credential.
-- [x] `docs/ACHIEVED_METRICS.json` is regenerated from code.
+- [x] `pnpm test` — 164 root TypeScript, 76 web, 90 Python.
+- [x] `pnpm run typecheck`.
+- [x] `pnpm run held-out:run`.
+- [x] `pnpm run format:check`.
+- [x] `python3 scripts/secret-scan.py` — 333 repository files.
+- [x] Fifteen Playwright journeys discovered, including opt-in real hosted
+      leakage and imbalance flows; this is test discovery, not browser
+      execution.
+- [ ] `./scripts/test-all.sh` on the current version (includes browser E2E).
+- [ ] `./scripts/clean-demo.sh` on the current version.
+- [ ] `./scripts/reproduce-session.sh leakage-01` on the current version.
+- [x] `./scripts/replay-patch.sh leakage-01` — verified patch, group overlap 0.
+- [ ] `./scripts/release-check.sh` on the current version (includes build and
+      secret scan).
+- [ ] Fresh temporary clone release check.
 
-## Commands
+## Browser/accessibility
 
-```bash
-./scripts/test-all.sh
-./scripts/run-mutations.sh leakage
-./scripts/clean-demo.sh
-./scripts/reproduce-session.sh leakage-01
-./scripts/replay-patch.sh leakage-01
-./scripts/release-check.sh
-```
+- [ ] Try the 3-minute sample in CloakBrowser.
+- [ ] Live own-notebook leakage and imbalance flows with the configured runner.
+- [ ] Persistent replay label and refresh/event reconnect.
+- [ ] Mobile 390px completion, keyboard-only completion, reduced motion, focus,
+      contrast, and no horizontal overflow.
 
-## Cloudflare
-
-- [x] Remote D1 migrations applied.
-- [x] Worker/assets deployed with locked Wrangler.
-- [x] `/api/health`, Try Instantly, upload refusal, and Replay verified live.
-- [x] Production URL and Worker version recorded in `docs/PROGRESS.md`.
+The current AGENTS instructions prohibit this agent from running `dev` or
+`build`; the unchecked browser/build/deploy items require a user-started server
+or explicit permission.

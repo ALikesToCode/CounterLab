@@ -152,3 +152,55 @@ root. Because stable authentication is file-backed and workspace-write is not a
 read allowlist, the product will not mount that credential merely to turn the
 status green. A host credential-injecting proxy is required before the live gate
 can pass.
+
+## 2026-07-15 — Use source-free Plans for hosted execution
+
+- Hosted runtime Codex may create only `experiment-plan.json`,
+  `patch-plan.json`, and display-only `public-rationale.md`.
+- The Plans contain registered operation IDs and lineage but no Python, shell,
+  SQL, formulas, imports, paths, network actions, or literal results.
+- A fixed Python interpreter and fixed patch engine own execution. The Worker
+  independently verifies Plans and results before session state can advance.
+- The adapter-code compiler remains a separately labelled advanced local proof;
+  hosted Studio never falls back to it silently.
+
+## 2026-07-15 — Attach a process-capable runner to the Cloudflare control plane
+
+- Keep Vite/React, the Worker, D1, and R2 as the public control plane.
+- Attach one Cloudflare Container through a Durable Object for scoped Codex,
+  kernel, verifier, and patch jobs.
+- Authorize a runner with a short-lived token bound to one job, input bundle,
+  output prefix, callback, state version, and expiration.
+- Treat Container disk as ephemeral and preserve authoritative inputs/outputs in
+  R2/D1. The same interface can target an authenticated dedicated service if
+  Container compatibility changes.
+
+## 2026-07-15 — Constrain generative UI to public proof composition
+
+- Use `json-render` only in the Proof Console, with a trusted registry of
+  `ProofSequence` and `ProofStep` components and an empty action catalogue.
+- Generate the view from already-sanitized `PublicCompilerEvent` values. The
+  generated spec cannot run code, issue a command, mutate session state, or
+  decide validity.
+- Keep core learning actions as explicit React components and visible buttons;
+  generative UI is presentation, not authority.
+
+## 2026-07-15 — Version cross-language canonical hashing without changing replay
+
+- Preserve the legacy Python canonical encoding for schema-v1 fixtures and
+  recorded replay hashes.
+- Hash hosted schema-v2 results with a browser-compatible number encoding so
+  Python `0.0` and the same parsed JavaScript number `0` have identical bytes.
+- Verify the exact v2 result again in TypeScript before release. This closes a
+  real runner/Worker integrity mismatch without rewriting historical evidence.
+
+## 2026-07-15 — Report held-out fixed completion separately from live generation
+
+- Held-out v2 safely parses four leakage, four imbalance, and two refusal
+  notebooks, then sends supported cases through a labelled
+  `deterministic_contract_probe` for Plan verification, fixed result, transfer,
+  and patch.
+- Report intake/routing (10/10) separately from full fixed completion (7/8).
+- Do not call the deterministic probe GPT/Codex plan-generation success. Keep
+  human review `PENDING` and preserve the Random Forest patch refusal as a
+  documented contract limit.

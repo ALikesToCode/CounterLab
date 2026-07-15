@@ -1,12 +1,12 @@
 # Supported notebook contract
 
-## P0 accepted input
+## Released accepted input
 
 - Jupyter `nbformat` 4 JSON in a file ending `.ipynb`.
 - Maximum 10,485,760 bytes, controlled by
   `COUNTERLAB_MAX_NOTEBOOK_BYTES`.
 - Python/scikit-learn classification patterns needed by the public
-  customer-churn notebook and documented variants.
+  customer-churn and rare-event notebooks and documented variants.
 - Code, markdown, raw cells, and inert text/JSON outputs.
 - A learner-supplied text claim.
 
@@ -38,10 +38,23 @@ unknown dependencies, active content, old `nbformat`, corrupt JSON, size limit,
 ambiguous schema, or missing evidence. The UI shows reasons and disables
 progress for non-`SUPPORTED` artifacts.
 
-P0 patch verification is narrower than intake. Only the exact public sample
-contract receives a `VERIFIED` patch. Other uploaded notebooks may be parsed and
-used for a supported Belief Test, but patch suggestions remain `UNVERIFIED`
-until a specific patch contract exists.
+The released concept registry supports two bounded families:
+
+- **Entity leakage:** repeated entity rows, a detectable entity field, a
+  row-wise evaluation split, and stored classification evidence. The fixed lab
+  can compare random-row, group-holdout, and identity-ablation runs.
+- **Class imbalance and metric choice:** a rare binary target, a supported
+  classification split, and stored accuracy, prevalence, or class-specific
+  evidence. The fixed lab can compute the majority baseline, confusion matrix,
+  precision, recall, F1, PR-AUC, ROC-AUC context, and bounded threshold and
+  prevalence sweeps.
+
+Patch verification is intentionally narrower than intake. A patch is released
+only when the notebook's evaluation cells match the selected concept pack's
+registered source transformation, the Patch Plan targets only resolved cells,
+the fixed engine recomputes its outputs, and the external verifier accepts the
+changed-cell allowlist and result lineage. A supported intake can still receive
+an honest patch refusal when its source shape is outside that patch contract.
 
 ## Explicit non-support
 

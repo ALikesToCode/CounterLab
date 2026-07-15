@@ -1,0 +1,108 @@
+{
+  "schemaVersion": "1",
+  "method": "permuted_balanced_concept_order",
+  "seed": 1729,
+  "slots": 24,
+  "assignments": [
+    {
+      "slotId": "slot_001",
+      "sequence": "leakage_first"
+    },
+    {
+      "slotId": "slot_002",
+      "sequence": "imbalance_first"
+    },
+    {
+      "slotId": "slot_003",
+      "sequence": "leakage_first"
+    },
+    {
+      "slotId": "slot_004",
+      "sequence": "imbalance_first"
+    },
+    {
+      "slotId": "slot_005",
+      "sequence": "leakage_first"
+    },
+    {
+      "slotId": "slot_006",
+      "sequence": "leakage_first"
+    },
+    {
+      "slotId": "slot_007",
+      "sequence": "imbalance_first"
+    },
+    {
+      "slotId": "slot_008",
+      "sequence": "leakage_first"
+    },
+    {
+      "slotId": "slot_009",
+      "sequence": "imbalance_first"
+    },
+    {
+      "slotId": "slot_010",
+      "sequence": "imbalance_first"
+    },
+    {
+      "slotId": "slot_011",
+      "sequence": "leakage_first"
+    },
+    {
+      "slotId": "slot_012",
+      "sequence": "leakage_first"
+    },
+    {
+      "slotId": "slot_013",
+      "sequence": "imbalance_first"
+    },
+    {
+      "slotId": "slot_014",
+      "sequence": "leakage_first"
+    },
+    {
+      "slotId": "slot_015",
+      "sequence": "imbalance_first"
+    },
+    {
+      "slotId": "slot_016",
+      "sequence": "imbalance_first"
+    },
+    {
+      "slotId": "slot_017",
+      "sequence": "leakage_first"
+    },
+    {
+      "slotId": "slot_018",
+      "sequence": "leakage_first"
+    },
+    {
+      "slotId": "slot_019",
+      "sequence": "imbalance_first"
+    },
+    {
+      "slotId": "slot_020",
+      "sequence": "imbalance_first"
+    },
+    {
+      "slotId": "slot_021",
+      "sequence": "imbalance_first"
+    },
+    {
+      "slotId": "slot_022",
+      "sequence": "imbalance_first"
+    },
+    {
+      "slotId": "slot_023",
+      "sequence": "leakage_first"
+    },
+    {
+      "slotId": "slot_024",
+      "sequence": "leakage_first"
+    }
+  ],
+  "limitations": [
+    "Randomization balances task order only; this pilot has no untreated control arm.",
+    "Slots are assigned to pseudonymous participant IDs after consent without storing direct identifiers."
+  ]
+}

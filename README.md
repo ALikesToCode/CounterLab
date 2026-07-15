@@ -7,9 +7,9 @@ evidence, verify transfer, and only then merge the repair.
 > Chatbots explain. CounterLab lets reality answer.
 
 CounterLab is a narrow Education-track product for machine-learning evaluation
-misconceptions in supported Jupyter notebooks. The P0 concept is entity leakage
-in a synthetic customer-churn notebook; it is not a generic notebook copilot or
-an unrestricted code runner.
+misconceptions in supported Jupyter notebooks. Its released concept packs cover
+entity leakage and class imbalance/metric choice; it is not a generic notebook
+copilot or an unrestricted code runner.
 
 **Live judge surface:** <https://counterlab.cserules.workers.dev>
 
@@ -34,11 +34,11 @@ The UI explicitly says the later run is not “repair attempt 3.”
 
 ## Judge Mode
 
-| Path                    | Meaning                                                                                            | Secrets required                |
-| ----------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------- |
-| Try instantly           | New D1-backed learner session using stored approved artifacts and real fixed-kernel payloads       | No                              |
-| Generate live           | GPT-5.6 analyst at the Worker; Codex/Python/Docker compilation on the process-capable local runner | OpenAI key, Codex login, Docker |
-| Replay verified session | Reconstructs checked-in evidence from actual prior runs; always visibly labelled                   | No                              |
+| Path                    | Meaning                                                                                                                               | Secrets required                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Try instantly           | New D1-backed learner session using stored approved artifacts and real fixed-kernel payloads                                          | No                                         |
+| Generate live           | Artifact-specific GPT analyst plus the authenticated Container runner, typed Plans, fixed kernel, verifier, and copied-notebook patch | Server-side model and runner configuration |
+| Replay verified session | Reconstructs checked-in evidence from actual prior runs; always visibly labelled                                                      | No                                         |
 
 Replay does not make a new model call. The rejected compiler run authorized no
 result. The displayed result is tied to the separately verified candidate and
@@ -46,10 +46,10 @@ fixed kernel hash.
 
 ## Supported notebook contract
 
-P0 accepts `nbformat` 4 `.ipynb` files up to 10 MiB containing the documented
-Python/scikit-learn classification subset, safe text/JSON outputs, and evidence
-needed for an entity-leakage Belief Test. Intake hashes and sanitizes the file;
-it never executes a cell.
+CounterLab accepts `nbformat` 4 `.ipynb` files up to 10 MiB containing the
+documented Python/scikit-learn subset, safe text/JSON outputs, and evidence for
+either entity leakage or class imbalance/metric choice. Intake hashes and
+sanitizes the file; it never executes a cell.
 
 Unsupported magics, active HTML/JavaScript/SVG/widgets, network dependencies,
 unknown packages, corrupt JSON, oversized files, and missing decisive evidence
@@ -72,35 +72,48 @@ server-only and may be configured as an HTTPS host root, a `/v1` base, or the
 full `/v1/responses` endpoint; CounterLab normalizes all three to the SDK base
 and never returns the endpoint in health, events, evidence, or browser state.
 
+Before a live call, Studio shows the exact sanitized packet: concept routing,
+claim, schema summary, support state, and bounded evidence excerpts. The learner
+must approve that packet; sensitive-looking excerpts require a second explicit
+confirmation. Editing the claim or artifact invalidates the approval.
+
 ### Runtime Codex generates
 
-Codex App Server over stdio JSONL generates only:
+For the hosted Studio, Codex App Server over stdio JSONL generates only:
 
 ```text
 experiment-plan.json
-artifact-adapter.py
-public_tests.py
+patch-plan.json
+public-rationale.md
 ```
 
-It may receive structured verifier counterexamples and gets at most two repair
-attempts. Browser events contain sanitized plans, files, diffs, command
-summaries, durations, exit codes, and verifier counterexamples—never private
-reasoning.
+Only the JSON Plans are authoritative; the rationale is display-only. Plans can
+compose registered fixed operations but cannot contain source code, commands,
+SQL, formulas, imports, paths, or literal results. Codex may receive structured
+verifier counterexamples and gets at most two repair attempts. Browser events
+contain sanitized plans, files, diffs, command summaries, durations, exit
+codes, and verifier counterexamples—never private reasoning.
+
+The separate advanced local proof retains the older three-file adapter path
+(`experiment-plan.json`, `artifact-adapter.py`, and `public_tests.py`) behind AST
+policy and a no-network container. It is never used silently by hosted Studio.
 
 ### Fixed code computes
 
-The Python kernel owns fixture generation, random/group splits, preprocessing,
-model training, accuracy, ROC AUC, entity overlap, transfer scoring, canonical
-serialization, and chart-ready results. Generated adapters only declare fixed
-SDK runs.
+The Python kernel owns fixture generation, random/group/stratified splits,
+preprocessing, model training, entity overlap, majority baselines, confusion
+counts, accuracy, precision, recall, F1, PR-AUC, contextual ROC-AUC, threshold
+and prevalence scenarios, transfer scoring, canonical serialization, and
+chart-ready results.
 
 ### The external verifier proves
 
-For this documented fixture and contract, the verifier establishes named
-properties such as zero group overlap, identity removal, controlled variables,
-label responsiveness, row-order invariance, deterministic hashes, honest chart
-payloads, candidate runner controls, hidden-mount absence, and supported-case
-status. It does not prove global mastery, causality, or formal sandbox security.
+For the documented concept contracts, the verifier establishes named properties
+such as zero group overlap, identity removal, controlled variables, majority
+baseline computation, confusion-matrix consistency, threshold/prevalence
+response, label responsiveness, deterministic hashes, honest chart payloads,
+runner controls, and changed-cell scope. It does not prove global mastery,
+causality, or formal sandbox security.
 
 The complete authority matrix is in
 [docs/AUTHORITY_BOUNDARIES.md](docs/AUTHORITY_BOUNDARIES.md).
@@ -108,29 +121,40 @@ The complete authority matrix is in
 ## Architecture
 
 ```text
-Vite React UI
-    │ typed requests
-Cloudflare Worker ── D1 sessions + append-only event chain
-    │              └─ R2 private uploads and patch copies
-    ├─ OpenAI Responses API (optional live analyst)
-    └─ stored sample/replay path
+Vite React Studio
+    │ typed requests + reconnectable public events
+Cloudflare Worker ── D1 sessions/jobs/event chain
+    │              └─ R2 private inputs/Plans/results/patches/proofs
+    ├─ Responses API (optional live analyst)
+    ├─ stored sample/replay path
+    └─ Container-backed Durable Object
+          ├─ Codex App Server over stdio JSONL
+          ├─ source-free Plan compiler + two-repair cap
+          ├─ fixed pandas/scikit-learn interpreter
+          ├─ independent verifier
+          └─ fixed copy-patch engine
 
-Local process runtime
-    ├─ Codex App Server stdio compiler
-    ├─ exact-file + Python AST policy
-    ├─ Docker candidate runner (no network, non-root, read-only)
-    ├─ fixed pandas/scikit-learn kernel
-    └─ frozen host verifier
+Advanced local proof (separate)
+    └─ AST policy + no-network Docker adapter runner
 ```
 
-Cloudflare does not pretend it can spawn Codex, Python, or Docker. Those health
-fields return `local-runner-required`. Details are in
+The Worker never spawns a host process directly. It dispatches a short-lived,
+single-job token to the process-capable Container binding; when that binding or
+its credentials are absent, live mode fails with a typed unavailable state and
+never substitutes sample or replay evidence. Details are in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+The proof console also uses `json-render` for a constrained generative view of
+sanitized public events. The catalogue contains only trusted CounterLab cards,
+tables, and status components, exposes no actions, and has no authority over
+session state or verification. Core learning actions always remain ordinary
+visible React controls.
 
 ## Setup
 
-Required: Node 22+, pnpm 11.12.0, Python 3.12+, and the locked dependencies.
-Docker is required for live candidate execution and replay reproduction.
+Required for local reproduction: Node 22+, pnpm 11.12.0, Python 3.12+, and the
+locked dependencies. A Docker-compatible engine is required for local
+Cloudflare Container development and for the advanced local adapter proof.
 
 ```bash
 cp .env.example .env.local
@@ -143,8 +167,9 @@ starts the fixed kernel and Vite/Worker app, and prints honest live capability
 status.
 
 The deployed no-secret judge/replay surface is
-<https://counterlab.cserules.workers.dev>. It uses remote D1 and private R2;
-process-bound Codex/Python/Docker capabilities remain explicitly local-only.
+<https://counterlab.cserules.workers.dev>. The repository now includes the
+Container runner binding and image; the upgraded image still requires a fresh
+deployment and production smoke before hosted live capability is claimed.
 
 For foreground development:
 
@@ -164,27 +189,35 @@ OPENAI_REASONING_EFFORT=medium
 CODEX_MODEL=
 COUNTERLAB_CODEX_MODE=replay
 COUNTERLAB_SANDBOX_IMAGE=counterlab-runner:local
+COUNTERLAB_ADMIN_DIAGNOSTIC_SECRET=
 ```
 
-Then authenticate the local CLI with `codex login` and ensure Docker is running.
-`pnpm run codex:live` currently returns typed
-`CODEX_ISOLATION_UNAVAILABLE` unless a trusted credential-safe
-`AppServerLaunchBoundary` is injected; it does not fall back to the old
-unisolated host launch. Cloudflare-hosted live lab compilation returns a typed
-local-runner requirement and never substitutes replay.
+For hosted mode, configure the Worker/Container secrets and runner signing key;
+the App Server remains internal to the Container and uses stdio JSONL. For the
+advanced local adapter proof, authenticate the local CLI with `codex login` and
+ensure Docker is running. A missing runner, model credential, or isolation
+boundary produces a typed setup error and never falls back to sample or replay.
 
 For local Vite development, server-only Responses settings are read from the
 repository-root `.env` and bound only to the Worker runtime. For Cloudflare,
 store the same values as Worker secrets; do not use public `VITE_` variables.
+
+Operators can inspect privacy-preserving queue, phase timing, repair, token,
+concept, support, and failure aggregates at `/api/admin/diagnostics` when
+`COUNTERLAB_ADMIN_DIAGNOSTIC_SECRET` is set. The endpoint is otherwise absent
+and never returns artifact, session, notebook, credential, or endpoint data.
 
 ## Verification and reproduction
 
 ```bash
 ./scripts/test-all.sh
 ./scripts/run-mutations.sh leakage
+./scripts/run-mutations.sh imbalance
+pnpm run held-out:run
 ./scripts/reproduce-session.sh leakage-01
 ./scripts/replay-patch.sh leakage-01
 ./scripts/release-check.sh
+./scripts/production-smoke.sh https://your-deployed-counterlab.example
 ```
 
 The current measured artifact is
@@ -196,6 +229,11 @@ The current measured artifact is
 - canonical result hash
   `2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0`;
 - 12/12 published critical mutations detected;
+- class-imbalance majority accuracy 0.989333 with 0 rare-class recall, and
+  12/12 imbalance mutations detected;
+- held-out intake/routing 10/10 and fixed full-loop completion 7/8; the
+  Random Forest patch is explicitly outside the registered non-sample patch
+  contract;
 - verified live candidate passed 18 invariants;
 - verified patch preserved four unrelated cell source hashes and has zero group
   overlap.
@@ -215,8 +253,9 @@ repairs then left an unexpected `__pycache__`, so that run remained rejected and
 released no result.
 
 Unsupported: arbitrary datasets/packages, generic Python files, active notebook
-content, non-Python kernels, uploaded notebooks outside the exact patch contract,
-accounts, LMS features, and claims of global mastery.
+content, non-Python kernels, source shapes or estimators outside a concept
+pack's fixed patch contract, accounts, LMS features, and claims of global
+mastery.
 
 ## Privacy and security limits
 

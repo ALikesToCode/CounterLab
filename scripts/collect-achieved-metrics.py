@@ -10,6 +10,11 @@ import pandas as pd
 
 from counterlab_kernel.canonical import canonical_json
 from counterlab_kernel.experiment import run_leakage_experiment
+from counterlab_kernel.imbalance import run_imbalance_experiment
+from counterlab_kernel.imbalance_verifier import (
+    critical_imbalance_mutations,
+    verify_imbalance_candidate,
+)
 from counterlab_kernel.verifier import critical_mutations, verify_candidate
 
 
@@ -28,6 +33,26 @@ def main() -> None:
         failed = {failure["invariant"] for failure in report["failures"]}
         if report["status"] == "REJECTED" and mutation["expectedInvariant"] in failed:
             detected += 1
+
+    imbalance_frame = pd.read_csv(ROOT / "fixtures/public/fraud_rare_event.csv")
+    imbalance_result = run_imbalance_experiment(imbalance_frame, seed=2603)
+    imbalance_runs = {
+        run["operation"]: run for run in imbalance_result["runs"]
+    }
+    imbalance_detected = 0
+    imbalance_mutations = critical_imbalance_mutations(imbalance_result)
+    for mutation in imbalance_mutations:
+        report = verify_imbalance_candidate(mutation["candidate"])
+        failed = {failure["invariant"] for failure in report["failures"]}
+        if (
+            report["status"] == "REJECTED"
+            and mutation["expectedInvariant"] in failed
+        ):
+            imbalance_detected += 1
+
+    held_out = json.loads(
+        (ROOT / "docs/HELD_OUT_RESULTS.json").read_text(encoding="utf-8")
+    )
 
     compiler = json.loads(
         (ROOT / "replays/leakage-01/compiler/index.json").read_text(encoding="utf-8")
@@ -70,6 +95,45 @@ def main() -> None:
             "total": len(mutations),
             "rate": detected / len(mutations),
         },
+        "imbalance": {
+            "fixture": {
+                "rows": len(imbalance_frame),
+                "positives": int(imbalance_frame["fraud"].sum()),
+                "prevalence": float(imbalance_frame["fraud"].mean()),
+                "seed": 2603,
+            },
+            "resultHash": imbalance_result["resultHash"],
+            "majorityAccuracy": imbalance_runs[
+                "imbalance.majority_baseline"
+            ]["metrics"]["accuracy"],
+            "majorityRecall": imbalance_runs[
+                "imbalance.majority_baseline"
+            ]["metrics"]["recall"],
+            "stratifiedPrAuc": imbalance_runs[
+                "imbalance.stratified_holdout"
+            ]["metrics"]["prAuc"],
+            "lowerThresholdRecall": imbalance_runs[
+                "imbalance.threshold_sweep"
+            ]["metrics"]["recall"],
+            "mutationBenchmark": {
+                "detected": imbalance_detected,
+                "total": len(imbalance_mutations),
+                "rate": imbalance_detected / len(imbalance_mutations),
+            },
+        },
+        "heldOut": {
+            "benchmarkId": held_out["benchmarkId"],
+            "intakePassed": held_out["summary"]["passed"],
+            "intakeTotal": held_out["summary"]["total"],
+            "fixedCompletionPassed": held_out["summary"][
+                "supportedCompletion"
+            ]["passed"],
+            "fixedCompletionTotal": held_out["summary"][
+                "supportedCompletion"
+            ]["total"],
+            "planSource": "deterministic_contract_probe",
+            "humanReview": "PENDING",
+        },
         "liveCodexReplay": {
             "modelId": compiler["modelId"],
             "rejectedRun": compiler["rejectedLiveRun"]["status"],
@@ -94,7 +158,8 @@ def main() -> None:
     destination.write_text(f"{canonical_json(payload)}\n", encoding="utf-8")
     print(
         f"wrote {destination.relative_to(ROOT)}: {detected}/{len(mutations)} "
-        f"mutations, result {result['resultHash']}"
+        f"leakage mutations and {imbalance_detected}/{len(imbalance_mutations)} "
+        f"imbalance mutations, result {result['resultHash']}"
     )
 
 

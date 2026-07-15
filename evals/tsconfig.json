@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "held-out/**/*.ts",
+    "learner-pilot/**/*.ts",
+    "../scripts/run-held-out.ts",
+    "../scripts/generate-pilot-randomization.ts",
+    "../scripts/analyze-learner-pilot.ts"
+  ]
+}

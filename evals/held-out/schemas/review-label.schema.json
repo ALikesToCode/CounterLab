@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://counterlab.local/schemas/held-out-review-label-v1.json",
+  "title": "CounterLab held-out review label",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "caseId",
+    "fileName",
+    "family",
+    "variation",
+    "labelSource",
+    "humanReview",
+    "notebookSha256",
+    "expected"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "caseId": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+    "fileName": { "type": "string", "pattern": "^[a-z0-9-]+\\.ipynb$" },
+    "family": {
+      "enum": ["entity_leakage", "class_imbalance", "unsupported"]
+    },
+    "variation": { "type": "string", "minLength": 1 },
+    "labelSource": { "const": "deterministic_case_spec" },
+    "humanReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reviewerId", "reviewedAt", "notes"],
+      "properties": {
+        "status": { "enum": ["PENDING", "REVIEWED", "ADJUDICATED"] },
+        "reviewerId": { "type": ["string", "null"] },
+        "reviewedAt": { "type": ["string", "null"], "format": "date-time" },
+        "notes": { "type": ["string", "null"], "maxLength": 2000 }
+      }
+    },
+    "notebookSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "supportStatus",
+        "concept",
+        "requiredMetricNames",
+        "requiredSymbols",
+        "requiredPackageHints",
+        "requiredSupportReasonCodes"
+      ],
+      "properties": {
+        "supportStatus": { "enum": ["SUPPORTED", "PARTIAL", "UNSUPPORTED"] },
+        "concept": {
+          "enum": ["entity_leakage", "class_imbalance", null]
+        },
+        "requiredMetricNames": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "requiredSymbols": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "requiredPackageHints": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "requiredSupportReasonCodes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

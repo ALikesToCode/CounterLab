@@ -4,16 +4,17 @@ CounterLab separates proposal, computation, verification, and learner judgment. 
 
 ## Responsibility matrix
 
-| Authority                 | Owns                                                                                                    | May produce                                                                                                             | Must not decide or access                                                                                                     |
-| ------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Learner                   | Claim, Belief Test confirmation or rejection, immutable prediction, revision, transfer attempt          | Text claim, confirmation, prediction confidence, reusable rule, fixed transfer choices                                  | Experimental metrics before prediction, verifier outcome, hidden answers                                                      |
-| GPT-5.6 reasoning analyst | Evidence-linked hypothesis formalization                                                                | Schema-valid Belief Test, alternatives, uncertainty, smallest discriminating intervention                               | Cell execution, experimental results, generated-code validity, mastery, patch unlock                                          |
-| Runtime Codex compiler    | Bounded compilation of an approved contract                                                             | Experiment plan, adapter that composes the public SDK, public tests; after transfer, a minimal patch to a notebook copy | Metric formulas, split primitives, transfer scoring, final validity, hidden verifier, held-out data, secrets, original upload |
-| Fixed Python kernel       | Numeric truth for the documented concept                                                                | Splits, preprocessing, model training, metrics, overlap, fingerprints, chart-ready data, transfer scoring               | Learner-model diagnosis, compiler validity, prose grading                                                                     |
-| Local candidate runner    | Static and OS execution policy                                                                          | Workspace-policy result, bounded execution evidence, command duration and exit status                                   | Numeric truth, verifier verdict, credentials, network access                                                                  |
-| Frozen host verifier      | Named falsifiable validity checks                                                                       | `VERIFIED` or `REJECTED`, invariant failures, observed/expected values, minimal counterexamples                         | Repair implementation, learner judgment, model reasoning                                                                      |
-| Cloudflare Worker         | Edge intake, API validation, D1 persistence, sample/replay orchestration, optional server-side GPT call | Typed HTTP responses and explicit availability states                                                                   | Child processes, Codex App Server, native Python kernel, Docker sandbox, pretending replay is live                            |
-| Local orchestrator        | Process-capable live workflow                                                                           | Codex event relay, workspace creation, candidate execution, host verification, repair control                           | Weakening contracts during a session, accepting a rejected candidate                                                          |
+| Authority                 | Owns                                                                                           | May produce                                                                                               | Must not decide or access                                                                                                        |
+| ------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Learner                   | Claim, Belief Test confirmation or rejection, immutable prediction, revision, transfer attempt | Text claim, confirmation, prediction confidence, reusable rule, fixed transfer choices                    | Experimental metrics before prediction, verifier outcome, hidden answers                                                         |
+| GPT-5.6 reasoning analyst | Evidence-linked hypothesis formalization                                                       | Schema-valid Belief Test, alternatives, uncertainty, smallest discriminating intervention                 | Cell execution, experimental results, generated-code validity, mastery, patch unlock                                             |
+| Runtime Codex compiler    | Bounded compilation of an approved contract                                                    | Hosted Experiment/Patch Plans and display-only rationale; advanced local adapter/public tests             | Metric formulas, executable hosted code, transfer scoring, final validity, hidden verifier, held-out data, secrets, upload bytes |
+| Fixed Python kernel       | Numeric truth for the documented concept                                                       | Splits, preprocessing, model training, metrics, overlap, fingerprints, chart-ready data, transfer scoring | Learner-model diagnosis, compiler validity, prose grading                                                                        |
+| Local candidate runner    | Static and OS execution policy                                                                 | Workspace-policy result, bounded execution evidence, command duration and exit status                     | Numeric truth, verifier verdict, credentials, network access                                                                     |
+| Frozen host verifier      | Named falsifiable validity checks                                                              | `VERIFIED` or `REJECTED`, invariant failures, observed/expected values, minimal counterexamples           | Repair implementation, learner judgment, model reasoning                                                                         |
+| Cloudflare Worker         | Intake, API validation, D1/R2 control plane, sample/replay, analyst, job dispatch              | Typed responses, scoped runner jobs/tokens, validated callbacks, reconnectable public events              | Child processes, direct filesystem access, accepting runner self-attestation, pretending replay is live                          |
+| Container runner          | Process-capable hosted workflow                                                                | Codex stdio relay, source-free Plan files, fixed interpreter/patch process evidence                       | D1/R2 credentials, unrelated objects, browser secrets, weakening verifier contracts                                              |
+| Advanced local runner     | Adapter-code proof                                                                             | AST/workspace policy, no-network candidate evidence, host verification                                    | Weakening contracts during a session, accepting a rejected candidate                                                             |
 
 ## Evidence flow
 
@@ -42,6 +43,12 @@ Each arrow narrows authority. Downstream evidence may reject an upstream proposa
 
 The reasoning analyst receives sanitized notebook structure, code/output excerpts, metric candidates, schema summary, support state, learner claim, and concept rules. It does not receive raw fixture rows, local paths, secrets, or the complete notebook unless a future support contract explicitly requires and documents that expansion.
 
+Live Studio first returns this sanitized input as a learner-visible preview.
+The analyst call requires a hash of that exact preview; sensitive-looking
+excerpts require explicit additional approval. A changed claim or artifact
+invalidates the preview hash. This is an approval boundary, not a claim that a
+heuristic can identify every sensitive value.
+
 The official SDK may target an operator-configured, Responses-compatible HTTPS
 base URL. Endpoint identity and credentials remain server-only configuration;
 they are not part of prompts, provenance, event payloads, health responses, or
@@ -62,15 +69,25 @@ compiler fails with `CODEX_ISOLATION_UNAVAILABLE`; unisolated direct spawn is
 available only to fake unit-test processes. The included Bubblewrap probe
 proves the target mount shape but is not an authenticated launcher.
 
-The lab turn is limited to approved belief evidence, public schema/documentation, redacted fixture structure, resource limits, and allowlisted files and commands. The requested generated file set must be exactly:
+The hosted lab turn is limited to approved belief evidence, public
+schema/documentation, redacted fixture structure, resource limits, and permitted
+outputs. Its complete generated file set is:
 
 ```text
 experiment-plan.json
-artifact-adapter.py
-public_tests.py
+public-rationale.md
 ```
 
-The compiler cannot mark its own output verified. `public_tests.py` is diagnostic evidence only. The fixed host pipeline checks exact workspace contents, validates the plan and AST policy, runs the candidate under OS controls, recomputes results, and asks the external verifier for the authoritative result.
+The hosted patch turn separately creates `patch-plan.json` and
+`public-rationale.md`. Rationale never determines validity. A Plan cannot contain
+source, commands, formulas, SQL, imports, paths, or literal results. The compiler
+cannot mark its own output verified; the Worker verifies structure, lineage,
+evidence, registered operations, and concept invariants before the Container's
+fixed interpreter can release a result.
+
+The advanced local proof keeps `artifact-adapter.py` and `public_tests.py`
+behind its exact-file, AST, and Docker policy. It is never an implicit hosted
+fallback.
 
 If the verifier rejects a candidate, Codex receives only bounded structured counterexamples. Repair attempts are numbered `1` or `2`; both the TypeScript input contract and Python orchestrator cap repairs at two. A third repair is invalid.
 
@@ -89,7 +106,10 @@ App Server protocol messages are not relayed directly. CounterLab emits only val
 
 Reasoning items and deltas, agent-message deltas and completed free-form prose, raw response items, arbitrary tool arguments, secrets, and full local paths are dropped. Unknown messages do not gain UI authority. Recognized messages with invalid shapes fail the compiler rather than being guessed at.
 
-The current package exposes these events as an async iterable. A local HTTP process may encode them as SSE. The Cloudflare Worker does not spawn Codex, so a deployed request for live Codex returns `LOCAL_RUNNER_REQUIRED` rather than an artificial stream.
+The hosted runner persists these events through the Worker as append-only
+evidence. Browsers reconnect from a validated cursor. If the runner binding or
+credential is unavailable, the Worker returns a typed setup state rather than
+an artificial stream or replay substitution.
 
 ## Generated workspace and candidate execution boundary
 
@@ -125,13 +145,24 @@ Transfer is scored by a fixed evaluator on a surface-different forecasting task.
 
 After transfer passes, Codex may propose a minimal change to a copy. The patch verifier owns notebook validity, allowed-cell scope, dependency allowlist, zero group overlap, recomputed metric provenance, determinism, and unchanged unrelated-cell hashes. A proposed patch that merely changes the displayed conclusion without changing evaluation design is rejected.
 
-## Cloudflare versus local authority
+## Cloudflare control plane versus runner authority
 
-The Vite/Cloudflare deployment is intentionally edge-compatible. It can parse and persist artifacts, run the deterministic sample/replay product flow, call the OpenAI Responses API server-side when configured, and expose typed health state.
+The Vite/Cloudflare Worker owns edge-safe parsing, D1/R2 persistence, the
+deterministic sample/replay flow, the optional analyst call, job authorization,
+and final independent Plan/result verification. It does not spawn processes.
 
-Cloudflare Workers do not own the process capabilities required for Codex App Server, Python, Docker, Git worktrees, or native local SQLite. Current Worker health reports those capabilities as `local-runner-required`, and the live lab compile route returns a typed 503 with `LOCAL_RUNNER_REQUIRED`.
+The process-capable Container runner owns one scoped job at a time and receives
+only a signed input-bundle capability. It cannot query D1, list R2, mint another
+token, or declare its own candidate valid. The same runner interface can target
+an authenticated dedicated process service if Container compatibility changes.
 
-The local runner is the only component permitted to own live compilation and execution. It currently reports setup unavailable until a credential-safe launch boundary is supplied. This split prevents a Cloudflare replay from being presented as a live generation and prevents unavailable process capabilities from degrading into fake success.
+This split prevents replay from being presented as generation and prevents an
+unavailable runner from degrading into sample-derived success.
+
+Operational diagnostics are private aggregate evidence only. Their bearer
+secret grants no runner-job capability, and the response omits notebook text,
+raw events, artifact/session/job identifiers, credentials, and configured model
+endpoints.
 
 ## Replay and disabled authority
 
@@ -165,4 +196,6 @@ labels the later run as a third repair.
 - Container controls are implementation evidence, not a formal sandbox proof.
 - Replay mode is backed by the checked-in live compiler traces plus deterministic
   transfer and patch evidence; replaying them is not a new live run.
-- The Cloudflare deployment cannot execute live Codex or the native kernel and says so through typed health and API errors.
+- The Container-backed hosted runner is implemented and covered by integration
+  tests, but the upgraded image has not yet completed a production smoke at the
+  public URL; hosted live availability remains unclaimed until that deployment.

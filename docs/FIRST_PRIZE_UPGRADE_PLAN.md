@@ -44,7 +44,10 @@ notebook -> safe Artifact Manifest -> learner claim -> Belief Test approval
 - The fixed sample path, deterministic transfer, exact sample patch, clean-clone
   scripts, and CloakBrowser judged path are green.
 
-### Verified release blockers
+### Baseline release blockers captured before implementation
+
+The following findings motivated the upgrade. Regression tests now prevent
+their return; they are historical baseline facts, not the current architecture.
 
 - Worker modes are unstructured strings. Non-live Belief Tests use the approved
   sample analyst, and the Worker forces `entity_leakage`.
@@ -122,11 +125,11 @@ contracts.
 Hosted Studio and the existing local proof are separate products of one
 authority model:
 
-| Path | Codex output | Execution |
-| --- | --- | --- |
-| Hosted Studio | typed Experiment/Patch plans and public rationale | fixed interpreter only |
-| Advanced local proof | plan, Python adapter, public tests | AST policy plus locked Docker candidate runner |
-| Verified replay | no new generation | reconstruct stored event/result payloads |
+| Path                 | Codex output                                      | Execution                                      |
+| -------------------- | ------------------------------------------------- | ---------------------------------------------- |
+| Hosted Studio        | typed Experiment/Patch plans and public rationale | fixed interpreter only                         |
+| Advanced local proof | plan, Python adapter, public tests                | AST policy plus locked Docker candidate runner |
+| Verified replay      | no new generation                                 | reconstruct stored event/result payloads       |
 
 The local adapter proof remains available and honestly labelled. It is not a
 fallback used silently by hosted live sessions.
@@ -215,6 +218,10 @@ manifest, concept, Belief Test, prediction, state version, or input hashes diffe
 
 ### Gate 1 — Authority regression boundary
 
+Status: **complete**. Modes are discriminated at contracts and routes; tests
+reject sample Belief Tests, results, patches, and replay metadata in live
+artifact sessions.
+
 1. Add failing tests proving a non-sample artifact cannot receive sample Belief
    Test, result, transfer, patch, proof, or replay metadata.
 2. Add failing tests proving unsupported concepts cannot be advertised.
@@ -227,7 +234,7 @@ green with explicit labels.
 
 ### Gate 2 — Runner jobs and hosted leakage
 
-Status: **complete in the repository**. The Container-backed test runner now
+Status: **complete in the repository**. The Container-backed runner now
 completes an artifact-specific Experiment Plan, fixed result, cursor stream,
 and fail-closed callback. Public deployment smoke remains a Gate 5 release task.
 
@@ -246,10 +253,12 @@ reconnect reconstructs the same state.
 
 ### Gate 3 — Artifact-specific patch and Studio experience
 
-Status: **in progress**. Item 1 is complete: Patch Plan v1, source sealing,
-fixed patch execution, private download, and Proof Bundle v2 pass the full
-repository gate. Studio decomposition, interactive controls, history, commands,
-and proof sharing remain.
+Status: **complete in the repository**. Patch Plan v1, source sealing, fixed
+copy-patch execution, private download, Proof Bundle v2, Studio shell, evidence
+navigator, Agent Rail, constrained generated proof view, command palette,
+recent-session resume, explicit stage review/reset, and interactive leakage
+controls are implemented and covered by unit/integration tests. Production
+browser smoke remains a Gate 5 task.
 
 1. Add deterministic leakage patch support detector, Patch Plan interpreter,
    verifier, R2 download, and Proof Bundle v2.
@@ -267,6 +276,12 @@ and proof download are usable after refresh.
 
 ### Gate 4 — Class imbalance
 
+Status: **complete in the repository**. The deterministic fixture/notebook,
+router and analyst rules, four fixed operations, interactive threshold and
+prevalence controls, manufacturing transfer, artifact-bound patch engine, and
+12-mutation verifier are implemented. The Worker integration test completes
+transfer through proof for this concept.
+
 1. Add deterministic rare-event fixture/notebook and stored kernel output.
 2. Add registry rules, Belief Test routing, majority baseline, stratified split,
    confusion matrix, precision, recall, F1, PR-AUC, contextual ROC-AUC,
@@ -278,6 +293,14 @@ Exit: imbalance completes sample and live supported paths end to end. Only then
 does public copy advertise two concepts.
 
 ### Gate 5 — Held-out, study, and release
+
+Status: **partial**. Held-out v2 records 10/10 safe intake/routing decisions and
+7/8 fixed full-loop completions without source edits; the Random Forest case is
+honestly refused by the logistic-only non-sample patch contract. The learner
+pilot protocol/randomization/analysis harness is ready with no participant
+outcomes claimed. New-version Playwright, production runner smoke, deployment,
+and clean-clone release checks remain not run because this agent is prohibited
+from starting dev/build commands without user action.
 
 1. Freeze four leakage, four imbalance, and two unsupported held-out notebooks.
 2. Generate machine and human held-out matrices from actual runs.
@@ -298,8 +321,9 @@ targets or simulated learner outcomes.
 
 - Node 26.2.0, pnpm 11.12.0, Python 3.14.5, Docker 29.5.2, Codex CLI 0.144.4,
   and Wrangler 4.110.0 are installed.
-- The Cloudflare account is logged in and Container-enabled. Existing CounterLab
-  D1/R2 bindings are healthy, but no runner Container binding is configured.
+- The Cloudflare account is logged in and Container-enabled. CounterLab D1/R2
+  bindings and the Container-backed Durable Object are configured in
+  `wrangler.jsonc`; the upgraded image has not yet been deployed or smoke-tested.
 - Cloudflare Containers are beta, use ephemeral disk, deploy with rolling image
   rollout, and require Workers Paid usage.
 - Live Belief analysis requires the existing server-side key and optional custom

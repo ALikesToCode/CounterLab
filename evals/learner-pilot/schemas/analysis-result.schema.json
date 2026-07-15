@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://counterlab.local/schemas/pilot-analysis-result-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "analyzedAt",
+    "participantCount",
+    "completedSessionCount",
+    "metrics",
+    "limitations"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "status": { "enum": ["NO_DATA", "DESCRIPTIVE_ONLY"] },
+    "analyzedAt": { "type": "string", "format": "date-time" },
+    "participantCount": { "type": "integer", "minimum": 0 },
+    "completedSessionCount": { "type": "integer", "minimum": 0 },
+    "metrics": {
+      "type": ["object", "null"],
+      "properties": {
+        "completionRate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "taskCount": { "type": "integer", "minimum": 0 },
+        "transferPassRate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "predictionChangeRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "medianTaskDurationSeconds": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "byConcept": { "type": "object" }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

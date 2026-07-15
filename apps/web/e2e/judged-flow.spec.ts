@@ -6,6 +6,14 @@ const claim =
   "The 98 percent random split accuracy proves this model generalizes to customers it has never seen.";
 const revision =
   "When rows repeat an entity, hold out whole entities and remove identity-derived features before claiming generalization.";
+const imbalanceNotebookPath = new URL(
+  "../../../fixtures/notebooks/fraud_class_imbalance.ipynb",
+  import.meta.url,
+).pathname;
+const leakageNotebookPath = new URL(
+  "../../../evals/held-out/notebooks/leakage-rows-pipeline.ipynb",
+  import.meta.url,
+).pathname;
 
 async function reset(page: Page) {
   await page.goto("/");
@@ -16,7 +24,7 @@ async function reset(page: Page) {
 async function startInstant(page: Page) {
   await reset(page);
   await page
-    .getByRole("button", { name: /Start the 3-minute lesson/i })
+    .getByRole("button", { name: /Try the 3-minute sample — Try instantly/i })
     .click();
   await expect(
     page.getByRole("heading", { name: /What do you think the score means/i }),
@@ -59,19 +67,21 @@ test("the first visit explains the lesson before asking for technical knowledge"
   await reset(page);
   await expect(
     page.getByRole("heading", {
-      name: "A model scored 98.5%. Can you trust it?",
+      name: "Your notebook made a claim. Will it survive a fair test?",
     }),
   ).toBeVisible();
   await expect(
     page.getByText(
-      /CounterLab is a guided lesson.*make a prediction.*fairer test.*new problem/i,
+      /Lock what you expect.*verified test.*apply the lesson.*repair/i,
     ),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Start the 3-minute lesson/i }),
+    page.getByRole("button", {
+      name: /Try the 3-minute sample — Try instantly/i,
+    }),
   ).toBeInViewport();
   await expect(
-    page.getByRole("button", { name: /Test my notebook/i }),
+    page.getByRole("button", { name: /Analyze a notebook — Generate live/i }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Watch a verified replay/i }),
@@ -106,12 +116,19 @@ test("Try Instantly persists the verified learning loop and exports a valid proo
 
   await commitAndOpenResult(page);
   await expect(page.getByText("59.4%").first()).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      name: /Change the test, then let the kernel recompute it/i,
+    }),
+  ).toBeVisible();
 
   await recordRevision(page);
   await page.getByLabel(/Time-ordered holdout/i).check();
   await page.getByLabel(/Centered rolling target/i).check();
   await page.getByRole("button", { name: /Check transfer/i }).click();
-  await expect(page.getByText(/Transfer passed/i)).toBeVisible();
+  await expect(
+    page.locator(".eyebrow", { hasText: "Transfer passed" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: /Verify notebook patch/i }).click();
   await expect(
     page.getByRole("heading", { name: /Your learning, before and after/i }),
@@ -132,7 +149,9 @@ test("Try Instantly persists the verified learning loop and exports a valid proo
   await expect(
     page.getByRole("heading", { name: /Your learning, before and after/i }),
   ).toBeVisible();
-  await expect(page.getByText(/Transfer passed/i)).toBeVisible();
+  await expect(
+    page.locator(".eyebrow", { hasText: "Transfer passed" }),
+  ).toBeVisible();
   expect(consoleErrors).toEqual([]);
 });
 
@@ -222,7 +241,7 @@ test("prediction is immutable and results do not exist before commitment", async
 test("a learner can use a claim starter and return home", async ({ page }) => {
   await reset(page);
   await page
-    .getByRole("button", { name: /Start the 3-minute lesson/i })
+    .getByRole("button", { name: /Try the 3-minute sample — Try instantly/i })
     .click();
 
   await page.getByRole("button", { name: /Use a starter claim/i }).click();
@@ -234,7 +253,7 @@ test("a learner can use a claim starter and return home", async ({ page }) => {
   await page.getByRole("button", { name: /Start over/i }).click();
   await expect(
     page.getByRole("heading", {
-      name: "A model scored 98.5%. Can you trust it?",
+      name: "Your notebook made a claim. Will it survive a fair test?",
     }),
   ).toBeVisible();
   expect(
@@ -301,7 +320,9 @@ test("failed transfer keeps the patch locked and a corrected answer unlocks it",
   await page.getByLabel(/Time-ordered holdout/i).check();
   await page.getByLabel(/Centered rolling target/i).check();
   await page.getByRole("button", { name: /Check transfer/i }).click();
-  await expect(page.getByText(/Transfer passed/i)).toBeVisible();
+  await expect(
+    page.locator(".eyebrow", { hasText: "Transfer passed" }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Verify notebook patch/i }),
   ).toBeEnabled();
@@ -311,7 +332,11 @@ test("Replay remains visibly labelled for the full reconstructed path", async ({
   page,
 }) => {
   await reset(page);
-  await page.getByRole("button", { name: /Replay verified session/i }).click();
+  await page
+    .getByRole("button", {
+      name: /Watch a verified replay — Replay verified session/i,
+    })
+    .click();
   const replayBanner = page.getByLabel("Replay status");
   await expect(replayBanner).toContainText("Verified replay");
   await page.getByRole("button", { name: /Continue replay/i }).click();
@@ -352,7 +377,9 @@ test("missing live capabilities are stated without claiming a model call", async
     });
   });
   await reset(page);
-  await page.getByRole("button", { name: /Generate live/i }).click();
+  await page
+    .getByRole("button", { name: /Analyze a notebook — Generate live/i })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Test my notebook" }),
   ).toBeVisible();
@@ -388,7 +415,9 @@ test("configured live reasoning remains unproven until its first request", async
     });
   });
   await reset(page);
-  await page.getByRole("button", { name: /Generate live/i }).click();
+  await page
+    .getByRole("button", { name: /Analyze a notebook — Generate live/i })
+    .click();
 
   await expect(
     page.getByText(/Notebook lesson tools are ready to try/i),
@@ -407,7 +436,7 @@ test("unsupported notebooks are parsed without execution and cannot advance", as
 }) => {
   await reset(page);
   await page
-    .getByRole("button", { name: /Start the 3-minute lesson/i })
+    .getByRole("button", { name: /Try the 3-minute sample — Try instantly/i })
     .click();
   await expect(
     page.getByRole("heading", { name: /What do you think the score means/i }),
@@ -447,7 +476,7 @@ test("the judged path is keyboard operable with reduced motion", async ({
   await reset(page);
 
   const tryInstant = page.getByRole("button", {
-    name: /Start the 3-minute lesson/i,
+    name: /Try the 3-minute sample — Try instantly/i,
   });
   await tryInstant.focus();
   await page.keyboard.press("Enter");
@@ -488,7 +517,9 @@ test("the judged path is keyboard operable with reduced motion", async ({
   await page.keyboard.press("Space");
   await page.getByRole("button", { name: /Check transfer/i }).focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByText(/Transfer passed/i)).toBeVisible();
+  await expect(
+    page.locator(".eyebrow", { hasText: "Transfer passed" }),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: /Verify notebook patch/i }).focus();
   await page.keyboard.press("Enter");
@@ -500,4 +531,230 @@ test("the judged path is keyboard operable with reduced motion", async ({
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+});
+
+test("a configured hosted runner completes an untouched leakage notebook", async ({
+  page,
+}) => {
+  test.skip(
+    process.env.COUNTERLAB_E2E_LIVE !== "1",
+    "Set COUNTERLAB_E2E_LIVE=1 only against a real configured analyst and runner.",
+  );
+  test.setTimeout(12 * 60_000);
+
+  const health = await page.request.get("/api/health");
+  expect(health.ok()).toBe(true);
+  expect((await health.json()).data).toMatchObject({
+    liveGpt: "configured",
+    liveCodex: "configured",
+    liveKernel: "configured",
+    sandbox: "configured",
+  });
+
+  await reset(page);
+  await page
+    .getByRole("button", { name: /Analyze a notebook — Generate live/i })
+    .click();
+  await expect(
+    page.getByText(/Hosted notebook runner is ready/i),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: /Continue with my notebook/i })
+    .click();
+
+  await page.locator('input[type="file"]').setInputFiles(leakageNotebookPath);
+  await expect(
+    page.getByText(/leakage-rows-pipeline.ipynb/i).first(),
+  ).toBeVisible();
+  await page.getByLabel("Your claim").fill(claim);
+  await page.getByRole("button", { name: /Compare two explanations/i }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: /Review the evidence sent for analysis/i,
+    }),
+  ).toBeVisible();
+  await expect(page.getByText(/Entity leakage/i).first()).toBeVisible();
+  const sensitiveApproval = page.getByRole("checkbox", {
+    name: /I reviewed the sensitive-looking excerpts/i,
+  });
+  if ((await sensitiveApproval.count()) > 0) await sensitiveApproval.check();
+  await page.getByRole("button", { name: /Send this evidence/i }).click();
+
+  await expect(
+    page.getByRole("heading", { name: /Which explanation fits/i }),
+  ).toBeVisible({ timeout: 210_000 });
+  await expect(
+    page.getByText(/The model partly remembers customers/i),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: /These two ideas make sense/i })
+    .click();
+  await page.getByLabel(/Remain near 98%/i).check();
+  await page.getByLabel(/Confidence/i).fill("84");
+  await page.getByRole("button", { name: /Lock my answer/i }).click();
+
+  await expect(
+    page.getByRole("heading", { name: /Here.s what changed/i }),
+  ).toBeVisible({ timeout: 360_000 });
+  await expect(page.getByText(/0 shared customers/i).first()).toBeVisible();
+
+  await page.getByLabel(/Whole entities/i).check();
+  await page.getByLabel(/Remove identity feature/i).check();
+  await page.getByLabel(/Test size/i).fill("0.3");
+  await page.getByRole("button", { name: /Run this configuration/i }).click();
+  await expect(page.getByText(/Verified exploratory result/i)).toBeVisible({
+    timeout: 180_000,
+  });
+
+  await page.getByLabel("Your revised mental model").fill(revision);
+  await page
+    .getByRole("button", { name: /Try the rule on a new problem/i })
+    .click();
+  await page.getByLabel(/Time-ordered holdout/i).check();
+  await page.getByLabel(/Centered rolling target/i).check();
+  await page.getByRole("button", { name: /Check transfer/i }).click();
+  await expect(
+    page.locator(".eyebrow", { hasText: "Transfer passed" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: /Verify notebook patch/i }).click();
+  await expect(
+    page.getByRole("heading", { name: /You found the hidden shortcut/i }),
+  ).toBeVisible({ timeout: 300_000 });
+  await expect(page).toHaveURL(/\/proof\//);
+
+  const patchDownload = page.waitForEvent("download");
+  await page
+    .getByRole("link", { name: /Download verified notebook copy/i })
+    .click();
+  expect((await patchDownload).suggestedFilename()).toMatch(
+    /\.counterlab-patched\.ipynb$/i,
+  );
+
+  const proofDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: /Download proof/i }).click();
+  const proofPath = await (await proofDownload).path();
+  expect(proofPath).not.toBeNull();
+  expect(
+    ProofBundleSchema.parse(JSON.parse(await readFile(proofPath!, "utf8")))
+      .events,
+  ).not.toHaveLength(0);
+});
+
+test("a configured hosted runner completes an untouched class-imbalance notebook", async ({
+  page,
+}) => {
+  test.skip(
+    process.env.COUNTERLAB_E2E_LIVE !== "1",
+    "Set COUNTERLAB_E2E_LIVE=1 only against a real configured analyst and runner.",
+  );
+  test.setTimeout(12 * 60_000);
+
+  const health = await page.request.get("/api/health");
+  expect(health.ok()).toBe(true);
+  const capability = (await health.json()).data;
+  expect(capability).toMatchObject({
+    liveGpt: "configured",
+    liveCodex: "configured",
+    liveKernel: "configured",
+    sandbox: "configured",
+  });
+
+  await reset(page);
+  await page
+    .getByRole("button", { name: /Analyze a notebook — Generate live/i })
+    .click();
+  await expect(
+    page.getByText(/Hosted notebook runner is ready/i),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: /Continue with my notebook/i })
+    .click();
+
+  await page.locator('input[type="file"]').setInputFiles(imbalanceNotebookPath);
+  await expect(
+    page.getByText(/fraud_class_imbalance.ipynb/i).first(),
+  ).toBeVisible();
+  await page
+    .getByLabel("Your claim")
+    .fill(
+      "The 99 percent accuracy proves this fraud classifier catches the rare cases that matter.",
+    );
+  await page.getByRole("button", { name: /Compare two explanations/i }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: /Review the evidence sent for analysis/i,
+    }),
+  ).toBeVisible();
+  await expect(page.getByText(/Class imbalance/i).first()).toBeVisible();
+  await page.getByRole("button", { name: /Send this evidence/i }).click();
+
+  await expect(
+    page.getByRole("heading", { name: /Which explanation fits/i }),
+  ).toBeVisible({ timeout: 210_000 });
+  await expect(page.getByText(/Rarity hides failure/i).first()).toBeVisible();
+  await page
+    .getByRole("button", { name: /These two ideas make sense/i })
+    .click();
+  await page.getByLabel(/Expose a serious minority-class problem/i).check();
+  await page.getByLabel(/Confidence/i).fill("86");
+  await page.getByRole("button", { name: /Lock my answer/i }).click();
+
+  await expect(
+    page.getByRole("heading", {
+      name: /A high accuracy can still miss every rare event/i,
+    }),
+  ).toBeVisible({ timeout: 360_000 });
+  await expect(
+    page.getByText(/Verified Lab · rare-event evaluation/i),
+  ).toBeVisible();
+
+  await page.getByLabel("Decision threshold").fill("0.2");
+  await page.getByLabel("Prevalence scenario").selectOption("rarer");
+  await page.getByLabel("Metric focus").selectOption("recall");
+  await page.getByRole("button", { name: /Run this scenario/i }).click();
+  await expect(page.getByText(/Verified exploratory result/i)).toBeVisible({
+    timeout: 180_000,
+  });
+
+  await page
+    .getByLabel("Your revised mental model")
+    .fill(
+      "When positive cases are rare, compare against the majority baseline and choose class-specific metrics and a threshold that match deployment cost.",
+    );
+  await page.getByRole("button", { name: /Try it on defects/i }).click();
+  await page.getByLabel(/Lower threshold based on missed-defect cost/i).check();
+  await page.getByLabel(/Missing a defect is the costly error/i).check();
+  await page.getByLabel(/Confusion matrix shows misses/i).check();
+  await page.getByLabel(/Prevalence changes precision/i).check();
+  await page.getByRole("button", { name: /Check transfer/i }).click();
+  await expect(
+    page.locator(".eyebrow", { hasText: "Transfer passed" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: /Verify notebook repair/i }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: /Your notebook copy passed the repair checks/i,
+    }),
+  ).toBeVisible({ timeout: 300_000 });
+  await expect(page).toHaveURL(/\/proof\//);
+
+  const patchDownload = page.waitForEvent("download");
+  await page.getByRole("link", { name: /Download patched copy/i }).click();
+  const patch = await patchDownload;
+  expect(patch.suggestedFilename()).toMatch(/\.counterlab-patched\.ipynb$/i);
+
+  const proofDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: /Export Proof Bundle/i }).click();
+  const proof = await proofDownload;
+  const proofPath = await proof.path();
+  expect(proofPath).not.toBeNull();
+  const parsedProof = ProofBundleSchema.parse(
+    JSON.parse(await readFile(proofPath!, "utf8")),
+  );
+  expect(parsedProof.sessionId).toMatch(/^session_/);
+  expect(parsedProof.events.some((event) => event.actor === "kernel")).toBe(
+    true,
+  );
 });

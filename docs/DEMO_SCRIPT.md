@@ -1,62 +1,69 @@
 # 2:45 demo voiceover
 
-## 0:00–0:18 — Thesis and deceptive result
+Use **Live notebook analysis** for the primary recording after the Container
+smoke passes. Keep **Verified replay** open as a disclosed backup; never present
+replay as a new model call.
 
-Show the sparse landing page. Say: “Chatbots explain. CounterLab lets reality
-answer. This notebook reports 98.5% test accuracy, and the tempting claim is
-that it generalizes to new customers.” Choose Try Instantly and point to Cell 3,
-output 0, the seed, sample size, and `customer_id` evidence.
+## 0:00–0:12 — Deceptive notebook
 
-## 0:18–0:42 — Evidence-linked Belief Test
+Upload the untouched customer-churn notebook. Say: “This notebook reports 98.5%
+test accuracy. The claim is that it generalizes to customers it has never
+seen.” Show the stored output and exact evaluation cell.
 
-Enter the claim and create the Belief Test. Contrast the two hypotheses: real
-generalization versus repeated-customer identity. Point to the three exact
-evidence chips and the decisive whole-customer/identity-ablation intervention.
-Confirm it.
+## 0:12–0:28 — Evidence-linked Belief Test
 
-## 0:42–0:57 — Immutable prediction
+Preview the sanitized content, approve the live analyst call, then show two
+hypotheses linked to exact cell/output evidence. Say: “GPT formalizes the
+disagreement, but it cannot run the notebook or invent a result.”
 
-Choose “Remain near 98%,” set confidence, and commit. Say: “CounterLab freezes
-the prediction before any verified result exists. This is the Prediction
-Contract.”
+## 0:28–0:40 — Immutable prediction
 
-## 0:57–1:28 — Genuine Codex generation and verifier rejection
+Choose “Remain near 98%,” set confidence, and lock it. Show the immutable hash.
+Say: “The result does not exist until the learner commits.”
 
-Use Replay Verified Session for demo reliability; keep the banner visible.
-Show the authenticated `gpt-5.6-sol` trace. The first candidate fails constrained
-tests on an unsupported SDK argument. Repair 1 fixes the constructor but leaves
-`__pycache__`; repair 2 hits the cap and the run authorizes no result. Say: “This
-failure is real and preserved. We do not stage it and we do not call a later run
-repair 3.”
+## 0:40–1:05 — Compile, reject, repair
 
-Then show the separate later live candidate: three bounded files, exit 0, 18
-invariants, 12/12 mutations, canonical hash reproduced. Mention the visible
-generation-isolation limitation.
+Open the Proof Console during the live compile. Show the constrained generated
+Plan view, resolved cells, external-verifier rejection, bounded counterexample,
+repair event, and accepted Plan. Say: “Codex writes a typed Plan, not executable
+Python. The verifier—not Codex—decides whether reality may run.”
 
-## 1:28–1:50 — Reality
+If the live candidate passes first try, say so honestly and use the visibly
+labelled replay only to show the genuine prior rejection/two-repair trace.
 
-Open the verified result. Compare 98.5% random rows, 59.4% unseen customers, and
-67.4% without identity. Point to zero group overlap, n=720, seed 1729, the table,
-and result hash. Say: “The random split measured recognition more than
-generalization.”
+## 1:05–1:30 — Reality and one real control
 
-## 1:50–2:12 — Revision and transfer
+Show 98.5% random rows, 59.4% unseen customers, 67.4% identity ablation, zero
+group overlap, sample sizes, seed, and result hash. Change identity ablation or
+test fraction and wait for the fixed kernel's newly verified configuration.
+Say: “Same fixed operations; a test that matches deployment.”
 
-Write: “When rows repeat an entity, hold out whole entities and remove
-identity-derived features.” Open the forecasting transfer. Choose time-ordered
-holdout and centered rolling target. Say: “The surface changed; the rule did
-not.” Pass the fixed evaluator.
+## 1:30–1:50 — Learner revision
 
-## 2:12–2:32 — Patch unlock
+Write: “When rows repeat an entity, hold out whole entities and remove identity
+from features before claiming generalization.” Keep the learner action primary;
+technical hashes stay in the collapsed Proof Console.
 
-Before passing, briefly show the locked patch. After pass, verify the notebook
-copy patch. Point to the Cell 3 unified diff: group evaluation, identity removed,
-unrelated cell hashes unchanged, overlap zero. Emphasize that the original was
-never overwritten.
+## 1:50–2:10 — Surface-different transfer
 
-## 2:32–2:45 — Dual diff and proof
+Choose a time-ordered forecasting holdout and identify the centered rolling
+target as future leakage. Say: “No model grades this. The fixed evaluator checks
+whether the rule transfers to a new surface.”
 
-Show the Reasoning Diff across belief, prediction/evidence, code, and transfer.
-Expand the technical proof and export the Proof Bundle. Close: “CounterLab does
-not declare mastery. It shows exactly what was tested, rejected, transferred,
-and verified.”
+## 2:10–2:32 — Artifact-specific patch
+
+Show the patch gate unlock. Review the source-free Patch Plan, one-cell notebook
+diff, zero overlap, unchanged cell count, source/patched hashes, and verified
+download. Emphasize that the original upload was never overwritten.
+
+## 2:32–2:45 — Reasoning Diff and proof
+
+Show Belief, Evidence, Behavior, Code, and the five proof hashes. Export the
+Proof Bundle. Close: “Chatbots explain. CounterLab lets reality answer—and only
+then helps you fix the code.”
+
+## Backup disclosure
+
+If the live runner is unavailable, say: “This is a Verified replay of an actual
+stored run; it makes no new model call.” Keep the replay banner visible on every
+screen and do not splice replay footage into a sequence labelled live.

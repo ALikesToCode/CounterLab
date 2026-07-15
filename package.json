@@ -14,7 +14,9 @@
     "typecheck": "tsc --noEmit && pnpm --filter @counterlab/web run typecheck",
     "format:check": "prettier --check .",
     "contracts:generate": "tsx scripts/generate-contract-schemas.ts",
-    "codex:live": "tsx scripts/run-live-codex.ts"
+    "codex:live": "tsx scripts/run-live-codex.ts",
+    "belief:live:verify": "tsx scripts/verify-live-belief.ts",
+    "held-out:run": "tsx scripts/run-held-out.ts"
   },
   "dependencies": {
     "openai": "6.46.0",

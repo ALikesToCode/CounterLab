@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://counterlab.local/schemas/pilot-consent-record-v1.json",
+  "title": "CounterLab learner-pilot consent record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "participantId",
+    "consentVersion",
+    "consentedAt",
+    "affirmations",
+    "withdrawalCodeHash"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "participantId": {
+      "type": "string",
+      "pattern": "^participant_[A-Za-z0-9_-]+$"
+    },
+    "consentVersion": { "const": "1" },
+    "consentedAt": { "type": "string", "format": "date-time" },
+    "affirmations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adult",
+        "informed",
+        "voluntary",
+        "dataUse",
+        "participation"
+      ],
+      "properties": {
+        "adult": { "const": true },
+        "informed": { "const": true },
+        "voluntary": { "const": true },
+        "dataUse": { "const": true },
+        "participation": { "const": true }
+      }
+    },
+    "withdrawalCodeHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 of a participant-held random withdrawal code; never hash a name or email."
+    }
+  }
+}

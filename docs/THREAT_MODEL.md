@@ -14,7 +14,8 @@ canonical results, patches, event chain, and Proof Bundles.
 4. Approved contract to Codex App Server.
 5. Generated files to host policy and Docker.
 6. Candidate declaration to fixed kernel/verifier.
-7. Stored events to replay/browser.
+7. Worker-issued job capability to the process-capable runner.
+8. Stored events to replay/browser.
 
 ## Enforced controls
 
@@ -25,6 +26,8 @@ canonical results, patches, event chain, and Proof Bundles.
   the browser, stored in evidence, or forwarded to Codex. GPT receives no raw
   rows, secrets, or client paths.
 - Zod validation and evidence-reference resolution for model output.
+- Hash-bound learner preview/approval before a live analyst call, with an extra
+  confirmation for sensitive-looking excerpts.
 - Legal server-side state transitions and immutable prediction hash.
 - Exact generated file set, regular-file/symlink checks, JSON depth/size limits.
 - Adapter AST denial of filesystem/environment/dynamic import/eval/exec,
@@ -38,6 +41,8 @@ canonical results, patches, event chain, and Proof Bundles.
   stripped of local paths; reasoning and raw agent prose are dropped.
 - Append-only D1 event table and canonical hash chain; optional HMAC.
 - Release secret-pattern scan.
+- Secret-protected, identifier-free aggregate operational diagnostics; the
+  route is absent when its secret is not configured.
 
 The custom Responses base URL is operator-controlled configuration. CounterLab
 requires HTTPS except for loopback development, rejects embedded credentials,
@@ -67,12 +72,22 @@ This proves the mount shape, not authenticated end-to-end generation: stable
 Codex authentication is file-backed and would be readable to model-invoked
 commands if mounted into that namespace.
 
-Docker controls are not a formal sandbox proof and inherit host kernel/runtime
-risk. Cloudflare account security, local machine compromise, denial of service
-beyond configured limits, and side channels are outside the hackathon guarantee.
-An unsigned Proof Bundle detects internal inconsistency but is not a third-party
-signature. Uploaded notebooks outside the exact sample patch contract do not
-receive a verified patch.
+Hosted source-free Plans remove arbitrary model-authored Python from the public
+critical path, but the Container runtime, Codex CLI, configured model endpoint,
+and Cloudflare control plane remain operational dependencies. Short-lived runner
+tokens narrow authority; they do not make the system formally capability-secure.
+
+The sensitive-looking excerpt detector is deliberately conservative and cannot
+guarantee data classification. Learners remain responsible for reviewing the
+exact sanitized preview before approving a live request.
+
+Docker controls for the advanced local proof are not a formal sandbox proof and
+inherit host kernel/runtime risk. Cloudflare account security, local machine
+compromise, denial of service beyond configured limits, and side channels are
+outside the hackathon guarantee. An unsigned Proof Bundle detects internal
+inconsistency but is not a third-party signature. Notebook source shapes or
+estimators outside a concept pack's registered patch transformation receive an
+honest patch refusal even when intake and the fixed lab are supported.
 
 ## Highest-priority hardening
 

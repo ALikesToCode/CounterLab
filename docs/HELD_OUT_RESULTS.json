@@ -1,0 +1,593 @@
+{
+  "schemaVersion": "2",
+  "benchmarkId": "counterlab-held-out-v2",
+  "executedAt": "2026-07-15T05:27:12.530Z",
+  "parser": "@counterlab/notebook-parser",
+  "executionMode": "safe_parse_plus_fixed_contract_completion",
+  "labelsSha256": "3ca1d08a8a96f807c8fbe81d96632d2eb2d6b473850301f6d048ebc9016dfc18",
+  "summary": {
+    "total": 10,
+    "passed": 10,
+    "failed": 0,
+    "byFamily": {
+      "entity_leakage": {
+        "passed": 4,
+        "total": 4
+      },
+      "class_imbalance": {
+        "passed": 4,
+        "total": 4
+      },
+      "unsupported": {
+        "passed": 2,
+        "total": 2
+      }
+    },
+    "supportedCompletion": {
+      "passed": 7,
+      "total": 8
+    }
+  },
+  "cases": [
+    {
+      "caseId": "leakage_rows_pipeline",
+      "fileName": "leakage-rows-pipeline.ipynb",
+      "family": "entity_leakage",
+      "variation": "pipeline_with_identity",
+      "humanReviewStatus": "PENDING",
+      "executedParser": true,
+      "expected": {
+        "supportStatus": "SUPPORTED",
+        "concept": "entity_leakage"
+      },
+      "observed": {
+        "supportStatus": "SUPPORTED",
+        "concept": "entity_leakage",
+        "metricNames": [
+          "accuracy",
+          "roc_auc"
+        ],
+        "symbols": [
+          "LogisticRegression",
+          "Pipeline",
+          "accuracy_score",
+          "roc_auc_score",
+          "train_test_split"
+        ],
+        "packageHints": [
+          "sklearn"
+        ],
+        "supportReasonCodes": [],
+        "fileSha256": "2bd07100f1794cc78d0a70e8b82f08c498a3093d705f9aabb4f5d0c362ea891f"
+      },
+      "checks": {
+        "notebookHashMatches": true,
+        "supportStatusMatches": true,
+        "conceptMatches": true,
+        "metricsPresent": true,
+        "symbolsPresent": true,
+        "packagesPresent": true,
+        "supportReasonsMatch": true,
+        "stableEvidenceReferences": true
+      },
+      "completion": {
+        "attempted": true,
+        "planSource": "deterministic_contract_probe",
+        "planVerified": true,
+        "resultVerified": true,
+        "transferPassed": true,
+        "patchVerified": true,
+        "unchangedCellCount": 1,
+        "resultHash": "e824fd1c8a6ece589016775920d3c427d5ba2ffc18c5a8303524281552fa0eb2",
+        "patchHash": "301ee38de473f32c9ab61016b256c43cc9438a40ed28716a66a0f405b28df391",
+        "durationMs": 3405,
+        "failureCode": null
+      },
+      "passed": true
+    },
+    {
+      "caseId": "leakage_shuffled_observations",
+      "fileName": "leakage-shuffled-observations.ipynb",
+      "family": "entity_leakage",
+      "variation": "shuffled_repeated_entities",
+      "humanReviewStatus": "PENDING",
+      "executedParser": true,
+      "expected": {
+        "supportStatus": "SUPPORTED",
+        "concept": "entity_leakage"
+      },
+      "observed": {
+        "supportStatus": "SUPPORTED",
+        "concept": "entity_leakage",
+        "metricNames": [
+          "accuracy",
+          "roc_auc"
+        ],
+        "symbols": [
+          "LogisticRegression",
+          "accuracy_score",
+          "roc_auc_score",
+          "train_test_split"
+        ],
+        "packageHints": [
+          "pandas",
+          "sklearn"
+        ],
+        "supportReasonCodes": [],
+        "fileSha256": "a5003b19d3c38caadacd1331c8aa6b769ddfa189f48fafd0e5a028d715e2068e"
+      },
+      "checks": {
+        "notebookHashMatches": true,
+        "supportStatusMatches": true,
+        "conceptMatches": true,
+        "metricsPresent": true,
+        "symbolsPresent": true,
+        "packagesPresent": true,
+        "supportReasonsMatch": true,
+        "stableEvidenceReferences": true
+      },
+      "completion": {
+        "attempted": true,
+        "planSource": "deterministic_contract_probe",
+        "planVerified": true,
+        "resultVerified": true,
+        "transferPassed": true,
+        "patchVerified": true,
+        "unchangedCellCount": 1,
+        "resultHash": "33a70dc9b3e148432311ee11ce8721c69386138b20fde10b5836cdfa9cb906d6",
+        "patchHash": "bbd5e8e905b13ab7bebbadbddbe5484f1876bf669ce018293d79d3424bc23ac7",
+        "durationMs": 3386,
+        "failureCode": null
+      },
+      "passed": true
+    },
+    {
+      "caseId": "leakage_column_transformer",
+      "fileName": "leakage-column-transformer.ipynb",
+      "family": "entity_leakage",
+      "variation": "column_transformer_identity",
+      "humanReviewStatus": "PENDING",
+      "executedParser": true,
+      "expected": {
+        "supportStatus": "SUPPORTED",
+        "concept": "entity_leakage"
+      },
+      "observed": {
+        "supportStatus": "SUPPORTED",
+        "concept": "entity_leakage",
+        "metricNames": [
+          "accuracy",
+          "roc_auc"
+        ],
+        "symbols": [
+          "ColumnTransformer",
+          "LogisticRegression",
+          "OneHotEncoder",
+          "accuracy_score",
+          "roc_auc_score",
+          "train_test_split"
+        ],
+        "packageHints": [
+          "sklearn"
+        ],
+        "supportReasonCodes": [],
+        "fileSha256": "98d5a6073142935103eabe6964fca4cd619f316ff727ee92904e940744e1d14d"
+      },
+      "checks": {
+        "notebookHashMatches": true,
+        "supportStatusMatches": true,
+        "conceptMatches": true,
+        "metricsPresent": true,
+        "symbolsPresent": true,
+        "packagesPresent": true,
+        "supportReasonsMatch": true,
+        "stableEvidenceReferences": true
+      },
+      "completion": {
+        "attempted": true,
+        "planSource": "deterministic_contract_probe",
+        "planVerified": true,
+        "resultVerified": true,
+        "transferPassed": true,
+        "patchVerified": true,
+        "unchangedCellCount": 1,
+        "resultHash": "c3132100f380732c3e2a3eb9aa70e5fae88bc0d829df3fb298ed0a1b76a63607",
+        "patchHash": "883a3b7eb0d395727fd71af1f181c21e93cd2bc56df95e7e6fda0998cd0c84a8",
+        "durationMs": 3457,
+        "failureCode": null
+      },
+      "passed": true
+    },
+    {
+      "caseId": "leakage_random_forest",
+      "fileName": "leakage-random-forest.ipynb",
+      "family": "entity_leakage",
+      "variation": "different_estimator_same_split",
+      "humanReviewStatus": "PENDING",
+      "executedParser": true,
+      "expected": {
+        "supportStatus": "SUPPORTED",
+        "concept": "entity_leakage"
+      },
+      "observed": {
+        "supportStatus": "SUPPORTED",
+        "concept": "entity_leakage",
+        "metricNames": [
+          "accuracy",
+          "roc_auc"
+        ],
+        "symbols": [
+          "RandomForestClassifier",
+          "accuracy_score",
+          "roc_auc_score",
+          "train_test_split"
+        ],
+        "packageHints": [
+          "sklearn"
+        ],
+        "supportReasonCodes": [],
+        "fileSha256": "ff44def01b3d700cbb2c3fb92365fd43ccb6ec7d01d07410980f596ab977e344"
+      },
+      "checks": {
+        "notebookHashMatches": true,
+        "supportStatusMatches": true,
+        "conceptMatches": true,
+        "metricsPresent": true,
+        "symbolsPresent": true,
+        "packagesPresent": true,
+        "supportReasonsMatch": true,
+        "stableEvidenceReferences": true
+      },
+      "completion": {
+        "attempted": true,
+        "planSource": "deterministic_contract_probe",
+        "planVerified": true,
+        "resultVerified": true,
+        "transferPassed": true,
+        "patchVerified": false,
+        "unchangedCellCount": 0,
+        "resultHash": "45733a502b97e7287a388d8ae0505eb4ffb2990c14a8adf55ce429cefc8e9d84",
+        "patchHash": null,
+        "durationMs": 3355,
+        "failureCode": "PATCH_ESTIMATOR_OUTSIDE_CONTRACT"
+      },
+      "passed": true
+    },
+    {
+      "caseId": "imbalance_accuracy_only",
+      "fileName": "imbalance-accuracy-only.ipynb",
+      "family": "class_imbalance",
+      "variation": "majority_baseline",
+      "humanReviewStatus": "PENDING",
+      "executedParser": true,
+      "expected": {
+        "supportStatus": "SUPPORTED",
+        "concept": "class_imbalance"
+      },
+      "observed": {
+        "supportStatus": "SUPPORTED",
+        "concept": "class_imbalance",
+        "metricNames": [
+          "accuracy"
+        ],
+        "symbols": [
+          "accuracy_score",
+          "train_test_split"
+        ],
+        "packageHints": [
+          "sklearn"
+        ],
+        "supportReasonCodes": [],
+        "fileSha256": "646f9a0673070318cc32c2b1cd12573f173ef7bb5eabf05d3ec1e4996ce1fa22"
+      },
+      "checks": {
+        "notebookHashMatches": true,
+        "supportStatusMatches": true,
+        "conceptMatches": true,
+        "metricsPresent": true,
+        "symbolsPresent": true,
+        "packagesPresent": true,
+        "supportReasonsMatch": true,
+        "stableEvidenceReferences": true
+      },
+      "completion": {
+        "attempted": true,
+        "planSource": "deterministic_contract_probe",
+        "planVerified": true,
+        "resultVerified": true,
+        "transferPassed": true,
+        "patchVerified": true,
+        "unchangedCellCount": 1,
+        "resultHash": "db7bc6599f63598bf12811950c0c0a6296369fa05a3cec95f7e523fb44440455",
+        "patchHash": "8a766ee56a0a3d6c51cc3feaf4a1588833e81e50359e43e044934048b8a94734",
+        "durationMs": 3773,
+        "failureCode": null
+      },
+      "passed": true
+    },
+    {
+      "caseId": "imbalance_confusion_metrics",
+      "fileName": "imbalance-confusion-metrics.ipynb",
+      "family": "class_imbalance",
+      "variation": "minority_metrics",
+      "humanReviewStatus": "PENDING",
+      "executedParser": true,
+      "expected": {
+        "supportStatus": "SUPPORTED",
+        "concept": "class_imbalance"
+      },
+      "observed": {
+        "supportStatus": "SUPPORTED",
+        "concept": "class_imbalance",
+        "metricNames": [
+          "accuracy",
+          "f1_score",
+          "precision",
+          "recall"
+        ],
+        "symbols": [
+          "LogisticRegression",
+          "accuracy_score",
+          "f1_score",
+          "train_test_split"
+        ],
+        "packageHints": [
+          "sklearn"
+        ],
+        "supportReasonCodes": [],
+        "fileSha256": "7a47447bd411ede26efd47f874a9a632b603fd4f2a79021f24bde2f51a81a5b2"
+      },
+      "checks": {
+        "notebookHashMatches": true,
+        "supportStatusMatches": true,
+        "conceptMatches": true,
+        "metricsPresent": true,
+        "symbolsPresent": true,
+        "packagesPresent": true,
+        "supportReasonsMatch": true,
+        "stableEvidenceReferences": true
+      },
+      "completion": {
+        "attempted": true,
+        "planSource": "deterministic_contract_probe",
+        "planVerified": true,
+        "resultVerified": true,
+        "transferPassed": true,
+        "patchVerified": true,
+        "unchangedCellCount": 1,
+        "resultHash": "d2f836c64455ca5f231da152442843eb5c213aebb3817ac899f387001dd76407",
+        "patchHash": "4bdfbe563622aba7d048ac03575cf3b8be755b9a8c572f24d0c795953d1a54a5",
+        "durationMs": 3830,
+        "failureCode": null
+      },
+      "passed": true
+    },
+    {
+      "caseId": "imbalance_weighted_model",
+      "fileName": "imbalance-weighted-model.ipynb",
+      "family": "class_imbalance",
+      "variation": "class_weight_balanced",
+      "humanReviewStatus": "PENDING",
+      "executedParser": true,
+      "expected": {
+        "supportStatus": "SUPPORTED",
+        "concept": "class_imbalance"
+      },
+      "observed": {
+        "supportStatus": "SUPPORTED",
+        "concept": "class_imbalance",
+        "metricNames": [
+          "f1_score",
+          "precision",
+          "recall"
+        ],
+        "symbols": [
+          "LogisticRegression",
+          "f1_score",
+          "train_test_split"
+        ],
+        "packageHints": [
+          "sklearn"
+        ],
+        "supportReasonCodes": [],
+        "fileSha256": "b920fe77ab251381da1564052273f1d7243ed54b0cfee7cfed1abbcff942c25f"
+      },
+      "checks": {
+        "notebookHashMatches": true,
+        "supportStatusMatches": true,
+        "conceptMatches": true,
+        "metricsPresent": true,
+        "symbolsPresent": true,
+        "packagesPresent": true,
+        "supportReasonsMatch": true,
+        "stableEvidenceReferences": true
+      },
+      "completion": {
+        "attempted": true,
+        "planSource": "deterministic_contract_probe",
+        "planVerified": true,
+        "resultVerified": true,
+        "transferPassed": true,
+        "patchVerified": true,
+        "unchangedCellCount": 1,
+        "resultHash": "42f27e4a66862b2e902fcb1cbe4a9f445ab99859f39035776f887078af2f165f",
+        "patchHash": "88879bc55684c680f18a580244d3601677d5665bcf7d68a4601dfe4f0ce578a9",
+        "durationMs": 3858,
+        "failureCode": null
+      },
+      "passed": true
+    },
+    {
+      "caseId": "imbalance_threshold_policy",
+      "fileName": "imbalance-threshold-policy.ipynb",
+      "family": "class_imbalance",
+      "variation": "decision_threshold",
+      "humanReviewStatus": "PENDING",
+      "executedParser": true,
+      "expected": {
+        "supportStatus": "SUPPORTED",
+        "concept": "class_imbalance"
+      },
+      "observed": {
+        "supportStatus": "SUPPORTED",
+        "concept": "class_imbalance",
+        "metricNames": [
+          "f1_score",
+          "precision",
+          "recall"
+        ],
+        "symbols": [
+          "LogisticRegression",
+          "f1_score",
+          "train_test_split"
+        ],
+        "packageHints": [
+          "sklearn"
+        ],
+        "supportReasonCodes": [],
+        "fileSha256": "0c01f2bcb12d89e3b5c072fed2b8af57152eca62c30cc92b6efab1ab5741bd46"
+      },
+      "checks": {
+        "notebookHashMatches": true,
+        "supportStatusMatches": true,
+        "conceptMatches": true,
+        "metricsPresent": true,
+        "symbolsPresent": true,
+        "packagesPresent": true,
+        "supportReasonsMatch": true,
+        "stableEvidenceReferences": true
+      },
+      "completion": {
+        "attempted": true,
+        "planSource": "deterministic_contract_probe",
+        "planVerified": true,
+        "resultVerified": true,
+        "transferPassed": true,
+        "patchVerified": true,
+        "unchangedCellCount": 1,
+        "resultHash": "092c55070ec6b32d94d16ab31d3fc4c74ee7bda2e6a1acc9387221827b0b6d77",
+        "patchHash": "53fb10890b54cc5ed345041f5bed29253fb9c460a979ebf6dd22c99d0b6da242",
+        "durationMs": 3817,
+        "failureCode": null
+      },
+      "passed": true
+    },
+    {
+      "caseId": "unsupported_network_dependency",
+      "fileName": "unsupported-network-dependency.ipynb",
+      "family": "unsupported",
+      "variation": "external_network",
+      "humanReviewStatus": "PENDING",
+      "executedParser": true,
+      "expected": {
+        "supportStatus": "UNSUPPORTED",
+        "concept": null
+      },
+      "observed": {
+        "supportStatus": "UNSUPPORTED",
+        "concept": null,
+        "metricNames": [
+          "accuracy"
+        ],
+        "symbols": [
+          "accuracy_score"
+        ],
+        "packageHints": [
+          "requests",
+          "sklearn"
+        ],
+        "supportReasonCodes": [
+          "EXTERNAL_NETWORK_DEPENDENCY"
+        ],
+        "fileSha256": "9e75132459689a45d01700f5c2cc14ffb12ab5caf094dc8ff2654570dd757ffa"
+      },
+      "checks": {
+        "notebookHashMatches": true,
+        "supportStatusMatches": true,
+        "conceptMatches": true,
+        "metricsPresent": true,
+        "symbolsPresent": true,
+        "packagesPresent": true,
+        "supportReasonsMatch": true,
+        "stableEvidenceReferences": true
+      },
+      "completion": {
+        "attempted": false,
+        "planSource": "deterministic_contract_probe",
+        "planVerified": false,
+        "resultVerified": false,
+        "transferPassed": false,
+        "patchVerified": false,
+        "unchangedCellCount": 0,
+        "resultHash": null,
+        "patchHash": null,
+        "durationMs": 0,
+        "failureCode": null
+      },
+      "passed": true
+    },
+    {
+      "caseId": "unsupported_magic_package",
+      "fileName": "unsupported-magic-package.ipynb",
+      "family": "unsupported",
+      "variation": "magic_and_unknown_package",
+      "humanReviewStatus": "PENDING",
+      "executedParser": true,
+      "expected": {
+        "supportStatus": "UNSUPPORTED",
+        "concept": null
+      },
+      "observed": {
+        "supportStatus": "UNSUPPORTED",
+        "concept": null,
+        "metricNames": [
+          "accuracy"
+        ],
+        "symbols": [
+          "accuracy_score"
+        ],
+        "packageHints": [
+          "sklearn",
+          "xgboost"
+        ],
+        "supportReasonCodes": [
+          "UNKNOWN_PACKAGE_REQUIREMENT",
+          "UNSUPPORTED_MAGIC"
+        ],
+        "fileSha256": "1479d5333d0b7ef95cdfca1c830d39b78e291f2622210a7574e710012f6c94f4"
+      },
+      "checks": {
+        "notebookHashMatches": true,
+        "supportStatusMatches": true,
+        "conceptMatches": true,
+        "metricsPresent": true,
+        "symbolsPresent": true,
+        "packagesPresent": true,
+        "supportReasonsMatch": true,
+        "stableEvidenceReferences": true
+      },
+      "completion": {
+        "attempted": false,
+        "planSource": "deterministic_contract_probe",
+        "planVerified": false,
+        "resultVerified": false,
+        "transferPassed": false,
+        "patchVerified": false,
+        "unchangedCellCount": 0,
+        "resultHash": null,
+        "patchHash": null,
+        "durationMs": 0,
+        "failureCode": null
+      },
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "The intake benchmark executes the safe notebook parser; it never executes uploaded notebook cells.",
+    "Supported cases additionally exercise a deterministic contract probe through the independent Plan verifier, fixed synthetic kernel, fixed transfer evaluator, and fixed copy-patch verifier.",
+    "The completion probe does not call GPT or Codex and is labelled deterministic_contract_probe; it measures fixed authority coverage, not live model-generation success.",
+    "Concept-family inference is a deterministic evidence heuristic, not an LLM evaluation.",
+    "Human review labels remain PENDING until independent reviewers complete and adjudicate the matrix.",
+    "Held-out parser accuracy does not establish learner outcomes or arbitrary-notebook support."
+  ]
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail when common credential shapes occur in any Git-tracked text file."""
+"""Fail when common credential shapes occur in tracked or untracked repo text."""
 
 from __future__ import annotations
 
@@ -21,16 +21,18 @@ PATTERNS = (
     (
         "credential assignment",
         re.compile(
-            r"(?:OPENAI_API_KEY|OPENAI_BASE_URL|CLOUDFLARE_API_TOKEN|COUNTERLAB_SIGNING_KEY)"
+            r"(?:OPENAI_API_KEY|OPENAI_BASE_URL|CODEX_AUTH_JSON|CLOUDFLARE_API_TOKEN|"
+            r"COUNTERLAB_SIGNING_KEY|COUNTERLAB_RUNNER_SIGNING_KEY|"
+            r"COUNTERLAB_ADMIN_DIAGNOSTIC_SECRET)"
             + r"\s*(?<![=!<>])=(?!=)\s*[^\s#]+"
         ),
     ),
 )
 
 
-def tracked_files() -> list[Path]:
+def repository_files() -> list[Path]:
     result = subprocess.run(
-        ["git", "ls-files", "-z"],
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
         cwd=ROOT,
         check=True,
         capture_output=True,
@@ -40,19 +42,24 @@ def tracked_files() -> list[Path]:
 
 def main() -> int:
     findings: list[str] = []
-    for path in tracked_files():
+    paths = repository_files()
+    for path in paths:
         if not path.is_file():
             continue
         text = path.read_bytes().decode("utf-8", errors="ignore")
         for line_number, line in enumerate(text.splitlines(), start=1):
             for label, pattern in PATTERNS:
                 if pattern.search(line):
+                    if label == "credential assignment" and re.search(
+                        r"=\s*[\"']?\$", line
+                    ):
+                        continue
                     findings.append(f"{path.relative_to(ROOT)}:{line_number}: {label}")
     if findings:
-        print("Potential secrets detected in tracked files:")
+        print("Potential secrets detected in repository files:")
         print("\n".join(findings))
         return 1
-    print(f"Secret scan passed across {len(tracked_files())} tracked files.")
+    print(f"Secret scan passed across {len(paths)} repository files.")
     return 0
 
 

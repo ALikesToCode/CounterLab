@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://counterlab.local/schemas/pilot-session-result-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "participantId",
+    "assignmentSlotId",
+    "consentVersion",
+    "consentedAt",
+    "startedAt",
+    "completedAt",
+    "completed",
+    "tasks"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "participantId": {
+      "type": "string",
+      "pattern": "^participant_[A-Za-z0-9_-]+$"
+    },
+    "assignmentSlotId": { "type": "string", "pattern": "^slot_\\d{3}$" },
+    "consentVersion": { "const": "1" },
+    "consentedAt": { "type": "string", "format": "date-time" },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "completedAt": { "type": ["string", "null"], "format": "date-time" },
+    "completed": { "type": "boolean" },
+    "tasks": {
+      "type": "array",
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "concept",
+          "transferPassed",
+          "predictionChanged",
+          "durationSeconds"
+        ],
+        "properties": {
+          "concept": { "enum": ["entity_leakage", "class_imbalance"] },
+          "transferPassed": { "type": "boolean" },
+          "predictionChanged": { "type": "boolean" },
+          "durationSeconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 7200
+          }
+        }
+      }
+    }
+  }
+}

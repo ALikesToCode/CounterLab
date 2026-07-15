@@ -4,82 +4,74 @@ Updated: 2026-07-15
 
 ## Current status
 
-The leakage P0 is complete for the deterministic learner/replay path, the live
-Belief Test, and the post-generation candidate boundary. GPT live mode supports
-a provider-neutral custom Responses base URL and, after the credential was
-corrected, produced a schema-valid, evidence-resolving Belief Test through both
-the local Worker and deployed Cloudflare Worker. Runtime Codex has genuine
-rejected and verified evidence, while generation-time host read isolation is
-enforced by a Bubblewrap launch boundary. Credentials are staged only for the
-App Server handshake, then revoked before the model turn; the installed runtime
-completed a genuine reject-repair-verify run after that revocation. This boundary
-remains version-sensitive and is not claimed as a formal sandbox proof.
-Class-imbalance P0.5 has not started; the completed leakage gates now make that
-the next eligible concept slice rather than a blocker on the leakage release.
+CounterLab Studio now has three contract-separated modes: sample lesson, live
+notebook analysis, and verified replay. Both released concept packs—entity
+leakage and class imbalance/metric choice—have fixed kernels, independent
+Plan/result verification, interactive controls, deterministic transfer tasks,
+source-free Patch Plans, verified copied-notebook patches, Reasoning Diffs, and
+Proof Bundles.
 
-The hosted own-notebook leakage path is now complete in the repository through
-artifact-specific patch download and Proof Bundle v2. Codex generates strict,
-source-free Experiment and Patch Plans; the Worker independently verifies both;
-the fixed Python kernel and patch engine own numeric truth and notebook edits.
-The source notebook remains sealed from Codex and is released only to the fixed
-patch process after the Patch Plan passes. Production deployment and one real
-public runner smoke remain not run for this new slice.
+The hosted architecture is implemented as a Vite/React Cloudflare control plane
+with D1/R2 plus a Container-backed Durable Object runner. Runtime Codex writes
+only typed JSON Plans and display-only rationale. The public critical path never
+executes model-authored Python. The existing adapter-code compiler remains a
+separately labelled advanced local proof and replay.
 
-The judged surface now uses a plain-first learning studio. The first visit asks
-one concrete question and one recommended three-minute lesson leads the page.
-Each phase keeps one learner decision in focus; evidence, forecasting transfer,
-patch unlock, and the Reasoning Diff no longer accumulate into one long screen.
-The four-stage lesson map reads “Question → Your guess → Fair test → Learn &
-apply.” Completed steps open as read-only review pages, refresh restores the
-canonical session or replay checkpoint, and a persistent Start over control
-clears the saved lesson. Exact analyst wording, run traces, tables, hashes, and
-reproduction details remain available through closed disclosures. All displayed
-metrics remain derived from the canonical payload.
+The live Responses integration was exercised against the configured endpoint. A
+real schema-constrained class-imbalance Belief Test completed, validated locally,
+and resolved all three evidence references to exact notebook cells/outputs. The
+custom base URL remains server-only and provider-neutral in product state and
+copy.
 
 ## Acceptance matrix
 
-| Gate                                                            | Status  | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| --------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Sample notebook parses without execution with stable references | pass    | `SUPPORTED`, five cells, file SHA `92ba63894d3c2ffd64ba76324bb7bb2b3afeb0310883a33ed140faf058d03024`; parser and artifact tests pass.                                                                                                                                                                                                                                                                                          |
-| Leakage kernel produces a real discriminating gap               | pass    | Accuracy: random 0.984722, group 0.594444, identity ablation 0.673611 from 2,880 generated rows.                                                                                                                                                                                                                                                                                                                               |
-| Group split has zero entity overlap                             | pass    | Canonical result reports count/rate 0; random split overlaps 389 customers.                                                                                                                                                                                                                                                                                                                                                    |
-| All published critical leakage mutations are rejected           | pass    | `./scripts/run-mutations.sh leakage`: 12/12 detected.                                                                                                                                                                                                                                                                                                                                                                          |
-| Deterministic canonical result hash                             | pass    | Kernel, row-order probe, Docker replay, and repeated generation reproduce `2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0`.                                                                                                                                                                                                                                                                                  |
-| Complete deterministic learning loop                            | pass    | Claim through Reasoning Diff/Proof Bundle completes in the CloakBrowser Playwright path; refresh reconstructs state and no chart appears before verified results.                                                                                                                                                                                                                                                              |
-| Prediction immutability and legal state transitions             | pass    | API/unit/browser checks reject a second prediction and illegal/early result, transfer, and patch transitions.                                                                                                                                                                                                                                                                                                                  |
-| Append-only event chain and replay                              | pass    | D1 trigger protection, hash-chain validation, Proof Bundle validation, refresh reconstruction, and persistent replay banner are tested.                                                                                                                                                                                                                                                                                        |
-| GPT-5.6 Belief Test live path                                   | pass    | Official Responses structured-output client, privacy identifier, `store: false`, local Zod/evidence validation, refusal/no-key states, and custom `/v1/responses` routing are tested. A real deployed request on 2026-07-14 returned `BELIEF_TEST_PROPOSED`, concept `entity_leakage`, three resolving evidence references, and `requiresLearnerConfirmation: true`.                                                           |
-| Codex compile/verify/repair                                     | pass    | Credential-safe Bubblewrap launch, App Server handshake, pre-turn credential revocation, strict generated-file boundary, and host verifier were exercised in a genuine `gpt-5.6-sol` run. The first plan was rejected with a structured `experiment_plan_runs` counterexample; repair 1 passed the exact canonical result hash and 12/12 mutations. Unisolated launches still fail closed. This is not a formal sandbox proof. |
-| Candidate sandbox and hidden-mount boundary                     | pass    | Real Docker reproduction is no-network, non-root, read-only, capability-dropped, resource-bounded, credential-free, and does not mount verifier/held-out paths. This is not a formal sandbox proof.                                                                                                                                                                                                                            |
-| Transfer-gated verified patch                                   | pass    | Failure keeps patch locked; pass unlocks a copied-notebook patch with zero overlap and four unrelated source hashes unchanged.                                                                                                                                                                                                                                                                                                 |
-| Hosted own-notebook leakage loop                                | pass    | Worker/runner integration tests complete artifact-specific Plan compile, independent verification, fixed-kernel execution, transfer, source-sealed Patch Plan, fixed patch, private download, Reasoning Diff, and Proof Bundle v2 without substituting sample result or patch authority.                                                                                                                                         |
-| Hosted runner production deployment                             | not run | The updated Container image builds during `test-all.sh`; the new image/control-plane version has not yet been deployed and smoke-tested at the public URL.                                                                                                                                                                                                                                                                      |
-| Unsupported notebook refusal                                    | pass    | Browser uploads a notebook with unsupported magic/network content, receives typed reasons, and cannot advance.                                                                                                                                                                                                                                                                                                                 |
-| Required local scripts                                          | pass    | `test-all`, mutations, clean demo, session reproduction, patch replay, replay recording, and achieved-metrics generation execute successfully in the working checkout.                                                                                                                                                                                                                                                         |
-| Full release check and secret scan                              | pass    | `./scripts/release-check.sh` passes tests, typecheck, production build, 12 mutations, Docker smoke/reproduction, patch replay, metrics generation, and a scan of every tracked file.                                                                                                                                                                                                                                           |
-| Fresh temporary clone acceptance                                | pass    | A no-local Git clone installed locked Node/Python dependencies, applied local D1 migration, ran `clean-demo.sh`, and passed the complete release check.                                                                                                                                                                                                                                                                        |
-| Accessibility and responsive judged path                        | pass    | A 390×844 CloakBrowser run completes entirely by keyboard with reduced motion, visible semantic controls, and no horizontal overflow; primary text/status contrast pairs are unit-checked at ≥4.5:1.                                                                                                                                                                                                                           |
-| Cloudflare replay/sample deployment                             | pass    | Remote D1, R2, Worker/assets, health, plain-first Try Instantly, upload refusal, Replay, Proof Bundle, live Belief Test, refresh restoration, read-only stage review, reset, and all 13 production CloakBrowser paths pass at `https://counterlab.cserules.workers.dev`. The first-visit gate keeps the primary action in view and rejects technical landing jargon. Version `fd8fafd7-ae39-4580-8fac-9b4bc14d1d24`.           |
-| Class-imbalance P0.5                                            | not run | The leakage prerequisites now pass, but this separate concept pack, evaluator, mutations, untouched variants, and learning path have not been implemented. It is not represented as supported.                                                                                                                                                                                                                                 |
+| Gate                                         | Status  | Current evidence                                                                                                                                                                                                                          |
+| -------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sample/live/replay mode separation           | pass    | Contract and Worker regression tests prevent a non-sample artifact from receiving sample Belief Test, result, patch, or replay authority.                                                                                                 |
+| Safe notebook intake and evidence references | pass    | Parser tests cover bounded input, no execution, active-output sanitization, stable hashes, exact cells/outputs, and typed refusal.                                                                                                        |
+| Live schema-constrained Belief Test          | pass    | Real configured Responses call returned a valid class-imbalance Belief Test with three locally resolved evidence references; invalid/unresolved output is rejected in tests.                                                              |
+| Live analyst preview and approval            | pass    | Live calls require a hash-bound preview of the exact sanitized packet; sensitive-looking evidence requires explicit approval, and claim/artifact changes invalidate it.                                                                  |
+| Runner job/token/callback/event cursor model | pass    | D1 repository, optimistic transitions, single-job signed tokens, callback idempotency, cursor reconnect, and browser-safe event schemas pass integration tests.                                                                           |
+| Artifact-specific hosted Experiment Plan     | pass    | Worker/runner integration compiles and independently verifies typed v2 Plans; rejected candidates release no result.                                                                                                                      |
+| Fixed hosted result and cross-language hash  | pass    | Python v2 result hashes now use browser-compatible canonical JSON while legacy v1/replay hashes remain stable; TypeScript result verification passes both concepts.                                                                       |
+| Entity-leakage lab and mutations             | pass    | Computed random 0.984722, group 0.594444, ablation 0.673611, zero group overlap; 12/12 published mutations detected.                                                                                                                      |
+| Class-imbalance lab and mutations            | pass    | 6,000 rows, 1.0833% positives, majority accuracy 0.989333 with recall 0; threshold recall 0.3125; 12/12 mutations detected.                                                                                                               |
+| Interactive fixed-kernel controls            | pass    | Leakage split/entity/ablation/test-fraction and imbalance threshold/prevalence/metric focus dispatch verified configurations; authoritative results remain immutable.                                                                     |
+| Transfer-gated artifact patch                | pass    | Fixed forecasting/manufacturing evaluators gate source-free Patch Plans; both concept patch engines preserve unrelated cells and fail closed on verifier mutations.                                                                       |
+| Non-sample leakage patch                     | pass    | Three logistic-regression held-out styles compile through the registered one-cell group/identity transformation; entity aliases and patch mutations are tested.                                                                           |
+| Reasoning Diff and Proof Bundle              | pass    | Worker integration binds artifact, Plan, result, transfer, patch, job events, and hashes into concept-specific learner/machine outputs.                                                                                                   |
+| Studio navigation and resume                 | pass    | Explicit completed-stage review, recent sessions, canonical refresh restoration, Start over, Agent Rail, command palette, and proof console have React tests.                                                                             |
+| Constrained generative UI                    | pass    | `json-render` composes only trusted public proof components from sanitized events; it has no action registry and no validity authority.                                                                                                   |
+| Private operational diagnostics              | pass    | Secret-protected Worker aggregation reports queue/phase timing samples, repairs, token usage, concept, support, and failures without notebook or session/artifact/job identifiers.                                                         |
+| Held-out intake/routing                      | pass    | `counterlab-held-out-v2`: 10/10 cases pass; four leakage, four imbalance, two unsupported.                                                                                                                                                |
+| Held-out fixed full-loop completion          | partial | 7/8 supported notebooks complete Plan verification → fixed result → transfer → verified patch without source edits. Random Forest reaches result/transfer then receives `PATCH_ESTIMATOR_OUTSIDE_CONTRACT`. Human review remains pending. |
+| Learner pilot                                | partial | Paired-crossover protocol, consent/privacy note, randomization, schema, and analysis script exist. No participants or learner outcomes are claimed.                                                                                       |
+| TypeScript/Web/Python suites                 | pass    | `pnpm test`: 164 root TypeScript, 76 web, and 90 Python tests passed. `pnpm run typecheck` passed including generated Worker types.                                                                                                       |
+| New-version browser E2E                      | not run | Fifteen CloakBrowser journeys are defined, including opt-in real hosted leakage and imbalance flows. The current AGENTS instructions prohibit this agent from starting `dev` or `build`; a user-started server or explicit permission is required. |
+| Container image build and production deploy  | not run | Runner image/binding are implemented; the upgraded image has not been built/deployed in this worktree because build commands are prohibited.                                                                                              |
+| Production live runner smoke                 | not run | The existing public deployment predates this Container upgrade. Do not treat its current health as proof of the new runner.                                                                                                               |
+| Clean-clone/release check/secret scan        | partial | Secret scan passed across 333 repository files. The full release/clean-clone script also invokes prohibited build/E2E steps and therefore awaits user execution/permission.                                                              |
 
-## Latest verified suite
+## Latest verified commands
 
-- Root Vitest: 142 tests passed.
-- Web Vitest: 45 tests passed.
-- Pytest kernel/runner: 103 tests passed.
-- CloakBrowser Playwright: 13 judged-path tests passed locally and against
-  Cloudflare production, including committed-prediction restoration, replay
-  restoration with its persistent banner, read-only completed-step review,
-  explicit reset, one-decision-at-a-time phases, configured/missing live states,
-  and mobile keyboard/reduced-motion completion. The 390px layout has labelled
-  stage navigation and no horizontal overflow.
-- Mutation matrix: 12/12 detected.
-- Docker replay: canonical result and patch reproduced.
+- `pnpm test` — 164 root TypeScript, 76 web, 90 Python passed.
+- `pnpm run typecheck` — root, web, and Worker typechecks passed.
+- `pnpm exec vitest run --config evals/held-out/vitest.config.ts` — 6 tests passed.
+- `pnpm run held-out:run` — intake 10/10; fixed completion 7/8.
+- `./scripts/run-mutations.sh leakage` and `imbalance` — 12/12 detected in each matrix.
+- `pnpm --filter @counterlab/web exec playwright test --config playwright.config.ts --list` — 15 CloakBrowser journeys discovered; execution not claimed.
+- `pnpm run format:check` — passed.
+- `python3 scripts/secret-scan.py` — passed across 333 repository files.
+- `./scripts/replay-patch.sh leakage-01` — `PATCH VERIFIED`, group overlap 0.
+- `PYTHONPATH=services/kernel/src .venv/bin/python scripts/collect-achieved-metrics.py` — regenerated `docs/ACHIEVED_METRICS.json` from fixed kernels/verifiers.
+- `pnpm run belief:live:verify` — real configured analyst output validated and resolved; approximately 99 seconds on this environment.
 
 ## Highest-risk remaining issue
 
-The highest-risk remaining issue is the credential-revocation Codex boundary:
-it is tied to the installed App Server authentication lifecycle and must be
-requalified after a material Codex CLI protocol change. It is an enforced local
-boundary, not a formal sandbox proof. Class-imbalance P0.5 also remains
-unimplemented and must not be represented as a supported concept.
+The highest release risk is operational rather than hidden sample authority: the
+new Container runner has comprehensive in-repository integration coverage but no
+fresh public deployment/browser smoke. The next authorized action must build and
+deploy that exact image, run one untouched live artifact through the public URL,
+reconnect its event stream, download its patch/proof, scan for secrets, and then
+record the resulting deployment identifier. Cloudflare Containers remain a beta
+runtime and no formal sandbox claim is made.

@@ -1,0 +1,257 @@
+{
+  "generatedAt": "2026-07-15T00:00:00.000Z",
+  "generator": "scripts/generate-held-out-notebooks.py",
+  "labels": [
+    {
+      "caseId": "leakage_rows_pipeline",
+      "expected": {
+        "concept": "entity_leakage",
+        "requiredMetricNames": ["accuracy", "roc_auc"],
+        "requiredPackageHints": ["sklearn"],
+        "requiredSupportReasonCodes": [],
+        "requiredSymbols": [
+          "train_test_split",
+          "LogisticRegression",
+          "Pipeline"
+        ],
+        "supportStatus": "SUPPORTED"
+      },
+      "family": "entity_leakage",
+      "fileName": "leakage-rows-pipeline.ipynb",
+      "humanReview": {
+        "notes": null,
+        "reviewedAt": null,
+        "reviewerId": null,
+        "status": "PENDING"
+      },
+      "labelSource": "deterministic_case_spec",
+      "notebookSha256": "2bd07100f1794cc78d0a70e8b82f08c498a3093d705f9aabb4f5d0c362ea891f",
+      "schemaVersion": "1",
+      "variation": "pipeline_with_identity"
+    },
+    {
+      "caseId": "leakage_shuffled_observations",
+      "expected": {
+        "concept": "entity_leakage",
+        "requiredMetricNames": ["accuracy", "roc_auc"],
+        "requiredPackageHints": ["sklearn"],
+        "requiredSupportReasonCodes": [],
+        "requiredSymbols": ["train_test_split", "LogisticRegression"],
+        "supportStatus": "SUPPORTED"
+      },
+      "family": "entity_leakage",
+      "fileName": "leakage-shuffled-observations.ipynb",
+      "humanReview": {
+        "notes": null,
+        "reviewedAt": null,
+        "reviewerId": null,
+        "status": "PENDING"
+      },
+      "labelSource": "deterministic_case_spec",
+      "notebookSha256": "a5003b19d3c38caadacd1331c8aa6b769ddfa189f48fafd0e5a028d715e2068e",
+      "schemaVersion": "1",
+      "variation": "shuffled_repeated_entities"
+    },
+    {
+      "caseId": "leakage_column_transformer",
+      "expected": {
+        "concept": "entity_leakage",
+        "requiredMetricNames": ["accuracy", "roc_auc"],
+        "requiredPackageHints": ["sklearn"],
+        "requiredSupportReasonCodes": [],
+        "requiredSymbols": [
+          "ColumnTransformer",
+          "OneHotEncoder",
+          "train_test_split"
+        ],
+        "supportStatus": "SUPPORTED"
+      },
+      "family": "entity_leakage",
+      "fileName": "leakage-column-transformer.ipynb",
+      "humanReview": {
+        "notes": null,
+        "reviewedAt": null,
+        "reviewerId": null,
+        "status": "PENDING"
+      },
+      "labelSource": "deterministic_case_spec",
+      "notebookSha256": "98d5a6073142935103eabe6964fca4cd619f316ff727ee92904e940744e1d14d",
+      "schemaVersion": "1",
+      "variation": "column_transformer_identity"
+    },
+    {
+      "caseId": "leakage_random_forest",
+      "expected": {
+        "concept": "entity_leakage",
+        "requiredMetricNames": ["accuracy", "roc_auc"],
+        "requiredPackageHints": ["sklearn"],
+        "requiredSupportReasonCodes": [],
+        "requiredSymbols": ["train_test_split", "RandomForestClassifier"],
+        "supportStatus": "SUPPORTED"
+      },
+      "family": "entity_leakage",
+      "fileName": "leakage-random-forest.ipynb",
+      "humanReview": {
+        "notes": null,
+        "reviewedAt": null,
+        "reviewerId": null,
+        "status": "PENDING"
+      },
+      "labelSource": "deterministic_case_spec",
+      "notebookSha256": "ff44def01b3d700cbb2c3fb92365fd43ccb6ec7d01d07410980f596ab977e344",
+      "schemaVersion": "1",
+      "variation": "different_estimator_same_split"
+    },
+    {
+      "caseId": "imbalance_accuracy_only",
+      "expected": {
+        "concept": "class_imbalance",
+        "requiredMetricNames": ["accuracy"],
+        "requiredPackageHints": ["sklearn"],
+        "requiredSupportReasonCodes": [],
+        "requiredSymbols": ["train_test_split", "accuracy_score"],
+        "supportStatus": "SUPPORTED"
+      },
+      "family": "class_imbalance",
+      "fileName": "imbalance-accuracy-only.ipynb",
+      "humanReview": {
+        "notes": null,
+        "reviewedAt": null,
+        "reviewerId": null,
+        "status": "PENDING"
+      },
+      "labelSource": "deterministic_case_spec",
+      "notebookSha256": "646f9a0673070318cc32c2b1cd12573f173ef7bb5eabf05d3ec1e4996ce1fa22",
+      "schemaVersion": "1",
+      "variation": "majority_baseline"
+    },
+    {
+      "caseId": "imbalance_confusion_metrics",
+      "expected": {
+        "concept": "class_imbalance",
+        "requiredMetricNames": ["accuracy", "precision", "recall", "f1_score"],
+        "requiredPackageHints": ["sklearn"],
+        "requiredSupportReasonCodes": [],
+        "requiredSymbols": [
+          "LogisticRegression",
+          "train_test_split",
+          "f1_score"
+        ],
+        "supportStatus": "SUPPORTED"
+      },
+      "family": "class_imbalance",
+      "fileName": "imbalance-confusion-metrics.ipynb",
+      "humanReview": {
+        "notes": null,
+        "reviewedAt": null,
+        "reviewerId": null,
+        "status": "PENDING"
+      },
+      "labelSource": "deterministic_case_spec",
+      "notebookSha256": "7a47447bd411ede26efd47f874a9a632b603fd4f2a79021f24bde2f51a81a5b2",
+      "schemaVersion": "1",
+      "variation": "minority_metrics"
+    },
+    {
+      "caseId": "imbalance_weighted_model",
+      "expected": {
+        "concept": "class_imbalance",
+        "requiredMetricNames": ["precision", "recall", "f1_score"],
+        "requiredPackageHints": ["sklearn"],
+        "requiredSupportReasonCodes": [],
+        "requiredSymbols": [
+          "LogisticRegression",
+          "train_test_split",
+          "f1_score"
+        ],
+        "supportStatus": "SUPPORTED"
+      },
+      "family": "class_imbalance",
+      "fileName": "imbalance-weighted-model.ipynb",
+      "humanReview": {
+        "notes": null,
+        "reviewedAt": null,
+        "reviewerId": null,
+        "status": "PENDING"
+      },
+      "labelSource": "deterministic_case_spec",
+      "notebookSha256": "b920fe77ab251381da1564052273f1d7243ed54b0cfee7cfed1abbcff942c25f",
+      "schemaVersion": "1",
+      "variation": "class_weight_balanced"
+    },
+    {
+      "caseId": "imbalance_threshold_policy",
+      "expected": {
+        "concept": "class_imbalance",
+        "requiredMetricNames": ["precision", "recall", "f1_score"],
+        "requiredPackageHints": ["sklearn"],
+        "requiredSupportReasonCodes": [],
+        "requiredSymbols": ["LogisticRegression", "f1_score"],
+        "supportStatus": "SUPPORTED"
+      },
+      "family": "class_imbalance",
+      "fileName": "imbalance-threshold-policy.ipynb",
+      "humanReview": {
+        "notes": null,
+        "reviewedAt": null,
+        "reviewerId": null,
+        "status": "PENDING"
+      },
+      "labelSource": "deterministic_case_spec",
+      "notebookSha256": "0c01f2bcb12d89e3b5c072fed2b8af57152eca62c30cc92b6efab1ab5741bd46",
+      "schemaVersion": "1",
+      "variation": "decision_threshold"
+    },
+    {
+      "caseId": "unsupported_network_dependency",
+      "expected": {
+        "concept": null,
+        "requiredMetricNames": ["accuracy"],
+        "requiredPackageHints": ["requests", "sklearn"],
+        "requiredSupportReasonCodes": ["EXTERNAL_NETWORK_DEPENDENCY"],
+        "requiredSymbols": ["accuracy_score"],
+        "supportStatus": "UNSUPPORTED"
+      },
+      "family": "unsupported",
+      "fileName": "unsupported-network-dependency.ipynb",
+      "humanReview": {
+        "notes": null,
+        "reviewedAt": null,
+        "reviewerId": null,
+        "status": "PENDING"
+      },
+      "labelSource": "deterministic_case_spec",
+      "notebookSha256": "9e75132459689a45d01700f5c2cc14ffb12ab5caf094dc8ff2654570dd757ffa",
+      "schemaVersion": "1",
+      "variation": "external_network"
+    },
+    {
+      "caseId": "unsupported_magic_package",
+      "expected": {
+        "concept": null,
+        "requiredMetricNames": ["accuracy"],
+        "requiredPackageHints": ["sklearn", "xgboost"],
+        "requiredSupportReasonCodes": [
+          "UNSUPPORTED_MAGIC",
+          "UNKNOWN_PACKAGE_REQUIREMENT"
+        ],
+        "requiredSymbols": ["accuracy_score"],
+        "supportStatus": "UNSUPPORTED"
+      },
+      "family": "unsupported",
+      "fileName": "unsupported-magic-package.ipynb",
+      "humanReview": {
+        "notes": null,
+        "reviewedAt": null,
+        "reviewerId": null,
+        "status": "PENDING"
+      },
+      "labelSource": "deterministic_case_spec",
+      "notebookSha256": "1479d5333d0b7ef95cdfca1c830d39b78e291f2622210a7574e710012f6c94f4",
+      "schemaVersion": "1",
+      "variation": "magic_and_unknown_package"
+    }
+  ],
+  "schemaVersion": "1",
+  "seed": 1729
+}

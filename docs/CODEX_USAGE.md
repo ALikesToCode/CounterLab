@@ -1,178 +1,129 @@
 # Runtime Codex usage
 
-CounterLab uses Codex as a bounded artifact compiler. Codex proposes an experiment plan, an adapter that composes the public fixed SDK, and public tests. It does not own metric formulas, experiment truth, transfer scoring, or verification.
+CounterLab uses Codex as a bounded Plan compiler. Codex proposes how to compose
+registered experiments or repairs; it never owns numeric truth, learner transfer
+scoring, or final verification.
 
-## Runtime modes
+## Product modes
 
-`COUNTERLAB_CODEX_MODE` has three valid values.
+| Mode            | Model calls                 | Meaning                                                                  |
+| --------------- | --------------------------- | ------------------------------------------------------------------------ |
+| Sample lesson   | None                        | Bundled approved evidence and fixed results; always labelled sample.     |
+| Live notebook   | New analyst and Codex calls | Artifact-specific Belief Test, Plans, fixed execution, patch, and proof. |
+| Verified replay | None                        | Reconstructs stored public events/results; persistent replay label.      |
 
-| Mode       | Implementation           | Behavior                                                                                                                                                                               |
-| ---------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `live`     | `AppServerCodexCompiler` | Runs the locally installed Codex App Server over stdio JSONL. This mode requires the process-capable local runner, Codex CLI authentication, and the local sandbox pipeline.           |
-| `replay`   | `ReplayCodexCompiler`    | Validates and re-emits stored, already-sanitized compiler events. The first event carries the replay ID, original timestamp, and model so the UI can retain a persistent replay label. |
-| `disabled` | `DisabledCodexCompiler`  | Reports unavailable health and throws a typed `CODEX_DISABLED` setup error when compilation is attempted. It never returns fake success.                                               |
+No mode silently falls into another. Missing runner credentials or capability
+returns a typed setup error.
 
-Replay is a transport for actual stored compiler evidence, not permission to
-manufacture a trace. `replays/leakage-01/compiler` contains an authenticated
-rejected run with two attempted repairs and a separate authenticated verified
-run. It also contains the bounded generated files, prompt hashes, sanitized
-events, command/exit evidence, and external verifier report.
+## Hosted Plan compiler
 
-## Live protocol
+The process-capable runner starts `codex app-server` and uses stable stdio JSONL:
 
-The implemented live client targets the installed Codex CLI App Server protocol and uses its stable stdio transport:
+1. `initialize`, then `initialized`;
+2. one fresh thread and turn for the Experiment Plan;
+3. runtime validation and browser-safe event sanitization;
+4. independent Plan verification outside Codex context;
+5. at most two repairs using only structured counterexamples; and
+6. a separate fresh thread for a Patch Plan after deterministic transfer passes.
 
-1. Spawn `codex app-server --stdio`.
-2. Send `initialize` with CounterLab client information and explicit capabilities.
-3. Send the `initialized` notification.
-4. Send `thread/start` for the generation directory with `approvalPolicy: "never"`, `sandbox: "workspace-write"`, and an ephemeral thread.
-5. Send `turn/start` with one bounded text prompt.
-6. Runtime-validate JSONL responses and the notification shapes CounterLab consumes.
-7. Stop on the matching `turn/completed`, timeout, protocol failure, server request, or early process exit.
-8. Close stdin and terminate the child process; timed-out processes receive a forced cleanup fallback.
+The experimental App Server WebSocket transport is not on the critical path.
+`CODEX_MODEL` is sent only when configured; otherwise App Server selects its
+compatible default.
 
-The client does not use the experimental App Server WebSocket transport.
+### Inputs
 
-When `CODEX_MODEL` is non-empty, it is sent to both `thread/start` and `turn/start`. When it is unset, the `model` field is omitted entirely so the installed CLI selects its current compatible default. `health()` checks the executable and returns its version or a typed unavailable result; it does not start a model turn.
+Codex receives only the approved Belief Test, sanitized Artifact Manifest,
+resolved evidence, selected concept-pack capabilities/schema, resource limits,
+and permitted outputs. It does not receive notebook bytes, raw rows, secrets,
+hidden verifier source, mutation implementations, held-out fixtures, R2/D1
+credentials, or unrelated files.
 
-Interactive App Server requests, including command or file-change approvals, are denied and terminate the compilation. CounterLab does not proxy an approval prompt to the learner during a compiler turn.
-
-## Inputs sent to Codex
-
-The lab compilation prompt contains only:
-
-- the learner-approved Belief Test;
-- the experiment-plan JSON Schema;
-- public Concept Pack SDK documentation;
-- a redacted fixture schema;
-- approved evidence references;
-- resource limits;
-- exact permitted files; and
-- exact permitted commands.
-
-It does not intentionally include raw fixture rows, uploaded notebook bytes, secrets, hidden verifier source, held-out fixtures, or unrelated repository content. Server-side orchestration is responsible for constructing these sanitized inputs; the browser does not provide a filesystem path.
-
-The live client starts the App Server with an environment allowlist containing process essentials such as `PATH`, `HOME`, `CODEX_HOME`, locale, terminal, and XDG settings. It does not forward `OPENAI_API_KEY`, `COUNTERLAB_SIGNING_KEY`, or arbitrary application environment variables to the App Server child.
-
-## Permitted generated artifacts
-
-Lab generation is rejected unless the requested file set is exactly:
+### Outputs
 
 ```text
-generated/<session-id>/
-├── experiment-plan.json
-├── artifact-adapter.py
-└── public_tests.py
+experiment-plan.json
+patch-plan.json
+public-rationale.md
 ```
 
-The host workspace validator subsequently requires exactly these three regular, non-symlink files, applies size and JSON-depth bounds, validates the plan contract, and runs the adapter AST policy before candidate execution.
+Experiment and Patch Plans are source-free. Schemas reject executable source,
+shell, SQL, arbitrary formulas, imports, raw paths, network actions, and literal
+result values. `public-rationale.md` is display-only and cannot affect pass/fail.
 
-Patch compilation is a separate compiler call with a separate generation directory. Its prompt permits only a named copy of the notebook and a named patch-metadata JSON file, limits changes to approved cell indexes, and explicitly forbids locating or overwriting the original upload.
+The independent verifier resolves every evidence reference, checks lineage and
+registered operations, enforces controlled comparisons and resource limits, and
+returns only invariant, observed, expected, and a minimal counterexample. A
+rejected final Plan releases no result.
 
-## Browser-safe compiler events
+## Browser-safe event boundary
 
-`sanitizeAppServerMessage` is the only supported App Server-to-browser event boundary. It emits this narrow event set:
+Only validated `PublicCompilerEvent` values are stored and streamed:
 
-- plan summaries;
-- changed file names and unified diffs;
-- command summaries, bounded stdout/stderr excerpts, durations, exit codes, and status;
-- structured verifier counterexamples containing invariant, observed value, and minimal counterexample;
-- phase status; and
-- final turn status.
+- job start and public plan summary;
+- resolved evidence references;
+- allowed file creation and bounded unified Plan diff;
+- command label, exit code, duration, and short excerpt;
+- structured verifier rejection/repair/verified status;
+- fixed result hash; or
+- typed public failure.
 
-Reasoning notifications, reasoning items, raw response items, agent-message deltas, completed free-form agent messages, tool arguments, arbitrary local paths, and unknown notification bodies are not emitted. File paths are reduced to safe file names. Known secret patterns are redacted. Plan text and command output are bounded to approximately 4 KiB, and unified diffs are bounded to 64 KiB.
+Private reasoning, raw App Server messages, arbitrary tool arguments, notebook
+bytes, rows, local paths, environment variables, credentials, hidden tests, and
+complete stdout/stderr are never browser event fields. Reconnect resumes from a
+persisted cursor.
 
-The compiler returns an `AsyncIterable<CompilerEvent>`. A process-capable local HTTP orchestrator may serialize those sanitized events as server-sent events. The deployed Cloudflare Worker does not run Codex and therefore does not claim a live Codex SSE stream.
+## Cloudflare runner authority
 
-## Compile, verify, and repair
+The Worker issues a short-lived signed job token authorizing one job, manifest
+hash/input object, output prefix, callback, state version, and expiration. The
+Container runner cannot query D1, list R2, mint tokens, or attach a result to a
+session. It uploads scoped outputs and sends an idempotent callback; the Worker
+re-hashes and independently verifies the Plan/result before advancing state.
 
-The local sequence is:
+The hosted runner executes only fixed Python operations. It does not execute
+model-authored Python, and it does not require nested Docker. Missing binding,
+credential, timeout, or process capability is a typed failure—not replay or
+sample success.
 
-1. Create a fresh server-generated workspace for the session.
-2. Compile the three permitted files.
-3. Validate exact file membership, containment, content bounds, experiment-plan shape, and adapter AST policy on the host.
-4. Execute only the prevalidated candidate in the constrained Docker runner.
-5. Compute authoritative results with the fixed host kernel.
-6. Run the frozen verifier outside the candidate workspace.
-7. If rejected, reduce the verifier report to structured invariant names, observed values, expected values, and minimal counterexamples.
-8. Send that structured feedback into repair attempt 1 or 2.
-9. Stop after verification or two repairs. A rejected final candidate produces no verified lab result.
+## Advanced local adapter proof
 
-`RepairLabInput` accepts only repair attempt `1` or `2`, and the host `CompileVerifyOrchestrator` independently caps repairs at two. Repair prompts include the approved original inputs, previous artifact hashes, and sanitized verifier feedback; they do not include hidden verifier implementation details.
+The checked-in `leakage-01` replay also preserves the earlier local compiler
+that produced `experiment-plan.json`, `artifact-adapter.py`, and
+`public_tests.py`. That path applies exact-file and AST policy, then runs the
+candidate in a no-network, non-root, read-only Docker boundary before host
+verification. It remains useful security evidence but is not the hosted
+critical path.
 
-## Candidate execution boundary
+The first genuine stored run was rejected after two repairs and authorized no
+result. A separate later run passed 18 invariants and 12/12 mutations; the UI
+never calls it repair attempt 3. The original recorded App Server process had
+partial read isolation, which remains disclosed in replay provenance. Current
+advanced local launches fail closed without their OS boundary.
 
-Generated Python is not executed by the App Server client. After static validation, the local runner uses Docker with:
-
-- no network;
-- a read-only root filesystem;
-- a non-root numeric user;
-- all capabilities dropped and `no-new-privileges` enabled;
-- no inherited credentials;
-- read-only generated workspace and public fixture mounts;
-- a writable output mount and bounded temporary directory; and
-- CPU, wall-clock, memory, process, file-count, open-file, and output-size controls.
-
-The host kernel and verifier are not mounted into the candidate container. The verifier recomputes numeric truth and active probes outside that container.
-
-These controls reduce risk for the documented hackathon scope; they are not a formal sandbox proof.
-
-## Cloudflare and local-runner split
-
-The Cloudflare Vite Worker owns the edge-compatible product surface, D1-backed session state, notebook intake, sample/replay flow, and server-side GPT request when configured. Its health response explicitly reports live Codex, the native kernel, and the sandbox as `local-runner-required`.
-
-For a live Cloudflare session, `/api/sessions/:sessionId/lab/compile` returns the typed `LOCAL_RUNNER_REQUIRED` error. Cloudflare does not silently substitute replay data for a requested live Codex run. Codex App Server, Python, Docker, Git/worktree isolation, and native local SQLite belong on the process-capable local runner.
-
-## Local configuration
+## Configuration
 
 ```dotenv
 CODEX_MODEL=
 COUNTERLAB_CODEX_MODE=replay
+COUNTERLAB_RUNNER_SIGNING_KEY=
 COUNTERLAB_SANDBOX_IMAGE=counterlab-runner:local
 ```
 
-Live mode additionally requires:
+Hosted live mode additionally needs the Container binding and runner-side Codex
+credential. Advanced local mode needs a compatible `codex` CLI, local CLI
+authentication, and Docker.
 
-- an installed compatible `codex` CLI on `PATH`;
-- working Codex CLI authentication available through `CODEX_HOME`;
-- Docker and the pinned local runner image; and
-- the local orchestration service that creates isolated workspaces and invokes the host verifier; and
-- a credential-safe `AppServerLaunchBoundary`. The current Bubblewrap probe
-  proves the filesystem shape, but no authenticated boundary is enabled.
-
-Focused implementation checks are:
+Focused checks:
 
 ```bash
 pnpm exec vitest run packages/codex-client/src/index.test.ts
-pnpm exec tsc -p packages/codex-client/tsconfig.json --noEmit
-PYTHONPATH=services/kernel/src:services/runner/src .venv/bin/python -m pytest services/runner/tests
+pnpm exec vitest run services/hosted-runner/src/job-processor.test.ts
+pnpm exec vitest run apps/web/worker/runner-control-plane.test.ts
+PYTHONPATH=services/kernel/src .venv/bin/python -m pytest \
+  services/kernel/tests/test_plan_interpreter.py \
+  services/kernel/tests/test_hosted_patch.py
 ```
 
-## Honest current status
-
-The stdio client, protocol validation, sanitizer, replay/disabled behavior,
-constrained prompts, workspace policy, Docker execution, host pipeline, and
-two-repair cap are implemented and covered by the release suite.
-
-The stored evidence is deliberately unpolished: the first authenticated
-`gpt-5.6-sol` run failed on an unsupported public SDK constructor. Repair 1
-corrected that contract but created `__pycache__`; repair 2 did not remove the
-existing directory, so the exact-file verifier rejected the run and no result
-was released. A separate later authenticated run produced exactly three files,
-reproduced the canonical result, passed 18 named invariants, and detected 12/12
-published mutations. The UI says plainly that this is a later run, not repair
-attempt 3.
-
-The recorded run used a local host process and inspected global skill files
-outside the generation directory, so its generation isolation remains
-`PARTIAL`. The current `AppServerCodexCompiler` no longer launches that way: it
-requires an injected OS launch boundary and otherwise returns typed
-`CODEX_ISOLATION_UNAVAILABLE`. A real Bubblewrap probe proves that a namespace
-mounting only `/usr` and the exact generation workspace makes the repository,
-verifier, and held-out paths resolve as missing.
-
-That filesystem proof is not yet an authenticated launcher. Stable Codex auth
-is file-backed, and mounting the auth file would make it readable to generated
-commands because workspace-write is not a read allowlist. The credential-safe
-next step is the host proxy design in `packages/codex-client/README.md`; live
-generation remains disabled until it is implemented and independently probed.
+The runner binding/image are implemented and integration-tested in the
+repository. A fresh public deployment and production live-artifact smoke remain
+required before claiming hosted availability at the public URL.
