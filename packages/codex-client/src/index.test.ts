@@ -495,6 +495,34 @@ describe("hosted plan-only compiler", () => {
     }
   });
 
+  it("restarts one App Server whose turn fails before material compiler output", async () => {
+    const fakeServer = fileURLToPath(
+      new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
+    );
+    const work = await mkdtemp(
+      join(tmpdir(), "counterlab-codex-turn-restart-"),
+    );
+    const failureMarker = join(work, "first-turn-failed");
+    const compiler = new AppServerCodexCompiler({
+      command: process.execPath,
+      commandArgs: [fakeServer, `--fail-turn-once=${failureMarker}`],
+      timeoutMs: 2_000,
+      ...unisolatedTestProcess,
+    });
+
+    try {
+      await expect(
+        collect(compiler.compileExperimentPlan(hostedPlanInput())),
+      ).resolves.toContainEqual({
+        type: "status",
+        phase: "plan",
+        status: "completed",
+      });
+    } finally {
+      await rm(work, { recursive: true, force: true });
+    }
+  });
+
   it("fails closed after the single startup restart is exhausted", async () => {
     const compiler = new AppServerCodexCompiler({
       command: process.execPath,
@@ -817,7 +845,7 @@ describe("AppServerCodexCompiler stdio transport", () => {
     });
   });
 
-  it("does not label a failed turn as a completed generation phase", async () => {
+  it("fails closed without labelling a failed turn as completed", async () => {
     const fakeServer = fileURLToPath(
       new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
     );
@@ -828,7 +856,20 @@ describe("AppServerCodexCompiler stdio transport", () => {
       ...unisolatedTestProcess,
     });
 
-    const events = await collect(compiler.compileLab(labInput()));
+    const events: CompilerEvent[] = [];
+    let failure: unknown;
+    try {
+      for await (const event of compiler.compileLab(labInput())) {
+        events.push(event);
+      }
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toMatchObject({
+      name: "CompilerSetupError",
+      code: "CODEX_PROCESS_EXITED",
+    });
     expect(events).toContainEqual({
       type: "status",
       phase: "generate",

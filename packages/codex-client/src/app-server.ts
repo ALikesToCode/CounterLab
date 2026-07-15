@@ -630,7 +630,13 @@ export class AppServerCodexCompiler implements CodexCompiler {
       let emittedCompilerOutput = false;
       try {
         for await (const event of this.runOnce(prompt, cwd, phase)) {
-          if (event.type !== "status") emittedCompilerOutput = true;
+          if (
+            event.type !== "status" &&
+            event.type !== "final_status" &&
+            event.type !== "usage"
+          ) {
+            emittedCompilerOutput = true;
+          }
           yield event;
         }
         return;
@@ -757,6 +763,12 @@ export class AppServerCodexCompiler implements CodexCompiler {
         phase,
         status: phaseSucceeded ? "completed" : "failed",
       };
+      if (!phaseSucceeded) {
+        throw new CompilerSetupError(
+          "CODEX_PROCESS_EXITED",
+          "Codex App Server did not complete the requested turn.",
+        );
+      }
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new CompilerSetupError(

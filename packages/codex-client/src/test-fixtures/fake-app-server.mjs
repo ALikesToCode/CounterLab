@@ -15,6 +15,12 @@ let initialized = false;
 let selectedModel = "installed-compatible-default";
 const requestApproval = process.argv.includes("--request-approval");
 const failedTurn = process.argv.includes("--failed-turn");
+const failTurnOnceArgument = process.argv.find((argument) =>
+  argument.startsWith("--fail-turn-once="),
+);
+const failTurnOnceFile = failTurnOnceArgument?.slice(
+  "--fail-turn-once=".length,
+);
 const expectModelOmitted = process.argv.includes("--expect-model-omitted");
 const expectConstrainedTurn = process.argv.includes(
   "--expect-constrained-turn",
@@ -83,6 +89,11 @@ lines.on("line", (line) => {
     return;
   }
   if (message.method === "turn/start") {
+    const failThisTurn =
+      failedTurn || (failTurnOnceFile && !existsSync(failTurnOnceFile));
+    if (failTurnOnceFile && !existsSync(failTurnOnceFile)) {
+      writeFileSync(failTurnOnceFile, "failed\n", { mode: 0o600 });
+    }
     if (expectedCwd && message.params.cwd !== expectedCwd) process.exit(7);
     if (
       expectConstrainedTurn &&
@@ -104,33 +115,37 @@ lines.on("line", (line) => {
       });
       return;
     }
-    send({
-      method: "item/plan/delta",
-      params: {
-        threadId: "thread_test",
-        turnId: "turn_test",
-        itemId: "plan_test",
-        delta: "Create the constrained adapter.",
-      },
-    });
-    send({
-      method: "item/reasoning/textDelta",
-      params: {
-        threadId: "thread_test",
-        turnId: "turn_test",
-        itemId: "reasoning_test",
-        delta: "private reasoning must never surface",
-      },
-    });
+    if (!failThisTurn) {
+      send({
+        method: "item/plan/delta",
+        params: {
+          threadId: "thread_test",
+          turnId: "turn_test",
+          itemId: "plan_test",
+          delta: "Create the constrained adapter.",
+        },
+      });
+      send({
+        method: "item/reasoning/textDelta",
+        params: {
+          threadId: "thread_test",
+          turnId: "turn_test",
+          itemId: "reasoning_test",
+          delta: "private reasoning must never surface",
+        },
+      });
+    }
     send({
       method: "turn/completed",
       params: {
         threadId: "thread_test",
         turn: {
           id: "turn_test",
-          status: failedTurn ? "failed" : "completed",
+          status: failThisTurn ? "failed" : "completed",
           durationMs: 123,
-          error: failedTurn ? { message: "candidate generation failed" } : null,
+          error: failThisTurn
+            ? { message: "candidate generation failed" }
+            : null,
         },
       },
     });
