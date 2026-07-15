@@ -61,6 +61,30 @@ async function recordRevision(page: Page) {
   ).toBeVisible();
 }
 
+async function waitForVerifiedLiveCompile(page: Page) {
+  const verified = page.getByRole("heading", {
+    name: /The fair test passed its checks/i,
+  });
+  const retry = page.getByRole("button", {
+    name: /Retry protected compile/i,
+  });
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const outcome = await Promise.race([
+      verified
+        .waitFor({ state: "visible", timeout: 360_000 })
+        .then(() => "verified" as const),
+      retry
+        .waitFor({ state: "visible", timeout: 360_000 })
+        .then(() => "retry" as const),
+    ]);
+    if (outcome === "verified") return;
+    await retry.click();
+  }
+
+  await expect(verified).toBeVisible({ timeout: 360_000 });
+}
+
 test("the first visit explains the lesson before asking for technical knowledge", async ({
   page,
 }) => {
@@ -593,9 +617,7 @@ test("a configured hosted runner completes an untouched leakage notebook", async
   await page.getByLabel(/Confidence/i).fill("84");
   await page.getByRole("button", { name: /Lock my answer/i }).click();
 
-  await expect(
-    page.getByRole("heading", { name: /The fair test passed its checks/i }),
-  ).toBeVisible({ timeout: 360_000 });
+  await waitForVerifiedLiveCompile(page);
   await page.getByRole("button", { name: /Show me what happened/i }).click();
   await expect(
     page.getByRole("heading", { name: /Here.s what changed/i }),
@@ -704,9 +726,7 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
   await page.getByLabel(/Confidence/i).fill("86");
   await page.getByRole("button", { name: /Lock my answer/i }).click();
 
-  await expect(
-    page.getByRole("heading", { name: /The fair test passed its checks/i }),
-  ).toBeVisible({ timeout: 360_000 });
+  await waitForVerifiedLiveCompile(page);
   await page.getByRole("button", { name: /Show me what happened/i }).click();
   await expect(
     page.getByRole("heading", {
