@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { ProofBundleSchema } from "@counterlab/contracts";
-import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readFile, writeFile } from "node:fs/promises";
 
 const claim =
   "The 98 percent random split accuracy proves this model generalizes to customers it has never seen.";
@@ -14,6 +15,43 @@ const leakageNotebookPath = new URL(
   "../../../evals/held-out/notebooks/leakage-rows-pipeline.ipynb",
   import.meta.url,
 ).pathname;
+
+function sha256(value: Uint8Array | string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+async function writeLiveSmokeEvidence(
+  concept: "entity_leakage" | "class_imbalance",
+  proofBody: string,
+  patchedNotebookPath: string,
+): Promise<void> {
+  const destination = process.env.COUNTERLAB_E2E_EVIDENCE_PATH;
+  if (destination === undefined || destination.length === 0) return;
+  const proof = ProofBundleSchema.parse(JSON.parse(proofBody));
+  if (proof.schemaVersion !== "2" || proof.sessionMode !== "live_notebook") {
+    throw new Error("Live smoke evidence requires a live Proof Bundle v2");
+  }
+  await writeFile(
+    destination,
+    `${JSON.stringify(
+      {
+        schemaVersion: "1",
+        concept,
+        sourceArtifactHash: proof.artifactManifest.fileSha256,
+        planHash: proof.planVerification.planHash,
+        resultHash: proof.verifiedResultSet.resultHash,
+        patchResultHash: proof.patchResult.resultHash,
+        patchedNotebookSha256: sha256(await readFile(patchedNotebookPath)),
+        proofBundleSha256: sha256(proofBody),
+        proofContentHash: proof.integrity.contentHash,
+        eventChainHead: proof.integrity.eventChainHead,
+      },
+      null,
+      2,
+    )}\n`,
+    { encoding: "utf8", mode: 0o600 },
+  );
+}
 
 async function reset(page: Page) {
   await page.goto("/");
@@ -686,18 +724,24 @@ test("a configured hosted runner completes an untouched leakage notebook", async
   await page
     .getByRole("link", { name: /Download verified notebook copy/i })
     .click();
-  expect((await patchDownload).suggestedFilename()).toMatch(
-    /\.counterlab-patched\.ipynb$/i,
-  );
+  const patch = await patchDownload;
+  expect(patch.suggestedFilename()).toMatch(/\.counterlab-patched\.ipynb$/i);
+  const patchedNotebookPath = await patch.path();
+  expect(patchedNotebookPath).not.toBeNull();
 
   const proofDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: /Download proof/i }).click();
   const proofPath = await (await proofDownload).path();
   expect(proofPath).not.toBeNull();
+  const proofBody = await readFile(proofPath!, "utf8");
   expect(
-    ProofBundleSchema.parse(JSON.parse(await readFile(proofPath!, "utf8")))
-      .events,
+    ProofBundleSchema.parse(JSON.parse(proofBody)).events,
   ).not.toHaveLength(0);
+  await writeLiveSmokeEvidence(
+    "entity_leakage",
+    proofBody,
+    patchedNotebookPath!,
+  );
 });
 
 test("a configured hosted runner completes an untouched class-imbalance notebook", async ({
@@ -807,17 +851,23 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
   await page.getByRole("link", { name: /Download patched copy/i }).click();
   const patch = await patchDownload;
   expect(patch.suggestedFilename()).toMatch(/\.counterlab-patched\.ipynb$/i);
+  const patchedNotebookPath = await patch.path();
+  expect(patchedNotebookPath).not.toBeNull();
 
   const proofDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: /Export Proof Bundle/i }).click();
   const proof = await proofDownload;
   const proofPath = await proof.path();
   expect(proofPath).not.toBeNull();
-  const parsedProof = ProofBundleSchema.parse(
-    JSON.parse(await readFile(proofPath!, "utf8")),
-  );
+  const proofBody = await readFile(proofPath!, "utf8");
+  const parsedProof = ProofBundleSchema.parse(JSON.parse(proofBody));
   expect(parsedProof.sessionId).toMatch(/^session_/);
   expect(parsedProof.events.some((event) => event.actor === "kernel")).toBe(
     true,
+  );
+  await writeLiveSmokeEvidence(
+    "class_imbalance",
+    proofBody,
+    patchedNotebookPath!,
   );
 });
