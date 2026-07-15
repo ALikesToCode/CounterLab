@@ -1,79 +1,209 @@
-# CounterLab repository instructions
+# CounterLab AGENTS.md — Prize-One Constitution v5
+
+This repository constitution supersedes earlier CounterLab scope instructions.
+Preserve replay compatibility and proven implementation, but resolve product,
+authority, vocabulary, and sequencing conflicts in favor of this file.
 
 ## Mission
 
-Build **CounterLab**, a competition-grade education product whose core promise is:
+Build **CounterLab**, a scientific debugger for beliefs.
 
-> CounterLab is CI for understanding. It treats a learner's claim like code: formalize it, run a discriminating test, reject invalid evidence, verify transfer, and only then merge the repair.
+> **CounterLab compiles a learner’s claim into competing executable models,
+> finds the smallest experiment that can distinguish them, refuses weak
+> evidence, reveals the boundary where each model works, verifies transfer, and
+> only then unlocks repair.**
 
-The memorable line is:
+Product line:
 
-> Chatbots explain. CounterLab lets reality answer.
+> **Ask like chat. Prove it like science.**
 
-The judged product is not a generic tutor, notebook copilot, quiz generator, arbitrary simulation platform, or unrestricted code generator. It is a narrow, evidence-producing workflow for machine-learning evaluation misconceptions in Jupyter notebooks.
+Closing line:
+
+> **Chatbots explain. CounterLab lets reality answer.**
+
+CounterLab is not a generic tutor, arbitrary simulator, notebook copilot,
+unrestricted code generator, or mastery grader. It is an evidence-producing
+workflow with explicit authority boundaries.
 
 ## Working agreement
 
 - Read this file before changing code.
-- Inspect the repository, existing tests, and current state before proposing work.
-- For an authorized build or fix, make all safe in-scope local changes and run non-destructive validation without asking for routine approval.
-- Ask only when credentials are missing, an external write is required, a destructive action is unavoidable, or the requested scope would materially expand.
-- Do not stop after planning. Implement, test, repair, document, and leave the repository runnable.
-- Do not leave TODO markers, placeholder routes, fake counters, canned charts presented as live results, dead buttons, or stubbed production code.
-- When a live integration cannot run because a credential or local executable is unavailable, finish the complete replay/test path, make the live path fail clearly, and document the exact command or environment variable needed.
-- Keep `docs/PROGRESS.md` and `docs/DECISIONS.md` current after each milestone.
-- Preserve an honest distinction between achieved results, targets, replays, unsupported cases, and evaluation still in progress.
+- Inspect the repository, Git status, existing evidence, tests, and current
+  deployment state before editing.
+- Preserve useful implementation, replay compatibility, mutation tests,
+  held-out cases, user changes, and truthful claims.
+- Prefer small, independent, reviewable commits. Stage and verify only the
+  intended slice before each commit.
+- Use the configured user Git identity; never commit as Codex.
+- Do not stop after planning. Implement, test, repair, document, and leave the
+  repository runnable.
+- Ask only for missing credentials, destructive actions, external writes, or a
+  genuine scope decision.
+- Run the smallest relevant verification after each logical change and the
+  broader relevant suite before final handoff.
+- Never claim a deployment, test, learner result, performance result, model
+  call, or verifier outcome that did not occur.
+- Never substitute sample or replay authority for live authority.
+- Keep `docs/PROGRESS.md`, `docs/DECISIONS.md`, and
+  `docs/RELEASE_CHECKLIST.md` factual and current.
+- Do not leave TODO markers, placeholder routes, dead controls, fake timers,
+  fake metrics, canned live results, hidden manual repair, or unlabelled replay.
+- When live capability is unavailable, fail clearly and preserve honest sample
+  and replay paths. Never pretend a fallback was live.
+- Use CloakBrowser at `/home/mysterious/.local/bin/cloakbrowser-chromium` for
+  Chromium-based Playwright and browser automation unless a task explicitly
+  requires another browser.
 
-## Scope contract
+## Prize-one scope and sequencing
 
-### P0 hero
+Work in this order unless repository evidence proves a hard dependency requires
+an adjustment. Do not weaken an earlier gate to advance a later one.
 
-Ship one impeccable end-to-end concept first:
+### P0 — production truth
 
-- **Entity/data leakage in a scikit-learn classification notebook**
-- One preloaded customer-churn notebook
-- One uploaded `.ipynb` path within the documented support contract
-- A learner text claim
-- An evidence-linked Belief Test
-- Immutable prediction and confidence
-- Runtime Codex plan/adapter generation
-- External mutation verification and, when needed, repair
-- Real computed comparison: random row split versus customer-group split and identity-feature ablation
-- Learner revision
-- Surface-different fixed transfer task involving future leakage in forecasting
-- Transfer-gated minimal notebook patch
-- Learner-facing Reasoning Diff and machine-facing Proof Bundle
-- Judge Mode with instant sample, live generation, and visibly labelled replay
+Before product expansion:
 
-### P0.5 anti-template proof
+- deploy the current Worker/Container release;
+- complete untouched live entity-leakage and class-imbalance flows;
+- verify event reconnect, patched-artifact download, Proof Capsule export, and
+  no-secret behavior;
+- execute browser journeys;
+- record deployment evidence.
 
-Only after every P0 acceptance gate passes, add **class imbalance and metric choice** as a second concept family. It exists to show that CounterLab is not merely a leakage template.
+### P0.5 — scientific-method core
 
-### Explicit cuts
+Add and integrate across both existing ML Subject Packs:
 
-Do not build these before submission:
+- `BeliefSpec`;
+- `DiscriminationContract`;
+- versioned CounterLab Experiment IR;
+- fixed candidate-experiment scorer;
+- epistemic verifier;
+- tri-state `SUPPORTS | INCONCLUSIVE | REJECTED` Evidence Verdict;
+- “Why this test?”;
+- one signed Boundary Map;
+- Proof Capsule v2.
 
-- All STEM subjects or “any notebook” support
-- Voice input, screenshot intake, generic `.py` upload, arbitrary package installation, or arbitrary datasets
-- Calibration as a third polished concept before P0 and P0.5 are clean-clone reproducible
-- Authentication, accounts, multi-tenancy, an instructor dashboard, LMS features, marketplace, collaboration, or native mobile apps
-- Model-only grading of free-form explanations
-- High-stakes mastery claims, proctoring, authorship detection, hiring scores, or certificates
-- Multi-model voting or fusion with Kimi, GLM, DeepSeek, or other providers in the judged path
-- Unrestricted model-authored code, network access, filesystem access, shell access, or dependency installation inside generated lab modules
-- An unlabelled replay or a staged verifier failure presented as live
+Do not weaken existing fixed kernels, technical verifiers, replay evidence, or
+mutation suites while introducing the new contracts.
 
-## Product language and claim discipline
+### P1 — product experience
 
-Use these user-facing terms:
+Add:
 
-- **Belief Test**: a user-confirmed, evidence-linked hypothesis about the learner's current mental model and a stronger competing model
-- **Prediction Contract**: the learner's immutable pre-result prediction and confidence
-- **Verified Lab**: a lab that passed named deterministic checks for a documented scope
-- **Reasoning Diff**: before/after belief, evidence, transfer outcome, and unlocked code correction
-- **Proof Bundle**: machine-readable plan, commands, mutations, hashes, limitations, and replay metadata
+- a chat-first front door;
+- one learner vocabulary: Question, Prediction, Test, Boundary, Apply, Repair;
+- a calm conversation surface;
+- a focused Experiment Theater;
+- collapsed Activity and Evidence & proof drawers;
+- stable, accessible, responsive UI;
+- Judge Mode.
 
-Use “verified” only for named falsifiable properties. Never imply that CounterLab proves global mastery, proves causality beyond the experiment, or understands the learner's mind. Valid states are `VERIFIED`, `PARTIAL`, `REJECTED`, `UNVERIFIED`, and `INSUFFICIENT_EVIDENCE`.
+### P1.5 — one cross-domain proof
+
+Add exactly one verified non-ML Subject Pack:
+
+- `physics/free-fall`.
+
+It must include a fixed kernel, analytic and numerical checks, drag/vacuum
+controls, prediction, signed animated result, Boundary Map, deterministic
+transfer, mutations, and Proof Capsule.
+
+### P2 — impact
+
+- paired crossover learner pilot;
+- immediate conditional transfer;
+- delayed transfer when feasible;
+- a shareable no-account challenge only after the scientific core is stable.
+
+## Explicit cuts
+
+Do not build these before submission unless every earlier gate is green:
+
+- arbitrary subject generation or “all STEM” claims;
+- probability as a third verified Subject Pack;
+- accounts, authentication, multi-tenancy, or social profiles;
+- full classroom, instructor dashboard, LMS, gradebook, or certificates;
+- public leaderboards or marketplace;
+- voice or native mobile apps;
+- screenshot intake, generic `.py` support, arbitrary datasets, or arbitrary
+  package installation;
+- arbitrary generated React, CSS, HTML, JavaScript, SQL, shell, or Python;
+- multi-model voting or model fusion;
+- ChatGPT App integration;
+- a global mastery graph;
+- high-stakes grading, diagnosis, proctoring, hiring scores, or authorship
+  detection;
+- unlabelled replay or a staged verifier failure presented as live.
+
+## Learner vocabulary and compatibility
+
+The primary learner journey uses only:
+
+1. **Question** — the claim or uncertainty to investigate.
+2. **Prediction** — the learner’s immutable pre-result expectation and
+   confidence.
+3. **Test** — the smallest verified discriminating experiment.
+4. **Boundary** — where the supported pattern changes or stops applying.
+5. **Apply** — deterministic transfer to a surface-different case.
+6. **Repair** — a minimal verified correction unlocked after transfer.
+
+User-facing scientific artifacts are:
+
+### Belief Spec
+
+A learner-confirmed claim plus two primary competing hypotheses, artifact
+evidence when available, uncertainty, alternatives, and applicability
+conditions.
+
+### Why this test?
+
+A plain-language explanation of why the selected intervention separates the
+competing hypotheses while holding relevant controls fixed.
+
+### Verified Test
+
+A lab that passed named technical and epistemic checks for a documented scope.
+
+### Evidence Verdict
+
+Exactly one of:
+
+- `SUPPORTS` — the verified result matches a declared decisive pattern and
+  names the supported hypothesis and bounded claim;
+- `INCONCLUSIVE` — the result is valid but cannot discriminate within the
+  declared thresholds or supported patterns;
+- `REJECTED` — the proposed test, binding, or evidence failed verification and
+  releases no authoritative result.
+
+Never label the learner wrong. A surprising result updates the comparison
+between hypotheses; it is not a judgment of the learner.
+
+### Boundary Map
+
+A signed, deterministic sweep showing where the relevant outcome changes across
+Subject Pack-defined conditions.
+
+### Reasoning Diff
+
+Before/after belief, prediction, evidence, boundary condition, transfer action,
+and repair.
+
+### Proof Capsule
+
+Portable machine-readable evidence and replay metadata. It does not certify
+global mastery.
+
+Legacy names may remain in stored replay and API compatibility layers:
+
+- `BeliefTest` maps to `BeliefSpec`;
+- `PredictionContract` maps to Prediction;
+- `Verified Lab` maps to Verified Test;
+- `ProofBundle` v1 maps into Proof Capsule v2;
+- `Concept Pack` maps to Subject Pack.
+
+Do not silently rewrite historical hashes or replay payloads. New primary UI and
+new contracts use the v5 vocabulary.
 
 ## Authority boundaries
 
@@ -81,748 +211,597 @@ Use “verified” only for named falsifiable properties. Never imply that Count
 
 May:
 
-- Receive sanitized notebook structure, code excerpts, displayed outputs, metrics, schema summaries, and the learner's claim
-- Produce a schema-constrained Belief Test with competing hypotheses, evidence references, alternatives, uncertainty, and the smallest discriminating intervention
-- Ask Socratic questions grounded in verified results
-- Explain a verified patch after transfer
+- route intent;
+- read sanitized artifact evidence;
+- propose a schema-valid Belief Spec;
+- propose candidate experiments from the selected Subject Pack;
+- draft plain-language explanations;
+- explain signed outcomes.
 
 Must never:
 
-- Execute uploaded notebook cells
-- Fabricate experimental results
-- Decide whether generated code is valid
-- Grade understanding from prose style
-- Declare mastery or silently finalize a misconception diagnosis
+- execute user artifacts;
+- compute authoritative results;
+- choose a final experiment without fixed validation and scoring;
+- decide verification;
+- grade transfer;
+- fabricate result values or unsupported artifact content;
+- declare mastery.
 
-Use the official OpenAI Responses API and a current structured-output mechanism. Default the API model through `OPENAI_MODEL`, with `gpt-5.6` as the default alias. Use intentional reasoning settings rather than blindly selecting the maximum. Keep raw data out of the request; send only the sanitized artifact context required for the Belief Test. Use `store: false` where supported and a stable privacy-preserving safety identifier for end-user requests.
+Use the official JavaScript/TypeScript SDK and Responses API-compatible
+interface. `OPENAI_MODEL` defaults to `gpt-5.6` and
+`OPENAI_REASONING_EFFORT` defaults to `medium`. When `OPENAI_BASE_URL` is set,
+use it server-side without exposing or hardcoding provider identity in product
+copy, browser state, evidence, or logs. Keep `OPENAI_API_KEY` server-side. Use
+structured output, local Zod validation, evidence resolution, `store: false`
+where supported, bounded requests, and a privacy-preserving safety identifier.
 
-### Runtime Codex lab compiler
+Send only the exact sanitized packet preview approved for the request: relevant
+cell excerpts and hashes, output/metric evidence, schema summary, learner claim,
+support status, and stable Subject Pack rules. Never send raw rows, secrets,
+local paths, or unrelated notebook content.
 
-May:
+### Runtime Codex compiler
 
-- Read the approved Belief Test, public Concept Pack SDK docs, redacted fixture schema, resource limits, and a bounded file list
-- Create only `generated/<session-id>/experiment-plan.json`, `artifact-adapter.py`, and public tests
-- Run allow-listed commands in an isolated worktree/container
-- Receive structured verifier counterexamples and attempt at most two repairs
-- After transfer passes, start a separate turn that creates a minimal patch to a copy of the original notebook
+May create or repair only:
 
-Must never:
+```text
+generated/<session-id>/
+  discrimination-contract.json
+  experiment-ir.json
+  lab-scene.json
+  public-rationale.md
+  patch-plan.json
+```
 
-- Read hidden verifier source, mutation catalogues, held-out fixtures, secrets, or unrelated user files
-- Implement metric formulas, split primitives, chart rendering, transfer scoring, or the final validity decision
-- Install arbitrary dependencies or use the network
-- Modify the fixed kernel, verifier, transfer evaluator, or authoritative concept claims during a session
+Only typed JSON plans are authoritative. `public-rationale.md` and
+`lab-scene.json` are display descriptions and never determine pass/fail or
+numerical truth.
 
-For rich live integration, use Codex App Server over its stable local `stdio` JSONL transport and relay sanitized events to the browser through server-sent events. Do not make the experimental App Server WebSocket transport part of the critical path. Use a stored, visibly labelled replay when live Codex is unavailable.
+Codex must never:
 
-### Fixed experiment kernel
+- see hidden verifier source, mutations, held-out fixtures, unrelated files, or
+  secrets;
+- implement metric, scoring, split, or physics formulas;
+- author unrestricted UI or executable source code;
+- install packages or access the network;
+- modify fixed kernels, scorers, verifiers, or transfer evaluators;
+- decide final validity.
+
+Use Codex App Server over stable `stdio` JSONL in the critical path. Perform the
+required initialize/initialized handshake, validate runtime messages, sanitize
+public events, and keep experimental transports and capabilities out unless
+separately justified and tested. Permit at most two repairs after the initial
+attempt. A first-attempt pass is valid; never inject a bug for theater.
+
+Stage any required process credential through a private bounded launch
+boundary, remove it after initialization, and never include it in generated
+command environments, public events, or persisted browser-visible state.
+
+### Fixed Subject Pack scorer
 
 Owns:
 
-- Synthetic fixtures and seeds
-- Data splitting primitives
-- Preprocessing primitives
-- Model training
-- Metric formulas
-- Overlap computation
-- Canonical result serialization
-- Chart-ready data
-- Transfer scoring
+- candidate eligibility;
+- required controls and one-variable-change enforcement;
+- discrimination margin;
+- complexity and resource cost;
+- deterministic tie-breaking;
+- selection evidence;
+- inconclusive thresholds.
 
-Generated code composes kernel APIs; it does not redefine numeric truth.
+GPT-5.6 or Codex may propose candidates. Only this scorer may select the final
+candidate, and only from pack-registered operations.
+
+### Fixed kernels
+
+Own all numerical truth, preprocessing and split primitives, metric formulas,
+physics integration, chart-ready data, canonical serialization, Boundary Map
+cells, and transfer scoring.
 
 ### Frozen verifier
 
-Owns the final pass/fail decision for the documented invariants. It must run outside the Codex-visible workspace. Model-written public tests are useful diagnostics but are never the sole authority over model-written code.
+Owns technical validity, epistemic validity, result-to-UI binding,
+reproducibility, mutation detection, and patch scope. It runs outside the
+model-visible workspace. Model-authored public rationale or diagnostics are
+never final authority.
 
 ### Learner
 
-Owns confirmation or rejection of the Belief Test, the pre-result prediction, the revision, and the transfer attempt. The product must never reduce the learner to clicking “accept.”
+Owns claim framing, hypothesis confirmation, Prediction, revision, transfer
+action, and patch approval. Never reduce the learner to clicking Accept.
 
-## Supported notebook contract
+## Architecture and execution boundary
 
-P0 supports:
+Preserve the proven architecture unless evidence justifies a migration:
 
-- Jupyter notebooks with `nbformat` 4
-- Maximum file size defined in one central configuration value and documented in `docs/SUPPORT_CONTRACT.md`
-- Python/scikit-learn classification patterns needed by the public customer-churn sample and held-out variants
-- Code, markdown, and safe text/JSON outputs
-- A text claim supplied by the learner
+- Vite + React + strict TypeScript for the product surface;
+- Cloudflare Worker as the control plane;
+- D1 for sessions, jobs, and append-only evidence events;
+- private R2 for uploaded artifacts, patched copies, and Proof Capsules;
+- Durable Object plus Cloudflare Container runner for process-capable work;
+- Python, pandas, NumPy, and scikit-learn for fixed ML kernels;
+- a fixed Python physics kernel for `physics/free-fall`;
+- Zod plus generated JSON Schema for shared contracts;
+- Vitest, Pytest, and Playwright with CloakBrowser for verification.
 
-Parsing rules:
+The hosted public path never executes arbitrary model-authored Python. Codex
+produces bounded plans; fixed interpreters compose allowlisted operations. The
+existing adapter-code compiler and stored reject-repair replay may remain as a
+clearly separated advanced local proof, but cannot provide live hosted
+authority.
 
-- Treat the notebook as untrusted data and never execute uploaded cells during intake
-- Sanitize or omit HTML, JavaScript, SVG, widgets, and active output content
-- Hash the original file, every cell source, and every accepted output
-- Extract import hints, known estimator/split/metric symbols, displayed numeric metrics, feature names, and execution order
-- Preserve exact evidence references to cell indexes and hashes
-- Return typed unsupported reasons rather than guessing
+Runner jobs, signed one-job tokens, optimistic transitions, callback
+idempotency, bounded retries, timeouts, sanitized cursor-based event streams,
+and typed errors remain mandatory. A rejected or failed compiler job releases no
+lab result.
 
-You are the principal engineer, product designer, test engineer, and release owner for **CounterLab**. Build the complete competition-grade project in this repository now. Do not merely describe an architecture or stop after scaffolding.
+## Mode separation
 
-You are authorized to inspect files, initialize the repository if empty, create and edit in-scope files, install compatible local dependencies, run non-destructive commands, start local services, run tests, and iterate until the acceptance gates pass. Ask only for missing credentials, destructive actions, external writes, or a material expansion of scope.
+Modes are a discriminated union and have separate authority:
 
-Read `AGENTS.md` first and treat it as the product constitution. Then inspect the repository and existing work. Preserve useful code; replace weak scaffolding when necessary. If the repository is empty, initialize the implementation described below.
+- `sample` — bundled approved lesson evidence, clearly labelled;
+- `replay` — reconstruction of actual stored events, labelled on every screen,
+  with no new model call;
+- `live_notebook` — artifact-specific live analysis and hosted runner work;
+- `guided_lab` — a fixed Subject Pack experience without arbitrary artifact
+  intake;
+- `challenge` — a shareable read-only or no-account transfer challenge.
 
-## Outcome
+No mode may silently fall back to or borrow authority from another. Route-level
+validation and regression tests must prevent mode leakage.
 
-Ship a locally runnable, judge-friendly Education-track product with this thesis:
+## Supported artifact contract
 
-> **CounterLab is CI for understanding. It treats a learner's claim like code: formalize it, run a discriminating test, reject invalid evidence, verify transfer, and only then merge the repair.**
+Live ML notebook support remains narrow and explicit:
 
-The judged hero story is:
+- Jupyter `nbformat` 4;
+- maximum size defined once and documented in
+  `docs/SUPPORT_CONTRACT.md`;
+- the documented Python/scikit-learn patterns for entity leakage and class
+  imbalance;
+- code, markdown, and sanitized text/JSON outputs;
+- a learner-supplied Question.
 
-1. A customer-churn notebook reports approximately 99% test accuracy.
-2. The learner claims this proves generalization to new customers.
-3. GPT-5.6 creates an evidence-linked Belief Test with two competing hypotheses.
-4. The learner commits a prediction before seeing results.
-5. Runtime Codex creates an experiment plan and constrained artifact adapter.
-6. An external mutation verifier either rejects the candidate with a concrete counterexample or verifies it.
-7. The learner observes real computed random-split, group-split, and identity-ablation results.
-8. The learner revises the mental model.
-9. A fixed forecasting transfer task checks whether the rule generalizes without model hints.
-10. Only a passing transfer unlocks a minimal, independently verified patch to a copy of the original notebook.
-11. The final screen shows a Reasoning Diff and exports a replayable Proof Bundle.
+Intake treats notebooks as untrusted data and never executes cells. It must
+sanitize or omit HTML, JavaScript, SVG, widgets, and active content; hash the
+file, cell sources, and accepted outputs; extract exact evidence references; and
+return typed support decisions.
 
-The memorable line is:
+Reject or mark unsupported:
 
-> **Chatbots explain. CounterLab lets reality answer.**
+- unsupported magics;
+- opaque custom binaries;
+- active embedded content;
+- corrupted JSON or invalid notebook versions;
+- oversized notebooks;
+- required external network calls;
+- unknown packages or arbitrary installation;
+- missing evidence needed for a supported Belief Spec;
+- unsupported estimators or patch shapes.
 
-## First actions
+`physics/free-fall` is a guided fixed Subject Pack, not evidence that arbitrary
+physics notebooks or all STEM subjects are supported.
 
-Perform these immediately:
+## Scientific-method contracts
 
-1. Read `AGENTS.md`.
-2. Inspect the repository tree, package files, Git status, available runtimes, and existing tests.
-3. Create or update:
-   - `docs/PROGRESS.md`
-   - `docs/DECISIONS.md`
-   - `docs/BUILD_PLAN.md`
-4. In `docs/BUILD_PLAN.md`, record the current repository state, the architecture you will use, milestone gates, and any environment constraints you actually detected.
-5. Continue directly into implementation. Do not wait for approval after writing the plan.
+### BeliefSpec
 
-## Build strategy
+The versioned schema must include:
 
-Use vertical slices. The proof spine comes before visual polish.
+- a stable ID and session/Subject Pack provenance;
+- learner Question or claim;
+- exactly two primary competing hypotheses;
+- predicted qualitative outcomes for each hypothesis;
+- resolved evidence references when an artifact exists;
+- plausible alternatives;
+- uncertainty, limitations, and insufficiency state;
+- applicability conditions;
+- required learner confirmation.
 
-### Milestone 1 — Deterministic evidence spine
+Unresolved or irrelevant evidence, invented execution results, and unsupported
+claims invalidate the Belief Spec.
 
-Implement first:
+### DiscriminationContract
 
-- Public synthetic customer-churn fixture generator
-- Public sample `.ipynb` with stored outputs
-- Safe notebook parser that never executes uploaded cells
-- Canonical Artifact Manifest and evidence references
-- Leakage reference kernel
-- Canonical result serialization and integrity hashes
-- External mutation verifier
-- Mutation suite with at least ten critical failures
-- CLI scripts to run the kernel, verifier, and mutation matrix
+The versioned contract must record:
 
-Exit gate:
+- the two hypotheses;
+- the intervention;
+- changed variable;
+- controlled variables;
+- observable and unit;
+- decisive patterns for each hypothesis;
+- inconclusive conditions and thresholds;
+- candidate score breakdown;
+- plain-language “Why this test?”;
+- Subject Pack and artifact provenance.
 
-- The sample notebook parses into stable hashes and exact cell references.
-- The kernel computes a dramatic but non-hardcoded gap between random row split and group split.
-- Group split has zero customer overlap.
-- Every published critical mutation is rejected.
-- Running the same fixture and seed twice produces equal canonical result hashes.
+### CounterLab Experiment IR
 
-Do not start the full UI until this gate passes.
+The IR:
 
-### Milestone 2 — Complete learning loop without live models
+- is schema-versioned and rejects unknown fields;
+- contains registered operation IDs, never formulas;
+- contains no literal verified result values;
+- contains no arbitrary commands, imports, code, SQL, shell, or network action;
+- contains no raw paths outside approved artifact tokens;
+- records hypotheses, predictions, intervention, controls, observables,
+  decisive patterns, inconclusive conditions, Boundary Map sweep, transfer, and
+  provenance;
+- fails closed on unknown operations;
+- resolves every evidence and result binding;
+- has deterministic canonical JSON and a canonical hash.
 
-Implement a deterministic sample path using stored approved artifacts:
+Validate the same schema in TypeScript and Python before execution.
 
-- Four-screen product flow
-- Belief Test display and edit/reject/insufficient-evidence controls
-- Immutable prediction and confidence
-- Verified lab view driven only by canonical kernel output
-- Learner revision
-- Fixed forecasting transfer evaluator
-- Patch locked before transfer
-- Verified sample-notebook patch after transfer
-- Reasoning Diff
-- Proof Bundle
-- Append-only event log and replay
-- Try Instantly and Replay Verified Session Judge Mode paths
+### Candidate experiment scorer
 
-Exit gate:
+The fixed scorer first applies hard eligibility gates, then ranks eligible
+candidates using pack-versioned weights for:
 
-- A fresh user can complete claim → prediction → lab → revision → transfer → patch → Reasoning Diff without builder explanation.
-- Refreshing or replaying reconstructs the same visible event sequence from stored evidence.
-- No chart renders before a verified result payload is available.
-- The original notebook is never overwritten.
+- expected discrimination;
+- control completeness;
+- observable validity;
+- intervention minimality;
+- complexity and runtime cost;
+- boundary value;
+- transfer relevance.
 
-### Milestone 3 — GPT-5.6 Belief Test integration
+Scores and tie-breaks are reproducible and included in evidence. The scorer
+cannot use model confidence as numerical truth and cannot inspect hidden
+outcomes.
 
-Implement the live reasoning analyst behind an interface with a deterministic sample/replay fallback.
+## Epistemic verifier rules
 
-Requirements:
+Reject when:
 
-- Official OpenAI JavaScript/TypeScript SDK
-- Responses API
-- Default model from `OPENAI_MODEL`, defaulting to `gpt-5.6`
-- Current structured-output mechanism validated again with local Zod schemas
-- `reasoning.effort` configurable through `OPENAI_REASONING_EFFORT`, default `medium`
-- `store: false` where supported
-- Stable privacy-preserving safety identifier derived from the local session, never raw PII
-- Server-side API key only
-- Input contains only sanitized notebook evidence, schema summary, learner claim, support status, and concept-pack definitions
-- Output is rejected if evidence references do not resolve to the Artifact Manifest
-- “Insufficient evidence” is a valid result
+- hypotheses are not meaningfully separable;
+- more than the declared variable changes;
+- required controls are absent;
+- the selected observable cannot distinguish the hypotheses;
+- decisive patterns or inconclusive thresholds are missing;
+- result bindings are unresolved;
+- the result falls outside supported patterns without an inconclusive state;
+- claims exceed the experiment or Boundary Map;
+- the UI implies global truth, causality beyond the experiment, or mastery;
+- a visual or explanation disagrees with the signed payload.
 
-The Belief Test schema must include:
+A rejected test releases no experimental result. A valid but non-discriminating
+outcome produces `INCONCLUSIVE`, not a forced winner.
 
-```ts
-type BeliefTest = {
-  id: string;
-  concept: "entity_leakage" | "class_imbalance";
-  learnerClaim: string;
-  currentHypothesis: {
-    statement: string;
-    predictedOutcome: string;
-  };
-  competingHypothesis: {
-    statement: string;
-    predictedOutcome: string;
-  };
-  evidenceRefs: Array<{
-    cellIndex?: number;
-    outputIndex?: number;
-    kind: "code" | "metric" | "schema" | "output" | "learner_claim";
-    hash: string;
-    excerpt: string;
-    relevance: string;
-  }>;
-  alternatives: Array<{
-    label: string;
-    rationale: string;
-  }>;
-  decisiveIntervention: {
-    id: string;
-    description: string;
-    controlledVariables: string[];
-    changedVariables: string[];
-    discriminatesBecause: string;
-  };
-  uncertainty: {
-    confidence: number;
-    limitations: string[];
-    insufficientEvidence: boolean;
-  };
-  requiresLearnerConfirmation: true;
-};
-```
+## Boundary Map rules
 
-Keep the permanent product instructions and concept rules in a stable cacheable prefix. Do not send raw rows, secrets, local paths, or unnecessary notebook content.
+- Axes and units come from the Subject Pack allowlist.
+- The grid is bounded by pack-defined limits.
+- The fixed kernel owns every cell.
+- Labels and units are fixed or validated.
+- Model-authored formulas and literal grids are forbidden.
+- The same input, seed, pack version, and kernel version produce the same hash.
+- Visual blocks bind to signed result paths.
+- Mutations cover swapped axes, frozen values, mislabeled legends, incorrect
+  units, stale bindings, and nondeterminism.
+- Cryptographically signed maps require the configured signing key. Without a
+  key, label output integrity-hashed and do not claim the signed-map release
+  gate passed.
 
-Exit gate:
+## Subject Pack requirements
 
-- With a valid key, the model produces a schema-valid, evidence-resolving Belief Test.
-- With no key, the product clearly offers Try Instantly and Replay instead of pretending a live call occurred.
-- An invalid or unsupported response cannot advance the session state.
+### Entity leakage
 
-### Milestone 4 — Runtime Codex compile–verify–repair
+Preserve and generalize the existing deterministic fixture, notebook support,
+fixed kernel, verifier, transfer, patcher, held-out variants, and replay.
 
-Implement a real runtime Codex client behind a clean interface.
+Required fixed operations include random-row split, group holdout,
+identity-feature ablation, entity-overlap calculation, and controlled
+model/preprocessing comparison. The Boundary Map sweeps allowlisted test
+fraction and repeated-entity conditions while keeping model and preprocessing
+controlled. Displayed metrics always come from the fixed kernel.
 
-Use Codex App Server for the product's rich live integration:
+The transfer remains a surface-different time-ordered forecasting case with
+future leakage. A patch may unlock only after deterministic transfer and must
+operate on a copy, use group-aware evaluation, remove identity where required,
+and preserve unrelated cells.
 
-- Spawn `codex app-server` as a child process using the default stable `stdio` JSONL transport.
-- Perform the required initialize/initialized handshake.
-- Start a thread and turn using `CODEX_MODEL` when provided; otherwise use the current compatible default discovered from the installed Codex version.
-- Parse JSONL messages with runtime validation.
-- Stream sanitized state to the browser over server-sent events.
-- Show only plan summaries, inspected file names, unified diffs, command summaries, stdout/stderr excerpts, durations, exit codes, verifier counterexamples, and final status.
-- Never surface private chain-of-thought.
-- Do not depend on the experimental App Server WebSocket transport.
+### Class imbalance and metric choice
 
-Create a `CodexCompiler` interface with at least:
+Preserve and generalize the existing rare-event fixture, notebook support,
+fixed kernel, verifier, transfer, patcher, held-out variants, and replay.
 
-```ts
-interface CodexCompiler {
-  compileLab(input: CompileLabInput): AsyncIterable<CompilerEvent>;
-  repairLab(input: RepairLabInput): AsyncIterable<CompilerEvent>;
-  compilePatch(input: CompilePatchInput): AsyncIterable<CompilerEvent>;
-  health(): Promise<CompilerHealth>;
-}
-```
+Required fixed operations include majority baseline, stratified holdout,
+confusion matrix, precision, recall, F1, PR-AUC, contextual ROC-AUC, threshold
+sweep, and prevalence sweep with fixed conditional behavior. The Boundary Map
+sweeps allowlisted threshold and prevalence axes. Confusion totals, prevalence,
+threshold response, metric identity, result hashes, and patch scope remain
+independently verified.
 
-Provide implementations:
+The transfer remains a surface-different rare manufacturing defect case with
+changed prevalence and asymmetric false-negative cost.
 
-- `AppServerCodexCompiler` for live generation
-- `ReplayCodexCompiler` for actual stored sessions
-- A disabled implementation that returns a typed setup error rather than fake success
+### Physics/free-fall
 
-The lab turn receives only:
+Implement one fixed guided Subject Pack with:
 
-- Approved Belief Test
-- `experiment-plan.schema.json`
-- Public Concept Pack SDK documentation
-- Redacted fixture schema and evidence references
-- Resource limits
-- Permitted files and commands
-- The generation target directory
+- allowlisted inputs such as height, gravitational field, mass, drag mode, drag
+  coefficient, cross-sectional area, air density, and fixed numerical-step
+  choices;
+- analytic vacuum results and independently checked numerical vacuum results;
+- a fixed numerical drag solver with documented tolerances;
+- drag/vacuum and mass controls;
+- immutable learner Prediction before results;
+- signed position, velocity, and fall-time paths suitable for an accessible
+  animation;
+- a Boundary Map over pack-approved drag and mass/area conditions;
+- deterministic transfer to a surface-different drop scenario;
+- technical and epistemic verifier mutations;
+- Proof Capsule v2.
 
-It may create only:
+The kernel owns formulas, integration, tolerances, and animation data. Codex may
+only compose operation IDs into IR and scene bindings. Mutations must include
+analytic/numerical mismatch, frozen drag response, swapped axes, incorrect
+units, stale animation data, nonphysical values, and nondeterminism.
+
+## Product experience
+
+### Chat-first front door
+
+The first screen asks what the learner wants to test in plain language. It may
+offer notebook analysis, the short sample, a verified replay, or the guided
+free-fall lab. It must explain the support boundary in one sentence and avoid
+requiring technical vocabulary before the Question is clear.
+
+### Learner journey
+
+1. **Question** — capture the claim and show adjacent artifact evidence when
+   relevant.
+2. **Prediction** — confirm the Belief Spec and immutably lock the expectation
+   and confidence.
+3. **Test** — show “Why this test?”, then compile, score, verify, and run the
+   selected IR.
+4. **Boundary** — reveal the signed result and allow one real bounded control or
+   Boundary Map exploration.
+5. **Apply** — evaluate deterministic transfer without an LLM verdict.
+6. **Repair** — unlock a minimal verified patch only after transfer passes.
+
+### Experiment Theater
+
+- The main canvas focuses on the current learner action and one dominant CTA.
+- The verified intervention, controlled variables, observable, prediction, and
+  outcome remain visible together.
+- Result animation or charts begin only after signed data arrives.
+- Loading preserves layout dimensions.
+- Accessible tables expose every quantitative visual.
+- Activity and Evidence & proof drawers are collapsed by default and become
+  prominent during compile/verify or when the learner opens them.
+- There is no permanent agent cockpit.
+
+### Judge Mode
+
+Judge Mode exposes honest paths:
+
+- a short Sample lesson;
+- Live notebook analysis;
+- a persistently labelled Verified replay;
+- the guided physics lab when its full release gate is green.
+
+Replay never makes a new model call. Live never silently falls back to sample or
+replay. A genuine prior reject-repair replay is acceptable when labelled; never
+stage a rejection in a live run.
+
+## Canonical state and transitions
+
+Persist explicit, validated state transitions. New v5 state may be layered over
+legacy replay state, but illegal transitions must fail server-side.
 
 ```text
-generated/<session-id>/experiment-plan.json
-generated/<session-id>/artifact-adapter.py
-generated/<session-id>/public_tests.py
+ARTIFACT_INGESTED | GUIDED_LAB_SELECTED
+  -> QUESTION_FRAMED
+  -> BELIEF_SPEC_PROPOSED
+  -> BELIEF_SPEC_CONFIRMED | INSUFFICIENT_EVIDENCE | REJECTED_BY_LEARNER
+  -> PREDICTION_LOCKED
+  -> CANDIDATES_PROPOSED
+  -> DISCRIMINATION_CONTRACT_VERIFIED | TEST_REJECTED
+  -> EXPERIMENT_IR_VERIFIED | TEST_REJECTED
+  -> TEST_RUNNING
+  -> SUPPORTS | INCONCLUSIVE | REJECTED
+  -> BOUNDARY_VERIFIED
+  -> REVISION_RECORDED
+  -> TRANSFER_IN_PROGRESS
+  -> TRANSFER_FAILED | TRANSFER_PASSED
+  -> PATCH_COMPILING
+  -> PATCH_REJECTED | PATCH_VERIFIED
+  -> REASONING_DIFF_ISSUED
+  -> PROOF_CAPSULE_ISSUED
 ```
 
-Use a fresh Git worktree or equivalent isolated copy pinned to the Concept Pack template commit. Keep hidden verifier, mutation catalogue, held-out fixtures, secrets, and unrelated files outside the mounted workspace.
-
-Before execution, run a strict AST policy over `artifact-adapter.py`. Deny:
-
-- `open`, filesystem traversal, environment reads, dynamic imports
-- `eval`, `exec`, `compile`, reflection-based escape patterns
-- `os`, `sys`, `subprocess`, sockets, HTTP libraries, package installation
-- direct metric implementations or direct access to hidden result files
-
-Execute the candidate in a hardened local container/process boundary:
-
-- No network
-- Non-root user
-- Read-only root/files except output mount and temporary directory
-- Read-only public fixtures and SDK
-- CPU, wall-clock, memory, process, file-count, and output-size limits
-- No credentials in the environment
-
-Run the external verifier from the host/outside the Codex-visible workspace. If rejected, send only structured invariant names, observed values, and minimal counterexamples. Permit at most two live repairs. Preserve every prompt hash, event, patch, command, duration, exit code, and commit hash.
-
-Do not intentionally inject a bug to manufacture a dramatic demo. Persist and replay a genuine prior reject-repair session when one exists. If a live candidate passes first try, present that honestly.
-
-Exit gate:
-
-- Live mode generates an artifact-specific plan and adapter or returns a clear environment/setup error.
-- Replay mode reconstructs a genuine stored Codex trace and remains visibly labelled.
-- Codex cannot read the hidden verifier path.
-- A rejected candidate cannot produce a lab result.
-- A verified candidate can be reproduced from the recorded contract, template, and fixture.
-
-### Milestone 5 — Transfer-gated patch and dual diff
-
-After `TRANSFER_PASSED`, start a separate Codex turn in a separate worktree.
-
-The patch task must:
-
-- Operate on a copy of the original supported notebook
-- Apply the smallest correction to the evaluation path
-- Replace row-wise random evaluation with customer-group evaluation
-- Remove customer identity from model features where required
-- Preserve unrelated cells byte-for-byte at the source level
-- Recompute the supported notebook path under the fixed kernel/sandbox
-- Produce a unified notebook-cell diff and patch metadata
-
-The patch verifier must reject:
-
-- Changes to unrelated cells
-- New dependencies outside the allowlist
-- Broad rewrites when a local correction exists
-- Invalid notebook JSON/nbformat
-- Remaining group overlap
-- Hardcoded metrics
-- Nondeterministic output
-- A patch that changes the conclusion without changing the actual evaluation design
-
-The final Reasoning Diff must present:
-
-| Dimension | Before | After |
-|---|---|---|
-| Belief | Learner's original claim | Revised reusable rule |
-| Prediction | Pre-result expectation | Observed verified result |
-| Code | Original evaluation design | Minimal verified patch |
-| Transfer | Initial model applied to new case | Fixed evaluator outcome |
-
-Below it, expose an expandable technical proof containing hashes, commands, mutations, fixture/kernel/verifier versions, replay ID, limitations, and reproduction commands.
-
-Exit gate:
-
-- The patch button is unavailable before transfer.
-- Passing transfer unlocks the patch.
-- The public notebook patch verifies and leaves unrelated cell hashes unchanged.
-- Failed transfer returns the learner to the evidence without generating a patch.
-
-### Milestone 6 — Judge hardening, P0.5, and release
-
-Only after all previous gates pass:
-
-- Add the class-imbalance Concept Pack as an anti-template proof.
-- Add at least two untouched notebook variants per implemented concept.
-- Implement honest unsupported/refusal cases.
-- Add end-to-end Playwright coverage for the judged path.
-- Add clean-clone scripts and dependency checks.
-- Finish accessibility, responsive layout, error states, and performance.
-- Generate achieved metrics from real test logs; do not hand-type success rates.
-- Finish README and submission documentation.
-
-Do not add a third polished concept unless everything above is already stable and reproducible.
-
-## Required architecture
-
-Use a repository structure close to this, adapting only when the existing codebase has a demonstrably better structure:
-
-```text
-counterlab/
-├── AGENTS.md
-├── apps/
-│   └── web/                         # Next.js App Router, React, strict TypeScript
-├── services/
-│   └── kernel/                      # Python package/API: fixtures, ML kernel, canonical results
-├── packages/
-│   ├── contracts/                   # Zod, JSON Schema, shared state and API types
-│   ├── notebook-parser/             # Safe .ipynb parser and Artifact Manifest
-│   ├── codex-client/                # App Server stdio client, replay client, event sanitizer
-│   ├── verifier/                    # Host-side invariant and mutation engine
-│   ├── proof-bundle/                # Event hash chain, export, replay
-│   └── ui/                          # Reusable accessible components
-├── concept-packs/
-│   ├── leakage/
-│   │   ├── public/
-│   │   ├── verifier/                # Never mounted into generation workspace
-│   │   └── transfer/
-│   └── imbalance/
-├── fixtures/
-│   ├── public/
-│   ├── held-out/                    # Never mounted into generation workspace
-│   └── notebooks/
-├── evals/
-│   ├── mutations/
-│   └── held-out/
-├── replays/
-│   └── leakage-01/
-├── scripts/
-├── docs/
-├── data/                            # Local SQLite and generated artifacts; gitignored as appropriate
-├── .env.example
-├── package.json
-├── pnpm-lock.yaml
-└── pyproject.toml
-```
-
-Use:
-
-- Next.js + React + TypeScript for the product surface
-- Server-side Node routes/orchestrator for session state, OpenAI calls, Codex process control, SSE, and SQLite
-- Python with pandas, NumPy, and scikit-learn for the fixed reference kernel
-- Zod and generated JSON Schema for contracts
-- SQLite for sessions and append-only evidence events
-- Pytest for kernel/verifier tests
-- Vitest for TypeScript unit/contract tests
-- Playwright for the judged end-to-end path
-- Docker or an equivalent OS-enforced local sandbox for generated adapter execution
-
-Prefer a small number of stable dependencies. Lock all versions. Keep the sample/replay path runnable without OpenAI credentials. Live mode may require the OpenAI key, Codex CLI authentication, and Docker.
-
-## Data and notebook implementation
-
-Create a deterministic generator for the public leakage fixture. The fixture should have roughly:
-
-- Hundreds of customers
-- Multiple observations per customer
-- A categorical `customer_id`
-- A mostly customer-stable target or customer-specific shortcut
-- A few weak but genuinely predictive non-identity features
-- Controlled noise
-
-The public notebook should use a pipeline that one-hot encodes `customer_id` and performs a random row split. Because the same customers occur in train and test, the baseline should look excellent. Under `GroupShuffleSplit` by `customer_id`, unseen-customer performance should fall materially. Removing identity features should also remove the shortcut.
-
-Do not hardcode 99.1%, 68.4%, or any other result. Tune only the fixture-generation parameters, then freeze the seed. Tests should assert:
-
-- `random_split_accuracy > group_split_accuracy + meaningful_margin`
-- `random_split_accuracy > id_ablation_accuracy + meaningful_margin`
-- `group_entity_overlap == 0`
-- `random_entity_overlap > 0`
-- Metrics fall inside broad credible ranges
-- Same input and seed yield the same canonical hash
-
-Store displayed outputs in the sample notebook by running the actual generator/kernel during a build script. The UI must read verified result payloads, not notebook headline text, as the source of experimental truth.
-
-## Core contracts
-
-Implement and validate at least these shared contracts:
-
-### Artifact Manifest
-
-```ts
-type ArtifactManifest = {
-  artifactId: string;
-  fileName: string;
-  fileSha256: string;
-  nbformat: number;
-  support: {
-    status: "SUPPORTED" | "PARTIAL" | "UNSUPPORTED";
-    reasons: Array<{ code: string; message: string; cellIndex?: number }>;
-  };
-  cells: Array<{
-    index: number;
-    type: "code" | "markdown" | "raw";
-    sourceSha256: string;
-    sourceExcerpt: string;
-    executionCount?: number | null;
-    outputHashes: string[];
-    symbols: string[];
-    metricCandidates: Array<{ name: string; value: number; outputIndex: number }>;
-  }>;
-  schemaSummary: {
-    fields: Array<{ name: string; inferredType: string; privacyClass: string }>;
-    rowCount?: number;
-    entityCandidates: string[];
-    targetCandidates: string[];
-  };
-  packageHints: string[];
-  createdAt: string;
-};
-```
-
-### Prediction Contract
-
-```ts
-type PredictionContract = {
-  id: string;
-  sessionId: string;
-  beliefTestId: string;
-  choice: string;
-  numericRange?: { min: number; max: number };
-  confidence: number;
-  committedAt: string;
-  immutableHash: string;
-};
-```
-
-### Experiment plan
-
-```ts
-type ExperimentPlan = {
-  schemaVersion: "1";
-  concept: "entity_leakage" | "class_imbalance";
-  datasetAdapter: string;
-  competingHypotheses: [string, string];
-  expectedDiscrimination: Array<{
-    runId: string;
-    expectedUnderCurrent: string;
-    expectedUnderCompeting: string;
-  }>;
-  runs: Array<{
-    id: string;
-    split: "random" | "group" | "time";
-    groupBy?: string;
-    dropFeatures?: string[];
-    model: string;
-    seed: number;
-  }>;
-  metrics: string[];
-  views: string[];
-  invariants: string[];
-  resourceLimits: {
-    wallSeconds: number;
-    memoryMb: number;
-    maxProcesses: number;
-    maxFiles: number;
-    maxOutputBytes: number;
-  };
-};
-```
-
-### Evidence event
-
-```ts
-type EvidenceEvent = {
-  eventId: string;
-  sessionId: string;
-  sequence: number;
-  timestamp: string;
-  actor: "learner" | "gpt-5.6" | "codex" | "verifier" | "kernel" | "system";
-  kind: string;
-  inputHashes: string[];
-  outputHashes: string[];
-  payload: Record<string, unknown>;
-  modelId?: string;
-  promptHash?: string;
-  commitHash?: string;
-  durationMs?: number;
-  exitCode?: number;
-  previousEventHash?: string;
-  eventHash: string;
-};
-```
-
-Also implement `VerifiedResultSet`, `TransferResult`, `PatchResult`, `ReasoningDiff`, and `ProofBundle` with explicit schema versions.
-
-## API and routes
-
-Implement typed endpoints or server actions equivalent to:
-
-```text
-POST /api/artifacts
-POST /api/sessions
-POST /api/sessions/:id/belief-test
-POST /api/sessions/:id/belief-test/confirm
-POST /api/sessions/:id/prediction
-POST /api/sessions/:id/lab/compile
-GET  /api/sessions/:id/events
-POST /api/sessions/:id/lab/run
-POST /api/sessions/:id/revision
-POST /api/sessions/:id/transfer
-POST /api/sessions/:id/patch/compile
-GET  /api/sessions/:id/reasoning-diff
-GET  /api/sessions/:id/proof-bundle
-GET  /api/replays/:replayId
-GET  /api/health
-```
-
-Every mutating route must validate the current session state and reject illegal transitions. Every response must be schema-valid and include a typed error body on failure.
-
-## UI requirements
-
-Build a polished, coherent experience rather than a developer dashboard.
-
-### Landing / Judge Mode
-
-- Product name, tagline, one-sentence thesis
-- Three large actions:
-  - Try instantly
-  - Generate live
-  - Replay verified session
-- Small support note: judged path supports Jupyter notebooks in the documented ML subset
-- No login
-
-### Screen 1 — Claim
-
-- Sample notebook card and upload control
-- Notebook evidence summary with exact cells and outputs
-- One claim text area
-- Clear warnings for unsupported content
-- Continue only when a supported artifact and claim exist
-
-### Screen 2 — Belief Test
-
-- Learner claim
-- Current and competing hypotheses displayed side-by-side
-- Three or fewer evidence chips with cell references
-- Predicted result under each hypothesis
-- Alternatives and limitations in a compact disclosure
-- Confirm, edit, reject, insufficient-evidence actions
-- Prediction choices, optional numeric range, confidence slider, immutable commit
-
-### Screen 3 — Build and verify
-
-- Stepper showing plan → generate → public tests → external verifier → repair → verified/rejected
-- Diff viewer
-- Command/event timeline
-- Concrete verifier counterexample, such as overlapping customer IDs, when present
-- Persistent replay badge in replay mode
-- No private reasoning text
-
-### Screen 4 — Reality and transfer
-
-- Cards for random split, group split, and ID ablation
-- Real chart and accessible data table
-- Entity-overlap visualization
-- Original prediction beside observed result
-- Revision prompt focused on a reusable rule
-- Fixed forecasting transfer task
-- Patch lock state before pass
-- Patch diff and verification after pass
-- Reasoning Diff and expandable Proof Bundle provenance
-
-Design details:
-
-- Use the color semantics in `AGENTS.md`.
-- Use clear typography and generous spacing.
-- Provide loading, rejected, insufficient-evidence, unsupported, live-unavailable, replay, and verified states.
-- Ensure keyboard-only completion and reduced-motion behavior.
-- Keep charts honest: include sample sizes, units, split strategy, and seed.
-
-## Persistence and replay
-
-Use SQLite with migrations. Persist:
-
-- Sessions and state
-- Artifact metadata and hashes, not unnecessary raw content
-- Belief Tests and confirmations
-- Prediction Contract
-- Compiler events
-- Verifier events
-- Results
-- Revision and transfer
-- Patch metadata
-- Event hash chain
-- Replay metadata
-
-Store uploaded files and generated workspaces outside the public web root. Apply safe filenames and generated IDs. Never trust a client-provided path.
-
-A replay must be produced from stored events and result payloads. Display a persistent “Verified replay” banner and the original run timestamp, model, fixture, verifier, and commit identifiers.
-
-## Security implementation
-
-At minimum:
-
-- File-size and content-type limits
-- JSON parsing with bounded depth/size where practical
-- Notebook output sanitization
-- No execution during intake
-- Path containment checks
-- Random server-generated IDs
-- Server-only secrets
-- Generated-code AST allowlist
-- No-network sandbox
-- Non-root execution and resource limits
-- Hidden evaluator isolation
-- Dependency allowlist
-- No raw chain-of-thought in logs or UI
-- Secret scanning in the release script
-- Explicit security limitations in documentation
-
-Do not claim formal sandbox proof. State exactly what is enforced and what remains outside the hackathon guarantee.
+Prediction is immutable. No result or Boundary Map appears before
+`PREDICTION_LOCKED`. Rejected technical or epistemic verification cannot
+advance to a result. Failed transfer cannot produce a patch.
+
+## Public compiler events
+
+Expose only validated browser-safe events such as job start, plan summary,
+evidence references, allowed file creation, sanitized diff, command summary,
+verifier counterexample, repair start, verified status, result readiness, or
+typed failure.
+
+Never emit private reasoning, hidden tests, secrets, credentials, raw notebook
+bytes, raw dataset rows, local paths, environment variables, or complete
+stdout/stderr. Persist the sanitized stream append-only and support reconnect
+from an event cursor.
+
+## Evidence, replay, and Proof Capsule v2
+
+Canonicalize JSON before hashing and chain append-only evidence events. Record
+actor, sequence, timestamp, input/output hashes, model and prompt identifiers,
+commit, duration, exit code, and concise public payload when applicable.
+
+Proof Capsule v2 must include or hash-bind:
+
+- mode and session provenance;
+- artifact manifest or guided-lab input contract;
+- approved Belief Spec;
+- immutable Prediction;
+- candidate experiments and fixed score breakdown;
+- Discrimination Contract and “Why this test?”;
+- canonical Experiment IR;
+- compiler events and repair history;
+- technical and epistemic verifier reports;
+- canonical result and Evidence Verdict;
+- signed Boundary Map;
+- learner revision;
+- deterministic transfer result;
+- patch plan, diff, artifact hashes, and patch verifier result when applicable;
+- event hash chain;
+- fixture, kernel, scorer, verifier, schema, prompt, model, template, and Subject
+  Pack versions;
+- limitations, non-claims, replay ID, and reproduction commands.
+
+Use HMAC or stronger signing only when the configured signing key exists.
+Without one, say integrity-hashed. Replay must reconstruct from stored events and
+payloads, display its original timestamp and identifiers, and remain visibly
+labelled throughout.
+
+Reasoning Diff is learner-facing. Proof Capsule is machine-facing.
+
+## Patch policy
+
+Before transfer passes:
+
+- patch routes return a typed locked state;
+- UI explains that CounterLab tests understanding before repair.
+
+After transfer passes:
+
+- start a separate bounded Codex turn;
+- create a source-free Patch Plan;
+- modify only a copy of the supported artifact;
+- apply the smallest pack-registered correction;
+- verify artifact validity, allowed-cell scope, dependencies, actual evaluation
+  change, recomputed results, reproducibility, and unchanged unrelated hashes;
+- expose a cell-level diff, source/patched hashes, unchanged count, verifier
+  properties, download, and reproduction command.
+
+Never overwrite the original. Reject broad rewrites, new dependencies outside
+the allowlist, hardcoded metrics, nondeterminism, collateral source changes, or
+a conclusion change without an evaluation-design change. Unsupported patch
+shapes fail honestly; do not stretch the claim.
+
+## Security and privacy
+
+At minimum enforce:
+
+- bounded file size, content type, JSON depth/size where practical, and safe
+  filenames;
+- no notebook execution during intake;
+- active-output sanitization;
+- generated IDs and path containment;
+- server-only secrets;
+- short-lived single-job runner tokens;
+- credential-safe process launch and revocation;
+- no-network runner boundary;
+- non-root execution and read-only inputs/root where supported;
+- CPU, wall-clock, memory, process, file-count, and output-size limits;
+- hidden verifier and held-out isolation;
+- dependency and operation allowlists;
+- no raw chain-of-thought in logs, events, or UI;
+- secret scanning in release checks;
+- private diagnostics protected by a sufficiently strong secret and containing
+  only aggregate, non-identifying operational data;
+- explicit limitations in `docs/THREAT_MODEL.md`.
+
+Do not claim formal sandbox proof or 100% security. State exactly what the
+Cloudflare Container and local advanced path enforce and what remains outside
+the guarantee.
+
+## Product and design rules
+
+- One dominant action per stage.
+- Body text is at least 15 px; secondary text at least 13 px; labels at least
+  12 px.
+- Interactive targets are at least 44 px.
+- No permanent agent cockpit or developer dashboard as the primary experience.
+- Activity and Evidence & proof are collapsed by default.
+- Never animate or reveal a result before signed data arrives.
+- Preserve layout dimensions during loading.
+- Support full keyboard completion, visible focus, readable contrast, reduced
+  motion, and screen-reader alternatives.
+- Complete the main journey at a 390 px viewport without horizontal overflow.
+- Charts and animations expose units, sample sizes, conditions, seeds where
+  relevant, and an accessible table.
+- Use red only for rejected invariants or contradicted expectations, never to
+  shame the learner.
+- Keep default learner copy plain. Put schemas, hashes, model IDs, command
+  excerpts, and verifier internals in Evidence & proof.
+- Measure performance before making performance claims.
 
 ## Tests and evaluation
 
-Implement:
+### TypeScript and Worker
 
-### Python
+Cover:
 
-- Fixture determinism
-- Kernel metric correctness against independent simple fixtures
-- Split overlap checks
-- Canonical serialization
-- Adapter AST policy
-- Every verifier invariant
-- Every seeded mutation
-- Patch verifier
-- Held-out notebook variants
+- sample/live/replay/guided/challenge separation;
+- non-sample artifacts never receiving sample Belief Specs, results, patches,
+  or replay authority;
+- contract validation and canonical hashes;
+- fixed candidate scoring and deterministic tie-breaks;
+- epistemic verdicts and inconclusive thresholds;
+- evidence resolution and result-to-UI binding;
+- job transitions, signed tokens, callback idempotency, and cursor reconnect;
+- event sanitization and credential boundaries;
+- state transitions, Prediction immutability, replay reconstruction, and Proof
+  Capsule validation;
+- unsupported refusal and typed API errors.
 
-### TypeScript
+### Python kernels and verifiers
 
-- Contract validation
-- State transitions
-- Evidence-reference resolution
-- Event hash chain
-- Replay reconstruction
-- API error handling
-- GPT output rejection
-- Codex event sanitization
+Cover:
 
-### End-to-end
+- existing fixture determinism, canonical serialization, ML operations,
+  overlap/confusion invariants, interactive configurations, transfer, patches,
+  held-out variants, and every existing mutation;
+- Experiment IR policy and cross-language canonical hashes;
+- epistemic verifier invariants and mutations;
+- Boundary Map determinism, axes, units, bindings, and mutations;
+- free-fall analytic/numerical agreement, drag/vacuum response, physical bounds,
+  transfer, patch-free guided flow, and mutations.
 
-- Try Instantly complete path
-- Replay complete path and persistent label
-- Prediction immutability
-- No results before prediction
-- Rejected lab cannot run
-- Transfer failure keeps patch locked
-- Transfer pass unlocks verified patch
-- Proof Bundle downloads and validates
-- Unsupported notebook state
-- Live mode missing-credential state
+### Browser
 
-Generate an achieved-metrics artifact from actual test results. It may include mutation detection, held-out generation, clean-clone reproducibility, and timing only when those measurements have been run. Never fabricate learner-study outcomes.
+Use CloakBrowser and cover:
+
+- chat-first entry and plain-language support boundary;
+- Sample completion;
+- persistent Replay labelling;
+- untouched live leakage and imbalance flows;
+- guided free-fall flow when released;
+- refresh/resume and event-stream reconnect;
+- no result before Prediction;
+- rejected verifier blocking result;
+- `INCONCLUSIVE` without a forced winner;
+- interactive Boundary control and signed visual binding;
+- transfer failure/pass and patch lock/unlock;
+- patch and Proof Capsule downloads;
+- unsupported and missing-credential states;
+- mobile 390 px, keyboard-only, reduced motion, focus, contrast, and overflow.
+
+### Benchmarks and learner pilot
+
+Keep held-out cases outside the model-visible context and version benchmark
+changes. Record support decision, evidence precision, routing, Plan/IR success,
+verification, repair count, false-teaching events, patch correctness, runtime,
+and measured cost only when executed.
+
+The learner pilot uses a paired crossover, explanation-only baseline,
+CounterLab condition, immediate conditional transfer, delayed transfer when
+feasible, anonymized schema, consent/privacy note, and an analysis script. The
+primary outcome is unassisted transfer. Do not claim results until real rows
+exist.
 
 ## Required scripts
 
-Implement executable cross-platform-friendly shell scripts, with clear failures:
+Keep these executable and clear on failure:
 
 ```bash
 ./scripts/dev.sh
@@ -830,358 +809,109 @@ Implement executable cross-platform-friendly shell scripts, with clear failures:
 ./scripts/test-all.sh
 ./scripts/generate-fixtures.sh
 ./scripts/run-mutations.sh leakage
+./scripts/run-mutations.sh imbalance
 ./scripts/reproduce-session.sh leakage-01
 ./scripts/record-replay.sh <session-id>
 ./scripts/replay-patch.sh leakage-01
 ./scripts/release-check.sh
+./scripts/production-smoke.sh <deployed-url>
 ```
 
-`clean-demo.sh` must:
+Add equivalent mutation/reproduction entry points for `physics/free-fall` when
+that pack is implemented. `clean-demo.sh` must check runtimes and locked
+dependencies, initialize local persistence, generate/verify public fixtures,
+start required local services, print the URL, and state which live capabilities
+are available.
 
-- Check required runtimes
-- Install or explain dependencies without hidden global assumptions
-- Initialize the database
-- Generate/verify public fixtures
-- Start the kernel and web app
-- Print the local URL
-- Explain whether live GPT/Codex mode is available
+## Documentation
 
-## Documentation and submission assets
+Maintain at least:
 
-Create a strong README that includes:
+- `README.md`;
+- `docs/BUILD_PLAN.md`;
+- `docs/PROGRESS.md`;
+- `docs/DECISIONS.md`;
+- `docs/RELEASE_CHECKLIST.md`;
+- `docs/SUPPORT_CONTRACT.md`;
+- `docs/ARCHITECTURE.md`;
+- `docs/AUTHORITY_BOUNDARIES.md`;
+- `docs/THREAT_MODEL.md`;
+- `docs/EVALUATION.md`;
+- `docs/CODEX_USAGE.md`;
+- `docs/DEMO_SCRIPT.md`;
+- `docs/DEVPOST_COPY.md`;
+- `docs/SCREENSHOT_PLAN.md`;
+- `docs/ACHIEVED_METRICS.json`;
+- `docs/HELD_OUT_RESULTS.json`;
+- Proof Capsule v2 schema and reproduction documentation.
 
-1. One-sentence problem and product thesis
-2. 30-second judged path
-3. Judge Mode choices and exact replay meaning
-4. Supported notebook contract
-5. What GPT-5.6 generates
-6. What runtime Codex generates and repairs
-7. What fixed code computes
-8. What the external verifier proves
-9. What is not claimed
-10. Architecture and authority boundaries
-11. Setup and one-command sample
-12. Live mode requirements
-13. Mutation benchmark and reproduction commands
-14. Achieved metrics, targets, failures, and unsupported cases
-15. Privacy and security limitations
-16. How Codex accelerated the build and where key human decisions were made
-17. License and attribution
+The README and demo must distinguish what GPT-5.6 proposes, what Runtime Codex
+compiles or repairs, what fixed scorers/kernels compute, what the verifier
+proves, what each mode means, what is supported, and what is not claimed.
 
-Also complete all documentation required by `AGENTS.md` and create:
+## Release evidence and gates
 
-- `docs/DEMO_SCRIPT.md` with a 2:45 voiceover plan
-- `docs/DEVPOST_COPY.md` with title, tagline, short description, longer description, and judge instructions
-- `docs/SCREENSHOT_PLAN.md`
-- `docs/RELEASE_CHECKLIST.md`
+A release is not ready until:
 
-The demo script must visibly show:
+- the current production deployment identifier and runner image/version are
+  recorded;
+- untouched live leakage and imbalance pass;
+- one verified physics flow passes or physics is omitted and not advertised;
+- all existing tests remain green;
+- new epistemic and Boundary Map mutations pass;
+- browser tests execute against local and production surfaces as applicable;
+- mobile and accessibility gates pass;
+- Proof Capsule v2 validates and reproduces;
+- public event reconnect, patched-artifact download, proof export, and no-secret
+  behavior pass;
+- sample, replay, live, guided, and challenge authority remain unmistakable;
+- a clean checkout or fresh temporary clone passes release checks;
+- achieved metrics are generated from actual test output;
+- learner pilot contains real rows or remains explicitly pending;
+- the demo/video uses achieved numbers only;
+- the `/feedback` session ID used for release feedback is saved in factual
+  release evidence.
 
-- The deceptive notebook result
-- Evidence-linked Belief Test
-- Immutable prediction
-- Codex generation
-- Genuine verifier rejection/repair via live run or labelled replay
-- Verified result
-- Revision
-- Transfer
-- Patch unlocking
-- Reasoning Diff
+Do not mark a gate complete without commands, outputs, hashes, browser evidence,
+deployment identifiers, or another appropriate record. Valid progress states
+are `pass`, `fail`, `partial`, and `not run`.
 
-## Environment variables
+## Environment contract
 
-Create `.env.example` with at least:
+Document and keep server-only where applicable:
 
 ```dotenv
 OPENAI_API_KEY=
+OPENAI_BASE_URL=
 OPENAI_MODEL=gpt-5.6
 OPENAI_REASONING_EFFORT=medium
 CODEX_MODEL=
 COUNTERLAB_CODEX_MODE=replay
 COUNTERLAB_DATABASE_PATH=./data/counterlab.sqlite
 COUNTERLAB_SIGNING_KEY=
+COUNTERLAB_ADMIN_DIAGNOSTIC_SECRET=
+COUNTERLAB_RUNNER_SIGNING_KEY=
+COUNTERLAB_RUNNER_BASE_URL=
 COUNTERLAB_MAX_NOTEBOOK_BYTES=10485760
 COUNTERLAB_SANDBOX_IMAGE=counterlab-runner:local
 ```
 
-`COUNTERLAB_CODEX_MODE` accepts `live`, `replay`, or `disabled`.
-
-## Quality rules
-
-- Keep all generated metrics derived from kernel output.
-- No dead controls or decorative traces.
-- No hidden manual edits between generation, verification, transfer, and patch.
-- No “works for any notebook,” “proves mastery,” “world first,” or “100% secure” copy.
-- No generic AI prose where a deterministic status or evidence table is better.
-- No model voting.
-- No third concept until the proof spine is stable.
-- No success report without commands and test evidence.
-
-## Final acceptance test
-
-Before declaring completion, run from a clean checkout or fresh temporary clone:
-
-1. `./scripts/test-all.sh`
-2. `./scripts/run-mutations.sh leakage`
-3. `./scripts/clean-demo.sh`
-4. Complete the Try Instantly path in a browser
-5. Complete the Replay path and verify the replay banner never disappears
-6. Reproduce `leakage-01`
-7. Replay and verify the notebook patch
-8. Run the release check and secret scan
-
-Then update `docs/PROGRESS.md` with an acceptance matrix showing each gate as pass, fail, partial, or not run. Do not mark a gate complete without evidence.
-
-## Completion response
-
-When the repository is ready, give a concise release report containing:
-
-- Implemented architecture and user journey
-- Exact files and major modules created
-- Commands/tests run and their results
-- Measured achieved metrics
-- Live-mode requirements and replay status
-- Known unsupported cases and limitations
-- The highest-risk remaining issue, if any
-
-Proceed now: inspect the repository, write the build plan, and implement Milestone 1. Continue through later milestones automatically as each exit gate passes.
-
-Reject or mark unsupported:
-
-- Unsupported magics, opaque custom binaries, embedded active content, corrupted JSON, oversized notebooks, external network dependencies, unknown package requirements, or missing evidence needed for a supported Belief Test
-
-## Product flow
-
-The user-facing experience is four screens, backed by a more detailed state machine.
-
-1. **Claim**
-   - Landing line and three Judge Mode choices
-   - Preloaded sample or `.ipynb` upload
-   - One prompt: “What do you think this result proves?”
-   - Artifact evidence and support warnings
-
-2. **Belief Test and prediction**
-   - Learner claim
-   - Current hypothesis and stronger competing hypothesis
-   - Predicted result under each hypothesis
-   - Three or fewer evidence chips
-   - Alternatives and uncertainty
-   - Confirm, edit, reject, or insufficient-evidence action
-   - Immutable prediction and confidence committed before results exist
-
-3. **Build and verify**
-   - Sanitized Codex plan updates, file changes, commands, durations, structured verifier rejection, repair, and final commit
-   - No private chain-of-thought
-   - No result chart until a verified payload exists
-
-4. **Reality, transfer, and repair**
-   - Real baseline/intervention metrics and provenance
-   - Original prediction shown beside observed results
-   - Learner revision
-   - Fixed forecasting transfer task with no model hints
-   - Patch visibly locked before transfer and unlocked only after pass
-   - Minimal notebook patch, patch verification, Reasoning Diff, Proof Bundle, and replay ID
-
-## Canonical state machine
-
-Use explicit, validated transitions:
-
-```text
-INGESTED
-  -> BELIEF_TEST_PROPOSED
-  -> BELIEF_TEST_CONFIRMED | INSUFFICIENT_EVIDENCE | REJECTED_BY_LEARNER
-  -> PREDICTION_COMMITTED
-  -> LAB_COMPILING
-  -> LAB_REJECTED | LAB_VERIFIED
-  -> EXPERIMENT_COMPLETED
-  -> REVISION_RECORDED
-  -> TRANSFER_IN_PROGRESS
-  -> TRANSFER_FAILED | TRANSFER_PASSED
-  -> PATCH_COMPILING
-  -> PATCH_REJECTED | PATCH_VERIFIED
-  -> REASONING_DIFF_ISSUED
-```
-
-Invalid transitions must be rejected server-side and tested.
-
-## Generated artifact boundary
-
-A runtime Codex turn may write only:
-
-```text
-generated/<session-id>/
-├── experiment-plan.json
-├── artifact-adapter.py
-└── public_tests.py
-```
-
-The adapter must pass a static AST policy before execution. Allow only the fixed SDK and harmless standard-library typing/data declarations. Deny filesystem access, dynamic imports, `eval`, `exec`, subprocesses, sockets, HTTP clients, environment access, reflection used to escape the API, and direct implementation of metrics.
-
-The post-transfer patch runs in a different worktree and may modify only a copy of the uploaded notebook plus a patch metadata file. It must never overwrite the original upload.
-
-## Leakage experiment contract
-
-The public fixture must be deterministic and must produce a real, inspectable failure mode:
-
-- Multiple rows per customer
-- A customer identity feature represented categorically
-- A target that is highly predictable when the same customer appears in train and test
-- Weak but nonzero generalizable signal after identity is removed
-- A random row split that appears excellent
-- A customer-group split that reveals substantially lower out-of-entity performance
-- An identity ablation that removes the shortcut
-
-Never hardcode displayed metrics. Tests may assert credible ranges, ordering, overlap invariants, and deterministic hashes, not a fabricated exact headline.
-
-The fixed kernel must compute at least:
-
-- Accuracy
-- ROC AUC when valid
-- Entity overlap count and rate
-- Sample sizes
-- Split strategy
-- Seed
-- Feature set fingerprint
-
-## Active mutation verifier
-
-The external verifier must attack candidates rather than merely run happy-path tests. Include at least these critical checks:
-
-1. Group split has zero customer overlap
-2. Displayed metrics respond when labels/data are mutated; literals and stale caches are rejected
-3. Baseline and intervention differ only in declared variables
-4. Identity ablation actually removes identity-derived features
-5. Row reordering does not change canonical results beyond documented tolerance
-6. Same seed and inputs produce the same canonical result hash
-7. Chart labels, units, sample sizes, and data series match the verified payload
-8. Network attempts fail under OS/container enforcement
-9. Time, memory, process, file-count, and output-size limits are enforced
-10. The experiment plan predicts observably different outcomes under the competing hypotheses
-11. Hidden verifier and held-out files are not mounted or readable from the generation workspace
-12. Unsupported or ambiguous cases are refused instead of verified
-
-Keep independent seeded bad adapters under `evals/mutations/`. `scripts/run-mutations.sh leakage` must print a pass/fail matrix and exit nonzero on any missed critical mutation.
-
-## Transfer and patch policy
-
-The P0 transfer case is a surface-different forecasting scenario containing future leakage. The learner must choose a time-aware evaluation strategy and identify the future-information risk using fixed choices/evidence chips. The pass/fail decision is deterministic and does not depend on an LLM verdict.
-
-Before transfer passes:
-
-- Patch endpoint returns a locked state
-- UI explains that CounterLab teaches before it repairs
-
-After transfer passes:
-
-- Start a separate Codex patch turn
-- Apply the smallest viable correction to a copy of the supported notebook
-- Verify notebook validity, allowed-cell scope, zero group overlap, recomputed metrics, reproducibility, and unchanged hashes for unrelated cells
-- Reject broad edits, unexplained dependency changes, or collateral source changes
-
-For the public sample, the patch must be fully verified. For an uploaded notebook outside the exact patch support contract, label a suggestion `UNVERIFIED` rather than stretching the claim.
-
-## Judge Mode
-
-The landing page must expose three honest paths:
-
-- **Try instantly**: a no-account, no-secret path using a stored verified session and real computed payloads
-- **Generate live**: uses GPT-5.6 and Codex when `OPENAI_API_KEY`, Codex authentication, and the sandbox are available
-- **Replay verified session**: reconstructs an actual stored event log; a persistent banner must say it is a replay
-
-Never stage a prerecorded sequence as live. If a live run passes on the first attempt, do not invent a rejection. The demo may use a labelled replay of a genuine prior reject-repair session for reliability.
-
-## Data integrity and evidence
-
-Store append-only evidence events. Canonicalize JSON before hashing. Chain event hashes using the previous event hash. Include actor, sequence, timestamp, input hashes, output hashes, model identifier, prompt hash, commit hash, duration, exit code, and a concise payload.
-
-Use optional HMAC signing only when `COUNTERLAB_SIGNING_KEY` exists. Without a key, call the artifact “integrity-hashed,” not cryptographically signed.
-
-The Proof Bundle must include:
-
-- Artifact Manifest
-- Approved Belief Test
-- Prediction Contract
-- Experiment plan
-- Generated adapter hash and commit
-- Public test results
-- External verifier results and mutation names
-- Canonical verified result set
-- Learner revision
-- Transfer result
-- Patch diff and patch verifier result
-- Event hash chain
-- Environment, dependency, fixture, kernel, verifier, prompt, model, and template versions
-- Known limitations and replay ID
-
-## Visual and interaction standards
-
-- Desktop-first, responsive, accessible, and polished enough for a judged product
-- Navy for evidence/system state; blue for learner flow; purple for hypotheses/Reasoning Diff; aqua for verified computation; gold for prediction/patch; red only for rejected invariants or contradicted expectations
-- Sparse first screen with one sentence and three Judge Mode choices
-- No “AI command center” clutter
-- Charts must show units, sample size, split strategy, and seed, plus an accessible table/provenance view
-- Replays remain visibly labelled for the full session
-- Support keyboard navigation, visible focus, reduced motion, readable contrast, and chart alternatives
-- Never animate or preload experimental values before a verified result payload arrives
-
-## Repository quality
-
-Use strict TypeScript and typed Python. Keep business rules out of UI components. Validate every API boundary. Add structured error handling and typed unsupported states. Keep secrets server-side. Include `.env.example` with no real credentials.
-
-Required runnable commands:
-
-```bash
-./scripts/dev.sh
-./scripts/clean-demo.sh
-./scripts/test-all.sh
-./scripts/reproduce-session.sh leakage-01
-./scripts/run-mutations.sh leakage
-```
-
-The clean demo must explain which capabilities work without secrets and which require live credentials.
-
-Required documentation:
-
-- `README.md`
-- `docs/SUPPORT_CONTRACT.md`
-- `docs/ARCHITECTURE.md`
-- `docs/AUTHORITY_BOUNDARIES.md`
-- `docs/THREAT_MODEL.md`
-- `docs/EVALUATION.md`
-- `docs/DEMO_SCRIPT.md`
-- `docs/CODEX_USAGE.md`
-- `docs/DECISIONS.md`
-- `docs/PROGRESS.md`
-
-The README must clearly separate what GPT-5.6 generates, what Codex generates, what fixed code computes, what the verifier proves, what remains unverified, and how replay differs from live generation.
-
-## Acceptance gates
-
-Do not start class imbalance until all leakage gates pass:
-
-- One real `.ipynb` is parsed without execution and produces stable evidence references and hashes
-- Belief Test is schema-valid, evidence-linked, editable, and can return insufficient evidence
-- Prediction is immutable and no result exists before commitment
-- Runtime Codex creates an artifact-specific plan/adapter in a fresh isolated workspace, or the live path is fully implemented and a genuine replay is available when credentials are absent
-- Hidden verifier is inaccessible to Codex
-- Every published critical leakage mutation is rejected
-- At least one genuine reject-repair trace is persisted and replayable
-- Verified charts use only canonical kernel output
-- Fixed transfer evaluator passes/fails without an LLM
-- Patch remains locked until transfer and then verifies on the public notebook without collateral changes
-- Reasoning Diff and Proof Bundle reproduce from stored events
-- `./scripts/test-all.sh` and `./scripts/clean-demo.sh` pass from a clean checkout
-- README includes achieved metrics and known failures without invented claims
+`COUNTERLAB_CODEX_MODE` accepts only `live`, `replay`, or `disabled`. Sample and
+Replay remain usable without model credentials. Live may require the configured
+Responses key/base URL, Codex authentication, and a compatible runner.
 
 ## Final reporting
 
-At the end of a Codex work session, report:
+At the end of a work session, report concisely:
 
-1. What was implemented
-2. Files changed
-3. Commands and tests run, with results
-4. Acceptance gates now passing
-5. Honest blockers or unsupported cases
-6. The next highest-value action
+1. what was implemented;
+2. files and major modules changed;
+3. commands and tests run with actual results;
+4. gates now passing;
+5. live, sample, replay, guided, and challenge status;
+6. measured metrics only;
+7. honest blockers, unsupported cases, and non-claims;
+8. the highest-risk remaining issue and next highest-value action.
 
-Do not expose private chain-of-thought. Report concise decisions, evidence, diffs, commands, and outcomes.
+Do not expose private chain-of-thought. Report decisions, evidence, diffs,
+commands, and outcomes.
