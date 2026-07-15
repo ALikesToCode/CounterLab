@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { PublicCompilerEventSchema } from "@counterlab/contracts";
+import { z } from "zod";
 
 import {
   ApiClientError,
@@ -13,6 +15,129 @@ type RunnerEventsApi = Pick<
   "getSession" | "listRunnerEvents"
 >;
 type StandaloneRunnerEventsApi = Pick<typeof counterLabApi, "listRunnerEvents">;
+
+const MAX_SNAPSHOT_EVENTS = 256;
+const MAX_SNAPSHOT_BYTES = 512 * 1024;
+const RunnerEventSnapshotSchema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    sessionId: z.string().trim().min(1),
+    jobId: z.string().trim().min(1),
+    cursor: z.number().int().nonnegative(),
+    events: z.array(PublicCompilerEventSchema).max(MAX_SNAPSHOT_EVENTS),
+  })
+  .strict()
+  .superRefine((snapshot, context) => {
+    let previousCursor = 0;
+    for (const [index, event] of snapshot.events.entries()) {
+      if (event.jobId !== snapshot.jobId) {
+        context.addIssue({
+          code: "custom",
+          path: ["events", index, "jobId"],
+          message: "event belongs to another runner job",
+        });
+      }
+      if (event.cursor <= previousCursor || event.cursor > snapshot.cursor) {
+        context.addIssue({
+          code: "custom",
+          path: ["events", index, "cursor"],
+          message: "event cursors must increase within the snapshot cursor",
+        });
+      }
+      previousCursor = event.cursor;
+    }
+  });
+
+export type RunnerEventSnapshot = z.infer<typeof RunnerEventSnapshotSchema>;
+
+export function runnerEventSnapshotKey(
+  sessionId: string,
+  jobId: string,
+): string {
+  return `counterlab.runnerEvents.${encodeURIComponent(sessionId)}.${encodeURIComponent(jobId)}`;
+}
+
+function removeSnapshot(
+  sessionId: string,
+  jobId: string,
+  storage: Storage,
+): void {
+  try {
+    storage.removeItem(runnerEventSnapshotKey(sessionId, jobId));
+  } catch {
+    // Storage can be unavailable in privacy modes. The authoritative stream
+    // remains in D1 and the browser will safely reconstruct from cursor zero.
+  }
+}
+
+export function readRunnerEventSnapshot(
+  sessionId: string,
+  jobId: string,
+  storage: Storage,
+): RunnerEventSnapshot | null {
+  const key = runnerEventSnapshotKey(sessionId, jobId);
+  try {
+    const serialized = storage.getItem(key);
+    if (serialized === null) return null;
+    if (new TextEncoder().encode(serialized).byteLength > MAX_SNAPSHOT_BYTES) {
+      removeSnapshot(sessionId, jobId, storage);
+      return null;
+    }
+    const parsed = RunnerEventSnapshotSchema.safeParse(JSON.parse(serialized));
+    if (
+      !parsed.success ||
+      parsed.data.sessionId !== sessionId ||
+      parsed.data.jobId !== jobId
+    ) {
+      removeSnapshot(sessionId, jobId, storage);
+      return null;
+    }
+    return parsed.data;
+  } catch {
+    removeSnapshot(sessionId, jobId, storage);
+    return null;
+  }
+}
+
+export function writeRunnerEventSnapshot(
+  sessionId: string,
+  jobId: string,
+  events: readonly PublicCompilerEvent[],
+  cursor: number,
+  storage: Storage,
+): boolean {
+  const parsed = RunnerEventSnapshotSchema.safeParse({
+    schemaVersion: "1",
+    sessionId,
+    jobId,
+    cursor,
+    events,
+  });
+  if (!parsed.success) {
+    removeSnapshot(sessionId, jobId, storage);
+    return false;
+  }
+  try {
+    const serialized = JSON.stringify(parsed.data);
+    if (new TextEncoder().encode(serialized).byteLength > MAX_SNAPSHOT_BYTES) {
+      removeSnapshot(sessionId, jobId, storage);
+      return false;
+    }
+    storage.setItem(runnerEventSnapshotKey(sessionId, jobId), serialized);
+    return true;
+  } catch {
+    removeSnapshot(sessionId, jobId, storage);
+    return false;
+  }
+}
+
+function availableLocalStorage(): Storage | undefined {
+  try {
+    return window.localStorage ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export type MonitorRunnerJobInput = {
   sessionId: string;
@@ -68,8 +193,19 @@ export async function monitorRunnerJob({
   for (let poll = 0; poll < maxPolls; poll += 1) {
     if (signal?.aborted) throw signal.reason;
     const page = await api.listRunnerEvents(sessionId, jobId, cursor);
+    const previousCursor = cursor;
+    if (page.nextCursor < cursor) {
+      throw new ApiClientError({
+        code: "RUNNER_EVENT_CURSOR_REGRESSION",
+        message: "The runner event stream moved backwards and was rejected.",
+        status: 409,
+        retryable: true,
+      });
+    }
     cursor = page.nextCursor;
-    if (page.events.length > 0) onEvents?.(page.events, cursor);
+    if (page.events.length > 0 || cursor !== previousCursor) {
+      onEvents?.(page.events, cursor);
+    }
 
     const session = await api.getSession(sessionId);
     onSession?.(session);
@@ -141,8 +277,19 @@ export async function monitorStandaloneRunnerJob({
   for (let poll = 0; poll < maxPolls; poll += 1) {
     if (signal?.aborted) throw signal.reason;
     const page = await api.listRunnerEvents(sessionId, jobId, cursor);
+    const previousCursor = cursor;
+    if (page.nextCursor < cursor) {
+      throw new ApiClientError({
+        code: "RUNNER_EVENT_CURSOR_REGRESSION",
+        message: "The runner event stream moved backwards and was rejected.",
+        status: 409,
+        retryable: true,
+      });
+    }
     cursor = page.nextCursor;
-    if (page.events.length > 0) onEvents?.(page.events, cursor);
+    if (page.events.length > 0 || cursor !== previousCursor) {
+      onEvents?.(page.events, cursor);
+    }
     if (page.terminal) {
       const failure = [...page.events]
         .reverse()
@@ -186,6 +333,9 @@ export function useRunnerEvents() {
   const [events, setEvents] = useState<PublicCompilerEvent[]>([]);
   const [cursor, setCursor] = useState(0);
   const controller = useRef<AbortController | null>(null);
+  const activeJob = useRef<{ sessionId: string; jobId: string } | null>(null);
+  const eventsRef = useRef<PublicCompilerEvent[]>([]);
+  const cursorRef = useRef(0);
 
   const cancel = useCallback(() => {
     controller.current?.abort();
@@ -196,9 +346,63 @@ export function useRunnerEvents() {
 
   const clear = useCallback(() => {
     cancel();
+    const active = activeJob.current;
+    const storage = availableLocalStorage();
+    if (active !== null && storage !== undefined) {
+      removeSnapshot(active.sessionId, active.jobId, storage);
+    }
+    activeJob.current = null;
+    eventsRef.current = [];
+    cursorRef.current = 0;
     setEvents([]);
     setCursor(0);
   }, [cancel]);
+
+  const prepareReconnect = useCallback((sessionId: string, jobId: string) => {
+    const storage = availableLocalStorage();
+    const persisted =
+      storage === undefined
+        ? null
+        : readRunnerEventSnapshot(sessionId, jobId, storage);
+    const sameJob =
+      activeJob.current?.sessionId === sessionId &&
+      activeJob.current.jobId === jobId;
+    const nextEvents = persisted?.events ?? (sameJob ? eventsRef.current : []);
+    const nextCursor = persisted?.cursor ?? (sameJob ? cursorRef.current : 0);
+    activeJob.current = { sessionId, jobId };
+    eventsRef.current = [...nextEvents];
+    cursorRef.current = nextCursor;
+    setEvents([...nextEvents]);
+    setCursor(nextCursor);
+    return nextCursor;
+  }, []);
+
+  const rememberEvents = useCallback(
+    (
+      sessionId: string,
+      jobId: string,
+      nextEvents: readonly PublicCompilerEvent[],
+      nextCursor: number,
+    ) => {
+      const seen = new Set(eventsRef.current.map((event) => event.eventId));
+      const merged = [
+        ...eventsRef.current,
+        ...nextEvents.filter((event) => !seen.has(event.eventId)),
+      ];
+      activeJob.current = { sessionId, jobId };
+      eventsRef.current = merged;
+      cursorRef.current = nextCursor;
+      const storage = availableLocalStorage();
+      if (storage !== undefined) {
+        writeRunnerEventSnapshot(sessionId, jobId, merged, nextCursor, storage);
+      }
+      // The public cursor is persisted synchronously before React can paint the
+      // corresponding event update.
+      setCursor(nextCursor);
+      setEvents(merged);
+    },
+    [],
+  );
 
   const waitForJob = useCallback(
     async (
@@ -207,27 +411,26 @@ export function useRunnerEvents() {
       cancel();
       const nextController = new AbortController();
       controller.current = nextController;
+      const after = prepareReconnect(input.sessionId, input.jobId);
       try {
         return await monitorRunnerJob({
           ...input,
-          after: 0,
+          after,
           signal: nextController.signal,
           onEvents: (nextEvents, nextCursor) => {
-            setEvents((current) => {
-              const seen = new Set(current.map((event) => event.eventId));
-              return [
-                ...current,
-                ...nextEvents.filter((event) => !seen.has(event.eventId)),
-              ];
-            });
-            setCursor(nextCursor);
+            rememberEvents(
+              input.sessionId,
+              input.jobId,
+              nextEvents,
+              nextCursor,
+            );
           },
         });
       } finally {
         if (controller.current === nextController) controller.current = null;
       }
     },
-    [cancel],
+    [cancel, prepareReconnect, rememberEvents],
   );
 
   const waitForStandaloneJob = useCallback(
@@ -240,27 +443,26 @@ export function useRunnerEvents() {
       cancel();
       const nextController = new AbortController();
       controller.current = nextController;
+      const after = prepareReconnect(input.sessionId, input.jobId);
       try {
         return await monitorStandaloneRunnerJob({
           ...input,
-          after: 0,
+          after,
           signal: nextController.signal,
           onEvents: (nextEvents, nextCursor) => {
-            setEvents((current) => {
-              const seen = new Set(current.map((event) => event.eventId));
-              return [
-                ...current,
-                ...nextEvents.filter((event) => !seen.has(event.eventId)),
-              ];
-            });
-            setCursor(nextCursor);
+            rememberEvents(
+              input.sessionId,
+              input.jobId,
+              nextEvents,
+              nextCursor,
+            );
           },
         });
       } finally {
         if (controller.current === nextController) controller.current = null;
       }
     },
-    [cancel],
+    [cancel, prepareReconnect, rememberEvents],
   );
 
   return {

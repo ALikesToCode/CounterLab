@@ -209,6 +209,7 @@ function installApi(
     rejectLiveBelief?: boolean;
     beliefTest?: typeof liveBeliefTest | typeof imbalanceBeliefTest;
     stallRunner?: boolean;
+    restoredSessionState?: "INGESTED" | "LAB_COMPILING";
   } = {},
 ) {
   let activeMode:
@@ -259,7 +260,7 @@ function installApi(
       }
       if (path === "/api/sessions/session_ui") {
         return response(
-          session("LAB_COMPILING", 5, {
+          session(options.restoredSessionState ?? "LAB_COMPILING", 5, {
             artifactId: uploadedArtifact.artifactId,
             mode: { kind: "live_notebook" },
           }),
@@ -651,6 +652,48 @@ describe("CounterLab judged flow", () => {
           init?.method === "POST",
       ),
     ).toBe(true);
+  });
+
+  it("reacquires an idempotent compile job when refresh lost the local job checkpoint", async () => {
+    const fetcher = installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      stallRunner: true,
+    });
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem("counterlab.mode", "live");
+
+    const view = render(<App />);
+
+    expect(
+      await screen.findByRole("button", { name: /cancel this test/i }),
+    ).toBeInTheDocument();
+    expect(
+      fetcher.mock.calls.some(
+        ([path, init]) =>
+          String(path).endsWith("/sessions/session_ui/lab/compile") &&
+          init?.method === "POST",
+      ),
+    ).toBe(true);
+    expect(window.localStorage.getItem("counterlab.activeRunnerJobId")).toBe(
+      liveRunnerJob.jobId,
+    );
+
+    view.unmount();
+  });
+
+  it("opens a shareable session route without depending on local mode storage", async () => {
+    installApi({ restoredSessionState: "INGESTED" });
+    window.history.pushState({}, "", "/session/session_ui");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /what do you think the score means/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/live generation/i)).toBeInTheDocument();
   });
 
   it("uses class-imbalance language when the analyst routes a rare-event notebook", async () => {

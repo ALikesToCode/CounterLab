@@ -17,6 +17,12 @@ import {
   type VerifiedResultSet,
 } from "./api";
 import { useRunnerEvents } from "./hooks/useRunnerEvents";
+import {
+  clearAllActiveRunnerCheckpoints,
+  clearActiveRunnerCheckpoint,
+  readActiveRunnerCheckpoint,
+  writeActiveRunnerCheckpoint,
+} from "./hooks/runnerCheckpoint";
 import { CounterLabStudio } from "./app/CounterLabStudio";
 import { parseStudioLocation, studioPath } from "./app/AppRouter";
 import { InteractiveImbalanceLab } from "./components/lesson/InteractiveImbalanceLab";
@@ -57,6 +63,59 @@ const storageKeys = {
   activeRunnerJobId: "counterlab.activeRunnerJobId",
   activeRunnerJobKind: "counterlab.activeRunnerJobKind",
 } as const;
+
+function legacyRunnerKind(value: string | null): RunnerJob["kind"] | null {
+  return value === "BELIEF_ANALYSIS" ||
+    value === "LAB_COMPILE" ||
+    value === "LAB_VERIFY" ||
+    value === "LAB_RUN" ||
+    value === "PATCH_COMPILE" ||
+    value === "PATCH_VERIFY"
+    ? value
+    : null;
+}
+
+function storedRunnerCheckpoint(sessionId: string) {
+  const current = readActiveRunnerCheckpoint(sessionId, window.localStorage);
+  if (current !== null) return current;
+  const legacyJobId = window.localStorage.getItem(
+    storageKeys.activeRunnerJobId,
+  );
+  const legacyKind = legacyRunnerKind(
+    window.localStorage.getItem(storageKeys.activeRunnerJobKind),
+  );
+  if (legacyJobId === null || legacyKind === null) return null;
+  const migrated = {
+    schemaVersion: "1" as const,
+    sessionId,
+    jobId: legacyJobId,
+    kind: legacyKind,
+  };
+  writeActiveRunnerCheckpoint(migrated, window.localStorage);
+  return migrated;
+}
+
+function rememberRunnerCheckpoint(sessionId: string, job: RunnerJob) {
+  writeActiveRunnerCheckpoint(
+    {
+      schemaVersion: "1",
+      sessionId,
+      jobId: job.jobId,
+      kind: job.kind,
+    },
+    window.localStorage,
+  );
+  // Keep one-release compatibility with child lesson components that still
+  // recognize the former pair. The single JSON checkpoint is authoritative.
+  window.localStorage.setItem(storageKeys.activeRunnerJobId, job.jobId);
+  window.localStorage.setItem(storageKeys.activeRunnerJobKind, job.kind);
+}
+
+function forgetRunnerCheckpoint(sessionId: string, jobId?: string) {
+  clearActiveRunnerCheckpoint(sessionId, jobId, window.localStorage);
+  window.localStorage.removeItem(storageKeys.activeRunnerJobId);
+  window.localStorage.removeItem(storageKeys.activeRunnerJobKind);
+}
 
 function storedReplayTransferState(): TransferState {
   const stored = window.localStorage.getItem(storageKeys.replayTransferState);
@@ -1921,8 +1980,7 @@ function LeakageRealityScreen({
     }
     setPatch(completed.patchResult);
     updateSession(completed);
-    window.localStorage.removeItem(storageKeys.activeRunnerJobId);
-    window.localStorage.removeItem(storageKeys.activeRunnerJobKind);
+    forgetRunnerCheckpoint(session.sessionId, jobId);
     setTransferState("patched");
     try {
       setProofBundle(await counterLabApi.getProofBundle(session.sessionId));
@@ -1934,21 +1992,17 @@ function LeakageRealityScreen({
   };
 
   useEffect(() => {
-    const activeJobId = window.localStorage.getItem(
-      storageKeys.activeRunnerJobId,
-    );
-    const activeJobKind = window.localStorage.getItem(
-      storageKeys.activeRunnerJobKind,
-    );
+    const activeJob =
+      session === null ? null : storedRunnerCheckpoint(session.sessionId);
     if (
       session?.state !== "PATCH_COMPILING" ||
-      activeJobId === null ||
-      activeJobKind !== "PATCH_COMPILE"
+      activeJob === null ||
+      activeJob.kind !== "PATCH_COMPILE"
     ) {
       return;
     }
     setTransferState("patching");
-    void runAction(() => completePatchJob(activeJobId));
+    void runAction(() => completePatchJob(activeJob.jobId));
     // Resume the one persisted patch job once when this session is restored.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.sessionId]);
@@ -2009,14 +2063,7 @@ function LeakageRealityScreen({
         setPatchJob(updated.runnerJob);
         patchRunner.clear();
         setTransferState("patching");
-        window.localStorage.setItem(
-          storageKeys.activeRunnerJobId,
-          updated.runnerJob.jobId,
-        );
-        window.localStorage.setItem(
-          storageKeys.activeRunnerJobKind,
-          updated.runnerJob.kind,
-        );
+        rememberRunnerCheckpoint(session.sessionId, updated.runnerJob);
         await completePatchJob(updated.runnerJob.jobId);
       } else {
         throw new ApiClientError({
@@ -3332,13 +3379,11 @@ export function App() {
 
   const rememberRunnerJob = (job: RunnerJob) => {
     setRunnerJob(job);
-    window.localStorage.setItem(storageKeys.activeRunnerJobId, job.jobId);
-    window.localStorage.setItem(storageKeys.activeRunnerJobKind, job.kind);
+    rememberRunnerCheckpoint(job.sessionId, job);
   };
 
-  const forgetRunnerJob = () => {
-    window.localStorage.removeItem(storageKeys.activeRunnerJobId);
-    window.localStorage.removeItem(storageKeys.activeRunnerJobKind);
+  const forgetRunnerJob = (sessionId: string, jobId?: string) => {
+    forgetRunnerCheckpoint(sessionId, jobId);
   };
 
   const advanceLiveLab = async (startingSession: SessionView) => {
@@ -3352,7 +3397,7 @@ export function App() {
       current.state === "LAB_REJECTED"
     ) {
       runner.clear();
-      forgetRunnerJob();
+      forgetRunnerJob(sessionId);
       const compiled = await counterLabApi.compileLab(sessionId);
       setSession(compiled);
       current = compiled;
@@ -3361,9 +3406,17 @@ export function App() {
     }
 
     if (current.state === "LAB_COMPILING") {
-      const jobId =
-        current.runnerJob?.jobId ??
-        window.localStorage.getItem(storageKeys.activeRunnerJobId);
+      const checkpoint = storedRunnerCheckpoint(sessionId);
+      let jobId = current.runnerJob?.jobId ?? checkpoint?.jobId ?? null;
+      if (jobId === null || jobId === undefined) {
+        const recovered = await counterLabApi.compileLab(sessionId);
+        setSession(recovered);
+        current = recovered;
+        if (recovered.runnerJob !== undefined) {
+          rememberRunnerJob(recovered.runnerJob);
+          jobId = recovered.runnerJob.jobId;
+        }
+      }
       if (jobId === null || jobId === undefined) {
         throw new ApiClientError({
           code: "RUNNER_RESUME_TOKEN_MISSING",
@@ -3392,7 +3445,7 @@ export function App() {
 
     if (
       current.state === "LAB_VERIFIED" &&
-      window.localStorage.getItem(storageKeys.activeRunnerJobKind) !== "LAB_RUN"
+      storedRunnerCheckpoint(sessionId)?.kind !== "LAB_RUN"
     ) {
       const run = await counterLabApi.runLab(sessionId);
       setSession(run);
@@ -3404,9 +3457,8 @@ export function App() {
       current.state === "LAB_COMPILING" ||
       (current.state === "LAB_VERIFIED" && current.verifiedResult === undefined)
     ) {
-      const jobId =
-        current.runnerJob?.jobId ??
-        window.localStorage.getItem(storageKeys.activeRunnerJobId);
+      const checkpoint = storedRunnerCheckpoint(sessionId);
+      const jobId = current.runnerJob?.jobId ?? checkpoint?.jobId ?? null;
       if (jobId === null || jobId === undefined) {
         throw new ApiClientError({
           code: "RUNNER_RESUME_TOKEN_MISSING",
@@ -3435,7 +3487,7 @@ export function App() {
         status: 409,
       });
     }
-    forgetRunnerJob();
+    forgetRunnerJob(sessionId);
     setSession(current);
     setStage("build");
   };
@@ -3450,9 +3502,9 @@ export function App() {
   };
 
   const cancelLiveLab = () => {
-    const jobId =
-      runnerJob?.jobId ??
-      window.localStorage.getItem(storageKeys.activeRunnerJobId);
+    const checkpoint =
+      session === null ? null : storedRunnerCheckpoint(session.sessionId);
+    const jobId = runnerJob?.jobId ?? checkpoint?.jobId ?? null;
     if (session === null || jobId === null || cancellingRunner) return;
     setCancellingRunner(true);
     runner.cancel();
@@ -3461,7 +3513,7 @@ export function App() {
       .then((updated) => {
         setSession(updated);
         setRunnerJob(updated.runnerJob);
-        forgetRunnerJob();
+        forgetRunnerJob(session.sessionId, jobId);
         setError(
           "You cancelled this test before it could release a result. Your notebook, claim, and locked prediction are preserved.",
         );
@@ -3494,7 +3546,9 @@ export function App() {
       return;
     }
 
-    if (sessionId === null || (storedMode === null && route.kind !== "proof")) {
+    const routeProvidesSession =
+      route.kind === "session" || route.kind === "proof";
+    if (sessionId === null || (storedMode === null && !routeProvidesSession)) {
       if (storedMode === "live" || route.kind === "new") {
         setMode("live");
         setStage("live-setup");
@@ -3626,6 +3680,7 @@ export function App() {
     Object.values(storageKeys).forEach((key) =>
       window.localStorage.removeItem(key),
     );
+    clearAllActiveRunnerCheckpoints(window.localStorage);
     setMode(null);
     setStage("landing");
     setClaim("");
@@ -4018,9 +4073,7 @@ export function App() {
               failed={error !== null}
               canCancel={
                 session?.mode.kind === "live_notebook" &&
-                (runnerJob !== null ||
-                  window.localStorage.getItem(storageKeys.activeRunnerJobId) !==
-                    null)
+                (runnerJob !== null || session.state === "LAB_COMPILING")
               }
               retrying={busy}
               cancelling={cancellingRunner}
