@@ -736,9 +736,9 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
   await page.getByLabel(/Confusion matrix shows misses/i).check();
   await page.getByLabel(/Prevalence changes precision/i).check();
   await page.getByRole("button", { name: /Check transfer/i }).click();
-  await expect(
-    page.locator(".eyebrow", { hasText: "Transfer passed" }),
-  ).toBeVisible();
+  await expect(page.locator(".imbalance-transfer-pass .eyebrow")).toHaveText(
+    "Transfer passed",
+  );
 
   await page.getByRole("button", { name: /Verify notebook repair/i }).click();
   await expect(
