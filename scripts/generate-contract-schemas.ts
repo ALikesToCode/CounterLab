@@ -15,6 +15,7 @@ import {
   ScientificEngineSnapshotSchema,
   SubjectPackEngineBindingsSchema,
 } from "../packages/scientific-engine-registry/src/index.js";
+import { ExperimentIRV5Schema } from "../packages/experiment-ir/src/index.js";
 
 const root = resolve(import.meta.dirname, "..");
 const schemas = [
@@ -25,6 +26,22 @@ const schemas = [
     schema: BeliefSpecV2Schema,
     destinations: [
       resolve(root, "packages/contracts/schemas/belief-spec-v2.schema.json"),
+    ],
+  },
+  {
+    fileName: "experiment-ir-v5.schema.json",
+    id: "https://counterlab.dev/schemas/experiment-ir-v5.schema.json",
+    title: "CounterLab Experiment IR v5",
+    schema: ExperimentIRV5Schema,
+    destinations: [
+      resolve(
+        root,
+        "packages/experiment-ir/schemas/experiment-ir-v5.schema.json",
+      ),
+      resolve(
+        root,
+        "services/kernel/src/counterlab_kernel/schemas/experiment-ir-v5.schema.json",
+      ),
     ],
   },
   {

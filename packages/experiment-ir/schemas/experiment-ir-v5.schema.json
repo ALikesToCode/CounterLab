@@ -1,0 +1,955 @@
+{
+  "$id": "https://counterlab.dev/schemas/experiment-ir-v5.schema.json",
+  "title": "CounterLab Experiment IR v5",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "5"
+    },
+    "irId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+    },
+    "executionPlanId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sessionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "concept": {
+      "type": "string",
+      "enum": ["entity_leakage", "class_imbalance"]
+    },
+    "conceptPackVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifactManifestHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "beliefSpecId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "beliefSpecHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "evidenceRefs": {
+      "minItems": 1,
+      "maxItems": 6,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "cellIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "outputIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["code", "metric", "schema", "output", "learner_claim"]
+          },
+          "hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "excerpt": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "relevance": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["kind", "hash", "excerpt", "relevance"],
+        "additionalProperties": false
+      }
+    },
+    "hypotheses": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "enum": ["current", "competing"]
+            },
+            "statement": {
+              "type": "string",
+              "minLength": 1
+            },
+            "conditions": {
+              "minItems": 1,
+              "maxItems": 12,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "nonClaims": {
+              "minItems": 1,
+              "maxItems": 12,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "predictedPattern": {
+              "type": "object",
+              "properties": {
+                "patternId": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["patternId", "description"],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "statement",
+            "conditions",
+            "nonClaims",
+            "predictedPattern"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "enum": ["current", "competing"]
+            },
+            "statement": {
+              "type": "string",
+              "minLength": 1
+            },
+            "conditions": {
+              "minItems": 1,
+              "maxItems": 12,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "nonClaims": {
+              "minItems": 1,
+              "maxItems": 12,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "predictedPattern": {
+              "type": "object",
+              "properties": {
+                "patternId": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["patternId", "description"],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "statement",
+            "conditions",
+            "nonClaims",
+            "predictedPattern"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "candidateExperiments": {
+      "minItems": 1,
+      "maxItems": 8,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "operationIds": {
+            "minItems": 1,
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "leakage.random_row_split",
+                "leakage.group_holdout",
+                "leakage.identity_ablation",
+                "leakage.entity_overlap",
+                "leakage.controlled_comparison",
+                "imbalance.majority_baseline",
+                "imbalance.stratified_holdout",
+                "imbalance.confusion_matrix",
+                "imbalance.threshold_sweep",
+                "imbalance.prevalence_sweep"
+              ]
+            }
+          },
+          "baseline": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "concept": {
+                    "type": "string",
+                    "const": "entity_leakage"
+                  },
+                  "runId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "operation": {
+                    "type": "string",
+                    "enum": [
+                      "leakage.random_row_split",
+                      "leakage.group_holdout",
+                      "leakage.identity_ablation"
+                    ]
+                  },
+                  "seed": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "testFraction": {
+                    "type": "number",
+                    "minimum": 0.1,
+                    "maximum": 0.5
+                  },
+                  "entityField": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "dropIdentity": {
+                    "type": "boolean"
+                  },
+                  "model": {
+                    "type": "string",
+                    "const": "logistic_regression"
+                  }
+                },
+                "required": [
+                  "concept",
+                  "runId",
+                  "operation",
+                  "seed",
+                  "testFraction",
+                  "entityField",
+                  "dropIdentity",
+                  "model"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "concept": {
+                    "type": "string",
+                    "const": "class_imbalance"
+                  },
+                  "runId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "operation": {
+                    "type": "string",
+                    "enum": [
+                      "imbalance.majority_baseline",
+                      "imbalance.stratified_holdout",
+                      "imbalance.threshold_sweep",
+                      "imbalance.prevalence_sweep"
+                    ]
+                  },
+                  "seed": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "threshold": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 0.95
+                  },
+                  "prevalenceScenario": {
+                    "type": "string",
+                    "enum": ["observed", "rarer", "more_common"]
+                  },
+                  "model": {
+                    "type": "string",
+                    "enum": ["logistic_regression", "majority_baseline"]
+                  }
+                },
+                "required": [
+                  "concept",
+                  "runId",
+                  "operation",
+                  "seed",
+                  "threshold",
+                  "prevalenceScenario",
+                  "model"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "interventions": {
+            "minItems": 1,
+            "maxItems": 7,
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "concept": {
+                      "type": "string",
+                      "const": "entity_leakage"
+                    },
+                    "runId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "operation": {
+                      "type": "string",
+                      "enum": [
+                        "leakage.random_row_split",
+                        "leakage.group_holdout",
+                        "leakage.identity_ablation"
+                      ]
+                    },
+                    "seed": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "testFraction": {
+                      "type": "number",
+                      "minimum": 0.1,
+                      "maximum": 0.5
+                    },
+                    "entityField": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "dropIdentity": {
+                      "type": "boolean"
+                    },
+                    "model": {
+                      "type": "string",
+                      "const": "logistic_regression"
+                    }
+                  },
+                  "required": [
+                    "concept",
+                    "runId",
+                    "operation",
+                    "seed",
+                    "testFraction",
+                    "entityField",
+                    "dropIdentity",
+                    "model"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "concept": {
+                      "type": "string",
+                      "const": "class_imbalance"
+                    },
+                    "runId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "operation": {
+                      "type": "string",
+                      "enum": [
+                        "imbalance.majority_baseline",
+                        "imbalance.stratified_holdout",
+                        "imbalance.threshold_sweep",
+                        "imbalance.prevalence_sweep"
+                      ]
+                    },
+                    "seed": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "threshold": {
+                      "type": "number",
+                      "minimum": 0.05,
+                      "maximum": 0.95
+                    },
+                    "prevalenceScenario": {
+                      "type": "string",
+                      "enum": ["observed", "rarer", "more_common"]
+                    },
+                    "model": {
+                      "type": "string",
+                      "enum": ["logistic_regression", "majority_baseline"]
+                    }
+                  },
+                  "required": [
+                    "concept",
+                    "runId",
+                    "operation",
+                    "seed",
+                    "threshold",
+                    "prevalenceScenario",
+                    "model"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "heldConstantIds": {
+            "minItems": 1,
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+            }
+          },
+          "changedVariableIds": {
+            "minItems": 1,
+            "maxItems": 4,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+            }
+          },
+          "observableIds": {
+            "minItems": 1,
+            "maxItems": 12,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "accuracy",
+                "roc_auc",
+                "entity_overlap_rate",
+                "precision",
+                "recall",
+                "f1",
+                "pr_auc",
+                "confusion_matrix",
+                "prevalence"
+              ]
+            }
+          },
+          "hypothesisPatterns": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "object",
+                "properties": {
+                  "hypothesisId": {
+                    "type": "string",
+                    "enum": ["current", "competing"]
+                  },
+                  "patternId": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+                  }
+                },
+                "required": ["hypothesisId", "patternId"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "hypothesisId": {
+                    "type": "string",
+                    "enum": ["current", "competing"]
+                  },
+                  "patternId": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+                  }
+                },
+                "required": ["hypothesisId", "patternId"],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "inconclusiveConditionIds": {
+            "minItems": 1,
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+            }
+          },
+          "complexityCost": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "discriminatesBecause": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "operationIds",
+          "baseline",
+          "interventions",
+          "heldConstantIds",
+          "changedVariableIds",
+          "observableIds",
+          "hypothesisPatterns",
+          "inconclusiveConditionIds",
+          "complexityCost",
+          "discriminatesBecause"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "selection": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "UNSELECTED"
+            }
+          },
+          "required": ["status"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "SELECTED"
+            },
+            "candidateId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+            },
+            "eligibleCandidateIds": {
+              "minItems": 1,
+              "maxItems": 8,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+              }
+            },
+            "rejectedCandidates": {
+              "maxItems": 8,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "candidateId": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+                  },
+                  "reasonCodes": {
+                    "minItems": 1,
+                    "maxItems": 12,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+                    }
+                  }
+                },
+                "required": ["candidateId", "reasonCodes"],
+                "additionalProperties": false
+              }
+            },
+            "minimumSeparation": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "requiredSeparation": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "complexityCost": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "normalizedScore": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "scorerVersion": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+            }
+          },
+          "required": [
+            "status",
+            "candidateId",
+            "eligibleCandidateIds",
+            "rejectedCandidates",
+            "minimumSeparation",
+            "requiredSeparation",
+            "complexityCost",
+            "normalizedScore",
+            "scorerVersion"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "LEGACY_SELECTED"
+            },
+            "candidateId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+            },
+            "adapterVersion": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+            },
+            "notRescored": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "status",
+            "candidateId",
+            "adapterVersion",
+            "notRescored"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "visualizations": {
+      "minItems": 1,
+      "maxItems": 8,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "metric_comparison",
+          "entity_overlap",
+          "confusion_matrix",
+          "threshold_curve",
+          "prevalence_sensitivity"
+        ]
+      }
+    },
+    "inconclusiveConditions": {
+      "minItems": 1,
+      "maxItems": 12,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "nextExperimentId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+          }
+        },
+        "required": ["id", "description"],
+        "additionalProperties": false
+      }
+    },
+    "boundarySweep": {
+      "type": "object",
+      "properties": {
+        "sweepId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+        },
+        "axisIds": {
+          "minItems": 1,
+          "maxItems": 2,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+          }
+        },
+        "gridPresetId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+        },
+        "observableId": {
+          "type": "string",
+          "enum": [
+            "accuracy",
+            "roc_auc",
+            "entity_overlap_rate",
+            "precision",
+            "recall",
+            "f1",
+            "pr_auc",
+            "confusion_matrix",
+            "prevalence"
+          ]
+        },
+        "maxCells": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 2500
+        }
+      },
+      "required": [
+        "sweepId",
+        "axisIds",
+        "gridPresetId",
+        "observableId",
+        "maxCells"
+      ],
+      "additionalProperties": false
+    },
+    "transfer": {
+      "type": "object",
+      "properties": {
+        "taskId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+        },
+        "changedSurface": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requiredActionIds": {
+          "minItems": 1,
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+          }
+        },
+        "nonClaims": {
+          "minItems": 1,
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "taskId",
+        "changedSurface",
+        "requiredActionIds",
+        "nonClaims"
+      ],
+      "additionalProperties": false
+    },
+    "nonClaims": {
+      "minItems": 1,
+      "maxItems": 12,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "provenance": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "codex"
+            },
+            "generatorId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+            },
+            "promptHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "inputHashes": {
+              "minItems": 1,
+              "maxItems": 20,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          },
+          "required": ["kind", "generatorId", "promptHash", "inputHashes"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "fixed"
+            },
+            "generatorId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+            },
+            "inputHashes": {
+              "minItems": 1,
+              "maxItems": 20,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          },
+          "required": ["kind", "generatorId", "inputHashes"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "legacy_plan_v2"
+            },
+            "generatorId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+            },
+            "sourcePlanHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "inputHashes": {
+              "minItems": 1,
+              "maxItems": 20,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          },
+          "required": ["kind", "generatorId", "sourcePlanHash", "inputHashes"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "limitations": {
+      "minItems": 1,
+      "maxItems": 12,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "resourceLimits": {
+      "type": "object",
+      "properties": {
+        "wallSeconds": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 120
+        },
+        "memoryMb": {
+          "type": "integer",
+          "minimum": 128,
+          "maximum": 2048
+        },
+        "maxRuns": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 8
+        }
+      },
+      "required": ["wallSeconds", "memoryMb", "maxRuns"],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "irId",
+    "executionPlanId",
+    "sessionId",
+    "concept",
+    "conceptPackVersion",
+    "artifactManifestHash",
+    "beliefSpecId",
+    "beliefSpecHash",
+    "evidenceRefs",
+    "hypotheses",
+    "candidateExperiments",
+    "selection",
+    "visualizations",
+    "inconclusiveConditions",
+    "transfer",
+    "nonClaims",
+    "provenance",
+    "limitations",
+    "resourceLimits"
+  ],
+  "additionalProperties": false
+}
