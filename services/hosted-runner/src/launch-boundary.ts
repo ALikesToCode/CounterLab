@@ -5,9 +5,9 @@ import {
   chown,
   mkdir,
   mkdtemp,
-  readFile,
   realpath,
   rm,
+  writeFile,
 } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
@@ -39,7 +39,6 @@ export type ContainerCodexLaunchBoundaryOptions = {
   setprivExecutable: string;
   uid: number;
   gid: number;
-  ptraceScopePath?: string;
 };
 
 function isolationError(message: string, cause?: unknown): CompilerSetupError {
@@ -58,19 +57,16 @@ function isContained(root: string, candidate: string): boolean {
 }
 
 export class ContainerCodexLaunchBoundary implements AppServerLaunchBoundary {
-  private readonly accessToken: string;
-  private readonly ptraceScopePath: string;
+  private readonly parsedAuth: string;
 
   constructor(private readonly options: ContainerCodexLaunchBoundaryOptions) {
     try {
-      this.accessToken = CodexAuthSchema.parse(
-        JSON.parse(options.authJson) as unknown,
-      ).tokens.access_token;
+      this.parsedAuth = JSON.stringify(
+        CodexAuthSchema.parse(JSON.parse(options.authJson) as unknown),
+      );
     } catch (error) {
       throw isolationError("Codex authentication is not valid JSON.", error);
     }
-    this.ptraceScopePath =
-      options.ptraceScopePath ?? "/proc/sys/kernel/yama/ptrace_scope";
   }
 
   async health(): Promise<AppServerLaunchBoundaryHealth> {
@@ -93,19 +89,7 @@ export class ContainerCodexLaunchBoundary implements AppServerLaunchBoundary {
         access(this.options.setprivExecutable, constants.X_OK),
         access(this.options.workspaceRoot, constants.R_OK | constants.W_OK),
         access(this.options.codexHomeRoot, constants.R_OK | constants.W_OK),
-        access(this.ptraceScopePath, constants.R_OK),
       ]);
-      const ptraceScope = Number.parseInt(
-        (await readFile(this.ptraceScopePath, "utf8")).trim(),
-        10,
-      );
-      if (!Number.isInteger(ptraceScope) || ptraceScope < 1) {
-        return {
-          available: false,
-          reason:
-            "Container ancestor process protection must be enabled for Codex credentials.",
-        };
-      }
       return { available: true };
     } catch {
       return {
@@ -142,14 +126,23 @@ export class ContainerCodexLaunchBoundary implements AppServerLaunchBoundary {
     const codexHome = await mkdtemp(
       join(resolve(this.options.codexHomeRoot), "counterlab-codex-"),
     );
+    const authPath = join(codexHome, "auth.json");
     const runtimeTemp = join(codexHome, "tmp");
     let disposed = false;
+    let revoked = false;
     try {
       await chmod(codexHome, 0o700);
       await chown(codexHome, this.options.uid, this.options.gid);
       await mkdir(runtimeTemp, { mode: 0o700 });
       await chown(runtimeTemp, this.options.uid, this.options.gid);
       await chmod(runtimeTemp, 0o700);
+      await writeFile(authPath, this.parsedAuth, {
+        encoding: "utf8",
+        mode: 0o600,
+        flag: "wx",
+      });
+      await chown(authPath, this.options.uid, this.options.gid);
+      await chmod(authPath, 0o600);
       await chown(workspace, this.options.uid, this.options.gid);
       await chmod(workspace, 0o700);
     } catch (error) {
@@ -161,11 +154,11 @@ export class ContainerCodexLaunchBoundary implements AppServerLaunchBoundary {
       ...request.environment,
       HOME: codexHome,
       CODEX_HOME: codexHome,
-      CODEX_ACCESS_TOKEN: this.accessToken,
       TMPDIR: runtimeTemp,
     };
     delete environment.CODEX_AUTH_JSON;
     delete environment.OPENAI_API_KEY;
+    delete environment.CODEX_ACCESS_TOKEN;
 
     return {
       command: this.options.setprivExecutable,
@@ -185,6 +178,11 @@ export class ContainerCodexLaunchBoundary implements AppServerLaunchBoundary {
       environment,
       protocolCwd: workspace,
       spawnCwd: workspace,
+      async revokeCredentials() {
+        if (revoked) return;
+        revoked = true;
+        await rm(authPath, { force: true });
+      },
       async dispose() {
         if (disposed) return;
         disposed = true;
