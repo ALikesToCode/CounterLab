@@ -602,7 +602,7 @@
                     "type": "array",
                     "items": {
                       "type": "string",
-                      "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+                      "pattern": "^[A-Z][A-Z0-9_]{0,95}$"
                     }
                   }
                 },

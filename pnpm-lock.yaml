@@ -160,6 +160,18 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
+  packages/experiment-scorer:
+    dependencies:
+      "@counterlab/contracts":
+        specifier: workspace:*
+        version: link:../contracts
+      "@counterlab/experiment-ir":
+        specifier: workspace:*
+        version: link:../experiment-ir
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+
   packages/notebook-parser:
     dependencies:
       "@counterlab/contracts":

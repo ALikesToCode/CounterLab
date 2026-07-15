@@ -20,6 +20,9 @@ const TokenIdSchema = z
     /^[a-z][a-z0-9._:-]{0,95}$/,
     "expected a bounded lowercase operation or contract token",
   );
+const ReasonCodeSchema = z
+  .string()
+  .regex(/^[A-Z][A-Z0-9_]{0,95}$/, "expected an uppercase reason code");
 
 const HypothesisPatternSchema = z
   .object({
@@ -134,7 +137,7 @@ export const CandidateExperimentSchema = z
 const RejectedCandidateSchema = z
   .object({
     candidateId: TokenIdSchema,
-    reasonCodes: z.array(TokenIdSchema).min(1).max(12),
+    reasonCodes: z.array(ReasonCodeSchema).min(1).max(12),
   })
   .strict();
 
