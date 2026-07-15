@@ -1,5 +1,36 @@
 # Decisions
 
+## 2026-07-15 — Admit only the scientific engines required by released packs
+
+- Register the CounterLab fixed ML kernel, NumPy 2.4.6, pandas 2.3.3, and
+  scikit-learn 1.9.0 as the bounded authoritative solver stack for the current
+  ten operation IDs.
+- Keep fixture/oracle, renderer-binding, and mutation authorities internal and
+  independently integrity-bound. SciPy remains transitive only; physics and
+  chemistry candidates are not admitted by roadmap mention.
+- Treat the registry, Subject Pack bindings, locks, licenses, installed files,
+  health checks, SBOMs, vulnerability evidence, image digest, source commit,
+  tolerance profile, and golden hashes as one fail-closed authority snapshot.
+- A local candidate cannot inherit production authority. Promotion requires a
+  source-bound non-root image, fresh evidence, no unreviewed fixable Critical or
+  High findings, Proof Capsule linkage, deployment, and production smoke.
+- Keep vulnerability risk explicit. The current candidate's eight fixable High
+  findings block promotion; no VEX suppression is applied.
+
+## 2026-07-15 — Bundle the hosted runner into a minimal non-root image
+
+- Bundle the Worker-facing Node service with pinned esbuild at build time and
+  copy only Node, the bundle, Codex, the fixed Python environment, and public
+  fixtures into the final image.
+- Do not ship npm, pnpm, TypeScript, tsx, build-time node_modules, or the SBOM
+  toolchain in the runner image.
+- Start the Container as `10001:10001`. When the runner already has the target
+  identity, use `setpriv --no-new-privs` without a redundant privileged UID/GID
+  transition; retain the explicit privilege-drop branch for root-launched local
+  compatibility.
+- This reduced the measured local candidate from roughly 604 MB to 333 MB. It
+  is a local image-size observation, not a Cloudflare cold-start claim.
+
 ## 2026-07-15 — Make hosted patch generation plan-only
 
 - Runtime Codex receives the approved Belief Test, sanitized manifest, verified

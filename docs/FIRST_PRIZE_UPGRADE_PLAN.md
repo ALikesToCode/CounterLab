@@ -7,6 +7,14 @@ held-out/study limitation. The active v5.1 phase order and scientific-engine
 work are tracked in `task_plan.md`; pending v5.1 contracts are not retroactively
 claimed here.
 
+The v5.1 scientific-engine registry gate is now implemented for the two
+released ML packs. Its exact non-root local candidate, licenses, integrity
+evidence, deterministic health runs, normalized SBOMs, vulnerability report,
+and canonical authority hash pass the registry-only image gate. Production
+promotion remains pending because eight fixable High findings and Proof Capsule
+v2 engine linkage still fail closed. See `docs/SCIENTIFIC_ENGINES.md` and
+`docs/DEPENDENCY_ADMISSION.md`.
+
 ## Release objective
 
 CounterLab Studio is a mental-model debugger that turns a learner's notebook

@@ -28,6 +28,26 @@ green release is evidence, but is not silently promoted to the current tree.
 - [x] Held-out intake/routing is 10/10 and fixed full-loop completion is 7/8
       with the failure documented.
 
+## Scientific-engine governance
+
+- [x] Registry schema, role policy, operation bindings, and canonical snapshot
+      pass for the two released ML Subject Packs.
+- [x] Every declared evidence file resolves inside the repository and matches
+      its recorded SHA-256.
+- [x] Installed versions, wheel/RECORD hashes, licenses, one-thread tolerance
+      profile, and exact non-root image identity match the local candidate.
+- [x] Leakage and imbalance golden hashes reproduce twice in the no-network,
+      read-only runtime probe.
+- [x] Node, Python, and container CycloneDX 1.6 inventories are deterministic
+      after normalization and bind current locks, source, image, registry, and
+      Subject Pack bindings.
+- [ ] Production vulnerability policy passes. The current local candidate has
+      eight unreviewed fixable High findings.
+- [ ] Proof Capsule v2 validates `scientificEngineSnapshotHash`.
+- [ ] `scripts/release-check.sh` invokes the full engine gate.
+- [ ] The exact engine-qualified image is deployed and production smoke records
+      its authority hash.
+
 ## Learning and patch loop
 
 - [x] Prediction is immutable and no result exists before commitment.
@@ -102,8 +122,8 @@ Report SHA-256:
 The checked browser items describe the released Studio journey. The following
 v5.1 product gates remain pending and must not be inferred from them:
 
-- [ ] scientific-engine registry, licenses, integrity manifests, SBOM, health,
-      drift, and vulnerability evidence;
+- [ ] scientific-engine production promotion; the local registry, licenses,
+      integrity manifests, SBOM, health, and drift evidence now pass;
 - [ ] Belief Spec v2 and Experiment IR v5 with replay-safe adapters;
 - [ ] fixed experiment scorer and epistemic tri-state verdict;
 - [ ] one signed Boundary Map;

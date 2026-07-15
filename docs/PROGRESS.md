@@ -33,11 +33,19 @@ The exact-version production smoke completed all seven stages at
 `docs/PRODUCTION_SMOKE.json` with SHA-256
 `d74795a13034293483a1a0375d3906643a3dd2ba3472d8fae3498b6894430bb2`.
 
+Scientific-engine governance is now implemented for the released ML packs. The
+exact local candidate image is non-root, its four admitted engines are bound to
+versions, roles, operations, licenses, installed-file hashes, health evidence,
+three normalized SBOMs, and an authority hash. The registry-only image gate
+passes. This is not production authority: eight fixable High findings and the
+missing Proof Capsule v2 snapshot link still fail closed.
+
 ## Acceptance matrix
 
 | Gate                                         | Status  | Current evidence                                                                                                                                                                                                                          |
 | -------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Sample/live/replay mode separation           | pass    | Contract and Worker regression tests prevent a non-sample artifact from receiving sample Belief Test, result, patch, or replay authority.                                                                                                 |
+| Scientific-engine registry and evidence      | partial | 48/48 focused TypeScript tests and 4/4 Python verifier tests pass; exact image `sha256:67682290…` reproduces both kernel hashes and authority hash `e7953ed4…`. Production remains blocked by eight fixable High findings and Proof Capsule linkage. |
 | Safe notebook intake and evidence references | pass    | Parser tests cover bounded input, no execution, active-output sanitization, stable hashes, exact cells/outputs, and typed refusal.                                                                                                        |
 | Live schema-constrained Belief Test          | pass    | Real configured Responses call returned a valid class-imbalance Belief Test with three locally resolved evidence references; invalid/unresolved output is rejected in tests.                                                              |
 | Live analyst preview and approval            | pass    | Live calls require a hash-bound preview of the exact sanitized packet; sensitive-looking evidence requires explicit approval, and claim/artifact changes invalidate it.                                                                  |
@@ -66,6 +74,10 @@ The exact-version production smoke completed all seven stages at
 ## Latest verified commands
 
 - `./scripts/production-smoke.sh https://counterlab.cserules.workers.dev` — exact Worker version `ae01fe03-731f-4939-849f-e8f4eaec7f51`; all seven stages passed, including two genuine untouched live notebooks. Evidence: `docs/PRODUCTION_SMOKE.json`.
+- `./scripts/verify-scientific-engines.sh --registry-only --image counterlab-runner:engine-registry-v3` — passed for image `sha256:67682290a02e8b94e4522511242a3196f1a4f116eb187e22274abece2740b7a2`; authority hash `e7953ed4bd523864608473602bac614467fbfd504203e6d9c0721e428f2417d9`.
+- `vitest run packages/scientific-engine-registry/test` — 48/48 passed; focused Python verifier tests 4/4 passed.
+- Two `--no-cache --target python-builder` executions produced the same kernel wheel hash `a2a9cb3b5068a1e8c29fcb210b96b63879ad6c2c2255dc8734e4de1bc2426f61`.
+- Full `verify-scientific-engines.sh --image ...` — correctly rejected only `PROOF_CAPSULE_ENGINE_LINK_MISSING`; this is a recorded blocker, not a pass.
 - `pnpm --filter @counterlab/web test -- --run` after dispatch recovery — 101/101 web tests passed; strict web and Worker typechecks passed.
 - `./scripts/test-all.sh` before the final dispatch-recovery slice — 179 root TypeScript, 99 web, 136 Python, and 13 local browser journeys passed with 2 credentialed live skips. A current full rerun remains a release action.
 - Historical pre-hardening `./scripts/release-check.sh` and fresh-clone runs passed their then-current locked tree; they are not substituted for the pending v5.1 release rerun.
@@ -84,5 +96,7 @@ runner now fails closed, restarts only before material compiler output, caps the
 restart budget at three turns, revokes staged credentials after initialization,
 and exposes a typed retry path. Production smoke proved both first-attempt
 success and recovery after a failed compile, but this cannot remove upstream
-availability risk. Cloudflare Containers remain a beta runtime, and no formal
-sandbox proof is claimed.
+availability risk. For the v5.1 release specifically, production scientific
+engine promotion is also blocked by eight fixable High CPython findings and
+missing Proof Capsule linkage. Cloudflare Containers remain a beta runtime, and
+no formal sandbox proof is claimed.
