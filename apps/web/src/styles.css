@@ -4134,6 +4134,34 @@ thead {
   max-width: 1180px;
 }
 
+.compiler-retry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 22px 24px;
+  border-color: rgb(214 142 32 / 32%);
+  background:
+    radial-gradient(circle at 8% 15%, rgb(255 200 91 / 17%), transparent 36%),
+    linear-gradient(125deg, #fffaf0, var(--paper) 62%);
+  box-shadow: 0 18px 44px rgb(84 55 10 / 10%);
+}
+
+.compiler-retry h2 {
+  margin: 4px 0 6px;
+  font-size: clamp(18px, 2vw, 24px);
+}
+
+.compiler-retry p:last-child {
+  max-width: 720px;
+  margin: 0;
+  color: var(--muted);
+}
+
+.compiler-retry .button {
+  flex: 0 0 auto;
+}
+
 .live-compiler-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.65fr) minmax(260px, 0.72fr);
@@ -4325,6 +4353,11 @@ thead {
 }
 
 @media (max-width: 620px) {
+  .compiler-retry {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .live-compiler-grid .panel-title {
     align-items: flex-start;
     flex-direction: column;

@@ -3107,9 +3107,15 @@ function compilerEventCopy(event: PublicCompilerEvent): {
 function LiveCompileScreen({
   events,
   job,
+  failed,
+  retrying,
+  onRetry,
 }: {
   events: readonly PublicCompilerEvent[];
   job: RunnerJob | null;
+  failed: boolean;
+  retrying: boolean;
+  onRetry: () => void;
 }) {
   const repaired = events.some((event) => event.kind === "repair.started");
   const verified = events.some(
@@ -3121,13 +3127,16 @@ function LiveCompileScreen({
       <div className="screen-intro compact">
         <p className="eyebrow">03 · Build and verify</p>
         <h1>
-          {verified
-            ? "The fair test passed its checks."
-            : "Building your fair test…"}
+          {failed
+            ? "The runner stopped safely."
+            : verified
+              ? "The fair test passed its checks."
+              : "Building your fair test…"}
         </h1>
         <p>
-          Your prediction is locked. The compiler can propose a plan, but only
-          the independent verifier can authorize a result.
+          {failed
+            ? "No result was released. Your notebook evidence and locked prediction are preserved, so you can retry without starting over."
+            : "Your prediction is locked. The compiler can propose a plan, but only the independent verifier can authorize a result."}
         </p>
       </div>
       <div className="lock-notice">
@@ -3135,6 +3144,26 @@ function LiveCompileScreen({
         <strong>Your answer is immutable</strong>
         <span>No experimental value is shown until verification finishes.</span>
       </div>
+      {failed && (
+        <section className="panel compiler-retry" aria-labelledby="retry-title">
+          <div>
+            <p className="eyebrow gold">Safe stop · Evidence preserved</p>
+            <h2 id="retry-title">Try a fresh bounded compiler turn.</h2>
+            <p>
+              CounterLab will create a new isolated job. The failed job stays in
+              the proof history and still cannot release a result.
+            </p>
+          </div>
+          <button
+            className="button button-primary"
+            type="button"
+            disabled={retrying}
+            onClick={onRetry}
+          >
+            {retrying ? "Retrying…" : "Retry protected compile"}
+          </button>
+        </section>
+      )}
       <section className="live-compiler-grid">
         <div className="pipeline panel">
           <div className="panel-title">
@@ -3270,8 +3299,12 @@ export function App() {
       startingSession;
     setStage("live-compile");
 
-    if (current.state === "PREDICTION_COMMITTED") {
+    if (
+      current.state === "PREDICTION_COMMITTED" ||
+      current.state === "LAB_REJECTED"
+    ) {
       runner.clear();
+      forgetRunnerJob();
       const compiled = await counterLabApi.compileLab(sessionId);
       setSession(compiled);
       current = compiled;
@@ -3357,6 +3390,15 @@ export function App() {
     forgetRunnerJob();
     setSession(current);
     setStage("build");
+  };
+
+  const retryLiveLab = () => {
+    if (session === null) return;
+    void withRequest(async () => {
+      const restored = await counterLabApi.getSession(session.sessionId);
+      setSession(restored);
+      await advanceLiveLab(restored);
+    });
   };
 
   useEffect(() => {
@@ -3901,7 +3943,13 @@ export function App() {
             />
           )}
           {reviewStep === null && stage === "live-compile" && (
-            <LiveCompileScreen events={runner.events} job={runnerJob} />
+            <LiveCompileScreen
+              events={runner.events}
+              job={runnerJob}
+              failed={error !== null}
+              retrying={busy}
+              onRetry={retryLiveLab}
+            />
           )}
         </CounterLabStudio>
       )}

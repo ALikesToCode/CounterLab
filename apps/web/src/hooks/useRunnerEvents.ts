@@ -73,12 +73,10 @@ export async function monitorRunnerJob({
 
     const session = await api.getSession(sessionId);
     onSession?.(session);
-    if (terminalStates.includes(session.state)) return session;
-
+    const failure = page.terminal
+      ? [...page.events].reverse().find((event) => event.kind === "job.failed")
+      : undefined;
     if (page.terminal) {
-      const failure = [...page.events]
-        .reverse()
-        .find((event) => event.kind === "job.failed");
       if (page.jobError !== undefined) {
         throw new ApiClientError({
           code: page.jobError.code,
@@ -87,13 +85,17 @@ export async function monitorRunnerJob({
           retryable: page.jobError.retryable,
         });
       }
-      if (failure !== undefined) {
-        throw new ApiClientError({
-          code: failure.code,
-          message: failure.message,
-          status: 409,
-        });
-      }
+    }
+    if (failure !== undefined) {
+      throw new ApiClientError({
+        code: failure.code,
+        message: failure.message,
+        status: 409,
+      });
+    }
+    if (terminalStates.includes(session.state)) return session;
+
+    if (page.terminal) {
       if (
         page.jobStatus === "VERIFIED" &&
         verifiedTerminalPolls < terminalProjectionGracePolls

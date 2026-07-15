@@ -172,6 +172,40 @@ describe("monitorRunnerJob", () => {
       status: 504,
     });
   });
+
+  it("surfaces the job failure after the session projects LAB_REJECTED", async () => {
+    const api = {
+      listRunnerEvents: vi.fn().mockResolvedValue({
+        events: [],
+        nextCursor: 1,
+        terminal: true,
+        jobStatus: "FAILED" as const,
+        jobError: {
+          code: "CODEX_PROCESS_EXITED",
+          message: "Codex App Server could not complete the bounded Plan job.",
+          retryable: true,
+        },
+      }),
+      getSession: vi.fn().mockResolvedValue({
+        ...liveSession,
+        state: "LAB_REJECTED" as const,
+        version: 5,
+      }),
+    };
+
+    await expect(
+      monitorRunnerJob({
+        sessionId: liveSession.sessionId,
+        jobId: "job_1",
+        terminalStates: ["LAB_VERIFIED", "LAB_REJECTED"],
+        api,
+      }),
+    ).rejects.toMatchObject({
+      code: "CODEX_PROCESS_EXITED",
+      retryable: true,
+      status: 409,
+    });
+  });
 });
 
 describe("monitorStandaloneRunnerJob", () => {
