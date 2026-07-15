@@ -1,8 +1,9 @@
-# CounterLab AGENTS.md — Prize-One Constitution v5
+# CounterLab AGENTS.md — Prize-One Constitution v5.1 — Scientific Engine Edition
 
-This repository constitution supersedes earlier CounterLab scope instructions.
-Preserve replay compatibility and proven implementation, but resolve product,
-authority, vocabulary, and sequencing conflicts in favor of this file.
+This repository constitution supersedes earlier CounterLab scope instructions,
+including v5. Preserve replay compatibility and proven implementation, but
+resolve product, authority, vocabulary, scientific-engine, and sequencing
+conflicts in favor of this file.
 
 ## Mission
 
@@ -135,6 +136,107 @@ Do not build these before submission unless every earlier gate is green:
 - high-stakes grading, diagnosis, proctoring, hiring scores, or authorship
   detection;
 - unlabelled replay or a staged verifier failure presented as live.
+
+## Library-first scientific-engine policy
+
+Do not reinvent mature scientific libraries.
+
+> **Reuse mature engines. Wrap them in bounded adapters. Verify their outputs
+> independently.**
+
+CounterLab’s originality is not a new ODE solver, symbolic algebra system,
+chemistry toolkit, graph library, or physics renderer. Its original system is:
+
+- competing-model construction;
+- discriminating experiment selection;
+- epistemic verification;
+- tri-state evidence;
+- Boundary Maps;
+- transfer;
+- verified repair;
+- Proof Capsules.
+
+### Required role separation
+
+Every Subject Pack explicitly declares:
+
+- authoritative solver;
+- reference oracle;
+- unit validator;
+- renderer;
+- property-test generator;
+- optional secondary comparator.
+
+No engine may silently occupy more than its declared roles. A renderer, game
+engine, visualization library, LLM, or optional comparator is never
+authoritative by default. The Subject Pack manifest and Proof Capsule record the
+role assignment and exact engine versions.
+
+### Initially approved candidates
+
+- NumPy, SciPy, and scikit-learn for fixed numeric computation;
+- `scipy.integrate.solve_ivp` for ODEs;
+- `scipy.constants` for recorded constants;
+- Pint for unit validation;
+- SymPy for symbolic or analytic references;
+- Hypothesis for property-based tests;
+- Vega-Lite or the existing typed renderer for charts;
+- Rapier only as optional browser interaction, rendering, or comparison;
+- NetworkX for future reviewed graph Subject Packs.
+
+Approval here permits evaluation, not automatic production installation. Add a
+candidate to the production dependency set only when a shipped, reviewed
+Subject Pack needs its declared role and all admission gates pass.
+
+Future chemistry architecture may evaluate RDKit, 3Dmol.js, and Cantera. They
+must not enter the current production dependency set without a shipped reviewed
+Subject Pack and explicit owner approval.
+
+### Scientific-engine admission rules
+
+Before a scientific engine becomes authoritative, reference, validation,
+rendering, property-test, or comparison infrastructure, record and verify:
+
+- exact pinned version and package integrity;
+- official source;
+- license and required attribution;
+- lockfile entry and integrity record;
+- no floating CDN or runtime-fetched executable asset;
+- no runtime model-selected dependency;
+- no network requirement in authoritative execution;
+- bounded, schema-validated inputs;
+- CPU, wall-clock, memory, process, and output limits;
+- deterministic behavior or a documented numerical tolerance profile;
+- independent validation appropriate to its role;
+- upgrade drift and regression tests;
+- SBOM inclusion;
+- Proof Capsule provenance.
+
+Dependency upgrades are evidence changes. Re-run the pack’s oracle, invariant,
+convergence, mutation, Boundary Map, transfer, and golden tests before accepting
+an upgrade. Never update a scientific engine solely to silence a version
+warning.
+
+### Validation hierarchy
+
+Prefer independent evidence in this order when applicable:
+
+1. analytic or exact oracle;
+2. dimensional analysis;
+3. conservation law or invariant;
+4. numerical convergence;
+5. metamorphic or property-based tests;
+6. frozen golden benchmarks;
+7. cross-implementation comparison.
+
+Cross-library agreement alone is not proof. Two implementations can share the
+same assumption, convention, data source, or bug.
+
+### Chemistry safety boundary
+
+Any future chemistry Subject Pack must be curated and non-hazardous. Do not
+provide synthesis planning, dangerous laboratory instructions, unrestricted
+reaction search, or operational advice involving hazardous chemicals.
 
 ## Learner vocabulary and compatibility
 
@@ -321,7 +423,9 @@ Preserve the proven architecture unless evidence justifies a migration:
 - private R2 for uploaded artifacts, patched copies, and Proof Capsules;
 - Durable Object plus Cloudflare Container runner for process-capable work;
 - Python, pandas, NumPy, and scikit-learn for fixed ML kernels;
-- a fixed Python physics kernel for `physics/free-fall`;
+- bounded scientific-engine adapters registered by Subject Pack and role;
+- SciPy, Pint, and fixed analytic references for the `physics/free-fall`
+  kernel, once their admission gates pass;
 - Zod plus generated JSON Schema for shared contracts;
 - Vitest, Pytest, and Playwright with CloakBrowser for verification.
 
@@ -525,8 +629,13 @@ Implement one fixed guided Subject Pack with:
 - allowlisted inputs such as height, gravitational field, mass, drag mode, drag
   coefficient, cross-sectional area, air density, and fixed numerical-step
   choices;
-- analytic vacuum results and independently checked numerical vacuum results;
-- a fixed numerical drag solver with documented tolerances;
+- the analytic vacuum solution as the primary reference oracle;
+- `scipy.integrate.solve_ivp` as the numerical trajectory solver;
+- `scipy.constants` for recorded constants where appropriate;
+- Pint as the unit validator at pack and kernel boundaries;
+- SymPy only for fixed analytic derivation or test support;
+- analytic/numerical vacuum agreement and convergence checks with documented
+  tolerances;
 - drag/vacuum and mass controls;
 - immutable learner Prediction before results;
 - signed position, velocity, and fall-time paths suitable for an accessible
@@ -536,10 +645,18 @@ Implement one fixed guided Subject Pack with:
 - technical and epistemic verifier mutations;
 - Proof Capsule v2.
 
-The kernel owns formulas, integration, tolerances, and animation data. Codex may
-only compose operation IDs into IR and scene bindings. Mutations must include
-analytic/numerical mismatch, frozen drag response, swapped axes, incorrect
-units, stale animation data, nonphysical values, and nondeterminism.
+The fixed adapter owns bounded solver invocation, tolerances, units, and signed
+animation arrays. The browser renders those arrays with the existing renderer
+or Vega-Lite. Rapier may be used only as an optional renderer or secondary
+comparator; it never supplies authoritative trajectories. Do not write a general
+physics engine.
+
+Codex may only compose operation IDs into IR and scene bindings. It cannot emit
+equations, numerical methods, solver configuration outside the allowlist, or
+result arrays. Mutations must include analytic/numerical mismatch, convergence
+failure, dimensional inconsistency, frozen drag response, swapped axes,
+incorrect units, stale animation data, nonphysical values, engine-version
+drift, and nondeterminism.
 
 ## Product experience
 
@@ -655,6 +772,9 @@ Proof Capsule v2 must include or hash-bind:
 - event hash chain;
 - fixture, kernel, scorer, verifier, schema, prompt, model, template, and Subject
   Pack versions;
+- scientific-engine registry snapshot, declared roles, exact versions,
+  integrity records, licenses, tolerance profile, and engine-health result;
+- SBOM identifier or hash;
 - limitations, non-claims, replay ID, and reproduction commands.
 
 Use HMAC or stronger signing only when the configured signing key exists.
@@ -704,6 +824,7 @@ At minimum enforce:
 - CPU, wall-clock, memory, process, file-count, and output-size limits;
 - hidden verifier and held-out isolation;
 - dependency and operation allowlists;
+- pinned scientific-engine dependencies, license records, and SBOM generation;
 - no raw chain-of-thought in logs, events, or UI;
 - secret scanning in release checks;
 - private diagnostics protected by a sufficiently strong secret and containing
@@ -765,7 +886,11 @@ Cover:
 - epistemic verifier invariants and mutations;
 - Boundary Map determinism, axes, units, bindings, and mutations;
 - free-fall analytic/numerical agreement, drag/vacuum response, physical bounds,
-  transfer, patch-free guided flow, and mutations.
+  dimensional analysis, convergence, property tests, transfer, patch-free guided
+  flow, and mutations;
+- scientific-engine registry validation, role separation, health probes,
+  tolerance profiles, upgrade drift, licenses, integrity records, and SBOM
+  inclusion.
 
 ### Browser
 
@@ -818,10 +943,12 @@ Keep these executable and clear on failure:
 ```
 
 Add equivalent mutation/reproduction entry points for `physics/free-fall` when
-that pack is implemented. `clean-demo.sh` must check runtimes and locked
-dependencies, initialize local persistence, generate/verify public fixtures,
-start required local services, print the URL, and state which live capabilities
-are available.
+that pack is implemented. Before admitting its first scientific engine, add
+cross-platform-friendly engine-registry validation, engine-health, license, and
+SBOM commands and include them in `release-check.sh`. `clean-demo.sh` must check
+runtimes and locked dependencies, initialize local persistence, generate/verify
+public fixtures, start required local services, print the URL, and state which
+live capabilities are available.
 
 ## Documentation
 
@@ -843,6 +970,9 @@ Maintain at least:
 - `docs/SCREENSHOT_PLAN.md`;
 - `docs/ACHIEVED_METRICS.json`;
 - `docs/HELD_OUT_RESULTS.json`;
+- scientific-engine registry and role documentation;
+- third-party license and attribution inventory;
+- a machine-readable SBOM;
 - Proof Capsule v2 schema and reproduction documentation.
 
 The README and demo must distinguish what GPT-5.6 proposes, what Runtime Codex
@@ -856,6 +986,8 @@ A release is not ready until:
 - the current production deployment identifier and runner image/version are
   recorded;
 - untouched live leakage and imbalance pass;
+- the scientific-engine registry, declared role separation, licenses, package
+  integrity, SBOM, engine-health checks, and upgrade-drift tests pass;
 - one verified physics flow passes or physics is omitted and not advertised;
 - all existing tests remain green;
 - new epistemic and Boundary Map mutations pass;
