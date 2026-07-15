@@ -2126,6 +2126,30 @@ function LeakageRealityScreen({
           </aside>
         </section>
         {actionErrorNotice}
+        {actionError !== null && (
+          <section
+            className="panel compiler-retry"
+            aria-labelledby="patch-retry-title"
+          >
+            <div>
+              <p className="eyebrow gold">Safe stop · Source untouched</p>
+              <h2 id="patch-retry-title">Retry the isolated patch turn.</h2>
+              <p>
+                CounterLab will start a fresh Patch Plan job. The failed job
+                remains in the proof history and no notebook copy is released
+                until the patch verifier passes.
+              </p>
+            </div>
+            <button
+              className="button button-primary"
+              type="button"
+              disabled={actionBusy}
+              onClick={compilePatch}
+            >
+              {actionBusy ? "Retrying…" : "Retry protected patch"}
+            </button>
+          </section>
+        )}
       </main>
     );
   }
