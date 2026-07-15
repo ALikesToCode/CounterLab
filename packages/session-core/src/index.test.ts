@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
+import { migrateBeliefTestV1ToV2 } from "@counterlab/contracts";
 import { verifyEvidenceChain } from "../../proof-bundle/src/index.js";
 
 import {
@@ -233,6 +234,110 @@ afterEach(() => {
 });
 
 describe("SessionService state machine", () => {
+  it("persists v2 as the single belief authority and records learner decisions", async () => {
+    const { service, repository } = memoryService();
+    await service.createSession({
+      id: "session-1",
+      artifactId: "artifact-1",
+      mode: { kind: "live_notebook" },
+    });
+    const beliefSpec = {
+      ...migrateBeliefTestV1ToV2(beliefTest),
+      alternatives: [
+        {
+          id: "distribution-shift",
+          label: "Distribution shift",
+          statement: "Deployment data differs from the notebook split.",
+          rationale: "A shifted period could also change the score.",
+          conditions: ["Training and deployment periods differ."],
+          nonClaims: ["This alternative is not yet a verified explanation."],
+          evidence: beliefTest.evidenceRefs,
+          supportedCandidateExperimentIds: [],
+        },
+      ],
+    } as const;
+
+    await service.proposeBeliefSpecV2("session-1", beliefSpec);
+    let current = await service.getSession("session-1");
+    expect(current.beliefTest).toBeUndefined();
+    expect(current.beliefSpec).toMatchObject({
+      id: "belief-1",
+      learnerDecision: "UNDECIDED",
+    });
+
+    await service.selectBeliefAlternative("session-1", "distribution-shift");
+    current = await service.getSession("session-1");
+    expect(current.beliefSpec).toMatchObject({
+      learnerDecision: "ALTERNATIVE_SELECTED",
+      selectedAlternativeId: "distribution-shift",
+    });
+
+    await service.confirmBeliefTest("session-1");
+    current = await service.getSession("session-1");
+    expect(current.state).toBe("BELIEF_TEST_CONFIRMED");
+    expect(current.beliefSpec).toMatchObject({
+      learnerDecision: "ALTERNATIVE_SELECTED",
+      selectedAlternativeId: "distribution-shift",
+    });
+
+    await service.commitPrediction("session-1", prediction);
+    expect((await service.getSession("session-1")).prediction).toEqual(
+      prediction,
+    );
+
+    const events = await service.listEvents("session-1");
+    expect(events.map(({ kind }) => kind)).toEqual([
+      "session.created",
+      "belief_spec.proposed",
+      "belief_spec.alternative_selected",
+      "belief_spec.confirmed",
+      "prediction.committed",
+    ]);
+    repository.close();
+  });
+
+  it("does not let a v2 edit change belief identity or concept", async () => {
+    const { service, repository } = memoryService();
+    await service.createSession({
+      id: "session-1",
+      artifactId: "artifact-1",
+      mode: { kind: "live_notebook" },
+    });
+    const beliefSpec = migrateBeliefTestV1ToV2(beliefTest);
+    await service.proposeBeliefSpecV2("session-1", beliefSpec);
+
+    await expect(
+      service.editBeliefSpecV2("session-1", {
+        ...beliefSpec,
+        id: "replacement-id",
+        claim: "Edited claim",
+      }),
+    ).rejects.toThrow(/id/i);
+    await expect(
+      service.editBeliefSpecV2("session-1", {
+        ...beliefSpec,
+        concept: "class_imbalance",
+      }),
+    ).rejects.toThrow(/concept/i);
+
+    expect((await service.getSession("session-1")).beliefSpec).toEqual(
+      beliefSpec,
+    );
+    await service.editBeliefSpecV2("session-1", {
+      ...beliefSpec,
+      claim: "Edited claim with the same scientific scope.",
+    });
+    expect((await service.getSession("session-1")).beliefSpec).toMatchObject({
+      claim: "Edited claim with the same scientific scope.",
+      learnerDecision: "EDITED",
+    });
+    await service.confirmBeliefTest("session-1");
+    expect((await service.getSession("session-1")).beliefSpec).toMatchObject({
+      learnerDecision: "CONFIRMED",
+    });
+    repository.close();
+  });
+
   it("normalizes legacy persisted modes but rejects them for new sessions", async () => {
     expect(normalizeSessionMode("instant")).toEqual({
       kind: "sample_lesson",

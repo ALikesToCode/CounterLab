@@ -1,4 +1,5 @@
 import {
+  BeliefSpecV2Schema,
   BeliefTestSchema,
   PatchResultSchema,
   PredictionContractSchema,
@@ -6,6 +7,7 @@ import {
   ReasoningDiffSchema,
   TransferResultSchema,
   VerifiedResultSetSchema,
+  type BeliefSpecV2,
 } from "@counterlab/contracts";
 
 import {
@@ -13,6 +15,7 @@ import {
   createEvidenceEvent,
   createSessionAggregate,
   evolveSession,
+  getSessionBeliefAuthority,
   hashCanonical,
   type CounterLabSession,
   type EventDraft,
@@ -118,6 +121,38 @@ export class SessionService {
     );
   }
 
+  async proposeBeliefSpecV2(
+    sessionId: string,
+    beliefSpec: unknown,
+    provenance: {
+      actor?: "gpt-5.6" | "system";
+      modelId?: string;
+      promptHash?: string;
+    } = {},
+  ): Promise<CounterLabSession> {
+    const parsed = BeliefSpecV2Schema.parse(beliefSpec);
+    return this.transition(
+      sessionId,
+      "BELIEF_TEST_PROPOSED",
+      { beliefSpec: parsed },
+      {
+        actor: provenance.actor ?? "gpt-5.6",
+        kind: "belief_spec.proposed",
+        payload: {
+          beliefSpecId: parsed.id,
+          schemaVersion: parsed.schemaVersion,
+        },
+        ...(provenance.modelId === undefined
+          ? {}
+          : { modelId: provenance.modelId }),
+        ...(provenance.promptHash === undefined
+          ? {}
+          : { promptHash: provenance.promptHash }),
+        outputHashes: [await hashCanonical(parsed)],
+      },
+    );
+  }
+
   async editBeliefTest(
     sessionId: string,
     beliefTest: unknown,
@@ -127,6 +162,11 @@ export class SessionService {
       throw new InvalidSessionTransitionError(
         current.state,
         "BELIEF_TEST_PROPOSED",
+      );
+    }
+    if (current.beliefTest === undefined || current.beliefSpec !== undefined) {
+      throw new SessionInputError(
+        "A v1 Belief Test edit cannot replace a v2 Belief Spec",
       );
     }
     const parsed = BeliefTestSchema.parse(beliefTest);
@@ -146,22 +186,131 @@ export class SessionService {
     );
   }
 
-  async confirmBeliefTest(sessionId: string): Promise<CounterLabSession> {
+  async editBeliefSpecV2(
+    sessionId: string,
+    beliefSpec: unknown,
+  ): Promise<CounterLabSession> {
     const current = await this.requireSession(sessionId);
-    if (current.beliefTest === undefined) {
-      throw new SessionInputError(
-        "A proposed Belief Test is required before confirmation",
+    if (current.state !== "BELIEF_TEST_PROPOSED") {
+      throw new InvalidSessionTransitionError(
+        current.state,
+        "BELIEF_TEST_PROPOSED",
       );
     }
+    if (current.beliefSpec === undefined || current.beliefTest !== undefined) {
+      throw new SessionInputError(
+        "A v2 Belief Spec is required before a v2 edit",
+      );
+    }
+    const candidate = BeliefSpecV2Schema.parse(beliefSpec);
+    if (candidate.id !== current.beliefSpec.id) {
+      throw new SessionInputError("A Belief Spec edit cannot change its id");
+    }
+    if (candidate.concept !== current.beliefSpec.concept) {
+      throw new SessionInputError(
+        "A Belief Spec edit cannot change its concept",
+      );
+    }
+    const parsed = BeliefSpecV2Schema.parse({
+      ...withoutSelectedAlternative(candidate),
+      learnerDecision: "EDITED",
+    });
+    return this.revise(
+      current,
+      { beliefSpec: parsed },
+      {
+        actor: "learner",
+        kind: "belief_spec.edited",
+        payload: { beliefSpecId: parsed.id },
+        inputHashes: [await hashCanonical(current.beliefSpec)],
+        outputHashes: [await hashCanonical(parsed)],
+      },
+    );
+  }
+
+  async selectBeliefAlternative(
+    sessionId: string,
+    alternativeId: string,
+  ): Promise<CounterLabSession> {
+    const current = await this.requireSession(sessionId);
+    if (current.state !== "BELIEF_TEST_PROPOSED") {
+      throw new InvalidSessionTransitionError(
+        current.state,
+        "BELIEF_TEST_PROPOSED",
+      );
+    }
+    if (current.beliefSpec === undefined || current.beliefTest !== undefined) {
+      throw new SessionInputError(
+        "Alternative selection requires a v2 Belief Spec",
+      );
+    }
+    const selectedAlternativeId = requiredString(
+      alternativeId,
+      "alternativeId",
+    );
+    if (
+      !current.beliefSpec.alternatives.some(
+        (alternative) => alternative.id === selectedAlternativeId,
+      )
+    ) {
+      throw new SessionInputError(
+        `Unknown Belief Spec alternative: ${selectedAlternativeId}`,
+      );
+    }
+    const selected = BeliefSpecV2Schema.parse({
+      ...current.beliefSpec,
+      learnerDecision: "ALTERNATIVE_SELECTED",
+      selectedAlternativeId,
+    });
+    return this.revise(
+      current,
+      { beliefSpec: selected },
+      {
+        actor: "learner",
+        kind: "belief_spec.alternative_selected",
+        payload: { beliefSpecId: selected.id, selectedAlternativeId },
+        inputHashes: [await hashCanonical(current.beliefSpec)],
+        outputHashes: [await hashCanonical(selected)],
+      },
+    );
+  }
+
+  async confirmBeliefTest(sessionId: string): Promise<CounterLabSession> {
+    const current = await this.requireSession(sessionId);
+    const beliefAuthority = getSessionBeliefAuthority(current);
+    if (beliefAuthority === undefined) {
+      throw new SessionInputError(
+        "A proposed Belief Test or Belief Spec is required before confirmation",
+      );
+    }
+    const confirmedBeliefSpec =
+      current.beliefSpec === undefined
+        ? undefined
+        : current.beliefSpec.learnerDecision === "ALTERNATIVE_SELECTED"
+          ? current.beliefSpec
+          : BeliefSpecV2Schema.parse({
+              ...withoutSelectedAlternative(current.beliefSpec),
+              learnerDecision: "CONFIRMED",
+            });
     return this.transitionFrom(
       current,
       "BELIEF_TEST_CONFIRMED",
-      {},
+      confirmedBeliefSpec === undefined
+        ? {}
+        : { beliefSpec: confirmedBeliefSpec },
       {
         actor: "learner",
-        kind: "belief_test.confirmed",
-        payload: { beliefTestId: getObjectString(current.beliefTest, "id") },
-        inputHashes: [await hashCanonical(current.beliefTest)],
+        kind:
+          confirmedBeliefSpec === undefined
+            ? "belief_test.confirmed"
+            : "belief_spec.confirmed",
+        payload: {
+          beliefTestId: getObjectString(beliefAuthority, "id"),
+        },
+        inputHashes: [await hashCanonical(beliefAuthority)],
+        ...(confirmedBeliefSpec === undefined
+          ? {}
+          : { outputHashes: [await hashCanonical(confirmedBeliefSpec)] }),
       },
     );
   }
@@ -170,13 +319,26 @@ export class SessionService {
     sessionId: string,
     reason: string,
   ): Promise<CounterLabSession> {
-    return this.transition(
-      sessionId,
+    const current = await this.requireSession(sessionId);
+    const rejectedBeliefSpec =
+      current.beliefSpec === undefined
+        ? undefined
+        : BeliefSpecV2Schema.parse({
+            ...withoutSelectedAlternative(current.beliefSpec),
+            learnerDecision: "REJECTED",
+          });
+    return this.transitionFrom(
+      current,
       "REJECTED_BY_LEARNER",
-      {},
+      rejectedBeliefSpec === undefined
+        ? {}
+        : { beliefSpec: rejectedBeliefSpec },
       {
         actor: "learner",
-        kind: "belief_test.rejected",
+        kind:
+          rejectedBeliefSpec === undefined
+            ? "belief_test.rejected"
+            : "belief_spec.rejected",
         payload: { reason: requiredString(reason, "reason") },
       },
     );
@@ -186,13 +348,26 @@ export class SessionService {
     sessionId: string,
     reason: string,
   ): Promise<CounterLabSession> {
-    return this.transition(
-      sessionId,
+    const current = await this.requireSession(sessionId);
+    const insufficientBeliefSpec =
+      current.beliefSpec === undefined
+        ? undefined
+        : BeliefSpecV2Schema.parse({
+            ...current.beliefSpec,
+            supportState: "INSUFFICIENT_EVIDENCE",
+          });
+    return this.transitionFrom(
+      current,
       "INSUFFICIENT_EVIDENCE",
-      {},
+      insufficientBeliefSpec === undefined
+        ? {}
+        : { beliefSpec: insufficientBeliefSpec },
       {
         actor: "learner",
-        kind: "belief_test.insufficient_evidence",
+        kind:
+          insufficientBeliefSpec === undefined
+            ? "belief_test.insufficient_evidence"
+            : "belief_spec.insufficient_evidence",
         payload: { reason: requiredString(reason, "reason") },
       },
     );
@@ -213,7 +388,8 @@ export class SessionService {
         "prediction.sessionId must match the session",
       );
     }
-    const beliefTestId = getObjectString(current.beliefTest, "id");
+    const beliefAuthority = getSessionBeliefAuthority(current);
+    const beliefTestId = getObjectString(beliefAuthority, "id");
     if (parsed.beliefTestId !== beliefTestId) {
       throw new SessionInputError(
         "prediction.beliefTestId must match the confirmed Belief Test",
@@ -525,4 +701,12 @@ export class SessionService {
 function getObjectString(value: unknown, field: string): string {
   const record = asJsonRecord(value, "value");
   return requiredString(record[field], field);
+}
+
+function withoutSelectedAlternative(
+  beliefSpec: BeliefSpecV2,
+): Omit<BeliefSpecV2, "selectedAlternativeId"> {
+  const { selectedAlternativeId, ...unselected } = beliefSpec;
+  void selectedAlternativeId;
+  return unselected;
 }

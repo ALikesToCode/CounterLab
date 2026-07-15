@@ -1342,7 +1342,7 @@ function migratedAlternativeId(label: string, index: number): string {
  * The source object is never changed. Because v1 did not encode complete
  * conditions or per-hypothesis non-claims, the migrated view is PARTIAL.
  */
-export function migrateBeliefTestV1ToV2(input: BeliefTest): BeliefSpecV2 {
+export function migrateBeliefTestV1ToV2(input: unknown): BeliefSpecV2 {
   const beliefTest = BeliefTestSchema.parse(input);
   const limitations =
     beliefTest.uncertainty.limitations.length === 0

@@ -1,6 +1,7 @@
 import {
   assertTransition,
   EvidenceEventSchema,
+  type BeliefSpecV2,
   type BeliefTest,
   type EvidenceEvent as ContractEvidenceEvent,
   type PatchResult,
@@ -44,6 +45,7 @@ export interface CounterLabSession {
   createdAt: string;
   updatedAt: string;
   beliefTest?: BeliefTest;
+  beliefSpec?: BeliefSpecV2;
   prediction?: PredictionContract;
   labVerification?: unknown;
   verifiedResult?: VerifiedResultSet;
@@ -115,6 +117,19 @@ export class SessionInputError extends Error {
     super(message);
     this.name = "SessionInputError";
   }
+}
+
+export type SessionBeliefAuthority = BeliefTest | BeliefSpecV2;
+
+export function getSessionBeliefAuthority(
+  session: CounterLabSession,
+): SessionBeliefAuthority | undefined {
+  if (session.beliefTest !== undefined && session.beliefSpec !== undefined) {
+    throw new SessionInputError(
+      "A session cannot contain both a v1 Belief Test and a v2 Belief Spec",
+    );
+  }
+  return session.beliefSpec ?? session.beliefTest;
 }
 
 export function createSessionAggregate(input: {
