@@ -9,6 +9,7 @@ import {
   verifyEvidenceFiles,
   verifyPinnedSources,
   verifySboms,
+  verifyVulnerabilityReport,
 } from "../../../scripts/verify-scientific-engines.js";
 
 const repositoryRoot = resolve(import.meta.dirname, "../../..");
@@ -84,6 +85,25 @@ describe("scientific engine release verifier edge cases", () => {
     expect(findings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ code: "SBOM_ENGINE_VERSION_MISMATCH" }),
+      ]),
+    );
+  });
+
+  it("blocks production promotion while a fixable High finding is unreviewed", async () => {
+    const snapshot = await loadScientificEngineSnapshot(repositoryRoot);
+    const production = structuredClone(snapshot);
+    production.runtimeManifest.environmentKind = "cloudflare_production";
+
+    const findings = await verifyVulnerabilityReport(
+      repositoryRoot,
+      production,
+    );
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "PRODUCTION_FIXABLE_HIGH_VULNERABILITY",
+        }),
       ]),
     );
   });
