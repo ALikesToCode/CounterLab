@@ -27,6 +27,27 @@ const claims = {
   expiresAt: 1_784_070_300,
 };
 
+const BASE64URL_ALPHABET =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+function nonCanonicalSignatureAlias(token: string): string {
+  const segments = token.split(".");
+  const signature = segments[2];
+  if (segments.length !== 3 || signature === undefined) {
+    throw new Error("test token envelope is invalid");
+  }
+  const finalCharacter = signature.at(-1);
+  if (finalCharacter === undefined) throw new Error("test signature is empty");
+  const finalIndex = BASE64URL_ALPHABET.indexOf(finalCharacter);
+  if (finalIndex < 0 || signature.length % 4 !== 2) {
+    throw new Error("test signature is not the expected P-256 encoding");
+  }
+  const aliasCharacter = BASE64URL_ALPHABET[finalIndex ^ 1];
+  if (aliasCharacter === undefined) throw new Error("test alias is invalid");
+  segments[2] = `${signature.slice(0, -1)}${aliasCharacter}`;
+  return segments.join(".");
+}
+
 describe("runner job tokens", () => {
   let privateKey: string;
   let publicKey: string;
@@ -96,5 +117,19 @@ describe("runner job tokens", () => {
     await expect(issueRunnerJobToken(claims, "not-a-key")).rejects.toThrow(
       /private/i,
     );
+  });
+
+  it("rejects a non-canonical base64url alias of a valid signature", async () => {
+    const token = await issueRunnerJobToken(claims, privateKey);
+    const alias = nonCanonicalSignatureAlias(token);
+    expect(alias).not.toBe(token);
+
+    await expect(
+      verifyRunnerJobToken(alias, publicKey, {
+        nowEpochSeconds: claims.issuedAt + 1,
+        jobId: claims.jobId,
+        purpose: "RUN_JOB",
+      }),
+    ).rejects.toThrow(/encoding/i);
   });
 });

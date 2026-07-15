@@ -49,9 +49,13 @@ function base64UrlDecode(value: string): Uint8Array<ArrayBuffer> {
     const binary = atob(
       value.replaceAll("-", "+").replaceAll("_", "/") + padding,
     );
-    return new Uint8Array(
+    const decoded = new Uint8Array(
       Uint8Array.from(binary, (character) => character.charCodeAt(0)).buffer,
     );
+    if (base64UrlEncode(decoded) !== value) {
+      throw new RunnerTokenError("Runner token contains invalid encoding");
+    }
+    return decoded;
   } catch {
     throw new RunnerTokenError("Runner token contains invalid encoding");
   }
