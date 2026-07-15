@@ -594,8 +594,12 @@ test("a configured hosted runner completes an untouched leakage notebook", async
   await page.getByRole("button", { name: /Lock my answer/i }).click();
 
   await expect(
-    page.getByRole("heading", { name: /Here.s what changed/i }),
+    page.getByRole("heading", { name: /The fair test passed its checks/i }),
   ).toBeVisible({ timeout: 360_000 });
+  await page.getByRole("button", { name: /Show me what happened/i }).click();
+  await expect(
+    page.getByRole("heading", { name: /Here.s what changed/i }),
+  ).toBeVisible();
   await expect(page.getByText(/0 shared customers/i).first()).toBeVisible();
 
   await page.getByLabel(/Whole entities/i).check();
@@ -701,10 +705,14 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
   await page.getByRole("button", { name: /Lock my answer/i }).click();
 
   await expect(
+    page.getByRole("heading", { name: /The fair test passed its checks/i }),
+  ).toBeVisible({ timeout: 360_000 });
+  await page.getByRole("button", { name: /Show me what happened/i }).click();
+  await expect(
     page.getByRole("heading", {
       name: /A high accuracy can still miss every rare event/i,
     }),
-  ).toBeVisible({ timeout: 360_000 });
+  ).toBeVisible();
   await expect(
     page.getByText(/Verified Lab · rare-event evaluation/i),
   ).toBeVisible();
