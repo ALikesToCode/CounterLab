@@ -626,6 +626,33 @@ export class AppServerCodexCompiler implements CodexCompiler {
     cwd: string,
     phase: "plan" | "generate" | "repair" | "patch",
   ): AsyncIterable<CompilerEvent> {
+    for (let startupAttempt = 0; startupAttempt < 2; startupAttempt += 1) {
+      let emittedCompilerOutput = false;
+      try {
+        for await (const event of this.runOnce(prompt, cwd, phase)) {
+          if (event.type !== "status") emittedCompilerOutput = true;
+          yield event;
+        }
+        return;
+      } catch (error) {
+        const setupError = asSetupError(error);
+        if (
+          startupAttempt === 0 &&
+          !emittedCompilerOutput &&
+          setupError.code === "CODEX_PROCESS_EXITED"
+        ) {
+          continue;
+        }
+        throw setupError;
+      }
+    }
+  }
+
+  private async *runOnce(
+    prompt: string,
+    cwd: string,
+    phase: "plan" | "generate" | "repair" | "patch",
+  ): AsyncIterable<CompilerEvent> {
     const launch = await this.prepareLaunch(cwd);
     const connection = new AppServerConnection(
       launch.command,

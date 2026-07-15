@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -442,6 +445,48 @@ describe("hosted plan-only compiler", () => {
       type: "status",
       phase: "plan",
       status: "completed",
+    });
+  });
+
+  it("restarts one App Server that exits before emitting compiler output", async () => {
+    const fakeServer = fileURLToPath(
+      new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
+    );
+    const work = await mkdtemp(join(tmpdir(), "counterlab-codex-restart-"));
+    const exitMarker = join(work, "first-process-exited");
+    const compiler = new AppServerCodexCompiler({
+      command: process.execPath,
+      commandArgs: [fakeServer, `--exit-once=${exitMarker}`],
+      timeoutMs: 2_000,
+      ...unisolatedTestProcess,
+    });
+
+    try {
+      await expect(
+        collect(compiler.compileExperimentPlan(hostedPlanInput())),
+      ).resolves.toContainEqual({
+        type: "status",
+        phase: "plan",
+        status: "completed",
+      });
+    } finally {
+      await rm(work, { recursive: true, force: true });
+    }
+  });
+
+  it("fails closed after the single startup restart is exhausted", async () => {
+    const compiler = new AppServerCodexCompiler({
+      command: process.execPath,
+      commandArgs: ["-e", "process.exit(17)"],
+      timeoutMs: 2_000,
+      ...unisolatedTestProcess,
+    });
+
+    await expect(
+      collect(compiler.compileExperimentPlan(hostedPlanInput())),
+    ).rejects.toMatchObject({
+      name: "CompilerSetupError",
+      code: "CODEX_PROCESS_EXITED",
     });
   });
 });

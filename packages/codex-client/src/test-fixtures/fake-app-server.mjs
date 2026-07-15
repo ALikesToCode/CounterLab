@@ -1,4 +1,14 @@
 import readline from "node:readline";
+import { existsSync, writeFileSync } from "node:fs";
+
+const exitOnceArgument = process.argv.find((argument) =>
+  argument.startsWith("--exit-once="),
+);
+const exitOnceFile = exitOnceArgument?.slice("--exit-once=".length);
+if (exitOnceFile && !existsSync(exitOnceFile)) {
+  writeFileSync(exitOnceFile, "exited\n", { mode: 0o600 });
+  process.exit(17);
+}
 
 const lines = readline.createInterface({ input: process.stdin });
 let initialized = false;
