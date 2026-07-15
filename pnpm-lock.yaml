@@ -175,6 +175,15 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/scientific-engine-registry:
+    dependencies:
+      "@counterlab/session-core":
+        specifier: workspace:*
+        version: link:../session-core
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+
   packages/session-core:
     dependencies:
       "@counterlab/contracts":

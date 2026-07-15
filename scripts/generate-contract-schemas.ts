@@ -7,6 +7,13 @@ import {
   ExperimentPlanV2Schema,
   PatchPlanV1Schema,
 } from "../packages/contracts/src/index.js";
+import {
+  ScientificEngineEvidenceCatalogSchema,
+  ScientificEngineRegistrySchema,
+  ScientificEngineRuntimeManifestSchema,
+  ScientificEngineSnapshotSchema,
+  SubjectPackEngineBindingsSchema,
+} from "../packages/scientific-engine-registry/src/index.js";
 
 const root = resolve(import.meta.dirname, "..");
 const schemas = [
@@ -22,6 +29,66 @@ const schemas = [
     title: "CounterLab hosted Patch Plan v1",
     schema: PatchPlanV1Schema,
   },
+  {
+    fileName: "CounterLab_Scientific_Engine_Registry_v5_1.schema.json",
+    id: "https://counterlab.dev/schemas/scientific-engine-snapshot-v5.1.schema.json",
+    title: "CounterLab scientific engine authority snapshot v5.1",
+    schema: ScientificEngineSnapshotSchema,
+    destinations: [
+      resolve(
+        root,
+        "scientific-engines/CounterLab_Scientific_Engine_Registry_v5_1.schema.json",
+      ),
+    ],
+  },
+  {
+    fileName: "scientific-engine-registry-v1.schema.json",
+    id: "https://counterlab.dev/schemas/scientific-engine-registry-v1.schema.json",
+    title: "CounterLab scientific engine registry v1",
+    schema: ScientificEngineRegistrySchema,
+    destinations: [
+      resolve(
+        root,
+        "scientific-engines/schemas/scientific-engine-registry-v1.schema.json",
+      ),
+    ],
+  },
+  {
+    fileName: "subject-pack-engine-bindings-v1.schema.json",
+    id: "https://counterlab.dev/schemas/subject-pack-engine-bindings-v1.schema.json",
+    title: "CounterLab Subject Pack engine bindings v1",
+    schema: SubjectPackEngineBindingsSchema,
+    destinations: [
+      resolve(
+        root,
+        "scientific-engines/schemas/subject-pack-engine-bindings-v1.schema.json",
+      ),
+    ],
+  },
+  {
+    fileName: "scientific-engine-runtime-v1.schema.json",
+    id: "https://counterlab.dev/schemas/scientific-engine-runtime-v1.schema.json",
+    title: "CounterLab scientific engine runtime manifest v1",
+    schema: ScientificEngineRuntimeManifestSchema,
+    destinations: [
+      resolve(
+        root,
+        "scientific-engines/schemas/scientific-engine-runtime-v1.schema.json",
+      ),
+    ],
+  },
+  {
+    fileName: "scientific-engine-evidence-v1.schema.json",
+    id: "https://counterlab.dev/schemas/scientific-engine-evidence-v1.schema.json",
+    title: "CounterLab scientific engine evidence catalog v1",
+    schema: ScientificEngineEvidenceCatalogSchema,
+    destinations: [
+      resolve(
+        root,
+        "scientific-engines/schemas/scientific-engine-evidence-v1.schema.json",
+      ),
+    ],
+  },
 ];
 
 for (const definition of schemas) {
@@ -31,14 +98,18 @@ for (const definition of schemas) {
     null,
     2,
   )}\n`;
-  for (const destination of [
-    resolve(root, "packages/contracts/schemas", definition.fileName),
-    resolve(
-      root,
-      "services/kernel/src/counterlab_kernel/schemas",
-      definition.fileName,
-    ),
-  ]) {
+  const destinations =
+    "destinations" in definition
+      ? definition.destinations
+      : [
+          resolve(root, "packages/contracts/schemas", definition.fileName),
+          resolve(
+            root,
+            "services/kernel/src/counterlab_kernel/schemas",
+            definition.fileName,
+          ),
+        ];
+  for (const destination of destinations) {
     await mkdir(dirname(destination), { recursive: true });
     await writeFile(destination, serialized, "utf8");
   }

@@ -1,0 +1,248 @@
+{
+  "$id": "https://counterlab.dev/schemas/scientific-engine-registry-v1.schema.json",
+  "title": "CounterLab scientific engine registry v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1"
+    },
+    "engines": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+          },
+          "domain": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+          },
+          "packageName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "exactVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "sourceUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "licenseId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240,
+            "pattern": "^[A-Za-z0-9().+\\- ]+$"
+          },
+          "licenseFileHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "runtime": {
+            "type": "string",
+            "enum": [
+              "server_python",
+              "browser_wasm",
+              "browser_js",
+              "build_only"
+            ]
+          },
+          "roles": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "authoritative_solver",
+                "reference_oracle",
+                "unit_validator",
+                "renderer",
+                "property_test_generator",
+                "secondary_comparator"
+              ]
+            }
+          },
+          "capabilities": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            }
+          },
+          "allowedOperationIds": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+            }
+          },
+          "networkPolicy": {
+            "type": "string",
+            "const": "denied"
+          },
+          "deterministicProfile": {
+            "type": "object",
+            "properties": {
+              "seedPolicy": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "threadPolicy": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "toleranceProfileId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120,
+                "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+              },
+              "hardwareNotes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                }
+              }
+            },
+            "required": [
+              "seedPolicy",
+              "threadPolicy",
+              "toleranceProfileId",
+              "hardwareNotes"
+            ],
+            "additionalProperties": false
+          },
+          "resourceLimits": {
+            "type": "object",
+            "properties": {
+              "maxSeconds": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 3600
+              },
+              "maxMemoryMb": {
+                "type": "integer",
+                "minimum": 16,
+                "maximum": 65536
+              },
+              "maxOutputBytes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 104857600
+              }
+            },
+            "required": [
+              "maxSeconds",
+              "maxMemoryMb",
+              "maxOutputBytes"
+            ],
+            "additionalProperties": false
+          },
+          "validation": {
+            "type": "object",
+            "properties": {
+              "oracleStrategyIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120,
+                  "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+                }
+              },
+              "goldenFixtureIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120,
+                  "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+                }
+              },
+              "metamorphicPropertyIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120,
+                  "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+                }
+              },
+              "upgradeDriftFixtureIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120,
+                  "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+                }
+              }
+            },
+            "required": [
+              "oracleStrategyIds",
+              "goldenFixtureIds",
+              "metamorphicPropertyIds",
+              "upgradeDriftFixtureIds"
+            ],
+            "additionalProperties": false
+          },
+          "attribution": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "integrityHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "id",
+          "domain",
+          "packageName",
+          "exactVersion",
+          "sourceUrl",
+          "licenseId",
+          "licenseFileHash",
+          "runtime",
+          "roles",
+          "capabilities",
+          "allowedOperationIds",
+          "networkPolicy",
+          "deterministicProfile",
+          "resourceLimits",
+          "validation",
+          "attribution",
+          "integrityHash"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "engines"
+  ],
+  "additionalProperties": false
+}
