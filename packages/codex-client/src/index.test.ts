@@ -27,6 +27,7 @@ import {
 const generationDirectory = "/tmp/counterlab/generated/session_test";
 const unisolatedTestProcess = {
   allowUnisolatedTestProcess: true as const,
+  restartDelayMs: 0,
 };
 
 function labInput(): CompileLabInput {
@@ -495,17 +496,17 @@ describe("hosted plan-only compiler", () => {
     }
   });
 
-  it("restarts one App Server whose turn fails before material compiler output", async () => {
+  it("restarts two App Servers whose turns fail before material compiler output", async () => {
     const fakeServer = fileURLToPath(
       new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
     );
     const work = await mkdtemp(
       join(tmpdir(), "counterlab-codex-turn-restart-"),
     );
-    const failureMarker = join(work, "first-turn-failed");
+    const failureMarker = join(work, "failed-turn-count");
     const compiler = new AppServerCodexCompiler({
       command: process.execPath,
-      commandArgs: [fakeServer, `--fail-turn-once=${failureMarker}`],
+      commandArgs: [fakeServer, `--fail-turn-twice=${failureMarker}`],
       timeoutMs: 2_000,
       ...unisolatedTestProcess,
     });
@@ -523,7 +524,7 @@ describe("hosted plan-only compiler", () => {
     }
   });
 
-  it("fails closed after the single startup restart is exhausted", async () => {
+  it("fails closed after the bounded startup restarts are exhausted", async () => {
     const compiler = new AppServerCodexCompiler({
       command: process.execPath,
       commandArgs: ["-e", "process.exit(17)"],

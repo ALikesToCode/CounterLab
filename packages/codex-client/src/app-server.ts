@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 
 import { z } from "zod";
@@ -38,6 +39,7 @@ import {
 const execFileAsync = promisify(execFile);
 const MAX_PROTOCOL_BUFFER_BYTES = 1_048_576;
 const MAX_STDERR_BYTES = 4_000;
+const MAX_APP_SERVER_ATTEMPTS = 3;
 
 const ResponseEnvelopeSchema = z
   .object({
@@ -103,6 +105,7 @@ export type AppServerCodexCompilerOptions = {
   healthArgs?: string[];
   model?: string | undefined;
   timeoutMs?: number;
+  restartDelayMs?: number;
   environment?: NodeJS.ProcessEnv;
   launchBoundary?: AppServerLaunchBoundary;
   /** Fake App Server processes in unit tests only. Rejected outside NODE_ENV=test. */
@@ -470,6 +473,7 @@ export class AppServerCodexCompiler implements CodexCompiler {
   private readonly healthArgs: string[];
   private readonly model: string | undefined;
   private readonly timeoutMs: number;
+  private readonly restartDelayMs: number;
   private readonly environment: NodeJS.ProcessEnv;
   private readonly launchBoundary: AppServerLaunchBoundary | undefined;
   private readonly allowUnisolatedTestProcess: boolean;
@@ -482,6 +486,17 @@ export class AppServerCodexCompiler implements CodexCompiler {
     this.model =
       options.model?.trim() || process.env.CODEX_MODEL?.trim() || undefined;
     this.timeoutMs = options.timeoutMs ?? 120_000;
+    this.restartDelayMs = options.restartDelayMs ?? 1_000;
+    if (
+      !Number.isInteger(this.restartDelayMs) ||
+      this.restartDelayMs < 0 ||
+      this.restartDelayMs > 10_000
+    ) {
+      throw new CompilerSetupError(
+        "CODEX_INVALID_INPUT",
+        "Codex App Server restart delay must be an integer from 0 to 10000 milliseconds.",
+      );
+    }
     this.environment = safeEnvironment(options.environment ?? process.env);
     this.launchBoundary = options.launchBoundary;
     this.allowUnisolatedTestProcess =
@@ -626,7 +641,11 @@ export class AppServerCodexCompiler implements CodexCompiler {
     cwd: string,
     phase: "plan" | "generate" | "repair" | "patch",
   ): AsyncIterable<CompilerEvent> {
-    for (let startupAttempt = 0; startupAttempt < 2; startupAttempt += 1) {
+    for (
+      let startupAttempt = 0;
+      startupAttempt < MAX_APP_SERVER_ATTEMPTS;
+      startupAttempt += 1
+    ) {
       let emittedCompilerOutput = false;
       try {
         for await (const event of this.runOnce(prompt, cwd, phase)) {
@@ -643,10 +662,11 @@ export class AppServerCodexCompiler implements CodexCompiler {
       } catch (error) {
         const setupError = asSetupError(error);
         if (
-          startupAttempt === 0 &&
+          startupAttempt < MAX_APP_SERVER_ATTEMPTS - 1 &&
           !emittedCompilerOutput &&
           setupError.code === "CODEX_PROCESS_EXITED"
         ) {
+          await delay(this.restartDelayMs);
           continue;
         }
         throw setupError;

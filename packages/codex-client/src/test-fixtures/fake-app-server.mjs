@@ -1,5 +1,5 @@
 import readline from "node:readline";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 const exitOnceArgument = process.argv.find((argument) =>
   argument.startsWith("--exit-once="),
@@ -20,6 +20,12 @@ const failTurnOnceArgument = process.argv.find((argument) =>
 );
 const failTurnOnceFile = failTurnOnceArgument?.slice(
   "--fail-turn-once=".length,
+);
+const failTurnTwiceArgument = process.argv.find((argument) =>
+  argument.startsWith("--fail-turn-twice="),
+);
+const failTurnTwiceFile = failTurnTwiceArgument?.slice(
+  "--fail-turn-twice=".length,
 );
 const expectModelOmitted = process.argv.includes("--expect-model-omitted");
 const expectConstrainedTurn = process.argv.includes(
@@ -89,10 +95,21 @@ lines.on("line", (line) => {
     return;
   }
   if (message.method === "turn/start") {
+    const failureMarker = failTurnTwiceFile ?? failTurnOnceFile;
+    const failuresBeforeSuccess = failTurnTwiceFile ? 2 : 1;
+    const observedFailures =
+      failureMarker && existsSync(failureMarker)
+        ? Number(readFileSync(failureMarker, "utf8"))
+        : 0;
     const failThisTurn =
-      failedTurn || (failTurnOnceFile && !existsSync(failTurnOnceFile));
-    if (failTurnOnceFile && !existsSync(failTurnOnceFile)) {
-      writeFileSync(failTurnOnceFile, "failed\n", { mode: 0o600 });
+      failedTurn ||
+      (failureMarker !== undefined &&
+        Number.isInteger(observedFailures) &&
+        observedFailures < failuresBeforeSuccess);
+    if (failureMarker !== undefined && failThisTurn && !failedTurn) {
+      writeFileSync(failureMarker, String(observedFailures + 1), {
+        mode: 0o600,
+      });
     }
     if (expectedCwd && message.params.cwd !== expectedCwd) process.exit(7);
     if (
