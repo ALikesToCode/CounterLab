@@ -1783,6 +1783,7 @@ function InteractiveLeakageLab({
       {selectedRun !== undefined && configurationHash !== null && (
         <div className="interactive-result" aria-live="polite">
           <div className="interactive-result-score">
+            <span className="verified-chip">Verified exploratory result</span>
             <span>Verified accuracy</span>
             <strong>{percent.format(selectedRun.metrics.accuracy)}</strong>
             <small>
