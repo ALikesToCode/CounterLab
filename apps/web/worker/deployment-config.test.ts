@@ -29,6 +29,7 @@ describe("Cloudflare static asset routing", () => {
       readFileSync(resolve(process.cwd(), "wrangler.jsonc"), "utf-8"),
     ) as {
       assets?: {
+        directory?: string;
         not_found_handling?: string;
         run_worker_first?: string[];
       };
@@ -36,9 +37,16 @@ describe("Cloudflare static asset routing", () => {
 
     expect(config.assets).toEqual(
       expect.objectContaining({
+        directory: "./dist/client",
         not_found_handling: "single-page-application",
         run_worker_first: ["/api/*", "/ready"],
       }),
+    );
+    const packageJson = JSON.parse(
+      readFileSync(resolve(process.cwd(), "package.json"), "utf-8"),
+    ) as { scripts?: Record<string, string> };
+    expect(packageJson.scripts?.deploy).toBe(
+      "vite build && wrangler deploy --config dist/counterlab/wrangler.json",
     );
   });
 
