@@ -2,10 +2,13 @@ import { createHash } from "node:crypto";
 
 import {
   ArtifactManifestSchema,
+  BeliefSpecV2Schema,
   BeliefTestSchema,
   type ArtifactManifest,
+  type BeliefSpecV2,
   type BeliefTest,
   type ConceptId,
+  type EvidenceRef,
 } from "@counterlab/contracts";
 import {
   getConceptPack,
@@ -391,14 +394,38 @@ export function resolveBeliefTestEvidence(
   manifest: ArtifactManifest,
   learnerClaim: string,
 ): void {
-  if (
-    beliefTest.uncertainty.insufficientEvidence &&
-    beliefTest.evidenceRefs.length === 0
-  ) {
+  resolveEvidenceRefs(
+    beliefTest.evidenceRefs,
+    manifest,
+    learnerClaim,
+    beliefTest.uncertainty.insufficientEvidence,
+  );
+}
+
+export function resolveBeliefSpecV2Evidence(
+  beliefSpec: BeliefSpecV2,
+  manifest: ArtifactManifest,
+): void {
+  const parsed = BeliefSpecV2Schema.parse(beliefSpec);
+  resolveEvidenceRefs(
+    parsed.evidenceRefs,
+    manifest,
+    parsed.claim,
+    parsed.supportState === "INSUFFICIENT_EVIDENCE",
+  );
+}
+
+function resolveEvidenceRefs(
+  evidenceRefs: readonly EvidenceRef[],
+  manifest: ArtifactManifest,
+  learnerClaim: string,
+  insufficientEvidence: boolean,
+): void {
+  if (insufficientEvidence && evidenceRefs.length === 0) {
     return;
   }
 
-  for (const [index, evidence] of beliefTest.evidenceRefs.entries()) {
+  for (const [index, evidence] of evidenceRefs.entries()) {
     if (evidence.kind === "schema") {
       if (evidence.hash !== schemaSummaryHash(manifest.schemaSummary)) {
         evidenceError(index, "schema hash is unknown");

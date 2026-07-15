@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
 
-import type { ArtifactManifest, BeliefTest } from "@counterlab/contracts";
+import {
+  BeliefTestSchema,
+  migrateBeliefTestV1ToV2,
+  type ArtifactManifest,
+  type BeliefSpecV2,
+  type BeliefTest,
+} from "@counterlab/contracts";
 
 import {
   APPROVED_LEAKAGE_SAMPLE_SHA256,
@@ -17,6 +23,7 @@ import {
   deriveSafetyIdentifier,
   normalizeResponsesBaseURL,
   normalizeResponsesTimeout,
+  resolveBeliefSpecV2Evidence,
   resolveBeliefTestEvidence,
   schemaSummaryHash,
   type ResponsesTransport,
@@ -68,6 +75,23 @@ function manifest(overrides: Partial<ArtifactManifest> = {}): ArtifactManifest {
 }
 
 const claim = "This proves the model generalizes to new customers.";
+
+function parsedBeliefTest(artifact = manifest()): BeliefTest {
+  const wire = liveModelOutput(artifact);
+  return BeliefTestSchema.parse({
+    ...wire,
+    evidenceRefs: wire.evidenceRefs.map((evidence) => ({
+      kind: evidence.kind,
+      hash: evidence.hash,
+      excerpt: evidence.excerpt,
+      relevance: evidence.relevance,
+      ...(evidence.cellIndex === null ? {} : { cellIndex: evidence.cellIndex }),
+      ...(evidence.outputIndex === null
+        ? {}
+        : { outputIndex: evidence.outputIndex }),
+    })),
+  });
+}
 
 function liveModelOutput(
   artifact = manifest(),
@@ -336,6 +360,40 @@ describe("privacy-preserving analyst input", () => {
 });
 
 describe("evidence resolution", () => {
+  it("resolves every Belief Spec v2 reference against trusted artifact evidence", () => {
+    const artifact = manifest();
+    const beliefSpec = migrateBeliefTestV1ToV2(parsedBeliefTest(artifact));
+
+    expect(() =>
+      resolveBeliefSpecV2Evidence(beliefSpec, artifact),
+    ).not.toThrow();
+  });
+
+  it("rejects a v2 reference even when its nested copies agree with each other", () => {
+    const artifact = manifest();
+    const source = migrateBeliefTestV1ToV2(parsedBeliefTest(artifact));
+    const fabricatedEvidence = source.evidenceRefs.map((evidence) => ({
+      ...evidence,
+      hash: digest("f"),
+    }));
+    const fabricated = {
+      ...source,
+      evidenceRefs: fabricatedEvidence,
+      hypotheses: [
+        { ...source.hypotheses[0], evidence: fabricatedEvidence },
+        { ...source.hypotheses[1], evidence: fabricatedEvidence },
+      ],
+      alternatives: source.alternatives.map((alternative) => ({
+        ...alternative,
+        evidence: fabricatedEvidence,
+      })),
+    } satisfies BeliefSpecV2;
+
+    expect(() =>
+      resolveBeliefSpecV2Evidence(fabricated, artifact),
+    ).toThrowError(expect.objectContaining({ code: "UNRESOLVED_EVIDENCE" }));
+  });
+
   it("accepts code, output, schema, and learner-claim hashes that resolve", () => {
     const artifact = manifest();
     const beliefTest: BeliefTest = {
