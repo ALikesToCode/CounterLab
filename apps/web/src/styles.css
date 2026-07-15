@@ -5667,6 +5667,17 @@ thead {
   font-size: 12px;
 }
 
+.completion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.completion-actions .patch-download {
+  margin-top: 0;
+}
+
 .verified-patch-details,
 .technical-proof {
   margin-top: 18px;
@@ -5756,6 +5767,10 @@ thead {
   .completion-phase .final-title .button {
     width: 100%;
     justify-content: center;
+  }
+
+  .completion-actions {
+    width: 100%;
   }
 
   .completion-hero dl {

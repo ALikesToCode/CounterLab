@@ -2181,14 +2181,25 @@ function LeakageRealityScreen({
               <h2>Your learning, before and after</h2>
               <p>One view of what changed in your idea, evidence, and code.</p>
             </div>
-            <button
-              className="button button-quiet"
-              type="button"
-              disabled={proofBundle === null}
-              onClick={exportProof}
-            >
-              {proofBundle === null ? "Preparing proof" : "Download proof"}
-            </button>
+            <div className="completion-actions">
+              {session?.mode.kind === "live_notebook" && patch !== null && (
+                <a
+                  className="button button-gold patch-download"
+                  href={counterLabApi.patchDownloadUrl(session.sessionId)}
+                  download
+                >
+                  Download verified notebook copy <Mark name="arrow" />
+                </a>
+              )}
+              <button
+                className="button button-quiet"
+                type="button"
+                disabled={proofBundle === null}
+                onClick={exportProof}
+              >
+                {proofBundle === null ? "Preparing proof" : "Download proof"}
+              </button>
+            </div>
           </div>
           <div className="diff-table" role="table" aria-label="Reasoning Diff">
             <div className="diff-row diff-head" role="row">
@@ -2241,15 +2252,6 @@ function LeakageRealityScreen({
               <Mark name="check" /> Cell 3 changed · unrelated source hashes
               unchanged · group overlap 0 · result reproduced
             </p>
-            {session?.mode.kind === "live_notebook" && patch !== null && (
-              <a
-                className="button button-gold patch-download"
-                href={counterLabApi.patchDownloadUrl(session.sessionId)}
-                download
-              >
-                Download verified notebook copy <Mark name="arrow" />
-              </a>
-            )}
           </details>
           <details className="technical-proof">
             <summary>Technical proof and reproduction</summary>
