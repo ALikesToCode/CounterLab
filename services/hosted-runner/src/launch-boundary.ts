@@ -59,6 +59,13 @@ function isContained(root: string, candidate: string): boolean {
 export class ContainerCodexLaunchBoundary implements AppServerLaunchBoundary {
   private readonly parsedAuth: string;
 
+  private get requiresPrivilegeDrop(): boolean {
+    return (
+      process.getuid?.() !== this.options.uid ||
+      process.getgid?.() !== this.options.gid
+    );
+  }
+
   constructor(private readonly options: ContainerCodexLaunchBoundaryOptions) {
     try {
       this.parsedAuth = JSON.stringify(
@@ -132,18 +139,22 @@ export class ContainerCodexLaunchBoundary implements AppServerLaunchBoundary {
     let revoked = false;
     try {
       await chmod(codexHome, 0o700);
-      await chown(codexHome, this.options.uid, this.options.gid);
       await mkdir(runtimeTemp, { mode: 0o700 });
-      await chown(runtimeTemp, this.options.uid, this.options.gid);
       await chmod(runtimeTemp, 0o700);
       await writeFile(authPath, this.parsedAuth, {
         encoding: "utf8",
         mode: 0o600,
         flag: "wx",
       });
-      await chown(authPath, this.options.uid, this.options.gid);
       await chmod(authPath, 0o600);
-      await chown(workspace, this.options.uid, this.options.gid);
+      if (this.requiresPrivilegeDrop) {
+        await Promise.all([
+          chown(codexHome, this.options.uid, this.options.gid),
+          chown(runtimeTemp, this.options.uid, this.options.gid),
+          chown(authPath, this.options.uid, this.options.gid),
+          chown(workspace, this.options.uid, this.options.gid),
+        ]);
+      }
       await chmod(workspace, 0o700);
     } catch (error) {
       await rm(codexHome, { force: true, recursive: true });
@@ -163,9 +174,13 @@ export class ContainerCodexLaunchBoundary implements AppServerLaunchBoundary {
     return {
       command: this.options.setprivExecutable,
       args: [
-        `--reuid=${this.options.uid}`,
-        `--regid=${this.options.gid}`,
-        "--clear-groups",
+        ...(this.requiresPrivilegeDrop
+          ? [
+              `--reuid=${this.options.uid}`,
+              `--regid=${this.options.gid}`,
+              "--clear-groups",
+            ]
+          : []),
         "--no-new-privs",
         request.command,
         ...request.args,

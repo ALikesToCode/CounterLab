@@ -56,7 +56,14 @@ describe("ContainerCodexLaunchBoundary", () => {
     expect((await stat(workspace)).mode & 0o777).toBe(0o700);
 
     expect(prepared.command).toBe("/usr/bin/setpriv");
-    expect(prepared.args).toContain(`--reuid=${process.getuid?.() ?? 1000}`);
+    expect(prepared.args).toContain("--no-new-privs");
+    expect(prepared.args).not.toContain(
+      `--reuid=${process.getuid?.() ?? 1000}`,
+    );
+    expect(prepared.args).not.toContain(
+      `--regid=${process.getgid?.() ?? 1000}`,
+    );
+    expect(prepared.args).not.toContain("--clear-groups");
     expect(prepared.args).toContain(process.execPath);
     expect(prepared.environment).not.toHaveProperty("CODEX_AUTH_JSON");
     expect(prepared.environment).not.toHaveProperty("OPENAI_API_KEY");
