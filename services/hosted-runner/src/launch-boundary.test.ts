@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { access, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -21,10 +21,12 @@ async function root(): Promise<string> {
 }
 
 describe("ContainerCodexLaunchBoundary", () => {
-  it("stages credentials for initialization, drops privileges, and revokes before the turn", async () => {
+  it("passes the access token only to the trusted App Server process", async () => {
     const workspaceRoot = await root();
     const workspace = join(workspaceRoot, "job_1");
     const codexHomeRoot = await root();
+    const ptraceScopePath = join(await root(), "ptrace_scope");
+    await writeFile(ptraceScopePath, "1\n");
     const boundary = new ContainerCodexLaunchBoundary({
       authJson: JSON.stringify({
         tokens: { access_token: "access-token-long-enough-for-test" },
@@ -35,6 +37,7 @@ describe("ContainerCodexLaunchBoundary", () => {
       setprivExecutable: "/usr/bin/setpriv",
       uid: process.getuid?.() ?? 1000,
       gid: process.getgid?.() ?? 1000,
+      ptraceScopePath,
     });
     await import("node:fs/promises").then(({ mkdir }) =>
       mkdir(workspace, { mode: 0o700 }),
@@ -59,6 +62,10 @@ describe("ContainerCodexLaunchBoundary", () => {
     expect(prepared.args).toContain(`--reuid=${process.getuid?.() ?? 1000}`);
     expect(prepared.args).toContain(process.execPath);
     expect(prepared.environment).not.toHaveProperty("CODEX_AUTH_JSON");
+    expect(prepared.environment).not.toHaveProperty("OPENAI_API_KEY");
+    expect(prepared.environment.CODEX_ACCESS_TOKEN).toBe(
+      "access-token-long-enough-for-test",
+    );
     expect(prepared.environment.CODEX_HOME).toMatch(/counterlab-codex-/u);
     expect(prepared.environment.TMPDIR).toMatch(/counterlab-codex-.*\/tmp$/u);
     expect(prepared.environment.TMPDIR).not.toBe(workspace);
@@ -66,14 +73,19 @@ describe("ContainerCodexLaunchBoundary", () => {
       (await stat(prepared.environment.TMPDIR ?? "missing")).mode & 0o777,
     ).toBe(0o700);
     const authPath = join(prepared.environment.CODEX_HOME ?? "", "auth.json");
-    expect(await readFile(authPath, "utf8")).toContain("access_token");
-
-    await prepared.revokeCredentials?.();
-    await expect(readFile(authPath, "utf8")).rejects.toThrow();
+    await expect(access(authPath)).rejects.toThrow();
+    expect(prepared.args).toContain("--strict-config");
+    expect(prepared.args).toContain("shell_environment_policy.inherit=none");
+    expect(prepared.args).toContain(
+      'shell_environment_policy.exclude=["CODEX_ACCESS_TOKEN","OPENAI_API_KEY"]',
+    );
+    expect(prepared.revokeCredentials).toBeUndefined();
     await prepared.dispose?.();
   });
 
-  it("rejects a generation directory outside the configured workspace root", async () => {
+  it("refuses to expose a parent access token without ancestor process protection", async () => {
+    const ptraceScopePath = join(await root(), "ptrace_scope");
+    await writeFile(ptraceScopePath, "0\n");
     const boundary = new ContainerCodexLaunchBoundary({
       authJson: JSON.stringify({
         tokens: { access_token: "access-token-long-enough-for-test" },
@@ -84,6 +96,29 @@ describe("ContainerCodexLaunchBoundary", () => {
       setprivExecutable: "/usr/bin/setpriv",
       uid: process.getuid?.() ?? 1000,
       gid: process.getgid?.() ?? 1000,
+      ptraceScopePath,
+    });
+
+    await expect(boundary.health()).resolves.toMatchObject({
+      available: false,
+      reason: expect.stringMatching(/ancestor process protection/i),
+    });
+  });
+
+  it("rejects a generation directory outside the configured workspace root", async () => {
+    const ptraceScopePath = join(await root(), "ptrace_scope");
+    await writeFile(ptraceScopePath, "1\n");
+    const boundary = new ContainerCodexLaunchBoundary({
+      authJson: JSON.stringify({
+        tokens: { access_token: "access-token-long-enough-for-test" },
+      }),
+      workspaceRoot: await root(),
+      codexHomeRoot: await root(),
+      codexExecutable: process.execPath,
+      setprivExecutable: "/usr/bin/setpriv",
+      uid: process.getuid?.() ?? 1000,
+      gid: process.getgid?.() ?? 1000,
+      ptraceScopePath,
     });
 
     await expect(
