@@ -365,6 +365,7 @@ export async function runHeldOutCompletion(
       belief,
     );
     await verifyExperimentPlan(plan, {
+      sessionId: plan.sessionId,
       manifest: input.manifest,
       beliefTest: belief,
     });

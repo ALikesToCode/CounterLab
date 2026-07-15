@@ -1486,6 +1486,7 @@ export function createApi(options: ApiOptions = {}) {
     try {
       if (job.kind === "LAB_COMPILE") {
         report = await verifyExperimentPlan(planInput, {
+          sessionId: job.sessionId,
           manifest: artifact.manifest,
           beliefTest: session.beliefTest,
         });
@@ -1714,6 +1715,7 @@ export function createApi(options: ApiOptions = {}) {
             verification = await verifyExperimentPlan(
               JSON.parse(planObject.body) as unknown,
               {
+                sessionId: job.sessionId,
                 manifest: artifact.manifest,
                 beliefTest: currentSession.beliefTest,
               },
@@ -2086,6 +2088,7 @@ export function createApi(options: ApiOptions = {}) {
         const [planVerification, patchPlanVerification, evidenceEvents] =
           await Promise.all([
             verifyExperimentPlan(experimentPlan, {
+              sessionId: updatedSession.id,
               manifest: artifact.manifest,
               beliefTest: updatedSession.beliefTest,
             }),
@@ -2204,6 +2207,7 @@ export function createApi(options: ApiOptions = {}) {
       try {
         plan = ExperimentPlanV2Schema.parse(JSON.parse(planObject.body));
         await verifyExperimentPlan(plan, {
+          sessionId,
           manifest: artifact.manifest,
           beliefTest: current.beliefTest,
         });
@@ -2536,6 +2540,7 @@ export function createApi(options: ApiOptions = {}) {
     );
     if ("concept" in configuration) {
       await verifyExperimentPlan(interactivePlan, {
+        sessionId,
         manifest: artifact.manifest,
         beliefTest: current.beliefTest,
       });
@@ -2544,7 +2549,11 @@ export function createApi(options: ApiOptions = {}) {
         interactivePlan,
         plan,
         configuration,
-        { manifest: artifact.manifest, beliefTest: current.beliefTest },
+        {
+          sessionId,
+          manifest: artifact.manifest,
+          beliefTest: current.beliefTest,
+        },
       );
     }
     const planHash = await hashCanonical(interactivePlan);

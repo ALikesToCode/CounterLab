@@ -355,10 +355,11 @@ describe("hosted Experiment Plan verifier", () => {
 
     await expect(
       verifyExperimentPlan(imbalancePlan, {
+        sessionId: imbalancePlan.sessionId,
         manifest: artifact,
         beliefTest: imbalanceBelief,
       }),
-    ).resolves.toMatchObject({ status: "VERIFIED", invariantCount: 15 });
+    ).resolves.toMatchObject({ status: "VERIFIED", invariantCount: 16 });
 
     const fixtureHash = "9".repeat(64);
     const resultRun = (
@@ -462,6 +463,7 @@ describe("hosted Experiment Plan verifier", () => {
     };
     await expect(
       verifyExperimentPlan(missingThreshold, {
+        sessionId: imbalancePlan.sessionId,
         manifest: artifact,
         beliefTest: imbalanceBelief,
       }),
@@ -472,6 +474,7 @@ describe("hosted Experiment Plan verifier", () => {
 
   it("verifies resolved lineage and the complete leakage intervention set", async () => {
     const report = await verifyExperimentPlan(await plan(), {
+      sessionId: "session_live_1",
       manifest: manifest(),
       beliefTest: belief(),
     });
@@ -484,6 +487,21 @@ describe("hosted Experiment Plan verifier", () => {
     expect(report.planHash).toMatch(/^[a-f0-9]{64}$/);
   });
 
+  it("rejects a plan whose session lineage does not match the verified job", async () => {
+    const crossedSession = {
+      ...(await plan()),
+      sessionId: "session_from_another_job",
+    };
+
+    await expect(
+      verifyExperimentPlan(crossedSession, {
+        sessionId: "session_live_1",
+        manifest: manifest(),
+        beliefTest: belief(),
+      }),
+    ).rejects.toThrow(/session lineage/i);
+  });
+
   it("rejects unresolved evidence, missing group holdout, and changed controls", async () => {
     const unresolved = {
       ...(await plan()),
@@ -491,6 +509,7 @@ describe("hosted Experiment Plan verifier", () => {
     };
     await expect(
       verifyExperimentPlan(unresolved, {
+        sessionId: "session_live_1",
         manifest: manifest(),
         beliefTest: belief(),
       }),
@@ -504,6 +523,7 @@ describe("hosted Experiment Plan verifier", () => {
     };
     await expect(
       verifyExperimentPlan(missingGroup, {
+        sessionId: "session_live_1",
         manifest: manifest(),
         beliefTest: belief(),
       }),
@@ -516,6 +536,7 @@ describe("hosted Experiment Plan verifier", () => {
     };
     await expect(
       verifyExperimentPlan(changedSeed, {
+        sessionId: "session_live_1",
         manifest: manifest(),
         beliefTest: belief(),
       }),

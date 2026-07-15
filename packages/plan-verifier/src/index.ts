@@ -42,6 +42,12 @@ export class PlanVerificationError extends Error {
   }
 }
 
+export type ExperimentPlanVerificationContext = {
+  sessionId: string;
+  manifest: ArtifactManifest;
+  beliefTest: BeliefTest;
+};
+
 export type ResultVerificationReport = {
   schemaVersion: "1";
   status: "VERIFIED" | "REJECTED";
@@ -306,7 +312,7 @@ export async function verifyPatchPlan(
 
 async function verifyImbalanceExperimentPlan(
   plan: ExperimentPlanV2,
-  context: { manifest: ArtifactManifest; beliefTest: BeliefTest },
+  context: ExperimentPlanVerificationContext,
 ): Promise<PlanVerificationReport> {
   const pack = getConceptPack("class_imbalance");
   const runs = [plan.baseline, ...plan.interventions];
@@ -344,6 +350,15 @@ async function verifyImbalanceExperimentPlan(
     );
   }
   const invariants: PlanInvariant[] = [
+    invariant(
+      "session_lineage",
+      plan.sessionId === context.sessionId,
+      plan.sessionId,
+      context.sessionId,
+      plan.sessionId === context.sessionId
+        ? undefined
+        : "The plan session lineage does not match this runner job.",
+    ),
     invariant(
       "artifact_manifest_lineage",
       plan.artifactManifestHash === manifestHash,
@@ -475,7 +490,7 @@ async function verifyImbalanceExperimentPlan(
 
 export async function verifyExperimentPlan(
   input: unknown,
-  context: { manifest: ArtifactManifest; beliefTest: BeliefTest },
+  context: ExperimentPlanVerificationContext,
 ): Promise<PlanVerificationReport> {
   const parsed = ExperimentPlanV2Schema.safeParse(input);
   if (!parsed.success) {
@@ -537,6 +552,15 @@ export async function verifyExperimentPlan(
   const visualizations = new Set(pack.allowedVisualizations);
   const manifestHash = await hashCanonical(context.manifest);
   const invariants: PlanInvariant[] = [
+    invariant(
+      "session_lineage",
+      plan.sessionId === context.sessionId,
+      plan.sessionId,
+      context.sessionId,
+      plan.sessionId === context.sessionId
+        ? undefined
+        : "The plan session lineage does not match this runner job.",
+    ),
     invariant(
       "artifact_manifest_lineage",
       plan.artifactManifestHash === manifestHash,
@@ -1174,7 +1198,7 @@ export async function verifyInteractiveLeakageExperimentPlan(
   candidateInput: unknown,
   baseInput: unknown,
   configuration: InteractiveLeakagePlanConfiguration,
-  context: { manifest: ArtifactManifest; beliefTest: BeliefTest },
+  context: ExperimentPlanVerificationContext,
 ): Promise<PlanVerificationReport> {
   const baseReport = await verifyExperimentPlan(baseInput, context);
   const parsedBase = ExperimentPlanV2Schema.safeParse(baseInput);
