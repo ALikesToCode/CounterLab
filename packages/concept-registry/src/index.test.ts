@@ -271,4 +271,41 @@ describe("concept-pack registry", () => {
       "imbalance.prevalence_sweep",
     );
   });
+
+  it("publishes fixed experiment-selection authority for every released pack", () => {
+    const leakage = getConceptPack("entity_leakage").scientificMethod;
+    expect(leakage.candidateExperimentIds).toEqual([
+      "group-holdout",
+      "group-holdout-plus-ablation",
+    ]);
+    expect(leakage.scoringPolicy).toMatchObject({
+      concept: "entity_leakage",
+      requiredOperationIds: ["leakage.group_holdout"],
+      requiredObservableIds: ["accuracy", "entity_overlap_rate"],
+    });
+
+    const imbalance = getConceptPack("class_imbalance").scientificMethod;
+    expect(imbalance.scoringPolicy).toMatchObject({
+      concept: "class_imbalance",
+      requiredOperationIds: [
+        "imbalance.majority_baseline",
+        "imbalance.confusion_matrix",
+        "imbalance.threshold_sweep",
+      ],
+      requiredObservableIds: ["recall", "confusion_matrix", "prevalence"],
+    });
+    for (const pack of releasedConceptPacks()) {
+      expect(pack.scientificMethod.scoringPolicy.concept).toBe(pack.id);
+      expect(
+        pack.scientificMethod.scoringPolicy.allowedOperationIds.every(
+          (operation) => pack.allowedOperations.includes(operation),
+        ),
+      ).toBe(true);
+      expect(
+        pack.scientificMethod.scoringPolicy.allowedObservableIds.every(
+          (metric) => pack.allowedMetrics.includes(metric),
+        ),
+      ).toBe(true);
+    }
+  });
 });

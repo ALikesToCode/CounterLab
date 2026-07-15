@@ -8,6 +8,10 @@ import type {
   FixedOperationId,
   PatchOperationId,
 } from "@counterlab/contracts";
+import {
+  ExperimentScoringPolicySchema,
+  type ExperimentScoringPolicy,
+} from "@counterlab/experiment-scorer";
 
 export type { ConceptId, ConceptRoutingDecision } from "@counterlab/contracts";
 
@@ -35,6 +39,10 @@ export interface ConceptPackDefinition {
   allowedMetrics: readonly AllowedMetric[];
   allowedVisualizations: readonly AllowedVisualization[];
   experimentPlanRules: readonly string[];
+  scientificMethod: {
+    candidateExperimentIds: readonly string[];
+    scoringPolicy: ExperimentScoringPolicy;
+  };
   verifierContract: {
     id: string;
     invariants: readonly string[];
@@ -50,6 +58,77 @@ export interface ConceptPackDefinition {
   approvedClaims: readonly string[];
   forbiddenClaims: readonly string[];
 }
+
+const leakageScoringPolicy = ExperimentScoringPolicySchema.parse({
+  schemaVersion: "1",
+  policyVersion: "leakage-selection-v1",
+  concept: "entity_leakage",
+  allowedOperationIds: [
+    "leakage.random_row_split",
+    "leakage.group_holdout",
+    "leakage.identity_ablation",
+    "leakage.entity_overlap",
+    "leakage.controlled_comparison",
+  ],
+  requiredOperationIds: ["leakage.group_holdout"],
+  requiredControlIds: ["model", "seed", "test_fraction"],
+  allowedChangedVariableIds: ["split_strategy", "identity_feature"],
+  requiredObservableIds: ["accuracy", "entity_overlap_rate"],
+  allowedObservableIds: ["accuracy", "roc_auc", "entity_overlap_rate"],
+  patternSeparations: [
+    {
+      currentPatternId: "leakage.small-gap",
+      competingPatternId: "leakage.material-gap",
+      separation: 0.82,
+    },
+  ],
+  minimumSeparation: 0.4,
+  maximumComplexityCost: 10,
+  complexityWeight: 0.15,
+  scorerVersion: "experiment-scorer-v1",
+});
+
+const imbalanceScoringPolicy = ExperimentScoringPolicySchema.parse({
+  schemaVersion: "1",
+  policyVersion: "imbalance-selection-v1",
+  concept: "class_imbalance",
+  allowedOperationIds: [
+    "imbalance.majority_baseline",
+    "imbalance.stratified_holdout",
+    "imbalance.confusion_matrix",
+    "imbalance.threshold_sweep",
+    "imbalance.prevalence_sweep",
+  ],
+  requiredOperationIds: [
+    "imbalance.majority_baseline",
+    "imbalance.confusion_matrix",
+    "imbalance.threshold_sweep",
+  ],
+  requiredControlIds: ["model_scores", "seed", "evaluation_set"],
+  allowedChangedVariableIds: ["decision_threshold", "class_prevalence"],
+  requiredObservableIds: ["recall", "confusion_matrix", "prevalence"],
+  allowedObservableIds: [
+    "accuracy",
+    "precision",
+    "recall",
+    "f1",
+    "pr_auc",
+    "roc_auc",
+    "confusion_matrix",
+    "prevalence",
+  ],
+  patternSeparations: [
+    {
+      currentPatternId: "imbalance.useful-minority-detection",
+      competingPatternId: "imbalance.majority-dominance",
+      separation: 0.85,
+    },
+  ],
+  minimumSeparation: 0.45,
+  maximumComplexityCost: 12,
+  complexityWeight: 0.15,
+  scorerVersion: "experiment-scorer-v1",
+});
 
 function leakageSupport(manifest: ArtifactManifest): SupportDetection {
   const splitCell = manifest.cells.find(
@@ -308,6 +387,10 @@ const leakagePack = Object.freeze({
     "Use leakage.identity_ablation exactly once with the same seed, model, test fraction, and entity field as the baseline, changing only dropIdentity to true.",
     "The baseline and both interventions must use one entity field resolved from the Artifact Manifest.",
   ],
+  scientificMethod: {
+    candidateExperimentIds: ["group-holdout", "group-holdout-plus-ablation"],
+    scoringPolicy: leakageScoringPolicy,
+  },
   verifierContract: {
     id: "leakage-plan-verifier-v2",
     invariants: [
@@ -385,6 +468,13 @@ const imbalancePack = Object.freeze({
     "Change only threshold in the threshold sweep, then keep that threshold fixed while changing prevalence in the prevalence sweep.",
     "Include every registered imbalance metric and visualization exactly once.",
   ],
+  scientificMethod: {
+    candidateExperimentIds: [
+      "threshold-and-majority-baseline",
+      "prevalence-and-threshold-sweep",
+    ],
+    scoringPolicy: imbalanceScoringPolicy,
+  },
   verifierContract: {
     id: "imbalance-plan-verifier-v1",
     invariants: [

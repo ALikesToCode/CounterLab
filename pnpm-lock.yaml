@@ -144,6 +144,9 @@ importers:
       "@counterlab/contracts":
         specifier: workspace:*
         version: link:../contracts
+      "@counterlab/experiment-scorer":
+        specifier: workspace:*
+        version: link:../experiment-scorer
 
   packages/contracts:
     dependencies:
