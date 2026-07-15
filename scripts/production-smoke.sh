@@ -68,7 +68,10 @@ record_stage() {
   local started_at="$4"
   local completed_at="$5"
   local concept="${6:-}"
-  local evidence_json="${7:-{}}"
+  local evidence_json="${7:-}"
+  if [[ -z "${evidence_json}" ]]; then
+    evidence_json="{}"
+  fi
   local stage_json
   stage_json="$(
     python3 - "${stage_id}" "${mode}" "${status}" "${started_at}" "${completed_at}" "${concept}" "${evidence_json}" <<'PY'

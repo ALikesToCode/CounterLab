@@ -178,6 +178,8 @@ def test_production_smoke_wires_readiness_modes_and_json_release_evidence() -> N
     assert "COUNTERLAB_SMOKE_REPORT_PATH" in script
     assert "production_smoke_report.py" in script
     assert "Production stage" in script
+    assert 'local evidence_json="${7:-}"' in script
+    assert 'evidence_json="{}"' in script
     for stage_id in (
         "public-readiness",
         "capability-health",
