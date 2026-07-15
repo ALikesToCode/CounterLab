@@ -3132,14 +3132,20 @@ function LiveCompileScreen({
   events,
   job,
   failed,
+  canCancel,
   retrying,
+  cancelling,
   onRetry,
+  onCancel,
 }: {
   events: readonly PublicCompilerEvent[];
   job: RunnerJob | null;
   failed: boolean;
+  canCancel: boolean;
   retrying: boolean;
+  cancelling: boolean;
   onRetry: () => void;
+  onCancel: () => void;
 }) {
   const repaired = events.some((event) => event.kind === "repair.started");
   const verified = events.some(
@@ -3168,6 +3174,22 @@ function LiveCompileScreen({
         <strong>Your answer is immutable</strong>
         <span>No experimental value is shown until verification finishes.</span>
       </div>
+      {!failed && canCancel && (
+        <div className="compiler-controls">
+          <span>
+            You can leave this page and return; CounterLab will reconnect to the
+            same protected job.
+          </span>
+          <button
+            className="button button-quiet"
+            type="button"
+            disabled={cancelling}
+            onClick={onCancel}
+          >
+            {cancelling ? "Cancelling safely…" : "Cancel this test"}
+          </button>
+        </div>
+      )}
       {failed && (
         <section className="panel compiler-retry" aria-labelledby="retry-title">
           <div>
@@ -3269,6 +3291,7 @@ export function App() {
   const [liveHealth, setLiveHealth] = useState<CapabilityHealth | null>(null);
   const [liveHealthError, setLiveHealthError] = useState<string | null>(null);
   const [checkingLiveHealth, setCheckingLiveHealth] = useState(false);
+  const [cancellingRunner, setCancellingRunner] = useState(false);
   const [analysisPreview, setAnalysisPreview] =
     useState<BeliefAnalysisPreview | null>(null);
   const [sensitiveContentApproved, setSensitiveContentApproved] =
@@ -3278,6 +3301,7 @@ export function App() {
   const replay = mode === "replay";
 
   const reportError = (caught: unknown) => {
+    if (caught instanceof Error && caught.name === "AbortError") return;
     if (
       caught instanceof ApiClientError &&
       caught.code === "LIVE_UNAVAILABLE"
@@ -3423,6 +3447,27 @@ export function App() {
       setSession(restored);
       await advanceLiveLab(restored);
     });
+  };
+
+  const cancelLiveLab = () => {
+    const jobId =
+      runnerJob?.jobId ??
+      window.localStorage.getItem(storageKeys.activeRunnerJobId);
+    if (session === null || jobId === null || cancellingRunner) return;
+    setCancellingRunner(true);
+    runner.cancel();
+    void counterLabApi
+      .cancelRunnerJob(session.sessionId, jobId)
+      .then((updated) => {
+        setSession(updated);
+        setRunnerJob(updated.runnerJob);
+        forgetRunnerJob();
+        setError(
+          "You cancelled this test before it could release a result. Your notebook, claim, and locked prediction are preserved.",
+        );
+      })
+      .catch(reportError)
+      .finally(() => setCancellingRunner(false));
   };
 
   useEffect(() => {
@@ -3971,8 +4016,16 @@ export function App() {
               events={runner.events}
               job={runnerJob}
               failed={error !== null}
+              canCancel={
+                session?.mode.kind === "live_notebook" &&
+                (runnerJob !== null ||
+                  window.localStorage.getItem(storageKeys.activeRunnerJobId) !==
+                    null)
+              }
               retrying={busy}
+              cancelling={cancellingRunner}
               onRetry={retryLiveLab}
+              onCancel={cancelLiveLab}
             />
           )}
         </CounterLabStudio>

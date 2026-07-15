@@ -114,6 +114,16 @@ const RunnerActionResponseSchema = z
   .strict();
 export type RunnerActionResponse = z.infer<typeof RunnerActionResponseSchema>;
 
+const RunnerCancelResponseSchema = z
+  .object({
+    ...sessionViewShape,
+    runnerJob: RunnerJobSchema,
+    reused: z.boolean(),
+    runnerAcknowledged: z.boolean(),
+  })
+  .strict();
+export type RunnerCancelResponse = z.infer<typeof RunnerCancelResponseSchema>;
+
 const InteractiveRunResponseSchema = z
   .object({
     ...sessionViewShape,
@@ -510,6 +520,16 @@ export class CounterLabApiClient {
     return this.request(
       `/api/sessions/${encodedId(sessionId)}/jobs/${encodedId(jobId)}/events?after=${after}`,
       RunnerEventsResponseSchema,
+    );
+  }
+
+  cancelRunnerJob(
+    sessionId: string,
+    jobId: string,
+  ): Promise<RunnerCancelResponse> {
+    return this.postWithoutInput(
+      `/api/sessions/${encodedId(sessionId)}/jobs/${encodedId(jobId)}/cancel`,
+      RunnerCancelResponseSchema,
     );
   }
 

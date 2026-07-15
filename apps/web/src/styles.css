@@ -4162,6 +4162,20 @@ thead {
   flex: 0 0 auto;
 }
 
+.compiler-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: -4px 0 18px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.compiler-controls .button {
+  flex: 0 0 auto;
+}
+
 .live-compiler-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.65fr) minmax(260px, 0.72fr);
@@ -4353,7 +4367,8 @@ thead {
 }
 
 @media (max-width: 620px) {
-  .compiler-retry {
+  .compiler-retry,
+  .compiler-controls {
     align-items: stretch;
     flex-direction: column;
   }

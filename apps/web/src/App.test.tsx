@@ -140,6 +140,30 @@ const liveResult = {
   })),
 };
 
+const liveRunnerJob = {
+  schemaVersion: "1" as const,
+  jobId: "runner_job_ui",
+  kind: "LAB_COMPILE" as const,
+  status: "STARTING" as const,
+  sessionId: "session_ui",
+  artifactId: uploadedArtifact.artifactId,
+  artifactManifestHash: uploadedArtifact.fileSha256,
+  conceptPack: { id: "entity_leakage" as const, version: "1.0.0" },
+  inputHashes: ["b".repeat(64)],
+  stateVersion: 5,
+  jobVersion: 2,
+  createdAt: "2026-07-14T09:02:00.000Z",
+  updatedAt: "2026-07-14T09:02:01.000Z",
+  startedAt: "2026-07-14T09:02:01.000Z",
+  dispatchAcknowledgedAt: "2026-07-14T09:02:01.000Z",
+  attempt: 1,
+  maxAttempts: 3,
+  runnerIdentity: "cloudflare-container-runner-v1",
+  timeoutSeconds: 180,
+  outputHashes: [],
+  eventCursor: 0,
+};
+
 function session(
   state: string,
   version: number,
@@ -184,6 +208,7 @@ function installApi(
     runner?: "configured" | "local-runner-required";
     rejectLiveBelief?: boolean;
     beliefTest?: typeof liveBeliefTest | typeof imbalanceBeliefTest;
+    stallRunner?: boolean;
   } = {},
 ) {
   let activeMode:
@@ -229,6 +254,46 @@ function installApi(
           201,
         );
       }
+      if (path === `/api/artifacts/${uploadedArtifact.artifactId}`) {
+        return response(uploadedArtifact);
+      }
+      if (path === "/api/sessions/session_ui") {
+        return response(
+          session("LAB_COMPILING", 5, {
+            artifactId: uploadedArtifact.artifactId,
+            mode: { kind: "live_notebook" },
+          }),
+        );
+      }
+      if (path.includes("/jobs/runner_job_ui/events?after=")) {
+        return response({
+          events: [],
+          nextCursor: 0,
+          jobStatus: "STARTING",
+          terminal: false,
+        });
+      }
+      if (path.endsWith("/jobs/runner_job_ui/cancel")) {
+        return response({
+          ...session("LAB_REJECTED", 6, {
+            artifactId: uploadedArtifact.artifactId,
+            mode: { kind: "live_notebook" },
+          }),
+          runnerJob: {
+            ...liveRunnerJob,
+            status: "CANCELLED",
+            jobVersion: 3,
+            completedAt: "2026-07-14T09:02:02.000Z",
+            error: {
+              code: "RUNNER_JOB_CANCELLED",
+              message: "The learner cancelled this runner job.",
+              retryable: true,
+            },
+          },
+          reused: false,
+          runnerAcknowledged: true,
+        });
+      }
       if (path.endsWith("/belief-test/preview")) {
         return response(livePreview);
       }
@@ -268,6 +333,15 @@ function installApi(
         );
       }
       if (path.endsWith("/lab/compile")) {
+        if (options.stallRunner) {
+          return response({
+            ...session("LAB_COMPILING", 5, {
+              artifactId: activeArtifactId,
+              mode: activeMode,
+            }),
+            runnerJob: liveRunnerJob,
+          });
+        }
         return response(
           session("LAB_VERIFIED", 6, {
             artifactId: activeArtifactId,
@@ -539,6 +613,44 @@ describe("CounterLab judged flow", () => {
     expect(document.body).not.toHaveTextContent(
       /Responses endpoint|OpenAI|GPT-/i,
     );
+  });
+
+  it("restores an active live compile and lets the learner cancel it safely", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      stallRunner: true,
+    });
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem("counterlab.mode", "live");
+    window.localStorage.setItem(
+      "counterlab.activeRunnerJobId",
+      liveRunnerJob.jobId,
+    );
+    window.localStorage.setItem(
+      "counterlab.activeRunnerJobKind",
+      liveRunnerJob.kind,
+    );
+
+    render(<App />);
+    await user.click(
+      await screen.findByRole("button", { name: /cancel this test/i }),
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: /runner stopped safely/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/cancelled this test before it could release a result/i),
+    ).toBeInTheDocument();
+    expect(
+      fetcher.mock.calls.some(
+        ([path, init]) =>
+          String(path).endsWith("/jobs/runner_job_ui/cancel") &&
+          init?.method === "POST",
+      ),
+    ).toBe(true);
   });
 
   it("uses class-imbalance language when the analyst routes a rare-event notebook", async () => {

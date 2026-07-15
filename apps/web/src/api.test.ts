@@ -289,6 +289,47 @@ describe("CounterLabApiClient", () => {
     );
   });
 
+  it("validates authoritative runner cancellation and its encoded route", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({
+        ok: true,
+        data: {
+          ...session,
+          mode: { kind: "live_notebook" },
+          state: "LAB_REJECTED",
+          version: 9,
+          runnerJob: {
+            ...runnerJob,
+            status: "CANCELLED",
+            jobVersion: 2,
+            runnerIdentity: "counterlab-control-plane-cancel",
+            completedAt: "2026-07-14T10:03:00.000Z",
+            error: {
+              code: "RUNNER_JOB_CANCELLED",
+              message: "The learner cancelled this runner job.",
+              retryable: true,
+            },
+          },
+          reused: false,
+          runnerAcknowledged: true,
+        },
+      }),
+    );
+    const client = new CounterLabApiClient({ fetch: fetcher });
+
+    await expect(
+      client.cancelRunnerJob("session/with space", "job/with space"),
+    ).resolves.toMatchObject({
+      state: "LAB_REJECTED",
+      runnerJob: { status: "CANCELLED" },
+      runnerAcknowledged: true,
+    });
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/sessions/session%2Fwith%20space/jobs/job%2Fwith%20space/cancel",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
   it("maps every learning-loop method to its encoded route without swallowing errors", async () => {
     const fetcher = vi.fn<typeof fetch>(async () =>
       jsonResponse(
