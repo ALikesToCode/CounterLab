@@ -1,5 +1,38 @@
 # Progress Log: CounterLab Studio upgrade
 
+## v5.1 Scientific Engine Edition — 2026-07-15
+
+- Began the new implementation mandate under the supplied Ultra Execution
+  Policy.
+- Read the planning-with-files, test-driven-development, parallel-agent, and RTK
+  workflows.
+- Rebased `task_plan.md` onto the non-negotiable v5.1 phase order.
+- Confirmed the repository began this phase with no uncommitted files.
+- Logged and corrected one stale-context planning-file patch failure.
+- No new v5.1 engineering or release claim has been made yet.
+- Read the current README, progress matrix, and decision history. Recorded the
+  already-proven production evidence and identified stale v5 vocabulary and one
+  contradictory deployment sentence for Phase 2 documentation repair.
+- Read support, architecture, evaluation, release, achieved metrics, upgrade,
+  authority, and threat-model documents. Logged stale production/isolation
+  claims and isolated pre-v5.1 achievements from still-unimplemented v5.1 gates.
+- Ran `./scripts/test-all.sh`: 170 root TypeScript, 79 web, 136 Python, all
+  typechecks, current local migrations, and 13 CloakBrowser journeys passed; 2
+  credentialed live journeys skipped locally as designed.
+- The local Cloudflare runner build resolved to the recorded image digest
+  `sha256:167a207956b5efc6b28702d905d2eafaad8e0502da75e3df1de3a38a9927a636`.
+- Ran `./scripts/release-check.sh`: 170 root TypeScript, 79 web, 136 Python,
+  13 local browser journeys (2 credentialed live skips), leakage 12/12,
+  imbalance 12/12, held-out routing 10/10 and fixed completion 7/8, sandbox
+  smoke, production build, metrics generation, replay reproduction, patch
+  verification, and the 334-file secret scan passed.
+- Refreshed `docs/HELD_OUT_RESULTS.json` from that real baseline run; only the
+  execution timestamp and measured durations changed.
+- Phase 0 baseline is complete. Phase 1 production-authority audit is active.
+
+The historical Studio progress below remains evidence for the pre-v5.1 release,
+not proof that new v5.1 gates pass.
+
 ## Session: 2026-07-15
 
 ### Phase 1: Repository and blocker discovery

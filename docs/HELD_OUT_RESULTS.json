@@ -1,7 +1,7 @@
 {
   "schemaVersion": "2",
   "benchmarkId": "counterlab-held-out-v2",
-  "executedAt": "2026-07-15T05:27:12.530Z",
+  "executedAt": "2026-07-15T11:00:49.269Z",
   "parser": "@counterlab/notebook-parser",
   "executionMode": "safe_parse_plus_fixed_contract_completion",
   "labelsSha256": "3ca1d08a8a96f807c8fbe81d96632d2eb2d6b473850301f6d048ebc9016dfc18",
@@ -80,7 +80,7 @@
         "unchangedCellCount": 1,
         "resultHash": "e824fd1c8a6ece589016775920d3c427d5ba2ffc18c5a8303524281552fa0eb2",
         "patchHash": "301ee38de473f32c9ab61016b256c43cc9438a40ed28716a66a0f405b28df391",
-        "durationMs": 3405,
+        "durationMs": 3923,
         "failureCode": null
       },
       "passed": true
@@ -136,7 +136,7 @@
         "unchangedCellCount": 1,
         "resultHash": "33a70dc9b3e148432311ee11ce8721c69386138b20fde10b5836cdfa9cb906d6",
         "patchHash": "bbd5e8e905b13ab7bebbadbddbe5484f1876bf669ce018293d79d3424bc23ac7",
-        "durationMs": 3386,
+        "durationMs": 3381,
         "failureCode": null
       },
       "passed": true
@@ -193,7 +193,7 @@
         "unchangedCellCount": 1,
         "resultHash": "c3132100f380732c3e2a3eb9aa70e5fae88bc0d829df3fb298ed0a1b76a63607",
         "patchHash": "883a3b7eb0d395727fd71af1f181c21e93cd2bc56df95e7e6fda0998cd0c84a8",
-        "durationMs": 3457,
+        "durationMs": 3339,
         "failureCode": null
       },
       "passed": true
@@ -248,7 +248,7 @@
         "unchangedCellCount": 0,
         "resultHash": "45733a502b97e7287a388d8ae0505eb4ffb2990c14a8adf55ce429cefc8e9d84",
         "patchHash": null,
-        "durationMs": 3355,
+        "durationMs": 3164,
         "failureCode": "PATCH_ESTIMATOR_OUTSIDE_CONTRACT"
       },
       "passed": true
@@ -300,7 +300,7 @@
         "unchangedCellCount": 1,
         "resultHash": "db7bc6599f63598bf12811950c0c0a6296369fa05a3cec95f7e523fb44440455",
         "patchHash": "8a766ee56a0a3d6c51cc3feaf4a1588833e81e50359e43e044934048b8a94734",
-        "durationMs": 3773,
+        "durationMs": 3613,
         "failureCode": null
       },
       "passed": true
@@ -357,7 +357,7 @@
         "unchangedCellCount": 1,
         "resultHash": "d2f836c64455ca5f231da152442843eb5c213aebb3817ac899f387001dd76407",
         "patchHash": "4bdfbe563622aba7d048ac03575cf3b8be755b9a8c572f24d0c795953d1a54a5",
-        "durationMs": 3830,
+        "durationMs": 3518,
         "failureCode": null
       },
       "passed": true
@@ -412,7 +412,7 @@
         "unchangedCellCount": 1,
         "resultHash": "42f27e4a66862b2e902fcb1cbe4a9f445ab99859f39035776f887078af2f165f",
         "patchHash": "88879bc55684c680f18a580244d3601677d5665bcf7d68a4601dfe4f0ce578a9",
-        "durationMs": 3858,
+        "durationMs": 3661,
         "failureCode": null
       },
       "passed": true
@@ -467,7 +467,7 @@
         "unchangedCellCount": 1,
         "resultHash": "092c55070ec6b32d94d16ab31d3fc4c74ee7bda2e6a1acc9387221827b0b6d77",
         "patchHash": "53fb10890b54cc5ed345041f5bed29253fb9c460a979ebf6dd22c99d0b6da242",
-        "durationMs": 3817,
+        "durationMs": 3609,
         "failureCode": null
       },
       "passed": true

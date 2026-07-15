@@ -1,5 +1,62 @@
 # Findings: CounterLab Studio upgrade
 
+## 2026-07-15 v5.1 scientific-engine upgrade
+
+- The current repository is already a substantial production release: live
+  entity leakage and class imbalance, Cloudflare Worker/D1/R2/Container runner,
+  fixed kernels, verified patching, replay, and evidence chains exist.
+- Root `AGENTS.md` was upgraded to a concise v5.1 scientific-engine constitution
+  in commit `97f2e1d`, but the latest execution mandate adds concrete registry
+  schemas, phase order, production authority checks, IR v5, scorer, Boundary
+  Map, free-fall, Proof Capsule, performance, and submission gates that still
+  require implementation and documentation propagation.
+- Existing planning records were stale from the earlier Studio upgrade and must
+  not be treated as current completion evidence.
+- No relevant CounterLab entry was found in the external memory registry; the
+  repository and current production evidence remain authoritative.
+- Current `docs/PROGRESS.md` records a real deployed Worker, runner image, live
+  leakage/imbalance browser completion, cursor resume, patch/proof downloads,
+  clean-clone release, and 7/8 held-out fixed-loop completion. Phase 1 may reuse
+  this evidence only after rechecking the new `/ready`, cancellation,
+  duplicate-submission, and JSON smoke-report requirements.
+- `README.md` still opens with the pre-v5 “CI for understanding” thesis and old
+  Belief Test/Verified Lab/Proof Bundle vocabulary. It also contains a stale
+  sentence saying the upgraded image still needs deployment, which conflicts
+  with the later recorded production version and must be corrected factually.
+- `docs/DECISIONS.md` intentionally contains historical decisions that are now
+  superseded, including an edge-only Cloudflare path and older generated Plan
+  shapes. Preserve history, but add explicit v5.1 decisions instead of deleting
+  old entries.
+- `docs/SUPPORT_CONTRACT.md`, `docs/ARCHITECTURE.md`, and authority/evidence
+  diagrams still use Belief Test, Prediction Contract, Experiment Plan, and
+  Proof Bundle as current primary terms. Phase 2 needs versioned compatibility
+  wording rather than destructive renames.
+- `docs/EVALUATION.md`, `docs/ARCHITECTURE.md`, and
+  `docs/AUTHORITY_BOUNDARIES.md` contain stale “production smoke not yet run” or
+  credential-broker limitations that conflict with the newer production and
+  staged-credential-revocation evidence. These must be reconciled before any
+  new release claim.
+- Existing evaluation evidence remains strong and narrow: leakage and imbalance
+  fixed metrics/mutations, 10/10 routing, 7/8 fixed held-out completion, real
+  live compiler traces, deterministic transfer, and verified patch. It contains
+  no BeliefSpecV2, IR v5, scorer, epistemic verdict, Boundary Map, scientific
+  engine registry, physics, or Proof Capsule evidence.
+- The current release checklist is fully green for the pre-v5.1 product. New
+  v5.1 gates must be added as separate unchecked/partial rows rather than
+  retroactively weakening or relabelling prior evidence.
+- Baseline runtimes are Node 26.2.0, pnpm 11.12.0, Python 3.14.5, Docker
+  29.5.2, Codex CLI 0.144.4, and Wrangler 4.110.0. No supplied
+  `CounterLab_Scientific_Engine_Registry_v5_1.schema.json` exists in the tree.
+- The current repository has 334 tracked files and no scientific-engine
+  registry, Experiment IR v5, scorer, Boundary Map, or physics package yet.
+- The full pre-v5.1 `release-check.sh` remains reproducible on the current host:
+  all TS/web/Python/type/browser tests, both 12/12 mutation suites, 10/10
+  held-out routing with 7/8 fixed completion, sandbox smoke, Vite/Worker build,
+  canonical replay/patch reproduction, and a 334-file secret scan passed.
+
+The sections below are retained as historical implementation findings and may
+be stale. Verify them against the current tree before making decisions.
+
 ## Requirements
 
 - Preserve strong fixed evidence machinery while eliminating every path that can

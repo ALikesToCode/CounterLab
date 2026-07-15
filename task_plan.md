@@ -1,119 +1,209 @@
-# Task Plan: CounterLab Studio first-prize upgrade
+# Task Plan: CounterLab v5.1 Scientific Engine Edition
 
 ## Goal
 
-Upgrade the existing CounterLab release into an honest hosted, artifact-specific
-Studio with strict sample/live/replay separation, a process-capable runner plane,
-two verified concept packs, and a complete public notebook-to-proof journey.
+Transform the proven CounterLab Studio release into a scientific debugger for
+beliefs with versioned scientific contracts, fixed experiment selection,
+epistemic verification, signed Boundary Maps, one reviewed free-fall Subject
+Pack, Proof Capsule v2, and a simpler chat-first product—without weakening live
+authority, replay compatibility, fixed kernels, or existing verifiers.
 
-## Current Phase
+## Current phase
 
-Phase 3 — Hosted artifact-specific leakage vertical slice
+Phase 1 — public production authority gate (`in_progress`).
 
-## Phases
+## Lead-owned critical surfaces
 
-### Phase 1: Repository and blocker discovery
+- repository architecture and phase order;
+- root `AGENTS.md` and shared contracts;
+- session state machine and D1 migrations;
+- Worker routes and runner orchestration;
+- Subject Pack and scientific-engine registries;
+- Experiment IR, canonical hashes, and production deployment;
+- integration, release claims, final results, and factual documentation.
 
-- [x] Read the required product, progress, authority, threat, and master documents.
-- [x] Inspect the current API, contracts, session core, parser, analyst, Codex,
-      kernel, verifier, runner, replay, UI, migrations, and tests.
-- [x] Prove each stated blocker in current code/tests.
+Parallel work may inspect or change only explicitly delegated, independent
+surfaces. No parallel edits to shared schemas, state, Worker session logic,
+migrations, orchestration, deployment configuration, registries, canonical hash
+code, `apps/web/src/App.tsx`, or global CSS.
+
+## Phase order
+
+### Phase 0 — clean checkpoint and factual baseline
+
+- [x] Read required repository and release documents.
+- [x] Inspect Git state, history, runtimes, tests, metrics, and incomplete work.
+- [x] Run the current non-destructive baseline suite.
+- [x] Record factual baseline and create the pre-v5.1 checkpoint commit.
 - **Status:** complete
 
-### Phase 2: Upgrade plan and regression boundary
+### Phase 1 — public production authority gate
 
-- [x] Create `docs/FIRST_PRIZE_UPGRADE_PLAN.md` from repository evidence.
-- [x] Add failing tests for sample leakage, concept advertising, and configured
-      runner dead ends.
-- [x] Separate sample/live/replay contracts and route validation.
-- **Status:** complete
+- [ ] Audit `/ready`, deployment/image binding, D1 migrations, and secret-safe
+      capability reporting.
+- [ ] Prove live leakage and imbalance end to end.
+- [ ] Prove cursor reconnect, cancellation, duplicate-job idempotency, artifact
+      and proof downloads, and public-event sanitization.
+- [ ] Make `scripts/production-smoke.sh` emit a secret-free JSON stage report.
+- **Status:** in progress
 
-### Phase 3: Hosted artifact-specific leakage vertical slice
+### Phase 2 — install and propagate v5.1 constitution
 
-- [x] Add runner job/event/token contracts and D1 persistence.
-- [x] Add authenticated runner service/test runner and fixed plan interpreter.
-- [x] Compile, verify, repair, run, patch, and stream an uploaded leakage notebook.
-- [x] Add artifact-specific proof and patch download.
-- **Status:** complete
-
-### Phase 4: CounterLab Studio product shell
-
-- [ ] Refactor only product-responsibility boundaries covered by tests.
-- [ ] Add Studio navigation, evidence navigator, agent rail, proof console,
-      history, commands, and interactive leakage controls.
+- [ ] Merge the complete v5.1 execution constitution into root `AGENTS.md`.
+- [ ] Update decisions, upgrade plan, support contract, diagrams, vocabulary,
+      and release checklist without deleting legacy contracts.
 - **Status:** pending
 
-### Phase 5: Class imbalance and held-out evidence
+### Phase 2A — scientific-engine registry and dependency governance
 
-- [ ] Implement the imbalance kernel, verifier, transfer, patch, fixture, notebook,
-      mutations, UI controls, and end-to-end path.
-- [ ] Freeze and run the supported/unsupported held-out matrix.
-- [ ] Add learner-pilot protocol and non-fabricated achieved metrics.
+- [ ] Add registry schema/package, canonical hash, policy, fixtures, licenses,
+      notices, and reviewed registry entries for engines already in use.
+- [ ] Add admission, health, import, integrity, license, SBOM, vulnerability,
+      size, and drift verification.
+- [ ] Add `scripts/verify-scientific-engines.sh` and release integration.
 - **Status:** pending
 
-### Phase 6: Release verification and deployment
+### Phase 3 — Belief Spec v2
 
-- [ ] Run the full local and clean-clone acceptance matrix.
-- [ ] Run production smoke and a real uploaded live notebook.
-- [ ] Update all required documentation and achieved metrics.
-- [ ] Commit reviewable slices, deploy Cloudflare control/runner planes, and
-      verify the public URL.
+- [ ] Add strict `BeliefSpecV2`, v1 adapter, evidence/non-claim validation, and
+      learner decisions.
 - **Status:** pending
 
-## Key Questions
+### Phase 4 — CounterLab Experiment IR v5
 
-1. Which current notebook patterns contain enough sanitized evidence to compile
-   an artifact-specific fixed plan without raw data or arbitrary generated code?
-2. Can the installed Cloudflare account run the required Container shape, or is
-   an authenticated dedicated runner the compatible release path?
-3. Which session/event schema changes can remain backward compatible with the
-   genuine leakage replay and current proof bundles?
+- [ ] Add strict package/schema/types/canonical hash/policy/migration.
+- [ ] Preserve current Experiment Plan and replay through parity-tested adapters.
+- **Status:** pending
 
-## Decisions Made
+### Phase 5 — fixed experiment-selection scorer
 
-| Decision                                                 | Rationale                                                                                                                  |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Preserve the fixed kernel/verifier/parser/evidence chain | They are already proven and remain the numeric/integrity authority.                                                        |
-| Start with leakage regression tests                      | The user explicitly prioritizes eliminating sample leakage before runner/UI expansion.                                     |
-| No generated Python on the hosted path                   | A fixed plan interpreter gives a smaller, auditable authority surface.                                                     |
-| Bind sample authority to sample artifact ID and hash     | Identical uploaded bytes remain a live artifact; provenance cannot be inferred from content hash alone.                    |
-| Make Plan v2 the only hosted executable authority        | Codex output is strict JSON; Python validates the generated schema, lineage, and evidence before calling fixed operations. |
-| Keep uploaded notebook bytes sealed from Codex           | Codex emits only a source-free Patch Plan; the Worker independently verifies it before a fixed Python operation receives the scoped source bytes. |
+- [ ] Add deterministic eligibility, separation, complexity, tie-breaking,
+      public selection evidence, and mutation coverage.
+- **Status:** pending
 
-## Errors Encountered
+### Phase 6 — epistemic verifier and tri-state verdict
 
-| Error                                                                                                             | Attempt | Resolution                                                                                                                           |
-| ----------------------------------------------------------------------------------------------------------------- | ------: | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Initial full `AGENTS.md` output was truncated                                                                     |       1 | Re-read the file in bounded line ranges.                                                                                             |
-| Worker API remainder output exceeded the available model context                                                  |       1 | Re-read `apps/web/worker/api.ts` in chunks of at most 200 lines.                                                                     |
-| Combined plan/progress patch used stale task-plan table context                                                   |       1 | Split the plan document creation from exact-context status updates.                                                                  |
-| Root Vitest config found no Worker test for a direct `apps/web/worker` filter                                     |       1 | Run the test through `apps/web/vitest.config.ts`.                                                                                    |
-| A combined Git diff command produced output too large for the tool response                                       |       1 | Switched to `git status`, `git diff --stat`, and bounded per-file diffs.                                                             |
-| Focused mode-migration test output expanded to a large DOM dump and was truncated                                 |       1 | Used the failure summary and reran individual failing tests after correcting their explicit assumptions.                             |
-| Repository-wide Prettier check reported 46 pre-existing style issues, mostly generated/replay and unrelated files |       1 | Kept scope reviewable, formatted every changed code file, and used `git diff --check`; the repository-wide backlog remains explicit. |
-| Full gate found Node/Cloudflare type conflicts in the SQLite-backed D1 test adapter                               |       1 | Typed SQL binds as `SQLInputValue` and converted `import.meta.url` to a string path before reading migrations.                       |
-| Combined App Server source inspection exceeded the response context                                               |       1 | Re-read only the relevant implementation in bounded line ranges.                                                                     |
-| Hosted compiler typecheck rejected the new `plan` phase at the reusable transport boundary                        |       1 | Added `plan` to the existing validated compiler phase union.                                                                         |
-| Runner-event API client used an incorrect error-class name                                                        |       1 | Replaced it with the existing typed `ApiClientError` constructor.                                                                    |
-| Progress update patch used stale formatted table context                                                          |       1 | Re-read the exact table before applying the evidence update.                                                                         |
-| Progress search contained an unescaped shell backtick                                                             |       1 | Re-ran the bounded search with a safe single-quoted pattern.                                                                         |
-| Combined progress/task-plan patch missed a formatted task-plan row                                                |       1 | Split the documentation updates and patched each exact table independently.                                                          |
-| Candidate verification added a verifier event to the reconnect stream                                             |       1 | Updated the cursor regression to require both the file and verifier events.                                                          |
-| Hosted runner event helper used non-distributive `Omit` over a union                                              |       1 | Added a distributive event-payload type while retaining runtime schema validation.                                                   |
-| Prettier had no parser for the Dockerfile and `.dockerignore`                                                     |       1 | Kept them hand-audited and switched validation to Docker and Wrangler.                                                               |
-| Container constructor used the default unknown Durable Object props type                                          |       1 | Bound the constructor state to the Container base class's empty props type.                                                          |
-| Resuming the truncated Docker build referenced an expired process ID                                              |       1 | Checked image state, then reran the cached build with concise progress to recover the real failure.                                  |
-| Runner image account tools were installed but `/usr/sbin` was absent from `PATH`                                  |       1 | Added standard sbin paths to the explicit production image `PATH`.                                                                   |
-| Corepack failed on a broken Yarn shim after copying Node into the Python base                                     |       1 | Installed the repository-pinned `pnpm@11.12.0` directly and removed Corepack from the image path.                                    |
-| Broad tests found trailing JSONC commas incompatible with the strict deployment-config regression                |       1 | Kept `wrangler.jsonc` valid strict JSON while retaining the supported Wrangler configuration.                                        |
-| LAB_RUN contract test referenced a Plan fixture outside its describe scope                                        |       1 | Moved the lineage test into the hosted-runner contract suite that owns the fixture.                                                  |
-| Hosted runner test introduced an unnecessary session-core dependency for hashes                                   |       1 | Used contract-valid opaque hashes and preserved the runner's narrow runtime dependencies.                                            |
-| Result verifier accessed entity fields before narrowing future imbalance run specs                                |       1 | Added an explicit leakage-spec type guard before entity-specific checks.                                                             |
-| Filtered hosted-runner Vitest invocation inserted an extra `--` and found no tests                                 |       1 | Invoked the two files through root Vitest with explicit paths.                                                                       |
-| Web Vitest was invoked from the repository root with an app-relative config                                        |       1 | Ran the Worker suite from `apps/web`, matching its configured include roots.                                                         |
-| Python formatting probe found no optional `black` module in the locked environment                                 |       1 | Kept Python changes manually PEP 8 aligned and relied on pytest plus `git diff --check`; no dependency was added for one check.       |
+- [ ] Add independent findings, `SUPPORTS | INCONCLUSIVE | REJECTED`, release
+      blocking, and one mutation per finding.
+- **Status:** pending
 
-## Notes
+### Phase 7 — Runtime Codex v5 artifacts
 
-- Re-read this file before every architecture or release decision.
-- Log every failed command and change approach rather than repeating it.
+- [ ] Restrict live output to discrimination contract, IR, scene, rationale, and
+      post-transfer Patch Plan with two repairs and no hidden/manual edits.
+- **Status:** pending
+
+### Phase 8 — entity-leakage integration
+
+- [ ] Add candidate experiments, scorer contract, epistemic mappings, signed
+      recurrence/signal Boundary Sweep, and mutations while preserving v1.
+- **Status:** pending
+
+### Phase 9 — class-imbalance integration
+
+- [ ] Add candidate experiments, scorer contract, tri-state mappings,
+      prevalence/threshold Boundary Sweep, and mutations.
+- **Status:** pending
+
+### Phase 10 — Boundary Map engine
+
+- [ ] Add bounded fixed-kernel contract, deterministic hash/signature, typed
+      renderer, accessible table, visual binding, and mutation tests.
+- **Status:** pending
+
+### Phase 11 — chat-first product and Experiment Theater
+
+- [ ] Incrementally introduce conversation intent, one learner vocabulary,
+      progressive disclosure, and focused Theater without breaking resume.
+- **Status:** pending
+
+### Phase 12 — typed generative UI v2
+
+- [ ] Add allowlisted `LabSceneV2`, signed result bindings, copy policy, and
+      fail-closed unknown blocks.
+- **Status:** pending
+
+### Phase 13 — physics/free-fall Subject Pack
+
+- [ ] Admit reviewed SciPy/Pint/SymPy/Hypothesis engines only after registry and
+      ML production gates pass.
+- [ ] Add fixed kernel, independent oracles, convergence, units, signed motion,
+      Boundary Map, transfer, and mutations.
+- **Status:** pending
+
+### Phase 14 — Proof Capsule v2
+
+- [ ] Add deterministic `.counterlab` archive, CLI validate/inspect/replay,
+      corruption/mode tests, engine provenance, and v1 compatibility.
+- **Status:** pending
+
+### Phase 15 — shareable challenge
+
+- [ ] Add no-account validated-capsule challenge only after the core gates pass.
+- **Status:** pending
+
+### Phase 16 — Judge Mode
+
+- [ ] Add `/judge`, signed labelled replay default, genuine live option,
+      achieved evidence, failures, capsule download, and reproduction.
+- **Status:** pending
+
+### Phase 17 — learner pilot
+
+- [ ] Keep paired crossover tooling; record real consented rows or explicitly
+      retain `EVALUATION PENDING`.
+- **Status:** pending
+
+### Phase 18 — measured performance
+
+- [ ] Add Web Vitals/bundle budgets, route lazy loading, abort/idempotency, and
+      measured local/live timing with no fake ETA.
+- **Status:** pending
+
+### Phase 19 — accessibility and browser quality
+
+- [ ] Execute mobile/tablet/desktop, keyboard, focus, reduced-motion, tables,
+      async refresh, duplicate-click, and production journeys.
+- **Status:** pending
+
+### Phase 20 — demo, release, and submission
+
+- [ ] Run full/fresh-clone/release/production gates, generate achieved evidence,
+      complete under-three-minute demo assets, record `/feedback`, deploy, and
+      report exact results and limitations.
+- **Status:** pending
+
+## Architecture decisions
+
+| Decision | Rationale |
+| --- | --- |
+| Preserve the current Worker/D1/R2/Container control and runner planes | They already passed real live leakage and imbalance release evidence. |
+| Keep existing v1/v2 plans, replay, and hashes through adapters | Historical evidence must never be rewritten in place. |
+| Test first for every behavior change | New authority boundaries need proof the regression test can fail. |
+| Register mature engines instead of reimplementing them | CounterLab owns epistemic authority, not general scientific solvers. |
+| Keep renderers non-authoritative | Smooth visuals cannot decide scientific evidence. |
+| Fail closed when a phase gate is not satisfied | Physics, challenges, and claims are omitted rather than simulated. |
+
+## Delegation ledger
+
+| Workstream | Scope | Shared critical files | Status |
+| --- | --- | --- | --- |
+| Production authority audit | Read-only routes, smoke, runner capability audit | none | pending |
+| Scientific engine candidate audit | Official docs, versions, licenses, deployment implications | none | pending |
+| UX/accessibility baseline audit | Read-only product and browser-test audit | none | pending |
+
+## Errors encountered
+
+| Error | Attempt | Resolution |
+| --- | ---: | --- |
+| Existing planning files described the completed pre-v5 Studio upgrade | 1 | Rebased the persistent plan on the v5.1 phase order; prior history remains in Git. |
+| First combined planning-file patch used the wrong historical `progress.md` heading | 1 | Read the exact headings and split the updates by file. |
+
+## Operating notes
+
+- Re-read this file before architecture, dependency, deployment, or release
+  decisions.
+- Update `findings.md` after every two inspection/research actions.
+- Update `progress.md` after each test, commit, phase, or error.
+- Review every delegated patch and integrate one independent workstream at a
+  time.
