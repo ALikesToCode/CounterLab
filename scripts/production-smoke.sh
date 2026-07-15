@@ -68,8 +68,13 @@ import urllib.request
 
 base = sys.argv[1]
 destination = pathlib.Path(sys.argv[2])
-request = urllib.request.Request(base + "/", headers={"User-Agent": "CounterLab release smoke"})
-with urllib.request.urlopen(request, timeout=30) as response:
+headers = {"User-Agent": "CounterLab release smoke"}
+
+def open_public(url):
+    request = urllib.request.Request(url, headers=headers)
+    return urllib.request.urlopen(request, timeout=30)
+
+with open_public(base + "/") as response:
     html = response.read()
 (destination / "index.html").write_bytes(html)
 
@@ -82,7 +87,7 @@ for path in paths:
         continue
     if not urllib.parse.urlparse(resolved).path.endswith((".js", ".css")):
         continue
-    with urllib.request.urlopen(resolved, timeout=30) as response:
+    with open_public(resolved) as response:
         public.append(response.read())
 
 joined = b"\n".join(public).decode("utf-8", errors="replace")
