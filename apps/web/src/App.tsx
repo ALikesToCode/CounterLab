@@ -3445,7 +3445,7 @@ export function App() {
 
     if (
       current.state === "LAB_VERIFIED" &&
-      storedRunnerCheckpoint(sessionId)?.kind !== "LAB_RUN"
+      current.verifiedResult === undefined
     ) {
       const run = await counterLabApi.runLab(sessionId);
       setSession(run);

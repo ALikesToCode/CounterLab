@@ -139,22 +139,36 @@ export class CloudflareContainerRunnerDispatcher implements RunnerDispatcher {
 
   async dispatch(request: RunnerDispatchRequest): Promise<void> {
     const instance = this.binding.getByName(request.job.jobId);
-    const response = await instance.fetch("http://runner.internal/jobs", {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${request.token}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        schemaVersion: "1",
-        jobId: request.job.jobId,
-        controlPlaneUrl: request.controlPlaneUrl,
-      }),
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (!response.ok) {
-      throw new Error(`Runner dispatch failed with status ${response.status}`);
+    let lastFailure: unknown;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      let response: Response;
+      try {
+        response = await instance.fetch("http://runner.internal/jobs", {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${request.token}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            schemaVersion: "1",
+            jobId: request.job.jobId,
+            controlPlaneUrl: request.controlPlaneUrl,
+          }),
+          signal: AbortSignal.timeout(30_000),
+        });
+      } catch (error) {
+        lastFailure = error;
+        continue;
+      }
+      if (response.ok) return;
+      lastFailure = new Error(
+        `Runner dispatch failed with status ${response.status}`,
+      );
+      if (response.status < 500) throw lastFailure;
     }
+    throw lastFailure instanceof Error
+      ? lastFailure
+      : new Error("Runner dispatch failed without an acknowledgement");
   }
 
   async cancel(request: RunnerDispatchRequest): Promise<void> {

@@ -209,7 +209,7 @@ function installApi(
     rejectLiveBelief?: boolean;
     beliefTest?: typeof liveBeliefTest | typeof imbalanceBeliefTest;
     stallRunner?: boolean;
-    restoredSessionState?: "INGESTED" | "LAB_COMPILING";
+    restoredSessionState?: "INGESTED" | "LAB_COMPILING" | "LAB_VERIFIED";
   } = {},
 ) {
   let activeMode:
@@ -680,6 +680,42 @@ describe("CounterLab judged flow", () => {
     );
 
     view.unmount();
+  });
+
+  it("reacquires an unacknowledged fixed run after refresh", async () => {
+    const fetcher = installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      restoredSessionState: "LAB_VERIFIED",
+    });
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem("counterlab.mode", "live");
+    window.localStorage.setItem(
+      "counterlab.activeRunnerJob.session_ui",
+      JSON.stringify({
+        schemaVersion: "1",
+        sessionId: "session_ui",
+        jobId: "runner_job_ui",
+        kind: "LAB_RUN",
+      }),
+    );
+
+    render(<App />);
+
+    await vi.waitFor(
+      () =>
+        expect(
+          fetcher.mock.calls.some(
+            ([path, init]) =>
+              String(path).endsWith("/sessions/session_ui/lab/run") &&
+              init?.method === "POST",
+          ),
+        ).toBe(true),
+      { timeout: 750 },
+    );
+    expect(
+      await screen.findByRole("heading", { name: /the result is ready/i }),
+    ).toBeInTheDocument();
   });
 
   it("opens a shareable session route without depending on local mode storage", async () => {

@@ -77,6 +77,46 @@ describe("HttpRunnerDispatcher", () => {
     );
   });
 
+  it("redelivers a Container job when the first dispatch acknowledgement is lost", async () => {
+    const fetch = vi
+      .fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>()
+      .mockRejectedValueOnce(new DOMException("timed out", "TimeoutError"))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ accepted: true, reused: true }), {
+          status: 202,
+        }),
+      );
+    const getByName = vi.fn(() => ({ fetch }));
+    const dispatcher = new CloudflareContainerRunnerDispatcher({ getByName });
+
+    await expect(
+      dispatcher.dispatch({
+        job,
+        token: "scoped-job-token",
+        controlPlaneUrl: "https://studio.example.test",
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(getByName).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not redeliver a definitively rejected Container job", async () => {
+    const fetch = vi.fn(async () => new Response(null, { status: 403 }));
+    const dispatcher = new CloudflareContainerRunnerDispatcher({
+      getByName: () => ({ fetch }),
+    });
+
+    await expect(
+      dispatcher.dispatch({
+        job,
+        token: "invalid-job-token",
+        controlPlaneUrl: "https://studio.example.test",
+      }),
+    ).rejects.toThrow(/status 403/i);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
   it("probes readiness and cancels only the scoped job", async () => {
     const fetcher = vi.fn<typeof fetch>(async (_input, init) =>
       init?.method === "DELETE"
