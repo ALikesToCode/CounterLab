@@ -3,6 +3,7 @@ import {
   access,
   chmod,
   chown,
+  mkdir,
   mkdtemp,
   realpath,
   rm,
@@ -123,11 +124,15 @@ export class ContainerCodexLaunchBoundary implements AppServerLaunchBoundary {
       join(resolve(this.options.codexHomeRoot), "counterlab-codex-"),
     );
     const authPath = join(codexHome, "auth.json");
+    const runtimeTemp = join(codexHome, "tmp");
     let disposed = false;
     let revoked = false;
     try {
       await chmod(codexHome, 0o700);
       await chown(codexHome, this.options.uid, this.options.gid);
+      await mkdir(runtimeTemp, { mode: 0o700 });
+      await chown(runtimeTemp, this.options.uid, this.options.gid);
+      await chmod(runtimeTemp, 0o700);
       await writeFile(authPath, this.parsedAuth, {
         encoding: "utf8",
         mode: 0o600,
@@ -146,7 +151,7 @@ export class ContainerCodexLaunchBoundary implements AppServerLaunchBoundary {
       ...request.environment,
       HOME: codexHome,
       CODEX_HOME: codexHome,
-      TMPDIR: workspace,
+      TMPDIR: runtimeTemp,
     };
     delete environment.CODEX_AUTH_JSON;
     delete environment.OPENAI_API_KEY;

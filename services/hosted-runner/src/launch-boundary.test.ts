@@ -60,6 +60,11 @@ describe("ContainerCodexLaunchBoundary", () => {
     expect(prepared.args).toContain(process.execPath);
     expect(prepared.environment).not.toHaveProperty("CODEX_AUTH_JSON");
     expect(prepared.environment.CODEX_HOME).toMatch(/counterlab-codex-/u);
+    expect(prepared.environment.TMPDIR).toMatch(/counterlab-codex-.*\/tmp$/u);
+    expect(prepared.environment.TMPDIR).not.toBe(workspace);
+    expect(
+      (await stat(prepared.environment.TMPDIR ?? "missing")).mode & 0o777,
+    ).toBe(0o700);
     const authPath = join(prepared.environment.CODEX_HOME ?? "", "auth.json");
     expect(await readFile(authPath, "utf8")).toContain("access_token");
 
