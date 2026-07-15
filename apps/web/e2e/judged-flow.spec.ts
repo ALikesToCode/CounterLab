@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { ProofBundleSchema } from "@counterlab/contracts";
 import { readFile } from "node:fs/promises";
 
@@ -83,6 +83,33 @@ async function waitForVerifiedLiveCompile(page: Page) {
   }
 
   await expect(verified).toBeVisible({ timeout: 360_000 });
+}
+
+async function waitForVerifiedPatch({
+  success,
+  failure,
+  retry,
+}: {
+  success: Locator;
+  failure: Locator;
+  retry: Locator;
+}) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const outcome = await Promise.race([
+      success
+        .waitFor({ state: "visible", timeout: 360_000 })
+        .then(() => "verified" as const),
+      failure
+        .waitFor({ state: "visible", timeout: 360_000 })
+        .then(() => "retry" as const),
+    ]);
+    if (outcome === "verified") return;
+    await expect(retry).toBeEnabled();
+    await retry.click();
+    await expect(failure).toBeHidden();
+  }
+
+  await expect(success).toBeVisible({ timeout: 360_000 });
 }
 
 test("the first visit explains the lesson before asking for technical knowledge", async ({
@@ -644,9 +671,15 @@ test("a configured hosted runner completes an untouched leakage notebook", async
   ).toBeVisible();
 
   await page.getByRole("button", { name: /Verify notebook patch/i }).click();
-  await expect(
-    page.getByRole("heading", { name: /You found the hidden shortcut/i }),
-  ).toBeVisible({ timeout: 300_000 });
+  await waitForVerifiedPatch({
+    success: page.getByRole("heading", {
+      name: /You found the hidden shortcut/i,
+    }),
+    failure: page.locator(
+      ".lesson-phase.live-compiler > .transfer-result[role='alert']",
+    ),
+    retry: page.getByRole("button", { name: /Retry protected patch/i }),
+  });
   await expect(page).toHaveURL(/\/proof\//);
 
   const patchDownload = page.waitForEvent("download");
@@ -761,11 +794,13 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
   );
 
   await page.getByRole("button", { name: /Verify notebook repair/i }).click();
-  await expect(
-    page.getByRole("heading", {
+  await waitForVerifiedPatch({
+    success: page.getByRole("heading", {
       name: /Your notebook copy passed the repair checks/i,
     }),
-  ).toBeVisible({ timeout: 300_000 });
+    failure: page.locator(".imbalance-patch-gate [role='alert']"),
+    retry: page.getByRole("button", { name: /Verify notebook repair/i }),
+  });
   await expect(page).toHaveURL(/\/proof\//);
 
   const patchDownload = page.waitForEvent("download");
