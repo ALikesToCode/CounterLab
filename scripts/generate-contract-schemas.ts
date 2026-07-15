@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { z } from "zod";
 
 import {
+  BeliefSpecV2Schema,
   ExperimentPlanV2Schema,
   PatchPlanV1Schema,
 } from "../packages/contracts/src/index.js";
@@ -17,6 +18,15 @@ import {
 
 const root = resolve(import.meta.dirname, "..");
 const schemas = [
+  {
+    fileName: "belief-spec-v2.schema.json",
+    id: "https://counterlab.dev/schemas/belief-spec-v2.schema.json",
+    title: "CounterLab Belief Spec v2",
+    schema: BeliefSpecV2Schema,
+    destinations: [
+      resolve(root, "packages/contracts/schemas/belief-spec-v2.schema.json"),
+    ],
+  },
   {
     fileName: "experiment-plan-v2.schema.json",
     id: "https://counterlab.dev/schemas/experiment-plan-v2.schema.json",

@@ -1,0 +1,422 @@
+{
+  "$id": "https://counterlab.dev/schemas/belief-spec-v2.schema.json",
+  "title": "CounterLab Belief Spec v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "2"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "concept": {
+      "type": "string",
+      "enum": [
+        "entity_leakage",
+        "class_imbalance"
+      ]
+    },
+    "claim": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evidenceRefs": {
+      "maxItems": 6,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "cellIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "outputIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "code",
+              "metric",
+              "schema",
+              "output",
+              "learner_claim"
+            ]
+          },
+          "hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "excerpt": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "relevance": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "kind",
+          "hash",
+          "excerpt",
+          "relevance"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "hypotheses": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "enum": [
+                "current",
+                "competing"
+              ]
+            },
+            "statement": {
+              "type": "string",
+              "minLength": 1
+            },
+            "conditions": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "nonClaims": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "evidence": {
+              "maxItems": 6,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "cellIndex": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "outputIndex": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "code",
+                      "metric",
+                      "schema",
+                      "output",
+                      "learner_claim"
+                    ]
+                  },
+                  "hash": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "excerpt": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "relevance": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "kind",
+                  "hash",
+                  "excerpt",
+                  "relevance"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "supportedCandidateExperimentIds": {
+              "maxItems": 12,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "required": [
+            "id",
+            "statement",
+            "conditions",
+            "nonClaims",
+            "evidence",
+            "supportedCandidateExperimentIds"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "enum": [
+                "current",
+                "competing"
+              ]
+            },
+            "statement": {
+              "type": "string",
+              "minLength": 1
+            },
+            "conditions": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "nonClaims": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "evidence": {
+              "maxItems": 6,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "cellIndex": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "outputIndex": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "code",
+                      "metric",
+                      "schema",
+                      "output",
+                      "learner_claim"
+                    ]
+                  },
+                  "hash": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "excerpt": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "relevance": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "kind",
+                  "hash",
+                  "excerpt",
+                  "relevance"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "supportedCandidateExperimentIds": {
+              "maxItems": 12,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "required": [
+            "id",
+            "statement",
+            "conditions",
+            "nonClaims",
+            "evidence",
+            "supportedCandidateExperimentIds"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "alternatives": {
+      "maxItems": 8,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "statement": {
+            "type": "string",
+            "minLength": 1
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1
+          },
+          "conditions": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "nonClaims": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidence": {
+            "maxItems": 6,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "cellIndex": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "outputIndex": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "code",
+                    "metric",
+                    "schema",
+                    "output",
+                    "learner_claim"
+                  ]
+                },
+                "hash": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "excerpt": {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                "relevance": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "kind",
+                "hash",
+                "excerpt",
+                "relevance"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "supportedCandidateExperimentIds": {
+            "maxItems": 12,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "statement",
+          "rationale",
+          "conditions",
+          "nonClaims",
+          "evidence",
+          "supportedCandidateExperimentIds"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "uncertainty": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "supportState": {
+      "type": "string",
+      "enum": [
+        "SUPPORTED",
+        "PARTIAL",
+        "INSUFFICIENT_EVIDENCE"
+      ]
+    },
+    "learnerDecision": {
+      "type": "string",
+      "enum": [
+        "UNDECIDED",
+        "CONFIRMED",
+        "EDITED",
+        "ALTERNATIVE_SELECTED",
+        "REJECTED"
+      ]
+    },
+    "selectedAlternativeId": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "concept",
+    "claim",
+    "evidenceRefs",
+    "hypotheses",
+    "alternatives",
+    "uncertainty",
+    "supportState",
+    "learnerDecision"
+  ],
+  "additionalProperties": false
+}
