@@ -65,6 +65,7 @@ import { z, ZodError } from "zod";
 import patchedNotebookText from "../../../replays/leakage-01/patch/customer_churn_leakage.patched.ipynb?raw";
 import patchKernelResult from "../../../replays/leakage-01/patch-kernel-result.json";
 import compilerReplaySummary from "../../../replays/leakage-01/compiler/replay-summary.json";
+import replayVerifiedResult from "../../../replays/leakage-01/compiler/verified-live-run/verified-result.json";
 import experimentPlanSchema from "../../../packages/contracts/schemas/experiment-plan-v2.schema.json";
 import patchPlanSchema from "../../../packages/contracts/schemas/patch-plan-v1.schema.json";
 import { D1ArtifactStore, type ArtifactStore } from "./artifact-store";
@@ -3468,7 +3469,7 @@ export function createApi(options: ApiOptions = {}) {
         verifierVersion: "leakage-verifier-v1",
         templateCommit: compilerReplaySummary.repositoryCommitAtRun,
         compilerTrace: compilerReplaySummary,
-        result: sampleResult,
+        result: replayVerifiedResult,
         patch: patchKernelResult,
       }),
     );
