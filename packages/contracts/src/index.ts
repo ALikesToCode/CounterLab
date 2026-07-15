@@ -1146,6 +1146,260 @@ export const BeliefTestSchema = z
 
 export type BeliefTest = z.infer<typeof BeliefTestSchema>;
 
+export const PrimaryHypothesisSchema = z
+  .object({
+    id: z.enum(["current", "competing"]),
+    statement: NonEmptyString,
+    conditions: z.array(NonEmptyString).min(1),
+    nonClaims: z
+      .array(NonEmptyString)
+      .min(1, "at least one non-claim is required"),
+    evidence: z.array(EvidenceRefSchema).max(6),
+    supportedCandidateExperimentIds: z.array(NonEmptyString).max(12),
+  })
+  .strict();
+
+export type PrimaryHypothesis = z.infer<typeof PrimaryHypothesisSchema>;
+
+export const AlternativeHypothesisSchema = z
+  .object({
+    id: NonEmptyString,
+    label: NonEmptyString,
+    statement: NonEmptyString,
+    rationale: NonEmptyString,
+    conditions: z.array(NonEmptyString).min(1),
+    nonClaims: z
+      .array(NonEmptyString)
+      .min(1, "at least one non-claim is required"),
+    evidence: z.array(EvidenceRefSchema).max(6),
+    supportedCandidateExperimentIds: z.array(NonEmptyString).max(12),
+  })
+  .strict();
+
+export type AlternativeHypothesis = z.infer<typeof AlternativeHypothesisSchema>;
+
+export const BeliefSpecV2Schema = z
+  .object({
+    schemaVersion: z.literal("2"),
+    id: NonEmptyString,
+    concept: ConceptIdSchema,
+    claim: NonEmptyString,
+    evidenceRefs: z.array(EvidenceRefSchema).max(6),
+    hypotheses: z.tuple([PrimaryHypothesisSchema, PrimaryHypothesisSchema]),
+    alternatives: z.array(AlternativeHypothesisSchema).max(8),
+    uncertainty: ProportionSchema,
+    supportState: z.enum(["SUPPORTED", "PARTIAL", "INSUFFICIENT_EVIDENCE"]),
+    learnerDecision: z.enum([
+      "UNDECIDED",
+      "CONFIRMED",
+      "EDITED",
+      "ALTERNATIVE_SELECTED",
+      "REJECTED",
+    ]),
+    selectedAlternativeId: NonEmptyString.optional(),
+  })
+  .strict()
+  .superRefine((beliefSpec, context) => {
+    if (
+      beliefSpec.hypotheses[0].id !== "current" ||
+      beliefSpec.hypotheses[1].id !== "competing"
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "hypotheses must be ordered as current followed by competing",
+        path: ["hypotheses"],
+      });
+    }
+    if (
+      beliefSpec.hypotheses[0].statement.toLowerCase() ===
+      beliefSpec.hypotheses[1].statement.toLowerCase()
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "current and competing hypotheses must differ",
+        path: ["hypotheses", 1, "statement"],
+      });
+    }
+
+    const evidenceKeys = new Set(
+      beliefSpec.evidenceRefs.map(beliefEvidenceKey),
+    );
+    for (const [
+      hypothesisIndex,
+      hypothesis,
+    ] of beliefSpec.hypotheses.entries()) {
+      for (const [evidenceIndex, evidence] of hypothesis.evidence.entries()) {
+        if (!evidenceKeys.has(beliefEvidenceKey(evidence))) {
+          context.addIssue({
+            code: "custom",
+            message: "hypothesis evidence must resolve to evidenceRefs",
+            path: ["hypotheses", hypothesisIndex, "evidence", evidenceIndex],
+          });
+        }
+      }
+    }
+    for (const [
+      alternativeIndex,
+      alternative,
+    ] of beliefSpec.alternatives.entries()) {
+      for (const [evidenceIndex, evidence] of alternative.evidence.entries()) {
+        if (!evidenceKeys.has(beliefEvidenceKey(evidence))) {
+          context.addIssue({
+            code: "custom",
+            message: "alternative evidence must resolve to evidenceRefs",
+            path: ["alternatives", alternativeIndex, "evidence", evidenceIndex],
+          });
+        }
+      }
+    }
+
+    if (beliefSpec.supportState !== "INSUFFICIENT_EVIDENCE") {
+      if (beliefSpec.evidenceRefs.length === 0) {
+        context.addIssue({
+          code: "custom",
+          message: "SUPPORTED or PARTIAL Belief Specs require evidenceRefs",
+          path: ["evidenceRefs"],
+        });
+      }
+      for (const [index, hypothesis] of beliefSpec.hypotheses.entries()) {
+        if (hypothesis.evidence.length === 0) {
+          context.addIssue({
+            code: "custom",
+            message: "each primary hypothesis requires resolved evidence",
+            path: ["hypotheses", index, "evidence"],
+          });
+        }
+        if (hypothesis.supportedCandidateExperimentIds.length === 0) {
+          context.addIssue({
+            code: "custom",
+            message:
+              "each primary hypothesis requires a supported candidate experiment",
+            path: ["hypotheses", index, "supportedCandidateExperimentIds"],
+          });
+        }
+      }
+    }
+
+    const alternativeIds = new Set<string>();
+    for (const [index, alternative] of beliefSpec.alternatives.entries()) {
+      if (alternativeIds.has(alternative.id)) {
+        context.addIssue({
+          code: "custom",
+          message: `duplicate alternative hypothesis id: ${alternative.id}`,
+          path: ["alternatives", index, "id"],
+        });
+      }
+      alternativeIds.add(alternative.id);
+    }
+    if (beliefSpec.learnerDecision === "ALTERNATIVE_SELECTED") {
+      if (
+        beliefSpec.selectedAlternativeId === undefined ||
+        !alternativeIds.has(beliefSpec.selectedAlternativeId)
+      ) {
+        context.addIssue({
+          code: "custom",
+          message:
+            "ALTERNATIVE_SELECTED requires a selectedAlternativeId that resolves",
+          path: ["selectedAlternativeId"],
+        });
+      }
+    } else if (beliefSpec.selectedAlternativeId !== undefined) {
+      context.addIssue({
+        code: "custom",
+        message: "selectedAlternativeId is only valid for ALTERNATIVE_SELECTED",
+        path: ["selectedAlternativeId"],
+      });
+    }
+  });
+
+export type BeliefSpecV2 = z.infer<typeof BeliefSpecV2Schema>;
+
+export const BeliefSpecSchema = z.union([BeliefTestSchema, BeliefSpecV2Schema]);
+
+export type BeliefSpec = z.infer<typeof BeliefSpecSchema>;
+
+function beliefEvidenceKey(evidence: EvidenceRef): string {
+  return [
+    evidence.kind,
+    evidence.hash,
+    evidence.cellIndex ?? "",
+    evidence.outputIndex ?? "",
+  ].join(":");
+}
+
+function migratedAlternativeId(label: string, index: number): string {
+  const slug = label
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  return `alternative-${index + 1}${slug.length === 0 ? "" : `-${slug}`}`;
+}
+
+/**
+ * Creates an unsigned v2 compatibility view of a signed v1 Belief Test.
+ * The source object is never changed. Because v1 did not encode complete
+ * conditions or per-hypothesis non-claims, the migrated view is PARTIAL.
+ */
+export function migrateBeliefTestV1ToV2(input: BeliefTest): BeliefSpecV2 {
+  const beliefTest = BeliefTestSchema.parse(input);
+  const limitations =
+    beliefTest.uncertainty.limitations.length === 0
+      ? [
+          "This replay predates explicit hypothesis conditions and does not establish conclusions outside its recorded intervention.",
+        ]
+      : [...beliefTest.uncertainty.limitations];
+  const conditions = [
+    beliefTest.decisiveIntervention.description,
+    ...beliefTest.decisiveIntervention.controlledVariables.map(
+      (variable) => `${variable} remains controlled.`,
+    ),
+  ];
+  const candidateExperimentIds = [beliefTest.decisiveIntervention.id];
+
+  return BeliefSpecV2Schema.parse({
+    schemaVersion: "2",
+    id: beliefTest.id,
+    concept: beliefTest.concept,
+    claim: beliefTest.learnerClaim,
+    evidenceRefs: structuredClone(beliefTest.evidenceRefs),
+    hypotheses: [
+      {
+        id: "current",
+        statement: beliefTest.currentHypothesis.statement,
+        conditions,
+        nonClaims: limitations,
+        evidence: structuredClone(beliefTest.evidenceRefs),
+        supportedCandidateExperimentIds: candidateExperimentIds,
+      },
+      {
+        id: "competing",
+        statement: beliefTest.competingHypothesis.statement,
+        conditions,
+        nonClaims: limitations,
+        evidence: structuredClone(beliefTest.evidenceRefs),
+        supportedCandidateExperimentIds: candidateExperimentIds,
+      },
+    ],
+    alternatives: beliefTest.alternatives.map((alternative, index) => ({
+      id: migratedAlternativeId(alternative.label, index),
+      label: alternative.label,
+      statement: alternative.label,
+      rationale: alternative.rationale,
+      conditions: [beliefTest.decisiveIntervention.description],
+      nonClaims: limitations,
+      evidence: structuredClone(beliefTest.evidenceRefs),
+      supportedCandidateExperimentIds: [],
+    })),
+    uncertainty: beliefTest.uncertainty.confidence,
+    supportState: beliefTest.uncertainty.insufficientEvidence
+      ? "INSUFFICIENT_EVIDENCE"
+      : "PARTIAL",
+    learnerDecision: "UNDECIDED",
+  });
+}
+
 export const PredictionContractSchema = z
   .object({
     schemaVersion: VersionOneSchema.default("1"),

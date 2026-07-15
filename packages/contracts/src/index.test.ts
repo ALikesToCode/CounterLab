@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   ApiErrorSchema,
   ArtifactManifestSchema,
+  BeliefSpecV2Schema,
   BeliefTestSchema,
   ConceptIdSchema,
   ConceptRoutingDecisionSchema,
@@ -32,6 +33,7 @@ import {
   apiSuccessSchema,
   assertTransition,
   assertRunnerJobTransition,
+  migrateBeliefTestV1ToV2,
 } from "./index.js";
 
 describe("ArtifactManifestSchema", () => {
@@ -722,6 +724,179 @@ describe("session transitions", () => {
 const hash = (character: string) => character.repeat(64);
 
 describe("learning-loop contracts", () => {
+  it("validates a learner-decidable Belief Spec v2 with explicit scope", () => {
+    const evidence = {
+      cellIndex: 3,
+      outputIndex: 0,
+      kind: "metric" as const,
+      hash: hash("a"),
+      excerpt: "Test accuracy: 0.9847",
+      relevance: "This is the result the learner interpreted.",
+    };
+    const beliefSpec = BeliefSpecV2Schema.parse({
+      schemaVersion: "2",
+      id: "belief_1",
+      concept: "entity_leakage",
+      claim: "The score proves the model generalizes to new customers.",
+      evidenceRefs: [evidence],
+      hypotheses: [
+        {
+          id: "current",
+          statement: "Random rows measure new-customer performance.",
+          conditions: ["The deployment unit is a previously unseen customer."],
+          nonClaims: ["This does not establish performance after drift."],
+          evidence: [evidence],
+          supportedCandidateExperimentIds: ["group-holdout"],
+        },
+        {
+          id: "competing",
+          statement: "Repeated customer identity inflates the row split.",
+          conditions: ["Customers repeat across observations."],
+          nonClaims: ["This does not claim that every identity feature leaks."],
+          evidence: [evidence],
+          supportedCandidateExperimentIds: ["group-holdout"],
+        },
+      ],
+      alternatives: [
+        {
+          id: "distribution-shift",
+          label: "Distribution shift",
+          statement: "The test period differs from deployment.",
+          rationale: "A time change could explain part of the score gap.",
+          conditions: ["Training and deployment periods differ."],
+          nonClaims: ["This is not selected as a primary hypothesis."],
+          evidence: [evidence],
+          supportedCandidateExperimentIds: [],
+        },
+      ],
+      uncertainty: 0.86,
+      supportState: "SUPPORTED",
+      learnerDecision: "UNDECIDED",
+    });
+
+    expect(beliefSpec.hypotheses.map(({ id }) => id)).toEqual([
+      "current",
+      "competing",
+    ]);
+    expect(() =>
+      BeliefSpecV2Schema.parse({ ...beliefSpec, unreviewed: true }),
+    ).toThrow();
+    expect(() =>
+      BeliefSpecV2Schema.parse({
+        ...beliefSpec,
+        hypotheses: [beliefSpec.hypotheses[1], beliefSpec.hypotheses[0]],
+      }),
+    ).toThrow(/current|competing/i);
+    expect(() =>
+      BeliefSpecV2Schema.parse({
+        ...beliefSpec,
+        hypotheses: [
+          {
+            ...beliefSpec.hypotheses[0],
+            nonClaims: [],
+          },
+          beliefSpec.hypotheses[1],
+        ],
+      }),
+    ).toThrow(/non-claim/i);
+  });
+
+  it("fails closed when Belief Spec evidence is unresolved internally", () => {
+    const evidence = {
+      kind: "learner_claim" as const,
+      hash: hash("b"),
+      excerpt: "The score proves generalization.",
+      relevance: "This is the learner claim.",
+    };
+    const candidate = {
+      schemaVersion: "2",
+      id: "belief_2",
+      concept: "entity_leakage",
+      claim: "The score proves generalization.",
+      evidenceRefs: [evidence],
+      hypotheses: [
+        {
+          id: "current",
+          statement: "The score generalizes.",
+          conditions: ["The evaluation matches deployment."],
+          nonClaims: ["No claim is made outside this artifact."],
+          evidence: [{ ...evidence, hash: hash("c") }],
+          supportedCandidateExperimentIds: ["group-holdout"],
+        },
+        {
+          id: "competing",
+          statement: "The evaluation leaks identity.",
+          conditions: ["Rows repeat entities."],
+          nonClaims: ["No causal claim is made."],
+          evidence: [evidence],
+          supportedCandidateExperimentIds: ["group-holdout"],
+        },
+      ],
+      alternatives: [],
+      uncertainty: 0.5,
+      supportState: "PARTIAL",
+      learnerDecision: "UNDECIDED",
+    };
+
+    expect(() => BeliefSpecV2Schema.parse(candidate)).toThrow(/evidenceRefs/i);
+  });
+
+  it("adapts v1 without mutating the signed source or inventing support", () => {
+    const v1 = BeliefTestSchema.parse({
+      id: "belief_replay_1",
+      concept: "entity_leakage",
+      learnerClaim: "Random-row accuracy proves generalization.",
+      currentHypothesis: {
+        statement: "Random rows measure new-customer performance.",
+        predictedOutcome: "The group score stays high.",
+      },
+      competingHypothesis: {
+        statement: "Repeated entities inflate the score.",
+        predictedOutcome: "The group score falls.",
+      },
+      evidenceRefs: [
+        {
+          cellIndex: 3,
+          outputIndex: 0,
+          kind: "metric",
+          hash: hash("d"),
+          excerpt: "accuracy=0.98",
+          relevance: "The notebook headline.",
+        },
+      ],
+      alternatives: [],
+      decisiveIntervention: {
+        id: "group-holdout",
+        description: "Hold out complete customers.",
+        controlledVariables: ["model", "seed"],
+        changedVariables: ["split"],
+        discriminatesBecause: "Only leakage predicts a material gap.",
+      },
+      uncertainty: {
+        confidence: 0.8,
+        limitations: ["The old replay did not encode hypothesis conditions."],
+        insufficientEvidence: false,
+      },
+      requiresLearnerConfirmation: true,
+    });
+    const before = JSON.stringify(v1);
+
+    const migrated = migrateBeliefTestV1ToV2(v1);
+
+    expect(migrated).toMatchObject({
+      schemaVersion: "2",
+      id: "belief_replay_1",
+      claim: v1.learnerClaim,
+      learnerDecision: "UNDECIDED",
+      supportState: "PARTIAL",
+    });
+    expect(migrated.hypotheses[0].nonClaims).toContain(
+      "The old replay did not encode hypothesis conditions.",
+    );
+    expect(JSON.stringify(v1)).toBe(before);
+    expect(v1.schemaVersion).toBe("1");
+  });
+
   it("accepts the exact Belief Test shape and attaches schema version 1", () => {
     const beliefTest = BeliefTestSchema.parse({
       id: "belief_1",
