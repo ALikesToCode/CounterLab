@@ -6,6 +6,7 @@ import { z } from "zod";
 import {
   BeliefSpecV2Schema,
   EpistemicObservationV1Schema,
+  EpistemicVerifierPolicyV1Schema,
   EvidenceVerdictSchema,
   ExperimentPlanV2Schema,
   PatchPlanV1Schema,
@@ -41,6 +42,12 @@ const schemas = [
     id: "https://counterlab.dev/schemas/evidence-verdict-v1.schema.json",
     title: "CounterLab evidence verdict v1",
     schema: EvidenceVerdictSchema,
+  },
+  {
+    fileName: "epistemic-verifier-policy-v1.schema.json",
+    id: "https://counterlab.dev/schemas/epistemic-verifier-policy-v1.schema.json",
+    title: "CounterLab epistemic verifier policy v1",
+    schema: EpistemicVerifierPolicyV1Schema,
   },
   {
     fileName: "experiment-ir-v5.schema.json",

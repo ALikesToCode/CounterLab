@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@counterlab/contracts": "workspace:*",
+    "@counterlab/experiment-ir": "workspace:*",
     "@counterlab/experiment-scorer": "workspace:*"
   }
 }

@@ -360,7 +360,7 @@ const ObservableBindingSchema = z
   })
   .strict();
 
-const EpistemicOutcomeSchema = z.discriminatedUnion("kind", [
+export const EpistemicOutcomeV1Schema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("HYPOTHESIS_PATTERN"),
@@ -388,7 +388,7 @@ export const EpistemicObservationV1Schema = z
     changedVariableIds: z.array(EpistemicTokenIdSchema).max(12),
     controlBindings: z.array(ControlBindingSchema).min(1).max(20),
     observableBindings: z.array(ObservableBindingSchema).min(1).max(20),
-    outcome: EpistemicOutcomeSchema,
+    outcome: EpistemicOutcomeV1Schema,
     boundaryBinding: z
       .object({
         sweepId: EpistemicTokenIdSchema,
@@ -428,6 +428,75 @@ export const EpistemicObservationV1Schema = z
 
 export type EpistemicObservationV1 = z.infer<
   typeof EpistemicObservationV1Schema
+>;
+
+export type EpistemicOutcomeV1 = z.infer<typeof EpistemicOutcomeV1Schema>;
+
+const BoundarySweepPolicySchema = z
+  .object({
+    sweepId: EpistemicTokenIdSchema,
+    axisIds: z.array(EpistemicTokenIdSchema).min(1).max(2),
+    gridPresetId: EpistemicTokenIdSchema,
+    observableId: AllowedMetricSchema,
+    maxCells: z.number().int().positive().max(2_500),
+    resultPathPrefix: SignedResultPathSchema,
+  })
+  .strict();
+
+export const EpistemicVerifierPolicyV1Schema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    policyVersion: EpistemicTokenIdSchema,
+    verifierVersion: EpistemicTokenIdSchema,
+    classifierId: EpistemicTokenIdSchema,
+    concept: ConceptIdSchema,
+    allowedScopes: z.array(NonEmptyString.max(500)).min(1).max(12),
+    observableResultPathPrefixes: z
+      .array(
+        z
+          .object({
+            observableId: AllowedMetricSchema,
+            prefixes: z.array(SignedResultPathSchema).min(1).max(8),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(20),
+    boundarySweeps: z.array(BoundarySweepPolicySchema).max(12),
+    approvedClaims: z.array(NonEmptyString.max(500)).max(20),
+    forbiddenClaims: z.array(NonEmptyString.max(500)).min(1).max(20),
+  })
+  .strict()
+  .superRefine((policy, context) => {
+    const observableIds = new Set<string>();
+    for (const [
+      index,
+      binding,
+    ] of policy.observableResultPathPrefixes.entries()) {
+      if (observableIds.has(binding.observableId)) {
+        context.addIssue({
+          code: "custom",
+          message: `duplicate observable policy: ${binding.observableId}`,
+          path: ["observableResultPathPrefixes", index, "observableId"],
+        });
+      }
+      observableIds.add(binding.observableId);
+    }
+    const sweepIds = new Set<string>();
+    for (const [index, sweep] of policy.boundarySweeps.entries()) {
+      if (sweepIds.has(sweep.sweepId)) {
+        context.addIssue({
+          code: "custom",
+          message: `duplicate boundary sweep policy: ${sweep.sweepId}`,
+          path: ["boundarySweeps", index, "sweepId"],
+        });
+      }
+      sweepIds.add(sweep.sweepId);
+    }
+  });
+
+export type EpistemicVerifierPolicyV1 = z.infer<
+  typeof EpistemicVerifierPolicyV1Schema
 >;
 
 export const EpistemicFindingCodeSchema = z.enum([

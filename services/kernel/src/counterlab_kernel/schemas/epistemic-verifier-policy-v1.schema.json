@@ -1,0 +1,171 @@
+{
+  "$id": "https://counterlab.dev/schemas/epistemic-verifier-policy-v1.schema.json",
+  "title": "CounterLab epistemic verifier policy v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1"
+    },
+    "policyVersion": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+    },
+    "verifierVersion": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+    },
+    "classifierId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+    },
+    "concept": {
+      "type": "string",
+      "enum": [
+        "entity_leakage",
+        "class_imbalance"
+      ]
+    },
+    "allowedScopes": {
+      "minItems": 1,
+      "maxItems": 12,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    },
+    "observableResultPathPrefixes": {
+      "minItems": 1,
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "observableId": {
+            "type": "string",
+            "enum": [
+              "accuracy",
+              "roc_auc",
+              "entity_overlap_rate",
+              "precision",
+              "recall",
+              "f1",
+              "pr_auc",
+              "confusion_matrix",
+              "prevalence"
+            ]
+          },
+          "prefixes": {
+            "minItems": 1,
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 256,
+              "pattern": "^\\/(?:[A-Za-z0-9_-]+)(?:\\/[A-Za-z0-9_-]+)*$"
+            }
+          }
+        },
+        "required": [
+          "observableId",
+          "prefixes"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "boundarySweeps": {
+      "maxItems": 12,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "sweepId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+          },
+          "axisIds": {
+            "minItems": 1,
+            "maxItems": 2,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+            }
+          },
+          "gridPresetId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+          },
+          "observableId": {
+            "type": "string",
+            "enum": [
+              "accuracy",
+              "roc_auc",
+              "entity_overlap_rate",
+              "precision",
+              "recall",
+              "f1",
+              "pr_auc",
+              "confusion_matrix",
+              "prevalence"
+            ]
+          },
+          "maxCells": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 2500
+          },
+          "resultPathPrefix": {
+            "type": "string",
+            "maxLength": 256,
+            "pattern": "^\\/(?:[A-Za-z0-9_-]+)(?:\\/[A-Za-z0-9_-]+)*$"
+          }
+        },
+        "required": [
+          "sweepId",
+          "axisIds",
+          "gridPresetId",
+          "observableId",
+          "maxCells",
+          "resultPathPrefix"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "approvedClaims": {
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    },
+    "forbiddenClaims": {
+      "minItems": 1,
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "policyVersion",
+    "verifierVersion",
+    "classifierId",
+    "concept",
+    "allowedScopes",
+    "observableResultPathPrefixes",
+    "boundarySweeps",
+    "approvedClaims",
+    "forbiddenClaims"
+  ],
+  "additionalProperties": false
+}

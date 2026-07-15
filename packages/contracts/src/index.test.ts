@@ -10,6 +10,7 @@ import {
   ConceptRoutingDecisionSchema,
   EvidenceEventSchema,
   EpistemicObservationV1Schema,
+  EpistemicVerifierPolicyV1Schema,
   EvidenceVerdictSchema,
   ExperimentPlanSchema,
   ExperimentPlanV2Schema,
@@ -143,6 +144,37 @@ describe("epistemic evidence contracts", () => {
         technicalReportHash: observation.technicalVerification.reportHash,
         verifierVersion: "epistemic-verifier-v1",
       }),
+    ).toThrow();
+  });
+
+  it("requires a strict, versioned epistemic policy", () => {
+    const policy = {
+      schemaVersion: "1",
+      policyVersion: "leakage-epistemic-policy-v1",
+      verifierVersion: "epistemic-verifier-v1",
+      classifierId: "leakage-outcome-classifier-v1",
+      concept: "entity_leakage",
+      allowedScopes: ["unseen customers in the documented fixture"],
+      observableResultPathPrefixes: [
+        { observableId: "accuracy", prefixes: ["/chartData"] },
+      ],
+      boundarySweeps: [
+        {
+          sweepId: "leakage-recurrence-sweep",
+          axisIds: ["entity_recurrence"],
+          gridPresetId: "leakage-grid-v1",
+          observableId: "accuracy",
+          maxCells: 48,
+          resultPathPrefix: "/boundaryMaps/leakage_recurrence",
+        },
+      ],
+      approvedClaims: ["This result is scoped to the documented fixture."],
+      forbiddenClaims: ["This proves global mastery."],
+    } as const;
+
+    expect(EpistemicVerifierPolicyV1Schema.parse(policy)).toEqual(policy);
+    expect(() =>
+      EpistemicVerifierPolicyV1Schema.parse({ ...policy, arbitrary: true }),
     ).toThrow();
   });
 });

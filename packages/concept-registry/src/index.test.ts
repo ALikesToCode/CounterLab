@@ -306,6 +306,17 @@ describe("concept-pack registry", () => {
           (metric) => pack.allowedMetrics.includes(metric),
         ),
       ).toBe(true);
+      expect(pack.scientificMethod.epistemic.policy).toMatchObject({
+        schemaVersion: "1",
+        concept: pack.id,
+        verifierVersion: "epistemic-verifier-v1",
+      });
+      expect(pack.scientificMethod.epistemic.policy.approvedClaims).toEqual(
+        pack.approvedClaims,
+      );
+      expect(pack.scientificMethod.epistemic.policy.forbiddenClaims).toEqual(
+        pack.forbiddenClaims,
+      );
     }
   });
 });
