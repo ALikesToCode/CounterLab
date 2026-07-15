@@ -105,7 +105,7 @@ advanced local launches fail closed without their OS boundary.
 ```dotenv
 CODEX_MODEL=
 COUNTERLAB_CODEX_MODE=replay
-COUNTERLAB_RUNNER_SIGNING_KEY=
+COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY=
 COUNTERLAB_SANDBOX_IMAGE=counterlab-runner:local
 ```
 

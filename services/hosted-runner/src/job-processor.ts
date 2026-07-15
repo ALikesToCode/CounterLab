@@ -49,23 +49,31 @@ export type CandidateDecision = {
 };
 
 export interface RunnerControlPlane {
-  getInput(): Promise<RunnerJobInputBundle>;
-  getSource(): Promise<string>;
-  start(): Promise<void>;
-  resume(): Promise<void>;
-  appendEvent(event: PublicCompilerEvent): Promise<void>;
-  upload(path: string, body: string): Promise<{ sha256: string }>;
-  candidate(input: {
-    attempt: number;
-    planSha256: string;
-  }): Promise<CandidateDecision>;
-  callback(callback: RunnerCallback): Promise<void>;
+  getInput(signal?: AbortSignal): Promise<RunnerJobInputBundle>;
+  getSource(signal?: AbortSignal): Promise<string>;
+  start(signal?: AbortSignal): Promise<void>;
+  resume(signal?: AbortSignal): Promise<void>;
+  appendEvent(event: PublicCompilerEvent, signal?: AbortSignal): Promise<void>;
+  upload(
+    path: string,
+    body: string,
+    signal?: AbortSignal,
+  ): Promise<{ sha256: string }>;
+  candidate(
+    input: {
+      attempt: number;
+      planSha256: string;
+    },
+    signal?: AbortSignal,
+  ): Promise<CandidateDecision>;
+  callback(callback: RunnerCallback, signal?: AbortSignal): Promise<void>;
 }
 
 export interface FixedKernelExecutor {
   run(
     bundle: RunnerLabRunBundle,
     workspace: string,
+    signal?: AbortSignal,
   ): Promise<{ body: string; durationMs: number }>;
 }
 
@@ -75,6 +83,7 @@ export interface FixedPatchExecutor {
     sourceNotebook: string,
     patchPlan: string,
     workspace: string,
+    signal?: AbortSignal,
   ): Promise<{
     notebookBody: string;
     patchResultBody: string;
@@ -125,6 +134,17 @@ class RunnerProcessingError extends Error {
     super(publicMessage);
     this.name = "RunnerProcessingError";
   }
+}
+
+class RunnerCancelledError extends Error {
+  constructor() {
+    super("Runner job cancelled");
+    this.name = "RunnerCancelledError";
+  }
+}
+
+function throwIfCancelled(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new RunnerCancelledError();
 }
 
 function asPublicError(error: unknown): RunnerProcessingError {
@@ -198,14 +218,17 @@ export class HostedRunnerJobProcessor {
     this.id = options.id ?? ((prefix) => `${prefix}_${crypto.randomUUID()}`);
   }
 
-  async run(jobId: string): Promise<void> {
+  async run(jobId: string, signal?: AbortSignal): Promise<void> {
     let bundle: RunnerJobInputBundle | undefined;
     let cursor = 0;
     let outputHashes: string[] = [];
     const operationalMetrics = emptyOperationalMetrics();
     try {
+      throwIfCancelled(signal);
       bundle = RunnerJobInputBundleSchema.parse(
-        await this.options.controlPlane.getInput(),
+        await this.authorityCall(signal, () =>
+          this.options.controlPlane.getInput(signal),
+        ),
       );
       if (bundle.jobId !== jobId) {
         throw new RunnerProcessingError(
@@ -214,8 +237,12 @@ export class HostedRunnerJobProcessor {
           false,
         );
       }
-      await this.options.controlPlane.start();
-      cursor = await this.emit(jobId, cursor, { kind: "job.started" });
+      const stateVersion = bundle.stateVersion;
+      await this.authorityCall(signal, () =>
+        this.options.controlPlane.start(signal),
+      );
+      throwIfCancelled(signal);
+      cursor = await this.emit(jobId, cursor, { kind: "job.started" }, signal);
 
       const generationDirectory = await this.prepareWorkspace(jobId);
       if (bundle.kind === "LAB_RUN") {
@@ -227,7 +254,12 @@ export class HostedRunnerJobProcessor {
             true,
           );
         }
-        const executed = await fixedKernel.run(bundle, generationDirectory);
+        const executed = await fixedKernel.run(
+          bundle,
+          generationDirectory,
+          signal,
+        );
+        throwIfCancelled(signal);
         operationalMetrics.kernelDurationMs = executed.durationMs;
         if (
           new TextEncoder().encode(executed.body).byteLength > MAX_RESULT_BYTES
@@ -249,35 +281,51 @@ export class HostedRunnerJobProcessor {
           );
         }
         const result = HostedVerifiedResultSetV2Schema.parse(rawResult);
-        const uploaded = await this.options.controlPlane.upload(
-          "verified-result.json",
-          executed.body,
+        const uploaded = await this.authorityCall(signal, () =>
+          this.options.controlPlane.upload(
+            "verified-result.json",
+            executed.body,
+            signal,
+          ),
         );
         outputHashes = [uploaded.sha256];
-        cursor = await this.emit(jobId, cursor, {
-          kind: "command.completed",
-          label: "Fixed kernel executed the verified Plan",
-          exitCode: 0,
-          durationMs: executed.durationMs,
-          excerpt: `${result.runs.length} fixed run${result.runs.length === 1 ? "" : "s"} completed.`,
-        });
-        cursor = await this.emit(jobId, cursor, {
-          kind: "result.ready",
-          resultHash: result.resultHash,
-        });
-        await this.options.controlPlane.callback(
-          RunnerCallbackSchema.parse({
-            schemaVersion: "1",
-            callbackId: this.id("runner_callback"),
-            idempotencyKey: `${jobId}:verified:${uploaded.sha256}`,
-            jobId,
-            stateVersion: bundle.stateVersion,
-            status: "VERIFIED",
-            outputHashes,
-            finalEventCursor: cursor,
-            operationalMetrics,
-            occurredAt: this.now().toISOString(),
-          }),
+        cursor = await this.emit(
+          jobId,
+          cursor,
+          {
+            kind: "command.completed",
+            label: "Fixed kernel executed the verified Plan",
+            exitCode: 0,
+            durationMs: executed.durationMs,
+            excerpt: `${result.runs.length} fixed run${result.runs.length === 1 ? "" : "s"} completed.`,
+          },
+          signal,
+        );
+        cursor = await this.emit(
+          jobId,
+          cursor,
+          {
+            kind: "result.ready",
+            resultHash: result.resultHash,
+          },
+          signal,
+        );
+        await this.authorityCall(signal, () =>
+          this.options.controlPlane.callback(
+            RunnerCallbackSchema.parse({
+              schemaVersion: "1",
+              callbackId: this.id("runner_callback"),
+              idempotencyKey: `${jobId}:verified:${uploaded.sha256}`,
+              jobId,
+              stateVersion,
+              status: "VERIFIED",
+              outputHashes,
+              finalEventCursor: cursor,
+              operationalMetrics,
+              occurredAt: this.now().toISOString(),
+            }),
+            signal,
+          ),
         );
         return;
       }
@@ -297,9 +345,13 @@ export class HostedRunnerJobProcessor {
         cursor = await this.consumeCompilerEvents(
           jobId,
           cursor,
-          this.options.compiler.compileHostedPatchPlan(compileInput),
+          this.options.compiler.compileHostedPatchPlan(
+            compileInput,
+            signal === undefined ? {} : { signal },
+          ),
           PATCH_PLAN_OUTPUTS,
           operationalMetrics,
+          signal,
         );
         let uploaded = await this.validateAndUpload(
           jobId,
@@ -307,13 +359,16 @@ export class HostedRunnerJobProcessor {
           generationDirectory,
           PATCH_PLAN_PATH,
           PATCH_PLAN_OUTPUTS,
+          signal,
         );
         cursor = uploaded.cursor;
         outputHashes = uploaded.outputHashes;
-        let decision = await this.options.controlPlane.candidate({
-          attempt: 1,
-          planSha256: uploaded.planHash,
-        });
+        let decision = await this.authorityCall(signal, () =>
+          this.options.controlPlane.candidate(
+            { attempt: 1, planSha256: uploaded.planHash },
+            signal,
+          ),
+        );
         operationalMetrics.verifierDurationMs += decision.verifierDurationMs;
         cursor = decision.nextCursor;
         for (
@@ -329,11 +384,18 @@ export class HostedRunnerJobProcessor {
             );
           }
           operationalMetrics.repairAttempts = repairAttempt;
-          cursor = await this.emit(jobId, cursor, {
-            kind: "repair.started",
-            attempt: repairAttempt,
-          });
-          await this.options.controlPlane.resume();
+          cursor = await this.emit(
+            jobId,
+            cursor,
+            {
+              kind: "repair.started",
+              attempt: repairAttempt,
+            },
+            signal,
+          );
+          await this.authorityCall(signal, () =>
+            this.options.controlPlane.resume(signal),
+          );
           const repairInput: RepairHostedPatchPlanInput = {
             ...compileInput,
             repairAttempt: repairAttempt as 1 | 2,
@@ -344,9 +406,13 @@ export class HostedRunnerJobProcessor {
           cursor = await this.consumeCompilerEvents(
             jobId,
             cursor,
-            this.options.compiler.repairHostedPatchPlan(repairInput),
+            this.options.compiler.repairHostedPatchPlan(
+              repairInput,
+              signal === undefined ? {} : { signal },
+            ),
             PATCH_PLAN_OUTPUTS,
             operationalMetrics,
+            signal,
           );
           uploaded = await this.validateAndUpload(
             jobId,
@@ -354,13 +420,19 @@ export class HostedRunnerJobProcessor {
             generationDirectory,
             PATCH_PLAN_PATH,
             PATCH_PLAN_OUTPUTS,
+            signal,
           );
           cursor = uploaded.cursor;
           outputHashes = uploaded.outputHashes;
-          decision = await this.options.controlPlane.candidate({
-            attempt: repairAttempt + 1,
-            planSha256: uploaded.planHash,
-          });
+          decision = await this.authorityCall(signal, () =>
+            this.options.controlPlane.candidate(
+              {
+                attempt: repairAttempt + 1,
+                planSha256: uploaded.planHash,
+              },
+              signal,
+            ),
+          );
           operationalMetrics.verifierDurationMs += decision.verifierDurationMs;
           cursor = decision.nextCursor;
         }
@@ -368,13 +440,17 @@ export class HostedRunnerJobProcessor {
           join(generationDirectory, PATCH_PLAN_PATH),
           "utf8",
         );
-        const sourceNotebook = await this.options.controlPlane.getSource();
+        const sourceNotebook = await this.authorityCall(signal, () =>
+          this.options.controlPlane.getSource(signal),
+        );
         const patched = await fixedPatch.run(
           bundle,
           sourceNotebook,
           patchPlan,
           generationDirectory,
+          signal,
         );
+        throwIfCancelled(signal);
         operationalMetrics.patchDurationMs = patched.durationMs;
         const patchResult = PatchResultSchema.parse(
           JSON.parse(patched.patchResultBody),
@@ -391,43 +467,62 @@ export class HostedRunnerJobProcessor {
             false,
           );
         }
-        const notebookUpload = await this.options.controlPlane.upload(
-          "patched-notebook.ipynb",
-          patched.notebookBody,
+        const notebookUpload = await this.authorityCall(signal, () =>
+          this.options.controlPlane.upload(
+            "patched-notebook.ipynb",
+            patched.notebookBody,
+            signal,
+          ),
         );
-        const resultUpload = await this.options.controlPlane.upload(
-          "patch-result.json",
-          patched.patchResultBody,
+        const resultUpload = await this.authorityCall(signal, () =>
+          this.options.controlPlane.upload(
+            "patch-result.json",
+            patched.patchResultBody,
+            signal,
+          ),
         );
         outputHashes = [
           ...outputHashes,
           notebookUpload.sha256,
           resultUpload.sha256,
         ];
-        cursor = await this.emit(jobId, cursor, {
-          kind: "command.completed",
-          label: "Fixed patch engine applied and verified the Plan",
-          exitCode: 0,
-          durationMs: patched.durationMs,
-          excerpt: `${patchResult.modifiedCells.length} notebook cell${patchResult.modifiedCells.length === 1 ? "" : "s"} changed.`,
-        });
-        cursor = await this.emit(jobId, cursor, {
-          kind: "result.ready",
-          resultHash: patchResult.resultHash,
-        });
-        await this.options.controlPlane.callback(
-          RunnerCallbackSchema.parse({
-            schemaVersion: "1",
-            callbackId: this.id("runner_callback"),
-            idempotencyKey: `${jobId}:verified:${outputHashes.join(":")}`,
-            jobId,
-            stateVersion: bundle.stateVersion,
-            status: "VERIFIED",
-            outputHashes,
-            finalEventCursor: cursor,
-            operationalMetrics,
-            occurredAt: this.now().toISOString(),
-          }),
+        cursor = await this.emit(
+          jobId,
+          cursor,
+          {
+            kind: "command.completed",
+            label: "Fixed patch engine applied and verified the Plan",
+            exitCode: 0,
+            durationMs: patched.durationMs,
+            excerpt: `${patchResult.modifiedCells.length} notebook cell${patchResult.modifiedCells.length === 1 ? "" : "s"} changed.`,
+          },
+          signal,
+        );
+        cursor = await this.emit(
+          jobId,
+          cursor,
+          {
+            kind: "result.ready",
+            resultHash: patchResult.resultHash,
+          },
+          signal,
+        );
+        await this.authorityCall(signal, () =>
+          this.options.controlPlane.callback(
+            RunnerCallbackSchema.parse({
+              schemaVersion: "1",
+              callbackId: this.id("runner_callback"),
+              idempotencyKey: `${jobId}:verified:${outputHashes.join(":")}`,
+              jobId,
+              stateVersion,
+              status: "VERIFIED",
+              outputHashes,
+              finalEventCursor: cursor,
+              operationalMetrics,
+              occurredAt: this.now().toISOString(),
+            }),
+            signal,
+          ),
         );
         return;
       }
@@ -435,9 +530,13 @@ export class HostedRunnerJobProcessor {
       cursor = await this.consumeCompilerEvents(
         jobId,
         cursor,
-        this.options.compiler.compileExperimentPlan(compileInput),
+        this.options.compiler.compileExperimentPlan(
+          compileInput,
+          signal === undefined ? {} : { signal },
+        ),
         LAB_PLAN_OUTPUTS,
         operationalMetrics,
+        signal,
       );
       let uploaded = await this.validateAndUpload(
         jobId,
@@ -445,13 +544,16 @@ export class HostedRunnerJobProcessor {
         generationDirectory,
         PLAN_PATH,
         LAB_PLAN_OUTPUTS,
+        signal,
       );
       cursor = uploaded.cursor;
       outputHashes = uploaded.outputHashes;
-      let decision = await this.options.controlPlane.candidate({
-        attempt: 1,
-        planSha256: uploaded.planHash,
-      });
+      let decision = await this.authorityCall(signal, () =>
+        this.options.controlPlane.candidate(
+          { attempt: 1, planSha256: uploaded.planHash },
+          signal,
+        ),
+      );
       operationalMetrics.verifierDurationMs += decision.verifierDurationMs;
       cursor = decision.nextCursor;
 
@@ -468,11 +570,18 @@ export class HostedRunnerJobProcessor {
           );
         }
         operationalMetrics.repairAttempts = repairAttempt;
-        cursor = await this.emit(jobId, cursor, {
-          kind: "repair.started",
-          attempt: repairAttempt,
-        });
-        await this.options.controlPlane.resume();
+        cursor = await this.emit(
+          jobId,
+          cursor,
+          {
+            kind: "repair.started",
+            attempt: repairAttempt,
+          },
+          signal,
+        );
+        await this.authorityCall(signal, () =>
+          this.options.controlPlane.resume(signal),
+        );
         const repairInput: RepairHostedExperimentPlanInput = {
           ...compileInput,
           repairAttempt: repairAttempt as 1 | 2,
@@ -483,9 +592,13 @@ export class HostedRunnerJobProcessor {
         cursor = await this.consumeCompilerEvents(
           jobId,
           cursor,
-          this.options.compiler.repairExperimentPlan(repairInput),
+          this.options.compiler.repairExperimentPlan(
+            repairInput,
+            signal === undefined ? {} : { signal },
+          ),
           LAB_PLAN_OUTPUTS,
           operationalMetrics,
+          signal,
         );
         uploaded = await this.validateAndUpload(
           jobId,
@@ -493,52 +606,66 @@ export class HostedRunnerJobProcessor {
           generationDirectory,
           PLAN_PATH,
           LAB_PLAN_OUTPUTS,
+          signal,
         );
         cursor = uploaded.cursor;
         outputHashes = uploaded.outputHashes;
-        decision = await this.options.controlPlane.candidate({
-          attempt: repairAttempt + 1,
-          planSha256: uploaded.planHash,
-        });
+        decision = await this.authorityCall(signal, () =>
+          this.options.controlPlane.candidate(
+            {
+              attempt: repairAttempt + 1,
+              planSha256: uploaded.planHash,
+            },
+            signal,
+          ),
+        );
         operationalMetrics.verifierDurationMs += decision.verifierDurationMs;
         cursor = decision.nextCursor;
       }
 
-      await this.options.controlPlane.callback(
-        RunnerCallbackSchema.parse({
-          schemaVersion: "1",
-          callbackId: this.id("runner_callback"),
-          idempotencyKey: `${jobId}:verified:${outputHashes.join(":")}`,
-          jobId,
-          stateVersion: bundle.stateVersion,
-          status: "VERIFIED",
-          outputHashes,
-          finalEventCursor: cursor,
-          operationalMetrics,
-          occurredAt: this.now().toISOString(),
-        }),
+      await this.authorityCall(signal, () =>
+        this.options.controlPlane.callback(
+          RunnerCallbackSchema.parse({
+            schemaVersion: "1",
+            callbackId: this.id("runner_callback"),
+            idempotencyKey: `${jobId}:verified:${outputHashes.join(":")}`,
+            jobId,
+            stateVersion,
+            status: "VERIFIED",
+            outputHashes,
+            finalEventCursor: cursor,
+            operationalMetrics,
+            occurredAt: this.now().toISOString(),
+          }),
+          signal,
+        ),
       );
     } catch (error) {
+      if (signal?.aborted || error instanceof RunnerCancelledError) return;
       const publicError = asPublicError(error);
       if (bundle === undefined) throw publicError;
-      await this.options.controlPlane.callback(
-        RunnerCallbackSchema.parse({
-          schemaVersion: "1",
-          callbackId: this.id("runner_callback"),
-          idempotencyKey: `${jobId}:failed:${publicError.code}`,
-          jobId,
-          stateVersion: bundle.stateVersion,
-          status: "FAILED",
-          outputHashes,
-          finalEventCursor: cursor,
-          error: {
-            code: publicError.code,
-            message: publicError.publicMessage,
-            retryable: publicError.retryable,
-          },
-          operationalMetrics,
-          occurredAt: this.now().toISOString(),
-        }),
+      const failedStateVersion = bundle.stateVersion;
+      await this.authorityCall(signal, () =>
+        this.options.controlPlane.callback(
+          RunnerCallbackSchema.parse({
+            schemaVersion: "1",
+            callbackId: this.id("runner_callback"),
+            idempotencyKey: `${jobId}:failed:${publicError.code}`,
+            jobId,
+            stateVersion: failedStateVersion,
+            status: "FAILED",
+            outputHashes,
+            finalEventCursor: cursor,
+            error: {
+              code: publicError.code,
+              message: publicError.publicMessage,
+              retryable: publicError.retryable,
+            },
+            operationalMetrics,
+            occurredAt: this.now().toISOString(),
+          }),
+          signal,
+        ),
       );
     }
   }
@@ -614,20 +741,27 @@ export class HostedRunnerJobProcessor {
     events: AsyncIterable<CompilerEvent>,
     allowedOutputs: ReadonlySet<string>,
     operationalMetrics: RunnerOperationalMetrics,
+    signal?: AbortSignal,
   ): Promise<number> {
     let cursor = initialCursor;
     let completed = false;
     for await (const event of events) {
+      throwIfCancelled(signal);
       if (event.type === "plan_summary") {
-        cursor = await this.emit(jobId, cursor, {
-          kind: "plan.summary",
-          title: "Codex is compiling the counterexperiment",
-          steps: event.summary
-            .split(/\n+/u)
-            .map((step) => step.trim())
-            .filter(Boolean)
-            .slice(0, 12),
-        });
+        cursor = await this.emit(
+          jobId,
+          cursor,
+          {
+            kind: "plan.summary",
+            title: "Codex is compiling the counterexperiment",
+            steps: event.summary
+              .split(/\n+/u)
+              .map((step) => step.trim())
+              .filter(Boolean)
+              .slice(0, 12),
+          },
+          signal,
+        );
       } else if (event.type === "file_change") {
         for (const path of event.files) {
           if (!allowedOutputs.has(path)) {
@@ -637,21 +771,33 @@ export class HostedRunnerJobProcessor {
               false,
             );
           }
-          cursor = await this.emit(jobId, cursor, {
-            kind: "diff.updated",
-            path: path as
-              typeof PLAN_PATH | typeof PATCH_PLAN_PATH | typeof RATIONALE_PATH,
-            unifiedDiff: event.unifiedDiff,
-          });
+          cursor = await this.emit(
+            jobId,
+            cursor,
+            {
+              kind: "diff.updated",
+              path: path as
+                | typeof PLAN_PATH
+                | typeof PATCH_PLAN_PATH
+                | typeof RATIONALE_PATH,
+              unifiedDiff: event.unifiedDiff,
+            },
+            signal,
+          );
         }
       } else if (event.type === "command") {
-        cursor = await this.emit(jobId, cursor, {
-          kind: "command.completed",
-          label: event.command,
-          exitCode: event.exitCode ?? -1,
-          durationMs: event.durationMs ?? 0,
-          excerpt: event.outputExcerpt,
-        });
+        cursor = await this.emit(
+          jobId,
+          cursor,
+          {
+            kind: "command.completed",
+            label: event.command,
+            exitCode: event.exitCode ?? -1,
+            durationMs: event.durationMs ?? 0,
+            excerpt: event.outputExcerpt,
+          },
+          signal,
+        );
       } else if (event.type === "final_status") {
         operationalMetrics.compilerDurationMs += event.durationMs ?? 0;
         completed = event.status === "completed" || event.status === "verified";
@@ -665,6 +811,7 @@ export class HostedRunnerJobProcessor {
         operationalMetrics.planTokenUsage.totalTokens += event.totalTokens;
       }
     }
+    throwIfCancelled(signal);
     if (!completed) {
       throw new RunnerProcessingError(
         "CODEX_PROCESS_EXITED",
@@ -681,6 +828,7 @@ export class HostedRunnerJobProcessor {
     directory: string,
     primaryPlanPath: typeof PLAN_PATH | typeof PATCH_PLAN_PATH,
     allowedOutputs: ReadonlySet<string>,
+    signal?: AbortSignal,
   ): Promise<{
     cursor: number;
     planHash: string;
@@ -688,6 +836,7 @@ export class HostedRunnerJobProcessor {
     outputHashByPath: Record<string, string>;
     primaryPlan: unknown;
   }> {
+    throwIfCancelled(signal);
     const entries = await readdir(directory, { withFileTypes: true });
     const names = entries.map((entry) => entry.name).sort();
     if (
@@ -706,6 +855,7 @@ export class HostedRunnerJobProcessor {
     const outputHashByPath: Record<string, string> = {};
     let primaryPlan: unknown;
     for (const path of [primaryPlanPath, RATIONALE_PATH] as const) {
+      throwIfCancelled(signal);
       const absolutePath = join(directory, path);
       assertContained(directory, absolutePath);
       const metadata = await lstat(absolutePath);
@@ -731,13 +881,20 @@ export class HostedRunnerJobProcessor {
           primaryPlan = body;
         }
       }
-      const uploaded = await this.options.controlPlane.upload(path, body);
+      const uploaded = await this.authorityCall(signal, () =>
+        this.options.controlPlane.upload(path, body, signal),
+      );
       outputHashByPath[path] = uploaded.sha256;
-      cursor = await this.emit(jobId, cursor, {
-        kind: "file.created",
-        path,
-        sha256: uploaded.sha256,
-      });
+      cursor = await this.emit(
+        jobId,
+        cursor,
+        {
+          kind: "file.created",
+          path,
+          sha256: uploaded.sha256,
+        },
+        signal,
+      );
     }
     const planHash = outputHashByPath[primaryPlanPath];
     if (planHash === undefined) {
@@ -760,6 +917,7 @@ export class HostedRunnerJobProcessor {
     jobId: string,
     cursor: number,
     payload: PublicCompilerEventPayload,
+    signal?: AbortSignal,
   ): Promise<number> {
     const nextCursor = cursor + 1;
     const event = PublicCompilerEventSchema.parse({
@@ -770,7 +928,19 @@ export class HostedRunnerJobProcessor {
       at: this.now().toISOString(),
       ...payload,
     });
-    await this.options.controlPlane.appendEvent(event);
+    await this.authorityCall(signal, () =>
+      this.options.controlPlane.appendEvent(event, signal),
+    );
     return nextCursor;
+  }
+
+  private async authorityCall<T>(
+    signal: AbortSignal | undefined,
+    action: () => Promise<T>,
+  ): Promise<T> {
+    throwIfCancelled(signal);
+    const result = await action();
+    throwIfCancelled(signal);
+    return result;
   }
 }

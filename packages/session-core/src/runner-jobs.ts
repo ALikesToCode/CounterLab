@@ -9,6 +9,7 @@ import {
   type RunnerJobError,
   type RunnerJobKind,
   type RunnerJobStatus,
+  type RunnerRequestIdentityV1,
 } from "@counterlab/contracts";
 
 import { hashCanonical } from "./domain.js";
@@ -26,9 +27,26 @@ export interface CreateRunnerJobInput {
   timeoutSeconds: number;
 }
 
+export interface CreateIdempotentRunnerJobInput extends CreateRunnerJobInput {
+  requestIdentity: RunnerRequestIdentityV1;
+}
+
 export interface RunnerJobRepository {
   create(job: RunnerJob): Promise<void>;
+  createOrReuse(job: RunnerJob): Promise<{
+    job: RunnerJob;
+    reused: boolean;
+  }>;
   find(jobId: string): Promise<RunnerJob | undefined>;
+  findForState(input: {
+    sessionId: string;
+    kind: RunnerJobKind;
+    artifactManifestHash: string;
+    stateVersion: number;
+  }): Promise<RunnerJob | undefined>;
+  findReusableRequest(
+    requestFingerprint: string,
+  ): Promise<RunnerJob | undefined>;
   save(job: RunnerJob, expectedVersion: number): Promise<void>;
   appendEvent(
     job: RunnerJob,
@@ -112,8 +130,43 @@ export class RunnerJobService {
   }
 
   async createJob(input: CreateRunnerJobInput): Promise<RunnerJob> {
+    const job = await this.buildJob(input);
+    await this.repository.create(job);
+    return structuredClone(job);
+  }
+
+  async createOrReuseJob(
+    input: CreateIdempotentRunnerJobInput,
+  ): Promise<{ job: RunnerJob; reused: boolean }> {
+    const requestFingerprint = await hashCanonical(input.requestIdentity);
+    const job = await this.buildJob({
+      ...input,
+      requestFingerprint,
+    });
+    const result = await this.repository.createOrReuse(job);
+    if (
+      result.job.requestFingerprint !== requestFingerprint ||
+      result.job.requestIdentity === undefined ||
+      (await hashCanonical(result.job.requestIdentity)) !== requestFingerprint
+    ) {
+      throw new RunnerCallbackStateError(
+        "Reusable runner job request identity does not match its fingerprint",
+      );
+    }
+    return {
+      job: structuredClone(result.job),
+      reused: result.reused,
+    };
+  }
+
+  private async buildJob(
+    input: CreateRunnerJobInput & {
+      requestIdentity?: RunnerRequestIdentityV1;
+      requestFingerprint?: string;
+    },
+  ): Promise<RunnerJob> {
     const timestamp = this.clock.now().toISOString();
-    const job = RunnerJobSchema.parse({
+    return RunnerJobSchema.parse({
       schemaVersion: "1",
       ...input,
       status: "QUEUED",
@@ -125,14 +178,71 @@ export class RunnerJobService {
       outputHashes: [],
       eventCursor: 0,
     });
-    await this.repository.create(job);
-    return structuredClone(job);
   }
 
   async getJob(jobId: string): Promise<RunnerJob> {
     const job = await this.repository.find(jobId);
     if (job === undefined) throw new RunnerJobNotFoundError(jobId);
     return structuredClone(job);
+  }
+
+  async findForState(input: {
+    sessionId: string;
+    kind: RunnerJobKind;
+    artifactManifestHash: string;
+    stateVersion: number;
+  }): Promise<RunnerJob | undefined> {
+    const job = await this.repository.findForState(input);
+    return job === undefined ? undefined : structuredClone(job);
+  }
+
+  async findReusableRequest(
+    requestIdentity: RunnerRequestIdentityV1,
+  ): Promise<RunnerJob | undefined> {
+    const requestFingerprint = await hashCanonical(requestIdentity);
+    const job = await this.repository.findReusableRequest(requestFingerprint);
+    if (job === undefined) return undefined;
+    if (
+      job.requestFingerprint !== requestFingerprint ||
+      job.requestIdentity === undefined ||
+      (await hashCanonical(job.requestIdentity)) !== requestFingerprint
+    ) {
+      throw new RunnerCallbackStateError(
+        "Reusable runner job request identity does not match its fingerprint",
+      );
+    }
+    return structuredClone(job);
+  }
+
+  async cancelJob(jobId: string): Promise<RunnerJob> {
+    const current = await this.getJob(jobId);
+    if (current.status === "CANCELLED") return current;
+    if (TERMINAL_JOB_STATUSES.has(current.status)) {
+      throw new RunnerCallbackStateError(
+        `Runner job ${jobId} is already terminal with status ${current.status}`,
+      );
+    }
+    try {
+      return await this.transition(
+        current.jobId,
+        current.jobVersion,
+        "CANCELLED",
+        {
+          runnerIdentity:
+            current.runnerIdentity ?? "counterlab-control-plane-cancel",
+          error: {
+            code: "RUNNER_JOB_CANCELLED",
+            message: "The learner cancelled this runner job.",
+            retryable: true,
+          },
+        },
+      );
+    } catch (error) {
+      if (!(error instanceof ConcurrentRunnerJobUpdateError)) throw error;
+      const updated = await this.getJob(jobId);
+      if (updated.status === "CANCELLED") return updated;
+      throw error;
+    }
   }
 
   async expireIfTimedOut(jobId: string): Promise<RunnerJob> {
@@ -149,6 +259,42 @@ export class RunnerJobService {
         retryable: true,
       },
     });
+  }
+
+  async acknowledgeDispatch(
+    jobId: string,
+    expectedVersion: number,
+  ): Promise<RunnerJob> {
+    const current = await this.getJob(jobId);
+    if (current.dispatchAcknowledgedAt !== undefined) return current;
+    if (current.jobVersion !== expectedVersion) {
+      throw new ConcurrentRunnerJobUpdateError(jobId);
+    }
+    if (current.status !== "STARTING") {
+      if (
+        [
+          "RUNNING",
+          "AWAITING_APPROVAL",
+          "REPAIRING",
+          "VERIFIED",
+          "REJECTED",
+        ].includes(current.status)
+      ) {
+        return current;
+      }
+      throw new RunnerCallbackStateError(
+        `Runner job ${jobId} cannot acknowledge dispatch from ${current.status}`,
+      );
+    }
+    const timestamp = this.clock.now().toISOString();
+    const next = RunnerJobSchema.parse({
+      ...current,
+      dispatchAcknowledgedAt: timestamp,
+      jobVersion: current.jobVersion + 1,
+      updatedAt: timestamp,
+    });
+    await this.repository.save(next, current.jobVersion);
+    return structuredClone(next);
   }
 
   async transition(

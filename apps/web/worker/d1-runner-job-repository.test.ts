@@ -73,7 +73,11 @@ class SqliteD1Database {
       dirname(fileURLToPath(import.meta.url)),
       "../migrations",
     );
-    for (const file of ["0001_evidence_store.sql", "0002_runner_jobs.sql"]) {
+    for (const file of [
+      "0001_evidence_store.sql",
+      "0002_runner_jobs.sql",
+      "0003_runner_request_identity.sql",
+    ]) {
       this.sqlite.exec(readFileSync(resolve(migrationDirectory, file), "utf8"));
     }
     this.sqlite
@@ -108,6 +112,68 @@ class SqliteD1Database {
 }
 
 describe("D1RunnerJobRepository", () => {
+  it("collapses identical active request fingerprints and separates configurations", async () => {
+    const database = new SqliteD1Database();
+    database.migrate();
+    const repository = new D1RunnerJobRepository(
+      database as unknown as D1Database,
+    );
+    const service = new RunnerJobService(repository, {
+      now: () => new Date("2026-07-15T00:00:00.000Z"),
+    });
+    const requestIdentity = {
+      schemaVersion: "1" as const,
+      sessionId: "session_live_1",
+      mode: "live_notebook" as const,
+      purpose: "LAB_RUN_INTERACTIVE" as const,
+      artifactId: "artifact_live_1",
+      artifactManifestHash: "a".repeat(64),
+      conceptPack: { id: "entity_leakage" as const, version: "2.0.0" },
+      authorityProfileHash: "b".repeat(64),
+      authorityInputHashes: { plan: "c".repeat(64) },
+      configurationHash: "d".repeat(64),
+    };
+    const common = {
+      kind: "LAB_RUN" as const,
+      sessionId: "session_live_1",
+      artifactId: "artifact_live_1",
+      artifactManifestHash: "a".repeat(64),
+      conceptPack: { id: "entity_leakage" as const, version: "2.0.0" },
+      inputHashes: ["c".repeat(64)],
+      stateVersion: 4,
+      maxAttempts: 1,
+      timeoutSeconds: 90,
+      requestIdentity,
+    };
+
+    const first = await service.createOrReuseJob({
+      ...common,
+      jobId: "job_request_1",
+    });
+    const duplicate = await service.createOrReuseJob({
+      ...common,
+      jobId: "job_request_2",
+    });
+    const distinct = await service.createOrReuseJob({
+      ...common,
+      jobId: "job_request_3",
+      requestIdentity: {
+        ...requestIdentity,
+        configurationHash: "e".repeat(64),
+      },
+    });
+
+    expect(first.reused).toBe(false);
+    expect(duplicate).toMatchObject({
+      reused: true,
+      job: { jobId: "job_request_1" },
+    });
+    expect(distinct).toMatchObject({
+      reused: false,
+      job: { jobId: "job_request_3" },
+    });
+  });
+
   it("persists optimistic jobs, cursor reconnect, and idempotent callbacks", async () => {
     const database = new SqliteD1Database();
     database.migrate();
@@ -157,6 +223,14 @@ describe("D1RunnerJobRepository", () => {
     await expect(service.listEvents(streamed.jobId, 0)).resolves.toEqual([
       expect.objectContaining({ cursor: 1, kind: "job.started" }),
     ]);
+    await expect(
+      service.findForState({
+        sessionId: streamed.sessionId,
+        kind: streamed.kind,
+        artifactManifestHash: streamed.artifactManifestHash,
+        stateVersion: streamed.stateVersion,
+      }),
+    ).resolves.toMatchObject({ jobId: streamed.jobId, status: "RUNNING" });
 
     const callback = {
       schemaVersion: "1" as const,

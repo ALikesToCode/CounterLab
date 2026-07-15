@@ -30,6 +30,7 @@ import {
   type CompileHostedPatchPlanInput,
   type CompilePatchInput,
   type CompilerEvent,
+  type CompilerExecutionOptions,
   type CompilerHealth,
   type RepairLabInput,
   type RepairHostedExperimentPlanInput,
@@ -40,6 +41,15 @@ const execFileAsync = promisify(execFile);
 const MAX_PROTOCOL_BUFFER_BYTES = 1_048_576;
 const MAX_STDERR_BYTES = 4_000;
 const MAX_APP_SERVER_ATTEMPTS = 3;
+
+function throwIfCancelled(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new CompilerSetupError(
+      "CODEX_CANCELLED",
+      "Codex compilation was cancelled.",
+    );
+  }
+}
 
 const ResponseEnvelopeSchema = z
   .object({
@@ -249,6 +259,7 @@ class AppServerConnection {
   private stderrBuffer = "";
   private requestSequence = 0;
   private closed = false;
+  private terminationScheduled = false;
   private fatalError: Error | undefined;
 
   constructor(
@@ -262,6 +273,7 @@ class AppServerConnection {
       this.process = spawn(command, args, {
         env: environment,
         ...(cwd ? { cwd } : {}),
+        detached: process.platform !== "win32",
         stdio: ["pipe", "pipe", "pipe"],
       });
     } catch (error) {
@@ -330,19 +342,16 @@ class AppServerConnection {
       );
     }
     this.pending.clear();
-    this.process.stdin.end();
-    if (this.process.exitCode === null && this.process.signalCode === null) {
-      this.process.kill("SIGTERM");
-      const timer = setTimeout(() => {
-        if (
-          this.process.exitCode === null &&
-          this.process.signalCode === null
-        ) {
-          this.process.kill("SIGKILL");
-        }
-      }, 250);
-      timer.unref();
-    }
+    this.terminateProcess();
+  }
+
+  cancel(): void {
+    this.fail(
+      new CompilerSetupError(
+        "CODEX_CANCELLED",
+        "Codex compilation was cancelled.",
+      ),
+    );
   }
 
   private write(message: unknown): void {
@@ -460,8 +469,40 @@ class AppServerConnection {
     this.events.fail(error);
     if (!this.closed) {
       this.closed = true;
-      this.process.stdin.destroy();
-      this.process.kill("SIGTERM");
+      this.terminateProcess();
+    }
+  }
+
+  private terminateProcess(): void {
+    if (this.terminationScheduled) return;
+    this.terminationScheduled = true;
+    this.process.stdin.destroy();
+    if (this.process.exitCode !== null || this.process.signalCode !== null) {
+      return;
+    }
+    this.killProcessTree("SIGTERM");
+    const timer = setTimeout(() => {
+      if (this.process.exitCode === null && this.process.signalCode === null) {
+        this.killProcessTree("SIGKILL");
+      }
+    }, 250);
+    timer.unref();
+  }
+
+  private killProcessTree(signal: NodeJS.Signals): void {
+    const pid = this.process.pid;
+    if (process.platform !== "win32" && pid !== undefined) {
+      try {
+        process.kill(-pid, signal);
+        return;
+      } catch {
+        // Fall through when the process group has already exited.
+      }
+    }
+    try {
+      this.process.kill(signal);
+    } catch {
+      // The child exited between the lifecycle check and the signal.
     }
   }
 }
@@ -546,28 +587,35 @@ export class AppServerCodexCompiler implements CodexCompiler {
     }
   }
 
-  async *compileLab(raw: CompileLabInput): AsyncIterable<CompilerEvent> {
+  async *compileLab(
+    raw: CompileLabInput,
+    options: CompilerExecutionOptions = {},
+  ): AsyncIterable<CompilerEvent> {
     const input = parseInput(CompileLabInputSchema, raw);
     yield* this.run(
       buildCompileLabPrompt(input),
       input.generationDirectory,
       "generate",
+      options.signal,
     );
   }
 
   async *compileExperimentPlan(
     raw: CompileHostedExperimentPlanInput,
+    options: CompilerExecutionOptions = {},
   ): AsyncIterable<CompilerEvent> {
     const input = parseInput(CompileHostedExperimentPlanInputSchema, raw);
     yield* this.run(
       buildCompileHostedExperimentPlanPrompt(input),
       input.generationDirectory,
       "plan",
+      options.signal,
     );
   }
 
   async *repairExperimentPlan(
     raw: RepairHostedExperimentPlanInput,
+    options: CompilerExecutionOptions = {},
   ): AsyncIterable<CompilerEvent> {
     const input = parseInput(RepairHostedExperimentPlanInputSchema, raw);
     for (const counterexample of input.verifierCounterexamples) {
@@ -582,22 +630,26 @@ export class AppServerCodexCompiler implements CodexCompiler {
       buildRepairHostedExperimentPlanPrompt(input),
       input.generationDirectory,
       "repair",
+      options.signal,
     );
   }
 
   async *compileHostedPatchPlan(
     raw: CompileHostedPatchPlanInput,
+    options: CompilerExecutionOptions = {},
   ): AsyncIterable<CompilerEvent> {
     const input = parseInput(CompileHostedPatchPlanInputSchema, raw);
     yield* this.run(
       buildCompileHostedPatchPlanPrompt(input),
       input.generationDirectory,
       "patch",
+      options.signal,
     );
   }
 
   async *repairHostedPatchPlan(
     raw: RepairHostedPatchPlanInput,
+    options: CompilerExecutionOptions = {},
   ): AsyncIterable<CompilerEvent> {
     const input = parseInput(RepairHostedPatchPlanInputSchema, raw);
     for (const counterexample of input.verifierCounterexamples) {
@@ -612,10 +664,14 @@ export class AppServerCodexCompiler implements CodexCompiler {
       buildRepairHostedPatchPlanPrompt(input),
       input.generationDirectory,
       "repair",
+      options.signal,
     );
   }
 
-  async *repairLab(raw: RepairLabInput): AsyncIterable<CompilerEvent> {
+  async *repairLab(
+    raw: RepairLabInput,
+    options: CompilerExecutionOptions = {},
+  ): AsyncIterable<CompilerEvent> {
     const input = parseInput(RepairLabInputSchema, raw);
     for (const counterexample of input.verifierCounterexamples) {
       yield { type: "verifier_counterexample", ...counterexample };
@@ -624,15 +680,20 @@ export class AppServerCodexCompiler implements CodexCompiler {
       buildRepairLabPrompt(input),
       input.generationDirectory,
       "repair",
+      options.signal,
     );
   }
 
-  async *compilePatch(raw: CompilePatchInput): AsyncIterable<CompilerEvent> {
+  async *compilePatch(
+    raw: CompilePatchInput,
+    options: CompilerExecutionOptions = {},
+  ): AsyncIterable<CompilerEvent> {
     const input = parseInput(CompilePatchInputSchema, raw);
     yield* this.run(
       buildCompilePatchPrompt(input),
       input.generationDirectory,
       "patch",
+      options.signal,
     );
   }
 
@@ -640,15 +701,17 @@ export class AppServerCodexCompiler implements CodexCompiler {
     prompt: string,
     cwd: string,
     phase: "plan" | "generate" | "repair" | "patch",
+    signal?: AbortSignal,
   ): AsyncIterable<CompilerEvent> {
     for (
       let startupAttempt = 0;
       startupAttempt < MAX_APP_SERVER_ATTEMPTS;
       startupAttempt += 1
     ) {
+      throwIfCancelled(signal);
       let emittedCompilerOutput = false;
       try {
-        for await (const event of this.runOnce(prompt, cwd, phase)) {
+        for await (const event of this.runOnce(prompt, cwd, phase, signal)) {
           if (
             event.type !== "status" &&
             event.type !== "final_status" &&
@@ -660,6 +723,7 @@ export class AppServerCodexCompiler implements CodexCompiler {
         }
         return;
       } catch (error) {
+        throwIfCancelled(signal);
         const setupError = asSetupError(error);
         if (
           startupAttempt < MAX_APP_SERVER_ATTEMPTS - 1 &&
@@ -678,7 +742,9 @@ export class AppServerCodexCompiler implements CodexCompiler {
     prompt: string,
     cwd: string,
     phase: "plan" | "generate" | "repair" | "patch",
+    signal?: AbortSignal,
   ): AsyncIterable<CompilerEvent> {
+    throwIfCancelled(signal);
     const launch = await this.prepareLaunch(cwd);
     const connection = new AppServerConnection(
       launch.command,
@@ -687,6 +753,8 @@ export class AppServerCodexCompiler implements CodexCompiler {
       launch.spawnCwd,
       this.timeoutMs,
     );
+    const cancel = () => connection.cancel();
+    signal?.addEventListener("abort", cancel, { once: true });
 
     try {
       yield { type: "status", phase: "initialize", status: "started" };
@@ -790,6 +858,7 @@ export class AppServerCodexCompiler implements CodexCompiler {
         );
       }
     } catch (error) {
+      throwIfCancelled(signal);
       if (error instanceof z.ZodError) {
         throw new CompilerSetupError(
           "CODEX_PROTOCOL_ERROR",
@@ -799,6 +868,7 @@ export class AppServerCodexCompiler implements CodexCompiler {
       }
       throw asSetupError(error);
     } finally {
+      signal?.removeEventListener("abort", cancel);
       connection.close();
       await launch.dispose?.();
     }

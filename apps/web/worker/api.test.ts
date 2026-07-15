@@ -10,6 +10,7 @@ import {
   type PublicCompilerEvent,
   type RunnerCallback,
   type RunnerJob,
+  type RunnerJobKind,
   RunnerLabRunBundleSchema,
   RunnerPatchCompileBundleSchema,
 } from "@counterlab/contracts";
@@ -35,7 +36,11 @@ import type {
   RunnerDispatcher,
   RunnerObjectStore,
 } from "./runner-control-plane";
+import { generateRunnerJobTokenKeyPair } from "./runner-token";
 import { summarizeOperationalRows } from "./operational-diagnostics";
+
+const { privateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY } =
+  await generateRunnerJobTokenKeyPair();
 
 class MemorySessionRepository implements SessionRepository {
   private readonly sessions = new Map<string, CounterLabSession>();
@@ -129,8 +134,57 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
     this.jobs.set(job.jobId, structuredClone(job));
   }
 
+  async createOrReuse(
+    job: RunnerJob,
+  ): Promise<{ job: RunnerJob; reused: boolean }> {
+    const existing = [...this.jobs.values()].find(
+      (candidate) =>
+        candidate.requestFingerprint === job.requestFingerprint &&
+        !["REJECTED", "FAILED", "CANCELLED", "TIMED_OUT"].includes(
+          candidate.status,
+        ),
+    );
+    if (existing !== undefined) {
+      return { job: structuredClone(existing), reused: true };
+    }
+    await this.create(job);
+    return { job: structuredClone(job), reused: false };
+  }
+
   async find(jobId: string): Promise<RunnerJob | undefined> {
     const job = this.jobs.get(jobId);
+    return job === undefined ? undefined : structuredClone(job);
+  }
+
+  async findReusableRequest(
+    requestFingerprint: string,
+  ): Promise<RunnerJob | undefined> {
+    const job = [...this.jobs.values()].find(
+      (candidate) =>
+        candidate.requestFingerprint === requestFingerprint &&
+        !["REJECTED", "FAILED", "CANCELLED", "TIMED_OUT"].includes(
+          candidate.status,
+        ),
+    );
+    return job === undefined ? undefined : structuredClone(job);
+  }
+
+  async findForState(input: {
+    sessionId: string;
+    kind: RunnerJobKind;
+    artifactManifestHash: string;
+    stateVersion: number;
+  }): Promise<RunnerJob | undefined> {
+    const job = [...this.jobs.values()].find(
+      (candidate) =>
+        !["REJECTED", "FAILED", "CANCELLED", "TIMED_OUT"].includes(
+          candidate.status,
+        ) &&
+        candidate.sessionId === input.sessionId &&
+        candidate.kind === input.kind &&
+        candidate.artifactManifestHash === input.artifactManifestHash &&
+        candidate.stateVersion === input.stateVersion,
+    );
     return job === undefined ? undefined : structuredClone(job);
   }
 
@@ -195,9 +249,25 @@ class MemoryRunnerObjectStore implements RunnerObjectStore {
 class CapturingRunnerDispatcher implements RunnerDispatcher {
   readonly identity = "test-runner-v1";
   readonly dispatched: RunnerDispatchRequest[] = [];
+  readonly cancelled: RunnerDispatchRequest[] = [];
+
+  constructor(private dispatchFailuresRemaining = 0) {}
+
+  ready(): Promise<boolean> {
+    return Promise.resolve(true);
+  }
 
   dispatch(request: RunnerDispatchRequest): Promise<void> {
     this.dispatched.push(structuredClone(request));
+    if (this.dispatchFailuresRemaining > 0) {
+      this.dispatchFailuresRemaining -= 1;
+      return Promise.reject(new Error("ambiguous runner dispatch"));
+    }
+    return Promise.resolve();
+  }
+
+  cancel(request: RunnerDispatchRequest): Promise<void> {
+    this.cancelled.push(structuredClone(request));
     return Promise.resolve();
   }
 }
@@ -344,7 +414,10 @@ async function sha256Text(value: string): Promise<string> {
   ).join("");
 }
 
-async function preparedHostedRunner(sessionId: string) {
+async function preparedHostedRunner(
+  sessionId: string,
+  dispatcher = new CapturingRunnerDispatcher(),
+) {
   const harness = await sessionHarness("sample");
   const sampleRoute = `/api/sessions/${harness.sessionId}`;
   await postJson(harness.app, `${sampleRoute}/belief-test`, {
@@ -388,16 +461,16 @@ async function preparedHostedRunner(sessionId: string) {
   });
   const runnerJobs = new MemoryRunnerJobRepository();
   const runnerObjects = new MemoryRunnerObjectStore();
-  const dispatcher = new CapturingRunnerDispatcher();
+  let runnerIdSequence = 0;
   const app = createApi({
     sessionRepository: harness.sessionRepository,
     artifactStore: harness.artifactStore,
     runnerJobRepository: runnerJobs,
     runnerObjectStore: runnerObjects,
     runnerDispatcher: dispatcher,
-    runnerSigningKey: "runner-test-signing-key-that-is-long-enough",
+    runnerSigningPrivateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
     now: () => new Date("2026-07-14T10:00:00.000Z"),
-    id: (prefix) => `${prefix}_${sessionId}`,
+    id: (prefix) => `${prefix}_${sessionId}_${++runnerIdSequence}`,
   });
   const queued = await postJson(app, `/api/sessions/${sessionId}/lab/compile`);
   const dispatch = dispatcher.dispatched[0];
@@ -410,6 +483,7 @@ async function preparedHostedRunner(sessionId: string) {
     queued,
     runnerJobs,
     runnerObjects,
+    dispatcher,
     uploaded,
   };
 }
@@ -797,7 +871,7 @@ async function preparedImbalanceInteractiveSession() {
     runnerJobRepository: runnerJobs,
     runnerObjectStore: runnerObjects,
     runnerDispatcher: dispatcher,
-    runnerSigningKey: "runner-test-signing-key-that-is-long-enough",
+    runnerSigningPrivateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
     now: () => new Date("2026-07-14T10:00:00.000Z"),
     id: (prefix) => `${prefix}_imbalance_interactive`,
   });
@@ -912,7 +986,7 @@ describe("Cloudflare Worker API", () => {
       runnerJobRepository: runnerJobs,
       runnerObjectStore: runnerObjects,
       runnerDispatcher: dispatcher,
-      runnerSigningKey: "runner-test-signing-key-that-is-long-enough",
+      runnerSigningPrivateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
       now: () => new Date("2026-07-14T10:00:00.000Z"),
       id: (prefix) => `${prefix}_imbalance_run`,
     });
@@ -920,6 +994,17 @@ describe("Cloudflare Worker API", () => {
     const response = await postJson(app, `/api/sessions/${sessionId}/lab/run`);
 
     expect(response.status).toBe(202);
+    const firstBody = (await response.clone().json()) as {
+      data: { runnerJob: RunnerJob };
+    };
+    const duplicate = await postJson(app, `/api/sessions/${sessionId}/lab/run`);
+    expect(duplicate.status).toBe(202);
+    await expect(duplicate.json()).resolves.toMatchObject({
+      data: {
+        reused: true,
+        runnerJob: { jobId: firstBody.data.runnerJob.jobId },
+      },
+    });
     expect(dispatcher.dispatched).toHaveLength(1);
     const dispatch = dispatcher.dispatched[0];
     if (dispatch === undefined) throw new Error("runner was not dispatched");
@@ -952,6 +1037,27 @@ describe("Cloudflare Worker API", () => {
     );
 
     expect(response.status).toBe(202);
+    const firstBody = (await response.clone().json()) as {
+      data: { runnerJob: RunnerJob };
+    };
+    const duplicate = await postJson(
+      harness.app,
+      `/api/sessions/${harness.sessionId}/lab/interactive`,
+      {
+        schemaVersion: "1",
+        concept: "class_imbalance",
+        threshold: 0.2,
+        prevalenceScenario: "more_common",
+        metricFocus: "recall",
+      },
+    );
+    expect(duplicate.status).toBe(202);
+    await expect(duplicate.json()).resolves.toMatchObject({
+      data: {
+        reused: true,
+        runnerJob: { jobId: firstBody.data.runnerJob.jobId },
+      },
+    });
     expect(harness.dispatcher.dispatched).toHaveLength(1);
     const dispatch = harness.dispatcher.dispatched[0];
     if (dispatch === undefined) throw new Error("runner was not dispatched");
@@ -1563,7 +1669,7 @@ describe("Cloudflare Worker API", () => {
       runnerJobRepository: runnerJobs,
       runnerObjectStore: runnerObjects,
       runnerDispatcher: dispatcher,
-      runnerSigningKey: "runner-test-signing-key-that-is-long-enough",
+      runnerSigningPrivateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
       now: () => new Date("2026-07-14T10:00:00.000Z"),
       id: (prefix) => `${prefix}_hosted_plan_${++hostedIdSequence}`,
     });
@@ -1760,6 +1866,28 @@ describe("Cloudflare Worker API", () => {
       finalEventCursor: 3,
       occurredAt: "2026-07-14T10:00:01.000Z",
     };
+    const originalSessionSave = harness.sessionRepository.save.bind(
+      harness.sessionRepository,
+    );
+    let interruptProjection = true;
+    harness.sessionRepository.save = async (...arguments_) => {
+      if (interruptProjection) {
+        interruptProjection = false;
+        throw new ConcurrentD1SessionUpdateError(sessionId);
+      }
+      return originalSessionSave(...arguments_);
+    };
+    const interruptedCallback = await postJson(
+      app,
+      `/api/runner/jobs/${dispatch.job.jobId}/callback`,
+      callbackBody,
+      authorization,
+    );
+    expect(interruptedCallback.status).toBe(409);
+    await expect(interruptedCallback.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "ILLEGAL_TRANSITION" },
+    });
     const callback = await postJson(
       app,
       `/api/runner/jobs/${dispatch.job.jobId}/callback`,
@@ -1770,7 +1898,7 @@ describe("Cloudflare Worker API", () => {
     await expect(callback.json()).resolves.toMatchObject({
       ok: true,
       data: {
-        duplicate: false,
+        duplicate: true,
         runnerJob: { status: "VERIFIED", outputHashes: [planHash] },
         session: { state: "LAB_VERIFIED", artifactId: uploaded.artifactId },
         verification: { status: "VERIFIED" },
@@ -2498,6 +2626,180 @@ describe("Cloudflare Worker API", () => {
     });
   });
 
+  it("fails closed on readiness until the analyst and process runner are usable", async () => {
+    const unavailable = await api.request("/ready");
+    expect(unavailable.status).toBe(503);
+    await expect(unavailable.json()).resolves.toMatchObject({
+      status: "not-ready",
+      checks: { analyst: false, runner: false },
+    });
+
+    const dispatcher = new CapturingRunnerDispatcher();
+    const readyApi = createApi({
+      sessionRepository: new MemorySessionRepository(),
+      artifactStore: new MemoryArtifactStore(),
+      runnerJobRepository: new MemoryRunnerJobRepository(),
+      runnerObjectStore: new MemoryRunnerObjectStore(),
+      runnerDispatcher: dispatcher,
+      runnerSigningPrivateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
+    });
+    const response = await readyApi.request("/ready", undefined, {
+      OPENAI_API_KEY: "configured-server-key",
+    } as unknown as Env);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      status: "ready",
+      service: "counterlab-control-plane",
+      checks: {
+        analyst: true,
+        persistence: true,
+        privateStorage: true,
+        runner: true,
+        signing: true,
+      },
+    });
+  });
+
+  it("reuses an active compile submission and cancels the process job once", async () => {
+    const harness = await preparedHostedRunner("session_idempotent_compile");
+    const firstBody = (await harness.queued.json()) as {
+      data: { runnerJob: RunnerJob };
+    };
+
+    const duplicate = await postJson(
+      harness.app,
+      `/api/sessions/${firstBody.data.runnerJob.sessionId}/lab/compile`,
+    );
+    expect(duplicate.status).toBe(202);
+    await expect(duplicate.json()).resolves.toMatchObject({
+      data: {
+        runnerJob: { jobId: firstBody.data.runnerJob.jobId },
+        reused: true,
+      },
+    });
+    expect(harness.dispatcher.dispatched).toHaveLength(1);
+
+    const cancelPath = `/api/sessions/${firstBody.data.runnerJob.sessionId}/jobs/${firstBody.data.runnerJob.jobId}/cancel`;
+    const cancelled = await postJson(harness.app, cancelPath);
+    expect(cancelled.status).toBe(200);
+    await expect(cancelled.json()).resolves.toMatchObject({
+      data: { runnerJob: { status: "CANCELLED" } },
+    });
+    expect(harness.dispatcher.cancelled).toHaveLength(1);
+
+    const duplicateCancel = await postJson(harness.app, cancelPath);
+    expect(duplicateCancel.status).toBe(200);
+    await expect(duplicateCancel.json()).resolves.toMatchObject({
+      data: { runnerJob: { status: "CANCELLED" }, reused: true },
+    });
+    expect(harness.dispatcher.cancelled).toHaveLength(1);
+  });
+
+  it("redelivers the same compile job after an ambiguous dispatch without creating a second job", async () => {
+    const dispatcher = new CapturingRunnerDispatcher(1);
+    const harness = await preparedHostedRunner(
+      "session_dispatch_recovery",
+      dispatcher,
+    );
+    expect(harness.queued.status).toBe(503);
+    const firstAttempt = dispatcher.dispatched[0];
+    if (firstAttempt === undefined)
+      throw new Error("first dispatch was missing");
+    await expect(
+      harness.runnerJobs.find(firstAttempt.job.jobId),
+    ).resolves.toMatchObject({
+      status: "STARTING",
+    });
+
+    const retry = await postJson(
+      harness.app,
+      `/api/sessions/${firstAttempt.job.sessionId}/lab/compile`,
+    );
+
+    expect(retry.status).toBe(202);
+    await expect(retry.json()).resolves.toMatchObject({
+      data: {
+        reused: true,
+        runnerJob: {
+          jobId: firstAttempt.job.jobId,
+          status: "STARTING",
+        },
+      },
+    });
+    expect(dispatcher.dispatched).toHaveLength(2);
+    expect(dispatcher.dispatched[1]?.job.jobId).toBe(firstAttempt.job.jobId);
+    expect(dispatcher.dispatched[1]?.token).not.toBe(firstAttempt.token);
+  });
+
+  it("projects a timed-out compile job into the session exactly once", async () => {
+    const harness = await preparedHostedRunner("session_timeout_projection");
+    const queued = (await harness.queued.clone().json()) as {
+      data: { runnerJob: RunnerJob };
+    };
+    const timeoutApi = createApi({
+      sessionRepository: harness.sessionRepository,
+      artifactStore: harness.artifactStore,
+      runnerJobRepository: harness.runnerJobs,
+      runnerObjectStore: harness.runnerObjects,
+      runnerDispatcher: harness.dispatcher,
+      runnerSigningPrivateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
+      now: () => new Date("2026-07-14T10:04:00.000Z"),
+      id: (prefix) => `${prefix}_timeout_projection`,
+    });
+    const eventsPath = `/api/sessions/${queued.data.runnerJob.sessionId}/jobs/${queued.data.runnerJob.jobId}/events`;
+    const eventCountBeforeTimeout = (
+      await harness.sessionRepository.listEvents(
+        queued.data.runnerJob.sessionId,
+      )
+    ).length;
+
+    const timedOut = await timeoutApi.request(eventsPath);
+    expect(timedOut.status).toBe(200);
+    await expect(timedOut.json()).resolves.toMatchObject({
+      data: {
+        jobStatus: "TIMED_OUT",
+        terminal: true,
+        jobError: { code: "RUNNER_JOB_TIMED_OUT" },
+      },
+    });
+    await expect(
+      harness.sessionRepository.find(queued.data.runnerJob.sessionId),
+    ).resolves.toMatchObject({ state: "LAB_REJECTED" });
+
+    const repeated = await timeoutApi.request(eventsPath);
+    expect(repeated.status).toBe(200);
+    await expect(
+      harness.sessionRepository.listEvents(queued.data.runnerJob.sessionId),
+    ).resolves.toHaveLength(eventCountBeforeTimeout + 1);
+  });
+
+  it("makes authoritative cancellation win even when runner acknowledgement fails", async () => {
+    const harness = await preparedHostedRunner("session_cancel_authority");
+    const queued = (await harness.queued.json()) as {
+      data: { runnerJob: RunnerJob };
+    };
+    harness.dispatcher.cancel = () =>
+      Promise.reject(new Error("runner unavailable"));
+
+    const response = await postJson(
+      harness.app,
+      `/api/sessions/${queued.data.runnerJob.sessionId}/jobs/${queued.data.runnerJob.jobId}/cancel`,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        state: "LAB_REJECTED",
+        runnerJob: { status: "CANCELLED" },
+        runnerAcknowledged: false,
+      },
+    });
+    await expect(
+      harness.runnerJobs.find(queued.data.runnerJob.jobId),
+    ).resolves.toMatchObject({ status: "CANCELLED" });
+  });
+
   it("keeps private operational diagnostics secret-protected and identifier-free", async () => {
     const secret = "diagnostic-secret-that-is-long-enough";
     const diagnostics = summarizeOperationalRows(
@@ -2559,7 +2861,7 @@ describe("Cloudflare Worker API", () => {
   it("reports a process runner only when dispatch and signing are both configured", async () => {
     const response = await api.request("/api/health", undefined, {
       COUNTERLAB_RUNNER_BASE_URL: "http://127.0.0.1:8788",
-      COUNTERLAB_RUNNER_SIGNING_KEY: "r".repeat(64),
+      COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY: TEST_RUNNER_SIGNING_PRIVATE_KEY,
     } as unknown as Env & Record<string, string>);
 
     expect(response.status).toBe(200);

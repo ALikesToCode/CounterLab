@@ -1,6 +1,18 @@
 import readline from "node:readline";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
+const ignoreSigtermArgument = process.argv.find((argument) =>
+  argument.startsWith("--ignore-sigterm="),
+);
+const ignoreSigtermPidFile = ignoreSigtermArgument?.slice(
+  "--ignore-sigterm=".length,
+);
+if (ignoreSigtermPidFile) {
+  writeFileSync(ignoreSigtermPidFile, String(process.pid), { mode: 0o600 });
+  process.on("SIGTERM", () => undefined);
+  setInterval(() => undefined, 1_000);
+}
+
 const exitOnceArgument = process.argv.find((argument) =>
   argument.startsWith("--exit-once="),
 );
@@ -15,6 +27,7 @@ let initialized = false;
 let selectedModel = "installed-compatible-default";
 const requestApproval = process.argv.includes("--request-approval");
 const failedTurn = process.argv.includes("--failed-turn");
+const silentTurn = process.argv.includes("--silent-turn");
 const failTurnOnceArgument = process.argv.find((argument) =>
   argument.startsWith("--fail-turn-once="),
 );
@@ -124,6 +137,7 @@ lines.on("line", (line) => {
       process.exit(5);
     }
     send({ id: message.id, result: { turn: { id: "turn_test" } } });
+    if (silentTurn) return;
     if (requestApproval) {
       send({
         id: 99,

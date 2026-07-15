@@ -25,6 +25,7 @@ import {
   RunnerLabRunBundleSchema,
   RunnerJobSchema,
   RunnerJobTokenClaimsSchema,
+  RunnerRequestIdentityV1Schema,
   TransferResultSchema,
   VerifiedResultSetSchema,
   apiResponseSchema,
@@ -409,8 +410,11 @@ describe("hosted runner contracts", () => {
 
   it("binds a short-lived token to one job, bundle, output prefix, and callback", () => {
     const claims = RunnerJobTokenClaimsSchema.parse({
-      schemaVersion: "1",
+      schemaVersion: "2",
+      issuer: "counterlab-control-plane",
       audience: "counterlab-runner",
+      purpose: "RUN_JOB",
+      controlPlaneOrigin: "https://counterlab.example.test",
       tokenId: "token_job_live_1",
       jobId: "job_live_1",
       sessionId: "session_live_1",
@@ -429,6 +433,47 @@ describe("hosted runner contracts", () => {
         expiresAt: claims.issuedAt + 3601,
       }),
     ).toThrow(/expiration/i);
+    expect(() =>
+      RunnerJobTokenClaimsSchema.parse({
+        ...claims,
+        controlPlaneOrigin: "https://counterlab.example.test/not-an-origin",
+      }),
+    ).toThrow(/origin/i);
+  });
+
+  it("distinguishes authoritative and interactive runner request identities", () => {
+    const base = {
+      schemaVersion: "1" as const,
+      sessionId: "session_live_1",
+      mode: "live_notebook" as const,
+      artifactId: "artifact_live_1",
+      artifactManifestHash: "a".repeat(64),
+      conceptPack: { id: "entity_leakage" as const, version: "2.0.0" },
+      authorityProfileHash: "b".repeat(64),
+      authorityInputHashes: {
+        belief: "c".repeat(64),
+        prediction: "d".repeat(64),
+      },
+    };
+    expect(
+      RunnerRequestIdentityV1Schema.parse({
+        ...base,
+        purpose: "LAB_RUN_AUTHORITATIVE",
+      }).purpose,
+    ).toBe("LAB_RUN_AUTHORITATIVE");
+    expect(
+      RunnerRequestIdentityV1Schema.parse({
+        ...base,
+        purpose: "LAB_RUN_INTERACTIVE",
+        configurationHash: "e".repeat(64),
+      }).configurationHash,
+    ).toBe("e".repeat(64));
+    expect(() =>
+      RunnerRequestIdentityV1Schema.parse({
+        ...base,
+        purpose: "LAB_RUN_INTERACTIVE",
+      }),
+    ).toThrow(/configuration/i);
   });
 
   it("accepts only artifact-bound fixed-kernel LAB_RUN bundles", () => {

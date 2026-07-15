@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -810,6 +810,72 @@ describe("AppServerCodexCompiler stdio transport", () => {
       name: "CompilerSetupError",
       code: "CODEX_TIMEOUT",
     });
+  });
+
+  it("terminates an active App Server turn when the runner cancels it", async () => {
+    const fakeServer = fileURLToPath(
+      new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
+    );
+    const compiler = new AppServerCodexCompiler({
+      command: process.execPath,
+      commandArgs: [fakeServer, "--silent-turn"],
+      timeoutMs: 5_000,
+      ...unisolatedTestProcess,
+    });
+    const controller = new AbortController();
+    const compilation = collect(
+      compiler.compileLab(labInput(), { signal: controller.signal }),
+    );
+    setTimeout(() => controller.abort(), 50);
+
+    await expect(compilation).rejects.toMatchObject({
+      name: "CompilerSetupError",
+      code: "CODEX_CANCELLED",
+    });
+  });
+
+  it("escalates cancellation when an App Server ignores SIGTERM", async () => {
+    const fakeServer = fileURLToPath(
+      new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
+    );
+    const work = await mkdtemp(join(tmpdir(), "counterlab-codex-cancel-"));
+    const pidFile = join(work, "app-server.pid");
+    let processId: number | undefined;
+    try {
+      const compiler = new AppServerCodexCompiler({
+        command: process.execPath,
+        commandArgs: [
+          fakeServer,
+          "--silent-turn",
+          `--ignore-sigterm=${pidFile}`,
+        ],
+        timeoutMs: 5_000,
+        ...unisolatedTestProcess,
+      });
+      const controller = new AbortController();
+      const compilation = collect(
+        compiler.compileLab(labInput(), { signal: controller.signal }),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      processId = Number(await readFile(pidFile, "utf8"));
+      controller.abort();
+
+      await expect(compilation).rejects.toMatchObject({
+        name: "CompilerSetupError",
+        code: "CODEX_CANCELLED",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      expect(() => process.kill(processId!, 0)).toThrow();
+    } finally {
+      if (processId !== undefined) {
+        try {
+          process.kill(processId, "SIGKILL");
+        } catch {
+          // The expected path has already reaped the test process.
+        }
+      }
+      await rm(work, { recursive: true, force: true });
+    }
   });
 
   it("denies interactive server requests instead of forwarding approvals", async () => {

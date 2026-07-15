@@ -4,6 +4,7 @@ import type {
   PublicCompilerEvent,
   RunnerCallback,
   RunnerJob,
+  RunnerJobKind,
 } from "@counterlab/contracts";
 
 import {
@@ -24,8 +25,57 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
     this.jobs.set(job.jobId, structuredClone(job));
   }
 
+  async createOrReuse(
+    job: RunnerJob,
+  ): Promise<{ job: RunnerJob; reused: boolean }> {
+    const existing = [...this.jobs.values()].find(
+      (candidate) =>
+        candidate.requestFingerprint === job.requestFingerprint &&
+        !["REJECTED", "FAILED", "CANCELLED", "TIMED_OUT"].includes(
+          candidate.status,
+        ),
+    );
+    if (existing !== undefined) {
+      return { job: structuredClone(existing), reused: true };
+    }
+    await this.create(job);
+    return { job: structuredClone(job), reused: false };
+  }
+
   async find(jobId: string): Promise<RunnerJob | undefined> {
     const job = this.jobs.get(jobId);
+    return job === undefined ? undefined : structuredClone(job);
+  }
+
+  async findReusableRequest(
+    requestFingerprint: string,
+  ): Promise<RunnerJob | undefined> {
+    const job = [...this.jobs.values()].find(
+      (candidate) =>
+        candidate.requestFingerprint === requestFingerprint &&
+        !["REJECTED", "FAILED", "CANCELLED", "TIMED_OUT"].includes(
+          candidate.status,
+        ),
+    );
+    return job === undefined ? undefined : structuredClone(job);
+  }
+
+  async findForState(input: {
+    sessionId: string;
+    kind: RunnerJobKind;
+    artifactManifestHash: string;
+    stateVersion: number;
+  }): Promise<RunnerJob | undefined> {
+    const job = [...this.jobs.values()].find(
+      (candidate) =>
+        !["REJECTED", "FAILED", "CANCELLED", "TIMED_OUT"].includes(
+          candidate.status,
+        ) &&
+        candidate.sessionId === input.sessionId &&
+        candidate.kind === input.kind &&
+        candidate.artifactManifestHash === input.artifactManifestHash &&
+        candidate.stateVersion === input.stateVersion,
+    );
     return job === undefined ? undefined : structuredClone(job);
   }
 
@@ -107,6 +157,86 @@ function service(repository = new MemoryRunnerJobRepository()) {
 }
 
 describe("RunnerJobService", () => {
+  it("atomically reuses one semantic request and separates interactive configurations", async () => {
+    const harness = service();
+    const identity = {
+      schemaVersion: "1" as const,
+      sessionId: "session_live_1",
+      mode: "live_notebook" as const,
+      purpose: "LAB_RUN_INTERACTIVE" as const,
+      artifactId: "artifact_live_1",
+      artifactManifestHash: HASH_A,
+      conceptPack: { id: "entity_leakage" as const, version: "2.0.0" },
+      authorityProfileHash: HASH_B,
+      authorityInputHashes: { plan: HASH_C },
+      configurationHash: "d".repeat(64),
+    };
+    const first = await harness.service.createOrReuseJob({
+      ...jobInput(),
+      jobId: "job_interactive_1",
+      kind: "LAB_RUN",
+      requestIdentity: identity,
+    });
+    const duplicate = await harness.service.createOrReuseJob({
+      ...jobInput(),
+      jobId: "job_interactive_2",
+      kind: "LAB_RUN",
+      requestIdentity: identity,
+    });
+    const distinct = await harness.service.createOrReuseJob({
+      ...jobInput(),
+      jobId: "job_interactive_3",
+      kind: "LAB_RUN",
+      requestIdentity: {
+        ...identity,
+        configurationHash: "e".repeat(64),
+      },
+    });
+
+    expect(first).toMatchObject({ reused: false });
+    expect(duplicate).toMatchObject({
+      reused: true,
+      job: { jobId: "job_interactive_1" },
+    });
+    expect(distinct).toMatchObject({
+      reused: false,
+      job: { jobId: "job_interactive_3" },
+    });
+    expect(harness.repository.jobs.size).toBe(2);
+  });
+
+  it("finds the one job bound to a session state and cancels it idempotently", async () => {
+    const harness = service();
+    const queued = await harness.service.createJob(jobInput());
+    const starting = await harness.service.transition(
+      queued.jobId,
+      queued.jobVersion,
+      "STARTING",
+      { runnerIdentity: "runner-container-test" },
+    );
+
+    await expect(
+      harness.service.findForState({
+        sessionId: starting.sessionId,
+        kind: starting.kind,
+        artifactManifestHash: starting.artifactManifestHash,
+        stateVersion: starting.stateVersion,
+      }),
+    ).resolves.toMatchObject({ jobId: starting.jobId, status: "STARTING" });
+
+    const cancelled = await harness.service.cancelJob(starting.jobId);
+    expect(cancelled).toMatchObject({
+      status: "CANCELLED",
+      error: {
+        code: "RUNNER_JOB_CANCELLED",
+        retryable: true,
+      },
+    });
+    await expect(harness.service.cancelJob(starting.jobId)).resolves.toEqual(
+      cancelled,
+    );
+  });
+
   it("expires a stalled non-terminal job from its start deadline", async () => {
     const repository = new MemoryRunnerJobRepository();
     let now = new Date("2026-07-15T00:00:00.000Z");

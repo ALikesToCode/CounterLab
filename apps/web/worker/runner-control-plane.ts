@@ -8,7 +8,9 @@ export type RunnerDispatchRequest = {
 
 export interface RunnerDispatcher {
   readonly identity: string;
+  ready(): Promise<boolean>;
   dispatch(request: RunnerDispatchRequest): Promise<void>;
+  cancel(request: RunnerDispatchRequest): Promise<void>;
 }
 
 export interface RunnerObjectStore {
@@ -66,6 +68,19 @@ export class HttpRunnerDispatcher implements RunnerDispatcher {
     this.fetcher = options.fetch ?? globalThis.fetch;
   }
 
+  async ready(): Promise<boolean> {
+    try {
+      const response = await this.fetcher(`${this.baseURL}/ready`, {
+        method: "GET",
+        headers: { accept: "application/json" },
+        signal: AbortSignal.timeout(10_000),
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
   async dispatch(request: RunnerDispatchRequest): Promise<void> {
     const response = await this.fetcher(`${this.baseURL}/jobs`, {
       method: "POST",
@@ -78,9 +93,26 @@ export class HttpRunnerDispatcher implements RunnerDispatcher {
         jobId: request.job.jobId,
         controlPlaneUrl: request.controlPlaneUrl,
       }),
+      signal: AbortSignal.timeout(15_000),
     });
     if (!response.ok) {
       throw new Error(`Runner dispatch failed with status ${response.status}`);
+    }
+  }
+
+  async cancel(request: RunnerDispatchRequest): Promise<void> {
+    const response = await this.fetcher(
+      `${this.baseURL}/jobs/${encodeURIComponent(request.job.jobId)}`,
+      {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${request.token}` },
+        signal: AbortSignal.timeout(15_000),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(
+        `Runner cancellation failed with status ${response.status}`,
+      );
     }
   }
 }
@@ -101,6 +133,10 @@ export class CloudflareContainerRunnerDispatcher implements RunnerDispatcher {
 
   constructor(private readonly binding: RunnerContainerBinding) {}
 
+  async ready(): Promise<boolean> {
+    return Promise.resolve(true);
+  }
+
   async dispatch(request: RunnerDispatchRequest): Promise<void> {
     const instance = this.binding.getByName(request.job.jobId);
     const response = await instance.fetch("http://runner.internal/jobs", {
@@ -114,9 +150,27 @@ export class CloudflareContainerRunnerDispatcher implements RunnerDispatcher {
         jobId: request.job.jobId,
         controlPlaneUrl: request.controlPlaneUrl,
       }),
+      signal: AbortSignal.timeout(30_000),
     });
     if (!response.ok) {
       throw new Error(`Runner dispatch failed with status ${response.status}`);
+    }
+  }
+
+  async cancel(request: RunnerDispatchRequest): Promise<void> {
+    const instance = this.binding.getByName(request.job.jobId);
+    const response = await instance.fetch(
+      `http://runner.internal/jobs/${encodeURIComponent(request.job.jobId)}`,
+      {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${request.token}` },
+        signal: AbortSignal.timeout(15_000),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(
+        `Runner cancellation failed with status ${response.status}`,
+      );
     }
   }
 }

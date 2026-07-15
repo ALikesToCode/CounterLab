@@ -12,10 +12,13 @@ import {
   RunnerLabRunBundleSchema,
   RunnerOutputPathSchema,
   RunnerPatchCompileBundleSchema,
+  RunnerRequestIdentityV1Schema,
   type BeliefTest,
   type ExperimentPlanV2,
   type PatchResult,
   type RunnerCallback,
+  type RunnerJob,
+  type RunnerRequestIdentityV1,
   type VerifiedResultSet,
 } from "@counterlab/contracts";
 import {
@@ -79,6 +82,7 @@ import {
   type RunnerObjectStore,
 } from "./runner-control-plane";
 import {
+  deriveRunnerJobTokenPublicKey,
   RunnerTokenError,
   issueRunnerJobToken,
   verifyRunnerJobToken,
@@ -110,7 +114,7 @@ type WorkerBindings = Env & {
   COUNTERLAB_CODEX_MODE?: string;
   COUNTERLAB_MAX_NOTEBOOK_BYTES?: string;
   COUNTERLAB_SIGNING_KEY?: string;
-  COUNTERLAB_RUNNER_SIGNING_KEY?: string;
+  COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY?: string;
   COUNTERLAB_RUNNER_BASE_URL?: string;
   COUNTERLAB_ADMIN_DIAGNOSTIC_SECRET?: string;
   RUNNER?: unknown;
@@ -129,7 +133,7 @@ export interface ApiOptions {
   runnerJobRepository?: RunnerJobRepository;
   runnerObjectStore?: RunnerObjectStore;
   runnerDispatcher?: RunnerDispatcher;
-  runnerSigningKey?: string;
+  runnerSigningPrivateKey?: string;
   adminDiagnosticSecret?: string;
   operationalDiagnostics?: () => Promise<OperationalDiagnostics>;
   now?: () => Date;
@@ -386,20 +390,39 @@ function runnerDispatcher(
     : undefined;
 }
 
-function runnerSigningKey(
+function runnerSigningPrivateKey(
   context: Context<AppBindings>,
   options: ApiOptions,
 ): string {
-  const secret =
-    options.runnerSigningKey ?? context.env?.COUNTERLAB_RUNNER_SIGNING_KEY;
-  if (secret === undefined || secret.length < 32) {
+  const privateKey =
+    options.runnerSigningPrivateKey ??
+    context.env?.COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY;
+  if (privateKey === undefined) {
     throw new ApiInputError(
       "RUNNER_AUTH_UNAVAILABLE",
       "Runner job signing is not configured",
       503,
     );
   }
-  return secret;
+  try {
+    deriveRunnerJobTokenPublicKey(privateKey);
+  } catch {
+    throw new ApiInputError(
+      "RUNNER_AUTH_UNAVAILABLE",
+      "Runner job signing is not configured",
+      503,
+    );
+  }
+  return privateKey;
+}
+
+function runnerVerifyingPublicKey(
+  context: Context<AppBindings>,
+  options: ApiOptions,
+): string {
+  return deriveRunnerJobTokenPublicKey(
+    runnerSigningPrivateKey(context, options),
+  );
 }
 
 function requestNow(options: ApiOptions): Date {
@@ -408,6 +431,92 @@ function requestNow(options: ApiOptions): Date {
 
 function requestId(options: ApiOptions, prefix: string): string {
   return options.id?.(prefix) ?? `${prefix}_${crypto.randomUUID()}`;
+}
+
+function liveRunnerRequestIdentity(
+  input: Omit<RunnerRequestIdentityV1, "schemaVersion" | "mode">,
+): RunnerRequestIdentityV1 {
+  return RunnerRequestIdentityV1Schema.parse({
+    schemaVersion: "1",
+    mode: "live_notebook",
+    ...input,
+  });
+}
+
+async function dispatchRecoverableRunnerJob(input: {
+  context: Context<AppBindings>;
+  options: ApiOptions;
+  jobs: RunnerJobService;
+  dispatcher: RunnerDispatcher;
+  job: RunnerJob;
+}): Promise<RunnerJob> {
+  let dispatchJob = input.job;
+  if (dispatchJob.status === "QUEUED") {
+    try {
+      dispatchJob = await input.jobs.transition(
+        dispatchJob.jobId,
+        dispatchJob.jobVersion,
+        "STARTING",
+        { runnerIdentity: input.dispatcher.identity },
+      );
+    } catch (error) {
+      if (!(error instanceof ConcurrentRunnerJobUpdateError)) throw error;
+      dispatchJob = await input.jobs.getJob(dispatchJob.jobId);
+    }
+  }
+  if (
+    dispatchJob.status !== "STARTING" ||
+    dispatchJob.dispatchAcknowledgedAt !== undefined
+  ) {
+    return dispatchJob;
+  }
+
+  const nowEpochSeconds = Math.floor(
+    requestNow(input.options).getTime() / 1_000,
+  );
+  const inputBundleKey = `runner-input/${dispatchJob.jobId}.json`;
+  const token = await issueRunnerJobToken(
+    {
+      schemaVersion: "2",
+      issuer: "counterlab-control-plane",
+      audience: "counterlab-runner",
+      purpose: "RUN_JOB",
+      controlPlaneOrigin: new URL(input.context.req.url).origin,
+      tokenId: requestId(input.options, "runner_token"),
+      jobId: dispatchJob.jobId,
+      sessionId: dispatchJob.sessionId,
+      artifactManifestHash: dispatchJob.artifactManifestHash,
+      inputBundleKey,
+      outputPrefix: `runner-output/${dispatchJob.jobId}/`,
+      callbackPath: `/api/runner/jobs/${dispatchJob.jobId}/callback`,
+      stateVersion: dispatchJob.stateVersion,
+      issuedAt: nowEpochSeconds,
+      expiresAt: nowEpochSeconds + 300,
+    },
+    runnerSigningPrivateKey(input.context, input.options),
+  );
+  try {
+    await input.dispatcher.dispatch({
+      job: dispatchJob,
+      token,
+      controlPlaneUrl: new URL(input.context.req.url).origin,
+    });
+    try {
+      return await input.jobs.acknowledgeDispatch(
+        dispatchJob.jobId,
+        dispatchJob.jobVersion,
+      );
+    } catch (error) {
+      if (!(error instanceof ConcurrentRunnerJobUpdateError)) throw error;
+      return input.jobs.getJob(dispatchJob.jobId);
+    }
+  } catch {
+    throw new ApiInputError(
+      "RUNNER_DISPATCH_FAILED",
+      "The process runner did not acknowledge this job; retrying will redeliver the same job",
+      503,
+    );
+  }
 }
 
 async function sha256Text(value: string): Promise<string> {
@@ -441,10 +550,12 @@ async function authorizeRunner(
   const job = await runnerJobService(context, options).getJob(jobId);
   const claims = await verifyRunnerJobToken(
     bearerToken(context),
-    runnerSigningKey(context, options),
+    runnerVerifyingPublicKey(context, options),
     {
       nowEpochSeconds: Math.floor(requestNow(options).getTime() / 1_000),
       jobId,
+      purpose: "RUN_JOB",
+      controlPlaneOrigin: new URL(context.req.url).origin,
       artifactManifestHash: job.artifactManifestHash,
       ...(callbackPath === undefined ? {} : { callbackPath }),
     },
@@ -469,13 +580,14 @@ function runnerCapability(
   context: Context<AppBindings>,
   options: ApiOptions = {},
 ) {
-  const signingKey =
-    options.runnerSigningKey ?? context.env?.COUNTERLAB_RUNNER_SIGNING_KEY;
-  return runnerDispatcher(context, options) === undefined ||
-    signingKey === undefined ||
-    signingKey.length < 32
-    ? ("local-runner-required" as const)
-    : ("configured" as const);
+  try {
+    runnerSigningPrivateKey(context, options);
+    return runnerDispatcher(context, options) === undefined
+      ? ("local-runner-required" as const)
+      : ("configured" as const);
+  } catch {
+    return "local-runner-required" as const;
+  }
 }
 
 function requireApprovedSampleArtifact(
@@ -552,6 +664,55 @@ function statePayload(
 
 export function createApi(options: ApiOptions = {}) {
   const app = new Hono<AppBindings>();
+
+  app.get("/ready", async (context) => {
+    const dispatcher = runnerDispatcher(context, options);
+    let signing = false;
+    try {
+      runnerSigningPrivateKey(context, options);
+      signing = true;
+    } catch {
+      signing = false;
+    }
+    let persistence =
+      options.sessionRepository !== undefined &&
+      options.runnerJobRepository !== undefined;
+    if (!persistence && context.env?.DB !== undefined) {
+      try {
+        await context.env.DB.prepare("SELECT 1 AS ready").first();
+        persistence = true;
+      } catch {
+        persistence = false;
+      }
+    }
+    let privateStorage = options.runnerObjectStore !== undefined;
+    if (!privateStorage && context.env?.ARTIFACTS !== undefined) {
+      try {
+        await context.env.ARTIFACTS.head("health/counterlab-readiness-probe");
+        privateStorage = true;
+      } catch {
+        privateStorage = false;
+      }
+    }
+    const checks = {
+      analyst: (context.env?.OPENAI_API_KEY?.trim().length ?? 0) > 0,
+      persistence,
+      privateStorage,
+      runner: dispatcher === undefined ? false : await dispatcher.ready(),
+      signing,
+    };
+    const ready = Object.values(checks).every(Boolean);
+    context.header("cache-control", "no-store");
+    context.header("x-content-type-options", "nosniff");
+    return context.json(
+      {
+        status: ready ? ("ready" as const) : ("not-ready" as const),
+        service: "counterlab-control-plane" as const,
+        checks,
+      },
+      ready ? 200 : 503,
+    );
+  });
 
   app.use("/api/*", async (context, next) => {
     const requestId = context.req.header("cf-ray") ?? crypto.randomUUID();
@@ -1091,7 +1252,58 @@ export function createApi(options: ApiOptions = {}) {
       }
       const pack = getConceptPack(current.beliefTest.concept);
       const manifestHash = await hashCanonical(artifact.manifest);
-      const started = await service.startLabCompilation(sessionId);
+      const beliefTestHash = await hashCanonical(current.beliefTest);
+      const packContractHash = await hashCanonical({
+        id: pack.id,
+        version: pack.version,
+        allowedOperations: pack.allowedOperations,
+        allowedMetrics: pack.allowedMetrics,
+        allowedVisualizations: pack.allowedVisualizations,
+        verifierInvariants: pack.verifierContract.invariants,
+        planRequirements: pack.experimentPlanRules,
+      });
+      const requestIdentity = liveRunnerRequestIdentity({
+        sessionId,
+        purpose: "LAB_COMPILE",
+        artifactId: artifact.manifest.artifactId,
+        artifactManifestHash: manifestHash,
+        conceptPack: { id: pack.id, version: pack.version },
+        authorityProfileHash: await hashCanonical({
+          compiler: "codex-app-server-stdio",
+          experimentPlanSchema,
+          resourceLimits: { wallSeconds: 45, memoryMb: 768, maxRuns: 4 },
+          permittedOutputs: ["experiment-plan.json", "public-rationale.md"],
+        }),
+        authorityInputHashes: {
+          artifactManifest: manifestHash,
+          beliefTest: beliefTestHash,
+          prediction: current.prediction.immutableHash,
+          conceptPack: packContractHash,
+        },
+      });
+      const jobs = runnerJobService(context, options);
+      const reusable = await jobs.findReusableRequest(requestIdentity);
+      if (reusable !== undefined) {
+        const runnerJob = await dispatchRecoverableRunnerJob({
+          context,
+          options,
+          jobs,
+          dispatcher,
+          job: reusable,
+        });
+        return context.json(
+          jsonSuccess({
+            ...statePayload(current),
+            runnerJob,
+            reused: true as const,
+          }),
+          202,
+        );
+      }
+      const started =
+        current.state === "LAB_COMPILING"
+          ? current
+          : await service.startLabCompilation(sessionId);
       const jobId = requestId(options, "runner_job");
       const bundle = RunnerLabCompileBundleSchema.parse({
         schemaVersion: "1",
@@ -1124,8 +1336,7 @@ export function createApi(options: ApiOptions = {}) {
         JSON.stringify(bundle),
         "application/json",
       );
-      const jobs = runnerJobService(context, options);
-      const queued = await jobs.createJob({
+      const claimed = await jobs.createOrReuseJob({
         jobId,
         kind: "LAB_COMPILE",
         sessionId,
@@ -1134,65 +1345,28 @@ export function createApi(options: ApiOptions = {}) {
         conceptPack: { id: pack.id, version: pack.version },
         inputHashes: [
           manifestHash,
-          await hashCanonical(current.beliefTest),
+          beliefTestHash,
           current.prediction.immutableHash,
           inputBundleHash,
         ],
+        requestIdentity,
         stateVersion: started.version,
         maxAttempts: 3,
         timeoutSeconds: 180,
       });
-      const starting = await jobs.transition(
-        jobId,
-        queued.jobVersion,
-        "STARTING",
-        { runnerIdentity: dispatcher.identity },
-      );
-      const nowEpochSeconds = Math.floor(requestNow(options).getTime() / 1_000);
-      const token = await issueRunnerJobToken(
-        {
-          schemaVersion: "1",
-          audience: "counterlab-runner",
-          tokenId: requestId(options, "runner_token"),
-          jobId,
-          sessionId,
-          artifactManifestHash: manifestHash,
-          inputBundleKey,
-          outputPrefix: `runner-output/${jobId}/`,
-          callbackPath: `/api/runner/jobs/${jobId}/callback`,
-          stateVersion: started.version,
-          issuedAt: nowEpochSeconds,
-          expiresAt: nowEpochSeconds + 300,
-        },
-        runnerSigningKey(context, options),
-      );
-      try {
-        await dispatcher.dispatch({
-          job: starting,
-          token,
-          controlPlaneUrl: new URL(context.req.url).origin,
-        });
-      } catch {
-        await jobs.transition(jobId, starting.jobVersion, "FAILED", {
-          runnerIdentity: dispatcher.identity,
-          error: {
-            code: "RUNNER_DISPATCH_FAILED",
-            message: "The process runner did not accept this job",
-            retryable: true,
-          },
-        });
-        await service.rejectLab(sessionId, {
-          code: "RUNNER_DISPATCH_FAILED",
-          jobId,
-        });
-        throw new ApiInputError(
-          "RUNNER_DISPATCH_FAILED",
-          "The process runner did not accept this job",
-          503,
-        );
-      }
+      const starting = await dispatchRecoverableRunnerJob({
+        context,
+        options,
+        jobs,
+        dispatcher,
+        job: claimed.job,
+      });
       return context.json(
-        jsonSuccess({ ...statePayload(started), runnerJob: starting }),
+        jsonSuccess({
+          ...statePayload(started),
+          runnerJob: starting,
+          ...(claimed.reused ? { reused: true as const } : {}),
+        }),
         202,
       );
     }
@@ -1606,13 +1780,32 @@ export function createApi(options: ApiOptions = {}) {
     const sessionId = context.req.param("sessionId");
     const jobId = context.req.param("jobId");
     const jobs = runnerJobService(context, options);
-    const job = await jobs.expireIfTimedOut(jobId);
-    if (job.sessionId !== sessionId) {
+    const existingJob = await jobs.getJob(jobId);
+    if (existingJob.sessionId !== sessionId) {
       throw new ApiInputError(
         "RUNNER_JOB_SESSION_MISMATCH",
         "Runner job does not belong to this session",
         404,
       );
+    }
+    const job = await jobs.expireIfTimedOut(jobId);
+    if (job.status === "TIMED_OUT") {
+      const service = sessionService(context, options);
+      const current = await service.getSession(sessionId);
+      if (job.kind === "LAB_COMPILE" && current.state === "LAB_COMPILING") {
+        await service.rejectLab(sessionId, {
+          code: "RUNNER_JOB_TIMED_OUT",
+          jobId,
+        });
+      } else if (
+        job.kind === "PATCH_COMPILE" &&
+        current.state === "PATCH_COMPILING"
+      ) {
+        await service.rejectPatch(sessionId, {
+          code: "RUNNER_JOB_TIMED_OUT",
+          jobId,
+        });
+      }
     }
     const rawAfter = context.req.query("after") ?? "0";
     const after = Number(rawAfter);
@@ -1637,6 +1830,113 @@ export function createApi(options: ApiOptions = {}) {
           "CANCELLED",
           "TIMED_OUT",
         ].includes(job.status),
+      }),
+    );
+  });
+
+  app.post("/api/sessions/:sessionId/jobs/:jobId/cancel", async (context) => {
+    const sessionId = context.req.param("sessionId");
+    const jobId = context.req.param("jobId");
+    const service = sessionService(context, options);
+    const session = await service.getSession(sessionId);
+    requireMutableSession(session);
+    if (session.mode.kind !== "live_notebook") {
+      throw new ApiInputError(
+        "RUNNER_CANCEL_MODE_MISMATCH",
+        "Only a live notebook job can be cancelled",
+        409,
+      );
+    }
+    const jobs = runnerJobService(context, options);
+    const job = await jobs.getJob(jobId);
+    if (job.sessionId !== sessionId || job.artifactId !== session.artifactId) {
+      throw new ApiInputError(
+        "RUNNER_JOB_SESSION_MISMATCH",
+        "Runner job does not belong to this session",
+        404,
+      );
+    }
+    const projectCancellation = async () => {
+      const latest = await service.getSession(sessionId);
+      if (job.kind === "LAB_COMPILE" && latest.state === "LAB_COMPILING") {
+        return service.rejectLab(sessionId, {
+          code: "RUNNER_JOB_CANCELLED",
+          jobId,
+        });
+      }
+      if (job.kind === "PATCH_COMPILE" && latest.state === "PATCH_COMPILING") {
+        return service.rejectPatch(sessionId, {
+          code: "RUNNER_JOB_CANCELLED",
+          jobId,
+        });
+      }
+      return latest;
+    };
+    if (job.status === "CANCELLED") {
+      const projectedSession = await projectCancellation();
+      return context.json(
+        jsonSuccess({
+          ...statePayload(projectedSession),
+          runnerJob: job,
+          reused: true as const,
+          runnerAcknowledged: true,
+        }),
+      );
+    }
+    if (["VERIFIED", "REJECTED", "FAILED", "TIMED_OUT"].includes(job.status)) {
+      throw new ApiInputError(
+        "RUNNER_JOB_NOT_ACTIVE",
+        `Runner job is already terminal with status ${job.status}`,
+        409,
+      );
+    }
+    const dispatcher = runnerDispatcher(context, options);
+    if (dispatcher === undefined) {
+      throw new ApiInputError(
+        "LOCAL_RUNNER_REQUIRED",
+        "Runner cancellation requires a configured CounterLab runner",
+        503,
+      );
+    }
+    const nowEpochSeconds = Math.floor(requestNow(options).getTime() / 1_000);
+    const token = await issueRunnerJobToken(
+      {
+        schemaVersion: "2",
+        issuer: "counterlab-control-plane",
+        audience: "counterlab-runner",
+        purpose: "CANCEL_JOB",
+        controlPlaneOrigin: new URL(context.req.url).origin,
+        tokenId: requestId(options, "runner_cancel_token"),
+        jobId,
+        sessionId,
+        artifactManifestHash: job.artifactManifestHash,
+        inputBundleKey: `runner-input/${jobId}.json`,
+        outputPrefix: `runner-output/${jobId}/`,
+        callbackPath: `/api/runner/jobs/${jobId}/callback`,
+        stateVersion: job.stateVersion,
+        issuedAt: nowEpochSeconds,
+        expiresAt: nowEpochSeconds + 60,
+      },
+      runnerSigningPrivateKey(context, options),
+    );
+    const cancelled = await jobs.cancelJob(jobId);
+    const updatedSession = await projectCancellation();
+    let runnerAcknowledged = true;
+    try {
+      await dispatcher.cancel({
+        job: cancelled,
+        token,
+        controlPlaneUrl: new URL(context.req.url).origin,
+      });
+    } catch {
+      runnerAcknowledged = false;
+    }
+    return context.json(
+      jsonSuccess({
+        ...statePayload(updatedSession),
+        runnerJob: cancelled,
+        reused: false as const,
+        runnerAcknowledged,
       }),
     );
   });
@@ -2007,14 +2307,14 @@ export function createApi(options: ApiOptions = {}) {
     const completed = await runnerJobService(context, options).recordCallback(
       terminalCallback,
     );
-    let updatedSession = currentSession;
-    if (!completed.duplicate) {
-      if (
-        job.kind === "LAB_COMPILE" &&
-        terminalCallback.status === "VERIFIED" &&
-        verification?.status === "VERIFIED" &&
-        "planHash" in verification
-      ) {
+    let updatedSession = await service.getSession(job.sessionId);
+    if (
+      job.kind === "LAB_COMPILE" &&
+      terminalCallback.status === "VERIFIED" &&
+      verification?.status === "VERIFIED" &&
+      "planHash" in verification
+    ) {
+      if (updatedSession.state === "LAB_COMPILING") {
         updatedSession = await service.verifyLab(
           job.sessionId,
           {
@@ -2029,33 +2329,78 @@ export function createApi(options: ApiOptions = {}) {
             ]),
           ],
         );
-      } else if (job.kind === "LAB_COMPILE") {
+      } else {
+        const existing = HostedPlanLineageSchema.safeParse(
+          updatedSession.labVerification,
+        );
+        if (
+          !existing.success ||
+          existing.data.jobId !== jobId ||
+          existing.data.planHash !== verification.planHash
+        ) {
+          throw new ApiInputError(
+            "RUNNER_PROJECTION_CONFLICT",
+            "The terminal Plan callback conflicts with session evidence",
+            409,
+          );
+        }
+      }
+    } else if (job.kind === "LAB_COMPILE") {
+      if (updatedSession.state === "LAB_COMPILING") {
         updatedSession = await service.rejectLab(job.sessionId, {
           jobId,
           status: terminalCallback.status,
           error: terminalCallback.error ?? null,
           verification,
         });
-      } else if (
-        job.kind === "LAB_RUN" &&
-        !interactiveRun &&
-        terminalCallback.status === "VERIFIED" &&
-        verification?.status === "VERIFIED" &&
-        verifiedResult !== null
-      ) {
+      } else if (updatedSession.state !== "LAB_REJECTED") {
+        throw new ApiInputError(
+          "RUNNER_PROJECTION_CONFLICT",
+          "The rejected Plan callback conflicts with session evidence",
+          409,
+        );
+      }
+    } else if (
+      job.kind === "LAB_RUN" &&
+      !interactiveRun &&
+      terminalCallback.status === "VERIFIED" &&
+      verification?.status === "VERIFIED" &&
+      verifiedResult !== null
+    ) {
+      if (updatedSession.state === "LAB_VERIFIED") {
         updatedSession = await service.recordExperimentResult(
           job.sessionId,
           verifiedResult,
         );
       } else if (
-        job.kind === "PATCH_COMPILE" &&
-        terminalCallback.status === "VERIFIED" &&
-        verification?.status === "VERIFIED" &&
-        patchResult !== null
+        updatedSession.verifiedResult?.resultHash !== verifiedResult.resultHash
       ) {
+        throw new ApiInputError(
+          "RUNNER_PROJECTION_CONFLICT",
+          "The fixed-kernel callback conflicts with session evidence",
+          409,
+        );
+      }
+    } else if (
+      job.kind === "PATCH_COMPILE" &&
+      terminalCallback.status === "VERIFIED" &&
+      verification?.status === "VERIFIED" &&
+      patchResult !== null
+    ) {
+      if (updatedSession.state === "PATCH_COMPILING") {
         updatedSession = await service.verifyPatch(job.sessionId, patchResult);
+      } else if (
+        updatedSession.patchResult?.resultHash !== patchResult.resultHash
+      ) {
+        throw new ApiInputError(
+          "RUNNER_PROJECTION_CONFLICT",
+          "The fixed patch callback conflicts with session evidence",
+          409,
+        );
+      }
+      if (updatedSession.state === "PATCH_VERIFIED") {
         const lineage = HostedPlanLineageSchema.parse(
-          currentSession.labVerification,
+          updatedSession.labVerification,
         );
         const [experimentPlanObject, patchPlanObject] = await Promise.all([
           runnerObjectStore(context, options).get(
@@ -2122,7 +2467,7 @@ export function createApi(options: ApiOptions = {}) {
           compilerEvents,
           patchPlan,
           patchPlanVerification,
-          issuedAt: requestNow(options).toISOString(),
+          issuedAt: terminalCallback.occurredAt,
           ...(context.env?.COUNTERLAB_SIGNING_KEY === undefined
             ? {}
             : { signingKey: context.env.COUNTERLAB_SIGNING_KEY }),
@@ -2132,13 +2477,21 @@ export function createApi(options: ApiOptions = {}) {
           proof.reasoningDiff,
           proof.proofBundle,
         );
-      } else if (job.kind === "PATCH_COMPILE") {
+      }
+    } else if (job.kind === "PATCH_COMPILE") {
+      if (updatedSession.state === "PATCH_COMPILING") {
         updatedSession = await service.rejectPatch(job.sessionId, {
           jobId,
           status: terminalCallback.status,
           error: terminalCallback.error ?? null,
           verification,
         });
+      } else if (updatedSession.state !== "PATCH_REJECTED") {
+        throw new ApiInputError(
+          "RUNNER_PROJECTION_CONFLICT",
+          "The rejected patch callback conflicts with session evidence",
+          409,
+        );
       }
     }
     return context.json(
@@ -2238,6 +2591,31 @@ export function createApi(options: ApiOptions = {}) {
           409,
         );
       }
+      const fixtureId =
+        plan.concept === "class_imbalance"
+          ? "public-imbalance-v1"
+          : "public-leakage-v1";
+      const requestIdentity = liveRunnerRequestIdentity({
+        sessionId,
+        purpose: "LAB_RUN_AUTHORITATIVE",
+        artifactId: artifact.manifest.artifactId,
+        artifactManifestHash: manifestHash,
+        conceptPack: {
+          id: plan.concept,
+          version: plan.conceptPackVersion,
+        },
+        authorityProfileHash: await hashCanonical({
+          kernel: "counterlab-fixed-kernel-v2",
+          verifier: "hosted-result-verifier-v2",
+          fixtureId,
+          permittedOutputs: ["verified-result.json"],
+        }),
+        authorityInputHashes: {
+          artifactManifest: manifestHash,
+          experimentPlan: planHash,
+          beliefTest: await hashCanonical(current.beliefTest),
+        },
+      });
       const jobId = requestId(options, "runner_job");
       const bundle = RunnerLabRunBundleSchema.parse({
         schemaVersion: "1",
@@ -2251,23 +2629,18 @@ export function createApi(options: ApiOptions = {}) {
         learnerClaim: current.beliefTest.learnerClaim,
         experimentPlan: plan,
         experimentPlanHash: planHash,
-        fixture: {
-          id:
-            plan.concept === "class_imbalance"
-              ? "public-imbalance-v1"
-              : "public-leakage-v1",
-        },
+        fixture: { id: fixtureId },
         permittedOutputs: ["verified-result.json"],
       });
       const bundleHash = await hashCanonical(bundle);
       const inputBundleKey = `runner-input/${jobId}.json`;
+      const jobs = runnerJobService(context, options);
       await runnerObjectStore(context, options).put(
         inputBundleKey,
         JSON.stringify(bundle),
         "application/json",
       );
-      const jobs = runnerJobService(context, options);
-      const queued = await jobs.createJob({
+      const claimed = await jobs.createOrReuseJob({
         jobId,
         kind: "LAB_RUN",
         sessionId,
@@ -2278,57 +2651,24 @@ export function createApi(options: ApiOptions = {}) {
           version: plan.conceptPackVersion,
         },
         inputHashes: [manifestHash, planHash, bundleHash],
+        requestIdentity,
         stateVersion: current.version,
         maxAttempts: 1,
         timeoutSeconds: 150,
       });
-      const starting = await jobs.transition(
-        jobId,
-        queued.jobVersion,
-        "STARTING",
-        { runnerIdentity: dispatcher.identity },
-      );
-      const nowEpochSeconds = Math.floor(requestNow(options).getTime() / 1_000);
-      const token = await issueRunnerJobToken(
-        {
-          schemaVersion: "1",
-          audience: "counterlab-runner",
-          tokenId: requestId(options, "runner_token"),
-          jobId,
-          sessionId,
-          artifactManifestHash: manifestHash,
-          inputBundleKey,
-          outputPrefix: `runner-output/${jobId}/`,
-          callbackPath: `/api/runner/jobs/${jobId}/callback`,
-          stateVersion: current.version,
-          issuedAt: nowEpochSeconds,
-          expiresAt: nowEpochSeconds + 300,
-        },
-        runnerSigningKey(context, options),
-      );
-      try {
-        await dispatcher.dispatch({
-          job: starting,
-          token,
-          controlPlaneUrl: new URL(context.req.url).origin,
-        });
-      } catch {
-        await jobs.transition(jobId, starting.jobVersion, "FAILED", {
-          runnerIdentity: dispatcher.identity,
-          error: {
-            code: "RUNNER_DISPATCH_FAILED",
-            message: "The process runner did not accept this job",
-            retryable: true,
-          },
-        });
-        throw new ApiInputError(
-          "RUNNER_DISPATCH_FAILED",
-          "The process runner did not accept this job",
-          503,
-        );
-      }
+      const starting = await dispatchRecoverableRunnerJob({
+        context,
+        options,
+        jobs,
+        dispatcher,
+        job: claimed.job,
+      });
       return context.json(
-        jsonSuccess({ ...statePayload(current), runnerJob: starting }),
+        jsonSuccess({
+          ...statePayload(current),
+          runnerJob: starting,
+          ...(claimed.reused ? { reused: true as const } : {}),
+        }),
         202,
       );
     }
@@ -2558,6 +2898,32 @@ export function createApi(options: ApiOptions = {}) {
       );
     }
     const planHash = await hashCanonical(interactivePlan);
+    const interactiveFixtureId =
+      interactivePlan.concept === "class_imbalance"
+        ? "public-imbalance-v1"
+        : "public-leakage-v1";
+    const requestIdentity = liveRunnerRequestIdentity({
+      sessionId,
+      purpose: "LAB_RUN_INTERACTIVE",
+      artifactId: artifact.manifest.artifactId,
+      artifactManifestHash: manifestHash,
+      conceptPack: {
+        id: interactivePlan.concept,
+        version: interactivePlan.conceptPackVersion,
+      },
+      authorityProfileHash: await hashCanonical({
+        kernel: "counterlab-fixed-kernel-v2",
+        verifier: "interactive-result-verifier-v2",
+        fixtureId: interactiveFixtureId,
+        permittedOutputs: ["verified-result.json"],
+      }),
+      authorityInputHashes: {
+        artifactManifest: manifestHash,
+        basePlan: basePlanHash,
+        interactivePlan: planHash,
+      },
+      configurationHash,
+    });
     const jobId = requestId(options, "runner_job");
     const bundle = RunnerLabRunBundleSchema.parse({
       schemaVersion: "1",
@@ -2571,23 +2937,18 @@ export function createApi(options: ApiOptions = {}) {
       learnerClaim: current.beliefTest.learnerClaim,
       experimentPlan: interactivePlan,
       experimentPlanHash: planHash,
-      fixture: {
-        id:
-          interactivePlan.concept === "class_imbalance"
-            ? "public-imbalance-v1"
-            : "public-leakage-v1",
-      },
+      fixture: { id: interactiveFixtureId },
       permittedOutputs: ["verified-result.json"],
     });
     const bundleHash = await hashCanonical(bundle);
     const inputBundleKey = `runner-input/${jobId}.json`;
+    const jobs = runnerJobService(context, options);
     await runnerObjectStore(context, options).put(
       inputBundleKey,
       JSON.stringify(bundle),
       "application/json",
     );
-    const jobs = runnerJobService(context, options);
-    const queued = await jobs.createJob({
+    const claimed = await jobs.createOrReuseJob({
       jobId,
       kind: "LAB_RUN",
       sessionId,
@@ -2598,61 +2959,25 @@ export function createApi(options: ApiOptions = {}) {
         version: interactivePlan.conceptPackVersion,
       },
       inputHashes: [manifestHash, planHash, configurationHash, bundleHash],
+      requestIdentity,
       stateVersion: current.version,
       maxAttempts: 1,
       timeoutSeconds: 150,
     });
-    const starting = await jobs.transition(
-      jobId,
-      queued.jobVersion,
-      "STARTING",
-      { runnerIdentity: dispatcher.identity },
-    );
-    const nowEpochSeconds = Math.floor(requestNow(options).getTime() / 1_000);
-    const token = await issueRunnerJobToken(
-      {
-        schemaVersion: "1",
-        audience: "counterlab-runner",
-        tokenId: requestId(options, "runner_token"),
-        jobId,
-        sessionId,
-        artifactManifestHash: manifestHash,
-        inputBundleKey,
-        outputPrefix: `runner-output/${jobId}/`,
-        callbackPath: `/api/runner/jobs/${jobId}/callback`,
-        stateVersion: current.version,
-        issuedAt: nowEpochSeconds,
-        expiresAt: nowEpochSeconds + 300,
-      },
-      runnerSigningKey(context, options),
-    );
-    try {
-      await dispatcher.dispatch({
-        job: starting,
-        token,
-        controlPlaneUrl: new URL(context.req.url).origin,
-      });
-    } catch {
-      await jobs.transition(jobId, starting.jobVersion, "FAILED", {
-        runnerIdentity: dispatcher.identity,
-        error: {
-          code: "RUNNER_DISPATCH_FAILED",
-          message: "The process runner did not accept this job",
-          retryable: true,
-        },
-      });
-      throw new ApiInputError(
-        "RUNNER_DISPATCH_FAILED",
-        "The process runner did not accept this job",
-        503,
-      );
-    }
+    const starting = await dispatchRecoverableRunnerJob({
+      context,
+      options,
+      jobs,
+      dispatcher,
+      job: claimed.job,
+    });
     return context.json(
       jsonSuccess({
         ...statePayload(current),
         runnerJob: starting,
         selectedRunId,
         configurationHash,
+        ...(claimed.reused ? { reused: true as const } : {}),
       }),
       202,
     );
@@ -2862,7 +3187,52 @@ export function createApi(options: ApiOptions = {}) {
         );
       }
       const pack = getConceptPack(current.beliefTest.concept);
-      const started = await service.startPatchCompilation(sessionId);
+      const patchContractHash = await hashCanonical({
+        id: pack.patchContract.id,
+        allowedTransformations: pack.patchContract.allowedTransformations,
+        allowedCellIndices,
+      });
+      const requestIdentity = liveRunnerRequestIdentity({
+        sessionId,
+        purpose: "PATCH_COMPILE",
+        artifactId: sourceArtifact.manifest.artifactId,
+        artifactManifestHash: manifestHash,
+        conceptPack: { id: pack.id, version: pack.version },
+        authorityProfileHash: await hashCanonical({
+          compiler: "codex-app-server-stdio",
+          patchPlanSchema,
+          permittedOutputs: ["patch-plan.json", "public-rationale.md"],
+        }),
+        authorityInputHashes: {
+          artifactManifest: manifestHash,
+          verifiedResult: current.verifiedResult.resultHash,
+          transferResult: current.transferResult.resultHash,
+          patchContract: patchContractHash,
+        },
+      });
+      const jobs = runnerJobService(context, options);
+      const reusable = await jobs.findReusableRequest(requestIdentity);
+      if (reusable !== undefined) {
+        const runnerJob = await dispatchRecoverableRunnerJob({
+          context,
+          options,
+          jobs,
+          dispatcher,
+          job: reusable,
+        });
+        return context.json(
+          jsonSuccess({
+            ...statePayload(current),
+            runnerJob,
+            reused: true as const,
+          }),
+          202,
+        );
+      }
+      const started =
+        current.state === "PATCH_COMPILING"
+          ? current
+          : await service.startPatchCompilation(sessionId);
       const jobId = requestId(options, "runner_job");
       const bundle = RunnerPatchCompileBundleSchema.parse({
         schemaVersion: "1",
@@ -2870,7 +3240,7 @@ export function createApi(options: ApiOptions = {}) {
         jobId,
         sessionId,
         stateVersion: started.version,
-        requestedAt: requestNow(options).toISOString(),
+        requestedAt: started.updatedAt,
         artifactManifestHash: manifestHash,
         conceptPackVersion: pack.version,
         artifactManifest: sourceArtifact.manifest,
@@ -2902,8 +3272,7 @@ export function createApi(options: ApiOptions = {}) {
         JSON.stringify(bundle),
         "application/json",
       );
-      const jobs = runnerJobService(context, options);
-      const queued = await jobs.createJob({
+      const claimed = await jobs.createOrReuseJob({
         jobId,
         kind: "PATCH_COMPILE",
         sessionId,
@@ -2916,61 +3285,24 @@ export function createApi(options: ApiOptions = {}) {
           current.transferResult.resultHash,
           bundleHash,
         ],
+        requestIdentity,
         stateVersion: started.version,
         maxAttempts: 3,
         timeoutSeconds: 180,
       });
-      const starting = await jobs.transition(
-        jobId,
-        queued.jobVersion,
-        "STARTING",
-        { runnerIdentity: dispatcher.identity },
-      );
-      const nowEpochSeconds = Math.floor(requestNow(options).getTime() / 1_000);
-      const token = await issueRunnerJobToken(
-        {
-          schemaVersion: "1",
-          audience: "counterlab-runner",
-          tokenId: requestId(options, "runner_token"),
-          jobId,
-          sessionId,
-          artifactManifestHash: manifestHash,
-          inputBundleKey,
-          outputPrefix: `runner-output/${jobId}/`,
-          callbackPath: `/api/runner/jobs/${jobId}/callback`,
-          stateVersion: started.version,
-          issuedAt: nowEpochSeconds,
-          expiresAt: nowEpochSeconds + 300,
-        },
-        runnerSigningKey(context, options),
-      );
-      try {
-        await dispatcher.dispatch({
-          job: starting,
-          token,
-          controlPlaneUrl: new URL(context.req.url).origin,
-        });
-      } catch {
-        await jobs.transition(jobId, starting.jobVersion, "FAILED", {
-          runnerIdentity: dispatcher.identity,
-          error: {
-            code: "RUNNER_DISPATCH_FAILED",
-            message: "The process runner did not accept this patch job",
-            retryable: true,
-          },
-        });
-        await service.rejectPatch(sessionId, {
-          code: "RUNNER_DISPATCH_FAILED",
-          jobId,
-        });
-        throw new ApiInputError(
-          "RUNNER_DISPATCH_FAILED",
-          "The process runner did not accept this patch job",
-          503,
-        );
-      }
+      const starting = await dispatchRecoverableRunnerJob({
+        context,
+        options,
+        jobs,
+        dispatcher,
+        job: claimed.job,
+      });
       return context.json(
-        jsonSuccess({ ...statePayload(started), runnerJob: starting }),
+        jsonSuccess({
+          ...statePayload(started),
+          runnerJob: starting,
+          ...(claimed.reused ? { reused: true as const } : {}),
+        }),
         202,
       );
     }

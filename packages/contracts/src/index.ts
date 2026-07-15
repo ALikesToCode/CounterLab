@@ -609,6 +609,66 @@ export const RunnerJobErrorSchema = z
 
 export type RunnerJobError = z.infer<typeof RunnerJobErrorSchema>;
 
+export const RunnerRequestPurposeSchema = z.enum([
+  "LAB_COMPILE",
+  "LAB_RUN_AUTHORITATIVE",
+  "LAB_RUN_INTERACTIVE",
+  "PATCH_COMPILE",
+]);
+
+export type RunnerRequestPurpose = z.infer<typeof RunnerRequestPurposeSchema>;
+
+export const RunnerRequestIdentityV1Schema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    sessionId: NonEmptyString,
+    mode: z.literal("live_notebook"),
+    purpose: RunnerRequestPurposeSchema,
+    artifactId: NonEmptyString,
+    artifactManifestHash: Sha256Schema,
+    conceptPack: z
+      .object({
+        id: z.enum(["entity_leakage", "class_imbalance"]),
+        version: NonEmptyString,
+      })
+      .strict(),
+    authorityProfileHash: Sha256Schema,
+    authorityInputHashes: z
+      .record(z.string().trim().min(1).max(80), Sha256Schema)
+      .refine((value) => Object.keys(value).length > 0, {
+        message: "authorityInputHashes must not be empty",
+      }),
+    configurationHash: Sha256Schema.optional(),
+  })
+  .strict()
+  .superRefine((identity, context) => {
+    if (
+      identity.purpose === "LAB_RUN_INTERACTIVE" &&
+      identity.configurationHash === undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "interactive runner identity requires configurationHash",
+        path: ["configurationHash"],
+      });
+    }
+    if (
+      identity.purpose !== "LAB_RUN_INTERACTIVE" &&
+      identity.configurationHash !== undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "configurationHash is permitted only for an interactive runner identity",
+        path: ["configurationHash"],
+      });
+    }
+  });
+
+export type RunnerRequestIdentityV1 = z.infer<
+  typeof RunnerRequestIdentityV1Schema
+>;
+
 const terminalRunnerStatuses = new Set<RunnerJobStatus>([
   "VERIFIED",
   "REJECTED",
@@ -633,11 +693,14 @@ export const RunnerJobSchema = z
       })
       .strict(),
     inputHashes: z.array(Sha256Schema).min(1),
+    requestFingerprint: Sha256Schema.optional(),
+    requestIdentity: RunnerRequestIdentityV1Schema.optional(),
     stateVersion: z.number().int().positive(),
     jobVersion: z.number().int().positive(),
     createdAt: z.iso.datetime({ offset: true }),
     updatedAt: z.iso.datetime({ offset: true }),
     startedAt: z.iso.datetime({ offset: true }).optional(),
+    dispatchAcknowledgedAt: z.iso.datetime({ offset: true }).optional(),
     completedAt: z.iso.datetime({ offset: true }).optional(),
     attempt: z.number().int().nonnegative(),
     maxAttempts: z.number().int().positive().max(3),
@@ -649,6 +712,17 @@ export const RunnerJobSchema = z
   })
   .strict()
   .superRefine((job, context) => {
+    if (
+      (job.requestFingerprint === undefined) !==
+      (job.requestIdentity === undefined)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "requestFingerprint and requestIdentity must be present together",
+        path: ["requestFingerprint"],
+      });
+    }
     if (job.attempt > job.maxAttempts) {
       context.addIssue({
         code: "custom",
@@ -904,8 +978,17 @@ export type RunnerCallback = z.infer<typeof RunnerCallbackSchema>;
 
 export const RunnerJobTokenClaimsSchema = z
   .object({
-    schemaVersion: z.literal("1"),
+    schemaVersion: z.literal("2"),
+    issuer: z.literal("counterlab-control-plane"),
     audience: z.literal("counterlab-runner"),
+    purpose: z.enum(["RUN_JOB", "CANCEL_JOB"]),
+    controlPlaneOrigin: z
+      .string()
+      .url()
+      .max(2_048)
+      .refine((value) => new URL(value).origin === value, {
+        message: "controlPlaneOrigin must be an exact URL origin",
+      }),
     tokenId: NonEmptyString,
     jobId: NonEmptyString,
     sessionId: NonEmptyString,

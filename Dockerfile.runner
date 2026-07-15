@@ -22,6 +22,7 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json vitest.config.ts pyproject.toml ./
 COPY packages/contracts ./packages/contracts
 COPY packages/codex-client ./packages/codex-client
+COPY packages/session-core ./packages/session-core
 COPY services/hosted-runner ./services/hosted-runner
 COPY services/kernel/src ./services/kernel/src
 COPY fixtures/public/customer_churn.csv ./fixtures/public/customer_churn.csv

@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { RunnerJob } from "@counterlab/contracts";
 
-import { HttpRunnerDispatcher } from "./runner-control-plane";
+import {
+  CloudflareContainerRunnerDispatcher,
+  HttpRunnerDispatcher,
+} from "./runner-control-plane";
 
 const job: RunnerJob = {
   schemaVersion: "1",
@@ -29,6 +32,16 @@ const job: RunnerJob = {
 };
 
 describe("HttpRunnerDispatcher", () => {
+  it("checks a Container binding without cold-starting a readiness instance", async () => {
+    const getByName = vi.fn(() => {
+      throw new Error("readiness must not cold-start a Container");
+    });
+    const dispatcher = new CloudflareContainerRunnerDispatcher({ getByName });
+
+    await expect(dispatcher.ready()).resolves.toBe(true);
+    expect(getByName).not.toHaveBeenCalled();
+  });
+
   it("dispatches one scoped job to a loopback process runner", async () => {
     const fetcher = vi.fn<typeof fetch>(
       async () =>
@@ -59,6 +72,44 @@ describe("HttpRunnerDispatcher", () => {
           jobId: job.jobId,
           controlPlaneUrl: "http://127.0.0.1:5173",
         }),
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it("probes readiness and cancels only the scoped job", async () => {
+    const fetcher = vi.fn<typeof fetch>(async (_input, init) =>
+      init?.method === "DELETE"
+        ? new Response(JSON.stringify({ cancelled: true }), { status: 202 })
+        : new Response(JSON.stringify({ status: "ready" }), { status: 200 }),
+    );
+    const dispatcher = new HttpRunnerDispatcher({
+      baseURL: "https://runner.example.test",
+      fetch: fetcher,
+    });
+    const request = {
+      job,
+      token: "scoped-job-token",
+      controlPlaneUrl: "https://studio.example.test",
+    };
+
+    await expect(dispatcher.ready()).resolves.toBe(true);
+    await dispatcher.cancel(request);
+
+    expect(fetcher).toHaveBeenNthCalledWith(
+      1,
+      "https://runner.example.test/ready",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      `https://runner.example.test/jobs/${job.jobId}`,
+      expect.objectContaining({
+        method: "DELETE",
+        headers: expect.objectContaining({
+          authorization: "Bearer scoped-job-token",
+        }),
+        signal: expect.any(AbortSignal),
       }),
     );
   });

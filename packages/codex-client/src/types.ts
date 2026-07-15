@@ -314,21 +314,38 @@ export type CompilerHealth =
     }
   | { mode: "disabled"; available: false; reason: string };
 
+export type CompilerExecutionOptions = {
+  signal?: AbortSignal;
+};
+
 export interface CodexCompiler {
-  compileLab(input: CompileLabInput): AsyncIterable<CompilerEvent>;
-  repairLab(input: RepairLabInput): AsyncIterable<CompilerEvent>;
-  compilePatch(input: CompilePatchInput): AsyncIterable<CompilerEvent>;
+  compileLab(
+    input: CompileLabInput,
+    options?: CompilerExecutionOptions,
+  ): AsyncIterable<CompilerEvent>;
+  repairLab(
+    input: RepairLabInput,
+    options?: CompilerExecutionOptions,
+  ): AsyncIterable<CompilerEvent>;
+  compilePatch(
+    input: CompilePatchInput,
+    options?: CompilerExecutionOptions,
+  ): AsyncIterable<CompilerEvent>;
   compileExperimentPlan(
     input: CompileHostedExperimentPlanInput,
+    options?: CompilerExecutionOptions,
   ): AsyncIterable<CompilerEvent>;
   repairExperimentPlan(
     input: RepairHostedExperimentPlanInput,
+    options?: CompilerExecutionOptions,
   ): AsyncIterable<CompilerEvent>;
   compileHostedPatchPlan(
     input: CompileHostedPatchPlanInput,
+    options?: CompilerExecutionOptions,
   ): AsyncIterable<CompilerEvent>;
   repairHostedPatchPlan(
     input: RepairHostedPatchPlanInput,
+    options?: CompilerExecutionOptions,
   ): AsyncIterable<CompilerEvent>;
   health(): Promise<CompilerHealth>;
 }
@@ -341,7 +358,8 @@ export type CompilerSetupErrorCode =
   | "CODEX_PROTOCOL_ERROR"
   | "CODEX_PROCESS_EXITED"
   | "CODEX_ISOLATION_UNAVAILABLE"
-  | "CODEX_INVALID_INPUT";
+  | "CODEX_INVALID_INPUT"
+  | "CODEX_CANCELLED";
 
 export class CompilerSetupError extends Error {
   readonly code: CompilerSetupErrorCode;

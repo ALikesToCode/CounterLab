@@ -24,7 +24,7 @@ function contrast(first: string, second: string): number {
 }
 
 describe("Cloudflare static asset routing", () => {
-  it("runs only API paths through the Worker before serving the SPA", () => {
+  it("runs API and public readiness paths through the Worker before serving the SPA", () => {
     const config = JSON.parse(
       readFileSync(resolve(process.cwd(), "wrangler.jsonc"), "utf-8"),
     ) as {
@@ -37,7 +37,7 @@ describe("Cloudflare static asset routing", () => {
     expect(config.assets).toEqual(
       expect.objectContaining({
         not_found_handling: "single-page-application",
-        run_worker_first: ["/api/*"],
+        run_worker_first: ["/api/*", "/ready"],
       }),
     );
   });

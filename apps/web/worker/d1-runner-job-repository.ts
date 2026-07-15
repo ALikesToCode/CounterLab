@@ -5,6 +5,7 @@ import {
   type PublicCompilerEvent,
   type RunnerCallback,
   type RunnerJob,
+  type RunnerJobKind,
 } from "@counterlab/contracts";
 import {
   ConcurrentRunnerJobUpdateError,
@@ -17,14 +18,41 @@ export class D1RunnerJobRepository implements RunnerJobRepository {
   constructor(private readonly database: D1Database) {}
 
   async create(job: RunnerJob): Promise<void> {
+    await this.insert(job);
+  }
+
+  async createOrReuse(
+    job: RunnerJob,
+  ): Promise<{ job: RunnerJob; reused: boolean }> {
+    const parsed = RunnerJobSchema.parse(job);
+    if (
+      parsed.requestFingerprint === undefined ||
+      parsed.requestIdentity === undefined
+    ) {
+      throw new Error("Idempotent runner jobs require a request identity");
+    }
+    try {
+      await this.insert(parsed);
+      return { job: parsed, reused: false };
+    } catch (error) {
+      const existing = await this.findReusableRequest(
+        parsed.requestFingerprint,
+      );
+      if (existing === undefined) throw error;
+      return { job: existing, reused: true };
+    }
+  }
+
+  private async insert(job: RunnerJob): Promise<void> {
     const parsed = RunnerJobSchema.parse(job);
     await this.database
       .prepare(
         `INSERT INTO runner_jobs
           (id, session_id, kind, status, artifact_id, artifact_manifest_hash,
            concept_pack_id, concept_pack_version, state_version, version,
-           event_cursor, job_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           event_cursor, job_json, created_at, updated_at, request_purpose,
+           request_fingerprint, request_identity_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         parsed.jobId,
@@ -41,14 +69,68 @@ export class D1RunnerJobRepository implements RunnerJobRepository {
         JSON.stringify(parsed),
         parsed.createdAt,
         parsed.updatedAt,
+        parsed.requestIdentity?.purpose ?? null,
+        parsed.requestFingerprint ?? null,
+        parsed.requestIdentity === undefined
+          ? null
+          : JSON.stringify(parsed.requestIdentity),
       )
       .run();
+  }
+
+  async findReusableRequest(
+    requestFingerprint: string,
+  ): Promise<RunnerJob | undefined> {
+    const row = await this.database
+      .prepare(
+        `SELECT job_json FROM runner_jobs
+         WHERE request_fingerprint = ?
+           AND status IN (
+             'QUEUED', 'STARTING', 'RUNNING', 'AWAITING_APPROVAL',
+             'REPAIRING', 'VERIFIED'
+           )
+         LIMIT 1`,
+      )
+      .bind(requestFingerprint)
+      .first<{ job_json: string }>();
+    return row === null
+      ? undefined
+      : RunnerJobSchema.parse(JSON.parse(row.job_json));
   }
 
   async find(jobId: string): Promise<RunnerJob | undefined> {
     const row = await this.database
       .prepare("SELECT job_json FROM runner_jobs WHERE id = ?")
       .bind(jobId)
+      .first<{ job_json: string }>();
+    return row === null
+      ? undefined
+      : RunnerJobSchema.parse(JSON.parse(row.job_json));
+  }
+
+  async findForState(input: {
+    sessionId: string;
+    kind: RunnerJobKind;
+    artifactManifestHash: string;
+    stateVersion: number;
+  }): Promise<RunnerJob | undefined> {
+    const row = await this.database
+      .prepare(
+        `SELECT job_json FROM runner_jobs
+         WHERE session_id = ? AND kind = ? AND artifact_manifest_hash = ?
+           AND state_version = ?
+           AND status IN (
+             'QUEUED', 'STARTING', 'RUNNING', 'AWAITING_APPROVAL',
+             'REPAIRING', 'VERIFIED'
+           )
+         ORDER BY created_at DESC LIMIT 1`,
+      )
+      .bind(
+        input.sessionId,
+        input.kind,
+        input.artifactManifestHash,
+        input.stateVersion,
+      )
       .first<{ job_json: string }>();
     return row === null
       ? undefined

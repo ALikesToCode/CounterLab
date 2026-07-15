@@ -22,7 +22,19 @@ cd "${ROOT_DIR}"
 RUNNER_PID=""
 if [[ -s "${CODEX_AUTH_FILE}" ]] && command -v codex >/dev/null 2>&1; then
   export CODEX_AUTH_JSON="$(<"${CODEX_AUTH_FILE}")"
-  export COUNTERLAB_RUNNER_SIGNING_KEY="${COUNTERLAB_RUNNER_SIGNING_KEY:-$("${PYTHON_BIN}" -c 'import secrets; print(secrets.token_hex(32))')}"
+  if [[ -z "${COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY:-}" ]]; then
+    IFS=$'\t' read -r \
+      COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY \
+      COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY \
+      < <(node "${ROOT_DIR}/scripts/runner-token-key.mjs" --tsv)
+    export COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY
+    export COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY
+  else
+    export COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY="$(
+      printf '%s' "${COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY}" \
+        | node "${ROOT_DIR}/scripts/runner-token-key.mjs" --derive-public
+    )"
+  fi
   export COUNTERLAB_RUNNER_BASE_URL="http://127.0.0.1:${HOSTED_RUNNER_PORT}"
   export COUNTERLAB_RUNNER_WORK_ROOT="${ROOT_DIR}/data/hosted-runner/jobs"
   export COUNTERLAB_CODEX_HOME_ROOT="${ROOT_DIR}/data/hosted-runner/codex-home"

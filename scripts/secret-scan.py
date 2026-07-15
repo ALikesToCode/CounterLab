@@ -22,7 +22,7 @@ PATTERNS = (
         "credential assignment",
         re.compile(
             r"(?:OPENAI_API_KEY|OPENAI_BASE_URL|CODEX_AUTH_JSON|CLOUDFLARE_API_TOKEN|"
-            r"COUNTERLAB_SIGNING_KEY|COUNTERLAB_RUNNER_SIGNING_KEY|"
+            r"COUNTERLAB_SIGNING_KEY|COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY|"
             r"COUNTERLAB_ADMIN_DIAGNOSTIC_SECRET)"
             + r"\s*(?<![=!<>])=(?!=)\s*[^\s#]+"
         ),

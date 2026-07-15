@@ -189,6 +189,9 @@ importers:
       "@counterlab/contracts":
         specifier: workspace:*
         version: link:../../packages/contracts
+      "@counterlab/session-core":
+        specifier: workspace:*
+        version: link:../../packages/session-core
       "@openai/codex":
         specifier: 0.144.4
         version: 0.144.4

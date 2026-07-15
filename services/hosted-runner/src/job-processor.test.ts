@@ -722,6 +722,35 @@ describe("HostedRunnerJobProcessor", () => {
     });
   });
 
+  it("releases no result or terminal callback when cancellation wins during upload", async () => {
+    const controller = new AbortController();
+    const compiler = new FakeCompiler({ schemaVersion: "2" });
+    const kernel = new FakeFixedKernel();
+    const controlPlane = new FakeControlPlane(await runBundle(), []);
+    const originalUpload = controlPlane.upload.bind(controlPlane);
+    controlPlane.upload = async (path, body) => {
+      const uploaded = await originalUpload(path, body);
+      controller.abort();
+      return uploaded;
+    };
+    const processor = new HostedRunnerJobProcessor({
+      workspaceRoot: await workspace(),
+      compiler,
+      fixedKernel: kernel,
+      controlPlane,
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_cancel`,
+    });
+
+    await processor.run("runner_job_run_1", controller.signal);
+
+    expect([...controlPlane.uploads.keys()]).toEqual(["verified-result.json"]);
+    expect(controlPlane.events.map((event) => event.kind)).toEqual([
+      "job.started",
+    ]);
+    expect(controlPlane.callbacks).toHaveLength(0);
+  });
+
   it("compiles a verified Patch Plan before the fixed patch process sees source bytes", async () => {
     const patchPlan = { schemaVersion: "1", operations: [] };
     const compiler = new FakeCompiler(patchPlan);

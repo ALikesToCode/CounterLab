@@ -18,6 +18,7 @@ export type FixedPatchProcessOptions = {
   cwd: string;
   timeout: number;
   env: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
 };
 
 export type FixedPatchProcessRunner = (
@@ -96,6 +97,7 @@ export class PythonFixedPatchExecutor implements FixedPatchExecutor {
     sourceNotebook: string,
     patchPlan: string,
     workspace: string,
+    signal?: AbortSignal,
   ): Promise<{
     notebookBody: string;
     patchResultBody: string;
@@ -165,6 +167,7 @@ export class PythonFixedPatchExecutor implements FixedPatchExecutor {
         {
           cwd: workspace,
           timeout: 45_000,
+          ...(signal === undefined ? {} : { signal }),
           env: {
             LANG: "C.UTF-8",
             PATH: "/opt/counterlab-venv/bin:/usr/local/bin:/usr/bin:/bin",

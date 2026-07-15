@@ -13,6 +13,7 @@ export type FixedKernelProcessOptions = {
   cwd: string;
   timeout: number;
   env: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
 };
 
 export type FixedKernelProcessRunner = (
@@ -62,6 +63,7 @@ export class PythonFixedKernelExecutor implements FixedKernelExecutor {
   async run(
     bundle: RunnerLabRunBundle,
     workspace: string,
+    signal?: AbortSignal,
   ): Promise<{ body: string; durationMs: number }> {
     const inputPath = join(workspace, "lab-run-bundle.json");
     const outputPath = join(workspace, "verified-result.json");
@@ -85,6 +87,7 @@ export class PythonFixedKernelExecutor implements FixedKernelExecutor {
         {
           cwd: workspace,
           timeout: bundle.experimentPlan.resourceLimits.wallSeconds * 1_000,
+          ...(signal === undefined ? {} : { signal }),
           env: {
             LANG: "C.UTF-8",
             PATH: "/opt/counterlab-venv/bin:/usr/local/bin:/usr/bin:/bin",

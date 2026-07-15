@@ -4,6 +4,7 @@ import {
   type RunnerCallback,
   type RunnerJobInputBundle,
 } from "@counterlab/contracts";
+import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
 
 import type { CandidateDecision, RunnerControlPlane } from "./job-processor.js";
@@ -40,6 +41,7 @@ export type HttpRunnerControlPlaneOptions = {
   jobId: string;
   token: string;
   fetch?: typeof fetch;
+  callbackRetryDelayMs?: number;
 };
 
 class ControlPlaneRequestError extends Error {
@@ -52,6 +54,7 @@ class ControlPlaneRequestError extends Error {
 export class HttpRunnerControlPlane implements RunnerControlPlane {
   private readonly baseUrl: URL;
   private readonly fetcher: typeof fetch;
+  private readonly callbackRetryDelayMs: number;
 
   constructor(private readonly options: HttpRunnerControlPlaneOptions) {
     this.baseUrl = new URL(options.controlPlaneUrl);
@@ -62,46 +65,75 @@ export class HttpRunnerControlPlane implements RunnerControlPlane {
       throw new Error("Runner control plane must use HTTPS");
     }
     this.fetcher = options.fetch ?? fetch;
+    this.callbackRetryDelayMs = options.callbackRetryDelayMs ?? 250;
+    if (
+      !Number.isInteger(this.callbackRetryDelayMs) ||
+      this.callbackRetryDelayMs < 0 ||
+      this.callbackRetryDelayMs > 5_000
+    ) {
+      throw new Error("Callback retry delay must be between 0 and 5000 ms");
+    }
   }
 
-  async getInput(): Promise<RunnerJobInputBundle> {
+  async getInput(signal?: AbortSignal): Promise<RunnerJobInputBundle> {
     const response = await this.request(
       `/api/runner/jobs/${this.jobId()}/input`,
       { method: "GET" },
       false,
+      signal,
     );
     return RunnerJobInputBundleSchema.parse(await response.json());
   }
 
-  async getSource(): Promise<string> {
+  async getSource(signal?: AbortSignal): Promise<string> {
     const response = await this.request(
       `/api/runner/jobs/${this.jobId()}/source`,
       { method: "GET" },
       false,
+      signal,
     );
     return response.text();
   }
 
-  async start(): Promise<void> {
-    await this.jsonRequest(`/api/runner/jobs/${this.jobId()}/start`, {
-      method: "POST",
-    });
+  async start(signal?: AbortSignal): Promise<void> {
+    await this.jsonRequest(
+      `/api/runner/jobs/${this.jobId()}/start`,
+      {
+        method: "POST",
+      },
+      signal,
+    );
   }
 
-  async resume(): Promise<void> {
-    await this.jsonRequest(`/api/runner/jobs/${this.jobId()}/resume`, {
-      method: "POST",
-    });
+  async resume(signal?: AbortSignal): Promise<void> {
+    await this.jsonRequest(
+      `/api/runner/jobs/${this.jobId()}/resume`,
+      {
+        method: "POST",
+      },
+      signal,
+    );
   }
 
-  async appendEvent(event: PublicCompilerEvent): Promise<void> {
-    await this.jsonRequest(`/api/runner/jobs/${this.jobId()}/events`, {
-      method: "POST",
-      body: JSON.stringify(event),
-    });
+  async appendEvent(
+    event: PublicCompilerEvent,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    await this.jsonRequest(
+      `/api/runner/jobs/${this.jobId()}/events`,
+      {
+        method: "POST",
+        body: JSON.stringify(event),
+      },
+      signal,
+    );
   }
 
-  async upload(path: string, body: string): Promise<{ sha256: string }> {
+  async upload(
+    path: string,
+    body: string,
+    signal?: AbortSignal,
+  ): Promise<{ sha256: string }> {
     const data = await this.jsonRequest(
       `/api/runner/jobs/${this.jobId()}/outputs/${encodeURIComponent(path)}`,
       {
@@ -113,34 +145,61 @@ export class HttpRunnerControlPlane implements RunnerControlPlane {
         },
         body,
       },
+      signal,
     );
     return UploadResponseSchema.parse(data);
   }
 
-  async candidate(input: {
-    attempt: number;
-    planSha256: string;
-  }): Promise<CandidateDecision> {
+  async candidate(
+    input: {
+      attempt: number;
+      planSha256: string;
+    },
+    signal?: AbortSignal,
+  ): Promise<CandidateDecision> {
     const data = await this.jsonRequest(
       `/api/runner/jobs/${this.jobId()}/candidate`,
       { method: "POST", body: JSON.stringify(input) },
+      signal,
     );
     return CandidateDecisionSchema.parse(data);
   }
 
-  async callback(callback: RunnerCallback): Promise<void> {
-    await this.jsonRequest(`/api/runner/jobs/${this.jobId()}/callback`, {
-      method: "POST",
-      body: JSON.stringify(callback),
-    });
+  async callback(
+    callback: RunnerCallback,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const body = JSON.stringify(callback);
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        await this.jsonRequest(
+          `/api/runner/jobs/${this.jobId()}/callback`,
+          { method: "POST", body },
+          signal,
+        );
+        return;
+      } catch (error) {
+        const retryable =
+          error instanceof ControlPlaneRequestError &&
+          (error.status === 409 || error.status === 429 || error.status >= 500);
+        if (!retryable || attempt === 3) throw error;
+        await delay(this.callbackRetryDelayMs * attempt, undefined, {
+          ...(signal === undefined ? {} : { signal }),
+        });
+      }
+    }
   }
 
   private jobId(): string {
     return encodeURIComponent(this.options.jobId);
   }
 
-  private async jsonRequest(path: string, init: RequestInit): Promise<unknown> {
-    const response = await this.request(path, init, true);
+  private async jsonRequest(
+    path: string,
+    init: RequestInit,
+    signal?: AbortSignal,
+  ): Promise<unknown> {
+    const response = await this.request(path, init, true, signal);
     const envelope = EnvelopeSchema.parse(await response.json());
     return envelope.data;
   }
@@ -149,6 +208,7 @@ export class HttpRunnerControlPlane implements RunnerControlPlane {
     path: string,
     init: RequestInit,
     expectJsonEnvelope: boolean,
+    signal?: AbortSignal,
   ): Promise<Response> {
     const headers = new Headers(init.headers);
     headers.set("authorization", `Bearer ${this.options.token}`);
@@ -160,7 +220,10 @@ export class HttpRunnerControlPlane implements RunnerControlPlane {
       ...init,
       headers,
       redirect: "error",
-      signal: AbortSignal.timeout(30_000),
+      signal:
+        signal === undefined
+          ? AbortSignal.timeout(30_000)
+          : AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
     });
     if (!response.ok) throw new ControlPlaneRequestError(response.status);
     if (

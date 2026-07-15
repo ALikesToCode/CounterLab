@@ -8,6 +8,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { AppServerCodexCompiler } from "@counterlab/codex-client";
+import { verifyRunnerJobToken } from "@counterlab/session-core";
 import { z } from "zod";
 
 import { HttpRunnerControlPlane } from "./control-plane-client.js";
@@ -27,11 +28,22 @@ const DispatchSchema = z
   .strict();
 
 export type HostedRunnerServerOptions = {
+  authorizeToken(
+    token: string,
+    jobId: string,
+    purpose: "RUN_JOB" | "CANCEL_JOB",
+    controlPlaneOrigin?: string,
+  ): Promise<boolean>;
   processJob(input: {
     jobId: string;
     token: string;
     controlPlaneUrl: string;
+    signal: AbortSignal;
   }): Promise<void>;
+};
+
+type ActiveJob = {
+  controller: AbortController;
 };
 
 function respond(
@@ -77,7 +89,8 @@ function token(request: IncomingMessage): string | undefined {
 }
 
 export function createHostedRunnerServer(options: HostedRunnerServerOptions) {
-  const activeJobs = new Set<string>();
+  const activeJobs = new Map<string, ActiveJob>();
+  const cancelledJobs = new Set<string>();
   return createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://runner.internal");
     if (request.method === "GET" && url.pathname === "/ready") {
@@ -85,6 +98,41 @@ export function createHostedRunnerServer(options: HostedRunnerServerOptions) {
         status: "ready",
         service: "counterlab-hosted-runner",
       });
+      return;
+    }
+    const cancellation = /^\/jobs\/([A-Za-z0-9_-]+)$/u.exec(url.pathname);
+    if (request.method === "DELETE" && cancellation !== null) {
+      const scopedToken = token(request);
+      if (scopedToken === undefined) {
+        respond(response, 401, { error: "RUNNER_AUTH_REQUIRED" });
+        return;
+      }
+      const jobId = cancellation[1];
+      if (jobId === undefined) {
+        respond(response, 404, { error: "RUNNER_JOB_NOT_FOUND" });
+        return;
+      }
+      if (!(await options.authorizeToken(scopedToken, jobId, "CANCEL_JOB"))) {
+        respond(response, 403, { error: "RUNNER_AUTH_INVALID" });
+        return;
+      }
+      if (cancelledJobs.has(jobId)) {
+        respond(response, 200, { cancelled: true, reused: true, jobId });
+        return;
+      }
+      const active = activeJobs.get(jobId);
+      if (active === undefined) {
+        respond(response, 404, { error: "RUNNER_JOB_NOT_FOUND" });
+        return;
+      }
+      cancelledJobs.add(jobId);
+      if (cancelledJobs.size > 1_000) {
+        const oldest = cancelledJobs.values().next().value as
+          string | undefined;
+        if (oldest !== undefined) cancelledJobs.delete(oldest);
+      }
+      active.controller.abort();
+      respond(response, 202, { cancelled: true, reused: false, jobId });
       return;
     }
     if (request.method !== "POST" || url.pathname !== "/jobs") {
@@ -98,18 +146,36 @@ export function createHostedRunnerServer(options: HostedRunnerServerOptions) {
     }
     try {
       const body = DispatchSchema.parse(JSON.parse(await readBody(request)));
-      if (activeJobs.has(body.jobId)) {
-        respond(response, 409, { error: "RUNNER_JOB_ACTIVE" });
+      if (
+        !(await options.authorizeToken(
+          scopedToken,
+          body.jobId,
+          "RUN_JOB",
+          new URL(body.controlPlaneUrl).origin,
+        ))
+      ) {
+        respond(response, 403, { error: "RUNNER_AUTH_INVALID" });
         return;
       }
-      activeJobs.add(body.jobId);
+      if (activeJobs.has(body.jobId)) {
+        respond(response, 202, {
+          accepted: true,
+          reused: true,
+          jobId: body.jobId,
+        });
+        return;
+      }
+      const controller = new AbortController();
+      activeJobs.set(body.jobId, { controller });
       void options
         .processJob({
           jobId: body.jobId,
           token: scopedToken,
           controlPlaneUrl: body.controlPlaneUrl,
+          signal: controller.signal,
         })
         .catch((error: unknown) => {
+          if (controller.signal.aborted) return;
           console.error("Hosted runner job failed", {
             jobId: body.jobId,
             name: error instanceof Error ? error.name : "UnknownError",
@@ -129,9 +195,20 @@ export function createHostedRunnerServer(options: HostedRunnerServerOptions) {
 
 async function startProductionServer(): Promise<void> {
   const authJson = process.env.CODEX_AUTH_JSON;
+  const runnerVerifyingPublicKey =
+    process.env.COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY;
   delete process.env.CODEX_AUTH_JSON;
+  delete process.env.COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY;
   if (authJson === undefined || authJson.trim().length === 0) {
     throw new Error("CODEX_AUTH_JSON is required by the hosted runner");
+  }
+  if (
+    runnerVerifyingPublicKey === undefined ||
+    runnerVerifyingPublicKey.length === 0
+  ) {
+    throw new Error(
+      "COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY is required by the hosted runner",
+    );
   }
   const workspaceRoot = process.env.COUNTERLAB_RUNNER_WORK_ROOT ?? "/work/jobs";
   const codexHomeRoot =
@@ -159,7 +236,20 @@ async function startProductionServer(): Promise<void> {
   if (!boundaryHealth.available) throw new Error(boundaryHealth.reason);
 
   const server = createHostedRunnerServer({
-    async processJob({ jobId, token, controlPlaneUrl }) {
+    async authorizeToken(scopedToken, jobId, purpose, controlPlaneOrigin) {
+      try {
+        await verifyRunnerJobToken(scopedToken, runnerVerifyingPublicKey, {
+          nowEpochSeconds: Math.floor(Date.now() / 1_000),
+          jobId,
+          purpose,
+          ...(controlPlaneOrigin === undefined ? {} : { controlPlaneOrigin }),
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    async processJob({ jobId, token, controlPlaneUrl, signal }) {
       const controlPlane = new HttpRunnerControlPlane({
         controlPlaneUrl,
         jobId,
@@ -196,7 +286,7 @@ async function startProductionServer(): Promise<void> {
         }),
         controlPlane,
       });
-      await processor.run(jobId);
+      await processor.run(jobId, signal);
     },
   });
   const port = Number(process.env.PORT ?? "8080");

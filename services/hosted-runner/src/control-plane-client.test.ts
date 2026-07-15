@@ -92,4 +92,40 @@ describe("HttpRunnerControlPlane", () => {
     ).not.toThrow();
     vi.unstubAllEnvs();
   });
+
+  it("retries the same terminal callback after a projection conflict", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: false }), {
+          status: 409,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(json({ duplicate: true }));
+    const client = new HttpRunnerControlPlane({
+      controlPlaneUrl: "http://127.0.0.1:8787",
+      jobId: "job_1",
+      token: "scoped-runner-token",
+      fetch: fetcher,
+      callbackRetryDelayMs: 0,
+    });
+
+    await client.callback({
+      schemaVersion: "1",
+      callbackId: "callback_1",
+      idempotencyKey: "job_1:verified:hash",
+      jobId: "job_1",
+      stateVersion: 4,
+      status: "VERIFIED",
+      outputHashes: ["a".repeat(64)],
+      finalEventCursor: 0,
+      occurredAt: "2026-07-15T00:00:00.000Z",
+    });
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher.mock.calls[0]?.[1]?.body).toBe(
+      fetcher.mock.calls[1]?.[1]?.body,
+    );
+  });
 });
