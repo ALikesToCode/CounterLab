@@ -4,8 +4,11 @@ import {
   ApiClientError,
   counterLabApi,
   type ArtifactView,
+  type BeliefAnalysisPreview,
   type BeliefTest,
   type CapabilityHealth,
+  type ImbalanceVerifiedResultSet,
+  type LeakageVerifiedResultSet,
   type PatchResult,
   type ProofBundle,
   type PublicCompilerEvent,
@@ -16,6 +19,9 @@ import {
 import { useRunnerEvents } from "./hooks/useRunnerEvents";
 import { CounterLabStudio } from "./app/CounterLabStudio";
 import { parseStudioLocation, studioPath } from "./app/AppRouter";
+import { InteractiveImbalanceLab } from "./components/lesson/InteractiveImbalanceLab";
+import { ImbalancePatchReview } from "./components/lesson/ImbalancePatchReview";
+import { ImbalanceTransferLesson } from "./components/lesson/ImbalanceTransferLesson";
 import type { RecentProject, StudioStage } from "./components/studio/types";
 
 import { getRun, sampleArtifact, sampleResult, verifiedReplay } from "./sample";
@@ -269,9 +275,8 @@ function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
           </p>
           <h2>Your notebook made a claim. Will it survive a fair test?</h2>
           <p className="learning-promise">
-            Bring a result you are unsure about. CounterLab turns your idea into
-            a prediction, lets a verified test answer it, checks whether the
-            lesson transfers, and only then unlocks a repair.
+            Bring a notebook result. Lock what you expect, run a verified test,
+            apply the lesson once, then unlock a repair.
           </p>
           <div className="learning-actions">
             <button
@@ -333,21 +338,9 @@ function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
 
       <section className="lesson-steps shell" aria-label="How CounterLab works">
         {[
-          [
-            "1",
-            "Question the claim",
-            "Link your idea to exact notebook cells.",
-          ],
-          [
-            "2",
-            "Let reality answer",
-            "Lock a prediction, then run a fair test.",
-          ],
-          [
-            "3",
-            "Transfer, then repair",
-            "Use the rule on a new case to unlock a verified copy.",
-          ],
+          ["1", "Question the claim", "Link exact notebook evidence."],
+          ["2", "Let reality answer", "Predict, then test fairly."],
+          ["3", "Transfer, then repair", "Apply the rule before repair."],
         ].map(([index, title, copy]) => (
           <article key={index}>
             <span>{index}</span>
@@ -361,8 +354,8 @@ function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
 
       <section className="more-paths shell" id="judge-paths">
         <div className="more-paths-heading">
-          <span>Want to see it before uploading?</span>
-          <p>Take the short sample or inspect a recorded verified run.</p>
+          <span>See it before uploading</span>
+          <p>Try the sample or inspect a verified run.</p>
         </div>
         <div className="simple-mode-grid">
           <button
@@ -395,8 +388,9 @@ function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
         </div>
 
         <p className="plain-support-note">
-          Released support: entity leakage in documented Python/scikit-learn
-          Jupyter notebooks. Unsupported files are refused, not guessed.
+          Released support: entity leakage and class imbalance in documented
+          Python/scikit-learn Jupyter notebooks. Unsupported files are refused,
+          not guessed.
         </p>
       </section>
     </main>
@@ -406,14 +400,22 @@ function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
 function ClaimScreen({
   artifact,
   claim,
-  setClaim,
+  updateClaim,
+  analysisPreview,
+  sensitiveContentApproved,
+  setSensitiveContentApproved,
+  cancelPreview,
   continueToBelief,
   uploadNotebook,
   busy,
 }: {
   artifact: ArtifactView | null;
   claim: string;
-  setClaim: (claim: string) => void;
+  updateClaim: (claim: string) => void;
+  analysisPreview: BeliefAnalysisPreview | null;
+  sensitiveContentApproved: boolean;
+  setSensitiveContentApproved: (approved: boolean) => void;
+  cancelPreview: () => void;
   continueToBelief: () => void;
   uploadNotebook: (file: File) => void;
   busy: boolean;
@@ -592,7 +594,7 @@ function ClaimScreen({
             className="claim-starter"
             type="button"
             onClick={() =>
-              setClaim(
+              updateClaim(
                 "I think the high score means the model will work for completely new customers.",
               )
             }
@@ -602,21 +604,86 @@ function ClaimScreen({
           <textarea
             id="learner-claim"
             value={claim}
-            onChange={(event) => setClaim(event.target.value)}
+            onChange={(event) => updateClaim(event.target.value)}
             placeholder="I think this score means the model will work for…"
             rows={7}
           />
-          <div className="form-footer">
-            <span>{claim.trim().length} characters</span>
-            <button
-              className="button button-primary"
-              type="button"
-              disabled={claim.trim().length < 12 || !supported || busy}
-              onClick={continueToBelief}
+          {analysisPreview === null ? (
+            <div className="form-footer">
+              <span>{claim.trim().length} characters</span>
+              <button
+                className="button button-primary"
+                type="button"
+                disabled={claim.trim().length < 12 || !supported || busy}
+                onClick={continueToBelief}
+              >
+                Compare two explanations <Mark name="arrow" />
+              </button>
+            </div>
+          ) : (
+            <section
+              className="analyst-preview"
+              aria-labelledby="analyst-preview-title"
             >
-              Compare two explanations <Mark name="arrow" />
-            </button>
-          </div>
+              <div className="analyst-preview-head">
+                <div>
+                  <p className="eyebrow aqua">Your approval boundary</p>
+                  <h3 id="analyst-preview-title">
+                    Review the evidence sent for analysis
+                  </h3>
+                </div>
+                <span className="concept-chip">
+                  {analysisPreview.conceptTitle}
+                </span>
+              </div>
+              <p>
+                This sanitized bundle contains notebook structure and short
+                evidence excerpts—not raw rows, local paths, or notebook bytes.
+              </p>
+              <pre aria-label="Exact sanitized analyst input">
+                <code>
+                  {JSON.stringify(analysisPreview.sanitizedContent, null, 2)}
+                </code>
+              </pre>
+              {analysisPreview.requiresSensitiveApproval && (
+                <label className="sensitive-approval">
+                  <input
+                    type="checkbox"
+                    checked={sensitiveContentApproved}
+                    onChange={(event) =>
+                      setSensitiveContentApproved(event.target.checked)
+                    }
+                  />
+                  <span>
+                    I reviewed the redacted sensitive-looking excerpt and want
+                    to continue.
+                  </span>
+                </label>
+              )}
+              <div className="analyst-preview-actions">
+                <button
+                  className="button button-primary"
+                  type="button"
+                  disabled={
+                    busy ||
+                    (analysisPreview.requiresSensitiveApproval &&
+                      !sensitiveContentApproved)
+                  }
+                  onClick={continueToBelief}
+                >
+                  Send this evidence <Mark name="arrow" />
+                </button>
+                <button
+                  className="button button-quiet"
+                  type="button"
+                  disabled={busy}
+                  onClick={cancelPreview}
+                >
+                  Change my claim
+                </button>
+              </div>
+            </section>
+          )}
         </section>
       </div>
     </main>
@@ -648,13 +715,54 @@ function BeliefScreen({
   editClaim: () => void;
   stop: (reason: "rejected" | "insufficient") => void;
 }) {
-  const currentHypothesis =
-    "The model learned a useful pattern that will work for new customers.";
-  const currentPrediction = "The score stays close to 98% for new customers.";
-  const competingHypothesis =
-    "The model partly remembers customers it already saw.";
-  const competingPrediction =
-    "The score drops for new customers and without customer ID.";
+  const isImbalance = beliefTest?.concept === "class_imbalance";
+  const copy = isImbalance
+    ? {
+        currentLabel: "Idea A · Accuracy is enough",
+        currentHypothesis:
+          "The high overall score means the model catches the rare cases that matter.",
+        currentPrediction:
+          "Minority recall should also be strong and clearly beat a majority-only baseline.",
+        competingLabel: "Idea B · Rarity hides failure",
+        competingHypothesis:
+          "The common class makes accuracy look excellent even when rare cases are missed.",
+        competingPrediction:
+          "A majority baseline will look similar while recall and PR-AUC expose the misses.",
+        fairTest:
+          "Compare the majority baseline, confusion matrix, and rare-class metrics.",
+        intervention:
+          "We keep the data and scoring model fixed. We expose class-specific errors, then test a bounded threshold change.",
+        help: "If accuracy reflects useful rare-event detection, recall should stay strong and beat the majority baseline. If rarity hides failure, class-specific evidence will reveal the gap.",
+        predictionLegend:
+          "When we inspect minority performance, the evidence will…",
+        staysTitle: "Still support the high-score claim",
+        staysDetail:
+          "Rare-class recall and PR-AUC confirm the overall accuracy.",
+        fallsTitle: "Expose a serious minority-class problem",
+        fallsDetail:
+          "The majority baseline or missed positives explain the high score.",
+      }
+    : {
+        currentLabel: "Idea A · A useful pattern",
+        currentHypothesis:
+          "The model learned a useful pattern that will work for new customers.",
+        currentPrediction: "The score stays close to 98% for new customers.",
+        competingLabel: "Idea B · Customer memory",
+        competingHypothesis:
+          "The model partly remembers customers it already saw.",
+        competingPrediction:
+          "The score drops for new customers and without customer ID.",
+        fairTest:
+          "Keep each customer's rows together, then remove customer ID.",
+        intervention:
+          "We keep the model the same. We change who appears in the test, then check what happens without customer ID.",
+        help: "If the model learned a reusable pattern, the score should stay high. If it remembers customers, the score should fall. The two ideas now predict different outcomes.",
+        predictionLegend: "If we hold out entire customers, accuracy will…",
+        staysTitle: "Remain near 98%",
+        staysDetail: "The notebook result reflects a reusable signal.",
+        fallsTitle: "Fall materially",
+        fallsDetail: "The random split is benefiting from repeated identities.",
+      };
 
   return (
     <main className="workspace shell">
@@ -683,10 +791,10 @@ function BeliefScreen({
 
       <section className="hypothesis-grid" aria-label="Competing hypotheses">
         <article className="hypothesis current">
-          <p className="hypothesis-label">Idea A · A useful pattern</p>
-          <h2>{currentHypothesis}</h2>
+          <p className="hypothesis-label">{copy.currentLabel}</p>
+          <h2>{copy.currentHypothesis}</h2>
           <p className="prediction-line">
-            <span>Predicts</span> {currentPrediction}
+            <span>Predicts</span> {copy.currentPrediction}
           </p>
           {beliefTest !== undefined && (
             <details className="analyst-wording">
@@ -700,10 +808,10 @@ function BeliefScreen({
           vs
         </div>
         <article className="hypothesis competing">
-          <p className="hypothesis-label">Idea B · Customer memory</p>
-          <h2>{competingHypothesis}</h2>
+          <p className="hypothesis-label">{copy.competingLabel}</p>
+          <h2>{copy.competingHypothesis}</h2>
           <p className="prediction-line">
-            <span>Predicts</span> {competingPrediction}
+            <span>Predicts</span> {copy.competingPrediction}
           </p>
           {beliefTest !== undefined && (
             <details className="analyst-wording">
@@ -738,13 +846,8 @@ function BeliefScreen({
                       ? " · source"
                       : ` · output ${evidence.outputIndex}`
                   }`}{" "}
-              <strong>
-                {evidence.outputIndex !== undefined
-                  ? "98.5% score shown"
-                  : evidence.kind === "schema"
-                    ? "customer ID marks who must stay together"
-                    : "random split uses customer ID"}
-              </strong>
+              <strong>{evidence.relevance}</strong>
+              <small>{evidence.excerpt}</small>
             </span>
           ))
         )}
@@ -753,13 +856,8 @@ function BeliefScreen({
       <section className="intervention panel">
         <div>
           <p className="eyebrow">The fairer test</p>
-          <h2>
-            Keep each customer&apos;s rows together, then remove customer ID.
-          </h2>
-          <p>
-            We keep the model the same. We change who appears in the test, then
-            check what happens without customer ID.
-          </p>
+          <h2>{copy.fairTest}</h2>
+          <p>{copy.intervention}</p>
         </div>
         <details>
           <summary>Alternatives, limitations, and uncertainty</summary>
@@ -778,11 +876,7 @@ function BeliefScreen({
 
       <details className="concept-help panel">
         <summary>Why can this test teach us something?</summary>
-        <p>
-          If the model learned a reusable pattern, the score should stay high.
-          If it remembers customers, the score should fall. The two ideas now
-          predict different outcomes.
-        </p>
+        <p>{copy.help}</p>
       </details>
 
       {!confirmed ? (
@@ -829,7 +923,7 @@ function BeliefScreen({
             <Mark name="lock" />
           </div>
           <fieldset>
-            <legend>If we hold out entire customers, accuracy will…</legend>
+            <legend>{copy.predictionLegend}</legend>
             <label className="choice">
               <input
                 type="radio"
@@ -838,8 +932,8 @@ function BeliefScreen({
                 onChange={() => setPrediction("stays-high")}
               />
               <span>
-                <strong>Remain near 98%</strong>
-                <small>The notebook result reflects a reusable signal.</small>
+                <strong>{copy.staysTitle}</strong>
+                <small>{copy.staysDetail}</small>
               </span>
             </label>
             <label className="choice">
@@ -850,10 +944,8 @@ function BeliefScreen({
                 onChange={() => setPrediction("falls")}
               />
               <span>
-                <strong>Fall materially</strong>
-                <small>
-                  The random split is benefiting from repeated identities.
-                </small>
+                <strong>{copy.fallsTitle}</strong>
+                <small>{copy.fallsDetail}</small>
               </span>
             </label>
             <label className="choice">
@@ -1077,7 +1169,7 @@ const semanticOperations = {
 } as const;
 
 function resultRun(
-  result: VerifiedResultSet,
+  result: LeakageVerifiedResultSet,
   id: keyof typeof semanticOperations,
 ) {
   const run = result.runs.find(
@@ -1091,7 +1183,7 @@ function resultRun(
   return run;
 }
 
-function ResultBars({ result }: { result: VerifiedResultSet }) {
+function ResultBars({ result }: { result: LeakageVerifiedResultSet }) {
   const runs = [
     { run: resultRun(result, "random_row_split"), label: "Random rows" },
     {
@@ -1119,7 +1211,7 @@ function ResultBars({ result }: { result: VerifiedResultSet }) {
   );
 }
 
-function ResultTable({ result }: { result: VerifiedResultSet }) {
+function ResultTable({ result }: { result: LeakageVerifiedResultSet }) {
   const runs = [
     resultRun(result, "random_row_split"),
     resultRun(result, "customer_group_split"),
@@ -1167,6 +1259,129 @@ function ResultTable({ result }: { result: VerifiedResultSet }) {
   );
 }
 
+function ImbalanceReviewScreen({
+  step,
+  claim,
+  session,
+  result,
+  returnToCurrent,
+  restart,
+}: {
+  step: ReviewStep;
+  claim: string;
+  session: SessionView | null;
+  result: ImbalanceVerifiedResultSet;
+  returnToCurrent: () => void;
+  restart: () => void;
+}) {
+  const majority = result.runs.find(
+    (run) => run.operation === "imbalance.majority_baseline",
+  );
+  const stratified = result.runs.find(
+    (run) => run.operation === "imbalance.stratified_holdout",
+  );
+  if (majority === undefined || stratified === undefined) {
+    throw new Error("Verified imbalance result is missing required runs");
+  }
+  const titles: Record<ReviewStep, string> = {
+    claim: "Review your original question",
+    belief: "Review your prediction",
+    build: "Review the rare-event test",
+    reality: "Review what you learned",
+  };
+  return (
+    <main className="workspace shell lesson-review">
+      <div className="screen-intro compact">
+        <p className="eyebrow">Lesson map · Saved step</p>
+        <h1>{titles[step]}</h1>
+        <p>Saved evidence stays read-only while you inspect this step.</p>
+      </div>
+      <aside className="review-notice" role="note">
+        <Mark name="lock" />
+        <div>
+          <strong>Saved evidence is read-only.</strong>
+          <span>Your current lesson remains exactly where you left it.</span>
+        </div>
+      </aside>
+      <section className="review-card panel">
+        {step === "claim" && (
+          <>
+            <p className="eyebrow">The result you questioned</p>
+            <div className="review-score-row">
+              <strong>{percent.format(majority.metrics.accuracy)}</strong>
+              <div>
+                <span>Accuracy can hide the rare class</span>
+                <p>The majority baseline catches no positive cases.</p>
+              </div>
+            </div>
+            <blockquote>{claim}</blockquote>
+          </>
+        )}
+        {step === "belief" && (
+          <>
+            <p className="eyebrow purple">Your committed guess</p>
+            <h2>{session?.prediction?.choice ?? "Prediction not committed"}</h2>
+            <p>
+              {session?.beliefTest?.competingHypothesis.statement ??
+                "Class rarity can make a weak detector look accurate."}
+            </p>
+          </>
+        )}
+        {step === "build" && (
+          <>
+            <p className="eyebrow aqua">Verified Lab</p>
+            <h2>
+              CounterLab measured the minority class, not only the headline.
+            </h2>
+            <ul className="review-checks">
+              <li>
+                <Mark name="check" /> Computed majority baseline
+              </li>
+              <li>
+                <Mark name="check" /> Confusion totals match sample size
+              </li>
+              <li>
+                <Mark name="check" /> Threshold and prevalence respond
+              </li>
+            </ul>
+          </>
+        )}
+        {step === "reality" && (
+          <>
+            <p className="eyebrow gold">Verified lesson</p>
+            <div className="review-result-change">
+              <span>
+                Accuracy{" "}
+                <strong>{percent.format(majority.metrics.accuracy)}</strong>
+              </span>
+              <Mark name="arrow" />
+              <span>
+                Rare-class recall{" "}
+                <strong>{percent.format(stratified.metrics.recall)}</strong>
+              </span>
+            </div>
+            <blockquote>
+              {session?.revision ?? "Write a reusable evaluation rule."}
+            </blockquote>
+          </>
+        )}
+      </section>
+      <div className="review-actions">
+        <button
+          className="button button-primary"
+          type="button"
+          onClick={returnToCurrent}
+        >
+          Return to current step <Mark name="arrow" />
+        </button>
+        <button className="button button-quiet" type="button" onClick={restart}>
+          Start a new lesson
+        </button>
+      </div>
+    </main>
+  );
+}
+
 function ReviewScreen({
   step,
   claim,
@@ -1182,8 +1397,21 @@ function ReviewScreen({
   returnToCurrent: () => void;
   restart: () => void;
 }) {
-  const random = resultRun(result, "random_row_split");
-  const group = resultRun(result, "customer_group_split");
+  if (result.concept === "class_imbalance") {
+    return (
+      <ImbalanceReviewScreen
+        step={step}
+        claim={claim}
+        session={session}
+        result={result as ImbalanceVerifiedResultSet}
+        returnToCurrent={returnToCurrent}
+        restart={restart}
+      />
+    );
+  }
+  const leakageResult = result as LeakageVerifiedResultSet;
+  const random = resultRun(leakageResult, "random_row_split");
+  const group = resultRun(leakageResult, "customer_group_split");
   const titles: Record<ReviewStep, string> = {
     claim: "Review your original question",
     belief: "Review your prediction",
@@ -1312,17 +1540,301 @@ function ReviewScreen({
   );
 }
 
-function RealityScreen({
+function InteractiveLeakageLab({
+  session,
+  artifact,
+  authoritativeResult,
+}: {
+  session: SessionView | null;
+  artifact: ArtifactView | null;
+  authoritativeResult: LeakageVerifiedResultSet;
+}) {
+  const isLive = session?.mode.kind === "live_notebook";
+  const entityCandidates = artifact?.schemaSummary.entityCandidates ?? [];
+  const [splitStrategy, setSplitStrategy] = useState<"random" | "group">(
+    "group",
+  );
+  const [entityField, setEntityField] = useState(
+    entityCandidates[0] ?? "customer_id",
+  );
+  const [identityAblation, setIdentityAblation] = useState(false);
+  const [testFraction, setTestFraction] = useState(0.25);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [exploredResult, setExploredResult] =
+    useState<LeakageVerifiedResultSet | null>(null);
+  const [configurationHash, setConfigurationHash] = useState<string | null>(
+    null,
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const runner = useRunnerEvents();
+
+  useEffect(() => {
+    if (
+      entityCandidates.length > 0 &&
+      !entityCandidates.includes(entityField)
+    ) {
+      setEntityField(entityCandidates[0]!);
+    }
+  }, [entityCandidates, entityField]);
+
+  const selectedRun = exploredResult?.runs.find(
+    (run) => run.id === selectedRunId,
+  );
+
+  const runConfiguration = async () => {
+    if (!isLive || session === null) return;
+    setBusy(true);
+    setError(null);
+    setExploredResult(null);
+    setSelectedRunId(null);
+    setConfigurationHash(null);
+    runner.clear();
+    try {
+      const queued = await counterLabApi.runInteractiveLeakage(
+        session.sessionId,
+        {
+          schemaVersion: "1",
+          splitStrategy,
+          entityField,
+          identityAblation,
+          testFraction,
+        },
+      );
+      await runner.waitForStandaloneJob({
+        sessionId: session.sessionId,
+        jobId: queued.runnerJob.jobId,
+      });
+      const verified = await counterLabApi.getInteractiveResult(
+        session.sessionId,
+        queued.runnerJob.jobId,
+      );
+      if (verified.result.concept !== "entity_leakage") {
+        throw new ApiClientError({
+          code: "INTERACTIVE_RESULT_CONCEPT_MISMATCH",
+          message: "The exploratory result did not match the leakage lab.",
+          status: 409,
+        });
+      }
+      setExploredResult(verified.result as LeakageVerifiedResultSet);
+      setSelectedRunId(verified.selectedRunId);
+      setConfigurationHash(verified.configurationHash);
+    } catch (caught) {
+      setError(
+        caught instanceof ApiClientError
+          ? caught.message
+          : "The protected runner could not verify this configuration.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!isLive) {
+    return (
+      <section className="interactive-lab panel interactive-lab-preview">
+        <div>
+          <p className="eyebrow aqua">Explore with your own notebook</p>
+          <h2>Change the test, then let the kernel recompute it.</h2>
+          <p>
+            Live notebook sessions can change the split boundary, identity
+            feature, entity field, and test size. Every combination is rerun by
+            fixed code and independently verified before a value appears.
+          </p>
+        </div>
+        <span className="verified-chip">
+          Sample result stays fixed for a reproducible lesson
+        </span>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      className="interactive-lab panel"
+      aria-labelledby="lab-controls-title"
+    >
+      <div className="interactive-lab-heading">
+        <div>
+          <p className="eyebrow aqua">Explore the causal boundary</p>
+          <h2 id="lab-controls-title">What changes the conclusion?</h2>
+          <p>
+            Choose one evaluation design. Values appear only after the fixed
+            kernel and external verifier agree.
+          </p>
+        </div>
+        <span className="verified-chip">
+          Authoritative result {authoritativeResult.resultHash.slice(0, 10)}…
+        </span>
+      </div>
+
+      <div className="lab-control-grid">
+        <fieldset className="segmented-control">
+          <legend>Who belongs in the test?</legend>
+          <label>
+            <input
+              type="radio"
+              name="interactive-split"
+              checked={splitStrategy === "random"}
+              onChange={() => setSplitStrategy("random")}
+            />
+            <span>Mixed rows</span>
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="interactive-split"
+              checked={splitStrategy === "group"}
+              onChange={() => setSplitStrategy("group")}
+            />
+            <span>Whole entities</span>
+          </label>
+        </fieldset>
+
+        <label className="lab-select-control">
+          <span>Entity boundary</span>
+          <select
+            value={entityField}
+            onChange={(event) => setEntityField(event.target.value)}
+          >
+            {entityCandidates.map((candidate) => (
+              <option key={candidate} value={candidate}>
+                {candidate}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="lab-toggle-control">
+          <input
+            type="checkbox"
+            checked={identityAblation}
+            onChange={(event) => setIdentityAblation(event.target.checked)}
+          />
+          <span>
+            <strong>Remove identity feature</strong>
+            <small>
+              Tests whether the model relies on who the row belongs to.
+            </small>
+          </span>
+        </label>
+
+        <label className="lab-range-control">
+          <span>
+            Test size <strong>{Math.round(testFraction * 100)}%</strong>
+          </span>
+          <input
+            type="range"
+            min="0.1"
+            max="0.5"
+            step="0.05"
+            value={testFraction}
+            onChange={(event) => setTestFraction(Number(event.target.value))}
+          />
+        </label>
+      </div>
+
+      <div className="interactive-run-summary">
+        <div>
+          <span>Changed</span>
+          <strong>
+            {splitStrategy === "group" ? "entity boundary" : "row boundary"}
+            {identityAblation ? " + identity removed" : " + identity kept"}
+          </strong>
+        </div>
+        <div>
+          <span>Controlled</span>
+          <strong>Fixture · model · preprocessing · seed</strong>
+        </div>
+        <button
+          className="button button-primary"
+          type="button"
+          disabled={busy || entityCandidates.length === 0}
+          onClick={() => void runConfiguration()}
+        >
+          {busy ? "Running fair test…" : "Run this configuration"}
+          {!busy && <Mark name="arrow" />}
+        </button>
+      </div>
+
+      {busy && (
+        <div className="interactive-progress" role="status" aria-live="polite">
+          <span className="status-dot configured" />
+          <div>
+            <strong>
+              {runner.events.at(-1) === undefined
+                ? "Protected runner accepted the configuration"
+                : compilerEventCopy(runner.events.at(-1)!).label}
+            </strong>
+            <span>
+              No chart is released until the result payload passes verification.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {error !== null && (
+        <div className="transfer-result rejected" role="alert">
+          <strong>No exploratory result was released.</strong>
+          <span>{error}</span>
+        </div>
+      )}
+
+      {selectedRun !== undefined && configurationHash !== null && (
+        <div className="interactive-result" aria-live="polite">
+          <div className="interactive-result-score">
+            <span>Verified accuracy</span>
+            <strong>{percent.format(selectedRun.metrics.accuracy)}</strong>
+            <small>
+              n={selectedRun.sampleSizes.test} · overlap{" "}
+              {selectedRun.entityOverlap.count} · seed {selectedRun.seed}
+            </small>
+          </div>
+          <dl>
+            <div>
+              <dt>Split</dt>
+              <dd>{selectedRun.splitStrategy}</dd>
+            </div>
+            <div>
+              <dt>Identity</dt>
+              <dd>
+                {selectedRun.dropFeatures.includes(entityField)
+                  ? "Removed"
+                  : "Included"}
+              </dd>
+            </div>
+            <div>
+              <dt>Result proof</dt>
+              <dd>{exploredResult?.resultHash.slice(0, 12)}…</dd>
+            </div>
+            <div>
+              <dt>Configuration</dt>
+              <dd>{configurationHash.slice(0, 12)}…</dd>
+            </div>
+          </dl>
+          <p>
+            This is a verified exploration. It does not replace the immutable
+            result used by your Prediction Contract or Proof Bundle.
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function LeakageRealityScreen({
   claim,
   prediction,
   result,
   session,
+  artifact,
   updateSession,
 }: {
   claim: string;
   prediction: PredictionChoice;
-  result: VerifiedResultSet;
+  result: LeakageVerifiedResultSet;
   session: SessionView | null;
+  artifact: ArtifactView | null;
   updateSession: (session: SessionView) => void;
 }) {
   const random = resultRun(result, "random_row_split");
@@ -2079,6 +2591,12 @@ function RealityScreen({
         </details>
       </section>
 
+      <InteractiveLeakageLab
+        session={session}
+        artifact={artifact}
+        authoritativeResult={result}
+      />
+
       <section className="prediction-observed">
         <div>
           <p className="eyebrow gold">Prediction</p>
@@ -2126,6 +2644,257 @@ function RealityScreen({
 
       {actionErrorNotice}
     </main>
+  );
+}
+
+function ImbalanceRealityScreen({
+  claim,
+  result,
+  session,
+  updateSession,
+}: {
+  claim: string;
+  result: ImbalanceVerifiedResultSet;
+  session: SessionView | null;
+  updateSession: (session: SessionView) => void;
+}) {
+  const majority = result.runs.find(
+    (run) => run.operation === "imbalance.majority_baseline",
+  );
+  const stratified = result.runs.find(
+    (run) => run.operation === "imbalance.stratified_holdout",
+  );
+  const threshold = result.runs.find(
+    (run) => run.operation === "imbalance.threshold_sweep",
+  );
+  const prevalence = result.runs.find(
+    (run) => run.operation === "imbalance.prevalence_sweep",
+  );
+  if (
+    majority === undefined ||
+    stratified === undefined ||
+    threshold === undefined ||
+    prevalence === undefined
+  ) {
+    throw new Error("Verified imbalance result is missing required fixed runs");
+  }
+  return (
+    <main className="workspace shell reality imbalance-reality">
+      <div className="screen-intro">
+        <p className="eyebrow aqua">Verified Lab · rare-event evaluation</p>
+        <h1>A high accuracy can still miss every rare event.</h1>
+        <p>
+          CounterLab compared the notebook claim with a computed majority
+          baseline, class-specific metrics, and two bounded operating scenarios.
+        </p>
+      </div>
+      <LearningGuide
+        step="Reality answered"
+        title="Ask what happens to the class you cannot afford to miss."
+        known={`The majority baseline is ${percent.format(majority.metrics.accuracy)} accurate with ${percent.format(majority.metrics.recall)} rare-class recall.`}
+        unknown="Which threshold and metric match the real cost of missed positives."
+        next="Compare recall, precision, and prevalence—not accuracy alone."
+        tone="gold"
+      />
+      <section
+        className="finding-banner"
+        aria-label="Verified imbalance finding"
+      >
+        <div>
+          <span className="contradicted">Headline contradicted</span>
+          <h2>
+            {percent.format(majority.metrics.accuracy)} accuracy, zero rare
+            cases caught.
+          </h2>
+          <p>{claim}</p>
+        </div>
+        <dl>
+          <div>
+            <dt>We changed</dt>
+            <dd>Metric, threshold, and prevalence scenario</dd>
+          </div>
+          <div>
+            <dt>We kept</dt>
+            <dd>Fixture, stratified holdout, model score, and seed</dd>
+          </div>
+          <div>
+            <dt>We checked</dt>
+            <dd>
+              Confusion totals, deterministic hash, and response to controls
+            </dd>
+          </div>
+        </dl>
+      </section>
+      <section
+        className="metric-grid imbalance-metric-grid"
+        aria-label="Rare-event metrics"
+      >
+        <article>
+          <p>Majority baseline accuracy</p>
+          <strong>{percent.format(majority.metrics.accuracy)}</strong>
+          <small>
+            recall {percent.format(majority.metrics.recall)} · n=
+            {majority.sampleSizes.test}
+          </small>
+        </article>
+        <article className="metric-decisive">
+          <p>Model rare-class recall</p>
+          <strong>{percent.format(stratified.metrics.recall)}</strong>
+          <small>
+            precision {percent.format(stratified.metrics.precision)} · threshold{" "}
+            {stratified.threshold}
+          </small>
+        </article>
+        <article>
+          <p>PR-AUC vs prevalence</p>
+          <strong>{stratified.metrics.prAuc.toFixed(3)}</strong>
+          <small>
+            base rate {percent.format(stratified.prevalence)} · ROC-AUC{" "}
+            {stratified.metrics.rocAuc.toFixed(3)}
+          </small>
+        </article>
+      </section>
+      <section className="results-panel panel">
+        <div className="panel-title">
+          <div>
+            <p className="eyebrow">Fixed-kernel comparison</p>
+            <h2>What each operating choice reveals</h2>
+          </div>
+          <span className="verified-chip">
+            <Mark name="check" /> Verified
+          </span>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <caption>
+              All values come from the canonical result payload.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Run</th>
+                <th scope="col">Threshold</th>
+                <th scope="col">Prevalence</th>
+                <th scope="col">Precision</th>
+                <th scope="col">Recall</th>
+                <th scope="col">F1</th>
+                <th scope="col">PR-AUC</th>
+                <th scope="col">Test n</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.runs.map((run) => (
+                <tr key={run.id}>
+                  <th scope="row">{run.id.replaceAll("_", " ")}</th>
+                  <td>{run.threshold.toFixed(2)}</td>
+                  <td>{percent.format(run.prevalence)}</td>
+                  <td>{percent.format(run.metrics.precision)}</td>
+                  <td>{percent.format(run.metrics.recall)}</td>
+                  <td>{percent.format(run.metrics.f1)}</td>
+                  <td>{run.metrics.prAuc.toFixed(3)}</td>
+                  <td>{run.sampleSizes.test}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div
+          className="imbalance-control-story"
+          aria-label="Verified control response"
+        >
+          <article>
+            <span>Threshold {stratified.threshold}</span>
+            <strong>{percent.format(stratified.metrics.recall)} recall</strong>
+          </article>
+          <Mark name="arrow" />
+          <article>
+            <span>Threshold {threshold.threshold}</span>
+            <strong>{percent.format(threshold.metrics.recall)} recall</strong>
+          </article>
+          <Mark name="arrow" />
+          <article>
+            <span>{prevalence.prevalenceScenario.replaceAll("_", " ")}</span>
+            <strong>
+              {percent.format(prevalence.metrics.precision)} precision
+            </strong>
+          </article>
+        </div>
+        <code>
+          result {result.resultHash.slice(0, 12)}… · seed {result.seed}
+        </code>
+      </section>
+      <section className="prediction-observed">
+        <div>
+          <p className="eyebrow gold">Claim</p>
+          <h2>{claim}</h2>
+        </div>
+        <div className="reasoning-arrow">
+          <Mark name="arrow" />
+        </div>
+        <div>
+          <p className="eyebrow aqua">Observed</p>
+          <h2>{majority.confusionMatrix.fn} rare positives missed</h2>
+          <p>{majority.confusionMatrix.tp} true positives</p>
+        </div>
+      </section>
+      <InteractiveImbalanceLab
+        isLive={session?.mode.kind === "live_notebook"}
+        sessionId={session?.sessionId ?? null}
+        authoritativeResultHash={result.resultHash}
+      />
+      {session !== null && session.mode.kind !== "verified_replay" && (
+        <>
+          <ImbalanceTransferLesson
+            sessionId={session.sessionId}
+            state={session.state}
+            {...(session.revision === undefined
+              ? {}
+              : { revision: session.revision })}
+            {...(session.transferResult === undefined
+              ? {}
+              : { transferOutcome: session.transferResult.outcome })}
+            updateSession={updateSession}
+          />
+          {session.transferResult?.outcome === "PASSED" && (
+            <ImbalancePatchReview
+              session={session}
+              updateSession={updateSession}
+            />
+          )}
+        </>
+      )}
+      {session?.revision !== undefined && (
+        <section className="revision panel">
+          <p className="eyebrow">Saved revision</p>
+          <h2>{session.revision}</h2>
+        </section>
+      )}
+    </main>
+  );
+}
+
+function RealityScreen(props: {
+  claim: string;
+  prediction: PredictionChoice;
+  result: VerifiedResultSet;
+  session: SessionView | null;
+  artifact: ArtifactView | null;
+  updateSession: (session: SessionView) => void;
+}) {
+  if (props.result.concept === "class_imbalance") {
+    return (
+      <ImbalanceRealityScreen
+        claim={props.claim}
+        result={props.result as ImbalanceVerifiedResultSet}
+        session={props.session}
+        updateSession={props.updateSession}
+      />
+    );
+  }
+  return (
+    <LeakageRealityScreen
+      {...props}
+      result={props.result as LeakageVerifiedResultSet}
+    />
   );
 }
 
@@ -2444,6 +3213,10 @@ export function App() {
   const [liveHealth, setLiveHealth] = useState<CapabilityHealth | null>(null);
   const [liveHealthError, setLiveHealthError] = useState<string | null>(null);
   const [checkingLiveHealth, setCheckingLiveHealth] = useState(false);
+  const [analysisPreview, setAnalysisPreview] =
+    useState<BeliefAnalysisPreview | null>(null);
+  const [sensitiveContentApproved, setSensitiveContentApproved] =
+    useState(false);
   const [runnerJob, setRunnerJob] = useState<RunnerJob | null>(null);
   const runner = useRunnerEvents();
   const replay = mode === "replay";
@@ -2624,7 +3397,7 @@ export function App() {
       if (restored.prediction !== undefined) {
         const savedChoice = restored.prediction.choice.toLowerCase();
         setPrediction(
-          savedChoice.includes("fall")
+          savedChoice.includes("fall") || savedChoice.includes("minority")
             ? "falls"
             : savedChoice.includes("unsure")
               ? "unsure"
@@ -2701,6 +3474,8 @@ export function App() {
     setMode(nextMode);
     setReviewStep(null);
     setError(null);
+    setAnalysisPreview(null);
+    setSensitiveContentApproved(false);
     window.localStorage.setItem(storageKeys.mode, nextMode);
     if (nextMode === "live") {
       setStage("live-setup");
@@ -2748,6 +3523,8 @@ export function App() {
     setArtifact(null);
     setSession(null);
     setError(null);
+    setAnalysisPreview(null);
+    setSensitiveContentApproved(false);
     setRunnerJob(null);
     runner.clear();
   };
@@ -2807,6 +3584,8 @@ export function App() {
       setConfirmed(false);
       setPrediction(null);
       setConfidence(72);
+      setAnalysisPreview(null);
+      setSensitiveContentApproved(false);
       window.localStorage.removeItem(storageKeys.sessionId);
       window.localStorage.setItem(storageKeys.mode, "live");
       setStage("claim");
@@ -2815,6 +3594,8 @@ export function App() {
 
   const uploadNotebook = (file: File) => {
     void withRequest(async () => {
+      setAnalysisPreview(null);
+      setSensitiveContentApproved(false);
       const uploaded = await counterLabApi.uploadArtifact(file);
       setArtifact(uploaded);
       setSession(null);
@@ -2834,12 +3615,38 @@ export function App() {
     if (session === null) return;
     window.localStorage.setItem(storageKeys.claim, claim);
     void withRequest(async () => {
+      if (mode === "live" && analysisPreview === null) {
+        const preview = await counterLabApi.previewBeliefAnalysis(
+          session.sessionId,
+          claim,
+        );
+        setAnalysisPreview(preview);
+        setSensitiveContentApproved(false);
+        return;
+      }
       const updated = await counterLabApi.proposeBeliefTest(session.sessionId, {
         learnerClaim: claim,
+        ...(analysisPreview === null
+          ? {}
+          : {
+              previewHash: analysisPreview.previewHash,
+              sensitiveContentApproved:
+                analysisPreview.requiresSensitiveApproval
+                  ? sensitiveContentApproved
+                  : false,
+            }),
       });
       setSession(updated);
+      setAnalysisPreview(null);
+      setSensitiveContentApproved(false);
       setStage("belief");
     });
+  };
+
+  const updateClaim = (nextClaim: string) => {
+    setClaim(nextClaim);
+    setAnalysisPreview(null);
+    setSensitiveContentApproved(false);
   };
 
   const confirmBeliefTest = () => {
@@ -2872,11 +3679,18 @@ export function App() {
 
   const commitPrediction = () => {
     if (session === null || prediction === null) return;
-    const labels: Record<PredictionChoice, string> = {
-      "stays-high": "Accuracy remains near 98%",
-      falls: "Accuracy falls materially",
-      unsure: "I am unsure",
-    };
+    const labels: Record<PredictionChoice, string> =
+      session.beliefTest?.concept === "class_imbalance"
+        ? {
+            "stays-high": "Accuracy still supports useful rare-case detection",
+            falls: "Minority metrics expose a serious evaluation problem",
+            unsure: "I am unsure",
+          }
+        : {
+            "stays-high": "Accuracy remains near 98%",
+            falls: "Accuracy falls materially",
+            unsure: "I am unsure",
+          };
     void withRequest(async () => {
       const committed = await counterLabApi.commitPrediction(
         session.sessionId,
@@ -2952,6 +3766,7 @@ export function App() {
           actions={{
             newAnalysis: () => chooseMode("live"),
             showEvidence: () => review("claim"),
+            navigateStage: (target) => review(target),
             ...(stage === "belief" && confirmed && prediction !== null
               ? { lockPrediction: commitPrediction }
               : {}),
@@ -2986,7 +3801,14 @@ export function App() {
             <ClaimScreen
               artifact={artifact}
               claim={claim}
-              setClaim={setClaim}
+              updateClaim={updateClaim}
+              analysisPreview={analysisPreview}
+              sensitiveContentApproved={sensitiveContentApproved}
+              setSensitiveContentApproved={setSensitiveContentApproved}
+              cancelPreview={() => {
+                setAnalysisPreview(null);
+                setSensitiveContentApproved(false);
+              }}
               continueToBelief={proposeBeliefTest}
               uploadNotebook={uploadNotebook}
               busy={busy}
@@ -3060,6 +3882,7 @@ export function App() {
               prediction={prediction ?? "stays-high"}
               result={session?.verifiedResult ?? sampleResult}
               session={session}
+              artifact={artifact}
               updateSession={setSession}
             />
           )}

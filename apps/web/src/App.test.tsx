@@ -72,6 +72,53 @@ const liveBeliefTest = {
   requiresLearnerConfirmation: true,
 };
 
+const imbalanceBeliefTest = {
+  ...liveBeliefTest,
+  id: "belief_live_imbalance_ui",
+  concept: "class_imbalance" as const,
+  learnerClaim:
+    "The 99 percent accuracy means this fraud model catches rare fraud.",
+  currentHypothesis: {
+    statement: "High accuracy means the classifier is useful.",
+    predictedOutcome: "Rare-class recall should be strong.",
+  },
+  competingHypothesis: {
+    statement: "Class rarity lets a majority predictor appear highly accurate.",
+    predictedOutcome:
+      "The majority baseline stays high while rare-class recall is poor.",
+  },
+  evidenceRefs: [
+    {
+      kind: "metric" as const,
+      cellIndex: 4,
+      outputIndex: 0,
+      hash: "e".repeat(64),
+      excerpt: "accuracy: 0.99",
+      relevance: "Overall accuracy does not reveal rare-class misses.",
+    },
+  ],
+};
+
+const livePreview = {
+  schemaVersion: "1" as const,
+  concept: "entity_leakage" as const,
+  conceptTitle: "Entity leakage",
+  previewHash: "d".repeat(64),
+  requiresSensitiveApproval: false,
+  sanitizedContent: {
+    learnerClaim:
+      "The notebook accuracy proves generalization to new customers.",
+    supportStatus: "SUPPORTED",
+    evidence: [
+      {
+        cellIndex: 3,
+        kind: "code",
+        excerpt: "train_test_split(X, y, random_state=42)",
+      },
+    ],
+  },
+};
+
 const operationByRun = {
   random_row_split: "leakage.random_row_split",
   customer_group_split: "leakage.group_holdout",
@@ -136,6 +183,7 @@ function installApi(
     liveGpt?: "configured" | "server-key-required";
     runner?: "configured" | "local-runner-required";
     rejectLiveBelief?: boolean;
+    beliefTest?: typeof liveBeliefTest | typeof imbalanceBeliefTest;
   } = {},
 ) {
   let activeMode:
@@ -181,6 +229,9 @@ function installApi(
           201,
         );
       }
+      if (path.endsWith("/belief-test/preview")) {
+        return response(livePreview);
+      }
       if (path.endsWith("/belief-test")) {
         if (activeMode.kind === "live_notebook" && options.rejectLiveBelief) {
           return errorResponse(
@@ -194,7 +245,7 @@ function installApi(
             artifactId: activeArtifactId,
             mode: activeMode,
             ...(activeMode.kind === "live_notebook"
-              ? { beliefTest: liveBeliefTest }
+              ? { beliefTest: options.beliefTest ?? liveBeliefTest }
               : {}),
           }),
         );
@@ -307,7 +358,7 @@ describe("CounterLab judged flow", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        /turns your idea into a prediction.*verified test.*lesson transfers.*repair/i,
+        /lock what you expect.*verified test.*apply the lesson once.*unlock a repair/i,
       ),
     ).toBeInTheDocument();
     expect(
@@ -401,10 +452,28 @@ describe("CounterLab judged flow", () => {
     );
 
     expect(
+      await screen.findByRole("heading", {
+        name: /review the evidence sent for analysis/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/train_test_split/)).toBeInTheDocument();
+    expect(
+      fetcher.mock.calls.some(([path]) =>
+        String(path).endsWith("/belief-test"),
+      ),
+    ).toBe(false);
+    await user.click(
+      screen.getByRole("button", { name: /send this evidence/i }),
+    );
+
+    expect(
       await screen.findByText(/live competing hypothesis/i),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/customer ID marks who must stay together/i),
+      screen.getByText(/the claim targets unseen customers/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/customer_id identifies the evaluation boundary/i),
     ).toBeInTheDocument();
     await user.click(
       screen.getByRole("button", { name: /these two ideas make sense/i }),
@@ -455,6 +524,9 @@ describe("CounterLab judged flow", () => {
     await user.click(
       screen.getByRole("button", { name: /compare two explanations/i }),
     );
+    await user.click(
+      await screen.findByRole("button", { name: /send this evidence/i }),
+    );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /live reasoning is unavailable/i,
@@ -466,6 +538,47 @@ describe("CounterLab judged flow", () => {
     ).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(
       /Responses endpoint|OpenAI|GPT-/i,
+    );
+  });
+
+  it("uses class-imbalance language when the analyst routes a rare-event notebook", async () => {
+    const user = userEvent.setup();
+    installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      beliefTest: imbalanceBeliefTest,
+    });
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /generate live/i }));
+    await user.click(
+      await screen.findByRole("button", { name: /continue with my notebook/i }),
+    );
+    await user.upload(
+      screen.getByLabelText(/use a different notebook/i),
+      new File(["{}"], "fraud_model.ipynb", {
+        type: "application/json",
+      }),
+    );
+    await user.type(
+      await screen.findByLabelText(/your claim/i),
+      imbalanceBeliefTest.learnerClaim,
+    );
+    await user.click(
+      screen.getByRole("button", { name: /compare two explanations/i }),
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /send this evidence/i }),
+    );
+
+    expect(
+      (await screen.findAllByText(/rarity hides failure/i)).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getByText(/majority baseline, confusion matrix/i),
+    ).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(
+      /hold out entire customers|customer memory/i,
     );
   });
 

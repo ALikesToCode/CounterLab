@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { PublicCompilerEvent, SessionView } from "../api";
-import { monitorRunnerJob } from "./useRunnerEvents";
+import {
+  monitorRunnerJob,
+  monitorStandaloneRunnerJob,
+} from "./useRunnerEvents";
 
 const started: PublicCompilerEvent = {
   schemaVersion: "1",
@@ -81,5 +84,95 @@ describe("monitorRunnerJob", () => {
         api,
       }),
     ).rejects.toMatchObject({ code: "RUNNER_TERMINATED", status: 409 });
+  });
+
+  it("surfaces the persisted control-plane failure for a timed-out session job", async () => {
+    const api = {
+      listRunnerEvents: vi.fn().mockResolvedValue({
+        events: [],
+        nextCursor: 0,
+        terminal: true,
+        jobStatus: "TIMED_OUT" as const,
+        jobError: {
+          code: "RUNNER_JOB_TIMED_OUT",
+          message: "Runner job exceeded its deadline",
+          retryable: true,
+        },
+      }),
+      getSession: vi.fn().mockResolvedValue(liveSession),
+    };
+
+    await expect(
+      monitorRunnerJob({
+        sessionId: liveSession.sessionId,
+        jobId: "job_1",
+        terminalStates: ["LAB_VERIFIED"],
+        api,
+      }),
+    ).rejects.toMatchObject({
+      code: "RUNNER_JOB_TIMED_OUT",
+      status: 504,
+    });
+  });
+});
+
+describe("monitorStandaloneRunnerJob", () => {
+  it("surfaces a typed terminal job error even when no final public event was appended", async () => {
+    const api = {
+      listRunnerEvents: vi.fn().mockResolvedValue({
+        events: [],
+        nextCursor: 0,
+        terminal: true,
+        jobStatus: "TIMED_OUT" as const,
+        jobError: {
+          code: "RUNNER_JOB_TIMED_OUT",
+          message: "Runner job exceeded its deadline",
+          retryable: true,
+        },
+      }),
+    };
+
+    await expect(
+      monitorStandaloneRunnerJob({
+        sessionId: liveSession.sessionId,
+        jobId: "job_interactive_1",
+        api,
+      }),
+    ).rejects.toMatchObject({
+      code: "RUNNER_JOB_TIMED_OUT",
+      message: "Runner job exceeded its deadline",
+      status: 504,
+    });
+  });
+
+  it("finishes from the job event terminal flag without waiting for a session transition", async () => {
+    const api = {
+      listRunnerEvents: vi
+        .fn()
+        .mockResolvedValueOnce({
+          events: [started],
+          nextCursor: 1,
+          terminal: false,
+        })
+        .mockResolvedValueOnce({ events: [], nextCursor: 1, terminal: true }),
+    };
+    const seen: PublicCompilerEvent[] = [];
+
+    await expect(
+      monitorStandaloneRunnerJob({
+        sessionId: liveSession.sessionId,
+        jobId: "job_interactive_1",
+        pollIntervalMs: 0,
+        api,
+        onEvents: (events) => seen.push(...events),
+      }),
+    ).resolves.toBe(1);
+    expect(seen).toEqual([started]);
+    expect(api.listRunnerEvents).toHaveBeenNthCalledWith(
+      2,
+      liveSession.sessionId,
+      "job_interactive_1",
+      1,
+    );
   });
 });

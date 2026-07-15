@@ -342,6 +342,35 @@ describe("CounterLabApiClient", () => {
         invoke: () => client.runLab(sessionId),
       },
       {
+        expectedPath: `/api/sessions/${encoded}/lab/interactive`,
+        expectedMethod: "POST",
+        invoke: () =>
+          client.runInteractiveLeakage(sessionId, {
+            schemaVersion: "1",
+            splitStrategy: "group",
+            entityField: "account_key",
+            identityAblation: true,
+            testFraction: 0.25,
+          }),
+      },
+      {
+        expectedPath: `/api/sessions/${encoded}/lab/interactive`,
+        expectedMethod: "POST",
+        invoke: () =>
+          client.runInteractiveImbalance(sessionId, {
+            schemaVersion: "1",
+            concept: "class_imbalance",
+            threshold: 0.25,
+            prevalenceScenario: "rarer",
+            metricFocus: "recall",
+          }),
+      },
+      {
+        expectedPath: `/api/sessions/${encoded}/jobs/job%2Fone/result`,
+        expectedMethod: "GET",
+        invoke: () => client.getInteractiveResult(sessionId, "job/one"),
+      },
+      {
         expectedPath: `/api/sessions/${encoded}/revision`,
         expectedMethod: "POST",
         invoke: () =>
@@ -409,6 +438,42 @@ describe("CounterLabApiClient", () => {
     await expect(
       client.listRunnerEvents("session_1", "job_1", -1),
     ).rejects.toMatchObject({ code: "INVALID_EVENT_CURSOR", status: 400 });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unbounded interactive configuration before making a request", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const client = new CounterLabApiClient({ fetch: fetcher });
+
+    let caught: unknown;
+    try {
+      client.runInteractiveLeakage("session_1", {
+        schemaVersion: "1",
+        splitStrategy: "random",
+        entityField: "account_key",
+        identityAblation: false,
+        testFraction: 0.8,
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toMatchObject({ code: "INVALID_REQUEST", status: 0 });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid imbalance metric focus before making a request", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const client = new CounterLabApiClient({ fetch: fetcher });
+
+    expect(() =>
+      client.runInteractiveImbalance("session_1", {
+        schemaVersion: "1",
+        concept: "class_imbalance",
+        threshold: 0.25,
+        prevalenceScenario: "rarer",
+        metricFocus: "accuracy" as "recall",
+      }),
+    ).toThrow();
     expect(fetcher).not.toHaveBeenCalled();
   });
 

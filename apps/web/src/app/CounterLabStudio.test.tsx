@@ -19,6 +19,7 @@ describe("CounterLabStudio", () => {
         actions={{
           newAnalysis: vi.fn(),
           showEvidence: vi.fn(),
+          navigateStage: vi.fn(),
           startOver: vi.fn(),
           openRecent: vi.fn(),
         }}
@@ -47,6 +48,7 @@ describe("CounterLabStudio", () => {
         actions={{
           newAnalysis: analyze,
           showEvidence: vi.fn(),
+          navigateStage: vi.fn(),
           startOver: vi.fn(),
           openRecent: vi.fn(),
         }}
@@ -64,5 +66,30 @@ describe("CounterLabStudio", () => {
     expect(
       screen.getByRole("button", { name: /new analysis/i }),
     ).toBeInTheDocument();
+  });
+
+  it("lets a learner revisit completed stages without resetting the session", () => {
+    const navigateStage = vi.fn();
+    render(
+      <CounterLabStudio
+        context={{ ...context, stage: "reality" }}
+        actions={{
+          newAnalysis: vi.fn(),
+          showEvidence: vi.fn(),
+          navigateStage,
+          startOver: vi.fn(),
+          openRecent: vi.fn(),
+        }}
+      >
+        <main>Reality</main>
+      </CounterLabStudio>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /belief test/i }));
+    expect(navigateStage).toHaveBeenCalledWith("belief");
+    expect(screen.getByRole("button", { name: /verified lab/i })).toBeEnabled();
+    expect(screen.getByText(/transfer & patch/i).closest("li")).toHaveClass(
+      "current",
+    );
   });
 });

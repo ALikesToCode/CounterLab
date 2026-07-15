@@ -2,12 +2,16 @@ import {
   ArtifactManifestSchema,
   BeliefTestSchema,
   EvidenceEventSchema,
+  InteractiveImbalanceRunRequestSchema,
+  InteractiveLeakageRunRequestSchema,
   PatchResultSchema,
   PredictionContractSchema,
   ProofBundleSchema,
   PublicCompilerEventSchema,
   ReasoningDiffSchema,
+  RunnerJobErrorSchema,
   RunnerJobSchema,
+  RunnerJobStatusSchema,
   SessionModeSchema,
   SessionStateSchema,
   TransferResultSchema,
@@ -16,6 +20,10 @@ import {
   type ArtifactManifest,
   type BeliefTest,
   type EvidenceEvent,
+  type InteractiveImbalanceRunRequest,
+  type InteractiveLeakageRunRequest,
+  type LeakageVerifiedResultSet,
+  type ImbalanceVerifiedResultSet,
   type PatchResult,
   type PredictionContract,
   type ProofBundle,
@@ -29,6 +37,9 @@ import {
 import { z } from "zod";
 
 const NonEmptyString = z.string().trim().min(1);
+const Sha256Digest = z
+  .string()
+  .regex(/^[a-f0-9]{64}$/, "expected a lowercase SHA-256 digest");
 
 export const CapabilityHealthSchema = z
   .object({
@@ -103,11 +114,37 @@ const RunnerActionResponseSchema = z
   .strict();
 export type RunnerActionResponse = z.infer<typeof RunnerActionResponseSchema>;
 
+const InteractiveRunResponseSchema = z
+  .object({
+    ...sessionViewShape,
+    runnerJob: RunnerJobSchema,
+    selectedRunId: NonEmptyString,
+    configurationHash: Sha256Digest,
+  })
+  .strict();
+export type InteractiveRunResponse = z.infer<
+  typeof InteractiveRunResponseSchema
+>;
+
+const InteractiveResultResponseSchema = z
+  .object({
+    result: VerifiedResultSetSchema,
+    selectedRunId: NonEmptyString,
+    configurationHash: Sha256Digest,
+    verification: z.object({ status: z.literal("VERIFIED") }).passthrough(),
+  })
+  .strict();
+export type InteractiveResultResponse = z.infer<
+  typeof InteractiveResultResponseSchema
+>;
+
 const RunnerEventsResponseSchema = z
   .object({
     events: z.array(PublicCompilerEventSchema),
     nextCursor: z.number().int().nonnegative(),
     terminal: z.boolean(),
+    jobStatus: RunnerJobStatusSchema.optional(),
+    jobError: RunnerJobErrorSchema.optional(),
   })
   .strict();
 export type RunnerEventsResponse = z.infer<typeof RunnerEventsResponseSchema>;
@@ -169,7 +206,22 @@ const CreateReplaySessionInputSchema = z
   .strict();
 
 const BeliefProposalInputSchema = z
-  .object({ learnerClaim: z.string().trim().min(12).max(2_000) })
+  .object({
+    learnerClaim: z.string().trim().min(12).max(2_000),
+    previewHash: Sha256Digest.optional(),
+    sensitiveContentApproved: z.boolean().optional(),
+  })
+  .strict();
+
+const BeliefAnalysisPreviewSchema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    concept: z.enum(["entity_leakage", "class_imbalance"]),
+    conceptTitle: NonEmptyString,
+    previewHash: Sha256Digest,
+    requiresSensitiveApproval: z.boolean(),
+    sanitizedContent: z.record(z.string(), z.unknown()),
+  })
   .strict();
 
 const BeliefResponseInputSchema = z.discriminatedUnion("action", [
@@ -231,6 +283,7 @@ export type CreateReplaySessionInput = z.input<
   typeof CreateReplaySessionInputSchema
 >;
 export type BeliefProposalInput = z.input<typeof BeliefProposalInputSchema>;
+export type BeliefAnalysisPreview = z.infer<typeof BeliefAnalysisPreviewSchema>;
 export type BeliefResponseInput = z.input<typeof BeliefResponseInputSchema>;
 export type PredictionInput = z.input<typeof PredictionInputSchema>;
 export type RevisionInput = z.input<typeof RevisionInputSchema>;
@@ -380,6 +433,27 @@ export class CounterLabApiClient {
     );
   }
 
+  previewBeliefAnalysis(
+    sessionId: string,
+    learnerClaim: string,
+  ): Promise<BeliefAnalysisPreview> {
+    return this.request(
+      `/api/sessions/${encodedId(sessionId)}/belief-test/preview`,
+      BeliefAnalysisPreviewSchema,
+      {
+        method: "POST",
+        body: JSON.stringify(
+          validatedInput(
+            BeliefProposalInputSchema.pick({ learnerClaim: true }),
+            {
+              learnerClaim,
+            },
+          ),
+        ),
+      },
+    );
+  }
+
   respondToBeliefTest(
     sessionId: string,
     input: BeliefResponseInput,
@@ -443,6 +517,48 @@ export class CounterLabApiClient {
     return this.postWithoutInput(
       `/api/sessions/${encodedId(sessionId)}/lab/run`,
       RunnerActionResponseSchema,
+    );
+  }
+
+  runInteractiveLeakage(
+    sessionId: string,
+    input: InteractiveLeakageRunRequest,
+  ): Promise<InteractiveRunResponse> {
+    return this.request(
+      `/api/sessions/${encodedId(sessionId)}/lab/interactive`,
+      InteractiveRunResponseSchema,
+      {
+        method: "POST",
+        body: JSON.stringify(
+          validatedInput(InteractiveLeakageRunRequestSchema, input),
+        ),
+      },
+    );
+  }
+
+  runInteractiveImbalance(
+    sessionId: string,
+    input: InteractiveImbalanceRunRequest,
+  ): Promise<InteractiveRunResponse> {
+    return this.request(
+      `/api/sessions/${encodedId(sessionId)}/lab/interactive`,
+      InteractiveRunResponseSchema,
+      {
+        method: "POST",
+        body: JSON.stringify(
+          validatedInput(InteractiveImbalanceRunRequestSchema, input),
+        ),
+      },
+    );
+  }
+
+  getInteractiveResult(
+    sessionId: string,
+    jobId: string,
+  ): Promise<InteractiveResultResponse> {
+    return this.request(
+      `/api/sessions/${encodedId(sessionId)}/jobs/${encodedId(jobId)}/result`,
+      InteractiveResultResponseSchema,
     );
   }
 
@@ -616,4 +732,6 @@ export type {
   SessionState,
   TransferResult,
   VerifiedResultSet,
+  LeakageVerifiedResultSet,
+  ImbalanceVerifiedResultSet,
 };

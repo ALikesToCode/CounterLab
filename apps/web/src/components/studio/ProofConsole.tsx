@@ -1,4 +1,5 @@
 import type { PublicCompilerEvent } from "../../api";
+import { GeneratedProofView } from "./GeneratedProofView";
 import type { StudioContext } from "./types";
 
 export type ProofTab =
@@ -132,15 +133,20 @@ export function ProofConsole({
                 <span>It will appear here when the session produces it.</span>
               </div>
             ) : (
-              <ol className="console-events">
-                {filteredEvents.map((event) => (
-                  <li key={event.eventId}>
-                    <time>{new Date(event.at).toLocaleTimeString()}</time>
-                    <span>{event.kind}</span>
-                    <p>{eventSummary(event)}</p>
-                  </li>
-                ))}
-              </ol>
+              <>
+                {(activeTab === "Plan" || activeTab === "Verifier") && (
+                  <GeneratedProofView events={filteredEvents} />
+                )}
+                <ol className="console-events">
+                  {filteredEvents.map((event) => (
+                    <li key={event.eventId}>
+                      <time>{new Date(event.at).toLocaleTimeString()}</time>
+                      <span>{event.kind}</span>
+                      <p>{eventSummary(event)}</p>
+                    </li>
+                  ))}
+                </ol>
+              </>
             )}
           </div>
         </div>

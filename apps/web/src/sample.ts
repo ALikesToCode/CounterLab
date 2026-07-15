@@ -1,14 +1,18 @@
 import rawResult from "../../../fixtures/public/leakage_verified_result.json";
 import {
   VerifiedResultSetSchema,
-  type VerifiedResultSet,
+  type LeakageVerifiedResultSet,
 } from "@counterlab/contracts";
 
-export type VerifiedRun = VerifiedResultSet["runs"][number];
+export type VerifiedRun = LeakageVerifiedResultSet["runs"][number];
 
-export const sampleResult = VerifiedResultSetSchema.parse(rawResult);
+const parsedSampleResult = VerifiedResultSetSchema.parse(rawResult);
+if (parsedSampleResult.concept !== "entity_leakage") {
+  throw new Error("The bundled lesson must contain entity-leakage evidence");
+}
+export const sampleResult = parsedSampleResult as LeakageVerifiedResultSet;
 
-export function getRun(id: string): VerifiedRun {
+export function getRun(id: string): LeakageVerifiedResultSet["runs"][number] {
   const run = sampleResult.runs.find((candidate) => candidate.id === id);
   if (run === undefined) {
     throw new Error(`Verified fixture is missing run ${id}`);

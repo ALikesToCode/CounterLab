@@ -1,0 +1,20 @@
+# Product constitutions and build-session journals are human-maintained.
+AGENTS.md
+CounterLab_Codex_Master_Build_Prompt.md
+findings.md
+progress.md
+task_plan.md
+
+# Replay and verified-result bytes participate in integrity checks.
+replays/**
+fixtures/public/*_verified_result.json
+
+# Generated JSON Schemas are emitted by the contract generator.
+concept-packs/*/public/*.schema.json
+packages/contracts/schemas/**
+services/kernel/src/counterlab_kernel/schemas/**
+
+# Benchmark and achieved-metric artifacts are emitted by evaluation scripts.
+docs/ACHIEVED_METRICS.json
+docs/HELD_OUT_MATRIX.md
+docs/HELD_OUT_RESULTS.json

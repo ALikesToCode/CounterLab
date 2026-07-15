@@ -19,6 +19,7 @@ export function ProjectSidebar({
   recentProjects,
   onNewAnalysis,
   onShowEvidence,
+  onNavigateStage,
   onOpenRecent,
   onOpenCommands,
 }: {
@@ -26,6 +27,7 @@ export function ProjectSidebar({
   recentProjects: readonly RecentProject[];
   onNewAnalysis: () => void;
   onShowEvidence: () => void;
+  onNavigateStage: (stage: (typeof stages)[number][0]) => void;
   onOpenRecent: (project: RecentProject) => void;
   onOpenCommands: () => void;
 }) {
@@ -83,7 +85,17 @@ export function ProjectSidebar({
               key={key}
             >
               <span>{index < currentPosition ? "✓" : index + 1}</span>
-              <strong>{label}</strong>
+              {index < currentPosition ? (
+                <button
+                  type="button"
+                  aria-label={`Review ${label}`}
+                  onClick={() => onNavigateStage(key)}
+                >
+                  {label}
+                </button>
+              ) : (
+                <strong>{label}</strong>
+              )}
             </li>
           ))}
         </ol>
