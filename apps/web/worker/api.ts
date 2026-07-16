@@ -13,6 +13,7 @@ import {
   RunnerOutputPathSchema,
   RunnerPatchCompileBundleSchema,
   RunnerRequestIdentityV1Schema,
+  type BeliefSpecV2,
   type BeliefTest,
   type ExperimentPlanV2,
   type PatchResult,
@@ -54,6 +55,7 @@ import {
   SessionInputError,
   SessionNotFoundError,
   SessionService,
+  getSessionBeliefAuthority,
   hashCanonical,
   type RunnerJobRepository,
   type SessionRepository,
@@ -171,12 +173,18 @@ const BeliefRequestSchema = z
     sensitiveContentApproved: z.boolean().optional(),
   })
   .strict();
-const ConfirmationSchema = z.discriminatedUnion("action", [
+const ConfirmationSchema = z.union([
   z.object({ action: z.literal("confirm") }).strict(),
   z
     .object({
       action: z.literal("edit"),
       beliefTest: JsonObjectSchema,
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal("edit"),
+      beliefSpec: JsonObjectSchema,
     })
     .strict(),
   z
@@ -689,6 +697,9 @@ function statePayload(
     ...(session.beliefTest === undefined
       ? {}
       : { beliefTest: session.beliefTest }),
+    ...(session.beliefSpec === undefined
+      ? {}
+      : { beliefSpec: session.beliefSpec }),
     ...(session.prediction === undefined
       ? {}
       : { prediction: session.prediction }),
@@ -1073,41 +1084,45 @@ export function createApi(options: ApiOptions = {}) {
     }
     if (routing.kind === "insufficient_evidence") {
       const concept = routing.candidates[0] ?? "entity_leakage";
-      const insufficient: BeliefTest = {
-        schemaVersion: "1",
+      const insufficient: BeliefSpecV2 = {
+        schemaVersion: "2",
         id: `belief_insufficient_${session.id}`,
         concept,
-        learnerClaim,
-        currentHypothesis: {
-          statement: learnerClaim,
-          predictedOutcome:
-            "The available notebook evidence does not resolve this prediction.",
-        },
-        competingHypothesis: {
-          statement:
-            "A different evaluation boundary may change the reported result.",
-          predictedOutcome:
-            "A decisive result requires visible split and metric evidence.",
-        },
+        claim: learnerClaim,
         evidenceRefs: [],
+        hypotheses: [
+          {
+            id: "current",
+            statement: learnerClaim,
+            conditions: [
+              "The notebook must expose a supported evaluation design.",
+            ],
+            nonClaims: [
+              "CounterLab has not established whether this claim is true or false.",
+            ],
+            evidence: [],
+            supportedCandidateExperimentIds: [],
+          },
+          {
+            id: "competing",
+            statement:
+              "A different evaluation boundary may change the reported result.",
+            conditions: [
+              "The notebook must expose enough split and metric evidence to test this alternative.",
+            ],
+            nonClaims: [
+              "Missing evidence is not evidence for this competing explanation.",
+            ],
+            evidence: [],
+            supportedCandidateExperimentIds: [],
+          },
+        ],
         alternatives: [],
-        decisiveIntervention: {
-          id: "collect-supported-evidence",
-          description:
-            "Provide a supported evaluation cell and safe displayed metric before running a counterexperiment.",
-          controlledVariables: [],
-          changedVariables: ["available notebook evidence"],
-          discriminatesBecause:
-            "Without the evaluation design and its output, the competing explanations cannot be distinguished.",
-        },
-        uncertainty: {
-          confidence: 0,
-          limitations: routing.limitations,
-          insufficientEvidence: true,
-        },
-        requiresLearnerConfirmation: true,
+        uncertainty: 1,
+        supportState: "INSUFFICIENT_EVIDENCE",
+        learnerDecision: "UNDECIDED",
       };
-      const proposed = await service.proposeBeliefTest(
+      const proposed = await service.proposeBeliefSpecV2(
         session.id,
         insufficient,
         { actor: "system", modelId: "concept-router-v1" },
@@ -1144,18 +1159,33 @@ export function createApi(options: ApiOptions = {}) {
           409,
         );
       }
+
+      const analyst = createLiveBeliefAnalystFromEnv({
+        OPENAI_API_KEY: context.env?.OPENAI_API_KEY,
+        OPENAI_BASE_URL: context.env?.OPENAI_BASE_URL,
+        OPENAI_MODEL: context.env?.OPENAI_MODEL,
+        OPENAI_REASONING_EFFORT: context.env?.OPENAI_REASONING_EFFORT,
+        OPENAI_TIMEOUT_MS: context.env?.OPENAI_TIMEOUT_MS,
+      });
+      const result = await analyst.proposeBeliefSpec({
+        sessionId: session.id,
+        learnerClaim,
+        manifest: artifact.manifest,
+        concept: routing.concept,
+      });
+      const proposed = await service.proposeBeliefSpecV2(
+        session.id,
+        result.beliefSpec,
+        {
+          actor: "gpt-5.6",
+          modelId: result.provenance.modelId,
+          promptHash: result.provenance.promptHash,
+        },
+      );
+      return context.json(jsonSuccess(statePayload(proposed)));
     }
 
-    const analyst =
-      session.mode.kind === "live_notebook"
-        ? createLiveBeliefAnalystFromEnv({
-            OPENAI_API_KEY: context.env?.OPENAI_API_KEY,
-            OPENAI_BASE_URL: context.env?.OPENAI_BASE_URL,
-            OPENAI_MODEL: context.env?.OPENAI_MODEL,
-            OPENAI_REASONING_EFFORT: context.env?.OPENAI_REASONING_EFFORT,
-            OPENAI_TIMEOUT_MS: context.env?.OPENAI_TIMEOUT_MS,
-          })
-        : new ApprovedSampleBeliefAnalyst();
+    const analyst = new ApprovedSampleBeliefAnalyst();
     const result = await analyst.propose({
       sessionId: session.id,
       learnerClaim,
@@ -1163,22 +1193,16 @@ export function createApi(options: ApiOptions = {}) {
       concept: routing.concept,
     });
     const beliefTest: BeliefTest = result.beliefTest;
-    const liveProvenance =
-      result.provenance.mode === "live"
-        ? {
-            actor: "gpt-5.6" as const,
-            modelId: result.provenance.modelId,
-            promptHash: result.provenance.promptHash,
-          }
-        : {
-            actor: "system" as const,
-            modelId: result.provenance.approvalId,
-          };
-    const proposed = await service.proposeBeliefTest(
-      session.id,
-      beliefTest,
-      liveProvenance,
-    );
+    if (result.provenance.mode !== "approved-sample") {
+      throw new BeliefAnalystError(
+        "INVALID_RESPONSE",
+        "The sample lesson received non-sample belief authority",
+      );
+    }
+    const proposed = await service.proposeBeliefTest(session.id, beliefTest, {
+      actor: "system",
+      modelId: result.provenance.approvalId,
+    });
     return context.json(jsonSuccess(statePayload(proposed)));
   });
 
@@ -1186,13 +1210,33 @@ export function createApi(options: ApiOptions = {}) {
     const input = ConfirmationSchema.parse(await readJson(context));
     const service = sessionService(context, options);
     const sessionId = context.req.param("sessionId");
-    requireMutableSession(await service.getSession(sessionId));
+    const current = await service.getSession(sessionId);
+    requireMutableSession(current);
     if (input.action === "confirm") {
       return context.json(
         jsonSuccess(statePayload(await service.confirmBeliefTest(sessionId))),
       );
     }
     if (input.action === "edit") {
+      if (current.beliefSpec !== undefined) {
+        if (!("beliefSpec" in input)) {
+          throw new SessionInputError(
+            "A live Belief Spec edit cannot submit a v1 Belief Test",
+          );
+        }
+        return context.json(
+          jsonSuccess(
+            statePayload(
+              await service.editBeliefSpecV2(sessionId, input.beliefSpec),
+            ),
+          ),
+        );
+      }
+      if (!("beliefTest" in input)) {
+        throw new SessionInputError(
+          "A sample Belief Test edit cannot submit a v2 Belief Spec",
+        );
+      }
       return context.json(
         jsonSuccess(
           statePayload(
@@ -1223,15 +1267,18 @@ export function createApi(options: ApiOptions = {}) {
     const sessionId = context.req.param("sessionId");
     const current = await service.getSession(sessionId);
     requireMutableSession(current);
-    if (current.beliefTest === undefined) {
-      throw new SessionInputError("A confirmed Belief Test is required");
+    const beliefAuthority = getSessionBeliefAuthority(current);
+    if (beliefAuthority === undefined) {
+      throw new SessionInputError(
+        "A confirmed Belief Test or Belief Spec is required",
+      );
     }
     const committedAt = (options.now?.() ?? new Date()).toISOString();
     const base = {
       schemaVersion: "1" as const,
       id: `prediction_${crypto.randomUUID()}`,
       sessionId,
-      beliefTestId: current.beliefTest.id,
+      beliefTestId: beliefAuthority.id,
       choice: input.choice,
       ...(input.numericRange === undefined
         ? {}

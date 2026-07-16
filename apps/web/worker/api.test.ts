@@ -23,6 +23,7 @@ import type {
 } from "@counterlab/session-core";
 import { createEvidenceEvent, hashCanonical } from "@counterlab/session-core";
 import { validateProofBundle } from "@counterlab/proof-bundle";
+import { schemaSummaryHash } from "@counterlab/belief-analyst";
 
 import sourceNotebookText from "../../../fixtures/notebooks/customer_churn_leakage.ipynb?raw";
 import patchedNotebookText from "../../../replays/leakage-01/patch/customer_churn_leakage.patched.ipynb?raw";
@@ -524,6 +525,81 @@ async function liveBeliefInput(
       ? { sensitiveContentApproved: true }
       : {}),
   };
+}
+
+function liveBeliefSpecWire(artifact: ArtifactManifest) {
+  const codeCell = artifact.cells.find((cell) =>
+    cell.symbols.includes("train_test_split"),
+  );
+  if (codeCell === undefined) throw new Error("split evidence is missing");
+  const codeEvidence = {
+    cellIndex: codeCell.index,
+    outputIndex: null,
+    kind: "code" as const,
+    hash: codeCell.sourceSha256,
+    excerpt: "train_test_split",
+    relevance: "The evaluation splits rows rather than complete entities.",
+  };
+  const schemaEvidence = {
+    cellIndex: null,
+    outputIndex: null,
+    kind: "schema" as const,
+    hash: schemaSummaryHash(artifact.schemaSummary),
+    excerpt: "customer_id",
+    relevance: "The schema exposes the deployment entity boundary.",
+  };
+  return {
+    schemaVersion: "2" as const,
+    evidenceRefs: [codeEvidence, schemaEvidence],
+    hypotheses: [
+      {
+        id: "current" as const,
+        statement: "The model generalizes to unseen customers.",
+        conditions: ["Random rows represent future customer deployment."],
+        nonClaims: ["This does not establish performance for every cohort."],
+        evidence: [codeEvidence],
+        supportedCandidateExperimentIds: ["group-holdout"],
+      },
+      {
+        id: "competing" as const,
+        statement: "Repeated customer identity inflates row-split accuracy.",
+        conditions: ["Customer observations recur across the split."],
+        nonClaims: ["This does not prove all non-identity signal is absent."],
+        evidence: [schemaEvidence],
+        supportedCandidateExperimentIds: ["group-holdout-plus-ablation"],
+      },
+    ],
+    alternatives: [],
+    uncertainty: 0.14,
+    supportState: "SUPPORTED" as const,
+  };
+}
+
+function structuredResponsesResult(output: unknown): Response {
+  return new Response(
+    JSON.stringify({
+      id: "resp_worker_v2",
+      object: "response",
+      status: "completed",
+      model: "configured-model",
+      output: [
+        {
+          id: "message_v2",
+          type: "message",
+          role: "assistant",
+          status: "completed",
+          content: [
+            {
+              type: "output_text",
+              text: JSON.stringify(output),
+              annotations: [],
+            },
+          ],
+        },
+      ],
+    }),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
 }
 
 function imbalanceArtifactManifest(): ArtifactManifest {
@@ -3097,7 +3173,8 @@ describe("Cloudflare Worker API", () => {
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    const body = (await response.json()) as { data: Record<string, unknown> };
+    expect(body).toMatchObject({
       ok: true,
       data: {
         sessionId,
@@ -3105,6 +3182,8 @@ describe("Cloudflare Worker API", () => {
         state: "BELIEF_TEST_PROPOSED",
       },
     });
+    expect(body.data).toHaveProperty("beliefTest");
+    expect(body.data).not.toHaveProperty("beliefSpec");
     const events = await sessionRepository.listEvents(sessionId);
     expect(events).toHaveLength(2);
     expect(events[1]).toMatchObject({
@@ -3147,7 +3226,91 @@ describe("Cloudflare Worker API", () => {
     expect(await sessionRepository.listEvents(sessionId)).toHaveLength(1);
   });
 
-  it("returns an honest insufficient-evidence Belief Test before any live model call", async () => {
+  it("persists native v2 belief authority for a successful live notebook analysis", async () => {
+    const { app, sessionId, sessionRepository, artifactStore } =
+      await sessionHarness("live");
+    const artifact = await artifactStore.find("artifact_uploaded_not_sample");
+    if (artifact === undefined) throw new Error("live artifact is missing");
+    const learnerClaim =
+      "The notebook accuracy proves generalization to new customers.";
+    const beliefInput = await liveBeliefInput(app, sessionId, learnerClaim);
+    const upstream = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        structuredResponsesResult(liveBeliefSpecWire(artifact.manifest)),
+      );
+
+    try {
+      const response = await app.request(
+        `/api/sessions/${sessionId}/belief-test`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(beliefInput),
+        },
+        {
+          OPENAI_API_KEY: "server-only-key",
+          OPENAI_MODEL: "configured-model",
+        } as unknown as Env & Record<string, string>,
+      );
+
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { data: Record<string, unknown> };
+      expect(body.data).toMatchObject({
+        state: "BELIEF_TEST_PROPOSED",
+        beliefSpec: {
+          schemaVersion: "2",
+          concept: "entity_leakage",
+          claim: learnerClaim,
+          learnerDecision: "UNDECIDED",
+        },
+      });
+      expect(body.data).not.toHaveProperty("beliefTest");
+      const beliefSpecId = (body.data.beliefSpec as { id: string }).id;
+      const confirmed = await postJson(
+        app,
+        `/api/sessions/${sessionId}/belief-test/confirm`,
+        { action: "confirm" },
+      );
+      await expect(confirmed.json()).resolves.toMatchObject({
+        data: {
+          state: "BELIEF_TEST_CONFIRMED",
+          beliefSpec: { learnerDecision: "CONFIRMED" },
+        },
+      });
+      const prediction = await postJson(
+        app,
+        `/api/sessions/${sessionId}/prediction`,
+        { choice: "Group holdout remains high", confidence: 73 },
+      );
+      await expect(prediction.json()).resolves.toMatchObject({
+        data: {
+          state: "PREDICTION_COMMITTED",
+          prediction: { beliefTestId: beliefSpecId },
+        },
+      });
+      const refreshed = await app.request(`/api/sessions/${sessionId}`);
+      await expect(refreshed.json()).resolves.toMatchObject({
+        data: {
+          state: "PREDICTION_COMMITTED",
+          beliefSpec: { schemaVersion: "2", learnerDecision: "CONFIRMED" },
+          prediction: { beliefTestId: beliefSpecId },
+        },
+      });
+      expect(await sessionRepository.listEvents(sessionId)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "belief_spec.proposed",
+            modelId: "configured-model",
+          }),
+        ]),
+      );
+    } finally {
+      upstream.mockRestore();
+    }
+  });
+
+  it("returns an honest insufficient-evidence Belief Spec before any live model call", async () => {
     const harness = await sessionHarness("sample");
     const sample = await harness.artifactStore.find(harness.artifactId);
     if (sample === undefined) throw new Error("sample artifact is missing");
@@ -3181,10 +3344,12 @@ describe("Cloudflare Worker API", () => {
       ok: true,
       data: {
         state: "BELIEF_TEST_PROPOSED",
-        beliefTest: {
+        beliefSpec: {
+          schemaVersion: "2",
           concept: "entity_leakage",
           evidenceRefs: [],
-          uncertainty: { insufficientEvidence: true },
+          supportState: "INSUFFICIENT_EVIDENCE",
+          learnerDecision: "UNDECIDED",
         },
       },
     });
@@ -3193,7 +3358,7 @@ describe("Cloudflare Worker API", () => {
     );
     expect(events.at(-1)).toMatchObject({
       actor: "system",
-      kind: "belief_test.proposed",
+      kind: "belief_spec.proposed",
     });
     expect(events.at(-1)).not.toHaveProperty("promptHash");
   });
