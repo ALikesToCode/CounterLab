@@ -289,6 +289,7 @@ const RunnerLabRunExpectedHashesV5Schema = z
     artifactManifest: Sha256,
     beliefSpec: Sha256,
     prediction: Sha256,
+    fixtureDescriptor: Sha256,
     rawExperimentIr: Sha256,
     experimentSelection: Sha256,
     selectedExperimentIr: Sha256,
@@ -309,6 +310,13 @@ export const RunnerLabRunBundleV5Schema = z
     beliefSpecHash: Sha256,
     prediction: PredictionContractSchema,
     artifactManifest: ArtifactManifestSchema,
+    fixture: z
+      .object({
+        id: z.enum(["public-leakage-v1", "public-imbalance-v1"]),
+        version: TokenId,
+        contentSha256: Sha256,
+      })
+      .strict(),
     selectedExperimentIr: ExperimentIRV5Schema,
     selectedExperimentIrHash: Sha256,
     fixedSelection: FixedExperimentSelectionV1Schema,
@@ -357,6 +365,17 @@ export const RunnerLabRunBundleV5Schema = z
       addLineageIssue(
         "authoritative LAB_RUN requires a supported Artifact Manifest",
         ["artifactManifest", "support", "status"],
+      );
+    }
+
+    const expectedFixtureId =
+      bundle.approvedBeliefSpec.concept === "entity_leakage"
+        ? "public-leakage-v1"
+        : "public-imbalance-v1";
+    if (bundle.fixture.id !== expectedFixtureId) {
+      addLineageIssue(
+        "fixed fixture does not match the selected Subject Pack",
+        ["fixture", "id"],
       );
     }
 

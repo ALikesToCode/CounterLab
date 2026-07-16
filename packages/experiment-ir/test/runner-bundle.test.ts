@@ -292,6 +292,7 @@ function labRunBundleV5() {
     artifactManifest: compile.artifactManifestHash,
     beliefSpec: compile.beliefSpecHash,
     prediction: compile.prediction.immutableHash,
+    fixtureDescriptor: digest("7"),
     rawExperimentIr: digest("0"),
     experimentSelection: digest("2"),
     selectedExperimentIr: digest("1"),
@@ -310,6 +311,11 @@ function labRunBundleV5() {
     beliefSpecHash: compile.beliefSpecHash,
     prediction: compile.prediction,
     artifactManifest: compile.artifactManifest,
+    fixture: {
+      id: "public-leakage-v1" as const,
+      version: "leakage-fixture-v1",
+      contentSha256: digest("8"),
+    },
     selectedExperimentIr: experimentIr,
     selectedExperimentIrHash: expectedHashes.selectedExperimentIr,
     fixedSelection,
@@ -460,6 +466,7 @@ describe("Runner LAB_RUN bundle v5", () => {
       purpose: "AUTHORITATIVE",
       selectedExperimentIrHash: digest("1"),
       expectedHashes: {
+        fixtureDescriptor: digest("7"),
         rawExperimentIr: digest("0"),
         selectedExperimentIr: digest("1"),
       },
@@ -526,6 +533,32 @@ describe("Runner LAB_RUN bundle v5", () => {
               hash: digest("9"),
             },
           ],
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("requires one concept-matched, hash-bound fixed fixture", () => {
+    const source = labRunBundleV5();
+    const { fixture: _fixture, ...withoutFixture } = source;
+    expect(RunnerJobInputBundleV5Schema.safeParse(withoutFixture).success).toBe(
+      false,
+    );
+    expect(
+      RunnerJobInputBundleV5Schema.safeParse({
+        ...source,
+        fixture: { ...source.fixture, id: "public-imbalance-v1" },
+      }).success,
+    ).toBe(false);
+    expect(
+      RunnerJobInputBundleV5Schema.safeParse({
+        ...source,
+        resultOutput: {
+          ...source.resultOutput,
+          authoritativeInputHashes: {
+            ...source.resultOutput.authoritativeInputHashes,
+            fixtureDescriptor: digest("9"),
+          },
         },
       }).success,
     ).toBe(false);
