@@ -10,7 +10,10 @@ authority, replay compatibility, fixed kernels, or existing verifiers.
 
 ## Current phase
 
-Phase 2 — install and propagate v5.1 constitution (`in_progress`).
+Phases 7–9 — integrate the implemented v5 scientific authority into both
+hosted ML Subject Packs (`in_progress`). The current public deployment remains
+the qualified Experiment Plan v2 path until this compatibility-preserving
+upgrade passes focused tests and a new production smoke.
 
 ## Lead-owned critical surfaces
 
@@ -50,60 +53,68 @@ code, `apps/web/src/App.tsx`, or global CSS.
 ### Phase 2 — install and propagate v5.1 constitution
 
 - [x] Merge the complete v5.1 execution constitution into root `AGENTS.md`.
-- [ ] Update decisions, upgrade plan, support contract, diagrams, vocabulary,
+- [x] Update decisions, upgrade plan, support contract, diagrams, vocabulary,
       and release checklist without deleting legacy contracts.
-- **Status:** in progress
+- **Status:** complete
 
 ### Phase 2A — scientific-engine registry and dependency governance
 
-- [ ] Add registry schema/package, canonical hash, policy, fixtures, licenses,
+- [x] Add registry schema/package, canonical hash, policy, fixtures, licenses,
       notices, and reviewed registry entries for engines already in use.
-- [ ] Add admission, health, import, integrity, license, SBOM, vulnerability,
+- [x] Add admission, health, import, integrity, license, SBOM, vulnerability,
       size, and drift verification.
-- [ ] Add `scripts/verify-scientific-engines.sh` and release integration.
-- **Status:** pending
+- [x] Add `scripts/verify-scientific-engines.sh` and release integration.
+- **Status:** complete; the qualified local image and current production Proof
+  Bundle authority binding are recorded separately from Cloudflare's registry
+  digest.
 
 ### Phase 3 — Belief Spec v2
 
-- [ ] Add strict `BeliefSpecV2`, v1 adapter, evidence/non-claim validation, and
+- [x] Add strict `BeliefSpecV2`, v1 adapter, evidence/non-claim validation, and
       learner decisions.
-- **Status:** pending
+- **Status:** complete in contracts, analyst, and session core; hosted primary
+  flow migration remains part of Phases 7–9.
 
 ### Phase 4 — CounterLab Experiment IR v5
 
-- [ ] Add strict package/schema/types/canonical hash/policy/migration.
-- [ ] Preserve current Experiment Plan and replay through parity-tested adapters.
-- **Status:** pending
+- [x] Add strict package/schema/types/canonical hash/policy/migration.
+- [x] Preserve current Experiment Plan and replay through parity-tested adapters.
+- **Status:** complete as a shared package; the public runner still consumes the
+  qualified v2 projection until the hosted integration slice passes.
 
 ### Phase 5 — fixed experiment-selection scorer
 
-- [ ] Add deterministic eligibility, separation, complexity, tie-breaking,
+- [x] Add deterministic eligibility, separation, complexity, tie-breaking,
       public selection evidence, and mutation coverage.
-- **Status:** pending
+- **Status:** complete as fixed code for both released ML packs; hosted invocation
+  is in progress.
 
 ### Phase 6 — epistemic verifier and tri-state verdict
 
-- [ ] Add independent findings, `SUPPORTS | INCONCLUSIVE | REJECTED`, release
+- [x] Add independent findings, `SUPPORTS | INCONCLUSIVE | REJECTED`, release
       blocking, and one mutation per finding.
-- **Status:** pending
+- **Status:** complete in the frozen verifier with leakage and imbalance coverage;
+  public result release is not yet bound to this report.
 
 ### Phase 7 — Runtime Codex v5 artifacts
 
 - [ ] Restrict live output to discrimination contract, IR, scene, rationale, and
       post-transfer Patch Plan with two repairs and no hidden/manual edits.
-- **Status:** pending
+- **Status:** in progress; current hosted Codex output is the qualified v2 Plan
+  plus display-only rationale.
 
 ### Phase 8 — entity-leakage integration
 
 - [ ] Add candidate experiments, scorer contract, epistemic mappings, signed
       recurrence/signal Boundary Sweep, and mutations while preserving v1.
-- **Status:** pending
+- **Status:** in progress; pack policy and epistemic verification exist, but the
+  hosted job/result persistence path does not yet publish their v5 artifacts.
 
 ### Phase 9 — class-imbalance integration
 
 - [ ] Add candidate experiments, scorer contract, tri-state mappings,
       prevalence/threshold Boundary Sweep, and mutations.
-- **Status:** pending
+- **Status:** in progress for the same hosted authority binding as Phase 8.
 
 ### Phase 10 — Boundary Map engine
 
@@ -200,6 +211,7 @@ code, `apps/web/src/App.tsx`, or global CSS.
 | First combined planning-file patch used the wrong historical `progress.md` heading | 1 | Read the exact headings and split the updates by file. |
 | Combined runner-job, Worker API, and D1 repository read exceeded the response budget | 1 | Use bounded symbol searches and reads of at most 200 lines. |
 | R2 readiness probe branch was missing one closing brace | 1 | Focused API rerun passed, then 173 root + 82 web tests and typecheck passed. |
+| Metrics collection with the system Python could not import scikit-learn | 1 | Re-ran with the repository's locked `.venv/bin/python`; current metrics were generated from the fixed kernels and verifier. |
 
 ## Operating notes
 
