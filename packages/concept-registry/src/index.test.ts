@@ -284,10 +284,19 @@ describe("concept-pack registry", () => {
       leakage.scientificMethod.boundaryMap.axes.map((axis) => ({
         id: axis.id,
         points: axis.points.map((point) => point.input),
+        outputValues: axis.points.map((point) => point.outputValue),
       })),
     ).toEqual([
-      { id: "test_fraction", points: [0.1, 0.2, 0.3, 0.4, 0.5] },
-      { id: "observations_per_entity", points: [1, 2, 3, 4, 6] },
+      {
+        id: "test_fraction",
+        points: [0.1, 0.2, 0.3, 0.4, 0.5],
+        outputValues: [0.1, 0.2, 0.3, 0.4, 0.5],
+      },
+      {
+        id: "observations_per_entity",
+        points: [1, 2, 3, 4, 6],
+        outputValues: [1, 2, 3, 4, 6],
+      },
     ]);
 
     const imbalance = getConceptPack("class_imbalance");
@@ -301,14 +310,29 @@ describe("concept-pack registry", () => {
       imbalance.scientificMethod.boundaryMap.axes.map((axis) => ({
         id: axis.id,
         points: axis.points.map((point) => point.input),
+        outputValues: axis.points.map((point) => point.outputValue),
       })),
     ).toEqual([
       {
         id: "class_prevalence",
         points: ["rarer", "observed", "more_common"],
+        outputValues: [0.005361930295, 0.010666666667, 0.021333333333],
       },
-      { id: "decision_threshold", points: [0.1, 0.2, 0.3, 0.4, 0.5] },
+      {
+        id: "decision_threshold",
+        points: [0.1, 0.2, 0.3, 0.4, 0.5],
+        outputValues: [0.1, 0.2, 0.3, 0.4, 0.5],
+      },
     ]);
+
+    expect(leakage.scientificMethod.boundaryMap.units).toEqual({
+      optimism_gap: "accuracy proportion",
+    });
+    expect(imbalance.scientificMethod.boundaryMap.units).toEqual({
+      f1: "proportion",
+      prevalence: "proportion",
+      threshold: "probability",
+    });
 
     for (const pack of [leakage, imbalance]) {
       const policy = pack.scientificMethod.epistemic.policy.boundarySweeps[0];

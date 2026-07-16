@@ -56,6 +56,7 @@ export type BoundaryMapAxisDefinition = {
     id: string;
     label: string;
     input: string | number;
+    outputValue: number;
   }[];
 };
 
@@ -72,6 +73,7 @@ export type SubjectPackBoundaryMapDefinition = {
     label: string;
     description: string;
   }[];
+  units: Readonly<Record<string, string>>;
   assumptions: readonly string[];
   nonClaims: readonly string[];
   resultPathPrefix: string;
@@ -253,11 +255,11 @@ const leakageBoundaryMap = {
       label: "Test fraction",
       unit: "proportion",
       points: [
-        { id: "test-fraction-10", label: "10%", input: 0.1 },
-        { id: "test-fraction-20", label: "20%", input: 0.2 },
-        { id: "test-fraction-30", label: "30%", input: 0.3 },
-        { id: "test-fraction-40", label: "40%", input: 0.4 },
-        { id: "test-fraction-50", label: "50%", input: 0.5 },
+        { id: "test-fraction-10", label: "10%", input: 0.1, outputValue: 0.1 },
+        { id: "test-fraction-20", label: "20%", input: 0.2, outputValue: 0.2 },
+        { id: "test-fraction-30", label: "30%", input: 0.3, outputValue: 0.3 },
+        { id: "test-fraction-40", label: "40%", input: 0.4, outputValue: 0.4 },
+        { id: "test-fraction-50", label: "50%", input: 0.5, outputValue: 0.5 },
       ],
     },
     {
@@ -265,11 +267,36 @@ const leakageBoundaryMap = {
       label: "Observations per customer",
       unit: "observations/customer",
       points: [
-        { id: "observations-1", label: "1 observation", input: 1 },
-        { id: "observations-2", label: "2 observations", input: 2 },
-        { id: "observations-3", label: "3 observations", input: 3 },
-        { id: "observations-4", label: "4 observations", input: 4 },
-        { id: "observations-6", label: "6 observations", input: 6 },
+        {
+          id: "observations-1",
+          label: "1 observation",
+          input: 1,
+          outputValue: 1,
+        },
+        {
+          id: "observations-2",
+          label: "2 observations",
+          input: 2,
+          outputValue: 2,
+        },
+        {
+          id: "observations-3",
+          label: "3 observations",
+          input: 3,
+          outputValue: 3,
+        },
+        {
+          id: "observations-4",
+          label: "4 observations",
+          input: 4,
+          outputValue: 4,
+        },
+        {
+          id: "observations-6",
+          label: "6 observations",
+          input: 6,
+          outputValue: 6,
+        },
       ],
     },
   ],
@@ -278,26 +305,30 @@ const leakageBoundaryMap = {
     {
       id: "material",
       label: "Material optimism",
-      description: "Random-row optimism is at least 0.10.",
+      description:
+        "Random-row accuracy exceeds group-holdout accuracy by at least 0.10.",
     },
     {
       id: "transition",
       label: "Transition region",
-      description: "Random-row optimism is above 0.03 and below 0.10.",
+      description:
+        "The observed accuracy gap is greater than 0.03 but below 0.10.",
     },
     {
       id: "little",
       label: "Little observed gap",
-      description: "Random-row optimism is at most 0.03.",
+      description: "The observed accuracy gap is at most 0.03.",
     },
   ],
+  units: { optimism_gap: "accuracy proportion" },
   assumptions: [
-    "The estimator, preprocessing, seed, and feature set stay fixed within each comparison.",
+    "The estimator, preprocessing, seed, and feature set remain fixed within each comparison.",
     "Each fixture view retains the first canonical observations for every customer.",
+    "Optimism gap is random-row accuracy minus whole-customer holdout accuracy.",
   ],
   nonClaims: [
-    "A small observed gap does not prove that row splitting is universally safe.",
-    "The map does not establish performance for unrelated datasets.",
+    "This bounded synthetic sweep does not show that group holdout is always more accurate.",
+    "This map does not establish performance for unrelated datasets or deployment settings.",
   ],
   resultPathPrefix: "/boundaryMaps/leakage_recurrence",
 } as const satisfies SubjectPackBoundaryMapDefinition;
@@ -350,12 +381,23 @@ const imbalanceBoundaryMap = {
       label: "Positive-class prevalence",
       unit: "proportion",
       points: [
-        { id: "rarer", label: "Rarer", input: "rarer" },
-        { id: "observed", label: "Observed", input: "observed" },
+        {
+          id: "rarer",
+          label: "Rarer",
+          input: "rarer",
+          outputValue: 0.005361930295,
+        },
+        {
+          id: "observed",
+          label: "Observed",
+          input: "observed",
+          outputValue: 0.010666666667,
+        },
         {
           id: "more_common",
-          label: "More common",
+          label: "More Common",
           input: "more_common",
+          outputValue: 0.021333333333,
         },
       ],
     },
@@ -364,11 +406,11 @@ const imbalanceBoundaryMap = {
       label: "Decision threshold",
       unit: "probability",
       points: [
-        { id: "threshold-10", label: "0.1", input: 0.1 },
-        { id: "threshold-20", label: "0.2", input: 0.2 },
-        { id: "threshold-30", label: "0.3", input: 0.3 },
-        { id: "threshold-40", label: "0.4", input: 0.4 },
-        { id: "threshold-50", label: "0.5", input: 0.5 },
+        { id: "threshold-10", label: "0.1", input: 0.1, outputValue: 0.1 },
+        { id: "threshold-20", label: "0.2", input: 0.2, outputValue: 0.2 },
+        { id: "threshold-30", label: "0.3", input: 0.3, outputValue: 0.3 },
+        { id: "threshold-40", label: "0.4", input: 0.4, outputValue: 0.4 },
+        { id: "threshold-50", label: "0.5", input: 0.5, outputValue: 0.5 },
       ],
     },
   ],
@@ -390,13 +432,19 @@ const imbalanceBoundaryMap = {
       description: "The fixed F1 score is below 0.20.",
     },
   ],
+  units: {
+    f1: "proportion",
+    prevalence: "proportion",
+    threshold: "probability",
+  },
   assumptions: [
-    "Model scores and evaluation rows stay fixed while threshold changes within one prevalence scenario.",
+    "The trained model scores and evaluation rows stay fixed while threshold changes within a prevalence scenario.",
     "Prevalence scenarios are deterministic pack-owned resamples of the same holdout.",
+    "F1 is the Boundary Map observable; accuracy remains contextual evidence only.",
   ],
   nonClaims: [
     "The map does not select a production threshold or encode deployment costs.",
-    "The map does not establish utility for unrelated rare-event systems.",
+    "This bounded fixture does not establish utility for unrelated rare-event systems.",
   ],
   resultPathPrefix: "/boundaryMaps/threshold_prevalence",
 } as const satisfies SubjectPackBoundaryMapDefinition;

@@ -165,6 +165,8 @@ const LEAKAGE_EXPECTATION: BoundaryMapExpectationV1 = {
   axes: leakageAxes(),
   classifications: LEAKAGE_CLASSIFICATIONS.map((value) => ({ ...value })),
   units: { optimism_gap: "accuracy proportion" },
+  assumptions: ["The model and preprocessing remain fixed."],
+  nonClaims: ["This bounded map does not establish global performance."],
   cellCount: 4,
 };
 
@@ -364,6 +366,8 @@ const IMBALANCE_EXPECTATION: BoundaryMapExpectationV1 = {
     prevalence: "proportion",
     threshold: "probability",
   },
+  assumptions: ["Scores remain fixed inside each prevalence scenario."],
+  nonClaims: ["This map does not choose a production threshold."],
   cellCount: 4,
 };
 
@@ -453,6 +457,20 @@ describe("Boundary Map verifier", () => {
         draft.classifications[0].label = "Always generalizes";
       },
       "registered_classifications",
+    ],
+    [
+      "changed assumptions",
+      (draft: Record<string, any>) => {
+        draft.assumptions = ["The model changes between cells."];
+      },
+      "registered_scope",
+    ],
+    [
+      "removed non-claim",
+      (draft: Record<string, any>) => {
+        draft.nonClaims = ["This proves every deployment is safe."];
+      },
+      "registered_scope",
     ],
     [
       "wrong classification",

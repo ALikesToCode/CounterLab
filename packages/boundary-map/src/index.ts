@@ -36,6 +36,8 @@ export type BoundaryMapExpectationV1 = ExpectedLineage & {
   axes: BoundaryMapResultV1["axes"];
   classifications: BoundaryMapResultV1["classifications"];
   units: BoundaryMapResultV1["units"];
+  assumptions: BoundaryMapResultV1["assumptions"];
+  nonClaims: BoundaryMapResultV1["nonClaims"];
   cellCount: number;
 };
 
@@ -571,6 +573,39 @@ export function verifyBoundaryMap(
       canonicalEquals(result.classifications, expected.classifications)
         ? undefined
         : "Boundary Map legend or classification definitions differ from the registered Subject Pack.",
+    ),
+    invariant(
+      "registered_scope",
+      canonicalEquals(
+        {
+          assumptions: result.assumptions,
+          nonClaims: result.nonClaims,
+        },
+        {
+          assumptions: expected.assumptions,
+          nonClaims: expected.nonClaims,
+        },
+      ),
+      {
+        assumptions: result.assumptions,
+        nonClaims: result.nonClaims,
+      },
+      {
+        assumptions: expected.assumptions,
+        nonClaims: expected.nonClaims,
+      },
+      canonicalEquals(
+        {
+          assumptions: result.assumptions,
+          nonClaims: result.nonClaims,
+        },
+        {
+          assumptions: expected.assumptions,
+          nonClaims: expected.nonClaims,
+        },
+      )
+        ? undefined
+        : "Boundary Map assumptions or non-claims differ from the registered Subject Pack scope.",
     ),
     invariant(
       "canonical_cell_order",
