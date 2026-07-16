@@ -17,7 +17,7 @@
     "packages/experiment-ir/test/runner-bundle.test.ts": "3fb9fadcb5fb5f82a8b7ab3c82ea7ac046e1963d1c4610a186eded0efea40b20",
     "packages/experiment-scorer/src/scorer.ts": "843905a767a5c63b04f906e6ec3e9adc80573f5ab22d09cb512a1df886800e7c",
     "packages/experiment-scorer/test/scorer.test.ts": "7ee64b0528b17d5a3a76de4001a6c8fdebe5bbc55f4584ba4b74eda4e135f0cb",
-    "packages/generative-ui-contracts/test/lab-scene.test.ts": "44885cb962b9a2036752df4aad209bcff4ab2708298378cd73178393922b5344",
+    "packages/generative-ui-contracts/test/lab-scene.test.ts": "52502c8f8bf90bbb70d8ab0bd5dcf0a8ee47c82cb015d0ce3f98ae737ac998e7",
     "packages/plan-verifier/src/epistemic-imbalance.test.ts": "9ae799aa37b829c2854550632824ab8262acf655c0b04e4989c9a549d4d8beca",
     "packages/plan-verifier/src/epistemic.test.ts": "125da0262cd7b91e3a8a3d26b09c82bdba5b28e3c7be87b2a776a523c111dc72",
     "packages/plan-verifier/src/epistemic.ts": "cc7efcdc8e8bbae3576348343eb39a2364b2df1878b7418487d14a9e97352617",

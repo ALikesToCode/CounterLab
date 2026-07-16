@@ -10,6 +10,6 @@
     "apps/web/src/components/proof/ReasoningDiffView.tsx": "00b5ffc4e9b1f5f06b529fa4594e3ade43ed0f46a1107d15c7b019fcb172e1f6",
     "apps/web/src/components/studio/GeneratedProofView.tsx": "91728ffe869c1241c7589703585fcfd394ed579bc2e27f8678fbc11a3a82c05e",
     "apps/web/src/features/boundary/BoundaryStage.tsx": "8110f2b5d8416b057f49776f768e8d20f245144813331145ec3129f5e244f1b2",
-    "packages/generative-ui-contracts/src/index.ts": "9e1035dc1c9da5659d02220f6ebd875d8e947c46dff7f5a7eba9ecd47e7e6991"
+    "packages/generative-ui-contracts/src/index.ts": "4354d29ce569e3b165b7126059cc3d82fd51741395dea6831a6e479c49f274e0"
   }
 }

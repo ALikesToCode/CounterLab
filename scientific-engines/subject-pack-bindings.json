@@ -79,7 +79,7 @@
           "authorityId": "counterlab-signed-result-renderer",
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-renderer-integrity-v2",
-          "integrityHash": "3abaf1dc675b2cd87916903a18563d575649f482158f531c3327810a7ce2db64",
+          "integrityHash": "21a60213952589c39051213db58415b900a2b509511e9a1dd43bdecc69bce18b",
           "validationEvidenceIds": ["signed-result-binding-v2"],
           "reason": "Fixed React blocks render only signed canonical result paths."
         },
@@ -88,7 +88,7 @@
           "authorityId": "counterlab-mutation-matrix",
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-mutations-integrity-v2",
-          "integrityHash": "483f8a1940b7211e5f011b285a2dcadf21299e38b561ead91acefe05a04bd758",
+          "integrityHash": "ad2d1eaba323dc6debde9d7804e84b50d0cbbcf8c44163da5a05af7391149c22",
           "validationEvidenceIds": ["ml-row-order-invariance-v1"],
           "reason": "The frozen mutation catalogue exercises verifier and determinism properties."
         },
@@ -176,7 +176,7 @@
           "authorityId": "counterlab-signed-result-renderer",
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-renderer-integrity-v2",
-          "integrityHash": "3abaf1dc675b2cd87916903a18563d575649f482158f531c3327810a7ce2db64",
+          "integrityHash": "21a60213952589c39051213db58415b900a2b509511e9a1dd43bdecc69bce18b",
           "validationEvidenceIds": ["signed-result-binding-v2"],
           "reason": "Fixed React blocks render only signed canonical result paths."
         },
@@ -185,7 +185,7 @@
           "authorityId": "counterlab-mutation-matrix",
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-mutations-integrity-v2",
-          "integrityHash": "483f8a1940b7211e5f011b285a2dcadf21299e38b561ead91acefe05a04bd758",
+          "integrityHash": "ad2d1eaba323dc6debde9d7804e84b50d0cbbcf8c44163da5a05af7391149c22",
           "validationEvidenceIds": ["ml-row-order-invariance-v1"],
           "reason": "The frozen mutation catalogue exercises verifier and determinism properties."
         },
