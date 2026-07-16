@@ -690,6 +690,31 @@ describe("LiveBeliefAnalyst", () => {
     });
   });
 
+  it("derives compile readiness from fixed artifact support instead of model uncertainty", async () => {
+    const analyst = new LiveBeliefAnalyst({
+      apiKey: "server-only-key",
+      transport: new CapturingTransport({
+        outputParsed: liveBeliefSpecOutput(manifest(), {
+          supportState: "PARTIAL",
+          uncertainty: 0.45,
+        }),
+        refusals: [],
+      }),
+    });
+
+    const result = await analyst.proposeBeliefSpec({
+      sessionId: "session_v2_fixed_readiness",
+      learnerClaim: claim,
+      manifest: manifest(),
+      concept: "entity_leakage",
+    });
+
+    expect(result.beliefSpec).toMatchObject({
+      supportState: "SUPPORTED",
+      uncertainty: 0.45,
+    });
+  });
+
   it("uses the Responses structured-output contract and revalidates locally", async () => {
     const transport = new CapturingTransport({
       outputParsed: liveModelOutput(),

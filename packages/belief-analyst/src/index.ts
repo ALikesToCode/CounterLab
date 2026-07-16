@@ -43,7 +43,7 @@ ${conceptInstructions}`;
 
 export const BELIEF_SPEC_ANALYST_INSTRUCTIONS = `You are CounterLab's reasoning analyst. Propose two meaningfully different models of the learner's claim using only the sanitized artifact evidence and the selected Concept Pack below. Do not execute code, invent results, grade mastery, choose for the learner, or decide verification.
 
-Every evidence item must copy an exact supplied hash. Use null for an inapplicable cellIndex or outputIndex. Hypothesis and alternative evidence must be selected from the top-level evidenceRefs. Candidate experiment IDs must come only from the selected Concept Pack's candidateExperimentIds. State explicit conditions and at least one non-claim for each hypothesis. If the evidence cannot support a discriminating experiment, return INSUFFICIENT_EVIDENCE with empty evidence and candidate lists. CounterLab will bind the original claim, concept, identifier, and UNDECIDED learner state after local validation.
+Every evidence item must copy an exact supplied hash. Use null for an inapplicable cellIndex or outputIndex. Hypothesis and alternative evidence must be selected from the top-level evidenceRefs. Candidate experiment IDs must come only from the selected Concept Pack's candidateExperimentIds. State explicit conditions and at least one non-claim for each hypothesis. supportState describes readiness to run a discriminating experiment, not whether either hypothesis is already proven. Unknown experimental outcomes belong in conditions, non-claims, and uncertainty. Return SUPPORTED when the supplied supported artifact evidence can frame two candidate-linked hypotheses. If the evidence cannot support a discriminating experiment, return INSUFFICIENT_EVIDENCE with empty evidence and candidate lists. CounterLab will bind the original claim, concept, identifier, support readiness, and UNDECIDED learner state after local validation.
 
 ${conceptInstructions}`;
 
@@ -639,7 +639,16 @@ function fromBeliefSpecWire(
       evidence: alternative.evidence.map(withoutNullableIndexes),
     })),
     uncertainty: wire.data.uncertainty,
-    supportState: wire.data.supportState,
+    // The model may express uncertainty about an unmeasured outcome as PARTIAL.
+    // Compilation readiness is a fixed intake/evidence decision: a supported
+    // artifact with schema-valid, resolved, candidate-linked hypotheses is
+    // ready to test. An explicit insufficient-evidence result remains closed.
+    supportState:
+      wire.data.supportState === "INSUFFICIENT_EVIDENCE"
+        ? "INSUFFICIENT_EVIDENCE"
+        : input.manifest.support.status === "SUPPORTED"
+          ? "SUPPORTED"
+          : "PARTIAL",
     learnerDecision: "UNDECIDED" as const,
   };
   const parsed = BeliefSpecV2Schema.safeParse(candidate);
