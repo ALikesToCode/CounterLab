@@ -7,6 +7,7 @@ import {
   type ArtifactManifest,
   type BeliefTest,
   type ExperimentPlanV2,
+  type HostedVerifiedResultSetV2,
   HostedVerifiedResultSetV2Schema,
   type PublicCompilerEvent,
   type RunnerCallback,
@@ -36,6 +37,7 @@ import {
 } from "@counterlab/experiment-ir";
 
 import sourceNotebookText from "../../../fixtures/notebooks/customer_churn_leakage.ipynb?raw";
+import imbalanceResultText from "../../../fixtures/public/imbalance_verified_result.json?raw";
 import patchedNotebookText from "../../../replays/leakage-01/patch/customer_churn_leakage.patched.ipynb?raw";
 import scientificEngineSnapshotValue from "../../../scientific-engines/snapshot-hash.json";
 
@@ -614,6 +616,64 @@ function liveBeliefSpecWire(artifact: ArtifactManifest) {
   };
 }
 
+function liveImbalanceBeliefSpecWire(artifact: ArtifactManifest) {
+  const prevalenceCell = artifact.cells.find((cell) =>
+    cell.metricCandidates.some((metric) => metric.name === "positive_rate"),
+  );
+  const accuracyCell = artifact.cells.find((cell) =>
+    cell.metricCandidates.some((metric) => metric.name === "accuracy"),
+  );
+  if (prevalenceCell === undefined || accuracyCell === undefined) {
+    throw new Error("class-imbalance evidence is missing");
+  }
+  const prevalenceEvidence = {
+    cellIndex: prevalenceCell.index,
+    outputIndex: 0,
+    kind: "metric" as const,
+    hash: prevalenceCell.outputHashes[0]!,
+    excerpt: "positive_rate = 0.025",
+    relevance: "The displayed prevalence establishes a rare positive class.",
+  };
+  const accuracyEvidence = {
+    cellIndex: accuracyCell.index,
+    outputIndex: 0,
+    kind: "metric" as const,
+    hash: accuracyCell.outputHashes[0]!,
+    excerpt: "accuracy = 0.975",
+    relevance: "The learner relies on aggregate accuracy.",
+  };
+  const candidateExperimentIds = [
+    "threshold-and-majority-baseline",
+    "prevalence-and-threshold-sweep",
+  ];
+  return {
+    schemaVersion: "2" as const,
+    evidenceRefs: [prevalenceEvidence, accuracyEvidence],
+    hypotheses: [
+      {
+        id: "current" as const,
+        statement: "High accuracy reflects useful minority detection.",
+        conditions: ["The rare class is detected at the documented threshold."],
+        nonClaims: ["This threshold is not claimed optimal everywhere."],
+        evidence: [accuracyEvidence],
+        supportedCandidateExperimentIds: candidateExperimentIds,
+      },
+      {
+        id: "competing" as const,
+        statement:
+          "Class rarity lets a weak majority prediction appear accurate.",
+        conditions: ["The positive class is rare in the evaluation set."],
+        nonClaims: ["Accuracy is not useless for every balanced task."],
+        evidence: [prevalenceEvidence],
+        supportedCandidateExperimentIds: candidateExperimentIds,
+      },
+    ],
+    alternatives: [],
+    uncertainty: 0.18,
+    supportState: "SUPPORTED" as const,
+  };
+}
+
 function structuredResponsesResult(output: unknown): Response {
   return new Response(
     JSON.stringify({
@@ -741,6 +801,119 @@ async function preparedScientificHostedRunner(
     runnerJobs,
     runnerObjects,
     session,
+  };
+}
+
+async function preparedScientificImbalanceHostedRunner(
+  runnerJobs: MemoryRunnerJobRepository = new MemoryRunnerJobRepository(),
+) {
+  const sessionRepository = new MemorySessionRepository();
+  const artifactStore = new MemoryArtifactStore();
+  const artifact = imbalanceArtifactManifest();
+  await artifactStore.save(artifact, "uploads/rare-event-classifier.ipynb");
+  let intakeIdSequence = 0;
+  const intakeApp = createApi({
+    sessionRepository,
+    artifactStore,
+    now: () => new Date("2026-07-14T10:00:00.000Z"),
+    id: (prefix) => `${prefix}_imbalance_${++intakeIdSequence}`,
+  });
+  const created = await postJson(intakeApp, "/api/live/sessions", {
+    artifactId: artifact.artifactId,
+  });
+  expect(created.status).toBe(201);
+  const createdBody = (await created.json()) as {
+    data: { sessionId: string };
+  };
+  const sessionId = createdBody.data.sessionId;
+  const learnerClaim =
+    "The high accuracy proves the classifier catches rare fraud.";
+  const beliefInput = await liveBeliefInput(intakeApp, sessionId, learnerClaim);
+  const upstream = vi
+    .spyOn(globalThis, "fetch")
+    .mockResolvedValueOnce(
+      structuredResponsesResult(liveImbalanceBeliefSpecWire(artifact)),
+    );
+  try {
+    const proposed = await intakeApp.request(
+      `/api/sessions/${sessionId}/belief-test`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(beliefInput),
+      },
+      {
+        OPENAI_API_KEY: "server-only-key",
+        OPENAI_MODEL: "configured-model",
+      } as unknown as Env & Record<string, string>,
+    );
+    expect(proposed.status).toBe(200);
+  } finally {
+    upstream.mockRestore();
+  }
+  expect(
+    (
+      await postJson(
+        intakeApp,
+        `/api/sessions/${sessionId}/belief-test/confirm`,
+        { action: "confirm" },
+      )
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await postJson(intakeApp, `/api/sessions/${sessionId}/prediction`, {
+        choice: "High accuracy still means useful rare-event detection",
+        confidence: 68,
+      })
+    ).status,
+  ).toBe(201);
+  const session = await sessionRepository.find(sessionId);
+  if (session?.beliefSpec === undefined || session.prediction === undefined) {
+    throw new Error("live class-imbalance v5 contracts are missing");
+  }
+
+  const runnerObjects = new MemoryRunnerObjectStore();
+  const dispatcher = new CapturingRunnerDispatcher();
+  let runnerIdSequence = 0;
+  const app = createApi({
+    sessionRepository,
+    artifactStore,
+    runnerJobRepository: runnerJobs,
+    runnerObjectStore: runnerObjects,
+    runnerDispatcher: dispatcher,
+    runnerSigningPrivateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
+    now: () => new Date("2026-07-14T10:00:00.000Z"),
+    id: (prefix) => `${prefix}_scientific_imbalance_${++runnerIdSequence}`,
+  });
+  const queued = await postJson(app, `/api/sessions/${sessionId}/lab/compile`);
+  expect(queued.status).toBe(202);
+  const dispatch = dispatcher.dispatched[0];
+  if (dispatch === undefined) {
+    throw new Error("class-imbalance v5 runner was not dispatched");
+  }
+  const inputObject = runnerObjects.objects.get(
+    `runner-input/${dispatch.job.jobId}.json`,
+  );
+  if (inputObject === undefined) {
+    throw new Error("class-imbalance v5 input bundle is missing");
+  }
+  const bundle = RunnerLabCompileBundleV5Schema.parse(
+    JSON.parse(inputObject.body),
+  );
+  return {
+    app,
+    artifact,
+    artifactId: artifact.artifactId,
+    artifactStore,
+    bundle,
+    dispatch,
+    dispatcher,
+    runnerJobs,
+    runnerObjects,
+    session,
+    sessionId,
+    sessionRepository,
   };
 }
 
@@ -935,8 +1108,241 @@ async function scientificCandidateArtifacts(bundle: RunnerLabCompileBundleV5) {
   } as const;
 }
 
+async function scientificImbalanceCandidateArtifacts(
+  bundle: RunnerLabCompileBundleV5,
+) {
+  if (bundle.approvedBeliefSpec.concept !== "class_imbalance") {
+    throw new Error("test candidate requires the class-imbalance Subject Pack");
+  }
+  const candidateId = "threshold-and-majority-baseline";
+  const baseline = {
+    concept: "class_imbalance" as const,
+    runId: "majority_baseline",
+    operation: "imbalance.majority_baseline" as const,
+    seed: 2603,
+    threshold: 0.5,
+    prevalenceScenario: "observed" as const,
+    model: "majority_baseline" as const,
+  };
+  const discriminationContract = DiscriminationContractV1Schema.parse({
+    schemaVersion: "1",
+    contractId: "discrimination.imbalance-live-v5",
+    sessionId: bundle.sessionId,
+    concept: "class_imbalance",
+    conceptPackVersion: bundle.conceptPack.version,
+    artifactManifestHash: bundle.artifactManifestHash,
+    beliefSpecId: bundle.approvedBeliefSpec.id,
+    beliefSpecHash: bundle.beliefSpecHash,
+    hypotheses: bundle.approvedBeliefSpec.hypotheses.map(
+      (hypothesis, index) => ({
+        id: hypothesis.id,
+        statement: hypothesis.statement,
+        decisivePatternId:
+          index === 0
+            ? "imbalance.useful-minority-detection"
+            : "imbalance.majority-dominance",
+      }),
+    ),
+    candidateExperimentIds: [candidateId, "prevalence-and-threshold-sweep"],
+    changedVariableIds: ["decision_threshold", "class_prevalence"],
+    controlledVariableIds: ["model_scores", "seed", "evaluation_set"],
+    observableIds: [
+      "accuracy",
+      "precision",
+      "recall",
+      "f1",
+      "pr_auc",
+      "roc_auc",
+      "confusion_matrix",
+      "prevalence",
+    ],
+    inconclusiveConditionIds: ["minority-utility-uncertain"],
+    whyThisTest:
+      "The majority baseline and fixed-score threshold comparison reveal whether aggregate accuracy hides missed rare cases.",
+    nonClaims: ["This test does not choose a universal production threshold."],
+    evidenceRefs: bundle.approvedBeliefSpec.evidenceRefs,
+  });
+  const interventions = [
+    {
+      ...baseline,
+      runId: "stratified_model",
+      operation: "imbalance.stratified_holdout" as const,
+      model: "logistic_regression" as const,
+    },
+    {
+      ...baseline,
+      runId: "lower_threshold",
+      operation: "imbalance.threshold_sweep" as const,
+      model: "logistic_regression" as const,
+      threshold: 0.25,
+    },
+    {
+      ...baseline,
+      runId: "rarer_prevalence",
+      operation: "imbalance.prevalence_sweep" as const,
+      model: "logistic_regression" as const,
+      threshold: 0.25,
+      prevalenceScenario: "rarer" as const,
+    },
+  ];
+  const primaryCandidate = {
+    id: candidateId,
+    title: "Majority baseline and threshold sensitivity",
+    operationIds: [
+      "imbalance.majority_baseline" as const,
+      "imbalance.stratified_holdout" as const,
+      "imbalance.confusion_matrix" as const,
+      "imbalance.threshold_sweep" as const,
+      "imbalance.prevalence_sweep" as const,
+    ],
+    baseline,
+    interventions,
+    heldConstantIds: ["model_scores", "seed", "evaluation_set"],
+    changedVariableIds: ["decision_threshold", "class_prevalence"],
+    observableIds: [
+      "accuracy",
+      "precision",
+      "recall",
+      "f1",
+      "pr_auc",
+      "roc_auc",
+      "confusion_matrix",
+      "prevalence",
+    ] as const,
+    hypothesisPatterns: [
+      {
+        hypothesisId: "current" as const,
+        patternId: "imbalance.useful-minority-detection",
+      },
+      {
+        hypothesisId: "competing" as const,
+        patternId: "imbalance.majority-dominance",
+      },
+    ],
+    inconclusiveConditionIds: ["minority-utility-uncertain"],
+    complexityCost: 4,
+    discriminatesBecause:
+      "A majority baseline and a fixed-score threshold sweep expose minority performance hidden by aggregate accuracy.",
+  };
+  const experimentIr = ExperimentIRV5Schema.parse({
+    schemaVersion: "5",
+    irId: "ir.imbalance-live-v5",
+    executionPlanId: "plan_imbalance_live_v5",
+    sessionId: bundle.sessionId,
+    concept: "class_imbalance",
+    conceptPackVersion: bundle.conceptPack.version,
+    artifactManifestHash: bundle.artifactManifestHash,
+    beliefSpecId: bundle.approvedBeliefSpec.id,
+    beliefSpecHash: bundle.beliefSpecHash,
+    evidenceRefs: bundle.approvedBeliefSpec.evidenceRefs,
+    hypotheses: [
+      {
+        id: "current",
+        statement: bundle.approvedBeliefSpec.hypotheses[0].statement,
+        conditions: bundle.approvedBeliefSpec.hypotheses[0].conditions,
+        nonClaims: bundle.approvedBeliefSpec.hypotheses[0].nonClaims,
+        predictedPattern: {
+          patternId: "imbalance.useful-minority-detection",
+          description: "Minority recall and F1 remain useful.",
+        },
+      },
+      {
+        id: "competing",
+        statement: bundle.approvedBeliefSpec.hypotheses[1].statement,
+        conditions: bundle.approvedBeliefSpec.hypotheses[1].conditions,
+        nonClaims: bundle.approvedBeliefSpec.hypotheses[1].nonClaims,
+        predictedPattern: {
+          patternId: "imbalance.majority-dominance",
+          description: "Accuracy stays high while minority recall fails.",
+        },
+      },
+    ],
+    candidateExperiments: [
+      primaryCandidate,
+      {
+        ...primaryCandidate,
+        id: "prevalence-and-threshold-sweep",
+        title: "Prevalence and threshold boundary follow-up",
+        complexityCost: 6,
+      },
+    ],
+    selection: { status: "UNSELECTED" },
+    visualizations: [
+      "metric_comparison",
+      "confusion_matrix",
+      "threshold_curve",
+      "prevalence_sensitivity",
+    ],
+    inconclusiveConditions: [
+      {
+        id: "minority-utility-uncertain",
+        description: "Minority utility falls between decisive thresholds.",
+        nextExperimentId: "prevalence-and-threshold-sweep",
+      },
+    ],
+    transfer: {
+      taskId: "manufacturing-rare-defect-v1",
+      changedSurface: "Rare manufacturing defects with asymmetric cost",
+      requiredActionIds: ["choose_minority_sensitive_metric"],
+      nonClaims: ["This transfer does not certify global mastery."],
+    },
+    nonClaims: ["This test does not choose a universal production threshold."],
+    provenance: { kind: "codex", ...bundle.provenance },
+    limitations: [
+      "The result is scoped to the supplied notebook and fixed kernel.",
+    ],
+    resourceLimits: bundle.resourceLimits,
+  });
+  const labScene = LabSceneV2Schema.parse({
+    schemaVersion: "2",
+    sceneId: "scene-imbalance-live-v5",
+    sessionId: bundle.sessionId,
+    concept: "class_imbalance",
+    supportLabel: "GUIDED_VISUAL",
+    title: "Does accuracy hide missed rare cases?",
+    blocks: [
+      {
+        id: "hypotheses",
+        type: "Hypothesis",
+        current: bundle.approvedBeliefSpec.hypotheses[0].statement,
+        competing: bundle.approvedBeliefSpec.hypotheses[1].statement,
+      },
+      {
+        id: "why",
+        type: "WhyThisTest",
+        text: discriminationContract.whyThisTest,
+      },
+    ],
+    assumptions: ["The fixed kernel computes every class-specific metric."],
+    limitations: ["No result is shown before external verification."],
+    provenance: {
+      discriminationContractHash: await hashCanonical(discriminationContract),
+      experimentIrHash: await hashExperimentIR(experimentIr),
+    },
+  });
+  return {
+    "discrimination-contract.json": JSON.stringify(discriminationContract),
+    "experiment-ir.json": JSON.stringify(experimentIr),
+    "lab-scene.json": JSON.stringify(labScene),
+    "public-rationale.md":
+      "A majority baseline and fixed-score comparisons test whether aggregate accuracy represents useful rare-event detection.",
+  } as const;
+}
+
+type ScientificCandidateArtifacts = {
+  "discrimination-contract.json": string;
+  "experiment-ir.json": string;
+  "lab-scene.json": string;
+  "public-rationale.md": string;
+};
+
+type ScientificCandidateFactory = (
+  bundle: RunnerLabCompileBundleV5,
+) => Promise<ScientificCandidateArtifacts>;
+
 async function stageScientificCandidate(
   harness: Awaited<ReturnType<typeof preparedScientificHostedRunner>>,
+  createArtifacts: ScientificCandidateFactory = scientificCandidateArtifacts,
 ) {
   const jobId = harness.dispatch.job.jobId;
   const authorization = {
@@ -950,7 +1356,7 @@ async function stageScientificCandidate(
       })
     ).status,
   ).toBe(200);
-  const artifacts = await scientificCandidateArtifacts(harness.bundle);
+  const artifacts = await createArtifacts(harness.bundle);
   const artifactHashes = {} as Record<keyof typeof artifacts, string>;
   for (const [path, body] of Object.entries(artifacts) as Array<
     [keyof typeof artifacts, string]
@@ -981,14 +1387,15 @@ async function stageScientificCandidate(
   const payload = (await candidate.json()) as {
     data: { status: string; runnerJob: RunnerJob };
   };
-  expect(payload.data.status).toBe("VERIFIED");
+  expect(payload.data.status, JSON.stringify(payload.data)).toBe("VERIFIED");
   return { artifactHashes, artifacts, authorization, jobId, payload };
 }
 
 async function completeScientificCompileAndQueueRun(
   harness: Awaited<ReturnType<typeof preparedScientificHostedRunner>>,
+  createArtifacts?: ScientificCandidateFactory,
 ) {
-  const staged = await stageScientificCandidate(harness);
+  const staged = await stageScientificCandidate(harness, createArtifacts);
   const compileCallback = await postJson(
     harness.app,
     `/api/runner/jobs/${staged.jobId}/callback`,
@@ -1082,6 +1489,78 @@ async function scientificLeakageResult(bundle: RunnerLabRunBundleV5) {
       accuracy: run.metrics.accuracy,
       rocAuc: run.metrics.rocAuc,
       sampleSize: run.sampleSizes.test,
+      seed: run.seed,
+    })),
+  };
+  return HostedVerifiedResultSetV2Schema.parse({
+    ...payload,
+    resultHash: await hashCanonical(payload),
+  });
+}
+
+type HostedImbalanceResultV2 = Extract<
+  HostedVerifiedResultSetV2,
+  { concept: "class_imbalance" }
+>;
+
+async function scientificImbalanceResult(bundle: RunnerLabRunBundleV5) {
+  if (bundle.projectedPlan.concept !== "class_imbalance") {
+    throw new Error("test result helper requires the imbalance Subject Pack");
+  }
+  const source = JSON.parse(imbalanceResultText) as {
+    fixture: HostedImbalanceResultV2["fixture"];
+    kernelVersion: string;
+    seed: number;
+    runs: HostedImbalanceResultV2["runs"];
+  };
+  if (source.fixture.sha256 !== bundle.fixture.contentSha256) {
+    throw new Error("public imbalance result does not match fixture authority");
+  }
+  const sourceByOperation = new Map(
+    source.runs.map((run) => [run.operation, run]),
+  );
+  const specifications = [
+    bundle.projectedPlan.baseline,
+    ...bundle.projectedPlan.interventions,
+  ];
+  const runs = specifications.map((specification) => {
+    if (specification.concept !== "class_imbalance") {
+      throw new Error("mixed-concept test Plan is unsupported");
+    }
+    const sourceRun = sourceByOperation.get(specification.operation);
+    if (sourceRun === undefined) {
+      throw new Error(`missing test run for ${specification.operation}`);
+    }
+    return {
+      ...sourceRun,
+      id: specification.runId,
+      operation: specification.operation,
+      model: specification.model,
+      seed: specification.seed,
+      threshold: specification.threshold,
+      prevalenceScenario: specification.prevalenceScenario,
+    };
+  });
+  const payload = {
+    schemaVersion: "2" as const,
+    concept: "class_imbalance" as const,
+    planId: bundle.projectedPlan.planId,
+    sessionId: bundle.sessionId,
+    artifactManifestHash: bundle.artifactManifestHash,
+    conceptPackVersion: bundle.selectedExperimentIr.conceptPackVersion,
+    fixture: source.fixture,
+    kernelVersion: source.kernelVersion,
+    seed: source.seed,
+    runs,
+    chartData: runs.map((run) => ({
+      runId: run.id,
+      operation: run.operation,
+      ...run.metrics,
+      prevalence: run.prevalence,
+      predictedPositiveRate: run.predictedPositiveRate,
+      sampleSize: run.sampleSizes.test,
+      threshold: run.threshold,
+      prevalenceScenario: run.prevalenceScenario,
       seed: run.seed,
     })),
   };
@@ -1297,70 +1776,30 @@ async function imbalanceVerifiedResult(plan: ExperimentPlanV2) {
   if (plan.concept !== "class_imbalance") {
     throw new Error("imbalance result requires an imbalance plan");
   }
-  const fixtureHash = "e".repeat(64);
-  const featureHash = "f".repeat(64);
-  const confusionByOperation = {
-    "imbalance.majority_baseline": { tn: 1460, fp: 0, fn: 40, tp: 0 },
-    "imbalance.stratified_holdout": { tn: 1450, fp: 10, fn: 32, tp: 8 },
-    "imbalance.threshold_sweep": { tn: 1400, fp: 60, fn: 15, tp: 25 },
-    "imbalance.prevalence_sweep": { tn: 1400, fp: 60, fn: 7, tp: 13 },
-  } as const;
-  const rounded = (value: number) => Number(value.toFixed(12));
+  const source = JSON.parse(imbalanceResultText) as {
+    fixture: HostedImbalanceResultV2["fixture"];
+    kernelVersion: string;
+    runs: HostedImbalanceResultV2["runs"];
+  };
+  const sourceByOperation = new Map(
+    source.runs.map((run) => [run.operation, run]),
+  );
   const runs = [plan.baseline, ...plan.interventions].map((spec) => {
     if (spec.concept !== "class_imbalance") {
       throw new Error("mixed concept plan");
     }
-    const matrix = confusionByOperation[spec.operation];
-    const total = matrix.tn + matrix.fp + matrix.fn + matrix.tp;
-    const precision =
-      matrix.tp + matrix.fp === 0 ? 0 : matrix.tp / (matrix.tp + matrix.fp);
-    const recall =
-      matrix.tp + matrix.fn === 0 ? 0 : matrix.tp / (matrix.tp + matrix.fn);
-    const f1 =
-      precision + recall === 0
-        ? 0
-        : (2 * precision * recall) / (precision + recall);
+    const sourceRun = sourceByOperation.get(spec.operation);
+    if (sourceRun === undefined) {
+      throw new Error(`public fixture is missing ${spec.operation}`);
+    }
     return {
+      ...sourceRun,
       id: spec.runId,
       operation: spec.operation,
       model: spec.model,
       seed: spec.seed,
       threshold: spec.threshold,
       prevalenceScenario: spec.prevalenceScenario,
-      metrics: {
-        accuracy: rounded((matrix.tn + matrix.tp) / total),
-        precision: rounded(precision),
-        recall: rounded(recall),
-        f1: rounded(f1),
-        prAuc:
-          spec.operation === "imbalance.majority_baseline" ? 0.026667 : 0.31,
-        rocAuc: spec.operation === "imbalance.majority_baseline" ? 0.5 : 0.84,
-      },
-      confusionMatrix: matrix,
-      sampleSizes: { train: 4500, test: total },
-      classCounts: {
-        train: { negative: 4380, positive: 120 },
-        test: {
-          negative: matrix.tn + matrix.fp,
-          positive: matrix.fn + matrix.tp,
-        },
-      },
-      prevalence: rounded((matrix.fn + matrix.tp) / total),
-      predictedPositiveRate: rounded((matrix.fp + matrix.tp) / total),
-      featureSetFingerprint: featureHash,
-      pipelineFingerprint:
-        spec.model === "majority_baseline" ? "1".repeat(64) : "2".repeat(64),
-      evaluationSetFingerprint:
-        spec.prevalenceScenario === "observed"
-          ? "3".repeat(64)
-          : "4".repeat(64),
-      scoreFingerprint:
-        spec.model === "majority_baseline"
-          ? "5".repeat(64)
-          : spec.prevalenceScenario === "observed"
-            ? "6".repeat(64)
-            : "7".repeat(64),
-      inputFingerprint: fixtureHash,
     };
   });
   const withoutHash = {
@@ -1370,13 +1809,8 @@ async function imbalanceVerifiedResult(plan: ExperimentPlanV2) {
     sessionId: plan.sessionId,
     artifactManifestHash: plan.artifactManifestHash,
     conceptPackVersion: plan.conceptPackVersion,
-    fixture: {
-      sha256: fixtureHash,
-      rows: 6000,
-      positives: 160,
-      prevalence: rounded(160 / 6000),
-    },
-    kernelVersion: "0.1.0",
+    fixture: source.fixture,
+    kernelVersion: source.kernelVersion,
     seed: plan.baseline.seed,
     runs,
     chartData: runs.map((run) => ({
@@ -3589,6 +4023,255 @@ describe("Cloudflare Worker API", () => {
     });
     expect(await harness.runnerJobs.listEvents(jobId, 0)).toHaveLength(4);
   });
+
+  it("releases a class-imbalance v5 result through the same Worker authority boundary", async () => {
+    const harness = await preparedScientificImbalanceHostedRunner();
+    const run = await completeScientificCompileAndQueueRun(
+      harness,
+      scientificImbalanceCandidateArtifacts,
+    );
+    const jobId = run.dispatch.job.jobId;
+    expect(run.bundle).toMatchObject({
+      schemaVersion: "5",
+      kind: "LAB_RUN",
+      approvedBeliefSpec: { concept: "class_imbalance" },
+      fixture: {
+        id: "public-imbalance-v1",
+        version: "imbalance-fixture-v1",
+        contentSha256:
+          "7974fe5744c4f9f2e8a31817791dac09ba9efb17cc88a4aa3383ae333e92ad7f",
+      },
+      selectedExperimentIr: {
+        selection: {
+          status: "SELECTED",
+          candidateId: "threshold-and-majority-baseline",
+        },
+      },
+      projectedPlan: {
+        concept: "class_imbalance",
+        baseline: { operation: "imbalance.majority_baseline" },
+        interventions: [
+          { operation: "imbalance.stratified_holdout" },
+          { operation: "imbalance.threshold_sweep" },
+          { operation: "imbalance.prevalence_sweep" },
+        ],
+      },
+    });
+    expect(
+      (
+        await harness.app.request(`/api/runner/jobs/${jobId}/start`, {
+          method: "POST",
+          headers: run.authorization,
+        })
+      ).status,
+    ).toBe(200);
+    const result = await scientificImbalanceResult(run.bundle);
+    const resultText = JSON.stringify(result);
+    const resultFileHash = await sha256Text(resultText);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${jobId}/outputs/verified-result.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...run.authorization,
+              "content-type": "application/json",
+            },
+            body: resultText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    const callback = await postJson(
+      harness.app,
+      `/api/runner/jobs/${jobId}/callback`,
+      {
+        schemaVersion: "1",
+        callbackId: "callback_scientific_imbalance_run_v5",
+        idempotencyKey: "scientific-imbalance-run-v5-complete",
+        jobId,
+        stateVersion: run.dispatch.job.stateVersion,
+        status: "VERIFIED",
+        outputHashes: [resultFileHash],
+        finalEventCursor: 0,
+        occurredAt: "2026-07-14T10:00:04.000Z",
+      },
+      run.authorization,
+    );
+    expect(callback.status).toBe(200);
+    await expect(callback.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        runnerJob: { status: "VERIFIED", eventCursor: 2 },
+        session: {
+          state: "EXPERIMENT_COMPLETED",
+          verifiedResult: {
+            concept: "class_imbalance",
+            resultHash: result.resultHash,
+          },
+          evidenceVerdict: {
+            kind: "SUPPORTS",
+            hypothesisId: "competing",
+            resultHash: result.resultHash,
+          },
+          epistemicReportHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        },
+        verification: {
+          status: "VERIFIED",
+          verdict: {
+            kind: "SUPPORTS",
+            hypothesisId: "competing",
+            resultHash: result.resultHash,
+          },
+          technicalReport: { status: "VERIFIED" },
+        },
+      },
+    });
+    expect(
+      (await harness.runnerJobs.listEvents(jobId, 0)).map(
+        (event) => event.kind,
+      ),
+    ).toEqual(["verifier.verified", "result.ready"]);
+  });
+
+  it.each([
+    [
+      "fixture rows",
+      (result: HostedImbalanceResultV2) => ({
+        ...result,
+        fixture: { ...result.fixture, rows: result.fixture.rows + 1 },
+      }),
+    ],
+    [
+      "fixture positives",
+      (result: HostedImbalanceResultV2) => ({
+        ...result,
+        fixture: {
+          ...result.fixture,
+          positives: result.fixture.positives + 1,
+        },
+      }),
+    ],
+    [
+      "fixture prevalence",
+      (result: HostedImbalanceResultV2) => ({
+        ...result,
+        fixture: { ...result.fixture, prevalence: 0.02 },
+      }),
+    ],
+    [
+      "kernel version",
+      (result: HostedImbalanceResultV2) => ({
+        ...result,
+        kernelVersion: "forged-kernel",
+      }),
+    ],
+    [
+      "top-level seed",
+      (result: HostedImbalanceResultV2) => ({
+        ...result,
+        seed: result.seed + 1,
+      }),
+    ],
+  ] as Array<
+    [string, (result: HostedImbalanceResultV2) => HostedImbalanceResultV2]
+  >)(
+    "rejects class-imbalance v5 %s drift before result release",
+    async (label, mutate) => {
+      const harness = await preparedScientificImbalanceHostedRunner();
+      const run = await completeScientificCompileAndQueueRun(
+        harness,
+        scientificImbalanceCandidateArtifacts,
+      );
+      const jobId = run.dispatch.job.jobId;
+      expect(
+        (
+          await harness.app.request(`/api/runner/jobs/${jobId}/start`, {
+            method: "POST",
+            headers: run.authorization,
+          })
+        ).status,
+      ).toBe(200);
+      const valid = await scientificImbalanceResult(run.bundle);
+      if (valid.concept !== "class_imbalance") {
+        throw new Error("expected a class-imbalance test result");
+      }
+      const { resultHash: _resultHash, ...tamperedPayload } = mutate(valid);
+      const result = HostedVerifiedResultSetV2Schema.parse({
+        ...tamperedPayload,
+        resultHash: await hashCanonical(tamperedPayload),
+      });
+      const resultText = JSON.stringify(result);
+      const resultFileHash = await sha256Text(resultText);
+      expect(
+        (
+          await harness.app.request(
+            `/api/runner/jobs/${jobId}/outputs/verified-result.json`,
+            {
+              method: "PUT",
+              headers: {
+                ...run.authorization,
+                "content-type": "application/json",
+              },
+              body: resultText,
+            },
+          )
+        ).status,
+      ).toBe(201);
+      const suffix = label.replaceAll(" ", "_");
+      const callback = await postJson(
+        harness.app,
+        `/api/runner/jobs/${jobId}/callback`,
+        {
+          schemaVersion: "1",
+          callbackId: `callback_imbalance_${suffix}`,
+          idempotencyKey: `imbalance-${suffix}`,
+          jobId,
+          stateVersion: run.dispatch.job.stateVersion,
+          status: "VERIFIED",
+          outputHashes: [resultFileHash],
+          finalEventCursor: 0,
+          occurredAt: "2026-07-14T10:00:04.000Z",
+        },
+        run.authorization,
+      );
+      expect(callback.status).toBe(200);
+      await expect(callback.json()).resolves.toMatchObject({
+        data: {
+          runnerJob: {
+            status: "REJECTED",
+            error: { code: "EPISTEMIC_VERIFIER_REJECTED" },
+          },
+          session: {
+            state: "LAB_VERIFIED",
+            evidenceVerdict: { kind: "REJECTED", resultReleased: false },
+          },
+          verification: {
+            status: "REJECTED",
+            technicalReport: {
+              status: "REJECTED",
+              invariants: expect.arrayContaining([
+                expect.objectContaining({
+                  name: "fixed_result_authority",
+                  passed: false,
+                }),
+              ]),
+            },
+          },
+        },
+      });
+      expect(
+        (await harness.sessionRepository.find(harness.sessionId))
+          ?.verifiedResult,
+      ).toBeUndefined();
+      expect(
+        (await harness.runnerJobs.listEvents(jobId, 0)).map(
+          (event) => event.kind,
+        ),
+      ).toEqual(["verifier.rejected"]);
+    },
+  );
 
   it("resumes a v5 callback after a partial Worker authority-event append", async () => {
     const runnerJobs = new InterruptibleRunnerJobRepository();
