@@ -1,5 +1,9 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { ProofBundleSchema } from "@counterlab/contracts";
+import {
+  ProofBundleSchema,
+  ProofCapsuleReplayReceiptV2Schema,
+  ProofCapsuleReplayV2Schema,
+} from "@counterlab/contracts";
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 
@@ -22,7 +26,8 @@ function sha256(value: Uint8Array | string): string {
 
 async function writeLiveSmokeEvidence(
   concept: "entity_leakage" | "class_imbalance",
-  proofBody: string,
+  page: Page,
+  proofCapsulePath: string,
   patchedNotebookPath: string,
   authorityChecks?: {
     duplicateCompileReused: boolean;
@@ -34,25 +39,181 @@ async function writeLiveSmokeEvidence(
 ): Promise<void> {
   const destination = process.env.COUNTERLAB_E2E_EVIDENCE_PATH;
   if (destination === undefined || destination.length === 0) return;
-  const proof = ProofBundleSchema.parse(JSON.parse(proofBody));
-  if (proof.schemaVersion !== "2" || proof.sessionMode !== "live_notebook") {
-    throw new Error("Live smoke evidence requires a live Proof Bundle v2");
+
+  const sessionId = await page.evaluate(() =>
+    window.localStorage.getItem("counterlab.sessionId"),
+  );
+  if (sessionId === null) {
+    throw new Error("Live smoke evidence requires a persisted session ID");
   }
+
+  const completedSessionResponse = await page.request.get(
+    `/api/sessions/${encodeURIComponent(sessionId)}`,
+  );
+  expect(completedSessionResponse.ok()).toBe(true);
+  const completedSessionPayload = (await completedSessionResponse.json()) as {
+    data?: {
+      state?: unknown;
+      reasoningDiffV2?: unknown;
+      proofCapsule?: unknown;
+    };
+  };
+  expect(completedSessionPayload.data?.state).toBe("PROOF_CAPSULE_ISSUED");
+  expect(completedSessionPayload.data?.reasoningDiffV2).toBeDefined();
+  expect(completedSessionPayload.data?.proofCapsule).toBeDefined();
+
+  const proofCapsule = await readFile(proofCapsulePath);
+  const capsuleEnvelope = JSON.parse(proofCapsule.toString("utf8")) as {
+    entries?: Array<{ path?: unknown; sha256?: unknown; content?: unknown }>;
+  };
+  const engineSnapshotEntry = capsuleEnvelope.entries?.find(
+    (entry) => entry.path === "scientific-engine-snapshot.json",
+  );
+  if (
+    typeof engineSnapshotEntry?.sha256 !== "string" ||
+    typeof engineSnapshotEntry.content !== "string" ||
+    sha256(engineSnapshotEntry.content) !== engineSnapshotEntry.sha256
+  ) {
+    throw new Error(
+      "Live smoke evidence requires a hashed scientific-engine snapshot entry",
+    );
+  }
+
+  const publicationResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "POST" &&
+      url.pathname ===
+        `/api/sessions/${encodeURIComponent(sessionId)}/replays`
+    );
+  });
+  await page
+    .getByRole("button", { name: /Publish read-only replay/i })
+    .click();
+  const publicationResponse = await publicationResponsePromise;
+  expect([200, 201]).toContain(publicationResponse.status());
+  const publicationPayload = (await publicationResponse.json()) as {
+    data?: { replay?: unknown };
+  };
+  const receipt = ProofCapsuleReplayReceiptV2Schema.parse(
+    publicationPayload.data?.replay,
+  );
+  await expect(
+    page.getByRole("link", { name: /Open verified replay/i }),
+  ).toHaveAttribute(
+    "href",
+    `/replay/${encodeURIComponent(receipt.replayId)}`,
+  );
+
+  const duplicatePublicationResponse = await page.request.post(
+    `/api/sessions/${encodeURIComponent(sessionId)}/replays`,
+    { data: {} },
+  );
+  expect(duplicatePublicationResponse.status()).toBe(200);
+  const duplicatePublicationPayload =
+    (await duplicatePublicationResponse.json()) as {
+      data?: { reused?: unknown; replay?: unknown };
+    };
+  const duplicateReceipt = ProofCapsuleReplayReceiptV2Schema.parse(
+    duplicatePublicationPayload.data?.replay,
+  );
+  expect(duplicatePublicationPayload.data?.reused).toBe(true);
+  expect(duplicateReceipt.replayId).toBe(receipt.replayId);
+
+  const replayResponse = await page.request.get(
+    `/api/replays/${encodeURIComponent(receipt.replayId)}`,
+  );
+  expect(replayResponse.ok()).toBe(true);
+  const replayPayload = (await replayResponse.json()) as { data?: unknown };
+  const replay = ProofCapsuleReplayV2Schema.parse(replayPayload.data);
+
+  const replayCapsuleResponse = await page.request.get(
+    `/api/replays/${encodeURIComponent(receipt.replayId)}/proof-capsule`,
+  );
+  expect(replayCapsuleResponse.ok()).toBe(true);
+  expect(replayCapsuleResponse.headers()["content-type"]).toContain(
+    "application/vnd.counterlab.capsule+json",
+  );
+  const replayCapsule = Buffer.from(await replayCapsuleResponse.body());
+
+  const replayPatchResponse = await page.request.get(
+    `/api/replays/${encodeURIComponent(receipt.replayId)}/patched-notebook`,
+  );
+  expect(replayPatchResponse.ok()).toBe(true);
+  expect(replayPatchResponse.headers()["content-type"]).toContain(
+    "application/x-ipynb+json",
+  );
+  const replayPatch = Buffer.from(await replayPatchResponse.body());
+  const patchedNotebook = await readFile(patchedNotebookPath);
+  const parsedPatchedNotebook = JSON.parse(patchedNotebook.toString("utf8")) as {
+    nbformat?: unknown;
+    cells?: unknown;
+  };
+  expect(parsedPatchedNotebook.nbformat).toBe(4);
+  expect(Array.isArray(parsedPatchedNotebook.cells)).toBe(true);
+
+  const capsuleSha256 = sha256(proofCapsule);
+  const patchSha256 = sha256(patchedNotebook);
+  expect(capsuleSha256).toBe(receipt.bytesHash);
+  expect(proofCapsule.byteLength).toBe(receipt.proofCapsule.byteLength);
+  expect(sha256(replayCapsule)).toBe(capsuleSha256);
+  expect(sha256(replayPatch)).toBe(patchSha256);
+
+  await page.goto(`/replay/${encodeURIComponent(receipt.replayId)}`);
+  await expect(
+    page.getByRole("complementary", { name: "Verified replay mode" }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole("complementary", { name: "Verified replay mode" }),
+  ).toBeVisible();
+
   await writeFile(
     destination,
     `${JSON.stringify(
       {
-        schemaVersion: "1",
+        schemaVersion: "2",
         concept,
-        sourceArtifactHash: proof.artifactManifest.fileSha256,
-        planHash: proof.planVerification.planHash,
-        resultHash: proof.verifiedResultSet.resultHash,
-        patchResultHash: proof.patchResult.resultHash,
-        patchedNotebookSha256: sha256(await readFile(patchedNotebookPath)),
-        proofBundleSha256: sha256(proofBody),
-        proofContentHash: proof.integrity.contentHash,
-        eventChainHead: proof.integrity.eventChainHead,
-        scientificEngineSnapshotHash: proof.scientificEngineSnapshotHash,
+        sessionId,
+        publishedReplayId: receipt.replayId,
+        sourceArtifactHash: replay.artifactManifest.fileSha256,
+        experimentIrHash: replay.reasoningDiff.authority.experimentIrHash,
+        experimentSelectionHash:
+          replay.reasoningDiff.authority.selectionHash,
+        resultHash: replay.verifiedResult.resultHash,
+        evidenceVerdictHash:
+          replay.reasoningDiff.authority.evidenceVerdictHash,
+        epistemicReportHash:
+          replay.reasoningDiff.authority.epistemicReportHash,
+        boundaryMapHash: replay.boundary.result.resultHash,
+        boundaryReceiptHash:
+          replay.reasoningDiff.authority.boundaryReceiptHash,
+        transferResultHash:
+          replay.reasoningDiff.authority.transferResultHash,
+        patchPlanHash: replay.reasoningDiff.authority.patchPlanHash,
+        patchResultHash: replay.patchResult.resultHash,
+        patchedArtifactHash: replay.patchResult.patchedArtifactHash,
+        patchedNotebookSha256: patchSha256,
+        proofCapsuleSha256: capsuleSha256,
+        proofCapsuleRootHash: receipt.rootHash,
+        proofCapsuleBytesHash: receipt.bytesHash,
+        proofCapsuleMediaType: receipt.proofCapsule.mediaType,
+        proofCapsuleIntegrityMode: receipt.proofCapsule.integrity.mode,
+        proofCapsuleByteLength: receipt.proofCapsule.byteLength,
+        reasoningDiffHash: receipt.proofCapsule.reasoningDiffHash,
+        eventChainHead: receipt.eventChainHead,
+        scientificEngineSnapshotHash: engineSnapshotEntry.sha256,
+        replayProjectionHash: sha256(JSON.stringify(replay)),
+        replayProofCapsuleSha256: sha256(replayCapsule),
+        replayPatchedNotebookSha256: sha256(replayPatch),
+        replayPlaybackMode: replay.playbackMode,
+        replaySourceMode: replay.sourceMode,
+        replayPersistedAfterRefresh: true,
+        replayDownloadsMatch:
+          sha256(replayCapsule) === capsuleSha256 &&
+          sha256(replayPatch) === patchSha256,
+        duplicateReplayPublicationReused:
+          duplicatePublicationPayload.data?.reused === true,
         ...authorityChecks,
       },
       null,
@@ -204,6 +365,75 @@ async function waitForVerifiedPatch({
 
   await expect(success).toBeVisible({ timeout: 360_000 });
 }
+
+test("Judge Mode distinguishes every authority path", async ({ page }) => {
+  const healthResponse = await page.request.get("/api/health");
+  expect(healthResponse.ok()).toBe(true);
+  const health = (await healthResponse.json()) as {
+    data?: {
+      liveGpt?: unknown;
+      liveCodex?: unknown;
+      liveKernel?: unknown;
+      sandbox?: unknown;
+    };
+  };
+  const liveReady =
+    health.data?.liveGpt === "configured" &&
+    health.data.liveCodex === "configured" &&
+    health.data.liveKernel === "configured" &&
+    health.data.sandbox === "configured";
+  await page.goto("/judge");
+  await expect(page).toHaveURL(/\/judge$/);
+  await expect(
+    page.getByRole("heading", {
+      name: /see a belief break in twenty seconds/i,
+    }),
+  ).toBeVisible();
+  await expect(page.getByText("Sample lesson")).toBeVisible();
+  await expect(page.getByText("Live notebook analysis")).toBeVisible();
+  await expect(page.getByText("Verified replay", { exact: true })).toBeVisible();
+  if (liveReady) {
+    await expect(
+      page.getByRole("link", { name: /run live/i }),
+    ).toHaveAttribute("href", "/new");
+  } else {
+    await expect(page.getByText(/live authority is unavailable/i)).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /run live/i }),
+    ).toHaveCount(0);
+  }
+  await expect(
+    page.getByRole("link", { name: /watch replay/i }),
+  ).toHaveAttribute("href", "/replay/leakage-01");
+  await expect(
+    page.getByRole("heading", { name: "GPT-5.6", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Runtime Codex", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Fixed kernel", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Frozen verifier", exact: true }),
+  ).toBeVisible();
+
+  await page.reload();
+  await expect(page).toHaveURL(/\/judge$/);
+  await expect(
+    page.getByRole("heading", {
+      name: /see a belief break in twenty seconds/i,
+    }),
+  ).toBeVisible();
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
 
 test("the first visit explains the lesson before asking for technical knowledge", async ({
   page,
@@ -859,24 +1089,21 @@ test("a configured hosted runner completes an untouched leakage notebook", async
 
   const patchDownload = page.waitForEvent("download");
   await page
-    .getByRole("link", { name: /Download verified notebook copy/i })
+    .getByRole("link", { name: /Download repaired notebook/i })
     .click();
   const patch = await patchDownload;
   expect(patch.suggestedFilename()).toMatch(/\.counterlab-patched\.ipynb$/i);
   const patchedNotebookPath = await patch.path();
   expect(patchedNotebookPath).not.toBeNull();
 
-  const proofDownload = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Download proof/i }).click();
-  const proofPath = await (await proofDownload).path();
-  expect(proofPath).not.toBeNull();
-  const proofBody = await readFile(proofPath!, "utf8");
-  expect(
-    ProofBundleSchema.parse(JSON.parse(proofBody)).events,
-  ).not.toHaveLength(0);
+  const capsuleDownload = page.waitForEvent("download");
+  await page.getByRole("link", { name: /Export Proof Capsule/i }).click();
+  const capsulePath = await (await capsuleDownload).path();
+  expect(capsulePath).not.toBeNull();
   await writeLiveSmokeEvidence(
     "entity_leakage",
-    proofBody,
+    page,
+    capsulePath!,
     patchedNotebookPath!,
     {
       duplicateCompileReused: duplicateCompile.body.data.reused === true,
@@ -992,26 +1219,22 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
   await expect(page).toHaveURL(/\/proof\//);
 
   const patchDownload = page.waitForEvent("download");
-  await page.getByRole("link", { name: /Download patched copy/i }).click();
+  await page
+    .getByRole("link", { name: /Download repaired notebook/i })
+    .click();
   const patch = await patchDownload;
   expect(patch.suggestedFilename()).toMatch(/\.counterlab-patched\.ipynb$/i);
   const patchedNotebookPath = await patch.path();
   expect(patchedNotebookPath).not.toBeNull();
 
-  const proofDownload = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Export Proof Bundle/i }).click();
-  const proof = await proofDownload;
-  const proofPath = await proof.path();
-  expect(proofPath).not.toBeNull();
-  const proofBody = await readFile(proofPath!, "utf8");
-  const parsedProof = ProofBundleSchema.parse(JSON.parse(proofBody));
-  expect(parsedProof.sessionId).toMatch(/^session_/);
-  expect(parsedProof.events.some((event) => event.actor === "kernel")).toBe(
-    true,
-  );
+  const capsuleDownload = page.waitForEvent("download");
+  await page.getByRole("link", { name: /Export Proof Capsule/i }).click();
+  const capsulePath = await (await capsuleDownload).path();
+  expect(capsulePath).not.toBeNull();
   await writeLiveSmokeEvidence(
     "class_imbalance",
-    proofBody,
+    page,
+    capsulePath!,
     patchedNotebookPath!,
   );
 });

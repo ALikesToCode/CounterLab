@@ -14,6 +14,17 @@ _REPORT_STATUSES = {"RUNNING", "PASSED", "FAILED"}
 _STAGE_STATUSES = {"PASSED", "FAILED", "SKIPPED"}
 _MODES = {"control_plane", "sample", "replay", "live_notebook"}
 _CONCEPTS = {"entity_leakage", "class_imbalance"}
+_REQUIRED_PASSED_STAGE_MATRIX = {
+    "public-readiness": ("control_plane", None),
+    "capability-health": ("control_plane", None),
+    "public-secret-scan": ("control_plane", None),
+    "judge-mode": ("control_plane", None),
+    "sample-lesson": ("sample", None),
+    "verified-replay": ("replay", None),
+    "hosted-capsule-replay": ("replay", "entity_leakage"),
+    "live-leakage": ("live_notebook", "entity_leakage"),
+    "live-imbalance": ("live_notebook", "class_imbalance"),
+}
 _SAFE_IDENTIFIER = re.compile(r"^[A-Za-z0-9_.:-]{1,256}$")
 _IMAGE_DIGEST = re.compile(r"^sha256:[a-f0-9]{64}$")
 _FORBIDDEN_VALUE_PATTERNS = (
@@ -223,6 +234,30 @@ def finish_report(
     if status not in {"PASSED", "FAILED"}:
         raise ValueError("final smoke status must be PASSED or FAILED")
     report = load_report(path)
+    if status == "PASSED":
+        if (
+            report["deployment"]["workerVersion"] is None
+            or report["deployment"]["containerImageDigest"] is None
+        ):
+            raise ValueError(
+                "a passing smoke report requires deployment identity and image digest"
+            )
+        observed = {
+            stage["id"]: (
+                stage["mode"],
+                stage.get("concept"),
+                stage["status"],
+            )
+            for stage in report["stages"]
+        }
+        expected = {
+            stage_id: (mode, concept, "PASSED")
+            for stage_id, (mode, concept) in _REQUIRED_PASSED_STAGE_MATRIX.items()
+        }
+        if observed != expected:
+            raise ValueError(
+                "a passing smoke report requires the exact required stage matrix"
+            )
     report["status"] = status
     report["completedAt"] = _timestamp(completed_at, "completedAt")
     validate_report(report)

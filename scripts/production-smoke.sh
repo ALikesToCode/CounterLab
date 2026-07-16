@@ -18,6 +18,12 @@ if [[ ! "${BASE_URL}" =~ ^https:// ]]; then
   exit 2
 fi
 
+if [[ -z "${COUNTERLAB_DEPLOYMENT_ID:-}" || -z "${COUNTERLAB_CONTAINER_IMAGE_DIGEST:-}" ]]; then
+  echo "Production smoke requires COUNTERLAB_DEPLOYMENT_ID and COUNTERLAB_CONTAINER_IMAGE_DIGEST." >&2
+  echo "Use the exact Worker version and sha256 image digest from this release." >&2
+  exit 2
+fi
+
 for command in curl pnpm python3; do
   if ! command -v "${command}" >/dev/null 2>&1; then
     echo "Missing required command: ${command}" >&2
@@ -48,11 +54,42 @@ import pathlib
 import re
 import sys
 payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
-if payload.pop("schemaVersion", None) != "1":
+if payload.pop("schemaVersion", None) != "2":
     raise SystemExit("live smoke evidence schema is invalid")
 concept = payload.pop("concept", None)
 if concept != sys.argv[2]:
     raise SystemExit("live smoke evidence concept is invalid")
+
+token = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+session_id = payload.pop("sessionId", None)
+if not isinstance(session_id, str) or token.fullmatch(session_id) is None:
+    raise SystemExit("live smoke session authority is missing")
+published_replay_id = payload.pop("publishedReplayId", None)
+if (
+    not isinstance(published_replay_id, str)
+    or token.fullmatch(published_replay_id) is None
+):
+    raise SystemExit("published replay authority is missing")
+
+if payload.pop("proofCapsuleMediaType", None) != "application/vnd.counterlab.capsule+json":
+    raise SystemExit("Proof Capsule media type is invalid")
+integrity_mode = payload.pop("proofCapsuleIntegrityMode", None)
+if integrity_mode not in {"integrity-hashed", "hmac-signed"}:
+    raise SystemExit("Proof Capsule integrity mode is invalid")
+byte_length = payload.pop("proofCapsuleByteLength", None)
+if not isinstance(byte_length, int) or isinstance(byte_length, bool) or byte_length <= 0:
+    raise SystemExit("Proof Capsule byte length is invalid")
+if payload.pop("replayPlaybackMode", None) != "verified_capsule_replay":
+    raise SystemExit("published replay playback mode is invalid")
+if payload.pop("replaySourceMode", None) != "live_notebook":
+    raise SystemExit("published replay source mode is invalid")
+if payload.pop("replayPersistedAfterRefresh", None) is not True:
+    raise SystemExit("replay persistence check failed")
+if payload.pop("replayDownloadsMatch", None) is not True:
+    raise SystemExit("replay download authority check failed")
+if payload.pop("duplicateReplayPublicationReused", None) is not True:
+    raise SystemExit("duplicate replay publication was not reused")
+
 authority_keys = {
     "duplicateCompileReused",
     "reconnectedFromCursor",
@@ -70,15 +107,53 @@ if concept == "entity_leakage":
         raise SystemExit("live leakage authority checks are incomplete")
 elif authority:
     raise SystemExit("unexpected authority checks for this concept")
-if "scientificEngineSnapshotHash" not in payload:
+if not isinstance(payload.get("scientificEngineSnapshotHash"), str):
     raise SystemExit("live smoke scientific engine authority is missing")
-if not payload or any(
-    not isinstance(value, str) or re.fullmatch(r"[a-f0-9]{64}", value) is None
-    for value in payload.values()
+
+hash_keys = {
+    "sourceArtifactHash",
+    "experimentIrHash",
+    "experimentSelectionHash",
+    "resultHash",
+    "evidenceVerdictHash",
+    "epistemicReportHash",
+    "boundaryMapHash",
+    "boundaryReceiptHash",
+    "transferResultHash",
+    "patchPlanHash",
+    "patchResultHash",
+    "patchedArtifactHash",
+    "patchedNotebookSha256",
+    "proofCapsuleSha256",
+    "proofCapsuleRootHash",
+    "proofCapsuleBytesHash",
+    "reasoningDiffHash",
+    "eventChainHead",
+    "scientificEngineSnapshotHash",
+    "replayProjectionHash",
+    "replayProofCapsuleSha256",
+    "replayPatchedNotebookSha256",
+}
+if set(payload) != hash_keys or any(
+    not isinstance(payload[key], str)
+    or re.fullmatch(r"[a-f0-9]{64}", payload[key]) is None
+    for key in hash_keys
 ):
     raise SystemExit("live smoke evidence hashes are invalid")
-payload.update(authority)
-print(json.dumps(payload, separators=(",", ":")))
+print(json.dumps({
+    **payload,
+    **authority,
+    "sessionId": session_id,
+    "publishedReplayId": published_replay_id,
+    "proofCapsuleMediaType": "application/vnd.counterlab.capsule+json",
+    "proofCapsuleIntegrityMode": integrity_mode,
+    "proofCapsuleByteLength": byte_length,
+    "replayPlaybackMode": "verified_capsule_replay",
+    "replaySourceMode": "live_notebook",
+    "replayPersistedAfterRefresh": True,
+    "replayDownloadsMatch": True,
+    "duplicateReplayPublicationReused": True,
+}, separators=(",", ":")))
 PY
 }
 
@@ -133,12 +208,8 @@ init_args=(
   --base-url "${BASE_URL}"
   --started-at "${started_at}"
 )
-if [[ -n "${COUNTERLAB_DEPLOYMENT_ID:-}" ]]; then
-  init_args+=(--deployment-id "${COUNTERLAB_DEPLOYMENT_ID}")
-fi
-if [[ -n "${COUNTERLAB_CONTAINER_IMAGE_DIGEST:-}" ]]; then
-  init_args+=(--container-image-digest "${COUNTERLAB_CONTAINER_IMAGE_DIGEST}")
-fi
+init_args+=(--deployment-id "${COUNTERLAB_DEPLOYMENT_ID}")
+init_args+=(--container-image-digest "${COUNTERLAB_CONTAINER_IMAGE_DIGEST}")
 python3 "${REPORT_HELPER}" "${init_args[@]}"
 REPORT_INITIALIZED=1
 
@@ -251,6 +322,13 @@ stage_started="$(timestamp)"
 COUNTERLAB_E2E_BASE_URL="${BASE_URL}" \
   pnpm --filter @counterlab/web exec playwright test \
   --config playwright.config.ts \
+  --grep "Judge Mode distinguishes every authority path"
+record_stage "judge-mode" "control_plane" "PASSED" "${stage_started}" "$(timestamp)"
+
+stage_started="$(timestamp)"
+COUNTERLAB_E2E_BASE_URL="${BASE_URL}" \
+  pnpm --filter @counterlab/web exec playwright test \
+  --config playwright.config.ts \
   --grep "Try Instantly persists"
 record_stage "sample-lesson" "sample" "PASSED" "${stage_started}" "$(timestamp)"
 
@@ -268,9 +346,13 @@ COUNTERLAB_E2E_EVIDENCE_PATH="${TMP_DIR}/live-leakage.json" \
   pnpm --filter @counterlab/web exec playwright test \
   --config playwright.config.ts \
   --grep "configured hosted runner completes an untouched leakage notebook"
+leakage_evidence="$(live_evidence "${TMP_DIR}/live-leakage.json" "entity_leakage")"
 record_stage \
   "live-leakage" "live_notebook" "PASSED" "${stage_started}" "$(timestamp)" \
-  "entity_leakage" "$(live_evidence "${TMP_DIR}/live-leakage.json" "entity_leakage")"
+  "entity_leakage" "${leakage_evidence}"
+record_stage \
+  "hosted-capsule-replay" "replay" "PASSED" "${stage_started}" "$(timestamp)" \
+  "entity_leakage" "${leakage_evidence}"
 
 stage_started="$(timestamp)"
 COUNTERLAB_E2E_BASE_URL="${BASE_URL}" \
