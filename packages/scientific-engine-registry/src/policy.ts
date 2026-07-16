@@ -165,6 +165,60 @@ export function enforceScientificEngineSnapshotPolicy(
     snapshot.registry.engines.map((engine) => [engine.id, engine]),
   );
 
+  if (
+    snapshot.runtimeManifest.vexEvidenceId &&
+    snapshot.runtimeManifest.vexEvidenceHash &&
+    snapshot.runtimeManifest.reachabilityEvidenceId &&
+    snapshot.runtimeManifest.reachabilityEvidenceHash &&
+    snapshot.runtimeManifest.vexApplicationEvidenceId &&
+    snapshot.runtimeManifest.vexApplicationEvidenceHash
+  ) {
+    const vex = requireRecord(
+      records,
+      snapshot.runtimeManifest.vexEvidenceId,
+      "vex",
+      "runtimeManifest.vexEvidenceId",
+    );
+    if (vex.sha256 !== snapshot.runtimeManifest.vexEvidenceHash) {
+      throw new ScientificEnginePolicyError(
+        "VEX_HASH_MISMATCH",
+        "runtimeManifest.vexEvidenceHash",
+        "VEX evidence hash does not match its catalog record",
+      );
+    }
+    const reachability = requireRecord(
+      records,
+      snapshot.runtimeManifest.reachabilityEvidenceId,
+      "reachability_report",
+      "runtimeManifest.reachabilityEvidenceId",
+    );
+    if (
+      reachability.sha256 !== snapshot.runtimeManifest.reachabilityEvidenceHash
+    ) {
+      throw new ScientificEnginePolicyError(
+        "REACHABILITY_HASH_MISMATCH",
+        "runtimeManifest.reachabilityEvidenceHash",
+        "Reachability evidence hash does not match its catalog record",
+      );
+    }
+    const vexApplication = requireRecord(
+      records,
+      snapshot.runtimeManifest.vexApplicationEvidenceId,
+      "vex_application_report",
+      "runtimeManifest.vexApplicationEvidenceId",
+    );
+    if (
+      vexApplication.sha256 !==
+      snapshot.runtimeManifest.vexApplicationEvidenceHash
+    ) {
+      throw new ScientificEnginePolicyError(
+        "VEX_APPLICATION_HASH_MISMATCH",
+        "runtimeManifest.vexApplicationEvidenceHash",
+        "VEX application evidence hash does not match its catalog record",
+      );
+    }
+  }
+
   for (const [engineIndex, engine] of snapshot.registry.engines.entries()) {
     const engineRecords = snapshot.evidenceCatalog.records.filter(
       (record) => record.engineId === engine.id,

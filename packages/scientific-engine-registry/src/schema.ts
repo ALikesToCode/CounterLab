@@ -274,7 +274,11 @@ export const ScientificEngineEvidenceKindSchema = z.enum([
   "lockfile",
   "sbom",
   "sbom_manifest",
+  "vulnerability_scan",
   "vulnerability_report",
+  "vex",
+  "vex_application_report",
+  "reachability_report",
 ]);
 
 export const ScientificEngineEvidenceRecordSchema = z.strictObject({
@@ -292,65 +296,92 @@ export const ScientificEngineEvidenceCatalogSchema = z.strictObject({
   records: z.array(ScientificEngineEvidenceRecordSchema).min(1),
 });
 
-export const ScientificEngineRuntimeManifestSchema = z.strictObject({
-  schemaVersion: z.literal("1"),
-  generatedAt: z.iso.datetime(),
-  environmentId: StableIdSchema,
-  environmentKind: z.enum(["local_candidate", "cloudflare_production"]),
-  sourceCommit: GitCommitSchema,
-  registryHash: Sha256Schema,
-  bindingsHash: Sha256Schema,
-  platform: z.strictObject({
-    os: z.string().trim().min(1),
-    architecture: z.string().trim().min(1),
-  }),
-  runtimes: z
-    .array(
-      z.strictObject({
-        id: StableIdSchema,
-        exactVersion: ExactVersionSchema,
-        sourceUrl: HttpsUrlSchema,
-        licenseId: z.string().trim().min(1),
-        licenseFileHash: Sha256Schema,
-      }),
-    )
-    .min(1),
-  installedEngines: z
-    .array(
-      z.strictObject({
-        engineId: StableIdSchema,
-        packageName: z.string().trim().min(1).max(160),
-        exactVersion: ExactVersionSchema,
-        artifactSha256: Sha256Schema,
-        healthEvidenceId: StableIdSchema,
-        toleranceProfileId: StableIdSchema,
-      }),
-    )
-    .min(1),
-  container: z.strictObject({
-    imageDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
-    vcpu: z.number().positive(),
-    memoryMb: z.number().int().positive(),
-    diskMb: z.number().int().positive(),
-  }),
-  resourceLimitProfileId: StableIdSchema,
-  lockHashes: z
-    .record(StableIdSchema, Sha256Schema)
-    .refine(
-      (value) => Object.keys(value).length > 0,
-      "at least one lock hash is required",
-    ),
-  sbomHashes: z
-    .record(StableIdSchema, Sha256Schema)
-    .refine(
-      (value) => Object.keys(value).length > 0,
-      "at least one SBOM hash is required",
-    ),
-  sbomManifestEvidenceId: StableIdSchema,
-  sbomManifestHash: Sha256Schema,
-  vulnerabilityReportEvidenceId: StableIdSchema,
-  vulnerabilityReportHash: Sha256Schema,
-});
+export const ScientificEngineRuntimeManifestSchema = z
+  .strictObject({
+    schemaVersion: z.literal("1"),
+    generatedAt: z.iso.datetime(),
+    environmentId: StableIdSchema,
+    environmentKind: z.enum(["local_candidate", "cloudflare_production"]),
+    sourceCommit: GitCommitSchema,
+    registryHash: Sha256Schema,
+    bindingsHash: Sha256Schema,
+    platform: z.strictObject({
+      os: z.string().trim().min(1),
+      architecture: z.string().trim().min(1),
+    }),
+    runtimes: z
+      .array(
+        z.strictObject({
+          id: StableIdSchema,
+          exactVersion: ExactVersionSchema,
+          sourceUrl: HttpsUrlSchema,
+          licenseId: z.string().trim().min(1),
+          licenseFileHash: Sha256Schema,
+        }),
+      )
+      .min(1),
+    installedEngines: z
+      .array(
+        z.strictObject({
+          engineId: StableIdSchema,
+          packageName: z.string().trim().min(1).max(160),
+          exactVersion: ExactVersionSchema,
+          artifactSha256: Sha256Schema,
+          healthEvidenceId: StableIdSchema,
+          toleranceProfileId: StableIdSchema,
+        }),
+      )
+      .min(1),
+    container: z.strictObject({
+      imageDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+      vcpu: z.number().positive(),
+      memoryMb: z.number().int().positive(),
+      diskMb: z.number().int().positive(),
+    }),
+    resourceLimitProfileId: StableIdSchema,
+    lockHashes: z
+      .record(StableIdSchema, Sha256Schema)
+      .refine(
+        (value) => Object.keys(value).length > 0,
+        "at least one lock hash is required",
+      ),
+    sbomHashes: z
+      .record(StableIdSchema, Sha256Schema)
+      .refine(
+        (value) => Object.keys(value).length > 0,
+        "at least one SBOM hash is required",
+      ),
+    sbomManifestEvidenceId: StableIdSchema,
+    sbomManifestHash: Sha256Schema,
+    vulnerabilityReportEvidenceId: StableIdSchema,
+    vulnerabilityReportHash: Sha256Schema,
+    vexEvidenceId: StableIdSchema.optional(),
+    vexEvidenceHash: Sha256Schema.optional(),
+    reachabilityEvidenceId: StableIdSchema.optional(),
+    reachabilityEvidenceHash: Sha256Schema.optional(),
+    vexApplicationEvidenceId: StableIdSchema.optional(),
+    vexApplicationEvidenceHash: Sha256Schema.optional(),
+  })
+  .superRefine((manifest, context) => {
+    const reviewedBindings = [
+      manifest.vexEvidenceId,
+      manifest.vexEvidenceHash,
+      manifest.reachabilityEvidenceId,
+      manifest.reachabilityEvidenceHash,
+      manifest.vexApplicationEvidenceId,
+      manifest.vexApplicationEvidenceHash,
+    ];
+    const present = reviewedBindings.filter(
+      (value) => value !== undefined,
+    ).length;
+    if (present !== 0 && present !== reviewedBindings.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["vexEvidenceId"],
+        message: "reviewed vulnerability evidence bindings must be complete",
+      });
+    }
+  });
 
 export const ScientificEngineSnapshotSchema = z.strictObject({
   schemaVersion: z.literal("1"),
