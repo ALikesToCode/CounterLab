@@ -335,3 +335,21 @@ async browser journeys, and measured performance.
 | What's the goal?     | A real public artifact-specific CounterLab Studio with two verified concepts.       |
 | What have I learned? | See `findings.md`.                                                                  |
 | What have I done?    | Closed the exact public authority gate and preserved its signed/hash evidence.       |
+
+## 2026-07-16 v5 fixed-run checkpoint
+
+- Commit `37bf938` added the versioned v5 `LAB_RUN` to the hosted runner union
+  and routes it to the fixed kernel before any Codex compiler branch.
+- The v5 runner uploads only `verified-result.json`, publishes a bounded command
+  event, and withholds `result.ready` until the Worker verifies the result.
+- The Python entrypoint validates exact top-level/hash sets, Experiment IR v5
+  JSON Schema, Belief/Prediction/session lineage, fixed scorer selection,
+  projected Plan parity, the registered fixture descriptor, and the computed
+  fixture content hash before returning output.
+- Focused evidence: 8 Python plan/imbalance tests passed; 22 Experiment IR,
+  runner, and fixed-kernel tests passed; strict TypeScript, touched-file
+  Prettier, and `git diff --check` passed.
+- Active gate: Worker-side epistemic result verification and atomic tri-state
+  persistence. V5 interactive, transfer, patch, proof, Boundary Map, UI, and
+  release work remain downstream.
+- No build, dev server, deployment, or production smoke was run for this slice.

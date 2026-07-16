@@ -1,5 +1,20 @@
 # Decisions
 
+## 2026-07-16 — Make the Worker own v5 result readiness
+
+- A v5 `LAB_RUN` reaches the runner only after the Worker reconstructs and
+  re-verifies the complete scientific compile authority.
+- The runner may execute only the fixed projected Plan and upload
+  `verified-result.json`; it emits a bounded command-completed event but no
+  `result.ready` event.
+- Python independently validates the Experiment IR v5 schema, hash lineage,
+  selected experiment, registered fixture descriptor, and resulting fixture
+  content hash before returning a result.
+- The Worker will emit result readiness only after its frozen technical and
+  epistemic verification accepts the result. This prevents reconnect clients
+  from observing a result before independent verification.
+- Legacy v1/v2 runner behavior and replay evidence remain unchanged.
+
 ## 2026-07-15 — Admit only the scientific engines required by released packs
 
 - Register the CounterLab fixed ML kernel, NumPy 2.4.6, pandas 2.3.3, and

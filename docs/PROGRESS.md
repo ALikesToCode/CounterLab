@@ -20,10 +20,14 @@ separately labelled advanced local proof and replay.
 The v5 scientific-method packages are implemented and independently tested:
 `BeliefSpecV2`, Experiment IR v5 with a v2 projection adapter, the deterministic
 candidate scorer, and the epistemic verifier with tri-state Evidence Verdicts.
-They are not yet the authority released by the hosted Worker/runner path. The
-current production deployment remains the qualified Experiment Plan v2 path;
-binding the v5 artifacts and verdict into live leakage and imbalance jobs is the
-active engineering gate.
+The local Worker/runner implementation now creates a native Belief Spec, accepts
+only the four bounded Codex scientific artifacts, independently reruns candidate
+verification at the compile callback, dispatches an authority-bound v5
+`LAB_RUN`, and executes only its fixed projected Plan against the registered
+fixture. The runner deliberately withholds `result.ready`; Worker-side epistemic
+verification and tri-state result persistence are the active unfinished gate.
+The current production deployment remains the qualified Experiment Plan v2
+path and has not been promoted to this worktree.
 
 The live Responses integration was exercised against the configured endpoint. A
 real schema-constrained class-imbalance Belief Test completed, validated locally,
@@ -50,6 +54,29 @@ candidate was deployed under Cloudflare's distinct registry digest above; both
 live smoke stages record authority hash `d7677c79…`. The local OCI digest and
 deployed registry digest remain distinct identities and are not interchangeable.
 
+## Active v5.1 execution tracker
+
+| Slice | Status | Repository evidence | Remaining release condition |
+| --- | --- | --- | --- |
+| Belief Spec v2 analyst/session authority | done | Native v2 proposal, confirmation, evidence resolution, v1 replay adapter, and live Worker tests; commits through `06465f3` | Production promotion is deferred until the full v5 chain is complete. |
+| Bounded Codex scientific compile | done | Four-file allowlist, compiler provenance, fixed candidate verifier/scorer, two-repair contract, and terminal callback reconstruction; commits `d57b4a2` through `1972c2d` | Rerun in the final production image and smoke both concepts. |
+| V5 fixed-run dispatch | done | Exact Belief Spec, Prediction, manifest, fixture, raw/canonical IR, selection, selected IR, report, and Plan hashes bind the run; `c7eca2e` | No production claim until the callback gate below passes. |
+| V5 runner/Python execution | done | Versioned runner dispatches `LAB_RUN` before Codex, Python validates Experiment IR v5 and registered fixture authority, fixed kernel alone computes output, and no early result event is emitted; `37bf938` | Add a direct v5 imbalance-envelope test during concept integration. |
+| Worker epistemic result callback | in progress | Epistemic verifier package and tri-state schemas already pass package tests. | Reconstruct compile/run authority, verify the returned result, persist report/verdict atomically, and release only `SUPPORTS` or `INCONCLUSIVE`. |
+| Interactive controls on v5 lineage | pending | Existing v2 fixed controls remain qualified. | Remove legacy Belief Test/Plan assumptions and bind every control rerun to the v5 selected experiment. |
+| Transfer, patch, Reasoning Diff, proof | pending | Existing v2 artifact-specific path remains qualified. | Migrate lineage without sample/replay authority, then add Proof Capsule v2. |
+| Boundary Map, simplified Theater, Judge Mode | pending | Contracts/UX requirements are recorded; existing UI remains the released Studio UI. | Implement only after the v5 ML authority loop passes. |
+| Physics/free-fall | blocked by phase order | No verified public support is claimed. | Start only after both live ML concepts pass the new production authority gate. |
+| Final release | pending | Previous production v2 smoke remains valid for that deployment. | Full suites, clean clone, engine gate, secret scan, deployment, CloakBrowser journeys, and exact-version production smoke. |
+
+Latest local v5 run-boundary verification (2026-07-16):
+
+- Python Plan/imbalance interpreter: 8 passed.
+- Experiment IR plus hosted-runner/fixed-kernel Vitest: 22 passed.
+- Strict repository TypeScript: passed.
+- Touched TypeScript formatting and Git whitespace checks: passed.
+- No `build`, `dev`, deployment, or production smoke was run for this slice.
+
 ## Acceptance matrix
 
 | Gate                                         | Status  | Current evidence                                                                                                                                                                                                                          |
@@ -61,6 +88,7 @@ deployed registry digest remain distinct identities and are not interchangeable.
 | Live analyst preview and approval            | pass    | Live calls require a hash-bound preview of the exact sanitized packet; sensitive-looking evidence requires explicit approval, and claim/artifact changes invalidate it.                                                                  |
 | Runner job/token/callback/event cursor model | pass    | D1 repository, optimistic transitions, Worker-held P-256 private signing, Container public-key verification, callback idempotency, cursor reconnect, scoped cancellation, recoverable dispatch acknowledgement, and browser-safe event schemas pass tests and production smoke. |
 | Artifact-specific hosted Experiment Plan     | pass    | Worker/runner integration compiles and independently verifies typed v2 Plans; rejected candidates release no result.                                                                                                                      |
+| V5 hosted scientific authority migration     | partial | Native Belief Spec, bounded compile/repair, fixed selection, callback reconstruction, fixture-bound LAB_RUN dispatch, and fixed Python execution pass focused tests. Worker epistemic result release and all downstream v5 lineage remain pending. |
 | Fixed hosted result and cross-language hash  | pass    | Python v2 result hashes now use browser-compatible canonical JSON while legacy v1/replay hashes remain stable; TypeScript result verification passes both concepts.                                                                       |
 | Entity-leakage lab and mutations             | pass    | Computed random 0.984722, group 0.594444, ablation 0.673611, zero group overlap; the current CLI rejects 13/13 critical mutations and the achieved-metrics collector records the same 13/13 published set.                                |
 | Class-imbalance lab and mutations            | pass    | 6,000 rows, 1.0833% positives, majority accuracy 0.989333 with recall 0; threshold recall 0.3125; the current CLI rejects 19/19 critical mutations and the achieved-metrics collector records its narrower 15/15 published set.             |
@@ -104,13 +132,15 @@ deployed registry digest remain distinct identities and are not interchangeable.
 
 ## Highest-risk remaining issue
 
-The highest remaining product risk is authority migration: the v5 Belief Spec,
-Experiment IR, fixed scorer, and epistemic verifier pass their package tests but
-the public hosted path still releases the qualified v2 Plan/result contract.
-Until a live job persists and hash-binds the v5 selection, report, and tri-state
-verdict, P0.5 is not complete. Upstream Runtime Codex turn intermittency remains
-an operational risk; the runner fails closed and production smoke proved its
-bounded recovery path. The reviewed vulnerability exception expires on
+The highest remaining product risk is the final result-release authority cutover.
+The local v5 path now hash-binds Belief Spec, Prediction, raw compiler files,
+fixed selection, selected IR, projected Plan, and fixture through fixed-kernel
+execution, but the Worker result callback does not yet persist the epistemic
+report and tri-state verdict. Until it does, no v5 result may be released and the
+current production deployment must remain on its qualified v2 contract. Upstream
+Runtime Codex turn intermittency remains an operational risk; the runner fails
+closed and the previous production smoke proved its bounded recovery path. The
+reviewed vulnerability exception expires on
 `2026-07-30T04:21:10Z` and requires requalification on any bound source, image,
 SBOM, entrypoint, scanner, or vulnerability-status change. Cloudflare
 Containers remain a beta runtime, and no formal sandbox proof is claimed.

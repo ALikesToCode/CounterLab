@@ -98,23 +98,35 @@ code, `apps/web/src/App.tsx`, or global CSS.
 
 ### Phase 7 — Runtime Codex v5 artifacts
 
-- [ ] Restrict live output to discrimination contract, IR, scene, rationale, and
+- [x] Restrict live output to discrimination contract, IR, scene, rationale, and
       post-transfer Patch Plan with two repairs and no hidden/manual edits.
-- **Status:** in progress; current hosted Codex output is the qualified v2 Plan
-  plus display-only rationale.
+- [x] Reconstruct all compile inputs and raw/canonical outputs at the terminal
+      callback before recording verified lineage.
+- [x] Dispatch the selected v5 experiment to the fixed runner without a second
+      Codex turn or an early `result.ready` event.
+- [ ] Verify the returned fixed result epistemically and persist the tri-state
+      verdict before the Worker emits result readiness.
+- **Status:** in progress; generation, selection, callback reconstruction, and
+  fixed execution are complete locally. Result release remains closed.
 
 ### Phase 8 — entity-leakage integration
 
-- [ ] Add candidate experiments, scorer contract, epistemic mappings, signed
-      recurrence/signal Boundary Sweep, and mutations while preserving v1.
-- **Status:** in progress; pack policy and epistemic verification exist, but the
-  hosted job/result persistence path does not yet publish their v5 artifacts.
+- [x] Add candidate experiments, scorer contract, and epistemic mappings while
+      preserving v1.
+- [x] Execute the selected group-holdout experiment through the versioned fixed
+      Python boundary with exact fixture authority.
+- [ ] Add tri-state result persistence, signed recurrence/signal Boundary Sweep,
+      and mutations while preserving v1.
+- **Status:** in progress; compile and fixed execution are integrated, but the
+  hosted result callback and Boundary Map are not yet released.
 
 ### Phase 9 — class-imbalance integration
 
-- [ ] Add candidate experiments, scorer contract, tri-state mappings,
+- [x] Add candidate experiments, scorer contract, and tri-state mappings.
+- [ ] Add a direct versioned run-envelope test, Worker tri-state persistence,
       prevalence/threshold Boundary Sweep, and mutations.
-- **Status:** in progress for the same hosted authority binding as Phase 8.
+- **Status:** in progress; the generic registered fixed runner supports the pack,
+  but the versioned end-to-end result-release proof remains pending.
 
 ### Phase 10 — Boundary Map engine
 

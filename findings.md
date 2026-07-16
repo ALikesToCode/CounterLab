@@ -521,3 +521,20 @@ be stale. Verify them against the current tree before making decisions.
   instrumentation or route-level lazy loading; `App.tsx` and the accumulated
   global styles remain large conflict surfaces that should be split by product
   responsibility only after authority contracts are stable.
+
+## 2026-07-16 v5 LAB_RUN authority findings
+
+- Raw compiler file SHA-256 values and canonical Experiment IR hashes are
+  distinct authorities. The run envelope preserves both and never compares a
+  pretty-printed file hash to a canonical semantic hash.
+- The fixed fixture materially determines every displayed metric, so the v5 run
+  binds its ID, version, descriptor hash, and generated content hash.
+- Dispatch must branch on job kind before schema version. Otherwise a v5
+  `LAB_RUN` is incorrectly sent through the scientific Codex compiler instead of
+  the fixed kernel.
+- Result readiness is a verifier-owned event. The runner can report successful
+  fixed execution, but only the Worker has the independent evidence needed to
+  release `SUPPORTS` or `INCONCLUSIVE` to a browser.
+- The generated Experiment IR v5 JSON Schema already ships in the Python
+  package. Validating against it at the process boundary closes executable and
+  unknown-field drift without duplicating the TypeScript schema manually.
