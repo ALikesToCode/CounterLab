@@ -35,6 +35,7 @@ import {
   VersionedRunnerJobInputBundleSchema,
   deriveInteractivePlanV5,
   hashExperimentIR,
+  type RunnerPatchCompileBundleV5,
 } from "@counterlab/experiment-ir";
 import {
   ApprovedSampleBeliefAnalyst,
@@ -93,7 +94,11 @@ import discriminationContractSchema from "../../../packages/contracts/schemas/di
 import experimentIrSchema from "../../../packages/experiment-ir/schemas/experiment-ir-v5.schema.json";
 import labSceneDraftSchema from "../../../packages/generative-ui-contracts/schemas/lab-scene-draft-v2.schema.json";
 import patchPlanSchema from "../../../packages/contracts/schemas/patch-plan-v1.schema.json";
-import { D1ArtifactStore, type ArtifactStore } from "./artifact-store";
+import {
+  D1ArtifactStore,
+  type ArtifactStore,
+  type StoredArtifact,
+} from "./artifact-store";
 import {
   ConcurrentD1SessionUpdateError,
   D1SessionRepository,
@@ -895,6 +900,144 @@ async function loadFrozenScientificCompileAuthority(input: {
     );
   }
   return authority;
+}
+
+async function resolveRunnerPatchAuthorityV5(input: {
+  store: RunnerObjectStore;
+  jobs: RunnerJobService;
+  job: RunnerJob;
+  session: CounterLabSession;
+  artifact: StoredArtifact;
+  bundle: RunnerPatchCompileBundleV5;
+}) {
+  const evidenceAuthority = await resolveSessionEvidenceAuthority(
+    input.session,
+  ).catch((error: unknown) => {
+    if (error instanceof SessionInputError) {
+      throw new ApiInputError(
+        "RUNNER_INPUT_LINEAGE_MISMATCH",
+        "The v5 patch authority no longer matches the session evidence",
+        409,
+      );
+    }
+    throw error;
+  });
+  if (
+    evidenceAuthority.protocol !== "v5" ||
+    evidenceAuthority.verdict !== "SUPPORTS" ||
+    input.session.transferResult?.outcome !== "PASSED"
+  ) {
+    throw new ApiInputError(
+      "RUNNER_INPUT_LINEAGE_MISMATCH",
+      "A supporting v5 verdict and passed transfer are required",
+      409,
+    );
+  }
+  const pack = getConceptPack(evidenceAuthority.concept);
+  const frozenCompile = await loadFrozenScientificCompileAuthority({
+    store: input.store,
+    jobs: input.jobs,
+    session: input.session,
+    manifest: input.artifact.manifest,
+    lineage: evidenceAuthority.lineage,
+  });
+  const [
+    bundleHash,
+    manifestHash,
+    bundledManifestHash,
+    beliefSpecHash,
+    bundledBeliefSpecHash,
+    predictionHash,
+    bundledPredictionHash,
+    compileAuthorityHash,
+    bundledCompileAuthorityHash,
+    selectionHash,
+    bundledSelectionHash,
+    projectedPlanHash,
+    bundledPlanHash,
+    evidenceVerdictHash,
+    bundledEvidenceVerdictHash,
+    transferResultHash,
+    bundledTransferResultHash,
+    patchContractHash,
+  ] = await Promise.all([
+    hashCanonical(input.bundle),
+    hashCanonical(input.artifact.manifest),
+    hashCanonical(input.bundle.artifactManifest),
+    hashCanonical(evidenceAuthority.beliefSpec),
+    hashCanonical(input.bundle.approvedBeliefSpec),
+    hashCanonical(evidenceAuthority.prediction),
+    hashCanonical(input.bundle.prediction),
+    hashCanonical(evidenceAuthority.lineage),
+    hashCanonical(input.bundle.compileAuthority),
+    hashCanonical(frozenCompile.outcome.selection),
+    hashCanonical(input.bundle.fixedSelection),
+    hashCanonical(frozenCompile.projectedPlan),
+    hashCanonical(input.bundle.basePlan),
+    hashCanonical(evidenceAuthority.evidenceVerdict),
+    hashCanonical(input.bundle.releaseAuthority.evidenceVerdict),
+    hashCanonical(input.session.transferResult),
+    hashCanonical(input.bundle.transferResult),
+    hashCanonical({
+      id: pack.patchContract.id,
+      allowedTransformations: pack.patchContract.allowedTransformations,
+      allowedCellIndices: input.bundle.allowedCellIndices,
+    }),
+  ]);
+  const selectedExperimentIrHash = await hashExperimentIR(
+    frozenCompile.selectedExperimentIr,
+  );
+  const expectedInputHashes = [
+    manifestHash,
+    beliefSpecHash,
+    evidenceAuthority.prediction.immutableHash,
+    selectedExperimentIrHash,
+    selectionHash,
+    projectedPlanHash,
+    evidenceAuthority.result.resultHash,
+    evidenceVerdictHash,
+    evidenceAuthority.epistemicReportHash,
+    input.session.transferResult.resultHash,
+    patchContractHash,
+    bundleHash,
+  ];
+  if (
+    input.bundle.jobId !== input.job.jobId ||
+    input.bundle.sessionId !== input.job.sessionId ||
+    input.bundle.stateVersion !== input.job.stateVersion ||
+    input.bundle.conceptPackVersion !== input.job.conceptPack.version ||
+    input.job.conceptPack.id !== pack.id ||
+    input.job.artifactManifestHash !== manifestHash ||
+    bundledManifestHash !== manifestHash ||
+    input.bundle.artifactManifestHash !== manifestHash ||
+    input.bundle.beliefSpecHash !== beliefSpecHash ||
+    bundledBeliefSpecHash !== beliefSpecHash ||
+    bundledPredictionHash !== predictionHash ||
+    bundledCompileAuthorityHash !== compileAuthorityHash ||
+    bundledSelectionHash !== selectionHash ||
+    bundledPlanHash !== projectedPlanHash ||
+    bundledEvidenceVerdictHash !== evidenceVerdictHash ||
+    input.bundle.releaseAuthority.evidenceVerdictHash !== evidenceVerdictHash ||
+    input.bundle.releaseAuthority.epistemicReportHash !==
+      evidenceAuthority.epistemicReportHash ||
+    input.bundle.releaseAuthority.authoritativeResultHash !==
+      evidenceAuthority.result.resultHash ||
+    bundledTransferResultHash !== transferResultHash ||
+    input.bundle.transferResult.resultHash !==
+      input.session.transferResult.resultHash ||
+    input.bundle.transferContractId !== pack.transferTask.id ||
+    input.bundle.transferResult.taskId !== pack.transferTask.evaluatorTaskId ||
+    input.bundle.patchContract.id !== pack.patchContract.id ||
+    JSON.stringify(input.job.inputHashes) !==
+      JSON.stringify(expectedInputHashes)
+  ) {
+    throw new ApiInputError(
+      "RUNNER_INPUT_LINEAGE_MISMATCH",
+      "The v5 patch input does not match frozen session authority",
+      409,
+    );
+  }
+  return { evidenceAuthority, frozenCompile, pack };
 }
 
 async function persistScientificAuthority(
@@ -2713,13 +2856,7 @@ export function createApi(options: ApiOptions = {}) {
       ),
       sessionService(context, options).getSession(job.sessionId),
     ]);
-    if (
-      inputObject === undefined ||
-      planObject === undefined ||
-      session.beliefTest === undefined ||
-      session.verifiedResult === undefined ||
-      session.transferResult?.outcome !== "PASSED"
-    ) {
+    if (inputObject === undefined || planObject === undefined) {
       throw new ApiInputError(
         "PATCH_PLAN_NOT_VERIFIED",
         "Source bytes remain sealed until the external Patch Plan verifier passes",
@@ -2727,19 +2864,57 @@ export function createApi(options: ApiOptions = {}) {
       );
     }
     try {
-      const bundle = RunnerPatchCompileBundleSchema.parse(
+      const versionedBundle = VersionedRunnerJobInputBundleSchema.parse(
         JSON.parse(inputObject.body),
       );
-      await verifyPatchPlan(JSON.parse(planObject.body) as unknown, {
-        sessionId: session.id,
-        manifest: artifact.manifest,
-        beliefTest: session.beliefTest,
-        verifiedResultHash: session.verifiedResult.resultHash,
-        transferResultHash: session.transferResult.resultHash,
-        conceptPackVersion: job.conceptPack.version,
-        allowedTransformations: bundle.patchContract.allowedTransformations,
-        allowedCellIndices: bundle.allowedCellIndices,
-      });
+      if (versionedBundle.kind !== "PATCH_COMPILE") {
+        throw new SyntaxError("runner input is not a Patch Compile bundle");
+      }
+      const planInput = JSON.parse(planObject.body) as unknown;
+      if (versionedBundle.schemaVersion === "5") {
+        const bundle = RunnerPatchCompileBundleV5Schema.parse(versionedBundle);
+        const authority = await resolveRunnerPatchAuthorityV5({
+          store: runnerObjectStore(context, options),
+          jobs: runnerJobService(context, options),
+          job,
+          session,
+          artifact,
+          bundle,
+        });
+        await verifyPatchPlan(planInput, {
+          sessionId: session.id,
+          manifest: artifact.manifest,
+          beliefSpec: authority.evidenceAuthority.beliefSpec,
+          verifiedResultHash: authority.evidenceAuthority.result.resultHash,
+          transferResultHash: bundle.transferResult.resultHash,
+          conceptPackVersion: job.conceptPack.version,
+          allowedTransformations: bundle.patchContract.allowedTransformations,
+          allowedCellIndices: bundle.allowedCellIndices,
+        });
+      } else {
+        if (
+          session.beliefTest === undefined ||
+          session.verifiedResult === undefined ||
+          session.transferResult?.outcome !== "PASSED"
+        ) {
+          throw new ApiInputError(
+            "PATCH_PLAN_NOT_VERIFIED",
+            "Source bytes remain sealed until the external Patch Plan verifier passes",
+            409,
+          );
+        }
+        const bundle = RunnerPatchCompileBundleSchema.parse(versionedBundle);
+        await verifyPatchPlan(planInput, {
+          sessionId: session.id,
+          manifest: artifact.manifest,
+          beliefTest: session.beliefTest,
+          verifiedResultHash: session.verifiedResult.resultHash,
+          transferResultHash: session.transferResult.resultHash,
+          conceptPackVersion: job.conceptPack.version,
+          allowedTransformations: bundle.patchContract.allowedTransformations,
+          allowedCellIndices: bundle.allowedCellIndices,
+        });
+      }
     } catch (error) {
       if (
         error instanceof PatchPlanVerificationError ||
@@ -3206,6 +3381,150 @@ export function createApi(options: ApiOptions = {}) {
           ...(outcome.selection === undefined
             ? {}
             : { selection: outcome.selection }),
+        }),
+      );
+    }
+    if (
+      inputBundle.kind === "PATCH_COMPILE" &&
+      inputBundle.schemaVersion === "5"
+    ) {
+      const bundle = RunnerPatchCompileBundleV5Schema.parse(inputBundle);
+      const candidate = LegacyRunnerCandidateSchema.parse(candidateInput);
+      if (candidate.attempt !== job.attempt) {
+        throw new ApiInputError(
+          "RUNNER_ATTEMPT_MISMATCH",
+          "Candidate attempt does not match the runner job attempt",
+          409,
+        );
+      }
+      const [artifact, session, planObject] = await Promise.all([
+        artifacts(context, options).find(job.artifactId),
+        sessionService(context, options).getSession(job.sessionId),
+        runnerObjectStore(context, options).get(
+          `${claims.outputPrefix}patch-plan.json`,
+        ),
+      ]);
+      if (artifact === undefined || planObject === undefined) {
+        throw new ApiInputError(
+          "RUNNER_CANDIDATE_LINEAGE_MISSING",
+          "Patch Plan candidate lineage is incomplete",
+          409,
+        );
+      }
+      if ((await sha256Text(planObject.body)) !== candidate.planSha256) {
+        throw new ApiInputError(
+          "RUNNER_OUTPUT_HASH_MISMATCH",
+          "Patch Plan candidate bytes do not match the declared hash",
+          409,
+        );
+      }
+      const authority = await resolveRunnerPatchAuthorityV5({
+        store: runnerObjectStore(context, options),
+        jobs: runnerJobService(context, options),
+        job,
+        session,
+        artifact,
+        bundle,
+      });
+      let planInput: unknown = null;
+      try {
+        planInput = JSON.parse(planObject.body) as unknown;
+      } catch {
+        planInput = null;
+      }
+      const verifierStartedAt = performance.now();
+      let report: Awaited<ReturnType<typeof verifyPatchPlan>>;
+      try {
+        report = await verifyPatchPlan(planInput, {
+          sessionId: session.id,
+          manifest: artifact.manifest,
+          beliefSpec: authority.evidenceAuthority.beliefSpec,
+          verifiedResultHash: authority.evidenceAuthority.result.resultHash,
+          transferResultHash: bundle.transferResult.resultHash,
+          conceptPackVersion: job.conceptPack.version,
+          allowedTransformations: bundle.patchContract.allowedTransformations,
+          allowedCellIndices: bundle.allowedCellIndices,
+        });
+      } catch (error) {
+        if (!(error instanceof PatchPlanVerificationError)) throw error;
+        report = error.report;
+      }
+      const verifierDurationMs = Math.max(
+        0,
+        Math.round(performance.now() - verifierStartedAt),
+      );
+      const store = runnerObjectStore(context, options);
+      await store.put(
+        `runner-authority/${jobId}/patch-plan-verification.json`,
+        JSON.stringify(report),
+        "application/json",
+      );
+      const jobs = runnerJobService(context, options);
+      let updatedJob = job;
+      if (report.status === "VERIFIED") {
+        updatedJob = await jobs.appendEvent(jobId, updatedJob.jobVersion, {
+          schemaVersion: "1",
+          eventId: requestId(options, "compiler_event"),
+          jobId,
+          cursor: updatedJob.eventCursor + 1,
+          at: requestNow(options).toISOString(),
+          kind: "verifier.verified",
+          invariantCount: report.invariantCount,
+          mutationCount: 0,
+        });
+        return context.json(
+          jsonSuccess({
+            status: "VERIFIED" as const,
+            canRepair: false,
+            counterexamples: [],
+            nextCursor: updatedJob.eventCursor,
+            verifierDurationMs,
+            runnerJob: updatedJob,
+            verification: report,
+          }),
+        );
+      }
+      const counterexamples = report.invariants
+        .filter((invariant) => !invariant.passed)
+        .map((invariant) => ({
+          invariant: invariant.name,
+          observed: invariant.observed ?? null,
+          expected: invariant.expected ?? null,
+          counterexample:
+            invariant.counterexample ??
+            `Candidate violated ${invariant.name.replaceAll("_", " ")}.`,
+        }));
+      for (const counterexample of counterexamples) {
+        updatedJob = await jobs.appendEvent(jobId, updatedJob.jobVersion, {
+          schemaVersion: "1",
+          eventId: requestId(options, "compiler_event"),
+          jobId,
+          cursor: updatedJob.eventCursor + 1,
+          at: requestNow(options).toISOString(),
+          kind: "verifier.rejected",
+          ...counterexample,
+        });
+      }
+      const canRepair = updatedJob.attempt < updatedJob.maxAttempts;
+      if (canRepair) {
+        updatedJob = await jobs.transition(
+          jobId,
+          updatedJob.jobVersion,
+          "REPAIRING",
+          {
+            runnerIdentity: updatedJob.runnerIdentity ?? "authenticated-runner",
+          },
+        );
+      }
+      return context.json(
+        jsonSuccess({
+          status: "REJECTED" as const,
+          canRepair,
+          counterexamples,
+          nextCursor: updatedJob.eventCursor,
+          verifierDurationMs,
+          runnerJob: updatedJob,
+          verification: report,
         }),
       );
     }

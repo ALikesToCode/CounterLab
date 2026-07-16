@@ -708,10 +708,18 @@ async function preparedScientificHostedRunner(
   runnerJobs: MemoryRunnerJobRepository = new MemoryRunnerJobRepository(),
 ) {
   const harness = await sessionHarness("live");
-  const artifact = await harness.artifactStore.find(
+  const storedArtifact = await harness.artifactStore.find(
     "artifact_uploaded_not_sample",
   );
-  if (artifact === undefined) throw new Error("live artifact is missing");
+  if (storedArtifact === undefined) throw new Error("live artifact is missing");
+  const artifact = {
+    ...storedArtifact,
+    manifest: {
+      ...storedArtifact.manifest,
+      fileSha256: await sha256Text(sourceNotebookText),
+    },
+  };
+  await harness.artifactStore.save(artifact.manifest, artifact.objectKey);
   const learnerClaim =
     "The notebook accuracy proves generalization to new customers.";
   const beliefInput = await liveBeliefInput(
@@ -768,6 +776,14 @@ async function preparedScientificHostedRunner(
     throw new Error("live v5 contracts are missing");
   }
   const runnerObjects = new MemoryRunnerObjectStore();
+  if (artifact.objectKey === undefined) {
+    throw new Error("live artifact source key is missing");
+  }
+  await runnerObjects.put(
+    artifact.objectKey,
+    sourceNotebookText,
+    "application/x-ipynb+json; charset=utf-8",
+  );
   const dispatcher = new CapturingRunnerDispatcher();
   let runnerIdSequence = 0;
   const app = createApi({
@@ -4193,6 +4209,162 @@ describe("Cloudflare Worker API", () => {
       },
     });
     expect(harness.dispatcher.dispatched).toHaveLength(3);
+
+    const patchAuthorization = {
+      authorization: `Bearer ${patchDispatch.token}`,
+    };
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${patchDispatch.job.jobId}/start`,
+          { method: "POST", headers: patchAuthorization },
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${patchDispatch.job.jobId}/source`,
+          { headers: patchAuthorization },
+        )
+      ).status,
+    ).toBe(409);
+
+    const targetCell = bundle.allowedCellIndices[0];
+    const entityField =
+      bundle.artifactManifest.schemaSummary.entityCandidates[0];
+    const targetField =
+      bundle.artifactManifest.schemaSummary.targetCandidates[0];
+    if (
+      targetCell === undefined ||
+      entityField === undefined ||
+      targetField === undefined
+    ) {
+      throw new Error("v5 patch target authority is incomplete");
+    }
+    const patchPlan = {
+      schemaVersion: "1" as const,
+      planId: "patch_plan_scientific_v5",
+      sessionId: bundle.sessionId,
+      concept: "entity_leakage" as const,
+      conceptPackVersion: bundle.conceptPackVersion,
+      artifactManifestHash: bundle.artifactManifestHash,
+      sourceArtifactHash: bundle.artifactManifest.fileSha256,
+      transferResultHash: bundle.transferResult.resultHash,
+      verifiedResultHash: bundle.releaseAuthority.authoritativeResultHash,
+      evidenceRefs: bundle.approvedBeliefSpec.evidenceRefs,
+      targetCells: [targetCell],
+      entityField,
+      targetField,
+      operations: [
+        {
+          id: "replace_row_split_with_group_holdout" as const,
+          cellIndex: targetCell,
+          reason: "Evaluate complete customers together.",
+        },
+        {
+          id: "exclude_entity_feature" as const,
+          cellIndex: targetCell,
+          reason: "Remove customer identity from model features.",
+        },
+      ],
+      preserveUnrelatedCells: true as const,
+      nonClaims: ["This does not establish production performance."],
+    };
+    const patchPlanText = JSON.stringify(patchPlan);
+    const patchPlanHash = await sha256Text(patchPlanText);
+    const rejectedPatchPlanText = JSON.stringify({
+      ...patchPlan,
+      operations: patchPlan.operations.slice(0, 1),
+    });
+    const rejectedPatchPlanHash = await sha256Text(rejectedPatchPlanText);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${patchDispatch.job.jobId}/outputs/patch-plan.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...patchAuthorization,
+              "content-type": "application/json",
+            },
+            body: rejectedPatchPlanText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    const rejectedCandidate = await postJson(
+      harness.app,
+      `/api/runner/jobs/${patchDispatch.job.jobId}/candidate`,
+      { attempt: 1, planSha256: rejectedPatchPlanHash },
+      patchAuthorization,
+    );
+    expect(rejectedCandidate.status).toBe(200);
+    await expect(rejectedCandidate.json()).resolves.toMatchObject({
+      data: {
+        status: "REJECTED",
+        canRepair: true,
+        runnerJob: { status: "REPAIRING", attempt: 2 },
+      },
+    });
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${patchDispatch.job.jobId}/source`,
+          { headers: patchAuthorization },
+        )
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${patchDispatch.job.jobId}/resume`,
+          { method: "POST", headers: patchAuthorization },
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${patchDispatch.job.jobId}/outputs/patch-plan.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...patchAuthorization,
+              "content-type": "application/json",
+            },
+            body: patchPlanText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    const candidate = await postJson(
+      harness.app,
+      `/api/runner/jobs/${patchDispatch.job.jobId}/candidate`,
+      { attempt: 2, planSha256: patchPlanHash },
+      patchAuthorization,
+    );
+    expect(candidate.status).toBe(200);
+    await expect(candidate.json()).resolves.toMatchObject({
+      data: {
+        status: "VERIFIED",
+        verification: { status: "VERIFIED" },
+      },
+    });
+    const scopedSource = await harness.app.request(
+      `/api/runner/jobs/${patchDispatch.job.jobId}/source`,
+      { headers: patchAuthorization },
+    );
+    expect(scopedSource.status, await scopedSource.clone().text()).toBe(200);
+    await expect(scopedSource.text()).resolves.toBe(sourceNotebookText);
+    expect(
+      harness.runnerObjects.objects.has(
+        `runner-authority/${patchDispatch.job.jobId}/patch-plan-verification.json`,
+      ),
+    ).toBe(true);
+    const finalSession = await harness.sessionRepository.find(bundle.sessionId);
+    expect(finalSession?.beliefSpec?.id).toBe(bundle.approvedBeliefSpec.id);
+    expect(finalSession?.beliefTest).toBeUndefined();
   });
 
   it("runs a v5 interactive control from frozen authority without replacing the verdict", async () => {
