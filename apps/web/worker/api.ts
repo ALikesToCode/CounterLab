@@ -1,6 +1,7 @@
 import {
   ArtifactManifestSchema,
   ExperimentPlanV2Schema,
+  HostedExperimentLineageV5Schema,
   HostedVerifiedResultSetV2Schema,
   InteractiveImbalanceRunRequestSchema,
   InteractiveLeakageRunRequestSchema,
@@ -15,6 +16,7 @@ import {
   RunnerRequestIdentityV1Schema,
   type BeliefSpecV2,
   type BeliefTest,
+  type ArtifactManifest,
   type ExperimentPlanV2,
   type PatchResult,
   type RunnerCallback,
@@ -23,9 +25,11 @@ import {
   type VerifiedResultSet,
 } from "@counterlab/contracts";
 import {
+  ExperimentIRV5Schema,
   RunnerLabCompileBundleV5Schema,
   RunnerScientificCandidateV5Schema,
   VersionedRunnerJobInputBundleSchema,
+  hashExperimentIR,
 } from "@counterlab/experiment-ir";
 import {
   ApprovedSampleBeliefAnalyst,
@@ -64,6 +68,7 @@ import {
   getSessionBeliefAuthority,
   hashCanonical,
   type RunnerJobRepository,
+  type CounterLabSession,
   type SessionRepository,
 } from "@counterlab/session-core";
 import { Hono } from "hono";
@@ -593,6 +598,244 @@ async function sha256Text(value: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) =>
     byte.toString(16).padStart(2, "0"),
   ).join("");
+}
+
+const SCIENTIFIC_COMPILER_OUTPUTS = [
+  "discrimination-contract.json",
+  "experiment-ir.json",
+  "lab-scene.json",
+  "public-rationale.md",
+] as const;
+
+async function reconstructScientificCompileAuthority(input: {
+  store: RunnerObjectStore;
+  job: RunnerJob;
+  session: CounterLabSession;
+  manifest: ArtifactManifest;
+  inputBundleKey: string;
+  outputPrefix: string;
+  callbackOutputHashes?: readonly string[];
+}) {
+  const authorityPrefix = `runner-authority/${input.job.jobId}/`;
+  const [inputObject, ...objects] = await Promise.all([
+    input.store.get(input.inputBundleKey),
+    ...SCIENTIFIC_COMPILER_OUTPUTS.map((path) =>
+      input.store.get(`${input.outputPrefix}${path}`),
+    ),
+    input.store.get(`${authorityPrefix}candidate-verification.json`),
+    input.store.get(`${authorityPrefix}experiment-selection.json`),
+    input.store.get(`${authorityPrefix}selected-experiment-ir.json`),
+    input.store.get(`${authorityPrefix}experiment-plan.json`),
+  ]);
+  if (
+    inputObject === undefined ||
+    objects.some((object) => object === undefined)
+  ) {
+    throw new ApiInputError(
+      "SCIENTIFIC_AUTHORITY_MISSING",
+      "The final scientific compiler authority is incomplete",
+      409,
+    );
+  }
+  const [
+    contractObject,
+    rawIrObject,
+    sceneObject,
+    rationaleObject,
+    storedReportObject,
+    storedSelectionObject,
+    storedSelectedIrObject,
+    storedPlanObject,
+  ] = objects as Array<{ body: string; contentType: string }>;
+
+  let bundle: z.infer<typeof RunnerLabCompileBundleV5Schema>;
+  let contract: unknown;
+  let rawIr: unknown;
+  let scene: unknown;
+  let storedReport: unknown;
+  let storedSelection: unknown;
+  let storedSelectedIr: z.infer<typeof ExperimentIRV5Schema>;
+  let storedPlan: ExperimentPlanV2;
+  try {
+    bundle = RunnerLabCompileBundleV5Schema.parse(JSON.parse(inputObject.body));
+    contract = JSON.parse(contractObject.body) as unknown;
+    rawIr = JSON.parse(rawIrObject.body) as unknown;
+    scene = JSON.parse(sceneObject.body) as unknown;
+    storedReport = JSON.parse(storedReportObject.body) as unknown;
+    storedSelection = JSON.parse(storedSelectionObject.body) as unknown;
+    storedSelectedIr = ExperimentIRV5Schema.parse(
+      JSON.parse(storedSelectedIrObject.body),
+    );
+    storedPlan = ExperimentPlanV2Schema.parse(
+      JSON.parse(storedPlanObject.body),
+    );
+  } catch (error) {
+    if (error instanceof SyntaxError || error instanceof ZodError) {
+      throw new ApiInputError(
+        "SCIENTIFIC_AUTHORITY_INVALID",
+        "The final scientific compiler authority failed strict validation",
+        409,
+      );
+    }
+    throw error;
+  }
+
+  if (
+    input.job.kind !== "LAB_COMPILE" ||
+    bundle.jobId !== input.job.jobId ||
+    bundle.sessionId !== input.job.sessionId ||
+    bundle.stateVersion !== input.job.stateVersion ||
+    bundle.artifactManifestHash !== input.job.artifactManifestHash ||
+    input.session.id !== input.job.sessionId ||
+    input.session.beliefSpec === undefined ||
+    input.session.prediction === undefined ||
+    input.session.beliefTest !== undefined ||
+    input.job.conceptPack.id !== bundle.conceptPack.id ||
+    input.job.conceptPack.version !== bundle.conceptPack.version
+  ) {
+    throw new ApiInputError(
+      "SCIENTIFIC_AUTHORITY_LINEAGE_MISMATCH",
+      "The scientific compiler authority does not belong to this live session",
+      409,
+    );
+  }
+
+  const fileHashes = await Promise.all(
+    [contractObject, rawIrObject, sceneObject, rationaleObject].map((object) =>
+      sha256Text(object.body),
+    ),
+  );
+  if (
+    input.callbackOutputHashes !== undefined &&
+    (input.callbackOutputHashes.length !== fileHashes.length ||
+      input.callbackOutputHashes.some(
+        (hash, index) => hash !== fileHashes[index],
+      ))
+  ) {
+    throw new ApiInputError(
+      "RUNNER_OUTPUT_HASH_MISMATCH",
+      "Scientific compiler bytes do not exactly match the terminal callback",
+      409,
+    );
+  }
+
+  const [
+    inputBundleHash,
+    manifestHash,
+    bundledManifestHash,
+    beliefSpecHash,
+    bundledBeliefSpecHash,
+    predictionHash,
+    bundledPredictionHash,
+  ] = await Promise.all([
+    hashCanonical(bundle),
+    hashCanonical(input.manifest),
+    hashCanonical(bundle.artifactManifest),
+    hashCanonical(input.session.beliefSpec),
+    hashCanonical(bundle.approvedBeliefSpec),
+    hashCanonical(input.session.prediction),
+    hashCanonical(bundle.prediction),
+  ]);
+  if (
+    !input.job.inputHashes.includes(inputBundleHash) ||
+    manifestHash !== input.job.artifactManifestHash ||
+    bundledManifestHash !== manifestHash ||
+    beliefSpecHash !== bundle.beliefSpecHash ||
+    bundledBeliefSpecHash !== beliefSpecHash ||
+    predictionHash !== bundledPredictionHash ||
+    input.session.prediction.immutableHash !== bundle.prediction.immutableHash
+  ) {
+    throw new ApiInputError(
+      "SCIENTIFIC_AUTHORITY_LINEAGE_MISMATCH",
+      "Current session authority does not match the compiled scientific inputs",
+      409,
+    );
+  }
+
+  const outcome = await verifyScientificCandidateV5({
+    bundle,
+    artifacts: {
+      discriminationContract: contract,
+      experimentIr: rawIr,
+      labScene: scene,
+      publicRationale: rationaleObject.body,
+    },
+  });
+  if (outcome.disposition !== "VERIFIED") {
+    throw new ApiInputError(
+      outcome.disposition === "INCONCLUSIVE_NO_DECISIVE_TEST"
+        ? "INCONCLUSIVE_NO_DECISIVE_TEST"
+        : "SCIENTIFIC_VERIFIER_REJECTED",
+      "The final scientific candidate did not pass fixed verification",
+      409,
+    );
+  }
+
+  const [
+    reportHash,
+    storedReportHash,
+    selectionHash,
+    storedSelectionHash,
+    storedSelectedIrHash,
+    storedPlanHash,
+  ] = await Promise.all([
+    hashCanonical(outcome.report),
+    hashCanonical(storedReport),
+    hashCanonical(outcome.selection),
+    hashCanonical(storedSelection),
+    hashExperimentIR(storedSelectedIr),
+    hashCanonical(storedPlan),
+  ]);
+  if (
+    storedReportHash !== reportHash ||
+    storedSelectionHash !== selectionHash ||
+    storedSelectedIrHash !== outcome.selectedIrHash ||
+    storedPlanHash !== outcome.executionPlanHash ||
+    (await hashExperimentIR(outcome.selectedIr)) !== storedSelectedIrHash ||
+    (await hashCanonical(outcome.executionPlan)) !== storedPlanHash
+  ) {
+    throw new ApiInputError(
+      "SCIENTIFIC_AUTHORITY_DERIVATION_MISMATCH",
+      "Stored fixed scientific derivations do not match fresh verification",
+      409,
+    );
+  }
+
+  const compilerOutputFileHashes = {
+    "discrimination-contract.json": fileHashes[0]!,
+    "experiment-ir.json": fileHashes[1]!,
+    "lab-scene.json": fileHashes[2]!,
+    "public-rationale.md": fileHashes[3]!,
+  };
+  const lineage = HostedExperimentLineageV5Schema.parse({
+    schemaVersion: "5",
+    status: "VERIFIED",
+    source: "hosted-experiment-ir-v5",
+    jobId: input.job.jobId,
+    inputBundleHash,
+    artifactManifestHash: manifestHash,
+    beliefSpecHash,
+    predictionHash: input.session.prediction.immutableHash,
+    compilerOutputFileHashes,
+    discriminationContractHash: outcome.report.discriminationContractHash,
+    rawExperimentIrCanonicalHash: outcome.report.rawExperimentIrHash,
+    labSceneHash: outcome.report.labSceneHash,
+    candidateVerificationReportHash: reportHash,
+    scientificVerifierVersion: outcome.report.verifierVersion,
+    selectionHash,
+    selectedExperimentIrHash: outcome.selectedIrHash,
+    projectedPlanHash: outcome.executionPlanHash,
+    scorerVersion: outcome.selection.scorerVersion,
+    projectionAdapterVersion: "experiment-ir-v5-to-plan-v2-v1",
+  });
+  return {
+    bundle,
+    compilerOutputFileHashes,
+    lineage,
+    outcome,
+    projectedPlan: storedPlan,
+    selectedExperimentIr: storedSelectedIr,
+  };
 }
 
 function bearerToken(context: Context<AppBindings>): string {
@@ -2456,69 +2699,126 @@ export function createApi(options: ApiOptions = {}) {
       | Awaited<ReturnType<typeof verifyExperimentPlan>>
       | Awaited<ReturnType<typeof verifyHostedResultSet>>
       | Awaited<ReturnType<typeof verifyPatchPlan>>
+      | Awaited<ReturnType<typeof verifyScientificCandidateV5>>["report"]
       | null = null;
+    let scientificAuthority: Awaited<
+      ReturnType<typeof reconstructScientificCompileAuthority>
+    > | null = null;
     let verifiedResult: VerifiedResultSet | null = null;
     let interactiveRun = false;
     let patchResult: PatchResult | null = null;
     let terminalCallback: RunnerCallback = callback;
     if (callback.status === "VERIFIED" && job.kind === "LAB_COMPILE") {
       const artifact = await artifacts(context, options).find(job.artifactId);
-      const planObject = await runnerObjectStore(context, options).get(
-        `${claims.outputPrefix}experiment-plan.json`,
+      const inputObject = await runnerObjectStore(context, options).get(
+        claims.inputBundleKey,
       );
-      if (
-        artifact === undefined ||
-        currentSession.beliefTest === undefined ||
-        planObject === undefined
-      ) {
-        terminalCallback = {
-          ...callback,
-          status: "REJECTED",
-          error: {
-            code: "RUNNER_OUTPUT_MISSING",
-            message: "Required artifact lineage or experiment plan is missing",
-            retryable: false,
-          },
-        };
-      } else {
-        const rawPlanHash = await sha256Text(planObject.body);
-        if (!callback.outputHashes.includes(rawPlanHash)) {
+      let scientificBundle = false;
+      if (inputObject !== undefined) {
+        try {
+          scientificBundle = RunnerLabCompileBundleV5Schema.safeParse(
+            JSON.parse(inputObject.body),
+          ).success;
+        } catch {
+          scientificBundle = false;
+        }
+      }
+      if (scientificBundle) {
+        if (artifact === undefined) {
           terminalCallback = {
             ...callback,
             status: "REJECTED",
             error: {
-              code: "RUNNER_OUTPUT_HASH_MISMATCH",
-              message: "Experiment plan bytes do not match the callback hashes",
+              code: "RUNNER_OUTPUT_MISSING",
+              message: "Required scientific artifact lineage is missing",
               retryable: false,
             },
           };
         } else {
           try {
-            verification = await verifyExperimentPlan(
-              JSON.parse(planObject.body) as unknown,
-              {
-                sessionId: job.sessionId,
-                manifest: artifact.manifest,
-                beliefTest: currentSession.beliefTest,
-              },
-            );
+            scientificAuthority = await reconstructScientificCompileAuthority({
+              store: runnerObjectStore(context, options),
+              job,
+              session: currentSession,
+              manifest: artifact.manifest,
+              inputBundleKey: claims.inputBundleKey,
+              outputPrefix: claims.outputPrefix,
+              callbackOutputHashes: callback.outputHashes,
+            });
+            verification = scientificAuthority.outcome.report;
           } catch (error) {
-            if (!(error instanceof PlanVerificationError)) throw error;
-            verification = error.report;
+            if (!(error instanceof ApiInputError)) throw error;
             terminalCallback = {
               ...callback,
               status: "REJECTED",
               error: {
-                code: "PLAN_VERIFIER_REJECTED",
-                message: "The external Plan verifier rejected the candidate",
+                code: error.code,
+                message: error.message,
                 retryable: false,
-                details: {
-                  failedInvariants: error.report.invariants
-                    .filter((invariant) => !invariant.passed)
-                    .map((invariant) => invariant.name),
-                },
               },
             };
+          }
+        }
+      } else {
+        const planObject = await runnerObjectStore(context, options).get(
+          `${claims.outputPrefix}experiment-plan.json`,
+        );
+        if (
+          artifact === undefined ||
+          currentSession.beliefTest === undefined ||
+          planObject === undefined
+        ) {
+          terminalCallback = {
+            ...callback,
+            status: "REJECTED",
+            error: {
+              code: "RUNNER_OUTPUT_MISSING",
+              message:
+                "Required artifact lineage or experiment plan is missing",
+              retryable: false,
+            },
+          };
+        } else {
+          const rawPlanHash = await sha256Text(planObject.body);
+          if (!callback.outputHashes.includes(rawPlanHash)) {
+            terminalCallback = {
+              ...callback,
+              status: "REJECTED",
+              error: {
+                code: "RUNNER_OUTPUT_HASH_MISMATCH",
+                message:
+                  "Experiment plan bytes do not match the callback hashes",
+                retryable: false,
+              },
+            };
+          } else {
+            try {
+              verification = await verifyExperimentPlan(
+                JSON.parse(planObject.body) as unknown,
+                {
+                  sessionId: job.sessionId,
+                  manifest: artifact.manifest,
+                  beliefTest: currentSession.beliefTest,
+                },
+              );
+            } catch (error) {
+              if (!(error instanceof PlanVerificationError)) throw error;
+              verification = error.report;
+              terminalCallback = {
+                ...callback,
+                status: "REJECTED",
+                error: {
+                  code: "PLAN_VERIFIER_REJECTED",
+                  message: "The external Plan verifier rejected the candidate",
+                  retryable: false,
+                  details: {
+                    failedInvariants: error.report.invariants
+                      .filter((invariant) => !invariant.passed)
+                      .map((invariant) => invariant.name),
+                  },
+                },
+              };
+            }
           }
         }
       }
@@ -2790,6 +3090,48 @@ export function createApi(options: ApiOptions = {}) {
     );
     let updatedSession = await service.getSession(job.sessionId);
     if (
+      job.kind === "LAB_COMPILE" &&
+      terminalCallback.status === "VERIFIED" &&
+      scientificAuthority !== null
+    ) {
+      if (updatedSession.state === "LAB_COMPILING") {
+        updatedSession = await service.verifyLab(
+          job.sessionId,
+          scientificAuthority.lineage,
+          [
+            scientificAuthority.lineage.inputBundleHash,
+            scientificAuthority.lineage.artifactManifestHash,
+            scientificAuthority.lineage.beliefSpecHash,
+            scientificAuthority.lineage.predictionHash,
+            ...Object.values(
+              scientificAuthority.lineage.compilerOutputFileHashes,
+            ),
+            scientificAuthority.lineage.discriminationContractHash,
+            scientificAuthority.lineage.rawExperimentIrCanonicalHash,
+            scientificAuthority.lineage.labSceneHash,
+            scientificAuthority.lineage.candidateVerificationReportHash,
+            scientificAuthority.lineage.selectionHash,
+            scientificAuthority.lineage.selectedExperimentIrHash,
+            scientificAuthority.lineage.projectedPlanHash,
+          ],
+        );
+      } else {
+        const existing = HostedExperimentLineageV5Schema.safeParse(
+          updatedSession.labVerification,
+        );
+        if (
+          !existing.success ||
+          (await hashCanonical(existing.data)) !==
+            (await hashCanonical(scientificAuthority.lineage))
+        ) {
+          throw new ApiInputError(
+            "RUNNER_PROJECTION_CONFLICT",
+            "The terminal scientific callback conflicts with session evidence",
+            409,
+          );
+        }
+      }
+    } else if (
       job.kind === "LAB_COMPILE" &&
       terminalCallback.status === "VERIFIED" &&
       verification?.status === "VERIFIED" &&
