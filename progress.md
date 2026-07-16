@@ -353,3 +353,22 @@ async browser journeys, and measured performance.
   persistence. V5 interactive, transfer, patch, proof, Boundary Map, UI, and
   release work remain downstream.
 - No build, dev server, deployment, or production smoke was run for this slice.
+
+## 2026-07-16 v5 epistemic result-authority checkpoint
+
+- Commit `36d8157` makes the Worker the only authority that can emit
+  `verifier.verified`, `verifier.rejected`, or `result.ready` for v5 runs.
+- The Worker closes runner writes at `AWAITING_APPROVAL`, freezes and re-reads
+  the exact result bytes, reconstructs compile and run lineage, and persists
+  technical verification, epistemic verification, and the tri-state verdict.
+- `SUPPORTS` and valid `INCONCLUSIVE` results advance atomically;
+  `REJECTED` stores a no-release verdict and exposes fixed counterexamples.
+- Callback retry tests cover partial Worker-event append, learner progression,
+  late runner events, mutable-output tampering, extra hashes, and duplicate
+  rejection evidence.
+- Verification: 123 Web/Worker tests and 68 focused authority tests passed;
+  repository and Worker TypeScript checks plus `git diff --check` passed.
+- Next gate: direct class-imbalance Worker callback integration, followed by v5
+  interactive controls, transfer, patch, Reasoning Diff, and proof lineage.
+- No build, dev server, deployment, browser journey, or production smoke was
+  run for this slice.

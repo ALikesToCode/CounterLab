@@ -337,3 +337,17 @@ can pass.
   `cd5c0c05b2f007c577905630a61f7be84c71908a511ca9bffad68f76bd86431a`.
   Any later bound source, image, engine, exception, or deployment change must
   requalify and produce a new smoke instead of inheriting this authority.
+
+## 2026-07-16 — Close runner writes before epistemic result release
+
+- Move a v5 `LAB_RUN` to `AWAITING_APPROVAL` before independent verification so
+  late runner events or output writes cannot race control-plane authority.
+- Freeze and re-read the exact result bytes under a Worker-owned object prefix;
+  reconstruct all compile/run hashes rather than trusting callback claims.
+- Reserve verifier and result-readiness events for the Worker. Persist the
+  technical report, epistemic report, and tri-state verdict before projecting
+  any learner-visible result.
+- Release `SUPPORTS` and valid `INCONCLUSIVE` evidence. For `REJECTED`, retain
+  structured findings and release no result.
+- Reconcile Worker-owned event prefixes and compare immutable evidence on
+  duplicate callbacks so retries remain safe after learner progression.

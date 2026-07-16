@@ -538,3 +538,20 @@ be stale. Verify them against the current tree before making decisions.
 - The generated Experiment IR v5 JSON Schema already ships in the Python
   package. Validating against it at the process boundary closes executable and
   unknown-field drift without duplicating the TypeScript schema manually.
+
+## 2026-07-16 v5 result-release authority findings
+
+- Verification cannot safely run while the runner can still append events or
+  overwrite its output object. The job now enters `AWAITING_APPROVAL` first and
+  the Worker verifies an immutable authority copy of the exact result bytes.
+- Result readiness is a control-plane fact. V5 runners are forbidden from
+  publishing verifier or readiness events; the Worker appends them only after
+  fixed technical and epistemic verification.
+- Cross-store callback recovery requires deterministic, prefix-reconcilable
+  Worker events and exact immutable hashes. Callback idempotency must remain
+  valid after the learner advances beyond the result stage.
+- Valid inconclusive evidence is an educational result, not a technical
+  failure. The v5 callback invokes the epistemic verifier directly so a valid
+  `INCONCLUSIVE` outcome can be released without weakening technical checks.
+- Leakage has direct Worker integration coverage. The equivalent
+  class-imbalance callback proof remains the next active gate.

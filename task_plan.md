@@ -10,10 +10,11 @@ authority, replay compatibility, fixed kernels, or existing verifiers.
 
 ## Current phase
 
-Phases 7–9 — integrate the implemented v5 scientific authority into both
-hosted ML Subject Packs (`in_progress`). The current public deployment remains
-the qualified Experiment Plan v2 path until this compatibility-preserving
-upgrade passes focused tests and a new production smoke.
+Phases 8–9 — prove the completed v5 result-authority boundary for both hosted
+ML Subject Packs, then migrate downstream learner stages (`in_progress`). The
+current public deployment remains the qualified Experiment Plan v2 path until
+this compatibility-preserving upgrade passes focused tests and a new
+production smoke.
 
 ## Lead-owned critical surfaces
 
@@ -93,8 +94,8 @@ code, `apps/web/src/App.tsx`, or global CSS.
 
 - [x] Add independent findings, `SUPPORTS | INCONCLUSIVE | REJECTED`, release
       blocking, and one mutation per finding.
-- **Status:** complete in the frozen verifier with leakage and imbalance coverage;
-  public result release is not yet bound to this report.
+- **Status:** complete in the frozen verifier with leakage and imbalance
+  coverage; the v5 Worker now binds result release to this report.
 
 ### Phase 7 — Runtime Codex v5 artifacts
 
@@ -104,10 +105,12 @@ code, `apps/web/src/App.tsx`, or global CSS.
       callback before recording verified lineage.
 - [x] Dispatch the selected v5 experiment to the fixed runner without a second
       Codex turn or an early `result.ready` event.
-- [ ] Verify the returned fixed result epistemically and persist the tri-state
+- [x] Verify the returned fixed result epistemically and persist the tri-state
       verdict before the Worker emits result readiness.
-- **Status:** in progress; generation, selection, callback reconstruction, and
-  fixed execution are complete locally. Result release remains closed.
+- **Status:** complete locally. Commit `36d8157` closes runner writes before
+  verification, freezes result bytes, persists the fixed reports/verdict, and
+  makes result readiness a Worker-owned event. Production promotion remains
+  deferred until downstream v5 lineage passes.
 
 ### Phase 8 — entity-leakage integration
 
@@ -115,10 +118,12 @@ code, `apps/web/src/App.tsx`, or global CSS.
       preserving v1.
 - [x] Execute the selected group-holdout experiment through the versioned fixed
       Python boundary with exact fixture authority.
-- [ ] Add tri-state result persistence, signed recurrence/signal Boundary Sweep,
+- [x] Add tri-state result persistence while preserving v1.
+- [ ] Add a signed recurrence/signal Boundary Sweep
       and mutations while preserving v1.
-- **Status:** in progress; compile and fixed execution are integrated, but the
-  hosted result callback and Boundary Map are not yet released.
+- **Status:** in progress; compile, fixed execution, and tri-state release are
+  integrated, but the Boundary Map and downstream learner stages are not yet
+  released.
 
 ### Phase 9 — class-imbalance integration
 
