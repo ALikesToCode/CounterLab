@@ -62,8 +62,14 @@ green release is evidence, but is not silently promoted to the current tree.
       outputs, and reject seeded patch mutations.
 - [x] Qualified v1/v2 Reasoning Diff and Proof Bundle bind
       artifact/Plan/result/transfer/patch.
-- [ ] Native v5 Reasoning Diff and Proof Capsule bind Belief Spec, Experiment
-      IR, Evidence Verdict, Boundary receipt, transfer, and verified patch.
+- [x] Native v5 Reasoning Diff and Proof Capsule bind Belief Spec, Experiment
+      IR, Evidence Verdict, Boundary receipt, transfer, and verified patch in
+      local Worker integration tests for both released ML packs.
+- [x] The deterministic Capsule archive, semantic validator, immutable
+      content-addressed storage, exact-byte download, HMAC policy, tamper
+      rejection, and validate/inspect/replay CLI pass locally.
+- [ ] Hosted Capsule replay persistence, learner-facing download/replay, and
+      final production qualification pass.
 
 ## Live integrations
 
@@ -161,7 +167,9 @@ v5.1 product gates remain pending and must not be inferred from them:
 - [ ] chat-first six-stage experience with collapsed Activity and Evidence &
       proof drawers;
 - [ ] verified physics free-fall pack or an explicit omission;
-- [ ] Proof Capsule v2 and `/judge`;
+- [x] Proof Capsule v2 archive, Worker issuance/download, and local labelled
+      replay authority;
+- [ ] hosted Proof Capsule replay/UI and `/judge`;
 - [ ] current mobile, keyboard, screen-reader, reduced-motion, and Web Vitals
       execution against the final UI;
 - [ ] learner pilot rows, or an explicit `EVALUATION PENDING` release label.

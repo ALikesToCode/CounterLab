@@ -1,5 +1,33 @@
 # Decisions
 
+## 2026-07-16 — Treat Proof Capsule structure and evidence authority separately
+
+- Use a canonical JSON envelope rather than a ZIP container: exact allowlisted
+  paths, direct canonical JSON, one terminal LF, per-entry byte lengths and
+  SHA-256 hashes, and a domain-separated root hash make the portable bytes
+  deterministic across supported runtimes.
+- Add a named HMAC only when the configured signing key exists. Otherwise label
+  the Capsule `Integrity-hashed`; never describe an unsigned archive as signed.
+- Treat structural integrity as necessary but insufficient. Before issuance and
+  download, independently resolve the Artifact Manifest, Belief Spec,
+  Prediction, fixed selection, Discrimination Contract, Experiment IR, result,
+  Evidence Verdict, technical/epistemic/Boundary/patch verifier reports,
+  transfer, patch, scientific-engine snapshot, compiler events, and evidence
+  chain.
+- Rebuild Capsule inputs only from Worker-owned immutable job prefixes. Persist
+  the exact canonical bytes under a content-addressed private object key, read
+  them back, and rerun both structural and semantic validation before issuing a
+  public receipt. Never expose the private object key in session payloads.
+- End the contained evidence chain at `reasoning_diff_v2.issued`; record
+  `proof_capsule.issued` outside the Capsule to avoid a circular hash. Duplicate
+  callbacks validate the existing bytes instead of recreating authority from a
+  later chain head.
+- Keep the Experiment IR transfer contract ID distinct from the fixed evaluator
+  task ID and resolve both through the Subject Pack registry.
+- Make CLI replay visibly `verified_capsule_replay`, preserve its original
+  `live_notebook` source mode, and perform no model call, kernel run, patch, or
+  artifact execution.
+
 ## 2026-07-16 — Focus the Experiment Theater on the learner
 
 - Preserve the evidence-editorial identity and proven lesson state instead of
