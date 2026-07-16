@@ -11,6 +11,7 @@
     "@counterlab/contracts": "workspace:*",
     "@counterlab/experiment-ir": "workspace:*",
     "@counterlab/experiment-scorer": "workspace:*",
+    "@counterlab/generative-ui-contracts": "workspace:*",
     "@counterlab/session-core": "workspace:*",
     "zod": "4.4.3"
   }

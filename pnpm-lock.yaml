@@ -225,6 +225,9 @@ importers:
       "@counterlab/experiment-scorer":
         specifier: workspace:*
         version: link:../experiment-scorer
+      "@counterlab/generative-ui-contracts":
+        specifier: workspace:*
+        version: link:../generative-ui-contracts
       "@counterlab/session-core":
         specifier: workspace:*
         version: link:../session-core

@@ -27,6 +27,8 @@ import {
   type EpistemicVerificationReport,
 } from "./epistemic.js";
 
+export * from "./scientific-candidate.js";
+
 export { EpistemicPresentationV1Schema };
 export type {
   EpistemicFinding,
