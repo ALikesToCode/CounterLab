@@ -33,12 +33,12 @@ operations, fields, versions, evidence IDs, or tolerance profiles fail closed.
 The recorded candidate is intentionally not labelled as production authority.
 
 - Environment: `counterlab-runner-linux-amd64-v2`
-- Source commit: `efe7fcfa6bfb5bb0115d4bd0bb1e1c1c628ef0b8`
+- Source commit: `bcd5df1729de303ab9553dd261843977b4f34ffa`
 - Image digest:
-  `sha256:1b974af90901e818fc202fffca8702f7a48aa1bcfa54776af7cc67831b5e34da`
+  `sha256:588b0963f3473be0347411a857399f6dfd9f31ccc7c8248963323792ff0a394a`
 - Runtime user: `10001:10001`
 - Authority hash:
-  `aff2ea37372b647b887d1e088f5aac98ceb725246b760eb07ae21e1453e5e57e`
+  `9cd4478e97c20f235df4df0b20b2e301d5883d42886f5ac73bb8f965ecf62c82`
 - Deterministic kernel hashes:
   - leakage: `a6ae7652e04e4d70196f991c63b8f7bcb3b76f8c4ab833d3ce2b626df0ab6c94`
   - imbalance: `5787e04aa59c2703336d35bf5e64935987b44029f47b833e9152dd7d5c97d0d4`
@@ -56,7 +56,7 @@ Three normalized CycloneDX 1.6 documents are committed:
 | -------------------------- | ---------: | ------------------------------------------------------------------ |
 | Production Node graph      |         19 | `80981d7969b467915c73c061b0ea701e02ac05e1dc8b6197025b4cd1cb5d2b19` |
 | Runner Python requirements |         22 | `24f1d2cf673e8ac7c45289d3fbbc900f609ca53430b4166597b493fac8debc54` |
-| Runner image filesystem    |      2,839 | `a3d072dddab55fafe92b09ffd56522fe62c9cfa96f89e3906bf137589496f92b` |
+| Runner image filesystem    |      2,839 | `1b0723b28a77e0522d8d8bbf62bc3861e0a7f4e55b1905d8b5a22e410bfedd5c` |
 
 The Grype 0.112.0 scan is recorded in
 `docs/sbom/vulnerability-report.json`. Its database was built at
@@ -71,7 +71,7 @@ reachability probe over both hosted run and patch entrypoints. The VEX
 application proof changes Grype from 171 active findings to 170 active plus
 exactly one ignored finding; a wrong-subcomponent negative control suppresses
 zero findings. The CVE was not listed in the checked CISA KEV catalogue. This
-exception expires on `2026-07-30T18:20:06Z` and must be requalified when the
+exception expires on `2026-07-30T19:10:33Z` and must be requalified when the
 image, source, SBOM, Python/module bytes, entrypoints, scanner database, or
 vulnerability status changes.
 
@@ -81,14 +81,14 @@ does not relabel the local snapshot as Cloudflare production authority.
 
 ## Production promotion
 
-The current v5.1 candidate above has passed the complete local image gate but
-has not yet been promoted or production-smoked. The previous qualified v2
-release remains deployed as Cloudflare Container version 13 with registry
-digest
-`sha256:bdd65feebad10d4b0f232e945eb1bd1195b803d13fddf8eee558b2efdd5dc8c6`
-and smoke-bound Worker `7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab`. That historical
-smoke records authority `d7677c79…`; it does not confer production authority on
-the new `aff2ea37…` candidate. The committed historical report SHA-256 is
+The schema-fixed candidate above has passed the complete local image gate but
+has not yet been promoted or production-smoked. Worker
+`89db95bc-d0c1-48c7-963b-2e2f9a35f876` currently runs Container version 14 on
+the preceding v5.1 digest `sha256:1b974af9…`; its smoke failed closed during
+live Belief Spec generation and therefore did not establish complete v5.1
+production authority. The older seven-stage v2 smoke remains historical
+evidence only and does not confer authority on `9cd4478e…`. Its committed report
+SHA-256 is
 `cd5c0c05b2f007c577905630a61f7be84c71908a511ca9bffad68f76bd86431a`.
 
 SBOM presence is inventory evidence, not proof that vulnerabilities are absent.
@@ -103,7 +103,7 @@ The current full local-candidate gate is:
 
 ```bash
 ./scripts/verify-scientific-engines.sh \
-  --image counterlab-runner:git-efe7fcfa6bfb5bb0115d4bd0bb1e1c1c628ef0b8
+  --image counterlab-runner:git-bcd5df1729de303ab9553dd261843977b4f34ffa
 ```
 
 It validates schemas, evidence hashes, role and operation policy, exact locks,

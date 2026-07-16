@@ -52,33 +52,43 @@ revision locked until the receipt is present. Both live ML paths also render the
 native six-dimension Reasoning Diff and download the immutable `.counterlab`
 Proof Capsule directly; historical sample and replay paths retain their own
 labelled authority.
-The current production scientific authority remains the qualified Experiment
-Plan v2 path. The complete v5.1 source is now bound to a fresh local runner
-candidate and passes the local scientific gate, but it has not yet been pushed,
-qualified, deployed, or production-smoked. The focused Experiment Theater UI
-was backported onto the current production source without advancing its
-scientific contracts.
+The first v5.1 production promotion reached Worker
+`89db95bc-d0c1-48c7-963b-2e2f9a35f876` and Container version 14. Public
+readiness, capability health, secret scanning, Judge Mode, Sample lesson, and
+Verified replay passed. The untouched live leakage path then failed closed
+before state advancement because the configured Responses-compatible endpoint
+rejected the Belief Spec v2 tuple schema. No runner job or result was released.
+The transport schema is fixed in `36ee156`, and the live verification command
+now exercises Belief Spec v2 in `bcd5df1`. Those commits are bound to the fresh
+local candidate recorded below; registry promotion and a new exact-version
+smoke remain pending.
 
-The live Responses integration was exercised against the configured endpoint. A
-real schema-constrained class-imbalance Belief Test completed, validated locally,
-and resolved all three evidence references to exact notebook cells/outputs. The
-custom base URL remains server-only and provider-neutral in product state and
-copy.
+The live Responses integration was exercised against the configured endpoint.
+A minimal request and the legacy v1 schema succeed. The exact pre-fix Belief
+Spec v2 request reproduced HTTP 400 `invalid_json_schema`; the bounded-array
+wire schema now succeeds while the canonical tuple and ordered hypothesis
+validation remain unchanged. A real v2 untouched leakage analysis at `medium`
+effort completed in approximately 36 seconds, validated locally, and resolved
+artifact evidence. An `xhigh` run reached the 180-second transport timeout and
+is not presented as a successful latency result. The custom base URL remains
+server-only and provider-neutral in product state and copy.
 
 The production control plane is deployed at
 `https://counterlab.cserules.workers.dev` as Worker version
-`67b6b2ad-a77b-4f62-b8f6-4bbd02300869`. The UI-only promotion used Wrangler's
-`--containers-rollout=none`; Container version 13 remains ready on image
-digest `sha256:bdd65feebad10d4b0f232e945eb1bd1195b803d13fddf8eee558b2efdd5dc8c6`.
-The last full exact-version production smoke belongs to Worker
+`89db95bc-d0c1-48c7-963b-2e2f9a35f876`, with Container version 14 healthy on
+the earlier v5.1 candidate digest
+`sha256:1b974af90901e818fc202fffca8702f7a48aa1bcfa54776af7cc67831b5e34da`.
+That version did not pass the live smoke and therefore has no completed v5.1
+production authority claim. The last full exact-version production smoke
+belongs to Worker
 `7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab` and completed all seven stages at
 `2026-07-16T05:03:38.850648Z`; its byte-for-byte report is committed as
 `docs/PRODUCTION_SMOKE.json` with SHA-256
 `cd5c0c05b2f007c577905630a61f7be84c71908a511ca9bffad68f76bd86431a`.
 
 Scientific-engine governance is implemented for the released ML packs. The
-exact source-bound v5.1 candidate is `efe7fcf…`, local OCI digest `1b974af9…`,
-and authority `aff2ea37…`. Its four admitted engines are bound to versions,
+exact source-bound v5.1 candidate is `bcd5df1…`, local OCI digest `588b0963…`,
+and authority `9cd4478e…`. Its four admitted engines are bound to versions,
 roles, operations, licenses, installed-file hashes, health evidence, three
 normalized SBOMs, raw vulnerability evidence, and an exact-image reviewed
 exception. The full local image gate passes. The earlier Cloudflare registry
@@ -102,17 +112,18 @@ evidence; those identities are not interchangeable with the new candidate.
   application; and an exact source-bound non-root runner candidate whose local
   scientific gate passes.
 - **In progress:** Cloudflare registry push, qualified Container/Worker
-  promotion, and exact-version production smoke for the v5.1 candidate.
+  promotion, and exact-version production smoke for the schema-fixed v5.1
+  candidate.
 - **Pending:** current-source desktop and 390 px browser journeys, chat-first
   learner simplification, clean-clone, secret, accessibility, performance, and
   final release gates.
 - **Blocked by phase order:** verified physics/free-fall and learner-impact
   expansion. Physics does not begin until both ML concepts pass the new public
   production authority gate.
-- **Not run for this checkpoint:** local `dev`, current-source browser journeys,
-  v5.1 deployment, or v5.1 production smoke. The exact runner image build and
-  scientific qualification checks were run; the public deployment remains the
-  qualified v2 release described below until promotion finishes.
+- **Not run for this checkpoint:** local `dev`, current schema-fixed browser
+  journeys, or a completed v5.1 production smoke. The previous promotion and
+  partial smoke are recorded above; the exact replacement runner image build
+  and scientific qualification checks passed locally.
 
 | Slice | Status | Repository evidence | Remaining release condition |
 | --- | --- | --- | --- |
@@ -130,7 +141,7 @@ evidence; those identities are not interchangeable with the new candidate.
 | Boundary Map authority and learner rendering | done locally | Commits through `5b89084`, `77e1cba`, `9c4fc23`, and `f50bab1` bind the exact pack sweep into compile authority, execute only registered grids, freeze and independently reverify lineage and values, issue an integrity/HMAC receipt, reject without result release, expose immutable authority-checked retrieval, gate revision, and render only a verified map with a semantic table and keyboard cell inspection. Both concepts and rejection/reconnect paths are covered. | Requalify both concepts in the final image and run the current desktop/390 px browser journey. |
 | Simplified Theater and Judge Mode | done locally; browser pending | `DESIGN.md`, the focused-theater work, hosted Capsule replay commits, and `ef066fa` remove the permanent agent cockpit, consolidate technical evidence into a collapsed Evidence & proof drawer, enforce Question → Prediction → Test → Boundary → Apply → Repair, and add evidence-first Judge routes with labelled authority. | Run updated desktop/390 px CloakBrowser journeys against the promoted source, then complete the chat-first clarity pass without exposing results before Prediction. |
 | Physics/free-fall | blocked by phase order | No verified public support is claimed. | Start only after both live ML concepts pass the new production authority gate. |
-| Final release | in progress | Exact source-bound runner `efe7fcf…` built as local OCI `1b974af9…`; scientific gate passes as authority `aff2ea37…`. Previous production v2 smoke remains valid only for that deployment. | Evidence-only commit, registry push, qualification, deploy, exact-version smoke, current browser journeys, and remaining release checks. |
+| Final release | in progress | Exact source-bound runner `bcd5df1…` built as local OCI `588b0963…`; scientific gate passes as authority `9cd4478e…`. Previous production v2 smoke remains valid only for that deployment. | Evidence-only commit, registry push, qualification, deploy, exact-version smoke, current browser journeys, and remaining release checks. |
 
 Latest local v5.1 verification checkpoint (2026-07-16):
 
@@ -157,11 +168,13 @@ Latest local v5.1 verification checkpoint (2026-07-16):
 - Worker Boundary authority after dispatch, rejection, receipt, retrieval, and
   revision-race closure: 18 files and 140/140 tests; session core 26/26;
   repository TypeScript check passed.
-- Full Python kernel suite after hosted Boundary Map integration: 169/169
-  passed.
-- Full TypeScript suites after current-pack fixture repair: 409/409 root and
-  136/136 web/Worker tests passed; strict repository and Worker TypeScript
-  passed.
+- Full Python kernel suite: 170/170 passed.
+- Full TypeScript suites after the Belief Spec transport repair: 435/435 root
+  and 185/185 web/Worker tests passed; strict repository TypeScript passed.
+- Belief analyst transport regression: 36/36 passed. The captured Responses
+  schema now has object-valued `items` with an exact length of two; the
+  canonical local schema still enforces ordered `current` and `competing`
+  hypotheses. The real v2 leakage verification completed at `medium` effort.
 - Focused Theater React tests: 3/3 passed; strict web/Worker TypeScript and
   targeted Prettier checks passed. `DESIGN.md` lint reports 0 warnings and 0
   errors.
@@ -172,14 +185,14 @@ Latest local v5.1 verification checkpoint (2026-07-16):
 - Current live Worker test fixtures resolve pack versions from the registry;
   historical signed replay/contract fixtures remain on their original versions.
 - Git whitespace check: passed.
-- The exact source-bound runner image was built from `efe7fcf…` as local OCI
-  `sha256:1b974af9…`, with non-root user `10001:10001` and matching OCI source
-  labels. `dev`, deployment, current browser journeys, and v5.1 production
-  smoke have not yet run.
+- The exact source-bound runner image was built from `bcd5df1…` as local OCI
+  `sha256:588b0963…`, with non-root user `10001:10001` and matching OCI source
+  labels. The replacement image has not yet been deployed; the preceding v5.1
+  deployment and its failed-closed live smoke remain recorded separately.
 - Two independent no-cache Python builder executions and the release candidate
   produced the same kernel wheel SHA-256 `38b1be0e…`.
 - Scientific registry Vitest passed 68/68; repository TypeScript passed; the
-  exact-image scientific gate returned `VERIFIED` with authority `aff2ea37…`.
+  exact-image scientific gate returned `VERIFIED` with authority `9cd4478e…`.
   Grype recorded 171 findings, 0 fixable Critical, one reviewed fixable High,
   one intended VEX suppression, and zero negative-control suppressions.
 - Production D1 migrations `0004_boundary_request_purpose.sql` and
@@ -194,9 +207,9 @@ Latest local v5.1 verification checkpoint (2026-07-16):
 | Gate                                         | Status  | Current evidence                                                                                                                                                                                                                          |
 | -------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Sample/live/replay mode separation           | pass    | Contract and Worker regression tests prevent a non-sample artifact from receiving sample Belief Test, result, patch, or replay authority.                                                                                                 |
-| Scientific-engine registry and evidence      | partial | The full gate passes for source-bound local image `1b974af9…` and authority `aff2ea37…`; 0 fixable Critical and 1 fixable High are handled by exact-image VEX, bounded reachability, and a negative-control scan. Registry push, production promotion, and new smoke binding remain pending. |
+| Scientific-engine registry and evidence      | partial | The full gate passes for source-bound local image `588b0963…` and authority `9cd4478e…`; 0 fixable Critical and 1 fixable High are handled by exact-image VEX, bounded reachability, and a negative-control scan. Registry push, production promotion, and new smoke binding remain pending. |
 | Safe notebook intake and evidence references | pass    | Parser tests cover bounded input, no execution, active-output sanitization, stable hashes, exact cells/outputs, and typed refusal.                                                                                                        |
-| Live schema-constrained Belief Test          | pass    | Real configured Responses call returned a valid class-imbalance Belief Test with three locally resolved evidence references; invalid/unresolved output is rejected in tests.                                                              |
+| Live schema-constrained Belief Spec          | partial | The exact pre-fix v2 call reproduced `invalid_json_schema`; `36ee156` fixes the provider-compatible wire schema, 36/36 tests pass, and a real medium-effort v2 leakage result validated with resolved evidence. Production rerun is pending. |
 | Live analyst preview and approval            | pass    | Live calls require a hash-bound preview of the exact sanitized packet; sensitive-looking evidence requires explicit approval, and claim/artifact changes invalidate it.                                                                  |
 | Runner job/token/callback/event cursor model | pass    | D1 repository, optimistic transitions, Worker-held P-256 private signing, Container public-key verification, callback idempotency, cursor reconnect, scoped cancellation, recoverable dispatch acknowledgement, and browser-safe event schemas pass tests and production smoke. |
 | Artifact-specific hosted Experiment Plan     | pass    | Worker/runner integration compiles and independently verifies typed v2 Plans; rejected candidates release no result.                                                                                                                      |
@@ -216,8 +229,8 @@ Latest local v5.1 verification checkpoint (2026-07-16):
 | Learner pilot                                | partial | Paired-crossover protocol, consent/privacy note, randomization, schema, and analysis script exist. No participants or learner outcomes are claimed.                                                                                       |
 | TypeScript/Web/Python suites                 | pass    | `COUNTERLAB_E2E_BASE_URL=https://counterlab.cserules.workers.dev ./scripts/test-all.sh` passed 303 root TypeScript tests, 110 web/Worker tests, 157 Python tests, strict TypeScript checks, and the production-backed browser slice.              |
 | New-version browser E2E                      | partial | Historical production v2 has 13 passing CloakBrowser journeys and a full live smoke. Current v5.1 desktop/390 px, reconnect, replay, and live browser journeys remain to be executed after promotion. |
-| Container image build and production deploy | partial | Current v5.1 image is source-bound to `efe7fcf…`, local OCI `1b974af9…`, and passes the local engine gate. The public Worker still uses the historical v2 Container until registry push, qualification, and deploy complete. |
-| Production live runner smoke                | partial | Historical v2 smoke passed all seven stages. The current v5.1 exact-version smoke has not run and cannot inherit the previous result. |
+| Container image build and production deploy | partial | The schema-fixed image is source-bound to `bcd5df1…`, local OCI `588b0963…`, and passes the local engine gate. Public Worker `89db95bc…` still runs the preceding v5.1 image until replacement qualification/deploy completes. |
+| Production live runner smoke                | fail    | Worker `89db95bc…` passed readiness, health, secret scan, Judge Mode, Sample, and replay; untouched leakage failed before state advancement on the now-fixed v2 schema. No result leaked. Both concepts must pass after redeploy. |
 | One-command local demo                      | pass    | `./scripts/clean-demo.sh` regenerated both fixtures, passed 5 focused tests, confirmed current local D1 migrations, and served healthy kernel and Worker endpoints before its exact processes were stopped.                               |
 | Clean-clone/release check/secret scan       | partial | The pre-hardening Studio tree passed a fresh-clone release check and 334-file scan. The current v5.1 tree has not yet rerun the final clean-clone, SBOM, dependency, and secret gates. |
 
@@ -228,10 +241,11 @@ Latest local v5.1 verification checkpoint (2026-07-16):
 - `COUNTERLAB_E2E_BASE_URL=https://counterlab.cserules.workers.dev ./scripts/test-all.sh` — 303 root TypeScript, 110 web/Worker, and 157 Python tests passed; 13 CloakBrowser journeys passed against production and 2 credentialed browser-only live cases were skipped. The separate production smoke above exercised both real live concepts.
 - `./scripts/run-mutations.sh leakage` and `./scripts/run-mutations.sh imbalance` — 13/13 and 19/19 critical mutations detected.
 - `PYTHONPATH=services/kernel/src .venv/bin/python scripts/collect-achieved-metrics.py` — regenerated canonical current kernel hashes and the 13/13 leakage plus 15/15 published imbalance mutation subsets in `docs/ACHIEVED_METRICS.json`.
-- `./scripts/build-source-bound-runner.sh` from a clean detached worktree — built source `efe7fcf…` as non-root local OCI `sha256:1b974af90901e818fc202fffca8702f7a48aa1bcfa54776af7cc67831b5e34da` with matching source/tree labels.
-- `./scripts/verify-scientific-engines.sh --image counterlab-runner:git-efe7fcfa6bfb5bb0115d4bd0bb1e1c1c628ef0b8` — passed with no findings and authority `aff2ea37372b647b887d1e088f5aac98ceb725246b760eb07ae21e1453e5e57e`. Its `local_candidate` metadata remains deliberately distinct from Cloudflare production authority.
+- `./scripts/build-source-bound-runner.sh` from a clean detached worktree — built source `bcd5df1…` as non-root local OCI `sha256:588b0963f3473be0347411a857399f6dfd9f31ccc7c8248963323792ff0a394a` with matching source/tree labels.
+- `./scripts/verify-scientific-engines.sh --image counterlab-runner:git-bcd5df1729de303ab9553dd261843977b4f34ffa` — passed with no findings and authority `9cd4478e97c20f235df4df0b20b2e301d5883d42886f5ac73bb8f965ecf62c82`. Its `local_candidate` metadata remains deliberately distinct from Cloudflare production authority.
 - The unsuppressed Grype 0.112.0 scan recorded 171 findings and 0 fixable Critical. One fixable High (`CVE-2026-15308`) is bound to exact-image VEX and bounded reachability; the applied scan ignored exactly that one finding and the wrong-subcomponent control ignored none.
-- `pnpm test:ts` — 296 root and 103 web/Worker tests passed; `pnpm test:python` — 105 passed; `pnpm typecheck` — passed.
+- `pnpm test:ts` — 435 root and 185 web/Worker tests passed;
+  `pnpm test:python` — 170 passed; repository `tsc --noEmit` — passed.
 - Two independent no-cache builder executions plus the release candidate produced kernel wheel hash `38b1be0e3c6e1ca33b3a8f36b45fb3273a416b1c2bea099f25afec71e8ebb87b`.
 - `pnpm --filter @counterlab/web test -- --run` after dispatch recovery — 101/101 web tests passed; strict web and Worker typechecks passed.
 - `./scripts/test-all.sh` before the final dispatch-recovery slice — 179 root TypeScript, 99 web, 136 Python, and 13 local browser journeys passed with 2 credentialed live skips. A current full rerun remains a release action.
@@ -258,6 +272,6 @@ deployment stays on its qualified v2 contract until those gates pass.
 Upstream Runtime Codex turn intermittency remains an operational
 risk; the runner fails closed and the previous production smoke proved its
 bounded recovery path. The reviewed vulnerability exception expires on
-`2026-07-30T18:20:06Z` and requires requalification on any bound source, image,
+`2026-07-30T19:10:33Z` and requires requalification on any bound source, image,
 SBOM, entrypoint, scanner, or vulnerability-status change. Cloudflare
 Containers remain a beta runtime, and no formal sandbox proof is claimed.

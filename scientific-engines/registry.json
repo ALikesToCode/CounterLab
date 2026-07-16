@@ -50,7 +50,7 @@
         "upgradeDriftFixtureIds": ["ml-engine-upgrade-drift-v1"]
       },
       "attribution": "CounterLab contributors; MIT license.",
-      "integrityHash": "69847ca9946c25f90bd42b42fbd1242e0d8e81d01b3718aaeee1c25c8ddd59b7"
+      "integrityHash": "f57e74500aed47c8f0daf6e2679f4584bd85517516eb5582f92f156451cdf076"
     },
     {
       "id": "numpy",
@@ -100,7 +100,7 @@
         "upgradeDriftFixtureIds": ["ml-engine-upgrade-drift-v1"]
       },
       "attribution": "NumPy Developers; BSD-3-Clause and bundled third-party notices.",
-      "integrityHash": "1c73d41d924bd5ca435ce8152f853421d504fad3efdb8396b564f4c879f842d4"
+      "integrityHash": "ecdca70eb3d975ddac58793366d9d8303597824d77eb695468b8757e2757f856"
     },
     {
       "id": "pandas",
@@ -149,7 +149,7 @@
         "upgradeDriftFixtureIds": ["ml-engine-upgrade-drift-v1"]
       },
       "attribution": "pandas development team; BSD-3-Clause license.",
-      "integrityHash": "6184e80a3917608c28dd4f631c77ae05cd494024050834492ae5bfe63d5023dc"
+      "integrityHash": "4f0e56377b1f6ccf1c2aba4ca7735913d1306073effe8f335dd3ab2d4dcf667b"
     },
     {
       "id": "scikit-learn",
@@ -199,7 +199,7 @@
         "upgradeDriftFixtureIds": ["ml-engine-upgrade-drift-v1"]
       },
       "attribution": "scikit-learn developers; BSD-3-Clause license.",
-      "integrityHash": "865e26ece9199f451881f8f29eb2a0d753fb309292c3547eb9b433ac7f6f8230"
+      "integrityHash": "aeb304d4c308b85162e2e77858c69f478ec4b4cf7e14fe5d251687c725e75f65"
     }
   ]
 }

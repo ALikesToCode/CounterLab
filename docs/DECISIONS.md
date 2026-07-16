@@ -582,9 +582,9 @@ can pass.
 
 - Preserve the previous v2 Container, Worker, and smoke identifiers as
   historical evidence; they do not grant authority to the current v5.1 source.
-- Bind the release candidate to source `efe7fcf…`, local OCI digest
-  `sha256:1b974af9…`, non-root user `10001:10001`, and scientific authority
-  `aff2ea37…`. Any runtime-source change requires a new image and evidence set.
+- Bind the release candidate to source `bcd5df1…`, local OCI digest
+  `sha256:588b0963…`, non-root user `10001:10001`, and scientific authority
+  `9cd4478e…`. Any runtime-source change requires a new image and evidence set.
 - Treat scientific-engine evidence and the five approved factual release
   documents as the only permissible post-build evidence delta. Qualification
   fails closed on any other path.
@@ -593,7 +593,26 @@ can pass.
 - Refresh the exact-image SBOM, vulnerability scan, VEX application and negative
   control, bounded in-image reachability probe, internal authority bindings,
   and canonical snapshot. The reviewed CPython exception expires at
-  `2026-07-30T18:20:06Z` and cannot transfer to another image.
+  `2026-07-30T19:10:33Z` and cannot transfer to another image.
 - Push, qualify, deploy, and smoke this exact candidate in that order. Do not
   begin physics or claim v5.1 production authority before both untouched ML
   concepts complete the new public smoke.
+
+## 2026-07-16 — Keep canonical tuples local; emit homogeneous Responses arrays
+
+- Preserve `BeliefSpecV2Schema` as the canonical exactly-two tuple with the
+  ordered `current` then `competing` refinement. This remains the state and
+  evidence authority.
+- Emit the model-facing wire field as a homogeneous array with length two.
+  `zodTextFormat` otherwise serializes a tuple as array-valued JSON Schema
+  `items`, which the configured Responses-compatible endpoint rejected with
+  `invalid_json_schema`.
+- Keep provider identity absent from browser state, product copy, evidence, and
+  logs. The custom base URL, model, key, and reasoning effort remain server
+  configuration only.
+- Make `belief:live:verify` exercise native Belief Spec v2 rather than the
+  historical v1 Belief Test so release preparation tests the production schema.
+- Use `medium` as the release default. The measured real v2 leakage call
+  completed in approximately 36 seconds at `medium`; a separate `xhigh` call
+  reached the 180-second transport timeout and is recorded as a failed latency
+  observation, not a successful run.

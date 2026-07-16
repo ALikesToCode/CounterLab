@@ -11,11 +11,15 @@ The v5.1 scientific-engine registry gate is now implemented for the two
 released ML packs. Its exact non-root local candidate, licenses, integrity
 evidence, deterministic health runs, normalized SBOMs, raw vulnerability scan,
 reviewed exception evidence, and canonical authority hash pass the full local
-image gate for source `efe7fcf…`, local image `1b974af9…`, and authority
-`aff2ea37372b647b887d1e088f5aac98ceb725246b760eb07ae21e1453e5e57e`.
+image gate for source `bcd5df1…`, local image `588b0963…`, and authority
+`9cd4478e97c20f235df4df0b20b2e301d5883d42886f5ac73bb8f965ecf62c82`.
 Proof Capsule v2 binds and validates scientific-engine authority. The new v5.1
 candidate is awaiting registry push, qualification, deployment, and production
-smoke; the earlier Worker `7c67c0f4…`, registry digest `bdd65fee…`, and
+smoke. The preceding production promotion reached Worker `89db95bc…`, then
+failed closed at live Belief Spec generation on an incompatible tuple-shaped
+wire schema. Commits `36ee156` and `bcd5df1` fix and directly verify the v2
+wire contract; no sample, replay, runner job, or result authority leaked during
+the failure. The earlier Worker `7c67c0f4…`, registry digest `bdd65fee…`, and
 seven-stage smoke remain historical v2 evidence only. See
 `docs/SCIENTIFIC_ENGINES.md` and `docs/DEPENDENCY_ADMISSION.md`.
 
