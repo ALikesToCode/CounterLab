@@ -702,3 +702,5 @@ export function inspectProofCapsuleV2(
   const validated = validateProofCapsuleV2(bytes, options);
   return { ...validated, entries: validated.envelope.entries };
 }
+
+export * from "./authority.js";

@@ -8,6 +8,10 @@
   },
   "dependencies": {
     "@counterlab/contracts": "workspace:*",
+    "@counterlab/experiment-ir": "workspace:*",
+    "@counterlab/experiment-scorer": "workspace:*",
+    "@counterlab/plan-verifier": "workspace:*",
+    "@counterlab/scientific-engine-registry": "workspace:*",
     "zod": "4.4.3"
   }
 }

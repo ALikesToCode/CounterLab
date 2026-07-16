@@ -255,6 +255,18 @@ importers:
       "@counterlab/contracts":
         specifier: workspace:*
         version: link:../contracts
+      "@counterlab/experiment-ir":
+        specifier: workspace:*
+        version: link:../experiment-ir
+      "@counterlab/experiment-scorer":
+        specifier: workspace:*
+        version: link:../experiment-scorer
+      "@counterlab/plan-verifier":
+        specifier: workspace:*
+        version: link:../plan-verifier
+      "@counterlab/scientific-engine-registry":
+        specifier: workspace:*
+        version: link:../scientific-engine-registry
       zod:
         specifier: 4.4.3
         version: 4.4.3
