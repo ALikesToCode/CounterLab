@@ -16,6 +16,8 @@
     "contracts:generate": "tsx scripts/generate-contract-schemas.ts",
     "engines:snapshot": "tsx scripts/generate-scientific-engine-snapshot.ts",
     "sbom:normalize": "tsx scripts/normalize-cyclonedx.ts",
+    "vulnerability:summarize": "tsx scripts/summarize-grype-scan.ts",
+    "vex:summarize": "tsx scripts/summarize-vex-application.ts",
     "codex:live": "tsx scripts/run-live-codex.ts",
     "belief:live:verify": "tsx scripts/verify-live-belief.ts",
     "held-out:run": "tsx scripts/run-held-out.ts"

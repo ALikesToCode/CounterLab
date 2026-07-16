@@ -6,7 +6,14 @@ import { fileURLToPath } from "node:url";
 import {
   canonicalizeScientificEngineSnapshot,
   hashScientificEngineSnapshot,
+  OpenVexDocumentSchema,
+  ReachabilityReportV1Schema,
+  summarizeGrypeScan,
+  summarizeVexApplication,
   validateScientificEngineSnapshot,
+  verifyVulnerabilityAuthority,
+  VulnerabilityReportV2Schema,
+  VexApplicationReportV1Schema,
   type ScientificEngineSnapshot,
 } from "../packages/scientific-engine-registry/src/index.js";
 import { releasedConceptPacks } from "../packages/concept-registry/src/index.js";
@@ -843,35 +850,29 @@ export async function verifyVulnerabilityReport(
   );
   if (!record) return findings;
   try {
-    const report = object(await json(resolve(root, record.path)));
+    const reportValue = await json(resolve(root, record.path));
+    const report = object(reportValue);
     const scanner = object(report?.scanner);
     const policy = object(report?.policy);
     const fixable = object(report?.fixableFindingsBySeverity);
+    const passingStatus =
+      report?.schemaVersion === "2"
+        ? policy?.status === "PASSED" ||
+          policy?.status === "PASSED_WITH_REVIEWED_EXCEPTION"
+        : policy?.status === "PASSED";
     if (
       report?.environmentId !== snapshot.runtimeManifest.environmentId ||
       report.environmentKind !== snapshot.runtimeManifest.environmentKind ||
       report.imageDigest !== snapshot.runtimeManifest.container.imageDigest ||
       scanner?.databaseValid !== true ||
-      policy?.status !== "PASSED" ||
-      policy.fixableCriticalCount !== 0
+      !passingStatus ||
+      policy?.fixableCriticalCount !== 0
     ) {
       findings.push(
         finding(
           "VULNERABILITY_REPORT_RUNTIME_MISMATCH",
           record.path,
           "Vulnerability report does not bind a passing scan to the current runtime image.",
-        ),
-      );
-    }
-    if (
-      snapshot.runtimeManifest.environmentKind === "cloudflare_production" &&
-      (Number(fixable?.Critical ?? 0) > 0 || Number(fixable?.High ?? 0) > 0)
-    ) {
-      findings.push(
-        finding(
-          "PRODUCTION_FIXABLE_HIGH_VULNERABILITY",
-          record.path,
-          "Production promotion rejects fixable Critical or High findings.",
         ),
       );
     }
@@ -887,6 +888,291 @@ export async function verifyVulnerabilityReport(
         ),
       );
     }
+
+    if (report?.schemaVersion !== "2") {
+      if (
+        snapshot.runtimeManifest.environmentKind === "cloudflare_production" &&
+        (Number(fixable?.Critical ?? 0) > 0 || Number(fixable?.High ?? 0) > 0)
+      ) {
+        findings.push(
+          finding(
+            "PRODUCTION_FIXABLE_HIGH_VULNERABILITY",
+            record.path,
+            "Legacy vulnerability evidence cannot except fixable Critical or High findings.",
+          ),
+        );
+      }
+      return findings;
+    }
+
+    const parsedReport = VulnerabilityReportV2Schema.safeParse(reportValue);
+    if (!parsedReport.success) {
+      findings.push(
+        finding(
+          "VULNERABILITY_REPORT_INVALID",
+          record.path,
+          parsedReport.error.issues[0]?.message ??
+            "Vulnerability report v2 is invalid.",
+        ),
+      );
+      return findings;
+    }
+    const reportV2 = parsedReport.data;
+    const rawRecord = snapshot.evidenceCatalog.records.find(
+      (candidate) => candidate.id === reportV2.rawScan.evidenceId,
+    );
+    if (
+      !rawRecord ||
+      rawRecord.kind !== "vulnerability_scan" ||
+      rawRecord.sha256 !== reportV2.rawScan.sha256
+    ) {
+      findings.push(
+        finding(
+          "RAW_VULNERABILITY_SCAN_MISMATCH",
+          record.path,
+          "The summarized report must bind the preserved raw scanner output.",
+        ),
+      );
+    } else {
+      const rawValue = await json(resolve(root, rawRecord.path));
+      const recomputed = summarizeGrypeScan(rawValue, {
+        environmentId: reportV2.environmentId,
+        environmentKind: reportV2.environmentKind,
+        imageDigest: reportV2.imageDigest,
+        rawScan: reportV2.rawScan,
+        scannerBinarySha256: reportV2.scanner.binarySha256,
+        reviewedHighExceptions: reportV2.reviewedExceptions.map(
+          ({ fingerprint: _fingerprint, severity: _severity, ...review }) =>
+            review,
+        ),
+        limitations: reportV2.limitations,
+      });
+      if (JSON.stringify(recomputed) !== JSON.stringify(reportV2)) {
+        findings.push(
+          finding(
+            "RAW_VULNERABILITY_SUMMARY_MISMATCH",
+            record.path,
+            "Vulnerability counts, findings, fingerprints, and policy must derive from the preserved raw scanner output.",
+          ),
+        );
+      }
+    }
+
+    const toolLock = object(
+      await json(resolve(root, "docs/sbom/tool-lock.json")),
+    );
+    const tools = Array.isArray(toolLock?.tools)
+      ? (toolLock.tools as JsonObject[])
+      : [];
+    const grype = tools.find((candidate) => candidate.id === "grype");
+    if (
+      !grype ||
+      grype.exactVersion !== reportV2.scanner.exactVersion ||
+      grype.binarySha256 !== reportV2.scanner.binarySha256
+    ) {
+      findings.push(
+        finding(
+          "VULNERABILITY_SCANNER_TOOL_MISMATCH",
+          record.path,
+          "Scanner version and binary must match the locked release tool.",
+        ),
+      );
+    }
+
+    const highCount = reportV2.fixableFindings.filter(
+      (candidate) => candidate.severity === "High",
+    ).length;
+    const criticalCount = reportV2.fixableFindings.filter(
+      (candidate) => candidate.severity === "Critical",
+    ).length;
+    if (criticalCount > 0) {
+      findings.push(
+        finding(
+          "PRODUCTION_FIXABLE_HIGH_VULNERABILITY",
+          record.path,
+          "Fixable Critical findings cannot be excepted.",
+        ),
+      );
+    }
+    if (highCount === 0) {
+      if (
+        reportV2.reviewedExceptions.length !== 0 ||
+        reportV2.policy.status !== "PASSED"
+      ) {
+        findings.push(
+          finding(
+            "VULNERABILITY_POLICY_MISMATCH",
+            record.path,
+            "A scan with no fixable High finding cannot claim a reviewed exception.",
+          ),
+        );
+      }
+      return findings;
+    }
+
+    const manifest = snapshot.runtimeManifest;
+    const vexRecord = snapshot.evidenceCatalog.records.find(
+      (candidate) => candidate.id === manifest.vexEvidenceId,
+    );
+    const reachabilityRecord = snapshot.evidenceCatalog.records.find(
+      (candidate) => candidate.id === manifest.reachabilityEvidenceId,
+    );
+    const vexApplicationRecord = snapshot.evidenceCatalog.records.find(
+      (candidate) => candidate.id === manifest.vexApplicationEvidenceId,
+    );
+    if (
+      !manifest.vexEvidenceId ||
+      !manifest.vexEvidenceHash ||
+      !manifest.reachabilityEvidenceId ||
+      !manifest.reachabilityEvidenceHash ||
+      !vexRecord ||
+      vexRecord.kind !== "vex" ||
+      vexRecord.sha256 !== manifest.vexEvidenceHash ||
+      !reachabilityRecord ||
+      reachabilityRecord.kind !== "reachability_report" ||
+      reachabilityRecord.sha256 !== manifest.reachabilityEvidenceHash ||
+      !manifest.vexApplicationEvidenceId ||
+      !manifest.vexApplicationEvidenceHash ||
+      !vexApplicationRecord ||
+      vexApplicationRecord.kind !== "vex_application_report" ||
+      vexApplicationRecord.sha256 !== manifest.vexApplicationEvidenceHash
+    ) {
+      findings.push(
+        finding(
+          "VULNERABILITY_EXCEPTION_BINDING_MISSING",
+          record.path,
+          "Fixable High exceptions require hash-bound VEX and reachability evidence.",
+        ),
+      );
+      return findings;
+    }
+
+    const [parsedVex, parsedReachability, parsedVexApplication] = [
+      OpenVexDocumentSchema.safeParse(
+        await json(resolve(root, vexRecord.path)),
+      ),
+      ReachabilityReportV1Schema.safeParse(
+        await json(resolve(root, reachabilityRecord.path)),
+      ),
+      VexApplicationReportV1Schema.safeParse(
+        await json(resolve(root, vexApplicationRecord.path)),
+      ),
+    ];
+    if (
+      !parsedVex.success ||
+      !parsedReachability.success ||
+      !parsedVexApplication.success
+    ) {
+      findings.push(
+        finding(
+          "VULNERABILITY_EXCEPTION_EVIDENCE_INVALID",
+          record.path,
+          "Reviewed exception evidence is not schema-valid.",
+        ),
+      );
+      return findings;
+    }
+
+    const application = parsedVexApplication.data;
+    const applicationInputRecords = [
+      application.inputs.baseline,
+      application.inputs.applied,
+      application.inputs.negativeControl,
+    ].map((input) => ({
+      input,
+      record: snapshot.evidenceCatalog.records.find(
+        (candidate) => candidate.id === input.evidenceId,
+      ),
+    }));
+    if (
+      application.imageDigest !== manifest.container.imageDigest ||
+      application.vexSha256 !== manifest.vexEvidenceHash ||
+      applicationInputRecords.some(
+        ({ input, record: inputRecord }) =>
+          !inputRecord ||
+          inputRecord.kind !== "vulnerability_scan" ||
+          inputRecord.sha256 !== input.sha256,
+      )
+    ) {
+      findings.push(
+        finding(
+          "VEX_APPLICATION_BINDING_MISMATCH",
+          vexApplicationRecord.path,
+          "VEX application proof must bind the exact image, VEX document, and three scanner outputs.",
+        ),
+      );
+      return findings;
+    }
+    const [baselineInput, appliedInput, negativeInput] = await Promise.all(
+      applicationInputRecords.map(({ record: inputRecord }) =>
+        json(resolve(root, inputRecord!.path)),
+      ),
+    );
+    const recomputedApplication = summarizeVexApplication(
+      baselineInput,
+      appliedInput,
+      negativeInput,
+      {
+        imageDigest: application.imageDigest,
+        scannerBinarySha256: application.scanner.binarySha256,
+        vexSha256: application.vexSha256,
+        inputs: application.inputs,
+        expectedFinding: {
+          id: application.suppressedFinding.id,
+          namespace: application.suppressedFinding.namespace,
+          package: application.suppressedFinding.package,
+          version: application.suppressedFinding.version,
+          artifactType: application.suppressedFinding.artifactType,
+          purl: application.suppressedFinding.purl,
+          fingerprint: application.suppressedFinding.fingerprint,
+        },
+        negativeSubcomponent: application.negativeControl.subcomponent,
+        limitations: application.limitations,
+      },
+    );
+    if (JSON.stringify(recomputedApplication) !== JSON.stringify(application)) {
+      findings.push(
+        finding(
+          "VEX_APPLICATION_SUMMARY_MISMATCH",
+          vexApplicationRecord.path,
+          "VEX suppression counts and match multisets must derive from the preserved scanner outputs.",
+        ),
+      );
+      return findings;
+    }
+
+    const python = manifest.runtimes.find(
+      (candidate) => candidate.id === "cpython",
+    );
+    const runnerSbomHash = manifest.sbomHashes["runner-container-sbom"];
+    if (!python || !runnerSbomHash) {
+      findings.push(
+        finding(
+          "VULNERABILITY_EXCEPTION_BINDING_MISSING",
+          record.path,
+          "Runtime Python and Container SBOM bindings are required.",
+        ),
+      );
+      return findings;
+    }
+    findings.push(
+      ...verifyVulnerabilityAuthority({
+        now: new Date().toISOString(),
+        runtime: {
+          environmentId: manifest.environmentId,
+          environmentKind: manifest.environmentKind,
+          imageDigest: manifest.container.imageDigest,
+          sourceCommit: manifest.sourceCommit,
+          sbomSha256: runnerSbomHash,
+          pythonVersion: python.exactVersion,
+          vexEvidenceId: manifest.vexEvidenceId,
+          reachabilityEvidenceId: manifest.reachabilityEvidenceId,
+        },
+        report: reportV2,
+        vex: parsedVex.data,
+        reachability: parsedReachability.data,
+      }),
+    );
   } catch (error) {
     findings.push(
       finding(
