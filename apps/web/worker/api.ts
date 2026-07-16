@@ -27,6 +27,7 @@ import {
 import {
   ExperimentIRV5Schema,
   RunnerLabCompileBundleV5Schema,
+  RunnerLabRunBundleV5Schema,
   RunnerScientificCandidateV5Schema,
   VersionedRunnerJobInputBundleSchema,
   hashExperimentIR,
@@ -3349,14 +3350,189 @@ export function createApi(options: ApiOptions = {}) {
           503,
         );
       }
-      if (
-        artifact === undefined ||
-        current.beliefTest === undefined ||
-        current.labVerification === undefined
-      ) {
+      if (artifact === undefined || current.labVerification === undefined) {
         throw new ApiInputError(
           "LIVE_CONTRACTS_REQUIRED",
           "A verified artifact-specific Plan is required before execution",
+          409,
+        );
+      }
+      const scientificLineage = HostedExperimentLineageV5Schema.safeParse(
+        current.labVerification,
+      );
+      if (scientificLineage.success) {
+        if (
+          current.beliefSpec === undefined ||
+          current.prediction === undefined ||
+          current.beliefTest !== undefined
+        ) {
+          throw new ApiInputError(
+            "LIVE_SCIENTIFIC_AUTHORITY_MISSING",
+            "A confirmed Belief Spec and immutable prediction are required for this scientific run",
+            409,
+          );
+        }
+        const jobs = runnerJobService(context, options);
+        const compileJob = await jobs.getJob(scientificLineage.data.jobId);
+        if (compileJob.status !== "VERIFIED") {
+          throw new ApiInputError(
+            "LIVE_SCIENTIFIC_AUTHORITY_MISSING",
+            "The scientific compiler job is not verified",
+            409,
+          );
+        }
+        const authority = await reconstructScientificCompileAuthority({
+          store: runnerObjectStore(context, options),
+          job: compileJob,
+          session: current,
+          manifest: artifact.manifest,
+          inputBundleKey: `runner-input/${compileJob.jobId}.json`,
+          outputPrefix: `runner-output/${compileJob.jobId}/`,
+        });
+        if (
+          (await hashCanonical(authority.lineage)) !==
+          (await hashCanonical(scientificLineage.data))
+        ) {
+          throw new ApiInputError(
+            "LIVE_SCIENTIFIC_AUTHORITY_DRIFT",
+            "The verified scientific authority changed before fixed execution",
+            409,
+          );
+        }
+        const pack = getConceptPack(authority.bundle.conceptPack.id);
+        const fixtureDescriptorHash = await hashCanonical(pack.fixedFixture);
+        const expectedHashes = {
+          artifactManifest: scientificLineage.data.artifactManifestHash,
+          beliefSpec: scientificLineage.data.beliefSpecHash,
+          prediction: scientificLineage.data.predictionHash,
+          fixtureDescriptor: fixtureDescriptorHash,
+          compileInputBundle: scientificLineage.data.inputBundleHash,
+          rawExperimentIrFile:
+            scientificLineage.data.compilerOutputFileHashes[
+              "experiment-ir.json"
+            ],
+          rawExperimentIrCanonical:
+            scientificLineage.data.rawExperimentIrCanonicalHash,
+          candidateVerificationReport:
+            scientificLineage.data.candidateVerificationReportHash,
+          experimentSelection: scientificLineage.data.selectionHash,
+          selectedExperimentIr: scientificLineage.data.selectedExperimentIrHash,
+          projectedPlan: scientificLineage.data.projectedPlanHash,
+        };
+        const requestIdentity = liveRunnerRequestIdentity({
+          sessionId,
+          purpose: "LAB_RUN_AUTHORITATIVE",
+          artifactId: artifact.manifest.artifactId,
+          artifactManifestHash: scientificLineage.data.artifactManifestHash,
+          conceptPack: { id: pack.id, version: pack.version },
+          authorityProfileHash: await hashCanonical({
+            kernel: "counterlab-fixed-kernel-v2",
+            technicalVerifier: "hosted-result-verifier-v2",
+            epistemicVerifier: "epistemic-verifier-v1",
+            fixture: pack.fixedFixture,
+            permittedOutputs: ["verified-result.json"],
+          }),
+          authorityInputHashes: expectedHashes,
+        });
+        const reusable = await jobs.findReusableRequest(requestIdentity);
+        if (reusable !== undefined) {
+          const runnerJob = await dispatchRecoverableRunnerJob({
+            context,
+            options,
+            jobs,
+            dispatcher,
+            job: reusable,
+          });
+          return context.json(
+            jsonSuccess({
+              ...statePayload(current),
+              runnerJob,
+              reused: true as const,
+            }),
+            202,
+          );
+        }
+        const jobId = requestId(options, "runner_job");
+        const bundle = RunnerLabRunBundleV5Schema.parse({
+          schemaVersion: "5",
+          kind: "LAB_RUN",
+          purpose: "AUTHORITATIVE",
+          jobId,
+          sessionId,
+          stateVersion: current.version,
+          artifactManifestHash: scientificLineage.data.artifactManifestHash,
+          approvedBeliefSpec: current.beliefSpec,
+          beliefSpecHash: scientificLineage.data.beliefSpecHash,
+          prediction: current.prediction,
+          artifactManifest: artifact.manifest,
+          fixture: pack.fixedFixture,
+          selectedExperimentIr: authority.selectedExperimentIr,
+          selectedExperimentIrHash:
+            scientificLineage.data.selectedExperimentIrHash,
+          fixedSelection: authority.outcome.selection,
+          projectedPlan: authority.projectedPlan,
+          expectedHashes,
+          provenance: {
+            compileJobId: compileJob.jobId,
+            compileInputBundleHash: scientificLineage.data.inputBundleHash,
+            compilerOutputFileHashes:
+              scientificLineage.data.compilerOutputFileHashes,
+            rawExperimentIrCanonicalHash:
+              scientificLineage.data.rawExperimentIrCanonicalHash,
+            scientificVerifierVersion:
+              scientificLineage.data.scientificVerifierVersion,
+            candidateVerificationReportHash:
+              scientificLineage.data.candidateVerificationReportHash,
+            scorerVersion: scientificLineage.data.scorerVersion,
+            projectionAdapterVersion:
+              scientificLineage.data.projectionAdapterVersion,
+          },
+          resultOutput: {
+            path: "verified-result.json",
+            schemaVersion: "2",
+            authoritativeInputHashes: expectedHashes,
+          },
+          permittedOutputs: ["verified-result.json"],
+        });
+        const bundleHash = await hashCanonical(bundle);
+        await runnerObjectStore(context, options).put(
+          `runner-input/${jobId}.json`,
+          JSON.stringify(bundle),
+          "application/json",
+        );
+        const claimed = await jobs.createOrReuseJob({
+          jobId,
+          kind: "LAB_RUN",
+          sessionId,
+          artifactId: artifact.manifest.artifactId,
+          artifactManifestHash: scientificLineage.data.artifactManifestHash,
+          conceptPack: { id: pack.id, version: pack.version },
+          inputHashes: [...Object.values(expectedHashes), bundleHash],
+          requestIdentity,
+          stateVersion: current.version,
+          maxAttempts: 1,
+          timeoutSeconds: 150,
+        });
+        const starting = await dispatchRecoverableRunnerJob({
+          context,
+          options,
+          jobs,
+          dispatcher,
+          job: claimed.job,
+        });
+        return context.json(
+          jsonSuccess({
+            ...statePayload(current),
+            runnerJob: starting,
+            ...(claimed.reused ? { reused: true as const } : {}),
+          }),
+          202,
+        );
+      }
+      if (current.beliefTest === undefined) {
+        throw new ApiInputError(
+          "LIVE_PLAN_LINEAGE_MISSING",
+          "The verified Plan lineage is incomplete",
           409,
         );
       }

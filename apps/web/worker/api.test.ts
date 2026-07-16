@@ -29,6 +29,7 @@ import { schemaSummaryHash } from "@counterlab/belief-analyst";
 import {
   ExperimentIRV5Schema,
   RunnerLabCompileBundleV5Schema,
+  RunnerLabRunBundleV5Schema,
   hashExperimentIR,
   type RunnerLabCompileBundleV5,
 } from "@counterlab/experiment-ir";
@@ -711,6 +712,7 @@ async function preparedScientificHostedRunner() {
     artifact: artifact.manifest,
     bundle,
     dispatch,
+    dispatcher,
     runnerJobs,
     runnerObjects,
     session,
@@ -3234,6 +3236,60 @@ describe("Cloudflare Worker API", () => {
       projectedPlanHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
     });
     expect(storedSession?.beliefTest).toBeUndefined();
+
+    const queuedRun = await postJson(
+      harness.app,
+      `/api/sessions/${harness.bundle.sessionId}/lab/run`,
+    );
+    expect(queuedRun.status).toBe(202);
+    const runDispatch = harness.dispatcher.dispatched[1];
+    if (runDispatch === undefined) throw new Error("v5 run was not dispatched");
+    const runInput = harness.runnerObjects.objects.get(
+      `runner-input/${runDispatch.job.jobId}.json`,
+    );
+    if (runInput === undefined) throw new Error("v5 run input is missing");
+    const runBundle = RunnerLabRunBundleV5Schema.parse(
+      JSON.parse(runInput.body),
+    );
+    expect(runBundle).toMatchObject({
+      schemaVersion: "5",
+      kind: "LAB_RUN",
+      purpose: "AUTHORITATIVE",
+      sessionId: harness.bundle.sessionId,
+      approvedBeliefSpec: { id: harness.bundle.approvedBeliefSpec.id },
+      selectedExperimentIr: {
+        selection: {
+          status: "SELECTED",
+          candidateId: "group-holdout-plus-ablation",
+        },
+      },
+      fixture: {
+        id: "public-leakage-v1",
+        version: "leakage-fixture-v1",
+        contentSha256:
+          "5c482f39e4e948a92dab61bf9c9f5c6577fbe9fc688fd597c9fefd785ee1be70",
+      },
+      provenance: {
+        compileJobId: jobId,
+        scientificVerifierVersion: "scientific-candidate-verifier-v1",
+        scorerVersion: "experiment-scorer-v1",
+      },
+      permittedOutputs: ["verified-result.json"],
+    });
+    expect(runBundle).not.toHaveProperty("approvedBeliefTest");
+    expect(runBundle).not.toHaveProperty("learnerClaim");
+    const duplicateRun = await postJson(
+      harness.app,
+      `/api/sessions/${harness.bundle.sessionId}/lab/run`,
+    );
+    expect(duplicateRun.status).toBe(202);
+    await expect(duplicateRun.json()).resolves.toMatchObject({
+      data: {
+        reused: true,
+        runnerJob: { jobId: runDispatch.job.jobId, kind: "LAB_RUN" },
+      },
+    });
+    expect(harness.dispatcher.dispatched).toHaveLength(2);
   });
 
   it("re-verifies final v5 compiler bytes before projecting verified authority", async () => {
@@ -3343,6 +3399,50 @@ describe("Cloudflare Worker API", () => {
         session: { state: "LAB_REJECTED" },
       },
     });
+  });
+
+  it("blocks a v5 fixed run when verified compile authority drifts later", async () => {
+    const harness = await preparedScientificHostedRunner();
+    const staged = await stageScientificCandidate(harness);
+    const callback = await postJson(
+      harness.app,
+      `/api/runner/jobs/${staged.jobId}/callback`,
+      {
+        schemaVersion: "1",
+        callbackId: "callback_scientific_compile_v5_before_run_drift",
+        idempotencyKey: "scientific-compile-v5-before-run-drift-1",
+        jobId: staged.jobId,
+        stateVersion: harness.dispatch.job.stateVersion,
+        status: "VERIFIED",
+        outputHashes: Object.values(staged.artifactHashes),
+        finalEventCursor: staged.payload.data.runnerJob.eventCursor,
+        occurredAt: "2026-07-14T10:00:01.000Z",
+      },
+      staged.authorization,
+    );
+    expect(callback.status).toBe(200);
+
+    const selectionKey = `runner-authority/${staged.jobId}/experiment-selection.json`;
+    const storedSelection = harness.runnerObjects.objects.get(selectionKey);
+    if (storedSelection === undefined)
+      throw new Error("fixed selection is missing");
+    harness.runnerObjects.objects.set(selectionKey, {
+      ...storedSelection,
+      body: JSON.stringify({
+        ...(JSON.parse(storedSelection.body) as Record<string, unknown>),
+        normalizedScore: 0.01,
+      }),
+    });
+
+    const run = await postJson(
+      harness.app,
+      `/api/sessions/${harness.bundle.sessionId}/lab/run`,
+    );
+    expect(run.status).toBe(409);
+    await expect(run.json()).resolves.toMatchObject({
+      error: { code: "SCIENTIFIC_AUTHORITY_DERIVATION_MISMATCH" },
+    });
+    expect(harness.dispatcher.dispatched).toHaveLength(1);
   });
 
   it("rejects a runner-claimed success when the independent hosted Plan verifier fails", async () => {
