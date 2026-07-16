@@ -949,12 +949,14 @@ async function preparedScientificImbalanceHostedRunner(
     "application/x-ipynb+json; charset=utf-8",
   );
   const dispatcher = new CapturingRunnerDispatcher();
+  const replayRepository = new MemoryProofCapsuleReplayRepository();
   let runnerIdSequence = 0;
   const app = createApi({
     sessionRepository,
     artifactStore,
     runnerJobRepository: runnerJobs,
     runnerObjectStore: runnerObjects,
+    replayRepository,
     runnerDispatcher: dispatcher,
     runnerSigningPrivateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
     now: () => new Date("2026-07-14T10:00:00.000Z"),
@@ -985,6 +987,7 @@ async function preparedScientificImbalanceHostedRunner(
     dispatcher,
     runnerJobs,
     runnerObjects,
+    replayRepository,
     session,
     sessionId,
     sessionRepository,
@@ -3302,6 +3305,40 @@ describe("Cloudflare Worker API", () => {
       patchPlanFileHash: patchPlanHash,
       patchedArtifactHash: patchedNotebookHash,
       patchResultHash: patchResult.resultHash,
+    });
+
+    const replayPublication = await postJson(
+      harness.app,
+      `/api/sessions/${harness.sessionId}/replays`,
+    );
+    expect(
+      replayPublication.status,
+      await replayPublication.clone().text(),
+    ).toBe(201);
+    const replayPublicationPayload = (await replayPublication.json()) as {
+      data: { replay: { replayId: string } };
+    };
+    const hostedReplay = await harness.app.request(
+      `/api/replays/${replayPublicationPayload.data.replay.replayId}`,
+    );
+    expect(hostedReplay.status).toBe(200);
+    await expect(hostedReplay.json()).resolves.toMatchObject({
+      data: {
+        schemaVersion: "2",
+        replay: true,
+        concept: "class_imbalance",
+        artifactManifest: { artifactId: harness.artifactId },
+        beliefSpec: { concept: "class_imbalance" },
+        verifiedResult: {
+          concept: "class_imbalance",
+          resultHash: result.resultHash,
+        },
+        patchResult: { resultHash: patchResult.resultHash },
+        provenance: {
+          conceptPackVersion: result.conceptPackVersion,
+          kernelVersion: result.kernelVersion,
+        },
+      },
     });
   });
 
