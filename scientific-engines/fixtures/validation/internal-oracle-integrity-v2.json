@@ -12,7 +12,7 @@
     "packages/experiment-ir/src/schema.ts": "53c0db4c139530edc66c8d73fbd2eeb54265263911ab3ca7bc56064287eb1523",
     "packages/experiment-scorer/src/scorer.ts": "843905a767a5c63b04f906e6ec3e9adc80573f5ab22d09cb512a1df886800e7c",
     "packages/plan-verifier/src/epistemic.ts": "cc7efcdc8e8bbae3576348343eb39a2364b2df1878b7418487d14a9e97352617",
-    "packages/plan-verifier/src/scientific-candidate.ts": "cfb2da6269b9a3be769d1b79d4f016a738ef96945931b41abd995b430b6723b0",
+    "packages/plan-verifier/src/scientific-candidate.ts": "1003dd254621d7ed6d7595c714ce60842a057144f482aa4682d58fae5e6a3708",
     "services/kernel/src/counterlab_kernel/boundary_map.py": "b25b81dedf61525a692fa2015f1c7a4085d291f526cc181dfd717782b9886d88",
     "services/kernel/src/counterlab_kernel/imbalance_transfer.py": "9bb54ee44706cd3cda46b49cf8b20234547311fd6503146f99cece203c5aab4f",
     "services/kernel/src/counterlab_kernel/imbalance_verifier.py": "49d713b71db6b08f7561ae2128fbcb23872ffea640cccd71eedd97805bcc0280",
