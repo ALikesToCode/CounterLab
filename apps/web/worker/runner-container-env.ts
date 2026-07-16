@@ -28,5 +28,6 @@ export function createRunnerContainerEnvVars(
     COUNTERLAB_PYTHON_EXECUTABLE: "/opt/counterlab-venv/bin/python",
     COUNTERLAB_CODEX_UID: "10001",
     COUNTERLAB_CODEX_GID: "10001",
+    COUNTERLAB_RUNNER_ONE_SHOT: "1",
   };
 }

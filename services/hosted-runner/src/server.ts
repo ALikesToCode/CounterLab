@@ -40,6 +40,7 @@ export type HostedRunnerServerOptions = {
     controlPlaneUrl: string;
     signal: AbortSignal;
   }): Promise<void>;
+  onJobSettled?(input: { jobId: string }): Promise<void> | void;
 };
 
 type ActiveJob = {
@@ -91,7 +92,7 @@ function token(request: IncomingMessage): string | undefined {
 export function createHostedRunnerServer(options: HostedRunnerServerOptions) {
   const activeJobs = new Map<string, ActiveJob>();
   const cancelledJobs = new Set<string>();
-  return createServer(async (request, response) => {
+  const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://runner.internal");
     if (request.method === "GET" && url.pathname === "/ready") {
       respond(response, 200, {
@@ -181,7 +182,18 @@ export function createHostedRunnerServer(options: HostedRunnerServerOptions) {
             name: error instanceof Error ? error.name : "UnknownError",
           });
         })
-        .finally(() => activeJobs.delete(body.jobId));
+        .finally(async () => {
+          activeJobs.delete(body.jobId);
+          if (options.onJobSettled === undefined) return;
+          try {
+            await options.onJobSettled({ jobId: body.jobId });
+          } catch (error) {
+            console.error("Hosted runner lifecycle cleanup failed", {
+              jobId: body.jobId,
+              name: error instanceof Error ? error.name : "UnknownError",
+            });
+          }
+        });
       respond(response, 202, { accepted: true, jobId: body.jobId });
     } catch (error) {
       if (error instanceof Error && error.message === "REQUEST_TOO_LARGE") {
@@ -191,6 +203,7 @@ export function createHostedRunnerServer(options: HostedRunnerServerOptions) {
       respond(response, 400, { error: "INVALID_RUNNER_REQUEST" });
     }
   });
+  return server;
 }
 
 async function startProductionServer(): Promise<void> {
@@ -235,6 +248,10 @@ async function startProductionServer(): Promise<void> {
   const boundaryHealth = await boundary.health();
   if (!boundaryHealth.available) throw new Error(boundaryHealth.reason);
 
+  const oneShot = process.env.COUNTERLAB_RUNNER_ONE_SHOT === "1";
+  const serverRef: {
+    current?: ReturnType<typeof createHostedRunnerServer>;
+  } = {};
   const server = createHostedRunnerServer({
     async authorizeToken(scopedToken, jobId, purpose, controlPlaneOrigin) {
       try {
@@ -288,7 +305,27 @@ async function startProductionServer(): Promise<void> {
       });
       await processor.run(jobId, signal);
     },
+    ...(oneShot
+      ? {
+          async onJobSettled({ jobId }: { jobId: string }) {
+            const activeServer = serverRef.current;
+            if (activeServer === undefined) {
+              throw new Error(
+                "Hosted runner server is unavailable for cleanup",
+              );
+            }
+            console.info("CounterLab hosted runner job settled", { jobId });
+            await new Promise<void>((resolveClose, rejectClose) => {
+              activeServer.close((error) =>
+                error === undefined ? resolveClose() : rejectClose(error),
+              );
+            });
+            process.exit(0);
+          },
+        }
+      : {}),
   });
+  serverRef.current = server;
   const port = Number(process.env.PORT ?? "8080");
   server.listen(port, "0.0.0.0", () => {
     console.info("CounterLab hosted runner ready", { port });

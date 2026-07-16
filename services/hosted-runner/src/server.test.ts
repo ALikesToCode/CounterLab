@@ -31,10 +31,12 @@ async function start(
   }) => Promise<void>,
   authorizeToken: HostedRunnerServerOptions["authorizeToken"] = (token) =>
     Promise.resolve(token === "scoped-token"),
+  onJobSettled?: HostedRunnerServerOptions["onJobSettled"],
 ) {
   const server = createHostedRunnerServer({
     authorizeToken,
     processJob,
+    ...(onJobSettled === undefined ? {} : { onJobSettled }),
   });
   servers.push(server);
   server.listen(0, "127.0.0.1");
@@ -129,6 +131,44 @@ describe("hosted runner HTTP service", () => {
       controlPlaneUrl: "https://counterlab.example.test",
       signal: expect.any(AbortSignal),
     });
+  });
+
+  it("signals one-shot lifecycle cleanup only after the accepted job settles", async () => {
+    let finishJob: (() => void) | undefined;
+    const processJob = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishJob = resolve;
+        }),
+    );
+    const onJobSettled = vi.fn(async () => undefined);
+    const baseUrl = await start(
+      processJob,
+      (token) => Promise.resolve(token === "scoped-token"),
+      onJobSettled,
+    );
+
+    const accepted = await fetch(`${baseUrl}/jobs`, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer scoped-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        schemaVersion: "1",
+        jobId: "runner_job_one_shot",
+        controlPlaneUrl: "https://counterlab.example.test",
+      }),
+    });
+    expect(accepted.status).toBe(202);
+    expect(onJobSettled).not.toHaveBeenCalled();
+
+    finishJob?.();
+    await vi.waitFor(() =>
+      expect(onJobSettled).toHaveBeenCalledExactlyOnceWith({
+        jobId: "runner_job_one_shot",
+      }),
+    );
   });
 
   it("rejects missing authentication and oversized JSON while idempotently accepting duplicate active jobs", async () => {
