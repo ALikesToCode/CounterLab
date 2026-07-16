@@ -40,7 +40,12 @@ type ScientificCandidateResult = {
     "VERIFIED" | "REPAIRABLE_REJECTION" | "INCONCLUSIVE_NO_DECISIVE_TEST";
   report: {
     status: string;
-    invariants?: Array<{ name: string; passed: boolean }>;
+    invariants?: Array<{
+      name: string;
+      passed: boolean;
+      observed?: unknown;
+      expected?: unknown;
+    }>;
   };
   selection?: ExperimentSelection;
   selectedIr?: ExperimentIRV5;
@@ -428,6 +433,24 @@ async function replaceIr(
   };
 }
 
+async function replaceContract(
+  fixture: Awaited<ReturnType<typeof scientificFixture>>,
+  discriminationContract: ScientificCandidateArtifacts["discriminationContract"],
+) {
+  return {
+    ...fixture,
+    artifacts: {
+      ...fixture.artifacts,
+      discriminationContract,
+      labScene: await sceneFor(
+        fixture.bundle,
+        discriminationContract,
+        fixture.artifacts.experimentIr,
+      ),
+    },
+  };
+}
+
 describe("scientific v5 candidate verification", () => {
   it("selects a decisive experiment and projects the fixed execution plan", async () => {
     const input = await scientificFixture();
@@ -537,6 +560,151 @@ describe("scientific v5 candidate verification", () => {
     );
     expect(result).not.toHaveProperty("selectedIr");
     expect(result).not.toHaveProperty("executionPlan");
+  });
+
+  it("reports both non-claim bindings when the contract diverges from the selected IR", async () => {
+    const fixture = await scientificFixture();
+    const discriminationContract = DiscriminationContractV1Schema.parse({
+      ...fixture.artifacts.discriminationContract,
+      nonClaims: ["This contract-only limitation is not bound to the IR."],
+    });
+    const input = await replaceContract(fixture, discriminationContract);
+
+    const result = await scientificVerifier()(input);
+    const finding = result.report.invariants?.find(
+      (candidate) => candidate.name === "discrimination_binding",
+    );
+
+    expect(result.disposition).toBe("REPAIRABLE_REJECTION");
+    expect(finding).toMatchObject({
+      passed: false,
+      observed: {
+        nonClaimsMatch: false,
+        contractNonClaimsHash: await hashCanonical(
+          discriminationContract.nonClaims,
+        ),
+        experimentIrNonClaimsHash: await hashCanonical(
+          fixture.artifacts.experimentIr.nonClaims,
+        ),
+      },
+      expected: {
+        nonClaimsMatch: true,
+      },
+    });
+    expect(JSON.stringify(finding)).not.toContain(
+      discriminationContract.nonClaims[0],
+    );
+  });
+
+  it("reports a contract-to-IR candidate ID mismatch without echoing unbounded contract text", async () => {
+    const fixture = await scientificFixture();
+    const discriminationContract = DiscriminationContractV1Schema.parse({
+      ...fixture.artifacts.discriminationContract,
+      candidateExperimentIds: ["group-holdout"],
+    });
+    const input = await replaceContract(fixture, discriminationContract);
+
+    const result = await scientificVerifier()(input);
+    const finding = result.report.invariants?.find(
+      (candidate) => candidate.name === "candidate_lineage",
+    );
+
+    expect(result.disposition).toBe("REPAIRABLE_REJECTION");
+    expect(finding).toMatchObject({
+      passed: false,
+      observed: {
+        candidateIdsMatch: false,
+        contractCandidateIdsHash: await hashCanonical(
+          discriminationContract.candidateExperimentIds,
+        ),
+        experimentIrCandidateIdsHash: await hashCanonical(
+          fixture.artifacts.experimentIr.candidateExperiments.map(
+            (candidate) => candidate.id,
+          ),
+        ),
+      },
+      expected: {
+        candidateIdsMatch: true,
+        allowedCandidateIds: fixture.bundle.conceptPack.candidateExperimentIds,
+      },
+    });
+  });
+
+  it("reports candidate operation allowlist violations", async () => {
+    const fixture = await scientificFixture();
+    const original = fixture.artifacts.experimentIr.candidateExperiments[0]!;
+    const experimentIr = ExperimentIRV5Schema.parse({
+      ...fixture.artifacts.experimentIr,
+      candidateExperiments: [
+        {
+          ...original,
+          operationIds: [
+            ...original.operationIds,
+            "imbalance.majority_baseline",
+          ],
+        },
+      ],
+    });
+    const input = await replaceIr(fixture, experimentIr);
+
+    const result = await scientificVerifier()(input);
+    const finding = result.report.invariants?.find(
+      (candidate) => candidate.name === "candidate_lineage",
+    );
+
+    expect(result.disposition).toBe("REPAIRABLE_REJECTION");
+    expect(finding).toMatchObject({
+      passed: false,
+      observed: {
+        candidates: [
+          {
+            id: original.id,
+            operationIds: experimentIr.candidateExperiments[0]!.operationIds,
+          },
+        ],
+      },
+      expected: {
+        allowedOperationIds: fixture.bundle.conceptPack.allowedOperations,
+        allowedObservableIds: fixture.bundle.conceptPack.allowedMetrics,
+      },
+    });
+  });
+
+  it("reports candidate observable allowlist violations", async () => {
+    const fixture = await scientificFixture();
+    const original = fixture.artifacts.experimentIr.candidateExperiments[0]!;
+    const experimentIr = ExperimentIRV5Schema.parse({
+      ...fixture.artifacts.experimentIr,
+      candidateExperiments: [
+        {
+          ...original,
+          observableIds: [...original.observableIds, "precision"],
+        },
+      ],
+    });
+    const input = await replaceIr(fixture, experimentIr);
+
+    const result = await scientificVerifier()(input);
+    const finding = result.report.invariants?.find(
+      (candidate) => candidate.name === "candidate_lineage",
+    );
+
+    expect(result.disposition).toBe("REPAIRABLE_REJECTION");
+    expect(finding).toMatchObject({
+      passed: false,
+      observed: {
+        candidates: [
+          {
+            id: original.id,
+            observableIds: experimentIr.candidateExperiments[0]!.observableIds,
+          },
+        ],
+      },
+      expected: {
+        allowedOperationIds: fixture.bundle.conceptPack.allowedOperations,
+        allowedObservableIds: fixture.bundle.conceptPack.allowedMetrics,
+      },
+    });
   });
 
   it("accepts only the exact pack-owned Boundary Sweep request before selection", async () => {

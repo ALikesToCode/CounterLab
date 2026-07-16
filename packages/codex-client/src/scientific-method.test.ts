@@ -191,6 +191,15 @@ describe("hosted scientific-method compiler", () => {
     expect(prompt).toContain("primary_identity_setting");
     expect(prompt).toContain("leakage.small-gap");
     expect(prompt).toContain("leakage.material-gap");
+    expect(prompt).toMatch(
+      /discriminationContract\.candidateExperimentIds.*experimentIr\.candidateExperiments/i,
+    );
+    expect(prompt).toMatch(
+      /discriminationContract\.nonClaims.*experimentIr\.nonClaims.*exactly/i,
+    );
+    expect(prompt).toMatch(
+      /candidate.*operationIds.*observableIds.*allowlists/i,
+    );
     expect(prompt).toMatch(/no literal result values/i);
     expect(prompt).toMatch(/copy conceptPack\.boundarySweep exactly/i);
     expect(prompt).not.toContain(generationDirectory);

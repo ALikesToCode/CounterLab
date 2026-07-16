@@ -485,6 +485,15 @@ export async function verifyScientificCandidateV5(
   const candidateIds = rawIr.candidateExperiments.map(
     (candidate) => candidate.id,
   );
+  const candidateIdsMatch = sameSet(
+    contract.candidateExperimentIds,
+    candidateIds,
+  );
+  const [contractCandidateIdsHash, experimentIrCandidateIdsHash] =
+    await Promise.all([
+      hashCanonical(contract.candidateExperimentIds),
+      hashCanonical(candidateIds),
+    ]);
   const allowedCandidateIds = new Set(
     pack.scientificMethod.candidateExperimentIds,
   );
@@ -590,7 +599,7 @@ export async function verifyScientificCandidateV5(
     ),
     invariant(
       "candidate_lineage",
-      sameSet(contract.candidateExperimentIds, candidateIds) &&
+      candidateIdsMatch &&
         candidateIds.every((candidateId) =>
           allowedCandidateIds.has(candidateId),
         ) &&
@@ -607,12 +616,22 @@ export async function verifyScientificCandidateV5(
           pack.allowedVisualizations.includes(visualization),
         ),
       {
-        candidateIds,
+        candidateIdsMatch,
+        contractCandidateIdsHash,
+        experimentIrCandidateIdsHash,
+        candidates: rawIr.candidateExperiments.map((candidate) => ({
+          id: candidate.id,
+          operationIds: candidate.operationIds,
+          observableIds: candidate.observableIds,
+        })),
         visualizations: rawIr.visualizations,
         boundarySweepRequested: rawIr.boundarySweep !== undefined,
       },
       {
-        candidateIds: pack.scientificMethod.candidateExperimentIds,
+        candidateIdsMatch: true,
+        allowedCandidateIds: pack.scientificMethod.candidateExperimentIds,
+        allowedOperationIds: pack.allowedOperations,
+        allowedObservableIds: pack.allowedMetrics,
         allowedVisualizations: pack.allowedVisualizations,
         boundarySweepHandledSeparately: true,
       },
@@ -732,6 +751,11 @@ export async function verifyScientificCandidateV5(
     selectedIr,
     executionPlan,
   );
+  const nonClaimsMatch = sameSet(contract.nonClaims, selectedIr.nonClaims);
+  const [contractNonClaimsHash, experimentIrNonClaimsHash] = await Promise.all([
+    hashCanonical(contract.nonClaims),
+    hashCanonical(selectedIr.nonClaims),
+  ]);
   const postSelectionChecks = [
     invariant(
       "discrimination_binding",
@@ -749,14 +773,30 @@ export async function verifyScientificCandidateV5(
           contract.inconclusiveConditionIds,
           selectedCandidate.inconclusiveConditionIds,
         ) &&
-        sameSet(contract.nonClaims, selectedIr.nonClaims),
+        nonClaimsMatch,
       {
+        candidateExperimentIds: contract.candidateExperimentIds,
         selectedCandidateId: selectedCandidate.id,
         changedVariableIds: contract.changedVariableIds,
         controlledVariableIds: contract.controlledVariableIds,
         observableIds: contract.observableIds,
+        inconclusiveConditionIds: contract.inconclusiveConditionIds,
+        nonClaimsMatch,
+        contractNonClaimsHash,
+        experimentIrNonClaimsHash,
       },
-      "Discrimination Contract exactly bound to the fixed selected candidate",
+      {
+        candidateExperimentIds: selectedIr.candidateExperiments.map(
+          (candidate) => candidate.id,
+        ),
+        selectedCandidateId: selectedCandidate.id,
+        changedVariableIds: selectedCandidate.changedVariableIds,
+        controlledVariableIds: selectedCandidate.heldConstantIds,
+        observableIds: selectedCandidate.observableIds,
+        inconclusiveConditionIds: selectedCandidate.inconclusiveConditionIds,
+        nonClaimsMatch: true,
+      },
+      "The Discrimination Contract must exactly bind the fixed-selected candidate and copy Experiment IR non-claims verbatim.",
     ),
     invariant(
       "selected_execution_semantics",
