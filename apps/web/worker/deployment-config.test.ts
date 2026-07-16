@@ -261,12 +261,25 @@ describe("Cloudflare static asset routing", () => {
         },
         receipt,
         image,
-        ...({
-          observation: {
-            ...receipt,
-            sourceArchiveSha256: "9".repeat(64),
-          },
-        } as Record<string, unknown>),
+        observation: {
+          sourceCommit,
+          sourceArchiveSha256: "9".repeat(64),
+          sourceTreeSha256: receipt.sourceTreeSha256,
+          dockerfileSha256: receipt.dockerfileSha256,
+          localImageTag: receipt.localImageTag,
+          localImageDigest: receipt.localImageDigest,
+          ociRevision: receipt.ociRevision,
+          ociSourceTreeSha256: receipt.ociSourceTreeSha256,
+          engineAuthorityHash: receipt.engineAuthorityHash,
+          runtimeManifestHash: receipt.runtimeManifestHash,
+          registryImage: receipt.registryImage,
+          registryDigest: receipt.registryDigest,
+          registryResolvedAt: receipt.registryResolvedAt,
+          currentCommit: receipt.evidenceCommit,
+          sourceIsAncestor: true,
+          changedPaths: [],
+          observedAt: receipt.qualifiedAt,
+        },
       }),
     ).toThrow(/source archive/i);
   });
