@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -614,6 +614,7 @@ describe("CounterLab judged flow", () => {
     });
     window.localStorage.setItem("counterlab.sessionId", "session_ui");
     window.localStorage.setItem("counterlab.mode", "live");
+    window.history.replaceState({}, "", "/session/session_ui");
 
     render(<App />);
 
@@ -673,6 +674,7 @@ describe("CounterLab judged flow", () => {
     });
     window.localStorage.setItem("counterlab.sessionId", "session_ui");
     window.localStorage.setItem("counterlab.mode", "live");
+    window.history.replaceState({}, "", "/session/session_ui");
     window.localStorage.setItem(
       "counterlab.activeRunnerJobId",
       liveRunnerJob.jobId,
@@ -710,6 +712,7 @@ describe("CounterLab judged flow", () => {
     });
     window.localStorage.setItem("counterlab.sessionId", "session_ui");
     window.localStorage.setItem("counterlab.mode", "live");
+    window.history.replaceState({}, "", "/session/session_ui");
 
     const view = render(<App />);
 
@@ -738,6 +741,7 @@ describe("CounterLab judged flow", () => {
     });
     window.localStorage.setItem("counterlab.sessionId", "session_ui");
     window.localStorage.setItem("counterlab.mode", "live");
+    window.history.replaceState({}, "", "/session/session_ui");
     window.localStorage.setItem(
       "counterlab.activeRunnerJob.session_ui",
       JSON.stringify({
@@ -787,6 +791,7 @@ describe("CounterLab judged flow", () => {
     });
     window.localStorage.setItem("counterlab.sessionId", "session_ui");
     window.localStorage.setItem("counterlab.mode", "live");
+    window.history.replaceState({}, "", "/session/session_ui");
 
     render(<App />);
 
@@ -817,6 +822,7 @@ describe("CounterLab judged flow", () => {
     });
     window.localStorage.setItem("counterlab.sessionId", "session_ui");
     window.localStorage.setItem("counterlab.mode", "live");
+    window.history.replaceState({}, "", "/session/session_ui");
 
     render(<App />);
 
@@ -978,6 +984,89 @@ describe("CounterLab judged flow", () => {
     ).toBe(false);
   });
 
+  it("lets an explicit session URL override stale replay storage", async () => {
+    window.localStorage.setItem("counterlab.mode", "replay");
+    window.localStorage.setItem("counterlab.replayId", "replay_retention_913");
+    window.history.replaceState({}, "", "/session/session_ui");
+    const fetcher = installApi({ restoredSessionState: "INGESTED" });
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /what do you think the score means/i,
+      }),
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/session/session_ui");
+    expect(
+      fetcher.mock.calls.some(
+        ([path]) => String(path) === "/api/sessions/session_ui",
+      ),
+    ).toBe(true);
+    expect(
+      fetcher.mock.calls.some(([path]) =>
+        String(path).startsWith("/api/replays/"),
+      ),
+    ).toBe(false);
+  });
+
+  it("does not carry a claim from another session into an explicit session URL", async () => {
+    window.localStorage.setItem("counterlab.sessionId", "session_old");
+    window.localStorage.setItem(
+      "counterlab.claim",
+      "A claim from another notebook",
+    );
+    window.history.replaceState({}, "", "/session/session_ui");
+    installApi({ restoredSessionState: "INGESTED" });
+
+    render(<App />);
+
+    expect(await screen.findByLabelText(/your claim/i)).toHaveValue("");
+  });
+
+  it("keeps the explicit landing URL instead of restoring stale replay state", () => {
+    window.localStorage.setItem("counterlab.mode", "replay");
+    window.localStorage.setItem("counterlab.replayId", "replay_retention_913");
+    const fetcher = installApi();
+
+    render(<App />);
+
+    expect(
+      screen.getByRole("heading", {
+        name: /your notebook made a claim/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      fetcher.mock.calls.some(([path]) =>
+        String(path).startsWith("/api/replays/"),
+      ),
+    ).toBe(false);
+  });
+
+  it("reconstructs the landing page when browser history emits popstate", async () => {
+    window.history.replaceState({}, "", "/replay/leakage-01");
+    installApi();
+    render(<App />);
+
+    expect(
+      (await screen.findAllByText(/verified replay/i)).length,
+    ).toBeGreaterThan(0);
+
+    act(() => {
+      window.history.pushState({}, "", "/");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+
+    const landingTitle = await screen.findByRole("heading", {
+      name: /your notebook made a claim/i,
+    });
+    expect(landingTitle).toHaveFocus();
+    expect(screen.queryByLabelText("Replay status")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Verified replay mode"),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders a hosted Capsule replay as read-only artifact-specific evidence", async () => {
     const user = userEvent.setup();
     const replay = replayFixture("class_imbalance");
@@ -1026,6 +1115,11 @@ describe("CounterLab judged flow", () => {
         name: /your notebook made a claim/i,
       }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: /your notebook made a claim/i,
+      }),
+    ).toHaveFocus();
   });
 
   it("does not label an unknown replay as verified", async () => {

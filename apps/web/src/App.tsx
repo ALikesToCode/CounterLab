@@ -423,7 +423,9 @@ function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
             <span>CounterLab Studio</span> · mental-model debugger for ML
             notebooks
           </p>
-          <h2>Your notebook made a claim. Will it survive a fair test?</h2>
+          <h2 id="landing-title" tabIndex={-1}>
+            Your notebook made a claim. Will it survive a fair test?
+          </h2>
           <p className="learning-promise">
             Bring a notebook result. Lock what you expect, run a verified test,
             apply the lesson once, then unlock a repair.
@@ -3478,6 +3480,8 @@ export function App() {
   const [replayIntro, setReplayIntro] = useState(false);
   const [activeReplayId, setActiveReplayId] = useState<string | null>(null);
   const [activeReplay, setActiveReplay] = useState<VerifiedReplay | null>(null);
+  const [locationRevision, setLocationRevision] = useState(0);
+  const [routeHydrated, setRouteHydrated] = useState(false);
   const [artifact, setArtifact] = useState<ArtifactView | null>(null);
   const [session, setSession] = useState<SessionView | null>(null);
   const [busy, setBusy] = useState(false);
@@ -3677,24 +3681,60 @@ export function App() {
       .finally(() => setCancellingRunner(false));
   };
 
-  useEffect(() => {
-    const route = parseStudioLocation(window.location.pathname);
-    const sessionId =
-      route.kind === "session" || route.kind === "proof"
-        ? route.id
-        : window.localStorage.getItem(storageKeys.sessionId);
-    const storedMode = window.localStorage.getItem(
-      storageKeys.mode,
-    ) as Mode | null;
-    const storedClaim = window.localStorage.getItem(storageKeys.claim);
+  const restart = () => {
+    Object.values(storageKeys).forEach((key) =>
+      window.localStorage.removeItem(key),
+    );
+    clearAllActiveRunnerCheckpoints(window.localStorage);
+    window.history.replaceState({}, "", "/");
+    setMode(null);
+    setStage("landing");
+    setClaim("");
+    setConfirmed(false);
+    setPrediction(null);
+    setConfidence(72);
+    setReviewStep(null);
+    setReplayIntro(false);
+    setActiveReplayId(null);
+    setActiveReplay(null);
+    setArtifact(null);
+    setSession(null);
+    setError(null);
+    setBusy(false);
+    setAnalysisPreview(null);
+    setSensitiveContentApproved(false);
+    setRunnerJob(null);
+    setRouteHydrated(true);
+    runner.clear();
+  };
 
-    if (storedMode === "replay" || route.kind === "replay") {
-      const replayId =
-        route.kind === "replay"
-          ? route.id
-          : (window.localStorage.getItem(storageKeys.replayId) ?? "leakage-01");
+  useEffect(() => {
+    const handlePopState = () => {
+      setRouteHydrated(false);
+      setLocationRevision((current) => current + 1);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const route = parseStudioLocation(window.location.pathname);
+
+    if (route.kind === "landing") {
+      restart();
+      return;
+    }
+
+    if (route.kind === "replay") {
+      const replayId = route.id;
+      runner.clear();
       setMode("replay");
       setActiveReplayId(replayId);
+      setActiveReplay(null);
+      setSession(null);
+      setArtifact(null);
+      setError(null);
       window.localStorage.setItem(storageKeys.mode, "replay");
       window.localStorage.setItem(storageKeys.replayId, replayId);
       setReplayIntro(
@@ -3705,81 +3745,127 @@ export function App() {
           ? "reality"
           : "build",
       );
-      void withRequest(async () => {
-        const loaded = await counterLabApi.getReplay(replayId);
-        setActiveReplay(loaded);
-        if (loaded.schemaVersion === "2") {
-          setReplayIntro(false);
+      setRouteHydrated(true);
+      setBusy(true);
+      void counterLabApi
+        .getReplay(replayId)
+        .then((loaded) => {
+          if (!active) return;
+          setActiveReplay(loaded);
+          if (loaded.schemaVersion === "2") {
+            setReplayIntro(false);
+            setStage("reality");
+          }
+        })
+        .catch((caught: unknown) => {
+          if (active) reportError(caught);
+        })
+        .finally(() => {
+          if (active) setBusy(false);
+        });
+      return () => {
+        active = false;
+      };
+    }
+
+    setActiveReplayId(null);
+    setActiveReplay(null);
+    setReplayIntro(false);
+
+    if (route.kind === "new") {
+      runner.clear();
+      setMode("live");
+      setStage("live-setup");
+      setSession(null);
+      setArtifact(null);
+      setError(null);
+      window.localStorage.setItem(storageKeys.mode, "live");
+      setRouteHydrated(true);
+      void checkLiveCapabilities();
+      return;
+    }
+
+    const sessionId = route.id;
+    const storedClaim =
+      window.localStorage.getItem(storageKeys.sessionId) === sessionId
+        ? window.localStorage.getItem(storageKeys.claim)
+        : null;
+    setClaim(storedClaim ?? "");
+    setBusy(true);
+    setError(null);
+    void (async () => {
+      try {
+        const restored = await counterLabApi.getSession(sessionId);
+        const restoredArtifact = await counterLabApi.getArtifact(
+          restored.artifactId,
+        );
+        if (!active) return;
+        setArtifact(restoredArtifact);
+        setSession(restored);
+        setMode(presentationMode(restored.mode));
+        window.localStorage.setItem(storageKeys.sessionId, restored.sessionId);
+        window.localStorage.setItem(
+          storageKeys.mode,
+          presentationMode(restored.mode),
+        );
+        if (restored.prediction !== undefined) {
+          const savedChoice = restored.prediction.choice.toLowerCase();
+          setPrediction(
+            savedChoice.includes("fall") || savedChoice.includes("minority")
+              ? "falls"
+              : savedChoice.includes("unsure")
+                ? "unsure"
+                : "stays-high",
+          );
+          setConfidence(restored.prediction.confidence);
+        }
+        setConfirmed(
+          restored.state !== "INGESTED" &&
+            restored.state !== "BELIEF_TEST_PROPOSED",
+        );
+        if (restored.state === "INGESTED") setStage("claim");
+        else if (
+          restored.state === "BELIEF_TEST_PROPOSED" ||
+          restored.state === "BELIEF_TEST_CONFIRMED"
+        ) {
+          setStage("belief");
+        } else if (
+          restored.state === "PREDICTION_COMMITTED" ||
+          restored.state === "LAB_COMPILING" ||
+          restored.state === "LAB_REJECTED" ||
+          restored.state === "LAB_VERIFIED"
+        ) {
+          if (
+            restored.mode.kind === "live_notebook" &&
+            restored.verifiedResult === undefined
+          ) {
+            await advanceLiveLab(restored);
+          } else {
+            setStage("build");
+          }
+        } else {
           setStage("reality");
         }
-      });
-      return;
-    }
-
-    const routeProvidesSession =
-      route.kind === "session" || route.kind === "proof";
-    if (sessionId === null || (storedMode === null && !routeProvidesSession)) {
-      if (storedMode === "live" || route.kind === "new") {
-        setMode("live");
-        setStage("live-setup");
-        void checkLiveCapabilities();
+        if (active) setRouteHydrated(true);
+      } catch (caught) {
+        if (active) reportError(caught);
+      } finally {
+        if (active) setBusy(false);
       }
-      return;
-    }
-    if (storedClaim !== null) setClaim(storedClaim);
-    void withRequest(async () => {
-      const restored = await counterLabApi.getSession(sessionId);
-      setArtifact(await counterLabApi.getArtifact(restored.artifactId));
-      setSession(restored);
-      setMode(presentationMode(restored.mode));
-      if (restored.prediction !== undefined) {
-        const savedChoice = restored.prediction.choice.toLowerCase();
-        setPrediction(
-          savedChoice.includes("fall") || savedChoice.includes("minority")
-            ? "falls"
-            : savedChoice.includes("unsure")
-              ? "unsure"
-              : "stays-high",
-        );
-        setConfidence(restored.prediction.confidence);
-      }
-      setConfirmed(
-        restored.state !== "INGESTED" &&
-          restored.state !== "BELIEF_TEST_PROPOSED",
-      );
-      if (restored.state === "INGESTED") setStage("claim");
-      else if (
-        restored.state === "BELIEF_TEST_PROPOSED" ||
-        restored.state === "BELIEF_TEST_CONFIRMED"
-      ) {
-        setStage("belief");
-      } else if (
-        restored.state === "PREDICTION_COMMITTED" ||
-        restored.state === "LAB_COMPILING" ||
-        restored.state === "LAB_REJECTED" ||
-        restored.state === "LAB_VERIFIED"
-      ) {
-        if (
-          restored.mode.kind === "live_notebook" &&
-          restored.verifiedResult === undefined
-        ) {
-          await advanceLiveLab(restored);
-        } else {
-          setStage("build");
-        }
-      } else {
-        setStage("reality");
-      }
-    });
-    // Session restoration runs once for the stable browser API client.
+    })();
+    return () => {
+      active = false;
+    };
+    // Route restoration reruns only when browser history changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [locationRevision]);
 
   useLayoutEffect(() => {
-    resetViewport();
+    resetViewport(stage === "landing" ? "landing-title" : undefined);
   }, [stage]);
 
   useEffect(() => {
+    if (!routeHydrated) return;
     const path = studioPath({
       stage,
       mode,
@@ -3788,9 +3874,9 @@ export function App() {
       completed: sessionProofReady(session),
     });
     if (window.location.pathname !== path) {
-      window.history.replaceState({}, "", path);
+      window.history.pushState({}, "", path);
     }
-  }, [activeReplayId, mode, session, stage]);
+  }, [activeReplayId, mode, routeHydrated, session, stage]);
 
   const checkLiveCapabilities = async () => {
     setCheckingLiveHealth(true);
@@ -3849,30 +3935,6 @@ export function App() {
       window.localStorage.setItem(storageKeys.sessionId, created.sessionId);
       setStage("claim");
     });
-  };
-
-  const restart = () => {
-    Object.values(storageKeys).forEach((key) =>
-      window.localStorage.removeItem(key),
-    );
-    clearAllActiveRunnerCheckpoints(window.localStorage);
-    setMode(null);
-    setStage("landing");
-    setClaim("");
-    setConfirmed(false);
-    setPrediction(null);
-    setConfidence(72);
-    setReviewStep(null);
-    setReplayIntro(false);
-    setActiveReplayId(null);
-    setActiveReplay(null);
-    setArtifact(null);
-    setSession(null);
-    setError(null);
-    setAnalysisPreview(null);
-    setSensitiveContentApproved(false);
-    setRunnerJob(null);
-    runner.clear();
   };
 
   const review = (step: ReviewStep) => {
