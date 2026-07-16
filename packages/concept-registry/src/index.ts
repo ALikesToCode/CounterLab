@@ -71,6 +71,10 @@ export interface ConceptPackDefinition {
     candidateExperimentIds: readonly string[];
     scoringPolicy: ExperimentScoringPolicy;
     epistemic: SubjectPackEpistemicAdapter;
+    defaultPresentation: {
+      scope: string;
+      learnerFacingClaims: readonly string[];
+    };
   };
   verifierContract: {
     id: string;
@@ -715,6 +719,10 @@ const leakagePack = deepFreeze({
       resolveControlValues: leakageControlValues,
       resolveObservablePath: leakageObservablePath,
     },
+    defaultPresentation: {
+      scope: "unseen customers in the documented fixture",
+      learnerFacingClaims: [leakageApprovedClaims[1]],
+    },
   },
   verifierContract: {
     id: "leakage-plan-verifier-v2",
@@ -804,6 +812,10 @@ const imbalancePack = deepFreeze({
       classifyOutcome: classifyImbalanceOutcome,
       resolveControlValues: imbalanceControlValues,
       resolveObservablePath: imbalanceObservablePath,
+    },
+    defaultPresentation: {
+      scope: "rare-event detection in the documented fixture",
+      learnerFacingClaims: [imbalanceApprovedClaims[1]],
     },
   },
   verifierContract: {

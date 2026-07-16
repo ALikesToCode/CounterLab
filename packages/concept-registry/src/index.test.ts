@@ -322,6 +322,12 @@ describe("concept-pack registry", () => {
       expect(pack.scientificMethod.epistemic.policy.forbiddenClaims).toEqual(
         pack.forbiddenClaims,
       );
+      expect(pack.scientificMethod.defaultPresentation).toMatchObject({
+        scope: pack.scientificMethod.epistemic.policy.allowedScopes[0],
+        learnerFacingClaims: [
+          pack.scientificMethod.epistemic.policy.approvedClaims[1],
+        ],
+      });
     }
   });
 
