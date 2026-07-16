@@ -285,6 +285,7 @@ async function startProductionServer(): Promise<void> {
       const processor = new HostedRunnerJobProcessor({
         workspaceRoot,
         compiler,
+        scientificCompiler: compiler,
         fixedKernel: new PythonFixedKernelExecutor({
           pythonExecutable:
             process.env.COUNTERLAB_PYTHON_EXECUTABLE ??

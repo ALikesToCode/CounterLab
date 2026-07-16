@@ -5,11 +5,15 @@ import {
   type CodexCompiler,
   type CompileHostedExperimentPlanInput,
   type CompileHostedPatchPlanInput,
+  type CompileHostedScientificMethodInput,
   type CompilerEvent,
   type RepairHostedExperimentPlanInput,
   type RepairHostedPatchPlanInput,
+  type RepairHostedScientificMethodInput,
+  type ScientificMethodCompiler,
 } from "@counterlab/codex-client";
 import {
+  DiscriminationContractV1Schema,
   HostedVerifiedResultSetV2Schema,
   PatchResultSchema,
   PublicCompilerEventSchema,
@@ -22,14 +26,29 @@ import {
   type RunnerOperationalMetrics,
 } from "@counterlab/contracts";
 import {
+  ExperimentIRV5Schema,
+  RunnerScientificCandidateV5Schema,
   VersionedRunnerJobInputBundleSchema,
+  type RunnerLabCompileBundleV5,
+  type RunnerScientificCandidateV5,
   type VersionedRunnerJobInputBundle,
 } from "@counterlab/experiment-ir";
+import { LabSceneDraftV2Schema } from "@counterlab/generative-ui-contracts";
 
 const PLAN_PATH = "experiment-plan.json";
 const PATCH_PLAN_PATH = "patch-plan.json";
 const RATIONALE_PATH = "public-rationale.md";
+const DISCRIMINATION_CONTRACT_PATH = "discrimination-contract.json";
+const EXPERIMENT_IR_PATH = "experiment-ir.json";
+const LAB_SCENE_PATH = "lab-scene.json";
 const LAB_PLAN_OUTPUTS = new Set([PLAN_PATH, RATIONALE_PATH]);
+const SCIENTIFIC_OUTPUT_PATHS = [
+  DISCRIMINATION_CONTRACT_PATH,
+  EXPERIMENT_IR_PATH,
+  LAB_SCENE_PATH,
+  RATIONALE_PATH,
+] as const;
+const SCIENTIFIC_OUTPUTS = new Set<string>(SCIENTIFIC_OUTPUT_PATHS);
 const PATCH_PLAN_OUTPUTS = new Set([PATCH_PLAN_PATH, RATIONALE_PATH]);
 const MAX_PLAN_BYTES = 524_288;
 const MAX_RATIONALE_BYTES = 65_536;
@@ -62,10 +81,8 @@ export interface RunnerControlPlane {
     signal?: AbortSignal,
   ): Promise<{ sha256: string }>;
   candidate(
-    input: {
-      attempt: number;
-      planSha256: string;
-    },
+    input:
+      { attempt: number; planSha256: string } | RunnerScientificCandidateV5,
     signal?: AbortSignal,
   ): Promise<CandidateDecision>;
   callback(callback: RunnerCallback, signal?: AbortSignal): Promise<void>;
@@ -97,6 +114,7 @@ export interface FixedPatchExecutor {
 export type HostedRunnerJobProcessorOptions = {
   workspaceRoot: string;
   compiler: CodexCompiler;
+  scientificCompiler?: ScientificMethodCompiler;
   fixedKernel?: FixedKernelExecutor;
   fixedPatch?: FixedPatchExecutor;
   controlPlane: RunnerControlPlane;
@@ -246,15 +264,47 @@ export class HostedRunnerJobProcessor {
       throwIfCancelled(signal);
       cursor = await this.emit(jobId, cursor, { kind: "job.started" }, signal);
 
+      const generationDirectory = await this.prepareWorkspace(jobId);
       if (bundle.schemaVersion === "5") {
-        throw new RunnerProcessingError(
-          "RUNNER_V5_NOT_ENABLED",
-          "The scientific-method runner authority is not enabled for this deployment.",
-          false,
+        const scientificCompiler = this.options.scientificCompiler;
+        if (scientificCompiler === undefined) {
+          throw new RunnerProcessingError(
+            "RUNNER_V5_NOT_ENABLED",
+            "The scientific-method runner authority is not enabled for this deployment.",
+            false,
+          );
+        }
+        const compiled = await this.compileScientificMethod(
+          jobId,
+          cursor,
+          bundle,
+          generationDirectory,
+          scientificCompiler,
+          operationalMetrics,
+          signal,
         );
+        cursor = compiled.cursor;
+        outputHashes = compiled.outputHashes;
+        await this.authorityCall(signal, () =>
+          this.options.controlPlane.callback(
+            RunnerCallbackSchema.parse({
+              schemaVersion: "1",
+              callbackId: this.id("runner_callback"),
+              idempotencyKey: `${jobId}:verified:${outputHashes.join(":")}`,
+              jobId,
+              stateVersion,
+              status: "VERIFIED",
+              outputHashes,
+              finalEventCursor: cursor,
+              operationalMetrics,
+              occurredAt: this.now().toISOString(),
+            }),
+            signal,
+          ),
+        );
+        return;
       }
 
-      const generationDirectory = await this.prepareWorkspace(jobId);
       if (bundle.kind === "LAB_RUN") {
         const fixedKernel = this.options.fixedKernel;
         if (fixedKernel === undefined) {
@@ -680,6 +730,255 @@ export class HostedRunnerJobProcessor {
     }
   }
 
+  private async compileScientificMethod(
+    jobId: string,
+    initialCursor: number,
+    bundle: RunnerLabCompileBundleV5,
+    generationDirectory: string,
+    compiler: ScientificMethodCompiler,
+    operationalMetrics: RunnerOperationalMetrics,
+    signal?: AbortSignal,
+  ): Promise<{ cursor: number; outputHashes: string[] }> {
+    const compileInput = this.scientificCompileInput(
+      bundle,
+      generationDirectory,
+    );
+    let cursor = await this.consumeCompilerEvents(
+      jobId,
+      initialCursor,
+      compiler.compileScientificMethod(
+        compileInput,
+        signal === undefined ? {} : { signal },
+      ),
+      SCIENTIFIC_OUTPUTS,
+      operationalMetrics,
+      signal,
+    );
+    let uploaded = await this.validateAndUploadScientific(
+      jobId,
+      cursor,
+      generationDirectory,
+      signal,
+    );
+    cursor = uploaded.cursor;
+    let decision = await this.authorityCall(signal, () =>
+      this.options.controlPlane.candidate(
+        RunnerScientificCandidateV5Schema.parse({
+          schemaVersion: "5",
+          attempt: 1,
+          artifactHashes: uploaded.outputHashByPath,
+        }),
+        signal,
+      ),
+    );
+    operationalMetrics.verifierDurationMs += decision.verifierDurationMs;
+    cursor = decision.nextCursor;
+
+    for (
+      let repairAttempt = 1;
+      decision.status === "REJECTED";
+      repairAttempt += 1
+    ) {
+      if (!decision.canRepair || repairAttempt > 2) {
+        throw new RunnerProcessingError(
+          "SCIENTIFIC_METHOD_VERIFIER_REJECTED",
+          "The external scientific-method verifier rejected the candidate after the allowed repairs.",
+          false,
+        );
+      }
+      operationalMetrics.repairAttempts = repairAttempt;
+      cursor = await this.emit(
+        jobId,
+        cursor,
+        { kind: "repair.started", attempt: repairAttempt },
+        signal,
+      );
+      await this.authorityCall(signal, () =>
+        this.options.controlPlane.resume(signal),
+      );
+      const repairInput: RepairHostedScientificMethodInput = {
+        ...compileInput,
+        repairAttempt: repairAttempt as 1 | 2,
+        verifierCounterexamples: decision.counterexamples,
+        previousOutputHashes: uploaded.outputHashByPath,
+        previousArtifacts: uploaded.artifacts,
+      };
+      cursor = await this.consumeCompilerEvents(
+        jobId,
+        cursor,
+        compiler.repairScientificMethod(
+          repairInput,
+          signal === undefined ? {} : { signal },
+        ),
+        SCIENTIFIC_OUTPUTS,
+        operationalMetrics,
+        signal,
+      );
+      uploaded = await this.validateAndUploadScientific(
+        jobId,
+        cursor,
+        generationDirectory,
+        signal,
+      );
+      cursor = uploaded.cursor;
+      decision = await this.authorityCall(signal, () =>
+        this.options.controlPlane.candidate(
+          RunnerScientificCandidateV5Schema.parse({
+            schemaVersion: "5",
+            attempt: repairAttempt + 1,
+            artifactHashes: uploaded.outputHashByPath,
+          }),
+          signal,
+        ),
+      );
+      operationalMetrics.verifierDurationMs += decision.verifierDurationMs;
+      cursor = decision.nextCursor;
+    }
+
+    return { cursor, outputHashes: uploaded.outputHashes };
+  }
+
+  private scientificCompileInput(
+    bundle: RunnerLabCompileBundleV5,
+    generationDirectory: string,
+  ): CompileHostedScientificMethodInput {
+    return {
+      sessionId: bundle.sessionId,
+      artifactManifestHash: bundle.artifactManifestHash,
+      beliefSpecHash: bundle.beliefSpecHash,
+      generationDirectory,
+      approvedBeliefSpec: bundle.approvedBeliefSpec,
+      artifactManifest: bundle.artifactManifest,
+      conceptPack: {
+        id: bundle.conceptPack.id,
+        version: bundle.conceptPack.version,
+        title: bundle.conceptPack.title,
+        allowedOperations: [...bundle.conceptPack.allowedOperations],
+        allowedMetrics: [...bundle.conceptPack.allowedMetrics],
+        allowedVisualizations: [...bundle.conceptPack.allowedVisualizations],
+        verifierInvariants: [...bundle.conceptPack.verifierInvariants],
+        candidateExperimentIds: [...bundle.conceptPack.candidateExperimentIds],
+        planRequirements: [...bundle.conceptPack.planRequirements],
+      },
+      schemas: bundle.schemas,
+      provenance: bundle.provenance,
+      resourceLimits: bundle.resourceLimits,
+      permittedOutputs: [...bundle.permittedOutputs],
+    };
+  }
+
+  private async validateAndUploadScientific(
+    jobId: string,
+    initialCursor: number,
+    directory: string,
+    signal?: AbortSignal,
+  ): Promise<{
+    cursor: number;
+    outputHashes: string[];
+    outputHashByPath: RunnerScientificCandidateV5["artifactHashes"];
+    artifacts: {
+      discriminationContract: Record<string, unknown>;
+      experimentIr: Record<string, unknown>;
+      labScene: Record<string, unknown>;
+    };
+  }> {
+    throwIfCancelled(signal);
+    const entries = await readdir(directory, { withFileTypes: true });
+    const names = entries.map((entry) => entry.name).sort();
+    if (
+      names.length !== SCIENTIFIC_OUTPUTS.size ||
+      names.some((name) => !SCIENTIFIC_OUTPUTS.has(name)) ||
+      entries.some((entry) => !entry.isFile() || entry.isSymbolicLink())
+    ) {
+      throw new RunnerProcessingError(
+        "RUNNER_OUTPUT_POLICY",
+        "Codex created a file outside the scientific output allowlist.",
+        false,
+      );
+    }
+
+    let cursor = initialCursor;
+    const bodies = new Map<string, string>();
+    const hashes: Partial<RunnerScientificCandidateV5["artifactHashes"]> = {};
+    for (const path of SCIENTIFIC_OUTPUT_PATHS) {
+      throwIfCancelled(signal);
+      const absolutePath = join(directory, path);
+      assertContained(directory, absolutePath);
+      const metadata = await lstat(absolutePath);
+      const maximum =
+        path === RATIONALE_PATH ? MAX_RATIONALE_BYTES : MAX_PLAN_BYTES;
+      if (
+        !metadata.isFile() ||
+        metadata.isSymbolicLink() ||
+        metadata.size <= 0 ||
+        metadata.size > maximum
+      ) {
+        throw new RunnerProcessingError(
+          "RUNNER_OUTPUT_POLICY",
+          `The generated ${path} failed the file policy.`,
+          false,
+        );
+      }
+      const body = await readFile(absolutePath, "utf8");
+      bodies.set(path, body);
+      const uploaded = await this.authorityCall(signal, () =>
+        this.options.controlPlane.upload(path, body, signal),
+      );
+      hashes[path] = uploaded.sha256;
+      cursor = await this.emit(
+        jobId,
+        cursor,
+        { kind: "file.created", path, sha256: uploaded.sha256 },
+        signal,
+      );
+    }
+
+    let discriminationContract: Record<string, unknown>;
+    let experimentIr: Record<string, unknown>;
+    let labScene: Record<string, unknown>;
+    try {
+      discriminationContract = DiscriminationContractV1Schema.parse(
+        JSON.parse(bodies.get(DISCRIMINATION_CONTRACT_PATH) ?? ""),
+      );
+      experimentIr = ExperimentIRV5Schema.parse(
+        JSON.parse(bodies.get(EXPERIMENT_IR_PATH) ?? ""),
+      );
+      labScene = LabSceneDraftV2Schema.parse(
+        JSON.parse(bodies.get(LAB_SCENE_PATH) ?? ""),
+      );
+    } catch {
+      throw new RunnerProcessingError(
+        "SCIENTIFIC_OUTPUT_INVALID",
+        "The generated scientific artifacts failed local schema validation.",
+        false,
+      );
+    }
+    const rationale = bodies.get(RATIONALE_PATH) ?? "";
+    if (
+      rationale.trim().length === 0 ||
+      /<\s*(?:script|iframe)|javascript:/iu.test(rationale)
+    ) {
+      throw new RunnerProcessingError(
+        "SCIENTIFIC_OUTPUT_INVALID",
+        "The public rationale failed the display-only content policy.",
+        false,
+      );
+    }
+    const outputHashByPath = RunnerScientificCandidateV5Schema.parse({
+      schemaVersion: "5",
+      attempt: 1,
+      artifactHashes: hashes,
+    }).artifactHashes;
+    return {
+      cursor,
+      outputHashes: SCIENTIFIC_OUTPUT_PATHS.map(
+        (path) => outputHashByPath[path],
+      ),
+      outputHashByPath,
+      artifacts: { discriminationContract, experimentIr, labScene },
+    };
+  }
+
   private compileInput(
     bundle: RunnerLabCompileBundle,
     generationDirectory: string,
@@ -786,10 +1085,10 @@ export class HostedRunnerJobProcessor {
             cursor,
             {
               kind: "diff.updated",
-              path: path as
-                | typeof PLAN_PATH
-                | typeof PATCH_PLAN_PATH
-                | typeof RATIONALE_PATH,
+              path: path as Extract<
+                PublicCompilerEvent,
+                { kind: "diff.updated" }
+              >["path"],
               unifiedDiff: event.unifiedDiff,
             },
             signal,

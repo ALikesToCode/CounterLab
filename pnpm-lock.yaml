@@ -264,6 +264,9 @@ importers:
       "@counterlab/experiment-ir":
         specifier: workspace:*
         version: link:../../packages/experiment-ir
+      "@counterlab/generative-ui-contracts":
+        specifier: workspace:*
+        version: link:../../packages/generative-ui-contracts
       "@counterlab/session-core":
         specifier: workspace:*
         version: link:../../packages/session-core

@@ -4,6 +4,7 @@ import {
 } from "@counterlab/contracts";
 import {
   VersionedRunnerJobInputBundleSchema,
+  type RunnerScientificCandidateV5,
   type VersionedRunnerJobInputBundle,
 } from "@counterlab/experiment-ir";
 import { setTimeout as delay } from "node:timers/promises";
@@ -153,10 +154,8 @@ export class HttpRunnerControlPlane implements RunnerControlPlane {
   }
 
   async candidate(
-    input: {
-      attempt: number;
-      planSha256: string;
-    },
+    input:
+      { attempt: number; planSha256: string } | RunnerScientificCandidateV5,
     signal?: AbortSignal,
   ): Promise<CandidateDecision> {
     const data = await this.jsonRequest(

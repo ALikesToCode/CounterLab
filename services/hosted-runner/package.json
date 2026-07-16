@@ -12,6 +12,7 @@
     "@counterlab/codex-client": "workspace:*",
     "@counterlab/contracts": "workspace:*",
     "@counterlab/experiment-ir": "workspace:*",
+    "@counterlab/generative-ui-contracts": "workspace:*",
     "@counterlab/session-core": "workspace:*",
     "@openai/codex": "0.144.4",
     "zod": "4.4.3"

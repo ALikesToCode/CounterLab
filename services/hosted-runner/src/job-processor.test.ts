@@ -6,15 +6,19 @@ import type {
   CodexCompiler,
   CompileHostedExperimentPlanInput,
   CompileHostedPatchPlanInput,
+  CompileHostedScientificMethodInput,
   CompileLabInput,
   CompilePatchInput,
   CompilerEvent,
   CompilerHealth,
   RepairHostedExperimentPlanInput,
   RepairHostedPatchPlanInput,
+  RepairHostedScientificMethodInput,
   RepairLabInput,
+  ScientificMethodCompiler,
 } from "@counterlab/codex-client";
 import {
+  DiscriminationContractV1Schema,
   RunnerLabCompileBundleSchema,
   RunnerLabRunBundleSchema,
   RunnerPatchCompileBundleSchema,
@@ -26,10 +30,14 @@ import {
   type RunnerPatchCompileBundle,
 } from "@counterlab/contracts";
 import {
+  ExperimentIRV5Schema,
   RunnerLabCompileBundleV5Schema,
+  migrateExperimentPlanV2ToIRV5,
+  type RunnerScientificCandidateV5,
   type RunnerLabCompileBundleV5,
   type VersionedRunnerJobInputBundle,
 } from "@counterlab/experiment-ir";
+import { LabSceneDraftV2Schema } from "@counterlab/generative-ui-contracts";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -183,6 +191,7 @@ function scientificBundleV5(
     artifactManifestHash: legacy.artifactManifestHash,
     approvedBeliefSpec: {
       ...migrated,
+      supportState: "SUPPORTED",
       learnerDecision: "CONFIRMED",
     },
     beliefSpecHash: "5".repeat(64),
@@ -198,6 +207,15 @@ function scientificBundleV5(
       discriminationContract: { type: "object" },
       experimentIr: { type: "object" },
       labScene: { type: "object" },
+    },
+    provenance: {
+      generatorId: "codex-app-server-stdio-v1",
+      promptHash: "6".repeat(64),
+      inputHashes: [
+        legacy.artifactManifestHash,
+        "5".repeat(64),
+        legacy.prediction.immutableHash,
+      ],
     },
     resourceLimits: legacy.resourceLimits,
     permittedOutputs: [
@@ -328,6 +346,88 @@ function patchBundle(jobId = "runner_job_patch_1"): RunnerPatchCompileBundle {
   });
 }
 
+async function scientificArtifacts() {
+  const bundleV5 = scientificBundleV5();
+  const execution = await runBundle("scientific_projection");
+  const migrated = migrateExperimentPlanV2ToIRV5(execution.experimentPlan, {
+    beliefSpecHash: bundleV5.beliefSpecHash,
+    sourcePlanHash: "7".repeat(64),
+    transfer: {
+      taskId: "forecast-future-leakage-v1",
+      changedSurface: "Time-ordered forecasting",
+      requiredActionIds: ["time_ordered_holdout"],
+      nonClaims: ["This transfer does not certify mastery."],
+    },
+  });
+  const candidateId = bundleV5.conceptPack.candidateExperimentIds[0]!;
+  const candidate = migrated.candidateExperiments[0]!;
+  const experimentIr = ExperimentIRV5Schema.parse({
+    ...migrated,
+    sessionId: bundleV5.sessionId,
+    artifactManifestHash: bundleV5.artifactManifestHash,
+    beliefSpecId: bundleV5.approvedBeliefSpec.id,
+    beliefSpecHash: bundleV5.beliefSpecHash,
+    hypotheses: migrated.hypotheses.map((hypothesis, index) => ({
+      ...hypothesis,
+      statement: bundleV5.approvedBeliefSpec.hypotheses[index]!.statement,
+    })),
+    candidateExperiments: [{ ...candidate, id: candidateId }],
+    selection: { status: "UNSELECTED" },
+    provenance: { kind: "codex", ...bundleV5.provenance },
+    limitations: ["This test is scoped to the supplied notebook evidence."],
+  });
+  const discriminationContract = DiscriminationContractV1Schema.parse({
+    schemaVersion: "1",
+    contractId: "discrimination_scientific_1",
+    sessionId: bundleV5.sessionId,
+    concept: bundleV5.approvedBeliefSpec.concept,
+    conceptPackVersion: bundleV5.conceptPack.version,
+    artifactManifestHash: bundleV5.artifactManifestHash,
+    beliefSpecId: bundleV5.approvedBeliefSpec.id,
+    beliefSpecHash: bundleV5.beliefSpecHash,
+    hypotheses: bundleV5.approvedBeliefSpec.hypotheses.map(
+      (hypothesis, index) => ({
+        id: hypothesis.id,
+        statement: hypothesis.statement,
+        decisivePatternId: `leakage.pattern-${index + 1}`,
+      }),
+    ),
+    candidateExperimentIds: [candidateId],
+    changedVariableIds: ["split_strategy"],
+    controlledVariableIds: ["model", "seed", "preprocessing"],
+    observableIds: ["accuracy", "entity_overlap_rate"],
+    inconclusiveConditionIds: ["legacy.unmapped-outcome"],
+    whyThisTest:
+      "Holding model settings fixed while separating complete entities tests the deployment boundary.",
+    nonClaims: ["This does not establish performance for every deployment."],
+    evidenceRefs: bundleV5.approvedBeliefSpec.evidenceRefs,
+  });
+  const labScene = LabSceneDraftV2Schema.parse({
+    schemaVersion: "2",
+    sceneId: "scene_scientific_1",
+    sessionId: bundleV5.sessionId,
+    concept: bundleV5.approvedBeliefSpec.concept,
+    supportLabel: "GUIDED_VISUAL",
+    title: "Does the score survive a whole-customer holdout?",
+    blocks: [
+      {
+        id: "hypotheses",
+        type: "Hypothesis",
+        current: bundleV5.approvedBeliefSpec.hypotheses[0].statement,
+        competing: bundleV5.approvedBeliefSpec.hypotheses[1].statement,
+      },
+      {
+        id: "why",
+        type: "WhyThisTest",
+        text: discriminationContract.whyThisTest,
+      },
+    ],
+    assumptions: ["The fixed kernel executes only registered operations."],
+    limitations: ["No result is shown before external verification."],
+  });
+  return { discriminationContract, experimentIr, labScene };
+}
+
 class FakeCompiler implements CodexCompiler {
   compileCalls = 0;
   patchCompileCalls = 0;
@@ -450,6 +550,69 @@ class FakeCompiler implements CodexCompiler {
   }
 }
 
+class FakeScientificCompiler implements ScientificMethodCompiler {
+  compileCalls: CompileHostedScientificMethodInput[] = [];
+  repairCalls: RepairHostedScientificMethodInput[] = [];
+
+  constructor(
+    private readonly artifacts: Awaited<ReturnType<typeof scientificArtifacts>>,
+  ) {}
+
+  async *compileScientificMethod(
+    input: CompileHostedScientificMethodInput,
+  ): AsyncIterable<CompilerEvent> {
+    this.compileCalls.push(structuredClone(input));
+    await this.writeCandidate(input.generationDirectory);
+    yield { type: "plan_summary", summary: "Compile the decisive test." };
+    yield {
+      type: "final_status",
+      status: "completed",
+      threadId: "thread_scientific_1",
+      turnId: "turn_scientific_1",
+      durationMs: 91,
+    };
+  }
+
+  async *repairScientificMethod(
+    input: RepairHostedScientificMethodInput,
+  ): AsyncIterable<CompilerEvent> {
+    this.repairCalls.push(structuredClone(input));
+    await this.writeCandidate(input.generationDirectory);
+    yield {
+      type: "final_status",
+      status: "completed",
+      threadId: "thread_scientific_repair",
+      turnId: "turn_scientific_repair",
+      durationMs: 33,
+    };
+  }
+
+  private async writeCandidate(directory: string): Promise<void> {
+    await Promise.all([
+      writeFile(
+        join(directory, "discrimination-contract.json"),
+        JSON.stringify(this.artifacts.discriminationContract),
+        "utf8",
+      ),
+      writeFile(
+        join(directory, "experiment-ir.json"),
+        JSON.stringify(this.artifacts.experimentIr),
+        "utf8",
+      ),
+      writeFile(
+        join(directory, "lab-scene.json"),
+        JSON.stringify(this.artifacts.labScene),
+        "utf8",
+      ),
+      writeFile(
+        join(directory, "public-rationale.md"),
+        "A whole-entity holdout changes the evaluation boundary while fixed code holds model settings constant.",
+        "utf8",
+      ),
+    ]);
+  }
+}
+
 class FakeControlPlane implements RunnerControlPlane {
   readonly events: PublicCompilerEvent[] = [];
   readonly uploads = new Map<string, string>();
@@ -457,6 +620,9 @@ class FakeControlPlane implements RunnerControlPlane {
   starts = 0;
   resumes = 0;
   candidateCalls = 0;
+  readonly candidateInputs: Array<
+    { attempt: number; planSha256: string } | RunnerScientificCandidateV5
+  > = [];
   source = '{"nbformat":4,"cells":[]}';
 
   constructor(
@@ -488,7 +654,11 @@ class FakeControlPlane implements RunnerControlPlane {
       sha256: path.startsWith("experiment") ? "f".repeat(64) : "1".repeat(64),
     });
   }
-  candidate(): Promise<CandidateDecision> {
+  candidate(
+    input:
+      { attempt: number; planSha256: string } | RunnerScientificCandidateV5,
+  ): Promise<CandidateDecision> {
+    this.candidateInputs.push(structuredClone(input));
     const decision = this.decisions[this.candidateCalls];
     this.candidateCalls += 1;
     if (decision === undefined) throw new Error("missing candidate decision");
@@ -650,6 +820,99 @@ describe("HostedRunnerJobProcessor", () => {
         }),
       }),
     ]);
+  });
+
+  it("compiles and submits all four bounded v5 artifacts as one candidate", async () => {
+    const compiler = new FakeCompiler({ schemaVersion: "2" });
+    const scientificCompiler = new FakeScientificCompiler(
+      await scientificArtifacts(),
+    );
+    const controlPlane = new FakeControlPlane(scientificBundleV5(), [
+      verifiedDecision,
+    ]);
+    const processor = new HostedRunnerJobProcessor({
+      workspaceRoot: await workspace(),
+      compiler,
+      scientificCompiler,
+      controlPlane,
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_v5_enabled`,
+    });
+
+    await processor.run("runner_job_scientific_1");
+
+    expect(scientificCompiler.compileCalls).toHaveLength(1);
+    expect(compiler.compileCalls).toBe(0);
+    expect([...controlPlane.uploads.keys()].sort()).toEqual([
+      "discrimination-contract.json",
+      "experiment-ir.json",
+      "lab-scene.json",
+      "public-rationale.md",
+    ]);
+    expect(controlPlane.candidateInputs).toEqual([
+      {
+        schemaVersion: "5",
+        attempt: 1,
+        artifactHashes: {
+          "discrimination-contract.json": "1".repeat(64),
+          "experiment-ir.json": "f".repeat(64),
+          "lab-scene.json": "1".repeat(64),
+          "public-rationale.md": "1".repeat(64),
+        },
+      },
+    ]);
+    expect(controlPlane.callbacks).toEqual([
+      expect.objectContaining({
+        status: "VERIFIED",
+        outputHashes: expect.arrayContaining(["f".repeat(64), "1".repeat(64)]),
+      }),
+    ]);
+  });
+
+  it("repairs a rejected v5 candidate using only structured counterexamples", async () => {
+    const scientificCompiler = new FakeScientificCompiler(
+      await scientificArtifacts(),
+    );
+    const rejected: CandidateDecision = {
+      status: "REJECTED",
+      canRepair: true,
+      nextCursor: 7,
+      verifierDurationMs: 6,
+      counterexamples: [
+        {
+          invariant: "MISSING_REQUIRED_CONTROL",
+          observed: ["model", "seed"],
+          expected: ["model", "seed", "preprocessing"],
+          counterexample: "preprocessing is not held constant",
+        },
+      ],
+    };
+    const controlPlane = new FakeControlPlane(scientificBundleV5(), [
+      rejected,
+      verifiedDecision,
+    ]);
+    const processor = new HostedRunnerJobProcessor({
+      workspaceRoot: await workspace(),
+      compiler: new FakeCompiler({ schemaVersion: "2" }),
+      scientificCompiler,
+      controlPlane,
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_v5_repair`,
+    });
+
+    await processor.run("runner_job_scientific_1");
+
+    expect(scientificCompiler.repairCalls).toHaveLength(1);
+    expect(scientificCompiler.repairCalls[0]).toMatchObject({
+      repairAttempt: 1,
+      verifierCounterexamples: rejected.counterexamples,
+    });
+    expect(controlPlane.resumes).toBe(1);
+    expect(controlPlane.candidateInputs).toHaveLength(2);
+    expect(controlPlane.callbacks.at(-1)).toMatchObject({
+      status: "VERIFIED",
+      operationalMetrics: { repairAttempts: 1 },
+    });
   });
 
   it("publishes only allow-listed files and completes a verified plan job", async () => {

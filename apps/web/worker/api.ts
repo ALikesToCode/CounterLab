@@ -1373,6 +1373,19 @@ export function createApi(options: ApiOptions = {}) {
         planRequirements: pack.experimentPlanRules,
       });
       const v5Compile = current.beliefSpec !== undefined;
+      const scientificPromptHash = await hashCanonical({
+        promptVersion: "scientific-method-compile-v1",
+        conceptPack: { id: pack.id, version: pack.version },
+        candidateExperimentIds:
+          pack.scientificMethod.candidateExperimentIds,
+        schemaHashes: {
+          discriminationContract: await hashCanonical(
+            discriminationContractSchema,
+          ),
+          experimentIr: await hashCanonical(experimentIrSchema),
+          labScene: await hashCanonical(labSceneDraftSchema),
+        },
+      });
       const requestIdentity = liveRunnerRequestIdentity({
         sessionId,
         purpose: "LAB_COMPILE",
@@ -1504,6 +1517,16 @@ export function createApi(options: ApiOptions = {}) {
                 discriminationContract: discriminationContractSchema,
                 experimentIr: experimentIrSchema,
                 labScene: labSceneDraftSchema,
+              },
+              provenance: {
+                generatorId: "codex-app-server-stdio-v1",
+                promptHash: scientificPromptHash,
+                inputHashes: [
+                  manifestHash,
+                  beliefAuthorityHash,
+                  current.prediction.immutableHash,
+                  packContractHash,
+                ],
               },
               resourceLimits: {
                 wallSeconds: 45,
