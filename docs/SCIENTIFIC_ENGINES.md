@@ -79,6 +79,17 @@ The resulting local-candidate policy is
 `PASSED_WITH_REVIEWED_EXCEPTION`. That is not a zero-vulnerability claim and
 does not relabel the local snapshot as Cloudflare production authority.
 
+## Production promotion
+
+The source-bound candidate was deployed separately as Cloudflare Container
+version 13 with registry digest
+`sha256:bdd65feebad10d4b0f232e945eb1bd1195b803d13fddf8eee558b2efdd5dc8c6`
+and Worker `7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab`. The local OCI digest remains
+`sha256:94c1987e…`; these identifiers are intentionally not treated as equal.
+One exact-version production smoke passed all seven stages, and both live Proof
+Bundles record authority hash `d7677c79…`. The committed report SHA-256 is
+`cd5c0c05b2f007c577905630a61f7be84c71908a511ca9bffad68f76bd86431a`.
+
 SBOM presence is inventory evidence, not proof that vulnerabilities are absent.
 The container inventory excludes the host kernel and Cloudflare platform. The
 Python requirements backend does not emit dependency edges. Scanner databases
@@ -104,8 +115,9 @@ its environment kind remains `local_candidate`.
 
 ## Non-claims
 
-- This evidence describes a local candidate, not the deployed Cloudflare
-  runner.
+- Local image evidence describes the qualified OCI candidate. Production
+  authority additionally requires the separately recorded Cloudflare digest,
+  Worker version, and smoke; those identities are not interchangeable.
 - The scan does not claim zero vulnerabilities.
 - Byte-identical floating-point results are not claimed outside the recorded
   Linux/amd64 runtime and tolerance profile.

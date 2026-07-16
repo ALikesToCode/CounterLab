@@ -48,7 +48,7 @@ green release is evidence, but is not silently promoted to the current tree.
       mismatched authority.
 - [x] `scripts/release-check.sh` requires a qualified image and invokes the full
       engine gate.
-- [ ] The exact engine-qualified image is deployed and production smoke records
+- [x] The exact engine-qualified image is deployed and production smoke records
       its authority hash.
 
 ## Learning and patch loop
@@ -86,20 +86,22 @@ green release is evidence, but is not silently promoted to the current tree.
 - [x] Public event reconnect, patch download, proof share, and no-secret check
       pass against production.
 
-## Exact production gate — 2026-07-15
+## Exact production gate — 2026-07-16
 
-- [x] Worker `ae01fe03-731f-4939-849f-e8f4eaec7f51` is deployed with the
+- [x] Worker `7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab` is deployed with the
       Container binding.
-- [x] Container version 10 resolves to image digest
-      `sha256:2b15a35b7f938d754467cadabf8a2f12d085c4436d5f28791cb6add6d2b7bbe1`.
+- [x] Container version 13 resolves to deployed registry digest
+      `sha256:bdd65feebad10d4b0f232e945eb1bd1195b803d13fddf8eee558b2efdd5dc8c6`.
 - [x] `/ready`, capability health, and the public response secret scan passed.
 - [x] Sample, replay, untouched live leakage, and untouched live imbalance
       passed with artifact/Plan/result/patch/proof hashes recorded.
 - [x] Production patch downloads opened and both Proof Bundles validated.
+- [x] Both live Proof Bundles record scientific-engine authority
+      `d7677c79914505c11cc0474a0f3e4be7527173ea27c5640b65c7b8a373a8e881`.
 - [x] The report contains no secrets, raw notebook bytes, or private reasoning.
 
 Report SHA-256:
-`d74795a13034293483a1a0375d3906643a3dd2ba3472d8fae3498b6894430bb2`.
+`cd5c0c05b2f007c577905630a61f7be84c71908a511ca9bffad68f76bd86431a`.
 
 ## Current-tree release commands
 
@@ -125,8 +127,6 @@ Report SHA-256:
 The checked browser items describe the released Studio journey. The following
 v5.1 product gates remain pending and must not be inferred from them:
 
-- [ ] scientific-engine production promotion; the local full gate and Proof
-      Bundle authority link pass, but deployment and a new public smoke remain;
 - [ ] Belief Spec v2 and Experiment IR v5 with replay-safe adapters;
 - [ ] fixed experiment scorer and epistemic tri-state verdict;
 - [ ] one signed Boundary Map;

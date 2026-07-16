@@ -206,8 +206,10 @@ labels the later run as a third repair.
   transfer and patch evidence; replaying them is not a new live run.
 - The Container-backed hosted runner completed exact-version production smoke
   for untouched leakage and imbalance on Worker
-  `ae01fe03-731f-4939-849f-e8f4eaec7f51`; evidence is committed in
-  `docs/PRODUCTION_SMOKE.json`.
+  `7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab` and deployed image digest
+  `sha256:bdd65feebad10d4b0f232e945eb1bd1195b803d13fddf8eee558b2efdd5dc8c6`.
+  Both live Proof Bundles record scientific-engine authority `d7677c79…`;
+  evidence is committed in `docs/PRODUCTION_SMOKE.json`.
 - The hosted Container still requires outbound access for live model
   compilation. Phase-specific network denial for later fixed-process work has
   not yet been demonstrated and is not claimed.

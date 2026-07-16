@@ -1,9 +1,9 @@
 {
   "baseUrl": "https://counterlab.cserules.workers.dev",
-  "completedAt": "2026-07-15T13:31:38.290830Z",
+  "completedAt": "2026-07-16T05:03:38.850648Z",
   "deployment": {
-    "containerImageDigest": "sha256:2b15a35b7f938d754467cadabf8a2f12d085c4436d5f28791cb6add6d2b7bbe1",
-    "workerVersion": "ae01fe03-731f-4939-849f-e8f4eaec7f51"
+    "containerImageDigest": "sha256:bdd65feebad10d4b0f232e945eb1bd1195b803d13fddf8eee558b2efdd5dc8c6",
+    "workerVersion": "7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab"
   },
   "privacy": {
     "containsPrivateReasoning": false,
@@ -13,93 +13,95 @@
   "schemaVersion": "1",
   "stages": [
     {
-      "completedAt": "2026-07-15T13:20:37.050749Z",
+      "completedAt": "2026-07-16T04:55:42.742859Z",
       "evidence": {
         "responseSha256": "64399860ecae4a7a7220c7ae87a45622b523fa26e723e1a7025ab775f83fa4b6"
       },
       "id": "public-readiness",
       "mode": "control_plane",
-      "startedAt": "2026-07-15T13:20:36.030446Z",
+      "startedAt": "2026-07-16T04:55:41.525963Z",
       "status": "PASSED"
     },
     {
-      "completedAt": "2026-07-15T13:20:37.454490Z",
+      "completedAt": "2026-07-16T04:55:43.344375Z",
       "evidence": {
-        "responseSha256": "ad3629dd392e7f5edc1b7f46b0bbfb1fd80c02075bd756274f0a3183c9d3db71"
+        "responseSha256": "31651fe8f183eaffca0021b1e73301179073d96f84e4d18382646a13c83eca34"
       },
       "id": "capability-health",
       "mode": "control_plane",
-      "startedAt": "2026-07-15T13:20:37.145476Z",
+      "startedAt": "2026-07-16T04:55:42.837609Z",
       "status": "PASSED"
     },
     {
-      "completedAt": "2026-07-15T13:20:39.919005Z",
+      "completedAt": "2026-07-16T04:55:44.746465Z",
       "evidence": {
-        "documentSha256": "388c7056ebe4697409cf4307d82ef941fe6c8d9e171a85fd3f84f26bb2c9c290"
+        "documentSha256": "8d266397388b66bdf009182b2c18448085363b99e0bce366aef943efcef4828f"
       },
       "id": "public-secret-scan",
       "mode": "control_plane",
-      "startedAt": "2026-07-15T13:20:37.547089Z",
+      "startedAt": "2026-07-16T04:55:43.439261Z",
       "status": "PASSED"
     },
     {
-      "completedAt": "2026-07-15T13:20:59.345065Z",
+      "completedAt": "2026-07-16T04:56:01.195489Z",
       "evidence": {},
       "id": "sample-lesson",
       "mode": "sample",
-      "startedAt": "2026-07-15T13:20:40.015218Z",
+      "startedAt": "2026-07-16T04:55:44.843613Z",
       "status": "PASSED"
     },
     {
-      "completedAt": "2026-07-15T13:21:02.882796Z",
+      "completedAt": "2026-07-16T04:56:04.641617Z",
       "evidence": {},
       "id": "verified-replay",
       "mode": "replay",
-      "startedAt": "2026-07-15T13:20:59.422889Z",
+      "startedAt": "2026-07-16T04:56:01.280910Z",
       "status": "PASSED"
     },
     {
-      "completedAt": "2026-07-15T13:26:03.729381Z",
+      "completedAt": "2026-07-16T04:59:32.574341Z",
       "concept": "entity_leakage",
       "evidence": {
         "cancellationAcknowledged": true,
         "cancelledWithoutResult": true,
         "duplicateCancelReused": true,
         "duplicateCompileReused": true,
-        "eventChainHead": "7d640ecd08347c54cd05a669ffa24e167ff424ec133429237dc08fb7ec83eed0",
-        "patchResultHash": "18d7afaecd1fc01b4dd49133e467278e5724bc141324bb569a707d00d1a4992b",
-        "patchedNotebookSha256": "40db2ba23a003fe0d0718b1837e4382ee638d937d78abf07262f9d51a1096e77",
-        "planHash": "922be22675fa76f6af71b64d56592a4ff1aad38edfa24eb449466b381e62fa08",
-        "proofBundleSha256": "e0b41693e0660e6e1b196e3e4b33f9f141de82efe9b85d4582a4115fc7d72416",
-        "proofContentHash": "33c6286d01b480b3a29a8d29c75edf616ac6e669466bb758be7b01e271cd076f",
+        "eventChainHead": "84ed8b0f6f3da43a4d50e735326610b7d9ec5203902bb5309f06c09a5cca6301",
+        "patchResultHash": "ab29a09d6cdeb04bd812723e4ae227c1cc7d60590916b8652723e5f80da00070",
+        "patchedNotebookSha256": "546ffcbf1990b3419803f971ec3e0aeff04f88c91a242db54f05835a25ae903d",
+        "planHash": "ee7a2c06d9bd349415439b89381288faf3e27db933057b7a0ea4ec70b543ea99",
+        "proofBundleSha256": "f9fa47f8e249fd370fd91120145475c6cdf8929f94e98d45254c80bdd4fb2381",
+        "proofContentHash": "021b6a5d2123f6c9f0ee5e6c5413482e880cb7e26af43aa110f99192dbaf6ffc",
         "reconnectedFromCursor": true,
-        "resultHash": "810d644dea40d31636e43dae40a112e2b442eb01c0ae653e289b7cd80155fa80",
+        "resultHash": "b7fa2b8e760df79248be4de1ffe463865e7f3e73f2d7df330dec4e9e479cd51e",
+        "scientificEngineSnapshotHash": "d7677c79914505c11cc0474a0f3e4be7527173ea27c5640b65c7b8a373a8e881",
         "sourceArtifactHash": "2bd07100f1794cc78d0a70e8b82f08c498a3093d705f9aabb4f5d0c362ea891f"
       },
       "id": "live-leakage",
       "mode": "live_notebook",
-      "startedAt": "2026-07-15T13:21:02.959342Z",
+      "startedAt": "2026-07-16T04:56:04.720209Z",
       "status": "PASSED"
     },
     {
-      "completedAt": "2026-07-15T13:31:38.188852Z",
+      "completedAt": "2026-07-16T05:03:38.753812Z",
       "concept": "class_imbalance",
       "evidence": {
-        "eventChainHead": "1889f5c5a74c1577c48e6573ed09ed3e4a8a5087d23249c97504153724557c8a",
-        "patchResultHash": "b115821a9c4f463e52f81867df9b04b3bc4042e823f2c1a7b3f14ad2ae122190",
-        "patchedNotebookSha256": "30a054210e52b767f4d031aca07bfaea3aee049011910e80579ad10a7bd35a88",
-        "planHash": "00e917b05e9d81c390aa7e3c316ebb0f4978e8900b0b6ddc935132b81ecb94e0",
-        "proofBundleSha256": "8abc5f7642f9063b3bf99c938f3e15d80d747551a67afd7a89c04382f9306de4",
-        "proofContentHash": "4a53cdc0acf151f4562ce105f4531018760dc74fc9af8424a545547afd58b62b",
-        "resultHash": "d4c81a3295bddd0f700c635767802fa7661e75845982fe705fcf5a22a5b78ef2",
-        "sourceArtifactHash": "c389cda219e6a982ad924465d962e40b33a1354bed92dd843f37b39624f9b70c"
+        "eventChainHead": "d1eda3cac9c7ac535cef63a6cdc90e75dc1f446742c54e4a982d2d3d4d1ccb43",
+        "patchResultHash": "e658c69ef41fb0e773601cb519a37092116f956bb3b0258d0ce2cced814c7fdb",
+        "patchedNotebookSha256": "dc284cff3bd5cf5245483c6346151448a9203c6296c612c66d1fcac0085fb24c",
+        "planHash": "752e90907823c01a2e1d328c18215d16699aab9774911d1d33fc59ca62712fe2",
+        "proofBundleSha256": "93208c4345daf5ac1c7f5e41b319f096008e67eedf4f28dbe9d27f5864b1adf5",
+        "proofContentHash": "21b5c39faf2c74609998440b7b01ac86601827856c94d8684912008aac897cfc",
+        "resultHash": "7cb820d41a3c57c77073e96a0a5b65a761a59d0e8561603f3d35be3df0621800",
+        "scientificEngineSnapshotHash": "d7677c79914505c11cc0474a0f3e4be7527173ea27c5640b65c7b8a373a8e881",
+        "sourceArtifactHash": "755d910d9ff921edc3345d02c353667632c8e2a7122c7eb84153f76023a926d8"
       },
       "id": "live-imbalance",
       "mode": "live_notebook",
-      "startedAt": "2026-07-15T13:26:03.827493Z",
+      "startedAt": "2026-07-16T04:59:32.669441Z",
       "status": "PASSED"
     }
   ],
-  "startedAt": "2026-07-15T13:20:35.967964Z",
+  "startedAt": "2026-07-16T04:55:41.464696Z",
   "status": "PASSED"
 }

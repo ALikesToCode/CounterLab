@@ -13,8 +13,9 @@ evidence, deterministic health runs, normalized SBOMs, raw vulnerability scan,
 reviewed exception evidence, and canonical authority hash pass the full local
 image gate as authority `d7677c79914505c11cc0474a0f3e4be7527173ea27c5640b65c7b8a373a8e881`.
 Proof Bundle v2 binds and validates that authority hash. Production promotion
-remains pending until the qualified image is deployed and a new
-public smoke records it. See `docs/SCIENTIFIC_ENGINES.md` and
+is now recorded separately through Worker `7c67c0f4…`, Cloudflare registry
+digest `bdd65fee…`, and a seven-stage smoke whose two live Proof Bundles bind
+that same authority. See `docs/SCIENTIFIC_ENGINES.md` and
 `docs/DEPENDENCY_ADMISSION.md`.
 
 ## Release objective
@@ -340,8 +341,8 @@ targets or simulated learner outcomes.
   and Wrangler 4.110.0 are installed.
 - The Cloudflare account is logged in and Container-enabled. CounterLab D1/R2
   bindings and the Container-backed Durable Object are configured in
-  `wrangler.jsonc`; Worker `ae01fe03-731f-4939-849f-e8f4eaec7f51` and Container
-  version 10 passed exact-version production smoke.
+  `wrangler.jsonc`; Worker `7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab` and Container
+  version 13 passed exact-version production smoke.
 - Cloudflare Containers are beta, use ephemeral disk, deploy with rolling image
   rollout, and require Workers Paid usage.
 - Live Belief analysis requires the existing server-side key and optional custom

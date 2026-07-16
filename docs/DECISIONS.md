@@ -299,3 +299,26 @@ can pass.
   digest. Promotion requires deployment evidence and a new public smoke.
 - Record build-tool provenance separately from installed runtime tools and
   reject malformed or truncated base-image digests in release evidence.
+
+## 2026-07-16 — Promote one-shot runner authority with distinct image identities
+
+- Bind the qualified runner source to commit
+  `095d485370e70d3b502023665fea4ebf156697ad`, local OCI digest
+  `sha256:94c1987e54b5074b3eb075f5924ec9d757d8579584d6d59b129124065272f934`,
+  and scientific-engine authority hash
+  `d7677c79914505c11cc0474a0f3e4be7527173ea27c5640b65c7b8a373a8e881`.
+- Record Cloudflare's separately produced registry digest
+  `sha256:bdd65feebad10d4b0f232e945eb1bd1195b803d13fddf8eee558b2efdd5dc8c6`,
+  Container version 13, and Worker
+  `7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab`. Never infer equality between local
+  and registry digests.
+- Run production Containers as one-shot job processes after the browser-safe
+  response stream settles. The post-smoke inventory recorded zero active
+  instances rather than retaining completed jobs as artificial capacity.
+- Require one fail-closed smoke to pass readiness, capability health, public
+  secret scan, sample, replay, and both untouched live concepts. Both live
+  Proof Bundles must record the qualified authority hash.
+- Commit that exact report as `docs/PRODUCTION_SMOKE.json`, SHA-256
+  `cd5c0c05b2f007c577905630a61f7be84c71908a511ca9bffad68f76bd86431a`.
+  Any later bound source, image, engine, exception, or deployment change must
+  requalify and produce a new smoke instead of inheriting this authority.

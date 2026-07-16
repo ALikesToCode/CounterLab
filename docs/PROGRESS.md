@@ -25,29 +25,29 @@ copy.
 
 The production control plane is deployed at
 `https://counterlab.cserules.workers.dev` as Worker version
-`ae01fe03-731f-4939-849f-e8f4eaec7f51`. Container version 10 uses image
-digest
-`sha256:2b15a35b7f938d754467cadabf8a2f12d085c4436d5f28791cb6add6d2b7bbe1`.
+`7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab`. Container version 13 uses image
+digest `sha256:bdd65feebad10d4b0f232e945eb1bd1195b803d13fddf8eee558b2efdd5dc8c6`.
 The exact-version production smoke completed all seven stages at
-`2026-07-15T13:31:38Z`; its byte-for-byte report is committed as
+`2026-07-16T05:03:38.850648Z`; its byte-for-byte report is committed as
 `docs/PRODUCTION_SMOKE.json` with SHA-256
-`d74795a13034293483a1a0375d3906643a3dd2ba3472d8fae3498b6894430bb2`.
+`cd5c0c05b2f007c577905630a61f7be84c71908a511ca9bffad68f76bd86431a`.
 
 Scientific-engine governance is now implemented for the released ML packs. The
 exact local candidate image is non-root, its four admitted engines are bound to
 versions, roles, operations, licenses, installed-file hashes, health evidence,
 three normalized SBOMs, raw vulnerability evidence, an exact-image reviewed
 exception, and an authority hash. The full local image gate passes and live
-Proof Bundle v2 creation binds that exact authority hash. This is not yet
-production authority: the qualified image has not been deployed and recorded
-as a Cloudflare production snapshot.
+Proof Bundle v2 creation binds that exact authority hash. The source-bound
+candidate was deployed under Cloudflare's distinct registry digest above; both
+live smoke stages record authority hash `d7677c79…`. The local OCI digest and
+deployed registry digest remain distinct identities and are not interchangeable.
 
 ## Acceptance matrix
 
 | Gate                                         | Status  | Current evidence                                                                                                                                                                                                                          |
 | -------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Sample/live/replay mode separation           | pass    | Contract and Worker regression tests prevent a non-sample artifact from receiving sample Belief Test, result, patch, or replay authority.                                                                                                 |
-| Scientific-engine registry and evidence      | partial | The full gate passes for local image `94c1987e…` and authority hash `d7677c79…`; 0 fixable Critical and 1 fixable High are handled by exact-image VEX plus bounded reachability and a negative-control scan. Proof Bundle v2 binds the authority hash. Production promotion remains pending deployment and a new public smoke. |
+| Scientific-engine registry and evidence      | pass    | The full gate passes for local image `94c1987e…` and authority hash `d7677c79…`; 0 fixable Critical and 1 fixable High are handled by exact-image VEX plus bounded reachability and a negative-control scan. Cloudflare deployment uses the separately recorded `bdd65fee…` registry digest, and both live Proof Bundles in the production smoke record the same authority hash. |
 | Safe notebook intake and evidence references | pass    | Parser tests cover bounded input, no execution, active-output sanitization, stable hashes, exact cells/outputs, and typed refusal.                                                                                                        |
 | Live schema-constrained Belief Test          | pass    | Real configured Responses call returned a valid class-imbalance Belief Test with three locally resolved evidence references; invalid/unresolved output is rejected in tests.                                                              |
 | Live analyst preview and approval            | pass    | Live calls require a hash-bound preview of the exact sanitized packet; sensitive-looking evidence requires explicit approval, and claim/artifact changes invalidate it.                                                                  |
@@ -68,15 +68,15 @@ as a Cloudflare production snapshot.
 | Learner pilot                                | partial | Paired-crossover protocol, consent/privacy note, randomization, schema, and analysis script exist. No participants or learner outcomes are claimed.                                                                                       |
 | TypeScript/Web/Python suites                 | pass    | Current focused release work passed 296 root TypeScript tests, 103 web/Worker tests, 105 Python tests, and strict TypeScript checks. The full browser/release script remains pending after final integration.                                  |
 | New-version browser E2E                      | pass    | 13 local CloakBrowser journeys passed; two credentialed live journeys were correctly skipped locally. Production separately passed sample/replay (2/2) and untouched leakage/imbalance live flows (2/2), including patch and Proof Bundle downloads. |
-| Container image build and production deploy | partial | The prior Worker `ae01fe03-731f-4939-849f-e8f4eaec7f51` and Container version 10 remain recorded production evidence. The newly qualified `691ec9e` local image is not yet deployed and must not inherit that authority. |
-| Production live runner smoke                | partial | The committed exact-version smoke passed the prior release. A new smoke covering the newly qualified image, both live concepts, reconnect, downloads, and proof validation remains pending. |
+| Container image build and production deploy | pass    | Worker `7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab` is bound to Container version 13 and deployed registry digest `bdd65fee…`; the source-bound local qualification remains recorded separately as OCI digest `94c1987e…`. |
+| Production live runner smoke                | pass    | One fail-closed run passed readiness, capability health, public secret scan, sample, replay, untouched live leakage, and untouched live imbalance. It also validated reconnect/idempotency/cancellation, patch and proof downloads, both Proof Bundles, and their engine-authority bindings. |
 | One-command local demo                      | pass    | `./scripts/clean-demo.sh` regenerated both fixtures, passed 5 focused tests, confirmed current local D1 migrations, and served healthy kernel and Worker endpoints before its exact processes were stopped.                               |
 | Clean-clone/release check/secret scan       | partial | The pre-hardening Studio tree passed a fresh-clone release check and 334-file scan. The current v5.1 tree has not yet rerun the final clean-clone, SBOM, dependency, and secret gates. |
 
 ## Latest verified commands
 
-- `./scripts/production-smoke.sh https://counterlab.cserules.workers.dev` — exact Worker version `ae01fe03-731f-4939-849f-e8f4eaec7f51`; all seven stages passed, including two genuine untouched live notebooks. Evidence: `docs/PRODUCTION_SMOKE.json`.
-- `./scripts/verify-scientific-engines.sh --image counterlab-runner:engine-registry-v5` — passed for image `sha256:94c1987e54b5074b3eb075f5924ec9d757d8579584d6d59b129124065272f934`; authority hash `d7677c79914505c11cc0474a0f3e4be7527173ea27c5640b65c7b8a373a8e881`. The snapshot remains `local_candidate` until deployment and a new public smoke establish production authority.
+- `./scripts/production-smoke.sh https://counterlab.cserules.workers.dev` — exact Worker version `7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab` and deployed image digest `bdd65fee…`; all seven stages passed, including two genuine untouched live notebooks and authority hash `d7677c79…` in both live Proof Bundles. Report SHA-256: `cd5c0c05…`.
+- `./scripts/verify-scientific-engines.sh --image counterlab-runner:engine-registry-v5` — passed for local OCI image `sha256:94c1987e54b5074b3eb075f5924ec9d757d8579584d6d59b129124065272f934`; authority hash `d7677c79914505c11cc0474a0f3e4be7527173ea27c5640b65c7b8a373a8e881`. Its `local_candidate` metadata is deliberately distinct from Cloudflare's deployed registry digest.
 - The unsuppressed Grype 0.112.0 scan recorded 171 findings and 0 fixable Critical. One fixable High (`CVE-2026-15308`) is bound to exact-image VEX and bounded reachability; the applied scan ignored exactly that one finding and the wrong-subcomponent control ignored none.
 - `pnpm test:ts` — 296 root and 103 web/Worker tests passed; `pnpm test:python` — 105 passed; `pnpm typecheck` — passed.
 - Two clean builder executions produced kernel wheel hash `16cbf5a0b9e76badddb29767858a31e310b454a9c30f44c3abe86a87b746ed57`.
@@ -98,8 +98,7 @@ runner now fails closed, restarts only before material compiler output, caps the
 restart budget at three turns, revokes staged credentials after initialization,
 and exposes a typed retry path. Production smoke proved both first-attempt
 success and recovery after a failed compile, but this cannot remove upstream
-availability risk. For the v5.1 release specifically, scientific-engine
-production promotion still requires deployment of the qualified candidate and
-a fresh public smoke; the local reviewed vulnerability exception expires on
-2026-08-14 and is deliberately non-transferable. Cloudflare Containers remain
-a beta runtime, and no formal sandbox proof is claimed.
+availability risk. The reviewed vulnerability exception expires on
+`2026-07-30T04:21:10Z` and requires requalification on any bound source, image,
+SBOM, entrypoint, scanner, or vulnerability-status change. Cloudflare
+Containers remain a beta runtime, and no formal sandbox proof is claimed.

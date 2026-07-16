@@ -168,9 +168,10 @@ status.
 
 The deployed surface is <https://counterlab.cserules.workers.dev>. Exact-version
 production smoke passed sample, replay, and untouched live leakage/imbalance on
-Worker `ae01fe03-731f-4939-849f-e8f4eaec7f51` with Container image
-`sha256:2b15a35b7f938d754467cadabf8a2f12d085c4436d5f28791cb6add6d2b7bbe1`.
-The secret-free evidence is committed in
+Worker `7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab` with Cloudflare Container image
+digest `sha256:bdd65feebad10d4b0f232e945eb1bd1195b803d13fddf8eee558b2efdd5dc8c6`.
+Both live Proof Bundles bind scientific-engine authority `d7677c79…`. The
+secret-free evidence is committed in
 [docs/PRODUCTION_SMOKE.json](docs/PRODUCTION_SMOKE.json).
 
 For foreground development:
