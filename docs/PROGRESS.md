@@ -29,8 +29,9 @@ verification now freezes the result, independently verifies it, persists its
 tri-state verdict, and alone releases readiness. The browser renders native v2
 belief authority after refresh, and downstream session-core/Worker gates now
 resolve exact v5 evidence authority before revision and concept-specific
-transfer. Interactive reruns, the v5 patch path, Reasoning Diff, and Proof
-Capsule lineage remain unfinished.
+transfer. Interactive reruns now derive from frozen compile/result authority
+without changing the Evidence Verdict. The v5 patch path, Reasoning Diff, and
+Proof Capsule lineage remain unfinished.
 The current production deployment remains the qualified Experiment Plan v2
 path and has not been promoted to this worktree.
 
@@ -69,22 +70,23 @@ deployed registry digest remain distinct identities and are not interchangeable.
 | V5 runner/Python execution | done | Versioned runner dispatches `LAB_RUN` before Codex, Python validates Experiment IR v5 and registered fixture authority, fixed kernel alone computes output, and no early result event is emitted; direct leakage and imbalance envelopes are covered. | Rebuild and requalify only with the complete release chain. |
 | Worker epistemic result callback | done | Commits `36d8157`, `32e9b0a`, and `f5de4e2` close runner writes, freeze exact bytes, bind frozen kernel/fixture/seed authority, persist reports/verdict, and prove `SUPPORTS` plus five no-release imbalance mutations through the Worker. | Migrate the browser and downstream learner stages before promotion. |
 | Browser and downstream evidence authority | done | Commits `f406f0e`, `22169c9`, and `3dbadd0` render exact v2 Belief Specs after refresh, fail closed on mixed or hash-mismatched authority, and route leakage/imbalance to their fixed transfer evaluators. | Preserve this authority tuple through interactive, patch, and proof migration. |
-| Interactive controls on v5 lineage | pending | Existing v2 fixed controls remain qualified. | Remove legacy Belief Test/Plan assumptions and bind every control rerun to the v5 selected experiment. |
+| Interactive controls on v5 lineage | done locally | Commits `30ec305`, `ce88b9c`, and `ee3c78f` add a purpose-separated strict bundle, cross-language fixed derivation, frozen compile/result authority, both concept controls, and immutable session verdicts. | Requalify in the final image and production smoke. |
 | V5 deterministic transfer | done locally | Both genuine v5 concepts pass their registered fixed transfer evaluator; `INCONCLUSIVE` may transfer but remains patch-locked. | Requalify inside the complete release chain before production promotion. |
 | V5 patch, Reasoning Diff, proof | pending | Existing v2 artifact-specific path remains qualified. | Add strict v5 Patch Plan authority without casting Belief Spec v2 into v1, then add Proof Capsule v2. |
 | Boundary Map, simplified Theater, Judge Mode | pending | Contracts/UX requirements are recorded; existing UI remains the released Studio UI. | Implement only after the v5 ML authority loop passes. |
 | Physics/free-fall | blocked by phase order | No verified public support is claimed. | Start only after both live ML concepts pass the new production authority gate. |
 | Final release | pending | Previous production v2 smoke remains valid for that deployment. | Full suites, clean clone, engine gate, secret scan, deployment, CloakBrowser journeys, and exact-version production smoke. |
 
-Latest local v5 downstream-authority verification (2026-07-16):
+Latest local v5 interactive-authority verification (2026-07-16):
 
-- Web/Worker Vitest: 132 passed across 18 files.
-- Session-core Vitest: 23 passed.
+- Web/Worker Vitest: 134 passed across 18 files.
+- Experiment IR and hosted-runner Vitest: 32 passed across 4 files.
+- Python kernel suite: 111 passed; focused plan/imbalance slice: 13 passed.
 - Strict repository and Worker TypeScript: passed.
 - Git whitespace check: passed.
 - No `build`, `dev`, deployment, or production smoke was run for this slice.
-- Next active slice: migrate interactive controls to frozen v5 compile/result
-  authority, then patch, Reasoning Diff, and Proof Capsule lineage.
+- Next active slice: add the strict v5 Patch Plan bundle and fixed callback
+  lineage, then Reasoning Diff and Proof Capsule v2.
 
 ## Acceptance matrix
 
@@ -97,7 +99,7 @@ Latest local v5 downstream-authority verification (2026-07-16):
 | Live analyst preview and approval            | pass    | Live calls require a hash-bound preview of the exact sanitized packet; sensitive-looking evidence requires explicit approval, and claim/artifact changes invalidate it.                                                                  |
 | Runner job/token/callback/event cursor model | pass    | D1 repository, optimistic transitions, Worker-held P-256 private signing, Container public-key verification, callback idempotency, cursor reconnect, scoped cancellation, recoverable dispatch acknowledgement, and browser-safe event schemas pass tests and production smoke. |
 | Artifact-specific hosted Experiment Plan     | pass    | Worker/runner integration compiles and independently verifies typed v2 Plans; rejected candidates release no result.                                                                                                                      |
-| V5 hosted scientific authority migration     | partial | Native Belief Spec, bounded compile/repair, fixed selection, fixture-bound fixed execution, Worker-owned tri-state result release, browser v2 belief rendering, and deterministic transfer pass direct leakage and imbalance integration tests. V5 interactive/patch/proof lineage remains pending. |
+| V5 hosted scientific authority migration     | partial | Native Belief Spec, bounded compile/repair, fixed selection, fixture-bound fixed execution, Worker-owned tri-state result release, browser v2 belief rendering, deterministic transfer, and frozen interactive controls pass direct leakage and imbalance integration tests. V5 patch/proof lineage remains pending. |
 | Fixed hosted result and cross-language hash  | pass    | Python v2 result hashes now use browser-compatible canonical JSON while legacy v1/replay hashes remain stable; TypeScript result verification passes both concepts.                                                                       |
 | Entity-leakage lab and mutations             | pass    | Computed random 0.984722, group 0.594444, ablation 0.673611, zero group overlap; the current CLI rejects 13/13 critical mutations and the achieved-metrics collector records the same 13/13 published set.                                |
 | Class-imbalance lab and mutations            | pass    | 6,000 rows, 1.0833% positives, majority accuracy 0.989333 with recall 0; threshold recall 0.3125; the current CLI rejects 19/19 critical mutations and the achieved-metrics collector records its narrower 15/15 published set.             |
@@ -142,10 +144,9 @@ Latest local v5 downstream-authority verification (2026-07-16):
 ## Highest-risk remaining issue
 
 The highest remaining product risk is carrying the completed v5 evidence tuple
-through exploratory reruns, artifact-specific patching, and portable proof.
-Interactive routing still assumes a legacy Belief Test/Plan and reads mutable
-runner output, while the Patch Plan bundle and Proof Bundle assembler remain
-v1/v2-only. Until strict versioned contracts bind those stages to the frozen
+through artifact-specific patching and portable proof. The Patch Plan bundle
+and Proof Bundle assembler remain v1/v2-only. Until strict versioned contracts
+bind those stages to the frozen
 Belief Spec, Prediction, Experiment IR, selection, result, Evidence Verdict, and
 epistemic report, the current production deployment must remain on its qualified
 v2 contract. Upstream Runtime Codex turn intermittency remains an operational

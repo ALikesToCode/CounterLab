@@ -1,5 +1,18 @@
 # Decisions
 
+## 2026-07-16 — Treat interactive runs as verified exploration, not new evidence
+
+- Give v5 interactive jobs a separate strict `INTERACTIVE` bundle rather than
+  weakening the authoritative LAB_RUN schema.
+- Derive every control change in fixed TypeScript and Python code from the
+  selected Experiment IR projection; metric focus remains display-only.
+- Read compiler artifacts and completed results from Worker-owned frozen
+  authority prefixes. Mutable runner output is not retrieval authority.
+- Verify and publish the selected exploratory run, but never create a new
+  epistemic verdict or replace the session's original result/verdict/report.
+- Permit both `SUPPORTS` and valid `INCONCLUSIVE` evidence to support
+  exploration; the existing patch lock for `INCONCLUSIVE` remains unchanged.
+
 ## 2026-07-16 — Normalize downstream evidence authority before learner transitions
 
 - Treat a persisted session aggregate as untrusted input whenever revision,

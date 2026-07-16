@@ -330,7 +330,7 @@ async browser journeys, and measured performance.
 
 | Question             | Answer                                                                              |
 | -------------------- | ----------------------------------------------------------------------------------- |
-| Where am I?          | Phases 8–9 downstream v5 authority: interactive first, then patch and proof.         |
+| Where am I?          | Phases 8–9 downstream v5 authority: artifact patch and Proof Capsule next.           |
 | Where am I going?    | Boundary Map, simpler Theater, optional verified physics, and final requalification. |
 | What's the goal?     | A real public artifact-specific CounterLab Studio with two verified concepts.       |
 | What have I learned? | See `findings.md`.                                                                  |
@@ -411,5 +411,29 @@ async browser journeys, and measured performance.
 - Active gate: a purpose-separated v5 interactive-run contract that derives
   every exploration from frozen compile/result authority and never replaces the
   authoritative verdict. V5 Patch Plan and Proof Capsule lineage follow.
+- No build, dev server, deployment, browser journey, or production smoke was
+  run for this slice.
+
+## 2026-07-16 v5 interactive-authority checkpoint
+
+- Commit `30ec305` introduces a separate strict v5 interactive LAB_RUN bundle.
+  It binds the frozen compile lineage, released result/verdict/report tuple,
+  configuration, deterministic derived Plan, selected run, and one permitted
+  output; unknown fields and rejected source evidence fail closed.
+- Commit `ce88b9c` adds an independent Python rederivation and exact nested-key
+  policy. The fixed process verifies configuration/source hashes and executes
+  only the allow-listed derived Plan.
+- Commit `ee3c78f` migrates the public Worker route for both released concepts.
+  Compiler outputs and results are frozen under Worker-only authority prefixes;
+  callback verification checks the selected run and never replaces the source
+  result, Evidence Verdict, epistemic report, or session state.
+- Verification: 134 Web/Worker tests, 32 Experiment IR/hosted-runner tests, all
+  111 kernel tests, 13 focused plan/imbalance tests, strict TypeScript, and
+  whitespace checks passed.
+- One initial package-filtered Vitest command used a repository-relative filter
+  incorrectly and found no tests; the same regressions were rerun through the
+  root Vitest config and failed red before implementation, then passed.
+- Active gate: a versioned v5 Patch Plan bundle/callback tied to the uploaded
+  artifact and passed fixed transfer, followed by Proof Capsule v2.
 - No build, dev server, deployment, browser journey, or production smoke was
   run for this slice.

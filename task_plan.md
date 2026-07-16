@@ -10,9 +10,9 @@ authority, replay compatibility, fixed kernels, or existing verifiers.
 
 ## Current phase
 
-Phases 8–9 — the completed v5 result, browser belief, and deterministic-transfer
-authority now pass for both hosted ML Subject Packs; migrate interactive,
-patch, and proof stages next (`in_progress`). The current public deployment
+Phases 8–9 — the completed v5 result, browser belief, deterministic-transfer,
+and interactive authority now pass for both hosted ML Subject Packs; migrate
+patch and proof stages next (`in_progress`). The current public deployment
 remains the qualified Experiment Plan v2 path until this compatibility-preserving
 upgrade passes focused tests and a new production smoke.
 
@@ -121,11 +121,13 @@ code, `apps/web/src/App.tsx`, or global CSS.
 - [x] Add tri-state result persistence while preserving v1.
 - [x] Render exact v2 belief authority after refresh and route the released v5
       result through the fixed forecasting transfer evaluator.
+- [x] Bind fixed interactive controls to frozen v5 compile/result authority
+      without replacing the authoritative Evidence Verdict.
 - [ ] Add a signed recurrence/signal Boundary Sweep
       and mutations while preserving v1.
 - **Status:** in progress; compile, fixed execution, and tri-state release are
-  integrated, browser belief/transfer authority passes, and interactive,
-  patch/proof, and Boundary Map stages are not yet released.
+  integrated, browser belief/transfer/interactive authority passes, and
+  patch/proof and Boundary Map stages are not yet released.
 
 ### Phase 9 — class-imbalance integration
 
@@ -135,10 +137,12 @@ code, `apps/web/src/App.tsx`, or global CSS.
       result release.
 - [x] Render exact v2 belief authority after refresh and route the released v5
       result through the fixed manufacturing-defect transfer evaluator.
+- [x] Bind threshold/prevalence controls to the same frozen v5 authority and
+      fixed kernel without a model call.
 - [ ] Add the prevalence/threshold Boundary Sweep and mutations.
 - **Status:** in progress; the versioned compile, fixed run, and end-to-end
-  result release plus browser belief/transfer authority now pass for the pack.
-  Interactive, patch/proof, and Boundary stages remain pending.
+  result release plus browser belief/transfer/interactive authority now pass
+  for the pack. Patch/proof and Boundary stages remain pending.
 
 ### Phase 10 — Boundary Map engine
 
