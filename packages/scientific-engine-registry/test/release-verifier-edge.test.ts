@@ -58,13 +58,21 @@ describe("scientific engine release verifier edge cases", () => {
   });
 
   it("rejects stale source hashes nested inside internal integrity evidence", async () => {
+    const snapshot = await loadScientificEngineSnapshot(repositoryRoot);
+    const authorityRecord = snapshot.evidenceCatalog.records.find((candidate) =>
+      candidate.id.startsWith("internal-oracle-integrity-"),
+    );
+    if (authorityRecord === undefined) {
+      throw new Error("scientific engine evidence is missing internal oracle authority");
+    }
+
     const root = await createTemporaryRoot();
     const evidencePath = join(
       root,
       "scientific-engines",
       "fixtures",
       "validation",
-      "internal-oracle-integrity-v1.json",
+      `${authorityRecord.id}.json`,
     );
     const sourcePath = join(root, "services", "kernel", "oracle.py");
     await mkdir(resolve(evidencePath, ".."), { recursive: true });
@@ -72,8 +80,8 @@ describe("scientific engine release verifier edge cases", () => {
     await writeFile(sourcePath, "def verify():\n    return True\n", "utf8");
     const evidence = `${JSON.stringify(
       {
-        schemaVersion: "1",
-        evidenceId: "internal-oracle-integrity-v1",
+        schemaVersion: "2",
+        evidenceId: authorityRecord.id,
         kind: "integrity",
         files: {
           "services/kernel/oracle.py": "0".repeat(64),
@@ -84,11 +92,13 @@ describe("scientific engine release verifier edge cases", () => {
     )}\n`;
     await writeFile(evidencePath, evidence, "utf8");
 
-    const snapshot = await loadScientificEngineSnapshot(repositoryRoot);
     const tampered = structuredClone(snapshot);
     const record = tampered.evidenceCatalog.records.find(
-      (candidate) => candidate.id === "internal-oracle-integrity-v1",
-    )!;
+      (candidate) => candidate.id === authorityRecord.id,
+    );
+    if (record === undefined) {
+      throw new Error("scientific engine evidence lost internal oracle authority");
+    }
     record.path = relative(root, evidencePath);
     record.sha256 = createHash("sha256").update(evidence).digest("hex");
 
