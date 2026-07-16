@@ -3,6 +3,7 @@ import {
   AllowedVisualizationSchema,
   ArtifactManifestSchema,
   BeliefSpecV2Schema,
+  BoundaryObservableIdSchema,
   EvidenceVerdictSchema,
   ExperimentPlanV2Schema,
   FixedOperationIdSchema,
@@ -927,6 +928,181 @@ export type RunnerLabInteractiveRunBundleV5 = z.infer<
   typeof RunnerLabInteractiveRunBundleV5Schema
 >;
 
+const RunnerBoundarySweepRequestV5Schema = z
+  .object({
+    sweepId: TokenId,
+    axisIds: z.tuple([TokenId, TokenId]).readonly(),
+    gridPresetId: TokenId,
+    observableId: BoundaryObservableIdSchema,
+    maxCells: z.number().int().positive().max(2_500),
+  })
+  .strict()
+  .superRefine((request, context) => {
+    if (request.axisIds[0] === request.axisIds[1]) {
+      context.addIssue({
+        code: "custom",
+        message: "Boundary Map axes must be unique",
+        path: ["axisIds", 1],
+      });
+    }
+  });
+
+export const RunnerBoundaryMapBundleV5Schema = z
+  .object({
+    schemaVersion: z.literal("5"),
+    kind: z.literal("LAB_RUN"),
+    purpose: z.literal("BOUNDARY"),
+    jobId: NonEmptyString,
+    sessionId: NonEmptyString,
+    stateVersion: z.number().int().positive(),
+    artifactManifestHash: Sha256,
+    fixture: z
+      .object({
+        id: z.enum(["public-leakage-v1", "public-imbalance-v1"]),
+        version: TokenId,
+        contentSha256: Sha256,
+      })
+      .strict(),
+    conceptPackVersion: NonEmptyString,
+    selectedExperimentIr: ExperimentIRV5Schema,
+    selectedExperimentIrHash: Sha256,
+    releaseAuthority: z
+      .object({
+        authoritativeResultHash: Sha256,
+        evidenceVerdict: EvidenceVerdictSchema,
+        evidenceVerdictHash: Sha256,
+        epistemicReportHash: Sha256,
+      })
+      .strict(),
+    boundaryRequest: RunnerBoundarySweepRequestV5Schema,
+    seed: z.number().int().nonnegative(),
+    resultOutput: z
+      .object({
+        path: z.literal("boundary-map.json"),
+        schemaVersion: z.literal("1"),
+        lineage: z
+          .object({
+            artifactManifestHash: Sha256,
+            experimentIrHash: Sha256,
+            authoritativeResultHash: Sha256,
+            evidenceVerdictHash: Sha256,
+          })
+          .strict(),
+      })
+      .strict(),
+    permittedOutputs: z.tuple([z.literal("boundary-map.json")]).readonly(),
+  })
+  .strict()
+  .superRefine((bundle, context) => {
+    const issue = (message: string, path: PropertyKey[]) =>
+      context.addIssue({ code: "custom", message, path });
+    const ir = bundle.selectedExperimentIr;
+    const verdict = bundle.releaseAuthority.evidenceVerdict;
+
+    if (
+      bundle.sessionId !== ir.sessionId ||
+      bundle.artifactManifestHash !== ir.artifactManifestHash
+    ) {
+      issue(
+        "Boundary Map session or Artifact Manifest lineage does not match",
+        ["selectedExperimentIr"],
+      );
+    }
+    if (bundle.conceptPackVersion !== ir.conceptPackVersion) {
+      issue("Boundary Map Subject Pack version lineage does not match", [
+        "conceptPackVersion",
+      ]);
+    }
+
+    const expectedFixtureId =
+      ir.concept === "entity_leakage"
+        ? "public-leakage-v1"
+        : "public-imbalance-v1";
+    if (bundle.fixture.id !== expectedFixtureId) {
+      issue("Boundary Map fixture does not match the Subject Pack", [
+        "fixture",
+        "id",
+      ]);
+    }
+
+    if (
+      ir.boundarySweep === undefined ||
+      !sameJson(ir.boundarySweep, bundle.boundaryRequest)
+    ) {
+      issue(
+        "Boundary Map request must equal the selected Experiment IR sweep",
+        ["boundaryRequest"],
+      );
+    }
+
+    const boundarySelection = ir.selection;
+    if (boundarySelection.status !== "SELECTED") {
+      issue("Boundary Map execution requires a selected Experiment IR", [
+        "selectedExperimentIr",
+        "selection",
+      ]);
+    } else {
+      const selectedCandidate = ir.candidateExperiments.find(
+        (candidate) => candidate.id === boundarySelection.candidateId,
+      );
+      if (selectedCandidate === undefined) {
+        issue("Boundary Map selected experiment does not resolve", [
+          "selectedExperimentIr",
+          "selection",
+        ]);
+      } else {
+        const runSeeds = [
+          selectedCandidate.baseline.seed,
+          ...selectedCandidate.interventions.map((run) => run.seed),
+        ];
+        if (runSeeds.some((seed) => seed !== bundle.seed)) {
+          issue("Boundary Map seed must match every selected fixed run", [
+            "seed",
+          ]);
+        }
+      }
+    }
+
+    if (verdict.kind === "REJECTED") {
+      issue("A rejected experiment cannot authorize a Boundary Map", [
+        "releaseAuthority",
+        "evidenceVerdict",
+      ]);
+    } else {
+      if (
+        verdict.resultHash !== bundle.releaseAuthority.authoritativeResultHash
+      ) {
+        issue("Boundary Map result authority does not match its verdict", [
+          "releaseAuthority",
+          "authoritativeResultHash",
+        ]);
+      }
+      if (verdict.irHash !== bundle.selectedExperimentIrHash) {
+        issue(
+          "Boundary Map Experiment IR authority does not match its verdict",
+          ["selectedExperimentIrHash"],
+        );
+      }
+    }
+
+    const expectedLineage = {
+      artifactManifestHash: bundle.artifactManifestHash,
+      experimentIrHash: bundle.selectedExperimentIrHash,
+      authoritativeResultHash: bundle.releaseAuthority.authoritativeResultHash,
+      evidenceVerdictHash: bundle.releaseAuthority.evidenceVerdictHash,
+    };
+    if (!sameJson(bundle.resultOutput.lineage, expectedLineage)) {
+      issue("Boundary Map output lineage does not match its frozen authority", [
+        "resultOutput",
+        "lineage",
+      ]);
+    }
+  });
+
+export type RunnerBoundaryMapBundleV5 = z.infer<
+  typeof RunnerBoundaryMapBundleV5Schema
+>;
+
 export const RunnerPatchCompileBundleV5Schema = z
   .object({
     schemaVersion: z.literal("5"),
@@ -1202,6 +1378,7 @@ export const RunnerJobInputBundleV5Schema = z.union([
   RunnerLabCompileBundleV5Schema,
   RunnerLabRunBundleV5Schema,
   RunnerLabInteractiveRunBundleV5Schema,
+  RunnerBoundaryMapBundleV5Schema,
   RunnerPatchCompileBundleV5Schema,
 ]);
 
@@ -1214,6 +1391,7 @@ export const VersionedRunnerJobInputBundleSchema = z.union([
   RunnerLabCompileBundleV5Schema,
   RunnerLabRunBundleV5Schema,
   RunnerLabInteractiveRunBundleV5Schema,
+  RunnerBoundaryMapBundleV5Schema,
   RunnerPatchCompileBundleV5Schema,
 ]);
 

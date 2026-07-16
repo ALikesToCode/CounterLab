@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   deriveInteractivePlanV5,
+  RunnerBoundaryMapBundleV5Schema,
   RunnerLabCompileBundleV5Schema,
   RunnerLabInteractiveRunBundleV5Schema,
   RunnerJobInputBundleV5Schema,
@@ -435,6 +436,51 @@ function interactiveLabRunBundleV5() {
       authorityHash: configurationHash,
     },
     permittedOutputs: ["verified-result.json" as const],
+  };
+}
+
+function boundaryMapBundleV5() {
+  const interactive = interactiveLabRunBundleV5();
+  const boundaryRequest = {
+    sweepId: "leakage-recurrence-boundary-v1",
+    axisIds: ["test_fraction", "observations_per_entity"],
+    gridPresetId: "leakage-recurrence-grid-v1",
+    observableId: "optimism_gap" as const,
+    maxCells: 25,
+  };
+  const selectedExperimentIr = {
+    ...interactive.selectedExperimentIr,
+    boundarySweep: boundaryRequest,
+  };
+
+  return {
+    schemaVersion: "5" as const,
+    kind: "LAB_RUN" as const,
+    purpose: "BOUNDARY" as const,
+    jobId: "runner_job_boundary_v5_1",
+    sessionId: interactive.sessionId,
+    stateVersion: 16,
+    artifactManifestHash: interactive.artifactManifestHash,
+    fixture: interactive.fixture,
+    conceptPackVersion: selectedExperimentIr.conceptPackVersion,
+    selectedExperimentIr,
+    selectedExperimentIrHash:
+      interactive.compileAuthority.selectedExperimentIrHash,
+    releaseAuthority: interactive.releaseAuthority,
+    boundaryRequest,
+    seed: selectedExperimentIr.candidateExperiments[0]!.baseline.seed,
+    resultOutput: {
+      path: "boundary-map.json" as const,
+      schemaVersion: "1" as const,
+      lineage: {
+        artifactManifestHash: interactive.artifactManifestHash,
+        experimentIrHash: interactive.compileAuthority.selectedExperimentIrHash,
+        authoritativeResultHash:
+          interactive.releaseAuthority.authoritativeResultHash,
+        evidenceVerdictHash: interactive.releaseAuthority.evidenceVerdictHash,
+      },
+    },
+    permittedOutputs: ["boundary-map.json" as const],
   };
 }
 
@@ -906,6 +952,126 @@ describe("Runner interactive LAB_RUN bundle v5", () => {
       RunnerLabInteractiveRunBundleV5Schema.safeParse({
         ...source,
         shellCommand: "python arbitrary.py",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("Runner Boundary Map LAB_RUN bundle v5", () => {
+  it("accepts an exact fixed sweep bound to released experiment authority", () => {
+    const source = boundaryMapBundleV5();
+    const parsed = RunnerBoundaryMapBundleV5Schema.safeParse(source);
+    const versioned = VersionedRunnerJobInputBundleSchema.safeParse(source);
+
+    expect(parsed.success).toBe(true);
+    expect(versioned.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data).toMatchObject({
+      schemaVersion: "5",
+      kind: "LAB_RUN",
+      purpose: "BOUNDARY",
+      seed: 1729,
+      resultOutput: {
+        path: "boundary-map.json",
+        schemaVersion: "1",
+      },
+      permittedOutputs: ["boundary-map.json"],
+    });
+  });
+
+  it("rejects missing or drifted Boundary Sweep authority", () => {
+    const source = boundaryMapBundleV5();
+    expect(
+      RunnerBoundaryMapBundleV5Schema.safeParse({
+        ...source,
+        selectedExperimentIr: {
+          ...source.selectedExperimentIr,
+          boundarySweep: undefined,
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      RunnerBoundaryMapBundleV5Schema.safeParse({
+        ...source,
+        boundaryRequest: {
+          ...source.boundaryRequest,
+          axisIds: ["observations_per_entity", "test_fraction"],
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      RunnerBoundaryMapBundleV5Schema.safeParse({
+        ...source,
+        boundaryRequest: {
+          ...source.boundaryRequest,
+          maxCells: 24,
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects result, verdict, concept-pack, fixture, and seed drift", () => {
+    const source = boundaryMapBundleV5();
+    const rejectedVerdict = {
+      schemaVersion: "1" as const,
+      kind: "REJECTED" as const,
+      findingIds: ["finding-1"],
+      resultReleased: false as const,
+      irHash: source.selectedExperimentIrHash,
+      technicalReportHash: digest("8"),
+      verifierVersion: "epistemic-verifier-v1",
+    };
+
+    for (const mutation of [
+      {
+        ...source,
+        releaseAuthority: {
+          ...source.releaseAuthority,
+          authoritativeResultHash: digest("f"),
+        },
+      },
+      {
+        ...source,
+        releaseAuthority: {
+          ...source.releaseAuthority,
+          evidenceVerdict: rejectedVerdict,
+        },
+      },
+      { ...source, conceptPackVersion: "different-pack-version" },
+      {
+        ...source,
+        fixture: { ...source.fixture, id: "public-imbalance-v1" as const },
+      },
+      { ...source, seed: source.seed + 1 },
+      {
+        ...source,
+        resultOutput: {
+          ...source.resultOutput,
+          lineage: {
+            ...source.resultOutput.lineage,
+            evidenceVerdictHash: digest("f"),
+          },
+        },
+      },
+    ]) {
+      expect(RunnerBoundaryMapBundleV5Schema.safeParse(mutation).success).toBe(
+        false,
+      );
+    }
+  });
+
+  it("rejects unknown executable fields and any output beyond the map", () => {
+    const source = boundaryMapBundleV5();
+    expect(
+      RunnerBoundaryMapBundleV5Schema.safeParse({
+        ...source,
+        command: "python arbitrary.py",
+      }).success,
+    ).toBe(false);
+    expect(
+      RunnerBoundaryMapBundleV5Schema.safeParse({
+        ...source,
+        permittedOutputs: ["boundary-map.json", "raw-rows.json"],
       }).success,
     ).toBe(false);
   });
