@@ -30,6 +30,7 @@ import {
   RunnerScientificCandidateV5Schema,
   VersionedRunnerJobInputBundleSchema,
   type RunnerLabCompileBundleV5,
+  type RunnerLabRunBundleV5,
   type RunnerScientificCandidateV5,
   type VersionedRunnerJobInputBundle,
 } from "@counterlab/experiment-ir";
@@ -90,7 +91,7 @@ export interface RunnerControlPlane {
 
 export interface FixedKernelExecutor {
   run(
-    bundle: RunnerLabRunBundle,
+    bundle: RunnerLabRunBundle | RunnerLabRunBundleV5,
     workspace: string,
     signal?: AbortSignal,
   ): Promise<{ body: string; durationMs: number }>;
@@ -265,46 +266,6 @@ export class HostedRunnerJobProcessor {
       cursor = await this.emit(jobId, cursor, { kind: "job.started" }, signal);
 
       const generationDirectory = await this.prepareWorkspace(jobId);
-      if (bundle.schemaVersion === "5") {
-        const scientificCompiler = this.options.scientificCompiler;
-        if (scientificCompiler === undefined) {
-          throw new RunnerProcessingError(
-            "RUNNER_V5_NOT_ENABLED",
-            "The scientific-method runner authority is not enabled for this deployment.",
-            false,
-          );
-        }
-        const compiled = await this.compileScientificMethod(
-          jobId,
-          cursor,
-          bundle,
-          generationDirectory,
-          scientificCompiler,
-          operationalMetrics,
-          signal,
-        );
-        cursor = compiled.cursor;
-        outputHashes = compiled.outputHashes;
-        await this.authorityCall(signal, () =>
-          this.options.controlPlane.callback(
-            RunnerCallbackSchema.parse({
-              schemaVersion: "1",
-              callbackId: this.id("runner_callback"),
-              idempotencyKey: `${jobId}:verified:${outputHashes.join(":")}`,
-              jobId,
-              stateVersion,
-              status: "VERIFIED",
-              outputHashes,
-              finalEventCursor: cursor,
-              operationalMetrics,
-              occurredAt: this.now().toISOString(),
-            }),
-            signal,
-          ),
-        );
-        return;
-      }
-
       if (bundle.kind === "LAB_RUN") {
         const fixedKernel = this.options.fixedKernel;
         if (fixedKernel === undefined) {
@@ -361,15 +322,17 @@ export class HostedRunnerJobProcessor {
           },
           signal,
         );
-        cursor = await this.emit(
-          jobId,
-          cursor,
-          {
-            kind: "result.ready",
-            resultHash: result.resultHash,
-          },
-          signal,
-        );
+        if (bundle.schemaVersion !== "5") {
+          cursor = await this.emit(
+            jobId,
+            cursor,
+            {
+              kind: "result.ready",
+              resultHash: result.resultHash,
+            },
+            signal,
+          );
+        }
         await this.authorityCall(signal, () =>
           this.options.controlPlane.callback(
             RunnerCallbackSchema.parse({
@@ -389,6 +352,47 @@ export class HostedRunnerJobProcessor {
         );
         return;
       }
+
+      if (bundle.schemaVersion === "5") {
+        const scientificCompiler = this.options.scientificCompiler;
+        if (scientificCompiler === undefined) {
+          throw new RunnerProcessingError(
+            "RUNNER_V5_NOT_ENABLED",
+            "The scientific-method runner authority is not enabled for this deployment.",
+            false,
+          );
+        }
+        const compiled = await this.compileScientificMethod(
+          jobId,
+          cursor,
+          bundle,
+          generationDirectory,
+          scientificCompiler,
+          operationalMetrics,
+          signal,
+        );
+        cursor = compiled.cursor;
+        outputHashes = compiled.outputHashes;
+        await this.authorityCall(signal, () =>
+          this.options.controlPlane.callback(
+            RunnerCallbackSchema.parse({
+              schemaVersion: "1",
+              callbackId: this.id("runner_callback"),
+              idempotencyKey: `${jobId}:verified:${outputHashes.join(":")}`,
+              jobId,
+              stateVersion,
+              status: "VERIFIED",
+              outputHashes,
+              finalEventCursor: cursor,
+              operationalMetrics,
+              occurredAt: this.now().toISOString(),
+            }),
+            signal,
+          ),
+        );
+        return;
+      }
+
       if (bundle.kind === "PATCH_COMPILE") {
         const fixedPatch = this.options.fixedPatch;
         if (fixedPatch === undefined) {

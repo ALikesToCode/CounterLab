@@ -333,8 +333,7 @@ function labRunBundleV5() {
         "lab-scene.json": digest("5"),
         "public-rationale.md": digest("6"),
       },
-      rawExperimentIrCanonicalHash:
-        expectedHashes.rawExperimentIrCanonical,
+      rawExperimentIrCanonicalHash: expectedHashes.rawExperimentIrCanonical,
       scientificVerifierVersion: "scientific-candidate-verifier-v1" as const,
       candidateVerificationReportHash:
         expectedHashes.candidateVerificationReport,
@@ -466,8 +465,11 @@ describe("Runner LAB_COMPILE bundle v5", () => {
 describe("Runner LAB_RUN bundle v5", () => {
   it("accepts one fully lineage-bound selected scientific run", () => {
     const parsed = RunnerJobInputBundleV5Schema.safeParse(labRunBundleV5());
+    const versioned =
+      VersionedRunnerJobInputBundleSchema.safeParse(labRunBundleV5());
 
     expect(parsed.success).toBe(true);
+    expect(versioned.success).toBe(true);
     if (!parsed.success) return;
     expect(parsed.data).toMatchObject({
       schemaVersion: "5",
@@ -596,8 +598,7 @@ describe("Runner LAB_RUN bundle v5", () => {
         ...source,
         expectedHashes: {
           ...source.expectedHashes,
-          rawExperimentIrCanonical:
-            source.expectedHashes.selectedExperimentIr,
+          rawExperimentIrCanonical: source.expectedHashes.selectedExperimentIr,
         },
         provenance: {
           ...source.provenance,

@@ -4,7 +4,7 @@ from copy import deepcopy
 
 import pytest
 
-from counterlab_kernel.canonical import sha256_json
+from counterlab_kernel.canonical import sha256_json, sha256_json_browser
 from counterlab_kernel.fixture import generate_leakage_fixture
 from counterlab_kernel.plan import (
     ExperimentPlanValidationError,
@@ -205,3 +205,245 @@ def test_hosted_lab_run_binds_plan_manifest_claim_and_fixture() -> None:
     tampered["experimentPlanHash"] = "0" * 64
     with pytest.raises(HostedLabRunError, match="plan hash"):
         execute_hosted_lab_run(tampered)
+
+
+def test_v5_hosted_lab_run_validates_selected_ir_and_fixed_fixture_authority() -> None:
+    projected_plan = plan()
+    projected_plan["changedVariables"] = ["split_boundary", "identity_feature"]
+    artifact_manifest = manifest()
+    candidate_id = "group-holdout-plus-ablation"
+    belief_spec = {
+        "schemaVersion": "2",
+        "id": projected_plan["beliefTestId"],
+        "concept": "entity_leakage",
+        "claim": CLAIM,
+        "evidenceRefs": projected_plan["evidenceRefs"],
+        "hypotheses": [
+            {
+                "id": "current",
+                "statement": "The row score generalizes to unseen customers.",
+                "conditions": ["The deployment unit is a customer."],
+                "nonClaims": ["This does not prove every future population."],
+                "evidence": projected_plan["evidenceRefs"],
+                "supportedCandidateExperimentIds": [candidate_id],
+            },
+            {
+                "id": "competing",
+                "statement": "Repeated identity inflates the row score.",
+                "conditions": ["Customer identity repeats across rows."],
+                "nonClaims": ["This does not prove every future population."],
+                "evidence": projected_plan["evidenceRefs"],
+                "supportedCandidateExperimentIds": [candidate_id],
+            },
+        ],
+        "alternatives": [],
+        "uncertainty": 0.15,
+        "supportState": "SUPPORTED",
+        "learnerDecision": "CONFIRMED",
+    }
+    belief_spec_hash = sha256_json_browser(belief_spec)
+    prediction_base = {
+        "schemaVersion": "1",
+        "id": "prediction_live_1",
+        "sessionId": projected_plan["sessionId"],
+        "beliefTestId": belief_spec["id"],
+        "choice": "The row score remains high.",
+        "confidence": 72,
+        "committedAt": "2026-07-15T00:00:00.000Z",
+    }
+    prediction = {
+        **prediction_base,
+        "immutableHash": sha256_json_browser(prediction_base),
+    }
+    fixed_selection = {
+        "eligibleCandidateIds": [candidate_id],
+        "rejectedCandidates": [],
+        "selectedCandidateId": candidate_id,
+        "minimumSeparation": 0.82,
+        "requiredSeparation": 0.4,
+        "complexityCost": 5,
+        "normalizedScore": 0.8,
+        "scorerVersion": "experiment-scorer-v1",
+    }
+    selected_ir = {
+        "schemaVersion": "5",
+        "irId": "ir-live-1",
+        "executionPlanId": projected_plan["planId"],
+        "sessionId": projected_plan["sessionId"],
+        "concept": "entity_leakage",
+        "conceptPackVersion": projected_plan["conceptPackVersion"],
+        "artifactManifestHash": projected_plan["artifactManifestHash"],
+        "beliefSpecId": belief_spec["id"],
+        "beliefSpecHash": belief_spec_hash,
+        "evidenceRefs": projected_plan["evidenceRefs"],
+        "hypotheses": [
+            {
+                "id": "current",
+                "statement": belief_spec["hypotheses"][0]["statement"],  # type: ignore[index]
+                "conditions": belief_spec["hypotheses"][0]["conditions"],  # type: ignore[index]
+                "nonClaims": belief_spec["hypotheses"][0]["nonClaims"],  # type: ignore[index]
+                "predictedPattern": {
+                    "patternId": "leakage.small-gap",
+                    "description": projected_plan["expectedPatterns"][0]["qualitativeOutcome"],  # type: ignore[index]
+                },
+            },
+            {
+                "id": "competing",
+                "statement": belief_spec["hypotheses"][1]["statement"],  # type: ignore[index]
+                "conditions": belief_spec["hypotheses"][1]["conditions"],  # type: ignore[index]
+                "nonClaims": belief_spec["hypotheses"][1]["nonClaims"],  # type: ignore[index]
+                "predictedPattern": {
+                    "patternId": "leakage.material-gap",
+                    "description": projected_plan["expectedPatterns"][1]["qualitativeOutcome"],  # type: ignore[index]
+                },
+            },
+        ],
+        "candidateExperiments": [
+            {
+                "id": candidate_id,
+                "title": "Hold out complete customers",
+                "operationIds": [
+                    "leakage.random_row_split",
+                    "leakage.group_holdout",
+                    "leakage.identity_ablation",
+                ],
+                "baseline": projected_plan["baseline"],
+                "interventions": projected_plan["interventions"],
+                "heldConstantIds": [
+                    f"control.{value}"
+                    for value in projected_plan["controlledVariables"]  # type: ignore[union-attr]
+                ],
+                "changedVariableIds": [
+                    f"change.{value}"
+                    for value in projected_plan["changedVariables"]  # type: ignore[union-attr]
+                ],
+                "observableIds": projected_plan["metrics"],
+                "hypothesisPatterns": [
+                    {
+                        "hypothesisId": "current",
+                        "patternId": "leakage.small-gap",
+                    },
+                    {
+                        "hypothesisId": "competing",
+                        "patternId": "leakage.material-gap",
+                    },
+                ],
+                "inconclusiveConditionIds": ["gap-within-tolerance"],
+                "complexityCost": 5,
+                "discriminatesBecause": projected_plan["discriminatesBecause"],
+            }
+        ],
+        "selection": {
+            "status": "SELECTED",
+            "candidateId": candidate_id,
+            "eligibleCandidateIds": fixed_selection["eligibleCandidateIds"],
+            "rejectedCandidates": fixed_selection["rejectedCandidates"],
+            "minimumSeparation": fixed_selection["minimumSeparation"],
+            "requiredSeparation": fixed_selection["requiredSeparation"],
+            "complexityCost": fixed_selection["complexityCost"],
+            "normalizedScore": fixed_selection["normalizedScore"],
+            "scorerVersion": fixed_selection["scorerVersion"],
+        },
+        "visualizations": projected_plan["visualizations"],
+        "inconclusiveConditions": [
+            {
+                "id": "gap-within-tolerance",
+                "description": "The observed gap is not decisive.",
+            }
+        ],
+        "transfer": {
+            "taskId": "forecast-future-leakage-v1",
+            "changedSurface": "Time-ordered forecasting",
+            "requiredActionIds": ["time_ordered_holdout"],
+            "nonClaims": ["This transfer does not certify mastery."],
+        },
+        "nonClaims": projected_plan["nonClaims"],
+        "provenance": {
+            "kind": "codex",
+            "generatorId": "codex-app-server-stdio-v1",
+            "promptHash": "1" * 64,
+            "inputHashes": ["2" * 64],
+        },
+        "limitations": ["This result is scoped to the fixed fixture."],
+        "resourceLimits": projected_plan["resourceLimits"],
+    }
+    fixture = {
+        "id": "public-leakage-v1",
+        "version": "leakage-fixture-v1",
+        "contentSha256": (
+            "5c482f39e4e948a92dab61bf9c9f5c6577fbe9fc688fd597c9fefd785ee1be70"
+        ),
+    }
+    expected_hashes = {
+        "artifactManifest": sha256_json_browser(artifact_manifest),
+        "beliefSpec": belief_spec_hash,
+        "prediction": prediction["immutableHash"],
+        "fixtureDescriptor": sha256_json_browser(fixture),
+        "compileInputBundle": "3" * 64,
+        "rawExperimentIrFile": "4" * 64,
+        "rawExperimentIrCanonical": "5" * 64,
+        "candidateVerificationReport": "6" * 64,
+        "experimentSelection": sha256_json_browser(fixed_selection),
+        "selectedExperimentIr": sha256_json_browser(selected_ir),
+        "projectedPlan": sha256_json_browser(projected_plan),
+    }
+    bundle = {
+        "schemaVersion": "5",
+        "kind": "LAB_RUN",
+        "purpose": "AUTHORITATIVE",
+        "jobId": "job_run_v5_1",
+        "sessionId": projected_plan["sessionId"],
+        "stateVersion": 8,
+        "artifactManifestHash": expected_hashes["artifactManifest"],
+        "approvedBeliefSpec": belief_spec,
+        "beliefSpecHash": belief_spec_hash,
+        "prediction": prediction,
+        "artifactManifest": artifact_manifest,
+        "fixture": fixture,
+        "selectedExperimentIr": selected_ir,
+        "selectedExperimentIrHash": expected_hashes["selectedExperimentIr"],
+        "fixedSelection": fixed_selection,
+        "projectedPlan": projected_plan,
+        "expectedHashes": expected_hashes,
+        "provenance": {
+            "compileJobId": "compile_job_v5_1",
+            "compileInputBundleHash": expected_hashes["compileInputBundle"],
+            "compilerOutputFileHashes": {
+                "discrimination-contract.json": "7" * 64,
+                "experiment-ir.json": expected_hashes["rawExperimentIrFile"],
+                "lab-scene.json": "8" * 64,
+                "public-rationale.md": "9" * 64,
+            },
+            "rawExperimentIrCanonicalHash": expected_hashes[
+                "rawExperimentIrCanonical"
+            ],
+            "scientificVerifierVersion": "scientific-candidate-verifier-v1",
+            "candidateVerificationReportHash": expected_hashes[
+                "candidateVerificationReport"
+            ],
+            "scorerVersion": "experiment-scorer-v1",
+            "projectionAdapterVersion": "experiment-ir-v5-to-plan-v2-v1",
+        },
+        "resultOutput": {
+            "path": "verified-result.json",
+            "schemaVersion": "2",
+            "authoritativeInputHashes": expected_hashes,
+        },
+        "permittedOutputs": ["verified-result.json"],
+    }
+
+    result = execute_hosted_lab_run(bundle)
+
+    assert result["schemaVersion"] == "2"
+    assert result["planId"] == projected_plan["planId"]
+    assert result["fixture"]["sha256"] == fixture["contentSha256"]  # type: ignore[index]
+
+    tampered = deepcopy(bundle)
+    tampered["selectedExperimentIrHash"] = "0" * 64
+    with pytest.raises(HostedLabRunError, match="selected Experiment IR hash"):
+        execute_hosted_lab_run(tampered)
+
+    executable_ir = deepcopy(bundle)
+    executable_ir["selectedExperimentIr"]["shell"] = "python candidate.py"  # type: ignore[index]
+    with pytest.raises(HostedLabRunError, match="Experiment IR schema"):
+        execute_hosted_lab_run(executable_ir)

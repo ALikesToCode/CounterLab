@@ -32,8 +32,11 @@ import {
 import {
   ExperimentIRV5Schema,
   RunnerLabCompileBundleV5Schema,
+  RunnerLabRunBundleV5Schema,
   hashExperimentIR,
   migrateExperimentPlanV2ToIRV5,
+  projectExperimentIRV5ToPlanV2,
+  type RunnerLabRunBundleV5,
   type RunnerScientificCandidateV5,
   type RunnerLabCompileBundleV5,
   type VersionedRunnerJobInputBundle,
@@ -434,6 +437,105 @@ async function scientificArtifacts() {
   return { discriminationContract, experimentIr, labScene };
 }
 
+async function scientificRunBundleV5(
+  jobId = "runner_job_run_scientific_1",
+): Promise<RunnerLabRunBundleV5> {
+  const compile = scientificBundleV5("compile_job_scientific_1");
+  const rawIr = (await scientificArtifacts()).experimentIr;
+  const candidate = rawIr.candidateExperiments[0]!;
+  const fixedSelection = {
+    eligibleCandidateIds: [candidate.id],
+    rejectedCandidates: [],
+    selectedCandidateId: candidate.id,
+    minimumSeparation: 0.82,
+    requiredSeparation: 0.4,
+    complexityCost: candidate.complexityCost,
+    normalizedScore: 0.8,
+    scorerVersion: "experiment-scorer-v1",
+  };
+  const selectedExperimentIr = ExperimentIRV5Schema.parse({
+    ...rawIr,
+    hypotheses: rawIr.hypotheses.map((hypothesis, index) => ({
+      ...hypothesis,
+      statement: compile.approvedBeliefSpec.hypotheses[index]!.statement,
+      conditions: compile.approvedBeliefSpec.hypotheses[index]!.conditions,
+      nonClaims: compile.approvedBeliefSpec.hypotheses[index]!.nonClaims,
+    })),
+    selection: {
+      status: "SELECTED",
+      candidateId: fixedSelection.selectedCandidateId,
+      eligibleCandidateIds: fixedSelection.eligibleCandidateIds,
+      rejectedCandidates: fixedSelection.rejectedCandidates,
+      minimumSeparation: fixedSelection.minimumSeparation,
+      requiredSeparation: fixedSelection.requiredSeparation,
+      complexityCost: fixedSelection.complexityCost,
+      normalizedScore: fixedSelection.normalizedScore,
+      scorerVersion: fixedSelection.scorerVersion,
+    },
+  });
+  const projectedPlan = projectExperimentIRV5ToPlanV2(selectedExperimentIr);
+  const fixture = {
+    id: "public-leakage-v1" as const,
+    version: "leakage-fixture-v1",
+    contentSha256:
+      "5c482f39e4e948a92dab61bf9c9f5c6577fbe9fc688fd597c9fefd785ee1be70",
+  };
+  const expectedHashes = {
+    artifactManifest: compile.artifactManifestHash,
+    beliefSpec: compile.beliefSpecHash,
+    prediction: compile.prediction.immutableHash,
+    fixtureDescriptor: await hashCanonical(fixture),
+    compileInputBundle: "8".repeat(64),
+    rawExperimentIrFile: "9".repeat(64),
+    rawExperimentIrCanonical: await hashExperimentIR(rawIr),
+    candidateVerificationReport: "a".repeat(64),
+    experimentSelection: await hashCanonical(fixedSelection),
+    selectedExperimentIr: await hashExperimentIR(selectedExperimentIr),
+    projectedPlan: await hashCanonical(projectedPlan),
+  };
+  return RunnerLabRunBundleV5Schema.parse({
+    schemaVersion: "5",
+    kind: "LAB_RUN",
+    purpose: "AUTHORITATIVE",
+    jobId,
+    sessionId: compile.sessionId,
+    stateVersion: 8,
+    artifactManifestHash: compile.artifactManifestHash,
+    approvedBeliefSpec: compile.approvedBeliefSpec,
+    beliefSpecHash: compile.beliefSpecHash,
+    prediction: compile.prediction,
+    artifactManifest: compile.artifactManifest,
+    fixture,
+    selectedExperimentIr,
+    selectedExperimentIrHash: expectedHashes.selectedExperimentIr,
+    fixedSelection,
+    projectedPlan,
+    expectedHashes,
+    provenance: {
+      compileJobId: compile.jobId,
+      compileInputBundleHash: expectedHashes.compileInputBundle,
+      compilerOutputFileHashes: {
+        "discrimination-contract.json": "b".repeat(64),
+        "experiment-ir.json": expectedHashes.rawExperimentIrFile,
+        "lab-scene.json": "c".repeat(64),
+        "public-rationale.md": "d".repeat(64),
+      },
+      rawExperimentIrCanonicalHash: expectedHashes.rawExperimentIrCanonical,
+      scientificVerifierVersion: "scientific-candidate-verifier-v1",
+      candidateVerificationReportHash:
+        expectedHashes.candidateVerificationReport,
+      scorerVersion: fixedSelection.scorerVersion,
+      projectionAdapterVersion: "experiment-ir-v5-to-plan-v2-v1",
+    },
+    resultOutput: {
+      path: "verified-result.json",
+      schemaVersion: "2",
+      authoritativeInputHashes: expectedHashes,
+    },
+    permittedOutputs: ["verified-result.json"],
+  });
+}
+
 class FakeCompiler implements CodexCompiler {
   compileCalls = 0;
   patchCompileCalls = 0;
@@ -717,23 +819,25 @@ class FakeFixedPatch implements FixedPatchExecutor {
 }
 
 class FakeFixedKernel implements FixedKernelExecutor {
-  calls: RunnerLabRunBundle[] = [];
+  calls: Array<RunnerLabRunBundle | RunnerLabRunBundleV5> = [];
 
-  async run(input: RunnerLabRunBundle): Promise<{
+  async run(input: RunnerLabRunBundle | RunnerLabRunBundleV5): Promise<{
     body: string;
     durationMs: number;
   }> {
     this.calls.push(structuredClone(input));
-    const spec = input.experimentPlan.baseline;
+    const plan =
+      input.schemaVersion === "5" ? input.projectedPlan : input.experimentPlan;
+    const spec = plan.baseline;
     return {
       durationMs: 41,
       body: JSON.stringify({
         schemaVersion: "2",
         concept: "entity_leakage",
-        planId: input.experimentPlan.planId,
+        planId: plan.planId,
         sessionId: input.sessionId,
         artifactManifestHash: input.artifactManifestHash,
-        conceptPackVersion: input.experimentPlan.conceptPackVersion,
+        conceptPackVersion: plan.conceptPackVersion,
         fixture: {
           customers: 480,
           rows: 2880,
@@ -1062,6 +1166,49 @@ describe("HostedRunnerJobProcessor", () => {
     expect(controlPlane.callbacks[0]).toMatchObject({
       status: "VERIFIED",
       finalEventCursor: 3,
+      operationalMetrics: { kernelDurationMs: 41 },
+    });
+  });
+
+  it("executes v5 LAB_RUN through the fixed kernel without Codex or an early result event", async () => {
+    const compiler = new FakeCompiler({ schemaVersion: "2" });
+    const scientificCompiler = new FakeScientificCompiler(
+      await scientificArtifacts(),
+    );
+    const kernel = new FakeFixedKernel();
+    const controlPlane = new FakeControlPlane(
+      await scientificRunBundleV5(),
+      [],
+    );
+    const processor = new HostedRunnerJobProcessor({
+      workspaceRoot: await workspace(),
+      compiler,
+      scientificCompiler,
+      fixedKernel: kernel,
+      controlPlane,
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_run_v5`,
+    });
+
+    await processor.run("runner_job_run_scientific_1");
+
+    expect(compiler.compileCalls).toBe(0);
+    expect(scientificCompiler.compileCalls).toHaveLength(0);
+    expect(kernel.calls).toHaveLength(1);
+    expect(kernel.calls[0]).toMatchObject({
+      schemaVersion: "5",
+      kind: "LAB_RUN",
+      projectedPlan: { schemaVersion: "2" },
+    });
+    expect(controlPlane.candidateCalls).toBe(0);
+    expect([...controlPlane.uploads.keys()]).toEqual(["verified-result.json"]);
+    expect(controlPlane.events.map((event) => event.kind)).toEqual([
+      "job.started",
+      "command.completed",
+    ]);
+    expect(controlPlane.callbacks[0]).toMatchObject({
+      status: "VERIFIED",
+      finalEventCursor: 2,
       operationalMetrics: { kernelDurationMs: 41 },
     });
   });

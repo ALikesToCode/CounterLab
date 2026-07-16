@@ -621,6 +621,7 @@ export type RunnerJobInputBundleV5 = z.infer<
 export const VersionedRunnerJobInputBundleSchema = z.union([
   RunnerJobInputBundleSchema,
   RunnerLabCompileBundleV5Schema,
+  RunnerLabRunBundleV5Schema,
 ]);
 
 export type VersionedRunnerJobInputBundle = z.infer<

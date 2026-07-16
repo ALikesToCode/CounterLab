@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 
 import type { RunnerLabRunBundle } from "@counterlab/contracts";
+import type { RunnerLabRunBundleV5 } from "@counterlab/experiment-ir";
 
 import type { FixedKernelExecutor } from "./job-processor.js";
 
@@ -61,7 +62,7 @@ export class PythonFixedKernelExecutor implements FixedKernelExecutor {
   }
 
   async run(
-    bundle: RunnerLabRunBundle,
+    bundle: RunnerLabRunBundle | RunnerLabRunBundleV5,
     workspace: string,
     signal?: AbortSignal,
   ): Promise<{ body: string; durationMs: number }> {
@@ -86,7 +87,11 @@ export class PythonFixedKernelExecutor implements FixedKernelExecutor {
         ],
         {
           cwd: workspace,
-          timeout: bundle.experimentPlan.resourceLimits.wallSeconds * 1_000,
+          timeout:
+            (bundle.schemaVersion === "5"
+              ? bundle.projectedPlan
+              : bundle.experimentPlan
+            ).resourceLimits.wallSeconds * 1_000,
           ...(signal === undefined ? {} : { signal }),
           env: {
             LANG: "C.UTF-8",
