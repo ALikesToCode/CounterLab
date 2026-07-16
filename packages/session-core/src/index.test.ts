@@ -7,9 +7,11 @@ import { migrateBeliefTestV1ToV2 } from "@counterlab/contracts";
 import { verifyEvidenceChain } from "../../proof-bundle/src/index.js";
 
 import {
+  hashCanonical,
   InvalidSessionTransitionError,
   normalizeSessionMode,
   PredictionAlreadyCommittedError,
+  SessionInputError,
   SessionService,
 } from "./index.js";
 import { SqliteSessionRepository } from "./sqlite-repository.js";
@@ -157,6 +159,35 @@ const rejectedVerdict = {
 
 const EPISTEMIC_REPORT_HASH = "9".repeat(64);
 
+async function scientificLineage(beliefSpec: unknown) {
+  return {
+    schemaVersion: "5" as const,
+    status: "VERIFIED" as const,
+    source: "hosted-experiment-ir-v5" as const,
+    jobId: "job-v5-compile-1",
+    inputBundleHash: "2".repeat(64),
+    artifactManifestHash: hostedResultSet.artifactManifestHash,
+    beliefSpecHash: await hashCanonical(beliefSpec),
+    predictionHash: prediction.immutableHash,
+    compilerOutputFileHashes: {
+      "discrimination-contract.json": "3".repeat(64),
+      "experiment-ir.json": "4".repeat(64),
+      "lab-scene.json": "5".repeat(64),
+      "public-rationale.md": "6".repeat(64),
+    },
+    discriminationContractHash: "a".repeat(64),
+    rawExperimentIrCanonicalHash: "b".repeat(64),
+    labSceneHash: "c".repeat(64),
+    candidateVerificationReportHash: "d".repeat(64),
+    scientificVerifierVersion: "scientific-candidate-verifier-v1" as const,
+    selectionHash: "e".repeat(64),
+    selectedExperimentIrHash: supportsVerdict.irHash,
+    projectedPlanHash: "f".repeat(64),
+    scorerVersion: "experiment-scorer-v1",
+    projectionAdapterVersion: "experiment-ir-v5-to-plan-v2-v1" as const,
+  };
+}
+
 const passingTransfer = {
   schemaVersion: "1",
   id: "transfer-1",
@@ -280,11 +311,15 @@ async function throughVerifiedLab(service: SessionService) {
     artifactId: "artifact-1",
     mode: { kind: "live_notebook" },
   });
-  await service.proposeBeliefTest("session-1", beliefTest);
+  await service.proposeBeliefSpecV2(
+    "session-1",
+    migrateBeliefTestV1ToV2(beliefTest),
+  );
   await service.confirmBeliefTest("session-1");
   await service.commitPrediction("session-1", prediction);
   await service.startLabCompilation("session-1");
-  await service.verifyLab("session-1", { verifierRunId: "verify-v5-1" });
+  const beliefSpec = (await service.getSession("session-1")).beliefSpec;
+  await service.verifyLab("session-1", await scientificLineage(beliefSpec));
 }
 
 const temporaryDirectories: string[] = [];
@@ -510,6 +545,90 @@ describe("SessionService state machine", () => {
     expect(
       (await service.getSession("session-1")).verifiedResult,
     ).toBeUndefined();
+    repository.close();
+  });
+
+  it("requires Belief Spec v2 and its exact compile lineage for epistemic release", async () => {
+    const legacy = memoryService();
+    await legacy.service.createSession({
+      id: "session-1",
+      artifactId: "artifact-1",
+      mode: { kind: "live_notebook" },
+    });
+    await legacy.service.proposeBeliefTest("session-1", beliefTest);
+    await legacy.service.confirmBeliefTest("session-1");
+    await legacy.service.commitPrediction("session-1", prediction);
+    await legacy.service.startLabCompilation("session-1");
+    await legacy.service.verifyLab(
+      "session-1",
+      await scientificLineage(migrateBeliefTestV1ToV2(beliefTest)),
+    );
+
+    await expect(
+      legacy.service.recordEpistemicResult("session-1", {
+        result: hostedResultSet,
+        verdict: supportsVerdict,
+        epistemicReportHash: EPISTEMIC_REPORT_HASH,
+      }),
+    ).rejects.toThrow(/Belief Spec v2/i);
+    expect((await legacy.service.getSession("session-1")).state).toBe(
+      "LAB_VERIFIED",
+    );
+    legacy.repository.close();
+
+    const mismatched = memoryService();
+    await throughVerifiedLab(mismatched.service);
+    await expect(
+      mismatched.service.recordEpistemicResult("session-1", {
+        result: {
+          ...hostedResultSet,
+          artifactManifestHash: "0".repeat(64),
+        },
+        verdict: supportsVerdict,
+        epistemicReportHash: EPISTEMIC_REPORT_HASH,
+      }),
+    ).rejects.toThrow(/artifact manifest/i);
+    expect((await mismatched.service.getSession("session-1")).state).toBe(
+      "LAB_VERIFIED",
+    );
+    mismatched.repository.close();
+  });
+
+  it("does not let the legacy result method bypass v5 epistemic authority", async () => {
+    const { service, repository } = memoryService();
+    await throughVerifiedLab(service);
+
+    await expect(
+      service.recordExperimentResult("session-1", resultSet),
+    ).rejects.toThrow(/epistemic/i);
+    expect((await service.getSession("session-1")).state).toBe("LAB_VERIFIED");
+    repository.close();
+  });
+
+  it("locks repair when a valid experiment remains inconclusive", async () => {
+    const { service, repository } = memoryService();
+    await throughVerifiedLab(service);
+    await service.recordEpistemicResult("session-1", {
+      result: hostedResultSet,
+      verdict: inconclusiveVerdict,
+      epistemicReportHash: EPISTEMIC_REPORT_HASH,
+    });
+    await service.recordRevision(
+      "session-1",
+      "This result does not yet distinguish the two explanations.",
+    );
+    await service.startTransfer("session-1");
+    await service.recordTransferResult("session-1", passingTransfer);
+
+    await expect(
+      service.startPatchCompilation("session-1"),
+    ).rejects.toBeInstanceOf(SessionInputError);
+    await expect(service.startPatchCompilation("session-1")).rejects.toThrow(
+      /INCONCLUSIVE/i,
+    );
+    expect((await service.getSession("session-1")).state).toBe(
+      "TRANSFER_PASSED",
+    );
     repository.close();
   });
 

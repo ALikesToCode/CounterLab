@@ -1,10 +1,15 @@
 import {
   assertTransition,
   type EvidenceVerdict,
+  EvidenceVerdictSchema,
   EvidenceEventSchema,
+  HostedExperimentLineageV5Schema,
+  HostedVerifiedResultSetV2Schema,
   type BeliefSpecV2,
   type BeliefTest,
   type EvidenceEvent as ContractEvidenceEvent,
+  type HostedLabLineage,
+  type HostedVerifiedResultSetV2,
   type PatchResult,
   type PredictionContract,
   type ProofBundle,
@@ -124,6 +129,43 @@ export class SessionInputError extends Error {
 
 export type SessionBeliefAuthority = BeliefTest | BeliefSpecV2;
 
+type ReleasableEvidenceVerdict = Exclude<EvidenceVerdict, { kind: "REJECTED" }>;
+type RejectedEvidenceVerdict = Extract<EvidenceVerdict, { kind: "REJECTED" }>;
+type ScientificLineageV5 = Extract<
+  HostedLabLineage,
+  { source: "hosted-experiment-ir-v5" }
+>;
+
+export type SessionEvidenceAuthority =
+  | {
+      protocol: "legacy";
+      verdict: "LEGACY_VERIFIED";
+      concept: BeliefTest["concept"];
+      beliefTest: BeliefTest;
+      result: VerifiedResultSet;
+    }
+  | {
+      protocol: "v5";
+      verdict: "SUPPORTS" | "INCONCLUSIVE";
+      concept: BeliefSpecV2["concept"];
+      beliefSpec: BeliefSpecV2;
+      prediction: PredictionContract;
+      result: HostedVerifiedResultSetV2;
+      evidenceVerdict: ReleasableEvidenceVerdict;
+      epistemicReportHash: string;
+      lineage: ScientificLineageV5;
+    }
+  | {
+      protocol: "v5";
+      verdict: "REJECTED";
+      concept: BeliefSpecV2["concept"];
+      beliefSpec: BeliefSpecV2;
+      prediction: PredictionContract;
+      evidenceVerdict: RejectedEvidenceVerdict;
+      epistemicReportHash: string;
+      lineage: ScientificLineageV5;
+    };
+
 export function getSessionBeliefAuthority(
   session: CounterLabSession,
 ): SessionBeliefAuthority | undefined {
@@ -133,6 +175,201 @@ export function getSessionBeliefAuthority(
     );
   }
   return session.beliefSpec ?? session.beliefTest;
+}
+
+/**
+ * Resolves the evidence that is allowed to drive revision, transfer, and
+ * repair. Persisted aggregates are treated as untrusted: every v5 hash and
+ * authority boundary is checked again before a downstream transition.
+ */
+export async function resolveSessionEvidenceAuthority(
+  session: CounterLabSession,
+): Promise<SessionEvidenceAuthority> {
+  if (session.beliefTest !== undefined && session.beliefSpec !== undefined) {
+    throw new SessionInputError(
+      "Evidence authority mismatch: a session cannot mix Belief Test v1 and Belief Spec v2",
+    );
+  }
+
+  if (session.beliefSpec === undefined) {
+    if (
+      session.evidenceVerdict !== undefined ||
+      session.epistemicReportHash !== undefined ||
+      HostedExperimentLineageV5Schema.safeParse(session.labVerification).success
+    ) {
+      throw new SessionInputError(
+        "Evidence authority mismatch: scientific v5 evidence requires Belief Spec v2",
+      );
+    }
+    if (
+      session.beliefTest === undefined ||
+      session.verifiedResult === undefined
+    ) {
+      throw new SessionInputError(
+        "Evidence authority required before this learning step",
+      );
+    }
+    return {
+      protocol: "legacy",
+      verdict: "LEGACY_VERIFIED",
+      concept: session.beliefTest.concept,
+      beliefTest: session.beliefTest,
+      result: session.verifiedResult,
+    };
+  }
+
+  const beliefSpec = session.beliefSpec;
+  if (
+    beliefSpec.learnerDecision !== "CONFIRMED" &&
+    beliefSpec.learnerDecision !== "ALTERNATIVE_SELECTED"
+  ) {
+    throw new SessionInputError(
+      "Evidence authority mismatch: Belief Spec v2 must be learner-confirmed",
+    );
+  }
+  if (session.prediction === undefined) {
+    throw new SessionInputError(
+      "Evidence authority mismatch: v5 evidence requires an immutable prediction",
+    );
+  }
+  const prediction = session.prediction;
+  if (
+    prediction.sessionId !== session.id ||
+    prediction.beliefTestId !== beliefSpec.id
+  ) {
+    throw new SessionInputError(
+      "Evidence authority mismatch: prediction does not resolve to this Belief Spec v2 session",
+    );
+  }
+
+  const lineage = HostedExperimentLineageV5Schema.safeParse(
+    session.labVerification,
+  );
+  if (!lineage.success) {
+    throw new SessionInputError(
+      "Evidence authority mismatch: verified Experiment IR v5 lineage is required",
+    );
+  }
+  if (lineage.data.beliefSpecHash !== (await hashCanonical(beliefSpec))) {
+    throw new SessionInputError(
+      "Evidence authority mismatch: Belief Spec v2 hash does not match compile lineage",
+    );
+  }
+  if (lineage.data.predictionHash !== prediction.immutableHash) {
+    throw new SessionInputError(
+      "Evidence authority mismatch: Prediction Contract hash does not match compile lineage",
+    );
+  }
+
+  const verdict = EvidenceVerdictSchema.safeParse(session.evidenceVerdict);
+  if (!verdict.success) {
+    throw new SessionInputError(
+      "Evidence authority mismatch: a schema-valid Evidence Verdict is required",
+    );
+  }
+  const epistemicReportHash = requireSha256(
+    session.epistemicReportHash,
+    "epistemicReportHash",
+  );
+  if (verdict.data.irHash !== lineage.data.selectedExperimentIrHash) {
+    throw new SessionInputError(
+      "Evidence authority mismatch: Evidence Verdict IR hash does not match the selected experiment",
+    );
+  }
+
+  if (verdict.data.kind === "REJECTED") {
+    if (session.verifiedResult !== undefined) {
+      throw new SessionInputError(
+        "Evidence authority mismatch: rejected evidence cannot release a result",
+      );
+    }
+    return {
+      protocol: "v5",
+      verdict: "REJECTED",
+      concept: beliefSpec.concept,
+      beliefSpec,
+      prediction,
+      evidenceVerdict: verdict.data,
+      epistemicReportHash,
+      lineage: lineage.data,
+    };
+  }
+
+  const result = HostedVerifiedResultSetV2Schema.safeParse(
+    session.verifiedResult,
+  );
+  if (!result.success) {
+    throw new SessionInputError(
+      "Evidence authority mismatch: a hosted fixed-kernel result is required",
+    );
+  }
+  if (result.data.sessionId !== session.id) {
+    throw new SessionInputError(
+      "Evidence authority mismatch: result session does not match",
+    );
+  }
+  if (result.data.concept !== beliefSpec.concept) {
+    throw new SessionInputError(
+      "Evidence authority mismatch: result concept does not match Belief Spec v2",
+    );
+  }
+  if (result.data.artifactManifestHash !== lineage.data.artifactManifestHash) {
+    throw new SessionInputError(
+      "Evidence authority mismatch: result artifact manifest does not match compile lineage",
+    );
+  }
+  if (verdict.data.resultHash !== result.data.resultHash) {
+    throw new SessionInputError(
+      "Evidence authority mismatch: Evidence Verdict result hash does not match the fixed result",
+    );
+  }
+
+  return {
+    protocol: "v5",
+    verdict: verdict.data.kind,
+    concept: beliefSpec.concept,
+    beliefSpec,
+    prediction,
+    result: result.data,
+    evidenceVerdict: verdict.data,
+    epistemicReportHash,
+    lineage: lineage.data,
+  };
+}
+
+export async function sessionEvidenceInputHashes(
+  authority: SessionEvidenceAuthority,
+): Promise<string[]> {
+  if (authority.protocol === "legacy") {
+    return [
+      authority.result.resultHash,
+      await hashCanonical(authority.beliefTest),
+      await hashCanonical(authority.result),
+    ];
+  }
+  return [
+    ...new Set([
+      authority.lineage.beliefSpecHash,
+      authority.lineage.predictionHash,
+      authority.lineage.selectedExperimentIrHash,
+      authority.evidenceVerdict.technicalReportHash,
+      authority.epistemicReportHash,
+      ...(authority.verdict === "REJECTED"
+        ? []
+        : [authority.result.resultHash]),
+      await hashCanonical(authority.evidenceVerdict),
+      await hashCanonical(authority.lineage),
+    ]),
+  ];
+}
+
+function requireSha256(value: unknown, field: string): string {
+  if (typeof value !== "string" || !/^[a-f0-9]{64}$/u.test(value)) {
+    throw new SessionInputError(
+      `Evidence authority mismatch: ${field} must be a lowercase SHA-256 digest`,
+    );
+  }
+  return value;
 }
 
 export function createSessionAggregate(input: {

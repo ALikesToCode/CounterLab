@@ -19,6 +19,8 @@ import {
   evolveSession,
   getSessionBeliefAuthority,
   hashCanonical,
+  resolveSessionEvidenceAuthority,
+  sessionEvidenceInputHashes,
   type CounterLabSession,
   type EventDraft,
   type EvidenceEvent,
@@ -476,9 +478,15 @@ export class SessionService {
     sessionId: string,
     result: unknown,
   ): Promise<CounterLabSession> {
+    const current = await this.requireSession(sessionId);
+    if (current.beliefSpec !== undefined) {
+      throw new SessionInputError(
+        "Belief Spec v2 sessions require epistemic verification before a result can be released",
+      );
+    }
     const parsed = VerifiedResultSetSchema.parse(result);
-    return this.transition(
-      sessionId,
+    return this.transitionFrom(
+      current,
       "EXPERIMENT_COMPLETED",
       { verifiedResult: parsed },
       {
@@ -519,8 +527,20 @@ export class SessionService {
         "Evidence Verdict result hash must match the verified result",
       );
     }
-    return this.transition(
-      sessionId,
+    const current = await this.requireSession(sessionId);
+    const authority = await resolveSessionEvidenceAuthority({
+      ...current,
+      verifiedResult: result,
+      evidenceVerdict: verdict,
+      epistemicReportHash,
+    });
+    if (authority.protocol !== "v5" || authority.verdict === "REJECTED") {
+      throw new SessionInputError(
+        "recordEpistemicResult requires Belief Spec v2 scientific authority",
+      );
+    }
+    return this.transitionFrom(
+      current,
       "EXPERIMENT_COMPLETED",
       {
         verifiedResult: result,
@@ -574,6 +594,16 @@ export class SessionService {
         "epistemic rejection cannot replace an already released result",
       );
     }
+    const authority = await resolveSessionEvidenceAuthority({
+      ...current,
+      evidenceVerdict: verdict,
+      epistemicReportHash,
+    });
+    if (authority.protocol !== "v5" || authority.verdict !== "REJECTED") {
+      throw new SessionInputError(
+        "recordEpistemicRejection requires rejected Belief Spec v2 authority",
+      );
+    }
     return this.revise(
       current,
       { evidenceVerdict: verdict, epistemicReportHash },
@@ -598,28 +628,44 @@ export class SessionService {
     revision: string,
   ): Promise<CounterLabSession> {
     const cleanRevision = requiredString(revision, "revision");
-    return this.transition(
-      sessionId,
+    const current = await this.requireSession(sessionId);
+    const authority = await resolveSessionEvidenceAuthority(current);
+    if (authority.verdict === "REJECTED") {
+      throw new SessionInputError(
+        "Rejected evidence cannot advance to learner revision",
+      );
+    }
+    return this.transitionFrom(
+      current,
       "REVISION_RECORDED",
       { revision: cleanRevision },
       {
         actor: "learner",
         kind: "revision.recorded",
         payload: { revision: cleanRevision },
+        inputHashes: await sessionEvidenceInputHashes(authority),
         outputHashes: [await hashCanonical(cleanRevision)],
       },
     );
   }
 
   async startTransfer(sessionId: string): Promise<CounterLabSession> {
-    return this.transition(
-      sessionId,
+    const current = await this.requireSession(sessionId);
+    const authority = await resolveSessionEvidenceAuthority(current);
+    if (authority.verdict === "REJECTED") {
+      throw new SessionInputError(
+        "Rejected evidence cannot advance to transfer",
+      );
+    }
+    return this.transitionFrom(
+      current,
       "TRANSFER_IN_PROGRESS",
       {},
       {
         actor: "learner",
         kind: "transfer.started",
         payload: {},
+        inputHashes: await sessionEvidenceInputHashes(authority),
       },
     );
   }
@@ -649,14 +695,25 @@ export class SessionService {
   }
 
   async startPatchCompilation(sessionId: string): Promise<CounterLabSession> {
-    return this.transition(
-      sessionId,
+    const current = await this.requireSession(sessionId);
+    const authority = await resolveSessionEvidenceAuthority(current);
+    if (authority.verdict === "REJECTED") {
+      throw new SessionInputError("Rejected evidence cannot unlock repair");
+    }
+    if (authority.protocol === "v5" && authority.verdict === "INCONCLUSIVE") {
+      throw new SessionInputError(
+        "PATCH_LOCKED_INCONCLUSIVE: INCONCLUSIVE evidence cannot unlock repair",
+      );
+    }
+    return this.transitionFrom(
+      current,
       "PATCH_COMPILING",
       {},
       {
         actor: "codex",
         kind: "patch.compilation_started",
         payload: {},
+        inputHashes: await sessionEvidenceInputHashes(authority),
       },
     );
   }
