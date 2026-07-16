@@ -1,5 +1,20 @@
 # Decisions
 
+## 2026-07-16 — Normalize downstream evidence authority before learner transitions
+
+- Treat a persisted session aggregate as untrusted input whenever revision,
+  transfer, or patch eligibility is evaluated.
+- Resolve one explicit legacy or v5 authority tuple and reject partial, mixed,
+  hash-mismatched, concept-mismatched, or artifact-mismatched combinations.
+- Allow both `SUPPORTS` and `INCONCLUSIVE` evidence to reach deterministic
+  revision and transfer. Only `SUPPORTS` plus a passing transfer may unlock
+  repair; `REJECTED` releases no result.
+- Select the transfer evaluator from the resolved Belief Spec/result concept;
+  never use a fallback concept.
+- Preserve legacy sample/replay behavior as an explicit compatibility branch.
+  V5 interactive, Patch Plan, and Proof Capsule contracts remain separate
+  migrations and must not cast v2 objects into v1 schemas.
+
 ## 2026-07-16 — Make the Worker own v5 result readiness
 
 - A v5 `LAB_RUN` reaches the runner only after the Worker reconstructs and

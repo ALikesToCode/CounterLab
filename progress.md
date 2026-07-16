@@ -330,11 +330,11 @@ async browser journeys, and measured performance.
 
 | Question             | Answer                                                                              |
 | -------------------- | ----------------------------------------------------------------------------------- |
-| Where am I?          | Phase 2 constitution propagation, then scientific-engine governance.                |
-| Where am I going?    | Versioned scientific contracts, scorer, verifier, Boundary Map, and simpler UX.     |
+| Where am I?          | Phases 8–9 downstream v5 authority: interactive first, then patch and proof.         |
+| Where am I going?    | Boundary Map, simpler Theater, optional verified physics, and final requalification. |
 | What's the goal?     | A real public artifact-specific CounterLab Studio with two verified concepts.       |
 | What have I learned? | See `findings.md`.                                                                  |
-| What have I done?    | Closed the exact public authority gate and preserved its signed/hash evidence.       |
+| What have I done?    | Closed v5 compile/result/browser/transfer authority while preserving v1/v2 evidence. |
 
 ## 2026-07-16 v5 fixed-run checkpoint
 
@@ -389,5 +389,27 @@ async browser journeys, and measured performance.
   tests passed; repository and Worker TypeScript plus whitespace checks passed.
 - Next gate: browser client/session mirroring, followed by v5 interactive,
   transfer, patch, Reasoning Diff, and proof lineage.
+- No build, dev server, deployment, browser journey, or production smoke was
+  run for this slice.
+
+## 2026-07-16 v5 browser and deterministic-transfer checkpoint
+
+- Commit `f406f0e` adds a single learner-facing presentation adapter for legacy
+  Belief Test v1 and native Belief Spec v2 authority. Exact claims, hypotheses,
+  evidence, conditions, alternatives, and non-claims now survive refresh, and
+  class-imbalance predictions no longer fall through to leakage wording.
+- Commit `22169c9` treats every persisted session aggregate as untrusted at the
+  downstream boundary. Revision, transfer, and patch gates now re-resolve a
+  normalized authority tuple and reject mixed versions, hash drift, concept or
+  artifact mismatch, rejected evidence, and v5 result-method bypasses.
+- Commit `3dbadd0` dispatches genuine v5 leakage and class-imbalance sessions to
+  their registered fixed transfer evaluators. Valid `INCONCLUSIVE` evidence can
+  continue through revision and transfer for learning, but cannot unlock patch
+  generation.
+- Verification: 132 Web/Worker tests across 18 files, 23 session-core tests,
+  strict repository and Worker TypeScript, and `git diff --check` passed.
+- Active gate: a purpose-separated v5 interactive-run contract that derives
+  every exploration from frozen compile/result authority and never replaces the
+  authoritative verdict. V5 Patch Plan and Proof Capsule lineage follow.
 - No build, dev server, deployment, browser journey, or production smoke was
   run for this slice.

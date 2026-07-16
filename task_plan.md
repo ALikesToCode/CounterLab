@@ -10,11 +10,11 @@ authority, replay compatibility, fixed kernels, or existing verifiers.
 
 ## Current phase
 
-Phases 8–9 — prove the completed v5 result-authority boundary for both hosted
-ML Subject Packs, then migrate downstream learner stages (`in_progress`). The
-current public deployment remains the qualified Experiment Plan v2 path until
-this compatibility-preserving upgrade passes focused tests and a new
-production smoke.
+Phases 8–9 — the completed v5 result, browser belief, and deterministic-transfer
+authority now pass for both hosted ML Subject Packs; migrate interactive,
+patch, and proof stages next (`in_progress`). The current public deployment
+remains the qualified Experiment Plan v2 path until this compatibility-preserving
+upgrade passes focused tests and a new production smoke.
 
 ## Lead-owned critical surfaces
 
@@ -119,11 +119,13 @@ code, `apps/web/src/App.tsx`, or global CSS.
 - [x] Execute the selected group-holdout experiment through the versioned fixed
       Python boundary with exact fixture authority.
 - [x] Add tri-state result persistence while preserving v1.
+- [x] Render exact v2 belief authority after refresh and route the released v5
+      result through the fixed forecasting transfer evaluator.
 - [ ] Add a signed recurrence/signal Boundary Sweep
       and mutations while preserving v1.
 - **Status:** in progress; compile, fixed execution, and tri-state release are
-  integrated, but the Boundary Map and downstream learner stages are not yet
-  released.
+  integrated, browser belief/transfer authority passes, and interactive,
+  patch/proof, and Boundary Map stages are not yet released.
 
 ### Phase 9 — class-imbalance integration
 
@@ -131,10 +133,12 @@ code, `apps/web/src/App.tsx`, or global CSS.
 - [x] Add a direct versioned run-envelope test and Worker tri-state persistence.
 - [x] Reject forged fixture summary, kernel version, and seed authority before
       result release.
+- [x] Render exact v2 belief authority after refresh and route the released v5
+      result through the fixed manufacturing-defect transfer evaluator.
 - [ ] Add the prevalence/threshold Boundary Sweep and mutations.
 - **Status:** in progress; the versioned compile, fixed run, and end-to-end
-  result release now pass for the pack. Boundary and downstream learner stages
-  remain pending.
+  result release plus browser belief/transfer authority now pass for the pack.
+  Interactive, patch/proof, and Boundary stages remain pending.
 
 ### Phase 10 — Boundary Map engine
 

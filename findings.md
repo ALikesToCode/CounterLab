@@ -558,5 +558,10 @@ be stale. Verify them against the current tree before making decisions.
   kernel version, or top-level seed. Rehashed forgeries initially passed the
   technical verifier; frozen per-pack result authority now rejects all five
   tested mutations before result release.
-- The next blocking boundary is the browser/downstream model: its strict session
-  schema and learner routes still assume legacy Belief Test and Plan v2 fields.
+- Browser Belief Spec v2 presentation and fixed transfer routing are now closed.
+  The next blocking boundary is interactive exploration: its route accepts only
+  a legacy Belief Test/Plan v2 bundle, rereads mutable compiler output, and does
+  not distinguish an exploratory run from an authoritative epistemic run.
+- The v5 Patch Plan and portable proof boundaries remain separate blockers. The
+  current schemas require v1 Belief Test authority and must be versioned rather
+  than populated by casting a Belief Spec v2 into a legacy field.
