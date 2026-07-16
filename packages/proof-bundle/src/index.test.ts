@@ -299,6 +299,19 @@ describe("canonical evidence hashing", () => {
     expect(reordered.eventHash).toBe(first.eventHash);
   });
 
+  it("preserves own prototype-named keys without hash collisions", () => {
+    const withPrototypeKey = JSON.parse(
+      '{"safe":1,"__proto__":{"x":1}}',
+    ) as Record<string, unknown>;
+
+    expect(canonicalJson(withPrototypeKey)).toBe(
+      '{"__proto__":{"x":1},"safe":1}',
+    );
+    expect(hashCanonicalJson(withPrototypeKey)).not.toBe(
+      hashCanonicalJson({ safe: 1 }),
+    );
+  });
+
   it("detects payload tampering", () => {
     const events = chain();
     const tampered = structuredClone(events);

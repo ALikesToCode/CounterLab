@@ -67,7 +67,7 @@ function normalizeCanonical(
       throw new TypeError("canonical JSON does not support cyclic values");
     }
     ancestors.add(object);
-    const normalized: Record<string, CanonicalValue> = {};
+    const normalized = Object.create(null) as Record<string, CanonicalValue>;
     for (const key of Object.keys(value as Record<string, unknown>).sort()) {
       normalized[key] = normalizeCanonical(
         (value as Record<string, unknown>)[key],
