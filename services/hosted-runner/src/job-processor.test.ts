@@ -1291,6 +1291,112 @@ describe("HostedRunnerJobProcessor", () => {
     });
   });
 
+  it("reports the authoritative cursor when the final v5 repair is rejected", async () => {
+    const scientificCompiler = new FakeScientificCompiler(
+      await scientificArtifacts(),
+    );
+    const rejection = (nextCursor: number, canRepair: boolean) =>
+      ({
+        status: "REJECTED",
+        canRepair,
+        nextCursor,
+        verifierDurationMs: 5,
+        counterexamples: [
+          {
+            invariant: "NON_DISCRIMINATING_EXPERIMENT",
+            observed: "no eligible candidate",
+            expected: "one scorer-approved candidate",
+            counterexample: "The candidate does not separate both hypotheses.",
+          },
+        ],
+      }) satisfies CandidateDecision;
+    const controlPlane = new FakeControlPlane(scientificBundleV5(), [
+      rejection(7, true),
+      rejection(18, true),
+      rejection(30, false),
+    ]);
+    const processor = new HostedRunnerJobProcessor({
+      workspaceRoot: await workspace(),
+      compiler: new FakeCompiler({ schemaVersion: "2" }),
+      scientificCompiler,
+      controlPlane,
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_v5_exhausted`,
+    });
+
+    await processor.run("runner_job_scientific_1");
+
+    expect(scientificCompiler.repairCalls).toHaveLength(2);
+    expect(controlPlane.candidateInputs).toHaveLength(3);
+    expect(controlPlane.resumes).toBe(2);
+    expect(controlPlane.callbacks).toEqual([
+      expect.objectContaining({
+        status: "REJECTED",
+        finalEventCursor: 30,
+        outputHashes: expect.arrayContaining([
+          "f".repeat(64),
+          "1".repeat(64),
+        ]),
+        error: {
+          code: "SCIENTIFIC_METHOD_VERIFIER_REJECTED",
+          message:
+            "The external scientific-method verifier rejected the candidate after the allowed repairs.",
+          retryable: false,
+        },
+        operationalMetrics: {
+          compilerDurationMs: 157,
+          verifierDurationMs: 15,
+          repairAttempts: 2,
+          kernelDurationMs: 0,
+          patchDurationMs: 0,
+          planTokenUsage: {
+            inputTokens: 0,
+            cachedInputTokens: 0,
+            outputTokens: 0,
+            reasoningOutputTokens: 0,
+            totalTokens: 0,
+          },
+        },
+      }),
+    ]);
+  });
+
+  it("preserves the last appended cursor when a v5 compiler exits mid-stream", async () => {
+    const scientificCompiler = new FakeScientificCompiler(
+      await scientificArtifacts(),
+    );
+    scientificCompiler.compileScientificMethod = async function* () {
+      yield {
+        type: "plan_summary",
+        summary: "Inspect the evidence and compose the fixed operations.",
+      };
+    };
+    const controlPlane = new FakeControlPlane(scientificBundleV5(), []);
+    const processor = new HostedRunnerJobProcessor({
+      workspaceRoot: await workspace(),
+      compiler: new FakeCompiler({ schemaVersion: "2" }),
+      scientificCompiler,
+      controlPlane,
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_v5_midstream`,
+    });
+
+    await processor.run("runner_job_scientific_1");
+
+    expect(controlPlane.events.map((event) => event.kind)).toEqual([
+      "job.started",
+      "plan.summary",
+    ]);
+    expect(controlPlane.callbacks).toEqual([
+      expect.objectContaining({
+        status: "FAILED",
+        finalEventCursor: 2,
+        outputHashes: [],
+        error: expect.objectContaining({ code: "CODEX_PROCESS_EXITED" }),
+      }),
+    ]);
+  });
+
   it("publishes only allow-listed files and completes a verified plan job", async () => {
     const compiler = new FakeCompiler({ schemaVersion: "2" });
     const controlPlane = new FakeControlPlane(bundle(), [verifiedDecision]);

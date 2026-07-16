@@ -137,6 +137,11 @@ type PublicCompilerEventPayload = PublicCompilerEvent extends infer Event
     : never
   : never;
 
+type DelegatedJobProgress = {
+  cursor: number;
+  outputHashes: string[];
+};
+
 function emptyOperationalMetrics(): RunnerOperationalMetrics {
   return {
     compilerDurationMs: 0,
@@ -251,6 +256,7 @@ export class HostedRunnerJobProcessor {
     let bundle: VersionedRunnerJobInputBundle | undefined;
     let cursor = 0;
     let outputHashes: string[] = [];
+    let delegatedProgress: DelegatedJobProgress | undefined;
     const operationalMetrics = emptyOperationalMetrics();
     try {
       throwIfCancelled(signal);
@@ -385,13 +391,14 @@ export class HostedRunnerJobProcessor {
             false,
           );
         }
+        delegatedProgress = { cursor, outputHashes };
         const compiled = await this.compileScientificMethod(
           jobId,
-          cursor,
           bundle,
           generationDirectory,
           scientificCompiler,
           operationalMetrics,
+          delegatedProgress,
           signal,
         );
         cursor = compiled.cursor;
@@ -732,17 +739,22 @@ export class HostedRunnerJobProcessor {
       const publicError = asPublicError(error);
       if (bundle === undefined) throw publicError;
       const failedStateVersion = bundle.stateVersion;
+      const finalCursor = delegatedProgress?.cursor ?? cursor;
+      const finalOutputHashes = delegatedProgress?.outputHashes ?? outputHashes;
+      const terminalStatus = publicError.code.endsWith("_VERIFIER_REJECTED")
+        ? "REJECTED"
+        : "FAILED";
       await this.authorityCall(signal, () =>
         this.options.controlPlane.callback(
           RunnerCallbackSchema.parse({
             schemaVersion: "1",
             callbackId: this.id("runner_callback"),
-            idempotencyKey: `${jobId}:failed:${publicError.code}`,
+            idempotencyKey: `${jobId}:${terminalStatus.toLowerCase()}:${publicError.code}`,
             jobId,
             stateVersion: failedStateVersion,
-            status: "FAILED",
-            outputHashes,
-            finalEventCursor: cursor,
+            status: terminalStatus,
+            outputHashes: finalOutputHashes,
+            finalEventCursor: finalCursor,
             error: {
               code: publicError.code,
               message: publicError.publicMessage,
@@ -759,20 +771,20 @@ export class HostedRunnerJobProcessor {
 
   private async compileScientificMethod(
     jobId: string,
-    initialCursor: number,
     bundle: RunnerLabCompileBundleV5,
     generationDirectory: string,
     compiler: ScientificMethodCompiler,
     operationalMetrics: RunnerOperationalMetrics,
+    progress: DelegatedJobProgress,
     signal?: AbortSignal,
   ): Promise<{ cursor: number; outputHashes: string[] }> {
     const compileInput = this.scientificCompileInput(
       bundle,
       generationDirectory,
     );
-    let cursor = await this.consumeCompilerEvents(
+    progress.cursor = await this.consumeCompilerEvents(
       jobId,
-      initialCursor,
+      progress.cursor,
       compiler.compileScientificMethod(
         compileInput,
         signal === undefined ? {} : { signal },
@@ -780,14 +792,17 @@ export class HostedRunnerJobProcessor {
       SCIENTIFIC_OUTPUTS,
       operationalMetrics,
       signal,
+      progress,
     );
     let uploaded = await this.validateAndUploadScientific(
       jobId,
-      cursor,
+      progress.cursor,
       generationDirectory,
       signal,
+      progress,
     );
-    cursor = uploaded.cursor;
+    progress.cursor = uploaded.cursor;
+    progress.outputHashes = uploaded.outputHashes;
     let decision = await this.authorityCall(signal, () =>
       this.options.controlPlane.candidate(
         RunnerScientificCandidateV5Schema.parse({
@@ -799,7 +814,7 @@ export class HostedRunnerJobProcessor {
       ),
     );
     operationalMetrics.verifierDurationMs += decision.verifierDurationMs;
-    cursor = decision.nextCursor;
+    progress.cursor = decision.nextCursor;
 
     for (
       let repairAttempt = 1;
@@ -814,9 +829,9 @@ export class HostedRunnerJobProcessor {
         );
       }
       operationalMetrics.repairAttempts = repairAttempt;
-      cursor = await this.emit(
+      progress.cursor = await this.emit(
         jobId,
-        cursor,
+        progress.cursor,
         { kind: "repair.started", attempt: repairAttempt },
         signal,
       );
@@ -830,9 +845,9 @@ export class HostedRunnerJobProcessor {
         previousOutputHashes: uploaded.outputHashByPath,
         previousArtifacts: uploaded.artifacts,
       };
-      cursor = await this.consumeCompilerEvents(
+      progress.cursor = await this.consumeCompilerEvents(
         jobId,
-        cursor,
+        progress.cursor,
         compiler.repairScientificMethod(
           repairInput,
           signal === undefined ? {} : { signal },
@@ -840,14 +855,17 @@ export class HostedRunnerJobProcessor {
         SCIENTIFIC_OUTPUTS,
         operationalMetrics,
         signal,
+        progress,
       );
       uploaded = await this.validateAndUploadScientific(
         jobId,
-        cursor,
+        progress.cursor,
         generationDirectory,
         signal,
+        progress,
       );
-      cursor = uploaded.cursor;
+      progress.cursor = uploaded.cursor;
+      progress.outputHashes = uploaded.outputHashes;
       decision = await this.authorityCall(signal, () =>
         this.options.controlPlane.candidate(
           RunnerScientificCandidateV5Schema.parse({
@@ -859,10 +877,13 @@ export class HostedRunnerJobProcessor {
         ),
       );
       operationalMetrics.verifierDurationMs += decision.verifierDurationMs;
-      cursor = decision.nextCursor;
+      progress.cursor = decision.nextCursor;
     }
 
-    return { cursor, outputHashes: uploaded.outputHashes };
+    return {
+      cursor: progress.cursor,
+      outputHashes: progress.outputHashes,
+    };
   }
 
   private scientificCompileInput(
@@ -902,6 +923,7 @@ export class HostedRunnerJobProcessor {
     initialCursor: number,
     directory: string,
     signal?: AbortSignal,
+    progress?: DelegatedJobProgress,
   ): Promise<{
     cursor: number;
     outputHashes: string[];
@@ -961,6 +983,7 @@ export class HostedRunnerJobProcessor {
         { kind: "file.created", path, sha256: uploaded.sha256 },
         signal,
       );
+      if (progress !== undefined) progress.cursor = cursor;
     }
 
     let discriminationContract: Record<string, unknown>;
@@ -1090,6 +1113,7 @@ export class HostedRunnerJobProcessor {
     allowedOutputs: ReadonlySet<string>,
     operationalMetrics: RunnerOperationalMetrics,
     signal?: AbortSignal,
+    progress?: DelegatedJobProgress,
   ): Promise<number> {
     let cursor = initialCursor;
     let completed = false;
@@ -1110,6 +1134,7 @@ export class HostedRunnerJobProcessor {
           },
           signal,
         );
+        if (progress !== undefined) progress.cursor = cursor;
       } else if (event.type === "file_change") {
         for (const path of event.files) {
           if (!allowedOutputs.has(path)) {
@@ -1132,6 +1157,7 @@ export class HostedRunnerJobProcessor {
             },
             signal,
           );
+          if (progress !== undefined) progress.cursor = cursor;
         }
       } else if (event.type === "command") {
         cursor = await this.emit(
@@ -1146,6 +1172,7 @@ export class HostedRunnerJobProcessor {
           },
           signal,
         );
+        if (progress !== undefined) progress.cursor = cursor;
       } else if (event.type === "final_status") {
         operationalMetrics.compilerDurationMs += event.durationMs ?? 0;
         completed = event.status === "completed" || event.status === "verified";
