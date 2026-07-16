@@ -4,7 +4,7 @@
   "kind": "health_report",
   "engineId": "scikit-learn",
   "environmentId": "counterlab-runner-linux-amd64-v2",
-  "imageDigest": "sha256:588b0963f3473be0347411a857399f6dfd9f31ccc7c8248963323792ff0a394a",
+  "imageDigest": "sha256:68e5ed802ef505486d7f3b2b03faebe230162812354607eee99c21af8e7fdc0a",
   "observedVersion": "1.9.0",
   "checks": {
     "import": "PASSED",
