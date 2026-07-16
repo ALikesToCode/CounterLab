@@ -195,6 +195,34 @@ Landing and upload copy are generated from release-ready registered packs. A
 concept cannot be advertised until its complete registry definition and end-to-
 end release tests pass.
 
+### V5.1 Boundary Map checkpoint — active
+
+Done:
+
+- strict Boundary Map result, verification report, receipt, and authority-ref
+  contracts with generated TypeScript/Python JSON Schemas;
+- browser-compatible canonical hashes and exact Experiment IR lineage;
+- a real 5×5 entity-leakage grid and 3×5 class-imbalance grid computed by the
+  existing fixed kernels;
+- pack-owned axes, inputs, classification policies, assumptions, and non-claims;
+- exact frozen sweep authorization in both scientific-candidate and epistemic
+  verification; changed axes, observable, preset, or cell budget fail closed;
+- current pack versions advanced to leakage `2.1.0` and imbalance `1.1.0`
+  without rewriting historical signed v1/v2 artifacts.
+
+In progress:
+
+- the independent map verifier, mutation catalogue, integrity/HMAC receipt, and
+  authority reference.
+
+Pending after that verifier passes:
+
+- one purpose-separated fixed runner job, immutable R2 outputs, Worker callback
+  reconstruction, session projection/retrieval, accessible renderer, Reasoning
+  Diff v2, and Proof Capsule v2 binding;
+- final image rebuild, scientific-engine requalification, deployment, and live
+  production smoke for both concepts.
+
 ## Persistence and idempotency
 
 Migration 0002 adds:

@@ -440,3 +440,23 @@ can pass.
   falsely requalify the source-bound runner image.
 - Preserve strings exactly rather than NFC-normalizing Experiment IR in only one
   runtime; invalid lone surrogates fail closed before hashing.
+
+## 2026-07-16 — Boundary Maps are fixed pack authority, not generated charts
+
+- Let Codex request only one exact registered sweep ID, ordered axis IDs, grid
+  preset, observable, and cell budget. Any drift is a repairable rejection.
+- Keep all grid inputs, numerical cells, classifications, units, assumptions,
+  and non-claims in fixed Subject Pack/kernel authority. The model neither
+  supplies formulas nor authors result values.
+- Use the existing leakage and imbalance kernels to compute the complete bounded
+  grids in one job: 25 cells for recurrence/test-fraction leakage and 15 cells
+  for prevalence/threshold imbalance.
+- Separate primary Evidence Verdict release from Boundary Map release. An exact
+  deferred sweep may accompany a valid Experiment IR, but the map becomes
+  learner-visible only after independent result, lineage, mutation, and receipt
+  verification.
+- Advance current pack semantics to leakage `2.1.0` and imbalance `1.1.0`.
+  Preserve historical pack versions and signed replay bytes; do not reinterpret
+  old evidence in place.
+- Call an unsigned receipt `Integrity-hashed`. Use `Signed` only when the Worker
+  creates a valid HMAC receipt with a configured key ID.

@@ -34,7 +34,11 @@ without changing the Evidence Verdict. The strict v5 patch contract, runner,
 fixed Python verifier, and both Worker concept paths now preserve that authority
 through reject-repair or direct verification, source sealing, exact terminal
 hashes, immutable patch artifacts, and `PATCH_VERIFIED`. Native Reasoning Diff
-v2, Boundary Map authority, and Proof Capsule v2 remain unfinished.
+v2 and Proof Capsule v2 remain unfinished. Boundary Map v1 now has strict
+cross-runtime contracts, fixed 25-cell leakage and 15-cell imbalance kernels,
+pack-owned grids, and exact-request authorization. Its independent verifier,
+runner/Worker authority flow, session projection, and learner UI remain in
+progress.
 The current production deployment remains the qualified Experiment Plan v2
 path and has not been promoted to this worktree.
 
@@ -77,12 +81,13 @@ deployed registry digest remain distinct identities and are not interchangeable.
 | V5 deterministic transfer | done locally | Both genuine v5 concepts pass their registered fixed transfer evaluator; `INCONCLUSIVE` may transfer but remains patch-locked. | Requalify inside the complete release chain before production promotion. |
 | V5 artifact-specific patch | done locally for both packs | Commits `1d96fe0`, `3f8a653`, `ff5e03c`, `15799f9`, `a970fc0`, `8822f4d`, and `d2f2b92` add the strict v5 bundle, independent Python checks, transfer evaluator binding, idempotent Worker dispatch, genuine verifier reject-repair, source sealing, exact four-output callback, immutable authority, and copied patch download without creating a legacy proof. The Worker test now completes both concepts to `PATCH_VERIFIED`. | Requalify both concepts in the final image and production smoke. |
 | Canonical JSON authority | done locally | Commits `47f49a7` and `b4a68ff` preserve dangerous own keys, write sorted object text directly, use UTF-16 key order in both runtimes, reject lone surrogates, preserve Unicode normalization, and pass shared hash vectors without changing normal historical evidence. | Record `counterlab-canonical-json-v1` in Capsule integrity and rerun final release vectors. |
-| Reasoning Diff v2 and Proof Capsule v2 | active | Legacy Proof Bundle v1/v2 remains qualified and byte-compatible. The strict v5 patch stops honestly at `PATCH_VERIFIED`. | Add Boundary Map authority, native Reasoning Diff v2, deterministic Capsule archive/validation/storage/download, and replay persistence. |
-| Boundary Map, simplified Theater, Judge Mode | pending | Contracts/UX requirements are recorded; existing UI remains the released Studio UI. | Implement only after the v5 ML authority loop passes. |
+| Reasoning Diff v2 and Proof Capsule v2 | pending behind Boundary Map | Legacy Proof Bundle v1/v2 remains qualified and byte-compatible. The strict v5 patch stops honestly at `PATCH_VERIFIED`. | Finish Boundary Map authority, then add native Reasoning Diff v2, deterministic Capsule archive/validation/storage/download, and replay persistence. |
+| Boundary Map authority | active | Commits `2a1b827`, `0a6a97b`, and `0ad7c2a` add strict result/report/receipt schemas, cross-runtime canonical lineage, real fixed-kernel grids for both concepts, frozen grid definitions, pack-version bumps, and exact scientific/epistemic request authorization. | Finish the independent mutation verifier, runner bundle/execution, Worker receipt and storage flow, session state, retrieval API, and accessible renderer. |
+| Simplified Theater and Judge Mode | pending | Existing Studio UI remains the released interface; unrelated local UI edits are not release evidence. | Start after verified Boundary Map data can reach the browser without authority shortcuts. |
 | Physics/free-fall | blocked by phase order | No verified public support is claimed. | Start only after both live ML concepts pass the new production authority gate. |
 | Final release | pending | Previous production v2 smoke remains valid for that deployment. | Full suites, clean clone, engine gate, secret scan, deployment, CloakBrowser journeys, and exact-version production smoke. |
 
-Latest local v5 patch-authority verification (2026-07-16):
+Latest local v5.1 verification checkpoint (2026-07-16):
 
 - Worker API Vitest: 54/54 passed after both v5 patch callback integrations.
 - Concept registry Vitest: 12/12 passed.
@@ -91,15 +96,20 @@ Latest local v5 patch-authority verification (2026-07-16):
 - Shared canonical, Proof Bundle, session, and Experiment IR suites pass,
   including integer-like keys, non-BMP UTF-16 ordering, dangerous own keys,
   Unicode preservation, and lone-surrogate rejection in TypeScript and Python.
-- Full TypeScript suites after the repair: 373 root and 136 web/Worker passed;
-  all 126 Python kernel tests passed; strict typechecking passed.
+- Boundary Map contracts and Experiment IR: 70/70 focused TypeScript tests
+  passed. Registry, analyst, scientific-candidate, and epistemic suites: 101/101
+  passed.
+- Full Python kernel suite after both real Boundary Map grids: 148/148 passed.
+- The latest completed strict TypeScript check passed before the independent
+  Boundary Map verifier package entered the shared worktree. A full TypeScript
+  rerun remains pending until that in-progress package is integrated.
 - Strict repository and Worker TypeScript: passed.
 - Git whitespace check: passed.
 - No `build`, `dev`, deployment, or production smoke was run for this slice.
 - The recorded scientific-engine candidate remains source-bound to lock hash
   `48443375…`; current worktree drift is an explicit fail-closed release finding.
-- Next active slice: add signed Boundary Map authority, then native Reasoning
-  Diff and Proof Capsule v2.
+- Next active slice: finish the independent Boundary Map verifier, then bind the
+  fixed map through runner, Worker, session, and UI authority.
 
 ## Acceptance matrix
 
@@ -161,8 +171,9 @@ paths now carry the frozen Belief Spec, Prediction, Experiment IR, selection,
 result, Evidence Verdict, epistemic report, transfer, Patch Plan, and copied
 patch to `PATCH_VERIFIED`; they intentionally release no legacy proof. The
 canonical authority is now shared across TypeScript and Python with stable
-historical vectors. Boundary Map, Reasoning Diff v2, Capsule archive/storage,
-replay persistence, and final production
+historical vectors. Boundary Map contracts, frozen grids, and fixed numerical
+maps are complete; independent verification and hosted release remain open.
+Reasoning Diff v2, Capsule archive/storage, replay persistence, and final production
 qualification remain open. The current production deployment stays on its qualified v2
 contract. Upstream Runtime Codex turn intermittency remains an operational
 risk; the runner fails closed and the previous production smoke proved its
