@@ -60,7 +60,10 @@ green release is evidence, but is not silently promoted to the current tree.
 - [x] Leakage and manufacturing transfers are deterministic and model-free.
 - [x] Both patch engines edit copies, preserve unrelated cells, recompute
       outputs, and reject seeded patch mutations.
-- [x] Reasoning Diff and Proof Bundle bind artifact/Plan/result/transfer/patch.
+- [x] Qualified v1/v2 Reasoning Diff and Proof Bundle bind
+      artifact/Plan/result/transfer/patch.
+- [ ] Native v5 Reasoning Diff and Proof Capsule bind Belief Spec, Experiment
+      IR, Evidence Verdict, Boundary receipt, transfer, and verified patch.
 
 ## Live integrations
 
@@ -151,7 +154,10 @@ v5.1 product gates remain pending and must not be inferred from them:
 
 - [x] Belief Spec v2 and Experiment IR v5 with replay-safe adapters;
 - [x] fixed experiment scorer and epistemic tri-state verdict;
-- [ ] one signed Boundary Map;
+- [x] signed Boundary Map authority for both ML packs: fixed execution,
+      independent Worker verification, immutable receipt, retrieval, rejection,
+      duplicate callback, and revision-gate tests pass locally;
+- [ ] accessible Boundary Map learner renderer and final browser journey;
 - [ ] chat-first six-stage experience with collapsed Activity and Evidence &
       proof drawers;
 - [ ] verified physics free-fall pack or an explicit omission;

@@ -496,6 +496,26 @@ can pass.
   Map verifier there, then issue either an integrity-hashed or HMAC-signed
   receipt. A rejected map releases no cells to the session or UI.
 
+## 2026-07-16 — The Worker alone issues Boundary Map authority
+
+- Bind every live v5 compile bundle to the exact registered Boundary Sweep;
+  Codex may copy that request into Experiment IR but may not invent a grid,
+  formula, cell, label, unit, or result.
+- Store runner output, expected authority, verification report, and receipt as
+  separate immutable job-scoped objects. Retrieval reconstructs authority from
+  those objects and fails closed on any lineage, hash, signature, pack,
+  fixture, seed, result, verdict, or IR mismatch.
+- Use Worker time for receipt issuance. Runner-controlled timestamps are not
+  evidence, and duplicate callbacks reuse the already frozen receipt rather
+  than changing its hash or issuance time.
+- Require a configured signing key and key ID for live release. A missing or
+  wrong key fails closed; an unsigned map is not described as signed.
+- Advance native v5 sessions to revision only after `BOUNDARY_VERIFIED` and
+  revalidate the receipt against current session authority at the transition.
+  Keep the historical v1/v2 route separate and byte-compatible.
+- A rejected runner candidate preserves its verifier finding for audit but
+  creates neither learner-visible result cells nor a release receipt.
+
 ## 2026-07-16 — Promote the focused Theater without advancing authority
 
 - Backport the reviewed focused Experiment Theater UI onto production source
