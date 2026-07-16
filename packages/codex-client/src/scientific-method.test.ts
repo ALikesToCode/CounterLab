@@ -236,6 +236,7 @@ describe("hosted scientific-method compiler", () => {
       commandArgs: [
         fakeServer,
         "--expect-structured-turn",
+        "--expect-strict-output-schema",
         "--structured-scientific-output",
       ],
       timeoutMs: 2_000,

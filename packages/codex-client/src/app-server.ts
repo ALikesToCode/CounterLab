@@ -150,6 +150,7 @@ function strictStructuredSchema(value: unknown): unknown {
   for (const [key, nested] of Object.entries(source)) {
     if (key === "$id" || key === "$schema" || key === "title") continue;
     if (key === "required" || key === "properties") continue;
+    if (key === "prefixItems") continue;
     if (key === "oneOf") {
       output.anyOf = strictStructuredSchema(nested);
       continue;
@@ -185,6 +186,16 @@ function strictStructuredSchema(value: unknown): unknown {
     );
     output.required = Object.keys(properties);
     output.additionalProperties = false;
+  }
+
+  if (source.type === "array" && Array.isArray(source.prefixItems)) {
+    const tupleItems = source.prefixItems.map(strictStructuredSchema);
+    if (tupleItems.length > 0) {
+      output.items =
+        tupleItems.length === 1 ? tupleItems[0] : { anyOf: tupleItems };
+      output.minItems = tupleItems.length;
+      output.maxItems = tupleItems.length;
+    }
   }
 
   return output;

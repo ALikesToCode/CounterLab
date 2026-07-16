@@ -82,6 +82,12 @@ function isStrictStructuredSchema(value) {
   if (value === null || typeof value !== "object") return true;
   if (Object.hasOwn(value, "oneOf")) return false;
   if (
+    value.type === "array" &&
+    (!Object.hasOwn(value, "items") || Object.hasOwn(value, "prefixItems"))
+  ) {
+    return false;
+  }
+  if (
     value.properties !== undefined &&
     (value.additionalProperties !== false ||
       !Array.isArray(value.required) ||
