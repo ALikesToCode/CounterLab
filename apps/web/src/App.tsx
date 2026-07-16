@@ -29,6 +29,7 @@ import { parseStudioLocation, studioPath } from "./app/AppRouter";
 import { InteractiveImbalanceLab } from "./components/lesson/InteractiveImbalanceLab";
 import { ImbalancePatchReview } from "./components/lesson/ImbalancePatchReview";
 import { ImbalanceTransferLesson } from "./components/lesson/ImbalanceTransferLesson";
+import { ReasoningDiffView } from "./components/proof/ReasoningDiffView";
 import type { RecentProject, StudioStage } from "./components/studio/types";
 import { BoundaryStage } from "./features/boundary/BoundaryStage";
 
@@ -2336,7 +2337,21 @@ function LeakageRealityScreen({
           </dl>
         </section>
 
-        <section className="reasoning-diff panel">
+        {session?.mode.kind === "live_notebook" &&
+        session.reasoningDiffV2 !== undefined &&
+        session.proofCapsule !== undefined &&
+        patch !== null ? (
+          <ReasoningDiffView
+            diff={session.reasoningDiffV2}
+            capsule={session.proofCapsule}
+            patch={patch}
+            patchDownloadUrl={counterLabApi.patchDownloadUrl(session.sessionId)}
+            proofCapsuleDownloadUrl={counterLabApi.proofCapsuleDownloadUrl(
+              session.sessionId,
+            )}
+          />
+        ) : (
+          <section className="reasoning-diff panel">
           <div className="panel-title final-title">
             <div>
               <p className="eyebrow purple">Reasoning Diff</p>
@@ -2421,7 +2436,8 @@ function LeakageRealityScreen({
               <code>{`result_hash=${result.resultHash}\nseed=${result.seed}\nreplay_id=${proofBundle?.replayId ?? verifiedReplay.id}\n./scripts/reproduce-session.sh leakage-01\n./scripts/replay-patch.sh leakage-01`}</code>
             </pre>
           </details>
-        </section>
+          </section>
+        )}
         {actionErrorNotice}
       </main>
     );

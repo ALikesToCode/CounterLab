@@ -9,6 +9,7 @@ import {
   type SessionView,
 } from "../../api";
 import { useRunnerEvents } from "../../hooks/useRunnerEvents";
+import { ReasoningDiffView } from "../proof/ReasoningDiffView";
 
 const activeJobIdKey = "counterlab.activeRunnerJobId";
 const activeJobKindKey = "counterlab.activeRunnerJobKind";
@@ -149,6 +150,23 @@ export function ImbalancePatchReview({
   };
 
   if (patch !== null) {
+    if (
+      session.mode.kind === "live_notebook" &&
+      session.reasoningDiffV2 !== undefined &&
+      session.proofCapsule !== undefined
+    ) {
+      return (
+        <ReasoningDiffView
+          diff={session.reasoningDiffV2}
+          capsule={session.proofCapsule}
+          patch={patch}
+          patchDownloadUrl={counterLabApi.patchDownloadUrl(session.sessionId)}
+          proofCapsuleDownloadUrl={counterLabApi.proofCapsuleDownloadUrl(
+            session.sessionId,
+          )}
+        />
+      );
+    }
     return (
       <section className="panel imbalance-patch-review" aria-live="polite">
         <div className="panel-title">
