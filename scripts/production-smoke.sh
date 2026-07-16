@@ -70,6 +70,8 @@ if concept == "entity_leakage":
         raise SystemExit("live leakage authority checks are incomplete")
 elif authority:
     raise SystemExit("unexpected authority checks for this concept")
+if "scientificEngineSnapshotHash" not in payload:
+    raise SystemExit("live smoke scientific engine authority is missing")
 if not payload or any(
     not isinstance(value, str) or re.fullmatch(r"[a-f0-9]{64}", value) is None
     for value in payload.values()

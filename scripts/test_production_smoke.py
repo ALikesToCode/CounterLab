@@ -195,6 +195,7 @@ def test_live_leakage_evidence_requires_every_operational_authority_check() -> N
                     "schemaVersion": "1",
                     "concept": "entity_leakage",
                     "resultHash": "a" * 64,
+                    "scientificEngineSnapshotHash": "b" * 64,
                     **authority,
                 }
             ),
@@ -213,7 +214,9 @@ def test_live_leakage_evidence_requires_every_operational_authority_check() -> N
             text=True,
         )
         assert accepted.returncode == 0, accepted.stderr
-        assert json.loads(accepted.stdout)["reconnectedFromCursor"] is True
+        accepted_payload = json.loads(accepted.stdout)
+        assert accepted_payload["reconnectedFromCursor"] is True
+        assert accepted_payload["scientificEngineSnapshotHash"] == "b" * 64
 
         path.write_text(
             json.dumps(
@@ -221,6 +224,7 @@ def test_live_leakage_evidence_requires_every_operational_authority_check() -> N
                     "schemaVersion": "1",
                     "concept": "entity_leakage",
                     "resultHash": "a" * 64,
+                    "scientificEngineSnapshotHash": "b" * 64,
                     **{**authority, "cancelledWithoutResult": False},
                 }
             ),
@@ -240,6 +244,36 @@ def test_live_leakage_evidence_requires_every_operational_authority_check() -> N
         )
         assert rejected.returncode != 0
         assert "authority checks are incomplete" in rejected.stderr
+
+
+def test_live_evidence_requires_scientific_engine_authority() -> None:
+    with tempfile.TemporaryDirectory() as destination:
+        path = pathlib.Path(destination) / "live-evidence.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "schemaVersion": "1",
+                    "concept": "class_imbalance",
+                    "resultHash": "a" * 64,
+                }
+            ),
+            encoding="utf-8",
+        )
+        rejected = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                _live_evidence_source(),
+                str(path),
+                "class_imbalance",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        assert rejected.returncode != 0
+        assert "scientific engine authority is missing" in rejected.stderr
 
 
 def test_production_smoke_wires_readiness_modes_and_json_release_evidence() -> None:

@@ -52,6 +52,7 @@ async function writeLiveSmokeEvidence(
         proofBundleSha256: sha256(proofBody),
         proofContentHash: proof.integrity.contentHash,
         eventChainHead: proof.integrity.eventChainHead,
+        scientificEngineSnapshotHash: proof.scientificEngineSnapshotHash,
         ...authorityChecks,
       },
       null,
