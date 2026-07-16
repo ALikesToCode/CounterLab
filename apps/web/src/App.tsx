@@ -48,6 +48,13 @@ type TransferState =
   "locked" | "ready" | "failed" | "passed" | "patching" | "patched";
 type ReviewStep = "claim" | "belief" | "build" | "reality";
 
+function sessionProofReady(session: SessionView | null): boolean {
+  return (
+    session?.state === "PROOF_CAPSULE_ISSUED" ||
+    session?.state === "REASONING_DIFF_ISSUED"
+  );
+}
+
 type BeliefPresentation = {
   schemaVersion: "1" | "2";
   concept: BeliefTest["concept"];
@@ -2047,11 +2054,11 @@ function LeakageRealityScreen({
     const completed = await patchRunner.waitForJob({
       sessionId: session.sessionId,
       jobId,
-      terminalStates: ["REASONING_DIFF_ISSUED", "PATCH_REJECTED"],
+      terminalStates: ["PROOF_CAPSULE_ISSUED", "PATCH_REJECTED"],
       onSession: updateSession,
     });
     if (
-      completed.state !== "REASONING_DIFF_ISSUED" ||
+      completed.state !== "PROOF_CAPSULE_ISSUED" ||
       completed.patchResult === undefined
     ) {
       setTransferState("passed");
@@ -3732,7 +3739,7 @@ export function App() {
       stage,
       mode,
       ...(session === null ? {} : { sessionId: session.sessionId }),
-      completed: session?.state === "REASONING_DIFF_ISSUED",
+      completed: sessionProofReady(session),
     });
     if (window.location.pathname !== path) {
       window.history.replaceState({}, "", path);
@@ -3846,7 +3853,14 @@ export function App() {
   };
 
   const exportCurrentProof = () => {
-    if (session === null || session.state !== "REASONING_DIFF_ISSUED") return;
+    if (session === null || !sessionProofReady(session)) return;
+    if (session.proofCapsule !== undefined) {
+      const anchor = document.createElement("a");
+      anchor.href = counterLabApi.proofCapsuleDownloadUrl(session.sessionId);
+      anchor.download = "";
+      anchor.click();
+      return;
+    }
     void withRequest(async () => {
       const proof = await counterLabApi.getProofBundle(session.sessionId);
       const url = URL.createObjectURL(
@@ -4064,7 +4078,7 @@ export function App() {
                   reviewPatch: () => setStage("reality"),
                   downloadPatch: downloadCurrentPatch,
                 }),
-            ...(session?.state === "REASONING_DIFF_ISSUED"
+            ...(sessionProofReady(session)
               ? { exportProof: exportCurrentProof }
               : {}),
             startOver: restart,

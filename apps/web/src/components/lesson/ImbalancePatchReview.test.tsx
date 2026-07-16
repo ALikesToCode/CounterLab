@@ -45,7 +45,7 @@ describe("ImbalancePatchReview", () => {
     };
     const completed = {
       ...transferSession,
-      state: "REASONING_DIFF_ISSUED",
+      state: "PROOF_CAPSULE_ISSUED",
       patchResult: {
         status: "VERIFIED",
         modifiedCells: [3],
@@ -93,6 +93,7 @@ describe("ImbalancePatchReview", () => {
         expect.objectContaining({
           sessionId: "session_1",
           jobId: "job_patch_1",
+          terminalStates: ["PROOF_CAPSULE_ISSUED", "PATCH_REJECTED"],
         }),
       ),
     );

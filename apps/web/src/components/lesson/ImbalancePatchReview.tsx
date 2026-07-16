@@ -52,11 +52,11 @@ export function ImbalancePatchReview({
     const completed = await runner.waitForJob({
       sessionId: session.sessionId,
       jobId,
-      terminalStates: ["REASONING_DIFF_ISSUED", "PATCH_REJECTED"],
+      terminalStates: ["PROOF_CAPSULE_ISSUED", "PATCH_REJECTED"],
       onSession: updateSession,
     });
     if (
-      completed.state !== "REASONING_DIFF_ISSUED" ||
+      completed.state !== "PROOF_CAPSULE_ISSUED" ||
       completed.patchResult === undefined
     ) {
       throw new ApiClientError({
