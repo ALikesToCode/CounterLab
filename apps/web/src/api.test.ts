@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  CANONICAL_JSON_PROFILE,
   migrateBeliefTestV1ToV2,
   type ArtifactManifest,
   type BeliefTest,
@@ -88,6 +89,96 @@ const runnerJob = {
   eventCursor: 0,
 };
 
+const boundaryReceipt = {
+  schemaVersion: "1" as const,
+  canonicalProfile: CANONICAL_JSON_PROFILE,
+  sessionId: session.sessionId,
+  resultHash: digest("1"),
+  verificationReportHash: digest("2"),
+  experimentIrHash: digest("3"),
+  authoritativeResultHash: digest("4"),
+  evidenceVerdictHash: digest("5"),
+  issuedAt: "2026-07-14T10:04:00.000Z",
+  integrity: {
+    mode: "integrity-hashed" as const,
+    algorithm: "sha256" as const,
+    contentHash: digest("6"),
+  },
+  receiptHash: digest("7"),
+};
+
+const boundaryAuthority = {
+  jobId: "job_boundary_1",
+  sweepId: "entity-recurrence-sweep",
+  resultHash: boundaryReceipt.resultHash,
+  verificationReportHash: boundaryReceipt.verificationReportHash,
+  receipt: boundaryReceipt,
+  cellCount: 4,
+};
+
+const reasoningDiffV2 = {
+  schemaVersion: "2" as const,
+  id: "reasoning_diff_v2",
+  sessionId: session.sessionId,
+  concept: "entity_leakage" as const,
+  dimensions: {
+    belief: { before: "Random rows prove reuse.", after: "Match the deployment unit." },
+    prediction: { before: "The score stays high.", after: "The held-out entity score fell." },
+    evidence: { before: "Rows were mixed.", after: "Whole entities were held out." },
+    boundary: { before: "No boundary was named.", after: "Recurrence changes the optimism gap." },
+    behavior: { before: "Use random rows.", after: "Use a time-ordered transfer split." },
+    code: { before: "train_test_split(rows)", after: "group_holdout(customer_id)" },
+  },
+  authority: {
+    artifactManifestHash: digest("0"),
+    beliefSpecHash: digest("1"),
+    predictionHash: digest("2"),
+    experimentIrHash: digest("3"),
+    selectionHash: digest("4"),
+    authoritativeResultHash: digest("5"),
+    evidenceVerdictHash: digest("6"),
+    epistemicReportHash: digest("7"),
+    boundaryMapHash: digest("8"),
+    boundaryReceiptHash: digest("9"),
+    transferResultHash: digest("a"),
+    patchPlanHash: digest("b"),
+    patchResultHash: digest("c"),
+    patchedArtifactHash: digest("d"),
+  },
+  evidenceEventHashes: [
+    digest("0"),
+    digest("1"),
+    digest("2"),
+    digest("3"),
+    digest("4"),
+    digest("5"),
+    digest("6"),
+    digest("7"),
+  ],
+  limitations: ["This result is bounded to the documented notebook pattern."],
+  issuedAt: "2026-07-14T10:05:00.000Z",
+};
+
+const publicProofCapsule = {
+  schemaVersion: "2" as const,
+  capsuleId: "capsule_1",
+  sessionId: session.sessionId,
+  mode: "live_notebook" as const,
+  replayId: null,
+  mediaType: "application/vnd.counterlab.capsule+json" as const,
+  canonicalProfile: CANONICAL_JSON_PROFILE,
+  rootHash: digest("e"),
+  bytesHash: digest("f"),
+  byteLength: 4_096,
+  reasoningDiffHash: digest("a"),
+  eventChainHead: digest("b"),
+  createdAt: "2026-07-14T10:06:00.000Z",
+  integrity: {
+    mode: "integrity-hashed" as const,
+    algorithm: "sha256" as const,
+  },
+};
+
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
     status,
@@ -157,6 +248,153 @@ describe("CounterLabApiClient", () => {
         epistemicReportHash: digest("2"),
       }),
     ).toThrow(/Belief Spec v2/i);
+  });
+
+  it("accepts only browser-safe native proof authority in a resumable session", () => {
+    const nativeSession = {
+      ...session,
+      mode: { kind: "live_notebook" as const },
+      state: "PROOF_CAPSULE_ISSUED" as const,
+      version: 18,
+      boundaryMapAuthority: boundaryAuthority,
+      reasoningDiffV2,
+      proofCapsule: publicProofCapsule,
+    };
+
+    expect(SessionViewSchema.parse(nativeSession)).toMatchObject({
+      boundaryMapAuthority: { resultHash: boundaryReceipt.resultHash },
+      reasoningDiffV2: { schemaVersion: "2" },
+      proofCapsule: { capsuleId: "capsule_1" },
+    });
+    expect(() =>
+      SessionViewSchema.parse({
+        ...nativeSession,
+        proofCapsule: {
+          ...publicProofCapsule,
+          objectKey: `proof-capsules/session_1/${publicProofCapsule.bytesHash}.counterlab`,
+        },
+      }),
+    ).toThrow(/unrecognized key/i);
+  });
+
+  it("retrieves strict Boundary authority and both Reasoning Diff versions", async () => {
+    const boundaryResult = {
+      schemaVersion: "1" as const,
+      canonicalProfile: CANONICAL_JSON_PROFILE,
+      boundaryMapId: "boundary_1",
+      sessionId: session.sessionId,
+      concept: "entity_leakage" as const,
+      conceptPackVersion: "2.0.0",
+      artifactManifestHash: digest("0"),
+      experimentIrHash: boundaryReceipt.experimentIrHash,
+      authoritativeResultHash: boundaryReceipt.authoritativeResultHash,
+      evidenceVerdictHash: boundaryReceipt.evidenceVerdictHash,
+      sweepId: boundaryAuthority.sweepId,
+      gridPresetId: "compact-test-grid",
+      seed: 17,
+      kernelVersion: "leakage-kernel-v2",
+      axes: [
+        {
+          id: "test-fraction",
+          label: "Test fraction",
+          unit: "proportion",
+          points: [
+            { id: "test-20", value: 0.2, label: "20%" },
+            { id: "test-30", value: 0.3, label: "30%" },
+          ],
+        },
+        {
+          id: "observations-per-customer",
+          label: "Observations per customer",
+          unit: "rows/customer",
+          points: [
+            { id: "rows-2", value: 2, label: "2" },
+            { id: "rows-4", value: 4, label: "4" },
+          ],
+        },
+      ],
+      cells: [
+        ["test-20", 0.2, "rows-2", 2, "little-gap", 0.08],
+        ["test-20", 0.2, "rows-4", 4, "material-gap", 0.31],
+        ["test-30", 0.3, "rows-2", 2, "little-gap", 0.1],
+        ["test-30", 0.3, "rows-4", 4, "material-gap", 0.34],
+      ].map(
+        ([firstId, firstValue, secondId, secondValue, classificationId, gap], index) => ({
+          cellId: `cell-${index + 1}`,
+          concept: "entity_leakage" as const,
+          coordinates: [
+            { axisId: "test-fraction", pointId: firstId as string, value: firstValue as number },
+            {
+              axisId: "observations-per-customer",
+              pointId: secondId as string,
+              value: secondValue as number,
+            },
+          ] as const,
+          classificationId: classificationId as string,
+          randomAccuracy: 0.94,
+          groupAccuracy: 0.94 - (gap as number),
+          optimismGap: gap as number,
+          randomEntityOverlap: { count: 12, rate: 0.5 },
+          groupEntityOverlap: { count: 0, rate: 0 },
+          sampleSizes: { randomTest: 40, groupTest: 40 },
+          fixtureViewHash: digest("8"),
+          randomPipelineFingerprint: digest("9"),
+          groupPipelineFingerprint: digest("a"),
+        }),
+      ),
+      classifications: [
+        { id: "little-gap", label: "Little gap", description: "The split choice changes little." },
+        { id: "material-gap", label: "Material gap", description: "Repeated identities inflate the row split." },
+      ],
+      units: { accuracy: "proportion", optimism_gap: "proportion" },
+      assumptions: ["The estimator and preprocessing remain fixed."],
+      nonClaims: ["This map does not prove all grouped evaluations are better."],
+      resultHash: boundaryReceipt.resultHash,
+    };
+    const boundaryReport = {
+      schemaVersion: "1" as const,
+      status: "VERIFIED" as const,
+      verifierVersion: "boundary-map-verifier-v1" as const,
+      resultHash: boundaryResult.resultHash,
+      invariantCount: 1,
+      invariants: [
+        {
+          name: "axis-order-resolved",
+          passed: true,
+          observed: ["test-fraction", "observations-per-customer"],
+          expected: ["test-fraction", "observations-per-customer"],
+        },
+      ],
+      reportHash: boundaryReceipt.verificationReportHash,
+    };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ok: true,
+          data: {
+            result: boundaryResult,
+            report: boundaryReport,
+            receipt: boundaryReceipt,
+            authority: boundaryAuthority,
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ ok: true, data: reasoningDiffV2 }),
+      );
+    const client = new CounterLabApiClient({ fetch: fetcher });
+
+    await expect(client.getBoundary("session/with space")).resolves.toMatchObject({
+      report: { status: "VERIFIED" },
+      authority: { cellCount: 4 },
+    });
+    await expect(client.getReasoningDiff(session.sessionId)).resolves.toEqual(
+      reasoningDiffV2,
+    );
+    expect(fetcher.mock.calls[0]?.[0]).toBe(
+      "/api/sessions/session%2Fwith%20space/boundary",
+    );
   });
 
   it("sends a locally validated v2 Belief Spec edit without a v1 shadow", async () => {
@@ -619,6 +857,11 @@ describe("CounterLabApiClient", () => {
         invoke: () => client.compilePatch(sessionId),
       },
       {
+        expectedPath: `/api/sessions/${encoded}/boundary/run`,
+        expectedMethod: "POST",
+        invoke: () => client.runBoundary(sessionId),
+      },
+      {
         expectedPath: `/api/sessions/${encoded}/events`,
         expectedMethod: "GET",
         invoke: () => client.getEvents(sessionId),
@@ -706,6 +949,9 @@ describe("CounterLabApiClient", () => {
 
     expect(client.patchDownloadUrl("session/with space")).toBe(
       "https://studio.test/api/sessions/session%2Fwith%20space/patch/download",
+    );
+    expect(client.proofCapsuleDownloadUrl("session/with space")).toBe(
+      "https://studio.test/api/sessions/session%2Fwith%20space/proof-capsule",
     );
   });
 

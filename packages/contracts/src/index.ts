@@ -2919,7 +2919,7 @@ const ProofCapsuleIntegrityV2Schema = z.discriminatedUnion("mode", [
     .strict(),
 ]);
 
-export const ProofCapsuleRefV2Schema = z
+const ProofCapsuleRefV2BaseSchema = z
   .object({
     schemaVersion: z.literal("2"),
     capsuleId: NonEmptyString,
@@ -2942,8 +2942,17 @@ export const ProofCapsuleRefV2Schema = z
     createdAt: z.iso.datetime({ offset: true }),
     integrity: ProofCapsuleIntegrityV2Schema,
   })
-  .strict()
-  .superRefine((reference, context) => {
+  .strict();
+
+export const PublicProofCapsuleRefV2Schema =
+  ProofCapsuleRefV2BaseSchema.omit({ objectKey: true });
+
+export type PublicProofCapsuleRefV2 = z.infer<
+  typeof PublicProofCapsuleRefV2Schema
+>;
+
+export const ProofCapsuleRefV2Schema =
+  ProofCapsuleRefV2BaseSchema.superRefine((reference, context) => {
     const expectedSuffix = `/${reference.bytesHash}.counterlab`;
     if (!reference.objectKey.endsWith(expectedSuffix)) {
       context.addIssue({

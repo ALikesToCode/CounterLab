@@ -2,6 +2,10 @@ import {
   ArtifactManifestSchema,
   BeliefSpecV2Schema,
   BeliefTestSchema,
+  BoundaryMapAuthorityRefV1Schema,
+  BoundaryMapReceiptV1Schema,
+  BoundaryMapResultV1Schema,
+  BoundaryMapVerificationReportV1Schema,
   EvidenceVerdictSchema,
   EvidenceEventSchema,
   InteractiveImbalanceRunRequestSchema,
@@ -9,8 +13,10 @@ import {
   PatchResultSchema,
   PredictionContractSchema,
   ProofBundleSchema,
+  PublicProofCapsuleRefV2Schema,
   PublicCompilerEventSchema,
   ReasoningDiffSchema,
+  ReasoningDiffV2Schema,
   RunnerJobErrorSchema,
   RunnerJobSchema,
   RunnerJobStatusSchema,
@@ -22,6 +28,10 @@ import {
   type ArtifactManifest,
   type BeliefSpecV2,
   type BeliefTest,
+  type BoundaryMapAuthorityRefV1,
+  type BoundaryMapReceiptV1,
+  type BoundaryMapResultV1,
+  type BoundaryMapVerificationReportV1,
   type EvidenceEvent,
   type InteractiveImbalanceRunRequest,
   type InteractiveLeakageRunRequest,
@@ -30,7 +40,9 @@ import {
   type PatchResult,
   type PredictionContract,
   type ProofBundle,
+  type PublicProofCapsuleRefV2,
   type ReasoningDiff,
+  type ReasoningDiffV2,
   type RunnerJob,
   type PublicCompilerEvent,
   type SessionState,
@@ -93,11 +105,14 @@ const sessionViewShape = {
   verifiedResult: VerifiedResultSetSchema.optional(),
   evidenceVerdict: EvidenceVerdictSchema.optional(),
   epistemicReportHash: Sha256Digest.optional(),
+  boundaryMapAuthority: BoundaryMapAuthorityRefV1Schema.optional(),
   transferResult: TransferResultSchema.optional(),
   patchResult: PatchResultSchema.optional(),
   revision: z.string().trim().min(1).optional(),
   reasoningDiff: ReasoningDiffSchema.optional(),
   proofBundle: ProofBundleSchema.optional(),
+  reasoningDiffV2: ReasoningDiffV2Schema.optional(),
+  proofCapsule: PublicProofCapsuleRefV2Schema.optional(),
 };
 
 function requireExclusiveBeliefAuthority(
@@ -210,6 +225,47 @@ const InteractiveResultResponseSchema = z
   .strict();
 export type InteractiveResultResponse = z.infer<
   typeof InteractiveResultResponseSchema
+>;
+
+const BoundaryRunResponseSchema = z
+  .object({
+    ...sessionViewShape,
+    runnerJob: RunnerJobSchema,
+    reused: z.literal(true).optional(),
+  })
+  .strict()
+  .superRefine(requireExclusiveBeliefAuthority);
+export type BoundaryRunResponse = z.infer<typeof BoundaryRunResponseSchema>;
+
+const BoundaryResponseSchema = z
+  .object({
+    result: BoundaryMapResultV1Schema,
+    report: BoundaryMapVerificationReportV1Schema,
+    receipt: BoundaryMapReceiptV1Schema,
+    authority: BoundaryMapAuthorityRefV1Schema,
+  })
+  .strict()
+  .superRefine((response, context) => {
+    if (
+      response.result.resultHash !== response.receipt.resultHash ||
+      response.report.reportHash !== response.receipt.verificationReportHash ||
+      response.authority.resultHash !== response.result.resultHash
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Boundary response authority hashes must resolve",
+        path: ["authority"],
+      });
+    }
+  });
+export type BoundaryResponse = z.infer<typeof BoundaryResponseSchema>;
+
+const ReasoningDiffResponseSchema = z.union([
+  ReasoningDiffV2Schema,
+  ReasoningDiffSchema,
+]);
+export type ReasoningDiffResponse = z.infer<
+  typeof ReasoningDiffResponseSchema
 >;
 
 const RunnerEventsResponseSchema = z
@@ -608,6 +664,20 @@ export class CounterLabApiClient {
     );
   }
 
+  runBoundary(sessionId: string): Promise<BoundaryRunResponse> {
+    return this.postRunnerActionWithoutInput(
+      `/api/sessions/${encodedId(sessionId)}/boundary/run`,
+      BoundaryRunResponseSchema,
+    );
+  }
+
+  getBoundary(sessionId: string): Promise<BoundaryResponse> {
+    return this.request(
+      `/api/sessions/${encodedId(sessionId)}/boundary`,
+      BoundaryResponseSchema,
+    );
+  }
+
   runInteractiveLeakage(
     sessionId: string,
     input: InteractiveLeakageRunRequest,
@@ -689,6 +759,10 @@ export class CounterLabApiClient {
     return `${this.baseUrl}/api/sessions/${encodedId(sessionId)}/patch/download`;
   }
 
+  proofCapsuleDownloadUrl(sessionId: string): string {
+    return `${this.baseUrl}/api/sessions/${encodedId(sessionId)}/proof-capsule`;
+  }
+
   getEvents(sessionId: string): Promise<EvidenceEvent[]> {
     return this.request(
       `/api/sessions/${encodedId(sessionId)}/events`,
@@ -696,10 +770,10 @@ export class CounterLabApiClient {
     ).then((response) => response.events);
   }
 
-  getReasoningDiff(sessionId: string): Promise<ReasoningDiff> {
+  getReasoningDiff(sessionId: string): Promise<ReasoningDiffResponse> {
     return this.request(
       `/api/sessions/${encodedId(sessionId)}/reasoning-diff`,
-      ReasoningDiffSchema,
+      ReasoningDiffResponseSchema,
     );
   }
 
@@ -839,12 +913,18 @@ export const counterLabApi = new CounterLabApiClient();
 export type {
   ArtifactManifest,
   BeliefTest,
+  BoundaryMapAuthorityRefV1,
+  BoundaryMapReceiptV1,
+  BoundaryMapResultV1,
+  BoundaryMapVerificationReportV1,
   EvidenceEvent,
   PatchResult,
   PredictionContract,
   ProofBundle,
+  PublicProofCapsuleRefV2,
   PublicCompilerEvent,
   ReasoningDiff,
+  ReasoningDiffV2,
   RunnerJob,
   SessionState,
   TransferResult,

@@ -25,6 +25,7 @@ import {
   PredictionContractSchema,
   ProofBundleSchema,
   ProofCapsuleRefV2Schema,
+  PublicProofCapsuleRefV2Schema,
   ReasoningDiffSchema,
   ReasoningDiffV2Schema,
   SessionModeSchema,
@@ -1670,5 +1671,13 @@ describe("native v5 reasoning and capsule references", () => {
         objectKey: "proof-capsules/session_1/other.counterlab",
       }),
     ).toThrow(/object key/i);
+
+    const { objectKey: _objectKey, ...publicReference } = parsed;
+    expect(PublicProofCapsuleRefV2Schema.parse(publicReference)).toEqual(
+      publicReference,
+    );
+    expect(() =>
+      PublicProofCapsuleRefV2Schema.parse(parsed),
+    ).toThrow(/unrecognized key/i);
   });
 });
