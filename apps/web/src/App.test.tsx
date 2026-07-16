@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { migrateBeliefTestV1ToV2 } from "@counterlab/contracts";
 
 import { App } from "./App";
+import { replayFixture } from "./components/replay/ProofCapsuleReplayView.fixture";
 import { sampleArtifact, sampleResult } from "./sample";
 
 const artifact = {
@@ -229,6 +230,7 @@ function installApi(
       | "LAB_VERIFIED"
       | "EXPERIMENT_COMPLETED";
     restoredSessionExtra?: Record<string, unknown>;
+    replay?: ReturnType<typeof replayFixture>;
   } = {},
 ) {
   let activeMode:
@@ -380,10 +382,14 @@ function installApi(
           }),
         );
       }
-      if (path === "/api/replays/leakage-01") {
+      if (path.startsWith("/api/replays/")) {
+        const replayId = decodeURIComponent(path.slice("/api/replays/".length));
+        if (options.replay?.replayId === replayId) {
+          return response(options.replay);
+        }
         return response({
           schemaVersion: "1",
-          replayId: "leakage-01",
+          replayId,
           replay: true,
           recordedAt: "2026-07-14T11:50:37.947Z",
           modelId: "gpt-5.6-sol",
@@ -938,5 +944,105 @@ describe("CounterLab judged flow", () => {
 
     await user.click(screen.getByRole("button", { name: /continue replay/i }));
     expect(screen.getAllByText(/verified replay/i).length).toBeGreaterThan(0);
+  });
+
+  it("restores the exact replay URL instead of substituting the bundled replay", async () => {
+    const replayId = "replay/dynamic one";
+    window.localStorage.setItem("counterlab.mode", "replay");
+    window.localStorage.setItem("counterlab.replayId", "stale-replay");
+    window.history.replaceState(
+      {},
+      "",
+      `/replay/${encodeURIComponent(replayId)}`,
+    );
+    const fetcher = installApi();
+
+    render(<App />);
+
+    expect((await screen.findAllByText(replayId, { exact: true })).length).toBe(
+      2,
+    );
+    expect(window.location.pathname).toBe(
+      `/replay/${encodeURIComponent(replayId)}`,
+    );
+    expect(
+      fetcher.mock.calls.some(
+        ([path]) =>
+          String(path) === `/api/replays/${encodeURIComponent(replayId)}`,
+      ),
+    ).toBe(true);
+    expect(
+      fetcher.mock.calls.some(
+        ([path]) => String(path) === "/api/replays/leakage-01",
+      ),
+    ).toBe(false);
+  });
+
+  it("renders a hosted Capsule replay as read-only artifact-specific evidence", async () => {
+    const user = userEvent.setup();
+    const replay = replayFixture("class_imbalance");
+    window.history.replaceState(
+      {},
+      "",
+      `/replay/${encodeURIComponent(replay.replayId)}`,
+    );
+    const fetcher = installApi({ replay });
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /live notebook claim, replayed from verified evidence/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(replay.artifactManifest.fileName),
+    ).toBeInTheDocument();
+    expect(screen.getByText(replay.beliefSpec.claim)).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(sampleArtifact.fileName);
+    expect(screen.queryByText(/run fair test/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/lock my answer/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/verify notebook patch/i),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /download proof capsule/i }),
+    ).toHaveAttribute(
+      "href",
+      `/api/replays/${encodeURIComponent(replay.replayId)}/proof-capsule`,
+    );
+    expect(
+      fetcher.mock.calls.every(([, init]) =>
+        [undefined, "GET"].includes(init?.method),
+      ),
+    ).toBe(true);
+
+    await user.click(
+      screen.getByRole("button", { name: /start new analysis/i }),
+    );
+    expect(window.location.pathname).toBe("/");
+    expect(
+      screen.getByRole("heading", {
+        name: /your notebook made a claim/i,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not label an unknown replay as verified", async () => {
+    window.history.replaceState({}, "", "/replay/missing-replay");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () =>
+        errorResponse("REPLAY_NOT_FOUND", "Replay was not found", 404),
+      ),
+    );
+
+    render(<App />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /replay was not found/i,
+    );
+    expect(screen.queryByLabelText(/replay status/i)).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/verified replay/i);
   });
 });

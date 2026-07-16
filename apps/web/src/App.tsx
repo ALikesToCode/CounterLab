@@ -15,6 +15,7 @@ import {
   type PublicCompilerEvent,
   type RunnerJob,
   type SessionView,
+  type VerifiedReplay,
   type VerifiedResultSet,
 } from "./api";
 import { useRunnerEvents } from "./hooks/useRunnerEvents";
@@ -30,6 +31,7 @@ import { InteractiveImbalanceLab } from "./components/lesson/InteractiveImbalanc
 import { ImbalancePatchReview } from "./components/lesson/ImbalancePatchReview";
 import { ImbalanceTransferLesson } from "./components/lesson/ImbalanceTransferLesson";
 import { ReasoningDiffView } from "./components/proof/ReasoningDiffView";
+import { ProofCapsuleReplayView } from "./components/replay/ProofCapsuleReplayView";
 import type { RecentProject, StudioStage } from "./components/studio/types";
 import { BoundaryStage } from "./features/boundary/BoundaryStage";
 
@@ -145,6 +147,7 @@ const storageKeys = {
   mode: "counterlab.mode",
   claim: "counterlab.claim",
   replayStage: "counterlab.replayStage",
+  replayId: "counterlab.replayId",
   replayIntro: "counterlab.replayIntro",
   replayTransferState: "counterlab.replayTransferState",
   replayRevision: "counterlab.replayRevision",
@@ -260,14 +263,14 @@ function Mark({ name }: { name: "arrow" | "check" | "lock" | "spark" }) {
   );
 }
 
-function ReplayBanner() {
+function ReplayBanner({ replay }: { replay: VerifiedReplay }) {
   return (
     <aside className="replay-banner" aria-label="Replay status">
       <span className="status-dot" />
       <strong>Verified replay</strong>
-      <span>{verifiedReplay.id}</span>
+      <span>{replay.replayId}</span>
       <span className="replay-meta">
-        Recorded {new Date(verifiedReplay.recordedAt).toLocaleDateString()}
+        Recorded {new Date(replay.recordedAt).toLocaleDateString()}
       </span>
     </aside>
   );
@@ -2352,90 +2355,96 @@ function LeakageRealityScreen({
           />
         ) : (
           <section className="reasoning-diff panel">
-          <div className="panel-title final-title">
-            <div>
-              <p className="eyebrow purple">Reasoning Diff</p>
-              <h2>Your learning, before and after</h2>
-              <p>One view of what changed in your idea, evidence, and code.</p>
-            </div>
-            <div className="completion-actions">
-              {session?.mode.kind === "live_notebook" && patch !== null && (
-                <a
-                  className="button button-gold patch-download"
-                  href={counterLabApi.patchDownloadUrl(session.sessionId)}
-                  download
+            <div className="panel-title final-title">
+              <div>
+                <p className="eyebrow purple">Reasoning Diff</p>
+                <h2>Your learning, before and after</h2>
+                <p>
+                  One view of what changed in your idea, evidence, and code.
+                </p>
+              </div>
+              <div className="completion-actions">
+                {session?.mode.kind === "live_notebook" && patch !== null && (
+                  <a
+                    className="button button-gold patch-download"
+                    href={counterLabApi.patchDownloadUrl(session.sessionId)}
+                    download
+                  >
+                    Download verified notebook copy <Mark name="arrow" />
+                  </a>
+                )}
+                <button
+                  className="button button-quiet"
+                  type="button"
+                  disabled={proofBundle === null}
+                  onClick={exportProof}
                 >
-                  Download verified notebook copy <Mark name="arrow" />
-                </a>
-              )}
-              <button
-                className="button button-quiet"
-                type="button"
-                disabled={proofBundle === null}
-                onClick={exportProof}
-              >
-                {proofBundle === null ? "Preparing proof" : "Download proof"}
-              </button>
+                  {proofBundle === null ? "Preparing proof" : "Download proof"}
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="diff-table" role="table" aria-label="Reasoning Diff">
-            <div className="diff-row diff-head" role="row">
-              <span>Dimension</span>
-              <span>Before</span>
-              <span>After</span>
+            <div
+              className="diff-table"
+              role="table"
+              aria-label="Reasoning Diff"
+            >
+              <div className="diff-row diff-head" role="row">
+                <span>Dimension</span>
+                <span>Before</span>
+                <span>After</span>
+              </div>
+              <div className="diff-row" role="row">
+                <strong>Belief</strong>
+                <span>{claim}</span>
+                <span>{revision}</span>
+              </div>
+              <div className="diff-row" role="row">
+                <strong>Prediction</strong>
+                <span>
+                  {prediction === "stays-high"
+                    ? "Near 98%"
+                    : prediction === "falls"
+                      ? "Material fall"
+                      : "Uncertain"}
+                </span>
+                <span>
+                  {percent.format(group.metrics.accuracy)} on new customers
+                </span>
+              </div>
+              <div className="diff-row" role="row">
+                <strong>Code</strong>
+                <span>Random rows + customer identity</span>
+                <span>Whole-customer holdout + identity removed</span>
+              </div>
+              <div className="diff-row" role="row">
+                <strong>Transfer</strong>
+                <span>Rule not yet tested</span>
+                <span>Time-aware forecasting choice passed</span>
+              </div>
             </div>
-            <div className="diff-row" role="row">
-              <strong>Belief</strong>
-              <span>{claim}</span>
-              <span>{revision}</span>
-            </div>
-            <div className="diff-row" role="row">
-              <strong>Prediction</strong>
-              <span>
-                {prediction === "stays-high"
-                  ? "Near 98%"
-                  : prediction === "falls"
-                    ? "Material fall"
-                    : "Uncertain"}
-              </span>
-              <span>
-                {percent.format(group.metrics.accuracy)} on new customers
-              </span>
-            </div>
-            <div className="diff-row" role="row">
-              <strong>Code</strong>
-              <span>Random rows + customer identity</span>
-              <span>Whole-customer holdout + identity removed</span>
-            </div>
-            <div className="diff-row" role="row">
-              <strong>Transfer</strong>
-              <span>Rule not yet tested</span>
-              <span>Time-aware forecasting choice passed</span>
-            </div>
-          </div>
-          <details className="verified-patch-details">
-            <summary>See the verified notebook change</summary>
-            <p>
-              Only the supported evaluation cell changed. The original notebook
-              remains untouched.
-            </p>
-            <pre className="diff" aria-label="Verified notebook cell diff">
-              <code>
-                {patch?.diff ??
-                  "Verified replay patch: random rows replaced with customer-group evaluation; customer identity removed."}
-              </code>
-            </pre>
-            <p className="patch-proof">
-              <Mark name="check" /> Cell 3 changed · unrelated source hashes
-              unchanged · group overlap 0 · result reproduced
-            </p>
-          </details>
-          <details className="technical-proof">
-            <summary>Technical proof and reproduction</summary>
-            <pre>
-              <code>{`result_hash=${result.resultHash}\nseed=${result.seed}\nreplay_id=${proofBundle?.replayId ?? verifiedReplay.id}\n./scripts/reproduce-session.sh leakage-01\n./scripts/replay-patch.sh leakage-01`}</code>
-            </pre>
-          </details>
+            <details className="verified-patch-details">
+              <summary>See the verified notebook change</summary>
+              <p>
+                Only the supported evaluation cell changed. The original
+                notebook remains untouched.
+              </p>
+              <pre className="diff" aria-label="Verified notebook cell diff">
+                <code>
+                  {patch?.diff ??
+                    "Verified replay patch: random rows replaced with customer-group evaluation; customer identity removed."}
+                </code>
+              </pre>
+              <p className="patch-proof">
+                <Mark name="check" /> Cell 3 changed · unrelated source hashes
+                unchanged · group overlap 0 · result reproduced
+              </p>
+            </details>
+            <details className="technical-proof">
+              <summary>Technical proof and reproduction</summary>
+              <pre>
+                <code>{`result_hash=${result.resultHash}\nseed=${result.seed}\nreplay_id=${proofBundle?.replayId ?? verifiedReplay.id}\n./scripts/reproduce-session.sh leakage-01\n./scripts/replay-patch.sh leakage-01`}</code>
+              </pre>
+            </details>
           </section>
         )}
         {actionErrorNotice}
@@ -3052,26 +3061,26 @@ function ImbalanceRealityScreen({
         session.mode.kind !== "verified_replay" &&
         (session.mode.kind !== "live_notebook" ||
           session.boundaryMapAuthority !== undefined) && (
-        <>
-          <ImbalanceTransferLesson
-            sessionId={session.sessionId}
-            state={session.state}
-            {...(session.revision === undefined
-              ? {}
-              : { revision: session.revision })}
-            {...(session.transferResult === undefined
-              ? {}
-              : { transferOutcome: session.transferResult.outcome })}
-            updateSession={updateSession}
-          />
-          {session.transferResult?.outcome === "PASSED" && (
-            <ImbalancePatchReview
-              session={session}
+          <>
+            <ImbalanceTransferLesson
+              sessionId={session.sessionId}
+              state={session.state}
+              {...(session.revision === undefined
+                ? {}
+                : { revision: session.revision })}
+              {...(session.transferResult === undefined
+                ? {}
+                : { transferOutcome: session.transferResult.outcome })}
               updateSession={updateSession}
             />
-          )}
-        </>
-      )}
+            {session.transferResult?.outcome === "PASSED" && (
+              <ImbalancePatchReview
+                session={session}
+                updateSession={updateSession}
+              />
+            )}
+          </>
+        )}
       {session?.revision !== undefined && (
         <section className="revision panel">
           <p className="eyebrow">Saved revision</p>
@@ -3467,6 +3476,8 @@ export function App() {
   const [confidence, setConfidence] = useState(72);
   const [reviewStep, setReviewStep] = useState<ReviewStep | null>(null);
   const [replayIntro, setReplayIntro] = useState(false);
+  const [activeReplayId, setActiveReplayId] = useState<string | null>(null);
+  const [activeReplay, setActiveReplay] = useState<VerifiedReplay | null>(null);
   const [artifact, setArtifact] = useState<ArtifactView | null>(null);
   const [session, setSession] = useState<SessionView | null>(null);
   const [busy, setBusy] = useState(false);
@@ -3482,9 +3493,12 @@ export function App() {
   const [runnerJob, setRunnerJob] = useState<RunnerJob | null>(null);
   const runner = useRunnerEvents();
   const replay = mode === "replay";
+  const hostedReplay =
+    activeReplay?.schemaVersion === "2" ? activeReplay : null;
   const belief = sessionBeliefPresentation(session);
   const effectiveClaim =
     claim ||
+    hostedReplay?.beliefSpec.claim ||
     belief?.claim ||
     "The notebook accuracy proves generalization to new customers.";
 
@@ -3675,7 +3689,14 @@ export function App() {
     const storedClaim = window.localStorage.getItem(storageKeys.claim);
 
     if (storedMode === "replay" || route.kind === "replay") {
+      const replayId =
+        route.kind === "replay"
+          ? route.id
+          : (window.localStorage.getItem(storageKeys.replayId) ?? "leakage-01");
       setMode("replay");
+      setActiveReplayId(replayId);
+      window.localStorage.setItem(storageKeys.mode, "replay");
+      window.localStorage.setItem(storageKeys.replayId, replayId);
       setReplayIntro(
         window.localStorage.getItem(storageKeys.replayIntro) !== "false",
       );
@@ -3684,6 +3705,14 @@ export function App() {
           ? "reality"
           : "build",
       );
+      void withRequest(async () => {
+        const loaded = await counterLabApi.getReplay(replayId);
+        setActiveReplay(loaded);
+        if (loaded.schemaVersion === "2") {
+          setReplayIntro(false);
+          setStage("reality");
+        }
+      });
       return;
     }
 
@@ -3755,12 +3784,13 @@ export function App() {
       stage,
       mode,
       ...(session === null ? {} : { sessionId: session.sessionId }),
+      ...(activeReplayId === null ? {} : { replayId: activeReplayId }),
       completed: sessionProofReady(session),
     });
     if (window.location.pathname !== path) {
       window.history.replaceState({}, "", path);
     }
-  }, [mode, session, stage]);
+  }, [activeReplayId, mode, session, stage]);
 
   const checkLiveCapabilities = async () => {
     setCheckingLiveHealth(true);
@@ -3792,8 +3822,12 @@ export function App() {
       return;
     }
     if (nextMode === "replay") {
+      const replayId = "leakage-01";
+      setActiveReplayId(replayId);
+      window.localStorage.setItem(storageKeys.replayId, replayId);
       void withRequest(async () => {
-        await counterLabApi.getReplay("leakage-01");
+        const loaded = await counterLabApi.getReplay(replayId);
+        setActiveReplay(loaded);
         setSession(null);
         setArtifact(null);
         window.localStorage.setItem(storageKeys.replayStage, "build");
@@ -3830,6 +3864,8 @@ export function App() {
     setConfidence(72);
     setReviewStep(null);
     setReplayIntro(false);
+    setActiveReplayId(null);
+    setActiveReplay(null);
     setArtifact(null);
     setSession(null);
     setError(null);
@@ -4049,9 +4085,35 @@ export function App() {
     setReplayIntro(false);
   };
 
+  if (hostedReplay !== null) {
+    return (
+      <div className="app-frame stage-reality hosted-replay-frame">
+        <ProofCapsuleReplayView
+          replay={hostedReplay}
+          proofCapsuleDownloadUrl={counterLabApi.replayProofCapsuleDownloadUrl(
+            hostedReplay.replayId,
+          )}
+          patchedNotebookDownloadUrl={counterLabApi.replayPatchedNotebookDownloadUrl(
+            hostedReplay.replayId,
+          )}
+          onStartOver={restart}
+        />
+        <footer className="footer shell">
+          <span>
+            <strong>CounterLab</strong> · verified replay
+          </span>
+          <span>Chatbots explain. CounterLab lets reality answer.</span>
+          <span>Read-only Capsule playback</span>
+        </footer>
+      </div>
+    );
+  }
+
   return (
     <div className={`app-frame stage-${stage}`}>
-      {replay && <ReplayBanner />}
+      {replay && activeReplay !== null && (
+        <ReplayBanner replay={activeReplay} />
+      )}
       <Header
         mode={mode}
         stage={stage}
@@ -4146,7 +4208,18 @@ export function App() {
           {reviewStep === null &&
             stage === "build" &&
             mode !== null &&
-            (replayIntro ? (
+            (replay && activeReplay === null ? (
+              <main className="workspace shell narrow" aria-live="polite">
+                <div className="screen-intro">
+                  <p className="eyebrow">Checking stored evidence</p>
+                  <h1>Opening this replay…</h1>
+                  <p>
+                    CounterLab will label it verified only after the stored
+                    payload passes its strict replay contract.
+                  </p>
+                </div>
+              </main>
+            ) : replayIntro && activeReplay !== null ? (
               <main className="workspace shell narrow">
                 <div className="screen-intro">
                   <p className="eyebrow">Stored evidence chain</p>
@@ -4160,20 +4233,39 @@ export function App() {
                   <dl className="provenance-list">
                     <div>
                       <dt>Replay</dt>
-                      <dd>{verifiedReplay.id}</dd>
+                      <dd>{activeReplay.replayId}</dd>
                     </div>
-                    <div>
-                      <dt>Model</dt>
-                      <dd>{verifiedReplay.model}</dd>
-                    </div>
-                    <div>
-                      <dt>Verifier</dt>
-                      <dd>{verifiedReplay.verifier}</dd>
-                    </div>
-                    <div>
-                      <dt>Commit</dt>
-                      <dd>{verifiedReplay.commit}</dd>
-                    </div>
+                    {activeReplay.schemaVersion === "1" ? (
+                      <>
+                        <div>
+                          <dt>Model</dt>
+                          <dd>{activeReplay.modelId}</dd>
+                        </div>
+                        <div>
+                          <dt>Verifier</dt>
+                          <dd>{activeReplay.verifierVersion}</dd>
+                        </div>
+                        <div>
+                          <dt>Commit</dt>
+                          <dd>{activeReplay.templateCommit}</dd>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <dt>Subject Pack</dt>
+                          <dd>{activeReplay.concept.replaceAll("_", " ")}</dd>
+                        </div>
+                        <div>
+                          <dt>Capsule</dt>
+                          <dd>{activeReplay.capsuleId}</dd>
+                        </div>
+                        <div>
+                          <dt>Root hash</dt>
+                          <dd>{activeReplay.rootHash}</dd>
+                        </div>
+                      </>
+                    )}
                   </dl>
                 </section>
                 <button

@@ -27,10 +27,15 @@ export function studioPath(input: {
   stage: string;
   mode: "instant" | "live" | "replay" | null;
   sessionId?: string;
+  replayId?: string;
   completed?: boolean;
 }): string {
   if (input.stage === "landing" || input.mode === null) return "/";
-  if (input.mode === "replay") return "/replay/leakage-01";
+  if (input.mode === "replay") {
+    return input.replayId === undefined
+      ? "/"
+      : `/replay/${encodeURIComponent(input.replayId)}`;
+  }
   if (input.stage === "live-setup" || input.sessionId === undefined)
     return "/new";
   if (input.completed) return `/proof/${encodeURIComponent(input.sessionId)}`;

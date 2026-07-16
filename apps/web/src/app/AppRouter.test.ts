@@ -31,9 +31,14 @@ describe("Studio URL routing", () => {
         sessionId: "session/one",
       }),
     ).toBe("/session/session%2Fone");
-    expect(studioPath({ stage: "build", mode: "replay" })).toBe(
-      "/replay/leakage-01",
-    );
+    expect(
+      studioPath({
+        stage: "build",
+        mode: "replay",
+        replayId: "replay/dynamic one",
+      }),
+    ).toBe("/replay/replay%2Fdynamic%20one");
+    expect(studioPath({ stage: "build", mode: "replay" })).toBe("/");
     expect(
       studioPath({
         stage: "reality",
