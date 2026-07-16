@@ -209,6 +209,11 @@ export async function resolveSessionEvidenceAuthority(
         "Evidence authority required before this learning step",
       );
     }
+    if (session.verifiedResult.concept !== session.beliefTest.concept) {
+      throw new SessionInputError(
+        "Evidence authority mismatch: legacy result concept does not match Belief Test v1",
+      );
+    }
     return {
       protocol: "legacy",
       verdict: "LEGACY_VERIFIED",

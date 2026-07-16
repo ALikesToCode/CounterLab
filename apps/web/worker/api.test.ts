@@ -4022,6 +4022,29 @@ describe("Cloudflare Worker API", () => {
       },
     });
     expect(await harness.runnerJobs.listEvents(jobId, 0)).toHaveLength(4);
+
+    const transfer = await postJson(
+      harness.app,
+      `/api/sessions/${harness.bundle.sessionId}/transfer`,
+      {
+        strategyChoice: "time_ordered_holdout",
+        riskChoice: "centered_window_reads_future",
+        evidenceChoices: [
+          "center_true_uses_later_targets",
+          "random_split_mixes_dates",
+        ],
+      },
+    );
+    expect(transfer.status).toBe(200);
+    await expect(transfer.json()).resolves.toMatchObject({
+      data: {
+        state: "TRANSFER_PASSED",
+        transferResult: {
+          taskId: "forecasting-future-leakage-01",
+          evaluatorVersion: "counterlab-transfer-v1",
+        },
+      },
+    });
   });
 
   it("releases a class-imbalance v5 result through the same Worker authority boundary", async () => {
@@ -4133,6 +4156,41 @@ describe("Cloudflare Worker API", () => {
         (event) => event.kind,
       ),
     ).toEqual(["verifier.verified", "result.ready"]);
+
+    expect(
+      (
+        await postJson(
+          harness.app,
+          `/api/sessions/${harness.sessionId}/revision`,
+          {
+            revision:
+              "Rare-event accuracy needs a majority baseline and class-specific evidence.",
+          },
+        )
+      ).status,
+    ).toBe(200);
+    const transfer = await postJson(
+      harness.app,
+      `/api/sessions/${harness.sessionId}/transfer`,
+      {
+        strategyChoice: "cost_aware_threshold",
+        riskChoice: "minority_false_negative_cost",
+        evidenceChoices: [
+          "confusion_matrix_exposes_misses",
+          "prevalence_shift_changes_precision",
+        ],
+      },
+    );
+    expect(transfer.status).toBe(200);
+    await expect(transfer.json()).resolves.toMatchObject({
+      data: {
+        state: "TRANSFER_PASSED",
+        transferResult: {
+          taskId: "manufacturing-defect-transfer-01",
+          evaluatorVersion: "counterlab-imbalance-transfer-v1",
+        },
+      },
+    });
   });
 
   it.each([
@@ -4696,6 +4754,44 @@ describe("Cloudflare Worker API", () => {
         },
       },
     });
+
+    expect(
+      (
+        await postJson(
+          harness.app,
+          `/api/sessions/${harness.bundle.sessionId}/revision`,
+          {
+            revision:
+              "The evidence is inconclusive, so I need a more separating test before repair.",
+          },
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await postJson(
+          harness.app,
+          `/api/sessions/${harness.bundle.sessionId}/transfer`,
+          {
+            strategyChoice: "time_ordered_holdout",
+            riskChoice: "centered_window_reads_future",
+            evidenceChoices: [
+              "center_true_uses_later_targets",
+              "random_split_mixes_dates",
+            ],
+          },
+        )
+      ).status,
+    ).toBe(200);
+    const patch = await postJson(
+      harness.app,
+      `/api/sessions/${harness.bundle.sessionId}/patch/compile`,
+    );
+    expect(patch.status).toBe(409);
+    await expect(patch.json()).resolves.toMatchObject({
+      error: { code: "PATCH_LOCKED_INCONCLUSIVE" },
+    });
+    expect(harness.dispatcher.dispatched).toHaveLength(2);
   });
 
   it("re-verifies final v5 compiler bytes before projecting verified authority", async () => {

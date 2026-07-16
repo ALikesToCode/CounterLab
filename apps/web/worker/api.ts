@@ -72,6 +72,7 @@ import {
   SessionService,
   getSessionBeliefAuthority,
   hashCanonical,
+  resolveSessionEvidenceAuthority,
   type RunnerJobRepository,
   type CounterLabSession,
   type SessionRepository,
@@ -4769,6 +4770,25 @@ export function createApi(options: ApiOptions = {}) {
     const sessionId = context.req.param("sessionId");
     const current = await service.getSession(sessionId);
     requireMutableSession(current);
+    const evidenceAuthority = await resolveSessionEvidenceAuthority(
+      current,
+    ).catch((error: unknown) => {
+      if (error instanceof SessionInputError) {
+        throw new ApiInputError(
+          "LIVE_RESULT_REQUIRED",
+          "An artifact-bound verified result is required before transfer",
+          409,
+        );
+      }
+      throw error;
+    });
+    if (evidenceAuthority.verdict === "REJECTED") {
+      throw new ApiInputError(
+        "EVIDENCE_REJECTED",
+        "Rejected evidence cannot advance to transfer",
+        409,
+      );
+    }
     const artifact = await artifacts(context, options).find(current.artifactId);
     if (current.mode.kind === "verified_replay") {
       throw new ApiInputError(
@@ -4783,10 +4803,8 @@ export function createApi(options: ApiOptions = {}) {
       const manifestHash =
         artifact === undefined ? null : await hashCanonical(artifact.manifest);
       if (
-        current.verifiedResult?.schemaVersion !== "2" ||
-        current.beliefTest === undefined ||
-        current.verifiedResult.concept !== current.beliefTest.concept ||
-        current.verifiedResult.artifactManifestHash !== manifestHash
+        evidenceAuthority.result.schemaVersion !== "2" ||
+        evidenceAuthority.result.artifactManifestHash !== manifestHash
       ) {
         throw new ApiInputError(
           "LIVE_RESULT_REQUIRED",
@@ -4798,7 +4816,7 @@ export function createApi(options: ApiOptions = {}) {
     await service.startTransfer(sessionId);
     const evaluatedAt = (options.now?.() ?? new Date()).toISOString();
     const result =
-      current.beliefTest?.concept === "class_imbalance"
+      evidenceAuthority.concept === "class_imbalance"
         ? await evaluateImbalanceTransfer(sessionId, submission, evaluatedAt)
         : await evaluateLeakageTransfer(sessionId, submission, evaluatedAt);
     const updated = await service.recordTransferResult(sessionId, result);
@@ -4810,6 +4828,20 @@ export function createApi(options: ApiOptions = {}) {
     const sessionId = context.req.param("sessionId");
     const current = await service.getSession(sessionId);
     requireMutableSession(current);
+    if (current.evidenceVerdict?.kind === "REJECTED") {
+      throw new ApiInputError(
+        "EVIDENCE_REJECTED",
+        "Rejected evidence cannot unlock repair",
+        409,
+      );
+    }
+    if (current.evidenceVerdict?.kind === "INCONCLUSIVE") {
+      throw new ApiInputError(
+        "PATCH_LOCKED_INCONCLUSIVE",
+        "The experiment was valid but inconclusive, so repair remains locked",
+        409,
+      );
+    }
     const sourceArtifact = await artifacts(context, options).find(
       current.artifactId,
     );
@@ -4822,6 +4854,16 @@ export function createApi(options: ApiOptions = {}) {
           503,
         );
       }
+      await resolveSessionEvidenceAuthority(current).catch((error: unknown) => {
+        if (error instanceof SessionInputError) {
+          throw new ApiInputError(
+            "LIVE_PATCH_CONTRACTS_REQUIRED",
+            "A passed transfer and artifact-bound verified result are required",
+            409,
+          );
+        }
+        throw error;
+      });
       if (
         sourceArtifact?.objectKey === undefined ||
         current.beliefTest === undefined ||
