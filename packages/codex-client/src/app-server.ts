@@ -1,5 +1,8 @@
 import { execFile } from "node:child_process";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { constants } from "node:fs";
+import { open, realpath } from "node:fs/promises";
+import { isAbsolute, join, relative } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 
@@ -21,6 +24,7 @@ import {
   CompileHostedPatchPlanInputSchema,
   CompilePatchInputSchema,
   CompilerSetupError,
+  JsonValueSchema,
   RepairLabInputSchema,
   RepairHostedExperimentPlanInputSchema,
   RepairHostedPatchPlanInputSchema,
@@ -41,6 +45,140 @@ const execFileAsync = promisify(execFile);
 const MAX_PROTOCOL_BUFFER_BYTES = 1_048_576;
 const MAX_STDERR_BYTES = 4_000;
 const MAX_APP_SERVER_ATTEMPTS = 3;
+const MAX_STRUCTURED_OUTPUT_BYTES = 1_048_576;
+const PUBLIC_RATIONALE_PATH = "public-rationale.md";
+
+const StructuredHostedOutputSchema = z
+  .object({
+    authoritativeArtifact: JsonValueSchema,
+    publicRationale: z.string().trim().min(1).max(16_000),
+  })
+  .strict();
+
+const FinalAgentMessageNotificationSchema = z
+  .object({
+    method: z.literal("item/completed"),
+    params: z
+      .object({
+        threadId: z.string().min(1),
+        turnId: z.string().min(1),
+        item: z
+          .object({
+            type: z.literal("agentMessage"),
+            text: z.string().max(MAX_STRUCTURED_OUTPUT_BYTES),
+            phase: z.literal("final_answer"),
+          })
+          .passthrough(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+
+type StructuredRun = {
+  outputSchema: Record<string, unknown>;
+  materialize(finalMessage: string): Promise<void>;
+};
+
+function structuredOutputSchema(
+  authoritativeSchema: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    type: "object",
+    properties: {
+      authoritativeArtifact: authoritativeSchema,
+      publicRationale: {
+        type: "string",
+        minLength: 1,
+        maxLength: 16_000,
+      },
+    },
+    required: ["authoritativeArtifact", "publicRationale"],
+    additionalProperties: false,
+  };
+}
+
+function directChild(root: string, fileName: string): string {
+  const candidate = join(root, fileName);
+  const pathFromRoot = relative(root, candidate);
+  if (
+    pathFromRoot !== fileName ||
+    pathFromRoot.startsWith("..") ||
+    isAbsolute(pathFromRoot)
+  ) {
+    throw new CompilerSetupError(
+      "CODEX_ISOLATION_UNAVAILABLE",
+      "Hosted output escaped the generation directory.",
+    );
+  }
+  return candidate;
+}
+
+async function writeBoundedFile(path: string, body: string): Promise<void> {
+  const noFollow = constants.O_NOFOLLOW ?? 0;
+  const handle = await open(
+    path,
+    constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | noFollow,
+    0o600,
+  );
+  try {
+    await handle.writeFile(body, "utf8");
+  } finally {
+    await handle.close();
+  }
+}
+
+async function materializeStructuredHostedOutput(
+  generationDirectory: string,
+  authoritativePath: "experiment-plan.json" | "patch-plan.json",
+  finalMessage: string,
+): Promise<void> {
+  if (Buffer.byteLength(finalMessage, "utf8") > MAX_STRUCTURED_OUTPUT_BYTES) {
+    throw new CompilerSetupError(
+      "CODEX_PROTOCOL_ERROR",
+      "Codex structured output exceeded the hosted size limit.",
+    );
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(finalMessage) as unknown;
+  } catch (error) {
+    throw new CompilerSetupError(
+      "CODEX_PROTOCOL_ERROR",
+      "Codex did not return schema-constrained JSON.",
+      { cause: error },
+    );
+  }
+  const output = StructuredHostedOutputSchema.parse(value);
+  const canonicalDirectory = await realpath(generationDirectory);
+  await writeBoundedFile(
+    directChild(canonicalDirectory, authoritativePath),
+    `${JSON.stringify(output.authoritativeArtifact, null, 2)}\n`,
+  );
+  await writeBoundedFile(
+    directChild(canonicalDirectory, PUBLIC_RATIONALE_PATH),
+    `${output.publicRationale}\n`,
+  );
+}
+
+function materializedFileEvent(
+  authoritativePath: "experiment-plan.json" | "patch-plan.json",
+): CompilerEvent {
+  return {
+    type: "file_change",
+    files: [authoritativePath, PUBLIC_RATIONALE_PATH],
+    unifiedDiff: [
+      `--- /dev/null`,
+      `+++ b/${authoritativePath}`,
+      "@@ -0,0 +1 @@",
+      "+[schema-constrained artifact materialized by CounterLab]",
+      `--- /dev/null`,
+      `+++ b/${PUBLIC_RATIONALE_PATH}`,
+      "@@ -0,0 +1 @@",
+      "+[display-only rationale materialized by CounterLab]",
+    ].join("\n"),
+    status: "completed",
+  };
+}
 
 function throwIfCancelled(signal: AbortSignal | undefined): void {
   if (signal?.aborted) {
@@ -261,6 +399,8 @@ class AppServerConnection {
   private closed = false;
   private terminationScheduled = false;
   private fatalError: Error | undefined;
+  private finalAgentMessage:
+    { threadId: string; turnId: string; text: string } | undefined;
 
   constructor(
     command: string,
@@ -327,6 +467,13 @@ class AppServerConnection {
 
   nextEvent(): Promise<CompilerEvent> {
     return this.events.next(this.timeoutMs);
+  }
+
+  structuredFinalMessage(threadId: string, turnId: string): string | undefined {
+    return this.finalAgentMessage?.threadId === threadId &&
+      this.finalAgentMessage.turnId === turnId
+      ? this.finalAgentMessage.text
+      : undefined;
   }
 
   close(): void {
@@ -448,6 +595,16 @@ class AppServerConnection {
         ),
       );
       return;
+    }
+
+    const finalAgentMessage =
+      FinalAgentMessageNotificationSchema.safeParse(value);
+    if (finalAgentMessage.success) {
+      this.finalAgentMessage = {
+        threadId: finalAgentMessage.data.params.threadId,
+        turnId: finalAgentMessage.data.params.turnId,
+        text: finalAgentMessage.data.params.item.text,
+      };
     }
 
     try {
@@ -610,7 +767,17 @@ export class AppServerCodexCompiler implements CodexCompiler {
       input.generationDirectory,
       "plan",
       options.signal,
+      {
+        outputSchema: structuredOutputSchema(input.experimentPlanSchema),
+        materialize: (finalMessage) =>
+          materializeStructuredHostedOutput(
+            input.generationDirectory,
+            "experiment-plan.json",
+            finalMessage,
+          ),
+      },
     );
+    yield materializedFileEvent("experiment-plan.json");
   }
 
   async *repairExperimentPlan(
@@ -631,7 +798,17 @@ export class AppServerCodexCompiler implements CodexCompiler {
       input.generationDirectory,
       "repair",
       options.signal,
+      {
+        outputSchema: structuredOutputSchema(input.experimentPlanSchema),
+        materialize: (finalMessage) =>
+          materializeStructuredHostedOutput(
+            input.generationDirectory,
+            "experiment-plan.json",
+            finalMessage,
+          ),
+      },
     );
+    yield materializedFileEvent("experiment-plan.json");
   }
 
   async *compileHostedPatchPlan(
@@ -644,7 +821,17 @@ export class AppServerCodexCompiler implements CodexCompiler {
       input.generationDirectory,
       "patch",
       options.signal,
+      {
+        outputSchema: structuredOutputSchema(input.patchPlanSchema),
+        materialize: (finalMessage) =>
+          materializeStructuredHostedOutput(
+            input.generationDirectory,
+            "patch-plan.json",
+            finalMessage,
+          ),
+      },
     );
+    yield materializedFileEvent("patch-plan.json");
   }
 
   async *repairHostedPatchPlan(
@@ -665,7 +852,17 @@ export class AppServerCodexCompiler implements CodexCompiler {
       input.generationDirectory,
       "repair",
       options.signal,
+      {
+        outputSchema: structuredOutputSchema(input.patchPlanSchema),
+        materialize: (finalMessage) =>
+          materializeStructuredHostedOutput(
+            input.generationDirectory,
+            "patch-plan.json",
+            finalMessage,
+          ),
+      },
     );
+    yield materializedFileEvent("patch-plan.json");
   }
 
   async *repairLab(
@@ -702,6 +899,7 @@ export class AppServerCodexCompiler implements CodexCompiler {
     cwd: string,
     phase: "plan" | "generate" | "repair" | "patch",
     signal?: AbortSignal,
+    structured?: StructuredRun,
   ): AsyncIterable<CompilerEvent> {
     for (
       let startupAttempt = 0;
@@ -711,7 +909,13 @@ export class AppServerCodexCompiler implements CodexCompiler {
       throwIfCancelled(signal);
       let emittedCompilerOutput = false;
       try {
-        for await (const event of this.runOnce(prompt, cwd, phase, signal)) {
+        for await (const event of this.runOnce(
+          prompt,
+          cwd,
+          phase,
+          signal,
+          structured,
+        )) {
           if (
             event.type !== "status" &&
             event.type !== "final_status" &&
@@ -743,6 +947,7 @@ export class AppServerCodexCompiler implements CodexCompiler {
     cwd: string,
     phase: "plan" | "generate" | "repair" | "patch",
     signal?: AbortSignal,
+    structured?: StructuredRun,
   ): AsyncIterable<CompilerEvent> {
     throwIfCancelled(signal);
     const launch = await this.prepareLaunch(cwd);
@@ -797,10 +1002,14 @@ export class AppServerCodexCompiler implements CodexCompiler {
       const threadParams: Record<string, unknown> = {
         cwd: launch.protocolCwd,
         approvalPolicy: "never",
-        sandbox: "workspace-write",
+        sandbox: structured === undefined ? "workspace-write" : "read-only",
         ephemeral: true,
         serviceName: "counterlab",
       };
+      if (structured !== undefined) {
+        threadParams.baseInstructions =
+          "Return only a final JSON object matching the supplied schema. Do not call tools, inspect files, run commands, or modify files. All required context is in the user message.";
+      }
       if (this.model) threadParams.model = this.model;
       const thread = ThreadStartResponseSchema.parse(
         await connection.request("thread/start", threadParams),
@@ -818,14 +1027,19 @@ export class AppServerCodexCompiler implements CodexCompiler {
         input: [{ type: "text", text: prompt, text_elements: [] }],
         cwd: launch.protocolCwd,
         approvalPolicy: "never",
-        sandboxPolicy: {
-          type: "workspaceWrite",
-          writableRoots: [launch.protocolCwd],
-          networkAccess: false,
-          excludeSlashTmp: true,
-          excludeTmpdirEnvVar: true,
-        },
+        sandboxPolicy:
+          structured === undefined
+            ? {
+                type: "workspaceWrite",
+                writableRoots: [launch.protocolCwd],
+                networkAccess: false,
+                excludeSlashTmp: true,
+                excludeTmpdirEnvVar: true,
+              }
+            : { type: "readOnly", networkAccess: false },
       };
+      if (structured !== undefined)
+        turnParams.outputSchema = structured.outputSchema;
       if (this.model) turnParams.model = this.model;
       const turn = TurnStartResponseSchema.parse(
         await connection.request("turn/start", turnParams),
@@ -835,6 +1049,15 @@ export class AppServerCodexCompiler implements CodexCompiler {
       let phaseSucceeded = false;
       while (!finished) {
         const event = await connection.nextEvent();
+        if (
+          structured !== undefined &&
+          (event.type === "command" || event.type === "file_change")
+        ) {
+          throw new CompilerSetupError(
+            "CODEX_PROTOCOL_ERROR",
+            "Hosted structured compilation attempted to use a disallowed tool.",
+          );
+        }
         yield event;
         if (
           event.type === "final_status" &&
@@ -846,17 +1069,27 @@ export class AppServerCodexCompiler implements CodexCompiler {
             event.status === "completed" || event.status === "verified";
         }
       }
-      yield {
-        type: "status",
-        phase,
-        status: phaseSucceeded ? "completed" : "failed",
-      };
       if (!phaseSucceeded) {
+        yield { type: "status", phase, status: "failed" };
         throw new CompilerSetupError(
           "CODEX_PROCESS_EXITED",
           "Codex App Server did not complete the requested turn.",
         );
       }
+      if (structured !== undefined) {
+        const finalMessage = connection.structuredFinalMessage(
+          thread.thread.id,
+          turn.turn.id,
+        );
+        if (finalMessage === undefined) {
+          throw new CompilerSetupError(
+            "CODEX_PROTOCOL_ERROR",
+            "Codex App Server completed without a structured final message.",
+          );
+        }
+        await structured.materialize(finalMessage);
+      }
+      yield { type: "status", phase, status: "completed" };
     } catch (error) {
       throwIfCancelled(signal);
       if (error instanceof z.ZodError) {

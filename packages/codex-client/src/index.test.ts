@@ -88,11 +88,13 @@ function patchInput(): CompilePatchInput {
   };
 }
 
-function hostedPlanInput(): CompileHostedExperimentPlanInput {
+function hostedPlanInput(
+  directory = generationDirectory,
+): CompileHostedExperimentPlanInput {
   return {
     sessionId: "session_test",
     artifactManifestHash: "e".repeat(64),
-    generationDirectory,
+    generationDirectory: directory,
     approvedBeliefTest: {
       id: "belief_test",
       concept: "entity_leakage",
@@ -146,13 +148,15 @@ function hostedPlanInput(): CompileHostedExperimentPlanInput {
   };
 }
 
-function hostedPatchInput(): CompileHostedPatchPlanInput {
+function hostedPatchInput(
+  directory = generationDirectory,
+): CompileHostedPatchPlanInput {
   return {
     sessionId: "session_test",
     artifactManifestHash: "e".repeat(64),
     sourceArtifactHash: "b".repeat(64),
     conceptPackVersion: "2.0.0",
-    generationDirectory,
+    generationDirectory: directory,
     approvedBeliefTest: {
       id: "belief_test",
       concept: "entity_leakage",
@@ -449,25 +453,51 @@ describe("hosted plan-only compiler", () => {
     expect(prompt).not.toContain("hidden verifier source");
   });
 
-  it("runs hosted plan compilation through the stable stdio transport", async () => {
+  it("materializes hosted Plan artifacts from a read-only schema-constrained turn", async () => {
     const fakeServer = fileURLToPath(
       new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
     );
+    const work = await mkdtemp(join(tmpdir(), "counterlab-structured-plan-"));
     const compiler = new AppServerCodexCompiler({
       command: process.execPath,
-      commandArgs: [fakeServer, "--expect-constrained-turn"],
+      commandArgs: [
+        fakeServer,
+        "--expect-structured-turn",
+        "--structured-plan-output",
+      ],
       timeoutMs: 2_000,
       ...unisolatedTestProcess,
     });
 
-    const events = await collect(
-      compiler.compileExperimentPlan(hostedPlanInput()),
-    );
-    expect(events).toContainEqual({
-      type: "status",
-      phase: "plan",
-      status: "completed",
-    });
+    try {
+      const events = await collect(
+        compiler.compileExperimentPlan(hostedPlanInput(work)),
+      );
+      expect(events).toContainEqual({
+        type: "status",
+        phase: "plan",
+        status: "completed",
+      });
+      expect(
+        JSON.parse(await readFile(join(work, "experiment-plan.json"), "utf8")),
+      ).toEqual({
+        schemaVersion: "2",
+        artifactManifestHash: "e".repeat(64),
+      });
+      expect(await readFile(join(work, "public-rationale.md"), "utf8")).toBe(
+        "Whole-entity holdout is the smallest fair test.\n",
+      );
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: "file_change",
+          files: ["experiment-plan.json", "public-rationale.md"],
+          status: "completed",
+        }),
+      );
+      expect(events.some((event) => event.type === "command")).toBe(false);
+    } finally {
+      await rm(work, { recursive: true, force: true });
+    }
   });
 
   it("restarts one App Server that exits before emitting compiler output", async () => {
@@ -478,14 +508,18 @@ describe("hosted plan-only compiler", () => {
     const exitMarker = join(work, "first-process-exited");
     const compiler = new AppServerCodexCompiler({
       command: process.execPath,
-      commandArgs: [fakeServer, `--exit-once=${exitMarker}`],
+      commandArgs: [
+        fakeServer,
+        `--exit-once=${exitMarker}`,
+        "--structured-plan-output",
+      ],
       timeoutMs: 2_000,
       ...unisolatedTestProcess,
     });
 
     try {
       await expect(
-        collect(compiler.compileExperimentPlan(hostedPlanInput())),
+        collect(compiler.compileExperimentPlan(hostedPlanInput(work))),
       ).resolves.toContainEqual({
         type: "status",
         phase: "plan",
@@ -506,14 +540,18 @@ describe("hosted plan-only compiler", () => {
     const failureMarker = join(work, "failed-turn-count");
     const compiler = new AppServerCodexCompiler({
       command: process.execPath,
-      commandArgs: [fakeServer, `--fail-turn-twice=${failureMarker}`],
+      commandArgs: [
+        fakeServer,
+        `--fail-turn-twice=${failureMarker}`,
+        "--structured-plan-output",
+      ],
       timeoutMs: 2_000,
       ...unisolatedTestProcess,
     });
 
     try {
       await expect(
-        collect(compiler.compileExperimentPlan(hostedPlanInput())),
+        collect(compiler.compileExperimentPlan(hostedPlanInput(work))),
       ).resolves.toContainEqual({
         type: "status",
         phase: "plan",

@@ -68,9 +68,9 @@ function renderHostedExperimentPlanPrompt(
   return `You are the bounded CounterLab hosted Experiment Plan compiler. Produce an artifact-specific plan that composes fixed, independently verified operations.
 
 Authority boundary:
-- Write only ${input.permittedOutputs.join(" and ")} in the current generation directory.
-- experiment-plan.json is the only authoritative output. It must match the supplied JSON Schema exactly.
-- public-rationale.md is display-only plain language. It never determines verification, execution, teaching, or pass/fail.
+- Do not call tools or write files. Return one schema-constrained JSON object; fixed CounterLab code materializes only ${input.permittedOutputs.join(" and ")}.
+- authoritativeArtifact becomes experiment-plan.json and must match the supplied Experiment Plan JSON Schema exactly.
+- publicRationale becomes public-rationale.md, is display-only plain language, and never determines verification, execution, teaching, or pass/fail.
 - The plan must not contain executable source code, shell commands, SQL, arbitrary formulas, literal result values, raw paths, imports, network actions, or dynamic expressions.
 - Do not run shell commands, execute notebook cells, read files, inspect environment variables, access parent directories, use the network, or install packages.
 - Use only the registered operations, metrics, and visualizations listed below.
@@ -140,9 +140,9 @@ function renderHostedPatchPlanPrompt(
   return `You are the bounded CounterLab hosted Patch Plan compiler. Select the smallest registered repair after deterministic transfer has passed.
 
 Authority boundary:
-- Write only ${input.permittedOutputs.join(" and ")} in the current generation directory.
-- patch-plan.json is the only authoritative output and must match the supplied schema exactly.
-- public-rationale.md is display-only and never determines patch validity.
+- Do not call tools or write files. Return one schema-constrained JSON object; fixed CounterLab code materializes only ${input.permittedOutputs.join(" and ")}.
+- authoritativeArtifact becomes patch-plan.json and must match the supplied Patch Plan schema exactly.
+- publicRationale becomes public-rationale.md, is display-only, and never determines patch validity.
 - Do not write notebook code, Python, shell commands, SQL, imports, formulas, result literals, raw paths, or dynamic expressions.
 - Select only the registered transformations and allowed cell indexes below.
 - Copy evidence references only from the approved Belief Test and Artifact Manifest.

@@ -44,6 +44,8 @@ const expectModelOmitted = process.argv.includes("--expect-model-omitted");
 const expectConstrainedTurn = process.argv.includes(
   "--expect-constrained-turn",
 );
+const expectStructuredTurn = process.argv.includes("--expect-structured-turn");
+const structuredPlanOutput = process.argv.includes("--structured-plan-output");
 const expectedModelArgument = process.argv.find((argument) =>
   argument.startsWith("--expect-model="),
 );
@@ -98,6 +100,9 @@ lines.on("line", (line) => {
       selectedModel = message.params.model;
     }
     if (expectedCwd && message.params.cwd !== expectedCwd) process.exit(6);
+    if (expectStructuredTurn && message.params.sandbox !== "read-only") {
+      process.exit(9);
+    }
     send({
       id: message.id,
       result: {
@@ -136,6 +141,16 @@ lines.on("line", (line) => {
     ) {
       process.exit(5);
     }
+    if (
+      expectStructuredTurn &&
+      (message.params.sandboxPolicy?.type !== "readOnly" ||
+        message.params.sandboxPolicy?.networkAccess !== false ||
+        message.params.outputSchema?.properties?.authoritativeArtifact ===
+          undefined ||
+        message.params.outputSchema?.properties?.publicRationale === undefined)
+    ) {
+      process.exit(10);
+    }
     send({ id: message.id, result: { turn: { id: "turn_test" } } });
     if (silentTurn) return;
     if (requestApproval) {
@@ -147,6 +162,30 @@ lines.on("line", (line) => {
       return;
     }
     if (!failThisTurn) {
+      if (structuredPlanOutput) {
+        send({
+          method: "item/completed",
+          params: {
+            threadId: "thread_test",
+            turnId: "turn_test",
+            completedAtMs: 122,
+            item: {
+              type: "agentMessage",
+              id: "structured_output",
+              text: JSON.stringify({
+                authoritativeArtifact: {
+                  schemaVersion: "2",
+                  artifactManifestHash: "e".repeat(64),
+                },
+                publicRationale:
+                  "Whole-entity holdout is the smallest fair test.",
+              }),
+              phase: "final_answer",
+              memoryCitation: null,
+            },
+          },
+        });
+      }
       send({
         method: "item/plan/delta",
         params: {
