@@ -14,8 +14,9 @@
 - A local candidate cannot inherit production authority. Promotion requires a
   source-bound non-root image, fresh evidence, no unreviewed fixable Critical or
   High findings, Proof Capsule linkage, deployment, and production smoke.
-- Keep vulnerability risk explicit. The current candidate's eight fixable High
-  findings block promotion; no VEX suppression is applied.
+- Keep vulnerability risk explicit. The then-current v3 candidate's eight
+  fixable High findings blocked promotion; no VEX suppression was applied to
+  that historical image.
 
 ## 2026-07-15 — Bundle the hosted runner into a minimal non-root image
 
@@ -264,3 +265,23 @@ can pass.
 - Commit the sanitized report byte-for-byte as `docs/PRODUCTION_SMOKE.json`;
   later deployments must generate new evidence rather than inheriting this
   release's authority.
+
+## 2026-07-16 — Qualify vulnerability exceptions as exact, expiring authority
+
+- Upgrade the runner candidate to CPython 3.13.14 and retain the complete raw
+  Grype scan instead of reducing the report to a severity summary.
+- Permit a fixable High only when one reviewed exception maps one-to-one to the
+  exact CVE, package, version, image digest, VEX statement, and bounded
+  reachability report. Fixable Critical findings remain non-exceptable.
+- Prove VEX application with three scanner artifacts: unsuppressed baseline,
+  exact VEX application, and a wrong-subcomponent negative control. Preserve
+  the match multiset and fail if anything except the intended finding moves to
+  ignored.
+- Bind hosted run and patch entrypoints, source commit, SBOM, Python version,
+  vulnerable module bytes, KEV check, review owner, expiry, and revalidation
+  triggers. This is bounded reachability evidence, not whole-program proof.
+- Keep the qualified snapshot `local_candidate` until the exact image is
+  deployed and production smoke is recorded. A local pass or reviewed exception
+  cannot be relabelled as Cloudflare production evidence.
+- Require live Proof Bundle v2 output to include the canonical scientific-engine
+  authority hash, and make a mismatched expected authority fail validation.

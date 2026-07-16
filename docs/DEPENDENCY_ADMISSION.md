@@ -46,18 +46,23 @@ agreement alone is supporting evidence, not proof.
 ## Vulnerability policy
 
 Production promotion rejects every fixable Critical and every unreviewed
-fixable High finding. The current local candidate has eight fixable High
-findings and therefore is not production-qualified.
+fixable High finding. The current local candidate has no fixable Critical and
+one fixable High finding. That High is covered by a one-to-one, exact-image,
+expiring OpenVEX review and bounded reachability evidence, so the local policy
+is `PASSED_WITH_REVIEWED_EXCEPTION`.
 
-A future exception must be an image-digest-bound VEX/risk record naming the CVE,
+An exception must be an image-digest-bound VEX/risk record naming the CVE,
 component, status, justification, reachability evidence, owner, expiry, and
-revalidation trigger. Known-exploited findings fail unless evidence establishes
-that the exact image is not affected. No exception mechanism is implemented or
-used in the current release evidence.
+revalidation trigger. CounterLab additionally preserves raw, VEX-applied, and
+wrong-subcomponent negative-control scans and verifies that only the intended
+finding moves from active to ignored. Known-exploited findings fail unless
+evidence establishes that the exact image is not affected. The current review
+expires on `2026-08-14T05:30:00Z` and does not carry authority to another image
+or environment kind.
 
-Findings without a published fix are still recorded and reviewed; `--only-fixed`
-is not a zero-risk claim. Database age and validity are part of every scan
-record.
+Findings without a published fix are recorded and remain visible for release
+review; `--only-fixed` is not a zero-risk claim. Database age and validity are
+part of every scan record.
 
 ## Candidate roadmap
 

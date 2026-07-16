@@ -41,10 +41,13 @@ green release is evidence, but is not silently promoted to the current tree.
 - [x] Node, Python, and container CycloneDX 1.6 inventories are deterministic
       after normalization and bind current locks, source, image, registry, and
       Subject Pack bindings.
-- [ ] Production vulnerability policy passes. The current local candidate has
-      eight unreviewed fixable High findings.
-- [ ] Proof Capsule v2 validates `scientificEngineSnapshotHash`.
-- [ ] `scripts/release-check.sh` invokes the full engine gate.
+- [x] Local-candidate vulnerability policy passes with 0 fixable Critical and
+      one exact-image reviewed High exception; raw/applied/negative scans and
+      the bounded reachability review are hash-bound and retained.
+- [x] Proof Bundle v2 validates `scientificEngineSnapshotHash` and rejects a
+      mismatched authority.
+- [x] `scripts/release-check.sh` requires a qualified image and invokes the full
+      engine gate.
 - [ ] The exact engine-qualified image is deployed and production smoke records
       its authority hash.
 
@@ -122,8 +125,8 @@ Report SHA-256:
 The checked browser items describe the released Studio journey. The following
 v5.1 product gates remain pending and must not be inferred from them:
 
-- [ ] scientific-engine production promotion; the local registry, licenses,
-      integrity manifests, SBOM, health, and drift evidence now pass;
+- [ ] scientific-engine production promotion; the local full gate and Proof
+      Bundle authority link pass, but deployment and a new public smoke remain;
 - [ ] Belief Spec v2 and Experiment IR v5 with replay-safe adapters;
 - [ ] fixed experiment scorer and epistemic tri-state verdict;
 - [ ] one signed Boundary Map;

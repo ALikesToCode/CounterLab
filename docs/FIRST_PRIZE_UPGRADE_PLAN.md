@@ -1,6 +1,6 @@
 # CounterLab Studio — First Prize Upgrade Plan
 
-Updated: 2026-07-15
+Updated: 2026-07-16
 
 This document records the completed CounterLab Studio upgrade and its remaining
 held-out/study limitation. The active v5.1 phase order and scientific-engine
@@ -9,10 +9,11 @@ claimed here.
 
 The v5.1 scientific-engine registry gate is now implemented for the two
 released ML packs. Its exact non-root local candidate, licenses, integrity
-evidence, deterministic health runs, normalized SBOMs, vulnerability report,
-and canonical authority hash pass the registry-only image gate. Production
-promotion remains pending because eight fixable High findings and Proof Capsule
-v2 engine linkage still fail closed. See `docs/SCIENTIFIC_ENGINES.md` and
+evidence, deterministic health runs, normalized SBOMs, raw vulnerability scan,
+reviewed exception evidence, and canonical authority hash pass the full local
+image gate. Proof Bundle v2 binds and validates that authority hash. Production
+promotion remains pending until the qualified image is deployed and a new
+public smoke records it. See `docs/SCIENTIFIC_ENGINES.md` and
 `docs/DEPENDENCY_ADMISSION.md`.
 
 ## Release objective

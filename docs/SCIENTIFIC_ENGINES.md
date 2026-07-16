@@ -33,20 +33,20 @@ operations, fields, versions, evidence IDs, or tolerance profiles fail closed.
 The recorded candidate is intentionally not labelled as production authority.
 
 - Environment: `counterlab-runner-linux-amd64-v2`
-- Source commit: `6e27bd021ce39ea5d65b8d921825c7964c157fde`
+- Source commit: `47e8d393b7634a3a314cd26edac06b1e916d5bfa`
 - Image digest:
-  `sha256:67682290a02e8b94e4522511242a3196f1a4f116eb187e22274abece2740b7a2`
+  `sha256:241de2066e1aba3d8cca27de9d76c7d32f2b32893067d92cc8e837bccd79f19e`
 - Runtime user: `10001:10001`
 - Authority hash:
-  `e7953ed4bd523864608473602bac614467fbfd504203e6d9c0721e428f2417d9`
+  `a58be0afe8663d6f08991196b538eb8b31f5de9b47c09d243855aa04c66bcb02`
 - Deterministic kernel hashes:
-  - leakage: `2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0`
-  - imbalance: `90723d4dd1b73d42133646cf937f05befc731a8e4dbf0ff4c68ad51ddffdd0ef`
+  - leakage: `a6ae7652e04e4d70196f991c63b8f7bcb3b76f8c4ab833d3ce2b626df0ab6c94`
+  - imbalance: `5787e04aa59c2703336d35bf5e64935987b44029f47b833e9152dd7d5c97d0d4`
 
 The image starts as a non-root user, runs with one-thread numeric pools, and the
 verification probe uses a no-network, read-only container with bounded tmpfs.
 Two clean Python builder executions produced the same kernel wheel SHA-256:
-`a2a9cb3b5068a1e8c29fcb210b96b63879ad6c2c2255dc8734e4de1bc2426f61`.
+`ba946384886a4776631e7ac12de818a96e85f6a547b7357c15805890a8801146`.
 
 ## Inventory and vulnerability evidence
 
@@ -54,15 +54,30 @@ Three normalized CycloneDX 1.6 documents are committed:
 
 | Inventory                  | Components | SHA-256                                                            |
 | -------------------------- | ---------: | ------------------------------------------------------------------ |
-| Production Node graph      |         19 | `1614dafa5aac250b33824e14666fa49441a4bb5f548dbbd4bb2e6a679be801e1` |
+| Production Node graph      |         19 | `80981d7969b467915c73c061b0ea701e02ac05e1dc8b6197025b4cd1cb5d2b19` |
 | Runner Python requirements |         22 | `24f1d2cf673e8ac7c45289d3fbbc900f609ca53430b4166597b493fac8debc54` |
-| Runner image filesystem    |      3,433 | `9e88e173c3f15bfebf785717948b8356a8ea547391557b844296cdc67d1e671b` |
+| Runner image filesystem    |      2,839 | `3bc12058cc1ecacc0220545f47a1527c8de2d0cb4b54e921d43658d517065a26` |
 
 The Grype 0.112.0 scan is recorded in
-`docs/sbom/vulnerability-report.json`. It found no fixable Critical finding, but
-it did find eight fixable High findings attributed to CPython 3.12.13. Those
-findings block production promotion. No VEX suppression or risk exception has
-been applied.
+`docs/sbom/vulnerability-report.json`. Its database was built at
+`2026-07-15T18:14:40Z`. The unsuppressed scan contains 171 package findings:
+7 Critical, 23 High, 51 Medium, 4 Low, 50 Negligible, and 36 Unknown. None of
+the Critical findings has a published fix in this scan. The fixable set is 0
+Critical, 1 High, and 3 Medium.
+
+The one fixable High is `CVE-2026-15308` against CPython 3.13.14. CounterLab
+records an exact-image OpenVEX `not_affected` statement backed by a bounded
+reachability probe over both hosted run and patch entrypoints. The VEX
+application proof changes Grype from 171 active findings to 170 active plus
+exactly one ignored finding; a wrong-subcomponent negative control suppresses
+zero findings. The CVE was not listed in the checked CISA KEV catalogue. This
+exception expires on `2026-08-14T05:30:00Z` and must be requalified when the
+image, source, SBOM, Python/module bytes, entrypoints, scanner database, or
+vulnerability status changes.
+
+The resulting local-candidate policy is
+`PASSED_WITH_REVIEWED_EXCEPTION`. That is not a zero-vulnerability claim and
+does not relabel the local snapshot as Cloudflare production authority.
 
 SBOM presence is inventory evidence, not proof that vulnerabilities are absent.
 The container inventory excludes the host kernel and Cloudflare platform. The
@@ -72,27 +87,20 @@ change.
 
 ## Verification
 
-The earlier registry gate is:
+The current full local-candidate gate is:
 
 ```bash
 ./scripts/verify-scientific-engines.sh \
-  --registry-only \
-  --image counterlab-runner:engine-registry-v3
+  --image counterlab-runner:engine-registry-v4
 ```
 
 It validates schemas, evidence hashes, role and operation policy, exact locks,
-licenses, SBOM bindings, image/source identity, the non-root runtime user,
-installed distribution files, thread policy, and repeated golden results.
-
-The full command intentionally remains red until Proof Capsule v2 validates the
-scientific authority hash:
-
-```bash
-./scripts/verify-scientific-engines.sh \
-  --image counterlab-runner:engine-registry-v3
-```
-
-Current typed blocker: `PROOF_CAPSULE_ENGINE_LINK_MISSING`.
+licenses, SBOM bindings, raw-scan derivation, VEX application and negative
+control, bounded reachability, image/source identity, the non-root runtime user,
+installed distribution files, thread policy, repeated golden results, and the
+Proof Bundle v2 authority link. It passes for the exact image and authority
+hash above. Adding `--require-production` correctly rejects this snapshot while
+its environment kind remains `local_candidate`.
 
 ## Non-claims
 
