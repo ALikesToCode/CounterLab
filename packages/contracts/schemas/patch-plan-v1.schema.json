@@ -57,7 +57,13 @@
               },
               "kind": {
                 "type": "string",
-                "enum": ["code", "metric", "schema", "output", "learner_claim"]
+                "enum": [
+                  "code",
+                  "metric",
+                  "schema",
+                  "output",
+                  "learner_claim"
+                ]
               },
               "hash": {
                 "type": "string",
@@ -72,7 +78,12 @@
                 "minLength": 1
               }
             },
-            "required": ["kind", "hash", "excerpt", "relevance"],
+            "required": [
+              "kind",
+              "hash",
+              "excerpt",
+              "relevance"
+            ],
             "additionalProperties": false
           }
         },
@@ -137,7 +148,11 @@
                 "minLength": 1
               }
             },
-            "required": ["id", "cellIndex", "reason"],
+            "required": [
+              "id",
+              "cellIndex",
+              "reason"
+            ],
             "additionalProperties": false
           }
         }
@@ -216,7 +231,13 @@
               },
               "kind": {
                 "type": "string",
-                "enum": ["code", "metric", "schema", "output", "learner_claim"]
+                "enum": [
+                  "code",
+                  "metric",
+                  "schema",
+                  "output",
+                  "learner_claim"
+                ]
               },
               "hash": {
                 "type": "string",
@@ -231,7 +252,12 @@
                 "minLength": 1
               }
             },
-            "required": ["kind", "hash", "excerpt", "relevance"],
+            "required": [
+              "kind",
+              "hash",
+              "excerpt",
+              "relevance"
+            ],
             "additionalProperties": false
           }
         },
@@ -292,7 +318,11 @@
                 "minLength": 1
               }
             },
-            "required": ["id", "cellIndex", "reason"],
+            "required": [
+              "id",
+              "cellIndex",
+              "reason"
+            ],
             "additionalProperties": false
           }
         }

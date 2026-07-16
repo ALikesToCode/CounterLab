@@ -22,7 +22,10 @@
     },
     "concept": {
       "type": "string",
-      "enum": ["entity_leakage", "class_imbalance"]
+      "enum": [
+        "entity_leakage",
+        "class_imbalance"
+      ]
     },
     "conceptPackVersion": {
       "type": "string",
@@ -59,7 +62,13 @@
           },
           "kind": {
             "type": "string",
-            "enum": ["code", "metric", "schema", "output", "learner_claim"]
+            "enum": [
+              "code",
+              "metric",
+              "schema",
+              "output",
+              "learner_claim"
+            ]
           },
           "hash": {
             "type": "string",
@@ -74,7 +83,12 @@
             "minLength": 1
           }
         },
-        "required": ["kind", "hash", "excerpt", "relevance"],
+        "required": [
+          "kind",
+          "hash",
+          "excerpt",
+          "relevance"
+        ],
         "additionalProperties": false
       }
     },
@@ -86,7 +100,10 @@
           "properties": {
             "id": {
               "type": "string",
-              "enum": ["current", "competing"]
+              "enum": [
+                "current",
+                "competing"
+              ]
             },
             "statement": {
               "type": "string",
@@ -122,7 +139,10 @@
                   "minLength": 1
                 }
               },
-              "required": ["patternId", "description"],
+              "required": [
+                "patternId",
+                "description"
+              ],
               "additionalProperties": false
             }
           },
@@ -140,7 +160,10 @@
           "properties": {
             "id": {
               "type": "string",
-              "enum": ["current", "competing"]
+              "enum": [
+                "current",
+                "competing"
+              ]
             },
             "statement": {
               "type": "string",
@@ -176,7 +199,10 @@
                   "minLength": 1
                 }
               },
-              "required": ["patternId", "description"],
+              "required": [
+                "patternId",
+                "description"
+              ],
               "additionalProperties": false
             }
           },
@@ -313,11 +339,18 @@
                   },
                   "prevalenceScenario": {
                     "type": "string",
-                    "enum": ["observed", "rarer", "more_common"]
+                    "enum": [
+                      "observed",
+                      "rarer",
+                      "more_common"
+                    ]
                   },
                   "model": {
                     "type": "string",
-                    "enum": ["logistic_regression", "majority_baseline"]
+                    "enum": [
+                      "logistic_regression",
+                      "majority_baseline"
+                    ]
                   }
                 },
                 "required": [
@@ -424,11 +457,18 @@
                     },
                     "prevalenceScenario": {
                       "type": "string",
-                      "enum": ["observed", "rarer", "more_common"]
+                      "enum": [
+                        "observed",
+                        "rarer",
+                        "more_common"
+                      ]
                     },
                     "model": {
                       "type": "string",
-                      "enum": ["logistic_regression", "majority_baseline"]
+                      "enum": [
+                        "logistic_regression",
+                        "majority_baseline"
+                      ]
                     }
                   },
                   "required": [
@@ -490,14 +530,20 @@
                 "properties": {
                   "hypothesisId": {
                     "type": "string",
-                    "enum": ["current", "competing"]
+                    "enum": [
+                      "current",
+                      "competing"
+                    ]
                   },
                   "patternId": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
                   }
                 },
-                "required": ["hypothesisId", "patternId"],
+                "required": [
+                  "hypothesisId",
+                  "patternId"
+                ],
                 "additionalProperties": false
               },
               {
@@ -505,14 +551,20 @@
                 "properties": {
                   "hypothesisId": {
                     "type": "string",
-                    "enum": ["current", "competing"]
+                    "enum": [
+                      "current",
+                      "competing"
+                    ]
                   },
                   "patternId": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
                   }
                 },
-                "required": ["hypothesisId", "patternId"],
+                "required": [
+                  "hypothesisId",
+                  "patternId"
+                ],
                 "additionalProperties": false
               }
             ]
@@ -563,7 +615,9 @@
               "const": "UNSELECTED"
             }
           },
-          "required": ["status"],
+          "required": [
+            "status"
+          ],
           "additionalProperties": false
         },
         {
@@ -606,7 +660,10 @@
                     }
                   }
                 },
-                "required": ["candidateId", "reasonCodes"],
+                "required": [
+                  "candidateId",
+                  "reasonCodes"
+                ],
                 "additionalProperties": false
               }
             },
@@ -713,7 +770,10 @@
             "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
           }
         },
-        "required": ["id", "description"],
+        "required": [
+          "id",
+          "description"
+        ],
         "additionalProperties": false
       }
     },
@@ -840,7 +900,12 @@
               }
             }
           },
-          "required": ["kind", "generatorId", "promptHash", "inputHashes"],
+          "required": [
+            "kind",
+            "generatorId",
+            "promptHash",
+            "inputHashes"
+          ],
           "additionalProperties": false
         },
         {
@@ -864,7 +929,11 @@
               }
             }
           },
-          "required": ["kind", "generatorId", "inputHashes"],
+          "required": [
+            "kind",
+            "generatorId",
+            "inputHashes"
+          ],
           "additionalProperties": false
         },
         {
@@ -892,7 +961,12 @@
               }
             }
           },
-          "required": ["kind", "generatorId", "sourcePlanHash", "inputHashes"],
+          "required": [
+            "kind",
+            "generatorId",
+            "sourcePlanHash",
+            "inputHashes"
+          ],
           "additionalProperties": false
         }
       ]
@@ -925,7 +999,11 @@
           "maximum": 8
         }
       },
-      "required": ["wallSeconds", "memoryMb", "maxRuns"],
+      "required": [
+        "wallSeconds",
+        "memoryMb",
+        "maxRuns"
+      ],
       "additionalProperties": false
     }
   },
