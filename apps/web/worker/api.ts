@@ -30,6 +30,7 @@ import {
   RunnerLabCompileBundleV5Schema,
   RunnerLabInteractiveRunBundleV5Schema,
   RunnerLabRunBundleV5Schema,
+  RunnerPatchCompileBundleV5Schema,
   RunnerScientificCandidateV5Schema,
   VersionedRunnerJobInputBundleSchema,
   deriveInteractivePlanV5,
@@ -5529,7 +5530,9 @@ export function createApi(options: ApiOptions = {}) {
           503,
         );
       }
-      await resolveSessionEvidenceAuthority(current).catch((error: unknown) => {
+      const evidenceAuthority = await resolveSessionEvidenceAuthority(
+        current,
+      ).catch((error: unknown) => {
         if (error instanceof SessionInputError) {
           throw new ApiInputError(
             "LIVE_PATCH_CONTRACTS_REQUIRED",
@@ -5539,6 +5542,234 @@ export function createApi(options: ApiOptions = {}) {
         }
         throw error;
       });
+      if (evidenceAuthority.protocol === "v5") {
+        if (evidenceAuthority.verdict !== "SUPPORTS") {
+          throw new ApiInputError(
+            "PATCH_LOCKED_INCONCLUSIVE",
+            "The experiment was valid but inconclusive, so repair remains locked",
+            409,
+          );
+        }
+        if (
+          sourceArtifact?.objectKey === undefined ||
+          current.transferResult?.outcome !== "PASSED" ||
+          current.patchResult !== undefined
+        ) {
+          throw new ApiInputError(
+            "LIVE_PATCH_CONTRACTS_REQUIRED",
+            "A passed transfer and artifact-bound verified result are required",
+            409,
+          );
+        }
+        const manifestHash = await hashCanonical(sourceArtifact.manifest);
+        if (
+          evidenceAuthority.result.artifactManifestHash !== manifestHash ||
+          evidenceAuthority.lineage.artifactManifestHash !== manifestHash
+        ) {
+          throw new ApiInputError(
+            "LIVE_PATCH_LINEAGE_MISMATCH",
+            "The verified result does not match this source notebook",
+            409,
+          );
+        }
+        const pack = getConceptPack(evidenceAuthority.concept);
+        if (
+          current.transferResult.taskId !== pack.transferTask.evaluatorTaskId
+        ) {
+          throw new ApiInputError(
+            "LIVE_PATCH_TRANSFER_MISMATCH",
+            "The passed transfer does not match the selected Subject Pack",
+            409,
+          );
+        }
+        const allowedCellIndices = sourceArtifact.manifest.cells
+          .filter((cell) => {
+            if (cell.type !== "code") return false;
+            const evidence = new Set(cell.symbols);
+            if (
+              evidence.has("train_test_split") ||
+              cell.sourceExcerpt.includes("train_test_split")
+            ) {
+              return true;
+            }
+            return (
+              evidenceAuthority.concept === "class_imbalance" &&
+              [
+                "accuracy_score",
+                "classification_report",
+                "confusion_matrix",
+              ].some(
+                (symbol) =>
+                  evidence.has(symbol) || cell.sourceExcerpt.includes(symbol),
+              )
+            );
+          })
+          .map((cell) => cell.index)
+          .slice(0, 4);
+        if (allowedCellIndices.length === 0) {
+          throw new ApiInputError(
+            "LIVE_PATCH_UNSUPPORTED",
+            "No supported evaluation cell could be resolved for a minimal patch",
+            409,
+          );
+        }
+        const store = runnerObjectStore(context, options);
+        const jobs = runnerJobService(context, options);
+        const frozenCompile = await loadFrozenScientificCompileAuthority({
+          store,
+          jobs,
+          session: current,
+          manifest: sourceArtifact.manifest,
+          lineage: evidenceAuthority.lineage,
+        });
+        if (
+          frozenCompile.selectedExperimentIr.transfer.taskId !==
+          pack.transferTask.id
+        ) {
+          throw new ApiInputError(
+            "LIVE_PATCH_TRANSFER_MISMATCH",
+            "The frozen Experiment IR transfer does not match the Subject Pack",
+            409,
+          );
+        }
+        const [beliefSpecHash, evidenceVerdictHash, patchContractHash] =
+          await Promise.all([
+            hashCanonical(evidenceAuthority.beliefSpec),
+            hashCanonical(evidenceAuthority.evidenceVerdict),
+            hashCanonical({
+              id: pack.patchContract.id,
+              allowedTransformations: pack.patchContract.allowedTransformations,
+              allowedCellIndices,
+            }),
+          ]);
+        const authorityInputHashes = {
+          artifactManifest: manifestHash,
+          beliefSpec: beliefSpecHash,
+          prediction: evidenceAuthority.prediction.immutableHash,
+          selectedExperimentIr:
+            evidenceAuthority.lineage.selectedExperimentIrHash,
+          fixedSelection: evidenceAuthority.lineage.selectionHash,
+          projectedPlan: evidenceAuthority.lineage.projectedPlanHash,
+          verifiedResult: evidenceAuthority.result.resultHash,
+          evidenceVerdict: evidenceVerdictHash,
+          epistemicReport: evidenceAuthority.epistemicReportHash,
+          transferResult: current.transferResult.resultHash,
+          patchContract: patchContractHash,
+        };
+        const requestIdentity = liveRunnerRequestIdentity({
+          sessionId,
+          purpose: "PATCH_COMPILE",
+          artifactId: sourceArtifact.manifest.artifactId,
+          artifactManifestHash: manifestHash,
+          conceptPack: { id: pack.id, version: pack.version },
+          authorityProfileHash: await hashCanonical({
+            compiler: "codex-app-server-stdio",
+            authorityVersion: "5",
+            patchPlanSchema,
+            permittedOutputs: ["patch-plan.json", "public-rationale.md"],
+          }),
+          authorityInputHashes,
+        });
+        const reusable = await jobs.findReusableRequest(requestIdentity);
+        if (reusable !== undefined) {
+          const runnerJob = await dispatchRecoverableRunnerJob({
+            context,
+            options,
+            jobs,
+            dispatcher,
+            job: reusable,
+          });
+          return context.json(
+            jsonSuccess({
+              ...statePayload(current),
+              runnerJob,
+              reused: true as const,
+            }),
+            202,
+          );
+        }
+        const started =
+          current.state === "PATCH_COMPILING"
+            ? current
+            : await service.startPatchCompilation(sessionId);
+        const jobId = requestId(options, "runner_job");
+        const bundle = RunnerPatchCompileBundleV5Schema.parse({
+          schemaVersion: "5",
+          kind: "PATCH_COMPILE",
+          jobId,
+          sessionId,
+          stateVersion: started.version,
+          requestedAt: started.updatedAt,
+          artifactManifestHash: manifestHash,
+          conceptPackVersion: pack.version,
+          artifactManifest: sourceArtifact.manifest,
+          approvedBeliefSpec: evidenceAuthority.beliefSpec,
+          beliefSpecHash,
+          prediction: evidenceAuthority.prediction,
+          compileAuthority: evidenceAuthority.lineage,
+          selectedExperimentIr: frozenCompile.selectedExperimentIr,
+          fixedSelection: frozenCompile.outcome.selection,
+          basePlan: frozenCompile.projectedPlan,
+          releaseAuthority: {
+            authoritativeResultHash: evidenceAuthority.result.resultHash,
+            evidenceVerdict: evidenceAuthority.evidenceVerdict,
+            evidenceVerdictHash,
+            epistemicReportHash: evidenceAuthority.epistemicReportHash,
+          },
+          verifiedResultSummary: {
+            schemaVersion: "2",
+            concept: evidenceAuthority.concept,
+            resultHash: evidenceAuthority.result.resultHash,
+            planId: evidenceAuthority.result.planId,
+            runIds: evidenceAuthority.result.runs.map((run) => run.id),
+          },
+          transferContractId:
+            frozenCompile.selectedExperimentIr.transfer.taskId,
+          transferResult: current.transferResult,
+          patchContract: {
+            id: pack.patchContract.id,
+            allowedTransformations: pack.patchContract.allowedTransformations,
+          },
+          allowedCellIndices,
+          patchPlanSchema,
+          permittedOutputs: ["patch-plan.json", "public-rationale.md"],
+        });
+        const bundleHash = await hashCanonical(bundle);
+        const inputBundleKey = `runner-input/${jobId}.json`;
+        await store.put(
+          inputBundleKey,
+          JSON.stringify(bundle),
+          "application/json",
+        );
+        const claimed = await jobs.createOrReuseJob({
+          jobId,
+          kind: "PATCH_COMPILE",
+          sessionId,
+          artifactId: sourceArtifact.manifest.artifactId,
+          artifactManifestHash: manifestHash,
+          conceptPack: { id: pack.id, version: pack.version },
+          inputHashes: [...Object.values(authorityInputHashes), bundleHash],
+          requestIdentity,
+          stateVersion: started.version,
+          maxAttempts: 3,
+          timeoutSeconds: 180,
+        });
+        const starting = await dispatchRecoverableRunnerJob({
+          context,
+          options,
+          jobs,
+          dispatcher,
+          job: claimed.job,
+        });
+        return context.json(
+          jsonSuccess({
+            ...statePayload(started),
+            runnerJob: starting,
+            ...(claimed.reused ? { reused: true as const } : {}),
+          }),
+          202,
+        );
+      }
       if (
         sourceArtifact?.objectKey === undefined ||
         current.beliefTest === undefined ||

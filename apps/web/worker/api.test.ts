@@ -32,6 +32,7 @@ import {
   RunnerLabCompileBundleV5Schema,
   RunnerLabInteractiveRunBundleV5Schema,
   RunnerLabRunBundleV5Schema,
+  RunnerPatchCompileBundleV5Schema,
   hashExperimentIR,
   type RunnerLabCompileBundleV5,
   type RunnerLabInteractiveRunBundleV5,
@@ -4047,6 +4048,151 @@ describe("Cloudflare Worker API", () => {
         },
       },
     });
+  });
+
+  it("dispatches a live v5 patch from frozen experiment, verdict, and transfer authority", async () => {
+    const harness = await preparedScientificHostedRunner();
+    const run = await completeScientificCompileAndQueueRun(harness);
+    const runJobId = run.dispatch.job.jobId;
+    expect(
+      (
+        await harness.app.request(`/api/runner/jobs/${runJobId}/start`, {
+          method: "POST",
+          headers: run.authorization,
+        })
+      ).status,
+    ).toBe(200);
+    const result = await scientificLeakageResult(run.bundle);
+    const resultText = JSON.stringify(result);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${runJobId}/outputs/verified-result.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...run.authorization,
+              "content-type": "application/json",
+            },
+            body: resultText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    expect(
+      (
+        await postJson(
+          harness.app,
+          `/api/runner/jobs/${runJobId}/callback`,
+          {
+            schemaVersion: "1",
+            callbackId: "callback_scientific_before_patch_v5",
+            idempotencyKey: "scientific-before-patch-v5",
+            jobId: runJobId,
+            stateVersion: run.dispatch.job.stateVersion,
+            status: "VERIFIED",
+            outputHashes: [await sha256Text(resultText)],
+            finalEventCursor: 0,
+            occurredAt: "2026-07-14T10:00:04.000Z",
+          },
+          run.authorization,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await postJson(
+          harness.app,
+          `/api/sessions/${harness.bundle.sessionId}/revision`,
+          {
+            revision:
+              "Deployment units must determine the evaluation split before I trust generalization.",
+          },
+        )
+      ).status,
+    ).toBe(200);
+    const transfer = await postJson(
+      harness.app,
+      `/api/sessions/${harness.bundle.sessionId}/transfer`,
+      {
+        strategyChoice: "time_ordered_holdout",
+        riskChoice: "centered_window_reads_future",
+        evidenceChoices: [
+          "center_true_uses_later_targets",
+          "random_split_mixes_dates",
+        ],
+      },
+    );
+    expect(transfer.status).toBe(200);
+
+    const patch = await postJson(
+      harness.app,
+      `/api/sessions/${harness.bundle.sessionId}/patch/compile`,
+    );
+
+    expect(patch.status).toBe(202);
+    expect(harness.dispatcher.dispatched).toHaveLength(3);
+    const patchDispatch = harness.dispatcher.dispatched[2];
+    if (patchDispatch === undefined) {
+      throw new Error("v5 patch runner was not dispatched");
+    }
+    const inputObject = harness.runnerObjects.objects.get(
+      `runner-input/${patchDispatch.job.jobId}.json`,
+    );
+    if (inputObject === undefined) {
+      throw new Error("v5 patch input bundle is missing");
+    }
+    const bundle = RunnerPatchCompileBundleV5Schema.parse(
+      JSON.parse(inputObject.body),
+    );
+    const session = await harness.sessionRepository.find(
+      harness.bundle.sessionId,
+    );
+    if (
+      session?.evidenceVerdict === undefined ||
+      session.epistemicReportHash === undefined ||
+      session.transferResult === undefined
+    ) {
+      throw new Error("v5 patch session authority is incomplete");
+    }
+    expect(bundle).toMatchObject({
+      schemaVersion: "5",
+      kind: "PATCH_COMPILE",
+      approvedBeliefSpec: { id: harness.bundle.approvedBeliefSpec.id },
+      compileAuthority: session.labVerification,
+      selectedExperimentIr: run.bundle.selectedExperimentIr,
+      fixedSelection: run.bundle.fixedSelection,
+      basePlan: run.bundle.projectedPlan,
+      releaseAuthority: {
+        authoritativeResultHash: result.resultHash,
+        evidenceVerdict: { kind: "SUPPORTS", resultHash: result.resultHash },
+        epistemicReportHash: session.epistemicReportHash,
+      },
+      verifiedResultSummary: {
+        concept: "entity_leakage",
+        resultHash: result.resultHash,
+        planId: run.bundle.projectedPlan.planId,
+      },
+      transferContractId: run.bundle.selectedExperimentIr.transfer.taskId,
+      transferResult: {
+        taskId: "forecasting-future-leakage-01",
+        resultHash: session.transferResult.resultHash,
+      },
+    });
+    expect(bundle).not.toHaveProperty("approvedBeliefTest");
+
+    const duplicate = await postJson(
+      harness.app,
+      `/api/sessions/${harness.bundle.sessionId}/patch/compile`,
+    );
+    expect(duplicate.status).toBe(202);
+    await expect(duplicate.json()).resolves.toMatchObject({
+      data: {
+        reused: true,
+        runnerJob: { jobId: patchDispatch.job.jobId },
+      },
+    });
+    expect(harness.dispatcher.dispatched).toHaveLength(3);
   });
 
   it("runs a v5 interactive control from frozen authority without replacing the verdict", async () => {
