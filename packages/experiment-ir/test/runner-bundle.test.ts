@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  deriveInteractivePlanV5,
   RunnerLabCompileBundleV5Schema,
+  RunnerLabInteractiveRunBundleV5Schema,
   RunnerJobInputBundleV5Schema,
   RunnerScientificCandidateV5Schema,
   VersionedRunnerJobInputBundleSchema,
@@ -349,6 +351,93 @@ function labRunBundleV5() {
   };
 }
 
+function interactiveLabRunBundleV5() {
+  const authoritative = labRunBundleV5();
+  const configuration = {
+    schemaVersion: "1" as const,
+    splitStrategy: "group" as const,
+    entityField: "customer_id",
+    identityAblation: true,
+    testFraction: 0.3,
+  };
+  const configurationHash = digest("e");
+  const { interactivePlan, selectedRunId } = deriveInteractivePlanV5(
+    authoritative.projectedPlan,
+    configuration,
+    configurationHash,
+  );
+  const compileAuthority = {
+    schemaVersion: "5" as const,
+    status: "VERIFIED" as const,
+    source: "hosted-experiment-ir-v5" as const,
+    jobId: authoritative.provenance.compileJobId,
+    inputBundleHash: authoritative.expectedHashes.compileInputBundle,
+    artifactManifestHash: authoritative.artifactManifestHash,
+    beliefSpecHash: authoritative.beliefSpecHash,
+    predictionHash: authoritative.prediction.immutableHash,
+    compilerOutputFileHashes: authoritative.provenance.compilerOutputFileHashes,
+    discriminationContractHash: digest("4"),
+    rawExperimentIrCanonicalHash:
+      authoritative.expectedHashes.rawExperimentIrCanonical,
+    labSceneHash: digest("5"),
+    candidateVerificationReportHash:
+      authoritative.expectedHashes.candidateVerificationReport,
+    scientificVerifierVersion: "scientific-candidate-verifier-v1" as const,
+    selectionHash: authoritative.expectedHashes.experimentSelection,
+    selectedExperimentIrHash: authoritative.selectedExperimentIrHash,
+    projectedPlanHash: authoritative.expectedHashes.projectedPlan,
+    scorerVersion: authoritative.fixedSelection.scorerVersion,
+    projectionAdapterVersion: "experiment-ir-v5-to-plan-v2-v1" as const,
+  };
+  const authoritativeResultHash = digest("7");
+  const evidenceVerdict = {
+    schemaVersion: "1" as const,
+    kind: "SUPPORTS" as const,
+    hypothesisId: "competing" as const,
+    scope: "This supported artifact and deployment unit.",
+    resultHash: authoritativeResultHash,
+    irHash: authoritative.selectedExperimentIrHash,
+    technicalReportHash: digest("8"),
+    verifierVersion: "epistemic-verifier-v1",
+  };
+  return {
+    schemaVersion: "5" as const,
+    kind: "LAB_RUN" as const,
+    purpose: "INTERACTIVE" as const,
+    jobId: "runner_job_interactive_v5_1",
+    sessionId: authoritative.sessionId,
+    stateVersion: 14,
+    artifactManifestHash: authoritative.artifactManifestHash,
+    artifactManifest: authoritative.artifactManifest,
+    approvedBeliefSpec: authoritative.approvedBeliefSpec,
+    beliefSpecHash: authoritative.beliefSpecHash,
+    prediction: authoritative.prediction,
+    fixture: authoritative.fixture,
+    compileAuthority,
+    selectedExperimentIr: authoritative.selectedExperimentIr,
+    fixedSelection: authoritative.fixedSelection,
+    basePlan: authoritative.projectedPlan,
+    releaseAuthority: {
+      authoritativeResultHash,
+      evidenceVerdict,
+      evidenceVerdictHash: digest("9"),
+      epistemicReportHash: digest("a"),
+    },
+    configuration,
+    configurationHash,
+    derivationVersion: "interactive-plan-v5-derivation-v1" as const,
+    selectedRunId,
+    interactivePlan,
+    interactivePlanHash: digest("b"),
+    resultOutput: {
+      path: "verified-result.json" as const,
+      schemaVersion: "2" as const,
+      authorityHash: configurationHash,
+    },
+    permittedOutputs: ["verified-result.json" as const],
+  };
+}
+
 describe("Runner LAB_COMPILE bundle v5", () => {
   it("parses as a versioned job without changing the stored v1 bundle", () => {
     const parsed = RunnerLabCompileBundleV5Schema.parse(runnerBundleV5());
@@ -655,6 +744,101 @@ describe("Runner LAB_RUN bundle v5", () => {
             projectedPlan: digest("9"),
           },
         },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("Runner interactive LAB_RUN bundle v5", () => {
+  it("accepts a purpose-separated run bound to frozen compile and release authority", () => {
+    const parsed = RunnerLabInteractiveRunBundleV5Schema.safeParse(
+      interactiveLabRunBundleV5(),
+    );
+    const versioned = VersionedRunnerJobInputBundleSchema.safeParse(
+      interactiveLabRunBundleV5(),
+    );
+
+    expect(parsed.success).toBe(true);
+    expect(versioned.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data).toMatchObject({
+      schemaVersion: "5",
+      kind: "LAB_RUN",
+      purpose: "INTERACTIVE",
+      derivationVersion: "interactive-plan-v5-derivation-v1",
+      selectedRunId: `interactive-${digest("e").slice(0, 16)}`,
+      permittedOutputs: ["verified-result.json"],
+    });
+  });
+
+  it("rejects a rejected source verdict and release-result drift", () => {
+    const source = interactiveLabRunBundleV5();
+    expect(
+      RunnerLabInteractiveRunBundleV5Schema.safeParse({
+        ...source,
+        releaseAuthority: {
+          ...source.releaseAuthority,
+          evidenceVerdict: {
+            schemaVersion: "1",
+            kind: "REJECTED",
+            findingIds: ["finding-1"],
+            resultReleased: false,
+            irHash: source.compileAuthority.selectedExperimentIrHash,
+            technicalReportHash: digest("8"),
+            verifierVersion: "epistemic-verifier-v1",
+          },
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      RunnerLabInteractiveRunBundleV5Schema.safeParse({
+        ...source,
+        releaseAuthority: {
+          ...source.releaseAuthority,
+          authoritativeResultHash: digest("c"),
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects compile selection drift and a plan not derived from its configuration", () => {
+    const source = interactiveLabRunBundleV5();
+    expect(
+      RunnerLabInteractiveRunBundleV5Schema.safeParse({
+        ...source,
+        fixedSelection: {
+          ...source.fixedSelection,
+          selectedCandidateId: "different-candidate",
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      RunnerLabInteractiveRunBundleV5Schema.safeParse({
+        ...source,
+        interactivePlan: {
+          ...source.interactivePlan,
+          interventions: source.interactivePlan.interventions.map((run) =>
+            run.runId === source.selectedRunId
+              ? { ...run, seed: run.seed + 1 }
+              : run,
+          ),
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a missing selected run and all unknown fields", () => {
+    const source = interactiveLabRunBundleV5();
+    expect(
+      RunnerLabInteractiveRunBundleV5Schema.safeParse({
+        ...source,
+        selectedRunId: "interactive-0000000000000000",
+      }).success,
+    ).toBe(false);
+    expect(
+      RunnerLabInteractiveRunBundleV5Schema.safeParse({
+        ...source,
+        shellCommand: "python arbitrary.py",
       }).success,
     ).toBe(false);
   });

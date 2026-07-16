@@ -3,12 +3,17 @@ import {
   AllowedVisualizationSchema,
   ArtifactManifestSchema,
   BeliefSpecV2Schema,
+  EvidenceVerdictSchema,
   ExperimentPlanV2Schema,
   FixedOperationIdSchema,
+  HostedExperimentLineageV5Schema,
+  InteractiveImbalanceRunRequestSchema,
+  InteractiveLeakageRunRequestSchema,
   PredictionContractSchema,
   RunnerJobInputBundleSchema,
   type ArtifactManifest,
   type EvidenceRef,
+  type ExperimentPlanV2,
 } from "@counterlab/contracts";
 import { z } from "zod";
 
@@ -609,9 +614,321 @@ export const RunnerLabRunBundleV5Schema = z
 
 export type RunnerLabRunBundleV5 = z.infer<typeof RunnerLabRunBundleV5Schema>;
 
+export const InteractiveRunConfigurationV5Schema = z.union([
+  InteractiveLeakageRunRequestSchema,
+  InteractiveImbalanceRunRequestSchema,
+]);
+
+export type InteractiveRunConfigurationV5 = z.infer<
+  typeof InteractiveRunConfigurationV5Schema
+>;
+
+export function deriveInteractivePlanV5(
+  basePlanCandidate: unknown,
+  configurationCandidate: unknown,
+  configurationHashCandidate: unknown,
+): { interactivePlan: ExperimentPlanV2; selectedRunId: string } {
+  const basePlan = ExperimentPlanV2Schema.parse(basePlanCandidate);
+  const configuration = InteractiveRunConfigurationV5Schema.parse(
+    configurationCandidate,
+  );
+  const configurationHash = Sha256.parse(configurationHashCandidate);
+  const selectedRunId = `interactive-${configurationHash.slice(0, 16)}`;
+  const planId = `interactive-plan-${configurationHash.slice(0, 16)}`;
+
+  if ("concept" in configuration) {
+    if (basePlan.concept !== "class_imbalance") {
+      throw new TypeError(
+        "class-imbalance controls require a class-imbalance base Plan",
+      );
+    }
+    const targetOperation =
+      configuration.prevalenceScenario === "observed"
+        ? "imbalance.threshold_sweep"
+        : "imbalance.prevalence_sweep";
+    let selected = false;
+    const interventions = basePlan.interventions.map((run) => {
+      if (run.operation !== targetOperation) return run;
+      selected = true;
+      return {
+        ...run,
+        runId: selectedRunId,
+        threshold: configuration.threshold,
+        prevalenceScenario: configuration.prevalenceScenario,
+      };
+    });
+    if (!selected) {
+      throw new TypeError(
+        "base Plan is missing the registered class-imbalance control",
+      );
+    }
+    return {
+      selectedRunId,
+      interactivePlan: ExperimentPlanV2Schema.parse({
+        ...basePlan,
+        planId,
+        interventions,
+      }),
+    };
+  }
+
+  if (basePlan.concept !== "entity_leakage") {
+    throw new TypeError("leakage controls require an entity-leakage base Plan");
+  }
+  const targetOperation =
+    configuration.splitStrategy === "group"
+      ? "leakage.group_holdout"
+      : configuration.identityAblation
+        ? "leakage.identity_ablation"
+        : "leakage.random_row_split";
+  let selected = false;
+  const configureRun = <T extends ExperimentPlanV2["baseline"]>(run: T): T => {
+    if (run.operation !== targetOperation) return run;
+    selected = true;
+    return {
+      ...run,
+      runId: selectedRunId,
+      entityField: configuration.entityField,
+      dropIdentity: configuration.identityAblation,
+      testFraction: configuration.testFraction,
+    } as T;
+  };
+  const baseline = configureRun(basePlan.baseline);
+  const interventions = basePlan.interventions.map(configureRun);
+  if (!selected) {
+    throw new TypeError("base Plan is missing the registered leakage control");
+  }
+  return {
+    selectedRunId,
+    interactivePlan: ExperimentPlanV2Schema.parse({
+      ...basePlan,
+      planId,
+      baseline,
+      interventions,
+    }),
+  };
+}
+
+export const RunnerLabInteractiveRunBundleV5Schema = z
+  .object({
+    schemaVersion: z.literal("5"),
+    kind: z.literal("LAB_RUN"),
+    purpose: z.literal("INTERACTIVE"),
+    jobId: NonEmptyString,
+    sessionId: NonEmptyString,
+    stateVersion: z.number().int().positive(),
+    artifactManifestHash: Sha256,
+    artifactManifest: ArtifactManifestSchema,
+    approvedBeliefSpec: BeliefSpecV2Schema,
+    beliefSpecHash: Sha256,
+    prediction: PredictionContractSchema,
+    fixture: z
+      .object({
+        id: z.enum(["public-leakage-v1", "public-imbalance-v1"]),
+        version: TokenId,
+        contentSha256: Sha256,
+      })
+      .strict(),
+    compileAuthority: HostedExperimentLineageV5Schema,
+    selectedExperimentIr: ExperimentIRV5Schema,
+    fixedSelection: FixedExperimentSelectionV1Schema,
+    basePlan: ExperimentPlanV2Schema,
+    releaseAuthority: z
+      .object({
+        authoritativeResultHash: Sha256,
+        evidenceVerdict: EvidenceVerdictSchema,
+        evidenceVerdictHash: Sha256,
+        epistemicReportHash: Sha256,
+      })
+      .strict(),
+    configuration: InteractiveRunConfigurationV5Schema,
+    configurationHash: Sha256,
+    derivationVersion: z.literal("interactive-plan-v5-derivation-v1"),
+    selectedRunId: z
+      .string()
+      .regex(/^interactive-[a-f0-9]{16}$/u, "invalid interactive run ID"),
+    interactivePlan: ExperimentPlanV2Schema,
+    interactivePlanHash: Sha256,
+    resultOutput: z
+      .object({
+        path: z.literal("verified-result.json"),
+        schemaVersion: z.literal("2"),
+        authorityHash: Sha256,
+      })
+      .strict(),
+    permittedOutputs: z.tuple([z.literal("verified-result.json")]).readonly(),
+  })
+  .strict()
+  .superRefine((bundle, context) => {
+    const issue = (message: string, path: PropertyKey[]) =>
+      context.addIssue({ code: "custom", message, path });
+    const ir = bundle.selectedExperimentIr;
+    const plan = bundle.basePlan;
+    const compile = bundle.compileAuthority;
+    const verdict = bundle.releaseAuthority.evidenceVerdict;
+
+    if (
+      bundle.approvedBeliefSpec.learnerDecision !== "CONFIRMED" ||
+      bundle.approvedBeliefSpec.supportState !== "SUPPORTED" ||
+      bundle.artifactManifest.support.status !== "SUPPORTED"
+    ) {
+      issue("interactive v5 execution requires approved supported authority", [
+        "approvedBeliefSpec",
+      ]);
+    }
+    if (
+      bundle.sessionId !== bundle.prediction.sessionId ||
+      bundle.sessionId !== ir.sessionId ||
+      bundle.sessionId !== plan.sessionId
+    ) {
+      issue("interactive session lineage does not match", ["sessionId"]);
+    }
+    if (
+      bundle.approvedBeliefSpec.id !== bundle.prediction.beliefTestId ||
+      bundle.approvedBeliefSpec.id !== ir.beliefSpecId ||
+      bundle.approvedBeliefSpec.id !== plan.beliefTestId
+    ) {
+      issue("interactive Belief Spec lineage does not match", [
+        "approvedBeliefSpec",
+        "id",
+      ]);
+    }
+    if (
+      bundle.approvedBeliefSpec.concept !== ir.concept ||
+      ir.concept !== plan.concept ||
+      ("concept" in bundle.configuration
+        ? bundle.configuration.concept !== ir.concept
+        : ir.concept !== "entity_leakage")
+    ) {
+      issue("interactive Subject Pack lineage does not match", [
+        "configuration",
+      ]);
+    }
+    if (
+      bundle.artifactManifestHash !== compile.artifactManifestHash ||
+      bundle.artifactManifestHash !== ir.artifactManifestHash ||
+      bundle.artifactManifestHash !== plan.artifactManifestHash
+    ) {
+      issue("interactive Artifact Manifest lineage does not match", [
+        "artifactManifestHash",
+      ]);
+    }
+    if (
+      bundle.beliefSpecHash !== compile.beliefSpecHash ||
+      bundle.beliefSpecHash !== ir.beliefSpecHash ||
+      bundle.prediction.immutableHash !== compile.predictionHash
+    ) {
+      issue("interactive belief or prediction hash lineage does not match", [
+        "compileAuthority",
+      ]);
+    }
+    if (
+      compile.selectedExperimentIrHash !== verdict.irHash ||
+      compile.scorerVersion !== bundle.fixedSelection.scorerVersion
+    ) {
+      issue("interactive compile authority does not match released evidence", [
+        "compileAuthority",
+      ]);
+    }
+    if (verdict.kind === "REJECTED") {
+      issue("interactive exploration requires one released result", [
+        "releaseAuthority",
+      ]);
+    } else if (
+      verdict.resultHash !== bundle.releaseAuthority.authoritativeResultHash
+    ) {
+      issue("interactive result authority does not match its verdict", [
+        "releaseAuthority",
+        "authoritativeResultHash",
+      ]);
+    }
+
+    if (ir.selection.status !== "SELECTED") {
+      issue("interactive exploration requires a selected Experiment IR", [
+        "selectedExperimentIr",
+        "selection",
+      ]);
+    } else {
+      const embeddedSelection = {
+        eligibleCandidateIds: ir.selection.eligibleCandidateIds,
+        rejectedCandidates: ir.selection.rejectedCandidates,
+        selectedCandidateId: ir.selection.candidateId,
+        minimumSeparation: ir.selection.minimumSeparation,
+        requiredSeparation: ir.selection.requiredSeparation,
+        complexityCost: ir.selection.complexityCost,
+        normalizedScore: ir.selection.normalizedScore,
+        scorerVersion: ir.selection.scorerVersion,
+      };
+      if (!sameJson(embeddedSelection, bundle.fixedSelection)) {
+        issue("interactive fixed selection lineage does not match", [
+          "fixedSelection",
+        ]);
+      }
+    }
+
+    try {
+      if (!sameJson(projectExperimentIRV5ToPlanV2(ir), plan)) {
+        issue(
+          "interactive base Plan does not match the selected Experiment IR",
+          ["basePlan"],
+        );
+      }
+      const derived = deriveInteractivePlanV5(
+        plan,
+        bundle.configuration,
+        bundle.configurationHash,
+      );
+      if (
+        derived.selectedRunId !== bundle.selectedRunId ||
+        !sameJson(derived.interactivePlan, bundle.interactivePlan)
+      ) {
+        issue("interactive Plan is not the fixed configuration derivation", [
+          "interactivePlan",
+        ]);
+      }
+    } catch {
+      issue("interactive Plan cannot be derived from registered controls", [
+        "configuration",
+      ]);
+    }
+
+    const expectedFixtureId =
+      ir.concept === "entity_leakage"
+        ? "public-leakage-v1"
+        : "public-imbalance-v1";
+    if (bundle.fixture.id !== expectedFixtureId) {
+      issue("interactive fixture does not match the Subject Pack", [
+        "fixture",
+        "id",
+      ]);
+    }
+    if (
+      !("concept" in bundle.configuration) &&
+      !bundle.artifactManifest.schemaSummary.entityCandidates.includes(
+        bundle.configuration.entityField,
+      )
+    ) {
+      issue("interactive entity field does not resolve to the manifest", [
+        "configuration",
+        "entityField",
+      ]);
+    }
+    if (bundle.resultOutput.authorityHash !== bundle.configurationHash) {
+      issue("interactive output authority does not match its configuration", [
+        "resultOutput",
+        "authorityHash",
+      ]);
+    }
+  });
+
+export type RunnerLabInteractiveRunBundleV5 = z.infer<
+  typeof RunnerLabInteractiveRunBundleV5Schema
+>;
+
 export const RunnerJobInputBundleV5Schema = z.union([
   RunnerLabCompileBundleV5Schema,
   RunnerLabRunBundleV5Schema,
+  RunnerLabInteractiveRunBundleV5Schema,
 ]);
 
 export type RunnerJobInputBundleV5 = z.infer<
@@ -622,6 +939,7 @@ export const VersionedRunnerJobInputBundleSchema = z.union([
   RunnerJobInputBundleSchema,
   RunnerLabCompileBundleV5Schema,
   RunnerLabRunBundleV5Schema,
+  RunnerLabInteractiveRunBundleV5Schema,
 ]);
 
 export type VersionedRunnerJobInputBundle = z.infer<

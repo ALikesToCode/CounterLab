@@ -30,6 +30,7 @@ import {
   RunnerScientificCandidateV5Schema,
   VersionedRunnerJobInputBundleSchema,
   type RunnerLabCompileBundleV5,
+  type RunnerLabInteractiveRunBundleV5,
   type RunnerLabRunBundleV5,
   type RunnerScientificCandidateV5,
   type VersionedRunnerJobInputBundle,
@@ -91,7 +92,10 @@ export interface RunnerControlPlane {
 
 export interface FixedKernelExecutor {
   run(
-    bundle: RunnerLabRunBundle | RunnerLabRunBundleV5,
+    bundle:
+      | RunnerLabRunBundle
+      | RunnerLabRunBundleV5
+      | RunnerLabInteractiveRunBundleV5,
     workspace: string,
     signal?: AbortSignal,
   ): Promise<{ body: string; durationMs: number }>;
