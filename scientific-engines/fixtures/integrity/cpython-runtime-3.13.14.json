@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1",
+  "evidenceKind": "runtime-integrity",
+  "runtimeId": "cpython",
+  "exactVersion": "3.13.14",
+  "environmentId": "counterlab-runner-linux-amd64-v2",
+  "imageDigest": "sha256:241de2066e1aba3d8cca27de9d76c7d32f2b32893067d92cc8e837bccd79f19e",
+  "baseImage": {
+    "reference": "python:3.13-slim-trixie@sha256:bffeb7bd6a85767587059c6ba23e1e9122078e3aa3fa836099171b9bb00",
+    "platform": "linux/amd64"
+  },
+  "installedLicenseSha256": "78b12c3a81360b357002334f0e70ea0e92eebf7a9b358805c03c48484945f3bb",
+  "releaseGate": {
+    "status": "VERIFIED_WITH_REVIEWED_EXCEPTION",
+    "limitations": [
+      "The multi-architecture base manifest is pinned; Cloudflare and local release builds target linux/amd64.",
+      "CVE-2026-15308 remains in CPython 3.13.14 and is handled only through the separately hash-bound, expiring fixed-entrypoint VEX review."
+    ]
+  }
+}

@@ -1,19 +1,19 @@
 {
   "schemaVersion": "1",
   "evidenceKind": "local-candidate-runtime-summary",
-  "capturedAt": "2026-07-15T15:47:28Z",
+  "capturedAt": "2026-07-16T05:30:00Z",
   "environmentId": "counterlab-runner-linux-amd64-v2",
-  "imageDigest": "sha256:67682290a02e8b94e4522511242a3196f1a4f116eb187e22274abece2740b7a2",
-  "sourceCommit": "6e27bd021ce39ea5d65b8d921825c7964c157fde",
+  "imageDigest": "sha256:241de2066e1aba3d8cca27de9d76c7d32f2b32893067d92cc8e837bccd79f19e",
+  "sourceCommit": "47e8d393b7634a3a314cd26edac06b1e916d5bfa",
   "observedVersions": {
-    "cpython": "3.12.13",
+    "cpython": "3.13.14",
     "counterlab-fixed-ml-kernel": "0.1.0",
     "numpy": "2.4.6",
     "pandas": "2.3.3",
     "scikit-learn": "1.9.0",
     "scipy-transitive": "1.18.0",
-    "node": "22.22.2",
-    "pnpm": "11.12.0",
+    "node": "22.23.0",
+    "pnpm": "11.13.0",
     "codex": "0.144.4"
   },
   "checks": {
@@ -22,7 +22,10 @@
     "nonRootCodex": "PASSED",
     "stdioInitializeHandshake": "PASSED",
     "kernelGoldenHashes": "PASSED",
-    "kernelWheelReproducibility": "PASSED"
+    "kernelWheelReproducibility": "PASSED",
+    "reviewedVulnerabilityPolicy": "PASSED_WITH_REVIEWED_EXCEPTION",
+    "vexApplication": "PASSED",
+    "boundedReachability": "PASSED"
   },
   "status": "VERIFIED_LOCAL_CANDIDATE",
   "nonClaim": "This local candidate is not recorded as the Cloudflare production image until deployment and production smoke complete."

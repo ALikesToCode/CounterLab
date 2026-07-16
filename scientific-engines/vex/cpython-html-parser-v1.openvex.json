@@ -1,0 +1,27 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://counterlab.dev/vex/cpython-html-parser-v1",
+  "author": "CounterLab release engineering",
+  "timestamp": "2026-07-16T05:30:00.000Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "CVE-2026-15308"
+      },
+      "products": [
+        {
+          "@id": "pkg:oci/counterlab-runner@sha256:241de2066e1aba3d8cca27de9d76c7d32f2b32893067d92cc8e837bccd79f19e",
+          "subcomponents": [
+            {
+              "@id": "pkg:generic/python@3.13.14"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "CounterLab's fixed hosted leakage and imbalance run and patch entrypoints do not import or execute html.parser.HTMLParser. This statement does not cover arbitrary Python code or other entrypoints."
+    }
+  ]
+}

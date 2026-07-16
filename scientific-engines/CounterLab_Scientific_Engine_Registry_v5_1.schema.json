@@ -1098,6 +1098,36 @@
         "vulnerabilityReportHash": {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
+        },
+        "vexEvidenceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+        },
+        "vexEvidenceHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "reachabilityEvidenceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+        },
+        "reachabilityEvidenceHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "vexApplicationEvidenceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+        },
+        "vexApplicationEvidenceHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
         }
       },
       "required": [
@@ -1156,7 +1186,11 @@
                   "lockfile",
                   "sbom",
                   "sbom_manifest",
-                  "vulnerability_report"
+                  "vulnerability_scan",
+                  "vulnerability_report",
+                  "vex",
+                  "vex_application_report",
+                  "reachability_report"
                 ]
               },
               "engineId": {

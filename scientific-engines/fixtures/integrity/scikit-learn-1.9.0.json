@@ -5,20 +5,20 @@
   "packageName": "scikit-learn",
   "exactVersion": "1.9.0",
   "environmentId": "counterlab-runner-linux-amd64-v2",
-  "imageDigest": "sha256:67682290a02e8b94e4522511242a3196f1a4f116eb187e22274abece2740b7a2",
+  "imageDigest": "sha256:241de2066e1aba3d8cca27de9d76c7d32f2b32893067d92cc8e837bccd79f19e",
   "sourceBinding": {
     "status": "BOUND",
-    "commit": "6e27bd021ce39ea5d65b8d921825c7964c157fde",
+    "commit": "47e8d393b7634a3a314cd26edac06b1e916d5bfa",
     "ociLabel": "org.opencontainers.image.revision"
   },
   "artifact": {
-    "sha256": "056c92bb67ad4c28463c2f2653d9701449201e7e7a9e94e321be0f71c4fef2b8",
+    "sha256": "da76d09304a4706db7cc1e3ebaa3b6b98a67365cc11d2996c4f1e58ba47df714",
     "lockPath": "requirements.runner.lock.txt",
     "installPolicy": "pip --require-hashes --only-binary=:all:"
   },
   "installed": {
     "metadataSha256": "ee61a579f42d3edabe3e483db483475e33fffec04d7f3e69c539527bd93eaca6",
-    "recordSha256": "6c6ae4c06ae6247c527755df0ab73fb2da6810e5a6442ea34a0bd7fae2461693",
+    "recordSha256": "a62ba93a45e254b0d4d04cf810e4136ac41d4bb3ae25dd98712f82878107970f",
     "licenseExpression": "BSD-3-Clause",
     "licenseSha256": "8752dfe82d4a768e76ee309b202e7b33906d1ea9004d68cc61564391cc6b1a96"
   },

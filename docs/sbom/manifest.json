@@ -1,11 +1,11 @@
 {
   "schemaVersion": "1",
-  "generatedAt": "2026-07-15T15:47:28Z",
+  "generatedAt": "2026-07-16T05:30:00Z",
   "environmentId": "counterlab-runner-linux-amd64-v2",
   "environmentKind": "local_candidate",
-  "sourceCommit": "6e27bd021ce39ea5d65b8d921825c7964c157fde",
-  "imageDigest": "sha256:67682290a02e8b94e4522511242a3196f1a4f116eb187e22274abece2740b7a2",
-  "registryHash": "aa702bf0586ffbb1d5ab23253ff7c894fba78b6383aeca8880035ba24e3b6340",
+  "sourceCommit": "47e8d393b7634a3a314cd26edac06b1e916d5bfa",
+  "imageDigest": "sha256:241de2066e1aba3d8cca27de9d76c7d32f2b32893067d92cc8e837bccd79f19e",
+  "registryHash": "1b2dc964985f92e313e275efba86d5be9ca24f28db45be78917fd88bb2cf86b1",
   "bindingsHash": "723009ad42eb0f030c045c051f5dd0b6a3997db37caac4932bc9587781e4c3b8",
   "documents": [
     {
@@ -15,10 +15,10 @@
       "format": "CycloneDX",
       "specVersion": "1.6",
       "componentCount": 19,
-      "sha256": "1614dafa5aac250b33824e14666fa49441a4bb5f548dbbd4bb2e6a679be801e1",
-      "generator": "pnpm 11.12.0 sbom --prod --format cyclonedx-json",
+      "sha256": "80981d7969b467915c73c061b0ea701e02ac05e1dc8b6197025b4cd1cb5d2b19",
+      "generator": "pnpm 11.13.0 sbom --prod --sbom-format cyclonedx --sbom-spec-version 1.6",
       "toolLockPath": "pnpm-lock.yaml",
-      "toolLockSha256": "da5405cf965c39875bafe5e96e250c5118ca7971f1fb5cd78ee9b67b9a5e16ec"
+      "toolLockSha256": "04362d10bd26798aa9638843471a1eb3f649d069f55513fcc841ca4ae072490f"
     },
     {
       "id": "python-sbom",
@@ -38,11 +38,11 @@
       "path": "docs/sbom/runner-container.cdx.json",
       "format": "CycloneDX",
       "specVersion": "1.6",
-      "componentCount": 3433,
-      "sha256": "9e88e173c3f15bfebf785717948b8356a8ea547391557b844296cdc67d1e671b",
-      "generator": "syft 1.44.0 counterlab-runner:engine-registry-v3 -o cyclonedx-json",
+      "componentCount": 2839,
+      "sha256": "3bc12058cc1ecacc0220545f47a1527c8de2d0cb4b54e921d43658d517065a26",
+      "generator": "syft 1.44.0 counterlab-runner:engine-registry-v4 -o cyclonedx-json",
       "toolLockPath": "docs/sbom/tool-lock.json",
-      "toolLockSha256": "dc29492a2e4b4390c192cdda30ccac892b760485a2e816b30b8b5e18148cb864"
+      "toolLockSha256": "a80b273e8da8691c1c8695c7ccd351612ffcf69c9abb80a7768973dd210cef75"
     }
   ],
   "normalization": {

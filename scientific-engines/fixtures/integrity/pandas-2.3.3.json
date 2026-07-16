@@ -5,20 +5,20 @@
   "packageName": "pandas",
   "exactVersion": "2.3.3",
   "environmentId": "counterlab-runner-linux-amd64-v2",
-  "imageDigest": "sha256:67682290a02e8b94e4522511242a3196f1a4f116eb187e22274abece2740b7a2",
+  "imageDigest": "sha256:241de2066e1aba3d8cca27de9d76c7d32f2b32893067d92cc8e837bccd79f19e",
   "sourceBinding": {
     "status": "BOUND",
-    "commit": "6e27bd021ce39ea5d65b8d921825c7964c157fde",
+    "commit": "47e8d393b7634a3a314cd26edac06b1e916d5bfa",
     "ociLabel": "org.opencontainers.image.revision"
   },
   "artifact": {
-    "sha256": "b3d11d2fda7eb164ef27ffc14b4fcab16a80e1ce67e9f57e19ec0afaf715ba89",
+    "sha256": "318d77e0e42a628c04dc56bcef4b40de67918f7041c2b061af1da41dcff670ac",
     "lockPath": "requirements.runner.lock.txt",
     "installPolicy": "pip --require-hashes --only-binary=:all:"
   },
   "installed": {
     "metadataSha256": "40ee953dc7ca155840b639a1881ff84578075187fce0ac20eeda55a7fa0d9a90",
-    "recordSha256": "e134c4e9924bc37f4384e84b1c1ad2de0988e06476a3c1499196c17876ffd620",
+    "recordSha256": "1b33d5a60bc3e921e73ae6b7e26e162b1e8c8973c822784717d91bb396ab6765",
     "licenseExpression": null,
     "licenseSha256": "1dea2e80ed1cbd0233f84cee4486b29689f133babaccf4d295e51c43051f3216",
     "repositoryLicenseSha256": "3a7c6c317811be6c67da119ea1a8e8e98c118d430b820aa61a34d5f89b55c777",

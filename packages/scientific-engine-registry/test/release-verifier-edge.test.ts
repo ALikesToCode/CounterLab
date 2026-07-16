@@ -89,7 +89,7 @@ describe("scientific engine release verifier edge cases", () => {
     );
   });
 
-  it("blocks production promotion while a fixable High finding is unreviewed", async () => {
+  it("rejects relabelling local vulnerability authority as production evidence", async () => {
     const snapshot = await loadScientificEngineSnapshot(repositoryRoot);
     const production = structuredClone(snapshot);
     production.runtimeManifest.environmentKind = "cloudflare_production";
@@ -102,7 +102,10 @@ describe("scientific engine release verifier edge cases", () => {
     expect(findings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: "PRODUCTION_FIXABLE_HIGH_VULNERABILITY",
+          code: "VULNERABILITY_REPORT_RUNTIME_MISMATCH",
+        }),
+        expect.objectContaining({
+          code: "VEX_RUNTIME_BINDING_MISMATCH",
         }),
       ]),
     );

@@ -35,7 +35,11 @@
               "lockfile",
               "sbom",
               "sbom_manifest",
-              "vulnerability_report"
+              "vulnerability_scan",
+              "vulnerability_report",
+              "vex",
+              "vex_application_report",
+              "reachability_report"
             ]
           },
           "engineId": {

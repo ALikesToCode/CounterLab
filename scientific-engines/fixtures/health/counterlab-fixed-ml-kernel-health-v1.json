@@ -4,12 +4,12 @@
   "kind": "health_report",
   "engineId": "counterlab-fixed-ml-kernel",
   "environmentId": "counterlab-runner-linux-amd64-v2",
-  "imageDigest": "sha256:67682290a02e8b94e4522511242a3196f1a4f116eb187e22274abece2740b7a2",
+  "imageDigest": "sha256:241de2066e1aba3d8cca27de9d76c7d32f2b32893067d92cc8e837bccd79f19e",
   "observedVersion": "0.1.0",
   "checks": {
     "pipCheck": "PASSED",
-    "leakageResultHash": "2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0",
-    "imbalanceResultHash": "90723d4dd1b73d42133646cf937f05befc731a8e4dbf0ff4c68ad51ddffdd0ef",
+    "leakageResultHash": "a6ae7652e04e4d70196f991c63b8f7bcb3b76f8c4ab833d3ce2b626df0ab6c94",
+    "imbalanceResultHash": "5787e04aa59c2703336d35bf5e64935987b44029f47b833e9152dd7d5c97d0d4",
     "repeatedRunHashEquality": "PASSED"
   }
 }
