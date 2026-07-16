@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "evidenceKind": "vex-application-report",
-  "imageDigest": "sha256:241de2066e1aba3d8cca27de9d76c7d32f2b32893067d92cc8e837bccd79f19e",
+  "imageDigest": "sha256:25e04f049b1dff5220f12bf63d584246d225fc31a17d0c0cad21b4388da4ec61",
   "scanner": {
     "id": "grype",
     "exactVersion": "0.112.0",
@@ -10,19 +10,19 @@
     "databaseBuiltAt": "2026-07-15T18:14:40.000Z",
     "databaseValid": true
   },
-  "vexSha256": "ded7aaa3fb91d66553dca994a9bd2d622fa16c7ccfaa3f1af82c45d5fb980033",
+  "vexSha256": "e1f7f9c6cea4a06b7478a5cfa754d189ba55efd363f14ad50e22dbe601d4dcc4",
   "inputs": {
     "baseline": {
       "evidenceId": "grype-raw-scan-v2",
-      "sha256": "8627ee1fa9581ef6374120c7588e549f366df0923220521874f610e7205256db"
+      "sha256": "b64f3813be7de25f34b239ef52efe687cb47a19ef378004beeaa3baa0b7c8e55"
     },
     "applied": {
       "evidenceId": "grype-vex-applied-v1",
-      "sha256": "92a7ad4862f1542f5f0d21d2ea91eff44070800d4c55e928170da45709391cb0"
+      "sha256": "1ff8aee5dde29b01c1459adb93dd508845fc645b4a3052700726a35259af41b5"
     },
     "negativeControl": {
       "evidenceId": "grype-vex-negative-v1",
-      "sha256": "eb0d0e1c4a4bd0b2dbff1586beb3eef78693921b6e9047c77dad886284e765ff"
+      "sha256": "3de1376e3d4cfbca6cf6e84bafce06d3e4fae93eabe1d1bf51f564e51d86ecd1"
     }
   },
   "suppressedFinding": {
