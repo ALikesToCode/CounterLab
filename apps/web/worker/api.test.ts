@@ -4365,6 +4365,135 @@ describe("Cloudflare Worker API", () => {
     const finalSession = await harness.sessionRepository.find(bundle.sessionId);
     expect(finalSession?.beliefSpec?.id).toBe(bundle.approvedBeliefSpec.id);
     expect(finalSession?.beliefTest).toBeUndefined();
+
+    const rationaleText =
+      "This patch changes only the evaluation boundary and identity feature.";
+    const patchResult = await createSamplePatchResult(
+      bundle.sessionId,
+      bundle.artifactManifest.fileSha256,
+      bundle.requestedAt,
+    );
+    const patchResultText = JSON.stringify(patchResult);
+    const rationaleHash = await sha256Text(rationaleText);
+    const patchedNotebookHash = await sha256Text(patchedNotebookText);
+    const patchResultHash = await sha256Text(patchResultText);
+    for (const [path, body, contentType] of [
+      ["public-rationale.md", rationaleText, "text/markdown"],
+      [
+        "patched-notebook.ipynb",
+        patchedNotebookText,
+        "application/x-ipynb+json",
+      ],
+      ["patch-result.json", patchResultText, "application/json"],
+    ] as const) {
+      expect(
+        (
+          await harness.app.request(
+            `/api/runner/jobs/${patchDispatch.job.jobId}/outputs/${path}`,
+            {
+              method: "PUT",
+              headers: {
+                ...patchAuthorization,
+                "content-type": contentType,
+              },
+              body,
+            },
+          )
+        ).status,
+      ).toBe(201);
+    }
+    const activePatchJob = await harness.runnerJobs.find(
+      patchDispatch.job.jobId,
+    );
+    if (activePatchJob === undefined) {
+      throw new Error("active v5 patch job is missing");
+    }
+    const callbackBody = {
+      schemaVersion: "1" as const,
+      callbackId: "callback_scientific_patch_v5",
+      idempotencyKey: "scientific-patch-v5-complete",
+      jobId: patchDispatch.job.jobId,
+      stateVersion: patchDispatch.job.stateVersion,
+      status: "VERIFIED" as const,
+      outputHashes: [
+        patchPlanHash,
+        rationaleHash,
+        patchedNotebookHash,
+        patchResultHash,
+      ],
+      finalEventCursor: activePatchJob.eventCursor,
+      occurredAt: "2026-07-14T10:00:05.000Z",
+    };
+    const callback = await postJson(
+      harness.app,
+      `/api/runner/jobs/${patchDispatch.job.jobId}/callback`,
+      callbackBody,
+      patchAuthorization,
+    );
+    expect(callback.status).toBe(200);
+    const callbackPayload = (await callback.json()) as {
+      data: { session: Record<string, unknown> };
+    };
+    expect(callbackPayload).toMatchObject({
+      data: {
+        runnerJob: { status: "VERIFIED" },
+        session: {
+          state: "PATCH_VERIFIED",
+          patchResult: { resultHash: patchResult.resultHash },
+        },
+        verification: { status: "VERIFIED" },
+      },
+    });
+    expect(callbackPayload.data.session).not.toHaveProperty("beliefTest");
+    expect(callbackPayload.data.session).not.toHaveProperty("reasoningDiff");
+    expect(callbackPayload.data.session).not.toHaveProperty("proofBundle");
+    for (const path of [
+      "patch-plan.json",
+      "public-rationale.md",
+      "patch-plan-verification.json",
+      "patch-result.json",
+      "patched-notebook.ipynb",
+    ]) {
+      expect(
+        harness.runnerObjects.objects.has(
+          `runner-authority/${patchDispatch.job.jobId}/${path}`,
+        ),
+        path,
+      ).toBe(true);
+    }
+    const patchedDownload = await harness.app.request(
+      `/api/sessions/${bundle.sessionId}/patch/download`,
+    );
+    expect(patchedDownload.status).toBe(200);
+    await expect(patchedDownload.text()).resolves.toBe(patchedNotebookText);
+
+    for (const path of [
+      "patch-plan.json",
+      "public-rationale.md",
+      "patch-result.json",
+      "patched-notebook.ipynb",
+    ]) {
+      harness.runnerObjects.objects.delete(
+        `runner-output/${patchDispatch.job.jobId}/${path}`,
+      );
+    }
+    const duplicateCallback = await postJson(
+      harness.app,
+      `/api/runner/jobs/${patchDispatch.job.jobId}/callback`,
+      callbackBody,
+      patchAuthorization,
+    );
+    expect(duplicateCallback.status).toBe(200);
+    await expect(duplicateCallback.json()).resolves.toMatchObject({
+      data: {
+        duplicate: true,
+        runnerJob: { status: "VERIFIED" },
+        session: {
+          state: "PATCH_VERIFIED",
+          patchResult: { resultHash: patchResult.resultHash },
+        },
+      },
+    });
   });
 
   it("runs a v5 interactive control from frozen authority without replacing the verdict", async () => {

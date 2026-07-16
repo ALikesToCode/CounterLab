@@ -1040,6 +1040,41 @@ async function resolveRunnerPatchAuthorityV5(input: {
   return { evidenceAuthority, frozenCompile, pack };
 }
 
+async function persistRunnerAuthorityBytes(input: {
+  store: RunnerObjectStore;
+  key: string;
+  body: string;
+  contentType: string;
+}): Promise<string> {
+  const expectedHash = await sha256Text(input.body);
+  const existing = await input.store.get(input.key);
+  if (
+    existing !== undefined &&
+    (await sha256Text(existing.body)) !== expectedHash
+  ) {
+    throw new ApiInputError(
+      "RUNNER_AUTHORITY_CONFLICT",
+      "Frozen runner authority conflicts with the verified output bytes",
+      409,
+    );
+  }
+  if (existing === undefined) {
+    await input.store.put(input.key, input.body, input.contentType);
+  }
+  const persisted = await input.store.get(input.key);
+  if (
+    persisted === undefined ||
+    (await sha256Text(persisted.body)) !== expectedHash
+  ) {
+    throw new ApiInputError(
+      "RUNNER_AUTHORITY_MISSING",
+      "Verified runner authority could not be frozen",
+      409,
+    );
+  }
+  return expectedHash;
+}
+
 async function persistScientificAuthority(
   store: RunnerObjectStore,
   key: string,
@@ -3906,6 +3941,7 @@ export function createApi(options: ApiOptions = {}) {
     > | null = null;
     let interactiveRun = false;
     let patchResult: PatchResult | null = null;
+    let scientificPatch = false;
     let terminalCallback: RunnerCallback = callback;
     if (callback.status === "VERIFIED" && job.kind === "LAB_COMPILE") {
       const artifact = await artifacts(context, options).find(job.artifactId);
@@ -4281,159 +4317,367 @@ export function createApi(options: ApiOptions = {}) {
       }
     }
     if (callback.status === "VERIFIED" && job.kind === "PATCH_COMPILE") {
-      const [artifact, inputObject, planObject, resultObject, notebookObject] =
-        await Promise.all([
-          artifacts(context, options).find(job.artifactId),
-          runnerObjectStore(context, options).get(claims.inputBundleKey),
-          runnerObjectStore(context, options).get(
-            `${claims.outputPrefix}patch-plan.json`,
-          ),
-          runnerObjectStore(context, options).get(
-            `${claims.outputPrefix}patch-result.json`,
-          ),
-          runnerObjectStore(context, options).get(
-            `${claims.outputPrefix}patched-notebook.ipynb`,
-          ),
-        ]);
-      if (
-        artifact === undefined ||
-        inputObject === undefined ||
-        planObject === undefined ||
-        resultObject === undefined ||
-        notebookObject === undefined ||
-        currentSession.beliefTest === undefined ||
-        currentSession.verifiedResult === undefined ||
-        currentSession.transferResult?.outcome !== "PASSED"
-      ) {
-        terminalCallback = {
-          ...callback,
-          status: "REJECTED",
-          error: {
-            code: "RUNNER_OUTPUT_MISSING",
-            message:
-              "Required Patch Plan lineage or fixed patch output is missing",
-            retryable: false,
-          },
-        };
-      } else {
+      const store = runnerObjectStore(context, options);
+      const inputObject = await store.get(claims.inputBundleKey);
+      let v5Bundle: RunnerPatchCompileBundleV5 | undefined;
+      if (inputObject !== undefined) {
         try {
-          const bundle = RunnerPatchCompileBundleSchema.parse(
+          const parsed = VersionedRunnerJobInputBundleSchema.parse(
             JSON.parse(inputObject.body),
           );
-          if (
-            bundle.jobId !== jobId ||
-            bundle.sessionId !== job.sessionId ||
-            bundle.artifactManifestHash !== job.artifactManifestHash ||
-            (await hashCanonical(bundle)) !== job.inputHashes.at(-1) ||
-            (await hashCanonical(bundle.artifactManifest)) !==
-              job.artifactManifestHash
-          ) {
-            throw new ApiInputError(
-              "RUNNER_INPUT_LINEAGE_MISMATCH",
-              "Fixed patch input lineage does not match the runner job",
-              409,
-            );
+          if (parsed.kind === "PATCH_COMPILE" && parsed.schemaVersion === "5") {
+            v5Bundle = RunnerPatchCompileBundleV5Schema.parse(parsed);
           }
-          const rawHashes = await Promise.all([
-            sha256Text(planObject.body),
-            sha256Text(resultObject.body),
-            sha256Text(notebookObject.body),
-          ]);
-          if (
-            !rawHashes.every((hash) => callback.outputHashes.includes(hash))
-          ) {
-            throw new ApiInputError(
-              "RUNNER_OUTPUT_HASH_MISMATCH",
-              "Fixed patch bytes do not match the callback hashes",
-              409,
-            );
-          }
-          verification = await verifyPatchPlan(
-            JSON.parse(planObject.body) as unknown,
-            {
-              sessionId: currentSession.id,
-              manifest: artifact.manifest,
-              beliefTest: currentSession.beliefTest,
-              verifiedResultHash: currentSession.verifiedResult.resultHash,
-              transferResultHash: currentSession.transferResult.resultHash,
-              conceptPackVersion: job.conceptPack.version,
-              allowedTransformations:
-                bundle.patchContract.allowedTransformations,
-              allowedCellIndices: bundle.allowedCellIndices,
+        } catch {
+          v5Bundle = undefined;
+        }
+      }
+      const artifact = await artifacts(context, options).find(job.artifactId);
+      if (v5Bundle !== undefined) {
+        const authorityPrefix = `runner-authority/${jobId}/`;
+        const [
+          mutablePlan,
+          mutableRationale,
+          mutableResult,
+          mutableNotebook,
+          frozenPlan,
+          frozenRationale,
+          frozenResult,
+          frozenNotebook,
+        ] = await Promise.all([
+          store.get(`${claims.outputPrefix}patch-plan.json`),
+          store.get(`${claims.outputPrefix}public-rationale.md`),
+          store.get(`${claims.outputPrefix}patch-result.json`),
+          store.get(`${claims.outputPrefix}patched-notebook.ipynb`),
+          store.get(`${authorityPrefix}patch-plan.json`),
+          store.get(`${authorityPrefix}public-rationale.md`),
+          store.get(`${authorityPrefix}patch-result.json`),
+          store.get(`${authorityPrefix}patched-notebook.ipynb`),
+        ]);
+        const planObject = frozenPlan ?? mutablePlan;
+        const rationaleObject = frozenRationale ?? mutableRationale;
+        const resultObject = frozenResult ?? mutableResult;
+        const notebookObject = frozenNotebook ?? mutableNotebook;
+        if (
+          artifact === undefined ||
+          inputObject === undefined ||
+          planObject === undefined ||
+          rationaleObject === undefined ||
+          resultObject === undefined ||
+          notebookObject === undefined
+        ) {
+          terminalCallback = {
+            ...callback,
+            status: "REJECTED",
+            error: {
+              code: "RUNNER_OUTPUT_MISSING",
+              message:
+                "Required v5 Patch Plan lineage or fixed patch output is missing",
+              retryable: false,
             },
-          );
-          const parsedPatch = PatchResultSchema.parse(
-            JSON.parse(resultObject.body),
-          );
-          const { resultHash: _declaredResultHash, ...patchPayload } =
-            parsedPatch;
-          if (
-            parsedPatch.status !== "VERIFIED" ||
-            parsedPatch.sessionId !== currentSession.id ||
-            parsedPatch.generatedAt !== bundle.requestedAt ||
-            parsedPatch.sourceArtifactHash !== artifact.manifest.fileSha256 ||
-            parsedPatch.patchedArtifactHash !== rawHashes[2] ||
-            parsedPatch.patchHash !== (await hashCanonical(parsedPatch.diff)) ||
-            parsedPatch.resultHash !== (await hashCanonical(patchPayload)) ||
-            parsedPatch.modifiedCells.some(
-              (cell) => !bundle.allowedCellIndices.includes(cell),
-            )
-          ) {
-            throw new ApiInputError(
-              "PATCH_RESULT_LINEAGE_MISMATCH",
-              "The fixed patch result does not match its source, Plan, or notebook bytes",
-              409,
+          };
+        } else {
+          try {
+            const jobs = runnerJobService(context, options);
+            const closedJob = await closeScientificRunnerBoundary({
+              jobs,
+              job,
+              callback,
+            });
+            const authority = await resolveRunnerPatchAuthorityV5({
+              store,
+              jobs,
+              job: closedJob,
+              session: currentSession,
+              artifact,
+              bundle: v5Bundle,
+            });
+            const rawHashes = await Promise.all([
+              sha256Text(planObject.body),
+              sha256Text(rationaleObject.body),
+              sha256Text(notebookObject.body),
+              sha256Text(resultObject.body),
+            ]);
+            if (
+              JSON.stringify(callback.outputHashes) !==
+              JSON.stringify(rawHashes)
+            ) {
+              throw new ApiInputError(
+                "RUNNER_OUTPUT_HASH_MISMATCH",
+                "The exact v5 patch output set does not match the terminal callback",
+                409,
+              );
+            }
+            verification = await verifyPatchPlan(
+              JSON.parse(planObject.body) as unknown,
+              {
+                sessionId: currentSession.id,
+                manifest: artifact.manifest,
+                beliefSpec: authority.evidenceAuthority.beliefSpec,
+                verifiedResultHash:
+                  authority.evidenceAuthority.result.resultHash,
+                transferResultHash: v5Bundle.transferResult.resultHash,
+                conceptPackVersion: job.conceptPack.version,
+                allowedTransformations:
+                  v5Bundle.patchContract.allowedTransformations,
+                allowedCellIndices: v5Bundle.allowedCellIndices,
+              },
             );
-          }
-          patchResult = parsedPatch;
-          await runnerObjectStore(context, options).put(
-            `patches/${currentSession.id}/patched-notebook.ipynb`,
-            notebookObject.body,
-            "application/x-ipynb+json; charset=utf-8",
-          );
-        } catch (error) {
-          if (error instanceof ApiInputError) {
-            terminalCallback = {
-              ...callback,
-              status: "REJECTED",
-              error: {
-                code: error.code,
-                message: error.message,
-                retryable: false,
-              },
-            };
-          } else if (error instanceof PatchPlanVerificationError) {
-            verification = error.report;
-            terminalCallback = {
-              ...callback,
-              status: "REJECTED",
-              error: {
-                code: "PATCH_PLAN_VERIFIER_REJECTED",
-                message:
-                  "The external Patch Plan verifier rejected the candidate",
-                retryable: false,
-                details: {
-                  failedInvariants: error.report.invariants
-                    .filter((invariant) => !invariant.passed)
-                    .map((invariant) => invariant.name),
+            const parsedPatch = PatchResultSchema.parse(
+              JSON.parse(resultObject.body),
+            );
+            const { resultHash: _declaredResultHash, ...patchPayload } =
+              parsedPatch;
+            if (
+              parsedPatch.status !== "VERIFIED" ||
+              parsedPatch.sessionId !== currentSession.id ||
+              parsedPatch.generatedAt !== v5Bundle.requestedAt ||
+              parsedPatch.sourceArtifactHash !== artifact.manifest.fileSha256 ||
+              parsedPatch.patchedArtifactHash !== rawHashes[2] ||
+              parsedPatch.patchHash !==
+                (await hashCanonical(parsedPatch.diff)) ||
+              parsedPatch.resultHash !== (await hashCanonical(patchPayload)) ||
+              parsedPatch.modifiedCells.some(
+                (cell) => !v5Bundle.allowedCellIndices.includes(cell),
+              )
+            ) {
+              throw new ApiInputError(
+                "PATCH_RESULT_LINEAGE_MISMATCH",
+                "The v5 patch result does not match its source, Plan, or notebook bytes",
+                409,
+              );
+            }
+            await Promise.all([
+              persistRunnerAuthorityBytes({
+                store,
+                key: `${authorityPrefix}patch-plan.json`,
+                body: planObject.body,
+                contentType: "application/json",
+              }),
+              persistRunnerAuthorityBytes({
+                store,
+                key: `${authorityPrefix}public-rationale.md`,
+                body: rationaleObject.body,
+                contentType: "text/markdown; charset=utf-8",
+              }),
+              persistRunnerAuthorityBytes({
+                store,
+                key: `${authorityPrefix}patch-result.json`,
+                body: resultObject.body,
+                contentType: "application/json",
+              }),
+              persistRunnerAuthorityBytes({
+                store,
+                key: `${authorityPrefix}patched-notebook.ipynb`,
+                body: notebookObject.body,
+                contentType: "application/x-ipynb+json; charset=utf-8",
+              }),
+              persistScientificAuthority(
+                store,
+                `${authorityPrefix}patch-plan-verification.json`,
+                verification,
+              ),
+            ]);
+            patchResult = parsedPatch;
+            scientificPatch = true;
+            await store.put(
+              `patches/${currentSession.id}/patched-notebook.ipynb`,
+              notebookObject.body,
+              "application/x-ipynb+json; charset=utf-8",
+            );
+          } catch (error) {
+            if (error instanceof ApiInputError) {
+              terminalCallback = {
+                ...callback,
+                status: "REJECTED",
+                error: {
+                  code: error.code,
+                  message: error.message,
+                  retryable: false,
                 },
+              };
+            } else if (error instanceof PatchPlanVerificationError) {
+              verification = error.report;
+              terminalCallback = {
+                ...callback,
+                status: "REJECTED",
+                error: {
+                  code: "PATCH_PLAN_VERIFIER_REJECTED",
+                  message:
+                    "The external Patch Plan verifier rejected the candidate",
+                  retryable: false,
+                  details: {
+                    failedInvariants: error.report.invariants
+                      .filter((invariant) => !invariant.passed)
+                      .map((invariant) => invariant.name),
+                  },
+                },
+              };
+            } else if (
+              error instanceof SyntaxError ||
+              error instanceof ZodError
+            ) {
+              terminalCallback = {
+                ...callback,
+                status: "REJECTED",
+                error: {
+                  code: "PATCH_CONTRACT_REJECTED",
+                  message: "The fixed v5 patch output contract is invalid",
+                  retryable: false,
+                },
+              };
+            } else {
+              throw error;
+            }
+          }
+        }
+      } else {
+        const [planObject, resultObject, notebookObject] = await Promise.all([
+          store.get(`${claims.outputPrefix}patch-plan.json`),
+          store.get(`${claims.outputPrefix}patch-result.json`),
+          store.get(`${claims.outputPrefix}patched-notebook.ipynb`),
+        ]);
+        if (
+          artifact === undefined ||
+          inputObject === undefined ||
+          planObject === undefined ||
+          resultObject === undefined ||
+          notebookObject === undefined ||
+          currentSession.beliefTest === undefined ||
+          currentSession.verifiedResult === undefined ||
+          currentSession.transferResult?.outcome !== "PASSED"
+        ) {
+          terminalCallback = {
+            ...callback,
+            status: "REJECTED",
+            error: {
+              code: "RUNNER_OUTPUT_MISSING",
+              message:
+                "Required Patch Plan lineage or fixed patch output is missing",
+              retryable: false,
+            },
+          };
+        } else {
+          try {
+            const bundle = RunnerPatchCompileBundleSchema.parse(
+              JSON.parse(inputObject.body),
+            );
+            if (
+              bundle.jobId !== jobId ||
+              bundle.sessionId !== job.sessionId ||
+              bundle.artifactManifestHash !== job.artifactManifestHash ||
+              (await hashCanonical(bundle)) !== job.inputHashes.at(-1) ||
+              (await hashCanonical(bundle.artifactManifest)) !==
+                job.artifactManifestHash
+            ) {
+              throw new ApiInputError(
+                "RUNNER_INPUT_LINEAGE_MISMATCH",
+                "Fixed patch input lineage does not match the runner job",
+                409,
+              );
+            }
+            const rawHashes = await Promise.all([
+              sha256Text(planObject.body),
+              sha256Text(resultObject.body),
+              sha256Text(notebookObject.body),
+            ]);
+            if (
+              !rawHashes.every((hash) => callback.outputHashes.includes(hash))
+            ) {
+              throw new ApiInputError(
+                "RUNNER_OUTPUT_HASH_MISMATCH",
+                "Fixed patch bytes do not match the callback hashes",
+                409,
+              );
+            }
+            verification = await verifyPatchPlan(
+              JSON.parse(planObject.body) as unknown,
+              {
+                sessionId: currentSession.id,
+                manifest: artifact.manifest,
+                beliefTest: currentSession.beliefTest,
+                verifiedResultHash: currentSession.verifiedResult.resultHash,
+                transferResultHash: currentSession.transferResult.resultHash,
+                conceptPackVersion: job.conceptPack.version,
+                allowedTransformations:
+                  bundle.patchContract.allowedTransformations,
+                allowedCellIndices: bundle.allowedCellIndices,
               },
-            };
-          } else if (
-            error instanceof SyntaxError ||
-            error instanceof ZodError
-          ) {
-            terminalCallback = {
-              ...callback,
-              status: "REJECTED",
-              error: {
-                code: "PATCH_CONTRACT_REJECTED",
-                message: "The fixed patch output contract is invalid",
-                retryable: false,
-              },
-            };
-          } else {
-            throw error;
+            );
+            const parsedPatch = PatchResultSchema.parse(
+              JSON.parse(resultObject.body),
+            );
+            const { resultHash: _declaredResultHash, ...patchPayload } =
+              parsedPatch;
+            if (
+              parsedPatch.status !== "VERIFIED" ||
+              parsedPatch.sessionId !== currentSession.id ||
+              parsedPatch.generatedAt !== bundle.requestedAt ||
+              parsedPatch.sourceArtifactHash !== artifact.manifest.fileSha256 ||
+              parsedPatch.patchedArtifactHash !== rawHashes[2] ||
+              parsedPatch.patchHash !==
+                (await hashCanonical(parsedPatch.diff)) ||
+              parsedPatch.resultHash !== (await hashCanonical(patchPayload)) ||
+              parsedPatch.modifiedCells.some(
+                (cell) => !bundle.allowedCellIndices.includes(cell),
+              )
+            ) {
+              throw new ApiInputError(
+                "PATCH_RESULT_LINEAGE_MISMATCH",
+                "The fixed patch result does not match its source, Plan, or notebook bytes",
+                409,
+              );
+            }
+            patchResult = parsedPatch;
+            await store.put(
+              `patches/${currentSession.id}/patched-notebook.ipynb`,
+              notebookObject.body,
+              "application/x-ipynb+json; charset=utf-8",
+            );
+          } catch (error) {
+            if (error instanceof ApiInputError) {
+              terminalCallback = {
+                ...callback,
+                status: "REJECTED",
+                error: {
+                  code: error.code,
+                  message: error.message,
+                  retryable: false,
+                },
+              };
+            } else if (error instanceof PatchPlanVerificationError) {
+              verification = error.report;
+              terminalCallback = {
+                ...callback,
+                status: "REJECTED",
+                error: {
+                  code: "PATCH_PLAN_VERIFIER_REJECTED",
+                  message:
+                    "The external Patch Plan verifier rejected the candidate",
+                  retryable: false,
+                  details: {
+                    failedInvariants: error.report.invariants
+                      .filter((invariant) => !invariant.passed)
+                      .map((invariant) => invariant.name),
+                  },
+                },
+              };
+            } else if (
+              error instanceof SyntaxError ||
+              error instanceof ZodError
+            ) {
+              terminalCallback = {
+                ...callback,
+                status: "REJECTED",
+                error: {
+                  code: "PATCH_CONTRACT_REJECTED",
+                  message: "The fixed patch output contract is invalid",
+                  retryable: false,
+                },
+              };
+            } else {
+              throw error;
+            }
           }
         }
       }
@@ -4645,7 +4889,7 @@ export function createApi(options: ApiOptions = {}) {
           409,
         );
       }
-      if (updatedSession.state === "PATCH_VERIFIED") {
+      if (updatedSession.state === "PATCH_VERIFIED" && !scientificPatch) {
         const lineage = HostedPlanLineageSchema.parse(
           updatedSession.labVerification,
         );
