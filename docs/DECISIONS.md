@@ -1,5 +1,26 @@
 # Decisions
 
+## 2026-07-16 — Focus the Experiment Theater on the learner
+
+- Preserve the evidence-editorial identity and proven lesson state instead of
+  replacing the interface with a generic dashboard or a route rewrite.
+- Use one deep-navy project/evidence rail beside a warm learner canvas. Remove
+  the permanent agent rail because it competes with the current action and
+  violates the current no-cockpit rule.
+- Keep public compiler activity, hashes, verifier reports, and provenance in
+  the existing collapsed proof drawer; removing the cockpit does not remove
+  evidence access or change scientific authority.
+- Raise persistent Studio labels to at least 12 px, secondary copy to at least
+  13 px, and interactive targets to at least 44 px. Keep the existing editorial
+  serif for learner questions and conclusions.
+- Treat the local getdesign corpus as design logic, not brand identity: Sentry
+  informed authority polarity, Notion workspace geometry, ClickHouse real-data
+  proof, and Ferrari restraint. CounterLab retains its own palette, type, and
+  scientific semantics.
+- Do not claim the new surface as deployed or browser-verified until the owner
+  starts the local app or promotes it and CloakBrowser captures the updated
+  desktop and 390 px journeys.
+
 ## 2026-07-16 — Freeze native v5 patch authority before proof issuance
 
 - Keep the Experiment IR transfer contract ID distinct from the fixed transfer

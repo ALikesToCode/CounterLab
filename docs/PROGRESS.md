@@ -83,7 +83,7 @@ deployed registry digest remain distinct identities and are not interchangeable.
 | Canonical JSON authority | done locally | Commits `47f49a7` and `b4a68ff` preserve dangerous own keys, write sorted object text directly, use UTF-16 key order in both runtimes, reject lone surrogates, preserve Unicode normalization, and pass shared hash vectors without changing normal historical evidence. | Record `counterlab-canonical-json-v1` in Capsule integrity and rerun final release vectors. |
 | Reasoning Diff v2 and Proof Capsule v2 | pending behind Boundary Map | Legacy Proof Bundle v1/v2 remains qualified and byte-compatible. The strict v5 patch stops honestly at `PATCH_VERIFIED`. | Finish Boundary Map authority, then add native Reasoning Diff v2, deterministic Capsule archive/validation/storage/download, and replay persistence. |
 | Boundary Map authority | active | Commits `2a1b827`, `0a6a97b`, and `0ad7c2a` add strict result/report/receipt schemas, cross-runtime canonical lineage, real fixed-kernel grids for both concepts, frozen grid definitions, pack-version bumps, and exact scientific/epistemic request authorization. | Finish the independent mutation verifier, runner bundle/execution, Worker receipt and storage flow, session state, retrieval API, and accessible renderer. |
-| Simplified Theater and Judge Mode | pending | Existing Studio UI remains the released interface; unrelated local UI edits are not release evidence. | Start after verified Boundary Map data can reach the browser without authority shortcuts. |
+| Simplified Theater and Judge Mode | partial locally | `DESIGN.md`, the focused-theater plan, and commit `01ac1d7` remove the permanent agent cockpit, widen the learner canvas, consolidate authority into one evidence rail plus the collapsed proof drawer, and raise Studio typography and controls to the documented floor. | Run updated desktop/390 px CloakBrowser journeys after the owner starts the forbidden local dev surface; Boundary Map data and the full six-stage vocabulary remain pending. |
 | Physics/free-fall | blocked by phase order | No verified public support is claimed. | Start only after both live ML concepts pass the new production authority gate. |
 | Final release | pending | Previous production v2 smoke remains valid for that deployment. | Full suites, clean clone, engine gate, secret scan, deployment, CloakBrowser journeys, and exact-version production smoke. |
 
@@ -104,6 +104,13 @@ Latest local v5.1 verification checkpoint (2026-07-16):
   Boundary Map verifier package entered the shared worktree. A full TypeScript
   rerun remains pending until that in-progress package is integrated.
 - Strict repository and Worker TypeScript: passed.
+- Focused Theater React tests: 3/3 passed; strict web/Worker TypeScript and
+  targeted Prettier checks passed. `DESIGN.md` lint reports 0 warnings and 0
+  errors.
+- The broader web suite currently passes 132/136. Four Worker tests fail in the
+  concurrently integrated Boundary Map pack-version slice (`2.0.0`
+  expectations versus registered `2.1.0`, plus related imbalance callbacks);
+  the focused Studio suite remains green.
 - Git whitespace check: passed.
 - No `build`, `dev`, deployment, or production smoke was run for this slice.
 - The recorded scientific-engine candidate remains source-bound to lock hash
@@ -130,7 +137,7 @@ Latest local v5.1 verification checkpoint (2026-07-16):
 | Transfer-gated artifact patch                | pass    | Fixed forecasting/manufacturing evaluators gate source-free Patch Plans; both concept patch engines preserve unrelated cells and fail closed on verifier mutations.                                                                       |
 | Non-sample leakage patch                     | pass    | Three logistic-regression held-out styles compile through the registered one-cell group/identity transformation; entity aliases and patch mutations are tested.                                                                           |
 | Reasoning Diff and portable proof            | partial | Legacy Worker integration still validates qualified Proof Bundle v1/v2. Native v5 deliberately stops at `PATCH_VERIFIED`; it does not cast Belief Spec or Experiment IR authority into the legacy proof. Reasoning Diff v2, Boundary Map binding, and Proof Capsule v2 remain pending. |
-| Studio navigation and resume                 | pass    | Explicit completed-stage review, recent sessions, canonical refresh restoration, Start over, Agent Rail, command palette, and proof console have React tests.                                                                             |
+| Studio navigation and resume                 | pass    | Explicit completed-stage review, recent sessions, canonical refresh restoration, Start over, focused project/evidence rail, command palette, collapsed proof console, and no-permanent-cockpit contract have React tests.                  |
 | Constrained generative UI                    | pass    | `json-render` composes only trusted public proof components from sanitized events; it has no action registry and no validity authority.                                                                                                   |
 | Private operational diagnostics              | pass    | Secret-protected Worker aggregation reports queue/phase timing samples, repairs, token usage, concept, support, and failures without notebook or session/artifact/job identifiers.                                                         |
 | Held-out intake/routing                      | pass    | `counterlab-held-out-v2`: 10/10 cases pass; four leakage, four imbalance, two unsupported.                                                                                                                                                |

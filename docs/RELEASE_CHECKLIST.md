@@ -123,6 +123,10 @@ Report SHA-256:
 - [x] Persistent replay label and refresh/event reconnect.
 - [x] Mobile 390px completion, keyboard-only completion, reduced motion, focus,
       contrast, and no horizontal overflow.
+- [x] Focused Theater component contract, strict web/Worker TypeScript,
+      targeted formatting, and `DESIGN.md` lint pass locally.
+- [ ] Updated focused Theater desktop and 390 px screenshots after the owner
+      starts the local app; no `build` or `dev` command was run for this slice.
 
 The checked browser items describe the released Studio journey. The following
 v5.1 product gates remain pending and must not be inferred from them:
