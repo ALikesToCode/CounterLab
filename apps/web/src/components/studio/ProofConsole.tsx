@@ -1,3 +1,5 @@
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+
 import type { PublicCompilerEvent } from "../../api";
 import { GeneratedProofView } from "./GeneratedProofView";
 import type { StudioContext } from "./types";
@@ -77,6 +79,25 @@ export function ProofConsole({
   onTab: (tab: ProofTab) => void;
 }) {
   const filteredEvents = eventsForTab(context.events, activeTab);
+  const moveTab = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    index: number,
+  ) => {
+    let nextIndex = index;
+    if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
+    else if (event.key === "ArrowLeft")
+      nextIndex = (index - 1 + tabs.length) % tabs.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = tabs.length - 1;
+    else return;
+    event.preventDefault();
+    const nextTab = tabs[nextIndex];
+    if (!nextTab) {
+      return;
+    }
+    onTab(nextTab);
+    document.getElementById(`proof-tab-${nextTab.toLowerCase()}`)?.focus();
+  };
   return (
     <section className={`proof-console ${open ? "open" : ""}`}>
       <button
@@ -86,7 +107,7 @@ export function ProofConsole({
         onClick={onToggle}
       >
         <span>
-          <i /> Proof console
+          <i /> Evidence &amp; proof
         </span>
         <strong>
           {context.events.length} event{context.events.length === 1 ? "" : "s"}
@@ -96,19 +117,29 @@ export function ProofConsole({
       {open && (
         <div className="proof-console-body">
           <div className="proof-tabs" role="tablist" aria-label="Proof views">
-            {tabs.map((tab) => (
+            {tabs.map((tab, index) => (
               <button
+                id={`proof-tab-${tab.toLowerCase()}`}
                 role="tab"
                 aria-selected={activeTab === tab}
+                aria-controls="proof-tabpanel"
+                tabIndex={activeTab === tab ? 0 : -1}
                 type="button"
                 key={tab}
                 onClick={() => onTab(tab)}
+                onKeyDown={(event) => moveTab(event, index)}
               >
                 {tab}
               </button>
             ))}
           </div>
-          <div className="proof-console-content" role="tabpanel">
+          <div
+            id="proof-tabpanel"
+            className="proof-console-content"
+            role="tabpanel"
+            aria-labelledby={`proof-tab-${activeTab.toLowerCase()}`}
+            tabIndex={0}
+          >
             {activeTab === "Provenance" ? (
               <dl className="console-provenance">
                 <div>
@@ -124,6 +155,20 @@ export function ProofConsole({
                   <dd>
                     {context.session?.verifiedResult?.resultHash ??
                       "Locked until verification"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Boundary</dt>
+                  <dd>
+                    {context.session?.boundaryMapAuthority?.resultHash ??
+                      "Locked until verification"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Capsule</dt>
+                  <dd>
+                    {context.session?.proofCapsule?.rootHash ??
+                      "Issued after verified repair"}
                   </dd>
                 </div>
               </dl>

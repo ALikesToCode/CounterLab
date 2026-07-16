@@ -36,8 +36,18 @@ describe("CounterLabStudio", () => {
       screen.queryByRole("complementary", { name: /counterlab agents/i }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /proof console/i }),
+      screen.getByRole("button", { name: /evidence & proof/i }),
     ).toHaveAttribute("aria-expanded", "true");
+    for (const stage of [
+      "Question",
+      "Prediction",
+      "Test",
+      "Boundary",
+      "Apply",
+      "Repair",
+    ]) {
+      expect(screen.getByText(stage)).toBeInTheDocument();
+    }
   });
 
   it("opens the keyboard command palette without hiding visible controls", () => {
@@ -85,11 +95,37 @@ describe("CounterLabStudio", () => {
       </CounterLabStudio>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /belief test/i }));
+    fireEvent.click(screen.getByRole("button", { name: /prediction/i }));
     expect(navigateStage).toHaveBeenCalledWith("belief");
-    expect(screen.getByRole("button", { name: /verified lab/i })).toBeEnabled();
-    expect(screen.getByText(/transfer & patch/i).closest("li")).toHaveClass(
+    expect(screen.getByRole("button", { name: /test/i })).toBeEnabled();
+    expect(screen.getByText("Boundary").closest("li")).toHaveClass(
       "current",
+    );
+  });
+
+  it("supports arrow-key navigation across Evidence & proof tabs", () => {
+    render(
+      <CounterLabStudio
+        context={context}
+        actions={{
+          newAnalysis: vi.fn(),
+          showEvidence: vi.fn(),
+          navigateStage: vi.fn(),
+          startOver: vi.fn(),
+          openRecent: vi.fn(),
+        }}
+      >
+        <main>Compile</main>
+      </CounterLabStudio>,
+    );
+
+    const activity = screen.getByRole("tab", { name: "Activity" });
+    activity.focus();
+    fireEvent.keyDown(activity, { key: "ArrowRight" });
+    expect(screen.getByRole("tab", { name: "Plan" })).toHaveFocus();
+    expect(screen.getByRole("tab", { name: "Plan" })).toHaveAttribute(
+      "aria-selected",
+      "true",
     );
   });
 });

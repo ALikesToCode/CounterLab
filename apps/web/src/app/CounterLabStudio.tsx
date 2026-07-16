@@ -115,7 +115,7 @@ export function CounterLabStudio({
       {
         id: "proof",
         label: "Export proof",
-        hint: "Download the machine-readable Proof Bundle.",
+        hint: "Download the machine-readable Proof Capsule.",
         disabled: actions.exportProof === undefined,
         run: actions.exportProof ?? (() => undefined),
       },

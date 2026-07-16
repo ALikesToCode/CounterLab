@@ -1966,7 +1966,7 @@ function InteractiveLeakageLab({
           </dl>
           <p>
             This is a verified exploration. It does not replace the immutable
-            result used by your Prediction Contract or Proof Bundle.
+            result used by your locked Prediction or final Proof Capsule.
           </p>
         </div>
       )}
