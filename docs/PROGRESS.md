@@ -60,9 +60,9 @@ deployed registry digest remain distinct identities and are not interchangeable.
 | --- | --- | --- | --- |
 | Belief Spec v2 analyst/session authority | done | Native v2 proposal, confirmation, evidence resolution, v1 replay adapter, and live Worker tests; commits through `06465f3` | Production promotion is deferred until the full v5 chain is complete. |
 | Bounded Codex scientific compile | done | Four-file allowlist, compiler provenance, fixed candidate verifier/scorer, two-repair contract, and terminal callback reconstruction; commits `d57b4a2` through `1972c2d` | Rerun in the final production image and smoke both concepts. |
-| V5 fixed-run dispatch | done | Exact Belief Spec, Prediction, manifest, fixture, raw/canonical IR, selection, selected IR, report, and Plan hashes bind the run; `c7eca2e` | No production claim until the callback gate below passes. |
-| V5 runner/Python execution | done | Versioned runner dispatches `LAB_RUN` before Codex, Python validates Experiment IR v5 and registered fixture authority, fixed kernel alone computes output, and no early result event is emitted; `37bf938` | Add a direct v5 imbalance-envelope test during concept integration. |
-| Worker epistemic result callback | done | Commit `36d8157` write-closes the runner boundary, freezes the exact result bytes, reconstructs every v5 compile/run hash, persists technical and epistemic reports plus the verdict, and lets only Worker-owned events release `SUPPORTS` or `INCONCLUSIVE`; `REJECTED` releases no result. | Reprove this authority for class imbalance, then promote only with the complete v5 chain. |
+| V5 fixed-run dispatch | done | Exact Belief Spec, Prediction, manifest, fixture, raw/canonical IR, selection, selected IR, report, and Plan hashes bind the run; `c7eca2e` | No production claim until every downstream v5 stage passes. |
+| V5 runner/Python execution | done | Versioned runner dispatches `LAB_RUN` before Codex, Python validates Experiment IR v5 and registered fixture authority, fixed kernel alone computes output, and no early result event is emitted; direct leakage and imbalance envelopes are covered. | Rebuild and requalify only with the complete release chain. |
+| Worker epistemic result callback | done | Commits `36d8157`, `32e9b0a`, and `f5de4e2` close runner writes, freeze exact bytes, bind frozen kernel/fixture/seed authority, persist reports/verdict, and prove `SUPPORTS` plus five no-release imbalance mutations through the Worker. | Migrate the browser and downstream learner stages before promotion. |
 | Interactive controls on v5 lineage | pending | Existing v2 fixed controls remain qualified. | Remove legacy Belief Test/Plan assumptions and bind every control rerun to the v5 selected experiment. |
 | Transfer, patch, Reasoning Diff, proof | pending | Existing v2 artifact-specific path remains qualified. | Migrate lineage without sample/replay authority, then add Proof Capsule v2. |
 | Boundary Map, simplified Theater, Judge Mode | pending | Contracts/UX requirements are recorded; existing UI remains the released Studio UI. | Implement only after the v5 ML authority loop passes. |
@@ -71,14 +71,14 @@ deployed registry digest remain distinct identities and are not interchangeable.
 
 Latest local v5 result-authority verification (2026-07-16):
 
-- Web/Worker Vitest: 123 passed across 18 files.
-- Focused session, runner-job, Experiment IR, and epistemic-verifier Vitest: 68 passed across 5 files.
+- Web/Worker Vitest: 129 passed across 18 files.
+- Focused Concept Pack and result-verifier Vitest: 31 passed across 3 files.
 - Strict repository and Worker TypeScript: passed.
 - Git whitespace check: passed.
 - No `build`, `dev`, deployment, or production smoke was run for this slice.
-- Next active slice: prove the same v5 callback authority with a class-imbalance
-  Worker integration test, then migrate interactive controls, transfer, patch,
-  Reasoning Diff, and proof lineage.
+- Next active slice: mirror the v5 verdict/report in the browser client, then
+  migrate interactive controls, transfer, patch, Reasoning Diff, and proof
+  lineage.
 
 ## Acceptance matrix
 
@@ -91,7 +91,7 @@ Latest local v5 result-authority verification (2026-07-16):
 | Live analyst preview and approval            | pass    | Live calls require a hash-bound preview of the exact sanitized packet; sensitive-looking evidence requires explicit approval, and claim/artifact changes invalidate it.                                                                  |
 | Runner job/token/callback/event cursor model | pass    | D1 repository, optimistic transitions, Worker-held P-256 private signing, Container public-key verification, callback idempotency, cursor reconnect, scoped cancellation, recoverable dispatch acknowledgement, and browser-safe event schemas pass tests and production smoke. |
 | Artifact-specific hosted Experiment Plan     | pass    | Worker/runner integration compiles and independently verifies typed v2 Plans; rejected candidates release no result.                                                                                                                      |
-| V5 hosted scientific authority migration     | partial | Native Belief Spec, bounded compile/repair, fixed selection, fixture-bound fixed execution, and Worker-owned tri-state result release pass focused tests. Direct class-imbalance Worker integration and all downstream v5 interactive/transfer/patch/proof lineage remain pending. |
+| V5 hosted scientific authority migration     | partial | Native Belief Spec, bounded compile/repair, fixed selection, fixture-bound fixed execution, and Worker-owned tri-state result release pass direct leakage and imbalance integration tests. Browser mirroring plus all downstream v5 interactive/transfer/patch/proof lineage remain pending. |
 | Fixed hosted result and cross-language hash  | pass    | Python v2 result hashes now use browser-compatible canonical JSON while legacy v1/replay hashes remain stable; TypeScript result verification passes both concepts.                                                                       |
 | Entity-leakage lab and mutations             | pass    | Computed random 0.984722, group 0.594444, ablation 0.673611, zero group overlap; the current CLI rejects 13/13 critical mutations and the achieved-metrics collector records the same 13/13 published set.                                |
 | Class-imbalance lab and mutations            | pass    | 6,000 rows, 1.0833% positives, majority accuracy 0.989333 with recall 0; threshold recall 0.3125; the current CLI rejects 19/19 critical mutations and the achieved-metrics collector records its narrower 15/15 published set.             |

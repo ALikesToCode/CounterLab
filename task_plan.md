@@ -128,10 +128,13 @@ code, `apps/web/src/App.tsx`, or global CSS.
 ### Phase 9 — class-imbalance integration
 
 - [x] Add candidate experiments, scorer contract, and tri-state mappings.
-- [ ] Add a direct versioned run-envelope test, Worker tri-state persistence,
-      prevalence/threshold Boundary Sweep, and mutations.
-- **Status:** in progress; the generic registered fixed runner supports the pack,
-  but the versioned end-to-end result-release proof remains pending.
+- [x] Add a direct versioned run-envelope test and Worker tri-state persistence.
+- [x] Reject forged fixture summary, kernel version, and seed authority before
+      result release.
+- [ ] Add the prevalence/threshold Boundary Sweep and mutations.
+- **Status:** in progress; the versioned compile, fixed run, and end-to-end
+  result release now pass for the pack. Boundary and downstream learner stages
+  remain pending.
 
 ### Phase 10 — Boundary Map engine
 

@@ -553,5 +553,10 @@ be stale. Verify them against the current tree before making decisions.
 - Valid inconclusive evidence is an educational result, not a technical
   failure. The v5 callback invokes the epistemic verifier directly so a valid
   `INCONCLUSIVE` outcome can be released without weakening technical checks.
-- Leakage has direct Worker integration coverage. The equivalent
-  class-imbalance callback proof remains the next active gate.
+- Leakage and class imbalance now have direct Worker integration coverage.
+- A valid fixture hash did not by itself protect the declared fixture summary,
+  kernel version, or top-level seed. Rehashed forgeries initially passed the
+  technical verifier; frozen per-pack result authority now rejects all five
+  tested mutations before result release.
+- The next blocking boundary is the browser/downstream model: its strict session
+  schema and learner routes still assume legacy Belief Test and Plan v2 fields.

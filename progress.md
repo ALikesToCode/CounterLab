@@ -372,3 +372,22 @@ async browser journeys, and measured performance.
   interactive controls, transfer, patch, Reasoning Diff, and proof lineage.
 - No build, dev server, deployment, browser journey, or production smoke was
   run for this slice.
+
+## 2026-07-16 class-imbalance v5 result-authority checkpoint
+
+- Commit `32e9b0a` records frozen per-pack result authority for kernel version
+  and fixture summary, and requires the result seed to match the selected Plan.
+- Five rehashed forgeries—rows, positives, prevalence, kernel version, and
+  top-level seed—now produce a technical `REJECTED` verdict with no result.
+- Commit `f5de4e2` integration-tests an artifact-specific class-imbalance
+  Belief Spec through bounded scientific compile, fixed selection, versioned
+  run dispatch, the real public fixed-result fixture, Worker verification, and
+  `SUPPORTS competing`.
+- The same Worker tests prove all five fixed-authority mutations emit only
+  `verifier.rejected`, keep the session at `LAB_VERIFIED`, and expose no result.
+- Verification: 129 Web/Worker tests passed; 31 focused Concept Pack/verifier
+  tests passed; repository and Worker TypeScript plus whitespace checks passed.
+- Next gate: browser client/session mirroring, followed by v5 interactive,
+  transfer, patch, Reasoning Diff, and proof lineage.
+- No build, dev server, deployment, browser journey, or production smoke was
+  run for this slice.

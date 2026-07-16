@@ -351,3 +351,16 @@ can pass.
   structured findings and release no result.
 - Reconcile Worker-owned event prefixes and compare immutable evidence on
   duplicate callbacks so retries remain safe after learner progression.
+
+## 2026-07-16 — Bind fixed result metadata outside runner claims
+
+- Record each released Subject Pack's exact fixed fixture summary and kernel
+  version in the frozen Concept Pack registry; retain the existing three-field
+  execution descriptor separately so runner bundle compatibility does not drift.
+- Require a result's complete fixture summary and kernel version to match that
+  fixed authority, and require its top-level seed to match the selected Plan.
+- Treat a valid canonical hash as integrity, not truth: rows, positives,
+  prevalence, kernel version, or seed can be rehashed after tampering and must
+  still fail an independent named invariant.
+- Use the generated public fixed-kernel result as the class-imbalance Worker
+  integration source. Do not reuse the older synthetic helper as live authority.
