@@ -27,6 +27,7 @@ import type {
 import { createEvidenceEvent, hashCanonical } from "@counterlab/session-core";
 import { validateProofBundle } from "@counterlab/proof-bundle";
 import { schemaSummaryHash } from "@counterlab/belief-analyst";
+import { getConceptPack } from "@counterlab/concept-registry";
 import {
   ExperimentIRV5Schema,
   RunnerLabCompileBundleV5Schema,
@@ -60,6 +61,8 @@ import { summarizeOperationalRows } from "./operational-diagnostics";
 
 const { privateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY } =
   await generateRunnerJobTokenKeyPair();
+const LIVE_LEAKAGE_PACK_VERSION = getConceptPack("entity_leakage").version;
+const LIVE_IMBALANCE_PACK_VERSION = getConceptPack("class_imbalance").version;
 
 class MemorySessionRepository implements SessionRepository {
   private readonly sessions = new Map<string, CounterLabSession>();
@@ -1734,7 +1737,7 @@ async function imbalanceExperimentPlan(
     planId: "plan_imbalance_live",
     sessionId,
     concept: "class_imbalance",
-    conceptPackVersion: "1.0.0",
+    conceptPackVersion: LIVE_IMBALANCE_PACK_VERSION,
     artifactManifestHash: await hashCanonical(artifact),
     beliefTestId: beliefTest.id,
     evidenceRefs: beliefTest.evidenceRefs,
@@ -2329,7 +2332,10 @@ describe("Cloudflare Worker API", () => {
       sessionId: harness.sessionId,
       artifactId: harness.artifact.artifactId,
       artifactManifestHash: harness.plan.artifactManifestHash,
-      conceptPack: { id: "class_imbalance", version: "1.0.0" },
+      conceptPack: {
+        id: "class_imbalance",
+        version: LIVE_IMBALANCE_PACK_VERSION,
+      },
       inputHashes: ["1".repeat(64)],
       stateVersion: 4,
       jobVersion: 4,
@@ -2434,7 +2440,7 @@ describe("Cloudflare Worker API", () => {
       planId: "patch_plan_imbalance_worker",
       sessionId: harness.sessionId,
       concept: "class_imbalance" as const,
-      conceptPackVersion: "1.0.0",
+      conceptPackVersion: LIVE_IMBALANCE_PACK_VERSION,
       artifactManifestHash: harness.plan.artifactManifestHash,
       sourceArtifactHash: harness.artifact.fileSha256,
       transferResultHash: transferSession.transferResult.resultHash,
@@ -3109,7 +3115,10 @@ describe("Cloudflare Worker API", () => {
         kind: "LAB_COMPILE",
         status: "STARTING",
         artifactId: uploaded.artifactId,
-        conceptPack: { id: "entity_leakage", version: "2.0.0" },
+        conceptPack: {
+          id: "entity_leakage",
+          version: LIVE_LEAKAGE_PACK_VERSION,
+        },
       },
     });
     expect(dispatcher.dispatched).toHaveLength(1);
@@ -3157,7 +3166,7 @@ describe("Cloudflare Worker API", () => {
       planId: "plan_hosted_1",
       sessionId,
       concept: "entity_leakage" as const,
-      conceptPackVersion: "2.0.0",
+      conceptPackVersion: LIVE_LEAKAGE_PACK_VERSION,
       artifactManifestHash: manifestHash,
       beliefTestId: lesson.beliefTest.id,
       evidenceRefs: lesson.beliefTest.evidenceRefs,
@@ -3759,7 +3768,7 @@ describe("Cloudflare Worker API", () => {
       planId: "patch_plan_hosted_1",
       sessionId,
       concept: "entity_leakage" as const,
-      conceptPackVersion: "2.0.0",
+      conceptPackVersion: LIVE_LEAKAGE_PACK_VERSION,
       artifactManifestHash: manifestHash,
       sourceArtifactHash: uploaded.fileSha256,
       transferResultHash: transferredBody.data.transferResult.resultHash,
