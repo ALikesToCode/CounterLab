@@ -446,6 +446,24 @@ afterEach(() => {
 });
 
 describe("CounterLab judged flow", () => {
+  it("keeps Judge Mode on its own refresh-safe route", async () => {
+    window.localStorage.setItem("counterlab.mode", "live");
+    window.localStorage.setItem("counterlab.sessionId", "stale_session");
+    window.history.replaceState({}, "", "/judge");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /see a belief break in twenty seconds/i,
+      }),
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/judge");
+    expect(
+      screen.getByRole("link", { name: /watch verified replay/i }),
+    ).toHaveAttribute("href", "/replay/leakage-01");
+  });
+
   it("explains the product in plain language and offers three honest paths", () => {
     render(<App />);
 

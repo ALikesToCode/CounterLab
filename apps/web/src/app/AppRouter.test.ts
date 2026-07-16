@@ -4,6 +4,7 @@ import { parseStudioLocation, studioPath } from "./AppRouter";
 
 describe("Studio URL routing", () => {
   it("parses resumable session, replay, and proof paths", () => {
+    expect(parseStudioLocation("/judge")).toEqual({ kind: "judge" });
     expect(parseStudioLocation("/session/session%2Fone")).toEqual({
       kind: "session",
       id: "session/one",

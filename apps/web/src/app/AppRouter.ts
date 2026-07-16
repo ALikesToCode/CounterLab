@@ -1,5 +1,6 @@
 export type StudioLocation =
   | { kind: "landing" }
+  | { kind: "judge" }
   | { kind: "new" }
   | { kind: "session"; id: string }
   | { kind: "replay"; id: string }
@@ -8,6 +9,7 @@ export type StudioLocation =
 export function parseStudioLocation(pathname: string): StudioLocation {
   const parts = pathname.split("/").filter(Boolean);
   if (parts.length === 0) return { kind: "landing" };
+  if (parts.length === 1 && parts[0] === "judge") return { kind: "judge" };
   if (parts.length === 1 && parts[0] === "new") return { kind: "new" };
   if (
     parts.length === 2 &&

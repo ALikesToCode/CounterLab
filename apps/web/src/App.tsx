@@ -34,6 +34,7 @@ import { ReasoningDiffView } from "./components/proof/ReasoningDiffView";
 import { ProofCapsuleReplayView } from "./components/replay/ProofCapsuleReplayView";
 import type { RecentProject, StudioStage } from "./components/studio/types";
 import { BoundaryStage } from "./features/boundary/BoundaryStage";
+import { JudgeModeView } from "./features/judge/JudgeModeView";
 
 import { getRun, sampleArtifact, sampleResult, verifiedReplay } from "./sample";
 
@@ -447,6 +448,9 @@ function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
             >
               Try the 3-minute sample
             </button>
+            <a className="button lesson-secondary" href="/judge">
+              Open Judge Mode
+            </a>
           </div>
           <div className="lesson-trust" aria-label="Lesson details">
             <span>
@@ -3474,6 +3478,9 @@ function LiveCompileScreen({
 }
 
 export function App() {
+  const [judgeMode, setJudgeMode] = useState(
+    () => parseStudioLocation(window.location.pathname).kind === "judge",
+  );
   const [mode, setMode] = useState<Mode | null>(null);
   const [stage, setStage] = useState<Stage>("landing");
   const [claim, setClaim] = useState("");
@@ -3691,6 +3698,7 @@ export function App() {
     );
     clearAllActiveRunnerCheckpoints(window.localStorage);
     window.history.replaceState({}, "", "/");
+    setJudgeMode(false);
     setMode(null);
     setStage("landing");
     setClaim("");
@@ -3724,6 +3732,23 @@ export function App() {
   useEffect(() => {
     let active = true;
     const route = parseStudioLocation(window.location.pathname);
+
+    if (route.kind === "judge") {
+      runner.clear();
+      setJudgeMode(true);
+      setMode(null);
+      setStage("landing");
+      setActiveReplayId(null);
+      setActiveReplay(null);
+      setSession(null);
+      setArtifact(null);
+      setError(null);
+      setRouteHydrated(true);
+      void checkLiveCapabilities();
+      return;
+    }
+
+    setJudgeMode(false);
 
     if (route.kind === "landing") {
       restart();
@@ -3865,11 +3890,13 @@ export function App() {
   }, [locationRevision]);
 
   useLayoutEffect(() => {
-    resetViewport(stage === "landing" ? "landing-title" : undefined);
-  }, [stage]);
+    resetViewport(
+      judgeMode ? "judge-title" : stage === "landing" ? "landing-title" : undefined,
+    );
+  }, [judgeMode, stage]);
 
   useEffect(() => {
-    if (!routeHydrated) return;
+    if (!routeHydrated || judgeMode) return;
     const path = studioPath({
       stage,
       mode,
@@ -3880,7 +3907,7 @@ export function App() {
     if (window.location.pathname !== path) {
       window.history.pushState({}, "", path);
     }
-  }, [activeReplayId, mode, routeHydrated, session, stage]);
+  }, [activeReplayId, judgeMode, mode, routeHydrated, session, stage]);
 
   const checkLiveCapabilities = async () => {
     setCheckingLiveHealth(true);
@@ -3900,6 +3927,7 @@ export function App() {
   };
 
   const chooseMode = (nextMode: Mode) => {
+    setJudgeMode(false);
     setMode(nextMode);
     setReviewStep(null);
     setError(null);
@@ -4150,6 +4178,18 @@ export function App() {
     window.localStorage.setItem(storageKeys.replayIntro, "false");
     setReplayIntro(false);
   };
+
+  if (judgeMode) {
+    return (
+      <JudgeModeView
+        health={liveHealth}
+        healthPending={checkingLiveHealth}
+        healthError={liveHealthError}
+        onRetryHealth={() => void checkLiveCapabilities()}
+        onStartSample={() => chooseMode("instant")}
+      />
+    );
+  }
 
   if (hostedReplay !== null) {
     return (
