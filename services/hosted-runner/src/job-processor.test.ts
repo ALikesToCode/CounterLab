@@ -32,12 +32,14 @@ import {
 import {
   ExperimentIRV5Schema,
   RunnerLabCompileBundleV5Schema,
+  hashExperimentIR,
   migrateExperimentPlanV2ToIRV5,
   type RunnerScientificCandidateV5,
   type RunnerLabCompileBundleV5,
   type VersionedRunnerJobInputBundle,
 } from "@counterlab/experiment-ir";
-import { LabSceneDraftV2Schema } from "@counterlab/generative-ui-contracts";
+import { LabSceneV2Schema } from "@counterlab/generative-ui-contracts";
+import { hashCanonical } from "@counterlab/session-core";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -402,7 +404,7 @@ async function scientificArtifacts() {
     nonClaims: ["This does not establish performance for every deployment."],
     evidenceRefs: bundleV5.approvedBeliefSpec.evidenceRefs,
   });
-  const labScene = LabSceneDraftV2Schema.parse({
+  const labScene = LabSceneV2Schema.parse({
     schemaVersion: "2",
     sceneId: "scene_scientific_1",
     sessionId: bundleV5.sessionId,
@@ -424,6 +426,10 @@ async function scientificArtifacts() {
     ],
     assumptions: ["The fixed kernel executes only registered operations."],
     limitations: ["No result is shown before external verification."],
+    provenance: {
+      discriminationContractHash: await hashCanonical(discriminationContract),
+      experimentIrHash: await hashExperimentIR(experimentIr),
+    },
   });
   return { discriminationContract, experimentIr, labScene };
 }

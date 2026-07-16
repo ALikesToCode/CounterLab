@@ -33,7 +33,7 @@ import {
   type RunnerScientificCandidateV5,
   type VersionedRunnerJobInputBundle,
 } from "@counterlab/experiment-ir";
-import { LabSceneDraftV2Schema } from "@counterlab/generative-ui-contracts";
+import { LabSceneV2Schema } from "@counterlab/generative-ui-contracts";
 
 const PLAN_PATH = "experiment-plan.json";
 const PATCH_PLAN_PATH = "patch-plan.json";
@@ -943,7 +943,7 @@ export class HostedRunnerJobProcessor {
       experimentIr = ExperimentIRV5Schema.parse(
         JSON.parse(bodies.get(EXPERIMENT_IR_PATH) ?? ""),
       );
-      labScene = LabSceneDraftV2Schema.parse(
+      labScene = LabSceneV2Schema.parse(
         JSON.parse(bodies.get(LAB_SCENE_PATH) ?? ""),
       );
     } catch {
