@@ -1,16 +1,10 @@
-import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import {
-  existsSync,
-  mkdtempSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readdirSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
+
+import { qualifiedDeployConfig } from "../../../scripts/prepare-qualified-deploy";
 
 function luminance(color: string): number {
   const channels = [1, 3, 5].map((offset) =>
@@ -74,6 +68,18 @@ describe("Cloudflare static asset routing", () => {
     expect(config.containers?.[0]?.image_vars).toBeUndefined();
   });
 
+  it("revalidates the exact scientific runner before building a release", () => {
+    const script = readFileSync(
+      resolve(process.cwd(), "../../scripts/deploy-qualified.sh"),
+      "utf8",
+    );
+    const verifyIndex = script.indexOf("verify-scientific-engines.sh");
+    const buildIndex = script.indexOf("pnpm --filter @counterlab/web build");
+
+    expect(verifyIndex).toBeGreaterThan(0);
+    expect(buildIndex).toBeGreaterThan(verifyIndex);
+  });
+
   it("copies the complete hosted-runner workspace dependency closure", () => {
     const root = resolve(process.cwd(), "../..");
     const packageDirectories = readdirSync(resolve(root, "packages"), {
@@ -128,83 +134,108 @@ describe("Cloudflare static asset routing", () => {
   });
 
   it("generates a deploy config from a source-bound qualified image receipt", () => {
-    const directory = mkdtempSync(resolve(tmpdir(), "counterlab-release-"));
-    try {
-      const sourceCommit = "a".repeat(40);
-      const basePath = resolve(directory, "wrangler.json");
-      const receiptPath = resolve(directory, "qualified-runner.json");
-      const outputPath = resolve(directory, "wrangler.release.json");
-      const image = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
-      writeFileSync(
-        basePath,
-        JSON.stringify({
-          account_id: "account-1",
-          main: "index.js",
-          assets: { directory: "../client" },
-          containers: [
-            {
-              class_name: "CounterLabRunner",
-              image: "/unqualified/Dockerfile.runner",
-              image_vars: { COUNTERLAB_SOURCE_COMMIT: "0".repeat(40) },
-              image_build_context: "/unqualified",
-            },
-          ],
-        }),
-      );
-      writeFileSync(
-        receiptPath,
-        JSON.stringify({
-          schemaVersion: "1",
-          status: "VERIFIED",
-          sourceCommit,
-          sourceArchiveSha256: "b".repeat(64),
-          sourceTreeSha256: "c".repeat(64),
-          dockerfileSha256: "d".repeat(64),
-          localImageTag: `counterlab-runner:git-${sourceCommit}`,
-          localImageDigest: `sha256:${"e".repeat(64)}`,
-          ociRevision: sourceCommit,
-          ociSourceTreeSha256: "c".repeat(64),
-          engineAuthorityHash: "f".repeat(64),
-          runtimeManifestHash: "1".repeat(64),
-          evidenceCommit: "2".repeat(40),
-          qualifiedAt: "2026-07-16T16:00:00.000Z",
-          verifierVersion: "counterlab-release-v1",
-        }),
-      );
-
-      const result = spawnSync(
-        resolve(process.cwd(), "../../node_modules/.bin/tsx"),
-        [
-          resolve(process.cwd(), "../../scripts/prepare-qualified-deploy.ts"),
-          "--config",
-          basePath,
-          "--receipt",
-          receiptPath,
-          "--image",
-          image,
-          "--output",
-          outputPath,
+    const sourceCommit = "a".repeat(40);
+    const evidenceCommit = "2".repeat(40);
+    const image = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
+    const receipt = {
+      schemaVersion: "1",
+      status: "VERIFIED",
+      sourceCommit,
+      sourceArchiveSha256: "b".repeat(64),
+      sourceTreeSha256: "c".repeat(64),
+      dockerfileSha256: "d".repeat(64),
+      localImageTag: `counterlab-runner:git-${sourceCommit}`,
+      localImageDigest: `sha256:${"e".repeat(64)}`,
+      ociRevision: sourceCommit,
+      ociSourceTreeSha256: "c".repeat(64),
+      engineAuthorityHash: "f".repeat(64),
+      runtimeManifestHash: "1".repeat(64),
+      evidenceCommit,
+      qualifiedAt: "2026-07-16T16:00:00.000Z",
+      verifierVersion: "counterlab-release-v1",
+    };
+    const generated = qualifiedDeployConfig({
+      config: {
+        account_id: "account-1",
+        main: "index.js",
+        assets: { directory: "../client" },
+        containers: [
+          {
+            class_name: "CounterLabRunner",
+            image: "/unqualified/Dockerfile.runner",
+            image_vars: { COUNTERLAB_SOURCE_COMMIT: "0".repeat(40) },
+            image_build_context: "/unqualified",
+          },
         ],
-        { encoding: "utf8" },
-      );
-      expect(result.status, result.stderr).toBe(0);
+      },
+      receipt,
+      image,
+      observation: {
+        sourceCommit,
+        sourceArchiveSha256: receipt.sourceArchiveSha256,
+        sourceTreeSha256: receipt.sourceTreeSha256,
+        dockerfileSha256: receipt.dockerfileSha256,
+        localImageTag: receipt.localImageTag,
+        localImageDigest: receipt.localImageDigest,
+        ociRevision: receipt.ociRevision,
+        ociSourceTreeSha256: receipt.ociSourceTreeSha256,
+        engineAuthorityHash: receipt.engineAuthorityHash,
+        runtimeManifestHash: receipt.runtimeManifestHash,
+        currentCommit: evidenceCommit,
+        sourceIsAncestor: true,
+        changedPaths: ["scientific-engines/snapshot.json"],
+        observedAt: "2026-07-16T16:30:00.000Z",
+      },
+    });
 
-      const generated = JSON.parse(readFileSync(outputPath, "utf8")) as {
-        containers?: Array<Record<string, unknown>>;
-      };
-      expect(generated.containers?.[0]).toEqual(
-        expect.objectContaining({
-          class_name: "CounterLabRunner",
-          image,
-        }),
-      );
-      expect(generated.containers?.[0]).not.toHaveProperty("image_vars");
-      expect(generated.containers?.[0]).not.toHaveProperty(
-        "image_build_context",
-      );
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
+    expect(generated.containers).toEqual([
+      expect.objectContaining({ class_name: "CounterLabRunner", image }),
+    ]);
+    expect((generated.containers as Array<Record<string, unknown>>)[0]).not.toHaveProperty(
+      "image_vars",
+    );
+    expect((generated.containers as Array<Record<string, unknown>>)[0]).not.toHaveProperty(
+      "image_build_context",
+    );
+  });
+
+  it("rejects a qualified receipt that does not match recomputed release evidence", () => {
+    const sourceCommit = "a".repeat(40);
+    const image = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
+    const receipt = {
+      schemaVersion: "1",
+      status: "VERIFIED",
+      sourceCommit,
+      sourceArchiveSha256: "b".repeat(64),
+      sourceTreeSha256: "c".repeat(64),
+      dockerfileSha256: "d".repeat(64),
+      localImageTag: `counterlab-runner:git-${sourceCommit}`,
+      localImageDigest: `sha256:${"e".repeat(64)}`,
+      ociRevision: sourceCommit,
+      ociSourceTreeSha256: "c".repeat(64),
+      engineAuthorityHash: "f".repeat(64),
+      runtimeManifestHash: "1".repeat(64),
+      evidenceCommit: "2".repeat(40),
+      qualifiedAt: "2026-07-16T16:00:00.000Z",
+      verifierVersion: "counterlab-release-v1",
+    };
+
+    expect(() =>
+      qualifiedDeployConfig({
+        config: {
+          account_id: "account-1",
+          containers: [{ class_name: "CounterLabRunner" }],
+        },
+        receipt,
+        image,
+        ...({
+          observation: {
+            ...receipt,
+            sourceArchiveSha256: "9".repeat(64),
+          },
+        } as Record<string, unknown>),
+      }),
+    ).toThrow(/source archive/i);
   });
 
   it("keeps primary semantic text colors above normal-text contrast", () => {

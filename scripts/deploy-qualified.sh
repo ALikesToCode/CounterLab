@@ -24,6 +24,15 @@ fi
   exit 2
 }
 
+LOCAL_IMAGE="$(node -e '
+  const fs = require("node:fs");
+  const receipt = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+  if (typeof receipt.localImageTag !== "string") process.exit(2);
+  process.stdout.write(receipt.localImageTag);
+' "${RECEIPT}")"
+
+./scripts/verify-scientific-engines.sh --image "${LOCAL_IMAGE}"
+
 pnpm --filter @counterlab/web build
 pnpm exec tsx scripts/prepare-qualified-deploy.ts \
   --config apps/web/dist/counterlab/wrangler.json \
