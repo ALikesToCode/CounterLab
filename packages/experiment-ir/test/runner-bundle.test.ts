@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   RunnerLabCompileBundleV5Schema,
+  RunnerJobInputBundleV5Schema,
   RunnerScientificCandidateV5Schema,
   VersionedRunnerJobInputBundleSchema,
 } from "../src/index.js";
@@ -133,6 +134,207 @@ function runnerBundleV5() {
   };
 }
 
+function labRunBundleV5() {
+  const compile = runnerBundleV5();
+  const fixedSelection = {
+    eligibleCandidateIds: ["group-holdout"],
+    rejectedCandidates: [],
+    selectedCandidateId: "group-holdout",
+    minimumSeparation: 0.82,
+    requiredSeparation: 0.6,
+    complexityCost: 2,
+    normalizedScore: 0.8,
+    scorerVersion: "experiment-scorer-v1",
+  };
+  const baseline = {
+    concept: "entity_leakage" as const,
+    runId: "random-row",
+    operation: "leakage.random_row_split" as const,
+    seed: 1729,
+    testFraction: 0.25,
+    entityField: "customer_id",
+    dropIdentity: false,
+    model: "logistic_regression" as const,
+  };
+  const intervention = {
+    concept: "entity_leakage" as const,
+    runId: "group-holdout",
+    operation: "leakage.group_holdout" as const,
+    seed: 1729,
+    testFraction: 0.25,
+    entityField: "customer_id",
+    dropIdentity: false,
+    model: "logistic_regression" as const,
+  };
+  const experimentIr = {
+    schemaVersion: "5" as const,
+    irId: "ir-live-1",
+    executionPlanId: "plan-live-1",
+    sessionId: compile.sessionId,
+    concept: "entity_leakage" as const,
+    conceptPackVersion: compile.conceptPack.version,
+    artifactManifestHash: compile.artifactManifestHash,
+    beliefSpecId: compile.approvedBeliefSpec.id,
+    beliefSpecHash: compile.beliefSpecHash,
+    evidenceRefs: compile.approvedBeliefSpec.evidenceRefs,
+    hypotheses: [
+      {
+        id: "current" as const,
+        statement: compile.approvedBeliefSpec.hypotheses[0]!.statement,
+        conditions: compile.approvedBeliefSpec.hypotheses[0]!.conditions,
+        nonClaims: compile.approvedBeliefSpec.hypotheses[0]!.nonClaims,
+        predictedPattern: {
+          patternId: "leakage.small-gap",
+          description: "Group and row accuracy remain similar.",
+        },
+      },
+      {
+        id: "competing" as const,
+        statement: compile.approvedBeliefSpec.hypotheses[1]!.statement,
+        conditions: compile.approvedBeliefSpec.hypotheses[1]!.conditions,
+        nonClaims: compile.approvedBeliefSpec.hypotheses[1]!.nonClaims,
+        predictedPattern: {
+          patternId: "leakage.material-gap",
+          description: "Group accuracy falls when entity overlap reaches zero.",
+        },
+      },
+    ],
+    candidateExperiments: [
+      {
+        id: "group-holdout",
+        title: "Hold out whole customers",
+        operationIds: [
+          "leakage.random_row_split" as const,
+          "leakage.group_holdout" as const,
+          "leakage.entity_overlap" as const,
+        ],
+        baseline,
+        interventions: [intervention],
+        heldConstantIds: ["model", "seed", "preprocessing"],
+        changedVariableIds: ["split-strategy"],
+        observableIds: ["accuracy" as const, "entity_overlap_rate" as const],
+        hypothesisPatterns: [
+          {
+            hypothesisId: "current" as const,
+            patternId: "leakage.small-gap",
+          },
+          {
+            hypothesisId: "competing" as const,
+            patternId: "leakage.material-gap",
+          },
+        ],
+        inconclusiveConditionIds: ["leakage.gap-within-tolerance"],
+        complexityCost: 2,
+        discriminatesBecause:
+          "Only the evaluation unit changes while the estimator stays fixed.",
+      },
+    ],
+    selection: {
+      status: "SELECTED" as const,
+      candidateId: fixedSelection.selectedCandidateId,
+      eligibleCandidateIds: fixedSelection.eligibleCandidateIds,
+      rejectedCandidates: fixedSelection.rejectedCandidates,
+      minimumSeparation: fixedSelection.minimumSeparation,
+      requiredSeparation: fixedSelection.requiredSeparation,
+      complexityCost: fixedSelection.complexityCost,
+      normalizedScore: fixedSelection.normalizedScore,
+      scorerVersion: fixedSelection.scorerVersion,
+    },
+    visualizations: ["metric_comparison" as const, "entity_overlap" as const],
+    inconclusiveConditions: [
+      {
+        id: "leakage.gap-within-tolerance",
+        description:
+          "The measured gap is too small to distinguish the hypotheses.",
+      },
+    ],
+    transfer: {
+      taskId: "forecast-future-leakage-v1",
+      changedSurface: "Time-ordered forecasting with future-looking features.",
+      requiredActionIds: ["time-ordered-holdout"],
+      nonClaims: ["Transfer does not certify global mastery."],
+    },
+    nonClaims: ["This does not prove performance for every future customer."],
+    provenance: {
+      kind: "codex" as const,
+      generatorId: compile.provenance.generatorId,
+      promptHash: compile.provenance.promptHash,
+      inputHashes: compile.provenance.inputHashes,
+    },
+    limitations: ["The result is scoped to this supported artifact family."],
+    resourceLimits: compile.resourceLimits,
+  };
+  const projectedPlan = {
+    schemaVersion: "2" as const,
+    planId: experimentIr.executionPlanId,
+    sessionId: experimentIr.sessionId,
+    concept: experimentIr.concept,
+    conceptPackVersion: experimentIr.conceptPackVersion,
+    artifactManifestHash: experimentIr.artifactManifestHash,
+    beliefTestId: experimentIr.beliefSpecId,
+    evidenceRefs: experimentIr.evidenceRefs,
+    baseline,
+    interventions: [intervention],
+    controlledVariables: ["model", "seed", "preprocessing"],
+    changedVariables: ["split-strategy"],
+    metrics: ["accuracy" as const, "entity_overlap_rate" as const],
+    visualizations: experimentIr.visualizations,
+    discriminatesBecause:
+      experimentIr.candidateExperiments[0]!.discriminatesBecause,
+    expectedPatterns: experimentIr.hypotheses.map((hypothesis) => ({
+      hypothesisId: hypothesis.id,
+      qualitativeOutcome: hypothesis.predictedPattern.description,
+    })),
+    nonClaims: experimentIr.nonClaims,
+    resourceLimits: experimentIr.resourceLimits,
+  };
+  const expectedHashes = {
+    artifactManifest: compile.artifactManifestHash,
+    beliefSpec: compile.beliefSpecHash,
+    prediction: compile.prediction.immutableHash,
+    rawExperimentIr: digest("0"),
+    experimentSelection: digest("2"),
+    selectedExperimentIr: digest("1"),
+    projectedPlan: digest("3"),
+  };
+
+  return {
+    schemaVersion: "5" as const,
+    kind: "LAB_RUN" as const,
+    purpose: "AUTHORITATIVE" as const,
+    jobId: "runner_job_run_v5_1",
+    sessionId: compile.sessionId,
+    stateVersion: 10,
+    artifactManifestHash: compile.artifactManifestHash,
+    approvedBeliefSpec: compile.approvedBeliefSpec,
+    beliefSpecHash: compile.beliefSpecHash,
+    prediction: compile.prediction,
+    artifactManifest: compile.artifactManifest,
+    selectedExperimentIr: experimentIr,
+    selectedExperimentIrHash: expectedHashes.selectedExperimentIr,
+    fixedSelection,
+    projectedPlan,
+    expectedHashes,
+    provenance: {
+      compileJobId: compile.jobId,
+      compilerArtifactHashes: {
+        "discrimination-contract.json": digest("4"),
+        "experiment-ir.json": expectedHashes.rawExperimentIr,
+        "lab-scene.json": digest("5"),
+        "public-rationale.md": digest("6"),
+      },
+      scorerVersion: fixedSelection.scorerVersion,
+      projectionAdapterVersion: "experiment-ir-v5-to-plan-v2-v1" as const,
+    },
+    resultOutput: {
+      path: "verified-result.json" as const,
+      schemaVersion: "2" as const,
+      authoritativeInputHashes: expectedHashes,
+    },
+    permittedOutputs: ["verified-result.json" as const],
+  };
+}
+
 describe("Runner LAB_COMPILE bundle v5", () => {
   it("parses as a versioned job without changing the stored v1 bundle", () => {
     const parsed = RunnerLabCompileBundleV5Schema.parse(runnerBundleV5());
@@ -243,5 +445,164 @@ describe("Runner LAB_COMPILE bundle v5", () => {
         },
       }),
     ).toThrow();
+  });
+});
+
+describe("Runner LAB_RUN bundle v5", () => {
+  it("accepts one fully lineage-bound selected scientific run", () => {
+    const parsed = RunnerJobInputBundleV5Schema.safeParse(labRunBundleV5());
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data).toMatchObject({
+      schemaVersion: "5",
+      kind: "LAB_RUN",
+      purpose: "AUTHORITATIVE",
+      selectedExperimentIrHash: digest("1"),
+      expectedHashes: {
+        rawExperimentIr: digest("0"),
+        selectedExperimentIr: digest("1"),
+      },
+      permittedOutputs: ["verified-result.json"],
+    });
+  });
+
+  it("rejects unconfirmed belief, unselected IR, and scorer selection drift", () => {
+    const source = labRunBundleV5();
+    expect(
+      RunnerJobInputBundleV5Schema.safeParse({
+        ...source,
+        approvedBeliefSpec: {
+          ...source.approvedBeliefSpec,
+          learnerDecision: "UNDECIDED",
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      RunnerJobInputBundleV5Schema.safeParse({
+        ...source,
+        selectedExperimentIr: {
+          ...source.selectedExperimentIr,
+          selection: { status: "UNSELECTED" },
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      RunnerJobInputBundleV5Schema.safeParse({
+        ...source,
+        fixedSelection: {
+          ...source.fixedSelection,
+          selectedCandidateId: "different-candidate",
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects projected-plan, manifest, and evidence lineage drift", () => {
+    const source = labRunBundleV5();
+    expect(
+      RunnerJobInputBundleV5Schema.safeParse({
+        ...source,
+        projectedPlan: {
+          ...source.projectedPlan,
+          planId: "different-plan",
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      RunnerJobInputBundleV5Schema.safeParse({
+        ...source,
+        artifactManifestHash: digest("9"),
+      }).success,
+    ).toBe(false);
+    expect(
+      RunnerJobInputBundleV5Schema.safeParse({
+        ...source,
+        selectedExperimentIr: {
+          ...source.selectedExperimentIr,
+          evidenceRefs: [
+            {
+              ...source.selectedExperimentIr.evidenceRefs[0],
+              hash: digest("9"),
+            },
+          ],
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects hash, provenance, and result-output binding drift", () => {
+    const source = labRunBundleV5();
+    expect(
+      RunnerJobInputBundleV5Schema.safeParse({
+        ...source,
+        expectedHashes: {
+          ...source.expectedHashes,
+          beliefSpec: digest("9"),
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      RunnerJobInputBundleV5Schema.safeParse({
+        ...source,
+        selectedExperimentIrHash: digest("9"),
+      }).success,
+    ).toBe(false);
+    expect(
+      RunnerJobInputBundleV5Schema.safeParse({
+        ...source,
+        expectedHashes: {
+          ...source.expectedHashes,
+          rawExperimentIr: source.expectedHashes.selectedExperimentIr,
+        },
+        provenance: {
+          ...source.provenance,
+          compilerArtifactHashes: {
+            ...source.provenance.compilerArtifactHashes,
+            "experiment-ir.json": source.expectedHashes.selectedExperimentIr,
+          },
+        },
+        resultOutput: {
+          ...source.resultOutput,
+          authoritativeInputHashes: {
+            ...source.resultOutput.authoritativeInputHashes,
+            rawExperimentIr: source.expectedHashes.selectedExperimentIr,
+          },
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      RunnerJobInputBundleV5Schema.safeParse({
+        ...source,
+        provenance: {
+          ...source.provenance,
+          compilerArtifactHashes: {
+            ...source.provenance.compilerArtifactHashes,
+            "experiment-ir.json": source.expectedHashes.selectedExperimentIr,
+          },
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      RunnerJobInputBundleV5Schema.safeParse({
+        ...source,
+        provenance: {
+          ...source.provenance,
+          scorerVersion: "different-scorer",
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      RunnerJobInputBundleV5Schema.safeParse({
+        ...source,
+        resultOutput: {
+          ...source.resultOutput,
+          authoritativeInputHashes: {
+            ...source.resultOutput.authoritativeInputHashes,
+            projectedPlan: digest("9"),
+          },
+        },
+      }).success,
+    ).toBe(false);
   });
 });
