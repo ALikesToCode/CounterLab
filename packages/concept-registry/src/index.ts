@@ -105,6 +105,9 @@ export interface ConceptPackDefinition {
   };
   transferTask: {
     id: string;
+    evaluatorTaskId:
+      | "forecasting-future-leakage-01"
+      | "manufacturing-defect-transfer-01";
     title: string;
   };
   patchContract: {
@@ -770,6 +773,7 @@ const leakagePack = deepFreeze({
   },
   transferTask: {
     id: "forecast-future-leakage-v1",
+    evaluatorTaskId: "forecasting-future-leakage-01",
     title: "Choose an evaluation boundary that cannot see the future",
   },
   patchContract: {
@@ -878,6 +882,7 @@ const imbalancePack = deepFreeze({
   },
   transferTask: {
     id: "manufacturing-rare-defect-v1",
+    evaluatorTaskId: "manufacturing-defect-transfer-01",
     title: "Choose evidence for a rare manufacturing defect alert",
   },
   patchContract: {

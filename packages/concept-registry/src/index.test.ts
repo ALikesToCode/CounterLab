@@ -272,6 +272,19 @@ describe("concept-pack registry", () => {
     );
   });
 
+  it("binds each transfer contract to its fixed evaluator task", () => {
+    expect(getConceptPack("entity_leakage").transferTask).toEqual({
+      id: "forecast-future-leakage-v1",
+      evaluatorTaskId: "forecasting-future-leakage-01",
+      title: "Choose an evaluation boundary that cannot see the future",
+    });
+    expect(getConceptPack("class_imbalance").transferTask).toEqual({
+      id: "manufacturing-rare-defect-v1",
+      evaluatorTaskId: "manufacturing-defect-transfer-01",
+      title: "Choose evidence for a rare manufacturing defect alert",
+    });
+  });
+
   it("publishes fixed experiment-selection authority for every released pack", () => {
     const leakage = getConceptPack("entity_leakage").scientificMethod;
     expect(leakage.candidateExperimentIds).toEqual([
