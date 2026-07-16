@@ -102,7 +102,10 @@ describe("scientific engine release verifier", () => {
     const baseImage = evidence.baseImage as Record<string, unknown>;
     baseImage.reference =
       "python:3.13-slim-trixie@sha256:bffeb7bd6a85767587059c6ba23e1e9122078e3aa3fa836099171b9bb00";
-    const dockerfile = await readFile(resolve(root, "Dockerfile.runner"), "utf8");
+    const dockerfile = await readFile(
+      resolve(root, "Dockerfile.runner"),
+      "utf8",
+    );
 
     expect(
       verifyRuntimeIntegrityEvidence(evidence, snapshot, dockerfile),

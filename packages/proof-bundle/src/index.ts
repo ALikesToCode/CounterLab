@@ -386,10 +386,7 @@ export function createProofBundle(
   const draft = ProofBundleDraftSchema.parse(input);
   const chain = verifyEvidenceChain(draft.events);
   assertProofReferences(draft, chain);
-  assertScientificEngineSnapshot(
-    draft,
-    options.scientificEngineSnapshotHash,
-  );
+  assertScientificEngineSnapshot(draft, options.scientificEngineSnapshotHash);
   const contentHash = hashCanonicalJson(draft);
   const signingKey = options.signingKey;
   const integrity =
@@ -420,10 +417,7 @@ export function validateProofBundle(
   const draft = ProofBundleDraftSchema.parse(draftValue);
   const chain = verifyEvidenceChain(draft.events);
   assertProofReferences(draft, chain);
-  assertScientificEngineSnapshot(
-    draft,
-    options.scientificEngineSnapshotHash,
-  );
+  assertScientificEngineSnapshot(draft, options.scientificEngineSnapshotHash);
 
   if (integrity.eventChainHead !== chain.headHash) {
     throw new Error(

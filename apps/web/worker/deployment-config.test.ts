@@ -60,15 +60,18 @@ describe("Cloudflare static asset routing", () => {
     };
     const runtimeManifest = JSON.parse(
       readFileSync(
-        resolve(process.cwd(), "../../scientific-engines/runtime-manifest.json"),
+        resolve(
+          process.cwd(),
+          "../../scientific-engines/runtime-manifest.json",
+        ),
         "utf-8",
       ),
     ) as { sourceCommit?: string };
 
     expect(config.containers).toHaveLength(1);
-    expect(
-      config.containers?.[0]?.image_vars?.COUNTERLAB_SOURCE_COMMIT,
-    ).toBe(runtimeManifest.sourceCommit);
+    expect(config.containers?.[0]?.image_vars?.COUNTERLAB_SOURCE_COMMIT).toBe(
+      runtimeManifest.sourceCommit,
+    );
   });
 
   it("keeps primary semantic text colors above normal-text contrast", () => {
