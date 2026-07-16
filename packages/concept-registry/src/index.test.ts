@@ -344,12 +344,40 @@ describe("concept-pack registry", () => {
       contentSha256:
         "7974fe5744c4f9f2e8a31817791dac09ba9efb17cc88a4aa3383ae333e92ad7f",
     });
+    expect(getConceptPack("entity_leakage").fixedResultAuthority).toEqual({
+      concept: "entity_leakage",
+      kernelVersion: "0.1.0",
+      fixture: {
+        sha256:
+          "5c482f39e4e948a92dab61bf9c9f5c6577fbe9fc688fd597c9fefd785ee1be70",
+        rows: 2880,
+        customers: 480,
+        targetRate: 0.497569444444,
+      },
+    });
+    expect(getConceptPack("class_imbalance").fixedResultAuthority).toEqual({
+      concept: "class_imbalance",
+      kernelVersion: "0.1.0",
+      fixture: {
+        sha256:
+          "7974fe5744c4f9f2e8a31817791dac09ba9efb17cc88a4aa3383ae333e92ad7f",
+        rows: 6000,
+        positives: 65,
+        prevalence: 0.010833333333,
+      },
+    });
     for (const pack of releasedConceptPacks()) {
       expect(pack.fixedFixture.id).toContain(
         pack.id === "entity_leakage" ? "leakage" : "imbalance",
       );
       expect(pack.fixedFixture.contentSha256).toMatch(/^[a-f0-9]{64}$/u);
       expect(Object.isFrozen(pack.fixedFixture)).toBe(true);
+      expect(pack.fixedResultAuthority.concept).toBe(pack.id);
+      expect(pack.fixedResultAuthority.fixture.sha256).toBe(
+        pack.fixedFixture.contentSha256,
+      );
+      expect(Object.isFrozen(pack.fixedResultAuthority)).toBe(true);
+      expect(Object.isFrozen(pack.fixedResultAuthority.fixture)).toBe(true);
     }
   });
 

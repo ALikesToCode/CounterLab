@@ -184,7 +184,8 @@ async function result(
   experimentPlan?: LeakageExperimentPlan,
 ): Promise<HostedVerifiedResultSetV2> {
   const resolvedPlan = experimentPlan ?? (await plan());
-  const fixtureHash = "8".repeat(64);
+  const fixtureHash =
+    "5c482f39e4e948a92dab61bf9c9f5c6577fbe9fc688fd597c9fefd785ee1be70";
   const runs = [resolvedPlan.baseline, ...resolvedPlan.interventions].map(
     (spec) => {
       const group = spec.operation === "leakage.group_holdout";
@@ -204,7 +205,7 @@ async function result(
           accuracy: group ? 0.59 : ablation ? 0.61 : 0.985,
           rocAuc: group ? 0.64 : ablation ? 0.66 : 0.99,
         },
-        sampleSizes: { train: 1350, test: 450 },
+        sampleSizes: { train: 2160, test: 720 },
         entityCounts: { train: 360, test: 120 },
         entityOverlap: group ? { count: 0, rate: 0 } : { count: 120, rate: 1 },
       };
@@ -219,9 +220,9 @@ async function result(
     conceptPackVersion: resolvedPlan.conceptPackVersion,
     fixture: {
       customers: 480,
-      rows: 1800,
+      rows: 2880,
       sha256: fixtureHash,
-      targetRate: 0.49,
+      targetRate: 0.497569444444,
     },
     kernelVersion: "0.1.0",
     seed: 1729,
@@ -362,7 +363,8 @@ describe("hosted Experiment Plan verifier", () => {
       }),
     ).resolves.toMatchObject({ status: "VERIFIED", invariantCount: 16 });
 
-    const fixtureHash = "9".repeat(64);
+    const fixtureHash =
+      "7974fe5744c4f9f2e8a31817791dac09ba9efb17cc88a4aa3383ae333e92ad7f";
     const resultRun = (
       spec: (typeof imbalancePlan.interventions)[number],
       matrix: { tn: number; fp: number; fn: number; tp: number },
@@ -396,7 +398,7 @@ describe("hosted Experiment Plan verifier", () => {
         confusionMatrix: matrix,
         sampleSizes: { train: 4500, test: total },
         classCounts: {
-          train: { negative: 4339, positive: 161 },
+          train: { negative: 4451, positive: 49 },
           test: {
             negative: matrix.tn + matrix.fp,
             positive: matrix.fn + matrix.tp,
@@ -422,10 +424,30 @@ describe("hosted Experiment Plan verifier", () => {
     };
     const allSpecs = [imbalancePlan.baseline, ...imbalancePlan.interventions];
     const runs = [
-      resultRun(allSpecs[0]!, { tn: 1446, fp: 0, fn: 54, tp: 0 }, 0.036, 0.5),
-      resultRun(allSpecs[1]!, { tn: 1420, fp: 26, fn: 25, tp: 29 }, 0.3, 0.81),
-      resultRun(allSpecs[2]!, { tn: 1350, fp: 96, fn: 20, tp: 34 }, 0.24, 0.81),
-      resultRun(allSpecs[3]!, { tn: 1420, fp: 26, fn: 17, tp: 10 }, 0.17, 0.81),
+      resultRun(
+        allSpecs[0]!,
+        { tn: 1484, fp: 0, fn: 16, tp: 0 },
+        0.010666666667,
+        0.5,
+      ),
+      resultRun(
+        allSpecs[1]!,
+        { tn: 1481, fp: 3, fn: 14, tp: 2 },
+        0.19639318021,
+        0.882117587601,
+      ),
+      resultRun(
+        allSpecs[2]!,
+        { tn: 1468, fp: 16, fn: 11, tp: 5 },
+        0.19639318021,
+        0.882117587601,
+      ),
+      resultRun(
+        allSpecs[3]!,
+        { tn: 1468, fp: 16, fn: 5, tp: 3 },
+        0.12680156221,
+        0.825134770889,
+      ),
     ];
     const withoutHash = {
       schemaVersion: "2" as const,
@@ -437,8 +459,8 @@ describe("hosted Experiment Plan verifier", () => {
       fixture: {
         sha256: fixtureHash,
         rows: 6000,
-        positives: 215,
-        prevalence: 0.035833333333,
+        positives: 65,
+        prevalence: 0.010833333333,
       },
       kernelVersion: "0.1.0",
       seed: 2603,
@@ -461,7 +483,7 @@ describe("hosted Experiment Plan verifier", () => {
     };
     await expect(
       verifyHostedResultSet(imbalanceResult, imbalancePlan as ExperimentPlanV2),
-    ).resolves.toMatchObject({ status: "VERIFIED", invariantCount: 10 });
+    ).resolves.toMatchObject({ status: "VERIFIED", invariantCount: 11 });
 
     const staleImbalance = { ...imbalanceResult, resultHash: "0".repeat(64) };
     await expect(

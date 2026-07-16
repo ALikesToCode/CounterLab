@@ -47,6 +47,28 @@ export interface SubjectPackEpistemicAdapter {
   ): string | undefined;
 }
 
+export type FixedResultAuthority =
+  | {
+      concept: "entity_leakage";
+      kernelVersion: string;
+      fixture: {
+        sha256: string;
+        rows: number;
+        customers: number;
+        targetRate: number;
+      };
+    }
+  | {
+      concept: "class_imbalance";
+      kernelVersion: string;
+      fixture: {
+        sha256: string;
+        rows: number;
+        positives: number;
+        prevalence: number;
+      };
+    };
+
 export interface ConceptPackDefinition {
   id: ConceptId;
   version: string;
@@ -58,6 +80,7 @@ export interface ConceptPackDefinition {
     version: string;
     contentSha256: string;
   };
+  fixedResultAuthority: FixedResultAuthority;
   supportDetector: SupportDetector;
   analystRules: {
     stableInstructions: readonly string[];
@@ -686,6 +709,17 @@ const leakagePack = deepFreeze({
     contentSha256:
       "5c482f39e4e948a92dab61bf9c9f5c6577fbe9fc688fd597c9fefd785ee1be70",
   },
+  fixedResultAuthority: {
+    concept: "entity_leakage",
+    kernelVersion: "0.1.0",
+    fixture: {
+      sha256:
+        "5c482f39e4e948a92dab61bf9c9f5c6577fbe9fc688fd597c9fefd785ee1be70",
+      rows: 2880,
+      customers: 480,
+      targetRate: 0.497569444444,
+    },
+  },
   supportDetector: leakageSupport,
   analystRules: {
     stableInstructions: [
@@ -761,6 +795,17 @@ const imbalancePack = deepFreeze({
     version: "imbalance-fixture-v1",
     contentSha256:
       "7974fe5744c4f9f2e8a31817791dac09ba9efb17cc88a4aa3383ae333e92ad7f",
+  },
+  fixedResultAuthority: {
+    concept: "class_imbalance",
+    kernelVersion: "0.1.0",
+    fixture: {
+      sha256:
+        "7974fe5744c4f9f2e8a31817791dac09ba9efb17cc88a4aa3383ae333e92ad7f",
+      rows: 6000,
+      positives: 65,
+      prevalence: 0.010833333333,
+    },
   },
   supportDetector: imbalanceSupport,
   analystRules: {

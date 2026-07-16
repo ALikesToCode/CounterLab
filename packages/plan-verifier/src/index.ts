@@ -831,6 +831,15 @@ async function verifyImbalanceHostedResult(
     getConceptPack(
       "class_imbalance",
     ).scientificMethod.epistemic.classifyOutcome(result);
+  const fixedAuthority = getConceptPack("class_imbalance").fixedResultAuthority;
+  const fixedResultAuthorityMatches =
+    fixedAuthority.concept === "class_imbalance" &&
+    result.kernelVersion === fixedAuthority.kernelVersion &&
+    result.seed === plan.baseline.seed &&
+    result.fixture.sha256 === fixedAuthority.fixture.sha256 &&
+    result.fixture.rows === fixedAuthority.fixture.rows &&
+    result.fixture.positives === fixedAuthority.fixture.positives &&
+    result.fixture.prevalence === fixedAuthority.fixture.prevalence;
   const { resultHash: _declaredHash, ...canonicalPayload } = result;
   const canonicalHash = await hashCanonical(canonicalPayload);
   const invariants: PlanInvariant[] = [
@@ -851,6 +860,23 @@ async function verifyImbalanceHostedResult(
         sessionId: plan.sessionId,
         artifactManifestHash: plan.artifactManifestHash,
       },
+    ),
+    invariant(
+      "fixed_result_authority",
+      fixedResultAuthorityMatches,
+      {
+        kernelVersion: result.kernelVersion,
+        seed: result.seed,
+        fixture: result.fixture,
+      },
+      {
+        kernelVersion: fixedAuthority.kernelVersion,
+        seed: plan.baseline.seed,
+        fixture: fixedAuthority.fixture,
+      },
+      fixedResultAuthorityMatches
+        ? undefined
+        : "The result does not match the frozen kernel, seed, or fixture authority.",
     ),
     invariant(
       "declared_runs_only",
@@ -1059,6 +1085,15 @@ async function verifyHostedResultSetInternal(
     );
   const { resultHash: _declaredHash, ...canonicalPayload } = result;
   const canonicalHash = await hashCanonical(canonicalPayload);
+  const fixedAuthority = getConceptPack("entity_leakage").fixedResultAuthority;
+  const fixedResultAuthorityMatches =
+    fixedAuthority.concept === "entity_leakage" &&
+    result.kernelVersion === fixedAuthority.kernelVersion &&
+    result.seed === plan.baseline.seed &&
+    result.fixture.sha256 === fixedAuthority.fixture.sha256 &&
+    result.fixture.rows === fixedAuthority.fixture.rows &&
+    result.fixture.customers === fixedAuthority.fixture.customers &&
+    result.fixture.targetRate === fixedAuthority.fixture.targetRate;
   const invariants: PlanInvariant[] = [
     invariant(
       "plan_result_lineage",
@@ -1077,6 +1112,23 @@ async function verifyHostedResultSetInternal(
         sessionId: plan.sessionId,
         artifactManifestHash: plan.artifactManifestHash,
       },
+    ),
+    invariant(
+      "fixed_result_authority",
+      fixedResultAuthorityMatches,
+      {
+        kernelVersion: result.kernelVersion,
+        seed: result.seed,
+        fixture: result.fixture,
+      },
+      {
+        kernelVersion: fixedAuthority.kernelVersion,
+        seed: plan.baseline.seed,
+        fixture: fixedAuthority.fixture,
+      },
+      fixedResultAuthorityMatches
+        ? undefined
+        : "The result does not match the frozen kernel, seed, or fixture authority.",
     ),
     invariant(
       "declared_runs_only",

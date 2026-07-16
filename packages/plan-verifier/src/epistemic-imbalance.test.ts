@@ -265,21 +265,29 @@ async function selectedIr(stratifiedThreshold = 0.5) {
 }
 
 type GoldenRegion = "competing" | "inconclusive";
+type HostedImbalanceResultV2 = Extract<
+  HostedVerifiedResultSetV2,
+  { concept: "class_imbalance" }
+>;
 
-function readGolden(region: GoldenRegion): HostedVerifiedResultSetV2 {
+function readGolden(region: GoldenRegion): HostedImbalanceResultV2 {
   const url = new URL(
     `../../../fixtures/held-out/imbalance_epistemic_${region}_v2.json`,
     import.meta.url,
   );
-  return HostedVerifiedResultSetV2Schema.parse(
+  const result = HostedVerifiedResultSetV2Schema.parse(
     JSON.parse(readFileSync(url, "utf8")),
   );
+  if (result.concept !== "class_imbalance") {
+    throw new Error("epistemic imbalance fixture resolved to another concept");
+  }
+  return result;
 }
 
 async function resultFor(
   ir: Awaited<ReturnType<typeof selectedIr>>,
   region: GoldenRegion = "competing",
-): Promise<HostedVerifiedResultSetV2> {
+): Promise<HostedImbalanceResultV2> {
   const plan = projectExperimentIRV5ToPlanV2(ir);
   const result = readGolden(region);
   if (
@@ -329,13 +337,17 @@ async function resultFor(
 }
 
 async function rehash(
-  result: HostedVerifiedResultSetV2,
-): Promise<HostedVerifiedResultSetV2> {
+  result: HostedImbalanceResultV2,
+): Promise<HostedImbalanceResultV2> {
   const { resultHash: _resultHash, ...withoutHash } = result;
-  return HostedVerifiedResultSetV2Schema.parse({
+  const rehashed = HostedVerifiedResultSetV2Schema.parse({
     ...withoutHash,
     resultHash: await hashCanonical(withoutHash),
   });
+  if (rehashed.concept !== "class_imbalance") {
+    throw new Error("rehashed result resolved to another concept");
+  }
+  return rehashed;
 }
 
 async function verify(region: GoldenRegion = "competing") {
@@ -459,6 +471,77 @@ describe("class-imbalance epistemic authority", () => {
     });
     expect("resultHash" in report).toBe(false);
     expect("observation" in report).toBe(false);
+  });
+
+  it.each([
+    [
+      "fixture rows",
+      (result: HostedImbalanceResultV2) => ({
+        ...result,
+        fixture: { ...result.fixture, rows: result.fixture.rows + 1 },
+      }),
+    ],
+    [
+      "fixture positives",
+      (result: HostedImbalanceResultV2) => {
+        return {
+          ...result,
+          fixture: {
+            ...result.fixture,
+            positives: result.fixture.positives + 1,
+          },
+        };
+      },
+    ],
+    [
+      "fixture prevalence",
+      (result: HostedImbalanceResultV2) => {
+        return {
+          ...result,
+          fixture: { ...result.fixture, prevalence: 0.02 },
+        };
+      },
+    ],
+    [
+      "kernel version",
+      (result: HostedImbalanceResultV2) => ({
+        ...result,
+        kernelVersion: "forged-kernel",
+      }),
+    ],
+    [
+      "top-level seed",
+      (result: HostedImbalanceResultV2) => ({ ...result, seed: 999 }),
+    ],
+  ] as Array<
+    [string, (result: HostedImbalanceResultV2) => HostedImbalanceResultV2]
+  >)("rejects forged fixed %s authority", async (_label, mutate) => {
+    const ir = await selectedIr();
+    const result = await resultFor(ir);
+    const tampered = await rehash(mutate(result));
+    const report = await verifyEpistemicEvidence({
+      artifactManifest: manifest,
+      sessionId: "session-imbalance-1",
+      beliefSpec,
+      ir,
+      result: tampered,
+      presentation,
+    });
+
+    expect(report).toMatchObject({
+      status: "REJECTED",
+      findings: [{ code: "TECHNICAL_VERIFICATION_FAILED" }],
+      verdict: { kind: "REJECTED", resultReleased: false },
+      technicalReport: {
+        status: "REJECTED",
+        invariants: expect.arrayContaining([
+          expect.objectContaining({
+            name: "fixed_result_authority",
+            passed: false,
+          }),
+        ]),
+      },
+    });
   });
 
   it("rejects a changed threshold score fingerprint as a confound", async () => {
