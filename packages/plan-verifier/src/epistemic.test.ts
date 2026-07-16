@@ -273,7 +273,11 @@ async function resultFor(
   ir: Awaited<ReturnType<typeof selectedIr>>,
 ): Promise<HostedVerifiedResultSetV2> {
   const plan = projectExperimentIRV5ToPlanV2(ir);
-  const fixtureHash = digest("8");
+  const fixedAuthority = getConceptPack("entity_leakage").fixedResultAuthority;
+  if (fixedAuthority.concept !== "entity_leakage") {
+    throw new Error("entity-leakage fixed authority is unavailable");
+  }
+  const fixtureHash = fixedAuthority.fixture.sha256;
   const runs = [plan.baseline, ...plan.interventions].map((spec) => {
     if (spec.concept !== "entity_leakage") {
       throw new Error("test fixture supports leakage only");
@@ -295,7 +299,7 @@ async function resultFor(
         accuracy: grouped ? 0.59 : ablated ? 0.62 : 0.985,
         rocAuc: grouped ? 0.64 : ablated ? 0.66 : 0.99,
       },
-      sampleSizes: { train: 1_350, test: 450 },
+      sampleSizes: { train: 2_160, test: 720 },
       entityCounts: { train: 360, test: 120 },
       entityOverlap: grouped ? { count: 0, rate: 0 } : { count: 120, rate: 1 },
     };
@@ -307,13 +311,8 @@ async function resultFor(
     sessionId: plan.sessionId,
     artifactManifestHash: plan.artifactManifestHash,
     conceptPackVersion: plan.conceptPackVersion,
-    fixture: {
-      customers: 480,
-      rows: 1_800,
-      sha256: fixtureHash,
-      targetRate: 0.49,
-    },
-    kernelVersion: "0.1.0",
+    fixture: fixedAuthority.fixture,
+    kernelVersion: fixedAuthority.kernelVersion,
     seed: plan.baseline.seed,
     runs,
     chartData: runs.map((run) => ({
