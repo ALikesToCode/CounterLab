@@ -5,6 +5,7 @@ import { performance } from "node:perf_hooks";
 
 import type { RunnerLabRunBundle } from "@counterlab/contracts";
 import type {
+  RunnerBoundaryMapBundleV5,
   RunnerLabInteractiveRunBundleV5,
   RunnerLabRunBundleV5,
 } from "@counterlab/experiment-ir";
@@ -68,12 +69,18 @@ export class PythonFixedKernelExecutor implements FixedKernelExecutor {
     bundle:
       | RunnerLabRunBundle
       | RunnerLabRunBundleV5
-      | RunnerLabInteractiveRunBundleV5,
+      | RunnerLabInteractiveRunBundleV5
+      | RunnerBoundaryMapBundleV5,
     workspace: string,
     signal?: AbortSignal,
   ): Promise<{ body: string; durationMs: number }> {
     const inputPath = join(workspace, "lab-run-bundle.json");
-    const outputPath = join(workspace, "verified-result.json");
+    const outputPath = join(
+      workspace,
+      bundle.schemaVersion === "5" && bundle.purpose === "BOUNDARY"
+        ? "boundary-map.json"
+        : "verified-result.json",
+    );
     await writeFile(inputPath, JSON.stringify(bundle), {
       encoding: "utf8",
       mode: 0o600,
@@ -95,9 +102,11 @@ export class PythonFixedKernelExecutor implements FixedKernelExecutor {
           cwd: workspace,
           timeout:
             (bundle.schemaVersion === "5"
-              ? bundle.purpose === "INTERACTIVE"
-                ? bundle.interactivePlan
-                : bundle.projectedPlan
+              ? bundle.purpose === "BOUNDARY"
+                ? bundle.selectedExperimentIr
+                : bundle.purpose === "INTERACTIVE"
+                  ? bundle.interactivePlan
+                  : bundle.projectedPlan
               : bundle.experimentPlan
             ).resourceLimits.wallSeconds * 1_000,
           ...(signal === undefined ? {} : { signal }),

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { RunnerLabRunBundle } from "@counterlab/contracts";
+import type { RunnerBoundaryMapBundleV5 } from "@counterlab/experiment-ir";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { PythonFixedKernelExecutor } from "./fixed-kernel.js";
@@ -63,6 +64,45 @@ describe("PythonFixedKernelExecutor", () => {
             PYTHONHASHSEED: "0",
           },
         }),
+      }),
+    ]);
+  });
+
+  it("routes a v5 Boundary Map bundle to its only permitted output", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "counterlab-boundary-job-"));
+    workspaces.push(workspace);
+    const calls: Array<{
+      args: string[];
+      options: { timeout: number };
+    }> = [];
+    const executor = new PythonFixedKernelExecutor({
+      pythonExecutable: "/fixed/python",
+      runProcess: async (_command, args, options) => {
+        calls.push({ args, options });
+        const outputIndex = args.indexOf("--output") + 1;
+        await writeFile(args[outputIndex]!, '{"schemaVersion":"1"}\n', "utf8");
+      },
+    });
+
+    const result = await executor.run(
+      {
+        schemaVersion: "5",
+        purpose: "BOUNDARY",
+        selectedExperimentIr: {
+          resourceLimits: { wallSeconds: 23 },
+        },
+      } as RunnerBoundaryMapBundleV5,
+      workspace,
+    );
+
+    expect(result.body).toBe('{"schemaVersion":"1"}\n');
+    expect(calls).toEqual([
+      expect.objectContaining({
+        args: expect.arrayContaining([
+          "--output",
+          join(workspace, "boundary-map.json"),
+        ]),
+        options: expect.objectContaining({ timeout: 23_000 }),
       }),
     ]);
   });

@@ -18,6 +18,7 @@ import type {
   ScientificMethodCompiler,
 } from "@counterlab/codex-client";
 import {
+  BoundaryMapResultV1Schema,
   DiscriminationContractV1Schema,
   RunnerLabCompileBundleSchema,
   RunnerLabRunBundleSchema,
@@ -31,6 +32,7 @@ import {
 } from "@counterlab/contracts";
 import {
   ExperimentIRV5Schema,
+  RunnerBoundaryMapBundleV5Schema,
   RunnerLabCompileBundleV5Schema,
   RunnerLabRunBundleV5Schema,
   RunnerPatchCompileBundleV5Schema,
@@ -38,6 +40,7 @@ import {
   migrateExperimentPlanV2ToIRV5,
   projectExperimentIRV5ToPlanV2,
   type RunnerLabRunBundleV5,
+  type RunnerBoundaryMapBundleV5,
   type RunnerScientificCandidateV5,
   type RunnerLabCompileBundleV5,
   type RunnerPatchCompileBundleV5,
@@ -538,6 +541,68 @@ async function scientificRunBundleV5(
   });
 }
 
+async function boundaryRunBundleV5(
+  jobId = "runner_job_boundary_scientific_1",
+): Promise<RunnerBoundaryMapBundleV5> {
+  const run = await scientificRunBundleV5("runner_job_run_for_boundary_1");
+  const boundaryRequest = {
+    sweepId: "leakage-recurrence-boundary-v1",
+    axisIds: ["test_fraction", "observations_per_entity"],
+    gridPresetId: "leakage-recurrence-grid-v1",
+    observableId: "optimism_gap" as const,
+    maxCells: 25,
+  };
+  const selectedExperimentIr = ExperimentIRV5Schema.parse({
+    ...run.selectedExperimentIr,
+    boundarySweep: boundaryRequest,
+  });
+  const selectedExperimentIrHash = await hashExperimentIR(selectedExperimentIr);
+  const authoritativeResultHash = "4".repeat(64);
+  const evidenceVerdictHash = "3".repeat(64);
+
+  return RunnerBoundaryMapBundleV5Schema.parse({
+    schemaVersion: "5",
+    kind: "LAB_RUN",
+    purpose: "BOUNDARY",
+    jobId,
+    sessionId: run.sessionId,
+    stateVersion: 10,
+    artifactManifestHash: run.artifactManifestHash,
+    fixture: run.fixture,
+    conceptPackVersion: selectedExperimentIr.conceptPackVersion,
+    selectedExperimentIr,
+    selectedExperimentIrHash,
+    releaseAuthority: {
+      authoritativeResultHash,
+      evidenceVerdict: {
+        schemaVersion: "1",
+        kind: "SUPPORTS",
+        hypothesisId: "competing",
+        scope: "This supported notebook and declared deployment unit.",
+        resultHash: authoritativeResultHash,
+        irHash: selectedExperimentIrHash,
+        technicalReportHash: "2".repeat(64),
+        verifierVersion: "epistemic-verifier-v1",
+      },
+      evidenceVerdictHash,
+      epistemicReportHash: "6".repeat(64),
+    },
+    boundaryRequest,
+    seed: selectedExperimentIr.candidateExperiments[0]!.baseline.seed,
+    resultOutput: {
+      path: "boundary-map.json",
+      schemaVersion: "1",
+      lineage: {
+        artifactManifestHash: run.artifactManifestHash,
+        experimentIrHash: selectedExperimentIrHash,
+        authoritativeResultHash,
+        evidenceVerdictHash,
+      },
+    },
+    permittedOutputs: ["boundary-map.json"],
+  });
+}
+
 async function patchBundleV5(
   jobId = "runner_job_patch_scientific_1",
 ): Promise<RunnerPatchCompileBundleV5> {
@@ -923,13 +988,100 @@ class FakeFixedPatch implements FixedPatchExecutor {
 }
 
 class FakeFixedKernel implements FixedKernelExecutor {
-  calls: Array<RunnerLabRunBundle | RunnerLabRunBundleV5> = [];
+  calls: Array<
+    RunnerLabRunBundle | RunnerLabRunBundleV5 | RunnerBoundaryMapBundleV5
+  > = [];
 
-  async run(input: RunnerLabRunBundle | RunnerLabRunBundleV5): Promise<{
+  async run(
+    input:
+      RunnerLabRunBundle | RunnerLabRunBundleV5 | RunnerBoundaryMapBundleV5,
+  ): Promise<{
     body: string;
     durationMs: number;
   }> {
     this.calls.push(structuredClone(input));
+    if (input.schemaVersion === "5" && input.purpose === "BOUNDARY") {
+      const axisA = {
+        id: "test_fraction",
+        label: "Test fraction",
+        unit: "proportion",
+        points: [
+          { id: "test-0-2", value: 0.2, label: "20%" },
+          { id: "test-0-4", value: 0.4, label: "40%" },
+        ],
+      };
+      const axisB = {
+        id: "observations_per_entity",
+        label: "Observations per customer",
+        unit: "rows/customer",
+        points: [
+          { id: "rows-1", value: 1, label: "1" },
+          { id: "rows-4", value: 4, label: "4" },
+        ],
+      };
+      const cells = axisA.points.flatMap((first) =>
+        axisB.points.map((second, index) => ({
+          cellId: `cell-${first.id}-${second.id}`,
+          coordinates: [
+            { axisId: axisA.id, pointId: first.id, value: first.value },
+            { axisId: axisB.id, pointId: second.id, value: second.value },
+          ],
+          classificationId: index === 0 ? "small-gap" : "material-gap",
+          concept: "entity_leakage" as const,
+          randomAccuracy: 0.9,
+          groupAccuracy: index === 0 ? 0.84 : 0.6,
+          optimismGap: index === 0 ? 0.06 : 0.3,
+          randomEntityOverlap: { count: 8, rate: 0.8 },
+          groupEntityOverlap: { count: 0, rate: 0 },
+          sampleSizes: { randomTest: 40, groupTest: 40 },
+          fixtureViewHash: "7".repeat(64),
+          randomPipelineFingerprint: "8".repeat(64),
+          groupPipelineFingerprint: "8".repeat(64),
+        })),
+      );
+      return {
+        durationMs: 41,
+        body: JSON.stringify(
+          BoundaryMapResultV1Schema.parse({
+            schemaVersion: "1",
+            canonicalProfile: "counterlab-canonical-json-v1",
+            boundaryMapId: "boundary-map-test-1",
+            sessionId: input.sessionId,
+            concept: "entity_leakage",
+            conceptPackVersion: input.conceptPackVersion,
+            artifactManifestHash: input.artifactManifestHash,
+            experimentIrHash: input.selectedExperimentIrHash,
+            authoritativeResultHash:
+              input.releaseAuthority.authoritativeResultHash,
+            evidenceVerdictHash: input.releaseAuthority.evidenceVerdictHash,
+            sweepId: input.boundaryRequest.sweepId,
+            gridPresetId: input.boundaryRequest.gridPresetId,
+            seed: input.seed,
+            kernelVersion: "counterlab-kernel-boundary-v1",
+            axes: [axisA, axisB],
+            cells,
+            classifications: [
+              {
+                id: "small-gap",
+                label: "Small gap",
+                description: "The two evaluation strategies remain close.",
+              },
+              {
+                id: "material-gap",
+                label: "Material gap",
+                description: "The random-row result is materially optimistic.",
+              },
+            ],
+            units: { optimism_gap: "accuracy points" },
+            assumptions: [
+              "The fixed estimator and preprocessing are held constant.",
+            ],
+            nonClaims: ["This map does not establish all deployment behavior."],
+            resultHash: "9".repeat(64),
+          }),
+        ),
+      };
+    }
     const plan =
       input.schemaVersion === "5" ? input.projectedPlan : input.experimentPlan;
     const spec = plan.baseline;
@@ -1310,6 +1462,44 @@ describe("HostedRunnerJobProcessor", () => {
       "job.started",
       "command.completed",
     ]);
+    expect(controlPlane.callbacks[0]).toMatchObject({
+      status: "VERIFIED",
+      finalEventCursor: 2,
+      operationalMetrics: { kernelDurationMs: 41 },
+    });
+  });
+
+  it("executes a Boundary Map run and uploads only the unverified map authority candidate", async () => {
+    const compiler = new FakeCompiler({ schemaVersion: "2" });
+    const kernel = new FakeFixedKernel();
+    const controlPlane = new FakeControlPlane(await boundaryRunBundleV5(), []);
+    const processor = new HostedRunnerJobProcessor({
+      workspaceRoot: await workspace(),
+      compiler,
+      fixedKernel: kernel,
+      controlPlane,
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_boundary_v5`,
+    });
+
+    await processor.run("runner_job_boundary_scientific_1");
+
+    expect(compiler.compileCalls).toBe(0);
+    expect(kernel.calls).toHaveLength(1);
+    expect(kernel.calls[0]).toMatchObject({
+      schemaVersion: "5",
+      kind: "LAB_RUN",
+      purpose: "BOUNDARY",
+    });
+    expect([...controlPlane.uploads.keys()]).toEqual(["boundary-map.json"]);
+    expect(controlPlane.events.map((event) => event.kind)).toEqual([
+      "job.started",
+      "command.completed",
+    ]);
+    expect(controlPlane.events[1]).toMatchObject({
+      label: "Fixed kernel computed the Boundary Map",
+      excerpt: "4 signed grid cells computed; host verification is required.",
+    });
     expect(controlPlane.callbacks[0]).toMatchObject({
       status: "VERIFIED",
       finalEventCursor: 2,

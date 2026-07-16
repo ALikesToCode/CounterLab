@@ -13,6 +13,7 @@ import {
   type ScientificMethodCompiler,
 } from "@counterlab/codex-client";
 import {
+  BoundaryMapResultV1Schema,
   DiscriminationContractV1Schema,
   HostedVerifiedResultSetV2Schema,
   PatchResultSchema,
@@ -30,6 +31,7 @@ import {
   RunnerScientificCandidateV5Schema,
   VersionedRunnerJobInputBundleSchema,
   type RunnerLabCompileBundleV5,
+  type RunnerBoundaryMapBundleV5,
   type RunnerLabInteractiveRunBundleV5,
   type RunnerPatchCompileBundleV5,
   type RunnerLabRunBundleV5,
@@ -96,7 +98,8 @@ export interface FixedKernelExecutor {
     bundle:
       | RunnerLabRunBundle
       | RunnerLabRunBundleV5
-      | RunnerLabInteractiveRunBundleV5,
+      | RunnerLabInteractiveRunBundleV5
+      | RunnerBoundaryMapBundleV5,
     workspace: string,
     signal?: AbortSignal,
   ): Promise<{ body: string; durationMs: number }>;
@@ -306,13 +309,26 @@ export class HostedRunnerJobProcessor {
             false,
           );
         }
-        const result = HostedVerifiedResultSetV2Schema.parse(rawResult);
+        const isBoundaryRun =
+          bundle.schemaVersion === "5" && bundle.purpose === "BOUNDARY";
+        let commandExcerpt: string;
+        let releasedResultHash: string | undefined;
+        if (isBoundaryRun) {
+          const boundaryResult = BoundaryMapResultV1Schema.parse(rawResult);
+          commandExcerpt = `${boundaryResult.cells.length} signed grid cells computed; host verification is required.`;
+        } else {
+          const verifiedResult =
+            HostedVerifiedResultSetV2Schema.parse(rawResult);
+          commandExcerpt = `${verifiedResult.runs.length} fixed run${verifiedResult.runs.length === 1 ? "" : "s"} completed.`;
+          if (bundle.schemaVersion !== "5") {
+            releasedResultHash = verifiedResult.resultHash;
+          }
+        }
+        const outputPath = isBoundaryRun
+          ? "boundary-map.json"
+          : "verified-result.json";
         const uploaded = await this.authorityCall(signal, () =>
-          this.options.controlPlane.upload(
-            "verified-result.json",
-            executed.body,
-            signal,
-          ),
+          this.options.controlPlane.upload(outputPath, executed.body, signal),
         );
         outputHashes = [uploaded.sha256];
         cursor = await this.emit(
@@ -320,20 +336,22 @@ export class HostedRunnerJobProcessor {
           cursor,
           {
             kind: "command.completed",
-            label: "Fixed kernel executed the verified Plan",
+            label: isBoundaryRun
+              ? "Fixed kernel computed the Boundary Map"
+              : "Fixed kernel executed the verified Plan",
             exitCode: 0,
             durationMs: executed.durationMs,
-            excerpt: `${result.runs.length} fixed run${result.runs.length === 1 ? "" : "s"} completed.`,
+            excerpt: commandExcerpt,
           },
           signal,
         );
-        if (bundle.schemaVersion !== "5") {
+        if (releasedResultHash !== undefined) {
           cursor = await this.emit(
             jobId,
             cursor,
             {
               kind: "result.ready",
-              resultHash: result.resultHash,
+              resultHash: releasedResultHash,
             },
             signal,
           );

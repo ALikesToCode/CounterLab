@@ -11,9 +11,14 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
+from .boundary_map import (
+    LEAKAGE_SEED,
+    compute_imbalance_boundary_map,
+    compute_leakage_boundary_map,
+)
 from .canonical import canonical_json, sha256_json, sha256_json_browser
 from .fixture import generate_leakage_fixture
-from .imbalance import generate_imbalance_fixture
+from .imbalance import DEFAULT_IMBALANCE_SEED, generate_imbalance_fixture
 from .plan import ExperimentPlanValidationError, interpret_experiment_plan
 
 
@@ -87,6 +92,26 @@ _V5_INTERACTIVE_BUNDLE_KEYS = frozenset(
         "selectedRunId",
         "interactivePlan",
         "interactivePlanHash",
+        "resultOutput",
+        "permittedOutputs",
+    }
+)
+_V5_BOUNDARY_BUNDLE_KEYS = frozenset(
+    {
+        "schemaVersion",
+        "kind",
+        "purpose",
+        "jobId",
+        "sessionId",
+        "stateVersion",
+        "artifactManifestHash",
+        "fixture",
+        "conceptPackVersion",
+        "selectedExperimentIr",
+        "selectedExperimentIrHash",
+        "releaseAuthority",
+        "boundaryRequest",
+        "seed",
         "resultOutput",
         "permittedOutputs",
     }
@@ -172,6 +197,18 @@ _COMPILER_OUTPUT_PATHS = frozenset(
         "public-rationale.md",
     }
 )
+_BOUNDARY_REQUEST_KEYS = frozenset(
+    {"sweepId", "axisIds", "gridPresetId", "observableId", "maxCells"}
+)
+_BOUNDARY_RESULT_OUTPUT_KEYS = frozenset({"path", "schemaVersion", "lineage"})
+_BOUNDARY_RESULT_LINEAGE_KEYS = frozenset(
+    {
+        "artifactManifestHash",
+        "experimentIrHash",
+        "authoritativeResultHash",
+        "evidenceVerdictHash",
+    }
+)
 _REGISTERED_FIXTURES = {
     "entity_leakage": {
         "id": "public-leakage-v1",
@@ -187,6 +224,26 @@ _REGISTERED_FIXTURES = {
             "7974fe5744c4f9f2e8a31817791dac09ba9efb17cc88a4aa3383ae333e92ad7f"
         ),
     },
+}
+_REGISTERED_BOUNDARY_REQUESTS = {
+    "entity_leakage": {
+        "sweepId": "leakage-recurrence-sweep",
+        "axisIds": ["test_fraction", "observations_per_entity"],
+        "gridPresetId": "leakage-boundary-grid-v1",
+        "observableId": "optimism_gap",
+        "maxCells": 25,
+    },
+    "class_imbalance": {
+        "sweepId": "imbalance-threshold-prevalence-sweep",
+        "axisIds": ["class_prevalence", "decision_threshold"],
+        "gridPresetId": "imbalance-boundary-grid-v1",
+        "observableId": "f1",
+        "maxCells": 15,
+    },
+}
+_REGISTERED_BOUNDARY_SEEDS = {
+    "entity_leakage": LEAKAGE_SEED,
+    "class_imbalance": DEFAULT_IMBALANCE_SEED,
 }
 
 
@@ -700,6 +757,217 @@ def _execute_v5_interactive(bundle: Mapping[str, Any]) -> dict[str, Any]:
     )
 
 
+def _selected_candidate_runs(selected_ir: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    selection = _mapping(selected_ir.get("selection"), "IR selection")
+    if selection.get("status") != "SELECTED":
+        raise HostedLabRunError("Boundary Map requires a fixed-selected Experiment IR")
+    candidate_id = selection.get("candidateId")
+    candidates = selected_ir.get("candidateExperiments")
+    if not isinstance(candidates, list):
+        raise HostedLabRunError("Boundary Map Experiment IR candidates are invalid")
+    selected = next(
+        (
+            candidate
+            for candidate in candidates
+            if isinstance(candidate, Mapping) and candidate.get("id") == candidate_id
+        ),
+        None,
+    )
+    if selected is None:
+        raise HostedLabRunError("Boundary Map selected candidate does not resolve")
+    baseline = _mapping(selected.get("baseline"), "selected candidate baseline")
+    interventions = selected.get("interventions")
+    if not isinstance(interventions, list) or not all(
+        isinstance(run, Mapping) for run in interventions
+    ):
+        raise HostedLabRunError("Boundary Map selected candidate runs are invalid")
+    return [baseline, *interventions]
+
+
+def _validate_boundary_release_authority(
+    release_authority: Mapping[str, Any],
+    *,
+    selected_ir_hash: str,
+) -> tuple[str, str]:
+    _exact_keys(
+        release_authority,
+        _V5_RELEASE_AUTHORITY_KEYS,
+        "Boundary Map releaseAuthority",
+    )
+    verdict = _mapping(
+        release_authority.get("evidenceVerdict"), "evidenceVerdict"
+    )
+    verdict_kind = verdict.get("kind")
+    if verdict_kind not in {"SUPPORTS", "INCONCLUSIVE"}:
+        raise HostedLabRunError("Boundary Map requires one released result")
+    verdict_keys = _V5_EVIDENCE_VERDICT_BASE_KEYS | (
+        frozenset({"hypothesisId", "scope", "resultHash"})
+        if verdict_kind == "SUPPORTS"
+        else frozenset({"reasonCode", "scope", "resultHash"})
+        | (
+            frozenset({"nextExperimentId"})
+            if "nextExperimentId" in verdict
+            else frozenset()
+        )
+    )
+    _exact_keys(verdict, verdict_keys, "Boundary Map evidenceVerdict")
+
+    authoritative_result_hash = release_authority.get("authoritativeResultHash")
+    evidence_verdict_hash = release_authority.get("evidenceVerdictHash")
+    if not all(
+        _is_sha256(value)
+        for value in (
+            authoritative_result_hash,
+            evidence_verdict_hash,
+            release_authority.get("epistemicReportHash"),
+            verdict.get("technicalReportHash"),
+        )
+    ):
+        raise HostedLabRunError("Boundary Map release authority contains an invalid digest")
+    if (
+        evidence_verdict_hash != sha256_json_browser(verdict)
+        or verdict.get("irHash") != selected_ir_hash
+        or verdict.get("resultHash") != authoritative_result_hash
+    ):
+        raise HostedLabRunError("Boundary Map released result authority does not match")
+    return str(authoritative_result_hash), str(evidence_verdict_hash)
+
+
+def _execute_v5_boundary(bundle: Mapping[str, Any]) -> dict[str, Any]:
+    _exact_keys(
+        bundle,
+        _V5_BOUNDARY_BUNDLE_KEYS,
+        "hosted Boundary Map LAB_RUN v5 bundle",
+    )
+    if bundle.get("purpose") != "BOUNDARY":
+        raise HostedLabRunError("hosted Boundary Map LAB_RUN purpose is invalid")
+    if bundle.get("permittedOutputs") != ["boundary-map.json"]:
+        raise HostedLabRunError("hosted Boundary Map output policy is invalid")
+    if (
+        not isinstance(bundle.get("jobId"), str)
+        or not str(bundle.get("jobId")).strip()
+        or not isinstance(bundle.get("sessionId"), str)
+        or not str(bundle.get("sessionId")).strip()
+        or isinstance(bundle.get("stateVersion"), bool)
+        or not isinstance(bundle.get("stateVersion"), int)
+        or int(bundle["stateVersion"]) < 1
+    ):
+        raise HostedLabRunError("hosted Boundary Map job identity is invalid")
+
+    selected_ir = _mapping(
+        bundle.get("selectedExperimentIr"), "selectedExperimentIr"
+    )
+    _validate_experiment_ir(selected_ir)
+    selected_ir_hash = bundle.get("selectedExperimentIrHash")
+    artifact_manifest_hash = bundle.get("artifactManifestHash")
+    concept_pack_version = bundle.get("conceptPackVersion")
+    concept = selected_ir.get("concept")
+    if concept not in _REGISTERED_BOUNDARY_REQUESTS:
+        raise HostedLabRunError(
+            "no hosted Boundary Map runner is registered for this concept"
+        )
+    if (
+        not _is_sha256(selected_ir_hash)
+        or selected_ir_hash != sha256_json_browser(selected_ir)
+        or selected_ir.get("artifactManifestHash") != artifact_manifest_hash
+        or not _is_sha256(artifact_manifest_hash)
+        or selected_ir.get("sessionId") != bundle.get("sessionId")
+        or selected_ir.get("conceptPackVersion") != concept_pack_version
+        or not isinstance(concept_pack_version, str)
+        or not concept_pack_version.strip()
+    ):
+        raise HostedLabRunError("Boundary Map Experiment IR hash lineage does not match")
+
+    fixture = _mapping(bundle.get("fixture"), "fixture")
+    if dict(fixture) != _REGISTERED_FIXTURES[str(concept)]:
+        raise HostedLabRunError("fixture is not registered for the Boundary Map concept")
+
+    boundary_request = _mapping(bundle.get("boundaryRequest"), "boundaryRequest")
+    _exact_keys(
+        boundary_request,
+        _BOUNDARY_REQUEST_KEYS,
+        "Boundary Map request",
+    )
+    selected_request = selected_ir.get("boundarySweep")
+    registered_request = _REGISTERED_BOUNDARY_REQUESTS[str(concept)]
+    if (
+        not isinstance(selected_request, Mapping)
+        or dict(boundary_request) != dict(selected_request)
+        or dict(boundary_request) != registered_request
+    ):
+        raise HostedLabRunError(
+            "boundaryRequest is not the registered Boundary Map request"
+        )
+
+    seed = bundle.get("seed")
+    runs = _selected_candidate_runs(selected_ir)
+    run_seeds = {run.get("seed") for run in runs}
+    if (
+        isinstance(seed, bool)
+        or not isinstance(seed, int)
+        or seed < 0
+        or run_seeds != {seed}
+        or seed != _REGISTERED_BOUNDARY_SEEDS[str(concept)]
+    ):
+        raise HostedLabRunError(
+            "Boundary Map seed does not match selected candidate runs"
+        )
+
+    release_authority = _mapping(
+        bundle.get("releaseAuthority"), "releaseAuthority"
+    )
+    authoritative_result_hash, evidence_verdict_hash = (
+        _validate_boundary_release_authority(
+            release_authority,
+            selected_ir_hash=str(selected_ir_hash),
+        )
+    )
+
+    result_output = _mapping(bundle.get("resultOutput"), "resultOutput")
+    _exact_keys(
+        result_output,
+        _BOUNDARY_RESULT_OUTPUT_KEYS,
+        "Boundary Map resultOutput",
+    )
+    output_lineage = _mapping(result_output.get("lineage"), "resultOutput.lineage")
+    _exact_keys(
+        output_lineage,
+        _BOUNDARY_RESULT_LINEAGE_KEYS,
+        "Boundary Map output lineage",
+    )
+    expected_lineage = {
+        "artifactManifestHash": artifact_manifest_hash,
+        "experimentIrHash": selected_ir_hash,
+        "authoritativeResultHash": authoritative_result_hash,
+        "evidenceVerdictHash": evidence_verdict_hash,
+    }
+    if (
+        result_output.get("path") != "boundary-map.json"
+        or result_output.get("schemaVersion") != "1"
+        or dict(output_lineage) != expected_lineage
+    ):
+        raise HostedLabRunError("Boundary Map output lineage is invalid")
+
+    compute = (
+        compute_leakage_boundary_map
+        if concept == "entity_leakage"
+        else compute_imbalance_boundary_map
+    )
+    try:
+        return compute(
+            session_id=str(bundle.get("sessionId")),
+            concept_pack_version=concept_pack_version,
+            artifact_manifest_hash=str(artifact_manifest_hash),
+            experiment_ir_hash=str(selected_ir_hash),
+            authoritative_result_hash=authoritative_result_hash,
+            evidence_verdict_hash=evidence_verdict_hash,
+            seed=seed,
+            max_cells=int(boundary_request["maxCells"]),
+        )
+    except ValueError as error:
+        raise HostedLabRunError(str(error)) from error
+
+
 def _execute_v5(bundle: Mapping[str, Any]) -> dict[str, Any]:
     _exact_keys(bundle, _V5_BUNDLE_KEYS, "hosted LAB_RUN v5 bundle")
     if bundle.get("purpose") != "AUTHORITATIVE":
@@ -892,6 +1160,8 @@ def execute_hosted_lab_run(bundle: Mapping[str, Any]) -> dict[str, Any]:
     if bundle.get("kind") != "LAB_RUN":
         raise HostedLabRunError("hosted LAB_RUN bundle kind is invalid")
     if bundle.get("schemaVersion") == "5":
+        if bundle.get("purpose") == "BOUNDARY":
+            return _execute_v5_boundary(bundle)
         if bundle.get("purpose") == "INTERACTIVE":
             return _execute_v5_interactive(bundle)
         return _execute_v5(bundle)
