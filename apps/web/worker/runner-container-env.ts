@@ -21,7 +21,7 @@ export function createRunnerContainerEnvVars(
     COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY: runnerVerifyingPublicKey,
     NODE_ENV: "production",
     PORT: "8080",
-    COUNTERLAB_RUNNER_WORK_ROOT: "/work/jobs",
+    COUNTERLAB_RUNNER_WORK_ROOT: "/tmp/counterlab-jobs",
     COUNTERLAB_CODEX_HOME_ROOT: "/tmp/counterlab-codex",
     COUNTERLAB_CODEX_EXECUTABLE: "/usr/local/bin/codex",
     COUNTERLAB_SETPRIV_EXECUTABLE: "/usr/bin/setpriv",
