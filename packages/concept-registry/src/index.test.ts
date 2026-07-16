@@ -325,6 +325,28 @@ describe("concept-pack registry", () => {
     }
   });
 
+  it("registers the exact fixed fixture that supplies each pack's numeric inputs", () => {
+    expect(getConceptPack("entity_leakage").fixedFixture).toEqual({
+      id: "public-leakage-v1",
+      version: "leakage-fixture-v1",
+      contentSha256:
+        "5c482f39e4e948a92dab61bf9c9f5c6577fbe9fc688fd597c9fefd785ee1be70",
+    });
+    expect(getConceptPack("class_imbalance").fixedFixture).toEqual({
+      id: "public-imbalance-v1",
+      version: "imbalance-fixture-v1",
+      contentSha256:
+        "7974fe5744c4f9f2e8a31817791dac09ba9efb17cc88a4aa3383ae333e92ad7f",
+    });
+    for (const pack of releasedConceptPacks()) {
+      expect(pack.fixedFixture.id).toContain(
+        pack.id === "entity_leakage" ? "leakage" : "imbalance",
+      );
+      expect(pack.fixedFixture.contentSha256).toMatch(/^[a-f0-9]{64}$/u);
+      expect(Object.isFrozen(pack.fixedFixture)).toBe(true);
+    }
+  });
+
   it("deep-freezes every released authority graph", () => {
     for (const pack of releasedConceptPacks()) {
       expect(Object.isFrozen(pack)).toBe(true);

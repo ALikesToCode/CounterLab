@@ -53,6 +53,11 @@ export interface ConceptPackDefinition {
   releaseStatus: "released" | "development";
   title: string;
   learnerQuestion: string;
+  fixedFixture: {
+    id: "public-leakage-v1" | "public-imbalance-v1";
+    version: string;
+    contentSha256: string;
+  };
   supportDetector: SupportDetector;
   analystRules: {
     stableInstructions: readonly string[];
@@ -671,6 +676,12 @@ const leakagePack = deepFreeze({
   title: "Entity leakage",
   learnerQuestion:
     "Does this evaluation match the entities the model will face after deployment?",
+  fixedFixture: {
+    id: "public-leakage-v1",
+    version: "leakage-fixture-v1",
+    contentSha256:
+      "5c482f39e4e948a92dab61bf9c9f5c6577fbe9fc688fd597c9fefd785ee1be70",
+  },
   supportDetector: leakageSupport,
   analystRules: {
     stableInstructions: [
@@ -737,6 +748,12 @@ const imbalancePack = deepFreeze({
   title: "Class imbalance and metric choice",
   learnerQuestion:
     "Does the reported metric show that the rare class is detected at a useful operating point?",
+  fixedFixture: {
+    id: "public-imbalance-v1",
+    version: "imbalance-fixture-v1",
+    contentSha256:
+      "7974fe5744c4f9f2e8a31817791dac09ba9efb17cc88a4aa3383ae333e92ad7f",
+  },
   supportDetector: imbalanceSupport,
   analystRules: {
     stableInstructions: [
