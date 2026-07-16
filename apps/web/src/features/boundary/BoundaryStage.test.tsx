@@ -1,0 +1,188 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { BoundaryResponse, SessionView } from "../../api";
+import { BoundaryStage } from "./BoundaryStage";
+
+const api = vi.hoisted(() => ({
+  getBoundary: vi.fn(),
+  runBoundary: vi.fn(),
+}));
+const runner = vi.hoisted(() => ({
+  clear: vi.fn(),
+  events: [],
+  waitForJob: vi.fn(),
+}));
+
+vi.mock("../../api", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../api")>();
+  return { ...original, counterLabApi: api };
+});
+vi.mock("../../hooks/useRunnerEvents", () => ({
+  useRunnerEvents: () => runner,
+}));
+vi.mock("../../components/generative-ui/BoundaryMapBlock", () => ({
+  BoundaryMapBlock: ({ boundary }: { boundary: BoundaryResponse }) => (
+    <div data-testid="boundary-map">{boundary.result.resultHash}</div>
+  ),
+}));
+
+const digest = (character: string) => character.repeat(64);
+
+function memoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    clear: () => values.clear(),
+    getItem: (key) => values.get(key) ?? null,
+    key: (index) => [...values.keys()][index] ?? null,
+    removeItem: (key) => values.delete(key),
+    setItem: (key, value) => values.set(key, value),
+  };
+}
+
+const authority = {
+  jobId: "job_boundary_1",
+  sweepId: "leakage-recurrence-sweep",
+  resultHash: digest("1"),
+  verificationReportHash: digest("2"),
+  receipt: {
+    schemaVersion: "1",
+    canonicalProfile: "counterlab-canonical-json-v1",
+    sessionId: "session_1",
+    resultHash: digest("1"),
+    verificationReportHash: digest("2"),
+    experimentIrHash: digest("3"),
+    authoritativeResultHash: digest("4"),
+    evidenceVerdictHash: digest("5"),
+    issuedAt: "2026-07-16T12:00:00.000Z",
+    integrity: {
+      mode: "integrity-hashed",
+      algorithm: "sha256",
+      contentHash: digest("6"),
+    },
+    receiptHash: digest("7"),
+  },
+  cellCount: 4,
+} as const;
+
+const experimentCompleted = {
+  sessionId: "session_1",
+  artifactId: "artifact_1",
+  mode: { kind: "live_notebook" },
+  state: "EXPERIMENT_COMPLETED",
+  version: 10,
+  createdAt: "2026-07-16T11:00:00.000Z",
+  updatedAt: "2026-07-16T11:05:00.000Z",
+} satisfies SessionView;
+
+const boundaryResponse = {
+  result: { resultHash: authority.resultHash },
+  report: { status: "VERIFIED" },
+  receipt: authority.receipt,
+  authority,
+} as unknown as BoundaryResponse;
+
+describe("BoundaryStage", () => {
+  beforeEach(() => {
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: memoryStorage(),
+    });
+    vi.clearAllMocks();
+    api.getBoundary.mockResolvedValue(boundaryResponse);
+  });
+
+  it("runs the fixed sweep, waits for verification, then releases the map", async () => {
+    const updateSession = vi.fn();
+    api.runBoundary.mockResolvedValue({
+      ...experimentCompleted,
+      runnerJob: {
+        jobId: "job_boundary_1",
+        kind: "LAB_RUN",
+        status: "STARTING",
+      },
+    });
+    runner.waitForJob.mockResolvedValue({
+      ...experimentCompleted,
+      state: "BOUNDARY_VERIFIED",
+      version: 11,
+      boundaryMapAuthority: authority,
+    });
+
+    render(
+      <BoundaryStage
+        session={experimentCompleted}
+        prediction="The score remains high."
+        updateSession={updateSession}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /map the boundary/i }),
+    );
+
+    await waitFor(() =>
+      expect(runner.waitForJob).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session_1",
+          jobId: "job_boundary_1",
+          terminalStates: ["BOUNDARY_VERIFIED", "LAB_REJECTED"],
+        }),
+      ),
+    );
+    expect(await screen.findByTestId("boundary-map")).toHaveTextContent(
+      authority.resultHash,
+    );
+    expect(api.getBoundary).toHaveBeenCalledWith("session_1");
+    expect(updateSession).toHaveBeenCalledWith(
+      expect.objectContaining({ state: "BOUNDARY_VERIFIED" }),
+    );
+  });
+
+  it("restores a persisted verified boundary without starting a new job", async () => {
+    render(
+      <BoundaryStage
+        session={{
+          ...experimentCompleted,
+          state: "REVISION_RECORDED",
+          boundaryMapAuthority: authority,
+        }}
+        updateSession={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByTestId("boundary-map")).toBeInTheDocument();
+    expect(api.runBoundary).not.toHaveBeenCalled();
+  });
+
+  it("releases no map when the boundary job is rejected", async () => {
+    api.runBoundary.mockResolvedValue({
+      ...experimentCompleted,
+      runnerJob: {
+        jobId: "job_boundary_1",
+        kind: "LAB_RUN",
+        status: "STARTING",
+      },
+    });
+    runner.waitForJob.mockResolvedValue({
+      ...experimentCompleted,
+      state: "LAB_REJECTED",
+      version: 11,
+    });
+
+    render(
+      <BoundaryStage session={experimentCompleted} updateSession={vi.fn()} />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /map the boundary/i }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /no boundary values were released/i,
+    );
+    expect(screen.queryByTestId("boundary-map")).not.toBeInTheDocument();
+    expect(api.getBoundary).not.toHaveBeenCalled();
+  });
+});

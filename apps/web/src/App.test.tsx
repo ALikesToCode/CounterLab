@@ -226,7 +226,8 @@ function installApi(
       | "BELIEF_TEST_PROPOSED"
       | "BELIEF_TEST_CONFIRMED"
       | "LAB_COMPILING"
-      | "LAB_VERIFIED";
+      | "LAB_VERIFIED"
+      | "EXPERIMENT_COMPLETED";
     restoredSessionExtra?: Record<string, unknown>;
   } = {},
 ) {
@@ -596,6 +597,26 @@ describe("CounterLab judged flow", () => {
           String(init?.body).includes(uploadedArtifact.artifactId),
       ),
     ).toBe(true);
+  });
+
+  it("requires verified Boundary authority before a live learner can revise", async () => {
+    installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      restoredSessionState: "EXPERIMENT_COMPLETED",
+      restoredSessionExtra: { verifiedResult: liveResult },
+    });
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem("counterlab.mode", "live");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("button", { name: /map the boundary/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/your revised mental model/i),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps the first failed live request provider-neutral and on the claim screen", async () => {

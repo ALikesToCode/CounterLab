@@ -1,0 +1,241 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import {
+  ApiClientError,
+  counterLabApi,
+  type BoundaryResponse,
+  type SessionView,
+} from "../../api";
+import { BoundaryMapBlock } from "../../components/generative-ui/BoundaryMapBlock";
+import {
+  clearActiveRunnerCheckpoint,
+  readActiveRunnerCheckpoint,
+  writeActiveRunnerCheckpoint,
+} from "../../hooks/runnerCheckpoint";
+import { useRunnerEvents } from "../../hooks/useRunnerEvents";
+import styles from "./BoundaryStage.module.css";
+
+function storage(): Storage | undefined {
+  try {
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+function publicEventLabel(kind: string): string {
+  const labels: Record<string, string> = {
+    "job.started": "Fixed sweep started",
+    "plan.summary": "Registered Boundary plan resolved",
+    "artifact.read": "Evidence authority checked",
+    "command.completed": "Fixed kernel completed",
+    "verifier.rejected": "Boundary verifier rejected the output",
+    "verifier.verified": "Boundary verifier accepted every cell",
+    "result.ready": "Verified Boundary Map ready",
+    "job.failed": "Boundary job stopped safely",
+  };
+  return labels[kind] ?? kind.replaceAll(".", " ");
+}
+
+export function BoundaryStage({
+  session,
+  prediction,
+  updateSession,
+}: {
+  session: SessionView;
+  prediction?: string;
+  updateSession: (session: SessionView) => void;
+}) {
+  const runner = useRunnerEvents();
+  const [boundary, setBoundary] = useState<BoundaryResponse | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const activeJobId = useRef<string | null>(null);
+  const loadedReceiptHash = useRef<string | null>(null);
+
+  const loadBoundary = useCallback(async () => {
+    const response = await counterLabApi.getBoundary(session.sessionId);
+    setBoundary(response);
+    loadedReceiptHash.current = response.receipt.receiptHash;
+    window.requestAnimationFrame(() => {
+      document.getElementById("boundary-map-title")?.focus();
+    });
+    return response;
+  }, [session.sessionId]);
+
+  const finishJob = useCallback(
+    async (jobId: string) => {
+      activeJobId.current = jobId;
+      setBusy(true);
+      setError(null);
+      try {
+        const completed = await runner.waitForJob({
+          sessionId: session.sessionId,
+          jobId,
+          terminalStates: ["BOUNDARY_VERIFIED", "LAB_REJECTED"],
+          onSession: updateSession,
+        });
+        if (
+          completed.state !== "BOUNDARY_VERIFIED" ||
+          completed.boundaryMapAuthority === undefined
+        ) {
+          throw new ApiClientError({
+            code: "BOUNDARY_REJECTED",
+            message:
+              "The independent verifier rejected this sweep. No Boundary values were released.",
+            status: 409,
+          });
+        }
+        updateSession(completed);
+        await loadBoundary();
+        const localStorage = storage();
+        if (localStorage !== undefined) {
+          clearActiveRunnerCheckpoint(
+            session.sessionId,
+            jobId,
+            localStorage,
+          );
+        }
+      } catch (caught) {
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "CounterLab could not verify this Boundary Map.",
+        );
+      } finally {
+        activeJobId.current = null;
+        setBusy(false);
+      }
+    },
+    [loadBoundary, runner, session.sessionId, updateSession],
+  );
+
+  const startBoundary = async () => {
+    setBusy(true);
+    setError(null);
+    runner.clear();
+    try {
+      const started = await counterLabApi.runBoundary(session.sessionId);
+      setJobId(started.runnerJob.jobId);
+      activeJobId.current = started.runnerJob.jobId;
+      const localStorage = storage();
+      if (localStorage !== undefined) {
+        writeActiveRunnerCheckpoint(
+          {
+            schemaVersion: "1",
+            sessionId: session.sessionId,
+            jobId: started.runnerJob.jobId,
+            kind: started.runnerJob.kind,
+          },
+          localStorage,
+        );
+      }
+      updateSession(started);
+      await finishJob(started.runnerJob.jobId);
+    } catch (caught) {
+      activeJobId.current = null;
+      setBusy(false);
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "CounterLab could not start the fixed Boundary sweep.",
+      );
+    }
+  };
+
+  useEffect(() => {
+    const receiptHash = session.boundaryMapAuthority?.receipt.receiptHash;
+    if (
+      receiptHash !== undefined &&
+      loadedReceiptHash.current !== receiptHash
+    ) {
+      void loadBoundary().catch((caught: unknown) => {
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "The persisted Boundary authority could not be loaded.",
+        );
+      });
+      return;
+    }
+    if (
+      session.state !== "EXPERIMENT_COMPLETED" ||
+      activeJobId.current !== null
+    ) {
+      return;
+    }
+    const localStorage = storage();
+    const checkpoint =
+      localStorage === undefined
+        ? null
+        : readActiveRunnerCheckpoint(session.sessionId, localStorage);
+    if (checkpoint?.kind === "LAB_RUN") {
+      setJobId(checkpoint.jobId);
+      void finishJob(checkpoint.jobId);
+    }
+  }, [finishJob, loadBoundary, session.boundaryMapAuthority, session.sessionId, session.state]);
+
+  if (boundary !== null) {
+    return (
+      <BoundaryMapBlock
+        boundary={boundary}
+        {...(prediction === undefined ? {} : { prediction })}
+      />
+    );
+  }
+
+  if (busy) {
+    return (
+      <section className={styles.stage} aria-live="polite">
+        <div className={styles.statusMark} aria-hidden="true" />
+        <div>
+          <span>Boundary · Computing with fixed code</span>
+          <h2>Mapping where the evidence changes…</h2>
+          <p>
+            The runner is sweeping only registered conditions. No model call is
+            made for individual cells, and no value appears before verification.
+          </p>
+          <ol className={styles.events}>
+            {runner.events.length === 0 ? (
+              <li>Runner accepted {jobId ?? "the bounded job"}.</li>
+            ) : (
+              runner.events.map((event) => (
+                <li key={event.eventId}>{publicEventLabel(event.kind)}</li>
+              ))
+            )}
+          </ol>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className={styles.stage} aria-labelledby="boundary-stage-title">
+      <div className={styles.number} aria-hidden="true">
+        04
+      </div>
+      <div>
+        <span>Boundary · One question remains</span>
+        <h2 id="boundary-stage-title">Where does this rule stop applying?</h2>
+        <p>
+          One result can separate the hypotheses. A Boundary Map goes further:
+          fixed code changes two approved conditions and shows where the pattern
+          becomes weak, strong, or inconclusive.
+        </p>
+        {error === null ? null : (
+          <p className={styles.error} role="alert">
+            {error}
+          </p>
+        )}
+        <button
+          className="button button-primary"
+          type="button"
+          onClick={() => void startBoundary()}
+        >
+          {error === null ? "Map the boundary" : "Retry Boundary verification"}
+        </button>
+      </div>
+    </section>
+  );
+}

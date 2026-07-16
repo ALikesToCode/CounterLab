@@ -30,6 +30,7 @@ import { InteractiveImbalanceLab } from "./components/lesson/InteractiveImbalanc
 import { ImbalancePatchReview } from "./components/lesson/ImbalancePatchReview";
 import { ImbalanceTransferLesson } from "./components/lesson/ImbalanceTransferLesson";
 import type { RecentProject, StudioStage } from "./components/studio/types";
+import { BoundaryStage } from "./features/boundary/BoundaryStage";
 
 import { getRun, sampleArtifact, sampleResult, verifiedReplay } from "./sample";
 
@@ -2775,29 +2776,46 @@ function LeakageRealityScreen({
         </div>
       </section>
 
-      <section className="revision panel">
-        <div>
-          <p className="eyebrow">In your words</p>
-          <h2>Write the rule you’ll use next time</h2>
-          <p>Focus on how you would split the data—not these exact scores.</p>
-        </div>
-        <label htmlFor="revision">Your revised mental model</label>
-        <textarea
-          id="revision"
-          rows={4}
-          value={revision}
-          onChange={(event) => setRevision(event.target.value)}
-          placeholder="When rows repeat an entity, I should…"
+      {session?.mode.kind === "live_notebook" && (
+        <BoundaryStage
+          session={session}
+          prediction={
+            prediction === "stays-high"
+              ? "Accuracy remains near 98% on unseen customers."
+              : prediction === "falls"
+                ? "Accuracy falls materially on unseen customers."
+                : "The unseen-customer result is uncertain."
+          }
+          updateSession={updateSession}
         />
-        <button
-          className="button button-primary"
-          type="button"
-          disabled={revision.trim().length < 20 || actionBusy}
-          onClick={recordRevision}
-        >
-          Try the rule on a new problem <Mark name="arrow" />
-        </button>
-      </section>
+      )}
+
+      {(session?.mode.kind !== "live_notebook" ||
+        session.boundaryMapAuthority !== undefined) && (
+        <section className="revision panel">
+          <div>
+            <p className="eyebrow">In your words</p>
+            <h2>Write the rule you’ll use next time</h2>
+            <p>Focus on how you would split the data—not these exact scores.</p>
+          </div>
+          <label htmlFor="revision">Your revised mental model</label>
+          <textarea
+            id="revision"
+            rows={4}
+            value={revision}
+            onChange={(event) => setRevision(event.target.value)}
+            placeholder="When rows repeat an entity, I should…"
+          />
+          <button
+            className="button button-primary"
+            type="button"
+            disabled={revision.trim().length < 20 || actionBusy}
+            onClick={recordRevision}
+          >
+            Try the rule on a new problem <Mark name="arrow" />
+          </button>
+        </section>
+      )}
 
       {actionErrorNotice}
     </main>
@@ -2998,7 +3016,19 @@ function ImbalanceRealityScreen({
         sessionId={session?.sessionId ?? null}
         authoritativeResultHash={result.resultHash}
       />
-      {session !== null && session.mode.kind !== "verified_replay" && (
+      {session?.mode.kind === "live_notebook" && (
+        <BoundaryStage
+          session={session}
+          {...(session.prediction === undefined
+            ? {}
+            : { prediction: session.prediction.choice })}
+          updateSession={updateSession}
+        />
+      )}
+      {session !== null &&
+        session.mode.kind !== "verified_replay" &&
+        (session.mode.kind !== "live_notebook" ||
+          session.boundaryMapAuthority !== undefined) && (
         <>
           <ImbalanceTransferLesson
             sessionId={session.sessionId}

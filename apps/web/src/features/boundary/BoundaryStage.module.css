@@ -1,0 +1,119 @@
+.stage {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  min-height: 250px;
+  padding: clamp(24px, 4vw, 40px);
+  color: #e9f3f5;
+  border: 1px solid rgb(120 223 213 / 26%);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 10% 0%, rgb(44 191 178 / 18%), transparent 38%),
+    #0b2036;
+  box-shadow: 0 24px 64px rgb(7 23 41 / 18%);
+}
+
+.stage > div:last-child {
+  max-width: 780px;
+}
+
+.stage span {
+  color: #78dfd5;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.stage h2 {
+  margin: 6px 0 9px;
+  color: white;
+  font: 600 clamp(30px, 4vw, 44px) / 1.04 var(--serif);
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.stage p {
+  max-width: 690px;
+  margin: 0 0 19px;
+  color: #b9cbd4;
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.number {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  color: #78dfd5;
+  border: 1px solid rgb(120 223 213 / 40%);
+  border-radius: 50%;
+  font: 750 13px/1 var(--mono);
+}
+
+.statusMark {
+  width: 20px;
+  height: 20px;
+  margin: 10px;
+  border: 3px solid rgb(120 223 213 / 25%);
+  border-top-color: #78dfd5;
+  border-radius: 50%;
+  animation: boundary-spin 900ms linear infinite;
+}
+
+.events {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.events li {
+  padding: 7px 10px;
+  color: #d3e3e8;
+  border-left: 2px solid #58cabe;
+  background: rgb(255 255 255 / 5%);
+  font-size: 13px;
+}
+
+.error {
+  padding: 11px 13px;
+  color: #ffe1e5 !important;
+  border: 1px solid rgb(255 122 139 / 38%);
+  border-radius: 10px;
+  background: rgb(153 36 53 / 18%);
+}
+
+@keyframes boundary-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@media (max-width: 620px) {
+  .stage {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+    padding: 24px 18px;
+  }
+
+  .number {
+    width: 46px;
+    height: 46px;
+  }
+
+  .stage button {
+    width: 100%;
+    min-height: 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .statusMark {
+    animation: none;
+    border-color: #78dfd5;
+  }
+}
