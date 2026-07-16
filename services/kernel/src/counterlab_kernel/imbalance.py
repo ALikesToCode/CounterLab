@@ -33,6 +33,12 @@ from .sklearn_fingerprint import (
 IMBALANCE_KERNEL_VERSION = "0.1.0"
 DEFAULT_IMBALANCE_SEED = 2603
 DEFAULT_IMBALANCE_ROWS = 6_000
+IMBALANCE_BOUNDARY_PREVALENCE_SCENARIOS = (
+    "rarer",
+    "observed",
+    "more_common",
+)
+IMBALANCE_BOUNDARY_THRESHOLDS = (0.1, 0.2, 0.3, 0.4, 0.5)
 ROW_ID = "case_id"
 TARGET = "fraud"
 NUMERIC_FEATURES = (
@@ -438,12 +444,55 @@ def run_imbalance_plan(
     )
 
 
+def run_imbalance_boundary_grid(
+    frame: pd.DataFrame,
+    *,
+    seed: int,
+    plan_id: str,
+    session_id: str,
+    artifact_manifest_hash: str,
+    concept_pack_version: str,
+) -> dict[str, Any]:
+    """Execute the exact pack-owned threshold/prevalence Boundary Map grid."""
+
+    runs = [
+        {
+            "runId": f"{scenario}--threshold-{round(threshold * 100):02d}",
+            "operation": (
+                "imbalance.threshold_sweep"
+                if scenario == "observed"
+                else "imbalance.prevalence_sweep"
+            ),
+            "model": "logistic_regression",
+            "seed": seed,
+            "threshold": threshold,
+            "prevalenceScenario": scenario,
+        }
+        for scenario in IMBALANCE_BOUNDARY_PREVALENCE_SCENARIOS
+        for threshold in IMBALANCE_BOUNDARY_THRESHOLDS
+    ]
+    return _result(
+        frame,
+        runs,
+        schema_version="2",
+        lineage={
+            "planId": plan_id,
+            "sessionId": session_id,
+            "artifactManifestHash": artifact_manifest_hash,
+            "conceptPackVersion": concept_pack_version,
+        },
+    )
+
+
 __all__ = [
     "DEFAULT_IMBALANCE_SEED",
+    "IMBALANCE_BOUNDARY_PREVALENCE_SCENARIOS",
+    "IMBALANCE_BOUNDARY_THRESHOLDS",
     "IMBALANCE_KERNEL_VERSION",
     "REQUIRED_OPERATIONS",
     "canonical_imbalance_run_specs",
     "generate_imbalance_fixture",
+    "run_imbalance_boundary_grid",
     "run_imbalance_experiment",
     "run_imbalance_plan",
 ]
