@@ -27,6 +27,8 @@ WORKDIR /build
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json vitest.config.ts ./
 COPY packages/contracts ./packages/contracts
 COPY packages/codex-client ./packages/codex-client
+COPY packages/experiment-ir ./packages/experiment-ir
+COPY packages/generative-ui-contracts ./packages/generative-ui-contracts
 COPY packages/session-core ./packages/session-core
 COPY services/hosted-runner ./services/hosted-runner
 

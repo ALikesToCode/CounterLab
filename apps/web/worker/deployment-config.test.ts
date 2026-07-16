@@ -1,8 +1,14 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { relative, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -66,6 +72,59 @@ describe("Cloudflare static asset routing", () => {
     expect(config.containers).toHaveLength(1);
     expect(config.containers?.[0]?.image).toBe("../../Dockerfile.runner");
     expect(config.containers?.[0]?.image_vars).toBeUndefined();
+  });
+
+  it("copies the complete hosted-runner workspace dependency closure", () => {
+    const root = resolve(process.cwd(), "../..");
+    const packageDirectories = readdirSync(resolve(root, "packages"), {
+      withFileTypes: true,
+    }).filter((entry) => entry.isDirectory());
+    const workspaces = new Map<
+      string,
+      { directory: string; dependencies: Record<string, string> }
+    >();
+    for (const entry of packageDirectories) {
+      const directory = resolve(root, "packages", entry.name);
+      if (!existsSync(resolve(directory, "package.json"))) continue;
+      const manifest = JSON.parse(
+        readFileSync(resolve(directory, "package.json"), "utf8"),
+      ) as {
+        name: string;
+        dependencies?: Record<string, string>;
+      };
+      workspaces.set(manifest.name, {
+        directory,
+        dependencies: manifest.dependencies ?? {},
+      });
+    }
+    const hostedRunner = JSON.parse(
+      readFileSync(resolve(root, "services/hosted-runner/package.json"), "utf8"),
+    ) as { dependencies?: Record<string, string> };
+    const queue = Object.entries(hostedRunner.dependencies ?? {})
+      .filter(([, version]) => version.startsWith("workspace:"))
+      .map(([name]) => name);
+    const required = new Set<string>();
+    while (queue.length > 0) {
+      const name = queue.shift()!;
+      if (required.has(name)) continue;
+      required.add(name);
+      const workspace = workspaces.get(name);
+      expect(workspace, `workspace ${name}`).toBeDefined();
+      for (const [dependency, version] of Object.entries(
+        workspace?.dependencies ?? {},
+      )) {
+        if (version.startsWith("workspace:")) queue.push(dependency);
+      }
+    }
+
+    const dockerfile = readFileSync(resolve(root, "Dockerfile.runner"), "utf8");
+    for (const name of required) {
+      const workspace = workspaces.get(name)!;
+      const source = relative(root, workspace.directory);
+      expect(dockerfile, `${name} must be present in the build context`).toMatch(
+        new RegExp(`^COPY ${source.replaceAll("/", "\\/")} \\.\\/${source.replaceAll("/", "\\/")}$`, "m"),
+      );
+    }
   });
 
   it("generates a deploy config from a source-bound qualified image receipt", () => {
