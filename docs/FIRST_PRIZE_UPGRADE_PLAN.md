@@ -11,7 +11,7 @@ The v5.1 scientific-engine registry gate is now implemented for the two
 released ML packs. Its exact non-root local candidate, licenses, integrity
 evidence, deterministic health runs, normalized SBOMs, raw vulnerability scan,
 reviewed exception evidence, and canonical authority hash pass the full local
-image gate as authority `bea6f1be77f8318f4694b0e9da028440983038d34001890719dcad2d96f210b4`.
+image gate as authority `382b21034b115199a5010019b43b13fc71648f6a12709c24af85d5bad44d820d`.
 Proof Bundle v2 binds and validates that authority hash. Production promotion
 remains pending until the qualified image is deployed and a new
 public smoke records it. See `docs/SCIENTIFIC_ENGINES.md` and

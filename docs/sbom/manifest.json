@@ -1,11 +1,11 @@
 {
   "schemaVersion": "1",
-  "generatedAt": "2026-07-16T01:04:06Z",
+  "generatedAt": "2026-07-16T02:47:42Z",
   "environmentId": "counterlab-runner-linux-amd64-v2",
   "environmentKind": "local_candidate",
-  "sourceCommit": "eaedf3ea083f29512f8a2db148f1f632582ec444",
-  "imageDigest": "sha256:25e04f049b1dff5220f12bf63d584246d225fc31a17d0c0cad21b4388da4ec61",
-  "registryHash": "3321bef11e39d50ef700d6d956f4cc8240e27dd72ab46405a3d70c16ea9c2df2",
+  "sourceCommit": "691ec9e837520fb026c9ff224b9eb4f74d89b34f",
+  "imageDigest": "sha256:9e4af342bf2eda15ffaff63105f85c0970188059ca9c05c74d44882efc226eb3",
+  "registryHash": "b87d793ab86f52c311763eacd0da9e7f09d181475f5b55684290418bdeaf59e8",
   "bindingsHash": "723009ad42eb0f030c045c051f5dd0b6a3997db37caac4932bc9587781e4c3b8",
   "documents": [
     {
@@ -18,7 +18,7 @@
       "sha256": "80981d7969b467915c73c061b0ea701e02ac05e1dc8b6197025b4cd1cb5d2b19",
       "generator": "pnpm 11.13.0 sbom --prod --sbom-format cyclonedx --sbom-spec-version 1.6",
       "toolLockPath": "pnpm-lock.yaml",
-      "toolLockSha256": "04362d10bd26798aa9638843471a1eb3f649d069f55513fcc841ca4ae072490f"
+      "toolLockSha256": "4844337587025a0dcf07da3f3b245998b274f168657d8c3a3da052c89d96baf3"
     },
     {
       "id": "python-sbom",
@@ -39,7 +39,7 @@
       "format": "CycloneDX",
       "specVersion": "1.6",
       "componentCount": 2839,
-      "sha256": "5fe9687409daed95408ce499fa812e96d043045eec73dfa92ba71133fbf6a7dc",
+      "sha256": "7b7d26b6de450edcb2304b3c08ca30c1c614a49ff798af300d9b1c28664bd955",
       "generator": "syft 1.44.0 counterlab-runner:engine-registry-v5 -o cyclonedx-json",
       "toolLockPath": "docs/sbom/tool-lock.json",
       "toolLockSha256": "a80b273e8da8691c1c8695c7ccd351612ffcf69c9abb80a7768973dd210cef75"

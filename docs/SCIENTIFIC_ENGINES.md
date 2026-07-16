@@ -33,12 +33,12 @@ operations, fields, versions, evidence IDs, or tolerance profiles fail closed.
 The recorded candidate is intentionally not labelled as production authority.
 
 - Environment: `counterlab-runner-linux-amd64-v2`
-- Source commit: `eaedf3ea083f29512f8a2db148f1f632582ec444`
+- Source commit: `691ec9e837520fb026c9ff224b9eb4f74d89b34f`
 - Image digest:
-  `sha256:25e04f049b1dff5220f12bf63d584246d225fc31a17d0c0cad21b4388da4ec61`
+  `sha256:9e4af342bf2eda15ffaff63105f85c0970188059ca9c05c74d44882efc226eb3`
 - Runtime user: `10001:10001`
 - Authority hash:
-  `bea6f1be77f8318f4694b0e9da028440983038d34001890719dcad2d96f210b4`
+  `382b21034b115199a5010019b43b13fc71648f6a12709c24af85d5bad44d820d`
 - Deterministic kernel hashes:
   - leakage: `a6ae7652e04e4d70196f991c63b8f7bcb3b76f8c4ab833d3ce2b626df0ab6c94`
   - imbalance: `5787e04aa59c2703336d35bf5e64935987b44029f47b833e9152dd7d5c97d0d4`
@@ -56,7 +56,7 @@ Three normalized CycloneDX 1.6 documents are committed:
 | -------------------------- | ---------: | ------------------------------------------------------------------ |
 | Production Node graph      |         19 | `80981d7969b467915c73c061b0ea701e02ac05e1dc8b6197025b4cd1cb5d2b19` |
 | Runner Python requirements |         22 | `24f1d2cf673e8ac7c45289d3fbbc900f609ca53430b4166597b493fac8debc54` |
-| Runner image filesystem    |      2,839 | `5fe9687409daed95408ce499fa812e96d043045eec73dfa92ba71133fbf6a7dc` |
+| Runner image filesystem    |      2,839 | `7b7d26b6de450edcb2304b3c08ca30c1c614a49ff798af300d9b1c28664bd955` |
 
 The Grype 0.112.0 scan is recorded in
 `docs/sbom/vulnerability-report.json`. Its database was built at
@@ -71,7 +71,7 @@ reachability probe over both hosted run and patch entrypoints. The VEX
 application proof changes Grype from 171 active findings to 170 active plus
 exactly one ignored finding; a wrong-subcomponent negative control suppresses
 zero findings. The CVE was not listed in the checked CISA KEV catalogue. This
-exception expires on `2026-08-14T00:59:41Z` and must be requalified when the
+exception expires on `2026-07-30T02:36:02Z` and must be requalified when the
 image, source, SBOM, Python/module bytes, entrypoints, scanner database, or
 vulnerability status changes.
 

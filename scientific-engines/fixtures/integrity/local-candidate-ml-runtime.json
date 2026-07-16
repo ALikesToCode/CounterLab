@@ -1,10 +1,10 @@
 {
   "schemaVersion": "1",
   "evidenceKind": "local-candidate-runtime-summary",
-  "capturedAt": "2026-07-16T01:04:06Z",
+  "capturedAt": "2026-07-16T02:51:18Z",
   "environmentId": "counterlab-runner-linux-amd64-v2",
-  "imageDigest": "sha256:25e04f049b1dff5220f12bf63d584246d225fc31a17d0c0cad21b4388da4ec61",
-  "sourceCommit": "eaedf3ea083f29512f8a2db148f1f632582ec444",
+  "imageDigest": "sha256:9e4af342bf2eda15ffaff63105f85c0970188059ca9c05c74d44882efc226eb3",
+  "sourceCommit": "691ec9e837520fb026c9ff224b9eb4f74d89b34f",
   "observedVersions": {
     "cpython": "3.13.14",
     "counterlab-fixed-ml-kernel": "0.1.0",
@@ -27,6 +27,6 @@
     "vexApplication": "PASSED",
     "boundedReachability": "PASSED"
   },
-  "status": "VERIFIED_LOCAL_CANDIDATE",
-  "nonClaim": "This local candidate is not recorded as the Cloudflare production image until deployment and production smoke complete."
+  "status": "SUPPORTING_OBSERVATION",
+  "nonClaim": "This convenience summary is not part of the canonical scientific-engine authority snapshot and is not release authority. The bound catalog, runtime manifest, exact-image gate, deployment record, and production smoke remain authoritative."
 }
