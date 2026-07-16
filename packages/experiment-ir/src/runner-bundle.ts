@@ -290,9 +290,10 @@ const RunnerLabRunExpectedHashesV5Schema = z
     beliefSpec: Sha256,
     prediction: Sha256,
     fixtureDescriptor: Sha256,
+    compileInputBundle: Sha256,
     rawExperimentIrFile: Sha256,
     rawExperimentIrCanonical: Sha256,
-    scientificVerification: Sha256,
+    candidateVerificationReport: Sha256,
     experimentSelection: Sha256,
     selectedExperimentIr: Sha256,
     projectedPlan: Sha256,
@@ -327,7 +328,8 @@ export const RunnerLabRunBundleV5Schema = z
     provenance: z
       .object({
         compileJobId: NonEmptyString,
-        compilerArtifactHashes: z
+        compileInputBundleHash: Sha256,
+        compilerOutputFileHashes: z
           .object({
             "discrimination-contract.json": Sha256,
             "experiment-ir.json": Sha256,
@@ -339,7 +341,7 @@ export const RunnerLabRunBundleV5Schema = z
         scientificVerifierVersion: z.literal(
           "scientific-candidate-verifier-v1",
         ),
-        scientificVerificationHash: Sha256,
+        candidateVerificationReportHash: Sha256,
         scorerVersion: TokenId,
         projectionAdapterVersion: z.literal("experiment-ir-v5-to-plan-v2-v1"),
       })
@@ -539,12 +541,21 @@ export const RunnerLabRunBundleV5Schema = z
       ]);
     }
     if (
-      bundle.provenance.compilerArtifactHashes["experiment-ir.json"] !==
+      bundle.provenance.compileInputBundleHash !==
+      bundle.expectedHashes.compileInputBundle
+    ) {
+      addLineageIssue("compile input bundle hash lineage does not match", [
+        "provenance",
+        "compileInputBundleHash",
+      ]);
+    }
+    if (
+      bundle.provenance.compilerOutputFileHashes["experiment-ir.json"] !==
       bundle.expectedHashes.rawExperimentIrFile
     ) {
       addLineageIssue(
         "raw compiled Experiment IR hash lineage does not match",
-        ["provenance", "compilerArtifactHashes", "experiment-ir.json"],
+        ["provenance", "compilerOutputFileHashes", "experiment-ir.json"],
       );
     }
     if (
@@ -557,12 +568,12 @@ export const RunnerLabRunBundleV5Schema = z
       );
     }
     if (
-      bundle.provenance.scientificVerificationHash !==
-      bundle.expectedHashes.scientificVerification
+      bundle.provenance.candidateVerificationReportHash !==
+      bundle.expectedHashes.candidateVerificationReport
     ) {
       addLineageIssue("scientific verification hash lineage does not match", [
         "provenance",
-        "scientificVerificationHash",
+        "candidateVerificationReportHash",
       ]);
     }
 

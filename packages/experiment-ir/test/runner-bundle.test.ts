@@ -293,9 +293,10 @@ function labRunBundleV5() {
     beliefSpec: compile.beliefSpecHash,
     prediction: compile.prediction.immutableHash,
     fixtureDescriptor: digest("7"),
+    compileInputBundle: digest("b"),
     rawExperimentIrFile: digest("0"),
     rawExperimentIrCanonical: digest("a"),
-    scientificVerification: digest("9"),
+    candidateVerificationReport: digest("9"),
     experimentSelection: digest("2"),
     selectedExperimentIr: digest("1"),
     projectedPlan: digest("3"),
@@ -325,7 +326,8 @@ function labRunBundleV5() {
     expectedHashes,
     provenance: {
       compileJobId: compile.jobId,
-      compilerArtifactHashes: {
+      compileInputBundleHash: expectedHashes.compileInputBundle,
+      compilerOutputFileHashes: {
         "discrimination-contract.json": digest("4"),
         "experiment-ir.json": expectedHashes.rawExperimentIrFile,
         "lab-scene.json": digest("5"),
@@ -334,7 +336,8 @@ function labRunBundleV5() {
       rawExperimentIrCanonicalHash:
         expectedHashes.rawExperimentIrCanonical,
       scientificVerifierVersion: "scientific-candidate-verifier-v1" as const,
-      scientificVerificationHash: expectedHashes.scientificVerification,
+      candidateVerificationReportHash:
+        expectedHashes.candidateVerificationReport,
       scorerVersion: fixedSelection.scorerVersion,
       projectionAdapterVersion: "experiment-ir-v5-to-plan-v2-v1" as const,
     },
@@ -616,8 +619,8 @@ describe("Runner LAB_RUN bundle v5", () => {
         ...source,
         provenance: {
           ...source.provenance,
-          compilerArtifactHashes: {
-            ...source.provenance.compilerArtifactHashes,
+          compilerOutputFileHashes: {
+            ...source.provenance.compilerOutputFileHashes,
             "experiment-ir.json": source.expectedHashes.selectedExperimentIr,
           },
         },
@@ -628,7 +631,7 @@ describe("Runner LAB_RUN bundle v5", () => {
         ...source,
         provenance: {
           ...source.provenance,
-          scientificVerificationHash: digest("0"),
+          candidateVerificationReportHash: digest("0"),
         },
       }).success,
     ).toBe(false);

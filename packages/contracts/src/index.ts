@@ -1876,6 +1876,7 @@ export const HostedPlanLineageV2Schema = z
 
 export const HostedExperimentLineageV5Schema = z
   .object({
+    schemaVersion: z.literal("5"),
     status: z.literal("VERIFIED"),
     source: z.literal("hosted-experiment-ir-v5"),
     jobId: NonEmptyString,
@@ -1883,7 +1884,7 @@ export const HostedExperimentLineageV5Schema = z
     artifactManifestHash: Sha256Schema,
     beliefSpecHash: Sha256Schema,
     predictionHash: Sha256Schema,
-    compilerArtifactHashes: z
+    compilerOutputFileHashes: z
       .object({
         "discrimination-contract.json": Sha256Schema,
         "experiment-ir.json": Sha256Schema,
@@ -1894,7 +1895,7 @@ export const HostedExperimentLineageV5Schema = z
     discriminationContractHash: Sha256Schema,
     rawExperimentIrCanonicalHash: Sha256Schema,
     labSceneHash: Sha256Schema,
-    scientificVerificationHash: Sha256Schema,
+    candidateVerificationReportHash: Sha256Schema,
     scientificVerifierVersion: z.literal(
       "scientific-candidate-verifier-v1",
     ),

@@ -668,13 +668,14 @@ describe("hosted runner contracts", () => {
   it("separates legacy hosted plans from v5 fixed scientific authority", () => {
     const lineage = HostedLabLineageSchema.parse({
       status: "VERIFIED",
+      schemaVersion: "5",
       source: "hosted-experiment-ir-v5",
       jobId: "runner_job_compile_v5_1",
       inputBundleHash: "0".repeat(64),
       artifactManifestHash: "1".repeat(64),
       beliefSpecHash: "2".repeat(64),
       predictionHash: "3".repeat(64),
-      compilerArtifactHashes: {
+      compilerOutputFileHashes: {
         "discrimination-contract.json": "4".repeat(64),
         "experiment-ir.json": "5".repeat(64),
         "lab-scene.json": "6".repeat(64),
@@ -683,7 +684,7 @@ describe("hosted runner contracts", () => {
       discriminationContractHash: "8".repeat(64),
       rawExperimentIrCanonicalHash: "9".repeat(64),
       labSceneHash: "a".repeat(64),
-      scientificVerificationHash: "b".repeat(64),
+      candidateVerificationReportHash: "b".repeat(64),
       scientificVerifierVersion: "scientific-candidate-verifier-v1",
       selectionHash: "c".repeat(64),
       selectedExperimentIrHash: "d".repeat(64),
