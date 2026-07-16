@@ -30,6 +30,7 @@ import {
   ExperimentIRV5Schema,
   RunnerScientificCandidateV5Schema,
   VersionedRunnerJobInputBundleSchema,
+  hashExperimentIR,
   type RunnerLabCompileBundleV5,
   type RunnerBoundaryMapBundleV5,
   type RunnerLabInteractiveRunBundleV5,
@@ -38,7 +39,12 @@ import {
   type RunnerScientificCandidateV5,
   type VersionedRunnerJobInputBundle,
 } from "@counterlab/experiment-ir";
-import { LabSceneV2Schema } from "@counterlab/generative-ui-contracts";
+import {
+  LabSceneDraftV2Schema,
+  LabSceneV2Schema,
+  type LabSceneV2,
+} from "@counterlab/generative-ui-contracts";
+import { hashCanonical } from "@counterlab/session-core";
 
 const PLAN_PATH = "experiment-plan.json";
 const PATCH_PLAN_PATH = "patch-plan.json";
@@ -141,6 +147,42 @@ type DelegatedJobProgress = {
   cursor: number;
   outputHashes: string[];
 };
+
+async function projectSceneAuthority(
+  scene: LabSceneV2,
+  bundle: RunnerLabCompileBundleV5,
+  discriminationContract: Record<string, unknown>,
+  experimentIr: Record<string, unknown>,
+): Promise<LabSceneV2> {
+  const contract = DiscriminationContractV1Schema.parse(discriminationContract);
+  const ir = ExperimentIRV5Schema.parse(experimentIr);
+  const { provenance: _provenance, ...draft } = scene;
+  LabSceneDraftV2Schema.parse(draft);
+  const blocks = scene.blocks.map((block) => {
+    if (block.type === "Hypothesis") {
+      return {
+        ...block,
+        current: bundle.approvedBeliefSpec.hypotheses[0].statement,
+        competing: bundle.approvedBeliefSpec.hypotheses[1].statement,
+      };
+    }
+    if (block.type === "WhyThisTest") {
+      return { ...block, text: contract.whyThisTest };
+    }
+    return block;
+  });
+  return LabSceneV2Schema.parse({
+    ...scene,
+    sessionId: bundle.sessionId,
+    concept: bundle.conceptPack.id,
+    supportLabel: "GUIDED_VISUAL",
+    blocks,
+    provenance: {
+      discriminationContractHash: await hashCanonical(contract),
+      experimentIrHash: await hashExperimentIR(ir),
+    },
+  });
+}
 
 function emptyOperationalMetrics(): RunnerOperationalMetrics {
   return {
@@ -798,6 +840,7 @@ export class HostedRunnerJobProcessor {
       jobId,
       progress.cursor,
       generationDirectory,
+      bundle,
       signal,
       progress,
     );
@@ -861,6 +904,7 @@ export class HostedRunnerJobProcessor {
         jobId,
         progress.cursor,
         generationDirectory,
+        bundle,
         signal,
         progress,
       );
@@ -922,6 +966,7 @@ export class HostedRunnerJobProcessor {
     jobId: string,
     initialCursor: number,
     directory: string,
+    bundle: RunnerLabCompileBundleV5,
     signal?: AbortSignal,
     progress?: DelegatedJobProgress,
   ): Promise<{
@@ -951,7 +996,6 @@ export class HostedRunnerJobProcessor {
 
     let cursor = initialCursor;
     const bodies = new Map<string, string>();
-    const hashes: Partial<RunnerScientificCandidateV5["artifactHashes"]> = {};
     for (const path of SCIENTIFIC_OUTPUT_PATHS) {
       throwIfCancelled(signal);
       const absolutePath = join(directory, path);
@@ -973,6 +1017,63 @@ export class HostedRunnerJobProcessor {
       }
       const body = await readFile(absolutePath, "utf8");
       bodies.set(path, body);
+    }
+
+    let discriminationContract: Record<string, unknown>;
+    let experimentIr: Record<string, unknown>;
+    let labScene: LabSceneV2;
+    try {
+      discriminationContract = DiscriminationContractV1Schema.parse(
+        JSON.parse(bodies.get(DISCRIMINATION_CONTRACT_PATH) ?? ""),
+      );
+      experimentIr = ExperimentIRV5Schema.parse(
+        JSON.parse(bodies.get(EXPERIMENT_IR_PATH) ?? ""),
+      );
+      labScene = await projectSceneAuthority(
+        LabSceneV2Schema.parse(JSON.parse(bodies.get(LAB_SCENE_PATH) ?? "")),
+        bundle,
+        discriminationContract,
+        experimentIr,
+      );
+    } catch {
+      throw new RunnerProcessingError(
+        "SCIENTIFIC_OUTPUT_INVALID",
+        "The generated scientific artifacts failed local schema validation.",
+        false,
+      );
+    }
+    const projectedSceneBody = JSON.stringify(labScene);
+    if (
+      new TextEncoder().encode(projectedSceneBody).byteLength > MAX_PLAN_BYTES
+    ) {
+      throw new RunnerProcessingError(
+        "SCIENTIFIC_OUTPUT_INVALID",
+        "The projected Lab Scene exceeded the bounded output limit.",
+        false,
+      );
+    }
+    bodies.set(LAB_SCENE_PATH, projectedSceneBody);
+    const rationale = bodies.get(RATIONALE_PATH) ?? "";
+    if (
+      rationale.trim().length === 0 ||
+      /<\s*(?:script|iframe)|javascript:/iu.test(rationale)
+    ) {
+      throw new RunnerProcessingError(
+        "SCIENTIFIC_OUTPUT_INVALID",
+        "The public rationale failed the display-only content policy.",
+        false,
+      );
+    }
+    const hashes: Partial<RunnerScientificCandidateV5["artifactHashes"]> = {};
+    for (const path of SCIENTIFIC_OUTPUT_PATHS) {
+      const body = bodies.get(path);
+      if (body === undefined) {
+        throw new RunnerProcessingError(
+          "SCIENTIFIC_OUTPUT_INVALID",
+          `The generated ${path} was missing after local validation.`,
+          false,
+        );
+      }
       const uploaded = await this.authorityCall(signal, () =>
         this.options.controlPlane.upload(path, body, signal),
       );
@@ -984,38 +1085,6 @@ export class HostedRunnerJobProcessor {
         signal,
       );
       if (progress !== undefined) progress.cursor = cursor;
-    }
-
-    let discriminationContract: Record<string, unknown>;
-    let experimentIr: Record<string, unknown>;
-    let labScene: Record<string, unknown>;
-    try {
-      discriminationContract = DiscriminationContractV1Schema.parse(
-        JSON.parse(bodies.get(DISCRIMINATION_CONTRACT_PATH) ?? ""),
-      );
-      experimentIr = ExperimentIRV5Schema.parse(
-        JSON.parse(bodies.get(EXPERIMENT_IR_PATH) ?? ""),
-      );
-      labScene = LabSceneV2Schema.parse(
-        JSON.parse(bodies.get(LAB_SCENE_PATH) ?? ""),
-      );
-    } catch {
-      throw new RunnerProcessingError(
-        "SCIENTIFIC_OUTPUT_INVALID",
-        "The generated scientific artifacts failed local schema validation.",
-        false,
-      );
-    }
-    const rationale = bodies.get(RATIONALE_PATH) ?? "";
-    if (
-      rationale.trim().length === 0 ||
-      /<\s*(?:script|iframe)|javascript:/iu.test(rationale)
-    ) {
-      throw new RunnerProcessingError(
-        "SCIENTIFIC_OUTPUT_INVALID",
-        "The public rationale failed the display-only content policy.",
-        false,
-      );
     }
     const outputHashByPath = RunnerScientificCandidateV5Schema.parse({
       schemaVersion: "5",

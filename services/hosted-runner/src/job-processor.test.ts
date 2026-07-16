@@ -1245,6 +1245,171 @@ describe("HostedRunnerJobProcessor", () => {
     ]);
   });
 
+  it("projects display-only scene authority before publishing the candidate", async () => {
+    const bundleV5 = scientificBundleV5();
+    const artifacts = await scientificArtifacts();
+    artifacts.labScene = LabSceneV2Schema.parse({
+      ...artifacts.labScene,
+      sessionId: "model-authored-session",
+      concept: "class_imbalance",
+      supportLabel: "EXPLANATION_ONLY",
+      blocks: [
+        {
+          id: "hypotheses",
+          type: "Hypothesis",
+          current: "A paraphrase of the learner's current model.",
+          competing: "A paraphrase of the competing model.",
+        },
+        {
+          id: "why",
+          type: "WhyThisTest",
+          text: "A plausible but non-authoritative explanation.",
+        },
+        {
+          id: "scope",
+          type: "Limitation",
+          text: "This layout note must be preserved.",
+        },
+      ],
+      provenance: {
+        discriminationContractHash: "a".repeat(64),
+        experimentIrHash: "b".repeat(64),
+      },
+    });
+    const controlPlane = new FakeControlPlane(bundleV5, [verifiedDecision]);
+    const processor = new HostedRunnerJobProcessor({
+      workspaceRoot: await workspace(),
+      compiler: new FakeCompiler({ schemaVersion: "2" }),
+      scientificCompiler: new FakeScientificCompiler(artifacts),
+      controlPlane,
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_scene_projection`,
+    });
+
+    await processor.run("runner_job_scientific_1");
+
+    const published = LabSceneV2Schema.parse(
+      JSON.parse(controlPlane.uploads.get("lab-scene.json") ?? ""),
+    );
+    expect(published).toMatchObject({
+      sessionId: bundleV5.sessionId,
+      concept: bundleV5.conceptPack.id,
+      supportLabel: "GUIDED_VISUAL",
+      provenance: {
+        discriminationContractHash: await hashCanonical(
+          artifacts.discriminationContract,
+        ),
+        experimentIrHash: await hashExperimentIR(artifacts.experimentIr),
+      },
+    });
+    expect(published.blocks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "Hypothesis",
+          current: bundleV5.approvedBeliefSpec.hypotheses[0].statement,
+          competing: bundleV5.approvedBeliefSpec.hypotheses[1].statement,
+        }),
+        expect.objectContaining({
+          type: "WhyThisTest",
+          text: artifacts.discriminationContract.whyThisTest,
+        }),
+      ]),
+    );
+    expect(published.blocks.map((block) => block.id)).toEqual([
+      "hypotheses",
+      "why",
+      "scope",
+    ]);
+    expect(published.blocks[2]).toEqual({
+      id: "scope",
+      type: "Limitation",
+      text: "This layout note must be preserved.",
+    });
+  });
+
+  it("rejects model-authored scene proof authority before any output upload", async () => {
+    const artifacts = await scientificArtifacts();
+    artifacts.labScene = LabSceneV2Schema.parse({
+      ...artifacts.labScene,
+      supportLabel: "VERIFIED_TEST",
+      blocks: [
+        ...artifacts.labScene.blocks,
+        {
+          id: "proof",
+          type: "ProofBadge",
+          label: "Model claimed this was verified",
+          proofBinding: "/proof/model-claim",
+        },
+      ],
+    });
+    const controlPlane = new FakeControlPlane(scientificBundleV5(), []);
+    const processor = new HostedRunnerJobProcessor({
+      workspaceRoot: await workspace(),
+      compiler: new FakeCompiler({ schemaVersion: "2" }),
+      scientificCompiler: new FakeScientificCompiler(artifacts),
+      controlPlane,
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_scene_proof_rejected`,
+    });
+
+    await processor.run("runner_job_scientific_1");
+
+    expect(controlPlane.uploads.size).toBe(0);
+    expect(controlPlane.events.map((event) => event.kind)).toEqual([
+      "job.started",
+      "plan.summary",
+    ]);
+    expect(controlPlane.callbacks).toEqual([
+      expect.objectContaining({
+        status: "FAILED",
+        finalEventCursor: 2,
+        outputHashes: [],
+        error: expect.objectContaining({ code: "SCIENTIFIC_OUTPUT_INVALID" }),
+      }),
+    ]);
+  });
+
+  it("rejects unsafe public rationale before any scientific output upload", async () => {
+    const scientificCompiler = new FakeScientificCompiler(
+      await scientificArtifacts(),
+    );
+    const compile =
+      scientificCompiler.compileScientificMethod.bind(scientificCompiler);
+    scientificCompiler.compileScientificMethod = async function* (input) {
+      for await (const event of compile(input)) yield event;
+      await writeFile(
+        join(input.generationDirectory, "public-rationale.md"),
+        '<script src="https://example.invalid/unsafe.js"></script>',
+        "utf8",
+      );
+    };
+    const controlPlane = new FakeControlPlane(scientificBundleV5(), []);
+    const processor = new HostedRunnerJobProcessor({
+      workspaceRoot: await workspace(),
+      compiler: new FakeCompiler({ schemaVersion: "2" }),
+      scientificCompiler,
+      controlPlane,
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_unsafe_rationale`,
+    });
+
+    await processor.run("runner_job_scientific_1");
+
+    expect(controlPlane.uploads.size).toBe(0);
+    expect(controlPlane.events.map((event) => event.kind)).toEqual([
+      "job.started",
+      "plan.summary",
+    ]);
+    expect(controlPlane.callbacks).toEqual([
+      expect.objectContaining({
+        status: "FAILED",
+        finalEventCursor: 2,
+        outputHashes: [],
+        error: expect.objectContaining({ code: "SCIENTIFIC_OUTPUT_INVALID" }),
+      }),
+    ]);
+  });
+
   it("repairs a rejected v5 candidate using only structured counterexamples", async () => {
     const scientificCompiler = new FakeScientificCompiler(
       await scientificArtifacts(),
@@ -1333,10 +1498,7 @@ describe("HostedRunnerJobProcessor", () => {
       expect.objectContaining({
         status: "REJECTED",
         finalEventCursor: 30,
-        outputHashes: expect.arrayContaining([
-          "f".repeat(64),
-          "1".repeat(64),
-        ]),
+        outputHashes: expect.arrayContaining(["f".repeat(64), "1".repeat(64)]),
         error: {
           code: "SCIENTIFIC_METHOD_VERIFIER_REJECTED",
           message:
