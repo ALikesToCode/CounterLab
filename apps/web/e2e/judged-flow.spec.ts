@@ -315,6 +315,15 @@ async function recordRevision(page: Page) {
   ).toBeVisible();
 }
 
+async function waitForSamplePatch(page: Page) {
+  await expect(
+    page.getByRole("heading", { name: /You found the hidden shortcut/i }),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(
+    page.getByRole("heading", { name: /Your learning, before and after/i }),
+  ).toBeVisible();
+}
+
 async function waitForVerifiedLiveCompile(page: Page) {
   const verified = page.getByRole("heading", {
     name: /The fair test passed its checks/i,
@@ -504,9 +513,7 @@ test("Try Instantly persists the verified learning loop and exports a valid proo
     page.locator(".eyebrow", { hasText: "Transfer passed" }),
   ).toBeVisible();
   await page.getByRole("button", { name: /Verify notebook patch/i }).click();
-  await expect(
-    page.getByRole("heading", { name: /Your learning, before and after/i }),
-  ).toBeVisible();
+  await waitForSamplePatch(page);
 
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: /Download proof/i }).click();
@@ -568,9 +575,7 @@ test("the lesson keeps one learner decision in focus at a time", async ({
   ).toHaveCount(0);
 
   await page.getByRole("button", { name: /Verify notebook patch/i }).click();
-  await expect(
-    page.getByRole("heading", { name: /Your learning, before and after/i }),
-  ).toBeVisible();
+  await waitForSamplePatch(page);
   expect(await page.evaluate(() => window.scrollY)).toBeLessThan(24);
   await expect(page.locator("pre.diff")).not.toBeVisible();
   await expect(
@@ -897,9 +902,7 @@ test("the judged path is keyboard operable with reduced motion", async ({
 
   await page.getByRole("button", { name: /Verify notebook patch/i }).focus();
   await page.keyboard.press("Enter");
-  await expect(
-    page.getByRole("heading", { name: /Your learning, before and after/i }),
-  ).toBeVisible();
+  await waitForSamplePatch(page);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
