@@ -20,7 +20,11 @@ import {
 import { hashCanonical } from "@counterlab/session-core";
 
 import { evaluateVerifiedEpistemicEvidence } from "./epistemic.js";
-import { verifyEpistemicEvidence, verifyHostedResultSet } from "./index.js";
+import {
+  EpistemicVerificationReportV1Schema,
+  verifyEpistemicEvidence,
+  verifyHostedResultSet,
+} from "./index.js";
 
 const digest = (character: string) => character.repeat(64);
 
@@ -423,6 +427,14 @@ describe("epistemic verifier authority", () => {
 
     expect(report.status).toBe("VERIFIED");
     expect(report.findings).toEqual([]);
+    expect(report).toHaveProperty("technicalReport", {
+      schemaVersion: "1",
+      status: "VERIFIED",
+      verifierVersion: "hosted-result-verifier-v1",
+      resultHash: report.resultHash,
+      invariantCount: expect.any(Number),
+      invariants: expect.any(Array),
+    });
     expect(report.verdict).toMatchObject({
       kind: "SUPPORTS",
       hypothesisId: "competing",
@@ -448,6 +460,13 @@ describe("epistemic verifier authority", () => {
         }),
       ]),
     );
+    expect(EpistemicVerificationReportV1Schema.parse(report)).toEqual(report);
+    expect(() =>
+      EpistemicVerificationReportV1Schema.parse({
+        ...report,
+        technicalReportHash: digest("0"),
+      }),
+    ).toThrow(/authority/i);
   });
 
   it("derives a real inconclusive verdict from a between-pattern kernel result", async () => {

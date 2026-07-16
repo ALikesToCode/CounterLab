@@ -38,7 +38,7 @@ export const EpistemicPresentationV1Schema = z
   })
   .strict();
 
-const TechnicalInvariantSchema = z
+export const TechnicalInvariantSchema = z
   .object({
     name: z.string().trim().min(1),
     passed: z.boolean(),
@@ -48,7 +48,7 @@ const TechnicalInvariantSchema = z
   })
   .strict();
 
-const TechnicalResultVerificationReportSchema = z
+export const TechnicalResultVerificationReportSchema = z
   .object({
     schemaVersion: z.literal("1"),
     status: z.enum(["VERIFIED", "REJECTED"]),
@@ -78,29 +78,95 @@ const TechnicalResultVerificationReportSchema = z
     }
   });
 
-export type EpistemicFinding = {
-  id: string;
-  code: EpistemicFindingCode;
-  message: string;
-  observed: unknown;
-  expected: unknown;
-  counterexample?: string;
-};
+export const EpistemicFindingSchema = z
+  .object({
+    id: z.string().trim().min(1),
+    code: EpistemicFindingCodeSchema,
+    message: z.string().trim().min(1),
+    observed: z.unknown(),
+    expected: z.unknown(),
+    counterexample: z.string().optional(),
+  })
+  .strict();
 
-export type EpistemicVerificationReport = {
-  schemaVersion: "1";
-  status: "VERIFIED" | "REJECTED";
-  verifierVersion: string;
-  policyVersion: string;
-  classifierId: string;
-  irHash: string;
-  technicalReportHash: string;
-  resultHash?: string;
-  findingCount: number;
-  findings: EpistemicFinding[];
-  observation?: EpistemicObservationV1;
-  verdict: EvidenceVerdict;
-};
+export const EpistemicVerificationReportV1Schema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    status: z.enum(["VERIFIED", "REJECTED"]),
+    verifierVersion: z.string().trim().min(1),
+    policyVersion: z.string().trim().min(1),
+    classifierId: z.string().trim().min(1),
+    irHash: Sha256Schema,
+    technicalReportHash: Sha256Schema,
+    technicalReport: TechnicalResultVerificationReportSchema,
+    resultHash: Sha256Schema.optional(),
+    findingCount: z.number().int().nonnegative(),
+    findings: z.array(EpistemicFindingSchema),
+    observation: EpistemicObservationV1Schema.optional(),
+    verdict: EvidenceVerdictSchema,
+  })
+  .strict()
+  .superRefine((report, context) => {
+    if (report.findingCount !== report.findings.length) {
+      context.addIssue({
+        code: "custom",
+        message: "epistemic finding count does not match report contents",
+        path: ["findingCount"],
+      });
+    }
+    if (
+      report.verdict.irHash !== report.irHash ||
+      report.verdict.technicalReportHash !== report.technicalReportHash ||
+      report.verdict.verifierVersion !== report.verifierVersion
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Evidence Verdict authority does not match its report",
+        path: ["verdict"],
+      });
+    }
+    if (report.status === "VERIFIED") {
+      if (
+        report.findings.length !== 0 ||
+        report.observation === undefined ||
+        report.resultHash === undefined ||
+        report.verdict.kind === "REJECTED" ||
+        report.technicalReport.status !== "VERIFIED" ||
+        report.technicalReport.resultHash !== report.resultHash ||
+        report.verdict.resultHash !== report.resultHash
+      ) {
+        context.addIssue({
+          code: "custom",
+          message:
+            "verified epistemic report has inconsistent release authority",
+          path: ["status"],
+        });
+      }
+      return;
+    }
+    if (
+      report.findings.length === 0 ||
+      report.observation !== undefined ||
+      report.resultHash !== undefined ||
+      report.verdict.kind !== "REJECTED" ||
+      report.verdict.resultReleased !== false ||
+      JSON.stringify(report.verdict.findingIds) !==
+        JSON.stringify(report.findings.map((finding) => finding.id))
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "rejected epistemic report has inconsistent no-release authority",
+        path: ["status"],
+      });
+    }
+  });
+
+export type EpistemicFinding = z.infer<typeof EpistemicFindingSchema>;
+
+export type EpistemicVerificationReport = z.infer<
+  typeof EpistemicVerificationReportV1Schema
+>;
 
 export interface EvaluateVerifiedEpistemicEvidenceInput {
   artifactManifest: unknown;
@@ -371,6 +437,7 @@ export async function evaluateVerifiedEpistemicEvidence(
     return rejectedReport({
       irHash,
       technicalReportHash,
+      technicalReport,
       policyVersion: policy.policyVersion,
       verifierVersion: policy.verifierVersion,
       classifierId: policy.classifierId,
@@ -394,7 +461,7 @@ export async function evaluateVerifiedEpistemicEvidence(
     observation,
     policy.verifierVersion,
   );
-  return {
+  return EpistemicVerificationReportV1Schema.parse({
     schemaVersion: "1",
     status: "VERIFIED",
     verifierVersion: policy.verifierVersion,
@@ -402,12 +469,13 @@ export async function evaluateVerifiedEpistemicEvidence(
     classifierId: policy.classifierId,
     irHash,
     technicalReportHash,
+    technicalReport,
     resultHash: result.resultHash,
     findingCount: 0,
     findings: [],
     observation,
     verdict,
-  };
+  });
 }
 
 export async function technicalFailureEpistemicReport(
@@ -423,6 +491,7 @@ export async function technicalFailureEpistemicReport(
   return rejectedReport({
     irHash,
     technicalReportHash,
+    technicalReport,
     policyVersion: policy.policyVersion,
     verifierVersion: policy.verifierVersion,
     classifierId: policy.classifierId,
@@ -444,6 +513,7 @@ export async function technicalFailureEpistemicReport(
 function rejectedReport(input: {
   irHash: string;
   technicalReportHash: string;
+  technicalReport: z.infer<typeof TechnicalResultVerificationReportSchema>;
   policyVersion: string;
   verifierVersion: string;
   classifierId: string;
@@ -458,7 +528,7 @@ function rejectedReport(input: {
     technicalReportHash: input.technicalReportHash,
     verifierVersion: input.verifierVersion,
   });
-  return {
+  return EpistemicVerificationReportV1Schema.parse({
     schemaVersion: "1",
     status: "REJECTED",
     verifierVersion: input.verifierVersion,
@@ -466,10 +536,11 @@ function rejectedReport(input: {
     classifierId: input.classifierId,
     irHash: input.irHash,
     technicalReportHash: input.technicalReportHash,
+    technicalReport: input.technicalReport,
     findingCount: input.findings.length,
     findings: input.findings,
     verdict,
-  };
+  });
 }
 
 function verifyFixedSelection(

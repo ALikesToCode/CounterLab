@@ -449,6 +449,14 @@ describe("class-imbalance epistemic authority", () => {
       kind: "REJECTED",
       resultReleased: false,
     });
+    expect(report).toHaveProperty("technicalReport", {
+      schemaVersion: "1",
+      status: "REJECTED",
+      verifierVersion: "hosted-result-verifier-v1",
+      resultHash: tampered.resultHash,
+      invariantCount: expect.any(Number),
+      invariants: expect.any(Array),
+    });
     expect("resultHash" in report).toBe(false);
     expect("observation" in report).toBe(false);
   });

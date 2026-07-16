@@ -21,6 +21,7 @@ import {
 import { hashCanonical } from "@counterlab/session-core";
 
 import {
+  EpistemicVerificationReportV1Schema,
   EpistemicPresentationV1Schema,
   evaluateVerifiedEpistemicEvidence,
   technicalFailureEpistemicReport,
@@ -29,7 +30,7 @@ import {
 
 export * from "./scientific-candidate.js";
 
-export { EpistemicPresentationV1Schema };
+export { EpistemicPresentationV1Schema, EpistemicVerificationReportV1Schema };
 export type {
   EpistemicFinding,
   EpistemicVerificationReport,
