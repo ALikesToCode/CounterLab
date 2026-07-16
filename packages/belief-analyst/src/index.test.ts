@@ -556,10 +556,19 @@ describe("LiveBeliefAnalyst", () => {
       claim,
       learnerDecision: "UNDECIDED",
       hypotheses: [
-        { id: "current", supportedCandidateExperimentIds: ["group-holdout"] },
+        {
+          id: "current",
+          supportedCandidateExperimentIds: [
+            "group-holdout",
+            "group-holdout-plus-ablation",
+          ],
+        },
         {
           id: "competing",
-          supportedCandidateExperimentIds: ["group-holdout-plus-ablation"],
+          supportedCandidateExperimentIds: [
+            "group-holdout",
+            "group-holdout-plus-ablation",
+          ],
         },
       ],
     });
@@ -576,6 +585,9 @@ describe("LiveBeliefAnalyst", () => {
     });
     expect(transport.request?.instructions).toBe(
       BELIEF_SPEC_ANALYST_INSTRUCTIONS,
+    );
+    expect(transport.request?.instructions).toContain(
+      "CounterLab binds the same pack-owned candidate experiment IDs to both primary hypotheses",
     );
     expect(JSON.parse(transport.request!.input)).toMatchObject({
       conceptPack: {

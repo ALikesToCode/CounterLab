@@ -43,7 +43,7 @@ ${conceptInstructions}`;
 
 export const BELIEF_SPEC_ANALYST_INSTRUCTIONS = `You are CounterLab's reasoning analyst. Propose two meaningfully different models of the learner's claim using only the sanitized artifact evidence and the selected Concept Pack below. Do not execute code, invent results, grade mastery, choose for the learner, or decide verification.
 
-Every evidence item must copy an exact supplied hash. Use null for an inapplicable cellIndex or outputIndex. Hypothesis and alternative evidence must be selected from the top-level evidenceRefs. Candidate experiment IDs must come only from the selected Concept Pack's candidateExperimentIds. State explicit conditions and at least one non-claim for each hypothesis. supportState describes readiness to run a discriminating experiment, not whether either hypothesis is already proven. Unknown experimental outcomes belong in conditions, non-claims, and uncertainty. Return SUPPORTED when the supplied supported artifact evidence can frame two candidate-linked hypotheses. If the evidence cannot support a discriminating experiment, return INSUFFICIENT_EVIDENCE with empty evidence and candidate lists. CounterLab will bind the original claim, concept, identifier, support readiness, and UNDECIDED learner state after local validation.
+Every evidence item must copy an exact supplied hash. Use null for an inapplicable cellIndex or outputIndex. Hypothesis and alternative evidence must be selected from the top-level evidenceRefs. Candidate experiment IDs must come only from the selected Concept Pack's candidateExperimentIds. CounterLab binds the same pack-owned candidate experiment IDs to both primary hypotheses after validating the proposal, because a discriminating experiment must evaluate predictions under both hypotheses. State explicit conditions and at least one non-claim for each hypothesis. supportState describes readiness to run a discriminating experiment, not whether either hypothesis is already proven. Unknown experimental outcomes belong in conditions, non-claims, and uncertainty. Return SUPPORTED when the supplied supported artifact evidence can frame two candidate-linked hypotheses. If the evidence cannot support a discriminating experiment, return INSUFFICIENT_EVIDENCE with empty evidence and candidate lists. CounterLab will bind the original claim, concept, identifier, support readiness, and UNDECIDED learner state after local validation.
 
 ${conceptInstructions}`;
 
@@ -618,7 +618,27 @@ function fromBeliefSpecWire(
     ...hypothesis,
     evidence: hypothesis.evidence.map(withoutNullableIndexes),
   });
+  const registeredCandidateIds = [
+    ...getConceptPack(input.concept).scientificMethod.candidateExperimentIds,
+  ];
+  const allowedCandidateIds = new Set(registeredCandidateIds);
+  for (const hypothesis of [
+    ...wire.data.hypotheses,
+    ...wire.data.alternatives,
+  ]) {
+    for (const candidateId of hypothesis.supportedCandidateExperimentIds) {
+      if (!allowedCandidateIds.has(candidateId)) {
+        throw new BeliefAnalystError(
+          "INVALID_RESPONSE",
+          `the model response used an unregistered candidate experiment: ${candidateId}`,
+          { candidateId },
+        );
+      }
+    }
+  }
   const evidenceRefs = wire.data.evidenceRefs.map(withoutNullableIndexes);
+  const insufficientEvidence =
+    wire.data.supportState === "INSUFFICIENT_EVIDENCE";
   const candidate = {
     schemaVersion: "2" as const,
     id: `belief_${hashJson({
@@ -633,7 +653,12 @@ function fromBeliefSpecWire(
     concept: input.concept,
     claim: input.learnerClaim,
     evidenceRefs,
-    hypotheses: wire.data.hypotheses.map(mapHypothesis),
+    hypotheses: wire.data.hypotheses.map((hypothesis) => ({
+      ...mapHypothesis(hypothesis),
+      supportedCandidateExperimentIds: insufficientEvidence
+        ? []
+        : [...registeredCandidateIds],
+    })),
     alternatives: wire.data.alternatives.map((alternative) => ({
       ...alternative,
       evidence: alternative.evidence.map(withoutNullableIndexes),
@@ -658,22 +683,6 @@ function fromBeliefSpecWire(
       "the model response failed CounterLab's local Belief Spec v2 schema",
       { issues: parsed.error.issues },
     );
-  }
-
-  const allowedCandidateIds = new Set(
-    getConceptPack(input.concept).scientificMethod.candidateExperimentIds,
-  );
-  const hypotheses = [...parsed.data.hypotheses, ...parsed.data.alternatives];
-  for (const hypothesis of hypotheses) {
-    for (const candidateId of hypothesis.supportedCandidateExperimentIds) {
-      if (!allowedCandidateIds.has(candidateId)) {
-        throw new BeliefAnalystError(
-          "INVALID_RESPONSE",
-          `the model response used an unregistered candidate experiment: ${candidateId}`,
-          { candidateId },
-        );
-      }
-    }
   }
 
   resolveBeliefSpecV2Evidence(parsed.data, input.manifest);
