@@ -47,6 +47,12 @@ importers:
       "@counterlab/contracts":
         specifier: workspace:*
         version: link:../../packages/contracts
+      "@counterlab/experiment-ir":
+        specifier: workspace:*
+        version: link:../../packages/experiment-ir
+      "@counterlab/generative-ui-contracts":
+        specifier: workspace:*
+        version: link:../../packages/generative-ui-contracts
       "@counterlab/notebook-parser":
         specifier: workspace:*
         version: link:../../packages/notebook-parser

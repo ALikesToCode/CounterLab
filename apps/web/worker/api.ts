@@ -22,6 +22,7 @@ import {
   type RunnerRequestIdentityV1,
   type VerifiedResultSet,
 } from "@counterlab/contracts";
+import { RunnerLabCompileBundleV5Schema } from "@counterlab/experiment-ir";
 import {
   ApprovedSampleBeliefAnalyst,
   BeliefAnalystError,
@@ -69,6 +70,9 @@ import patchKernelResult from "../../../replays/leakage-01/patch-kernel-result.j
 import compilerReplaySummary from "../../../replays/leakage-01/compiler/replay-summary.json";
 import replayVerifiedResult from "../../../replays/leakage-01/compiler/verified-live-run/verified-result.json";
 import experimentPlanSchema from "../../../packages/contracts/schemas/experiment-plan-v2.schema.json";
+import discriminationContractSchema from "../../../packages/contracts/schemas/discrimination-contract-v1.schema.json";
+import experimentIrSchema from "../../../packages/experiment-ir/schemas/experiment-ir-v5.schema.json";
+import labSceneDraftSchema from "../../../packages/generative-ui-contracts/schemas/lab-scene-draft-v2.schema.json";
 import patchPlanSchema from "../../../packages/contracts/schemas/patch-plan-v1.schema.json";
 import { D1ArtifactStore, type ArtifactStore } from "./artifact-store";
 import {
@@ -1312,13 +1316,22 @@ export function createApi(options: ApiOptions = {}) {
           503,
         );
       }
-      if (
-        current.beliefTest === undefined ||
-        current.prediction === undefined
-      ) {
+      const beliefAuthority = getSessionBeliefAuthority(current);
+      if (beliefAuthority === undefined || current.prediction === undefined) {
         throw new ApiInputError(
           "LIVE_CONTRACTS_REQUIRED",
-          "A confirmed Belief Test and immutable prediction are required",
+          "A confirmed Belief Test or Belief Spec and immutable prediction are required",
+          409,
+        );
+      }
+      if (
+        current.beliefSpec !== undefined &&
+        (current.beliefSpec.learnerDecision !== "CONFIRMED" ||
+          current.beliefSpec.supportState !== "SUPPORTED")
+      ) {
+        throw new ApiInputError(
+          "BELIEF_SPEC_NOT_APPROVED",
+          "Live v5 compilation requires a confirmed, supported Belief Spec",
           409,
         );
       }
@@ -1339,16 +1352,16 @@ export function createApi(options: ApiOptions = {}) {
           : routing.kind === "choice_required"
             ? routing.candidates.map((candidate) => candidate.concept)
             : [];
-      if (!routedConcepts.includes(current.beliefTest.concept)) {
+      if (!routedConcepts.includes(beliefAuthority.concept)) {
         throw new ApiInputError(
           "CONCEPT_ROUTE_MISMATCH",
-          "The approved Belief Test does not match a supported artifact concept",
+          "The approved belief authority does not match a supported artifact concept",
           409,
         );
       }
-      const pack = getConceptPack(current.beliefTest.concept);
+      const pack = getConceptPack(beliefAuthority.concept);
       const manifestHash = await hashCanonical(artifact.manifest);
-      const beliefTestHash = await hashCanonical(current.beliefTest);
+      const beliefAuthorityHash = await hashCanonical(beliefAuthority);
       const packContractHash = await hashCanonical({
         id: pack.id,
         version: pack.version,
@@ -1356,23 +1369,56 @@ export function createApi(options: ApiOptions = {}) {
         allowedMetrics: pack.allowedMetrics,
         allowedVisualizations: pack.allowedVisualizations,
         verifierInvariants: pack.verifierContract.invariants,
+        candidateExperimentIds: pack.scientificMethod.candidateExperimentIds,
         planRequirements: pack.experimentPlanRules,
       });
+      const v5Compile = current.beliefSpec !== undefined;
       const requestIdentity = liveRunnerRequestIdentity({
         sessionId,
         purpose: "LAB_COMPILE",
         artifactId: artifact.manifest.artifactId,
         artifactManifestHash: manifestHash,
         conceptPack: { id: pack.id, version: pack.version },
-        authorityProfileHash: await hashCanonical({
-          compiler: "codex-app-server-stdio",
-          experimentPlanSchema,
-          resourceLimits: { wallSeconds: 45, memoryMb: 768, maxRuns: 4 },
-          permittedOutputs: ["experiment-plan.json", "public-rationale.md"],
-        }),
+        authorityProfileHash: await hashCanonical(
+          v5Compile
+            ? {
+                compiler: "codex-app-server-stdio",
+                contractVersion: "scientific-method-v5",
+                schemas: {
+                  discriminationContractSchema,
+                  experimentIrSchema,
+                  labSceneDraftSchema,
+                },
+                resourceLimits: {
+                  wallSeconds: 45,
+                  memoryMb: 768,
+                  maxRuns: 4,
+                },
+                permittedOutputs: [
+                  "discrimination-contract.json",
+                  "experiment-ir.json",
+                  "lab-scene.json",
+                  "public-rationale.md",
+                ],
+              }
+            : {
+                compiler: "codex-app-server-stdio",
+                contractVersion: "experiment-plan-v2",
+                experimentPlanSchema,
+                resourceLimits: {
+                  wallSeconds: 45,
+                  memoryMb: 768,
+                  maxRuns: 4,
+                },
+                permittedOutputs: [
+                  "experiment-plan.json",
+                  "public-rationale.md",
+                ],
+              },
+        ),
         authorityInputHashes: {
           artifactManifest: manifestHash,
-          beliefTest: beliefTestHash,
+          [v5Compile ? "beliefSpec" : "beliefTest"]: beliefAuthorityHash,
           prediction: current.prediction.immutableHash,
           conceptPack: packContractHash,
         },
@@ -1401,30 +1447,76 @@ export function createApi(options: ApiOptions = {}) {
           ? current
           : await service.startLabCompilation(sessionId);
       const jobId = requestId(options, "runner_job");
-      const bundle = RunnerLabCompileBundleSchema.parse({
-        schemaVersion: "1",
-        kind: "LAB_COMPILE",
-        jobId,
-        sessionId,
-        stateVersion: started.version,
-        artifactManifestHash: manifestHash,
-        approvedBeliefTest: current.beliefTest,
-        prediction: current.prediction,
-        artifactManifest: artifact.manifest,
-        conceptPack: {
-          id: pack.id,
-          version: pack.version,
-          title: pack.title,
-          allowedOperations: pack.allowedOperations,
-          allowedMetrics: pack.allowedMetrics,
-          allowedVisualizations: pack.allowedVisualizations,
-          verifierInvariants: pack.verifierContract.invariants,
-          planRequirements: pack.experimentPlanRules,
-        },
-        experimentPlanSchema,
-        resourceLimits: { wallSeconds: 45, memoryMb: 768, maxRuns: 4 },
-        permittedOutputs: ["experiment-plan.json", "public-rationale.md"],
-      });
+      const bundle =
+        current.beliefSpec === undefined
+          ? RunnerLabCompileBundleSchema.parse({
+              schemaVersion: "1",
+              kind: "LAB_COMPILE",
+              jobId,
+              sessionId,
+              stateVersion: started.version,
+              artifactManifestHash: manifestHash,
+              approvedBeliefTest: current.beliefTest,
+              prediction: current.prediction,
+              artifactManifest: artifact.manifest,
+              conceptPack: {
+                id: pack.id,
+                version: pack.version,
+                title: pack.title,
+                allowedOperations: pack.allowedOperations,
+                allowedMetrics: pack.allowedMetrics,
+                allowedVisualizations: pack.allowedVisualizations,
+                verifierInvariants: pack.verifierContract.invariants,
+                planRequirements: pack.experimentPlanRules,
+              },
+              experimentPlanSchema,
+              resourceLimits: {
+                wallSeconds: 45,
+                memoryMb: 768,
+                maxRuns: 4,
+              },
+              permittedOutputs: ["experiment-plan.json", "public-rationale.md"],
+            })
+          : RunnerLabCompileBundleV5Schema.parse({
+              schemaVersion: "5",
+              kind: "LAB_COMPILE",
+              jobId,
+              sessionId,
+              stateVersion: started.version,
+              artifactManifestHash: manifestHash,
+              approvedBeliefSpec: current.beliefSpec,
+              beliefSpecHash: beliefAuthorityHash,
+              prediction: current.prediction,
+              artifactManifest: artifact.manifest,
+              conceptPack: {
+                id: pack.id,
+                version: pack.version,
+                title: pack.title,
+                allowedOperations: pack.allowedOperations,
+                allowedMetrics: pack.allowedMetrics,
+                allowedVisualizations: pack.allowedVisualizations,
+                verifierInvariants: pack.verifierContract.invariants,
+                candidateExperimentIds:
+                  pack.scientificMethod.candidateExperimentIds,
+                planRequirements: pack.experimentPlanRules,
+              },
+              schemas: {
+                discriminationContract: discriminationContractSchema,
+                experimentIr: experimentIrSchema,
+                labScene: labSceneDraftSchema,
+              },
+              resourceLimits: {
+                wallSeconds: 45,
+                memoryMb: 768,
+                maxRuns: 4,
+              },
+              permittedOutputs: [
+                "discrimination-contract.json",
+                "experiment-ir.json",
+                "lab-scene.json",
+                "public-rationale.md",
+              ],
+            });
       const inputBundleHash = await hashCanonical(bundle);
       const inputBundleKey = `runner-input/${jobId}.json`;
       await runnerObjectStore(context, options).put(
@@ -1441,7 +1533,7 @@ export function createApi(options: ApiOptions = {}) {
         conceptPack: { id: pack.id, version: pack.version },
         inputHashes: [
           manifestHash,
-          beliefTestHash,
+          beliefAuthorityHash,
           current.prediction.immutableHash,
           inputBundleHash,
         ],

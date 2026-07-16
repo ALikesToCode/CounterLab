@@ -24,6 +24,7 @@ import type {
 import { createEvidenceEvent, hashCanonical } from "@counterlab/session-core";
 import { validateProofBundle } from "@counterlab/proof-bundle";
 import { schemaSummaryHash } from "@counterlab/belief-analyst";
+import { RunnerLabCompileBundleV5Schema } from "@counterlab/experiment-ir";
 
 import sourceNotebookText from "../../../fixtures/notebooks/customer_churn_leakage.ipynb?raw";
 import patchedNotebookText from "../../../replays/leakage-01/patch/customer_churn_leakage.patched.ipynb?raw";
@@ -3296,6 +3297,50 @@ describe("Cloudflare Worker API", () => {
           beliefSpec: { schemaVersion: "2", learnerDecision: "CONFIRMED" },
           prediction: { beliefTestId: beliefSpecId },
         },
+      });
+      const runnerJobs = new MemoryRunnerJobRepository();
+      const runnerObjects = new MemoryRunnerObjectStore();
+      const dispatcher = new CapturingRunnerDispatcher();
+      const compileApp = createApi({
+        sessionRepository,
+        artifactStore,
+        runnerJobRepository: runnerJobs,
+        runnerObjectStore: runnerObjects,
+        runnerDispatcher: dispatcher,
+        runnerSigningPrivateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
+        now: () => new Date("2026-07-14T10:00:00.000Z"),
+        id: (prefix) => `${prefix}_v5_live`,
+      });
+      const compile = await postJson(
+        compileApp,
+        `/api/sessions/${sessionId}/lab/compile`,
+      );
+      expect(compile.status).toBe(202);
+      expect(dispatcher.dispatched).toHaveLength(1);
+      const dispatched = dispatcher.dispatched[0];
+      if (dispatched === undefined)
+        throw new Error("v5 job was not dispatched");
+      const storedInput = runnerObjects.objects.get(
+        `runner-input/${dispatched.job.jobId}.json`,
+      );
+      if (storedInput === undefined) throw new Error("v5 input was not stored");
+      expect(
+        RunnerLabCompileBundleV5Schema.parse(JSON.parse(storedInput.body)),
+      ).toMatchObject({
+        schemaVersion: "5",
+        approvedBeliefSpec: { id: beliefSpecId },
+        conceptPack: {
+          candidateExperimentIds: [
+            "group-holdout",
+            "group-holdout-plus-ablation",
+          ],
+        },
+        permittedOutputs: [
+          "discrimination-contract.json",
+          "experiment-ir.json",
+          "lab-scene.json",
+          "public-rationale.md",
+        ],
       });
       expect(await sessionRepository.listEvents(sessionId)).toEqual(
         expect.arrayContaining([

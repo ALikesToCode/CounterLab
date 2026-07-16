@@ -18,6 +18,8 @@
     "@counterlab/belief-analyst": "workspace:*",
     "@counterlab/concept-registry": "workspace:*",
     "@counterlab/contracts": "workspace:*",
+    "@counterlab/experiment-ir": "workspace:*",
+    "@counterlab/generative-ui-contracts": "workspace:*",
     "@counterlab/notebook-parser": "workspace:*",
     "@counterlab/plan-verifier": "workspace:*",
     "@counterlab/proof-bundle": "workspace:*",
