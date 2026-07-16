@@ -495,3 +495,18 @@ can pass.
 - Freeze the exact runner bytes in the Worker, rerun the independent Boundary
   Map verifier there, then issue either an integrity-hashed or HMAC-signed
   receipt. A rejected map releases no cells to the session or UI.
+
+## 2026-07-16 — Promote the focused Theater without advancing authority
+
+- Backport the reviewed focused Experiment Theater UI onto production source
+  `095d485370e70d3b502023665fea4ebf156697ad` instead of deploying the
+  in-progress v5.1 Boundary Map worktree.
+- Deploy Worker assets with Wrangler's `--containers-rollout=none` so the
+  qualified Container remains version 13 on registry digest
+  `sha256:bdd65feebad10d4b0f232e945eb1bd1195b803d13fddf8eee558b2efdd5dc8c6`.
+- Record Worker `67b6b2ad-a77b-4f62-b8f6-4bbd02300869` as the current UI
+  deployment. Keep the complete production-smoke report bound only to Worker
+  `7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab`; an asset-only deploy does not inherit
+  that exact-version smoke result.
+- Verify the real sample route with CloakBrowser at desktop and 390 px, and fix
+  the responsive reset-label cascade before final handoff.

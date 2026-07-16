@@ -103,6 +103,24 @@ green release is evidence, but is not silently promoted to the current tree.
 Report SHA-256:
 `cd5c0c05b2f007c577905630a61f7be84c71908a511ca9bffad68f76bd86431a`.
 
+## Focused Theater UI promotion — 2026-07-16
+
+- [x] Worker `67b6b2ad-a77b-4f62-b8f6-4bbd02300869` is deployed at 100%.
+- [x] The deploy used `--containers-rollout=none`; Container version 13 remains
+      ready on registry digest
+      `sha256:bdd65feebad10d4b0f232e945eb1bd1195b803d13fddf8eee558b2efdd5dc8c6`.
+- [x] `/ready` returned analyst, persistence, private storage, runner, and
+      signing checks as true.
+- [x] CloakBrowser opened the real sample at desktop and 390 px, confirmed the
+      permanent agent rail is absent, retained the proof console, found no
+      horizontal page overflow, and recorded no console, page, or request
+      errors.
+- [x] The compact mobile reset label renders as `Reset` without leaking the
+      full `Start over` label.
+- [ ] The seven-stage live production smoke was not rerun for this UI-only
+      promotion. Its recorded proof remains bound only to Worker
+      `7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab`.
+
 ## Current-tree release commands
 
 - [ ] `./scripts/test-all.sh` after the latest production-recovery commit.
@@ -125,8 +143,8 @@ Report SHA-256:
       contrast, and no horizontal overflow.
 - [x] Focused Theater component contract, strict web/Worker TypeScript,
       targeted formatting, and `DESIGN.md` lint pass locally.
-- [ ] Updated focused Theater desktop and 390 px screenshots after the owner
-      starts the local app; no `build` or `dev` command was run for this slice.
+- [x] Updated focused Theater desktop and 390 px production screenshots using
+      CloakBrowser after deployment.
 
 The checked browser items describe the released Studio journey. The following
 v5.1 product gates remain pending and must not be inferred from them:

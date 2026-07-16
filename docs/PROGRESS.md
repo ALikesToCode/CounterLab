@@ -40,8 +40,10 @@ pack-owned grids, and exact-request authorization. Its independent verifier,
 strict purpose-separated runner contract, and fixed hosted execution now pass
 locally. Worker-owned freeze/verification/receipt storage, session projection,
 retrieval, and the learner UI remain in progress.
-The current production deployment remains the qualified Experiment Plan v2
-path and has not been promoted to this worktree.
+The current production scientific authority remains the qualified Experiment
+Plan v2 path and has not been promoted to the in-progress v5.1 worktree. The
+focused Experiment Theater UI was backported onto that qualified production
+source without advancing the scientific contracts.
 
 The live Responses integration was exercised against the configured endpoint. A
 real schema-constrained class-imbalance Belief Test completed, validated locally,
@@ -51,9 +53,11 @@ copy.
 
 The production control plane is deployed at
 `https://counterlab.cserules.workers.dev` as Worker version
-`7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab`. Container version 13 uses image
+`67b6b2ad-a77b-4f62-b8f6-4bbd02300869`. The UI-only promotion used Wrangler's
+`--containers-rollout=none`; Container version 13 remains ready on image
 digest `sha256:bdd65feebad10d4b0f232e945eb1bd1195b803d13fddf8eee558b2efdd5dc8c6`.
-The exact-version production smoke completed all seven stages at
+The last full exact-version production smoke belongs to Worker
+`7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab` and completed all seven stages at
 `2026-07-16T05:03:38.850648Z`; its byte-for-byte report is committed as
 `docs/PRODUCTION_SMOKE.json` with SHA-256
 `cd5c0c05b2f007c577905630a61f7be84c71908a511ca9bffad68f76bd86431a`.
@@ -148,13 +152,14 @@ Latest local v5.1 verification checkpoint (2026-07-16):
 | Learner pilot                                | partial | Paired-crossover protocol, consent/privacy note, randomization, schema, and analysis script exist. No participants or learner outcomes are claimed.                                                                                       |
 | TypeScript/Web/Python suites                 | pass    | `COUNTERLAB_E2E_BASE_URL=https://counterlab.cserules.workers.dev ./scripts/test-all.sh` passed 303 root TypeScript tests, 110 web/Worker tests, 157 Python tests, strict TypeScript checks, and the production-backed browser slice.              |
 | New-version browser E2E                      | pass    | 13 CloakBrowser journeys passed against the production endpoint; two credentialed browser-only live cases were skipped. Production smoke separately passed sample/replay (2/2) and untouched leakage/imbalance live flows (2/2), including patch and Proof Bundle downloads. |
-| Container image build and production deploy | pass    | Worker `7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab` is bound to Container version 13 and deployed registry digest `bdd65fee…`; the source-bound local qualification remains recorded separately as OCI digest `94c1987e…`. |
+| Container image build and production deploy | pass    | Current Worker `67b6b2ad-a77b-4f62-b8f6-4bbd02300869` reuses ready Container version 13 and deployed registry digest `bdd65fee…`; no Container rollout occurred. The source-bound local qualification remains recorded separately as OCI digest `94c1987e…`. |
 | Production live runner smoke                | pass    | One fail-closed run passed readiness, capability health, public secret scan, sample, replay, untouched live leakage, and untouched live imbalance. It also validated reconnect/idempotency/cancellation, patch and proof downloads, both Proof Bundles, and their engine-authority bindings. |
 | One-command local demo                      | pass    | `./scripts/clean-demo.sh` regenerated both fixtures, passed 5 focused tests, confirmed current local D1 migrations, and served healthy kernel and Worker endpoints before its exact processes were stopped.                               |
 | Clean-clone/release check/secret scan       | partial | The pre-hardening Studio tree passed a fresh-clone release check and 334-file scan. The current v5.1 tree has not yet rerun the final clean-clone, SBOM, dependency, and secret gates. |
 
 ## Latest verified commands
 
+- `pnpm exec wrangler deploy --config dist/counterlab/wrangler.json --containers-rollout=none` — deployed focused Theater assets as Worker `67b6b2ad-a77b-4f62-b8f6-4bbd02300869` at 100%; Container version 13 and digest `bdd65fee…` remained unchanged. `/ready` returned all five checks true, and CloakBrowser completed the sample at desktop and 390 px with no browser errors or page overflow.
 - `./scripts/production-smoke.sh https://counterlab.cserules.workers.dev` — exact Worker version `7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab` and deployed image digest `bdd65fee…`; all seven stages passed, including two genuine untouched live notebooks and authority hash `d7677c79…` in both live Proof Bundles. Report SHA-256: `cd5c0c05…`.
 - `COUNTERLAB_E2E_BASE_URL=https://counterlab.cserules.workers.dev ./scripts/test-all.sh` — 303 root TypeScript, 110 web/Worker, and 157 Python tests passed; 13 CloakBrowser journeys passed against production and 2 credentialed browser-only live cases were skipped. The separate production smoke above exercised both real live concepts.
 - `./scripts/run-mutations.sh leakage` and `./scripts/run-mutations.sh imbalance` — 13/13 and 19/19 critical mutations detected.
