@@ -7,6 +7,7 @@ import {
   PatchResultSchema,
   type RunnerPatchCompileBundle,
 } from "@counterlab/contracts";
+import type { RunnerPatchCompileBundleV5 } from "@counterlab/experiment-ir";
 
 import type { FixedPatchExecutor } from "./job-processor.js";
 
@@ -93,7 +94,7 @@ export class PythonFixedPatchExecutor implements FixedPatchExecutor {
   }
 
   async run(
-    bundle: RunnerPatchCompileBundle,
+    bundle: RunnerPatchCompileBundle | RunnerPatchCompileBundleV5,
     sourceNotebook: string,
     patchPlan: string,
     workspace: string,
@@ -141,8 +142,12 @@ export class PythonFixedPatchExecutor implements FixedPatchExecutor {
     ]);
 
     const startedAt = performance.now();
+    const concept =
+      bundle.schemaVersion === "5"
+        ? bundle.approvedBeliefSpec.concept
+        : bundle.approvedBeliefTest.concept;
     const fixturePath =
-      bundle.approvedBeliefTest.concept === "class_imbalance"
+      concept === "class_imbalance"
         ? this.imbalanceFixturePath
         : this.leakageFixturePath;
     try {

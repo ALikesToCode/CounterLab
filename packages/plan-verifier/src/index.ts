@@ -4,6 +4,7 @@ import {
   HostedVerifiedResultSetV2Schema,
   PatchPlanV1Schema,
   type ArtifactManifest,
+  type BeliefSpecV2,
   type BeliefTest,
   type EvidenceRef,
   type ExperimentPlanV2,
@@ -156,12 +157,16 @@ async function evidenceResolves(
 
 async function allEvidenceApproved(
   plan: Pick<ExperimentPlanV2, "evidenceRefs">,
-  beliefTest: BeliefTest,
+  beliefAuthority: BeliefTest | BeliefSpecV2,
   manifest: ArtifactManifest,
 ): Promise<{ passed: boolean; counterexample?: string }> {
   const approvedHashes = new Set(
-    await Promise.all(beliefTest.evidenceRefs.map(hashCanonical)),
+    await Promise.all(beliefAuthority.evidenceRefs.map(hashCanonical)),
   );
+  const learnerClaim =
+    beliefAuthority.schemaVersion === "2"
+      ? beliefAuthority.claim
+      : beliefAuthority.learnerClaim;
   for (const evidence of plan.evidenceRefs) {
     if (!approvedHashes.has(await hashCanonical(evidence))) {
       return {
@@ -169,9 +174,7 @@ async function allEvidenceApproved(
         counterexample: `Plan evidence ${evidence.hash.slice(0, 12)} is not in the approved Belief Test.`,
       };
     }
-    if (
-      !(await evidenceResolves(evidence, manifest, beliefTest.learnerClaim))
-    ) {
+    if (!(await evidenceResolves(evidence, manifest, learnerClaim))) {
       return {
         passed: false,
         counterexample: `Plan evidence ${evidence.hash.slice(0, 12)} does not resolve to the Artifact Manifest.`,
@@ -200,16 +203,21 @@ export class PatchPlanVerificationError extends Error {
   }
 }
 
-export type PatchPlanVerificationContext = {
+type PatchPlanVerificationContextBase = {
   sessionId: string;
   manifest: ArtifactManifest;
-  beliefTest: BeliefTest;
   verifiedResultHash: string;
   transferResultHash: string;
   conceptPackVersion: string;
   allowedTransformations: readonly PatchOperationId[];
   allowedCellIndices: number[];
 };
+
+export type PatchPlanVerificationContext = PatchPlanVerificationContextBase &
+  (
+    | { beliefTest: BeliefTest; beliefSpec?: never }
+    | { beliefSpec: BeliefSpecV2; beliefTest?: never }
+  );
 
 export async function verifyPatchPlan(
   input: unknown,
@@ -238,10 +246,14 @@ export async function verifyPatchPlan(
     );
   }
   const plan: PatchPlanV1 = parsed.data;
+  const beliefAuthority =
+    "beliefSpec" in context && context.beliefSpec !== undefined
+      ? context.beliefSpec
+      : context.beliefTest;
   const manifestHash = await hashCanonical(context.manifest);
   const evidence = await allEvidenceApproved(
     plan,
-    context.beliefTest,
+    beliefAuthority,
     context.manifest,
   );
   const allowedCells = new Set(context.allowedCellIndices);
@@ -277,11 +289,13 @@ export async function verifyPatchPlan(
     ),
     invariant(
       "belief_and_evidence_lineage",
-      plan.concept === context.beliefTest.concept &&
-        !context.beliefTest.uncertainty.insufficientEvidence &&
+      plan.concept === beliefAuthority.concept &&
+        (beliefAuthority.schemaVersion === "2"
+          ? beliefAuthority.supportState !== "INSUFFICIENT_EVIDENCE"
+          : !beliefAuthority.uncertainty.insufficientEvidence) &&
         evidence.passed,
       plan.evidenceRefs.map((item) => item.hash),
-      context.beliefTest.evidenceRefs.map((item) => item.hash),
+      beliefAuthority.evidenceRefs.map((item) => item.hash),
       evidence.counterexample,
     ),
     invariant(

@@ -438,6 +438,72 @@ function interactiveLabRunBundleV5() {
   };
 }
 
+function patchCompileBundleV5() {
+  const interactive = interactiveLabRunBundleV5();
+  return {
+    schemaVersion: "5" as const,
+    kind: "PATCH_COMPILE" as const,
+    jobId: "runner_job_patch_v5_1",
+    sessionId: interactive.sessionId,
+    stateVersion: 18,
+    requestedAt: "2026-07-16T05:20:00.000Z",
+    artifactManifestHash: interactive.artifactManifestHash,
+    conceptPackVersion: interactive.selectedExperimentIr.conceptPackVersion,
+    artifactManifest: interactive.artifactManifest,
+    approvedBeliefSpec: interactive.approvedBeliefSpec,
+    beliefSpecHash: interactive.beliefSpecHash,
+    prediction: interactive.prediction,
+    compileAuthority: interactive.compileAuthority,
+    selectedExperimentIr: interactive.selectedExperimentIr,
+    fixedSelection: interactive.fixedSelection,
+    basePlan: interactive.basePlan,
+    releaseAuthority: interactive.releaseAuthority,
+    verifiedResultSummary: {
+      schemaVersion: "2" as const,
+      concept: "entity_leakage" as const,
+      resultHash: interactive.releaseAuthority.authoritativeResultHash,
+      planId: interactive.basePlan.planId,
+      runIds: ["random-row", "group-holdout"],
+    },
+    transferResult: {
+      schemaVersion: "1" as const,
+      id: "transfer-live-1",
+      sessionId: interactive.sessionId,
+      taskId: "forecast-future-leakage-v1",
+      outcome: "PASSED" as const,
+      selectedStrategy: "time_ordered_holdout",
+      identifiedRisks: ["centered_window_reads_future"],
+      evidenceChoices: [
+        "center_true_uses_later_targets",
+        "random_split_mixes_dates",
+      ],
+      checks: [
+        {
+          invariant: "time_ordered_evaluation",
+          passed: true,
+          evidence: "The future rows are isolated from training.",
+        },
+      ],
+      evaluatorVersion: "forecast-transfer-v1",
+      evaluatedAt: "2026-07-16T05:19:00.000Z",
+      resultHash: digest("c"),
+    },
+    patchContract: {
+      id: "entity-leakage-patch-v1",
+      allowedTransformations: [
+        "replace_row_split_with_group_holdout" as const,
+        "exclude_entity_feature" as const,
+      ],
+    },
+    allowedCellIndices: [2],
+    patchPlanSchema: { type: "object" },
+    permittedOutputs: [
+      "patch-plan.json" as const,
+      "public-rationale.md" as const,
+    ],
+  };
+}
+
 describe("Runner LAB_COMPILE bundle v5", () => {
   it("parses as a versioned job without changing the stored v1 bundle", () => {
     const parsed = RunnerLabCompileBundleV5Schema.parse(runnerBundleV5());
@@ -839,6 +905,102 @@ describe("Runner interactive LAB_RUN bundle v5", () => {
       RunnerLabInteractiveRunBundleV5Schema.safeParse({
         ...source,
         shellCommand: "python arbitrary.py",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("Runner PATCH_COMPILE bundle v5", () => {
+  it("accepts a live repair bound to v5 belief, experiment, verdict, and transfer authority", () => {
+    const parsed = VersionedRunnerJobInputBundleSchema.safeParse(
+      patchCompileBundleV5(),
+    );
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data).toMatchObject({
+      schemaVersion: "5",
+      kind: "PATCH_COMPILE",
+      approvedBeliefSpec: { schemaVersion: "2" },
+      releaseAuthority: {
+        evidenceVerdict: { kind: "SUPPORTS" },
+      },
+      transferResult: { outcome: "PASSED" },
+      permittedOutputs: ["patch-plan.json", "public-rationale.md"],
+    });
+    expect("approvedBeliefTest" in parsed.data).toBe(false);
+  });
+
+  it("rejects sample authority, inconclusive evidence, and transfer or result drift", () => {
+    const source = patchCompileBundleV5();
+    expect(
+      VersionedRunnerJobInputBundleSchema.safeParse({
+        ...source,
+        approvedBeliefTest: { id: "sample-belief-test" },
+      }).success,
+    ).toBe(false);
+    expect(
+      VersionedRunnerJobInputBundleSchema.safeParse({
+        ...source,
+        releaseAuthority: {
+          ...source.releaseAuthority,
+          evidenceVerdict: {
+            ...source.releaseAuthority.evidenceVerdict,
+            kind: "INCONCLUSIVE",
+            reasonCode: "OUTCOME_WITHIN_TOLERANCE",
+            scope: "The result did not separate the hypotheses.",
+            nextExperimentId: "group-holdout",
+          },
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      VersionedRunnerJobInputBundleSchema.safeParse({
+        ...source,
+        transferResult: { ...source.transferResult, outcome: "FAILED" },
+      }).success,
+    ).toBe(false);
+    expect(
+      VersionedRunnerJobInputBundleSchema.safeParse({
+        ...source,
+        verifiedResultSummary: {
+          ...source.verifiedResultSummary,
+          resultHash: digest("f"),
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects selection, projected Plan, cell scope, and operation drift", () => {
+    const source = patchCompileBundleV5();
+    expect(
+      VersionedRunnerJobInputBundleSchema.safeParse({
+        ...source,
+        fixedSelection: {
+          ...source.fixedSelection,
+          selectedCandidateId: "different-candidate",
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      VersionedRunnerJobInputBundleSchema.safeParse({
+        ...source,
+        basePlan: { ...source.basePlan, planId: "different-plan" },
+      }).success,
+    ).toBe(false);
+    expect(
+      VersionedRunnerJobInputBundleSchema.safeParse({
+        ...source,
+        allowedCellIndices: [99],
+      }).success,
+    ).toBe(false);
+    expect(
+      VersionedRunnerJobInputBundleSchema.safeParse({
+        ...source,
+        patchContract: {
+          ...source.patchContract,
+          allowedTransformations: ["add_majority_baseline"],
+        },
       }).success,
     ).toBe(false);
   });

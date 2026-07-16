@@ -31,6 +31,7 @@ import {
   VersionedRunnerJobInputBundleSchema,
   type RunnerLabCompileBundleV5,
   type RunnerLabInteractiveRunBundleV5,
+  type RunnerPatchCompileBundleV5,
   type RunnerLabRunBundleV5,
   type RunnerScientificCandidateV5,
   type VersionedRunnerJobInputBundle,
@@ -103,7 +104,7 @@ export interface FixedKernelExecutor {
 
 export interface FixedPatchExecutor {
   run(
-    bundle: RunnerPatchCompileBundle,
+    bundle: RunnerPatchCompileBundle | RunnerPatchCompileBundleV5,
     sourceNotebook: string,
     patchPlan: string,
     workspace: string,
@@ -357,7 +358,7 @@ export class HostedRunnerJobProcessor {
         return;
       }
 
-      if (bundle.schemaVersion === "5") {
+      if (bundle.schemaVersion === "5" && bundle.kind !== "PATCH_COMPILE") {
         const scientificCompiler = this.options.scientificCompiler;
         if (scientificCompiler === undefined) {
           throw new RunnerProcessingError(
@@ -1014,25 +1015,34 @@ export class HostedRunnerJobProcessor {
   }
 
   private patchCompileInput(
-    bundle: RunnerPatchCompileBundle,
+    bundle: RunnerPatchCompileBundle | RunnerPatchCompileBundleV5,
     generationDirectory: string,
   ): CompileHostedPatchPlanInput {
-    return {
+    const common = {
       sessionId: bundle.sessionId,
       artifactManifestHash: bundle.artifactManifestHash,
       sourceArtifactHash: bundle.artifactManifest.fileSha256,
       conceptPackVersion: bundle.conceptPackVersion,
       generationDirectory,
-      approvedBeliefTest: bundle.approvedBeliefTest,
       artifactManifest: bundle.artifactManifest,
       verifiedResultSummary: bundle.verifiedResultSummary,
-      transferSummary: bundle.transferSummary,
+      transferSummary:
+        bundle.schemaVersion === "5"
+          ? bundle.transferResult
+          : bundle.transferSummary,
       patchContract: bundle.patchContract,
       allowedCellIndices: bundle.allowedCellIndices,
       patchPlanSchema: bundle.patchPlanSchema,
       resourceLimits: { wallSeconds: 45, memoryMb: 768, maxRuns: 1 },
       permittedOutputs: [...bundle.permittedOutputs],
     };
+    return bundle.schemaVersion === "5"
+      ? {
+          ...common,
+          authorityVersion: "5",
+          approvedBeliefSpec: bundle.approvedBeliefSpec,
+        }
+      : { ...common, approvedBeliefTest: bundle.approvedBeliefTest };
   }
 
   private async prepareWorkspace(jobId: string): Promise<string> {

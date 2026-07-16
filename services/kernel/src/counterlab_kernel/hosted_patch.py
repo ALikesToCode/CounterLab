@@ -16,7 +16,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from .canonical import canonical_json, sha256_json
+from .canonical import canonical_json, sha256_json, sha256_json_browser
 from .imbalance_patching import compile_imbalance_notebook_patch
 from .leakage_patching import compile_leakage_notebook_patch
 from .patching import compile_sample_notebook_patch
@@ -57,6 +57,96 @@ _PATCH_PLAN_BASE_KEYS = frozenset({
         "preserveUnrelatedCells",
         "nonClaims",
 })
+_V5_PATCH_BUNDLE_KEYS = frozenset({
+    "schemaVersion",
+    "kind",
+    "jobId",
+    "sessionId",
+    "stateVersion",
+    "requestedAt",
+    "artifactManifestHash",
+    "conceptPackVersion",
+    "artifactManifest",
+    "approvedBeliefSpec",
+    "beliefSpecHash",
+    "prediction",
+    "compileAuthority",
+    "selectedExperimentIr",
+    "fixedSelection",
+    "basePlan",
+    "releaseAuthority",
+    "verifiedResultSummary",
+    "transferResult",
+    "patchContract",
+    "allowedCellIndices",
+    "patchPlanSchema",
+    "permittedOutputs",
+})
+_V5_COMPILE_AUTHORITY_KEYS = frozenset({
+    "schemaVersion",
+    "status",
+    "source",
+    "jobId",
+    "inputBundleHash",
+    "artifactManifestHash",
+    "beliefSpecHash",
+    "predictionHash",
+    "compilerOutputFileHashes",
+    "discriminationContractHash",
+    "rawExperimentIrCanonicalHash",
+    "labSceneHash",
+    "candidateVerificationReportHash",
+    "scientificVerifierVersion",
+    "selectionHash",
+    "selectedExperimentIrHash",
+    "projectedPlanHash",
+    "scorerVersion",
+    "projectionAdapterVersion",
+})
+_V5_COMPILER_OUTPUT_KEYS = frozenset({
+    "discrimination-contract.json",
+    "experiment-ir.json",
+    "lab-scene.json",
+    "public-rationale.md",
+})
+_V5_RELEASE_AUTHORITY_KEYS = frozenset({
+    "authoritativeResultHash",
+    "evidenceVerdict",
+    "evidenceVerdictHash",
+    "epistemicReportHash",
+})
+_V5_SUPPORTS_VERDICT_KEYS = frozenset({
+    "schemaVersion",
+    "kind",
+    "hypothesisId",
+    "scope",
+    "resultHash",
+    "irHash",
+    "technicalReportHash",
+    "verifierVersion",
+})
+_V5_RESULT_SUMMARY_KEYS = frozenset({
+    "schemaVersion",
+    "concept",
+    "resultHash",
+    "planId",
+    "runIds",
+})
+_V5_TRANSFER_KEYS = frozenset({
+    "schemaVersion",
+    "id",
+    "sessionId",
+    "taskId",
+    "outcome",
+    "selectedStrategy",
+    "identifiedRisks",
+    "evidenceChoices",
+    "checks",
+    "evaluatorVersion",
+    "evaluatedAt",
+    "resultHash",
+})
+_V5_TRANSFER_CHECK_KEYS = frozenset({"invariant", "passed", "evidence"})
 
 
 class HostedPatchError(ValueError):
@@ -77,6 +167,212 @@ def _sequence(value: object, name: str) -> list[Any]:
 
 def _sha256_bytes(value: bytes) -> str:
     return sha256(value).hexdigest()
+
+
+def _strict_fields(
+    value: Mapping[str, Any], expected: frozenset[str], name: str
+) -> None:
+    actual = frozenset(value)
+    if actual != expected:
+        raise HostedPatchError(
+            f"{name} fields are invalid: "
+            f"missing={sorted(expected.difference(actual))}, "
+            f"extra={sorted(actual.difference(expected))}"
+        )
+
+
+def _validate_v5_patch_bundle(bundle: Mapping[str, Any]) -> None:
+    _strict_fields(bundle, _V5_PATCH_BUNDLE_KEYS, "v5 patch bundle")
+    manifest = _mapping(bundle.get("artifactManifest"), "artifactManifest")
+    belief = _mapping(bundle.get("approvedBeliefSpec"), "approvedBeliefSpec")
+    prediction = _mapping(bundle.get("prediction"), "prediction")
+    compile_authority = _mapping(
+        bundle.get("compileAuthority"), "compileAuthority"
+    )
+    selected_ir = _mapping(
+        bundle.get("selectedExperimentIr"), "selectedExperimentIr"
+    )
+    selection = _mapping(bundle.get("fixedSelection"), "fixedSelection")
+    plan = _mapping(bundle.get("basePlan"), "basePlan")
+    release = _mapping(bundle.get("releaseAuthority"), "releaseAuthority")
+    verdict = _mapping(release.get("evidenceVerdict"), "evidenceVerdict")
+    summary = _mapping(
+        bundle.get("verifiedResultSummary"), "verifiedResultSummary"
+    )
+    transfer = _mapping(bundle.get("transferResult"), "transferResult")
+    patch_contract = _mapping(bundle.get("patchContract"), "patchContract")
+
+    _strict_fields(
+        compile_authority, _V5_COMPILE_AUTHORITY_KEYS, "compile authority"
+    )
+    _strict_fields(
+        _mapping(
+            compile_authority.get("compilerOutputFileHashes"),
+            "compilerOutputFileHashes",
+        ),
+        _V5_COMPILER_OUTPUT_KEYS,
+        "compiler output hashes",
+    )
+    _strict_fields(release, _V5_RELEASE_AUTHORITY_KEYS, "release authority")
+    if verdict.get("kind") != "SUPPORTS":
+        raise HostedPatchError(
+            "v5 patch authority requires a SUPPORTS evidence verdict"
+        )
+    _strict_fields(verdict, _V5_SUPPORTS_VERDICT_KEYS, "SUPPORTS verdict")
+    _strict_fields(summary, _V5_RESULT_SUMMARY_KEYS, "verified result summary")
+    _strict_fields(transfer, _V5_TRANSFER_KEYS, "transfer result")
+    checks = _sequence(transfer.get("checks"), "transferResult.checks")
+    if not checks:
+        raise HostedPatchError("v5 patch transfer contains no deterministic checks")
+    for check in checks:
+        parsed_check = _mapping(check, "transfer check")
+        _strict_fields(
+            parsed_check, _V5_TRANSFER_CHECK_KEYS, "transfer check"
+        )
+    _strict_fields(
+        patch_contract,
+        frozenset({"id", "allowedTransformations"}),
+        "patch contract",
+    )
+
+    manifest_hash = sha256_json_browser(manifest)
+    belief_hash = sha256_json_browser(belief)
+    prediction_base = dict(prediction)
+    prediction_hash = prediction_base.pop("immutableHash", None)
+    selected_ir_hash = sha256_json_browser(selected_ir)
+    selection_hash = sha256_json_browser(selection)
+    projected_plan_hash = sha256_json_browser(plan)
+    verdict_hash = sha256_json_browser(verdict)
+    transfer_base = dict(transfer)
+    transfer_hash = transfer_base.pop("resultHash", None)
+    concept = belief.get("concept")
+    if concept not in _PATCH_OPERATIONS:
+        raise HostedPatchError("v5 patch Subject Pack is not registered")
+    if (
+        manifest.get("support", {}).get("status") != "SUPPORTED"
+        or belief.get("supportState") != "SUPPORTED"
+        or belief.get("learnerDecision") != "CONFIRMED"
+    ):
+        raise HostedPatchError("v5 patch requires approved supported evidence")
+    if (
+        bundle.get("artifactManifestHash") != manifest_hash
+        or compile_authority.get("artifactManifestHash") != manifest_hash
+        or selected_ir.get("artifactManifestHash") != manifest_hash
+        or plan.get("artifactManifestHash") != manifest_hash
+    ):
+        raise HostedPatchError("v5 patch Artifact Manifest lineage is invalid")
+    if (
+        bundle.get("beliefSpecHash") != belief_hash
+        or compile_authority.get("beliefSpecHash") != belief_hash
+        or selected_ir.get("beliefSpecHash") != belief_hash
+    ):
+        raise HostedPatchError("v5 patch Belief Spec lineage is invalid")
+    if (
+        prediction_hash != sha256_json_browser(prediction_base)
+        or compile_authority.get("predictionHash") != prediction_hash
+    ):
+        raise HostedPatchError("v5 patch prediction lineage is invalid")
+    session_id = bundle.get("sessionId")
+    belief_id = belief.get("id")
+    if (
+        prediction.get("sessionId") != session_id
+        or prediction.get("beliefTestId") != belief_id
+        or selected_ir.get("sessionId") != session_id
+        or selected_ir.get("beliefSpecId") != belief_id
+        or plan.get("sessionId") != session_id
+        or plan.get("beliefTestId") != belief_id
+        or transfer.get("sessionId") != session_id
+    ):
+        raise HostedPatchError("v5 patch session or belief lineage is invalid")
+    if (
+        selected_ir.get("concept") != concept
+        or plan.get("concept") != concept
+        or summary.get("concept") != concept
+        or selected_ir.get("conceptPackVersion")
+        != bundle.get("conceptPackVersion")
+        or plan.get("conceptPackVersion") != bundle.get("conceptPackVersion")
+    ):
+        raise HostedPatchError("v5 patch Subject Pack lineage is invalid")
+    if (
+        compile_authority.get("selectedExperimentIrHash") != selected_ir_hash
+        or verdict.get("irHash") != selected_ir_hash
+    ):
+        raise HostedPatchError("v5 patch selected Experiment IR is invalid")
+    if (
+        compile_authority.get("selectionHash") != selection_hash
+        or compile_authority.get("scorerVersion") != selection.get("scorerVersion")
+    ):
+        raise HostedPatchError("v5 patch fixed selection lineage is invalid")
+    embedded_selection = _mapping(
+        selected_ir.get("selection"), "selectedExperimentIr.selection"
+    )
+    expected_embedded_selection = {
+        "status": "SELECTED",
+        "candidateId": selection.get("selectedCandidateId"),
+        "eligibleCandidateIds": selection.get("eligibleCandidateIds"),
+        "rejectedCandidates": selection.get("rejectedCandidates"),
+        "minimumSeparation": selection.get("minimumSeparation"),
+        "requiredSeparation": selection.get("requiredSeparation"),
+        "complexityCost": selection.get("complexityCost"),
+        "normalizedScore": selection.get("normalizedScore"),
+        "scorerVersion": selection.get("scorerVersion"),
+    }
+    if dict(embedded_selection) != expected_embedded_selection:
+        raise HostedPatchError("v5 patch fixed selection does not match the IR")
+    if (
+        compile_authority.get("projectedPlanHash") != projected_plan_hash
+        or selected_ir.get("executionPlanId") != plan.get("planId")
+        or selected_ir.get("evidenceRefs") != belief.get("evidenceRefs")
+        or plan.get("evidenceRefs") != belief.get("evidenceRefs")
+    ):
+        raise HostedPatchError("v5 patch projected Plan lineage is invalid")
+    released_result_hash = release.get("authoritativeResultHash")
+    if (
+        release.get("evidenceVerdictHash") != verdict_hash
+        or verdict.get("resultHash") != released_result_hash
+        or summary.get("resultHash") != released_result_hash
+        or summary.get("planId") != plan.get("planId")
+    ):
+        raise HostedPatchError("v5 patch released result lineage is invalid")
+    expected_run_ids = [
+        _mapping(plan.get("baseline"), "basePlan.baseline").get("runId"),
+        *[
+            _mapping(run, "basePlan.intervention").get("runId")
+            for run in _sequence(plan.get("interventions"), "basePlan.interventions")
+        ],
+    ]
+    run_ids = _sequence(summary.get("runIds"), "verifiedResultSummary.runIds")
+    if len(set(run_ids)) != len(run_ids) or set(run_ids) != set(expected_run_ids):
+        raise HostedPatchError("v5 patch verified result runs are invalid")
+    transfer_task = _mapping(selected_ir.get("transfer"), "selectedExperimentIr.transfer")
+    if (
+        transfer.get("outcome") != "PASSED"
+        or not all(_mapping(check, "transfer check").get("passed") is True for check in checks)
+        or transfer.get("taskId") != transfer_task.get("taskId")
+        or transfer_hash != sha256_json_browser(transfer_base)
+    ):
+        raise HostedPatchError("v5 patch transfer authority is invalid")
+    expected_operations = _PATCH_OPERATIONS[str(concept)]
+    declared_operations = set(
+        _sequence(
+            patch_contract.get("allowedTransformations"),
+            "patchContract.allowedTransformations",
+        )
+    )
+    if declared_operations != expected_operations:
+        raise HostedPatchError("v5 patch transformation authority is invalid")
+    allowed_cells = _sequence(
+        bundle.get("allowedCellIndices"), "allowedCellIndices"
+    )
+    manifest_cells = {
+        cell.get("index")
+        for cell in _sequence(manifest.get("cells"), "artifactManifest.cells")
+        if isinstance(cell, Mapping) and cell.get("type") == "code"
+    }
+    if len(set(allowed_cells)) != len(allowed_cells) or any(
+        index not in manifest_cells for index in allowed_cells
+    ):
+        raise HostedPatchError("v5 patch cell scope is invalid")
 
 
 def _validate_patch_plan(
@@ -110,12 +406,21 @@ def _validate_patch_plan(
     result_summary = _mapping(
         bundle.get("verifiedResultSummary"), "verifiedResultSummary"
     )
-    transfer_summary = _mapping(bundle.get("transferSummary"), "transferSummary")
+    transfer_summary = _mapping(
+        bundle.get("transferResult")
+        if bundle.get("schemaVersion") == "5"
+        else bundle.get("transferSummary"),
+        "transfer authority",
+    )
+    expected_pack_version = (
+        bundle.get("conceptPackVersion")
+        if bundle.get("schemaVersion") == "5"
+        else ("2.0.0" if concept == "entity_leakage" else "1.0.0")
+    )
     if (
         plan.get("schemaVersion") != "1"
         or plan.get("sessionId") != bundle.get("sessionId")
-        or plan.get("conceptPackVersion")
-        != ("2.0.0" if concept == "entity_leakage" else "1.0.0")
+        or plan.get("conceptPackVersion") != expected_pack_version
         or plan.get("artifactManifestHash") != manifest_hash
         or plan.get("sourceArtifactHash") != manifest.get("fileSha256")
         or plan.get("verifiedResultHash") != result_summary.get("resultHash")
@@ -191,9 +496,19 @@ def _validate_patch_plan(
                 _mapping(manifest.get("schemaSummary"), "schemaSummary")
             )
         elif kind == "learner_claim":
-            belief = _mapping(bundle.get("approvedBeliefTest"), "approvedBeliefTest")
+            belief = _mapping(
+                bundle.get("approvedBeliefSpec")
+                if bundle.get("schemaVersion") == "5"
+                else bundle.get("approvedBeliefTest"),
+                "approved belief authority",
+            )
+            learner_claim = (
+                belief.get("claim")
+                if bundle.get("schemaVersion") == "5"
+                else belief.get("learnerClaim")
+            )
             resolved = reference.get("hash") == sha256_json(
-                belief.get("learnerClaim")
+                learner_claim
             )
         elif isinstance(cell_index, int) and cell is not None:
             if kind == "code":
@@ -220,15 +535,24 @@ def execute_hosted_patch(
 ) -> dict[str, Any]:
     """Apply and verify one registered patch without exposing source to Codex."""
 
-    if bundle.get("schemaVersion") != "1" or bundle.get("kind") != "PATCH_COMPILE":
+    if (
+        bundle.get("schemaVersion") not in {"1", "5"}
+        or bundle.get("kind") != "PATCH_COMPILE"
+    ):
         raise HostedPatchError("hosted PATCH_COMPILE bundle kind is invalid")
     if bundle.get("permittedOutputs") != [
         "patch-plan.json",
         "public-rationale.md",
     ]:
         raise HostedPatchError("hosted patch model-output policy is invalid")
+    if bundle.get("schemaVersion") == "5":
+        _validate_v5_patch_bundle(bundle)
     manifest = _mapping(bundle.get("artifactManifest"), "artifactManifest")
-    manifest_hash = sha256_json(manifest)
+    manifest_hash = (
+        sha256_json_browser(manifest)
+        if bundle.get("schemaVersion") == "5"
+        else sha256_json(manifest)
+    )
     if bundle.get("artifactManifestHash") != manifest_hash:
         raise HostedPatchError("artifact manifest hash does not match bundle bytes")
     if len(source_notebook) == 0 or len(source_notebook) > _MAX_NOTEBOOK_BYTES:

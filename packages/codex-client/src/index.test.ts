@@ -194,6 +194,25 @@ function hostedPatchInput(
   };
 }
 
+function hostedPatchV5Input(): CompileHostedPatchPlanInput {
+  const legacy = hostedPatchInput();
+  if (!("approvedBeliefTest" in legacy)) {
+    throw new Error("legacy hosted patch fixture lost Belief Test authority");
+  }
+  const { approvedBeliefTest: _legacyBelief, ...shared } = legacy;
+  return {
+    ...shared,
+    authorityVersion: "5",
+    approvedBeliefSpec: {
+      schemaVersion: "2",
+      id: "belief_spec_v5",
+      concept: "entity_leakage",
+      claim: "The random-row score proves performance for new customers.",
+      evidenceRefs: [{ hash: "a".repeat(64), cellIndex: 2 }],
+    },
+  } as CompileHostedPatchPlanInput;
+}
+
 async function collect(iterable: AsyncIterable<CompilerEvent>) {
   const events: CompilerEvent[] = [];
   for await (const event of iterable) events.push(event);
@@ -783,6 +802,15 @@ describe("hosted patch-plan compiler", () => {
     expect(prompt).toMatch(/do not write notebook code/i);
     expect(prompt).not.toContain(generationDirectory);
     expect(prompt).not.toContain("nbformat_minor");
+  });
+
+  it("labels v5 learner authority as a Belief Spec without accepting a legacy sample Belief Test", () => {
+    const prompt = buildCompileHostedPatchPlanPrompt(hostedPatchV5Input());
+
+    expect(prompt).toContain("Approved Belief Spec:");
+    expect(prompt).toContain('"id": "belief_spec_v5"');
+    expect(prompt).not.toContain("Approved Belief Test:");
+    expect(prompt).not.toContain('"id": "belief_test"');
   });
 
   it("repairs the prior Patch Plan without rebuilding resolved lineage", () => {

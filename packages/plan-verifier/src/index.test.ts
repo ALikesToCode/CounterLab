@@ -6,6 +6,7 @@ import type {
   ExperimentPlanV2,
   HostedVerifiedResultSetV2,
 } from "@counterlab/contracts";
+import { migrateBeliefTestV1ToV2 } from "@counterlab/contracts";
 import { hashCanonical } from "@counterlab/session-core";
 
 import {
@@ -722,6 +723,69 @@ describe("hosted Patch Plan verifier", () => {
         context,
       ),
     ).rejects.toBeInstanceOf(PatchPlanVerificationError);
+  });
+
+  it("resolves v5 Belief Spec claim evidence without a legacy Belief Test", async () => {
+    const experimentPlan = await plan();
+    const legacyBelief = belief();
+    const claimEvidence = {
+      kind: "learner_claim" as const,
+      hash: await hashCanonical(legacyBelief.learnerClaim),
+      excerpt: legacyBelief.learnerClaim,
+      relevance: "This is the learner claim the repair is scoped to.",
+    };
+    const migrated = migrateBeliefTestV1ToV2(legacyBelief);
+    const beliefSpec = {
+      ...migrated,
+      evidenceRefs: [...migrated.evidenceRefs, claimEvidence],
+      supportState: "SUPPORTED" as const,
+      learnerDecision: "CONFIRMED" as const,
+    };
+    const patchPlan = {
+      schemaVersion: "1" as const,
+      planId: "patch_plan_v5_belief_1",
+      sessionId: experimentPlan.sessionId,
+      concept: "entity_leakage" as const,
+      conceptPackVersion: experimentPlan.conceptPackVersion,
+      artifactManifestHash: experimentPlan.artifactManifestHash,
+      sourceArtifactHash: manifest().fileSha256,
+      transferResultHash: "e".repeat(64),
+      verifiedResultHash: "d".repeat(64),
+      evidenceRefs: [...legacyBelief.evidenceRefs, claimEvidence],
+      targetCells: [2],
+      entityField: "account_key",
+      targetField: "cancelled",
+      operations: [
+        {
+          id: "replace_row_split_with_group_holdout" as const,
+          cellIndex: 2,
+          reason: "Evaluate complete accounts together.",
+        },
+        {
+          id: "exclude_entity_feature" as const,
+          cellIndex: 2,
+          reason: "Remove the identity shortcut.",
+        },
+      ],
+      preserveUnrelatedCells: true as const,
+      nonClaims: ["This does not establish production performance."],
+    };
+
+    await expect(
+      verifyPatchPlan(patchPlan, {
+        sessionId: experimentPlan.sessionId,
+        manifest: manifest(),
+        beliefSpec,
+        verifiedResultHash: "d".repeat(64),
+        transferResultHash: "e".repeat(64),
+        conceptPackVersion: "2.0.0",
+        allowedTransformations: [
+          "replace_row_split_with_group_holdout",
+          "exclude_entity_feature",
+        ],
+        allowedCellIndices: [2],
+      }),
+    ).resolves.toMatchObject({ status: "VERIFIED" });
   });
 
   it("binds the imbalance repair to the evidenced accuracy-only cell", async () => {

@@ -9,8 +9,10 @@ import {
   HostedExperimentLineageV5Schema,
   InteractiveImbalanceRunRequestSchema,
   InteractiveLeakageRunRequestSchema,
+  PatchOperationIdSchema,
   PredictionContractSchema,
   RunnerJobInputBundleSchema,
+  TransferResultSchema,
   type ArtifactManifest,
   type EvidenceRef,
   type ExperimentPlanV2,
@@ -925,10 +927,281 @@ export type RunnerLabInteractiveRunBundleV5 = z.infer<
   typeof RunnerLabInteractiveRunBundleV5Schema
 >;
 
+export const RunnerPatchCompileBundleV5Schema = z
+  .object({
+    schemaVersion: z.literal("5"),
+    kind: z.literal("PATCH_COMPILE"),
+    jobId: NonEmptyString,
+    sessionId: NonEmptyString,
+    stateVersion: z.number().int().positive(),
+    requestedAt: z.iso.datetime({ offset: true }),
+    artifactManifestHash: Sha256,
+    conceptPackVersion: NonEmptyString,
+    artifactManifest: ArtifactManifestSchema,
+    approvedBeliefSpec: BeliefSpecV2Schema,
+    beliefSpecHash: Sha256,
+    prediction: PredictionContractSchema,
+    compileAuthority: HostedExperimentLineageV5Schema,
+    selectedExperimentIr: ExperimentIRV5Schema,
+    fixedSelection: FixedExperimentSelectionV1Schema,
+    basePlan: ExperimentPlanV2Schema,
+    releaseAuthority: z
+      .object({
+        authoritativeResultHash: Sha256,
+        evidenceVerdict: EvidenceVerdictSchema,
+        evidenceVerdictHash: Sha256,
+        epistemicReportHash: Sha256,
+      })
+      .strict(),
+    verifiedResultSummary: z
+      .object({
+        schemaVersion: z.literal("2"),
+        concept: z.enum(["entity_leakage", "class_imbalance"]),
+        resultHash: Sha256,
+        planId: NonEmptyString,
+        runIds: z.array(NonEmptyString).min(1).max(8),
+      })
+      .strict(),
+    transferResult: TransferResultSchema,
+    patchContract: z
+      .object({
+        id: NonEmptyString,
+        allowedTransformations: z
+          .array(PatchOperationIdSchema)
+          .min(2)
+          .max(3)
+          .readonly(),
+      })
+      .strict(),
+    allowedCellIndices: z.array(z.number().int().nonnegative()).min(1).max(4),
+    patchPlanSchema: z.record(z.string(), z.json()),
+    permittedOutputs: z
+      .tuple([z.literal("patch-plan.json"), z.literal("public-rationale.md")])
+      .readonly(),
+  })
+  .strict()
+  .superRefine((bundle, context) => {
+    const issue = (message: string, path: PropertyKey[]) =>
+      context.addIssue({ code: "custom", message, path });
+    const belief = bundle.approvedBeliefSpec;
+    const ir = bundle.selectedExperimentIr;
+    const plan = bundle.basePlan;
+    const compile = bundle.compileAuthority;
+    const verdict = bundle.releaseAuthority.evidenceVerdict;
+    const summary = bundle.verifiedResultSummary;
+
+    if (
+      belief.learnerDecision !== "CONFIRMED" ||
+      belief.supportState !== "SUPPORTED" ||
+      bundle.artifactManifest.support.status !== "SUPPORTED"
+    ) {
+      issue("v5 patching requires approved supported evidence authority", [
+        "approvedBeliefSpec",
+      ]);
+    }
+    if (
+      bundle.sessionId !== bundle.prediction.sessionId ||
+      bundle.sessionId !== ir.sessionId ||
+      bundle.sessionId !== plan.sessionId ||
+      bundle.sessionId !== bundle.transferResult.sessionId
+    ) {
+      issue("v5 patch session lineage does not match", ["sessionId"]);
+    }
+    if (
+      belief.id !== bundle.prediction.beliefTestId ||
+      belief.id !== ir.beliefSpecId ||
+      belief.id !== plan.beliefTestId
+    ) {
+      issue("v5 patch Belief Spec lineage does not match", [
+        "approvedBeliefSpec",
+        "id",
+      ]);
+    }
+    if (
+      belief.concept !== ir.concept ||
+      ir.concept !== plan.concept ||
+      plan.concept !== summary.concept
+    ) {
+      issue("v5 patch Subject Pack lineage does not match", [
+        "verifiedResultSummary",
+        "concept",
+      ]);
+    }
+    if (
+      bundle.conceptPackVersion !== ir.conceptPackVersion ||
+      bundle.conceptPackVersion !== plan.conceptPackVersion
+    ) {
+      issue("v5 patch Subject Pack version lineage does not match", [
+        "conceptPackVersion",
+      ]);
+    }
+    if (
+      bundle.artifactManifestHash !== compile.artifactManifestHash ||
+      bundle.artifactManifestHash !== ir.artifactManifestHash ||
+      bundle.artifactManifestHash !== plan.artifactManifestHash
+    ) {
+      issue("v5 patch Artifact Manifest lineage does not match", [
+        "artifactManifestHash",
+      ]);
+    }
+    if (
+      bundle.beliefSpecHash !== compile.beliefSpecHash ||
+      bundle.beliefSpecHash !== ir.beliefSpecHash ||
+      bundle.prediction.immutableHash !== compile.predictionHash
+    ) {
+      issue("v5 patch belief or prediction hash lineage does not match", [
+        "compileAuthority",
+      ]);
+    }
+    if (
+      compile.selectedExperimentIrHash !== verdict.irHash ||
+      compile.scorerVersion !== bundle.fixedSelection.scorerVersion
+    ) {
+      issue("v5 patch compile authority does not match released evidence", [
+        "compileAuthority",
+      ]);
+    }
+    if (verdict.kind !== "SUPPORTS") {
+      issue("repair unlocks only after a supporting evidence verdict", [
+        "releaseAuthority",
+        "evidenceVerdict",
+      ]);
+    } else if (
+      verdict.resultHash !== bundle.releaseAuthority.authoritativeResultHash
+    ) {
+      issue("v5 patch released result does not match its verdict", [
+        "releaseAuthority",
+        "authoritativeResultHash",
+      ]);
+    }
+    if (
+      summary.resultHash !== bundle.releaseAuthority.authoritativeResultHash ||
+      summary.planId !== plan.planId
+    ) {
+      issue("v5 patch result summary does not match released evidence", [
+        "verifiedResultSummary",
+      ]);
+    }
+    const expectedRunIds = [plan.baseline, ...plan.interventions].map(
+      (run) => run.runId,
+    );
+    if (
+      new Set(summary.runIds).size !== summary.runIds.length ||
+      summary.runIds.length !== expectedRunIds.length ||
+      expectedRunIds.some((runId) => !summary.runIds.includes(runId))
+    ) {
+      issue("v5 patch result runs do not match the authoritative Plan", [
+        "verifiedResultSummary",
+        "runIds",
+      ]);
+    }
+    if (
+      bundle.transferResult.outcome !== "PASSED" ||
+      bundle.transferResult.taskId !== ir.transfer.taskId
+    ) {
+      issue("v5 patch requires the selected experiment's passed transfer", [
+        "transferResult",
+      ]);
+    }
+
+    if (ir.selection.status !== "SELECTED") {
+      issue("v5 patch requires a fixed selected Experiment IR", [
+        "selectedExperimentIr",
+        "selection",
+      ]);
+    } else {
+      const embeddedSelection = {
+        eligibleCandidateIds: ir.selection.eligibleCandidateIds,
+        rejectedCandidates: ir.selection.rejectedCandidates,
+        selectedCandidateId: ir.selection.candidateId,
+        minimumSeparation: ir.selection.minimumSeparation,
+        requiredSeparation: ir.selection.requiredSeparation,
+        complexityCost: ir.selection.complexityCost,
+        normalizedScore: ir.selection.normalizedScore,
+        scorerVersion: ir.selection.scorerVersion,
+      };
+      if (!sameJson(embeddedSelection, bundle.fixedSelection)) {
+        issue("v5 patch fixed selection lineage does not match", [
+          "fixedSelection",
+        ]);
+      }
+    }
+    try {
+      if (!sameJson(projectExperimentIRV5ToPlanV2(ir), plan)) {
+        issue("v5 patch Plan does not match the selected Experiment IR", [
+          "basePlan",
+        ]);
+      }
+    } catch {
+      issue("v5 patch Experiment IR cannot be projected", [
+        "selectedExperimentIr",
+      ]);
+    }
+    if (!sameJson(ir.evidenceRefs, belief.evidenceRefs)) {
+      issue("v5 patch evidence lineage does not match", [
+        "selectedExperimentIr",
+        "evidenceRefs",
+      ]);
+    }
+    for (const [index, evidence] of belief.evidenceRefs.entries()) {
+      if (!evidenceResolvesStructurally(evidence, bundle.artifactManifest)) {
+        issue("v5 patch evidence does not resolve to the Artifact Manifest", [
+          "approvedBeliefSpec",
+          "evidenceRefs",
+          index,
+        ]);
+      }
+    }
+
+    const expectedTransformations =
+      belief.concept === "entity_leakage"
+        ? new Set([
+            "replace_row_split_with_group_holdout",
+            "exclude_entity_feature",
+          ])
+        : new Set([
+            "stratify_classification_holdout",
+            "add_majority_baseline",
+            "replace_accuracy_only_evaluation",
+          ]);
+    const transformations = new Set(
+      bundle.patchContract.allowedTransformations,
+    );
+    if (
+      transformations.size !== expectedTransformations.size ||
+      [...transformations].some(
+        (operation) => !expectedTransformations.has(operation),
+      )
+    ) {
+      issue("v5 patch transformations do not match the Subject Pack", [
+        "patchContract",
+        "allowedTransformations",
+      ]);
+    }
+    if (
+      new Set(bundle.allowedCellIndices).size !==
+        bundle.allowedCellIndices.length ||
+      !bundle.allowedCellIndices.every((index) =>
+        bundle.artifactManifest.cells.some(
+          (cell) => cell.index === index && cell.type === "code",
+        ),
+      )
+    ) {
+      issue("v5 patch cell allowlist does not resolve to code cells", [
+        "allowedCellIndices",
+      ]);
+    }
+  });
+
+export type RunnerPatchCompileBundleV5 = z.infer<
+  typeof RunnerPatchCompileBundleV5Schema
+>;
+
 export const RunnerJobInputBundleV5Schema = z.union([
   RunnerLabCompileBundleV5Schema,
   RunnerLabRunBundleV5Schema,
   RunnerLabInteractiveRunBundleV5Schema,
+  RunnerPatchCompileBundleV5Schema,
 ]);
 
 export type RunnerJobInputBundleV5 = z.infer<
@@ -940,6 +1213,7 @@ export const VersionedRunnerJobInputBundleSchema = z.union([
   RunnerLabCompileBundleV5Schema,
   RunnerLabRunBundleV5Schema,
   RunnerLabInteractiveRunBundleV5Schema,
+  RunnerPatchCompileBundleV5Schema,
 ]);
 
 export type VersionedRunnerJobInputBundle = z.infer<

@@ -205,11 +205,10 @@ export type RepairHostedScientificMethodInput = z.infer<
   typeof RepairHostedScientificMethodInputSchema
 >;
 
-export const CompileHostedPatchPlanInputSchema = BaseCompilationSchema.extend({
+const HostedPatchPlanInputBaseSchema = BaseCompilationSchema.extend({
   artifactManifestHash: z.string().regex(/^[a-f0-9]{64}$/i),
   sourceArtifactHash: z.string().regex(/^[a-f0-9]{64}$/i),
   conceptPackVersion: z.string().min(1).max(64),
-  approvedBeliefTest: JsonObjectSchema,
   artifactManifest: JsonObjectSchema,
   verifiedResultSummary: JsonObjectSchema,
   transferSummary: JsonObjectSchema,
@@ -220,23 +219,47 @@ export const CompileHostedPatchPlanInputSchema = BaseCompilationSchema.extend({
   permittedOutputs: z.array(z.string().min(1).max(128)).length(2),
 }).strict();
 
+const CompileHostedPatchPlanInputV1Schema =
+  HostedPatchPlanInputBaseSchema.extend({
+    approvedBeliefTest: JsonObjectSchema,
+  }).strict();
+
+const CompileHostedPatchPlanInputV5Schema =
+  HostedPatchPlanInputBaseSchema.extend({
+    authorityVersion: z.literal("5"),
+    approvedBeliefSpec: JsonObjectSchema,
+  }).strict();
+
+export const CompileHostedPatchPlanInputSchema = z.union([
+  CompileHostedPatchPlanInputV1Schema,
+  CompileHostedPatchPlanInputV5Schema,
+]);
+
 export type CompileHostedPatchPlanInput = z.infer<
   typeof CompileHostedPatchPlanInputSchema
 >;
 
-export const RepairHostedPatchPlanInputSchema =
-  CompileHostedPatchPlanInputSchema.extend({
-    repairAttempt: z.union([z.literal(1), z.literal(2)]),
-    verifierCounterexamples: z
-      .array(HostedVerifierCounterexampleSchema)
-      .min(1)
-      .max(24),
-    previousOutputHashes: z.record(
-      z.string(),
-      z.string().regex(/^[a-f0-9]{64}$/i),
-    ),
-    previousCandidatePlan: JsonValueSchema,
-  }).strict();
+const HostedPatchPlanRepairFields = {
+  repairAttempt: z.union([z.literal(1), z.literal(2)]),
+  verifierCounterexamples: z
+    .array(HostedVerifierCounterexampleSchema)
+    .min(1)
+    .max(24),
+  previousOutputHashes: z.record(
+    z.string(),
+    z.string().regex(/^[a-f0-9]{64}$/i),
+  ),
+  previousCandidatePlan: JsonValueSchema,
+} as const;
+
+export const RepairHostedPatchPlanInputSchema = z.union([
+  CompileHostedPatchPlanInputV1Schema.extend(
+    HostedPatchPlanRepairFields,
+  ).strict(),
+  CompileHostedPatchPlanInputV5Schema.extend(
+    HostedPatchPlanRepairFields,
+  ).strict(),
+]);
 
 export type RepairHostedPatchPlanInput = z.infer<
   typeof RepairHostedPatchPlanInputSchema

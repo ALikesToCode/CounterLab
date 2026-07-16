@@ -233,6 +233,12 @@ function renderHostedPatchPlanPrompt(
   input: CompileHostedPatchPlanInput,
 ): string {
   validateHostedPatchOutputs(input.permittedOutputs);
+  const beliefAuthority =
+    "approvedBeliefSpec" in input
+      ? input.approvedBeliefSpec
+      : input.approvedBeliefTest;
+  const beliefAuthorityName =
+    "approvedBeliefSpec" in input ? "Belief Spec" : "Belief Test";
   return `You are the bounded CounterLab hosted Patch Plan compiler. Select the smallest registered repair after deterministic transfer has passed.
 
 Authority boundary:
@@ -241,7 +247,7 @@ Authority boundary:
 - publicRationale becomes public-rationale.md, is display-only, and never determines patch validity.
 - Do not write notebook code, Python, shell commands, SQL, imports, formulas, result literals, raw paths, or dynamic expressions.
 - Select only the registered transformations and allowed cell indexes below.
-- Copy evidence references only from the approved Belief Test and Artifact Manifest.
+- Copy evidence references only from the approved ${beliefAuthorityName} and Artifact Manifest.
 - Preserve unrelated cells and make no claim beyond the verified result and passed transfer.
 - Do not read files, execute notebook cells, inspect environment variables, access parent directories, use the network, or install packages.
 - Finish with concise public status only; do not reveal private reasoning.
@@ -256,8 +262,8 @@ ${json({
   transferResultHash: input.transferSummary.resultHash,
 })}
 
-Approved Belief Test:
-${json(input.approvedBeliefTest)}
+Approved ${beliefAuthorityName}:
+${json(beliefAuthority)}
 
 Sanitized Artifact Manifest:
 ${json(input.artifactManifest)}

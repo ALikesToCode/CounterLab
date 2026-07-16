@@ -33,12 +33,14 @@ import {
   ExperimentIRV5Schema,
   RunnerLabCompileBundleV5Schema,
   RunnerLabRunBundleV5Schema,
+  RunnerPatchCompileBundleV5Schema,
   hashExperimentIR,
   migrateExperimentPlanV2ToIRV5,
   projectExperimentIRV5ToPlanV2,
   type RunnerLabRunBundleV5,
   type RunnerScientificCandidateV5,
   type RunnerLabCompileBundleV5,
+  type RunnerPatchCompileBundleV5,
   type VersionedRunnerJobInputBundle,
 } from "@counterlab/experiment-ir";
 import { LabSceneV2Schema } from "@counterlab/generative-ui-contracts";
@@ -533,6 +535,107 @@ async function scientificRunBundleV5(
       authoritativeInputHashes: expectedHashes,
     },
     permittedOutputs: ["verified-result.json"],
+  });
+}
+
+async function patchBundleV5(
+  jobId = "runner_job_patch_scientific_1",
+): Promise<RunnerPatchCompileBundleV5> {
+  const run = await scientificRunBundleV5("runner_job_run_for_patch_1");
+  const authoritativeResultHash = "4".repeat(64);
+  return RunnerPatchCompileBundleV5Schema.parse({
+    schemaVersion: "5",
+    kind: "PATCH_COMPILE",
+    jobId,
+    sessionId: run.sessionId,
+    stateVersion: 11,
+    requestedAt: "2026-07-14T10:00:00.000Z",
+    artifactManifestHash: run.artifactManifestHash,
+    conceptPackVersion: run.selectedExperimentIr.conceptPackVersion,
+    artifactManifest: run.artifactManifest,
+    approvedBeliefSpec: run.approvedBeliefSpec,
+    beliefSpecHash: run.beliefSpecHash,
+    prediction: run.prediction,
+    compileAuthority: {
+      schemaVersion: "5",
+      status: "VERIFIED",
+      source: "hosted-experiment-ir-v5",
+      jobId: run.provenance.compileJobId,
+      inputBundleHash: run.provenance.compileInputBundleHash,
+      artifactManifestHash: run.artifactManifestHash,
+      beliefSpecHash: run.beliefSpecHash,
+      predictionHash: run.prediction.immutableHash,
+      compilerOutputFileHashes: run.provenance.compilerOutputFileHashes,
+      discriminationContractHash: "b".repeat(64),
+      rawExperimentIrCanonicalHash: run.provenance.rawExperimentIrCanonicalHash,
+      labSceneHash: "c".repeat(64),
+      candidateVerificationReportHash:
+        run.provenance.candidateVerificationReportHash,
+      scientificVerifierVersion: "scientific-candidate-verifier-v1",
+      selectionHash: run.expectedHashes.experimentSelection,
+      selectedExperimentIrHash: run.selectedExperimentIrHash,
+      projectedPlanHash: run.expectedHashes.projectedPlan,
+      scorerVersion: run.fixedSelection.scorerVersion,
+      projectionAdapterVersion: "experiment-ir-v5-to-plan-v2-v1",
+    },
+    selectedExperimentIr: run.selectedExperimentIr,
+    fixedSelection: run.fixedSelection,
+    basePlan: run.projectedPlan,
+    releaseAuthority: {
+      authoritativeResultHash,
+      evidenceVerdict: {
+        schemaVersion: "1",
+        kind: "SUPPORTS",
+        hypothesisId: "competing",
+        scope: "This supported notebook and declared deployment unit.",
+        resultHash: authoritativeResultHash,
+        irHash: run.selectedExperimentIrHash,
+        technicalReportHash: "2".repeat(64),
+        verifierVersion: "epistemic-verifier-v1",
+      },
+      evidenceVerdictHash: "3".repeat(64),
+      epistemicReportHash: "6".repeat(64),
+    },
+    verifiedResultSummary: {
+      schemaVersion: "2",
+      concept: run.selectedExperimentIr.concept,
+      resultHash: authoritativeResultHash,
+      planId: run.projectedPlan.planId,
+      runIds: [
+        run.projectedPlan.baseline,
+        ...run.projectedPlan.interventions,
+      ].map((candidate) => candidate.runId),
+    },
+    transferResult: {
+      schemaVersion: "1",
+      id: "transfer_scientific_1",
+      sessionId: run.sessionId,
+      taskId: run.selectedExperimentIr.transfer.taskId,
+      outcome: "PASSED",
+      selectedStrategy: "time_ordered_holdout",
+      identifiedRisks: ["centered_window_reads_future"],
+      evidenceChoices: ["random_split_mixes_dates"],
+      checks: [
+        {
+          invariant: "time_ordered_evaluation",
+          passed: true,
+          evidence: "Future rows remain outside training.",
+        },
+      ],
+      evaluatorVersion: "forecast-transfer-v1",
+      evaluatedAt: "2026-07-14T09:59:00.000Z",
+      resultHash: "5".repeat(64),
+    },
+    patchContract: {
+      id: "leakage-notebook-patch-v2",
+      allowedTransformations: [
+        "replace_row_split_with_group_holdout",
+        "exclude_entity_feature",
+      ],
+    },
+    allowedCellIndices: [1],
+    patchPlanSchema: { type: "object" },
+    permittedOutputs: ["patch-plan.json", "public-rationale.md"],
   });
 }
 
@@ -1276,6 +1379,32 @@ describe("HostedRunnerJobProcessor", () => {
       finalEventCursor: 6,
       operationalMetrics: { patchDurationMs: 53 },
     });
+  });
+
+  it("routes a v5 repair through the bounded Patch Plan compiler and fixed patch process", async () => {
+    const patchPlan = { schemaVersion: "1", operations: [] };
+    const compiler = new FakeCompiler(patchPlan);
+    const fixedPatch = new FakeFixedPatch();
+    const controlPlane = new FakeControlPlane(await patchBundleV5(), [
+      { ...verifiedDecision, nextCursor: 4 },
+    ]);
+    const processor = new HostedRunnerJobProcessor({
+      workspaceRoot: await workspace(),
+      compiler,
+      fixedPatch,
+      controlPlane,
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_v5_patch`,
+    });
+
+    await processor.run("runner_job_patch_scientific_1");
+
+    expect(compiler.patchCompileCalls).toBe(1);
+    expect(compiler.compileCalls).toBe(0);
+    expect(fixedPatch.calls).toEqual([
+      { source: controlPlane.source, plan: JSON.stringify(patchPlan) },
+    ]);
+    expect(controlPlane.callbacks[0]).toMatchObject({ status: "VERIFIED" });
   });
 
   it("repairs a Patch Plan from its previous candidate and exact lineage", async () => {
