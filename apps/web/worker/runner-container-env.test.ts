@@ -24,7 +24,7 @@ describe("runner Container environment", () => {
       NODE_ENV: "production",
       PORT: "8080",
       COUNTERLAB_RUNNER_WORK_ROOT: "/work/jobs",
-      COUNTERLAB_CODEX_HOME_ROOT: "/run/counterlab-codex",
+      COUNTERLAB_CODEX_HOME_ROOT: "/tmp/counterlab-codex",
       COUNTERLAB_CODEX_EXECUTABLE: "/usr/local/bin/codex",
       COUNTERLAB_SETPRIV_EXECUTABLE: "/usr/bin/setpriv",
       COUNTERLAB_PYTHON_EXECUTABLE: "/opt/counterlab-venv/bin/python",
