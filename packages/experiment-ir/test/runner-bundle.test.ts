@@ -293,7 +293,9 @@ function labRunBundleV5() {
     beliefSpec: compile.beliefSpecHash,
     prediction: compile.prediction.immutableHash,
     fixtureDescriptor: digest("7"),
-    rawExperimentIr: digest("0"),
+    rawExperimentIrFile: digest("0"),
+    rawExperimentIrCanonical: digest("a"),
+    scientificVerification: digest("9"),
     experimentSelection: digest("2"),
     selectedExperimentIr: digest("1"),
     projectedPlan: digest("3"),
@@ -325,10 +327,14 @@ function labRunBundleV5() {
       compileJobId: compile.jobId,
       compilerArtifactHashes: {
         "discrimination-contract.json": digest("4"),
-        "experiment-ir.json": expectedHashes.rawExperimentIr,
+        "experiment-ir.json": expectedHashes.rawExperimentIrFile,
         "lab-scene.json": digest("5"),
         "public-rationale.md": digest("6"),
       },
+      rawExperimentIrCanonicalHash:
+        expectedHashes.rawExperimentIrCanonical,
+      scientificVerifierVersion: "scientific-candidate-verifier-v1" as const,
+      scientificVerificationHash: expectedHashes.scientificVerification,
       scorerVersion: fixedSelection.scorerVersion,
       projectionAdapterVersion: "experiment-ir-v5-to-plan-v2-v1" as const,
     },
@@ -467,7 +473,8 @@ describe("Runner LAB_RUN bundle v5", () => {
       selectedExperimentIrHash: digest("1"),
       expectedHashes: {
         fixtureDescriptor: digest("7"),
-        rawExperimentIr: digest("0"),
+        rawExperimentIrFile: digest("0"),
+        rawExperimentIrCanonical: digest("a"),
         selectedExperimentIr: digest("1"),
       },
       permittedOutputs: ["verified-result.json"],
@@ -586,20 +593,20 @@ describe("Runner LAB_RUN bundle v5", () => {
         ...source,
         expectedHashes: {
           ...source.expectedHashes,
-          rawExperimentIr: source.expectedHashes.selectedExperimentIr,
+          rawExperimentIrCanonical:
+            source.expectedHashes.selectedExperimentIr,
         },
         provenance: {
           ...source.provenance,
-          compilerArtifactHashes: {
-            ...source.provenance.compilerArtifactHashes,
-            "experiment-ir.json": source.expectedHashes.selectedExperimentIr,
-          },
+          rawExperimentIrCanonicalHash:
+            source.expectedHashes.selectedExperimentIr,
         },
         resultOutput: {
           ...source.resultOutput,
           authoritativeInputHashes: {
             ...source.resultOutput.authoritativeInputHashes,
-            rawExperimentIr: source.expectedHashes.selectedExperimentIr,
+            rawExperimentIrCanonical:
+              source.expectedHashes.selectedExperimentIr,
           },
         },
       }).success,
@@ -613,6 +620,15 @@ describe("Runner LAB_RUN bundle v5", () => {
             ...source.provenance.compilerArtifactHashes,
             "experiment-ir.json": source.expectedHashes.selectedExperimentIr,
           },
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      RunnerJobInputBundleV5Schema.safeParse({
+        ...source,
+        provenance: {
+          ...source.provenance,
+          scientificVerificationHash: digest("0"),
         },
       }).success,
     ).toBe(false);

@@ -290,7 +290,9 @@ const RunnerLabRunExpectedHashesV5Schema = z
     beliefSpec: Sha256,
     prediction: Sha256,
     fixtureDescriptor: Sha256,
-    rawExperimentIr: Sha256,
+    rawExperimentIrFile: Sha256,
+    rawExperimentIrCanonical: Sha256,
+    scientificVerification: Sha256,
     experimentSelection: Sha256,
     selectedExperimentIr: Sha256,
     projectedPlan: Sha256,
@@ -333,6 +335,11 @@ export const RunnerLabRunBundleV5Schema = z
             "public-rationale.md": Sha256,
           })
           .strict(),
+        rawExperimentIrCanonicalHash: Sha256,
+        scientificVerifierVersion: z.literal(
+          "scientific-candidate-verifier-v1",
+        ),
+        scientificVerificationHash: Sha256,
         scorerVersion: TokenId,
         projectionAdapterVersion: z.literal("experiment-ir-v5-to-plan-v2-v1"),
       })
@@ -446,7 +453,7 @@ export const RunnerLabRunBundleV5Schema = z
       ]);
     }
     if (
-      bundle.expectedHashes.rawExperimentIr ===
+      bundle.expectedHashes.rawExperimentIrCanonical ===
       bundle.expectedHashes.selectedExperimentIr
     ) {
       addLineageIssue(
@@ -533,12 +540,30 @@ export const RunnerLabRunBundleV5Schema = z
     }
     if (
       bundle.provenance.compilerArtifactHashes["experiment-ir.json"] !==
-      bundle.expectedHashes.rawExperimentIr
+      bundle.expectedHashes.rawExperimentIrFile
     ) {
       addLineageIssue(
         "raw compiled Experiment IR hash lineage does not match",
         ["provenance", "compilerArtifactHashes", "experiment-ir.json"],
       );
+    }
+    if (
+      bundle.provenance.rawExperimentIrCanonicalHash !==
+      bundle.expectedHashes.rawExperimentIrCanonical
+    ) {
+      addLineageIssue(
+        "canonical raw Experiment IR hash lineage does not match",
+        ["provenance", "rawExperimentIrCanonicalHash"],
+      );
+    }
+    if (
+      bundle.provenance.scientificVerificationHash !==
+      bundle.expectedHashes.scientificVerification
+    ) {
+      addLineageIssue("scientific verification hash lineage does not match", [
+        "provenance",
+        "scientificVerificationHash",
+      ]);
     }
 
     if (ir.selection.status === "SELECTED") {
