@@ -30,9 +30,11 @@ import { schemaSummaryHash } from "@counterlab/belief-analyst";
 import {
   ExperimentIRV5Schema,
   RunnerLabCompileBundleV5Schema,
+  RunnerLabInteractiveRunBundleV5Schema,
   RunnerLabRunBundleV5Schema,
   hashExperimentIR,
   type RunnerLabCompileBundleV5,
+  type RunnerLabInteractiveRunBundleV5,
   type RunnerLabRunBundleV5,
 } from "@counterlab/experiment-ir";
 
@@ -4047,6 +4049,213 @@ describe("Cloudflare Worker API", () => {
     });
   });
 
+  it("runs a v5 interactive control from frozen authority without replacing the verdict", async () => {
+    const harness = await preparedScientificHostedRunner();
+    const run = await completeScientificCompileAndQueueRun(harness);
+    const authoritativeJobId = run.dispatch.job.jobId;
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${authoritativeJobId}/start`,
+          { method: "POST", headers: run.authorization },
+        )
+      ).status,
+    ).toBe(200);
+    const authoritativeResult = await scientificLeakageResult(run.bundle);
+    const authoritativeText = JSON.stringify(authoritativeResult);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${authoritativeJobId}/outputs/verified-result.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...run.authorization,
+              "content-type": "application/json",
+            },
+            body: authoritativeText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    expect(
+      (
+        await postJson(
+          harness.app,
+          `/api/runner/jobs/${authoritativeJobId}/callback`,
+          {
+            schemaVersion: "1",
+            callbackId: "callback_scientific_before_interactive",
+            idempotencyKey: "scientific-before-interactive",
+            jobId: authoritativeJobId,
+            stateVersion: run.dispatch.job.stateVersion,
+            status: "VERIFIED",
+            outputHashes: [await sha256Text(authoritativeText)],
+            finalEventCursor: 0,
+            occurredAt: "2026-07-14T10:00:04.000Z",
+          },
+          run.authorization,
+        )
+      ).status,
+    ).toBe(200);
+    const before = await harness.sessionRepository.find(
+      harness.bundle.sessionId,
+    );
+    if (
+      before?.verifiedResult === undefined ||
+      before.evidenceVerdict === undefined ||
+      before.epistemicReportHash === undefined
+    ) {
+      throw new Error("v5 source evidence was not released");
+    }
+
+    const queued = await postJson(
+      harness.app,
+      `/api/sessions/${harness.bundle.sessionId}/lab/interactive`,
+      {
+        schemaVersion: "1",
+        splitStrategy: "group",
+        entityField: "customer_id",
+        identityAblation: false,
+        testFraction: 0.25,
+      },
+    );
+    expect(queued.status).toBe(202);
+    const queuedBody = (await queued.json()) as {
+      data: { selectedRunId: string; configurationHash: string };
+    };
+    expect(queuedBody.data.selectedRunId).toMatch(
+      /^interactive-[a-f0-9]{16}$/u,
+    );
+
+    const interactiveDispatch = harness.dispatcher.dispatched[2];
+    if (interactiveDispatch === undefined) {
+      throw new Error("v5 interactive run was not dispatched");
+    }
+    const interactiveInput = harness.runnerObjects.objects.get(
+      `runner-input/${interactiveDispatch.job.jobId}.json`,
+    );
+    if (interactiveInput === undefined) {
+      throw new Error("v5 interactive input is missing");
+    }
+    const interactiveBundle = RunnerLabInteractiveRunBundleV5Schema.parse(
+      JSON.parse(interactiveInput.body),
+    );
+    expect(interactiveBundle).toMatchObject({
+      purpose: "INTERACTIVE",
+      selectedRunId: queuedBody.data.selectedRunId,
+      configurationHash: queuedBody.data.configurationHash,
+      releaseAuthority: {
+        authoritativeResultHash: before.verifiedResult.resultHash,
+        evidenceVerdict: { kind: "SUPPORTS" },
+        epistemicReportHash: before.epistemicReportHash,
+      },
+    });
+
+    for (const path of [
+      "discrimination-contract.json",
+      "experiment-ir.json",
+      "lab-scene.json",
+      "public-rationale.md",
+    ]) {
+      expect(
+        harness.runnerObjects.objects.has(
+          `runner-authority/${run.staged.jobId}/compiler-output/${path}`,
+        ),
+      ).toBe(true);
+      harness.runnerObjects.objects.delete(
+        `runner-output/${run.staged.jobId}/${path}`,
+      );
+    }
+
+    const interactiveResult = await scientificLeakageResult({
+      ...run.bundle,
+      projectedPlan: interactiveBundle.interactivePlan,
+    } as RunnerLabRunBundleV5);
+    const interactiveText = JSON.stringify(interactiveResult);
+    const interactiveAuthorization = {
+      authorization: `Bearer ${interactiveDispatch.token}`,
+    };
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${interactiveDispatch.job.jobId}/start`,
+          { method: "POST", headers: interactiveAuthorization },
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${interactiveDispatch.job.jobId}/outputs/verified-result.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...interactiveAuthorization,
+              "content-type": "application/json",
+            },
+            body: interactiveText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    const completed = await postJson(
+      harness.app,
+      `/api/runner/jobs/${interactiveDispatch.job.jobId}/callback`,
+      {
+        schemaVersion: "1",
+        callbackId: "callback_scientific_interactive_v5",
+        idempotencyKey: "scientific-interactive-v5",
+        jobId: interactiveDispatch.job.jobId,
+        stateVersion: interactiveDispatch.job.stateVersion,
+        status: "VERIFIED",
+        outputHashes: [await sha256Text(interactiveText)],
+        finalEventCursor: 0,
+        occurredAt: "2026-07-14T10:00:06.000Z",
+      },
+      interactiveAuthorization,
+    );
+    expect(completed.status).toBe(200);
+    await expect(completed.json()).resolves.toMatchObject({
+      data: {
+        runnerJob: { status: "VERIFIED", eventCursor: 2 },
+        session: {
+          state: before.state,
+          verifiedResult: { resultHash: before.verifiedResult.resultHash },
+          evidenceVerdict: before.evidenceVerdict,
+          epistemicReportHash: before.epistemicReportHash,
+        },
+        verification: { status: "VERIFIED" },
+      },
+    });
+
+    harness.runnerObjects.objects.set(
+      `runner-output/${interactiveDispatch.job.jobId}/verified-result.json`,
+      { body: "{}", contentType: "application/json" },
+    );
+    const fetched = await harness.app.request(
+      `/api/sessions/${harness.bundle.sessionId}/jobs/${interactiveDispatch.job.jobId}/result`,
+    );
+    expect(fetched.status).toBe(200);
+    await expect(fetched.json()).resolves.toMatchObject({
+      data: {
+        result: { resultHash: interactiveResult.resultHash },
+        selectedRunId: interactiveBundle.selectedRunId,
+        configurationHash: interactiveBundle.configurationHash,
+        verification: { status: "VERIFIED" },
+      },
+    });
+    const after = await harness.sessionRepository.find(
+      harness.bundle.sessionId,
+    );
+    expect(after).toMatchObject({
+      state: before.state,
+      verifiedResult: { resultHash: before.verifiedResult.resultHash },
+      evidenceVerdict: before.evidenceVerdict,
+      epistemicReportHash: before.epistemicReportHash,
+    });
+  });
+
   it("releases a class-imbalance v5 result through the same Worker authority boundary", async () => {
     const harness = await preparedScientificImbalanceHostedRunner();
     const run = await completeScientificCompileAndQueueRun(
@@ -4189,6 +4398,161 @@ describe("Cloudflare Worker API", () => {
           taskId: "manufacturing-defect-transfer-01",
           evaluatorVersion: "counterlab-imbalance-transfer-v1",
         },
+      },
+    });
+  });
+
+  it("runs class-imbalance v5 controls through the fixed interactive authority", async () => {
+    const harness = await preparedScientificImbalanceHostedRunner();
+    const run = await completeScientificCompileAndQueueRun(
+      harness,
+      scientificImbalanceCandidateArtifacts,
+    );
+    const sourceJobId = run.dispatch.job.jobId;
+    expect(
+      (
+        await harness.app.request(`/api/runner/jobs/${sourceJobId}/start`, {
+          method: "POST",
+          headers: run.authorization,
+        })
+      ).status,
+    ).toBe(200);
+    const sourceResult = await scientificImbalanceResult(run.bundle);
+    const sourceText = JSON.stringify(sourceResult);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${sourceJobId}/outputs/verified-result.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...run.authorization,
+              "content-type": "application/json",
+            },
+            body: sourceText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    expect(
+      (
+        await postJson(
+          harness.app,
+          `/api/runner/jobs/${sourceJobId}/callback`,
+          {
+            schemaVersion: "1",
+            callbackId: "callback_imbalance_before_interactive_v5",
+            idempotencyKey: "imbalance-before-interactive-v5",
+            jobId: sourceJobId,
+            stateVersion: run.dispatch.job.stateVersion,
+            status: "VERIFIED",
+            outputHashes: [await sha256Text(sourceText)],
+            finalEventCursor: 0,
+            occurredAt: "2026-07-14T10:00:04.000Z",
+          },
+          run.authorization,
+        )
+      ).status,
+    ).toBe(200);
+    const before = await harness.sessionRepository.find(harness.sessionId);
+    if (
+      before?.verifiedResult === undefined ||
+      before.evidenceVerdict === undefined ||
+      before.epistemicReportHash === undefined
+    ) {
+      throw new Error("class-imbalance source authority is missing");
+    }
+
+    const queued = await postJson(
+      harness.app,
+      `/api/sessions/${harness.sessionId}/lab/interactive`,
+      {
+        schemaVersion: "1",
+        concept: "class_imbalance",
+        threshold: 0.25,
+        prevalenceScenario: "observed",
+        metricFocus: "recall",
+      },
+    );
+    expect(queued.status).toBe(202);
+    const dispatch = harness.dispatcher.dispatched[2];
+    if (dispatch === undefined) {
+      throw new Error("class-imbalance interactive run was not dispatched");
+    }
+    const inputObject = harness.runnerObjects.objects.get(
+      `runner-input/${dispatch.job.jobId}.json`,
+    );
+    if (inputObject === undefined) {
+      throw new Error("class-imbalance interactive bundle is missing");
+    }
+    const bundle = RunnerLabInteractiveRunBundleV5Schema.parse(
+      JSON.parse(inputObject.body),
+    );
+    expect(
+      bundle.interactivePlan.interventions.find(
+        (runSpec) => runSpec.runId === bundle.selectedRunId,
+      ),
+    ).toMatchObject({
+      operation: "imbalance.threshold_sweep",
+      threshold: 0.25,
+      prevalenceScenario: "observed",
+    });
+    const result = await scientificImbalanceResult({
+      ...run.bundle,
+      projectedPlan: bundle.interactivePlan,
+    } as RunnerLabRunBundleV5);
+    const resultText = JSON.stringify(result);
+    const authorization = { authorization: `Bearer ${dispatch.token}` };
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${dispatch.job.jobId}/start`,
+          { method: "POST", headers: authorization },
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${dispatch.job.jobId}/outputs/verified-result.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...authorization,
+              "content-type": "application/json",
+            },
+            body: resultText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    const completed = await postJson(
+      harness.app,
+      `/api/runner/jobs/${dispatch.job.jobId}/callback`,
+      {
+        schemaVersion: "1",
+        callbackId: "callback_imbalance_interactive_v5",
+        idempotencyKey: "imbalance-interactive-v5",
+        jobId: dispatch.job.jobId,
+        stateVersion: dispatch.job.stateVersion,
+        status: "VERIFIED",
+        outputHashes: [await sha256Text(resultText)],
+        finalEventCursor: 0,
+        occurredAt: "2026-07-14T10:00:06.000Z",
+      },
+      authorization,
+    );
+    expect(completed.status).toBe(200);
+    await expect(completed.json()).resolves.toMatchObject({
+      data: {
+        runnerJob: { status: "VERIFIED", eventCursor: 2 },
+        session: {
+          state: before.state,
+          verifiedResult: { resultHash: before.verifiedResult.resultHash },
+          evidenceVerdict: before.evidenceVerdict,
+          epistemicReportHash: before.epistemicReportHash,
+        },
+        verification: { status: "VERIFIED" },
       },
     });
   });

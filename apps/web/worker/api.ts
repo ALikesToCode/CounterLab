@@ -28,9 +28,11 @@ import {
 import {
   ExperimentIRV5Schema,
   RunnerLabCompileBundleV5Schema,
+  RunnerLabInteractiveRunBundleV5Schema,
   RunnerLabRunBundleV5Schema,
   RunnerScientificCandidateV5Schema,
   VersionedRunnerJobInputBundleSchema,
+  deriveInteractivePlanV5,
   hashExperimentIR,
 } from "@counterlab/experiment-ir";
 import {
@@ -853,6 +855,47 @@ async function reconstructScientificCompileAuthority(input: {
   };
 }
 
+async function loadFrozenScientificCompileAuthority(input: {
+  store: RunnerObjectStore;
+  jobs: RunnerJobService;
+  session: CounterLabSession;
+  manifest: ArtifactManifest;
+  lineage: z.infer<typeof HostedExperimentLineageV5Schema>;
+}) {
+  const compileJob = await input.jobs.getJob(input.lineage.jobId);
+  if (
+    compileJob.kind !== "LAB_COMPILE" ||
+    compileJob.status !== "VERIFIED" ||
+    compileJob.sessionId !== input.session.id ||
+    compileJob.artifactId !== input.manifest.artifactId
+  ) {
+    throw new ApiInputError(
+      "SCIENTIFIC_AUTHORITY_MISSING",
+      "The frozen scientific compiler job is not verified for this artifact",
+      409,
+    );
+  }
+  const authority = await reconstructScientificCompileAuthority({
+    store: input.store,
+    job: compileJob,
+    session: input.session,
+    manifest: input.manifest,
+    inputBundleKey: `runner-input/${compileJob.jobId}.json`,
+    outputPrefix: `runner-authority/${compileJob.jobId}/compiler-output/`,
+  });
+  if (
+    (await hashCanonical(authority.lineage)) !==
+    (await hashCanonical(input.lineage))
+  ) {
+    throw new ApiInputError(
+      "SCIENTIFIC_AUTHORITY_DERIVATION_MISMATCH",
+      "Frozen scientific compiler authority conflicts with the session lineage",
+      409,
+    );
+  }
+  return authority;
+}
+
 async function persistScientificAuthority(
   store: RunnerObjectStore,
   key: string,
@@ -1188,6 +1231,224 @@ async function reconstructScientificRunAuthority(input: {
   };
 }
 
+async function reconstructScientificInteractiveRunAuthority(input: {
+  store: RunnerObjectStore;
+  jobs: RunnerJobService;
+  job: RunnerJob;
+  session: CounterLabSession;
+  manifest: ArtifactManifest;
+  inputBundleKey: string;
+  outputPrefix: string;
+  callbackOutputHashes: readonly string[];
+}) {
+  const frozenResultKey = `runner-authority/${input.job.jobId}/verified-result.json`;
+  const [inputObject, mutableResultObject, frozenResultObject] =
+    await Promise.all([
+      input.store.get(input.inputBundleKey),
+      input.store.get(`${input.outputPrefix}verified-result.json`),
+      input.store.get(frozenResultKey),
+    ]);
+  const resultObject = frozenResultObject ?? mutableResultObject;
+  if (inputObject === undefined || resultObject === undefined) {
+    throw new ApiInputError(
+      "RUNNER_OUTPUT_MISSING",
+      "Required interactive input or fixed-kernel result is missing",
+      409,
+    );
+  }
+
+  let bundle: z.infer<typeof RunnerLabInteractiveRunBundleV5Schema>;
+  let result: z.infer<typeof HostedVerifiedResultSetV2Schema>;
+  try {
+    bundle = RunnerLabInteractiveRunBundleV5Schema.parse(
+      JSON.parse(inputObject.body),
+    );
+    result = HostedVerifiedResultSetV2Schema.parse(
+      JSON.parse(resultObject.body),
+    );
+  } catch (error) {
+    if (error instanceof SyntaxError || error instanceof ZodError) {
+      throw new ApiInputError(
+        "RESULT_CONTRACT_REJECTED",
+        "The interactive fixed-kernel authority failed strict validation",
+        409,
+      );
+    }
+    throw error;
+  }
+
+  const rawResultHash = await sha256Text(resultObject.body);
+  if (
+    input.callbackOutputHashes.length !== 1 ||
+    input.callbackOutputHashes[0] !== rawResultHash
+  ) {
+    throw new ApiInputError(
+      "RUNNER_OUTPUT_HASH_MISMATCH",
+      "Interactive fixed-kernel bytes do not match the terminal callback",
+      409,
+    );
+  }
+  if (frozenResultObject === undefined) {
+    await input.store.put(
+      frozenResultKey,
+      resultObject.body,
+      "application/json",
+    );
+  }
+  const persistedResult = await input.store.get(frozenResultKey);
+  if (
+    persistedResult === undefined ||
+    (await sha256Text(persistedResult.body)) !== rawResultHash
+  ) {
+    throw new ApiInputError(
+      "SCIENTIFIC_AUTHORITY_DERIVATION_MISMATCH",
+      "Frozen interactive result bytes do not match the terminal callback",
+      409,
+    );
+  }
+
+  const evidenceAuthority = await resolveSessionEvidenceAuthority(
+    input.session,
+  ).catch(() => {
+    throw new ApiInputError(
+      "EVIDENCE_AUTHORITY_REQUIRED",
+      "Released scientific evidence is required for interactive exploration",
+      409,
+    );
+  });
+  if (
+    evidenceAuthority.protocol !== "v5" ||
+    evidenceAuthority.verdict === "REJECTED"
+  ) {
+    throw new ApiInputError(
+      "EVIDENCE_AUTHORITY_REQUIRED",
+      "Interactive exploration requires released v5 evidence",
+      409,
+    );
+  }
+  const sessionLineage = HostedExperimentLineageV5Schema.parse(
+    input.session.labVerification,
+  );
+  const compileAuthority = await loadFrozenScientificCompileAuthority({
+    store: input.store,
+    jobs: input.jobs,
+    session: input.session,
+    manifest: input.manifest,
+    lineage: sessionLineage,
+  });
+  const [
+    bundleHash,
+    manifestHash,
+    bundledManifestHash,
+    selectionHash,
+    selectedIrHash,
+    basePlanHash,
+    interactivePlanHash,
+    evidenceVerdictHash,
+  ] = await Promise.all([
+    hashCanonical(bundle),
+    hashCanonical(input.manifest),
+    hashCanonical(bundle.artifactManifest),
+    hashCanonical(bundle.fixedSelection),
+    hashExperimentIR(bundle.selectedExperimentIr),
+    hashCanonical(bundle.basePlan),
+    hashCanonical(bundle.interactivePlan),
+    hashCanonical(evidenceAuthority.evidenceVerdict),
+  ]);
+  const expectedInputHashes = [
+    manifestHash,
+    selectedIrHash,
+    selectionHash,
+    basePlanHash,
+    evidenceAuthority.result.resultHash,
+    evidenceVerdictHash,
+    evidenceAuthority.epistemicReportHash,
+    bundle.configurationHash,
+    interactivePlanHash,
+    bundleHash,
+  ];
+  if (
+    input.job.kind !== "LAB_RUN" ||
+    input.job.status !== "AWAITING_APPROVAL" ||
+    bundle.jobId !== input.job.jobId ||
+    bundle.sessionId !== input.job.sessionId ||
+    bundle.stateVersion !== input.job.stateVersion ||
+    bundle.artifactManifestHash !== input.job.artifactManifestHash ||
+    input.session.id !== input.job.sessionId ||
+    input.session.mode.kind !== "live_notebook" ||
+    manifestHash !== input.job.artifactManifestHash ||
+    bundledManifestHash !== manifestHash ||
+    JSON.stringify(input.job.inputHashes) !==
+      JSON.stringify(expectedInputHashes)
+  ) {
+    throw new ApiInputError(
+      "RUNNER_INPUT_LINEAGE_MISMATCH",
+      "Interactive fixed-run lineage does not match the live session",
+      409,
+    );
+  }
+  const configurationHash = await hashCanonical({
+    schemaVersion: "1",
+    sessionId: input.session.id,
+    artifactManifestHash: manifestHash,
+    selectedExperimentIrHash: sessionLineage.selectedExperimentIrHash,
+    selectionHash: sessionLineage.selectionHash,
+    projectedPlanHash: sessionLineage.projectedPlanHash,
+    authoritativeResultHash: evidenceAuthority.result.resultHash,
+    evidenceVerdictHash,
+    epistemicReportHash: evidenceAuthority.epistemicReportHash,
+    configuration: bundle.configuration,
+  });
+  if (
+    bundle.configurationHash !== configurationHash ||
+    bundle.interactivePlanHash !== interactivePlanHash ||
+    (await hashCanonical(bundle.compileAuthority)) !==
+      (await hashCanonical(sessionLineage)) ||
+    selectedIrHash !== sessionLineage.selectedExperimentIrHash ||
+    selectionHash !== sessionLineage.selectionHash ||
+    basePlanHash !== sessionLineage.projectedPlanHash ||
+    (await hashExperimentIR(compileAuthority.selectedExperimentIr)) !==
+      selectedIrHash ||
+    (await hashCanonical(compileAuthority.outcome.selection)) !==
+      selectionHash ||
+    (await hashCanonical(compileAuthority.projectedPlan)) !== basePlanHash ||
+    bundle.releaseAuthority.authoritativeResultHash !==
+      evidenceAuthority.result.resultHash ||
+    (await hashCanonical(bundle.releaseAuthority.evidenceVerdict)) !==
+      evidenceVerdictHash ||
+    bundle.releaseAuthority.evidenceVerdictHash !== evidenceVerdictHash ||
+    bundle.releaseAuthority.epistemicReportHash !==
+      evidenceAuthority.epistemicReportHash
+  ) {
+    throw new ApiInputError(
+      "SCIENTIFIC_AUTHORITY_DERIVATION_MISMATCH",
+      "Interactive bundle does not match frozen compile and release authority",
+      409,
+    );
+  }
+
+  let report;
+  try {
+    report =
+      result.concept === "class_imbalance"
+        ? await verifyHostedResultSet(result, bundle.interactivePlan)
+        : await verifyInteractiveResultSet(
+            result,
+            bundle.interactivePlan,
+            bundle.selectedRunId,
+          );
+  } catch (error) {
+    if (error instanceof ResultVerificationError) throw error;
+    throw error;
+  }
+  await persistScientificAuthority(
+    input.store,
+    `runner-authority/${input.job.jobId}/technical-verification.json`,
+    report,
+  );
+  return { bundle, result, report, rawResultHash };
+}
+
 function scientificAuthorityEvents(input: {
   jobId: string;
   runnerCursor: number;
@@ -1282,6 +1543,73 @@ async function appendScientificAuthorityEvents(input: {
     );
   }
   return updated.eventCursor;
+}
+
+async function appendInteractiveAuthorityEvents(input: {
+  jobs: RunnerJobService;
+  job: RunnerJob;
+  callback: RunnerCallback;
+  authorityAt: string;
+  invariantCount: number;
+  resultHash: string;
+}): Promise<number> {
+  const expected = [
+    PublicCompilerEventSchema.parse({
+      schemaVersion: "1",
+      eventId: `authority_${input.job.jobId}_${input.callback.finalEventCursor + 1}`,
+      jobId: input.job.jobId,
+      cursor: input.callback.finalEventCursor + 1,
+      at: input.authorityAt,
+      kind: "verifier.verified",
+      invariantCount: input.invariantCount,
+      mutationCount: 0,
+    }),
+    PublicCompilerEventSchema.parse({
+      schemaVersion: "1",
+      eventId: `authority_${input.job.jobId}_${input.callback.finalEventCursor + 2}`,
+      jobId: input.job.jobId,
+      cursor: input.callback.finalEventCursor + 2,
+      at: input.authorityAt,
+      kind: "result.ready",
+      resultHash: input.resultHash,
+    }),
+  ];
+  const existing = await input.jobs.listEvents(
+    input.job.jobId,
+    input.callback.finalEventCursor,
+  );
+  if (
+    existing.length > expected.length ||
+    (await hashCanonical(existing.map(authorityEventPayload))) !==
+      (await hashCanonical(
+        expected.slice(0, existing.length).map(authorityEventPayload),
+      ))
+  ) {
+    throw new ApiInputError(
+      "RUNNER_AUTHORITY_EVENT_CONFLICT",
+      "Persisted interactive authority events are partial or conflicting",
+      409,
+    );
+  }
+  let current = await input.jobs.getJob(input.job.jobId);
+  if (
+    current.eventCursor !==
+    input.callback.finalEventCursor + existing.length
+  ) {
+    throw new ApiInputError(
+      "RUNNER_AUTHORITY_EVENT_CONFLICT",
+      "Runner event cursor contains unrecognized interactive authority events",
+      409,
+    );
+  }
+  for (const event of expected.slice(existing.length)) {
+    current = await input.jobs.appendEvent(
+      input.job.jobId,
+      current.jobVersion,
+      event,
+    );
+  }
+  return current.eventCursor;
 }
 
 function authorityEventPayload(event: PublicCompilerEvent) {
@@ -2787,6 +3115,15 @@ export function createApi(options: ApiOptions = {}) {
       let updatedJob = job;
       if (outcome.disposition === "VERIFIED") {
         await Promise.all([
+          ...paths.map((path) =>
+            store.put(
+              `${authorityPrefix}compiler-output/${path}`,
+              bodies.get(path) ?? "",
+              path.endsWith(".json")
+                ? "application/json"
+                : "text/markdown; charset=utf-8",
+            ),
+          ),
           store.put(
             `${authorityPrefix}selected-experiment-ir.json`,
             JSON.stringify(outcome.selectedIr),
@@ -3244,6 +3581,9 @@ export function createApi(options: ApiOptions = {}) {
     let epistemicAuthority: Awaited<
       ReturnType<typeof reconstructScientificRunAuthority>
     > | null = null;
+    let scientificInteractiveAuthority: Awaited<
+      ReturnType<typeof reconstructScientificInteractiveRunAuthority>
+    > | null = null;
     let interactiveRun = false;
     let patchResult: PatchResult | null = null;
     let terminalCallback: RunnerCallback = callback;
@@ -3367,6 +3707,7 @@ export function createApi(options: ApiOptions = {}) {
         claims.inputBundleKey,
       );
       let declaredVersion: unknown;
+      let declaredPurpose: unknown;
       if (inputObject !== undefined) {
         try {
           const raw = JSON.parse(inputObject.body) as unknown;
@@ -3374,8 +3715,13 @@ export function createApi(options: ApiOptions = {}) {
             raw !== null && typeof raw === "object" && !Array.isArray(raw)
               ? (raw as Record<string, unknown>).schemaVersion
               : undefined;
+          declaredPurpose =
+            raw !== null && typeof raw === "object" && !Array.isArray(raw)
+              ? (raw as Record<string, unknown>).purpose
+              : undefined;
         } catch {
           declaredVersion = undefined;
+          declaredPurpose = undefined;
         }
       }
       if (declaredVersion === "5") {
@@ -3390,6 +3736,70 @@ export function createApi(options: ApiOptions = {}) {
               retryable: false,
             },
           };
+        } else if (declaredPurpose === "INTERACTIVE") {
+          try {
+            const jobs = runnerJobService(context, options);
+            const scientificRunJob = await closeScientificRunnerBoundary({
+              jobs,
+              job,
+              callback,
+            });
+            scientificInteractiveAuthority =
+              await reconstructScientificInteractiveRunAuthority({
+                store: runnerObjectStore(context, options),
+                jobs,
+                job: scientificRunJob,
+                session: currentSession,
+                manifest: artifact.manifest,
+                inputBundleKey: claims.inputBundleKey,
+                outputPrefix: claims.outputPrefix,
+                callbackOutputHashes: callback.outputHashes,
+              });
+            interactiveRun = true;
+            verification = scientificInteractiveAuthority.report;
+            verifiedResult = scientificInteractiveAuthority.result;
+            const finalEventCursor = await appendInteractiveAuthorityEvents({
+              jobs,
+              job: scientificRunJob,
+              callback,
+              authorityAt: requestNow(options).toISOString(),
+              invariantCount:
+                scientificInteractiveAuthority.report.invariantCount,
+              resultHash: scientificInteractiveAuthority.result.resultHash,
+            });
+            terminalCallback = { ...terminalCallback, finalEventCursor };
+          } catch (error) {
+            if (error instanceof ResultVerificationError) {
+              verification = error.report;
+              terminalCallback = {
+                ...callback,
+                status: "REJECTED",
+                error: {
+                  code: "RESULT_VERIFIER_REJECTED",
+                  message:
+                    "The external verifier rejected the interactive result",
+                  retryable: false,
+                  details: {
+                    failedInvariants: error.report.invariants
+                      .filter((invariant) => !invariant.passed)
+                      .map((invariant) => invariant.name),
+                  },
+                },
+              };
+            } else if (error instanceof ApiInputError) {
+              terminalCallback = {
+                ...callback,
+                status: "REJECTED",
+                error: {
+                  code: error.code,
+                  message: error.message,
+                  retryable: false,
+                },
+              };
+            } else {
+              throw error;
+            }
+          }
         } else {
           try {
             const jobs = runnerJobService(context, options);
@@ -4391,13 +4801,7 @@ export function createApi(options: ApiOptions = {}) {
     const current = await service.getSession(sessionId);
     if (
       current.mode.kind !== "live_notebook" ||
-      current.verifiedResult === undefined ||
-      current.beliefTest === undefined ||
-      current.verifiedResult.concept !== current.beliefTest.concept ||
-      ("concept" in configuration &&
-        configuration.concept !== current.beliefTest.concept) ||
-      (!("concept" in configuration) &&
-        current.beliefTest.concept !== "entity_leakage")
+      current.verifiedResult === undefined
     ) {
       throw new ApiInputError(
         "INTERACTIVE_LAB_NOT_READY",
@@ -4414,11 +4818,226 @@ export function createApi(options: ApiOptions = {}) {
       );
     }
     const artifact = await artifacts(context, options).find(current.artifactId);
+    const scientificLineage = HostedExperimentLineageV5Schema.safeParse(
+      current.labVerification,
+    );
     const lineage = HostedPlanLineageSchema.safeParse(current.labVerification);
-    if (artifact === undefined || !lineage.success) {
+    if (
+      artifact === undefined ||
+      (!scientificLineage.success && !lineage.success)
+    ) {
       throw new ApiInputError(
         "LIVE_PLAN_LINEAGE_MISSING",
         "The verified Plan lineage is incomplete",
+        409,
+      );
+    }
+    if (scientificLineage.success) {
+      const evidenceAuthority = await resolveSessionEvidenceAuthority(
+        current,
+      ).catch(() => {
+        throw new ApiInputError(
+          "EVIDENCE_AUTHORITY_REQUIRED",
+          "Released v5 evidence is required for interactive exploration",
+          409,
+        );
+      });
+      if (
+        evidenceAuthority.protocol !== "v5" ||
+        evidenceAuthority.verdict === "REJECTED" ||
+        ("concept" in configuration
+          ? configuration.concept !== evidenceAuthority.concept
+          : evidenceAuthority.concept !== "entity_leakage")
+      ) {
+        throw new ApiInputError(
+          "INTERACTIVE_CONCEPT_MISMATCH",
+          "The requested controls do not match the released v5 evidence",
+          409,
+        );
+      }
+      if (
+        !("concept" in configuration) &&
+        !artifact.manifest.schemaSummary.entityCandidates.includes(
+          configuration.entityField,
+        )
+      ) {
+        throw new ApiInputError(
+          "INTERACTIVE_ENTITY_UNRESOLVED",
+          "The selected entity field is not an artifact candidate",
+          422,
+        );
+      }
+      const store = runnerObjectStore(context, options);
+      const jobs = runnerJobService(context, options);
+      const frozenCompile = await loadFrozenScientificCompileAuthority({
+        store,
+        jobs,
+        session: current,
+        manifest: artifact.manifest,
+        lineage: scientificLineage.data,
+      });
+      const [manifestHash, evidenceVerdictHash] = await Promise.all([
+        hashCanonical(artifact.manifest),
+        hashCanonical(evidenceAuthority.evidenceVerdict),
+      ]);
+      const configurationHash = await hashCanonical({
+        schemaVersion: "1",
+        sessionId,
+        artifactManifestHash: manifestHash,
+        selectedExperimentIrHash:
+          scientificLineage.data.selectedExperimentIrHash,
+        selectionHash: scientificLineage.data.selectionHash,
+        projectedPlanHash: scientificLineage.data.projectedPlanHash,
+        authoritativeResultHash: evidenceAuthority.result.resultHash,
+        evidenceVerdictHash,
+        epistemicReportHash: evidenceAuthority.epistemicReportHash,
+        configuration,
+      });
+      let derived: ReturnType<typeof deriveInteractivePlanV5>;
+      try {
+        derived = deriveInteractivePlanV5(
+          frozenCompile.projectedPlan,
+          configuration,
+          configurationHash,
+        );
+      } catch {
+        throw new ApiInputError(
+          "INTERACTIVE_PLAN_INCOMPLETE",
+          "The frozen Experiment Plan is missing the registered control",
+          409,
+        );
+      }
+      const interactivePlanHash = await hashCanonical(derived.interactivePlan);
+      const pack = getConceptPack(evidenceAuthority.concept);
+      const jobId = requestId(options, "runner_job");
+      const bundle = RunnerLabInteractiveRunBundleV5Schema.parse({
+        schemaVersion: "5",
+        kind: "LAB_RUN",
+        purpose: "INTERACTIVE",
+        jobId,
+        sessionId,
+        stateVersion: current.version,
+        artifactManifestHash: manifestHash,
+        artifactManifest: artifact.manifest,
+        approvedBeliefSpec: evidenceAuthority.beliefSpec,
+        beliefSpecHash: scientificLineage.data.beliefSpecHash,
+        prediction: current.prediction,
+        fixture: pack.fixedFixture,
+        compileAuthority: scientificLineage.data,
+        selectedExperimentIr: frozenCompile.selectedExperimentIr,
+        fixedSelection: frozenCompile.outcome.selection,
+        basePlan: frozenCompile.projectedPlan,
+        releaseAuthority: {
+          authoritativeResultHash: evidenceAuthority.result.resultHash,
+          evidenceVerdict: evidenceAuthority.evidenceVerdict,
+          evidenceVerdictHash,
+          epistemicReportHash: evidenceAuthority.epistemicReportHash,
+        },
+        configuration,
+        configurationHash,
+        derivationVersion: "interactive-plan-v5-derivation-v1",
+        selectedRunId: derived.selectedRunId,
+        interactivePlan: derived.interactivePlan,
+        interactivePlanHash,
+        resultOutput: {
+          path: "verified-result.json",
+          schemaVersion: "2",
+          authorityHash: configurationHash,
+        },
+        permittedOutputs: ["verified-result.json"],
+      });
+      const bundleHash = await hashCanonical(bundle);
+      const requestIdentity = liveRunnerRequestIdentity({
+        sessionId,
+        purpose: "LAB_RUN_INTERACTIVE",
+        artifactId: artifact.manifest.artifactId,
+        artifactManifestHash: manifestHash,
+        conceptPack: { id: pack.id, version: pack.version },
+        authorityProfileHash: await hashCanonical({
+          kernel: "counterlab-fixed-kernel-v2",
+          verifier: "interactive-result-verifier-v5",
+          derivation: bundle.derivationVersion,
+          fixture: pack.fixedFixture,
+          permittedOutputs: bundle.permittedOutputs,
+        }),
+        authorityInputHashes: {
+          artifactManifest: manifestHash,
+          selectedExperimentIr: scientificLineage.data.selectedExperimentIrHash,
+          experimentSelection: scientificLineage.data.selectionHash,
+          basePlan: scientificLineage.data.projectedPlanHash,
+          authoritativeResult: evidenceAuthority.result.resultHash,
+          evidenceVerdict: evidenceVerdictHash,
+          epistemicReport: evidenceAuthority.epistemicReportHash,
+          interactivePlan: interactivePlanHash,
+        },
+        configurationHash,
+      });
+      const inputBundleKey = `runner-input/${jobId}.json`;
+      await store.put(
+        inputBundleKey,
+        JSON.stringify(bundle),
+        "application/json",
+      );
+      const claimed = await jobs.createOrReuseJob({
+        jobId,
+        kind: "LAB_RUN",
+        sessionId,
+        artifactId: artifact.manifest.artifactId,
+        artifactManifestHash: manifestHash,
+        conceptPack: { id: pack.id, version: pack.version },
+        inputHashes: [
+          manifestHash,
+          scientificLineage.data.selectedExperimentIrHash,
+          scientificLineage.data.selectionHash,
+          scientificLineage.data.projectedPlanHash,
+          evidenceAuthority.result.resultHash,
+          evidenceVerdictHash,
+          evidenceAuthority.epistemicReportHash,
+          configurationHash,
+          interactivePlanHash,
+          bundleHash,
+        ],
+        requestIdentity,
+        stateVersion: current.version,
+        maxAttempts: 1,
+        timeoutSeconds: 150,
+      });
+      const starting = await dispatchRecoverableRunnerJob({
+        context,
+        options,
+        jobs,
+        dispatcher,
+        job: claimed.job,
+      });
+      return context.json(
+        jsonSuccess({
+          ...statePayload(current),
+          runnerJob: starting,
+          selectedRunId: derived.selectedRunId,
+          configurationHash,
+          ...(claimed.reused ? { reused: true as const } : {}),
+        }),
+        202,
+      );
+    }
+    if (!lineage.success) {
+      throw new ApiInputError(
+        "LIVE_PLAN_LINEAGE_MISSING",
+        "The verified legacy Plan lineage is incomplete",
+        409,
+      );
+    }
+    if (
+      current.beliefTest === undefined ||
+      current.verifiedResult.concept !== current.beliefTest.concept ||
+      ("concept" in configuration &&
+        configuration.concept !== current.beliefTest.concept) ||
+      (!("concept" in configuration) &&
+        current.beliefTest.concept !== "entity_leakage")
+    ) {
+      throw new ApiInputError(
+        "INTERACTIVE_LAB_NOT_READY",
+        "A completed live result for this interactive concept is required",
         409,
       );
     }
@@ -4693,17 +5312,73 @@ export function createApi(options: ApiOptions = {}) {
         409,
       );
     }
-    const [inputObject, resultObject] = await Promise.all([
-      runnerObjectStore(context, options).get(`runner-input/${jobId}.json`),
-      runnerObjectStore(context, options).get(
-        `runner-output/${jobId}/verified-result.json`,
-      ),
-    ]);
+    const [inputObject, frozenResultObject, mutableResultObject] =
+      await Promise.all([
+        runnerObjectStore(context, options).get(`runner-input/${jobId}.json`),
+        runnerObjectStore(context, options).get(
+          `runner-authority/${jobId}/verified-result.json`,
+        ),
+        runnerObjectStore(context, options).get(
+          `runner-output/${jobId}/verified-result.json`,
+        ),
+      ]);
+    const resultObject = frozenResultObject ?? mutableResultObject;
     if (inputObject === undefined || resultObject === undefined) {
       throw new ApiInputError(
         "RUNNER_OUTPUT_MISSING",
         "The verified interactive result is missing",
         409,
+      );
+    }
+    let rawBundle: unknown;
+    try {
+      rawBundle = JSON.parse(inputObject.body) as unknown;
+    } catch {
+      throw new ApiInputError(
+        "INTERACTIVE_RESULT_LINEAGE_MISMATCH",
+        "The interactive input bundle is invalid",
+        409,
+      );
+    }
+    const scientificBundle =
+      RunnerLabInteractiveRunBundleV5Schema.safeParse(rawBundle);
+    if (scientificBundle.success) {
+      if (scientificBundle.data.sessionId !== sessionId) {
+        throw new ApiInputError(
+          "INTERACTIVE_RESULT_LINEAGE_MISMATCH",
+          "The result is not an interactive run for this session",
+          409,
+        );
+      }
+      const rawHash = await sha256Text(resultObject.body);
+      if (!job.outputHashes.includes(rawHash)) {
+        throw new ApiInputError(
+          "RUNNER_OUTPUT_HASH_MISMATCH",
+          "Interactive result bytes do not match the callback hash",
+          409,
+        );
+      }
+      const result = HostedVerifiedResultSetV2Schema.parse(
+        JSON.parse(resultObject.body),
+      );
+      const verification =
+        result.concept === "class_imbalance"
+          ? await verifyHostedResultSet(
+              result,
+              scientificBundle.data.interactivePlan,
+            )
+          : await verifyInteractiveResultSet(
+              result,
+              scientificBundle.data.interactivePlan,
+              scientificBundle.data.selectedRunId,
+            );
+      return context.json(
+        jsonSuccess({
+          result,
+          selectedRunId: scientificBundle.data.selectedRunId,
+          configurationHash: scientificBundle.data.configurationHash,
+          verification,
+        }),
       );
     }
     const bundle = RunnerLabRunBundleSchema.parse(JSON.parse(inputObject.body));
