@@ -181,6 +181,81 @@ function object(value: unknown): JsonObject | undefined {
     : undefined;
 }
 
+export function verifyRuntimeIntegrityEvidence(
+  input: unknown,
+  snapshot: ScientificEngineSnapshot,
+  dockerfileText: string,
+): ScientificEngineVerificationFinding[] {
+  const findings: ScientificEngineVerificationFinding[] = [];
+  const path =
+    "scientific-engines/fixtures/integrity/cpython-runtime-3.13.14.json";
+  const evidence = object(input);
+  const baseImage = object(evidence?.baseImage);
+  const releaseGate = object(evidence?.releaseGate);
+  const runtime = snapshot.runtimeManifest.runtimes.find(
+    (candidate) => candidate.id === "cpython",
+  );
+  const expectedPlatform = `${snapshot.runtimeManifest.platform.os}/${snapshot.runtimeManifest.platform.architecture}`;
+
+  if (
+    !runtime ||
+    evidence?.schemaVersion !== "1" ||
+    evidence.evidenceKind !== "runtime-integrity" ||
+    evidence.runtimeId !== runtime.id ||
+    evidence.exactVersion !== runtime.exactVersion ||
+    evidence.environmentId !== snapshot.runtimeManifest.environmentId ||
+    evidence.imageDigest !== snapshot.runtimeManifest.container.imageDigest ||
+    evidence.installedLicenseSha256 !== runtime.licenseFileHash ||
+    baseImage?.platform !== expectedPlatform
+  ) {
+    findings.push(
+      finding(
+        "RUNTIME_INTEGRITY_SEMANTICS_MISMATCH",
+        path,
+        "CPython integrity evidence does not bind the current runtime manifest.",
+      ),
+    );
+  }
+
+  const declaredReference = baseImage?.reference;
+  const dockerReferences = new Set(
+    [...dockerfileText.matchAll(/^\s*FROM\s+(\S+)/gim)].map(
+      (match) => match[1],
+    ),
+  );
+  if (
+    typeof declaredReference !== "string" ||
+    !/^[^\s@]+@sha256:[a-f0-9]{64}$/.test(declaredReference) ||
+    !dockerReferences.has(declaredReference)
+  ) {
+    findings.push(
+      finding(
+        "RUNTIME_BASE_IMAGE_MISMATCH",
+        `${path}:baseImage.reference`,
+        "Runtime evidence must name the exact 64-hex base-image digest used by Dockerfile.runner.",
+      ),
+    );
+  }
+
+  if (
+    !["VERIFIED", "VERIFIED_WITH_REVIEWED_EXCEPTION"].includes(
+      String(releaseGate?.status),
+    ) ||
+    !Array.isArray(releaseGate?.limitations) ||
+    releaseGate.limitations.length === 0
+  ) {
+    findings.push(
+      finding(
+        "RUNTIME_RELEASE_GATE_INVALID",
+        `${path}:releaseGate`,
+        "Runtime integrity evidence requires an explicit verified status and limitations.",
+      ),
+    );
+  }
+
+  return findings;
+}
+
 function failedHealthValue(value: unknown, key = ""): boolean {
   if (typeof value === "string") {
     return /^(?:FAILED|REJECTED|ERROR)$/i.test(value);
@@ -210,6 +285,35 @@ export async function verifyEvidenceSemantics(
   const records = new Map(
     snapshot.evidenceCatalog.records.map((record) => [record.id, record]),
   );
+
+  const runtimeIntegrityRecord = records.get("cpython-runtime-integrity-v1");
+  if (!runtimeIntegrityRecord) {
+    findings.push(
+      finding(
+        "RUNTIME_INTEGRITY_EVIDENCE_MISSING",
+        "scientific-engines/evidence-catalog.json",
+        "The recorded CPython runtime requires exact base-image integrity evidence.",
+      ),
+    );
+  } else {
+    try {
+      const [evidence, dockerfileText] = await Promise.all([
+        json(resolve(root, runtimeIntegrityRecord.path)),
+        readFile(resolve(root, "Dockerfile.runner"), "utf8"),
+      ]);
+      findings.push(
+        ...verifyRuntimeIntegrityEvidence(evidence, snapshot, dockerfileText),
+      );
+    } catch (error) {
+      findings.push(
+        finding(
+          "RUNTIME_INTEGRITY_EVIDENCE_INVALID",
+          runtimeIntegrityRecord.path,
+          error instanceof Error ? error.message : String(error),
+        ),
+      );
+    }
+  }
 
   for (const installed of snapshot.runtimeManifest.installedEngines) {
     const descriptor = snapshot.registry.engines.find(

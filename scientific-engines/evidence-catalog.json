@@ -22,6 +22,16 @@
       ]
     },
     {
+      "id": "cpython-runtime-integrity-v1",
+      "kind": "integrity",
+      "path": "scientific-engines/fixtures/integrity/cpython-runtime-3.13.14.json",
+      "sha256": "cd22ab9511d4e01b7e2d6801e6f9a14a2a78115747a680ffd7eb5f4f3782eca3",
+      "status": "VERIFIED",
+      "limitations": [
+        "The base-image binding covers the pinned Linux amd64 runner runtime, not the Cloudflare host platform."
+      ]
+    },
+    {
       "id": "numpy-license-v1",
       "kind": "license",
       "engineId": "numpy",

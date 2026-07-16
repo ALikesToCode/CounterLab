@@ -9,6 +9,7 @@ import {
   verifyEvidenceFiles,
   verifyEvidenceSemantics,
   verifyPinnedSources,
+  verifyRuntimeIntegrityEvidence,
   verifySboms,
   verifySnapshotArtifacts,
 } from "../../../scripts/verify-scientific-engines.js";
@@ -83,6 +84,31 @@ describe("scientific engine release verifier", () => {
     expect(findings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ code: "ENGINE_ARTIFACT_HASH_MISMATCH" }),
+      ]),
+    );
+  });
+
+  it("rejects a malformed or unpinned runtime base-image digest", async () => {
+    const snapshot = await loadScientificEngineSnapshot(root);
+    const evidence = JSON.parse(
+      await readFile(
+        resolve(
+          root,
+          "scientific-engines/fixtures/integrity/cpython-runtime-3.13.14.json",
+        ),
+        "utf8",
+      ),
+    ) as Record<string, unknown>;
+    const baseImage = evidence.baseImage as Record<string, unknown>;
+    baseImage.reference =
+      "python:3.13-slim-trixie@sha256:bffeb7bd6a85767587059c6ba23e1e9122078e3aa3fa836099171b9bb00";
+    const dockerfile = await readFile(resolve(root, "Dockerfile.runner"), "utf8");
+
+    expect(
+      verifyRuntimeIntegrityEvidence(evidence, snapshot, dockerfile),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "RUNTIME_BASE_IMAGE_MISMATCH" }),
       ]),
     );
   });
