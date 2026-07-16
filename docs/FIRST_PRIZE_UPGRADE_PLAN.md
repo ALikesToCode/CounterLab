@@ -208,18 +208,25 @@ Done:
 - exact frozen sweep authorization in both scientific-candidate and epistemic
   verification; changed axes, observable, preset, or cell budget fail closed;
 - current pack versions advanced to leakage `2.1.0` and imbalance `1.1.0`
-  without rewriting historical signed v1/v2 artifacts.
+  without rewriting historical signed v1/v2 artifacts;
+- independent technical verification for lineage, grid order, units, legends,
+  leakage overlap/arithmetic/control, and imbalance confusion/threshold/control,
+  with integrity-only and HMAC receipt paths;
+- a strict v5 `LAB_RUN`/`BOUNDARY` bundle whose request must equal the selected
+  Experiment IR, whose seed and verdict authority fail closed, and whose sole
+  output is `boundary-map.json`;
+- fixed hosted Python execution for both registered grids and a runner processor
+  that uploads the map candidate without emitting `result.ready`.
 
 In progress:
 
-- the independent map verifier, mutation catalogue, integrity/HMAC receipt, and
-  authority reference.
+- Worker-owned output freezing, fresh independent verifier execution, receipt
+  issuance, immutable R2 objects, callback idempotency, and session projection.
 
-Pending after that verifier passes:
+Pending after Worker authority passes:
 
-- one purpose-separated fixed runner job, immutable R2 outputs, Worker callback
-  reconstruction, session projection/retrieval, accessible renderer, Reasoning
-  Diff v2, and Proof Capsule v2 binding;
+- retrieval/event-chain APIs, accessible renderer, Reasoning Diff v2, and Proof
+  Capsule v2 binding;
 - final image rebuild, scientific-engine requalification, deployment, and live
   production smoke for both concepts.
 

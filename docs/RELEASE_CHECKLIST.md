@@ -131,8 +131,8 @@ Report SHA-256:
 The checked browser items describe the released Studio journey. The following
 v5.1 product gates remain pending and must not be inferred from them:
 
-- [ ] Belief Spec v2 and Experiment IR v5 with replay-safe adapters;
-- [ ] fixed experiment scorer and epistemic tri-state verdict;
+- [x] Belief Spec v2 and Experiment IR v5 with replay-safe adapters;
+- [x] fixed experiment scorer and epistemic tri-state verdict;
 - [ ] one signed Boundary Map;
 - [ ] chat-first six-stage experience with collapsed Activity and Evidence &
       proof drawers;

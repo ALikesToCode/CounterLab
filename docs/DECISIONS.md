@@ -481,3 +481,17 @@ can pass.
   old evidence in place.
 - Call an unsigned receipt `Integrity-hashed`. Use `Signed` only when the Worker
   creates a valid HMAC receipt with a configured key ID.
+
+## 2026-07-16 — Boundary execution is not Boundary release
+
+- Use a distinct v5 `LAB_RUN` purpose, `BOUNDARY`, instead of overloading the
+  primary authoritative or interactive result envelopes.
+- Permit only `boundary-map.json`; bind its artifact, Experiment IR, primary
+  result, Evidence Verdict, fixed seed, fixture, pack version, and exact sweep
+  before the fixed Python kernel runs.
+- Treat the runner's terminal `VERIFIED` callback as successful bounded
+  execution only. It must not emit `result.ready` or create learner-visible map
+  authority.
+- Freeze the exact runner bytes in the Worker, rerun the independent Boundary
+  Map verifier there, then issue either an integrity-hashed or HMAC-signed
+  receipt. A rejected map releases no cells to the session or UI.

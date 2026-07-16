@@ -37,8 +37,9 @@ hashes, immutable patch artifacts, and `PATCH_VERIFIED`. Native Reasoning Diff
 v2 and Proof Capsule v2 remain unfinished. Boundary Map v1 now has strict
 cross-runtime contracts, fixed 25-cell leakage and 15-cell imbalance kernels,
 pack-owned grids, and exact-request authorization. Its independent verifier,
-runner/Worker authority flow, session projection, and learner UI remain in
-progress.
+strict purpose-separated runner contract, and fixed hosted execution now pass
+locally. Worker-owned freeze/verification/receipt storage, session projection,
+retrieval, and the learner UI remain in progress.
 The current production deployment remains the qualified Experiment Plan v2
 path and has not been promoted to this worktree.
 
@@ -82,7 +83,7 @@ deployed registry digest remain distinct identities and are not interchangeable.
 | V5 artifact-specific patch | done locally for both packs | Commits `1d96fe0`, `3f8a653`, `ff5e03c`, `15799f9`, `a970fc0`, `8822f4d`, and `d2f2b92` add the strict v5 bundle, independent Python checks, transfer evaluator binding, idempotent Worker dispatch, genuine verifier reject-repair, source sealing, exact four-output callback, immutable authority, and copied patch download without creating a legacy proof. The Worker test now completes both concepts to `PATCH_VERIFIED`. | Requalify both concepts in the final image and production smoke. |
 | Canonical JSON authority | done locally | Commits `47f49a7` and `b4a68ff` preserve dangerous own keys, write sorted object text directly, use UTF-16 key order in both runtimes, reject lone surrogates, preserve Unicode normalization, and pass shared hash vectors without changing normal historical evidence. | Record `counterlab-canonical-json-v1` in Capsule integrity and rerun final release vectors. |
 | Reasoning Diff v2 and Proof Capsule v2 | pending behind Boundary Map | Legacy Proof Bundle v1/v2 remains qualified and byte-compatible. The strict v5 patch stops honestly at `PATCH_VERIFIED`. | Finish Boundary Map authority, then add native Reasoning Diff v2, deterministic Capsule archive/validation/storage/download, and replay persistence. |
-| Boundary Map authority | active | Commits `2a1b827`, `0a6a97b`, and `0ad7c2a` add strict result/report/receipt schemas, cross-runtime canonical lineage, real fixed-kernel grids for both concepts, frozen grid definitions, pack-version bumps, and exact scientific/epistemic request authorization. | Finish the independent mutation verifier, runner bundle/execution, Worker receipt and storage flow, session state, retrieval API, and accessible renderer. |
+| Boundary Map authority | active | Commits `2a1b827`, `0a6a97b`, `0ad7c2a`, `4eb7aba`, `b98669f`, and `3ce8111` add strict result/report/receipt schemas, real fixed grids, pack authorization, an independent 24-test mutation/receipt verifier, a purpose-separated v5 runner bundle, and fixed hosted execution for both concepts. The runner uploads only `boundary-map.json` and emits no learner-ready result event. | Finish Worker-owned immutable bytes, independent verifier rerun and integrity/HMAC receipt, session state/projection, retrieval API, event-chain binding, and accessible renderer. |
 | Simplified Theater and Judge Mode | partial locally | `DESIGN.md`, the focused-theater plan, and commit `01ac1d7` remove the permanent agent cockpit, widen the learner canvas, consolidate authority into one evidence rail plus the collapsed proof drawer, and raise Studio typography and controls to the documented floor. | Run updated desktop/390 px CloakBrowser journeys after the owner starts the forbidden local dev surface; Boundary Map data and the full six-stage vocabulary remain pending. |
 | Physics/free-fall | blocked by phase order | No verified public support is claimed. | Start only after both live ML concepts pass the new production authority gate. |
 | Final release | pending | Previous production v2 smoke remains valid for that deployment. | Full suites, clean clone, engine gate, secret scan, deployment, CloakBrowser journeys, and exact-version production smoke. |
@@ -99,24 +100,26 @@ Latest local v5.1 verification checkpoint (2026-07-16):
 - Boundary Map contracts and Experiment IR: 70/70 focused TypeScript tests
   passed. Registry, analyst, scientific-candidate, and epistemic suites: 101/101
   passed.
-- Full Python kernel suite after both real Boundary Map grids: 148/148 passed.
-- The latest completed strict TypeScript check passed before the independent
-  Boundary Map verifier package entered the shared worktree. A full TypeScript
-  rerun remains pending until that in-progress package is integrated.
-- Strict repository and Worker TypeScript: passed.
+- Boundary Map verifier: 24/24 mutation, lineage, canonical-report, and
+  integrity/HMAC receipt tests passed. Runner bundle: 21/21; hosted runner:
+  15/15 focused tests passed.
+- Full Python kernel suite after hosted Boundary Map integration: 169/169
+  passed.
+- Full TypeScript suites after current-pack fixture repair: 409/409 root and
+  136/136 web/Worker tests passed; strict repository and Worker TypeScript
+  passed.
 - Focused Theater React tests: 3/3 passed; strict web/Worker TypeScript and
   targeted Prettier checks passed. `DESIGN.md` lint reports 0 warnings and 0
   errors.
-- The broader web suite currently passes 132/136. Four Worker tests fail in the
-  concurrently integrated Boundary Map pack-version slice (`2.0.0`
-  expectations versus registered `2.1.0`, plus related imbalance callbacks);
-  the focused Studio suite remains green.
+- Current live Worker test fixtures resolve pack versions from the registry;
+  historical signed replay/contract fixtures remain on their original versions.
 - Git whitespace check: passed.
 - No `build`, `dev`, deployment, or production smoke was run for this slice.
 - The recorded scientific-engine candidate remains source-bound to lock hash
   `48443375…`; current worktree drift is an explicit fail-closed release finding.
-- Next active slice: finish the independent Boundary Map verifier, then bind the
-  fixed map through runner, Worker, session, and UI authority.
+- Next active slice: freeze and independently verify the runner-produced map in
+  the Worker, issue its receipt, and bind it through session/event persistence
+  before exposing any map in the UI.
 
 ## Acceptance matrix
 
