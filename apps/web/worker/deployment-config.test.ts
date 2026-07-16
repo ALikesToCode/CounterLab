@@ -1,4 +1,7 @@
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -46,32 +49,103 @@ describe("Cloudflare static asset routing", () => {
       readFileSync(resolve(process.cwd(), "package.json"), "utf-8"),
     ) as { scripts?: Record<string, string> };
     expect(packageJson.scripts?.deploy).toBe(
-      "vite build && wrangler deploy --config dist/counterlab/wrangler.json",
+      "bash ../../scripts/deploy-qualified.sh",
     );
   });
 
-  it("builds the Container from the source revision qualified by the scientific runtime manifest", () => {
+  it("keeps the development Container honest instead of stamping it as qualified", () => {
     const config = JSON.parse(
       readFileSync(resolve(process.cwd(), "wrangler.jsonc"), "utf-8"),
     ) as {
       containers?: Array<{
+        image?: string;
         image_vars?: { COUNTERLAB_SOURCE_COMMIT?: string };
       }>;
     };
-    const runtimeManifest = JSON.parse(
-      readFileSync(
-        resolve(
-          process.cwd(),
-          "../../scientific-engines/runtime-manifest.json",
-        ),
-        "utf-8",
-      ),
-    ) as { sourceCommit?: string };
 
     expect(config.containers).toHaveLength(1);
-    expect(config.containers?.[0]?.image_vars?.COUNTERLAB_SOURCE_COMMIT).toBe(
-      runtimeManifest.sourceCommit,
-    );
+    expect(config.containers?.[0]?.image).toBe("../../Dockerfile.runner");
+    expect(config.containers?.[0]?.image_vars).toBeUndefined();
+  });
+
+  it("generates a deploy config from a source-bound qualified image receipt", () => {
+    const directory = mkdtempSync(resolve(tmpdir(), "counterlab-release-"));
+    try {
+      const sourceCommit = "a".repeat(40);
+      const basePath = resolve(directory, "wrangler.json");
+      const receiptPath = resolve(directory, "qualified-runner.json");
+      const outputPath = resolve(directory, "wrangler.release.json");
+      const image = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
+      writeFileSync(
+        basePath,
+        JSON.stringify({
+          account_id: "account-1",
+          main: "index.js",
+          assets: { directory: "../client" },
+          containers: [
+            {
+              class_name: "CounterLabRunner",
+              image: "/unqualified/Dockerfile.runner",
+              image_vars: { COUNTERLAB_SOURCE_COMMIT: "0".repeat(40) },
+              image_build_context: "/unqualified",
+            },
+          ],
+        }),
+      );
+      writeFileSync(
+        receiptPath,
+        JSON.stringify({
+          schemaVersion: "1",
+          status: "VERIFIED",
+          sourceCommit,
+          sourceArchiveSha256: "b".repeat(64),
+          sourceTreeSha256: "c".repeat(64),
+          dockerfileSha256: "d".repeat(64),
+          localImageTag: `counterlab-runner:git-${sourceCommit}`,
+          localImageDigest: `sha256:${"e".repeat(64)}`,
+          ociRevision: sourceCommit,
+          ociSourceTreeSha256: "c".repeat(64),
+          engineAuthorityHash: "f".repeat(64),
+          runtimeManifestHash: "1".repeat(64),
+          evidenceCommit: "2".repeat(40),
+          qualifiedAt: "2026-07-16T16:00:00.000Z",
+          verifierVersion: "counterlab-release-v1",
+        }),
+      );
+
+      const result = spawnSync(
+        resolve(process.cwd(), "../../node_modules/.bin/tsx"),
+        [
+          resolve(process.cwd(), "../../scripts/prepare-qualified-deploy.ts"),
+          "--config",
+          basePath,
+          "--receipt",
+          receiptPath,
+          "--image",
+          image,
+          "--output",
+          outputPath,
+        ],
+        { encoding: "utf8" },
+      );
+      expect(result.status, result.stderr).toBe(0);
+
+      const generated = JSON.parse(readFileSync(outputPath, "utf8")) as {
+        containers?: Array<Record<string, unknown>>;
+      };
+      expect(generated.containers?.[0]).toEqual(
+        expect.objectContaining({
+          class_name: "CounterLabRunner",
+          image,
+        }),
+      );
+      expect(generated.containers?.[0]).not.toHaveProperty("image_vars");
+      expect(generated.containers?.[0]).not.toHaveProperty(
+        "image_build_context",
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it("keeps primary semantic text colors above normal-text contrast", () => {

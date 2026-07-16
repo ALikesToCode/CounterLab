@@ -33,6 +33,7 @@ const HttpsUrlSchema = z.url().refine((value) => {
 
 const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
 const GitCommitSchema = z.string().regex(/^[a-f0-9]{40}$/);
+const OciDigestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 
 const RepositoryPathSchema = z
   .string()
@@ -390,3 +391,49 @@ export const ScientificEngineSnapshotSchema = z.strictObject({
   runtimeManifest: ScientificEngineRuntimeManifestSchema,
   evidenceCatalog: ScientificEngineEvidenceCatalogSchema,
 });
+
+export const QualifiedRunnerReleaseSchema = z
+  .strictObject({
+    schemaVersion: z.literal("1"),
+    status: z.literal("VERIFIED"),
+    sourceCommit: GitCommitSchema,
+    sourceArchiveSha256: Sha256Schema,
+    sourceTreeSha256: Sha256Schema,
+    dockerfileSha256: Sha256Schema,
+    localImageTag: z
+      .string()
+      .regex(/^counterlab-runner:git-[a-f0-9]{40}$/),
+    localImageDigest: OciDigestSchema,
+    ociRevision: GitCommitSchema,
+    ociSourceTreeSha256: Sha256Schema,
+    engineAuthorityHash: Sha256Schema,
+    runtimeManifestHash: Sha256Schema,
+    evidenceCommit: GitCommitSchema,
+    qualifiedAt: z.iso.datetime({ offset: true }),
+    verifierVersion: StableIdSchema,
+  })
+  .superRefine((release, context) => {
+    if (release.ociRevision !== release.sourceCommit) {
+      context.addIssue({
+        code: "custom",
+        path: ["ociRevision"],
+        message: "the OCI revision must equal the qualified source commit",
+      });
+    }
+    if (release.ociSourceTreeSha256 !== release.sourceTreeSha256) {
+      context.addIssue({
+        code: "custom",
+        path: ["ociSourceTreeSha256"],
+        message: "the OCI source-tree label must equal the qualified tree hash",
+      });
+    }
+    if (
+      release.localImageTag !== `counterlab-runner:git-${release.sourceCommit}`
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["localImageTag"],
+        message: "the local image tag must be immutable and source-bound",
+      });
+    }
+  });

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://counterlab.local/schemas/qualified-runner-release-v1.schema.json",
+  "title": "CounterLab qualified runner release receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "sourceCommit",
+    "sourceArchiveSha256",
+    "sourceTreeSha256",
+    "dockerfileSha256",
+    "localImageTag",
+    "localImageDigest",
+    "ociRevision",
+    "ociSourceTreeSha256",
+    "engineAuthorityHash",
+    "runtimeManifestHash",
+    "evidenceCommit",
+    "qualifiedAt",
+    "verifierVersion"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "status": { "const": "VERIFIED" },
+    "sourceCommit": { "$ref": "#/$defs/gitCommit" },
+    "sourceArchiveSha256": { "$ref": "#/$defs/sha256" },
+    "sourceTreeSha256": { "$ref": "#/$defs/sha256" },
+    "dockerfileSha256": { "$ref": "#/$defs/sha256" },
+    "localImageTag": {
+      "type": "string",
+      "pattern": "^counterlab-runner:git-[a-f0-9]{40}$"
+    },
+    "localImageDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "ociRevision": { "$ref": "#/$defs/gitCommit" },
+    "ociSourceTreeSha256": { "$ref": "#/$defs/sha256" },
+    "engineAuthorityHash": { "$ref": "#/$defs/sha256" },
+    "runtimeManifestHash": { "$ref": "#/$defs/sha256" },
+    "evidenceCommit": { "$ref": "#/$defs/gitCommit" },
+    "qualifiedAt": { "type": "string", "format": "date-time" },
+    "verifierVersion": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+    }
+  },
+  "$defs": {
+    "gitCommit": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

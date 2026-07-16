@@ -46,10 +46,12 @@ RUN pnpm install --frozen-lockfile --filter @counterlab/hosted-runner... \
 FROM python:3.13-slim-trixie@sha256:bffeb7bd6a85767587059c6ba23e1e9122078e3aa3fa836099171b9bb5a9bb00
 
 ARG COUNTERLAB_SOURCE_COMMIT=unbound
+ARG COUNTERLAB_SOURCE_TREE_SHA256=unbound
 
 LABEL org.opencontainers.image.licenses="MIT" \
     org.opencontainers.image.revision="${COUNTERLAB_SOURCE_COMMIT}" \
-    org.opencontainers.image.source="https://github.com/ALikesToCode/CounterLab"
+    org.opencontainers.image.source="https://github.com/ALikesToCode/CounterLab" \
+    io.counterlab.source-tree-sha256="${COUNTERLAB_SOURCE_TREE_SHA256}"
 
 ENV DEBIAN_FRONTEND=noninteractive \
     BLIS_NUM_THREADS=1 \
