@@ -823,6 +823,37 @@ export async function projectProofCapsuleReplayV2(
         eventHash,
       }),
     ),
+    provenance: {
+      conceptPackVersion: verifiedResult.conceptPackVersion,
+      kernelVersion: verifiedResult.kernelVersion,
+      verifierVersion: verifierReports.epistemicVerification.verifierVersion,
+      boundaryVerifierVersion:
+        verifierReports.boundaryVerification.verifierVersion,
+      scientificVerifierVersion:
+        capsule.manifest.authority.lineage.scientificVerifierVersion,
+      scorerVersion: capsule.manifest.authority.lineage.scorerVersion,
+      modelIds: [
+        ...new Set(
+          evidenceEvents.flatMap((event) =>
+            event.modelId === undefined ? [] : [event.modelId],
+          ),
+        ),
+      ].slice(0, 16),
+      promptHashes: [
+        ...new Set(
+          evidenceEvents.flatMap((event) =>
+            event.promptHash === undefined ? [] : [event.promptHash],
+          ),
+        ),
+      ].slice(0, 32),
+      commitHashes: [
+        ...new Set(
+          evidenceEvents.flatMap((event) =>
+            event.commitHash === undefined ? [] : [event.commitHash],
+          ),
+        ),
+      ].slice(0, 16),
+    },
     limitations: capsule.manifest.limitations,
   });
 }

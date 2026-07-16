@@ -3039,6 +3039,19 @@ export const ProofCapsuleReplayV2Schema =
     reasoningDiff: ReasoningDiffV2Schema,
     compilerEvents: z.array(PublicCompilerEventSchema).min(1).max(1_024),
     timeline: z.array(ProofCapsuleReplayTimelineEventV2Schema).min(1).max(512),
+    provenance: z
+      .object({
+        conceptPackVersion: NonEmptyString,
+        kernelVersion: NonEmptyString,
+        verifierVersion: NonEmptyString,
+        boundaryVerifierVersion: NonEmptyString,
+        scientificVerifierVersion: NonEmptyString,
+        scorerVersion: NonEmptyString,
+        modelIds: z.array(NonEmptyString).max(16),
+        promptHashes: z.array(Sha256Schema).max(32),
+        commitHashes: z.array(GitObjectIdSchema).max(16),
+      })
+      .strict(),
     limitations: z.array(NonEmptyString).min(1).max(32),
   }).superRefine((replay, context) => {
     if (

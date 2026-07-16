@@ -5979,6 +5979,17 @@ describe("Cloudflare Worker API", () => {
         },
         compilerEvents: expect.any(Array),
         timeline: expect.any(Array),
+        provenance: {
+          conceptPackVersion: result.conceptPackVersion,
+          kernelVersion: result.kernelVersion,
+          verifierVersion: expect.any(String),
+          boundaryVerifierVersion: "boundary-map-verifier-v1",
+          scientificVerifierVersion: expect.any(String),
+          scorerVersion: expect.any(String),
+          modelIds: expect.any(Array),
+          promptHashes: expect.any(Array),
+          commitHashes: expect.any(Array),
+        },
         limitations: expect.arrayContaining([
           expect.stringMatching(/bounded experiment/iu),
         ]),
