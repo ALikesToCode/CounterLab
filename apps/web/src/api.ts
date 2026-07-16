@@ -13,6 +13,8 @@ import {
   PatchResultSchema,
   PredictionContractSchema,
   ProofBundleSchema,
+  ProofCapsuleReplayReceiptV2Schema,
+  ProofCapsuleReplayV2Schema,
   PublicProofCapsuleRefV2Schema,
   PublicCompilerEventSchema,
   ReasoningDiffSchema,
@@ -40,6 +42,8 @@ import {
   type PatchResult,
   type PredictionContract,
   type ProofBundle,
+  type ProofCapsuleReplayReceiptV2,
+  type ProofCapsuleReplayV2,
   type PublicProofCapsuleRefV2,
   type ReasoningDiff,
   type ReasoningDiffV2,
@@ -264,9 +268,7 @@ const ReasoningDiffResponseSchema = z.union([
   ReasoningDiffV2Schema,
   ReasoningDiffSchema,
 ]);
-export type ReasoningDiffResponse = z.infer<
-  typeof ReasoningDiffResponseSchema
->;
+export type ReasoningDiffResponse = z.infer<typeof ReasoningDiffResponseSchema>;
 
 const RunnerEventsResponseSchema = z
   .object({
@@ -301,7 +303,7 @@ const PatchCompileResponseSchema = z
     }
   });
 
-const ReplaySchema = z
+const LegacyReplaySchema = z
   .object({
     schemaVersion: z.literal("1"),
     replayId: NonEmptyString,
@@ -324,7 +326,22 @@ const ReplaySchema = z
   })
   .strict();
 
-export type VerifiedReplay = z.infer<typeof ReplaySchema>;
+const ReplaySchema = z.union([LegacyReplaySchema, ProofCapsuleReplayV2Schema]);
+
+export type VerifiedReplay =
+  z.infer<typeof LegacyReplaySchema> | ProofCapsuleReplayV2;
+
+const PublishReplayResponseSchema = z
+  .object({
+    reused: z.boolean(),
+    replay: ProofCapsuleReplayReceiptV2Schema,
+  })
+  .strict();
+
+export type PublishReplayResponse = {
+  reused: boolean;
+  replay: ProofCapsuleReplayReceiptV2;
+};
 
 const CreateSampleSessionInputSchema = z
   .object({ sampleId: z.literal("leakage-01") })
@@ -763,6 +780,14 @@ export class CounterLabApiClient {
     return `${this.baseUrl}/api/sessions/${encodedId(sessionId)}/proof-capsule`;
   }
 
+  replayProofCapsuleDownloadUrl(replayId: string): string {
+    return `${this.baseUrl}/api/replays/${encodedId(replayId)}/proof-capsule`;
+  }
+
+  replayPatchedNotebookDownloadUrl(replayId: string): string {
+    return `${this.baseUrl}/api/replays/${encodedId(replayId)}/patched-notebook`;
+  }
+
   getEvents(sessionId: string): Promise<EvidenceEvent[]> {
     return this.request(
       `/api/sessions/${encodedId(sessionId)}/events`,
@@ -786,6 +811,13 @@ export class CounterLabApiClient {
 
   getReplay(replayId: string): Promise<VerifiedReplay> {
     return this.request(`/api/replays/${encodedId(replayId)}`, ReplaySchema);
+  }
+
+  publishReplay(sessionId: string): Promise<PublishReplayResponse> {
+    return this.postWithoutInput(
+      `/api/sessions/${encodedId(sessionId)}/replays`,
+      PublishReplayResponseSchema,
+    );
   }
 
   private postWithoutInput<T>(path: string, schema: z.ZodType<T>): Promise<T> {

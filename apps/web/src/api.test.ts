@@ -122,12 +122,30 @@ const reasoningDiffV2 = {
   sessionId: session.sessionId,
   concept: "entity_leakage" as const,
   dimensions: {
-    belief: { before: "Random rows prove reuse.", after: "Match the deployment unit." },
-    prediction: { before: "The score stays high.", after: "The held-out entity score fell." },
-    evidence: { before: "Rows were mixed.", after: "Whole entities were held out." },
-    boundary: { before: "No boundary was named.", after: "Recurrence changes the optimism gap." },
-    behavior: { before: "Use random rows.", after: "Use a time-ordered transfer split." },
-    code: { before: "train_test_split(rows)", after: "group_holdout(customer_id)" },
+    belief: {
+      before: "Random rows prove reuse.",
+      after: "Match the deployment unit.",
+    },
+    prediction: {
+      before: "The score stays high.",
+      after: "The held-out entity score fell.",
+    },
+    evidence: {
+      before: "Rows were mixed.",
+      after: "Whole entities were held out.",
+    },
+    boundary: {
+      before: "No boundary was named.",
+      after: "Recurrence changes the optimism gap.",
+    },
+    behavior: {
+      before: "Use random rows.",
+      after: "Use a time-ordered transfer split.",
+    },
+    code: {
+      before: "train_test_split(rows)",
+      after: "group_holdout(customer_id)",
+    },
   },
   authority: {
     artifactManifestHash: digest("0"),
@@ -319,11 +337,18 @@ describe("CounterLabApiClient", () => {
         ["test-30", 0.3, "rows-2", 2, "little-gap", 0.1],
         ["test-30", 0.3, "rows-4", 4, "material-gap", 0.34],
       ].map(
-        ([firstId, firstValue, secondId, secondValue, classificationId, gap], index) => ({
+        (
+          [firstId, firstValue, secondId, secondValue, classificationId, gap],
+          index,
+        ) => ({
           cellId: `cell-${index + 1}`,
           concept: "entity_leakage" as const,
           coordinates: [
-            { axisId: "test-fraction", pointId: firstId as string, value: firstValue as number },
+            {
+              axisId: "test-fraction",
+              pointId: firstId as string,
+              value: firstValue as number,
+            },
             {
               axisId: "observations-per-customer",
               pointId: secondId as string,
@@ -343,12 +368,22 @@ describe("CounterLabApiClient", () => {
         }),
       ),
       classifications: [
-        { id: "little-gap", label: "Little gap", description: "The split choice changes little." },
-        { id: "material-gap", label: "Material gap", description: "Repeated identities inflate the row split." },
+        {
+          id: "little-gap",
+          label: "Little gap",
+          description: "The split choice changes little.",
+        },
+        {
+          id: "material-gap",
+          label: "Material gap",
+          description: "Repeated identities inflate the row split.",
+        },
       ],
       units: { accuracy: "proportion", optimism_gap: "proportion" },
       assumptions: ["The estimator and preprocessing remain fixed."],
-      nonClaims: ["This map does not prove all grouped evaluations are better."],
+      nonClaims: [
+        "This map does not prove all grouped evaluations are better.",
+      ],
       resultHash: boundaryReceipt.resultHash,
     };
     const boundaryReport = {
@@ -380,12 +415,12 @@ describe("CounterLabApiClient", () => {
           },
         }),
       )
-      .mockResolvedValueOnce(
-        jsonResponse({ ok: true, data: reasoningDiffV2 }),
-      );
+      .mockResolvedValueOnce(jsonResponse({ ok: true, data: reasoningDiffV2 }));
     const client = new CounterLabApiClient({ fetch: fetcher });
 
-    await expect(client.getBoundary("session/with space")).resolves.toMatchObject({
+    await expect(
+      client.getBoundary("session/with space"),
+    ).resolves.toMatchObject({
       report: { status: "VERIFIED" },
       authority: { cellCount: 4 },
     });
@@ -599,6 +634,26 @@ describe("CounterLabApiClient", () => {
     const client = new CounterLabApiClient({ fetch: fetcher });
 
     await expect(client.createSampleArtifact()).rejects.toMatchObject({
+      code: "INVALID_API_RESPONSE",
+      status: 200,
+    });
+  });
+
+  it("rejects incomplete or storage-bearing hosted replay payloads", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({
+        ok: true,
+        data: {
+          schemaVersion: "2",
+          replayId: "replay_1",
+          replay: true,
+          objectKey: "proof-capsules/private.counterlab",
+        },
+      }),
+    );
+    const client = new CounterLabApiClient({ fetch: fetcher });
+
+    await expect(client.getReplay("replay_1")).rejects.toMatchObject({
       code: "INVALID_API_RESPONSE",
       status: 200,
     });
@@ -886,6 +941,11 @@ describe("CounterLabApiClient", () => {
         expectedMethod: "GET",
         invoke: () => client.getReplay("leakage-01"),
       },
+      {
+        expectedPath: `/api/sessions/${encoded}/replays`,
+        expectedMethod: "POST",
+        invoke: () => client.publishReplay(sessionId),
+      },
     ];
 
     for (const call of calls) {
@@ -952,6 +1012,12 @@ describe("CounterLabApiClient", () => {
     );
     expect(client.proofCapsuleDownloadUrl("session/with space")).toBe(
       "https://studio.test/api/sessions/session%2Fwith%20space/proof-capsule",
+    );
+    expect(client.replayProofCapsuleDownloadUrl("replay/with space")).toBe(
+      "https://studio.test/api/replays/replay%2Fwith%20space/proof-capsule",
+    );
+    expect(client.replayPatchedNotebookDownloadUrl("replay/with space")).toBe(
+      "https://studio.test/api/replays/replay%2Fwith%20space/patched-notebook",
     );
   });
 
