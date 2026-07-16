@@ -2815,6 +2815,10 @@ describe("Cloudflare Worker API", () => {
       dispatcher,
     );
     expect(harness.queued.status).toBe(503);
+    await expect(harness.queued.clone().json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "RUNNER_DISPATCH_FAILED", retryable: true },
+    });
     const firstAttempt = dispatcher.dispatched[0];
     if (firstAttempt === undefined)
       throw new Error("first dispatch was missing");

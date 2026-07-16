@@ -497,7 +497,7 @@ export class CounterLabApiClient {
   }
 
   compileLab(sessionId: string): Promise<LabCompileResponse> {
-    return this.postWithoutInput(
+    return this.postRunnerActionWithoutInput(
       `/api/sessions/${encodedId(sessionId)}/lab/compile`,
       LabCompileResponseSchema,
     );
@@ -534,7 +534,7 @@ export class CounterLabApiClient {
   }
 
   runLab(sessionId: string): Promise<RunnerActionResponse> {
-    return this.postWithoutInput(
+    return this.postRunnerActionWithoutInput(
       `/api/sessions/${encodedId(sessionId)}/lab/run`,
       RunnerActionResponseSchema,
     );
@@ -544,7 +544,7 @@ export class CounterLabApiClient {
     sessionId: string,
     input: InteractiveLeakageRunRequest,
   ): Promise<InteractiveRunResponse> {
-    return this.request(
+    return this.requestRunnerAction(
       `/api/sessions/${encodedId(sessionId)}/lab/interactive`,
       InteractiveRunResponseSchema,
       {
@@ -560,7 +560,7 @@ export class CounterLabApiClient {
     sessionId: string,
     input: InteractiveImbalanceRunRequest,
   ): Promise<InteractiveRunResponse> {
-    return this.request(
+    return this.requestRunnerAction(
       `/api/sessions/${encodedId(sessionId)}/lab/interactive`,
       InteractiveRunResponseSchema,
       {
@@ -611,7 +611,7 @@ export class CounterLabApiClient {
   }
 
   compilePatch(sessionId: string): Promise<PatchCompileResponse> {
-    return this.postWithoutInput(
+    return this.postRunnerActionWithoutInput(
       `/api/sessions/${encodedId(sessionId)}/patch/compile`,
       PatchCompileResponseSchema,
     );
@@ -651,6 +651,35 @@ export class CounterLabApiClient {
       method: "POST",
       body: JSON.stringify({}),
     });
+  }
+
+  private postRunnerActionWithoutInput<T>(
+    path: string,
+    schema: z.ZodType<T>,
+  ): Promise<T> {
+    return this.requestRunnerAction(path, schema, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  }
+
+  private async requestRunnerAction<T>(
+    path: string,
+    schema: z.ZodType<T>,
+    init: RequestInit,
+  ): Promise<T> {
+    try {
+      return await this.request(path, schema, init);
+    } catch (error) {
+      if (
+        !(error instanceof ApiClientError) ||
+        error.code !== "RUNNER_DISPATCH_FAILED" ||
+        !error.retryable
+      ) {
+        throw error;
+      }
+      return this.request(path, schema, init);
+    }
   }
 
   private async request<T>(

@@ -108,10 +108,39 @@ describe("HttpRunnerDispatcher", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
+  it("retries Container startup when instance acquisition fails transiently", async () => {
+    const startAndWaitForPorts = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(
+        new DOMException("instance unavailable", "TimeoutError"),
+      )
+      .mockResolvedValueOnce(undefined);
+    const fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ accepted: true }), { status: 202 }),
+    );
+    const dispatcher = new CloudflareContainerRunnerDispatcher(
+      { getByName: () => ({ startAndWaitForPorts, fetch }) },
+      {},
+    );
+
+    await expect(
+      dispatcher.dispatch({
+        job,
+        token: "scoped-job-token",
+        controlPlaneUrl: "https://studio.example.test",
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(startAndWaitForPorts).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
   it("starts a job Container with the bounded secret environment before dispatch", async () => {
     const startAndWaitForPorts = vi.fn(async () => undefined);
-    const fetch = vi.fn(async () =>
-      new Response(JSON.stringify({ accepted: true }), { status: 202 }),
+    const fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ accepted: true }), { status: 202 }),
     );
     const environment = {
       CODEX_AUTH_JSON: '{"auth_mode":"chatgpt"}',
@@ -133,6 +162,7 @@ describe("HttpRunnerDispatcher", () => {
     expect(startAndWaitForPorts).toHaveBeenCalledWith({
       ports: [8080],
       cancellationOptions: {
+        abort: expect.any(AbortSignal),
         instanceGetTimeoutMS: 10_000,
         portReadyTimeoutMS: 30_000,
       },

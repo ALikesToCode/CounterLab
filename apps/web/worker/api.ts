@@ -227,8 +227,16 @@ function jsonSuccess<T>(data: T) {
   return { ok: true as const, data };
 }
 
-function jsonError(code: string, message: string, status: number) {
-  return { ok: false as const, error: { code, message, status } };
+function jsonError(
+  code: string,
+  message: string,
+  status: number,
+  retryable = false,
+) {
+  return {
+    ok: false as const,
+    error: { code, message, status, ...(retryable ? { retryable: true } : {}) },
+  };
 }
 
 function constantTimeEqual(left: string, right: string): boolean {
@@ -307,6 +315,7 @@ class ApiInputError extends Error {
     readonly code: string,
     message: string,
     readonly status: number,
+    readonly retryable = false,
   ) {
     super(message);
     this.name = "ApiInputError";
@@ -520,6 +529,7 @@ async function dispatchRecoverableRunnerJob(input: {
       "RUNNER_DISPATCH_FAILED",
       "The process runner did not acknowledge this job; retrying will redeliver the same job",
       503,
+      true,
     );
   }
 }
@@ -3492,9 +3502,10 @@ export function createApi(options: ApiOptions = {}) {
 
   app.onError((error, context) => {
     if (error instanceof ApiInputError) {
-      return context.json(jsonError(error.code, error.message, error.status), {
-        status: error.status as 400,
-      });
+      return context.json(
+        jsonError(error.code, error.message, error.status, error.retryable),
+        { status: error.status as 400 },
+      );
     }
     if (error instanceof ZodError) {
       return context.json(

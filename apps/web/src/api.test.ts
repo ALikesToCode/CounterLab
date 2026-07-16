@@ -289,6 +289,70 @@ describe("CounterLabApiClient", () => {
     );
   });
 
+  it("redelivers the identical interactive request once after an ambiguous runner dispatch", async () => {
+    const liveSession = {
+      ...session,
+      mode: { kind: "live_notebook" as const },
+      state: "EXPERIMENT_COMPLETED" as const,
+      version: 10,
+    };
+    const request = {
+      schemaVersion: "1" as const,
+      concept: "class_imbalance" as const,
+      threshold: 0.2,
+      prevalenceScenario: "rarer" as const,
+      metricFocus: "recall" as const,
+    };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            ok: false,
+            error: {
+              code: "RUNNER_DISPATCH_FAILED",
+              message:
+                "The process runner did not acknowledge this job; retrying will redeliver the same job",
+              status: 503,
+              retryable: true,
+            },
+          },
+          503,
+        ),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            ok: true,
+            data: {
+              ...liveSession,
+              runnerJob: {
+                ...runnerJob,
+                status: "STARTING",
+                jobVersion: 2,
+                attempt: 1,
+                runnerIdentity: "cloudflare-container-runner-v1",
+              },
+              selectedRunId: "interactive_abc",
+              configurationHash: digest("d"),
+            },
+          },
+          202,
+        ),
+      );
+    const client = new CounterLabApiClient({ fetch: fetcher });
+
+    await expect(
+      client.runInteractiveImbalance(session.sessionId, request),
+    ).resolves.toMatchObject({
+      runnerJob: { jobId: runnerJob.jobId, status: "STARTING" },
+      selectedRunId: "interactive_abc",
+    });
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher.mock.calls[0]).toEqual(fetcher.mock.calls[1]);
+  });
+
   it("validates authoritative runner cancellation and its encoded route", async () => {
     const fetcher = vi.fn<typeof fetch>(async () =>
       jsonResponse({
