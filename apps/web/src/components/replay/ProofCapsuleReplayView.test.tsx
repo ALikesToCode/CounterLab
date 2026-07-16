@@ -15,6 +15,37 @@ describe("ProofCapsuleReplayView", () => {
     },
   );
 
+  it("exposes the six replay stages as keyboard-accessible in-page links", () => {
+    render(
+      <ProofCapsuleReplayView
+        replay={replayFixture("entity_leakage")}
+        proofCapsuleDownloadUrl="/api/replays/replay_retention_913/proof-capsule"
+        patchedNotebookDownloadUrl="/api/replays/replay_retention_913/patched-notebook"
+      />,
+    );
+
+    const stages = screen.getByRole("navigation", {
+      name: "Replay evidence stages",
+    });
+    const links = within(stages).getAllByRole("link");
+    expect(links.map((link) => link.textContent?.trim())).toEqual([
+      "01Question",
+      "02Prediction",
+      "03Test",
+      "04Boundary",
+      "05Apply",
+      "06Repair",
+    ]);
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([
+      "#replay-question",
+      "#replay-prediction",
+      "#replay-test",
+      "#replay-boundary",
+      "#replay-apply",
+      "#replay-repair",
+    ]);
+  });
+
   it("renders a dynamic live-artifact replay without mutable lesson controls", () => {
     const replay = replayFixture("class_imbalance");
     render(
@@ -112,7 +143,11 @@ describe("ProofCapsuleReplayView", () => {
     );
     expect(capsule).toHaveAttribute("download");
     expect(notebook).toHaveAttribute("download");
-    expect(screen.getAllByRole("link")).toEqual([notebook, capsule]);
+    expect(
+      screen
+        .getAllByRole("link")
+        .filter((link) => link.hasAttribute("download")),
+    ).toEqual([notebook, capsule]);
 
     const proof = document.getElementById("replay-proof");
     expect(proof).not.toBeNull();

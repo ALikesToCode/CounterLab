@@ -26,6 +26,15 @@ const reasoningDimensions = [
   ["code", "Repair"],
 ] as const;
 
+const replayStages = [
+  { id: "replay-question", label: "Question" },
+  { id: "replay-prediction", label: "Prediction" },
+  { id: "replay-test", label: "Test" },
+  { id: "replay-boundary", label: "Boundary" },
+  { id: "replay-apply", label: "Apply" },
+  { id: "replay-repair", label: "Repair" },
+] as const;
+
 function humanize(value: string): string {
   return value
     .replace(/^(?:leakage|imbalance)\./u, "")
@@ -499,19 +508,16 @@ export function ProofCapsuleReplayView({
         </header>
 
         <nav className={styles.stageRail} aria-label="Replay evidence stages">
-          {[
-            "Question",
-            "Prediction",
-            "Test",
-            "Boundary",
-            "Apply",
-            "Repair",
-          ].map((stage, index) => (
-            <span key={stage}>
-              <b>{String(index + 1).padStart(2, "0")}</b>
-              {stage}
-            </span>
-          ))}
+          <ol>
+            {replayStages.map((stage, index) => (
+              <li key={stage.id}>
+                <a href={`#${stage.id}`}>
+                  <b>{String(index + 1).padStart(2, "0")}</b>
+                  {stage.label}
+                </a>
+              </li>
+            ))}
+          </ol>
         </nav>
 
         <section

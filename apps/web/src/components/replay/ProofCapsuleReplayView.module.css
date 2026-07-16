@@ -168,33 +168,56 @@
 }
 
 .stageRail {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
   overflow: hidden;
   border: 1px solid #cad2d4;
   border-radius: 8px;
   background: rgb(255 254 249 / 70%);
 }
 
-.stageRail span {
+.stageRail ol {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stageRail li {
+  border-right: 1px solid #d7dcdd;
+}
+
+.stageRail li:last-child {
+  border-right: 0;
+}
+
+.stageRail a {
   display: grid;
   min-height: 68px;
   place-content: center;
   gap: 3px;
   padding: 10px;
-  border-right: 1px solid #d7dcdd;
+  color: #14273b;
   font-size: 14px;
   font-weight: 750;
   text-align: center;
+  text-decoration: none;
 }
 
-.stageRail span:last-child {
-  border-right: 0;
+.stageRail a:hover {
+  color: #0d645f;
+  background: rgb(18 119 115 / 8%);
+}
+
+.stageRail a:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 3px solid #127773;
+  outline-offset: -3px;
 }
 
 .stageRail b {
   color: #127773;
-  font: 11px/1 var(--mono);
+  font: 12px/1 var(--mono);
 }
 
 .section,
@@ -206,6 +229,7 @@
   border-radius: 12px;
   background: rgb(255 254 249 / 94%);
   box-shadow: 0 18px 58px rgb(36 49 60 / 6%);
+  scroll-margin-top: 82px;
 }
 
 .sectionHeader {
@@ -272,7 +296,7 @@
 
 .verificationStamp span {
   color: #63747d;
-  font-size: 11px;
+  font-size: 12px;
   text-transform: none;
 }
 
@@ -382,7 +406,7 @@
 
 .predictionCard dt {
   color: #b8c7d2;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .predictionCard dd {
@@ -575,8 +599,8 @@
 .patchSummary dt,
 .capsule dt,
 .provenance dt {
-  color: #778894;
-  font-size: 11px;
+  color: #526471;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -616,6 +640,16 @@
   color: #102435;
   background: #f0ce76;
   box-shadow: 0 9px 24px rgb(0 0 0 / 20%);
+}
+
+.primaryDownload:hover {
+  background: #f5d98f;
+}
+
+.secondaryDownload:hover {
+  color: #fff;
+  border-color: #a9c3d1;
+  background: rgb(255 255 255 / 8%);
 }
 
 .primaryDownload:focus-visible,
@@ -751,14 +785,18 @@
   }
 
   .stageRail {
+    overflow: visible;
+  }
+
+  .stageRail ol {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .stageRail span:nth-child(3) {
+  .stageRail li:nth-child(3) {
     border-right: 0;
   }
 
-  .stageRail span:nth-child(-n + 3) {
+  .stageRail li:nth-child(-n + 3) {
     border-bottom: 1px solid #d7dcdd;
   }
 
@@ -814,7 +852,7 @@
     grid-template-columns: 1fr;
   }
 
-  .stageRail span {
+  .stageRail a {
     min-height: 58px;
     font-size: 12px;
   }
