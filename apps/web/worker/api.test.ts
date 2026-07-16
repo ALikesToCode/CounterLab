@@ -2808,7 +2808,7 @@ describe("Cloudflare Worker API", () => {
     expect(harness.dispatcher.cancelled).toHaveLength(1);
   });
 
-  it("redelivers the same compile job after an ambiguous dispatch without creating a second job", async () => {
+  it("preserves a failed dispatch and retries the compile on a fresh isolated job", async () => {
     const dispatcher = new CapturingRunnerDispatcher(1);
     const harness = await preparedHostedRunner(
       "session_dispatch_recovery",
@@ -2825,8 +2825,17 @@ describe("Cloudflare Worker API", () => {
     await expect(
       harness.runnerJobs.find(firstAttempt.job.jobId),
     ).resolves.toMatchObject({
-      status: "STARTING",
+      status: "FAILED",
+      error: { code: "RUNNER_DISPATCH_FAILED", retryable: true },
     });
+    await expect(
+      harness.runnerJobs.listEvents(firstAttempt.job.jobId, 0),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        kind: "job.failed",
+        code: "RUNNER_DISPATCH_FAILED",
+      }),
+    ]);
 
     const retry = await postJson(
       harness.app,
@@ -2834,17 +2843,21 @@ describe("Cloudflare Worker API", () => {
     );
 
     expect(retry.status).toBe(202);
-    await expect(retry.json()).resolves.toMatchObject({
+    const retryBody = (await retry.json()) as {
+      data: { runnerJob: RunnerJob; reused?: boolean };
+    };
+    expect(retryBody).toMatchObject({
       data: {
-        reused: true,
         runnerJob: {
-          jobId: firstAttempt.job.jobId,
           status: "STARTING",
         },
       },
     });
+    expect(retryBody.data).not.toHaveProperty("reused");
     expect(dispatcher.dispatched).toHaveLength(2);
-    expect(dispatcher.dispatched[1]?.job.jobId).toBe(firstAttempt.job.jobId);
+    expect(dispatcher.dispatched[1]?.job.jobId).not.toBe(
+      firstAttempt.job.jobId,
+    );
     expect(dispatcher.dispatched[1]?.token).not.toBe(firstAttempt.token);
   });
 

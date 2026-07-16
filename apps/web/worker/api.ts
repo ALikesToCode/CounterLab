@@ -524,13 +524,47 @@ async function dispatchRecoverableRunnerJob(input: {
       if (!(error instanceof ConcurrentRunnerJobUpdateError)) throw error;
       return input.jobs.getJob(dispatchJob.jobId);
     }
-  } catch {
-    throw new ApiInputError(
-      "RUNNER_DISPATCH_FAILED",
-      "The process runner did not acknowledge this job; retrying will redeliver the same job",
-      503,
-      true,
-    );
+  } catch (dispatchError) {
+    const failure = {
+      code: "RUNNER_DISPATCH_FAILED",
+      message:
+        "The process runner did not acknowledge this job; retrying will create a fresh isolated job",
+      retryable: true,
+    } as const;
+    try {
+      const failed = await input.jobs.transition(
+        dispatchJob.jobId,
+        dispatchJob.jobVersion,
+        "FAILED",
+        { runnerIdentity: input.dispatcher.identity, error: failure },
+      );
+      await input.jobs.appendEvent(failed.jobId, failed.jobVersion, {
+        schemaVersion: "1",
+        eventId: requestId(input.options, "compiler_event"),
+        jobId: failed.jobId,
+        cursor: failed.eventCursor + 1,
+        at: requestNow(input.options).toISOString(),
+        kind: "job.failed",
+        code: failure.code,
+        message: failure.message,
+      });
+    } catch (stateError) {
+      if (!(stateError instanceof ConcurrentRunnerJobUpdateError)) {
+        console.error("CounterLab could not persist runner dispatch failure", {
+          requestId: input.context.get("requestId"),
+          jobId: dispatchJob.jobId,
+          errorName:
+            stateError instanceof Error ? stateError.name : "UnknownError",
+        });
+      }
+    }
+    console.warn("CounterLab runner dispatch was not acknowledged", {
+      requestId: input.context.get("requestId"),
+      jobId: dispatchJob.jobId,
+      errorName:
+        dispatchError instanceof Error ? dispatchError.name : "UnknownError",
+    });
+    throw new ApiInputError(failure.code, failure.message, 503, true);
   }
 }
 
