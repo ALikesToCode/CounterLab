@@ -1,9 +1,11 @@
 import type {
   PatchResult,
+  PublishReplayResponse,
   PublicProofCapsuleRefV2,
   ReasoningDiffV2,
 } from "../../api";
 import { ProofCapsuleView } from "./ProofCapsuleView";
+import { ReplayPublicationPanel } from "./ReplayPublicationPanel";
 import styles from "./ReasoningDiffView.module.css";
 
 const dimensionOrder = [
@@ -41,12 +43,14 @@ export function ReasoningDiffView({
   patch,
   patchDownloadUrl,
   proofCapsuleDownloadUrl,
+  publishReplay,
 }: {
   diff: ReasoningDiffV2;
   capsule: PublicProofCapsuleRefV2;
   patch: PatchResult;
   patchDownloadUrl: string;
   proofCapsuleDownloadUrl: string;
+  publishReplay?: () => Promise<PublishReplayResponse>;
 }) {
   return (
     <section className={styles.reasoningDiff} aria-labelledby="reasoning-diff-v2-title">
@@ -122,6 +126,10 @@ export function ReasoningDiffView({
         capsule={capsule}
         downloadUrl={proofCapsuleDownloadUrl}
       />
+
+      {publishReplay !== undefined && (
+        <ReplayPublicationPanel publishReplay={publishReplay} />
+      )}
 
       <details className={styles.proof}>
         <summary>Evidence &amp; proof</summary>

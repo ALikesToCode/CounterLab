@@ -1,0 +1,138 @@
+.panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 22px;
+  align-items: center;
+  padding: 20px;
+  color: #eaf4f1;
+  border: 1px solid rgb(94 207 188 / 28%);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 15% 0%, rgb(69 188 169 / 18%), transparent 42%),
+    #102e38;
+}
+
+.copy {
+  max-width: 760px;
+}
+
+.copy > span {
+  color: #91e5d7;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.copy h3 {
+  margin: 5px 0 5px;
+  color: white;
+  font: 600 24px/1.12 var(--serif);
+}
+
+.copy p {
+  margin: 0;
+  color: #c6d9d8;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.copy .error {
+  margin-top: 9px;
+  color: #ffd4cf;
+  font-weight: 750;
+}
+
+.publishAction,
+.replayAction,
+.copyAction {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 17px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.publishAction {
+  color: #132525;
+  background: #8ee3d4;
+  cursor: pointer;
+}
+
+.publishAction:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.replayAction {
+  color: #172105;
+  background: #d7e77e;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: min(100%, 360px);
+}
+
+.copyAction {
+  color: #eaf4f1;
+  border-color: rgb(234 244 241 / 35%);
+  background: transparent;
+  cursor: pointer;
+}
+
+.copyStatus {
+  grid-column: 1 / -1;
+  min-height: 18px;
+  color: #c6d9d8;
+  font-size: 13px;
+  text-align: right;
+}
+
+.publishAction:hover:not(:disabled),
+.replayAction:hover,
+.copyAction:hover {
+  filter: brightness(1.06);
+}
+
+.publishAction:focus-visible,
+.replayAction:focus-visible,
+.copyAction:focus-visible {
+  outline: 3px solid #a9c6ff;
+  outline-offset: 3px;
+}
+
+@media (max-width: 800px) {
+  .panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .publishAction,
+  .replayAction,
+  .copyAction {
+    width: 100%;
+  }
+
+  .actions {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .copyStatus {
+    grid-column: 1;
+    text-align: left;
+  }
+}

@@ -152,6 +152,7 @@ export function ImbalancePatchReview({
   if (patch !== null) {
     if (
       session.mode.kind === "live_notebook" &&
+      session.state === "PROOF_CAPSULE_ISSUED" &&
       session.reasoningDiffV2 !== undefined &&
       session.proofCapsule !== undefined
     ) {
@@ -164,6 +165,7 @@ export function ImbalancePatchReview({
           proofCapsuleDownloadUrl={counterLabApi.proofCapsuleDownloadUrl(
             session.sessionId,
           )}
+          publishReplay={() => counterLabApi.publishReplay(session.sessionId)}
         />
       );
     }

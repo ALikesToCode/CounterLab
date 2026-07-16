@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   CANONICAL_JSON_PROFILE,
@@ -8,6 +9,7 @@ import {
   ReasoningDiffV2Schema,
 } from "@counterlab/contracts";
 
+import type { PublishReplayResponse } from "../../api";
 import { ReasoningDiffView } from "./ReasoningDiffView";
 
 const digest = (character: string) => character.repeat(64);
@@ -111,6 +113,31 @@ const patch = PatchResultSchema.parse({
   resultHash: digest("5"),
 });
 
+function replayPublication(
+  replayId: string,
+  reused = false,
+): PublishReplayResponse {
+  return {
+    reused,
+    replay: {
+      schemaVersion: "2",
+      replayId,
+      replay: true,
+      label: "Verified replay",
+      playbackMode: "verified_capsule_replay",
+      sourceMode: "live_notebook",
+      sourceSessionId: "session_1",
+      capsuleId: capsule.capsuleId,
+      concept: "entity_leakage",
+      recordedAt: capsule.createdAt,
+      rootHash: capsule.rootHash,
+      bytesHash: capsule.bytesHash,
+      eventChainHead: capsule.eventChainHead,
+      proofCapsule: capsule,
+    },
+  };
+}
+
 describe("ReasoningDiffView", () => {
   it("renders all six authoritative dimensions and artifact-specific patch scope", () => {
     render(
@@ -164,5 +191,124 @@ describe("ReasoningDiffView", () => {
     expect(
       screen.getByText(/documented notebook pattern, not global mastery/i),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /publish read-only replay/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("publishes a live Capsule only after the learner explicitly asks", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.spyOn(navigator.clipboard, "writeText");
+    const publishReplay = vi
+      .fn()
+      .mockResolvedValue(replayPublication("replay:live.session_1"));
+
+    render(
+      <ReasoningDiffView
+        diff={diff}
+        capsule={capsule}
+        patch={patch}
+        patchDownloadUrl="/patch.ipynb"
+        proofCapsuleDownloadUrl="/proof.counterlab"
+        publishReplay={publishReplay}
+      />,
+    );
+
+    expect(publishReplay).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(/raw notebook stays private/i),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /publish read-only replay/i }),
+    );
+
+    expect(publishReplay).toHaveBeenCalledTimes(1);
+    expect(
+      await screen.findByRole("link", { name: /open verified replay/i }),
+    ).toHaveAttribute("href", "/replay/replay%3Alive.session_1");
+    expect(screen.getByText(/published from this proof capsule/i)).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: /copy replay link/i }),
+    );
+    expect(writeText).toHaveBeenCalledWith(
+      `${window.location.origin}/replay/replay%3Alive.session_1`,
+    );
+    expect(screen.getByText(/replay link copied/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /publish read-only replay/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps a failed publication honest and lets the learner retry", async () => {
+    const user = userEvent.setup();
+    const publishReplay = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Replay storage is unavailable."))
+      .mockResolvedValueOnce(replayPublication("replay_existing_1", true));
+
+    render(
+      <ReasoningDiffView
+        diff={diff}
+        capsule={capsule}
+        patch={patch}
+        patchDownloadUrl="/patch.ipynb"
+        proofCapsuleDownloadUrl="/proof.counterlab"
+        publishReplay={publishReplay}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /publish read-only replay/i }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Replay storage is unavailable.",
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /retry replay publication/i }),
+    );
+
+    expect(publishReplay).toHaveBeenCalledTimes(2);
+    expect(
+      await screen.findByText(/existing verified replay was returned/i),
+    ).toBeInTheDocument();
+  });
+
+  it("prevents duplicate replay publication while the first request is pending", async () => {
+    const user = userEvent.setup();
+    let resolvePublication!: (value: PublishReplayResponse) => void;
+    const publishReplay = vi.fn(
+      () =>
+        new Promise<PublishReplayResponse>((resolve) => {
+          resolvePublication = resolve;
+        }),
+    );
+
+    render(
+      <ReasoningDiffView
+        diff={diff}
+        capsule={capsule}
+        patch={patch}
+        patchDownloadUrl="/patch.ipynb"
+        proofCapsuleDownloadUrl="/proof.counterlab"
+        publishReplay={publishReplay}
+      />,
+    );
+
+    const publishButton = screen.getByRole("button", {
+      name: /publish read-only replay/i,
+    });
+    await user.click(publishButton);
+    expect(
+      screen.getByRole("button", { name: /publishing replay/i }),
+    ).toBeDisabled();
+    await user.click(publishButton);
+    expect(publishReplay).toHaveBeenCalledTimes(1);
+
+    resolvePublication(replayPublication("replay_pending_1"));
+    expect(
+      await screen.findByRole("link", { name: /open verified replay/i }),
+    ).toHaveAttribute("href", "/replay/replay_pending_1");
   });
 });

@@ -2343,6 +2343,7 @@ function LeakageRealityScreen({
         </section>
 
         {session?.mode.kind === "live_notebook" &&
+        session.state === "PROOF_CAPSULE_ISSUED" &&
         session.reasoningDiffV2 !== undefined &&
         session.proofCapsule !== undefined &&
         patch !== null ? (
@@ -2354,6 +2355,9 @@ function LeakageRealityScreen({
             proofCapsuleDownloadUrl={counterLabApi.proofCapsuleDownloadUrl(
               session.sessionId,
             )}
+            publishReplay={() =>
+              counterLabApi.publishReplay(session.sessionId)
+            }
           />
         ) : (
           <section className="reasoning-diff panel">

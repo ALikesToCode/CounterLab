@@ -1,13 +1,19 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SessionView } from "../../api";
+import { replayFixture } from "../replay/ProofCapsuleReplayView.fixture";
 import { ImbalancePatchReview } from "./ImbalancePatchReview";
 
 const api = vi.hoisted(() => ({
   compilePatch: vi.fn(),
   getProofBundle: vi.fn(),
   patchDownloadUrl: vi.fn(() => "/api/sessions/session_1/patch/download"),
+  proofCapsuleDownloadUrl: vi.fn(
+    () => "/api/sessions/session_1/proof-capsule",
+  ),
+  publishReplay: vi.fn(),
 }));
 const runner = vi.hoisted(() => ({
   clear: vi.fn(),
@@ -24,6 +30,10 @@ vi.mock("../../hooks/useRunnerEvents", () => ({
 }));
 
 describe("ImbalancePatchReview", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("compiles after transfer and presents the verified artifact-specific diff", async () => {
     const updateSession = vi.fn();
     const transferSession = {
@@ -108,5 +118,68 @@ describe("ImbalancePatchReview", () => {
     expect(
       screen.getByRole("link", { name: /download patched copy/i }),
     ).toHaveAttribute("href", "/api/sessions/session_1/patch/download");
+  });
+
+  it("offers explicit replay publication for a completed live Proof Capsule", async () => {
+    const user = userEvent.setup();
+    const replay = replayFixture("class_imbalance");
+    api.publishReplay.mockResolvedValue({
+      reused: false,
+      replay: {
+        ...replay,
+        proofCapsule: replay.proofCapsule,
+      },
+    });
+    const completedSession = {
+      sessionId: replay.sourceSessionId,
+      state: "PROOF_CAPSULE_ISSUED",
+      mode: { kind: "live_notebook" },
+      transferResult: replay.transferResult,
+      patchResult: replay.patchResult,
+      reasoningDiffV2: replay.reasoningDiff,
+      proofCapsule: replay.proofCapsule,
+    } as SessionView;
+
+    render(
+      <ImbalancePatchReview
+        session={completedSession}
+        updateSession={vi.fn()}
+      />,
+    );
+
+    expect(api.publishReplay).not.toHaveBeenCalled();
+    await user.click(
+      screen.getByRole("button", { name: /publish read-only replay/i }),
+    );
+    expect(api.publishReplay).toHaveBeenCalledTimes(1);
+    expect(api.publishReplay).toHaveBeenCalledWith(replay.sourceSessionId);
+    expect(
+      await screen.findByRole("link", { name: /open verified replay/i }),
+    ).toHaveAttribute("href", `/replay/${replay.replayId}`);
+  });
+
+  it("does not offer replay publication before the live Capsule is issued", () => {
+    const replay = replayFixture("class_imbalance");
+    const incompleteSession = {
+      sessionId: replay.sourceSessionId,
+      state: "TRANSFER_PASSED",
+      mode: { kind: "live_notebook" },
+      transferResult: replay.transferResult,
+      patchResult: replay.patchResult,
+      reasoningDiffV2: replay.reasoningDiff,
+      proofCapsule: replay.proofCapsule,
+    } as SessionView;
+
+    render(
+      <ImbalancePatchReview
+        session={incompleteSession}
+        updateSession={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /publish read-only replay/i }),
+    ).not.toBeInTheDocument();
+    expect(api.publishReplay).not.toHaveBeenCalled();
   });
 });
