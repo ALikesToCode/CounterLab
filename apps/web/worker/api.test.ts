@@ -3,6 +3,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  BoundaryMapResultV1Schema,
   DiscriminationContractV1Schema,
   type ArtifactManifest,
   type BeliefTest,
@@ -30,12 +31,14 @@ import { schemaSummaryHash } from "@counterlab/belief-analyst";
 import { getConceptPack } from "@counterlab/concept-registry";
 import {
   ExperimentIRV5Schema,
+  RunnerBoundaryMapBundleV5Schema,
   RunnerLabCompileBundleV5Schema,
   RunnerLabInteractiveRunBundleV5Schema,
   RunnerLabRunBundleV5Schema,
   RunnerPatchCompileBundleV5Schema,
   hashExperimentIR,
   type RunnerLabCompileBundleV5,
+  type RunnerBoundaryMapBundleV5,
   type RunnerLabInteractiveRunBundleV5,
   type RunnerLabRunBundleV5,
 } from "@counterlab/experiment-ir";
@@ -1080,6 +1083,7 @@ async function scientificCandidateArtifacts(bundle: RunnerLabCompileBundleV5) {
     ],
     selection: { status: "UNSELECTED" },
     visualizations: ["metric_comparison", "entity_overlap"],
+    boundarySweep: bundle.conceptPack.boundarySweep,
     inconclusiveConditions: [
       {
         id: "gap-within-tolerance",
@@ -1304,6 +1308,7 @@ async function scientificImbalanceCandidateArtifacts(
       "threshold_curve",
       "prevalence_sensitivity",
     ],
+    boundarySweep: bundle.conceptPack.boundarySweep,
     inconclusiveConditions: [
       {
         id: "minority-utility-uncertain",
@@ -1371,8 +1376,23 @@ type ScientificCandidateFactory = (
   bundle: RunnerLabCompileBundleV5,
 ) => Promise<ScientificCandidateArtifacts>;
 
+type ScientificHostedRunnerHarness = Pick<
+  Awaited<ReturnType<typeof preparedScientificHostedRunner>>,
+  | "app"
+  | "artifact"
+  | "artifactStore"
+  | "bundle"
+  | "dispatch"
+  | "dispatcher"
+  | "runnerJobs"
+  | "runnerObjects"
+  | "session"
+  | "sessionId"
+  | "sessionRepository"
+>;
+
 async function stageScientificCandidate(
-  harness: Awaited<ReturnType<typeof preparedScientificHostedRunner>>,
+  harness: ScientificHostedRunnerHarness,
   createArtifacts: ScientificCandidateFactory = scientificCandidateArtifacts,
 ) {
   const jobId = harness.dispatch.job.jobId;
@@ -1423,7 +1443,7 @@ async function stageScientificCandidate(
 }
 
 async function completeScientificCompileAndQueueRun(
-  harness: Awaited<ReturnType<typeof preparedScientificHostedRunner>>,
+  harness: ScientificHostedRunnerHarness,
   createArtifacts?: ScientificCandidateFactory,
 ) {
   const staged = await stageScientificCandidate(harness, createArtifacts);
@@ -1461,6 +1481,165 @@ async function completeScientificCompileAndQueueRun(
     bundle: RunnerLabRunBundleV5Schema.parse(JSON.parse(input.body)),
     authorization: { authorization: `Bearer ${dispatch.token}` },
   };
+}
+
+async function completePrimaryAndQueueBoundary(
+  harness: ScientificHostedRunnerHarness,
+  createArtifacts: ScientificCandidateFactory,
+  createResult: (
+    bundle: RunnerLabRunBundleV5,
+  ) => Promise<HostedVerifiedResultSetV2>,
+  idSuffix: string,
+) {
+  const run = await completeScientificCompileAndQueueRun(
+    harness,
+    createArtifacts,
+  );
+  const runJobId = run.dispatch.job.jobId;
+  expect(
+    (
+      await harness.app.request(`/api/runner/jobs/${runJobId}/start`, {
+        method: "POST",
+        headers: run.authorization,
+      })
+    ).status,
+  ).toBe(200);
+  const primaryResult = await createResult(run.bundle);
+  const primaryText = JSON.stringify(primaryResult);
+  expect(
+    (
+      await harness.app.request(
+        `/api/runner/jobs/${runJobId}/outputs/verified-result.json`,
+        {
+          method: "PUT",
+          headers: {
+            ...run.authorization,
+            "content-type": "application/json",
+          },
+          body: primaryText,
+        },
+      )
+    ).status,
+  ).toBe(201);
+  expect(
+    (
+      await postJson(
+        harness.app,
+        `/api/runner/jobs/${runJobId}/callback`,
+        {
+          schemaVersion: "1",
+          callbackId: `callback_primary_${idSuffix}`,
+          idempotencyKey: `primary-${idSuffix}`,
+          jobId: runJobId,
+          stateVersion: run.dispatch.job.stateVersion,
+          status: "VERIFIED",
+          outputHashes: [await sha256Text(primaryText)],
+          finalEventCursor: 0,
+          occurredAt: "2026-07-14T10:00:04.000Z",
+        },
+        run.authorization,
+      )
+    ).status,
+  ).toBe(200);
+  const queued = await postJson(
+    harness.app,
+    `/api/sessions/${harness.bundle.sessionId}/boundary/run`,
+  );
+  expect(queued.status, await queued.clone().text()).toBe(202);
+  const boundaryDispatch = harness.dispatcher.dispatched[2];
+  if (boundaryDispatch === undefined) {
+    throw new Error("Boundary Map runner was not dispatched");
+  }
+  const input = harness.runnerObjects.objects.get(
+    `runner-input/${boundaryDispatch.job.jobId}.json`,
+  );
+  if (input === undefined) throw new Error("Boundary Map input is missing");
+  return {
+    boundaryAuthorization: {
+      authorization: `Bearer ${boundaryDispatch.token}`,
+    },
+    boundaryBundle: RunnerBoundaryMapBundleV5Schema.parse(
+      JSON.parse(input.body),
+    ),
+    boundaryDispatch,
+    primaryResult,
+    run,
+  };
+}
+
+async function queueAndVerifyBoundary(
+  harness: ScientificHostedRunnerHarness,
+  idSuffix: string,
+) {
+  const queued = await postJson(
+    harness.app,
+    `/api/sessions/${harness.bundle.sessionId}/boundary/run`,
+  );
+  expect(queued.status, await queued.clone().text()).toBe(202);
+  const boundaryDispatch = harness.dispatcher.dispatched.at(-1);
+  if (boundaryDispatch === undefined) {
+    throw new Error("Boundary Map runner was not dispatched");
+  }
+  const input = harness.runnerObjects.objects.get(
+    `runner-input/${boundaryDispatch.job.jobId}.json`,
+  );
+  if (input === undefined) throw new Error("Boundary Map input is missing");
+  const boundaryBundle = RunnerBoundaryMapBundleV5Schema.parse(
+    JSON.parse(input.body),
+  );
+  const authorization = {
+    authorization: `Bearer ${boundaryDispatch.token}`,
+  };
+  expect(
+    (
+      await harness.app.request(
+        `/api/runner/jobs/${boundaryDispatch.job.jobId}/start`,
+        { method: "POST", headers: authorization },
+      )
+    ).status,
+  ).toBe(200);
+  const result = await scientificBoundaryMap(boundaryBundle);
+  const resultText = JSON.stringify(result);
+  expect(
+    (
+      await harness.app.request(
+        `/api/runner/jobs/${boundaryDispatch.job.jobId}/outputs/boundary-map.json`,
+        {
+          method: "PUT",
+          headers: {
+            ...authorization,
+            "content-type": "application/json",
+          },
+          body: resultText,
+        },
+      )
+    ).status,
+  ).toBe(201);
+  const callback = await postJson(
+    harness.app,
+    `/api/runner/jobs/${boundaryDispatch.job.jobId}/callback`,
+    {
+      schemaVersion: "1",
+      callbackId: `callback_boundary_${idSuffix}`,
+      idempotencyKey: `boundary-${idSuffix}`,
+      jobId: boundaryDispatch.job.jobId,
+      stateVersion: boundaryDispatch.job.stateVersion,
+      status: "VERIFIED",
+      outputHashes: [await sha256Text(resultText)],
+      finalEventCursor: 0,
+      occurredAt: "2026-07-14T10:00:06.000Z",
+    },
+    authorization,
+  );
+  expect(callback.status, await callback.clone().text()).toBe(200);
+  await expect(callback.json()).resolves.toMatchObject({
+    data: {
+      runnerJob: { status: "VERIFIED" },
+      session: { state: "BOUNDARY_VERIFIED" },
+      verification: { status: "VERIFIED" },
+    },
+  });
+  return { boundaryBundle, boundaryDispatch, result };
 }
 
 async function scientificLeakageResult(bundle: RunnerLabRunBundleV5) {
@@ -1596,6 +1775,182 @@ async function scientificImbalanceResult(bundle: RunnerLabRunBundleV5) {
     })),
   };
   return HostedVerifiedResultSetV2Schema.parse({
+    ...payload,
+    resultHash: await hashCanonical(payload),
+  });
+}
+
+async function scientificBoundaryMap(bundle: RunnerBoundaryMapBundleV5) {
+  const concept = bundle.selectedExperimentIr.concept;
+  const definition = getConceptPack(concept).scientificMethod.boundaryMap;
+  const axes = definition.axes.map((axis) => ({
+    id: axis.id,
+    label: axis.label,
+    unit: axis.unit,
+    points: axis.points.map((point) => ({
+      id: point.id,
+      label: point.label,
+      value: point.outputValue,
+    })),
+  }));
+  const pipelineFingerprint = await hashCanonical({
+    concept,
+    pipeline: "fixed-boundary-test-pipeline",
+  });
+  const cells = [] as Array<Record<string, unknown>>;
+  if (concept === "entity_leakage") {
+    for (const [fractionIndex, fraction] of axes[0]!.points.entries()) {
+      for (const [
+        observationIndex,
+        observations,
+      ] of axes[1]!.points.entries()) {
+        const optimismGap =
+          observationIndex === 0
+            ? Number((0.01 + fractionIndex * 0.002).toFixed(12))
+            : Number((0.04 + observationIndex * 0.03).toFixed(12));
+        const groupAccuracy = 0.66;
+        cells.push({
+          cellId: `${fraction.id}--${observations.id}`,
+          coordinates: [
+            {
+              axisId: axes[0]!.id,
+              pointId: fraction.id,
+              value: fraction.value,
+            },
+            {
+              axisId: axes[1]!.id,
+              pointId: observations.id,
+              value: observations.value,
+            },
+          ],
+          classificationId:
+            optimismGap >= 0.1
+              ? "material"
+              : optimismGap > 0.03
+                ? "transition"
+                : "little",
+          concept,
+          randomAccuracy: groupAccuracy + optimismGap,
+          groupAccuracy,
+          optimismGap,
+          randomEntityOverlap: {
+            count: observationIndex === 0 ? 0 : 20,
+            rate: observationIndex === 0 ? 0 : 0.5,
+          },
+          groupEntityOverlap: { count: 0, rate: 0 },
+          sampleSizes: { randomTest: 120, groupTest: 120 },
+          fixtureViewHash: await hashCanonical({
+            fixture: bundle.fixture.contentSha256,
+            observations: observations.value,
+          }),
+          randomPipelineFingerprint: pipelineFingerprint,
+          groupPipelineFingerprint: pipelineFingerprint,
+        });
+      }
+    }
+  } else {
+    const scenarioCounts = [
+      { total: 373, positive: 2 },
+      { total: 375, positive: 4 },
+      { total: 375, positive: 8 },
+    ];
+    for (const [scenarioIndex, scenario] of axes[0]!.points.entries()) {
+      const counts = scenarioCounts[scenarioIndex]!;
+      const scoreFingerprint = await hashCanonical({
+        scenario: scenario.id,
+        fixture: bundle.fixture.contentSha256,
+      });
+      for (const [thresholdIndex, threshold] of axes[1]!.points.entries()) {
+        const truePositive = Math.max(
+          0,
+          counts.positive - Math.floor((thresholdIndex * counts.positive) / 4),
+        );
+        const falsePositive = Math.max(
+          0,
+          30 - thresholdIndex * 7 - scenarioIndex * 2,
+        );
+        const falseNegative = counts.positive - truePositive;
+        const trueNegative = counts.total - counts.positive - falsePositive;
+        const predictedPositive = truePositive + falsePositive;
+        const precision =
+          predictedPositive === 0 ? 0 : truePositive / predictedPositive;
+        const recall =
+          counts.positive === 0 ? 0 : truePositive / counts.positive;
+        const f1 =
+          precision + recall === 0
+            ? 0
+            : (2 * precision * recall) / (precision + recall);
+        cells.push({
+          cellId: `${scenario.id}--${threshold.id}`,
+          coordinates: [
+            {
+              axisId: axes[0]!.id,
+              pointId: scenario.id,
+              value: scenario.value,
+            },
+            {
+              axisId: axes[1]!.id,
+              pointId: threshold.id,
+              value: threshold.value,
+            },
+          ],
+          classificationId:
+            f1 >= 0.3 ? "strong" : f1 >= 0.2 ? "tradeoff" : "weak",
+          concept,
+          prevalenceScenario: scenario.id,
+          prevalence: scenario.value,
+          threshold: threshold.value,
+          metrics: {
+            accuracy: (trueNegative + truePositive) / counts.total,
+            precision,
+            recall,
+            f1,
+            prAuc: 0.18 + scenarioIndex * 0.03,
+            rocAuc: 0.74 + scenarioIndex * 0.01,
+          },
+          confusion: {
+            trueNegative,
+            falsePositive,
+            falseNegative,
+            truePositive,
+          },
+          predictedPositiveRate: predictedPositive / counts.total,
+          sampleSize: counts.total,
+          scoreFingerprint,
+          pipelineFingerprint,
+        });
+      }
+    }
+  }
+  const idHash = await hashCanonical({
+    concept,
+    experimentIrHash: bundle.selectedExperimentIrHash,
+    sessionId: bundle.sessionId,
+    sweepId: bundle.boundaryRequest.sweepId,
+  });
+  const payload = {
+    schemaVersion: "1" as const,
+    canonicalProfile: "counterlab-canonical-json-v1" as const,
+    boundaryMapId: `boundary_${idHash.slice(0, 24)}`,
+    sessionId: bundle.sessionId,
+    concept,
+    conceptPackVersion: bundle.conceptPackVersion,
+    artifactManifestHash: bundle.artifactManifestHash,
+    experimentIrHash: bundle.selectedExperimentIrHash,
+    authoritativeResultHash: bundle.releaseAuthority.authoritativeResultHash,
+    evidenceVerdictHash: bundle.releaseAuthority.evidenceVerdictHash,
+    sweepId: bundle.boundaryRequest.sweepId,
+    gridPresetId: bundle.boundaryRequest.gridPresetId,
+    seed: bundle.seed,
+    kernelVersion: getConceptPack(concept).fixedResultAuthority.kernelVersion,
+    axes,
+    cells,
+    classifications: definition.classifications,
+    units: definition.units,
+    assumptions: definition.assumptions,
+    nonClaims: definition.nonClaims,
+  };
+  return BoundaryMapResultV1Schema.parse({
     ...payload,
     resultHash: await hashCanonical(payload),
   });
@@ -2636,6 +2991,7 @@ describe("Cloudflare Worker API", () => {
         )
       ).status,
     ).toBe(200);
+    await queueAndVerifyBoundary(harness, "imbalance-before-patch");
     expect(
       (
         await postJson(
@@ -2670,7 +3026,7 @@ describe("Cloudflare Worker API", () => {
       `/api/sessions/${harness.sessionId}/patch/compile`,
     );
     expect(patchQueued.status).toBe(202);
-    const patchDispatch = harness.dispatcher.dispatched[2];
+    const patchDispatch = harness.dispatcher.dispatched[3];
     if (patchDispatch === undefined) {
       throw new Error("class-imbalance v5 patch was not dispatched");
     }
@@ -4333,6 +4689,8 @@ describe("Cloudflare Worker API", () => {
       ).toBe(true);
     }
 
+    await queueAndVerifyBoundary(harness, "leakage-before-revision");
+
     const revised = await postJson(
       harness.app,
       `/api/sessions/${harness.bundle.sessionId}/revision`,
@@ -4379,6 +4737,562 @@ describe("Cloudflare Worker API", () => {
           evaluatorVersion: "counterlab-transfer-v1",
         },
       },
+    });
+  });
+
+  it("dispatches, verifies, resumes, and retrieves a frozen Boundary Map", async () => {
+    const harness = await preparedScientificHostedRunner();
+    const run = await completeScientificCompileAndQueueRun(harness);
+    const runJobId = run.dispatch.job.jobId;
+    expect(
+      (
+        await harness.app.request(`/api/runner/jobs/${runJobId}/start`, {
+          method: "POST",
+          headers: run.authorization,
+        })
+      ).status,
+    ).toBe(200);
+    const primaryResult = await scientificLeakageResult(run.bundle);
+    const primaryText = JSON.stringify(primaryResult);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${runJobId}/outputs/verified-result.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...run.authorization,
+              "content-type": "application/json",
+            },
+            body: primaryText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    expect(
+      (
+        await postJson(
+          harness.app,
+          `/api/runner/jobs/${runJobId}/callback`,
+          {
+            schemaVersion: "1",
+            callbackId: "callback_primary_before_boundary",
+            idempotencyKey: "primary-before-boundary",
+            jobId: runJobId,
+            stateVersion: run.dispatch.job.stateVersion,
+            status: "VERIFIED",
+            outputHashes: [await sha256Text(primaryText)],
+            finalEventCursor: 0,
+            occurredAt: "2026-07-14T10:00:04.000Z",
+          },
+          run.authorization,
+        )
+      ).status,
+    ).toBe(200);
+
+    const queued = await postJson(
+      harness.app,
+      `/api/sessions/${harness.bundle.sessionId}/boundary/run`,
+    );
+    expect(queued.status, await queued.clone().text()).toBe(202);
+    const boundaryDispatch = harness.dispatcher.dispatched[2];
+    if (boundaryDispatch === undefined) {
+      throw new Error("Boundary Map runner was not dispatched");
+    }
+    expect(boundaryDispatch.job.requestIdentity).toMatchObject({
+      purpose: "LAB_RUN_BOUNDARY",
+    });
+    const boundaryInput = harness.runnerObjects.objects.get(
+      `runner-input/${boundaryDispatch.job.jobId}.json`,
+    );
+    if (boundaryInput === undefined) {
+      throw new Error("Boundary Map input bundle is missing");
+    }
+    const boundaryBundle = RunnerBoundaryMapBundleV5Schema.parse(
+      JSON.parse(boundaryInput.body),
+    );
+    expect(boundaryBundle).toMatchObject({
+      purpose: "BOUNDARY",
+      seed: 1729,
+      permittedOutputs: ["boundary-map.json"],
+      releaseAuthority: {
+        authoritativeResultHash: primaryResult.resultHash,
+      },
+    });
+    expect(boundaryBundle.selectedExperimentIr.candidateExperiments).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          baseline: expect.objectContaining({ seed: 42 }),
+        }),
+      ]),
+    );
+    const duplicateQueue = await postJson(
+      harness.app,
+      `/api/sessions/${harness.bundle.sessionId}/boundary/run`,
+    );
+    expect(duplicateQueue.status).toBe(202);
+    await expect(duplicateQueue.json()).resolves.toMatchObject({
+      data: {
+        reused: true,
+        runnerJob: { jobId: boundaryDispatch.job.jobId },
+      },
+    });
+    expect(harness.dispatcher.dispatched).toHaveLength(3);
+
+    const prematureRevision = await postJson(
+      harness.app,
+      `/api/sessions/${harness.bundle.sessionId}/revision`,
+      {
+        revision:
+          "Deployment units must determine the evaluation split before I trust generalization.",
+      },
+    );
+    expect(prematureRevision.status).toBe(400);
+    await expect(prematureRevision.json()).resolves.toMatchObject({
+      error: {
+        code: "SESSION_INPUT_ERROR",
+        message: expect.stringMatching(/verified Boundary Map/i),
+      },
+    });
+    expect(
+      (await harness.sessionRepository.find(harness.bundle.sessionId))?.state,
+    ).toBe("EXPERIMENT_COMPLETED");
+
+    const boundaryAuthorization = {
+      authorization: `Bearer ${boundaryDispatch.token}`,
+    };
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${boundaryDispatch.job.jobId}/start`,
+          { method: "POST", headers: boundaryAuthorization },
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${boundaryDispatch.job.jobId}/outputs/verified-result.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...boundaryAuthorization,
+              "content-type": "application/json",
+            },
+            body: primaryText,
+          },
+        )
+      ).status,
+    ).toBe(403);
+    const forgedResultEvent = await postJson(
+      harness.app,
+      `/api/runner/jobs/${boundaryDispatch.job.jobId}/events`,
+      {
+        schemaVersion: "1",
+        eventId: "forged_boundary_result",
+        jobId: boundaryDispatch.job.jobId,
+        cursor: 1,
+        at: "2026-07-14T10:00:05.000Z",
+        kind: "result.ready",
+        resultHash: "f".repeat(64),
+      },
+      boundaryAuthorization,
+    );
+    expect(forgedResultEvent.status).toBe(403);
+
+    const boundaryResult = await scientificBoundaryMap(boundaryBundle);
+    const boundaryText = JSON.stringify(boundaryResult);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${boundaryDispatch.job.jobId}/outputs/boundary-map.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...boundaryAuthorization,
+              "content-type": "application/json",
+            },
+            body: boundaryText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    const callbackBody = {
+      schemaVersion: "1" as const,
+      callbackId: "callback_boundary_v5",
+      idempotencyKey: "boundary-v5-complete",
+      jobId: boundaryDispatch.job.jobId,
+      stateVersion: boundaryDispatch.job.stateVersion,
+      status: "VERIFIED" as const,
+      outputHashes: [await sha256Text(boundaryText)],
+      finalEventCursor: 0,
+      occurredAt: "2026-07-14T10:00:06.000Z",
+    };
+    const callback = await postJson(
+      harness.app,
+      `/api/runner/jobs/${boundaryDispatch.job.jobId}/callback`,
+      callbackBody,
+      boundaryAuthorization,
+    );
+    expect(callback.status).toBe(200);
+    await expect(callback.json()).resolves.toMatchObject({
+      data: {
+        duplicate: false,
+        runnerJob: { status: "VERIFIED", eventCursor: 2 },
+        session: {
+          state: "BOUNDARY_VERIFIED",
+          boundaryMapAuthority: {
+            jobId: boundaryDispatch.job.jobId,
+            resultHash: boundaryResult.resultHash,
+            cellCount: 25,
+            receipt: {
+              integrity: { mode: "integrity-hashed" },
+            },
+          },
+        },
+        verification: { status: "VERIFIED" },
+      },
+    });
+    expect(
+      (await harness.runnerJobs.listEvents(boundaryDispatch.job.jobId, 0)).map(
+        (event) => event.kind,
+      ),
+    ).toEqual(["verifier.verified", "result.ready"]);
+    for (const file of [
+      "boundary-map.json",
+      "boundary-map-expectation.json",
+      "boundary-map-verification.json",
+      "boundary-map-receipt.json",
+    ]) {
+      expect(
+        harness.runnerObjects.objects.has(
+          `runner-authority/${boundaryDispatch.job.jobId}/${file}`,
+        ),
+      ).toBe(true);
+    }
+
+    await harness.runnerObjects.put(
+      `runner-output/${boundaryDispatch.job.jobId}/boundary-map.json`,
+      JSON.stringify({ tampered: true }),
+      "application/json",
+    );
+    const retrieval = await harness.app.request(
+      `/api/sessions/${harness.bundle.sessionId}/boundary`,
+    );
+    expect(retrieval.status).toBe(200);
+    expect(retrieval.headers.get("cache-control")).toBe("private, no-store");
+    await expect(retrieval.json()).resolves.toMatchObject({
+      data: {
+        result: { resultHash: boundaryResult.resultHash },
+        report: { status: "VERIFIED" },
+        authority: { jobId: boundaryDispatch.job.jobId },
+      },
+    });
+
+    const duplicateCallback = await postJson(
+      harness.app,
+      `/api/runner/jobs/${boundaryDispatch.job.jobId}/callback`,
+      callbackBody,
+      boundaryAuthorization,
+    );
+    expect(duplicateCallback.status).toBe(200);
+    await expect(duplicateCallback.json()).resolves.toMatchObject({
+      data: {
+        duplicate: true,
+        session: { state: "BOUNDARY_VERIFIED" },
+      },
+    });
+    expect(
+      await harness.runnerJobs.listEvents(boundaryDispatch.job.jobId, 0),
+    ).toHaveLength(2);
+  });
+
+  it("withholds Boundary Map authority when the frozen verifier rejects a candidate", async () => {
+    const harness = await preparedScientificHostedRunner();
+    const prepared = await completePrimaryAndQueueBoundary(
+      harness,
+      scientificCandidateArtifacts,
+      scientificLeakageResult,
+      "boundary-rejection",
+    );
+    const jobId = prepared.boundaryDispatch.job.jobId;
+    expect(
+      (
+        await harness.app.request(`/api/runner/jobs/${jobId}/start`, {
+          method: "POST",
+          headers: prepared.boundaryAuthorization,
+        })
+      ).status,
+    ).toBe(200);
+    const valid = await scientificBoundaryMap(prepared.boundaryBundle);
+    if (valid.concept !== "entity_leakage") {
+      throw new Error("rejection test requires the leakage Boundary Map");
+    }
+    const { resultHash: _validHash, ...candidate } = valid;
+    const mutatedPayload = {
+      ...candidate,
+      cells: candidate.cells.map((cell, index) =>
+        index === 0
+          ? {
+              ...cell,
+              groupEntityOverlap: { count: 1, rate: 1 / 120 },
+            }
+          : cell,
+      ),
+    };
+    const rejectedResult = BoundaryMapResultV1Schema.parse({
+      ...mutatedPayload,
+      resultHash: await hashCanonical(mutatedPayload),
+    });
+    const rejectedText = JSON.stringify(rejectedResult);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${jobId}/outputs/boundary-map.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...prepared.boundaryAuthorization,
+              "content-type": "application/json",
+            },
+            body: rejectedText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    const callbackBody = {
+      schemaVersion: "1" as const,
+      callbackId: "callback_boundary_rejected_v5",
+      idempotencyKey: "boundary-rejected-v5",
+      jobId,
+      stateVersion: prepared.boundaryDispatch.job.stateVersion,
+      status: "VERIFIED" as const,
+      outputHashes: [await sha256Text(rejectedText)],
+      finalEventCursor: 0,
+      occurredAt: "2026-07-14T10:00:06.000Z",
+    };
+    const rejected = await postJson(
+      harness.app,
+      `/api/runner/jobs/${jobId}/callback`,
+      callbackBody,
+      prepared.boundaryAuthorization,
+    );
+    expect(rejected.status).toBe(200);
+    await expect(rejected.json()).resolves.toMatchObject({
+      data: {
+        duplicate: false,
+        runnerJob: {
+          status: "REJECTED",
+          error: { code: "BOUNDARY_MAP_VERIFIER_REJECTED" },
+        },
+        session: {
+          state: "EXPERIMENT_COMPLETED",
+        },
+        verification: { status: "REJECTED" },
+      },
+    });
+    const session = await harness.sessionRepository.find(
+      harness.bundle.sessionId,
+    );
+    expect(session?.boundaryMapAuthority).toBeUndefined();
+    const events = await harness.runnerJobs.listEvents(jobId, 0);
+    expect(events.length).toBeGreaterThan(0);
+    expect(events.every((event) => event.kind === "verifier.rejected")).toBe(
+      true,
+    );
+    expect(events.some((event) => event.kind === "result.ready")).toBe(false);
+    for (const file of [
+      "boundary-map.json",
+      "boundary-map-expectation.json",
+      "boundary-map-verification.json",
+    ]) {
+      expect(
+        harness.runnerObjects.objects.has(`runner-authority/${jobId}/${file}`),
+      ).toBe(true);
+    }
+    expect(
+      harness.runnerObjects.objects.has(
+        `runner-authority/${jobId}/boundary-map-receipt.json`,
+      ),
+    ).toBe(false);
+    const unavailable = await harness.app.request(
+      `/api/sessions/${harness.bundle.sessionId}/boundary`,
+    );
+    expect(unavailable.status).toBe(409);
+    await expect(unavailable.json()).resolves.toMatchObject({
+      error: { code: "BOUNDARY_MAP_NOT_READY" },
+    });
+    const sessionEventCount = (
+      await harness.sessionRepository.listEvents(harness.bundle.sessionId)
+    ).length;
+    const duplicate = await postJson(
+      harness.app,
+      `/api/runner/jobs/${jobId}/callback`,
+      callbackBody,
+      prepared.boundaryAuthorization,
+    );
+    expect(duplicate.status).toBe(200);
+    await expect(duplicate.json()).resolves.toMatchObject({
+      data: { duplicate: true, session: { state: "EXPERIMENT_COMPLETED" } },
+    });
+    expect(await harness.runnerJobs.listEvents(jobId, 0)).toHaveLength(
+      events.length,
+    );
+    expect(
+      await harness.sessionRepository.listEvents(harness.bundle.sessionId),
+    ).toHaveLength(sessionEventCount);
+  });
+
+  it("verifies and retrieves an HMAC-signed class-imbalance Boundary Map", async () => {
+    const harness = await preparedScientificImbalanceHostedRunner();
+    const prepared = await completePrimaryAndQueueBoundary(
+      harness,
+      scientificImbalanceCandidateArtifacts,
+      scientificImbalanceResult,
+      "imbalance-boundary",
+    );
+    const jobId = prepared.boundaryDispatch.job.jobId;
+    expect(prepared.boundaryBundle).toMatchObject({
+      fixture: { id: "public-imbalance-v1" },
+      seed: 2603,
+      boundaryRequest: {
+        axisIds: ["class_prevalence", "decision_threshold"],
+        maxCells: 15,
+      },
+    });
+    expect(
+      (
+        await harness.app.request(`/api/runner/jobs/${jobId}/start`, {
+          method: "POST",
+          headers: prepared.boundaryAuthorization,
+        })
+      ).status,
+    ).toBe(200);
+    const boundaryResult = await scientificBoundaryMap(prepared.boundaryBundle);
+    expect(boundaryResult).toMatchObject({
+      concept: "class_imbalance",
+      seed: 2603,
+    });
+    expect(boundaryResult.cells).toHaveLength(15);
+    const boundaryText = JSON.stringify(boundaryResult);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${jobId}/outputs/boundary-map.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...prepared.boundaryAuthorization,
+              "content-type": "application/json",
+            },
+            body: boundaryText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    const callbackBody = {
+      schemaVersion: "1" as const,
+      callbackId: "callback_imbalance_boundary_v5",
+      idempotencyKey: "imbalance-boundary-v5",
+      jobId,
+      stateVersion: prepared.boundaryDispatch.job.stateVersion,
+      status: "VERIFIED" as const,
+      outputHashes: [await sha256Text(boundaryText)],
+      finalEventCursor: 0,
+      occurredAt: "2026-07-14T10:00:06.000Z",
+    };
+    const signingEnv = {
+      COUNTERLAB_SIGNING_KEY:
+        "counterlab-test-boundary-signing-key-with-sufficient-entropy",
+      COUNTERLAB_SIGNING_KEY_ID: "boundary-test-key-v1",
+    } as unknown as Env & Record<string, string>;
+    const callback = await harness.app.request(
+      `/api/runner/jobs/${jobId}/callback`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...prepared.boundaryAuthorization,
+        },
+        body: JSON.stringify(callbackBody),
+      },
+      signingEnv,
+    );
+    expect(callback.status).toBe(200);
+    await expect(callback.json()).resolves.toMatchObject({
+      data: {
+        session: {
+          state: "BOUNDARY_VERIFIED",
+          boundaryMapAuthority: {
+            cellCount: 15,
+            receipt: {
+              issuedAt: "2026-07-14T10:00:00.000Z",
+              integrity: {
+                mode: "hmac-signed",
+                keyId: "boundary-test-key-v1",
+              },
+            },
+          },
+        },
+        verification: { status: "VERIFIED" },
+      },
+    });
+
+    const missingKey = await harness.app.request(
+      `/api/sessions/${harness.bundle.sessionId}/boundary`,
+    );
+    expect(missingKey.status).toBe(503);
+    await expect(missingKey.json()).resolves.toMatchObject({
+      error: { code: "BOUNDARY_SIGNING_KEY_REQUIRED" },
+    });
+    const retrieved = await harness.app.request(
+      `/api/sessions/${harness.bundle.sessionId}/boundary`,
+      undefined,
+      signingEnv,
+    );
+    expect(retrieved.status).toBe(200);
+    await expect(retrieved.json()).resolves.toMatchObject({
+      data: {
+        result: {
+          resultHash: boundaryResult.resultHash,
+          cells: expect.any(Array),
+        },
+        receipt: {
+          integrity: {
+            mode: "hmac-signed",
+            keyId: "boundary-test-key-v1",
+          },
+        },
+      },
+    });
+    const wrongKey = await harness.app.request(
+      `/api/sessions/${harness.bundle.sessionId}/boundary`,
+      undefined,
+      {
+        ...signingEnv,
+        COUNTERLAB_SIGNING_KEY: "wrong-boundary-signing-key",
+      } as unknown as Env & Record<string, string>,
+    );
+    expect(wrongKey.status).toBe(409);
+    await expect(wrongKey.json()).resolves.toMatchObject({
+      error: { code: "BOUNDARY_AUTHORITY_INVALID" },
+    });
+
+    const duplicate = await harness.app.request(
+      `/api/runner/jobs/${jobId}/callback`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...prepared.boundaryAuthorization,
+        },
+        body: JSON.stringify(callbackBody),
+      },
+      signingEnv,
+    );
+    expect(duplicate.status).toBe(200);
+    await expect(duplicate.json()).resolves.toMatchObject({
+      data: { duplicate: true, session: { state: "BOUNDARY_VERIFIED" } },
     });
   });
 
@@ -4431,6 +5345,7 @@ describe("Cloudflare Worker API", () => {
         )
       ).status,
     ).toBe(200);
+    await queueAndVerifyBoundary(harness, "leakage-before-patch");
     expect(
       (
         await postJson(
@@ -4463,8 +5378,8 @@ describe("Cloudflare Worker API", () => {
     );
 
     expect(patch.status).toBe(202);
-    expect(harness.dispatcher.dispatched).toHaveLength(3);
-    const patchDispatch = harness.dispatcher.dispatched[2];
+    expect(harness.dispatcher.dispatched).toHaveLength(4);
+    const patchDispatch = harness.dispatcher.dispatched[3];
     if (patchDispatch === undefined) {
       throw new Error("v5 patch runner was not dispatched");
     }
@@ -4524,7 +5439,7 @@ describe("Cloudflare Worker API", () => {
         runnerJob: { jobId: patchDispatch.job.jobId },
       },
     });
-    expect(harness.dispatcher.dispatched).toHaveLength(3);
+    expect(harness.dispatcher.dispatched).toHaveLength(4);
 
     const patchAuthorization = {
       authorization: `Bearer ${patchDispatch.token}`,
@@ -5128,6 +6043,8 @@ describe("Cloudflare Worker API", () => {
         (event) => event.kind,
       ),
     ).toEqual(["verifier.verified", "result.ready"]);
+
+    await queueAndVerifyBoundary(harness, "imbalance-before-revision");
 
     expect(
       (
@@ -5882,6 +6799,8 @@ describe("Cloudflare Worker API", () => {
       },
     });
 
+    await queueAndVerifyBoundary(harness, "inconclusive-before-revision");
+
     expect(
       (
         await postJson(
@@ -5918,7 +6837,7 @@ describe("Cloudflare Worker API", () => {
     await expect(patch.json()).resolves.toMatchObject({
       error: { code: "PATCH_LOCKED_INCONCLUSIVE" },
     });
-    expect(harness.dispatcher.dispatched).toHaveLength(2);
+    expect(harness.dispatcher.dispatched).toHaveLength(3);
   });
 
   it("re-verifies final v5 compiler bytes before projecting verified authority", async () => {

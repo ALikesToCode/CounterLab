@@ -1,5 +1,8 @@
 import {
   ArtifactManifestSchema,
+  BoundaryMapAuthorityRefV1Schema,
+  BoundaryMapResultV1Schema,
+  BoundaryMapVerificationReportV1Schema,
   ExperimentPlanV2Schema,
   HostedExperimentLineageV5Schema,
   HostedVerifiedResultSetV2Schema,
@@ -17,6 +20,9 @@ import {
   type BeliefSpecV2,
   type BeliefTest,
   type ArtifactManifest,
+  type BoundaryMapAuthorityRefV1,
+  type BoundaryMapResultV1,
+  type BoundaryMapVerificationReportV1,
   type ExperimentPlanV2,
   type PatchResult,
   type PublicCompilerEvent,
@@ -27,6 +33,7 @@ import {
 } from "@counterlab/contracts";
 import {
   ExperimentIRV5Schema,
+  RunnerBoundaryMapBundleV5Schema,
   RunnerLabCompileBundleV5Schema,
   RunnerLabInteractiveRunBundleV5Schema,
   RunnerLabRunBundleV5Schema,
@@ -35,8 +42,15 @@ import {
   VersionedRunnerJobInputBundleSchema,
   deriveInteractivePlanV5,
   hashExperimentIR,
+  type RunnerBoundaryMapBundleV5,
   type RunnerPatchCompileBundleV5,
 } from "@counterlab/experiment-ir";
+import {
+  issueBoundaryMapAuthority,
+  validateBoundaryMapAuthority,
+  verifyBoundaryMap,
+  type BoundaryMapExpectationV1,
+} from "@counterlab/boundary-map";
 import {
   ApprovedSampleBeliefAnalyst,
   BeliefAnalystError,
@@ -146,6 +160,7 @@ type WorkerBindings = Env & {
   COUNTERLAB_CODEX_MODE?: string;
   COUNTERLAB_MAX_NOTEBOOK_BYTES?: string;
   COUNTERLAB_SIGNING_KEY?: string;
+  COUNTERLAB_SIGNING_KEY_ID?: string;
   COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY?: string;
   COUNTERLAB_RUNNER_BASE_URL?: string;
   COUNTERLAB_ADMIN_DIAGNOSTIC_SECRET?: string;
@@ -1130,6 +1145,306 @@ async function persistScientificAuthority(
   return expectedHash;
 }
 
+function registeredBoundarySweep(pack: ReturnType<typeof getConceptPack>) {
+  const definition = pack.scientificMethod.boundaryMap;
+  return {
+    sweepId: definition.sweepId,
+    axisIds: [definition.axes[0].id, definition.axes[1].id] as const,
+    gridPresetId: definition.gridPresetId,
+    observableId: definition.observableId,
+    maxCells: definition.maxCells,
+  };
+}
+
+async function boundaryMapExpectation(
+  bundle: RunnerBoundaryMapBundleV5,
+): Promise<BoundaryMapExpectationV1> {
+  const pack = getConceptPack(bundle.selectedExperimentIr.concept);
+  const definition = pack.scientificMethod.boundaryMap;
+  const boundaryMapIdHash = await hashCanonical({
+    concept: pack.id,
+    experimentIrHash: bundle.selectedExperimentIrHash,
+    sessionId: bundle.sessionId,
+    sweepId: bundle.boundaryRequest.sweepId,
+  });
+  const axes = definition.axes.map((axis) => ({
+    id: axis.id,
+    label: axis.label,
+    unit: axis.unit,
+    points: axis.points.map((point) => ({
+      id: point.id,
+      label: point.label,
+      value: point.outputValue,
+    })),
+  })) as BoundaryMapResultV1["axes"];
+  return {
+    boundaryMapId: `boundary_${boundaryMapIdHash.slice(0, 24)}`,
+    sessionId: bundle.sessionId,
+    concept: pack.id,
+    conceptPackVersion: pack.version,
+    artifactManifestHash: bundle.artifactManifestHash,
+    experimentIrHash: bundle.selectedExperimentIrHash,
+    authoritativeResultHash: bundle.releaseAuthority.authoritativeResultHash,
+    evidenceVerdictHash: bundle.releaseAuthority.evidenceVerdictHash,
+    sweepId: definition.sweepId,
+    gridPresetId: definition.gridPresetId,
+    seed: definition.seed,
+    kernelVersion: pack.fixedResultAuthority.kernelVersion,
+    axes,
+    classifications: definition.classifications.map((classification) => ({
+      ...classification,
+    })),
+    units: { ...definition.units },
+    assumptions: [...definition.assumptions],
+    nonClaims: [...definition.nonClaims],
+    cellCount: axes[0].points.length * axes[1].points.length,
+  };
+}
+
+async function reconstructBoundaryMapAuthority(input: {
+  store: RunnerObjectStore;
+  jobs: RunnerJobService;
+  job: RunnerJob;
+  session: CounterLabSession;
+  manifest: ArtifactManifest;
+  inputBundleKey: string;
+  outputPrefix: string;
+  callbackOutputHashes: readonly string[];
+  issuedAt: string;
+  signingKey?: string;
+  signingKeyId?: string;
+}): Promise<{
+  bundle: RunnerBoundaryMapBundleV5;
+  result: BoundaryMapResultV1 | null;
+  report: BoundaryMapVerificationReportV1;
+  authority: BoundaryMapAuthorityRefV1 | null;
+  rawResultHash: string;
+}> {
+  const authorityPrefix = `runner-authority/${input.job.jobId}/`;
+  const frozenResultKey = `${authorityPrefix}boundary-map.json`;
+  const [inputObject, mutableResultObject, frozenResultObject] =
+    await Promise.all([
+      input.store.get(input.inputBundleKey),
+      input.store.get(`${input.outputPrefix}boundary-map.json`),
+      input.store.get(frozenResultKey),
+    ]);
+  const resultObject = frozenResultObject ?? mutableResultObject;
+  if (inputObject === undefined || resultObject === undefined) {
+    throw new ApiInputError(
+      "RUNNER_OUTPUT_MISSING",
+      "Required Boundary Map input or fixed-kernel output is missing",
+      409,
+    );
+  }
+
+  let bundle: RunnerBoundaryMapBundleV5;
+  let rawResult: unknown;
+  try {
+    bundle = RunnerBoundaryMapBundleV5Schema.parse(
+      JSON.parse(inputObject.body),
+    );
+    rawResult = JSON.parse(resultObject.body) as unknown;
+  } catch (error) {
+    if (error instanceof SyntaxError || error instanceof ZodError) {
+      throw new ApiInputError(
+        "BOUNDARY_CONTRACT_REJECTED",
+        "The Boundary Map input or output failed strict validation",
+        409,
+      );
+    }
+    throw error;
+  }
+
+  const rawResultHash = await sha256Text(resultObject.body);
+  if (
+    input.callbackOutputHashes.length !== 1 ||
+    input.callbackOutputHashes[0] !== rawResultHash
+  ) {
+    throw new ApiInputError(
+      "RUNNER_OUTPUT_HASH_MISMATCH",
+      "Boundary Map bytes do not exactly match the terminal callback",
+      409,
+    );
+  }
+  await persistRunnerAuthorityBytes({
+    store: input.store,
+    key: frozenResultKey,
+    body: resultObject.body,
+    contentType: "application/json",
+  });
+
+  const evidenceAuthority = await resolveSessionEvidenceAuthority(
+    input.session,
+  ).catch(() => {
+    throw new ApiInputError(
+      "EVIDENCE_AUTHORITY_REQUIRED",
+      "Released v5 evidence is required before a Boundary Map",
+      409,
+    );
+  });
+  if (
+    evidenceAuthority.protocol !== "v5" ||
+    evidenceAuthority.verdict === "REJECTED"
+  ) {
+    throw new ApiInputError(
+      "EVIDENCE_AUTHORITY_REQUIRED",
+      "A rejected experiment cannot authorize a Boundary Map",
+      409,
+    );
+  }
+  const lineage = HostedExperimentLineageV5Schema.parse(
+    input.session.labVerification,
+  );
+  const frozenCompile = await loadFrozenScientificCompileAuthority({
+    store: input.store,
+    jobs: input.jobs,
+    session: input.session,
+    manifest: input.manifest,
+    lineage,
+  });
+  const pack = getConceptPack(evidenceAuthority.concept);
+  const boundaryDefinition = pack.scientificMethod.boundaryMap;
+  const expected = await boundaryMapExpectation(bundle);
+  const [
+    bundleHash,
+    manifestHash,
+    selectedExperimentIrHash,
+    evidenceVerdictHash,
+    boundaryExpectationHash,
+  ] = await Promise.all([
+    hashCanonical(bundle),
+    hashCanonical(input.manifest),
+    hashExperimentIR(bundle.selectedExperimentIr),
+    hashCanonical(evidenceAuthority.evidenceVerdict),
+    hashCanonical(expected),
+  ]);
+  const expectedInputHashes = [
+    manifestHash,
+    selectedExperimentIrHash,
+    evidenceAuthority.result.resultHash,
+    evidenceVerdictHash,
+    evidenceAuthority.epistemicReportHash,
+    boundaryExpectationHash,
+    bundleHash,
+  ];
+  const registeredRequest = {
+    sweepId: boundaryDefinition.sweepId,
+    axisIds: boundaryDefinition.axes.map((axis) => axis.id),
+    gridPresetId: boundaryDefinition.gridPresetId,
+    observableId: boundaryDefinition.observableId,
+    maxCells: boundaryDefinition.maxCells,
+  };
+  if (
+    input.job.kind !== "LAB_RUN" ||
+    input.job.requestIdentity?.purpose !== "LAB_RUN_BOUNDARY" ||
+    bundle.jobId !== input.job.jobId ||
+    bundle.sessionId !== input.job.sessionId ||
+    bundle.stateVersion !== input.job.stateVersion ||
+    bundle.artifactManifestHash !== input.job.artifactManifestHash ||
+    input.session.id !== input.job.sessionId ||
+    input.session.mode.kind !== "live_notebook" ||
+    manifestHash !== input.job.artifactManifestHash ||
+    input.job.conceptPack.id !== pack.id ||
+    input.job.conceptPack.version !== pack.version ||
+    bundle.conceptPackVersion !== pack.version ||
+    JSON.stringify(bundle.fixture) !== JSON.stringify(pack.fixedFixture) ||
+    JSON.stringify(bundle.boundaryRequest) !==
+      JSON.stringify(registeredRequest) ||
+    bundle.seed !== boundaryDefinition.seed ||
+    JSON.stringify(input.job.inputHashes) !==
+      JSON.stringify(expectedInputHashes) ||
+    selectedExperimentIrHash !== lineage.selectedExperimentIrHash ||
+    selectedExperimentIrHash !== bundle.selectedExperimentIrHash ||
+    (await hashExperimentIR(frozenCompile.selectedExperimentIr)) !==
+      selectedExperimentIrHash ||
+    bundle.releaseAuthority.authoritativeResultHash !==
+      evidenceAuthority.result.resultHash ||
+    bundle.releaseAuthority.evidenceVerdictHash !== evidenceVerdictHash ||
+    (await hashCanonical(bundle.releaseAuthority.evidenceVerdict)) !==
+      evidenceVerdictHash ||
+    bundle.releaseAuthority.epistemicReportHash !==
+      evidenceAuthority.epistemicReportHash
+  ) {
+    throw new ApiInputError(
+      "BOUNDARY_AUTHORITY_LINEAGE_MISMATCH",
+      "Boundary Map lineage does not match the frozen experiment and Subject Pack authority",
+      409,
+    );
+  }
+
+  const report = verifyBoundaryMap(rawResult, expected);
+  await Promise.all([
+    persistScientificAuthority(
+      input.store,
+      `${authorityPrefix}boundary-map-expectation.json`,
+      expected,
+    ),
+    persistScientificAuthority(
+      input.store,
+      `${authorityPrefix}boundary-map-verification.json`,
+      report,
+    ),
+  ]);
+  if (report.status !== "VERIFIED") {
+    return {
+      bundle,
+      result: null,
+      report,
+      authority: null,
+      rawResultHash,
+    };
+  }
+
+  const result = BoundaryMapResultV1Schema.parse(rawResult);
+  const receiptKey = `${authorityPrefix}boundary-map-receipt.json`;
+  const existingReceiptObject = await input.store.get(receiptKey);
+  let issuedAt = input.issuedAt;
+  if (existingReceiptObject !== undefined) {
+    try {
+      issuedAt = BoundaryMapAuthorityRefV1Schema.parse(
+        JSON.parse(existingReceiptObject.body),
+      ).receipt.issuedAt;
+    } catch (error) {
+      if (error instanceof SyntaxError || error instanceof ZodError) {
+        throw new ApiInputError(
+          "BOUNDARY_AUTHORITY_INVALID",
+          "The frozen Boundary Map receipt failed strict validation",
+          409,
+        );
+      }
+      throw error;
+    }
+  }
+  const authority = issueBoundaryMapAuthority({
+    jobId: input.job.jobId,
+    result,
+    report,
+    expected,
+    issuedAt,
+    ...(input.signingKey === undefined
+      ? {}
+      : {
+          signing: {
+            keyId: input.signingKeyId ?? "counterlab-boundary-v1",
+            signingKey: input.signingKey,
+          },
+        }),
+  });
+  validateBoundaryMapAuthority(authority, {
+    result,
+    report,
+    expected,
+    ...(input.signingKey === undefined
+      ? {}
+      : {
+          signingKey: input.signingKey,
+          expectedKeyId: input.signingKeyId ?? "counterlab-boundary-v1",
+        }),
+  });
+  await persistScientificAuthority(input.store, receiptKey, authority);
+  return { bundle, result, report, authority, rawResultHash };
+}
+
 async function reconstructScientificRunAuthority(input: {
   store: RunnerObjectStore;
   jobs: RunnerJobService;
@@ -1791,6 +2106,88 @@ async function appendInteractiveAuthorityEvents(input: {
   return current.eventCursor;
 }
 
+async function appendBoundaryAuthorityEvents(input: {
+  jobs: RunnerJobService;
+  job: RunnerJob;
+  callback: RunnerCallback;
+  authorityAt: string;
+  report: BoundaryMapVerificationReportV1;
+}): Promise<number> {
+  const eventBase = (offset: number) => ({
+    schemaVersion: "1" as const,
+    eventId: `authority_${input.job.jobId}_${input.callback.finalEventCursor + offset}`,
+    jobId: input.job.jobId,
+    cursor: input.callback.finalEventCursor + offset,
+    at: input.authorityAt,
+  });
+  const expected =
+    input.report.status === "VERIFIED"
+      ? [
+          PublicCompilerEventSchema.parse({
+            ...eventBase(1),
+            kind: "verifier.verified",
+            invariantCount: input.report.invariantCount,
+            mutationCount: 0,
+          }),
+          PublicCompilerEventSchema.parse({
+            ...eventBase(2),
+            kind: "result.ready",
+            resultHash: input.report.resultHash,
+          }),
+        ]
+      : input.report.invariants
+          .filter((invariant) => !invariant.passed)
+          .map((invariant, index) =>
+            PublicCompilerEventSchema.parse({
+              ...eventBase(index + 1),
+              kind: "verifier.rejected",
+              invariant: invariant.name,
+              observed: invariant.observed,
+              expected: invariant.expected,
+              counterexample: (
+                invariant.counterexample ??
+                `${invariant.name}: the Boundary Map verifier withheld authority.`
+              ).slice(0, 2_000),
+            }),
+          );
+  const existing = await input.jobs.listEvents(
+    input.job.jobId,
+    input.callback.finalEventCursor,
+  );
+  if (
+    existing.length > expected.length ||
+    (await hashCanonical(existing.map(authorityEventPayload))) !==
+      (await hashCanonical(
+        expected.slice(0, existing.length).map(authorityEventPayload),
+      ))
+  ) {
+    throw new ApiInputError(
+      "RUNNER_AUTHORITY_EVENT_CONFLICT",
+      "Persisted Boundary Map authority events are partial or conflicting",
+      409,
+    );
+  }
+  let current = await input.jobs.getJob(input.job.jobId);
+  if (
+    current.eventCursor !==
+    input.callback.finalEventCursor + existing.length
+  ) {
+    throw new ApiInputError(
+      "RUNNER_AUTHORITY_EVENT_CONFLICT",
+      "Runner event cursor contains unrecognized Boundary Map authority events",
+      409,
+    );
+  }
+  for (const event of expected.slice(existing.length)) {
+    current = await input.jobs.appendEvent(
+      input.job.jobId,
+      current.jobVersion,
+      event,
+    );
+  }
+  return current.eventCursor;
+}
+
 function authorityEventPayload(event: PublicCompilerEvent) {
   const { eventId: _eventId, at: _at, ...authority } = event;
   return authority;
@@ -1956,6 +2353,9 @@ function statePayload(
     ...(session.epistemicReportHash === undefined
       ? {}
       : { epistemicReportHash: session.epistemicReportHash }),
+    ...(session.boundaryMapAuthority === undefined
+      ? {}
+      : { boundaryMapAuthority: session.boundaryMapAuthority }),
     ...(session.transferResult === undefined
       ? {}
       : { transferResult: session.transferResult }),
@@ -2606,6 +3006,8 @@ export function createApi(options: ApiOptions = {}) {
         );
       }
       const pack = getConceptPack(beliefAuthority.concept);
+      const v5Compile = current.beliefSpec !== undefined;
+      const boundarySweep = registeredBoundarySweep(pack);
       const manifestHash = await hashCanonical(artifact.manifest);
       const beliefAuthorityHash = await hashCanonical(beliefAuthority);
       const packContractHash = await hashCanonical({
@@ -2616,13 +3018,14 @@ export function createApi(options: ApiOptions = {}) {
         allowedVisualizations: pack.allowedVisualizations,
         verifierInvariants: pack.verifierContract.invariants,
         candidateExperimentIds: pack.scientificMethod.candidateExperimentIds,
+        ...(v5Compile ? { boundarySweep } : {}),
         planRequirements: pack.experimentPlanRules,
       });
-      const v5Compile = current.beliefSpec !== undefined;
       const scientificPromptHash = await hashCanonical({
-        promptVersion: "scientific-method-compile-v1",
+        promptVersion: "scientific-method-compile-v2",
         conceptPack: { id: pack.id, version: pack.version },
         candidateExperimentIds: pack.scientificMethod.candidateExperimentIds,
+        boundarySweep,
         schemaHashes: {
           discriminationContract: await hashCanonical(
             discriminationContractSchema,
@@ -2647,6 +3050,7 @@ export function createApi(options: ApiOptions = {}) {
                   experimentIrSchema,
                   labSceneDraftSchema,
                 },
+                boundarySweep,
                 resourceLimits: {
                   wallSeconds: 45,
                   memoryMb: 768,
@@ -2756,6 +3160,7 @@ export function createApi(options: ApiOptions = {}) {
                 verifierInvariants: pack.verifierContract.invariants,
                 candidateExperimentIds:
                   pack.scientificMethod.candidateExperimentIds,
+                boundarySweep,
                 planRequirements: pack.experimentPlanRules,
               },
               schemas: {
@@ -3033,7 +3438,10 @@ export function createApi(options: ApiOptions = {}) {
             ? (raw as Record<string, unknown>).schemaVersion
             : undefined;
         if (declaredVersion === "5") {
-          RunnerLabRunBundleV5Schema.parse(raw);
+          const bundle = VersionedRunnerJobInputBundleSchema.parse(raw);
+          if (bundle.kind !== "LAB_RUN") {
+            throw new SyntaxError("runner input is not a LAB_RUN bundle");
+          }
         }
       } catch (error) {
         if (error instanceof SyntaxError || error instanceof ZodError) {
@@ -3952,6 +4360,7 @@ export function createApi(options: ApiOptions = {}) {
       | Awaited<ReturnType<typeof verifyPatchPlan>>
       | Awaited<ReturnType<typeof verifyScientificCandidateV5>>["report"]
       | EpistemicVerificationReport
+      | BoundaryMapVerificationReportV1
       | null = null;
     let scientificAuthority: Awaited<
       ReturnType<typeof reconstructScientificCompileAuthority>
@@ -3963,6 +4372,10 @@ export function createApi(options: ApiOptions = {}) {
     let scientificInteractiveAuthority: Awaited<
       ReturnType<typeof reconstructScientificInteractiveRunAuthority>
     > | null = null;
+    let boundaryMapAuthority: Awaited<
+      ReturnType<typeof reconstructBoundaryMapAuthority>
+    > | null = null;
+    let boundaryRun = false;
     let interactiveRun = false;
     let patchResult: PatchResult | null = null;
     let scientificPatch = false;
@@ -4116,6 +4529,74 @@ export function createApi(options: ApiOptions = {}) {
               retryable: false,
             },
           };
+        } else if (declaredPurpose === "BOUNDARY") {
+          boundaryRun = true;
+          try {
+            const jobs = runnerJobService(context, options);
+            const scientificRunJob = await closeScientificRunnerBoundary({
+              jobs,
+              job,
+              callback,
+            });
+            boundaryMapAuthority = await reconstructBoundaryMapAuthority({
+              store: runnerObjectStore(context, options),
+              jobs,
+              job: scientificRunJob,
+              session: currentSession,
+              manifest: artifact.manifest,
+              inputBundleKey: claims.inputBundleKey,
+              outputPrefix: claims.outputPrefix,
+              callbackOutputHashes: callback.outputHashes,
+              issuedAt: requestNow(options).toISOString(),
+              ...(context.env?.COUNTERLAB_SIGNING_KEY === undefined
+                ? {}
+                : {
+                    signingKey: context.env.COUNTERLAB_SIGNING_KEY,
+                    ...(context.env.COUNTERLAB_SIGNING_KEY_ID === undefined
+                      ? {}
+                      : {
+                          signingKeyId: context.env.COUNTERLAB_SIGNING_KEY_ID,
+                        }),
+                  }),
+            });
+            verification = boundaryMapAuthority.report;
+            if (boundaryMapAuthority.report.status !== "VERIFIED") {
+              terminalCallback = {
+                ...callback,
+                status: "REJECTED",
+                error: {
+                  code: "BOUNDARY_MAP_VERIFIER_REJECTED",
+                  message:
+                    "The external Boundary Map verifier withheld result authority",
+                  retryable: false,
+                  details: {
+                    failedInvariants: boundaryMapAuthority.report.invariants
+                      .filter((invariant) => !invariant.passed)
+                      .map((invariant) => invariant.name),
+                  },
+                },
+              };
+            }
+            const finalEventCursor = await appendBoundaryAuthorityEvents({
+              jobs,
+              job: scientificRunJob,
+              callback,
+              authorityAt: requestNow(options).toISOString(),
+              report: boundaryMapAuthority.report,
+            });
+            terminalCallback = { ...terminalCallback, finalEventCursor };
+          } catch (error) {
+            if (!(error instanceof ApiInputError)) throw error;
+            terminalCallback = {
+              ...callback,
+              status: "REJECTED",
+              error: {
+                code: error.code,
+                message: error.message,
+                retryable: false,
+              },
+            };
+          }
         } else if (declaredPurpose === "INTERACTIVE") {
           try {
             const jobs = runnerJobService(context, options);
@@ -4805,6 +5286,34 @@ export function createApi(options: ApiOptions = {}) {
           409,
         );
       }
+    } else if (job.kind === "LAB_RUN" && boundaryRun) {
+      if (
+        terminalCallback.status === "VERIFIED" &&
+        boundaryMapAuthority?.report.status === "VERIFIED" &&
+        boundaryMapAuthority.authority !== null
+      ) {
+        const repeatsExistingAuthority =
+          updatedSession.boundaryMapAuthority !== undefined &&
+          (await hashCanonical(updatedSession.boundaryMapAuthority)) ===
+            (await hashCanonical(boundaryMapAuthority.authority));
+        if (repeatsExistingAuthority) {
+          // A later learner stage may still carry this immutable Boundary Map authority.
+        } else if (
+          updatedSession.state === "EXPERIMENT_COMPLETED" &&
+          updatedSession.boundaryMapAuthority === undefined
+        ) {
+          updatedSession = await service.recordBoundaryMapAuthority(
+            job.sessionId,
+            boundaryMapAuthority.authority,
+          );
+        } else {
+          throw new ApiInputError(
+            "RUNNER_PROJECTION_CONFLICT",
+            "The Boundary Map callback conflicts with session evidence",
+            409,
+          );
+        }
+      }
     } else if (job.kind === "LAB_RUN" && epistemicAuthority !== null) {
       const expectedVerdictHash = epistemicAuthority.evidenceVerdictHash;
       if (epistemicAuthority.report.status === "VERIFIED") {
@@ -5377,6 +5886,224 @@ export function createApi(options: ApiOptions = {}) {
     return context.json(jsonSuccess(statePayload(completed)));
   });
 
+  app.post("/api/sessions/:sessionId/boundary/run", async (context) => {
+    const service = sessionService(context, options);
+    const sessionId = context.req.param("sessionId");
+    const current = await service.getSession(sessionId);
+    requireMutableSession(current);
+    if (current.mode.kind !== "live_notebook") {
+      throw new ApiInputError(
+        "BOUNDARY_LIVE_REQUIRED",
+        "Boundary Map execution is available only for live notebook sessions",
+        409,
+      );
+    }
+    const dispatcher = runnerDispatcher(context, options);
+    if (dispatcher === undefined) {
+      throw new ApiInputError(
+        "LOCAL_RUNNER_REQUIRED",
+        "Boundary Map execution requires a configured CounterLab runner",
+        503,
+      );
+    }
+    const artifact = await artifacts(context, options).find(current.artifactId);
+    if (artifact === undefined) {
+      throw new ApiInputError(
+        "ARTIFACT_NOT_FOUND",
+        "The live notebook artifact could not be resolved",
+        404,
+      );
+    }
+    const evidenceAuthority = await resolveSessionEvidenceAuthority(
+      current,
+    ).catch(() => {
+      throw new ApiInputError(
+        "EVIDENCE_AUTHORITY_REQUIRED",
+        "A released v5 result is required before a Boundary Map",
+        409,
+      );
+    });
+    if (
+      evidenceAuthority.protocol !== "v5" ||
+      evidenceAuthority.verdict === "REJECTED"
+    ) {
+      throw new ApiInputError(
+        "EVIDENCE_AUTHORITY_REQUIRED",
+        "A rejected experiment cannot authorize a Boundary Map",
+        409,
+      );
+    }
+    const lineage = HostedExperimentLineageV5Schema.parse(
+      current.labVerification,
+    );
+    const jobs = runnerJobService(context, options);
+    const store = runnerObjectStore(context, options);
+    const frozenCompile = await loadFrozenScientificCompileAuthority({
+      store,
+      jobs,
+      session: current,
+      manifest: artifact.manifest,
+      lineage,
+    });
+    const pack = getConceptPack(evidenceAuthority.concept);
+    const definition = pack.scientificMethod.boundaryMap;
+    const selection = frozenCompile.selectedExperimentIr.selection;
+    const selectedCandidate =
+      selection.status === "SELECTED"
+        ? frozenCompile.selectedExperimentIr.candidateExperiments.find(
+            (candidate) => candidate.id === selection.candidateId,
+          )
+        : undefined;
+    if (
+      selectedCandidate === undefined ||
+      frozenCompile.selectedExperimentIr.boundarySweep === undefined
+    ) {
+      throw new ApiInputError(
+        "BOUNDARY_SWEEP_NOT_AUTHORIZED",
+        "The selected Experiment IR does not authorize a registered Boundary Sweep",
+        409,
+      );
+    }
+    const [manifestHash, selectedExperimentIrHash, evidenceVerdictHash] =
+      await Promise.all([
+        hashCanonical(artifact.manifest),
+        hashExperimentIR(frozenCompile.selectedExperimentIr),
+        hashCanonical(evidenceAuthority.evidenceVerdict),
+      ]);
+    const jobId = requestId(options, "runner_job");
+    const boundaryRequest = registeredBoundarySweep(pack);
+    const bundle = RunnerBoundaryMapBundleV5Schema.parse({
+      schemaVersion: "5",
+      kind: "LAB_RUN",
+      purpose: "BOUNDARY",
+      jobId,
+      sessionId,
+      stateVersion: current.version,
+      artifactManifestHash: manifestHash,
+      fixture: pack.fixedFixture,
+      conceptPackVersion: pack.version,
+      selectedExperimentIr: frozenCompile.selectedExperimentIr,
+      selectedExperimentIrHash,
+      releaseAuthority: {
+        authoritativeResultHash: evidenceAuthority.result.resultHash,
+        evidenceVerdict: evidenceAuthority.evidenceVerdict,
+        evidenceVerdictHash,
+        epistemicReportHash: evidenceAuthority.epistemicReportHash,
+      },
+      boundaryRequest,
+      seed: definition.seed,
+      resultOutput: {
+        path: "boundary-map.json",
+        schemaVersion: "1",
+        lineage: {
+          artifactManifestHash: manifestHash,
+          experimentIrHash: selectedExperimentIrHash,
+          authoritativeResultHash: evidenceAuthority.result.resultHash,
+          evidenceVerdictHash,
+        },
+      },
+      permittedOutputs: ["boundary-map.json"],
+    });
+    const expectation = await boundaryMapExpectation(bundle);
+    const [expectationHash, bundleHash] = await Promise.all([
+      hashCanonical(expectation),
+      hashCanonical(bundle),
+    ]);
+    const requestIdentity = liveRunnerRequestIdentity({
+      sessionId,
+      purpose: "LAB_RUN_BOUNDARY",
+      artifactId: artifact.manifest.artifactId,
+      artifactManifestHash: manifestHash,
+      conceptPack: { id: pack.id, version: pack.version },
+      authorityProfileHash: await hashCanonical({
+        kernelVersion: pack.fixedResultAuthority.kernelVersion,
+        verifierVersion: "boundary-map-verifier-v1",
+        receiptSchemaVersion: "1",
+        fixture: pack.fixedFixture,
+        boundaryDefinition: definition,
+        permittedOutputs: bundle.permittedOutputs,
+      }),
+      authorityInputHashes: {
+        artifactManifest: manifestHash,
+        selectedExperimentIr: selectedExperimentIrHash,
+        authoritativeResult: evidenceAuthority.result.resultHash,
+        evidenceVerdict: evidenceVerdictHash,
+        epistemicReport: evidenceAuthority.epistemicReportHash,
+        boundaryExpectation: expectationHash,
+      },
+    });
+    const reusable = await jobs.findReusableRequest(requestIdentity);
+    if (reusable !== undefined) {
+      const runnerJob = await dispatchRecoverableRunnerJob({
+        context,
+        options,
+        jobs,
+        dispatcher,
+        job: reusable,
+      });
+      return context.json(
+        jsonSuccess({
+          ...statePayload(current),
+          runnerJob,
+          reused: true as const,
+        }),
+        202,
+      );
+    }
+    if (
+      current.state !== "EXPERIMENT_COMPLETED" ||
+      current.boundaryMapAuthority !== undefined
+    ) {
+      throw new ApiInputError(
+        "BOUNDARY_STAGE_REQUIRED",
+        "A new Boundary Map can start only after the primary experiment and before revision",
+        409,
+      );
+    }
+    const inputHashes = [
+      manifestHash,
+      selectedExperimentIrHash,
+      evidenceAuthority.result.resultHash,
+      evidenceVerdictHash,
+      evidenceAuthority.epistemicReportHash,
+      expectationHash,
+      bundleHash,
+    ];
+    await store.put(
+      `runner-input/${jobId}.json`,
+      JSON.stringify(bundle),
+      "application/json",
+    );
+    const claimed = await jobs.createOrReuseJob({
+      jobId,
+      kind: "LAB_RUN",
+      sessionId,
+      artifactId: artifact.manifest.artifactId,
+      artifactManifestHash: manifestHash,
+      conceptPack: { id: pack.id, version: pack.version },
+      inputHashes,
+      requestIdentity,
+      stateVersion: current.version,
+      maxAttempts: 1,
+      timeoutSeconds: 180,
+    });
+    const starting = await dispatchRecoverableRunnerJob({
+      context,
+      options,
+      jobs,
+      dispatcher,
+      job: claimed.job,
+    });
+    return context.json(
+      jsonSuccess({
+        ...statePayload(current),
+        runnerJob: starting,
+        ...(claimed.reused ? { reused: true as const } : {}),
+      }),
+      202,
+    );
+  });
+
   app.post("/api/sessions/:sessionId/lab/interactive", async (context) => {
     const configuration = z
       .union([
@@ -5880,6 +6607,142 @@ export function createApi(options: ApiOptions = {}) {
       }),
       202,
     );
+  });
+
+  app.get("/api/sessions/:sessionId/boundary", async (context) => {
+    const sessionId = context.req.param("sessionId");
+    const session = await sessionService(context, options).getSession(
+      sessionId,
+    );
+    const authorityRef = session.boundaryMapAuthority;
+    if (authorityRef === undefined) {
+      throw new ApiInputError(
+        "BOUNDARY_MAP_NOT_READY",
+        "A Boundary Map is released only after independent verification",
+        409,
+      );
+    }
+    const jobs = runnerJobService(context, options);
+    const job = await jobs.getJob(authorityRef.jobId);
+    if (
+      job.status !== "VERIFIED" ||
+      job.kind !== "LAB_RUN" ||
+      job.sessionId !== sessionId ||
+      job.requestIdentity?.purpose !== "LAB_RUN_BOUNDARY"
+    ) {
+      throw new ApiInputError(
+        "BOUNDARY_AUTHORITY_MISSING",
+        "The verified Boundary Map job does not match this session",
+        409,
+      );
+    }
+    const prefix = `runner-authority/${job.jobId}/`;
+    const store = runnerObjectStore(context, options);
+    const [
+      bundleObject,
+      resultObject,
+      expectationObject,
+      reportObject,
+      receiptObject,
+    ] = await Promise.all([
+      store.get(`runner-input/${job.jobId}.json`),
+      store.get(`${prefix}boundary-map.json`),
+      store.get(`${prefix}boundary-map-expectation.json`),
+      store.get(`${prefix}boundary-map-verification.json`),
+      store.get(`${prefix}boundary-map-receipt.json`),
+    ]);
+    if (
+      bundleObject === undefined ||
+      resultObject === undefined ||
+      expectationObject === undefined ||
+      reportObject === undefined ||
+      receiptObject === undefined
+    ) {
+      throw new ApiInputError(
+        "BOUNDARY_AUTHORITY_MISSING",
+        "Immutable Boundary Map authority objects are missing",
+        409,
+      );
+    }
+
+    try {
+      const bundle = RunnerBoundaryMapBundleV5Schema.parse(
+        JSON.parse(bundleObject.body),
+      );
+      const result = BoundaryMapResultV1Schema.parse(
+        JSON.parse(resultObject.body),
+      );
+      const report = BoundaryMapVerificationReportV1Schema.parse(
+        JSON.parse(reportObject.body),
+      );
+      const persistedAuthority = BoundaryMapAuthorityRefV1Schema.parse(
+        JSON.parse(receiptObject.body),
+      );
+      const expected = await boundaryMapExpectation(bundle);
+      if (
+        bundle.jobId !== job.jobId ||
+        bundle.sessionId !== sessionId ||
+        (await hashCanonical(JSON.parse(expectationObject.body))) !==
+          (await hashCanonical(expected)) ||
+        job.outputHashes.length !== 1 ||
+        (await sha256Text(resultObject.body)) !== job.outputHashes[0] ||
+        (await hashCanonical(persistedAuthority)) !==
+          (await hashCanonical(authorityRef))
+      ) {
+        throw new ApiInputError(
+          "BOUNDARY_AUTHORITY_LINEAGE_MISMATCH",
+          "Persisted Boundary Map authority no longer matches the session",
+          409,
+        );
+      }
+      const integrity = persistedAuthority.receipt.integrity;
+      if (
+        integrity.mode === "hmac-signed" &&
+        context.env?.COUNTERLAB_SIGNING_KEY === undefined
+      ) {
+        throw new ApiInputError(
+          "BOUNDARY_SIGNING_KEY_REQUIRED",
+          "The Boundary Map signing key is unavailable",
+          503,
+        );
+      }
+      validateBoundaryMapAuthority(persistedAuthority, {
+        result,
+        report,
+        expected,
+        ...(integrity.mode === "hmac-signed"
+          ? {
+              signingKey: context.env?.COUNTERLAB_SIGNING_KEY as string,
+              expectedKeyId:
+                context.env?.COUNTERLAB_SIGNING_KEY_ID ??
+                "counterlab-boundary-v1",
+            }
+          : {}),
+      });
+      context.header("cache-control", "private, no-store");
+      return context.json(
+        jsonSuccess({
+          result,
+          report,
+          receipt: persistedAuthority.receipt,
+          authority: persistedAuthority,
+        }),
+      );
+    } catch (error) {
+      if (error instanceof ApiInputError) throw error;
+      if (error instanceof SyntaxError || error instanceof ZodError) {
+        throw new ApiInputError(
+          "BOUNDARY_AUTHORITY_INVALID",
+          "Persisted Boundary Map authority failed strict validation",
+          409,
+        );
+      }
+      throw new ApiInputError(
+        "BOUNDARY_AUTHORITY_INVALID",
+        "Persisted Boundary Map authority failed independent verification",
+        409,
+      );
+    }
   });
 
   app.get("/api/sessions/:sessionId/jobs/:jobId/result", async (context) => {

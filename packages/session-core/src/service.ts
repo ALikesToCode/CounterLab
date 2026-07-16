@@ -712,6 +712,32 @@ export class SessionService {
         "Rejected evidence cannot advance to learner revision",
       );
     }
+    if (authority.protocol === "v5") {
+      const boundaryMapAuthority = current.boundaryMapAuthority;
+      if (
+        current.state !== "BOUNDARY_VERIFIED" ||
+        boundaryMapAuthority === undefined
+      ) {
+        throw new SessionInputError(
+          "Belief Spec v2 evidence requires a verified Boundary Map before learner revision",
+        );
+      }
+      const evidenceVerdictHash = await hashCanonical(
+        authority.evidenceVerdict,
+      );
+      if (
+        boundaryMapAuthority.receipt.sessionId !== current.id ||
+        boundaryMapAuthority.receipt.experimentIrHash !==
+          authority.lineage.selectedExperimentIrHash ||
+        boundaryMapAuthority.receipt.authoritativeResultHash !==
+          authority.result.resultHash ||
+        boundaryMapAuthority.receipt.evidenceVerdictHash !== evidenceVerdictHash
+      ) {
+        throw new SessionInputError(
+          "Boundary Map authority no longer matches the released experiment evidence",
+        );
+      }
+    }
     return this.transitionFrom(
       current,
       "REVISION_RECORDED",

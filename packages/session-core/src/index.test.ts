@@ -606,6 +606,37 @@ describe("SessionService state machine", () => {
     repository.close();
   });
 
+  it("requires verified Boundary Map authority before a v5 learner revision", async () => {
+    const { service, repository } = memoryService();
+    await throughVerifiedLab(service);
+    await service.recordEpistemicResult("session-1", {
+      result: hostedResultSet,
+      verdict: supportsVerdict,
+      epistemicReportHash: EPISTEMIC_REPORT_HASH,
+    });
+
+    await expect(
+      service.recordRevision(
+        "session-1",
+        "The deployment unit should determine the evaluation boundary.",
+      ),
+    ).rejects.toThrow(/Boundary Map/i);
+    expect((await service.getSession("session-1")).state).toBe(
+      "EXPERIMENT_COMPLETED",
+    );
+
+    await service.recordBoundaryMapAuthority(
+      "session-1",
+      await boundaryMapAuthority(),
+    );
+    const revised = await service.recordRevision(
+      "session-1",
+      "The deployment unit should determine the evaluation boundary.",
+    );
+    expect(revised.state).toBe("REVISION_RECORDED");
+    repository.close();
+  });
+
   it("rejects mismatched or corrupted Boundary Map authority without changing state", async () => {
     const cases = [
       { sessionId: "another-session" },
@@ -723,6 +754,12 @@ describe("SessionService state machine", () => {
       verdict: inconclusiveVerdict,
       epistemicReportHash: EPISTEMIC_REPORT_HASH,
     });
+    await service.recordBoundaryMapAuthority(
+      "session-1",
+      await boundaryMapAuthority({
+        evidenceVerdictHash: await hashCanonical(inconclusiveVerdict),
+      }),
+    );
     await service.recordRevision(
       "session-1",
       "This result does not yet distinguish the two explanations.",

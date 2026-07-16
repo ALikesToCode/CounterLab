@@ -41,6 +41,9 @@ importers:
       "@counterlab/belief-analyst":
         specifier: workspace:*
         version: link:../../packages/belief-analyst
+      "@counterlab/boundary-map":
+        specifier: workspace:*
+        version: link:../../packages/boundary-map
       "@counterlab/concept-registry":
         specifier: workspace:*
         version: link:../../packages/concept-registry

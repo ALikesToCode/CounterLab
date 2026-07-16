@@ -16,6 +16,7 @@
   "dependencies": {
     "@cloudflare/containers": "0.3.7",
     "@counterlab/belief-analyst": "workspace:*",
+    "@counterlab/boundary-map": "workspace:*",
     "@counterlab/concept-registry": "workspace:*",
     "@counterlab/contracts": "workspace:*",
     "@counterlab/experiment-ir": "workspace:*",
