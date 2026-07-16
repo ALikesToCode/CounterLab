@@ -22,9 +22,11 @@ import type {
   SessionRepository,
 } from "@counterlab/session-core";
 import { createEvidenceEvent, hashCanonical } from "@counterlab/session-core";
+import { validateProofBundle } from "@counterlab/proof-bundle";
 
 import sourceNotebookText from "../../../fixtures/notebooks/customer_churn_leakage.ipynb?raw";
 import patchedNotebookText from "../../../replays/leakage-01/patch/customer_churn_leakage.patched.ipynb?raw";
+import scientificEngineSnapshotValue from "../../../scientific-engines/snapshot-hash.json";
 
 import { api, createApi } from "./api";
 import type { ArtifactStore, StoredArtifact } from "./artifact-store";
@@ -2552,7 +2554,10 @@ describe("Cloudflare Worker API", () => {
       patchAuthorization,
     );
     expect(patchCallback.status).toBe(200);
-    await expect(patchCallback.json()).resolves.toMatchObject({
+    const patchCallbackPayload = (await patchCallback.json()) as {
+      data: { session: { proofBundle: unknown } };
+    };
+    expect(patchCallbackPayload).toMatchObject({
       data: {
         runnerJob: { status: "VERIFIED" },
         session: {
@@ -2568,11 +2573,24 @@ describe("Cloudflare Worker API", () => {
             schemaVersion: "2",
             sessionMode: "live_notebook",
             replayId: null,
+            scientificEngineSnapshotHash:
+              scientificEngineSnapshotValue.authorityHash,
           },
         },
         verification: { status: "VERIFIED" },
       },
     });
+    expect(() =>
+      validateProofBundle(patchCallbackPayload.data.session.proofBundle, {
+        scientificEngineSnapshotHash:
+          scientificEngineSnapshotValue.authorityHash,
+      }),
+    ).not.toThrow();
+    expect(() =>
+      validateProofBundle(patchCallbackPayload.data.session.proofBundle, {
+        scientificEngineSnapshotHash: "f".repeat(64),
+      }),
+    ).toThrow(/scientific engine snapshot/i);
     const download = await app.request(
       `/api/sessions/${sessionId}/patch/download`,
     );

@@ -226,7 +226,23 @@ export function reconstructReplay(input: readonly unknown[]): ReplaySnapshot {
 
 export type ProofBundleOptions = {
   signingKey?: string;
+  scientificEngineSnapshotHash?: string;
 };
+
+function assertScientificEngineSnapshot(
+  draft: ProofBundleDraft,
+  expectedHash: string | undefined,
+): void {
+  if (
+    draft.schemaVersion === "2" &&
+    expectedHash !== undefined &&
+    draft.scientificEngineSnapshotHash !== expectedHash
+  ) {
+    throw new Error(
+      "Proof Bundle scientific engine snapshot hash does not match the expected authority",
+    );
+  }
+}
 
 function hmac(contentHash: string, signingKey: string): string {
   return createHmac("sha256", signingKey)
@@ -370,6 +386,10 @@ export function createProofBundle(
   const draft = ProofBundleDraftSchema.parse(input);
   const chain = verifyEvidenceChain(draft.events);
   assertProofReferences(draft, chain);
+  assertScientificEngineSnapshot(
+    draft,
+    options.scientificEngineSnapshotHash,
+  );
   const contentHash = hashCanonicalJson(draft);
   const signingKey = options.signingKey;
   const integrity =
@@ -400,6 +420,10 @@ export function validateProofBundle(
   const draft = ProofBundleDraftSchema.parse(draftValue);
   const chain = verifyEvidenceChain(draft.events);
   assertProofReferences(draft, chain);
+  assertScientificEngineSnapshot(
+    draft,
+    options.scientificEngineSnapshotHash,
+  );
 
   if (integrity.eventChainHead !== chain.headHash) {
     throw new Error(

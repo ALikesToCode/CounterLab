@@ -14,6 +14,18 @@ import type {
 } from "@counterlab/plan-verifier";
 import type { CounterLabSession } from "@counterlab/session-core";
 
+import scientificEngineSnapshotValue from "../../../scientific-engines/snapshot-hash.json";
+
+const SHA256 = /^[a-f0-9]{64}$/;
+
+function scientificEngineSnapshotHash(): string {
+  const hash = scientificEngineSnapshotValue.authorityHash;
+  if (!SHA256.test(hash)) {
+    throw new Error("Scientific engine snapshot authority hash is invalid");
+  }
+  return hash;
+}
+
 function requiredLiveEvidence(session: CounterLabSession) {
   if (
     session.mode.kind !== "live_notebook" ||
@@ -134,6 +146,7 @@ export function createLiveReasoningProof(input: {
   };
   const revisionEvent = event("revision.recorded");
   const modelEvent = event("belief_test.proposed");
+  const engineSnapshotHash = scientificEngineSnapshotHash();
   const proofBundle = createProofBundle(
     {
       schemaVersion: "2",
@@ -141,6 +154,7 @@ export function createLiveReasoningProof(input: {
       sessionId: input.session.id,
       replayId: null,
       sessionMode: "live_notebook",
+      scientificEngineSnapshotHash: engineSnapshotHash,
       createdAt: input.issuedAt,
       events: input.events,
       artifactManifest: input.manifest,
@@ -178,7 +192,12 @@ export function createLiveReasoningProof(input: {
       ],
       reproductionCommands: ["./scripts/test-all.sh", mutationCommand],
     },
-    input.signingKey === undefined ? {} : { signingKey: input.signingKey },
+    {
+      scientificEngineSnapshotHash: engineSnapshotHash,
+      ...(input.signingKey === undefined
+        ? {}
+        : { signingKey: input.signingKey }),
+    },
   );
   return { reasoningDiff, proofBundle };
 }

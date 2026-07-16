@@ -2456,6 +2456,7 @@ export const ProofBundleV2DraftSchema = z
     sessionId: NonEmptyString,
     replayId: z.null(),
     sessionMode: z.literal("live_notebook"),
+    scientificEngineSnapshotHash: Sha256Schema,
     createdAt: z.iso.datetime({ offset: true }),
     events: z.array(EvidenceEventSchema).min(1),
     artifactManifest: ArtifactManifestSchema,
