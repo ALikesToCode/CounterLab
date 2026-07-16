@@ -19,6 +19,7 @@ import {
   canonicalJsonV1,
   type EvidenceEvent,
 } from "@counterlab/contracts";
+import { getConceptPack } from "@counterlab/concept-registry";
 import {
   ExperimentIRV5Schema,
   hashExperimentIR,
@@ -267,6 +268,7 @@ export async function validateProofCapsulePayloadAuthorityV2(
   const authority = manifest.authority;
   const sessionId = manifest.sessionId;
   const concept = manifest.concept;
+  const subjectPack = getConceptPack(concept);
 
   const artifactManifest = parseJsonEntry(
     capsule,
@@ -606,7 +608,8 @@ export async function validateProofCapsulePayloadAuthorityV2(
   }
   if (
     transfer.outcome !== "PASSED" ||
-    transfer.taskId !== experimentIr.transfer.taskId ||
+    experimentIr.transfer.taskId !== subjectPack.transferTask.id ||
+    transfer.taskId !== subjectPack.transferTask.evaluatorTaskId ||
     patchPlan.artifactManifestHash !== authority.lineage.artifactManifestHash ||
     patchPlan.sourceArtifactHash !== artifactManifest.fileSha256 ||
     patchPlan.verifiedResultHash !== result.resultHash ||

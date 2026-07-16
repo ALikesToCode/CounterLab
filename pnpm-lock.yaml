@@ -252,6 +252,9 @@ importers:
 
   packages/proof-capsule:
     dependencies:
+      "@counterlab/concept-registry":
+        specifier: workspace:*
+        version: link:../concept-registry
       "@counterlab/contracts":
         specifier: workspace:*
         version: link:../contracts
