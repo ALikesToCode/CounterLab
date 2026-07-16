@@ -2,6 +2,7 @@ import {
   ArtifactManifestSchema,
   BeliefSpecV2Schema,
   BeliefTestSchema,
+  EvidenceVerdictSchema,
   EvidenceEventSchema,
   InteractiveImbalanceRunRequestSchema,
   InteractiveLeakageRunRequestSchema,
@@ -90,6 +91,8 @@ const sessionViewShape = {
   beliefSpec: BeliefSpecV2Schema.optional(),
   prediction: PredictionContractSchema.optional(),
   verifiedResult: VerifiedResultSetSchema.optional(),
+  evidenceVerdict: EvidenceVerdictSchema.optional(),
+  epistemicReportHash: Sha256Digest.optional(),
   transferResult: TransferResultSchema.optional(),
   patchResult: PatchResultSchema.optional(),
   revision: z.string().trim().min(1).optional(),
@@ -98,7 +101,12 @@ const sessionViewShape = {
 };
 
 function requireExclusiveBeliefAuthority(
-  value: { beliefTest?: unknown; beliefSpec?: unknown },
+  value: {
+    beliefTest?: unknown;
+    beliefSpec?: unknown;
+    evidenceVerdict?: unknown;
+    epistemicReportHash?: unknown;
+  },
   context: z.RefinementCtx,
 ): void {
   if (value.beliefTest !== undefined && value.beliefSpec !== undefined) {
@@ -106,6 +114,23 @@ function requireExclusiveBeliefAuthority(
       code: "custom",
       message: "a session view cannot contain more than one belief authority",
       path: ["beliefSpec"],
+    });
+  }
+  const hasVerdict = value.evidenceVerdict !== undefined;
+  const hasReport = value.epistemicReportHash !== undefined;
+  if (hasVerdict !== hasReport) {
+    context.addIssue({
+      code: "custom",
+      message:
+        "an evidence verdict and epistemic report hash must be returned together",
+      path: [hasVerdict ? "epistemicReportHash" : "evidenceVerdict"],
+    });
+  }
+  if (hasVerdict && value.beliefSpec === undefined) {
+    context.addIssue({
+      code: "custom",
+      message: "epistemic evidence requires Belief Spec v2 authority",
+      path: ["evidenceVerdict"],
     });
   }
 }

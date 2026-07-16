@@ -112,6 +112,53 @@ describe("CounterLabApiClient", () => {
     ).toThrow(/belief authority/i);
   });
 
+  it("accepts Worker-owned v5 evidence authority in resumable session responses", async () => {
+    const beliefSpec = migrateBeliefTestV1ToV2(beliefTest);
+    const evidenceVerdict = {
+      schemaVersion: "1" as const,
+      kind: "SUPPORTS" as const,
+      hypothesisId: "competing" as const,
+      scope: "unseen customers in the documented fixture",
+      resultHash: digest("e"),
+      irHash: digest("f"),
+      technicalReportHash: digest("1"),
+      verifierVersion: "epistemic-verifier-v1",
+    };
+    const v5Session = {
+      ...session,
+      state: "EXPERIMENT_COMPLETED" as const,
+      version: 7,
+      beliefSpec,
+      evidenceVerdict,
+      epistemicReportHash: digest("2"),
+    };
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({ ok: true, data: v5Session }),
+    );
+    const client = new CounterLabApiClient({ fetch: fetcher });
+
+    await expect(client.getSession(session.sessionId)).resolves.toMatchObject({
+      beliefSpec: { id: beliefSpec.id },
+      evidenceVerdict,
+      epistemicReportHash: digest("2"),
+    });
+    expect(() =>
+      SessionViewSchema.parse({
+        ...session,
+        beliefSpec,
+        evidenceVerdict,
+      }),
+    ).toThrow(/report hash.*together/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...session,
+        beliefTest,
+        evidenceVerdict,
+        epistemicReportHash: digest("2"),
+      }),
+    ).toThrow(/Belief Spec v2/i);
+  });
+
   it("sends a locally validated v2 Belief Spec edit without a v1 shadow", async () => {
     const beliefSpec = migrateBeliefTestV1ToV2(beliefTest);
     const fetcher = vi.fn<typeof fetch>(async () =>
