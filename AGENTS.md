@@ -40,6 +40,13 @@ workflow with explicit authority boundaries.
   repository runnable.
 - Ask only for missing credentials, destructive actions, external writes, or a
   genuine scope decision.
+- The owner explicitly authorizes this agent to run repository builds, local
+  development services, CloakBrowser/browser automation, Cloudflare deployment,
+  production smoke tests, and the release commands needed to verify CounterLab.
+  This supersedes earlier instructions that required asking the owner to start
+  or authorize those surfaces. Keep every action non-destructive, record only
+  outcomes that occurred, stop temporary local services after verification, and
+  still ask before missing-credential, destructive, or scope-expanding work.
 - Run the smallest relevant verification after each logical change and the
   broader relevant suite before final handoff.
 - Never claim a deployment, test, learner result, performance result, model
