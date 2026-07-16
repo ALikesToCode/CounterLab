@@ -18,6 +18,7 @@ import { PythonFixedKernelExecutor } from "./fixed-kernel.js";
 import { PythonFixedPatchExecutor } from "./fixed-patch.js";
 
 const MAX_REQUEST_BYTES = 16_384;
+export const CODEX_ATTEMPT_TIMEOUT_MS = 120_000;
 
 const DispatchSchema = z
   .object({
@@ -278,7 +279,7 @@ async function startProductionServer(): Promise<void> {
         healthCommand: codexExecutable,
         healthArgs: ["--version"],
         model: process.env.CODEX_MODEL?.trim() || undefined,
-        timeoutMs: 150_000,
+        timeoutMs: CODEX_ATTEMPT_TIMEOUT_MS,
         environment: { PATH: process.env.PATH, LANG: "C.UTF-8" },
         launchBoundary: boundary,
       });

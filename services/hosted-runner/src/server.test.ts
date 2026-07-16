@@ -3,6 +3,7 @@ import { once } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  CODEX_ATTEMPT_TIMEOUT_MS,
   createHostedRunnerServer,
   type HostedRunnerServerOptions,
 } from "./server.js";
@@ -49,6 +50,10 @@ async function start(
 }
 
 describe("hosted runner HTTP service", () => {
+  it("keeps the Codex process deadline within the signed attempt budget", () => {
+    expect(CODEX_ATTEMPT_TIMEOUT_MS).toBe(120_000);
+  });
+
   it("separates dispatch and cancellation token purposes and binds dispatch origin", async () => {
     let release: (() => void) | undefined;
     const authorizeToken = vi.fn<HostedRunnerServerOptions["authorizeToken"]>(
