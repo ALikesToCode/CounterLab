@@ -22,7 +22,11 @@ import {
   type RunnerRequestIdentityV1,
   type VerifiedResultSet,
 } from "@counterlab/contracts";
-import { RunnerLabCompileBundleV5Schema } from "@counterlab/experiment-ir";
+import {
+  RunnerLabCompileBundleV5Schema,
+  RunnerScientificCandidateV5Schema,
+  VersionedRunnerJobInputBundleSchema,
+} from "@counterlab/experiment-ir";
 import {
   ApprovedSampleBeliefAnalyst,
   BeliefAnalystError,
@@ -43,6 +47,7 @@ import {
   verifyInteractiveLeakageExperimentPlan,
   verifyInteractiveResultSet,
   verifyPatchPlan,
+  verifyScientificCandidateV5,
 } from "@counterlab/plan-verifier";
 import {
   ConcurrentRunnerJobUpdateError,
@@ -221,7 +226,7 @@ const TransferSubmissionSchema = z
     evidenceChoices: z.array(z.string().trim().min(1)).max(3),
   })
   .strict();
-const RunnerCandidateSchema = z
+const LegacyRunnerCandidateSchema = z
   .object({
     attempt: z.number().int().positive().max(3),
     planSha256: z.string().regex(/^[a-f0-9]{64}$/u),
@@ -1376,8 +1381,7 @@ export function createApi(options: ApiOptions = {}) {
       const scientificPromptHash = await hashCanonical({
         promptVersion: "scientific-method-compile-v1",
         conceptPack: { id: pack.id, version: pack.version },
-        candidateExperimentIds:
-          pack.scientificMethod.candidateExperimentIds,
+        candidateExperimentIds: pack.scientificMethod.candidateExperimentIds,
         schemaHashes: {
           discriminationContract: await hashCanonical(
             discriminationContractSchema,
@@ -1753,17 +1757,43 @@ export function createApi(options: ApiOptions = {}) {
     const generatedPath = RunnerOutputPathSchema.parse(
       context.req.param("generatedPath"),
     );
-    const permitted =
-      job.kind === "LAB_COMPILE"
-        ? new Set(["experiment-plan.json", "public-rationale.md"])
-        : job.kind === "LAB_RUN"
-          ? new Set(["verified-result.json"])
-          : new Set([
-              "patch-plan.json",
-              "public-rationale.md",
-              "patched-notebook.ipynb",
-              "patch-result.json",
-            ]);
+    let permitted: Set<string>;
+    if (job.kind === "LAB_COMPILE") {
+      const inputObject = await runnerObjectStore(context, options).get(
+        claims.inputBundleKey,
+      );
+      if (inputObject === undefined) {
+        throw new ApiInputError(
+          "RUNNER_INPUT_MISSING",
+          "The authenticated runner input bundle is missing",
+          409,
+        );
+      }
+      const bundle = VersionedRunnerJobInputBundleSchema.parse(
+        JSON.parse(inputObject.body),
+      );
+      if (
+        bundle.kind !== "LAB_COMPILE" ||
+        bundle.jobId !== job.jobId ||
+        bundle.sessionId !== job.sessionId
+      ) {
+        throw new ApiInputError(
+          "RUNNER_INPUT_LINEAGE_MISMATCH",
+          "The runner input bundle does not belong to this compile job",
+          409,
+        );
+      }
+      permitted = new Set(bundle.permittedOutputs);
+    } else if (job.kind === "LAB_RUN") {
+      permitted = new Set(["verified-result.json"]);
+    } else {
+      permitted = new Set([
+        "patch-plan.json",
+        "public-rationale.md",
+        "patched-notebook.ipynb",
+        "patch-result.json",
+      ]);
+    }
     if (!permitted.has(generatedPath)) {
       throw new ApiInputError(
         "RUNNER_OUTPUT_NOT_PERMITTED",
@@ -1823,7 +1853,247 @@ export function createApi(options: ApiOptions = {}) {
         409,
       );
     }
-    const candidate = RunnerCandidateSchema.parse(await readJson(context));
+    const inputObject = await runnerObjectStore(context, options).get(
+      claims.inputBundleKey,
+    );
+    if (inputObject === undefined) {
+      throw new ApiInputError(
+        "RUNNER_INPUT_MISSING",
+        "The authenticated runner input bundle is missing",
+        409,
+      );
+    }
+    const inputBundle = VersionedRunnerJobInputBundleSchema.parse(
+      JSON.parse(inputObject.body),
+    );
+    if (
+      inputBundle.kind !== job.kind ||
+      inputBundle.jobId !== job.jobId ||
+      inputBundle.sessionId !== job.sessionId
+    ) {
+      throw new ApiInputError(
+        "RUNNER_INPUT_LINEAGE_MISMATCH",
+        "The runner input bundle does not belong to this compile job",
+        409,
+      );
+    }
+    const candidateInput = await readJson(context);
+    if (
+      inputBundle.kind === "LAB_COMPILE" &&
+      inputBundle.schemaVersion === "5"
+    ) {
+      const scientificBundle =
+        RunnerLabCompileBundleV5Schema.parse(inputBundle);
+      const scientificCandidate =
+        RunnerScientificCandidateV5Schema.parse(candidateInput);
+      if (scientificCandidate.attempt !== job.attempt) {
+        throw new ApiInputError(
+          "RUNNER_ATTEMPT_MISMATCH",
+          "Candidate attempt does not match the runner job attempt",
+          409,
+        );
+      }
+      const paths = scientificBundle.permittedOutputs;
+      const bodies = new Map<(typeof paths)[number], string>();
+      for (const path of paths) {
+        const output = await runnerObjectStore(context, options).get(
+          `${claims.outputPrefix}${path}`,
+        );
+        if (output === undefined) {
+          throw new ApiInputError(
+            "RUNNER_CANDIDATE_LINEAGE_MISSING",
+            `Scientific candidate output ${path} is missing`,
+            409,
+          );
+        }
+        if (
+          (await sha256Text(output.body)) !==
+          scientificCandidate.artifactHashes[path]
+        ) {
+          throw new ApiInputError(
+            "RUNNER_OUTPUT_HASH_MISMATCH",
+            `Scientific candidate output ${path} does not match the declared hash`,
+            409,
+          );
+        }
+        bodies.set(path, output.body);
+      }
+      const artifact = await artifacts(context, options).find(job.artifactId);
+      const session = await sessionService(context, options).getSession(
+        job.sessionId,
+      );
+      if (
+        artifact === undefined ||
+        session.beliefSpec === undefined ||
+        session.prediction === undefined
+      ) {
+        throw new ApiInputError(
+          "RUNNER_CANDIDATE_LINEAGE_MISSING",
+          "Scientific candidate lineage is incomplete",
+          409,
+        );
+      }
+      const [
+        inputBundleHash,
+        artifactManifestHash,
+        bundledManifestHash,
+        beliefSpecHash,
+        bundledBeliefSpecHash,
+        predictionHash,
+        bundledPredictionHash,
+      ] = await Promise.all([
+        hashCanonical(scientificBundle),
+        hashCanonical(artifact.manifest),
+        hashCanonical(scientificBundle.artifactManifest),
+        hashCanonical(session.beliefSpec),
+        hashCanonical(scientificBundle.approvedBeliefSpec),
+        hashCanonical(session.prediction),
+        hashCanonical(scientificBundle.prediction),
+      ]);
+      if (
+        !job.inputHashes.includes(inputBundleHash) ||
+        artifactManifestHash !== job.artifactManifestHash ||
+        bundledManifestHash !== artifactManifestHash ||
+        beliefSpecHash !== scientificBundle.beliefSpecHash ||
+        bundledBeliefSpecHash !== beliefSpecHash ||
+        predictionHash !== bundledPredictionHash ||
+        scientificBundle.stateVersion !== job.stateVersion ||
+        scientificBundle.conceptPack.id !== job.conceptPack.id ||
+        scientificBundle.conceptPack.version !== job.conceptPack.version
+      ) {
+        throw new ApiInputError(
+          "RUNNER_INPUT_LINEAGE_MISMATCH",
+          "Scientific candidate authority does not match the current session",
+          409,
+        );
+      }
+
+      const parseArtifact = (path: (typeof paths)[number]): unknown => {
+        const body = bodies.get(path) ?? "";
+        try {
+          return JSON.parse(body) as unknown;
+        } catch {
+          return null;
+        }
+      };
+      const verifierStartedAt = performance.now();
+      const outcome = await verifyScientificCandidateV5({
+        bundle: scientificBundle,
+        artifacts: {
+          discriminationContract: parseArtifact("discrimination-contract.json"),
+          experimentIr: parseArtifact("experiment-ir.json"),
+          labScene: parseArtifact("lab-scene.json"),
+          publicRationale: bodies.get("public-rationale.md") ?? "",
+        },
+      });
+      const verifierDurationMs = Math.max(
+        0,
+        Math.round(performance.now() - verifierStartedAt),
+      );
+      const authorityPrefix = `runner-authority/${jobId}/`;
+      const store = runnerObjectStore(context, options);
+      await store.put(
+        `${authorityPrefix}candidate-verification.json`,
+        JSON.stringify(outcome.report),
+        "application/json",
+      );
+      if (outcome.selection !== undefined) {
+        await store.put(
+          `${authorityPrefix}experiment-selection.json`,
+          JSON.stringify(outcome.selection),
+          "application/json",
+        );
+      }
+
+      const jobs = runnerJobService(context, options);
+      let updatedJob = job;
+      if (outcome.disposition === "VERIFIED") {
+        await Promise.all([
+          store.put(
+            `${authorityPrefix}selected-experiment-ir.json`,
+            JSON.stringify(outcome.selectedIr),
+            "application/json",
+          ),
+          store.put(
+            `${authorityPrefix}experiment-plan.json`,
+            JSON.stringify(outcome.executionPlan),
+            "application/json",
+          ),
+        ]);
+        updatedJob = await jobs.appendEvent(jobId, updatedJob.jobVersion, {
+          schemaVersion: "1",
+          eventId: requestId(options, "compiler_event"),
+          jobId,
+          cursor: updatedJob.eventCursor + 1,
+          at: requestNow(options).toISOString(),
+          kind: "verifier.verified",
+          invariantCount: outcome.report.invariantCount,
+          mutationCount: 0,
+        });
+        return context.json(
+          jsonSuccess({
+            status: "VERIFIED" as const,
+            canRepair: false,
+            counterexamples: [],
+            nextCursor: updatedJob.eventCursor,
+            verifierDurationMs,
+            runnerJob: updatedJob,
+            verification: outcome.report,
+            selection: outcome.selection,
+            selectedIrHash: outcome.selectedIrHash,
+            executionPlanHash: outcome.executionPlanHash,
+          }),
+        );
+      }
+
+      const counterexamples = outcome.report.invariants
+        .filter((invariant) => !invariant.passed)
+        .map((invariant) => ({
+          invariant: invariant.name,
+          observed: invariant.observed ?? null,
+          expected: invariant.expected ?? null,
+          counterexample:
+            invariant.counterexample ??
+            `Candidate violated ${invariant.name.replaceAll("_", " ")}.`,
+        }));
+      for (const counterexample of counterexamples) {
+        updatedJob = await jobs.appendEvent(jobId, updatedJob.jobVersion, {
+          schemaVersion: "1",
+          eventId: requestId(options, "compiler_event"),
+          jobId,
+          cursor: updatedJob.eventCursor + 1,
+          at: requestNow(options).toISOString(),
+          kind: "verifier.rejected",
+          ...counterexample,
+        });
+      }
+      const canRepair = updatedJob.attempt < updatedJob.maxAttempts;
+      if (canRepair) {
+        updatedJob = await jobs.transition(
+          jobId,
+          updatedJob.jobVersion,
+          "REPAIRING",
+          {
+            runnerIdentity: updatedJob.runnerIdentity ?? "authenticated-runner",
+          },
+        );
+      }
+      return context.json(
+        jsonSuccess({
+          status: "REJECTED" as const,
+          canRepair,
+          counterexamples,
+          nextCursor: updatedJob.eventCursor,
+          verifierDurationMs,
+          runnerJob: updatedJob,
+          verification: outcome.report,
+          ...(outcome.selection === undefined
+            ? {}
+            : { selection: outcome.selection }),
+        }),
+      );
+    }
+    const candidate = LegacyRunnerCandidateSchema.parse(candidateInput);
     if (candidate.attempt !== job.attempt) {
       throw new ApiInputError(
         "RUNNER_ATTEMPT_MISMATCH",

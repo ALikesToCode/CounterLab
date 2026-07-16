@@ -3,6 +3,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  DiscriminationContractV1Schema,
   type ArtifactManifest,
   type BeliefTest,
   type ExperimentPlanV2,
@@ -14,6 +15,7 @@ import {
   RunnerLabRunBundleSchema,
   RunnerPatchCompileBundleSchema,
 } from "@counterlab/contracts";
+import { LabSceneV2Schema } from "@counterlab/generative-ui-contracts";
 import type {
   CounterLabSession,
   EvidenceEvent,
@@ -24,7 +26,12 @@ import type {
 import { createEvidenceEvent, hashCanonical } from "@counterlab/session-core";
 import { validateProofBundle } from "@counterlab/proof-bundle";
 import { schemaSummaryHash } from "@counterlab/belief-analyst";
-import { RunnerLabCompileBundleV5Schema } from "@counterlab/experiment-ir";
+import {
+  ExperimentIRV5Schema,
+  RunnerLabCompileBundleV5Schema,
+  hashExperimentIR,
+  type RunnerLabCompileBundleV5,
+} from "@counterlab/experiment-ir";
 
 import sourceNotebookText from "../../../fixtures/notebooks/customer_churn_leakage.ipynb?raw";
 import patchedNotebookText from "../../../replays/leakage-01/patch/customer_churn_leakage.patched.ipynb?raw";
@@ -559,7 +566,10 @@ function liveBeliefSpecWire(artifact: ArtifactManifest) {
         conditions: ["Random rows represent future customer deployment."],
         nonClaims: ["This does not establish performance for every cohort."],
         evidence: [codeEvidence],
-        supportedCandidateExperimentIds: ["group-holdout"],
+        supportedCandidateExperimentIds: [
+          "group-holdout",
+          "group-holdout-plus-ablation",
+        ],
       },
       {
         id: "competing" as const,
@@ -567,7 +577,10 @@ function liveBeliefSpecWire(artifact: ArtifactManifest) {
         conditions: ["Customer observations recur across the split."],
         nonClaims: ["This does not prove all non-identity signal is absent."],
         evidence: [schemaEvidence],
-        supportedCandidateExperimentIds: ["group-holdout-plus-ablation"],
+        supportedCandidateExperimentIds: [
+          "group-holdout",
+          "group-holdout-plus-ablation",
+        ],
       },
     ],
     alternatives: [],
@@ -601,6 +614,298 @@ function structuredResponsesResult(output: unknown): Response {
     }),
     { status: 200, headers: { "content-type": "application/json" } },
   );
+}
+
+async function preparedScientificHostedRunner() {
+  const harness = await sessionHarness("live");
+  const artifact = await harness.artifactStore.find(
+    "artifact_uploaded_not_sample",
+  );
+  if (artifact === undefined) throw new Error("live artifact is missing");
+  const learnerClaim =
+    "The notebook accuracy proves generalization to new customers.";
+  const beliefInput = await liveBeliefInput(
+    harness.app,
+    harness.sessionId,
+    learnerClaim,
+  );
+  const upstream = vi
+    .spyOn(globalThis, "fetch")
+    .mockResolvedValueOnce(
+      structuredResponsesResult(liveBeliefSpecWire(artifact.manifest)),
+    );
+  try {
+    const proposed = await harness.app.request(
+      `/api/sessions/${harness.sessionId}/belief-test`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(beliefInput),
+      },
+      {
+        OPENAI_API_KEY: "server-only-key",
+        OPENAI_MODEL: "configured-model",
+      } as unknown as Env & Record<string, string>,
+    );
+    expect(proposed.status).toBe(200);
+  } finally {
+    upstream.mockRestore();
+  }
+  expect(
+    (
+      await postJson(
+        harness.app,
+        `/api/sessions/${harness.sessionId}/belief-test/confirm`,
+        { action: "confirm" },
+      )
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await postJson(
+        harness.app,
+        `/api/sessions/${harness.sessionId}/prediction`,
+        {
+          choice: "The score survives a whole-customer holdout",
+          confidence: 71,
+        },
+      )
+    ).status,
+  ).toBe(201);
+
+  const session = await harness.sessionRepository.find(harness.sessionId);
+  if (session?.beliefSpec === undefined || session.prediction === undefined) {
+    throw new Error("live v5 contracts are missing");
+  }
+  const runnerJobs = new MemoryRunnerJobRepository();
+  const runnerObjects = new MemoryRunnerObjectStore();
+  const dispatcher = new CapturingRunnerDispatcher();
+  let runnerIdSequence = 0;
+  const app = createApi({
+    sessionRepository: harness.sessionRepository,
+    artifactStore: harness.artifactStore,
+    runnerJobRepository: runnerJobs,
+    runnerObjectStore: runnerObjects,
+    runnerDispatcher: dispatcher,
+    runnerSigningPrivateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
+    now: () => new Date("2026-07-14T10:00:00.000Z"),
+    id: (prefix) => `${prefix}_scientific_${++runnerIdSequence}`,
+  });
+  const queued = await postJson(
+    app,
+    `/api/sessions/${harness.sessionId}/lab/compile`,
+  );
+  expect(queued.status).toBe(202);
+  const dispatch = dispatcher.dispatched[0];
+  if (dispatch === undefined) throw new Error("v5 runner was not dispatched");
+  const inputObject = runnerObjects.objects.get(
+    `runner-input/${dispatch.job.jobId}.json`,
+  );
+  if (inputObject === undefined) throw new Error("v5 input bundle is missing");
+  const bundle = RunnerLabCompileBundleV5Schema.parse(
+    JSON.parse(inputObject.body),
+  );
+  return {
+    ...harness,
+    app,
+    artifact: artifact.manifest,
+    bundle,
+    dispatch,
+    runnerJobs,
+    runnerObjects,
+    session,
+  };
+}
+
+async function scientificCandidateArtifacts(bundle: RunnerLabCompileBundleV5) {
+  const entityField = bundle.artifactManifest.schemaSummary.entityCandidates[0];
+  if (entityField === undefined) throw new Error("entity field is missing");
+  const candidateId = "group-holdout-plus-ablation";
+  const baseline = {
+    concept: "entity_leakage" as const,
+    runId: "random_rows",
+    operation: "leakage.random_row_split" as const,
+    seed: 42,
+    testFraction: 0.25,
+    entityField,
+    dropIdentity: false,
+    model: "logistic_regression" as const,
+  };
+  const discriminationContract = DiscriminationContractV1Schema.parse({
+    schemaVersion: "1",
+    contractId: "discrimination.live-v5",
+    sessionId: bundle.sessionId,
+    concept: bundle.approvedBeliefSpec.concept,
+    conceptPackVersion: bundle.conceptPack.version,
+    artifactManifestHash: bundle.artifactManifestHash,
+    beliefSpecId: bundle.approvedBeliefSpec.id,
+    beliefSpecHash: bundle.beliefSpecHash,
+    hypotheses: bundle.approvedBeliefSpec.hypotheses.map(
+      (hypothesis, index) => ({
+        id: hypothesis.id,
+        statement: hypothesis.statement,
+        decisivePatternId:
+          index === 0 ? "leakage.small-gap" : "leakage.material-gap",
+      }),
+    ),
+    candidateExperimentIds: [candidateId],
+    changedVariableIds: ["split_strategy", "identity_feature"],
+    controlledVariableIds: [
+      "model",
+      "seed",
+      "test_fraction",
+      "entity_field",
+      "primary_identity_setting",
+      "preprocessing",
+      "model_hyperparameters",
+    ],
+    observableIds: ["accuracy", "roc_auc", "entity_overlap_rate"],
+    inconclusiveConditionIds: ["gap-within-tolerance"],
+    whyThisTest:
+      "Holding model settings fixed while separating complete customers tests the deployment boundary directly.",
+    nonClaims: [
+      "This test does not establish performance for every future customer.",
+    ],
+    evidenceRefs: bundle.approvedBeliefSpec.evidenceRefs,
+  });
+  const experimentIr = ExperimentIRV5Schema.parse({
+    schemaVersion: "5",
+    irId: "ir.live-v5",
+    executionPlanId: "plan_live_v5",
+    sessionId: bundle.sessionId,
+    concept: bundle.approvedBeliefSpec.concept,
+    conceptPackVersion: bundle.conceptPack.version,
+    artifactManifestHash: bundle.artifactManifestHash,
+    beliefSpecId: bundle.approvedBeliefSpec.id,
+    beliefSpecHash: bundle.beliefSpecHash,
+    evidenceRefs: bundle.approvedBeliefSpec.evidenceRefs,
+    hypotheses: [
+      {
+        id: "current",
+        statement: bundle.approvedBeliefSpec.hypotheses[0].statement,
+        conditions: bundle.approvedBeliefSpec.hypotheses[0].conditions,
+        nonClaims: bundle.approvedBeliefSpec.hypotheses[0].nonClaims,
+        predictedPattern: {
+          patternId: "leakage.small-gap",
+          description:
+            "The optimism gap remains small when complete customers are held out.",
+        },
+      },
+      {
+        id: "competing",
+        statement: bundle.approvedBeliefSpec.hypotheses[1].statement,
+        conditions: bundle.approvedBeliefSpec.hypotheses[1].conditions,
+        nonClaims: bundle.approvedBeliefSpec.hypotheses[1].nonClaims,
+        predictedPattern: {
+          patternId: "leakage.material-gap",
+          description:
+            "The optimism gap becomes material when complete customers are held out.",
+        },
+      },
+    ],
+    candidateExperiments: [
+      {
+        id: candidateId,
+        title: "Whole-customer holdout with identity ablation",
+        operationIds: [
+          "leakage.random_row_split",
+          "leakage.group_holdout",
+          "leakage.identity_ablation",
+        ],
+        baseline,
+        interventions: [
+          {
+            ...baseline,
+            runId: "unseen_customers",
+            operation: "leakage.group_holdout",
+          },
+          {
+            ...baseline,
+            runId: "without_identity",
+            operation: "leakage.identity_ablation",
+            dropIdentity: true,
+          },
+        ],
+        heldConstantIds: [
+          "model",
+          "seed",
+          "test_fraction",
+          "entity_field",
+          "primary_identity_setting",
+          "preprocessing",
+          "model_hyperparameters",
+        ],
+        changedVariableIds: ["split_strategy", "identity_feature"],
+        observableIds: ["accuracy", "roc_auc", "entity_overlap_rate"],
+        hypothesisPatterns: [
+          { hypothesisId: "current", patternId: "leakage.small-gap" },
+          { hypothesisId: "competing", patternId: "leakage.material-gap" },
+        ],
+        inconclusiveConditionIds: ["gap-within-tolerance"],
+        complexityCost: 5,
+        discriminatesBecause:
+          "Whole-customer holdout changes the evaluation unit while the fixed runs separately test the identity shortcut.",
+      },
+    ],
+    selection: { status: "UNSELECTED" },
+    visualizations: ["metric_comparison", "entity_overlap"],
+    inconclusiveConditions: [
+      {
+        id: "gap-within-tolerance",
+        description:
+          "The measured gap falls between the two decisive patterns.",
+        nextExperimentId: candidateId,
+      },
+    ],
+    transfer: {
+      taskId: "forecast-future-leakage-v1",
+      changedSurface: "Time-ordered forecasting",
+      requiredActionIds: ["time_ordered_holdout"],
+      nonClaims: ["This transfer does not certify global mastery."],
+    },
+    nonClaims: [
+      "This test does not establish performance for every future customer.",
+    ],
+    provenance: { kind: "codex", ...bundle.provenance },
+    limitations: [
+      "The result is scoped to the supplied notebook and fixed kernel.",
+    ],
+    resourceLimits: bundle.resourceLimits,
+  });
+  const labScene = LabSceneV2Schema.parse({
+    schemaVersion: "2",
+    sceneId: "scene-live-v5",
+    sessionId: bundle.sessionId,
+    concept: bundle.approvedBeliefSpec.concept,
+    supportLabel: "GUIDED_VISUAL",
+    title: "Does the score survive a whole-customer holdout?",
+    blocks: [
+      {
+        id: "hypotheses",
+        type: "Hypothesis",
+        current: bundle.approvedBeliefSpec.hypotheses[0].statement,
+        competing: bundle.approvedBeliefSpec.hypotheses[1].statement,
+      },
+      {
+        id: "why",
+        type: "WhyThisTest",
+        text: discriminationContract.whyThisTest,
+      },
+    ],
+    assumptions: ["The fixed kernel executes only registered operations."],
+    limitations: ["No result is shown before external verification."],
+    provenance: {
+      discriminationContractHash: await hashCanonical(discriminationContract),
+      experimentIrHash: await hashExperimentIR(experimentIr),
+    },
+  });
+  return {
+    "discrimination-contract.json": JSON.stringify(discriminationContract),
+    "experiment-ir.json": JSON.stringify(experimentIr),
+    "lab-scene.json": JSON.stringify(labScene),
+    "public-rationale.md":
+      "A whole-customer holdout changes the evaluation boundary while fixed controls preserve the comparison.",
+  } as const;
 }
 
 function imbalanceArtifactManifest(): ArtifactManifest {
@@ -2676,6 +2981,162 @@ describe("Cloudflare Worker API", () => {
       "uploaded_customer_model.counterlab-patched.ipynb",
     );
     await expect(download.text()).resolves.toBe(patchedNotebookText);
+  });
+
+  it("accepts exactly four v5 artifacts, fixes selection, and persists the projected execution plan", async () => {
+    const harness = await preparedScientificHostedRunner();
+    const jobId = harness.dispatch.job.jobId;
+    const authorization = {
+      authorization: `Bearer ${harness.dispatch.token}`,
+    };
+    expect(
+      (
+        await harness.app.request(`/api/runner/jobs/${jobId}/start`, {
+          method: "POST",
+          headers: authorization,
+        })
+      ).status,
+    ).toBe(200);
+
+    const artifacts = await scientificCandidateArtifacts(harness.bundle);
+    const artifactHashes = {} as Record<keyof typeof artifacts, string>;
+    for (const [path, body] of Object.entries(artifacts) as Array<
+      [keyof typeof artifacts, string]
+    >) {
+      const uploaded = await harness.app.request(
+        `/api/runner/jobs/${jobId}/outputs/${path}`,
+        {
+          method: "PUT",
+          headers: {
+            ...authorization,
+            "content-type": path.endsWith(".json")
+              ? "application/json"
+              : "text/markdown; charset=utf-8",
+          },
+          body,
+        },
+      );
+      expect(uploaded.status, path).toBe(201);
+      artifactHashes[path] = await sha256Text(body);
+    }
+
+    const forbiddenLegacyOutput = await harness.app.request(
+      `/api/runner/jobs/${jobId}/outputs/experiment-plan.json`,
+      {
+        method: "PUT",
+        headers: { ...authorization, "content-type": "application/json" },
+        body: JSON.stringify({ schemaVersion: "2" }),
+      },
+    );
+    expect(forbiddenLegacyOutput.status).toBe(403);
+    await expect(forbiddenLegacyOutput.json()).resolves.toMatchObject({
+      error: { code: "RUNNER_OUTPUT_NOT_PERMITTED" },
+    });
+
+    const missingHash = await postJson(
+      harness.app,
+      `/api/runner/jobs/${jobId}/candidate`,
+      {
+        schemaVersion: "5",
+        attempt: 1,
+        artifactHashes: {
+          "discrimination-contract.json":
+            artifactHashes["discrimination-contract.json"],
+          "experiment-ir.json": artifactHashes["experiment-ir.json"],
+          "public-rationale.md": artifactHashes["public-rationale.md"],
+        },
+      },
+      authorization,
+    );
+    expect(missingHash.status).toBe(400);
+    await expect(missingHash.json()).resolves.toMatchObject({
+      error: { code: "VALIDATION_ERROR" },
+    });
+
+    const wrongHash = await postJson(
+      harness.app,
+      `/api/runner/jobs/${jobId}/candidate`,
+      {
+        schemaVersion: "5",
+        attempt: 1,
+        artifactHashes: {
+          ...artifactHashes,
+          "lab-scene.json": "f".repeat(64),
+        },
+      },
+      authorization,
+    );
+    expect(wrongHash.status).toBe(409);
+    await expect(wrongHash.json()).resolves.toMatchObject({
+      error: { code: "RUNNER_OUTPUT_HASH_MISMATCH" },
+    });
+
+    const candidate = await postJson(
+      harness.app,
+      `/api/runner/jobs/${jobId}/candidate`,
+      {
+        schemaVersion: "5",
+        attempt: 1,
+        artifactHashes,
+      },
+      authorization,
+    );
+    expect(candidate.status).toBe(200);
+    await expect(candidate.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        status: "VERIFIED",
+        canRepair: false,
+        selection: {
+          selectedCandidateId: "group-holdout-plus-ablation",
+          scorerVersion: "experiment-scorer-v1",
+        },
+        verification: { status: "VERIFIED" },
+        runnerJob: { status: "RUNNING" },
+      },
+    });
+
+    const generated = [...harness.runnerObjects.objects.entries()].filter(
+      ([key]) => key.startsWith(`runner-output/${jobId}/`),
+    );
+    const authority = [...harness.runnerObjects.objects.entries()].filter(
+      ([key]) => key.startsWith(`runner-authority/${jobId}/`),
+    );
+    const rawIrObject = generated.find(([key]) =>
+      key.endsWith("/experiment-ir.json"),
+    )?.[1];
+    const selectedIrObject = authority.find(([key]) =>
+      key.endsWith("/selected-experiment-ir.json"),
+    )?.[1];
+    const projectedPlanObject = authority.find(([key]) =>
+      key.endsWith("/experiment-plan.json"),
+    )?.[1];
+    expect(rawIrObject).toBeDefined();
+    expect(selectedIrObject).toBeDefined();
+    expect(projectedPlanObject).toBeDefined();
+    expect(JSON.parse(rawIrObject!.body)).toMatchObject({
+      schemaVersion: "5",
+      selection: { status: "UNSELECTED" },
+    });
+    expect(JSON.parse(selectedIrObject!.body)).toMatchObject({
+      schemaVersion: "5",
+      selection: {
+        status: "SELECTED",
+        candidateId: "group-holdout-plus-ablation",
+        scorerVersion: "experiment-scorer-v1",
+      },
+    });
+    expect(JSON.parse(projectedPlanObject!.body)).toMatchObject({
+      schemaVersion: "2",
+      planId: "plan_live_v5",
+      sessionId: harness.bundle.sessionId,
+      beliefTestId: harness.bundle.approvedBeliefSpec.id,
+      baseline: { operation: "leakage.random_row_split" },
+      interventions: [
+        { operation: "leakage.group_holdout" },
+        { operation: "leakage.identity_ablation" },
+      ],
+    });
   });
 
   it("rejects a runner-claimed success when the independent hosted Plan verifier fails", async () => {
