@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "2",
+  "evidenceId": "signed-result-binding-v2",
+  "kind": "golden_fixture",
+  "rule": "Learner-visible metrics, Boundary Maps, Reasoning Diffs, and proof badges bind only to verified canonical result or Proof Capsule paths.",
+  "contractPath": "packages/generative-ui-contracts/src/index.ts",
+  "codePaths": [
+    "apps/web/src/App.tsx",
+    "apps/web/src/components/generative-ui/BoundaryMapBlock.tsx",
+    "apps/web/src/features/boundary/BoundaryStage.tsx",
+    "apps/web/src/components/studio/GeneratedProofView.tsx",
+    "apps/web/src/components/lesson/InteractiveImbalanceLab.tsx",
+    "apps/web/src/components/proof/ProofCapsuleView.tsx",
+    "apps/web/src/components/proof/ReasoningDiffView.tsx"
+  ],
+  "tests": [
+    "apps/web/src/App.test.tsx",
+    "apps/web/src/components/generative-ui/BoundaryMapBlock.test.tsx",
+    "apps/web/src/features/boundary/BoundaryStage.test.tsx",
+    "apps/web/src/components/studio/GeneratedProofView.test.tsx",
+    "apps/web/src/components/lesson/InteractiveImbalanceLab.test.tsx",
+    "apps/web/src/components/proof/ReasoningDiffView.test.tsx",
+    "packages/generative-ui-contracts/test/lab-scene.test.ts"
+  ],
+  "limitations": [
+    "This binds the released v5 ML views only; it is not authority for arbitrary generated UI."
+  ]
+}

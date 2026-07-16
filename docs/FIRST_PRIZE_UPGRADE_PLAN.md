@@ -11,12 +11,13 @@ The v5.1 scientific-engine registry gate is now implemented for the two
 released ML packs. Its exact non-root local candidate, licenses, integrity
 evidence, deterministic health runs, normalized SBOMs, raw vulnerability scan,
 reviewed exception evidence, and canonical authority hash pass the full local
-image gate as authority `d7677c79914505c11cc0474a0f3e4be7527173ea27c5640b65c7b8a373a8e881`.
-Proof Bundle v2 binds and validates that authority hash. Production promotion
-is now recorded separately through Worker `7c67c0f4…`, Cloudflare registry
-digest `bdd65fee…`, and a seven-stage smoke whose two live Proof Bundles bind
-that same authority. See `docs/SCIENTIFIC_ENGINES.md` and
-`docs/DEPENDENCY_ADMISSION.md`.
+image gate for source `efe7fcf…`, local image `1b974af9…`, and authority
+`aff2ea37372b647b887d1e088f5aac98ceb725246b760eb07ae21e1453e5e57e`.
+Proof Capsule v2 binds and validates scientific-engine authority. The new v5.1
+candidate is awaiting registry push, qualification, deployment, and production
+smoke; the earlier Worker `7c67c0f4…`, registry digest `bdd65fee…`, and
+seven-stage smoke remain historical v2 evidence only. See
+`docs/SCIENTIFIC_ENGINES.md` and `docs/DEPENDENCY_ADMISSION.md`.
 
 ## Release objective
 

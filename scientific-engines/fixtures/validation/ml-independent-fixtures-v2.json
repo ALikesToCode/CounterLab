@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "2",
+  "evidenceId": "ml-independent-fixtures-v2",
+  "kind": "oracle_strategy",
+  "strategy": [
+    "Compare kernel outputs against independently constructed small fixtures.",
+    "Recompute overlap and confusion totals from primitive labels and identifiers.",
+    "Require the frozen technical and epistemic verifiers to recompute canonical bindings.",
+    "Require fixed scorer, Boundary Map, transfer, and Experiment IR policy tests for both released ML packs."
+  ],
+  "testFiles": [
+    "services/kernel/tests/test_fixture_kernel.py",
+    "services/kernel/tests/test_imbalance_kernel.py",
+    "services/kernel/tests/test_verifier.py",
+    "services/kernel/tests/test_imbalance_verifier.py",
+    "services/kernel/tests/test_boundary_map.py",
+    "services/kernel/tests/test_hosted_boundary.py",
+    "services/kernel/tests/test_transfer.py",
+    "services/kernel/tests/test_imbalance_transfer.py",
+    "packages/concept-registry/src/index.test.ts",
+    "packages/experiment-ir/test/experiment-ir.test.ts",
+    "packages/experiment-ir/test/runner-bundle.test.ts",
+    "packages/experiment-scorer/test/scorer.test.ts",
+    "packages/plan-verifier/src/epistemic.test.ts",
+    "packages/plan-verifier/src/epistemic-imbalance.test.ts",
+    "packages/plan-verifier/src/scientific-candidate-v5.test.ts",
+    "packages/boundary-map/test/verifier.test.ts"
+  ],
+  "nonClaim": "Independent fixtures validate the released bounded operations and authority seams; they do not establish correctness for arbitrary notebooks, models, or subjects."
+}

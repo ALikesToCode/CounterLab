@@ -44,13 +44,13 @@
         "maxOutputBytes": 8388608
       },
       "validation": {
-        "oracleStrategyIds": ["ml-independent-fixtures-v1"],
+        "oracleStrategyIds": ["ml-independent-fixtures-v2"],
         "goldenFixtureIds": ["ml-kernel-golden-v1"],
         "metamorphicPropertyIds": ["ml-row-order-invariance-v1"],
         "upgradeDriftFixtureIds": ["ml-engine-upgrade-drift-v1"]
       },
       "attribution": "CounterLab contributors; MIT license.",
-      "integrityHash": "13d0846732c0c9abd41f1816b41a8aeec7f3174475c63837e6a185e9582a777c"
+      "integrityHash": "69847ca9946c25f90bd42b42fbd1242e0d8e81d01b3718aaeee1c25c8ddd59b7"
     },
     {
       "id": "numpy",
@@ -94,13 +94,13 @@
         "maxOutputBytes": 8388608
       },
       "validation": {
-        "oracleStrategyIds": ["ml-independent-fixtures-v1"],
+        "oracleStrategyIds": ["ml-independent-fixtures-v2"],
         "goldenFixtureIds": ["ml-kernel-golden-v1"],
         "metamorphicPropertyIds": ["ml-row-order-invariance-v1"],
         "upgradeDriftFixtureIds": ["ml-engine-upgrade-drift-v1"]
       },
       "attribution": "NumPy Developers; BSD-3-Clause and bundled third-party notices.",
-      "integrityHash": "545fb2bf71c7515dde0724f3753ecea9ef99fc4986d4d6a9507a8920cfb76bca"
+      "integrityHash": "1c73d41d924bd5ca435ce8152f853421d504fad3efdb8396b564f4c879f842d4"
     },
     {
       "id": "pandas",
@@ -143,13 +143,13 @@
         "maxOutputBytes": 8388608
       },
       "validation": {
-        "oracleStrategyIds": ["ml-independent-fixtures-v1"],
+        "oracleStrategyIds": ["ml-independent-fixtures-v2"],
         "goldenFixtureIds": ["ml-kernel-golden-v1"],
         "metamorphicPropertyIds": ["ml-row-order-invariance-v1"],
         "upgradeDriftFixtureIds": ["ml-engine-upgrade-drift-v1"]
       },
       "attribution": "pandas development team; BSD-3-Clause license.",
-      "integrityHash": "32cd5d02333eb767b3f5853b352255454e486e7d87adcc215127da01645b5396"
+      "integrityHash": "6184e80a3917608c28dd4f631c77ae05cd494024050834492ae5bfe63d5023dc"
     },
     {
       "id": "scikit-learn",
@@ -193,13 +193,13 @@
         "maxOutputBytes": 8388608
       },
       "validation": {
-        "oracleStrategyIds": ["ml-independent-fixtures-v1"],
+        "oracleStrategyIds": ["ml-independent-fixtures-v2"],
         "goldenFixtureIds": ["ml-kernel-golden-v1"],
         "metamorphicPropertyIds": ["ml-row-order-invariance-v1"],
         "upgradeDriftFixtureIds": ["ml-engine-upgrade-drift-v1"]
       },
       "attribution": "scikit-learn developers; BSD-3-Clause license.",
-      "integrityHash": "cfffa7c3b367629632aa4e7910238f86aeb61bfd930def258c1e9642d88aa663"
+      "integrityHash": "865e26ece9199f451881f8f29eb2a0d753fb309292c3547eb9b433ac7f6f8230"
     }
   ]
 }

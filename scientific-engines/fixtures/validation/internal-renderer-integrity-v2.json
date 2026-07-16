@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "2",
+  "evidenceId": "internal-renderer-integrity-v2",
+  "kind": "integrity",
+  "files": {
+    "apps/web/src/App.tsx": "d5c4df56ca6c5875be9812e9e83315c679bd99ada0b20555661f9fcae8871b45",
+    "apps/web/src/components/generative-ui/BoundaryMapBlock.tsx": "b754c1153aac9b2ce12fc069364fd7f240a27035f757dfc1106a979b79a09a77",
+    "apps/web/src/components/lesson/InteractiveImbalanceLab.tsx": "9867c97567fae859070bb8cecc812e674fc2fba27e2e243f72b88c816525b948",
+    "apps/web/src/components/proof/ProofCapsuleView.tsx": "a3491c285d712472622b9f5168af1eba085d1a081a71ae8a664e798784dafdd9",
+    "apps/web/src/components/proof/ReasoningDiffView.tsx": "00b5ffc4e9b1f5f06b529fa4594e3ade43ed0f46a1107d15c7b019fcb172e1f6",
+    "apps/web/src/components/studio/GeneratedProofView.tsx": "91728ffe869c1241c7589703585fcfd394ed579bc2e27f8678fbc11a3a82c05e",
+    "apps/web/src/features/boundary/BoundaryStage.tsx": "8110f2b5d8416b057f49776f768e8d20f245144813331145ec3129f5e244f1b2",
+    "packages/generative-ui-contracts/src/index.ts": "9e1035dc1c9da5659d02220f6ebd875d8e947c46dff7f5a7eba9ecd47e7e6991"
+  }
+}

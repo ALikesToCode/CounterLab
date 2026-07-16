@@ -3,7 +3,7 @@
   "subjectPacks": [
     {
       "subjectPackId": "class_imbalance",
-      "subjectPackVersion": "1.0.0",
+      "subjectPackVersion": "1.1.0",
       "operationAuthorities": [
         {
           "operationId": "imbalance.confusion_matrix",
@@ -64,10 +64,10 @@
         "referenceOracle": {
           "kind": "INTERNAL",
           "authorityId": "counterlab-independent-fixtures",
-          "exactVersion": "1.0.0",
-          "integrityEvidenceId": "internal-oracle-integrity-v1",
-          "integrityHash": "2f6437d00023494998a780cdeebec8e6366bc9eca3f753bd3e6583a53fe6a633",
-          "validationEvidenceIds": ["ml-independent-fixtures-v1"],
+          "exactVersion": "2.0.0",
+          "integrityEvidenceId": "internal-oracle-integrity-v2",
+          "integrityHash": "cc42db5965fc0cb8944c221c333b68fdfd3c413606a074fe0138178f80b50b52",
+          "validationEvidenceIds": ["ml-independent-fixtures-v2"],
           "reason": "Independent simple fixtures and primitive count checks validate the fixed outputs."
         },
         "unitValidator": {
@@ -77,18 +77,18 @@
         "renderer": {
           "kind": "INTERNAL",
           "authorityId": "counterlab-signed-result-renderer",
-          "exactVersion": "1.0.0",
-          "integrityEvidenceId": "internal-renderer-integrity-v1",
-          "integrityHash": "86ced2be40bbef3d486b32b10a290469c0228c3d7460ca4efc615c4bc2fe92d3",
-          "validationEvidenceIds": ["signed-result-binding-v1"],
+          "exactVersion": "2.0.0",
+          "integrityEvidenceId": "internal-renderer-integrity-v2",
+          "integrityHash": "3abaf1dc675b2cd87916903a18563d575649f482158f531c3327810a7ce2db64",
+          "validationEvidenceIds": ["signed-result-binding-v2"],
           "reason": "Fixed React blocks render only signed canonical result paths."
         },
         "propertyTestGenerator": {
           "kind": "INTERNAL",
           "authorityId": "counterlab-mutation-matrix",
-          "exactVersion": "1.0.0",
-          "integrityEvidenceId": "internal-mutations-integrity-v1",
-          "integrityHash": "1abe9160292229da6edb11ed4a680c26a9c00edc63399c785b3b3ecfe5241172",
+          "exactVersion": "2.0.0",
+          "integrityEvidenceId": "internal-mutations-integrity-v2",
+          "integrityHash": "483f8a1940b7211e5f011b285a2dcadf21299e38b561ead91acefe05a04bd758",
           "validationEvidenceIds": ["ml-row-order-invariance-v1"],
           "reason": "The frozen mutation catalogue exercises verifier and determinism properties."
         },
@@ -100,7 +100,7 @@
     },
     {
       "subjectPackId": "entity_leakage",
-      "subjectPackVersion": "2.0.0",
+      "subjectPackVersion": "2.1.0",
       "operationAuthorities": [
         {
           "operationId": "leakage.controlled_comparison",
@@ -161,10 +161,10 @@
         "referenceOracle": {
           "kind": "INTERNAL",
           "authorityId": "counterlab-independent-fixtures",
-          "exactVersion": "1.0.0",
-          "integrityEvidenceId": "internal-oracle-integrity-v1",
-          "integrityHash": "2f6437d00023494998a780cdeebec8e6366bc9eca3f753bd3e6583a53fe6a633",
-          "validationEvidenceIds": ["ml-independent-fixtures-v1"],
+          "exactVersion": "2.0.0",
+          "integrityEvidenceId": "internal-oracle-integrity-v2",
+          "integrityHash": "cc42db5965fc0cb8944c221c333b68fdfd3c413606a074fe0138178f80b50b52",
+          "validationEvidenceIds": ["ml-independent-fixtures-v2"],
           "reason": "Independent simple fixtures and primitive overlap checks validate the fixed outputs."
         },
         "unitValidator": {
@@ -174,18 +174,18 @@
         "renderer": {
           "kind": "INTERNAL",
           "authorityId": "counterlab-signed-result-renderer",
-          "exactVersion": "1.0.0",
-          "integrityEvidenceId": "internal-renderer-integrity-v1",
-          "integrityHash": "86ced2be40bbef3d486b32b10a290469c0228c3d7460ca4efc615c4bc2fe92d3",
-          "validationEvidenceIds": ["signed-result-binding-v1"],
+          "exactVersion": "2.0.0",
+          "integrityEvidenceId": "internal-renderer-integrity-v2",
+          "integrityHash": "3abaf1dc675b2cd87916903a18563d575649f482158f531c3327810a7ce2db64",
+          "validationEvidenceIds": ["signed-result-binding-v2"],
           "reason": "Fixed React blocks render only signed canonical result paths."
         },
         "propertyTestGenerator": {
           "kind": "INTERNAL",
           "authorityId": "counterlab-mutation-matrix",
-          "exactVersion": "1.0.0",
-          "integrityEvidenceId": "internal-mutations-integrity-v1",
-          "integrityHash": "1abe9160292229da6edb11ed4a680c26a9c00edc63399c785b3b3ecfe5241172",
+          "exactVersion": "2.0.0",
+          "integrityEvidenceId": "internal-mutations-integrity-v2",
+          "integrityHash": "483f8a1940b7211e5f011b285a2dcadf21299e38b561ead91acefe05a04bd758",
           "validationEvidenceIds": ["ml-row-order-invariance-v1"],
           "reason": "The frozen mutation catalogue exercises verifier and determinism properties."
         },

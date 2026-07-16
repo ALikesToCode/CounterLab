@@ -577,3 +577,23 @@ can pass.
 - Keep legacy sample/replay rendering compatible and labelled. Native live
   authority is never synthesized from the bundled lesson, and hosted Capsule
   replay remains a separate pending persistence/projection slice.
+
+## 2026-07-16 — Promote only an exact source-bound v5.1 candidate
+
+- Preserve the previous v2 Container, Worker, and smoke identifiers as
+  historical evidence; they do not grant authority to the current v5.1 source.
+- Bind the release candidate to source `efe7fcf…`, local OCI digest
+  `sha256:1b974af9…`, non-root user `10001:10001`, and scientific authority
+  `aff2ea37…`. Any runtime-source change requires a new image and evidence set.
+- Treat scientific-engine evidence and the five approved factual release
+  documents as the only permissible post-build evidence delta. Qualification
+  fails closed on any other path.
+- Require two independent no-cache wheel builds plus the release candidate to
+  agree on kernel wheel SHA-256 `38b1be0e…` before claiming reproducibility.
+- Refresh the exact-image SBOM, vulnerability scan, VEX application and negative
+  control, bounded in-image reachability probe, internal authority bindings,
+  and canonical snapshot. The reviewed CPython exception expires at
+  `2026-07-30T18:20:06Z` and cannot transfer to another image.
+- Push, qualify, deploy, and smoke this exact candidate in that order. Do not
+  begin physics or claim v5.1 production authority before both untouched ML
+  concepts complete the new public smoke.

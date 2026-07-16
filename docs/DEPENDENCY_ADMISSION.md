@@ -57,7 +57,7 @@ revalidation trigger. CounterLab additionally preserves raw, VEX-applied, and
 wrong-subcomponent negative-control scans and verifies that only the intended
 finding moves from active to ignored. Known-exploited findings fail unless
 evidence establishes that the exact image is not affected. The current review
-expires on `2026-07-30T04:21:10Z` and does not carry authority to another image
+expires on `2026-07-30T18:20:06Z` and does not carry authority to another image
 or environment kind.
 
 Findings without a published fix are recorded and remain visible for release

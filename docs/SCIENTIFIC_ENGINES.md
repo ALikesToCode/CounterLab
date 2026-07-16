@@ -33,12 +33,12 @@ operations, fields, versions, evidence IDs, or tolerance profiles fail closed.
 The recorded candidate is intentionally not labelled as production authority.
 
 - Environment: `counterlab-runner-linux-amd64-v2`
-- Source commit: `095d485370e70d3b502023665fea4ebf156697ad`
+- Source commit: `efe7fcfa6bfb5bb0115d4bd0bb1e1c1c628ef0b8`
 - Image digest:
-  `sha256:94c1987e54b5074b3eb075f5924ec9d757d8579584d6d59b129124065272f934`
+  `sha256:1b974af90901e818fc202fffca8702f7a48aa1bcfa54776af7cc67831b5e34da`
 - Runtime user: `10001:10001`
 - Authority hash:
-  `d7677c79914505c11cc0474a0f3e4be7527173ea27c5640b65c7b8a373a8e881`
+  `aff2ea37372b647b887d1e088f5aac98ceb725246b760eb07ae21e1453e5e57e`
 - Deterministic kernel hashes:
   - leakage: `a6ae7652e04e4d70196f991c63b8f7bcb3b76f8c4ab833d3ce2b626df0ab6c94`
   - imbalance: `5787e04aa59c2703336d35bf5e64935987b44029f47b833e9152dd7d5c97d0d4`
@@ -46,7 +46,7 @@ The recorded candidate is intentionally not labelled as production authority.
 The image starts as a non-root user, runs with one-thread numeric pools, and the
 verification probe uses a no-network, read-only container with bounded tmpfs.
 Two clean Python builder executions produced the same kernel wheel SHA-256:
-`16cbf5a0b9e76badddb29767858a31e310b454a9c30f44c3abe86a87b746ed57`.
+`38b1be0e3c6e1ca33b3a8f36b45fb3273a416b1c2bea099f25afec71e8ebb87b`.
 
 ## Inventory and vulnerability evidence
 
@@ -56,11 +56,11 @@ Three normalized CycloneDX 1.6 documents are committed:
 | -------------------------- | ---------: | ------------------------------------------------------------------ |
 | Production Node graph      |         19 | `80981d7969b467915c73c061b0ea701e02ac05e1dc8b6197025b4cd1cb5d2b19` |
 | Runner Python requirements |         22 | `24f1d2cf673e8ac7c45289d3fbbc900f609ca53430b4166597b493fac8debc54` |
-| Runner image filesystem    |      2,839 | `c9a9e06130fc4282b65939bbed675b5bddfa856763fc81e38d8fdfe8c0fa93f5` |
+| Runner image filesystem    |      2,839 | `a3d072dddab55fafe92b09ffd56522fe62c9cfa96f89e3906bf137589496f92b` |
 
 The Grype 0.112.0 scan is recorded in
 `docs/sbom/vulnerability-report.json`. Its database was built at
-`2026-07-15T18:14:40Z`. The unsuppressed scan contains 171 package findings:
+`2026-07-16T06:59:07Z`. The unsuppressed scan contains 171 package findings:
 7 Critical, 23 High, 51 Medium, 4 Low, 50 Negligible, and 36 Unknown. None of
 the Critical findings has a published fix in this scan. The fixable set is 0
 Critical, 1 High, and 3 Medium.
@@ -71,7 +71,7 @@ reachability probe over both hosted run and patch entrypoints. The VEX
 application proof changes Grype from 171 active findings to 170 active plus
 exactly one ignored finding; a wrong-subcomponent negative control suppresses
 zero findings. The CVE was not listed in the checked CISA KEV catalogue. This
-exception expires on `2026-07-30T04:21:10Z` and must be requalified when the
+exception expires on `2026-07-30T18:20:06Z` and must be requalified when the
 image, source, SBOM, Python/module bytes, entrypoints, scanner database, or
 vulnerability status changes.
 
@@ -81,13 +81,14 @@ does not relabel the local snapshot as Cloudflare production authority.
 
 ## Production promotion
 
-The source-bound candidate was deployed separately as Cloudflare Container
-version 13 with registry digest
+The current v5.1 candidate above has passed the complete local image gate but
+has not yet been promoted or production-smoked. The previous qualified v2
+release remains deployed as Cloudflare Container version 13 with registry
+digest
 `sha256:bdd65feebad10d4b0f232e945eb1bd1195b803d13fddf8eee558b2efdd5dc8c6`
-and Worker `7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab`. The local OCI digest remains
-`sha256:94c1987e…`; these identifiers are intentionally not treated as equal.
-One exact-version production smoke passed all seven stages, and both live Proof
-Bundles record authority hash `d7677c79…`. The committed report SHA-256 is
+and smoke-bound Worker `7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab`. That historical
+smoke records authority `d7677c79…`; it does not confer production authority on
+the new `aff2ea37…` candidate. The committed historical report SHA-256 is
 `cd5c0c05b2f007c577905630a61f7be84c71908a511ca9bffad68f76bd86431a`.
 
 SBOM presence is inventory evidence, not proof that vulnerabilities are absent.
@@ -102,7 +103,7 @@ The current full local-candidate gate is:
 
 ```bash
 ./scripts/verify-scientific-engines.sh \
-  --image counterlab-runner:engine-registry-v5
+  --image counterlab-runner:git-efe7fcfa6bfb5bb0115d4bd0bb1e1c1c628ef0b8
 ```
 
 It validates schemas, evidence hashes, role and operation policy, exact locks,
