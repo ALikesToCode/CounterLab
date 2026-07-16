@@ -6,6 +6,10 @@ import { isAbsolute, join, relative } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 
+import {
+  ExperimentPlanV2Schema,
+  PatchPlanV1Schema,
+} from "@counterlab/contracts";
 import { z } from "zod";
 
 import {
@@ -82,10 +86,11 @@ type StructuredRun = {
 function structuredOutputSchema(
   authoritativeSchema: Record<string, unknown>,
 ): Record<string, unknown> {
+  const strictAuthoritativeSchema = strictStructuredSchema(authoritativeSchema);
   return {
     type: "object",
     properties: {
-      authoritativeArtifact: authoritativeSchema,
+      authoritativeArtifact: strictAuthoritativeSchema,
       publicRationale: {
         type: "string",
         minLength: 1,
@@ -95,6 +100,69 @@ function structuredOutputSchema(
     required: ["authoritativeArtifact", "publicRationale"],
     additionalProperties: false,
   };
+}
+
+function strictStructuredSchema(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(strictStructuredSchema);
+  if (value === null || typeof value !== "object") return value;
+
+  const source = value as Record<string, unknown>;
+  const output: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(source)) {
+    if (key === "$id" || key === "$schema" || key === "title") continue;
+    if (key === "required" || key === "properties") continue;
+    if (key === "oneOf") {
+      output.anyOf = strictStructuredSchema(nested);
+      continue;
+    }
+    output[key] = strictStructuredSchema(nested);
+  }
+
+  if (
+    source.properties !== null &&
+    typeof source.properties === "object" &&
+    !Array.isArray(source.properties)
+  ) {
+    const properties = source.properties as Record<string, unknown>;
+    const originallyRequired = new Set(
+      Array.isArray(source.required)
+        ? source.required.filter(
+            (entry): entry is string => typeof entry === "string",
+          )
+        : [],
+    );
+    output.properties = Object.fromEntries(
+      Object.entries(properties).map(([name, propertySchema]) => {
+        const strictPropertySchema = strictStructuredSchema(propertySchema);
+        return [
+          name,
+          originallyRequired.has(name)
+            ? strictPropertySchema
+            : {
+                anyOf: [strictPropertySchema, { type: "null" }],
+              },
+        ];
+      }),
+    );
+    output.required = Object.keys(properties);
+    output.additionalProperties = false;
+  }
+
+  return output;
+}
+
+function removeModelBoundaryNullPlaceholders(value: unknown): unknown {
+  if (Array.isArray(value))
+    return value.map(removeModelBoundaryNullPlaceholders);
+  if (value === null || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([, nested]) => nested !== null)
+      .map(([name, nested]) => [
+        name,
+        removeModelBoundaryNullPlaceholders(nested),
+      ]),
+  );
 }
 
 function directChild(root: string, fileName: string): string {
@@ -130,6 +198,7 @@ async function writeBoundedFile(path: string, body: string): Promise<void> {
 async function materializeStructuredHostedOutput(
   generationDirectory: string,
   authoritativePath: "experiment-plan.json" | "patch-plan.json",
+  authoritativeValidator: z.ZodType<unknown>,
   finalMessage: string,
 ): Promise<void> {
   if (Buffer.byteLength(finalMessage, "utf8") > MAX_STRUCTURED_OUTPUT_BYTES) {
@@ -149,10 +218,16 @@ async function materializeStructuredHostedOutput(
     );
   }
   const output = StructuredHostedOutputSchema.parse(value);
+  // The strict model schema represents canonical optional properties as null.
+  // Current hosted contracts admit no null-valued properties, so remove those
+  // placeholders and immediately fail closed against the fixed local contract.
+  const authoritativeArtifact = authoritativeValidator.parse(
+    removeModelBoundaryNullPlaceholders(output.authoritativeArtifact),
+  );
   const canonicalDirectory = await realpath(generationDirectory);
   await writeBoundedFile(
     directChild(canonicalDirectory, authoritativePath),
-    `${JSON.stringify(output.authoritativeArtifact, null, 2)}\n`,
+    `${JSON.stringify(authoritativeArtifact, null, 2)}\n`,
   );
   await writeBoundedFile(
     directChild(canonicalDirectory, PUBLIC_RATIONALE_PATH),
@@ -773,6 +848,7 @@ export class AppServerCodexCompiler implements CodexCompiler {
           materializeStructuredHostedOutput(
             input.generationDirectory,
             "experiment-plan.json",
+            ExperimentPlanV2Schema,
             finalMessage,
           ),
       },
@@ -804,6 +880,7 @@ export class AppServerCodexCompiler implements CodexCompiler {
           materializeStructuredHostedOutput(
             input.generationDirectory,
             "experiment-plan.json",
+            ExperimentPlanV2Schema,
             finalMessage,
           ),
       },
@@ -827,6 +904,7 @@ export class AppServerCodexCompiler implements CodexCompiler {
           materializeStructuredHostedOutput(
             input.generationDirectory,
             "patch-plan.json",
+            PatchPlanV1Schema,
             finalMessage,
           ),
       },
@@ -858,6 +936,7 @@ export class AppServerCodexCompiler implements CodexCompiler {
           materializeStructuredHostedOutput(
             input.generationDirectory,
             "patch-plan.json",
+            PatchPlanV1Schema,
             finalMessage,
           ),
       },

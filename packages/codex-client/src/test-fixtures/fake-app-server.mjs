@@ -46,6 +46,18 @@ const expectConstrainedTurn = process.argv.includes(
 );
 const expectStructuredTurn = process.argv.includes("--expect-structured-turn");
 const structuredPlanOutput = process.argv.includes("--structured-plan-output");
+const structuredPatchOutput = process.argv.includes(
+  "--structured-patch-output",
+);
+const structuredInvalidOutput = process.argv.includes(
+  "--structured-invalid-output",
+);
+const structuredNullEvidenceOutput = process.argv.includes(
+  "--structured-null-evidence-output",
+);
+const expectStrictOutputSchema = process.argv.includes(
+  "--expect-strict-output-schema",
+);
 const expectedModelArgument = process.argv.find((argument) =>
   argument.startsWith("--expect-model="),
 );
@@ -57,6 +69,119 @@ const expectedCwd = expectedCwdArgument?.slice("--expect-cwd=".length);
 
 function send(value) {
   process.stdout.write(`${JSON.stringify(value)}\n`);
+}
+
+function isStrictStructuredSchema(value) {
+  if (Array.isArray(value)) return value.every(isStrictStructuredSchema);
+  if (value === null || typeof value !== "object") return true;
+  if (Object.hasOwn(value, "oneOf")) return false;
+  if (
+    value.properties !== undefined &&
+    (value.additionalProperties !== false ||
+      !Array.isArray(value.required) ||
+      JSON.stringify([...value.required].sort()) !==
+        JSON.stringify(Object.keys(value.properties).sort()))
+  ) {
+    return false;
+  }
+  return Object.values(value).every(isStrictStructuredSchema);
+}
+
+function canonicalExperimentPlan(evidenceRefs) {
+  return {
+    schemaVersion: "2",
+    planId: "plan_test",
+    sessionId: "session_test",
+    concept: "entity_leakage",
+    conceptPackVersion: "2.0.0",
+    artifactManifestHash: "e".repeat(64),
+    beliefTestId: "belief_test",
+    evidenceRefs,
+    baseline: {
+      concept: "entity_leakage",
+      runId: "random_rows",
+      operation: "leakage.random_row_split",
+      seed: 1729,
+      testFraction: 0.25,
+      entityField: "account_id",
+      dropIdentity: false,
+      model: "logistic_regression",
+    },
+    interventions: [
+      {
+        concept: "entity_leakage",
+        runId: "new_accounts",
+        operation: "leakage.group_holdout",
+        seed: 1729,
+        testFraction: 0.25,
+        entityField: "account_id",
+        dropIdentity: false,
+        model: "logistic_regression",
+      },
+      {
+        concept: "entity_leakage",
+        runId: "without_identity",
+        operation: "leakage.identity_ablation",
+        seed: 1729,
+        testFraction: 0.25,
+        entityField: "account_id",
+        dropIdentity: true,
+        model: "logistic_regression",
+      },
+    ],
+    controlledVariables: ["model", "seed", "test fraction"],
+    changedVariables: ["split boundary", "identity feature"],
+    metrics: ["accuracy", "roc_auc", "entity_overlap_rate"],
+    visualizations: ["metric_comparison", "entity_overlap"],
+    discriminatesBecause:
+      "Whole-entity holdout removes cross-partition identity while preserving the estimator.",
+    expectedPatterns: [
+      {
+        hypothesisId: "current",
+        qualitativeOutcome:
+          "Accuracy remains close to the random-row baseline with zero overlap.",
+      },
+      {
+        hypothesisId: "competing",
+        qualitativeOutcome:
+          "Accuracy falls when complete accounts are held out and overlap reaches zero.",
+      },
+    ],
+    nonClaims: ["This test does not prove deployment performance."],
+    resourceLimits: { wallSeconds: 30, memoryMb: 512, maxRuns: 4 },
+  };
+}
+
+function canonicalPatchPlan(evidenceRefs) {
+  return {
+    schemaVersion: "1",
+    planId: "patch_plan_test",
+    sessionId: "session_test",
+    conceptPackVersion: "2.0.0",
+    artifactManifestHash: "e".repeat(64),
+    sourceArtifactHash: "b".repeat(64),
+    transferResultHash: "d".repeat(64),
+    verifiedResultHash: "c".repeat(64),
+    evidenceRefs,
+    targetCells: [2],
+    preserveUnrelatedCells: true,
+    nonClaims: ["The patch does not prove performance on every customer."],
+    concept: "entity_leakage",
+    entityField: "account_id",
+    targetField: "cancelled",
+    operations: [
+      {
+        id: "replace_row_split_with_group_holdout",
+        cellIndex: 2,
+        reason: "Evaluate deployment units as complete held-out accounts.",
+      },
+      {
+        id: "exclude_entity_feature",
+        cellIndex: 2,
+        reason: "Prevent account identity from becoming a memorized shortcut.",
+      },
+    ],
+  };
 }
 
 lines.on("line", (line) => {
@@ -151,6 +276,12 @@ lines.on("line", (line) => {
     ) {
       process.exit(10);
     }
+    if (
+      expectStrictOutputSchema &&
+      !isStrictStructuredSchema(message.params.outputSchema)
+    ) {
+      process.exit(11);
+    }
     send({ id: message.id, result: { turn: { id: "turn_test" } } });
     if (silentTurn) return;
     if (requestApproval) {
@@ -162,7 +293,28 @@ lines.on("line", (line) => {
       return;
     }
     if (!failThisTurn) {
-      if (structuredPlanOutput) {
+      if (structuredPlanOutput || structuredPatchOutput) {
+        const evidenceRefs = structuredNullEvidenceOutput
+          ? [
+              {
+                cellIndex: null,
+                outputIndex: null,
+                kind: "learner_claim",
+                hash: "a".repeat(64),
+                excerpt: "The learner's claim.",
+                relevance: "This is the claim under test.",
+              },
+            ]
+          : [
+              {
+                cellIndex: 2,
+                outputIndex: null,
+                kind: "code",
+                hash: "a".repeat(64),
+                excerpt: "train_test_split(X, y)",
+                relevance: "This cell defines the row-wise evaluation.",
+              },
+            ];
         send({
           method: "item/completed",
           params: {
@@ -173,10 +325,11 @@ lines.on("line", (line) => {
               type: "agentMessage",
               id: "structured_output",
               text: JSON.stringify({
-                authoritativeArtifact: {
-                  schemaVersion: "2",
-                  artifactManifestHash: "e".repeat(64),
-                },
+                authoritativeArtifact: structuredInvalidOutput
+                  ? { schemaVersion: "2" }
+                  : structuredPatchOutput
+                    ? canonicalPatchPlan(evidenceRefs)
+                    : canonicalExperimentPlan(evidenceRefs),
                 publicRationale:
                   "Whole-entity holdout is the smallest fair test.",
               }),

@@ -6,6 +6,11 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  ExperimentPlanV2Schema,
+  PatchPlanV1Schema,
+} from "@counterlab/contracts";
+
+import {
   AppServerCodexCompiler,
   buildCompileHostedExperimentPlanPrompt,
   buildCompileHostedPatchPlanPrompt,
@@ -478,12 +483,12 @@ describe("hosted plan-only compiler", () => {
         phase: "plan",
         status: "completed",
       });
-      expect(
-        JSON.parse(await readFile(join(work, "experiment-plan.json"), "utf8")),
-      ).toEqual({
-        schemaVersion: "2",
-        artifactManifestHash: "e".repeat(64),
-      });
+      const materializedPlan = JSON.parse(
+        await readFile(join(work, "experiment-plan.json"), "utf8"),
+      ) as unknown;
+      expect(ExperimentPlanV2Schema.safeParse(materializedPlan).success).toBe(
+        true,
+      );
       expect(await readFile(join(work, "public-rationale.md"), "utf8")).toBe(
         "Whole-entity holdout is the smallest fair test.\n",
       );
@@ -495,6 +500,192 @@ describe("hosted plan-only compiler", () => {
         }),
       );
       expect(events.some((event) => event.type === "command")).toBe(false);
+    } finally {
+      await rm(work, { recursive: true, force: true });
+    }
+  });
+
+  it("adapts the canonical Plan schema to the strict App Server output subset", async () => {
+    const fakeServer = fileURLToPath(
+      new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
+    );
+    const canonicalSchema = JSON.parse(
+      await readFile(
+        fileURLToPath(
+          new URL(
+            "../../contracts/schemas/experiment-plan-v2.schema.json",
+            import.meta.url,
+          ),
+        ),
+        "utf8",
+      ),
+    ) as Record<string, unknown>;
+    const work = await mkdtemp(join(tmpdir(), "counterlab-strict-plan-"));
+    const compiler = new AppServerCodexCompiler({
+      command: process.execPath,
+      commandArgs: [
+        fakeServer,
+        "--expect-structured-turn",
+        "--expect-strict-output-schema",
+        "--structured-plan-output",
+      ],
+      timeoutMs: 2_000,
+      ...unisolatedTestProcess,
+    });
+
+    try {
+      await expect(
+        collect(
+          compiler.compileExperimentPlan({
+            ...hostedPlanInput(work),
+            experimentPlanSchema: canonicalSchema,
+          }),
+        ),
+      ).resolves.toContainEqual({
+        type: "status",
+        phase: "plan",
+        status: "completed",
+      });
+    } finally {
+      await rm(work, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects an incomplete structured Plan before materializing files", async () => {
+    const fakeServer = fileURLToPath(
+      new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
+    );
+    const canonicalSchema = JSON.parse(
+      await readFile(
+        fileURLToPath(
+          new URL(
+            "../../contracts/schemas/experiment-plan-v2.schema.json",
+            import.meta.url,
+          ),
+        ),
+        "utf8",
+      ),
+    ) as Record<string, unknown>;
+    const work = await mkdtemp(join(tmpdir(), "counterlab-invalid-plan-"));
+    const compiler = new AppServerCodexCompiler({
+      command: process.execPath,
+      commandArgs: [
+        fakeServer,
+        "--expect-structured-turn",
+        "--structured-plan-output",
+        "--structured-invalid-output",
+      ],
+      timeoutMs: 2_000,
+      ...unisolatedTestProcess,
+    });
+
+    try {
+      await expect(
+        collect(
+          compiler.compileExperimentPlan({
+            ...hostedPlanInput(work),
+            experimentPlanSchema: canonicalSchema,
+          }),
+        ),
+      ).rejects.toMatchObject({ code: "CODEX_PROTOCOL_ERROR" });
+      await expect(
+        readFile(join(work, "experiment-plan.json"), "utf8"),
+      ).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await rm(work, { recursive: true, force: true });
+    }
+  });
+
+  it("removes only model-boundary null placeholders before materialization", async () => {
+    const fakeServer = fileURLToPath(
+      new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
+    );
+    const work = await mkdtemp(join(tmpdir(), "counterlab-null-plan-"));
+    const compiler = new AppServerCodexCompiler({
+      command: process.execPath,
+      commandArgs: [
+        fakeServer,
+        "--expect-structured-turn",
+        "--structured-plan-output",
+        "--structured-null-evidence-output",
+      ],
+      timeoutMs: 2_000,
+      ...unisolatedTestProcess,
+    });
+
+    try {
+      await collect(
+        compiler.compileExperimentPlan({
+          ...hostedPlanInput(work),
+          experimentPlanSchema: JSON.parse(
+            await readFile(
+              fileURLToPath(
+                new URL(
+                  "../../contracts/schemas/experiment-plan-v2.schema.json",
+                  import.meta.url,
+                ),
+              ),
+              "utf8",
+            ),
+          ) as Record<string, unknown>,
+        }),
+      );
+      const materializedPlan = ExperimentPlanV2Schema.parse(
+        JSON.parse(
+          await readFile(join(work, "experiment-plan.json"), "utf8"),
+        ) as unknown,
+      );
+      expect(materializedPlan.evidenceRefs[0]?.cellIndex).toBeUndefined();
+      expect(materializedPlan.evidenceRefs[0]?.outputIndex).toBeUndefined();
+    } finally {
+      await rm(work, { recursive: true, force: true });
+    }
+  });
+
+  it("adapts the canonical Patch Plan union to the strict App Server output subset", async () => {
+    const fakeServer = fileURLToPath(
+      new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
+    );
+    const canonicalSchema = JSON.parse(
+      await readFile(
+        fileURLToPath(
+          new URL(
+            "../../contracts/schemas/patch-plan-v1.schema.json",
+            import.meta.url,
+          ),
+        ),
+        "utf8",
+      ),
+    ) as Record<string, unknown>;
+    const work = await mkdtemp(join(tmpdir(), "counterlab-strict-patch-"));
+    const compiler = new AppServerCodexCompiler({
+      command: process.execPath,
+      commandArgs: [
+        fakeServer,
+        "--expect-structured-turn",
+        "--expect-strict-output-schema",
+        "--structured-patch-output",
+      ],
+      timeoutMs: 2_000,
+      ...unisolatedTestProcess,
+    });
+
+    try {
+      const events = await collect(
+        compiler.compileHostedPatchPlan({
+          ...hostedPatchInput(work),
+          patchPlanSchema: canonicalSchema,
+        }),
+      );
+      expect(events).toContainEqual({
+        type: "status",
+        phase: "patch",
+        status: "completed",
+      });
+      const materializedPatch = JSON.parse(
+        await readFile(join(work, "patch-plan.json"), "utf8"),
+      ) as unknown;
+      expect(PatchPlanV1Schema.safeParse(materializedPatch).success).toBe(true);
     } finally {
       await rm(work, { recursive: true, force: true });
     }
