@@ -77,6 +77,7 @@ class SqliteD1Database {
       "0001_evidence_store.sql",
       "0002_runner_jobs.sql",
       "0003_runner_request_identity.sql",
+      "0004_boundary_request_purpose.sql",
     ]) {
       this.sqlite.exec(readFileSync(resolve(migrationDirectory, file), "utf8"));
     }
@@ -112,6 +113,53 @@ class SqliteD1Database {
 }
 
 describe("D1RunnerJobRepository", () => {
+  it("persists the distinct Boundary Map request purpose", async () => {
+    const database = new SqliteD1Database();
+    database.migrate();
+    const repository = new D1RunnerJobRepository(
+      database as unknown as D1Database,
+    );
+    const service = new RunnerJobService(repository, {
+      now: () => new Date("2026-07-16T00:00:00.000Z"),
+    });
+
+    const created = await service.createOrReuseJob({
+      jobId: "job_boundary_1",
+      kind: "LAB_RUN",
+      sessionId: "session_live_1",
+      artifactId: "artifact_live_1",
+      artifactManifestHash: "a".repeat(64),
+      conceptPack: { id: "entity_leakage", version: "2.1.0" },
+      inputHashes: ["c".repeat(64)],
+      stateVersion: 4,
+      maxAttempts: 1,
+      timeoutSeconds: 150,
+      requestIdentity: {
+        schemaVersion: "1",
+        sessionId: "session_live_1",
+        mode: "live_notebook",
+        purpose: "LAB_RUN_BOUNDARY",
+        artifactId: "artifact_live_1",
+        artifactManifestHash: "a".repeat(64),
+        conceptPack: { id: "entity_leakage", version: "2.1.0" },
+        authorityProfileHash: "b".repeat(64),
+        authorityInputHashes: { experimentIr: "c".repeat(64) },
+      },
+    });
+
+    expect(created).toMatchObject({
+      reused: false,
+      job: {
+        requestIdentity: { purpose: "LAB_RUN_BOUNDARY" },
+      },
+    });
+    expect(
+      database.sqlite
+        .prepare("SELECT request_purpose FROM runner_jobs WHERE id = ?")
+        .get("job_boundary_1"),
+    ).toEqual({ request_purpose: "LAB_RUN_BOUNDARY" });
+  });
+
   it("collapses identical active request fingerprints and separates configurations", async () => {
     const database = new SqliteD1Database();
     database.migrate();

@@ -3102,7 +3102,31 @@ export function createApi(options: ApiOptions = {}) {
       }
       permitted = new Set(bundle.permittedOutputs);
     } else if (job.kind === "LAB_RUN") {
-      permitted = new Set(["verified-result.json"]);
+      const inputObject = await runnerObjectStore(context, options).get(
+        claims.inputBundleKey,
+      );
+      if (inputObject === undefined) {
+        throw new ApiInputError(
+          "RUNNER_INPUT_MISSING",
+          "The authenticated runner input bundle is missing",
+          409,
+        );
+      }
+      const bundle = VersionedRunnerJobInputBundleSchema.parse(
+        JSON.parse(inputObject.body),
+      );
+      if (
+        bundle.kind !== "LAB_RUN" ||
+        bundle.jobId !== job.jobId ||
+        bundle.sessionId !== job.sessionId
+      ) {
+        throw new ApiInputError(
+          "RUNNER_INPUT_LINEAGE_MISMATCH",
+          "The runner input bundle does not belong to this run job",
+          409,
+        );
+      }
+      permitted = new Set(bundle.permittedOutputs);
     } else {
       permitted = new Set([
         "patch-plan.json",

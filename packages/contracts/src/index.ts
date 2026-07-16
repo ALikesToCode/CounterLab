@@ -1485,6 +1485,7 @@ export const AllowedGeneratedPathSchema = z.enum([
 export const RunnerOutputPathSchema = z.enum([
   ...AllowedGeneratedPathSchema.options,
   "verified-result.json",
+  "boundary-map.json",
   "patched-notebook.ipynb",
   "patch-result.json",
 ]);
