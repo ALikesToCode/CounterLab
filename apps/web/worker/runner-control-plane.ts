@@ -39,6 +39,12 @@ export type HttpRunnerDispatcherOptions = {
   fetch?: typeof globalThis.fetch;
 };
 
+async function releaseRunnerResponse(response: Response): Promise<void> {
+  if (response.body !== null && !response.bodyUsed) {
+    await response.body.cancel();
+  }
+}
+
 function normalizeRunnerBaseURL(configured: string): string {
   let url: URL;
   try {
@@ -180,6 +186,7 @@ export class CloudflareContainerRunnerDispatcher implements RunnerDispatcher {
           }),
           signal: AbortSignal.timeout(30_000),
         });
+        await releaseRunnerResponse(response);
       } catch (error) {
         lastFailure = error;
         continue;
@@ -205,6 +212,7 @@ export class CloudflareContainerRunnerDispatcher implements RunnerDispatcher {
         signal: AbortSignal.timeout(15_000),
       },
     );
+    await releaseRunnerResponse(response);
     if (!response.ok) {
       throw new Error(
         `Runner cancellation failed with status ${response.status}`,

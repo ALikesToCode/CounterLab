@@ -138,10 +138,10 @@ describe("HttpRunnerDispatcher", () => {
 
   it("starts a job Container with the bounded secret environment before dispatch", async () => {
     const startAndWaitForPorts = vi.fn(async () => undefined);
-    const fetch = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ accepted: true }), { status: 202 }),
-    );
+    const accepted = new Response(JSON.stringify({ accepted: true }), {
+      status: 202,
+    });
+    const fetch = vi.fn(async () => accepted);
     const environment = {
       CODEX_AUTH_JSON: '{"auth_mode":"chatgpt"}',
       COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY: "runner-public-key",
@@ -170,6 +170,31 @@ describe("HttpRunnerDispatcher", () => {
     expect(startAndWaitForPorts.mock.invocationCallOrder[0]).toBeLessThan(
       fetch.mock.invocationCallOrder[0] ?? 0,
     );
+    expect(accepted.bodyUsed).toBe(true);
+  });
+
+  it("releases the Container response after cancelling a scoped job", async () => {
+    const cancelled = new Response(JSON.stringify({ cancelled: true }), {
+      status: 202,
+    });
+    const fetch = vi.fn(async () => cancelled);
+    const dispatcher = new CloudflareContainerRunnerDispatcher(
+      {
+        getByName: () => ({
+          startAndWaitForPorts: vi.fn(async () => undefined),
+          fetch,
+        }),
+      },
+      {},
+    );
+
+    await dispatcher.cancel({
+      job,
+      token: "scoped-job-token",
+      controlPlaneUrl: "https://studio.example.test",
+    });
+
+    expect(cancelled.bodyUsed).toBe(true);
   });
 
   it("does not redeliver a definitively rejected Container job", async () => {
