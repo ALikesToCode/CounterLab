@@ -1,5 +1,6 @@
 import {
   ArtifactManifestSchema,
+  BeliefSpecV2Schema,
   BeliefTestSchema,
   EvidenceEventSchema,
   InteractiveImbalanceRunRequestSchema,
@@ -18,6 +19,7 @@ import {
   VerifiedResultSetSchema,
   apiSuccessSchema,
   type ArtifactManifest,
+  type BeliefSpecV2,
   type BeliefTest,
   type EvidenceEvent,
   type InteractiveImbalanceRunRequest,
@@ -85,6 +87,7 @@ const sessionViewShape = {
   createdAt: z.iso.datetime({ offset: true }),
   updatedAt: z.iso.datetime({ offset: true }),
   beliefTest: BeliefTestSchema.optional(),
+  beliefSpec: BeliefSpecV2Schema.optional(),
   prediction: PredictionContractSchema.optional(),
   verifiedResult: VerifiedResultSetSchema.optional(),
   transferResult: TransferResultSchema.optional(),
@@ -94,16 +97,49 @@ const sessionViewShape = {
   proofBundle: ProofBundleSchema.optional(),
 };
 
-export const SessionViewSchema = z.object(sessionViewShape).strict();
+function requireExclusiveBeliefAuthority(
+  value: { beliefTest?: unknown; beliefSpec?: unknown },
+  context: z.RefinementCtx,
+): void {
+  if (value.beliefTest !== undefined && value.beliefSpec !== undefined) {
+    context.addIssue({
+      code: "custom",
+      message: "a session view cannot contain more than one belief authority",
+      path: ["beliefSpec"],
+    });
+  }
+}
+
+export const SessionViewSchema = z
+  .object(sessionViewShape)
+  .strict()
+  .superRefine(requireExclusiveBeliefAuthority);
 export type SessionView = z.infer<typeof SessionViewSchema>;
 export type ArtifactView = ArtifactManifest;
+
+export type SessionBeliefAuthority =
+  | { schemaVersion: "1"; beliefTest: BeliefTest }
+  | { schemaVersion: "2"; beliefSpec: BeliefSpecV2 };
+
+export function getSessionBeliefAuthority(
+  session: Pick<SessionView, "beliefTest" | "beliefSpec">,
+): SessionBeliefAuthority | undefined {
+  if (session.beliefTest !== undefined) {
+    return { schemaVersion: "1", beliefTest: session.beliefTest };
+  }
+  if (session.beliefSpec !== undefined) {
+    return { schemaVersion: "2", beliefSpec: session.beliefSpec };
+  }
+  return undefined;
+}
 
 const LabCompileResponseSchema = z
   .object({
     ...sessionViewShape,
     runnerJob: RunnerJobSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine(requireExclusiveBeliefAuthority);
 export type LabCompileResponse = z.infer<typeof LabCompileResponseSchema>;
 
 const RunnerActionResponseSchema = z
@@ -111,7 +147,8 @@ const RunnerActionResponseSchema = z
     ...sessionViewShape,
     runnerJob: RunnerJobSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine(requireExclusiveBeliefAuthority);
 export type RunnerActionResponse = z.infer<typeof RunnerActionResponseSchema>;
 
 const RunnerCancelResponseSchema = z
@@ -121,7 +158,8 @@ const RunnerCancelResponseSchema = z
     reused: z.boolean(),
     runnerAcknowledged: z.boolean(),
   })
-  .strict();
+  .strict()
+  .superRefine(requireExclusiveBeliefAuthority);
 export type RunnerCancelResponse = z.infer<typeof RunnerCancelResponseSchema>;
 
 const InteractiveRunResponseSchema = z
@@ -131,7 +169,8 @@ const InteractiveRunResponseSchema = z
     selectedRunId: NonEmptyString,
     configurationHash: Sha256Digest,
   })
-  .strict();
+  .strict()
+  .superRefine(requireExclusiveBeliefAuthority);
 export type InteractiveRunResponse = z.infer<
   typeof InteractiveRunResponseSchema
 >;
@@ -172,6 +211,7 @@ const PatchCompileResponseSchema = z
   })
   .strict()
   .superRefine((response, context) => {
+    requireExclusiveBeliefAuthority(response, context);
     if (response.runnerJob === undefined && response.patch === undefined) {
       context.addIssue({
         code: "custom",
@@ -234,10 +274,13 @@ const BeliefAnalysisPreviewSchema = z
   })
   .strict();
 
-const BeliefResponseInputSchema = z.discriminatedUnion("action", [
+const BeliefResponseInputSchema = z.union([
   z.object({ action: z.literal("confirm") }).strict(),
   z
     .object({ action: z.literal("edit"), beliefTest: BeliefTestSchema })
+    .strict(),
+  z
+    .object({ action: z.literal("edit"), beliefSpec: BeliefSpecV2Schema })
     .strict(),
   z.object({ action: z.literal("reject"), reason: NonEmptyString }).strict(),
   z

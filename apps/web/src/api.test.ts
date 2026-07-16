@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { ArtifactManifest } from "@counterlab/contracts";
+import {
+  migrateBeliefTestV1ToV2,
+  type ArtifactManifest,
+  type BeliefTest,
+} from "@counterlab/contracts";
 
-import { ApiClientError, CounterLabApiClient } from "./api";
+import { ApiClientError, CounterLabApiClient, SessionViewSchema } from "./api";
 
 const digest = (character: string) => character.repeat(64);
 
@@ -30,6 +34,36 @@ const session = {
   version: 1,
   createdAt: "2026-07-14T10:01:00.000Z",
   updatedAt: "2026-07-14T10:01:00.000Z",
+};
+
+const beliefTest: BeliefTest = {
+  schemaVersion: "1",
+  id: "belief_1",
+  concept: "entity_leakage",
+  learnerClaim: "The score proves generalization.",
+  currentHypothesis: {
+    statement: "The model generalizes to unseen customers.",
+    predictedOutcome: "Group-holdout accuracy remains high.",
+  },
+  competingHypothesis: {
+    statement: "Repeated identities inflate the random split.",
+    predictedOutcome: "Group-holdout accuracy falls.",
+  },
+  evidenceRefs: [],
+  alternatives: [],
+  decisiveIntervention: {
+    id: "group-holdout",
+    description: "Hold out complete customers.",
+    controlledVariables: ["model", "seed"],
+    changedVariables: ["split boundary"],
+    discriminatesBecause: "The hypotheses predict different outcomes.",
+  },
+  uncertainty: {
+    confidence: 0.25,
+    limitations: ["The group result is not known yet."],
+    insufficientEvidence: true,
+  },
+  requiresLearnerConfirmation: true,
 };
 
 const runnerJob = {
@@ -62,6 +96,44 @@ function jsonResponse(payload: unknown, status = 200): Response {
 }
 
 describe("CounterLabApiClient", () => {
+  it("accepts exactly one versioned belief authority in a session view", () => {
+    const beliefSpec = migrateBeliefTestV1ToV2(beliefTest);
+
+    expect(SessionViewSchema.parse({ ...session, beliefTest })).toHaveProperty(
+      "beliefTest.id",
+      beliefTest.id,
+    );
+    expect(SessionViewSchema.parse({ ...session, beliefSpec })).toHaveProperty(
+      "beliefSpec.id",
+      beliefSpec.id,
+    );
+    expect(() =>
+      SessionViewSchema.parse({ ...session, beliefTest, beliefSpec }),
+    ).toThrow(/belief authority/i);
+  });
+
+  it("sends a locally validated v2 Belief Spec edit without a v1 shadow", async () => {
+    const beliefSpec = migrateBeliefTestV1ToV2(beliefTest);
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({ ok: true, data: { ...session, beliefSpec } }),
+    );
+    const client = new CounterLabApiClient({ fetch: fetcher });
+
+    await expect(
+      client.respondToBeliefTest(session.sessionId, {
+        action: "edit",
+        beliefSpec,
+      }),
+    ).resolves.toMatchObject({ beliefSpec: { id: beliefSpec.id } });
+    expect(fetcher).toHaveBeenCalledWith(
+      `/api/sessions/${session.sessionId}/belief-test/confirm`,
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ action: "edit", beliefSpec }),
+      }),
+    );
+  });
+
   it("validates configured-but-unproven server capabilities", async () => {
     const health = {
       platform: "cloudflare-workers",
