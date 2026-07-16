@@ -235,6 +235,19 @@ const imbalanceScoringPolicy = ExperimentScoringPolicySchema.parse({
   scorerVersion: "experiment-scorer-v1",
 });
 
+function publicScorerPlanRules(
+  policy: ExperimentScoringPolicy,
+): readonly string[] {
+  return [
+    `Fixed scorer required operation IDs: ${JSON.stringify(policy.requiredOperationIds)}.`,
+    `Fixed scorer required heldConstantIds: ${JSON.stringify(policy.requiredControlIds)}.`,
+    `Fixed scorer allowed changedVariableIds: ${JSON.stringify(policy.allowedChangedVariableIds)}.`,
+    `Fixed scorer required observable IDs: ${JSON.stringify(policy.requiredObservableIds)}.`,
+    `Fixed scorer decisive pattern pairs: ${JSON.stringify(policy.patternSeparations)}.`,
+    `Fixed scorer eligibility thresholds: minimumSeparation=${policy.minimumSeparation}; maximumComplexityCost=${policy.maximumComplexityCost}.`,
+  ];
+}
+
 const leakageApprovedClaims = [
   "This verified run measures the documented public fixture under the selected entity boundary.",
   "Zero entity overlap was verified for the group holdout run.",
@@ -951,6 +964,7 @@ const leakagePack = deepFreeze({
     "Use leakage.group_holdout exactly once with the same seed, model, test fraction, entity field, and identity setting as the baseline.",
     "Use leakage.identity_ablation exactly once with the same seed, model, test fraction, and entity field as the baseline, changing only dropIdentity to true.",
     "The baseline and both interventions must use one entity field resolved from the Artifact Manifest.",
+    ...publicScorerPlanRules(leakageScoringPolicy),
   ],
   scientificMethod: {
     candidateExperimentIds: ["group-holdout", "group-holdout-plus-ablation"],
@@ -1055,6 +1069,7 @@ const imbalancePack = deepFreeze({
     "Use logistic_regression for all non-baseline runs and one shared seed for every run.",
     "Change only threshold in the threshold sweep, then keep that threshold fixed while changing prevalence in the prevalence sweep.",
     "Include every registered imbalance metric and visualization exactly once.",
+    ...publicScorerPlanRules(imbalanceScoringPolicy),
   ],
   scientificMethod: {
     candidateExperimentIds: [

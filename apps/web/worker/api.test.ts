@@ -8170,6 +8170,11 @@ describe("Cloudflare Worker API", () => {
             "group-holdout",
             "group-holdout-plus-ablation",
           ],
+          planRequirements: expect.arrayContaining([
+            'Fixed scorer required heldConstantIds: ["model","seed","test_fraction","entity_field","primary_identity_setting","preprocessing","model_hyperparameters"].',
+            'Fixed scorer allowed changedVariableIds: ["split_strategy","identity_feature"].',
+            'Fixed scorer decisive pattern pairs: [{"currentPatternId":"leakage.small-gap","competingPatternId":"leakage.material-gap","separation":0.82}].',
+          ]),
         },
         permittedOutputs: [
           "discrimination-contract.json",

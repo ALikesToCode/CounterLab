@@ -376,6 +376,14 @@ describe("concept-pack registry", () => {
       ],
       requiredObservableIds: ["accuracy", "entity_overlap_rate"],
     });
+    expect(getConceptPack("entity_leakage").experimentPlanRules).toEqual(
+      expect.arrayContaining([
+        'Fixed scorer required heldConstantIds: ["model","seed","test_fraction","entity_field","primary_identity_setting","preprocessing","model_hyperparameters"].',
+        'Fixed scorer allowed changedVariableIds: ["split_strategy","identity_feature"].',
+        'Fixed scorer required observable IDs: ["accuracy","entity_overlap_rate"].',
+        'Fixed scorer decisive pattern pairs: [{"currentPatternId":"leakage.small-gap","competingPatternId":"leakage.material-gap","separation":0.82}].',
+      ]),
+    );
 
     const imbalance = getConceptPack("class_imbalance").scientificMethod;
     expect(imbalance.scoringPolicy).toMatchObject({
@@ -388,6 +396,14 @@ describe("concept-pack registry", () => {
       ],
       requiredObservableIds: ["recall", "confusion_matrix", "prevalence"],
     });
+    expect(getConceptPack("class_imbalance").experimentPlanRules).toEqual(
+      expect.arrayContaining([
+        'Fixed scorer required heldConstantIds: ["model_scores","seed","evaluation_set"].',
+        'Fixed scorer allowed changedVariableIds: ["decision_threshold","class_prevalence"].',
+        'Fixed scorer required observable IDs: ["recall","confusion_matrix","prevalence"].',
+        'Fixed scorer decisive pattern pairs: [{"currentPatternId":"imbalance.useful-minority-detection","competingPatternId":"imbalance.majority-dominance","separation":0.85}].',
+      ]),
+    );
     for (const pack of releasedConceptPacks()) {
       expect(pack.scientificMethod.scoringPolicy.concept).toBe(pack.id);
       expect(
