@@ -108,6 +108,55 @@ const resultSet = {
   resultHash: "c".repeat(64),
 };
 
+const hostedResultSet = {
+  ...resultSet,
+  schemaVersion: "2",
+  planId: "plan-v5-1",
+  sessionId: "session-1",
+  artifactManifestHash: "1".repeat(64),
+  conceptPackVersion: "2.0.0",
+  runs: resultSet.runs.map((run) => ({
+    ...run,
+    operation: "leakage.group_holdout",
+    pipelineFingerprint: "f".repeat(64),
+  })),
+  resultHash: "6".repeat(64),
+} as const;
+
+const supportsVerdict = {
+  schemaVersion: "1",
+  kind: "SUPPORTS",
+  hypothesisId: "competing",
+  scope: "unseen customers in the documented fixture",
+  resultHash: hostedResultSet.resultHash,
+  irHash: "7".repeat(64),
+  technicalReportHash: "8".repeat(64),
+  verifierVersion: "epistemic-verifier-v1",
+} as const;
+
+const inconclusiveVerdict = {
+  schemaVersion: "1",
+  kind: "INCONCLUSIVE",
+  reasonCode: "GAP_WITHIN_TOLERANCE",
+  scope: "unseen customers in the documented fixture",
+  resultHash: hostedResultSet.resultHash,
+  irHash: "7".repeat(64),
+  technicalReportHash: "8".repeat(64),
+  verifierVersion: "epistemic-verifier-v1",
+} as const;
+
+const rejectedVerdict = {
+  schemaVersion: "1",
+  kind: "REJECTED",
+  findingIds: ["finding_001"],
+  resultReleased: false,
+  irHash: "7".repeat(64),
+  technicalReportHash: "8".repeat(64),
+  verifierVersion: "epistemic-verifier-v1",
+} as const;
+
+const EPISTEMIC_REPORT_HASH = "9".repeat(64);
+
 const passingTransfer = {
   schemaVersion: "1",
   id: "transfer-1",
@@ -223,6 +272,19 @@ async function throughExperiment(service: SessionService) {
   await service.startLabCompilation("session-1");
   await service.verifyLab("session-1", { verifierRunId: "verify-1" });
   await service.recordExperimentResult("session-1", resultSet);
+}
+
+async function throughVerifiedLab(service: SessionService) {
+  await service.createSession({
+    id: "session-1",
+    artifactId: "artifact-1",
+    mode: { kind: "live_notebook" },
+  });
+  await service.proposeBeliefTest("session-1", beliefTest);
+  await service.confirmBeliefTest("session-1");
+  await service.commitPrediction("session-1", prediction);
+  await service.startLabCompilation("session-1");
+  await service.verifyLab("session-1", { verifierRunId: "verify-v5-1" });
 }
 
 const temporaryDirectories: string[] = [];
@@ -380,6 +442,100 @@ describe("SessionService state machine", () => {
     expect(
       (await service.getSession("session-1")).verifiedResult,
     ).toBeUndefined();
+    repository.close();
+  });
+
+  it("atomically persists a supported epistemic result, verdict, and report authority", async () => {
+    const { service, repository } = memoryService();
+    await throughVerifiedLab(service);
+
+    const completed = await service.recordEpistemicResult("session-1", {
+      result: hostedResultSet,
+      verdict: supportsVerdict,
+      epistemicReportHash: EPISTEMIC_REPORT_HASH,
+    });
+
+    expect(completed).toMatchObject({
+      state: "EXPERIMENT_COMPLETED",
+      verifiedResult: hostedResultSet,
+      evidenceVerdict: supportsVerdict,
+      epistemicReportHash: EPISTEMIC_REPORT_HASH,
+    });
+    const event = (await service.listEvents("session-1")).at(-1);
+    expect(event).toMatchObject({
+      actor: "verifier",
+      kind: "experiment.evidence_verified",
+      payload: {
+        verdict: "SUPPORTS",
+        resultHash: hostedResultSet.resultHash,
+        epistemicReportHash: EPISTEMIC_REPORT_HASH,
+      },
+    });
+    expect(verifyEvidenceChain(await service.listEvents("session-1"))).toEqual(
+      expect.objectContaining({ valid: true }),
+    );
+    repository.close();
+  });
+
+  it("persists an inconclusive result as educational evidence", async () => {
+    const { service, repository } = memoryService();
+    await throughVerifiedLab(service);
+
+    const completed = await service.recordEpistemicResult("session-1", {
+      result: hostedResultSet,
+      verdict: inconclusiveVerdict,
+      epistemicReportHash: EPISTEMIC_REPORT_HASH,
+    });
+
+    expect(completed.state).toBe("EXPERIMENT_COMPLETED");
+    expect(completed.evidenceVerdict).toEqual(inconclusiveVerdict);
+    expect(completed.verifiedResult).toEqual(hostedResultSet);
+    repository.close();
+  });
+
+  it("rejects mismatched epistemic release authority without changing state", async () => {
+    const { service, repository } = memoryService();
+    await throughVerifiedLab(service);
+
+    await expect(
+      service.recordEpistemicResult("session-1", {
+        result: hostedResultSet,
+        verdict: { ...supportsVerdict, resultHash: "0".repeat(64) },
+        epistemicReportHash: EPISTEMIC_REPORT_HASH,
+      }),
+    ).rejects.toThrow(/result hash/i);
+    expect(await service.getSession("session-1")).toMatchObject({
+      state: "LAB_VERIFIED",
+    });
+    expect(
+      (await service.getSession("session-1")).verifiedResult,
+    ).toBeUndefined();
+    repository.close();
+  });
+
+  it("records epistemic rejection without releasing a result", async () => {
+    const { service, repository } = memoryService();
+    await throughVerifiedLab(service);
+
+    const rejected = await service.recordEpistemicRejection("session-1", {
+      verdict: rejectedVerdict,
+      epistemicReportHash: EPISTEMIC_REPORT_HASH,
+    });
+
+    expect(rejected).toMatchObject({
+      state: "LAB_VERIFIED",
+      evidenceVerdict: rejectedVerdict,
+      epistemicReportHash: EPISTEMIC_REPORT_HASH,
+    });
+    expect(rejected.verifiedResult).toBeUndefined();
+    expect((await service.listEvents("session-1")).at(-1)).toMatchObject({
+      actor: "verifier",
+      kind: "experiment.evidence_rejected",
+      payload: {
+        verdict: "REJECTED",
+        epistemicReportHash: EPISTEMIC_REPORT_HASH,
+      },
+    });
     repository.close();
   });
 
@@ -775,6 +931,39 @@ describe("SqliteSessionRepository", () => {
     expect(restored.state).toBe("EXPERIMENT_COMPLETED");
     expect(restored.prediction).toEqual(prediction);
     expect(restored.verifiedResult).toEqual(resultSet);
+    secondRepository.close();
+  });
+
+  it("persists epistemic result authority across repository restarts", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "counterlab-epistemic-"));
+    temporaryDirectories.push(directory);
+    const databasePath = join(directory, "counterlab.sqlite");
+    const ids = new DeterministicIds();
+    const firstRepository = new SqliteSessionRepository(databasePath);
+    const firstService = new SessionService(firstRepository, {
+      id: ids.id,
+      now: ids.now,
+    });
+    await throughVerifiedLab(firstService);
+    await firstService.recordEpistemicResult("session-1", {
+      result: hostedResultSet,
+      verdict: supportsVerdict,
+      epistemicReportHash: EPISTEMIC_REPORT_HASH,
+    });
+    firstRepository.close();
+
+    const secondRepository = new SqliteSessionRepository(databasePath);
+    const restored = await new SessionService(secondRepository, {
+      id: ids.id,
+      now: ids.now,
+    }).getSession("session-1");
+
+    expect(restored).toMatchObject({
+      state: "EXPERIMENT_COMPLETED",
+      verifiedResult: hostedResultSet,
+      evidenceVerdict: supportsVerdict,
+      epistemicReportHash: EPISTEMIC_REPORT_HASH,
+    });
     secondRepository.close();
   });
 

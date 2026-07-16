@@ -1,6 +1,8 @@
 import {
   BeliefSpecV2Schema,
   BeliefTestSchema,
+  EvidenceVerdictSchema,
+  HostedVerifiedResultSetV2Schema,
   PatchResultSchema,
   PredictionContractSchema,
   ProofBundleSchema,
@@ -488,6 +490,109 @@ export class SessionService {
     );
   }
 
+  async recordEpistemicResult(
+    sessionId: string,
+    input: {
+      result: unknown;
+      verdict: unknown;
+      epistemicReportHash: string;
+    },
+  ): Promise<CounterLabSession> {
+    const result = HostedVerifiedResultSetV2Schema.parse(input.result);
+    const verdict = EvidenceVerdictSchema.parse(input.verdict);
+    const epistemicReportHash = sha256Digest(
+      input.epistemicReportHash,
+      "epistemicReportHash",
+    );
+    if (verdict.kind === "REJECTED") {
+      throw new SessionInputError(
+        "recordEpistemicResult requires a releasable Evidence Verdict",
+      );
+    }
+    if (result.sessionId !== sessionId) {
+      throw new SessionInputError(
+        "verifiedResult.sessionId must match the session",
+      );
+    }
+    if (verdict.resultHash !== result.resultHash) {
+      throw new SessionInputError(
+        "Evidence Verdict result hash must match the verified result",
+      );
+    }
+    return this.transition(
+      sessionId,
+      "EXPERIMENT_COMPLETED",
+      {
+        verifiedResult: result,
+        evidenceVerdict: verdict,
+        epistemicReportHash,
+      },
+      {
+        actor: "verifier",
+        kind: "experiment.evidence_verified",
+        payload: {
+          verdict: verdict.kind,
+          resultHash: result.resultHash,
+          epistemicReportHash,
+        },
+        outputHashes: [
+          ...new Set([
+            result.resultHash,
+            verdict.irHash,
+            verdict.technicalReportHash,
+            epistemicReportHash,
+            await hashCanonical(result),
+            await hashCanonical(verdict),
+          ]),
+        ],
+      },
+    );
+  }
+
+  async recordEpistemicRejection(
+    sessionId: string,
+    input: { verdict: unknown; epistemicReportHash: string },
+  ): Promise<CounterLabSession> {
+    const verdict = EvidenceVerdictSchema.parse(input.verdict);
+    const epistemicReportHash = sha256Digest(
+      input.epistemicReportHash,
+      "epistemicReportHash",
+    );
+    if (verdict.kind !== "REJECTED" || verdict.resultReleased !== false) {
+      throw new SessionInputError(
+        "recordEpistemicRejection requires a no-release Evidence Verdict",
+      );
+    }
+    const current = await this.requireSession(sessionId);
+    if (current.state !== "LAB_VERIFIED") {
+      throw new SessionInputError(
+        "epistemic rejection requires a verified lab awaiting result authority",
+      );
+    }
+    if (current.verifiedResult !== undefined) {
+      throw new SessionInputError(
+        "epistemic rejection cannot replace an already released result",
+      );
+    }
+    return this.revise(
+      current,
+      { evidenceVerdict: verdict, epistemicReportHash },
+      {
+        actor: "verifier",
+        kind: "experiment.evidence_rejected",
+        payload: { verdict: verdict.kind, epistemicReportHash },
+        outputHashes: [
+          ...new Set([
+            verdict.irHash,
+            verdict.technicalReportHash,
+            epistemicReportHash,
+            await hashCanonical(verdict),
+          ]),
+        ],
+      },
+    );
+  }
+
   async recordRevision(
     sessionId: string,
     revision: string,
@@ -702,6 +807,13 @@ export class SessionService {
 function getObjectString(value: unknown, field: string): string {
   const record = asJsonRecord(value, "value");
   return requiredString(record[field], field);
+}
+
+function sha256Digest(value: unknown, field: string): string {
+  if (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)) {
+    throw new SessionInputError(`${field} must be a lowercase SHA-256 digest`);
+  }
+  return value;
 }
 
 function withoutSelectedAlternative(

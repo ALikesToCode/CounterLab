@@ -1,5 +1,6 @@
 import {
   assertTransition,
+  type EvidenceVerdict,
   EvidenceEventSchema,
   type BeliefSpecV2,
   type BeliefTest,
@@ -49,6 +50,8 @@ export interface CounterLabSession {
   prediction?: PredictionContract;
   labVerification?: unknown;
   verifiedResult?: VerifiedResultSet;
+  evidenceVerdict?: EvidenceVerdict;
+  epistemicReportHash?: string;
   revision?: string;
   transferResult?: TransferResult;
   patchResult?: PatchResult;
