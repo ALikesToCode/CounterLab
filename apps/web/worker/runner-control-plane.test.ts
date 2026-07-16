@@ -36,7 +36,10 @@ describe("HttpRunnerDispatcher", () => {
     const getByName = vi.fn(() => {
       throw new Error("readiness must not cold-start a Container");
     });
-    const dispatcher = new CloudflareContainerRunnerDispatcher({ getByName });
+    const dispatcher = new CloudflareContainerRunnerDispatcher(
+      { getByName },
+      {},
+    );
 
     await expect(dispatcher.ready()).resolves.toBe(true);
     expect(getByName).not.toHaveBeenCalled();
@@ -86,8 +89,12 @@ describe("HttpRunnerDispatcher", () => {
           status: 202,
         }),
       );
-    const getByName = vi.fn(() => ({ fetch }));
-    const dispatcher = new CloudflareContainerRunnerDispatcher({ getByName });
+    const startAndWaitForPorts = vi.fn(async () => undefined);
+    const getByName = vi.fn(() => ({ fetch, startAndWaitForPorts }));
+    const dispatcher = new CloudflareContainerRunnerDispatcher(
+      { getByName },
+      {},
+    );
 
     await expect(
       dispatcher.dispatch({
@@ -101,11 +108,50 @@ describe("HttpRunnerDispatcher", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
-  it("does not redeliver a definitively rejected Container job", async () => {
-    const fetch = vi.fn(async () => new Response(null, { status: 403 }));
-    const dispatcher = new CloudflareContainerRunnerDispatcher({
-      getByName: () => ({ fetch }),
+  it("starts a job Container with the bounded secret environment before dispatch", async () => {
+    const startAndWaitForPorts = vi.fn(async () => undefined);
+    const fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ accepted: true }), { status: 202 }),
+    );
+    const environment = {
+      CODEX_AUTH_JSON: '{"auth_mode":"chatgpt"}',
+      COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY: "runner-public-key",
+      PORT: "8080",
+    };
+    const dispatcher = new CloudflareContainerRunnerDispatcher(
+      { getByName: () => ({ startAndWaitForPorts, fetch }) },
+      environment,
+    );
+
+    await dispatcher.dispatch({
+      job,
+      token: "scoped-job-token",
+      controlPlaneUrl: "https://studio.example.test",
     });
+
+    expect(startAndWaitForPorts).toHaveBeenCalledOnce();
+    expect(startAndWaitForPorts).toHaveBeenCalledWith({
+      ports: [8080],
+      cancellationOptions: {
+        instanceGetTimeoutMS: 10_000,
+        portReadyTimeoutMS: 30_000,
+      },
+      startOptions: { envVars: environment },
+    });
+    expect(startAndWaitForPorts.mock.invocationCallOrder[0]).toBeLessThan(
+      fetch.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it("does not redeliver a definitively rejected Container job", async () => {
+    const startAndWaitForPorts = vi.fn(async () => undefined);
+    const fetch = vi.fn(async () => new Response(null, { status: 403 }));
+    const dispatcher = new CloudflareContainerRunnerDispatcher(
+      {
+        getByName: () => ({ fetch, startAndWaitForPorts }),
+      },
+      {},
+    );
 
     await expect(
       dispatcher.dispatch({

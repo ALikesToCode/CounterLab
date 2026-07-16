@@ -82,6 +82,7 @@ import {
   type RunnerDispatcher,
   type RunnerObjectStore,
 } from "./runner-control-plane";
+import { createRunnerContainerEnvVars } from "./runner-container-env";
 import {
   deriveRunnerJobTokenPublicKey,
   RunnerTokenError,
@@ -387,7 +388,10 @@ function runnerDispatcher(
   }
   return isRunnerContainerBinding(context.env?.RUNNER) &&
     (context.env?.CODEX_AUTH_JSON?.trim().length ?? 0) > 0
-    ? new CloudflareContainerRunnerDispatcher(context.env.RUNNER)
+    ? new CloudflareContainerRunnerDispatcher(
+        context.env.RUNNER,
+        createRunnerContainerEnvVars(context.env),
+      )
     : undefined;
 }
 

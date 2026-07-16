@@ -19,6 +19,14 @@ export interface RunnerObjectStore {
 }
 
 type RunnerInstance = {
+  startAndWaitForPorts(options: {
+    ports: number[];
+    cancellationOptions: {
+      instanceGetTimeoutMS: number;
+      portReadyTimeoutMS: number;
+    };
+    startOptions: { envVars: Record<string, string> };
+  }): Promise<void>;
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 };
 
@@ -131,7 +139,10 @@ export function isRunnerContainerBinding(
 export class CloudflareContainerRunnerDispatcher implements RunnerDispatcher {
   readonly identity = "cloudflare-container-runner-v1";
 
-  constructor(private readonly binding: RunnerContainerBinding) {}
+  constructor(
+    private readonly binding: RunnerContainerBinding,
+    private readonly containerEnvironment: Record<string, string>,
+  ) {}
 
   async ready(): Promise<boolean> {
     return Promise.resolve(true);
@@ -139,6 +150,14 @@ export class CloudflareContainerRunnerDispatcher implements RunnerDispatcher {
 
   async dispatch(request: RunnerDispatchRequest): Promise<void> {
     const instance = this.binding.getByName(request.job.jobId);
+    await instance.startAndWaitForPorts({
+      ports: [8080],
+      cancellationOptions: {
+        instanceGetTimeoutMS: 10_000,
+        portReadyTimeoutMS: 30_000,
+      },
+      startOptions: { envVars: this.containerEnvironment },
+    });
     let lastFailure: unknown;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       let response: Response;
