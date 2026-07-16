@@ -465,11 +465,12 @@ function patchCompileBundleV5() {
       planId: interactive.basePlan.planId,
       runIds: ["random-row", "group-holdout"],
     },
+    transferContractId: interactive.selectedExperimentIr.transfer.taskId,
     transferResult: {
       schemaVersion: "1" as const,
       id: "transfer-live-1",
       sessionId: interactive.sessionId,
-      taskId: "forecast-future-leakage-v1",
+      taskId: "forecasting-future-leakage-01",
       outcome: "PASSED" as const,
       selectedStrategy: "time_ordered_holdout",
       identifiedRisks: ["centered_window_reads_future"],

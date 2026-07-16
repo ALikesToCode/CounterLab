@@ -40,6 +40,10 @@ _PATCH_OPERATIONS = {
         "replace_accuracy_only_evaluation",
     }),
 }
+_TRANSFER_RESULT_TASKS = {
+    "entity_leakage": "forecasting-future-leakage-01",
+    "class_imbalance": "manufacturing-defect-transfer-01",
+}
 _PATCH_PLAN_BASE_KEYS = frozenset({
         "schemaVersion",
         "planId",
@@ -76,6 +80,7 @@ _V5_PATCH_BUNDLE_KEYS = frozenset({
     "basePlan",
     "releaseAuthority",
     "verifiedResultSummary",
+    "transferContractId",
     "transferResult",
     "patchContract",
     "allowedCellIndices",
@@ -348,7 +353,8 @@ def _validate_v5_patch_bundle(bundle: Mapping[str, Any]) -> None:
     if (
         transfer.get("outcome") != "PASSED"
         or not all(_mapping(check, "transfer check").get("passed") is True for check in checks)
-        or transfer.get("taskId") != transfer_task.get("taskId")
+        or bundle.get("transferContractId") != transfer_task.get("taskId")
+        or transfer.get("taskId") != _TRANSFER_RESULT_TASKS.get(str(concept))
         or transfer_hash != sha256_json_browser(transfer_base)
     ):
         raise HostedPatchError("v5 patch transfer authority is invalid")

@@ -606,11 +606,12 @@ async function patchBundleV5(
         ...run.projectedPlan.interventions,
       ].map((candidate) => candidate.runId),
     },
+    transferContractId: run.selectedExperimentIr.transfer.taskId,
     transferResult: {
       schemaVersion: "1",
       id: "transfer_scientific_1",
       sessionId: run.sessionId,
-      taskId: run.selectedExperimentIr.transfer.taskId,
+      taskId: "forecasting-future-leakage-01",
       outcome: "PASSED",
       selectedStrategy: "time_ordered_holdout",
       identifiedRisks: ["centered_window_reads_future"],

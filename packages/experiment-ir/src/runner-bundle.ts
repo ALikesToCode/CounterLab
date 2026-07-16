@@ -962,6 +962,7 @@ export const RunnerPatchCompileBundleV5Schema = z
         runIds: z.array(NonEmptyString).min(1).max(8),
       })
       .strict(),
+    transferContractId: NonEmptyString,
     transferResult: TransferResultSchema,
     patchContract: z
       .object({
@@ -1097,7 +1098,7 @@ export const RunnerPatchCompileBundleV5Schema = z
     }
     if (
       bundle.transferResult.outcome !== "PASSED" ||
-      bundle.transferResult.taskId !== ir.transfer.taskId
+      bundle.transferContractId !== ir.transfer.taskId
     ) {
       issue("v5 patch requires the selected experiment's passed transfer", [
         "transferResult",

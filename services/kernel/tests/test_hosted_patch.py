@@ -170,7 +170,7 @@ def _v5_leakage_patch_case() -> tuple[bytes, dict[str, object], dict[str, object
         "schemaVersion": "1",
         "id": "transfer_live_v5_patch",
         "sessionId": session_id,
-        "taskId": selected_ir["transfer"]["taskId"],  # type: ignore[index]
+        "taskId": "forecasting-future-leakage-01",
         "outcome": "PASSED",
         "selectedStrategy": "time_ordered_holdout",
         "identifiedRisks": ["centered_window_reads_future"],
@@ -244,6 +244,7 @@ def _v5_leakage_patch_case() -> tuple[bytes, dict[str, object], dict[str, object
             "planId": base_plan["planId"],
             "runIds": ["random-row", "group-holdout"],
         },
+        "transferContractId": selected_ir["transfer"]["taskId"],  # type: ignore[index]
         "transferResult": transfer_result,
         "patchContract": {
             "id": "leakage-notebook-patch-v2",
