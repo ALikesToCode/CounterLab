@@ -435,3 +435,8 @@ can pass.
   explicit UTF-16 key ordering compatible with the browser/RFC 8785 model.
 - Add cross-runtime vectors for integer-like keys, non-BMP Unicode keys, and
   decomposed Unicode before issuing a Proof Capsule v2 hash.
+- Keep the implementation in the existing runtime-neutral contracts package so
+  the repair does not add a dependency, mutate the production lock graph, or
+  falsely requalify the source-bound runner image.
+- Preserve strings exactly rather than NFC-normalizing Experiment IR in only one
+  runtime; invalid lone surrogates fail closed before hashing.

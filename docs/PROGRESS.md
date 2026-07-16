@@ -76,7 +76,7 @@ deployed registry digest remain distinct identities and are not interchangeable.
 | Interactive controls on v5 lineage | done locally | Commits `30ec305`, `ce88b9c`, and `ee3c78f` add a purpose-separated strict bundle, cross-language fixed derivation, frozen compile/result authority, both concept controls, and immutable session verdicts. | Requalify in the final image and production smoke. |
 | V5 deterministic transfer | done locally | Both genuine v5 concepts pass their registered fixed transfer evaluator; `INCONCLUSIVE` may transfer but remains patch-locked. | Requalify inside the complete release chain before production promotion. |
 | V5 artifact-specific patch | done locally for both packs | Commits `1d96fe0`, `3f8a653`, `ff5e03c`, `15799f9`, `a970fc0`, `8822f4d`, and `d2f2b92` add the strict v5 bundle, independent Python checks, transfer evaluator binding, idempotent Worker dispatch, genuine verifier reject-repair, source sealing, exact four-output callback, immutable authority, and copied patch download without creating a legacy proof. The Worker test now completes both concepts to `PATCH_VERIFIED`. | Requalify both concepts in the final image and production smoke. |
-| Canonical JSON authority | active | Commit `47f49a7` preserves own `__proto__` keys with null-prototype normalization while retaining historical vectors; proof/session canonical suites pass 39/39. A follow-up audit reproduced integer-like-key re-enumeration and non-BMP Unicode key-order differences across runtimes. | Add a direct canonical writer, cross-runtime vectors, and a named profile before Capsule issuance. |
+| Canonical JSON authority | done locally | Commits `47f49a7` and `b4a68ff` preserve dangerous own keys, write sorted object text directly, use UTF-16 key order in both runtimes, reject lone surrogates, preserve Unicode normalization, and pass shared hash vectors without changing normal historical evidence. | Record `counterlab-canonical-json-v1` in Capsule integrity and rerun final release vectors. |
 | Reasoning Diff v2 and Proof Capsule v2 | active | Legacy Proof Bundle v1/v2 remains qualified and byte-compatible. The strict v5 patch stops honestly at `PATCH_VERIFIED`. | Add Boundary Map authority, native Reasoning Diff v2, deterministic Capsule archive/validation/storage/download, and replay persistence. |
 | Boundary Map, simplified Theater, Judge Mode | pending | Contracts/UX requirements are recorded; existing UI remains the released Studio UI. | Implement only after the v5 ML authority loop passes. |
 | Physics/free-fall | blocked by phase order | No verified public support is claimed. | Start only after both live ML concepts pass the new production authority gate. |
@@ -88,14 +88,18 @@ Latest local v5 patch-authority verification (2026-07-16):
 - Concept registry Vitest: 12/12 passed.
 - Relevant v5 patch contracts/runner Vitest: 83/83 passed before Worker
   integration; hosted Python patch tests: 9/9 passed.
-- Proof Bundle and session canonical suites: 39/39 passed, including distinct
-  hashes for an own `__proto__` key and unchanged historical vectors. Integer-like
-  and non-BMP Unicode cross-runtime vectors are the active canonical blocker.
+- Shared canonical, Proof Bundle, session, and Experiment IR suites pass,
+  including integer-like keys, non-BMP UTF-16 ordering, dangerous own keys,
+  Unicode preservation, and lone-surrogate rejection in TypeScript and Python.
+- Full TypeScript suites after the repair: 373 root and 136 web/Worker passed;
+  all 126 Python kernel tests passed; strict typechecking passed.
 - Strict repository and Worker TypeScript: passed.
 - Git whitespace check: passed.
 - No `build`, `dev`, deployment, or production smoke was run for this slice.
-- Next active slice: close the remaining cross-runtime canonical vectors, then
-  add signed Boundary Map authority, native Reasoning Diff, and Proof Capsule v2.
+- The recorded scientific-engine candidate remains source-bound to lock hash
+  `48443375…`; current worktree drift is an explicit fail-closed release finding.
+- Next active slice: add signed Boundary Map authority, then native Reasoning
+  Diff and Proof Capsule v2.
 
 ## Acceptance matrix
 
@@ -156,9 +160,9 @@ The highest remaining product risk is portable v5 proof authority. Both ML
 paths now carry the frozen Belief Spec, Prediction, Experiment IR, selection,
 result, Evidence Verdict, epistemic report, transfer, Patch Plan, and copied
 patch to `PATCH_VERIFIED`; they intentionally release no legacy proof. The
-own-key-loss ambiguity is repaired with stable historical vectors, while
-integer-like and non-BMP Unicode ordering remain open. Boundary Map, Reasoning
-Diff v2, Capsule archive/storage, replay persistence, and final production
+canonical authority is now shared across TypeScript and Python with stable
+historical vectors. Boundary Map, Reasoning Diff v2, Capsule archive/storage,
+replay persistence, and final production
 qualification remain open. The current production deployment stays on its qualified v2
 contract. Upstream Runtime Codex turn intermittency remains an operational
 risk; the runner fails closed and the previous production smoke proved its

@@ -20,11 +20,13 @@
   Belief Test v1 and Experiment Plan v2 as primary authority. The Worker now
   stops honestly at `PATCH_VERIFIED` pending native Reasoning Diff and Capsule.
 - The own JSON `__proto__` key-loss collision is fixed by null-prototype
-  normalization while normal historical vectors remain unchanged. A follow-up
-  cross-runtime audit found that integer-like keys are still re-enumerated by
-  `JSON.stringify`, and Python/JavaScript differ for some non-BMP Unicode key
-  orderings. New Proof Capsule authority therefore still needs a direct
-  canonical writer, explicit profile, and cross-runtime regression vectors.
+  normalization while normal historical vectors remain unchanged. The
+  follow-up integer-like-key, UTF-16 ordering, Unicode normalization, and lone
+  surrogate failures are now fixed by the shared direct writer and Python
+  parity implementation. Proof Capsule still must record the profile name.
+- The qualified Container is correctly bound to source lock hash `48443375…`,
+  not the current worktree. The unit suite asserts that drift as a named release
+  finding; final promotion requires a newly built and qualified image.
 - Strict Proof Capsule issuance also depends on a verified Boundary Map,
   immutable patch lineage, deterministic archive validation/storage, and replay
   persistence. None is marked complete yet.

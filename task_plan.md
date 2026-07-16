@@ -13,8 +13,8 @@ authority, replay compatibility, fixed kernels, or existing verifiers.
 Phases 10 and 14 — the complete local v5 result, browser belief, transfer,
 interactive, and patch authority pass for both hosted ML Subject Packs. The
 Worker paths now reach immutable copied patches after fixed verification, with
-the leakage path also exercising a genuine reject-repair. Remaining canonical
-cross-runtime vectors, Boundary Map, Reasoning Diff v2, and Proof Capsule v2 are active
+the leakage path also exercising a genuine reject-repair. Boundary Map,
+Reasoning Diff v2, and Proof Capsule v2 are active
 (`in_progress`). The current public deployment remains the qualified Experiment
 Plan v2 path until this compatibility-preserving upgrade passes focused tests
 and a new production smoke.
@@ -181,8 +181,8 @@ code, `apps/web/src/App.tsx`, or global CSS.
 ### Phase 14 — Proof Capsule v2
 
 - [x] Preserve own `__proto__` keys without changing historical normal vectors.
-- [ ] Make integer-like and Unicode key ordering cross-runtime deterministic,
-      then bind the explicit canonical profile into new Capsule authority.
+- [x] Make integer-like and Unicode key ordering cross-runtime deterministic.
+- [ ] Bind the explicit canonical profile into new Capsule authority.
 - [ ] Add deterministic `.counterlab` archive, CLI validate/inspect/replay,
       corruption/mode tests, engine provenance, and v1 compatibility.
 - **Status:** pending

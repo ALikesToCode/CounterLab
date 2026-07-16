@@ -23,14 +23,19 @@
   transfer, scoped source release, verified Plan, exact callback hashes, frozen
   copied notebook, and `PATCH_VERIFIED`.
 - Preserved own JSON `__proto__` keys in the two historical canonicalizers;
-  their 39 regression tests pass without changing normal historical vectors.
-  A subsequent audit found integer-like and non-BMP Unicode key-order vectors
-  that still require a cross-runtime canonical writer before Capsule issuance.
+  then replaced object materialization with one direct canonical writer shared
+  by contracts, sessions, Proof Bundles, and Experiment IR. TypeScript and
+  Python now match integer-like, non-BMP Unicode, dangerous-key, number, and
+  normalization-preservation vectors and reject lone surrogates.
 - Verification for this slice: Worker API 54/54, concept registry 12/12,
   strict repository TypeScript passed, relevant v5 patch/runner tests 83/83,
   hosted Python patch tests 9/9, and proof/session canonical tests 39/39. No
   build, dev server, deployment, browser journey, or production smoke was run
   for this slice.
+- After aligning a stale epistemic test factory to frozen fixture authority and
+  making current lock drift from the recorded image explicit, the full suites
+  pass 373 root TypeScript, 136 web/Worker, and 126 Python tests plus strict
+  typechecking. The current image remains stale by design and is not promoted.
 
 ## v5.1 Scientific Engine Edition — 2026-07-15
 
