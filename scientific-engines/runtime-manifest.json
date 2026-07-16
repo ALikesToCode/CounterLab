@@ -5,7 +5,7 @@
   "environmentKind": "local_candidate",
   "sourceCommit": "338c47dc3c2609a3a19f9b24fc9be3508944d524",
   "registryHash": "82b03cdc922adfd67119ab4e6c1d166807b67e217a2f62c0abb6a84378ddd439",
-  "bindingsHash": "bf6573c9741f4cfbabf155239e9e00fdcae9cb50936681d8fc82ee4232efe555",
+  "bindingsHash": "14e214edbf45802173e30d121fb71b0c0dadb4dd9b30852d34a746bdf5b05f6b",
   "platform": {
     "os": "linux",
     "architecture": "amd64"
