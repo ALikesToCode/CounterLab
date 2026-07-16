@@ -207,7 +207,7 @@ def test_hosted_lab_run_binds_plan_manifest_claim_and_fixture() -> None:
         execute_hosted_lab_run(tampered)
 
 
-def test_v5_hosted_lab_run_validates_selected_ir_and_fixed_fixture_authority() -> None:
+def v5_bundle() -> dict[str, object]:
     projected_plan = plan()
     projected_plan["changedVariables"] = ["split_boundary", "identity_feature"]
     artifact_manifest = manifest()
@@ -432,6 +432,14 @@ def test_v5_hosted_lab_run_validates_selected_ir_and_fixed_fixture_authority() -
         "permittedOutputs": ["verified-result.json"],
     }
 
+    return bundle
+
+
+def test_v5_hosted_lab_run_validates_selected_ir_and_fixed_fixture_authority() -> None:
+    bundle = v5_bundle()
+    projected_plan = bundle["projectedPlan"]
+    fixture = bundle["fixture"]
+
     result = execute_hosted_lab_run(bundle)
 
     assert result["schemaVersion"] == "2"
@@ -447,3 +455,158 @@ def test_v5_hosted_lab_run_validates_selected_ir_and_fixed_fixture_authority() -
     executable_ir["selectedExperimentIr"]["shell"] = "python candidate.py"  # type: ignore[index]
     with pytest.raises(HostedLabRunError, match="Experiment IR schema"):
         execute_hosted_lab_run(executable_ir)
+
+
+def interactive_v5_bundle() -> dict[str, object]:
+    authoritative = v5_bundle()
+    configuration = {
+        "schemaVersion": "1",
+        "splitStrategy": "group",
+        "entityField": "customer_id",
+        "identityAblation": True,
+        "testFraction": 0.3,
+    }
+    evidence_verdict = {
+        "schemaVersion": "1",
+        "kind": "SUPPORTS",
+        "hypothesisId": "competing",
+        "scope": "This supported artifact and deployment unit.",
+        "resultHash": "d" * 64,
+        "irHash": authoritative["selectedExperimentIrHash"],
+        "technicalReportHash": "e" * 64,
+        "verifierVersion": "epistemic-verifier-v1",
+    }
+    evidence_verdict_hash = sha256_json_browser(evidence_verdict)
+    epistemic_report_hash = "f" * 64
+    compile_authority = {
+        "schemaVersion": "5",
+        "status": "VERIFIED",
+        "source": "hosted-experiment-ir-v5",
+        "jobId": authoritative["provenance"]["compileJobId"],  # type: ignore[index]
+        "inputBundleHash": authoritative["expectedHashes"]["compileInputBundle"],  # type: ignore[index]
+        "artifactManifestHash": authoritative["artifactManifestHash"],
+        "beliefSpecHash": authoritative["beliefSpecHash"],
+        "predictionHash": authoritative["prediction"]["immutableHash"],  # type: ignore[index]
+        "compilerOutputFileHashes": authoritative["provenance"]["compilerOutputFileHashes"],  # type: ignore[index]
+        "discriminationContractHash": "7" * 64,
+        "rawExperimentIrCanonicalHash": authoritative["expectedHashes"]["rawExperimentIrCanonical"],  # type: ignore[index]
+        "labSceneHash": "8" * 64,
+        "candidateVerificationReportHash": authoritative["expectedHashes"]["candidateVerificationReport"],  # type: ignore[index]
+        "scientificVerifierVersion": "scientific-candidate-verifier-v1",
+        "selectionHash": authoritative["expectedHashes"]["experimentSelection"],  # type: ignore[index]
+        "selectedExperimentIrHash": authoritative["selectedExperimentIrHash"],
+        "projectedPlanHash": authoritative["expectedHashes"]["projectedPlan"],  # type: ignore[index]
+        "scorerVersion": authoritative["fixedSelection"]["scorerVersion"],  # type: ignore[index]
+        "projectionAdapterVersion": "experiment-ir-v5-to-plan-v2-v1",
+    }
+    configuration_authority = {
+        "schemaVersion": "1",
+        "sessionId": authoritative["sessionId"],
+        "artifactManifestHash": authoritative["artifactManifestHash"],
+        "selectedExperimentIrHash": compile_authority[
+            "selectedExperimentIrHash"
+        ],
+        "selectionHash": compile_authority["selectionHash"],
+        "projectedPlanHash": compile_authority["projectedPlanHash"],
+        "authoritativeResultHash": evidence_verdict["resultHash"],
+        "evidenceVerdictHash": evidence_verdict_hash,
+        "epistemicReportHash": epistemic_report_hash,
+        "configuration": configuration,
+    }
+    configuration_hash = sha256_json_browser(configuration_authority)
+    selected_run_id = f"interactive-{configuration_hash[:16]}"
+    interactive_plan = deepcopy(authoritative["projectedPlan"])
+    interactive_plan["planId"] = f"interactive-plan-{configuration_hash[:16]}"  # type: ignore[index]
+    for run in interactive_plan["interventions"]:  # type: ignore[union-attr]
+        if run["operation"] == "leakage.group_holdout":
+            run.update(
+                {
+                    "runId": selected_run_id,
+                    "entityField": configuration["entityField"],
+                    "dropIdentity": configuration["identityAblation"],
+                    "testFraction": configuration["testFraction"],
+                }
+            )
+
+    return {
+        "schemaVersion": "5",
+        "kind": "LAB_RUN",
+        "purpose": "INTERACTIVE",
+        "jobId": "job_interactive_v5_1",
+        "sessionId": authoritative["sessionId"],
+        "stateVersion": 12,
+        "artifactManifestHash": authoritative["artifactManifestHash"],
+        "artifactManifest": authoritative["artifactManifest"],
+        "approvedBeliefSpec": authoritative["approvedBeliefSpec"],
+        "beliefSpecHash": authoritative["beliefSpecHash"],
+        "prediction": authoritative["prediction"],
+        "fixture": authoritative["fixture"],
+        "compileAuthority": compile_authority,
+        "selectedExperimentIr": authoritative["selectedExperimentIr"],
+        "fixedSelection": authoritative["fixedSelection"],
+        "basePlan": authoritative["projectedPlan"],
+        "releaseAuthority": {
+            "authoritativeResultHash": evidence_verdict["resultHash"],
+            "evidenceVerdict": evidence_verdict,
+            "evidenceVerdictHash": evidence_verdict_hash,
+            "epistemicReportHash": epistemic_report_hash,
+        },
+        "configuration": configuration,
+        "configurationHash": configuration_hash,
+        "derivationVersion": "interactive-plan-v5-derivation-v1",
+        "selectedRunId": selected_run_id,
+        "interactivePlan": interactive_plan,
+        "interactivePlanHash": sha256_json_browser(interactive_plan),
+        "resultOutput": {
+            "path": "verified-result.json",
+            "schemaVersion": "2",
+            "authorityHash": configuration_hash,
+        },
+        "permittedOutputs": ["verified-result.json"],
+    }
+
+
+def test_v5_interactive_run_rederives_plan_and_executes_selected_control() -> None:
+    bundle = interactive_v5_bundle()
+
+    result = execute_hosted_lab_run(bundle)
+
+    selected = next(
+        run for run in result["runs"] if run["id"] == bundle["selectedRunId"]
+    )
+    assert result["planId"] == bundle["interactivePlan"]["planId"]  # type: ignore[index]
+    assert selected["splitStrategy"] == "group"
+    assert selected["entityOverlap"]["count"] == 0
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (
+            lambda bundle: bundle.update({"configurationHash": "0" * 64}),
+            "configuration hash",
+        ),
+        (
+            lambda bundle: bundle["interactivePlan"].update({"seed": 999}),  # type: ignore[union-attr]
+            "interactive Plan",
+        ),
+        (
+            lambda bundle: bundle["releaseAuthority"].update(  # type: ignore[union-attr]
+                {"authoritativeResultHash": "0" * 64}
+            ),
+            "released result",
+        ),
+        (
+            lambda bundle: bundle.update({"shell": "python arbitrary.py"}),
+            "fields are invalid",
+        ),
+    ],
+)
+def test_v5_interactive_run_rejects_authority_drift(
+    mutate: object, message: str
+) -> None:
+    bundle = interactive_v5_bundle()
+    mutate(bundle)  # type: ignore[operator]
+
+    with pytest.raises(HostedLabRunError, match=message):
+        execute_hosted_lab_run(bundle)
