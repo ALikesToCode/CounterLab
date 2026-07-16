@@ -57,6 +57,7 @@ import scientificEngineSnapshotValue from "../../../scientific-engines/snapshot-
 import { api, createApi } from "./api";
 import type { ArtifactStore, StoredArtifact } from "./artifact-store";
 import { ConcurrentD1SessionUpdateError } from "./d1-session-repository";
+import type { ProofCapsuleReplayRecordV2 } from "./replay-repository";
 import { sampleResult } from "./sample-evidence";
 import { createSamplePatchResult } from "./sample-learning-loop";
 import type {
@@ -133,6 +134,36 @@ class MemoryArtifactStore implements ArtifactStore {
   async find(artifactId: string): Promise<StoredArtifact | undefined> {
     const artifact = this.artifacts.get(artifactId);
     return artifact === undefined ? undefined : structuredClone(artifact);
+  }
+}
+
+class MemoryProofCapsuleReplayRepository {
+  private readonly records = new Map<string, ProofCapsuleReplayRecordV2>();
+
+  async createOrReuse(
+    record: ProofCapsuleReplayRecordV2,
+  ): Promise<{ record: ProofCapsuleReplayRecordV2; reused: boolean }> {
+    const existing = [...this.records.values()].find(
+      (candidate) => candidate.sourceSessionId === record.sourceSessionId,
+    );
+    if (existing !== undefined) {
+      if (
+        existing.capsuleId !== record.capsuleId ||
+        existing.objectKey !== record.objectKey
+      ) {
+        throw new Error("conflicting replay publication");
+      }
+      return { record: structuredClone(existing), reused: true };
+    }
+    this.records.set(record.replayId, structuredClone(record));
+    return { record: structuredClone(record), reused: false };
+  }
+
+  async find(
+    replayId: string,
+  ): Promise<ProofCapsuleReplayRecordV2 | undefined> {
+    const record = this.records.get(replayId);
+    return record === undefined ? undefined : structuredClone(record);
   }
 }
 
@@ -797,17 +828,20 @@ async function preparedScientificHostedRunner(
     "application/x-ipynb+json; charset=utf-8",
   );
   const dispatcher = new CapturingRunnerDispatcher();
+  const replayRepository = new MemoryProofCapsuleReplayRepository();
   let runnerIdSequence = 0;
-  const app = createApi({
+  const apiOptions = {
     sessionRepository: harness.sessionRepository,
     artifactStore: harness.artifactStore,
     runnerJobRepository: runnerJobs,
     runnerObjectStore: runnerObjects,
+    replayRepository,
     runnerDispatcher: dispatcher,
     runnerSigningPrivateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
     now: () => new Date("2026-07-14T10:00:00.000Z"),
-    id: (prefix) => `${prefix}_scientific_${++runnerIdSequence}`,
-  });
+    id: (prefix: string) => `${prefix}_scientific_${++runnerIdSequence}`,
+  };
+  const app = createApi(apiOptions);
   const queued = await postJson(
     app,
     `/api/sessions/${harness.sessionId}/lab/compile`,
@@ -831,6 +865,7 @@ async function preparedScientificHostedRunner(
     dispatcher,
     runnerJobs,
     runnerObjects,
+    replayRepository,
     session,
   };
 }
@@ -5840,6 +5875,83 @@ describe("Cloudflare Worker API", () => {
       concept: "entity_leakage",
       resultHash: result.resultHash,
       patchResultHash: patchResult.resultHash,
+    });
+    const publishedReplay = await harness.app.request(
+      `/api/sessions/${bundle.sessionId}/replays`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      },
+      capsuleSigningEnv,
+    );
+    expect(publishedReplay.status, await publishedReplay.clone().text()).toBe(
+      201,
+    );
+    const publishedReplayPayload = (await publishedReplay.json()) as {
+      data: {
+        reused: boolean;
+        replay: {
+          replayId: string;
+          sourceSessionId: string;
+          capsuleId: string;
+        };
+      };
+    };
+    expect(publishedReplayPayload).toMatchObject({
+      data: {
+        reused: false,
+        replay: {
+          schemaVersion: "2",
+          replay: true,
+          label: "Verified replay",
+          playbackMode: "verified_capsule_replay",
+          sourceMode: "live_notebook",
+          sourceSessionId: bundle.sessionId,
+          capsuleId: storedProofCapsule.capsuleId,
+          rootHash: storedProofCapsule.rootHash,
+          bytesHash: storedProofCapsule.bytesHash,
+        },
+      },
+    });
+    expect(JSON.stringify(publishedReplayPayload)).not.toContain("objectKey");
+
+    const duplicatePublication = await harness.app.request(
+      `/api/sessions/${bundle.sessionId}/replays`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      },
+      capsuleSigningEnv,
+    );
+    expect(duplicatePublication.status).toBe(200);
+    await expect(duplicatePublication.json()).resolves.toMatchObject({
+      data: {
+        reused: true,
+        replay: { replayId: publishedReplayPayload.data.replay.replayId },
+      },
+    });
+
+    const hostedReplay = await harness.app.request(
+      `/api/replays/${publishedReplayPayload.data.replay.replayId}`,
+      undefined,
+      capsuleSigningEnv,
+    );
+    expect(hostedReplay.status).toBe(200);
+    await expect(hostedReplay.json()).resolves.toMatchObject({
+      data: {
+        schemaVersion: "2",
+        replayId: publishedReplayPayload.data.replay.replayId,
+        replay: true,
+        label: "Verified replay",
+        playbackMode: "verified_capsule_replay",
+        sourceMode: "live_notebook",
+        sourceSessionId: bundle.sessionId,
+        capsuleId: storedProofCapsule.capsuleId,
+        rootHash: storedProofCapsule.rootHash,
+        bytesHash: storedProofCapsule.bytesHash,
+      },
     });
     const wrongCapsuleKey = await harness.app.request(
       `/api/sessions/${bundle.sessionId}/proof-capsule`,

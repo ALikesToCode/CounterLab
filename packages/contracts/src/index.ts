@@ -2944,15 +2944,61 @@ const ProofCapsuleRefV2BaseSchema = z
   })
   .strict();
 
-export const PublicProofCapsuleRefV2Schema =
-  ProofCapsuleRefV2BaseSchema.omit({ objectKey: true });
+export const PublicProofCapsuleRefV2Schema = ProofCapsuleRefV2BaseSchema.omit({
+  objectKey: true,
+});
 
 export type PublicProofCapsuleRefV2 = z.infer<
   typeof PublicProofCapsuleRefV2Schema
 >;
 
-export const ProofCapsuleRefV2Schema =
-  ProofCapsuleRefV2BaseSchema.superRefine((reference, context) => {
+export const ProofCapsuleReplayReceiptV2Schema = z
+  .object({
+    schemaVersion: z.literal("2"),
+    replayId: z
+      .string()
+      .regex(
+        /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/,
+        "expected a bounded replay token",
+      ),
+    replay: z.literal(true),
+    label: z.literal("Verified replay"),
+    playbackMode: z.literal("verified_capsule_replay"),
+    sourceMode: z.literal("live_notebook"),
+    sourceSessionId: NonEmptyString,
+    capsuleId: NonEmptyString,
+    concept: ConceptIdSchema,
+    recordedAt: z.iso.datetime({ offset: true }),
+    rootHash: Sha256Schema,
+    bytesHash: Sha256Schema,
+    eventChainHead: Sha256Schema,
+    proofCapsule: PublicProofCapsuleRefV2Schema,
+  })
+  .strict()
+  .superRefine((receipt, context) => {
+    if (
+      receipt.capsuleId !== receipt.proofCapsule.capsuleId ||
+      receipt.sourceSessionId !== receipt.proofCapsule.sessionId ||
+      receipt.recordedAt !== receipt.proofCapsule.createdAt ||
+      receipt.rootHash !== receipt.proofCapsule.rootHash ||
+      receipt.bytesHash !== receipt.proofCapsule.bytesHash ||
+      receipt.eventChainHead !== receipt.proofCapsule.eventChainHead
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "Proof Capsule replay receipt does not match its public Capsule reference",
+        path: ["proofCapsule"],
+      });
+    }
+  });
+
+export type ProofCapsuleReplayReceiptV2 = z.infer<
+  typeof ProofCapsuleReplayReceiptV2Schema
+>;
+
+export const ProofCapsuleRefV2Schema = ProofCapsuleRefV2BaseSchema.superRefine(
+  (reference, context) => {
     const expectedSuffix = `/${reference.bytesHash}.counterlab`;
     if (!reference.objectKey.endsWith(expectedSuffix)) {
       context.addIssue({
@@ -2961,7 +3007,8 @@ export const ProofCapsuleRefV2Schema =
         path: ["objectKey"],
       });
     }
-  });
+  },
+);
 
 export type ProofCapsuleRefV2 = z.infer<typeof ProofCapsuleRefV2Schema>;
 

@@ -10,6 +10,8 @@ import {
   InteractiveLeakageRunRequestSchema,
   PatchPlanV1Schema,
   PatchResultSchema,
+  ProofCapsuleRefV2Schema,
+  ProofCapsuleReplayReceiptV2Schema,
   PublicCompilerEventSchema,
   RunnerCallbackSchema,
   RunnerLabCompileBundleSchema,
@@ -160,6 +162,11 @@ import {
   loadOperationalDiagnostics,
   type OperationalDiagnostics,
 } from "./operational-diagnostics";
+import {
+  D1ProofCapsuleReplayRepository,
+  ReplayPublicationConflictError,
+  type ProofCapsuleReplayRepository,
+} from "./replay-repository";
 
 type WorkerBindings = Env & {
   CODEX_AUTH_JSON?: string;
@@ -190,6 +197,7 @@ export interface ApiOptions {
   artifactStore?: ArtifactStore;
   runnerJobRepository?: RunnerJobRepository;
   runnerObjectStore?: RunnerObjectStore;
+  replayRepository?: ProofCapsuleReplayRepository;
   runnerDispatcher?: RunnerDispatcher;
   runnerSigningPrivateKey?: string;
   adminDiagnosticSecret?: string;
@@ -217,6 +225,7 @@ const CreateLiveSessionSchema = z
 const CreateReplaySessionSchema = z
   .object({ replayId: z.literal("leakage-01") })
   .strict();
+const PublishReplaySchema = z.object({}).strict();
 const BeliefRequestSchema = z
   .object({
     learnerClaim: z.string().trim().min(12).max(2000),
@@ -442,6 +451,16 @@ function runnerObjectStore(
     );
   }
   return new R2RunnerObjectStore(context.env.ARTIFACTS);
+}
+
+function proofCapsuleReplays(
+  context: Context<AppBindings>,
+  options: ApiOptions,
+): ProofCapsuleReplayRepository {
+  return (
+    options.replayRepository ??
+    new D1ProofCapsuleReplayRepository(requiredDatabase(context))
+  );
 }
 
 function runnerDispatcher(
@@ -8278,6 +8297,76 @@ export function createApi(options: ApiOptions = {}) {
     return context.json(jsonSuccess(session.proofBundle));
   });
 
+  app.post("/api/sessions/:sessionId/replays", async (context) => {
+    PublishReplaySchema.parse(await readJson(context));
+    const session = await sessionService(context, options).getSession(
+      context.req.param("sessionId"),
+    );
+    if (
+      session.mode.kind !== "live_notebook" ||
+      session.state !== "PROOF_CAPSULE_ISSUED" ||
+      session.proofCapsule === undefined
+    ) {
+      throw new ApiInputError(
+        "REPLAY_PUBLICATION_LOCKED",
+        "A replay can be published only from a completed live Proof Capsule",
+        409,
+      );
+    }
+    const persisted = await requireFrozenAuthorityObject(
+      runnerObjectStore(context, options),
+      session.proofCapsule.objectKey,
+      "Proof Capsule",
+    );
+    const validated = await validatePersistedNativeProofCapsule({
+      ...persisted,
+      expectedReference: session.proofCapsule,
+      ...(context.env?.COUNTERLAB_SIGNING_KEY === undefined
+        ? {}
+        : { signingKey: context.env.COUNTERLAB_SIGNING_KEY }),
+      ...(context.env?.COUNTERLAB_SIGNING_KEY_ID === undefined
+        ? {}
+        : { signingKeyId: context.env.COUNTERLAB_SIGNING_KEY_ID }),
+    });
+    const { objectKey, ...publicCapsule } = session.proofCapsule;
+    const replayId = requestId(options, "replay");
+    const receipt = ProofCapsuleReplayReceiptV2Schema.parse({
+      schemaVersion: "2",
+      replayId,
+      replay: true,
+      label: "Verified replay",
+      playbackMode: "verified_capsule_replay",
+      sourceMode: "live_notebook",
+      sourceSessionId: session.id,
+      capsuleId: session.proofCapsule.capsuleId,
+      concept: validated.manifest.concept,
+      recordedAt: session.proofCapsule.createdAt,
+      rootHash: session.proofCapsule.rootHash,
+      bytesHash: session.proofCapsule.bytesHash,
+      eventChainHead: session.proofCapsule.eventChainHead,
+      proofCapsule: publicCapsule,
+    });
+    const publication = await proofCapsuleReplays(
+      context,
+      options,
+    ).createOrReuse({
+      schemaVersion: "2",
+      replayId,
+      sourceSessionId: session.id,
+      capsuleId: session.proofCapsule.capsuleId,
+      objectKey,
+      recordedAt: session.proofCapsule.createdAt,
+      metadata: receipt,
+    });
+    return context.json(
+      jsonSuccess({
+        reused: publication.reused,
+        replay: publication.record.metadata,
+      }),
+      publication.reused ? 200 : 201,
+    );
+  });
+
   app.get("/api/sessions/:sessionId/proof-capsule", async (context) => {
     const session = await sessionService(context, options).getSession(
       context.req.param("sessionId"),
@@ -8315,29 +8404,72 @@ export function createApi(options: ApiOptions = {}) {
     });
   });
 
-  app.get("/api/replays/:replayId", (context) => {
+  app.get("/api/replays/:replayId", async (context) => {
     const replayId = context.req.param("replayId");
-    if (replayId !== "leakage-01") {
+    if (replayId === "leakage-01") {
+      return context.json(
+        jsonSuccess({
+          schemaVersion: "1" as const,
+          replayId,
+          replay: true as const,
+          recordedAt: compilerReplaySummary.recordedAt,
+          modelId: compilerReplaySummary.modelId,
+          fixtureId: "customer-churn-public-v1",
+          verifierVersion: "leakage-verifier-v1",
+          templateCommit: compilerReplaySummary.repositoryCommitAtRun,
+          compilerTrace: compilerReplaySummary,
+          result: replayVerifiedResult,
+          patch: patchKernelResult,
+        }),
+      );
+    }
+    if (
+      options.replayRepository === undefined &&
+      context.env?.DB === undefined
+    ) {
       return context.json(
         jsonError("REPLAY_NOT_FOUND", `Replay ${replayId} was not found`, 404),
         404,
       );
     }
-    return context.json(
-      jsonSuccess({
-        schemaVersion: "1" as const,
-        replayId,
-        replay: true as const,
-        recordedAt: compilerReplaySummary.recordedAt,
-        modelId: compilerReplaySummary.modelId,
-        fixtureId: "customer-churn-public-v1",
-        verifierVersion: "leakage-verifier-v1",
-        templateCommit: compilerReplaySummary.repositoryCommitAtRun,
-        compilerTrace: compilerReplaySummary,
-        result: replayVerifiedResult,
-        patch: patchKernelResult,
-      }),
+    const record = await proofCapsuleReplays(context, options).find(replayId);
+    if (record === undefined) {
+      return context.json(
+        jsonError("REPLAY_NOT_FOUND", `Replay ${replayId} was not found`, 404),
+        404,
+      );
+    }
+    const expectedReference = ProofCapsuleRefV2Schema.parse({
+      ...record.metadata.proofCapsule,
+      objectKey: record.objectKey,
+    });
+    const persisted = await requireFrozenAuthorityObject(
+      runnerObjectStore(context, options),
+      record.objectKey,
+      "Proof Capsule replay",
     );
+    const validated = await validatePersistedNativeProofCapsule({
+      ...persisted,
+      expectedReference,
+      ...(context.env?.COUNTERLAB_SIGNING_KEY === undefined
+        ? {}
+        : { signingKey: context.env.COUNTERLAB_SIGNING_KEY }),
+      ...(context.env?.COUNTERLAB_SIGNING_KEY_ID === undefined
+        ? {}
+        : { signingKeyId: context.env.COUNTERLAB_SIGNING_KEY_ID }),
+    });
+    if (
+      validated.manifest.concept !== record.metadata.concept ||
+      validated.manifest.sessionId !== record.sourceSessionId
+    ) {
+      throw new ApiInputError(
+        "REPLAY_AUTHORITY_MISMATCH",
+        "The replay record does not match its Proof Capsule authority",
+        409,
+      );
+    }
+    context.header("cache-control", "private, no-store");
+    return context.json(jsonSuccess(record.metadata));
   });
 
   app.notFound((context) =>
@@ -8379,6 +8511,7 @@ export function createApi(options: ApiOptions = {}) {
       error instanceof PredictionAlreadyCommittedError ||
       error instanceof ConcurrentD1SessionUpdateError ||
       error instanceof ConcurrentRunnerJobUpdateError ||
+      error instanceof ReplayPublicationConflictError ||
       error instanceof RunnerCallbackConflictError ||
       error instanceof RunnerCallbackStateError ||
       error instanceof RunnerEventCursorError

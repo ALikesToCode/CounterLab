@@ -25,6 +25,7 @@ import {
   PredictionContractSchema,
   ProofBundleSchema,
   ProofCapsuleRefV2Schema,
+  ProofCapsuleReplayReceiptV2Schema,
   PublicProofCapsuleRefV2Schema,
   ReasoningDiffSchema,
   ReasoningDiffV2Schema,
@@ -1676,8 +1677,57 @@ describe("native v5 reasoning and capsule references", () => {
     expect(PublicProofCapsuleRefV2Schema.parse(publicReference)).toEqual(
       publicReference,
     );
+    expect(() => PublicProofCapsuleRefV2Schema.parse(parsed)).toThrow(
+      /unrecognized key/i,
+    );
+  });
+
+  it("keeps hosted Capsule replay receipts browser-safe and authority-bound", () => {
+    const publicCapsule = PublicProofCapsuleRefV2Schema.parse({
+      schemaVersion: "2",
+      capsuleId: "capsule_session_1",
+      sessionId: "session_1",
+      mode: "live_notebook",
+      replayId: null,
+      mediaType: "application/vnd.counterlab.capsule+json",
+      canonicalProfile: "counterlab-canonical-json-v1",
+      rootHash: hash("a"),
+      bytesHash: hash("b"),
+      byteLength: 4096,
+      reasoningDiffHash: hash("c"),
+      eventChainHead: hash("d"),
+      createdAt: "2026-07-16T10:00:00.000Z",
+      integrity: { mode: "integrity-hashed", algorithm: "sha256" },
+    });
+    const receipt = {
+      schemaVersion: "2",
+      replayId: "replay_1",
+      replay: true,
+      label: "Verified replay",
+      playbackMode: "verified_capsule_replay",
+      sourceMode: "live_notebook",
+      sourceSessionId: publicCapsule.sessionId,
+      capsuleId: publicCapsule.capsuleId,
+      concept: "entity_leakage",
+      recordedAt: publicCapsule.createdAt,
+      rootHash: publicCapsule.rootHash,
+      bytesHash: publicCapsule.bytesHash,
+      eventChainHead: publicCapsule.eventChainHead,
+      proofCapsule: publicCapsule,
+    } as const;
+
+    expect(ProofCapsuleReplayReceiptV2Schema.parse(receipt)).toEqual(receipt);
     expect(() =>
-      PublicProofCapsuleRefV2Schema.parse(parsed),
-    ).toThrow(/unrecognized key/i);
+      ProofCapsuleReplayReceiptV2Schema.parse({
+        ...receipt,
+        rootHash: hash("f"),
+      }),
+    ).toThrow(/does not match/u);
+    expect(() =>
+      ProofCapsuleReplayReceiptV2Schema.parse({
+        ...receipt,
+        objectKey: `proof-capsules/session_1/${hash("b")}.counterlab`,
+      }),
+    ).toThrow(/unrecognized key/iu);
   });
 });
