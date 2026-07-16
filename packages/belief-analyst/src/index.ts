@@ -120,10 +120,7 @@ const BeliefSpecV2WireSchema = z
   .object({
     schemaVersion: z.literal("2"),
     evidenceRefs: z.array(EvidenceRefWireSchema).max(6),
-    hypotheses: z.tuple([
-      PrimaryHypothesisWireSchema,
-      PrimaryHypothesisWireSchema,
-    ]),
+    hypotheses: z.array(PrimaryHypothesisWireSchema).length(2),
     alternatives: z
       .array(
         z

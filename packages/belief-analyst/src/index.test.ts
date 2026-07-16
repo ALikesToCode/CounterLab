@@ -587,6 +587,41 @@ describe("LiveBeliefAnalyst", () => {
     });
   });
 
+  it("emits a Responses-compatible object schema for exactly two hypotheses", async () => {
+    const artifact = manifest();
+    const transport = new CapturingTransport({
+      outputParsed: liveBeliefSpecOutput(artifact),
+      refusals: [],
+    });
+    const analyst = new LiveBeliefAnalyst({
+      apiKey: "server-only-key",
+      transport,
+    });
+
+    await analyst.proposeBeliefSpec({
+      sessionId: "session_v2_schema_compatibility",
+      learnerClaim: claim,
+      manifest: artifact,
+      concept: "entity_leakage",
+    });
+
+    const format = transport.request?.text.format as unknown as {
+      schema: {
+        properties: {
+          hypotheses: {
+            items?: unknown;
+            minItems?: number;
+            maxItems?: number;
+          };
+        };
+      };
+    };
+    const hypotheses = format.schema.properties.hypotheses;
+
+    expect(Array.isArray(hypotheses.items)).toBe(false);
+    expect(hypotheses).toMatchObject({ minItems: 2, maxItems: 2 });
+  });
+
   it("rejects unregistered v2 candidate experiments before state can advance", async () => {
     const invalid = liveBeliefSpecOutput(manifest(), {
       hypotheses: [
