@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { useRecentProjects } from "../hooks/useRecentProjects";
-import { AgentRail } from "../components/studio/AgentRail";
 import { CommandPalette } from "../components/studio/CommandPalette";
 import { ProjectSidebar } from "../components/studio/ProjectSidebar";
 import { ProofConsole, type ProofTab } from "../components/studio/ProofConsole";
@@ -142,7 +141,6 @@ export function CounterLabStudio({
         onOpenCommands={() => setPaletteOpen(true)}
       />
       <div className="studio-canvas">{children}</div>
-      <AgentRail context={context} />
       <button
         className="studio-mobile-command"
         type="button"

@@ -12,7 +12,7 @@ const context = {
 };
 
 describe("CounterLabStudio", () => {
-  it("makes project, agent, and proof navigation visible around the learner action", () => {
+  it("keeps project and proof navigation visible without a permanent agent cockpit", () => {
     render(
       <CounterLabStudio
         context={context}
@@ -33,8 +33,8 @@ describe("CounterLabStudio", () => {
       screen.getByRole("complementary", { name: /project and evidence/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("complementary", { name: /counterlab agents/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole("complementary", { name: /counterlab agents/i }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /proof console/i }),
     ).toHaveAttribute("aria-expanded", "true");

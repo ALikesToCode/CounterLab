@@ -6272,3 +6272,68 @@ body {
     content: "After";
   }
 }
+
+/* Focused Experiment Theater accessibility and hierarchy. */
+
+.wordmark {
+  min-height: 44px;
+}
+
+.wordmark-copy small,
+.topbar-context,
+.start-over-control,
+.eyebrow,
+.file-chip,
+.verified-chip,
+.support-chip,
+.evidence-ref {
+  font-size: 12px;
+}
+
+.proof-rail > button {
+  font-size: 13px;
+}
+
+.proof-rail i {
+  font-size: 12px;
+}
+
+.guide-title span,
+.guide-action span {
+  font-size: 12px;
+}
+
+.guide-action strong,
+.guide-context summary,
+.guide-context p,
+.claim-starter,
+.form-footer > span,
+.upload-control small,
+.notebook-card > details > summary {
+  font-size: 13px;
+}
+
+.notebook-card > details > summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+}
+
+.footer {
+  font-size: 13px;
+}
+
+@media (max-width: 620px) {
+  .proof-rail > button {
+    min-height: 44px;
+  }
+
+  .proof-rail b,
+  .start-over-control::before {
+    font-size: 12px;
+  }
+
+  .topbar-landing .wordmark-copy {
+    display: grid;
+  }
+}
