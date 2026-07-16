@@ -24,6 +24,8 @@ import {
   type BoundaryMapResultV1,
   type BoundaryMapVerificationReportV1,
   type ExperimentPlanV2,
+  type HostedPatchAuthorityRefV5,
+  type HostedResultAuthorityRefV5,
   type PatchResult,
   type PublicCompilerEvent,
   type RunnerCallback,
@@ -4379,6 +4381,7 @@ export function createApi(options: ApiOptions = {}) {
     let interactiveRun = false;
     let patchResult: PatchResult | null = null;
     let scientificPatch = false;
+    let scientificPatchAuthority: HostedPatchAuthorityRefV5 | null = null;
     let terminalCallback: RunnerCallback = callback;
     if (callback.status === "VERIFIED" && job.kind === "LAB_COMPILE") {
       const artifact = await artifacts(context, options).find(job.artifactId);
@@ -4985,6 +4988,18 @@ export function createApi(options: ApiOptions = {}) {
             ]);
             patchResult = parsedPatch;
             scientificPatch = true;
+            scientificPatchAuthority = {
+              schemaVersion: "5",
+              jobId,
+              inputBundleHash: await hashCanonical(v5Bundle),
+              patchPlanHash: verification.planHash,
+              patchPlanFileHash: rawHashes[0],
+              rationaleFileHash: rawHashes[1],
+              patchPlanVerificationHash: await hashCanonical(verification),
+              patchResultHash: parsedPatch.resultHash,
+              patchResultFileHash: rawHashes[3],
+              patchedArtifactHash: rawHashes[2],
+            };
             await store.put(
               `patches/${currentSession.id}/patched-notebook.ipynb`,
               notebookObject.body,
@@ -5317,6 +5332,16 @@ export function createApi(options: ApiOptions = {}) {
     } else if (job.kind === "LAB_RUN" && epistemicAuthority !== null) {
       const expectedVerdictHash = epistemicAuthority.evidenceVerdictHash;
       if (epistemicAuthority.report.status === "VERIFIED") {
+        const resultAuthority: HostedResultAuthorityRefV5 = {
+          schemaVersion: "5",
+          jobId,
+          inputBundleHash: await hashCanonical(epistemicAuthority.bundle),
+          resultHash: epistemicAuthority.result.resultHash,
+          resultFileHash: epistemicAuthority.rawResultHash,
+          technicalReportHash: epistemicAuthority.report.technicalReportHash,
+          epistemicReportHash: epistemicAuthority.epistemicReportHash,
+          evidenceVerdictHash: expectedVerdictHash,
+        };
         const repeatsExistingResult =
           updatedSession.verifiedResult !== undefined &&
           updatedSession.evidenceVerdict !== undefined &&
@@ -5325,7 +5350,10 @@ export function createApi(options: ApiOptions = {}) {
           (await hashCanonical(updatedSession.evidenceVerdict)) ===
             expectedVerdictHash &&
           updatedSession.epistemicReportHash ===
-            epistemicAuthority.epistemicReportHash;
+            epistemicAuthority.epistemicReportHash &&
+          updatedSession.resultAuthority !== undefined &&
+          (await hashCanonical(updatedSession.resultAuthority)) ===
+            (await hashCanonical(resultAuthority));
         if (repeatsExistingResult) {
           // A later learner stage may still carry this immutable result authority.
         } else if (
@@ -5336,6 +5364,7 @@ export function createApi(options: ApiOptions = {}) {
             result: epistemicAuthority.result,
             verdict: epistemicAuthority.report.verdict,
             epistemicReportHash: epistemicAuthority.epistemicReportHash,
+            resultAuthority,
           });
         } else {
           throw new ApiInputError(
@@ -5412,9 +5441,18 @@ export function createApi(options: ApiOptions = {}) {
       patchResult !== null
     ) {
       if (updatedSession.state === "PATCH_COMPILING") {
-        updatedSession = await service.verifyPatch(job.sessionId, patchResult);
+        updatedSession = await service.verifyPatch(
+          job.sessionId,
+          patchResult,
+          scientificPatchAuthority ?? undefined,
+        );
       } else if (
-        updatedSession.patchResult?.resultHash !== patchResult.resultHash
+        updatedSession.patchResult?.resultHash !== patchResult.resultHash ||
+        (scientificPatch &&
+          (scientificPatchAuthority === null ||
+            updatedSession.patchAuthority === undefined ||
+            (await hashCanonical(updatedSession.patchAuthority)) !==
+              (await hashCanonical(scientificPatchAuthority))))
       ) {
         throw new ApiInputError(
           "RUNNER_PROJECTION_CONFLICT",

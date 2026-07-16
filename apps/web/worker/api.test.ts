@@ -3236,6 +3236,21 @@ describe("Cloudflare Worker API", () => {
         },
       },
     });
+    const storedAuthority = await harness.sessionRepository.find(
+      patchBundle.sessionId,
+    );
+    expect(storedAuthority?.resultAuthority).toMatchObject({
+      jobId: runJobId,
+      resultHash: result.resultHash,
+      resultFileHash: await sha256Text(resultText),
+    });
+    expect(storedAuthority?.patchAuthority).toMatchObject({
+      jobId: patchDispatch.job.jobId,
+      patchPlanHash: await hashCanonical(patchPlan),
+      patchPlanFileHash: patchPlanHash,
+      patchedArtifactHash: patchedNotebookHash,
+      patchResultHash: patchResult.resultHash,
+    });
   });
 
   it("rejects cross-mode fields and retires generic mode selection", async () => {
@@ -5678,6 +5693,32 @@ describe("Cloudflare Worker API", () => {
     expect(callbackPayload.data.session).not.toHaveProperty("beliefTest");
     expect(callbackPayload.data.session).not.toHaveProperty("reasoningDiff");
     expect(callbackPayload.data.session).not.toHaveProperty("proofBundle");
+    expect(callbackPayload.data.session).not.toHaveProperty("resultAuthority");
+    expect(callbackPayload.data.session).not.toHaveProperty("patchAuthority");
+    const storedAuthority = await harness.sessionRepository.find(
+      bundle.sessionId,
+    );
+    if (storedAuthority === undefined) {
+      throw new Error("v5 authority session disappeared");
+    }
+    expect(storedAuthority.resultAuthority).toMatchObject({
+      schemaVersion: "5",
+      jobId: runJobId,
+      resultHash: result.resultHash,
+      resultFileHash: await sha256Text(resultText),
+      technicalReportHash: storedAuthority.evidenceVerdict?.technicalReportHash,
+      epistemicReportHash: storedAuthority.epistemicReportHash,
+    });
+    expect(storedAuthority.patchAuthority).toMatchObject({
+      schemaVersion: "5",
+      jobId: patchDispatch.job.jobId,
+      patchPlanHash: await hashCanonical(patchPlan),
+      patchPlanFileHash: patchPlanHash,
+      rationaleFileHash: rationaleHash,
+      patchResultHash: patchResult.resultHash,
+      patchResultFileHash: patchResultHash,
+      patchedArtifactHash: patchedNotebookHash,
+    });
     for (const path of [
       "patch-plan.json",
       "public-rationale.md",
