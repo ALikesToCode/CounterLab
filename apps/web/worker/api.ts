@@ -97,6 +97,10 @@ import {
   type CounterLabSession,
   type SessionRepository,
 } from "@counterlab/session-core";
+import {
+  validateProofCapsulePayloadAuthorityV2,
+  validateProofCapsuleV2,
+} from "@counterlab/proof-capsule";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { z, ZodError } from "zod";
@@ -147,6 +151,11 @@ import {
   sampleLabVerification,
 } from "./sample-proof";
 import { createLiveReasoningProof } from "./live-proof";
+import {
+  createNativeProofCapsuleV2,
+  createNativeReasoningDiffV2,
+  type NativeProofArtifactsV5,
+} from "./live-proof-v5";
 import {
   loadOperationalDiagnostics,
   type OperationalDiagnostics,
@@ -1727,6 +1736,663 @@ async function reconstructScientificRunAuthority(input: {
   };
 }
 
+const PROOF_CAPSULE_MEDIA_TYPE =
+  "application/vnd.counterlab.capsule+json" as const;
+
+type LoadedNativeProofAuthorityV5 = {
+  artifacts: NativeProofArtifactsV5;
+  compilerEvents: PublicCompilerEvent[];
+};
+
+async function requireFrozenAuthorityObject(
+  store: RunnerObjectStore,
+  key: string,
+  label: string,
+): Promise<{ body: string; contentType: string }> {
+  const object = await store.get(key);
+  if (object === undefined) {
+    throw new ApiInputError(
+      "PROOF_AUTHORITY_MISSING",
+      `Immutable ${label} authority is missing`,
+      409,
+    );
+  }
+  return object;
+}
+
+function parseFrozenAuthorityJson(
+  object: { body: string },
+  label: string,
+): unknown {
+  try {
+    return JSON.parse(object.body) as unknown;
+  } catch {
+    throw new ApiInputError(
+      "PROOF_AUTHORITY_INVALID",
+      `Immutable ${label} authority is not valid JSON`,
+      409,
+    );
+  }
+}
+
+async function requireAuthorityHash(
+  label: string,
+  actual: string,
+  expected: string,
+): Promise<void> {
+  if (actual !== expected) {
+    throw new ApiInputError(
+      "PROOF_AUTHORITY_MISMATCH",
+      `Immutable ${label} authority does not match the released session`,
+      409,
+    );
+  }
+}
+
+function configuredSigningKey(input: {
+  signingKey?: string;
+  signingKeyId?: string;
+}): { signingKey: string; keyId: string } | undefined {
+  const signingKey = input.signingKey;
+  if (signingKey === undefined || signingKey.trim().length === 0) {
+    return undefined;
+  }
+  const configuredKeyId = input.signingKeyId?.trim();
+  return {
+    signingKey,
+    keyId:
+      configuredKeyId === undefined || configuredKeyId.length === 0
+        ? "counterlab-capsule-v2"
+        : configuredKeyId,
+  };
+}
+
+async function loadNativeProofAuthorityV5(input: {
+  store: RunnerObjectStore;
+  jobs: RunnerJobService;
+  session: CounterLabSession;
+  manifest: ArtifactManifest;
+  signingKey?: string;
+  signingKeyId?: string;
+}): Promise<LoadedNativeProofAuthorityV5> {
+  if (
+    input.session.mode.kind !== "live_notebook" ||
+    input.session.resultAuthority === undefined ||
+    input.session.boundaryMapAuthority === undefined ||
+    input.session.patchAuthority === undefined
+  ) {
+    throw new ApiInputError(
+      "PROOF_AUTHORITY_MISSING",
+      "Native proof authority requires a live v5 result, Boundary Map, and patch",
+      409,
+    );
+  }
+  const lineage = HostedExperimentLineageV5Schema.parse(
+    input.session.labVerification,
+  );
+  const resultRef = input.session.resultAuthority;
+  const boundaryRef = BoundaryMapAuthorityRefV1Schema.parse(
+    input.session.boundaryMapAuthority,
+  );
+  const patchRef = input.session.patchAuthority;
+  const manifestHash = await hashCanonical(input.manifest);
+  await requireAuthorityHash(
+    "Artifact Manifest",
+    manifestHash,
+    lineage.artifactManifestHash,
+  );
+
+  const jobSpecifications = [
+    {
+      jobId: lineage.jobId,
+      kind: "LAB_COMPILE" as const,
+      purpose: "LAB_COMPILE",
+    },
+    {
+      jobId: resultRef.jobId,
+      kind: "LAB_RUN" as const,
+      purpose: "LAB_RUN_AUTHORITATIVE",
+    },
+    {
+      jobId: boundaryRef.jobId,
+      kind: "LAB_RUN" as const,
+      purpose: "LAB_RUN_BOUNDARY",
+    },
+    {
+      jobId: patchRef.jobId,
+      kind: "PATCH_COMPILE" as const,
+      purpose: "PATCH_COMPILE",
+    },
+  ];
+  const authorityJobs = await Promise.all(
+    jobSpecifications.map(async (specification) => {
+      const job = await input.jobs.getJob(specification.jobId);
+      if (
+        job.status !== "VERIFIED" ||
+        job.kind !== specification.kind ||
+        job.requestIdentity?.purpose !== specification.purpose ||
+        job.sessionId !== input.session.id ||
+        job.artifactId !== input.manifest.artifactId ||
+        job.artifactManifestHash !== manifestHash ||
+        job.conceptPack.id !== input.session.verifiedResult?.concept ||
+        job.eventCursor < 1
+      ) {
+        throw new ApiInputError(
+          "PROOF_AUTHORITY_MISMATCH",
+          `Verified ${specification.purpose} job does not match the released session`,
+          409,
+        );
+      }
+      const events = await input.jobs.listEvents(job.jobId, 0);
+      if (
+        events.length !== job.eventCursor ||
+        events.at(-1)?.cursor !== job.eventCursor
+      ) {
+        throw new ApiInputError(
+          "PROOF_EVENT_STREAM_INCOMPLETE",
+          `Public ${specification.purpose} event history is incomplete`,
+          409,
+        );
+      }
+      return { job, events };
+    }),
+  );
+  const [compileAuthorityJob, runAuthorityJob, boundaryAuthorityJob, patchJob] =
+    authorityJobs;
+  if (
+    compileAuthorityJob === undefined ||
+    runAuthorityJob === undefined ||
+    boundaryAuthorityJob === undefined ||
+    patchJob === undefined
+  ) {
+    throw new ApiInputError(
+      "PROOF_AUTHORITY_MISSING",
+      "The native proof job set is incomplete",
+      409,
+    );
+  }
+
+  const frozenCompile = await loadFrozenScientificCompileAuthority({
+    store: input.store,
+    jobs: input.jobs,
+    session: input.session,
+    manifest: input.manifest,
+    lineage,
+  });
+  const runAuthority = await reconstructScientificRunAuthority({
+    store: input.store,
+    jobs: input.jobs,
+    job: runAuthorityJob.job,
+    session: input.session,
+    manifest: input.manifest,
+    inputBundleKey: `runner-input/${runAuthorityJob.job.jobId}.json`,
+    outputPrefix: `runner-authority/${runAuthorityJob.job.jobId}/`,
+    callbackOutputHashes: runAuthorityJob.job.outputHashes,
+  });
+  if (
+    (await hashCanonical(runAuthority.result)) !==
+      (await hashCanonical(input.session.verifiedResult)) ||
+    runAuthority.result.resultHash !== resultRef.resultHash ||
+    runAuthority.rawResultHash !== resultRef.resultFileHash ||
+    runAuthority.epistemicReportHash !== resultRef.epistemicReportHash ||
+    runAuthority.evidenceVerdictHash !== resultRef.evidenceVerdictHash ||
+    runAuthority.report.technicalReportHash !== resultRef.technicalReportHash
+  ) {
+    throw new ApiInputError(
+      "PROOF_AUTHORITY_MISMATCH",
+      "Immutable fixed-result authority does not match the released session",
+      409,
+    );
+  }
+
+  const boundaryIntegrity = boundaryRef.receipt.integrity;
+  const currentSigning = configuredSigningKey(input);
+  if (
+    boundaryIntegrity.mode === "hmac-signed" &&
+    currentSigning === undefined
+  ) {
+    throw new ApiInputError(
+      "PROOF_SIGNING_KEY_REQUIRED",
+      "The signing key for the released Boundary Map is unavailable",
+      503,
+    );
+  }
+  const boundaryAuthority = await reconstructBoundaryMapAuthority({
+    store: input.store,
+    jobs: input.jobs,
+    job: boundaryAuthorityJob.job,
+    session: input.session,
+    manifest: input.manifest,
+    inputBundleKey: `runner-input/${boundaryAuthorityJob.job.jobId}.json`,
+    outputPrefix: `runner-authority/${boundaryAuthorityJob.job.jobId}/`,
+    callbackOutputHashes: boundaryAuthorityJob.job.outputHashes,
+    issuedAt: boundaryRef.receipt.issuedAt,
+    ...(boundaryIntegrity.mode === "hmac-signed" && currentSigning !== undefined
+      ? {
+          signingKey: currentSigning.signingKey,
+          signingKeyId: boundaryIntegrity.keyId,
+        }
+      : {}),
+  });
+  if (
+    boundaryAuthority.authority === null ||
+    boundaryAuthority.result === null ||
+    boundaryAuthority.report.status !== "VERIFIED" ||
+    (await hashCanonical(boundaryAuthority.authority)) !==
+      (await hashCanonical(boundaryRef))
+  ) {
+    throw new ApiInputError(
+      "PROOF_AUTHORITY_MISMATCH",
+      "Immutable Boundary Map authority does not match the released session",
+      409,
+    );
+  }
+
+  const patchPrefix = `runner-authority/${patchJob.job.jobId}/`;
+  const [
+    patchBundleObject,
+    patchPlanObject,
+    patchRationaleObject,
+    patchVerificationObject,
+    patchResultObject,
+    patchedNotebookObject,
+  ] = await Promise.all([
+    requireFrozenAuthorityObject(
+      input.store,
+      `runner-input/${patchJob.job.jobId}.json`,
+      "Patch input",
+    ),
+    requireFrozenAuthorityObject(
+      input.store,
+      `${patchPrefix}patch-plan.json`,
+      "Patch Plan",
+    ),
+    requireFrozenAuthorityObject(
+      input.store,
+      `${patchPrefix}public-rationale.md`,
+      "Patch rationale",
+    ),
+    requireFrozenAuthorityObject(
+      input.store,
+      `${patchPrefix}patch-plan-verification.json`,
+      "Patch Plan verifier",
+    ),
+    requireFrozenAuthorityObject(
+      input.store,
+      `${patchPrefix}patch-result.json`,
+      "Patch Result",
+    ),
+    requireFrozenAuthorityObject(
+      input.store,
+      `${patchPrefix}patched-notebook.ipynb`,
+      "patched notebook",
+    ),
+  ]);
+  const patchBundle = RunnerPatchCompileBundleV5Schema.parse(
+    parseFrozenAuthorityJson(patchBundleObject, "Patch input"),
+  );
+  const patchPlan = PatchPlanV1Schema.parse(
+    parseFrozenAuthorityJson(patchPlanObject, "Patch Plan"),
+  );
+  const patchResultFromStore = PatchResultSchema.parse(
+    parseFrozenAuthorityJson(patchResultObject, "Patch Result"),
+  );
+  const patchAuthority = await resolveRunnerPatchAuthorityV5({
+    store: input.store,
+    jobs: input.jobs,
+    job: patchJob.job,
+    session: input.session,
+    artifact: { manifest: input.manifest },
+    bundle: patchBundle,
+  });
+  const freshPatchVerification = await verifyPatchPlan(patchPlan, {
+    sessionId: input.session.id,
+    manifest: input.manifest,
+    beliefSpec: patchAuthority.evidenceAuthority.beliefSpec,
+    verifiedResultHash: patchAuthority.evidenceAuthority.result.resultHash,
+    transferResultHash: patchBundle.transferResult.resultHash,
+    conceptPackVersion: patchJob.job.conceptPack.version,
+    allowedTransformations: patchBundle.patchContract.allowedTransformations,
+    allowedCellIndices: patchBundle.allowedCellIndices,
+  });
+  const storedPatchVerification = parseFrozenAuthorityJson(
+    patchVerificationObject,
+    "Patch Plan verifier",
+  );
+  if (
+    (await sha256Text(patchPlanObject.body)) !== patchRef.patchPlanFileHash ||
+    (await sha256Text(patchRationaleObject.body)) !==
+      patchRef.rationaleFileHash ||
+    (await sha256Text(patchResultObject.body)) !==
+      patchRef.patchResultFileHash ||
+    (await sha256Text(patchedNotebookObject.body)) !==
+      patchRef.patchedArtifactHash ||
+    (await hashCanonical(patchPlan)) !== patchRef.patchPlanHash ||
+    (await hashCanonical(freshPatchVerification)) !==
+      patchRef.patchPlanVerificationHash ||
+    (await hashCanonical(storedPatchVerification)) !==
+      patchRef.patchPlanVerificationHash ||
+    patchResultFromStore.resultHash !== patchRef.patchResultHash ||
+    (await hashCanonical(patchResultFromStore)) !==
+      (await hashCanonical(input.session.patchResult))
+  ) {
+    throw new ApiInputError(
+      "PROOF_AUTHORITY_MISMATCH",
+      "Immutable patch authority does not match the released session",
+      409,
+    );
+  }
+
+  const compilePrefix = `runner-authority/${compileAuthorityJob.job.jobId}/`;
+  const runPrefix = `runner-authority/${runAuthorityJob.job.jobId}/`;
+  const [
+    discriminationContractObject,
+    candidateVerificationObject,
+    experimentSelectionObject,
+    selectedExperimentIrObject,
+    technicalVerificationObject,
+    epistemicVerificationObject,
+    evidenceVerdictObject,
+  ] = await Promise.all([
+    requireFrozenAuthorityObject(
+      input.store,
+      `${compilePrefix}compiler-output/discrimination-contract.json`,
+      "Discrimination Contract",
+    ),
+    requireFrozenAuthorityObject(
+      input.store,
+      `${compilePrefix}candidate-verification.json`,
+      "candidate verifier",
+    ),
+    requireFrozenAuthorityObject(
+      input.store,
+      `${compilePrefix}experiment-selection.json`,
+      "fixed experiment selection",
+    ),
+    requireFrozenAuthorityObject(
+      input.store,
+      `${compilePrefix}selected-experiment-ir.json`,
+      "selected Experiment IR",
+    ),
+    requireFrozenAuthorityObject(
+      input.store,
+      `${runPrefix}technical-verification.json`,
+      "technical verifier",
+    ),
+    requireFrozenAuthorityObject(
+      input.store,
+      `${runPrefix}epistemic-verification.json`,
+      "epistemic verifier",
+    ),
+    requireFrozenAuthorityObject(
+      input.store,
+      `${runPrefix}evidence-verdict.json`,
+      "Evidence Verdict",
+    ),
+  ]);
+  const discriminationContract = parseFrozenAuthorityJson(
+    discriminationContractObject,
+    "Discrimination Contract",
+  );
+  const candidateVerification = parseFrozenAuthorityJson(
+    candidateVerificationObject,
+    "candidate verifier",
+  );
+  const experimentSelection = parseFrozenAuthorityJson(
+    experimentSelectionObject,
+    "fixed experiment selection",
+  );
+  const selectedExperimentIr = parseFrozenAuthorityJson(
+    selectedExperimentIrObject,
+    "selected Experiment IR",
+  );
+  const technicalVerification = parseFrozenAuthorityJson(
+    technicalVerificationObject,
+    "technical verifier",
+  );
+  const epistemicVerification = parseFrozenAuthorityJson(
+    epistemicVerificationObject,
+    "epistemic verifier",
+  );
+  const evidenceVerdict = parseFrozenAuthorityJson(
+    evidenceVerdictObject,
+    "Evidence Verdict",
+  );
+  if (
+    (await sha256Text(discriminationContractObject.body)) !==
+      lineage.compilerOutputFileHashes["discrimination-contract.json"] ||
+    (await hashCanonical(discriminationContract)) !==
+      lineage.discriminationContractHash ||
+    (await hashCanonical(candidateVerification)) !==
+      lineage.candidateVerificationReportHash ||
+    (await hashCanonical(experimentSelection)) !== lineage.selectionHash ||
+    (await hashExperimentIR(
+      ExperimentIRV5Schema.parse(selectedExperimentIr),
+    )) !== lineage.selectedExperimentIrHash ||
+    (await hashCanonical(frozenCompile.outcome.selection)) !==
+      lineage.selectionHash ||
+    (await hashCanonical(technicalVerification)) !==
+      resultRef.technicalReportHash ||
+    (await hashCanonical(epistemicVerification)) !==
+      resultRef.epistemicReportHash ||
+    (await hashCanonical(evidenceVerdict)) !== resultRef.evidenceVerdictHash
+  ) {
+    throw new ApiInputError(
+      "PROOF_AUTHORITY_MISMATCH",
+      "Immutable experiment authority does not match the released session",
+      409,
+    );
+  }
+
+  return {
+    artifacts: {
+      experimentSelection,
+      discriminationContract,
+      selectedExperimentIr,
+      candidateVerification,
+      technicalVerification,
+      epistemicVerification,
+      evidenceVerdict,
+      boundaryMap: boundaryAuthority.result,
+      boundaryVerification: boundaryAuthority.report,
+      patchPlan,
+      patchPlanVerification: storedPatchVerification,
+      patchedNotebook: patchedNotebookObject.body,
+    },
+    compilerEvents: authorityJobs.flatMap(({ events }) => events),
+  };
+}
+
+async function validatePersistedNativeProofCapsule(input: {
+  body: string;
+  contentType: string;
+  expectedReference: NonNullable<CounterLabSession["proofCapsule"]>;
+  signingKey?: string;
+  signingKeyId?: string;
+}) {
+  if (input.contentType !== PROOF_CAPSULE_MEDIA_TYPE) {
+    throw new ApiInputError(
+      "PROOF_CAPSULE_INVALID",
+      "Persisted Proof Capsule media type is invalid",
+      409,
+    );
+  }
+  const currentSigning = configuredSigningKey(input);
+  if (
+    input.expectedReference.integrity.mode === "hmac-signed" &&
+    currentSigning === undefined
+  ) {
+    throw new ApiInputError(
+      "PROOF_SIGNING_KEY_REQUIRED",
+      "The signing key for this Proof Capsule is unavailable",
+      503,
+    );
+  }
+  try {
+    const validated = validateProofCapsuleV2(
+      new TextEncoder().encode(input.body),
+      {
+        expectedIntegrityMode: input.expectedReference.integrity.mode,
+        ...(input.expectedReference.integrity.mode === "hmac-signed" &&
+        currentSigning !== undefined
+          ? {
+              signingKeys: {
+                [input.expectedReference.integrity.keyId]:
+                  currentSigning.signingKey,
+              },
+            }
+          : {}),
+      },
+    );
+    if (
+      (await hashCanonical(validated.reference)) !==
+      (await hashCanonical(input.expectedReference))
+    ) {
+      throw new Error("Proof Capsule reference mismatch");
+    }
+    const boundaryIntegrity =
+      validated.manifest.authority.boundary.receipt.integrity;
+    if (
+      boundaryIntegrity.mode === "hmac-signed" &&
+      currentSigning === undefined
+    ) {
+      throw new ApiInputError(
+        "PROOF_SIGNING_KEY_REQUIRED",
+        "The signing key for the Capsule Boundary Map is unavailable",
+        503,
+      );
+    }
+    await validateProofCapsulePayloadAuthorityV2(validated, {
+      ...(boundaryIntegrity.mode === "hmac-signed" &&
+      currentSigning !== undefined
+        ? {
+            boundarySigningKeys: {
+              [boundaryIntegrity.keyId]: currentSigning.signingKey,
+            },
+          }
+        : {}),
+    });
+    return validated;
+  } catch (error) {
+    if (error instanceof ApiInputError) throw error;
+    throw new ApiInputError(
+      "PROOF_CAPSULE_INVALID",
+      "Persisted Proof Capsule failed integrity or evidence-authority validation",
+      409,
+    );
+  }
+}
+
+async function finalizeNativeProofV5(input: {
+  service: SessionService;
+  jobs: RunnerJobService;
+  store: RunnerObjectStore;
+  session: CounterLabSession;
+  manifest: ArtifactManifest;
+  signingKey?: string;
+  signingKeyId?: string;
+}): Promise<CounterLabSession> {
+  let session = input.session;
+  if (
+    session.state !== "PATCH_VERIFIED" &&
+    session.state !== "REASONING_DIFF_ISSUED" &&
+    session.state !== "PROOF_CAPSULE_ISSUED"
+  ) {
+    throw new ApiInputError(
+      "PROOF_STATE_INVALID",
+      "Native proof can be issued only after a verified patch",
+      409,
+    );
+  }
+  const authority = await loadNativeProofAuthorityV5({
+    store: input.store,
+    jobs: input.jobs,
+    session,
+    manifest: input.manifest,
+    ...(input.signingKey === undefined ? {} : { signingKey: input.signingKey }),
+    ...(input.signingKeyId === undefined
+      ? {}
+      : { signingKeyId: input.signingKeyId }),
+  });
+
+  if (session.state === "PATCH_VERIFIED") {
+    const reasoningDiff = await createNativeReasoningDiffV2({
+      session,
+      events: await input.service.listEvents(session.id),
+      boundaryMap: authority.artifacts.boundaryMap,
+      patchPlan: authority.artifacts.patchPlan,
+    });
+    session = await input.service.issueReasoningDiffV2(
+      session.id,
+      reasoningDiff,
+    );
+  }
+
+  if (session.state === "REASONING_DIFF_ISSUED") {
+    const capsuleSigning = configuredSigningKey(input);
+    const capsule = await createNativeProofCapsuleV2({
+      session,
+      manifest: input.manifest,
+      events: await input.service.listEvents(session.id),
+      compilerEvents: authority.compilerEvents,
+      artifacts: authority.artifacts,
+      ...(capsuleSigning === undefined ? {} : { signing: capsuleSigning }),
+    });
+    const capsuleBody = new TextDecoder().decode(capsule.bytes);
+    await persistRunnerAuthorityBytes({
+      store: input.store,
+      key: capsule.reference.objectKey,
+      body: capsuleBody,
+      contentType: PROOF_CAPSULE_MEDIA_TYPE,
+    });
+    const persisted = await requireFrozenAuthorityObject(
+      input.store,
+      capsule.reference.objectKey,
+      "Proof Capsule",
+    );
+    await validatePersistedNativeProofCapsule({
+      ...persisted,
+      expectedReference: capsule.reference,
+      ...(input.signingKey === undefined
+        ? {}
+        : { signingKey: input.signingKey }),
+      ...(input.signingKeyId === undefined
+        ? {}
+        : { signingKeyId: input.signingKeyId }),
+    });
+    session = await input.service.issueProofCapsuleV2(
+      session.id,
+      capsule.reference,
+    );
+  }
+
+  if (session.state === "PROOF_CAPSULE_ISSUED") {
+    if (session.proofCapsule === undefined) {
+      throw new ApiInputError(
+        "PROOF_CAPSULE_MISSING",
+        "The issued Proof Capsule reference is missing",
+        409,
+      );
+    }
+    const persisted = await requireFrozenAuthorityObject(
+      input.store,
+      session.proofCapsule.objectKey,
+      "Proof Capsule",
+    );
+    await validatePersistedNativeProofCapsule({
+      ...persisted,
+      expectedReference: session.proofCapsule,
+      ...(input.signingKey === undefined
+        ? {}
+        : { signingKey: input.signingKey }),
+      ...(input.signingKeyId === undefined
+        ? {}
+        : { signingKeyId: input.signingKeyId }),
+    });
+  }
+  return session;
+}
+
 async function reconstructScientificInteractiveRunAuthority(input: {
   store: RunnerObjectStore;
   jobs: RunnerJobService;
@@ -2329,6 +2995,12 @@ function isFile(value: string | File | null): value is File {
 function statePayload(
   session: Awaited<ReturnType<SessionService["getSession"]>>,
 ) {
+  const publicProofCapsule =
+    session.proofCapsule === undefined
+      ? undefined
+      : (({ objectKey: _objectKey, ...receipt }) => receipt)(
+          session.proofCapsule,
+        );
   return {
     sessionId: session.id,
     artifactId: session.artifactId,
@@ -2371,6 +3043,12 @@ function statePayload(
     ...(session.proofBundle === undefined
       ? {}
       : { proofBundle: session.proofBundle }),
+    ...(session.reasoningDiffV2 === undefined
+      ? {}
+      : { reasoningDiffV2: session.reasoningDiffV2 }),
+    ...(publicProofCapsule === undefined
+      ? {}
+      : { proofCapsule: publicProofCapsule }),
   };
 }
 
@@ -5540,6 +6218,29 @@ export function createApi(options: ApiOptions = {}) {
           proof.proofBundle,
         );
       }
+      if (scientificPatch) {
+        const artifact = await artifacts(context, options).find(job.artifactId);
+        if (artifact === undefined) {
+          throw new ApiInputError(
+            "PROOF_AUTHORITY_MISSING",
+            "The source Artifact Manifest is unavailable for native proof issuance",
+            409,
+          );
+        }
+        updatedSession = await finalizeNativeProofV5({
+          service,
+          jobs: runnerJobService(context, options),
+          store: runnerObjectStore(context, options),
+          session: updatedSession,
+          manifest: artifact.manifest,
+          ...(context.env?.COUNTERLAB_SIGNING_KEY === undefined
+            ? {}
+            : { signingKey: context.env.COUNTERLAB_SIGNING_KEY }),
+          ...(context.env?.COUNTERLAB_SIGNING_KEY_ID === undefined
+            ? {}
+            : { signingKeyId: context.env.COUNTERLAB_SIGNING_KEY_ID }),
+        });
+      }
     } else if (job.kind === "PATCH_COMPILE") {
       if (updatedSession.state === "PATCH_COMPILING") {
         updatedSession = await service.rejectPatch(job.sessionId, {
@@ -7497,14 +8198,15 @@ export function createApi(options: ApiOptions = {}) {
     const session = await sessionService(context, options).getSession(
       context.req.param("sessionId"),
     );
-    if (session.reasoningDiff === undefined) {
+    const reasoningDiff = session.reasoningDiffV2 ?? session.reasoningDiff;
+    if (reasoningDiff === undefined) {
       throw new ApiInputError(
         "REASONING_DIFF_NOT_READY",
         "Reasoning Diff is issued only after a verified patch",
         409,
       );
     }
-    return context.json(jsonSuccess(session.reasoningDiff));
+    return context.json(jsonSuccess(reasoningDiff));
   });
 
   app.get("/api/sessions/:sessionId/patch/download", async (context) => {
@@ -7574,6 +8276,43 @@ export function createApi(options: ApiOptions = {}) {
       `attachment; filename="counterlab-${session.id}-proof-bundle.json"`,
     );
     return context.json(jsonSuccess(session.proofBundle));
+  });
+
+  app.get("/api/sessions/:sessionId/proof-capsule", async (context) => {
+    const session = await sessionService(context, options).getSession(
+      context.req.param("sessionId"),
+    );
+    if (session.proofCapsule === undefined) {
+      throw new ApiInputError(
+        "PROOF_CAPSULE_NOT_READY",
+        "Proof Capsule v2 is issued only after native Reasoning Diff authority",
+        409,
+      );
+    }
+    const persisted = await requireFrozenAuthorityObject(
+      runnerObjectStore(context, options),
+      session.proofCapsule.objectKey,
+      "Proof Capsule",
+    );
+    await validatePersistedNativeProofCapsule({
+      ...persisted,
+      expectedReference: session.proofCapsule,
+      ...(context.env?.COUNTERLAB_SIGNING_KEY === undefined
+        ? {}
+        : { signingKey: context.env.COUNTERLAB_SIGNING_KEY }),
+      ...(context.env?.COUNTERLAB_SIGNING_KEY_ID === undefined
+        ? {}
+        : { signingKeyId: context.env.COUNTERLAB_SIGNING_KEY_ID }),
+    });
+    const safeSessionId = session.id.replace(/[^A-Za-z0-9._-]+/gu, "-");
+    return new Response(persisted.body, {
+      headers: {
+        "content-type": PROOF_CAPSULE_MEDIA_TYPE,
+        "content-disposition": `attachment; filename="counterlab-${safeSessionId}.counterlab"`,
+        "cache-control": "private, no-store",
+        "x-content-type-options": "nosniff",
+      },
+    });
   });
 
   app.get("/api/replays/:replayId", (context) => {

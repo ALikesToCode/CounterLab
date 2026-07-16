@@ -24,6 +24,7 @@
     "@counterlab/notebook-parser": "workspace:*",
     "@counterlab/plan-verifier": "workspace:*",
     "@counterlab/proof-bundle": "workspace:*",
+    "@counterlab/proof-capsule": "workspace:*",
     "@counterlab/session-core": "workspace:*",
     "@fontsource-variable/instrument-sans": "5.2.8",
     "@fontsource-variable/newsreader": "5.2.10",

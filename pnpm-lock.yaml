@@ -65,6 +65,9 @@ importers:
       "@counterlab/proof-bundle":
         specifier: workspace:*
         version: link:../../packages/proof-bundle
+      "@counterlab/proof-capsule":
+        specifier: workspace:*
+        version: link:../../packages/proof-capsule
       "@counterlab/session-core":
         specifier: workspace:*
         version: link:../../packages/session-core

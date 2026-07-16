@@ -27,6 +27,11 @@ import type {
 } from "@counterlab/session-core";
 import { createEvidenceEvent, hashCanonical } from "@counterlab/session-core";
 import { validateProofBundle } from "@counterlab/proof-bundle";
+import {
+  validateProofCapsulePayloadAuthorityV2,
+  validateProofCapsuleV2,
+} from "@counterlab/proof-capsule";
+import { runProofCapsuleCli } from "@counterlab/proof-capsule/node-cli";
 import { schemaSummaryHash } from "@counterlab/belief-analyst";
 import { getConceptPack } from "@counterlab/concept-registry";
 import {
@@ -3231,8 +3236,20 @@ describe("Cloudflare Worker API", () => {
       data: {
         runnerJob: { status: "VERIFIED" },
         session: {
-          state: "PATCH_VERIFIED",
+          state: "PROOF_CAPSULE_ISSUED",
           patchResult: { resultHash: patchResult.resultHash },
+          reasoningDiffV2: {
+            schemaVersion: "2",
+            authority: {
+              authoritativeResultHash: result.resultHash,
+              patchResultHash: patchResult.resultHash,
+            },
+          },
+          proofCapsule: {
+            schemaVersion: "2",
+            mode: "live_notebook",
+            integrity: { mode: "integrity-hashed" },
+          },
         },
       },
     });
@@ -5670,11 +5687,23 @@ describe("Cloudflare Worker API", () => {
       finalEventCursor: activePatchJob.eventCursor,
       occurredAt: "2026-07-14T10:00:05.000Z",
     };
-    const callback = await postJson(
-      harness.app,
+    const capsuleSigningKey =
+      "counterlab-test-capsule-signing-key-with-sufficient-entropy";
+    const capsuleSigningEnv = {
+      COUNTERLAB_SIGNING_KEY: capsuleSigningKey,
+      COUNTERLAB_SIGNING_KEY_ID: "capsule-test-key-v2",
+    } as unknown as Env & Record<string, string>;
+    const callback = await harness.app.request(
       `/api/runner/jobs/${patchDispatch.job.jobId}/callback`,
-      callbackBody,
-      patchAuthorization,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...patchAuthorization,
+        },
+        body: JSON.stringify(callbackBody),
+      },
+      capsuleSigningEnv,
     );
     expect(callback.status).toBe(200);
     const callbackPayload = (await callback.json()) as {
@@ -5684,8 +5713,23 @@ describe("Cloudflare Worker API", () => {
       data: {
         runnerJob: { status: "VERIFIED" },
         session: {
-          state: "PATCH_VERIFIED",
+          state: "PROOF_CAPSULE_ISSUED",
           patchResult: { resultHash: patchResult.resultHash },
+          reasoningDiffV2: {
+            schemaVersion: "2",
+            authority: {
+              authoritativeResultHash: result.resultHash,
+              patchResultHash: patchResult.resultHash,
+            },
+          },
+          proofCapsule: {
+            schemaVersion: "2",
+            mode: "live_notebook",
+            integrity: {
+              mode: "hmac-signed",
+              keyId: "capsule-test-key-v2",
+            },
+          },
         },
         verification: { status: "VERIFIED" },
       },
@@ -5695,6 +5739,10 @@ describe("Cloudflare Worker API", () => {
     expect(callbackPayload.data.session).not.toHaveProperty("proofBundle");
     expect(callbackPayload.data.session).not.toHaveProperty("resultAuthority");
     expect(callbackPayload.data.session).not.toHaveProperty("patchAuthority");
+    expect(callbackPayload.data.session).not.toHaveProperty("objectKey");
+    expect(callbackPayload.data.session.proofCapsule).not.toHaveProperty(
+      "objectKey",
+    );
     const storedAuthority = await harness.sessionRepository.find(
       bundle.sessionId,
     );
@@ -5719,6 +5767,21 @@ describe("Cloudflare Worker API", () => {
       patchResultFileHash: patchResultHash,
       patchedArtifactHash: patchedNotebookHash,
     });
+    expect(storedAuthority.state).toBe("PROOF_CAPSULE_ISSUED");
+    expect(storedAuthority.reasoningDiffV2).toMatchObject({
+      schemaVersion: "2",
+      authority: {
+        authoritativeResultHash: result.resultHash,
+        patchResultHash: patchResult.resultHash,
+      },
+    });
+    const storedProofCapsule = storedAuthority.proofCapsule;
+    if (storedProofCapsule === undefined) {
+      throw new Error("v5 Proof Capsule reference is missing");
+    }
+    expect(storedProofCapsule.objectKey).toBe(
+      `proof-capsules/${bundle.sessionId}/${storedProofCapsule.bytesHash}.counterlab`,
+    );
     for (const path of [
       "patch-plan.json",
       "public-rationale.md",
@@ -5739,6 +5802,84 @@ describe("Cloudflare Worker API", () => {
     expect(patchedDownload.status).toBe(200);
     await expect(patchedDownload.text()).resolves.toBe(patchedNotebookText);
 
+    const missingCapsuleKey = await harness.app.request(
+      `/api/sessions/${bundle.sessionId}/proof-capsule`,
+    );
+    expect(missingCapsuleKey.status).toBe(503);
+    await expect(missingCapsuleKey.json()).resolves.toMatchObject({
+      error: { code: "PROOF_SIGNING_KEY_REQUIRED" },
+    });
+    const capsuleDownload = await harness.app.request(
+      `/api/sessions/${bundle.sessionId}/proof-capsule`,
+      undefined,
+      capsuleSigningEnv,
+    );
+    expect(capsuleDownload.status).toBe(200);
+    expect(capsuleDownload.headers.get("content-type")).toContain(
+      "application/vnd.counterlab.capsule+json",
+    );
+    expect(capsuleDownload.headers.get("cache-control")).toBe(
+      "private, no-store",
+    );
+    expect(capsuleDownload.headers.get("x-content-type-options")).toBe(
+      "nosniff",
+    );
+    const capsuleBytes = new Uint8Array(await capsuleDownload.arrayBuffer());
+    const validatedCapsule = validateProofCapsuleV2(capsuleBytes, {
+      expectedIntegrityMode: "hmac-signed",
+      signingKeys: {
+        "capsule-test-key-v2": capsuleSigningKey,
+      },
+    });
+    expect(validatedCapsule.reference).toEqual(storedProofCapsule);
+    await expect(
+      validateProofCapsulePayloadAuthorityV2(validatedCapsule),
+    ).resolves.toMatchObject({
+      valid: true,
+      sessionId: bundle.sessionId,
+      concept: "entity_leakage",
+      resultHash: result.resultHash,
+      patchResultHash: patchResult.resultHash,
+    });
+    const wrongCapsuleKey = await harness.app.request(
+      `/api/sessions/${bundle.sessionId}/proof-capsule`,
+      undefined,
+      {
+        ...capsuleSigningEnv,
+        COUNTERLAB_SIGNING_KEY: "wrong-capsule-signing-key",
+      } as unknown as Env & Record<string, string>,
+    );
+    expect(wrongCapsuleKey.status).toBe(409);
+    await expect(wrongCapsuleKey.json()).resolves.toMatchObject({
+      error: { code: "PROOF_CAPSULE_INVALID" },
+    });
+    for (const command of ["validate", "inspect", "replay"] as const) {
+      const stdout: string[] = [];
+      const stderr: string[] = [];
+      await expect(
+        runProofCapsuleCli([command, "worker-issued.counterlab"], {
+          readBytes: () => Promise.resolve(capsuleBytes),
+          stdout: (value) => stdout.push(value),
+          stderr: (value) => stderr.push(value),
+          env: capsuleSigningEnv,
+        }),
+      ).resolves.toBe(0);
+      expect(stderr).toEqual([]);
+      expect(JSON.parse(stdout.join(""))).toMatchObject({
+        valid: true,
+        sessionId: bundle.sessionId,
+        sourceMode: "live_notebook",
+        resultHash: result.resultHash,
+      });
+      expect(stdout.join("")).not.toContain("objectKey");
+      if (command === "replay") {
+        expect(stdout.join("")).toContain(
+          '"playbackMode":"verified_capsule_replay"',
+        );
+        expect(stdout.join("")).not.toContain("patched-notebook.ipynb");
+      }
+    }
+
     for (const path of [
       "patch-plan.json",
       "public-rationale.md",
@@ -5749,11 +5890,17 @@ describe("Cloudflare Worker API", () => {
         `runner-output/${patchDispatch.job.jobId}/${path}`,
       );
     }
-    const duplicateCallback = await postJson(
-      harness.app,
+    const duplicateCallback = await harness.app.request(
       `/api/runner/jobs/${patchDispatch.job.jobId}/callback`,
-      callbackBody,
-      patchAuthorization,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...patchAuthorization,
+        },
+        body: JSON.stringify(callbackBody),
+      },
+      capsuleSigningEnv,
     );
     expect(duplicateCallback.status).toBe(200);
     await expect(duplicateCallback.json()).resolves.toMatchObject({
@@ -5761,11 +5908,55 @@ describe("Cloudflare Worker API", () => {
         duplicate: true,
         runnerJob: { status: "VERIFIED" },
         session: {
-          state: "PATCH_VERIFIED",
+          state: "PROOF_CAPSULE_ISSUED",
           patchResult: { resultHash: patchResult.resultHash },
+          proofCapsule: {
+            bytesHash: storedProofCapsule.bytesHash,
+          },
         },
       },
     });
+    const evidenceResponse = await harness.app.request(
+      `/api/sessions/${bundle.sessionId}/events`,
+    );
+    expect(evidenceResponse.status).toBe(200);
+    const evidencePayload = (await evidenceResponse.json()) as {
+      data: { events: Array<{ kind: string }> };
+    };
+    expect(
+      evidencePayload.data.events.filter(
+        (event) => event.kind === "reasoning_diff_v2.issued",
+      ),
+    ).toHaveLength(1);
+    expect(
+      evidencePayload.data.events.filter(
+        (event) => event.kind === "proof_capsule.issued",
+      ),
+    ).toHaveLength(1);
+
+    const persistedCapsule = harness.runnerObjects.objects.get(
+      storedProofCapsule.objectKey,
+    );
+    if (persistedCapsule === undefined) {
+      throw new Error("persisted Proof Capsule bytes are missing");
+    }
+    harness.runnerObjects.objects.set(storedProofCapsule.objectKey, {
+      ...persistedCapsule,
+      body: `${persistedCapsule.body.slice(0, -2)}x\n`,
+    });
+    const tamperedDownload = await harness.app.request(
+      `/api/sessions/${bundle.sessionId}/proof-capsule`,
+      undefined,
+      capsuleSigningEnv,
+    );
+    expect(tamperedDownload.status).toBe(409);
+    await expect(tamperedDownload.json()).resolves.toMatchObject({
+      error: { code: "PROOF_CAPSULE_INVALID" },
+    });
+    harness.runnerObjects.objects.set(
+      storedProofCapsule.objectKey,
+      persistedCapsule,
+    );
   });
 
   it("runs a v5 interactive control from frozen authority without replacing the verdict", async () => {
