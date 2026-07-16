@@ -15,6 +15,8 @@ import {
   ExperimentPlanSchema,
   ExperimentPlanV2Schema,
   HostedVerifiedResultSetV2Schema,
+  HostedPatchAuthorityRefV5Schema,
+  HostedResultAuthorityRefV5Schema,
   HostedLabLineageSchema,
   InteractiveImbalanceRunRequestSchema,
   InteractiveLeakageRunRequestSchema,
@@ -22,7 +24,9 @@ import {
   PatchPlanV1Schema,
   PredictionContractSchema,
   ProofBundleSchema,
+  ProofCapsuleRefV2Schema,
   ReasoningDiffSchema,
+  ReasoningDiffV2Schema,
   SessionModeSchema,
   SessionStateSchema,
   PublicCompilerEventSchema,
@@ -905,6 +909,9 @@ describe("session transitions", () => {
     expect(assertTransition("BOUNDARY_VERIFIED", "REVISION_RECORDED")).toBe(
       "REVISION_RECORDED",
     );
+    expect(
+      assertTransition("REASONING_DIFF_ISSUED", "PROOF_CAPSULE_ISSUED"),
+    ).toBe("PROOF_CAPSULE_ISSUED");
   });
 
   it("supports verifier and learner retry branches without skipping gates", () => {
@@ -1527,5 +1534,141 @@ describe("ProofBundleSchema", () => {
     };
 
     expect(() => ProofBundleSchema.parse(invalid)).toThrow(/signature/i);
+  });
+});
+
+describe("native v5 reasoning and capsule references", () => {
+  it("binds immutable primary-run and patch jobs to their frozen bytes", () => {
+    expect(
+      HostedResultAuthorityRefV5Schema.parse({
+        schemaVersion: "5",
+        jobId: "job-run-1",
+        inputBundleHash: hash("0"),
+        resultHash: hash("1"),
+        resultFileHash: hash("2"),
+        technicalReportHash: hash("3"),
+        epistemicReportHash: hash("4"),
+        evidenceVerdictHash: hash("5"),
+      }),
+    ).toMatchObject({ jobId: "job-run-1" });
+    expect(
+      HostedPatchAuthorityRefV5Schema.parse({
+        schemaVersion: "5",
+        jobId: "job-patch-1",
+        inputBundleHash: hash("5"),
+        patchPlanHash: hash("6"),
+        patchPlanFileHash: hash("7"),
+        rationaleFileHash: hash("8"),
+        patchPlanVerificationHash: hash("9"),
+        patchResultHash: hash("a"),
+        patchResultFileHash: hash("b"),
+        patchedArtifactHash: hash("c"),
+      }),
+    ).toMatchObject({ jobId: "job-patch-1" });
+  });
+
+  it("validates every learner-facing reasoning dimension and authority hash", () => {
+    const parsed = ReasoningDiffV2Schema.parse({
+      schemaVersion: "2",
+      id: "reasoning_v5_1",
+      sessionId: "session_1",
+      concept: "entity_leakage",
+      dimensions: {
+        belief: {
+          before: "Random-row accuracy proves new-customer generalization.",
+          after: "Evaluation units must match deployment units.",
+        },
+        prediction: {
+          before: "Group accuracy will remain high at 80% confidence.",
+          after: "Group accuracy fell while entity overlap reached zero.",
+        },
+        evidence: {
+          before: "Repeated customers appeared in both random partitions.",
+          after: "Whole-customer holdout removed train/test overlap.",
+        },
+        boundary: {
+          before: "The claim had no stated boundary.",
+          after: "Optimism grows as recurrence and identity signal increase.",
+        },
+        behavior: {
+          before: "Used a random split for forecasting.",
+          after: "Selected a time-ordered holdout and removed future data.",
+        },
+        code: {
+          before: "train_test_split(rows)",
+          after: "group-aware split; identity excluded",
+        },
+      },
+      authority: {
+        artifactManifestHash: hash("1"),
+        beliefSpecHash: hash("2"),
+        predictionHash: hash("3"),
+        experimentIrHash: hash("4"),
+        selectionHash: hash("5"),
+        authoritativeResultHash: hash("6"),
+        evidenceVerdictHash: hash("7"),
+        epistemicReportHash: hash("8"),
+        boundaryMapHash: hash("9"),
+        boundaryReceiptHash: hash("a"),
+        transferResultHash: hash("b"),
+        patchPlanHash: hash("c"),
+        patchResultHash: hash("d"),
+        patchedArtifactHash: hash("e"),
+      },
+      evidenceEventHashes: [
+        hash("0"),
+        hash("1"),
+        hash("2"),
+        hash("3"),
+        hash("4"),
+        hash("5"),
+        hash("6"),
+        hash("f"),
+      ],
+      limitations: ["This verifies one bounded experiment, not mastery."],
+      issuedAt: "2026-07-16T10:00:00.000Z",
+    });
+
+    expect(parsed.schemaVersion).toBe("2");
+    expect(() =>
+      ReasoningDiffV2Schema.parse({
+        ...parsed,
+        dimensions: { ...parsed.dimensions, boundary: undefined },
+      }),
+    ).toThrow();
+  });
+
+  it("binds an immutable capsule object to the Reasoning Diff and chain head", () => {
+    const rootHash = hash("a");
+    const parsed = ProofCapsuleRefV2Schema.parse({
+      schemaVersion: "2",
+      capsuleId: "capsule_session_1",
+      sessionId: "session_1",
+      mode: "live_notebook",
+      replayId: null,
+      objectKey: `proof-capsules/session_1/${hash("b")}.counterlab`,
+      mediaType: "application/vnd.counterlab.capsule+json",
+      canonicalProfile: "counterlab-canonical-json-v1",
+      rootHash,
+      bytesHash: hash("b"),
+      byteLength: 4096,
+      reasoningDiffHash: hash("c"),
+      eventChainHead: hash("d"),
+      createdAt: "2026-07-16T10:00:00.000Z",
+      integrity: {
+        mode: "hmac-signed",
+        algorithm: "hmac-sha256",
+        keyId: "counterlab-capsule-v2",
+        signature: hash("e"),
+      },
+    });
+
+    expect(parsed.objectKey).toContain(parsed.bytesHash);
+    expect(() =>
+      ProofCapsuleRefV2Schema.parse({
+        ...parsed,
+        objectKey: "proof-capsules/session_1/other.counterlab",
+      }),
+    ).toThrow(/object key/i);
   });
 });

@@ -1171,6 +1171,197 @@ describe("SessionService state machine", () => {
     expect(completed.proofBundle).toEqual(proofBundle);
     repository.close();
   });
+
+  it("issues a native v5 Reasoning Diff and content-addressed Proof Capsule reference", async () => {
+    const { service, repository } = memoryService();
+    await throughVerifiedLab(service);
+    await service.recordEpistemicResult("session-1", {
+      result: hostedResultSet,
+      verdict: supportsVerdict,
+      epistemicReportHash: EPISTEMIC_REPORT_HASH,
+      resultAuthority: {
+        schemaVersion: "5",
+        jobId: "job-v5-run-1",
+        inputBundleHash: "f".repeat(64),
+        resultHash: hostedResultSet.resultHash,
+        resultFileHash: "0".repeat(64),
+        technicalReportHash: supportsVerdict.technicalReportHash,
+        epistemicReportHash: EPISTEMIC_REPORT_HASH,
+        evidenceVerdictHash: await hashCanonical(supportsVerdict),
+      },
+    });
+    const boundary = await boundaryMapAuthority();
+    await service.recordBoundaryMapAuthority("session-1", boundary);
+    await service.recordRevision(
+      "session-1",
+      "Evaluation units must match deployment units.",
+    );
+    await service.startTransfer("session-1");
+    await service.recordTransferResult("session-1", passingTransfer);
+    await service.startPatchCompilation("session-1");
+    const patchResult = {
+      schemaVersion: "1",
+      id: "patch-v5-1",
+      sessionId: "session-1",
+      status: "VERIFIED",
+      sourceArtifactHash: artifactManifest.fileSha256,
+      patchedArtifactHash: "3".repeat(64),
+      patchHash: "4".repeat(64),
+      modifiedCells: [3],
+      diff: "- train_test_split\n+ GroupShuffleSplit",
+      verification: {
+        passed: true,
+        invariants: ["zero_group_overlap", "unrelated_cells_unchanged"],
+        unchangedCellHashes: ["5".repeat(64)],
+      },
+      generatedAt: "2026-07-16T10:00:00.000Z",
+      resultHash: "6".repeat(64),
+    } as const;
+    await service.verifyPatch("session-1", patchResult, {
+      schemaVersion: "5",
+      jobId: "job-v5-patch-1",
+      inputBundleHash: "f".repeat(64),
+      patchPlanHash: "7".repeat(64),
+      patchPlanFileHash: "8".repeat(64),
+      rationaleFileHash: "9".repeat(64),
+      patchPlanVerificationHash: "a".repeat(64),
+      patchResultHash: patchResult.resultHash,
+      patchResultFileHash: "b".repeat(64),
+      patchedArtifactHash: patchResult.patchedArtifactHash,
+    });
+    const eventsBeforeDiff = await service.listEvents("session-1");
+    const reasoningDiff = {
+      schemaVersion: "2",
+      id: "reasoning-v5-1",
+      sessionId: "session-1",
+      concept: "entity_leakage",
+      dimensions: {
+        belief: {
+          before: beliefTest.learnerClaim,
+          after: "Evaluation units must match deployment units.",
+        },
+        prediction: {
+          before: "Accuracy remains above 0.9 at 80% confidence.",
+          after: "Whole-customer holdout produced the verified result.",
+        },
+        evidence: {
+          before: "Random rows repeated customers across partitions.",
+          after: "Whole-customer holdout has zero entity overlap.",
+        },
+        boundary: {
+          before: "The claim had no stated recurrence boundary.",
+          after: "The signed sweep exposes where optimism changes.",
+        },
+        behavior: {
+          before: "Used a random forecasting split.",
+          after: "Selected time-aware evaluation without future leakage.",
+        },
+        code: {
+          before: "train_test_split(rows)",
+          after: "group-aware split; identity excluded",
+        },
+      },
+      authority: {
+        artifactManifestHash: hostedResultSet.artifactManifestHash,
+        beliefSpecHash: (
+          await scientificLineage(
+            (await service.getSession("session-1")).beliefSpec,
+          )
+        ).beliefSpecHash,
+        predictionHash: prediction.immutableHash,
+        experimentIrHash: supportsVerdict.irHash,
+        selectionHash: "e".repeat(64),
+        authoritativeResultHash: hostedResultSet.resultHash,
+        evidenceVerdictHash: await hashCanonical(supportsVerdict),
+        epistemicReportHash: EPISTEMIC_REPORT_HASH,
+        boundaryMapHash: boundary.resultHash,
+        boundaryReceiptHash: boundary.receipt.receiptHash,
+        transferResultHash: passingTransfer.resultHash,
+        patchPlanHash: "7".repeat(64),
+        patchResultHash: patchResult.resultHash,
+        patchedArtifactHash: patchResult.patchedArtifactHash,
+      },
+      evidenceEventHashes: eventsBeforeDiff.map((event) => event.eventHash),
+      limitations: ["This verifies one bounded experiment, not mastery."],
+      issuedAt: "2026-07-16T10:00:01.000Z",
+    } as const;
+
+    await expect(
+      service.issueReasoningDiffV2("session-1", {
+        ...reasoningDiff,
+        authority: {
+          ...reasoningDiff.authority,
+          patchPlanHash: "0".repeat(64),
+        },
+      }),
+    ).rejects.toThrow(/patchPlanHash/i);
+    expect((await service.getSession("session-1")).state).toBe(
+      "PATCH_VERIFIED",
+    );
+
+    const diffIssued = await service.issueReasoningDiffV2(
+      "session-1",
+      reasoningDiff,
+    );
+    expect(diffIssued).toMatchObject({
+      state: "REASONING_DIFF_ISSUED",
+      reasoningDiffV2: reasoningDiff,
+    });
+    expect(diffIssued.reasoningDiff).toBeUndefined();
+    expect(diffIssued.proofBundle).toBeUndefined();
+
+    const eventsBeforeCapsule = await service.listEvents("session-1");
+    const rootHash = "8".repeat(64);
+    const capsuleRef = {
+      schemaVersion: "2",
+      capsuleId: "capsule-session-1",
+      sessionId: "session-1",
+      mode: "live_notebook",
+      replayId: null,
+      objectKey: `proof-capsules/session-1/${"9".repeat(64)}.counterlab`,
+      mediaType: "application/vnd.counterlab.capsule+json",
+      canonicalProfile: "counterlab-canonical-json-v1",
+      rootHash,
+      bytesHash: "9".repeat(64),
+      byteLength: 4096,
+      reasoningDiffHash: await hashCanonical(reasoningDiff),
+      eventChainHead: eventsBeforeCapsule.at(-1)?.eventHash,
+      createdAt: "2026-07-16T10:00:02.000Z",
+      integrity: {
+        mode: "hmac-signed",
+        algorithm: "hmac-sha256",
+        keyId: "counterlab-capsule-v2",
+        signature: "a".repeat(64),
+      },
+    } as const;
+    await expect(
+      service.issueProofCapsuleV2("session-1", {
+        ...capsuleRef,
+        eventChainHead: "0".repeat(64),
+      }),
+    ).rejects.toThrow(/event-chain head/i);
+    const completed = await service.issueProofCapsuleV2(
+      "session-1",
+      capsuleRef,
+    );
+
+    expect(completed).toMatchObject({
+      state: "PROOF_CAPSULE_ISSUED",
+      proofCapsule: capsuleRef,
+    });
+    expect((await service.listEvents("session-1")).at(-1)).toMatchObject({
+      actor: "system",
+      kind: "proof_capsule.issued",
+      payload: {
+        capsuleId: capsuleRef.capsuleId,
+        rootHash: capsuleRef.rootHash,
+      },
+    });
+    expect(verifyEvidenceChain(await service.listEvents("session-1"))).toEqual(
+      expect.objectContaining({ valid: true }),
+    );
+    repository.close();
+  });
 });
 
 describe("SqliteSessionRepository", () => {

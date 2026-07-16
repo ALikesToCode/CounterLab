@@ -6,16 +6,21 @@ import {
   EvidenceVerdictSchema,
   EvidenceEventSchema,
   HostedExperimentLineageV5Schema,
+  HostedResultAuthorityRefV5Schema,
   HostedVerifiedResultSetV2Schema,
   type BeliefSpecV2,
   type BeliefTest,
   type EvidenceEvent as ContractEvidenceEvent,
   type HostedLabLineage,
+  type HostedPatchAuthorityRefV5,
+  type HostedResultAuthorityRefV5,
   type HostedVerifiedResultSetV2,
   type PatchResult,
   type PredictionContract,
   type ProofBundle,
+  type ProofCapsuleRefV2,
   type ReasoningDiff,
+  type ReasoningDiffV2,
   type SessionState,
   SessionModeSchema,
   type SessionMode as ContractSessionMode,
@@ -59,12 +64,16 @@ export interface CounterLabSession {
   verifiedResult?: VerifiedResultSet;
   evidenceVerdict?: EvidenceVerdict;
   epistemicReportHash?: string;
+  resultAuthority?: HostedResultAuthorityRefV5;
   boundaryMapAuthority?: BoundaryMapAuthorityRefV1;
   revision?: string;
   transferResult?: TransferResult;
   patchResult?: PatchResult;
+  patchAuthority?: HostedPatchAuthorityRefV5;
   reasoningDiff?: ReasoningDiff;
   proofBundle?: ProofBundle;
+  reasoningDiffV2?: ReasoningDiffV2;
+  proofCapsule?: ProofCapsuleRefV2;
 }
 
 export type EvidenceActor =
@@ -157,6 +166,7 @@ export type SessionEvidenceAuthority =
       evidenceVerdict: ReleasableEvidenceVerdict;
       epistemicReportHash: string;
       lineage: ScientificLineageV5;
+      resultAuthority?: HostedResultAuthorityRefV5;
     }
   | {
       protocol: "v5";
@@ -198,6 +208,10 @@ export async function resolveSessionEvidenceAuthority(
     if (
       session.evidenceVerdict !== undefined ||
       session.epistemicReportHash !== undefined ||
+      session.resultAuthority !== undefined ||
+      session.patchAuthority !== undefined ||
+      session.reasoningDiffV2 !== undefined ||
+      session.proofCapsule !== undefined ||
       HostedExperimentLineageV5Schema.safeParse(session.labVerification).success
     ) {
       throw new SessionInputError(
@@ -286,7 +300,10 @@ export async function resolveSessionEvidenceAuthority(
   }
 
   if (verdict.data.kind === "REJECTED") {
-    if (session.verifiedResult !== undefined) {
+    if (
+      session.verifiedResult !== undefined ||
+      session.resultAuthority !== undefined
+    ) {
       throw new SessionInputError(
         "Evidence authority mismatch: rejected evidence cannot release a result",
       );
@@ -332,6 +349,29 @@ export async function resolveSessionEvidenceAuthority(
     );
   }
 
+  const resultAuthority =
+    session.resultAuthority === undefined
+      ? undefined
+      : HostedResultAuthorityRefV5Schema.safeParse(session.resultAuthority);
+  if (resultAuthority !== undefined && !resultAuthority.success) {
+    throw new SessionInputError(
+      "Evidence authority mismatch: hosted result authority is invalid",
+    );
+  }
+  if (
+    resultAuthority?.success === true &&
+    (resultAuthority.data.resultHash !== result.data.resultHash ||
+      resultAuthority.data.technicalReportHash !==
+        verdict.data.technicalReportHash ||
+      resultAuthority.data.epistemicReportHash !== epistemicReportHash ||
+      resultAuthority.data.evidenceVerdictHash !==
+        (await hashCanonical(verdict.data)))
+  ) {
+    throw new SessionInputError(
+      "Evidence authority mismatch: hosted result reference does not match released evidence",
+    );
+  }
+
   return {
     protocol: "v5",
     verdict: verdict.data.kind,
@@ -342,6 +382,9 @@ export async function resolveSessionEvidenceAuthority(
     evidenceVerdict: verdict.data,
     epistemicReportHash,
     lineage: lineage.data,
+    ...(resultAuthority?.success === true
+      ? { resultAuthority: resultAuthority.data }
+      : {}),
   };
 }
 

@@ -2277,6 +2277,42 @@ export const HostedExperimentLineageV5Schema = z
   })
   .strict();
 
+export const HostedResultAuthorityRefV5Schema = z
+  .object({
+    schemaVersion: z.literal("5"),
+    jobId: NonEmptyString,
+    inputBundleHash: Sha256Schema,
+    resultHash: Sha256Schema,
+    resultFileHash: Sha256Schema,
+    technicalReportHash: Sha256Schema,
+    epistemicReportHash: Sha256Schema,
+    evidenceVerdictHash: Sha256Schema,
+  })
+  .strict();
+
+export type HostedResultAuthorityRefV5 = z.infer<
+  typeof HostedResultAuthorityRefV5Schema
+>;
+
+export const HostedPatchAuthorityRefV5Schema = z
+  .object({
+    schemaVersion: z.literal("5"),
+    jobId: NonEmptyString,
+    inputBundleHash: Sha256Schema,
+    patchPlanHash: Sha256Schema,
+    patchPlanFileHash: Sha256Schema,
+    rationaleFileHash: Sha256Schema,
+    patchPlanVerificationHash: Sha256Schema,
+    patchResultHash: Sha256Schema,
+    patchResultFileHash: Sha256Schema,
+    patchedArtifactHash: Sha256Schema,
+  })
+  .strict();
+
+export type HostedPatchAuthorityRefV5 = z.infer<
+  typeof HostedPatchAuthorityRefV5Schema
+>;
+
 export const HostedLabLineageSchema = z.discriminatedUnion("source", [
   HostedPlanLineageV2Schema,
   HostedExperimentLineageV5Schema,
@@ -2813,6 +2849,113 @@ export const ReasoningDiffSchema = z
 
 export type ReasoningDiff = z.infer<typeof ReasoningDiffSchema>;
 
+export const ReasoningDiffV2Schema = z
+  .object({
+    schemaVersion: z.literal("2"),
+    id: NonEmptyString,
+    sessionId: NonEmptyString,
+    concept: ConceptIdSchema,
+    dimensions: z
+      .object({
+        belief: BeforeAfterSchema,
+        prediction: BeforeAfterSchema,
+        evidence: BeforeAfterSchema,
+        boundary: BeforeAfterSchema,
+        behavior: BeforeAfterSchema,
+        code: BeforeAfterSchema,
+      })
+      .strict(),
+    authority: z
+      .object({
+        artifactManifestHash: Sha256Schema,
+        beliefSpecHash: Sha256Schema,
+        predictionHash: Sha256Schema,
+        experimentIrHash: Sha256Schema,
+        selectionHash: Sha256Schema,
+        authoritativeResultHash: Sha256Schema,
+        evidenceVerdictHash: Sha256Schema,
+        epistemicReportHash: Sha256Schema,
+        boundaryMapHash: Sha256Schema,
+        boundaryReceiptHash: Sha256Schema,
+        transferResultHash: Sha256Schema,
+        patchPlanHash: Sha256Schema,
+        patchResultHash: Sha256Schema,
+        patchedArtifactHash: Sha256Schema,
+      })
+      .strict(),
+    evidenceEventHashes: z.array(Sha256Schema).min(8).max(256),
+    limitations: z.array(NonEmptyString).min(1).max(20),
+    issuedAt: z.iso.datetime({ offset: true }),
+  })
+  .strict()
+  .superRefine((diff, context) => {
+    if (
+      new Set(diff.evidenceEventHashes).size !== diff.evidenceEventHashes.length
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Reasoning Diff evidence event hashes must be unique",
+        path: ["evidenceEventHashes"],
+      });
+    }
+  });
+
+export type ReasoningDiffV2 = z.infer<typeof ReasoningDiffV2Schema>;
+
+const ProofCapsuleIntegrityV2Schema = z.discriminatedUnion("mode", [
+  z
+    .object({
+      mode: z.literal("integrity-hashed"),
+      algorithm: z.literal("sha256"),
+    })
+    .strict(),
+  z
+    .object({
+      mode: z.literal("hmac-signed"),
+      algorithm: z.literal("hmac-sha256"),
+      keyId: EpistemicTokenIdSchema,
+      signature: Sha256Schema,
+    })
+    .strict(),
+]);
+
+export const ProofCapsuleRefV2Schema = z
+  .object({
+    schemaVersion: z.literal("2"),
+    capsuleId: NonEmptyString,
+    sessionId: NonEmptyString,
+    mode: z.literal("live_notebook"),
+    replayId: z.null(),
+    objectKey: z
+      .string()
+      .regex(
+        /^proof-capsules\/[A-Za-z0-9._:-]{1,128}\/[a-f0-9]{64}\.counterlab$/u,
+        "Proof Capsule object key must be content addressed",
+      ),
+    mediaType: z.literal("application/vnd.counterlab.capsule+json"),
+    canonicalProfile: z.literal(CANONICAL_JSON_PROFILE),
+    rootHash: Sha256Schema,
+    bytesHash: Sha256Schema,
+    byteLength: z.number().int().positive().max(16_777_216),
+    reasoningDiffHash: Sha256Schema,
+    eventChainHead: Sha256Schema,
+    createdAt: z.iso.datetime({ offset: true }),
+    integrity: ProofCapsuleIntegrityV2Schema,
+  })
+  .strict()
+  .superRefine((reference, context) => {
+    const expectedSuffix = `/${reference.bytesHash}.counterlab`;
+    if (!reference.objectKey.endsWith(expectedSuffix)) {
+      context.addIssue({
+        code: "custom",
+        message: "Proof Capsule object key must contain its exact bytes hash",
+        path: ["objectKey"],
+      });
+    }
+  });
+
+export type ProofCapsuleRefV2 = z.infer<typeof ProofCapsuleRefV2Schema>;
+
 export const ProofIntegritySchema = z
   .object({
     mode: z.enum(["integrity-hashed", "hmac-signed"]),
@@ -3099,6 +3242,7 @@ export const SessionStateSchema = z.enum([
   "PATCH_REJECTED",
   "PATCH_VERIFIED",
   "REASONING_DIFF_ISSUED",
+  "PROOF_CAPSULE_ISSUED",
 ]);
 
 export type SessionState = z.infer<typeof SessionStateSchema>;
@@ -3128,7 +3272,8 @@ const SESSION_TRANSITIONS: Readonly<
   PATCH_COMPILING: ["PATCH_REJECTED", "PATCH_VERIFIED"],
   PATCH_REJECTED: ["PATCH_COMPILING"],
   PATCH_VERIFIED: ["REASONING_DIFF_ISSUED"],
-  REASONING_DIFF_ISSUED: [],
+  REASONING_DIFF_ISSUED: ["PROOF_CAPSULE_ISSUED"],
+  PROOF_CAPSULE_ISSUED: [],
 };
 
 export function assertTransition(

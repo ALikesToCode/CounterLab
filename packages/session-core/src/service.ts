@@ -4,10 +4,14 @@ import {
   BoundaryMapAuthorityRefV1Schema,
   EvidenceVerdictSchema,
   HostedVerifiedResultSetV2Schema,
+  HostedPatchAuthorityRefV5Schema,
+  HostedResultAuthorityRefV5Schema,
   PatchResultSchema,
   PredictionContractSchema,
   ProofBundleSchema,
+  ProofCapsuleRefV2Schema,
   ReasoningDiffSchema,
+  ReasoningDiffV2Schema,
   TransferResultSchema,
   VerifiedResultSetSchema,
   type BeliefSpecV2,
@@ -505,6 +509,7 @@ export class SessionService {
       result: unknown;
       verdict: unknown;
       epistemicReportHash: string;
+      resultAuthority?: unknown;
     },
   ): Promise<CounterLabSession> {
     const result = HostedVerifiedResultSetV2Schema.parse(input.result);
@@ -513,6 +518,10 @@ export class SessionService {
       input.epistemicReportHash,
       "epistemicReportHash",
     );
+    const resultAuthority =
+      input.resultAuthority === undefined
+        ? undefined
+        : HostedResultAuthorityRefV5Schema.parse(input.resultAuthority);
     if (verdict.kind === "REJECTED") {
       throw new SessionInputError(
         "recordEpistemicResult requires a releasable Evidence Verdict",
@@ -526,6 +535,18 @@ export class SessionService {
     if (verdict.resultHash !== result.resultHash) {
       throw new SessionInputError(
         "Evidence Verdict result hash must match the verified result",
+      );
+    }
+    const evidenceVerdictHash = await hashCanonical(verdict);
+    if (
+      resultAuthority !== undefined &&
+      (resultAuthority.resultHash !== result.resultHash ||
+        resultAuthority.technicalReportHash !== verdict.technicalReportHash ||
+        resultAuthority.epistemicReportHash !== epistemicReportHash ||
+        resultAuthority.evidenceVerdictHash !== evidenceVerdictHash)
+    ) {
+      throw new SessionInputError(
+        "Hosted result authority does not match the released result, reports, or Evidence Verdict",
       );
     }
     const current = await this.requireSession(sessionId);
@@ -547,6 +568,7 @@ export class SessionService {
         verifiedResult: result,
         evidenceVerdict: verdict,
         epistemicReportHash,
+        ...(resultAuthority === undefined ? {} : { resultAuthority }),
       },
       {
         actor: "verifier",
@@ -564,6 +586,9 @@ export class SessionService {
             epistemicReportHash,
             await hashCanonical(result),
             await hashCanonical(verdict),
+            ...(resultAuthority === undefined
+              ? []
+              : [await hashCanonical(resultAuthority)]),
           ]),
         ],
       },
@@ -840,8 +865,13 @@ export class SessionService {
   async verifyPatch(
     sessionId: string,
     result: unknown,
+    authorityRef?: unknown,
   ): Promise<CounterLabSession> {
     const parsed = PatchResultSchema.parse(result);
+    const patchAuthority =
+      authorityRef === undefined
+        ? undefined
+        : HostedPatchAuthorityRefV5Schema.parse(authorityRef);
     if (parsed.sessionId !== sessionId) {
       throw new SessionInputError(
         "patchResult.sessionId must match the session",
@@ -852,10 +882,22 @@ export class SessionService {
         "A verified patch result is required to pass the patch gate",
       );
     }
+    if (
+      patchAuthority !== undefined &&
+      (patchAuthority.patchResultHash !== parsed.resultHash ||
+        patchAuthority.patchedArtifactHash !== parsed.patchedArtifactHash)
+    ) {
+      throw new SessionInputError(
+        "Hosted patch authority does not match the verified patch result",
+      );
+    }
     return this.transition(
       sessionId,
       "PATCH_VERIFIED",
-      { patchResult: parsed },
+      {
+        patchResult: parsed,
+        ...(patchAuthority === undefined ? {} : { patchAuthority }),
+      },
       {
         actor: "verifier",
         kind: "patch.verified",
@@ -865,6 +907,9 @@ export class SessionService {
           parsed.patchHash,
           parsed.patchedArtifactHash,
           await hashCanonical(parsed),
+          ...(patchAuthority === undefined
+            ? []
+            : [await hashCanonical(patchAuthority)]),
         ],
       },
     );
@@ -898,6 +943,183 @@ export class SessionService {
         kind: "reasoning_diff.issued",
         payload: {},
         outputHashes: [reasoningDiffHash, proofBundleHash],
+      },
+    );
+  }
+
+  async issueReasoningDiffV2(
+    sessionId: string,
+    reasoningDiff: unknown,
+  ): Promise<CounterLabSession> {
+    const current = await this.requireSession(sessionId);
+    const parsed = ReasoningDiffV2Schema.parse(reasoningDiff);
+    const authority = await resolveSessionEvidenceAuthority(current);
+    const boundary = current.boundaryMapAuthority;
+    const transfer = current.transferResult;
+    const patch = current.patchResult;
+    const patchAuthority = HostedPatchAuthorityRefV5Schema.safeParse(
+      current.patchAuthority,
+    );
+    if (
+      current.mode.kind !== "live_notebook" ||
+      authority.protocol !== "v5" ||
+      authority.verdict !== "SUPPORTS"
+    ) {
+      throw new SessionInputError(
+        "Native Reasoning Diff requires supporting v5 evidence authority",
+      );
+    }
+    if (
+      boundary === undefined ||
+      transfer?.outcome !== "PASSED" ||
+      patch?.status !== "VERIFIED" ||
+      authority.resultAuthority === undefined ||
+      !patchAuthority.success ||
+      parsed.sessionId !== sessionId ||
+      parsed.concept !== authority.concept
+    ) {
+      throw new SessionInputError(
+        "Native Reasoning Diff requires supporting v5 evidence, verified Boundary, passed transfer, and verified patch authority",
+      );
+    }
+    const [beliefSpecHash, evidenceVerdictHash] = await Promise.all([
+      hashCanonical(authority.beliefSpec),
+      hashCanonical(authority.evidenceVerdict),
+    ]);
+    const expectedAuthority = {
+      artifactManifestHash: authority.lineage.artifactManifestHash,
+      beliefSpecHash,
+      predictionHash: authority.prediction.immutableHash,
+      experimentIrHash: authority.lineage.selectedExperimentIrHash,
+      selectionHash: authority.lineage.selectionHash,
+      authoritativeResultHash: authority.result.resultHash,
+      evidenceVerdictHash,
+      epistemicReportHash: authority.epistemicReportHash,
+      boundaryMapHash: boundary.resultHash,
+      boundaryReceiptHash: boundary.receipt.receiptHash,
+      transferResultHash: transfer.resultHash,
+      patchResultHash: patch.resultHash,
+      patchedArtifactHash: patch.patchedArtifactHash,
+      patchPlanHash: patchAuthority.data.patchPlanHash,
+    };
+    for (const [field, expected] of Object.entries(expectedAuthority)) {
+      if (
+        parsed.authority[field as keyof typeof parsed.authority] !== expected
+      ) {
+        throw new SessionInputError(
+          `Native Reasoning Diff ${field} does not match frozen session authority`,
+        );
+      }
+    }
+    const events = await this.repository.listEvents(sessionId);
+    const eventHashes = new Set(events.map((event) => event.eventHash));
+    if (
+      eventHashes.size !== events.length ||
+      new Set(parsed.evidenceEventHashes).size !==
+        parsed.evidenceEventHashes.length ||
+      parsed.evidenceEventHashes.some(
+        (eventHash) => !eventHashes.has(eventHash),
+      )
+    ) {
+      throw new SessionInputError(
+        "Native Reasoning Diff contains an unresolved evidence event hash",
+      );
+    }
+    const requiredKinds = [
+      "belief_spec.confirmed",
+      "prediction.committed",
+      "lab.verified",
+      "experiment.evidence_verified",
+      "boundary_map.verified",
+      "revision.recorded",
+      "transfer.passed",
+      "patch.verified",
+    ];
+    for (const kind of requiredKinds) {
+      const event = events.find((candidate) => candidate.kind === kind);
+      if (
+        event === undefined ||
+        !parsed.evidenceEventHashes.includes(event.eventHash)
+      ) {
+        throw new SessionInputError(
+          `Native Reasoning Diff must resolve the ${kind} evidence event`,
+        );
+      }
+    }
+    const eventPositions = parsed.evidenceEventHashes.map((eventHash) =>
+      events.findIndex((event) => event.eventHash === eventHash),
+    );
+    if (
+      eventPositions.some(
+        (position, index) =>
+          index > 0 && position <= eventPositions[index - 1]!,
+      )
+    ) {
+      throw new SessionInputError(
+        "Native Reasoning Diff evidence event hashes must preserve chain order",
+      );
+    }
+    const reasoningDiffHash = await hashCanonical(parsed);
+    return this.transitionFrom(
+      current,
+      "REASONING_DIFF_ISSUED",
+      { reasoningDiffV2: parsed },
+      {
+        actor: "system",
+        kind: "reasoning_diff_v2.issued",
+        payload: { reasoningDiffId: parsed.id, schemaVersion: "2" },
+        inputHashes: parsed.evidenceEventHashes,
+        outputHashes: [reasoningDiffHash],
+      },
+    );
+  }
+
+  async issueProofCapsuleV2(
+    sessionId: string,
+    proofCapsule: unknown,
+  ): Promise<CounterLabSession> {
+    const current = await this.requireSession(sessionId);
+    const parsed = ProofCapsuleRefV2Schema.parse(proofCapsule);
+    const reasoningDiff = ReasoningDiffV2Schema.safeParse(
+      current.reasoningDiffV2,
+    );
+    if (
+      current.mode.kind !== "live_notebook" ||
+      !reasoningDiff.success ||
+      parsed.sessionId !== sessionId ||
+      parsed.objectKey !==
+        `proof-capsules/${sessionId}/${parsed.bytesHash}.counterlab` ||
+      parsed.reasoningDiffHash !== (await hashCanonical(reasoningDiff.data))
+    ) {
+      throw new SessionInputError(
+        "Proof Capsule reference does not match the native Reasoning Diff session authority",
+      );
+    }
+    const events = await this.repository.listEvents(sessionId);
+    const eventChainHead = events.at(-1)?.eventHash;
+    if (
+      eventChainHead === undefined ||
+      parsed.eventChainHead !== eventChainHead
+    ) {
+      throw new SessionInputError(
+        "Proof Capsule event-chain head does not match persisted evidence",
+      );
+    }
+    const referenceHash = await hashCanonical(parsed);
+    return this.transitionFrom(
+      current,
+      "PROOF_CAPSULE_ISSUED",
+      { proofCapsule: parsed },
+      {
+        actor: "system",
+        kind: "proof_capsule.issued",
+        payload: {
+          capsuleId: parsed.capsuleId,
+          rootHash: parsed.rootHash,
+          byteLength: parsed.byteLength,
+        },
+        inputHashes: [parsed.reasoningDiffHash, parsed.eventChainHead],
+        outputHashes: [parsed.rootHash, parsed.bytesHash, referenceHash],
       },
     );
   }
