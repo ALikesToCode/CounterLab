@@ -5988,6 +5988,32 @@ describe("Cloudflare Worker API", () => {
     expect(serializedHostedReplay).not.toContain("objectKey");
     expect(serializedHostedReplay).not.toContain("patched-notebook.ipynb");
     expect(serializedHostedReplay).not.toContain("private reasoning");
+
+    const replayCapsuleDownload = await harness.app.request(
+      `/api/replays/${publishedReplayPayload.data.replay.replayId}/proof-capsule`,
+      undefined,
+      capsuleSigningEnv,
+    );
+    expect(replayCapsuleDownload.status).toBe(200);
+    expect(replayCapsuleDownload.headers.get("content-type")).toContain(
+      "application/vnd.counterlab.capsule+json",
+    );
+    expect(new Uint8Array(await replayCapsuleDownload.arrayBuffer())).toEqual(
+      capsuleBytes,
+    );
+
+    const replayPatchedNotebookDownload = await harness.app.request(
+      `/api/replays/${publishedReplayPayload.data.replay.replayId}/patched-notebook`,
+      undefined,
+      capsuleSigningEnv,
+    );
+    expect(replayPatchedNotebookDownload.status).toBe(200);
+    expect(replayPatchedNotebookDownload.headers.get("content-type")).toContain(
+      "application/x-ipynb+json",
+    );
+    await expect(replayPatchedNotebookDownload.text()).resolves.toBe(
+      patchedNotebookText,
+    );
     const wrongCapsuleKey = await harness.app.request(
       `/api/sessions/${bundle.sessionId}/proof-capsule`,
       undefined,

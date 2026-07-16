@@ -464,6 +464,58 @@ function proofCapsuleReplays(
   );
 }
 
+async function loadHostedProofCapsuleReplay(
+  context: Context<AppBindings>,
+  options: ApiOptions,
+  replayId: string,
+) {
+  if (options.replayRepository === undefined && context.env?.DB === undefined) {
+    throw new ApiInputError(
+      "REPLAY_NOT_FOUND",
+      `Replay ${replayId} was not found`,
+      404,
+    );
+  }
+  const record = await proofCapsuleReplays(context, options).find(replayId);
+  if (record === undefined) {
+    throw new ApiInputError(
+      "REPLAY_NOT_FOUND",
+      `Replay ${replayId} was not found`,
+      404,
+    );
+  }
+  const expectedReference = ProofCapsuleRefV2Schema.parse({
+    ...record.metadata.proofCapsule,
+    objectKey: record.objectKey,
+  });
+  const persisted = await requireFrozenAuthorityObject(
+    runnerObjectStore(context, options),
+    record.objectKey,
+    "Proof Capsule replay",
+  );
+  const validated = await validatePersistedNativeProofCapsule({
+    ...persisted,
+    expectedReference,
+    ...(context.env?.COUNTERLAB_SIGNING_KEY === undefined
+      ? {}
+      : { signingKey: context.env.COUNTERLAB_SIGNING_KEY }),
+    ...(context.env?.COUNTERLAB_SIGNING_KEY_ID === undefined
+      ? {}
+      : { signingKeyId: context.env.COUNTERLAB_SIGNING_KEY_ID }),
+  });
+  if (
+    validated.manifest.concept !== record.metadata.concept ||
+    validated.manifest.sessionId !== record.sourceSessionId
+  ) {
+    throw new ApiInputError(
+      "REPLAY_AUTHORITY_MISMATCH",
+      "The replay record does not match its Proof Capsule authority",
+      409,
+    );
+  }
+  return { record, persisted, validated };
+}
+
 function runnerDispatcher(
   context: Context<AppBindings>,
   options: ApiOptions,
@@ -8424,51 +8476,11 @@ export function createApi(options: ApiOptions = {}) {
         }),
       );
     }
-    if (
-      options.replayRepository === undefined &&
-      context.env?.DB === undefined
-    ) {
-      return context.json(
-        jsonError("REPLAY_NOT_FOUND", `Replay ${replayId} was not found`, 404),
-        404,
-      );
-    }
-    const record = await proofCapsuleReplays(context, options).find(replayId);
-    if (record === undefined) {
-      return context.json(
-        jsonError("REPLAY_NOT_FOUND", `Replay ${replayId} was not found`, 404),
-        404,
-      );
-    }
-    const expectedReference = ProofCapsuleRefV2Schema.parse({
-      ...record.metadata.proofCapsule,
-      objectKey: record.objectKey,
-    });
-    const persisted = await requireFrozenAuthorityObject(
-      runnerObjectStore(context, options),
-      record.objectKey,
-      "Proof Capsule replay",
+    const { record, validated } = await loadHostedProofCapsuleReplay(
+      context,
+      options,
+      replayId,
     );
-    const validated = await validatePersistedNativeProofCapsule({
-      ...persisted,
-      expectedReference,
-      ...(context.env?.COUNTERLAB_SIGNING_KEY === undefined
-        ? {}
-        : { signingKey: context.env.COUNTERLAB_SIGNING_KEY }),
-      ...(context.env?.COUNTERLAB_SIGNING_KEY_ID === undefined
-        ? {}
-        : { signingKeyId: context.env.COUNTERLAB_SIGNING_KEY_ID }),
-    });
-    if (
-      validated.manifest.concept !== record.metadata.concept ||
-      validated.manifest.sessionId !== record.sourceSessionId
-    ) {
-      throw new ApiInputError(
-        "REPLAY_AUTHORITY_MISMATCH",
-        "The replay record does not match its Proof Capsule authority",
-        409,
-      );
-    }
     const boundaryIntegrity =
       validated.manifest.authority.boundary.receipt.integrity;
     const replay = await projectProofCapsuleReplayV2(
@@ -8487,6 +8499,52 @@ export function createApi(options: ApiOptions = {}) {
     );
     context.header("cache-control", "private, no-store");
     return context.json(jsonSuccess(replay));
+  });
+
+  app.get("/api/replays/:replayId/proof-capsule", async (context) => {
+    const replayId = context.req.param("replayId");
+    const { persisted } = await loadHostedProofCapsuleReplay(
+      context,
+      options,
+      replayId,
+    );
+    const safeReplayId = replayId.replace(/[^A-Za-z0-9._-]+/gu, "-");
+    return new Response(persisted.body, {
+      headers: {
+        "content-type": PROOF_CAPSULE_MEDIA_TYPE,
+        "content-disposition": `attachment; filename="counterlab-${safeReplayId}.counterlab"`,
+        "cache-control": "private, no-store",
+        "x-content-type-options": "nosniff",
+      },
+    });
+  });
+
+  app.get("/api/replays/:replayId/patched-notebook", async (context) => {
+    const replayId = context.req.param("replayId");
+    const { validated } = await loadHostedProofCapsuleReplay(
+      context,
+      options,
+      replayId,
+    );
+    const patchedNotebook = validated.envelope.entries.find(
+      (entry) => entry.path === "artifacts/patched-notebook.ipynb",
+    );
+    if (patchedNotebook === undefined) {
+      throw new ApiInputError(
+        "REPLAY_PATCH_NOT_AVAILABLE",
+        "This verified replay does not contain a patched notebook",
+        409,
+      );
+    }
+    const safeReplayId = replayId.replace(/[^A-Za-z0-9._-]+/gu, "-");
+    return new Response(patchedNotebook.content, {
+      headers: {
+        "content-type": "application/x-ipynb+json; charset=utf-8",
+        "content-disposition": `attachment; filename="counterlab-${safeReplayId}-patched.ipynb"`,
+        "cache-control": "private, no-store",
+        "x-content-type-options": "nosniff",
+      },
+    });
   });
 
   app.notFound((context) =>
