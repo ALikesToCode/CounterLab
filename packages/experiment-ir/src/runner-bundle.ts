@@ -73,6 +73,13 @@ export const RunnerLabCompileBundleV5Schema = z
         labScene: z.record(z.string(), z.json()),
       })
       .strict(),
+    provenance: z
+      .object({
+        generatorId: NonEmptyString.max(96),
+        promptHash: Sha256,
+        inputHashes: z.array(Sha256).min(3).max(20),
+      })
+      .strict(),
     resourceLimits: z
       .object({
         wallSeconds: z.number().int().positive().max(120),
@@ -92,9 +99,8 @@ export const RunnerLabCompileBundleV5Schema = z
   .strict()
   .superRefine((bundle, context) => {
     if (
-      bundle.approvedBeliefSpec.learnerDecision === "UNDECIDED" ||
-      bundle.approvedBeliefSpec.learnerDecision === "REJECTED" ||
-      bundle.approvedBeliefSpec.supportState === "INSUFFICIENT_EVIDENCE"
+      bundle.approvedBeliefSpec.learnerDecision !== "CONFIRMED" ||
+      bundle.approvedBeliefSpec.supportState !== "SUPPORTED"
     ) {
       context.addIssue({
         code: "custom",
@@ -102,6 +108,21 @@ export const RunnerLabCompileBundleV5Schema = z
           "v5 compilation requires a learner-approved Belief Spec with evidence",
         path: ["approvedBeliefSpec", "learnerDecision"],
       });
+    }
+
+    const provenanceHashes = new Set(bundle.provenance.inputHashes);
+    for (const [label, requiredHash] of [
+      ["artifact manifest", bundle.artifactManifestHash],
+      ["Belief Spec", bundle.beliefSpecHash],
+      ["prediction", bundle.prediction.immutableHash],
+    ] as const) {
+      if (!provenanceHashes.has(requiredHash)) {
+        context.addIssue({
+          code: "custom",
+          message: `compiler provenance is missing the ${label} hash`,
+          path: ["provenance", "inputHashes"],
+        });
+      }
     }
     if (
       bundle.sessionId !== bundle.prediction.sessionId ||

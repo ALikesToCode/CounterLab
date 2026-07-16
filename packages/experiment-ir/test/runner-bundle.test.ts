@@ -117,6 +117,11 @@ function runnerBundleV5() {
       experimentIr: { type: "object" },
       labScene: { type: "object" },
     },
+    provenance: {
+      generatorId: "codex-app-server-stdio-v1",
+      promptHash: digest("f"),
+      inputHashes: [digest("a"), digest("b"), digest("d")],
+    },
     resourceLimits: { wallSeconds: 45, memoryMb: 768, maxRuns: 4 },
     permittedOutputs: [
       "discrimination-contract.json" as const,
@@ -146,6 +151,8 @@ describe("Runner LAB_COMPILE bundle v5", () => {
     for (const update of [
       { learnerDecision: "UNDECIDED" },
       { learnerDecision: "REJECTED" },
+      { learnerDecision: "ALTERNATIVE_SELECTED" },
+      { supportState: "PARTIAL" },
       { supportState: "INSUFFICIENT_EVIDENCE" },
     ]) {
       expect(() =>
@@ -188,6 +195,27 @@ describe("Runner LAB_COMPILE bundle v5", () => {
           ...runnerBundleV5().permittedOutputs,
           "experiment-plan.json",
         ],
+      }),
+    ).toThrow();
+  });
+
+  it("requires compiler provenance to bind every authoritative input", () => {
+    expect(() =>
+      RunnerLabCompileBundleV5Schema.parse({
+        ...runnerBundleV5(),
+        provenance: {
+          ...runnerBundleV5().provenance,
+          inputHashes: [digest("a"), digest("b")],
+        },
+      }),
+    ).toThrow(/provenance/i);
+    expect(() =>
+      RunnerLabCompileBundleV5Schema.parse({
+        ...runnerBundleV5(),
+        provenance: {
+          ...runnerBundleV5().provenance,
+          promptHash: "not-a-hash",
+        },
       }),
     ).toThrow();
   });
