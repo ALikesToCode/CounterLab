@@ -40,6 +40,7 @@ import {
 } from "@counterlab/experiment-ir";
 
 import sourceNotebookText from "../../../fixtures/notebooks/customer_churn_leakage.ipynb?raw";
+import imbalanceNotebookText from "../../../fixtures/notebooks/fraud_class_imbalance.ipynb?raw";
 import imbalanceResultText from "../../../fixtures/public/imbalance_verified_result.json?raw";
 import patchedNotebookText from "../../../replays/leakage-01/patch/customer_churn_leakage.patched.ipynb?raw";
 import scientificEngineSnapshotValue from "../../../scientific-engines/snapshot-hash.json";
@@ -828,7 +829,10 @@ async function preparedScientificImbalanceHostedRunner(
 ) {
   const sessionRepository = new MemorySessionRepository();
   const artifactStore = new MemoryArtifactStore();
-  const artifact = imbalanceArtifactManifest();
+  const artifact = {
+    ...imbalanceArtifactManifest(),
+    fileSha256: await sha256Text(imbalanceNotebookText),
+  };
   await artifactStore.save(artifact, "uploads/rare-event-classifier.ipynb");
   let intakeIdSequence = 0;
   const intakeApp = createApi({
@@ -893,6 +897,11 @@ async function preparedScientificImbalanceHostedRunner(
   }
 
   const runnerObjects = new MemoryRunnerObjectStore();
+  await runnerObjects.put(
+    "uploads/rare-event-classifier.ipynb",
+    imbalanceNotebookText,
+    "application/x-ipynb+json; charset=utf-8",
+  );
   const dispatcher = new CapturingRunnerDispatcher();
   let runnerIdSequence = 0;
   const app = createApi({
@@ -2564,6 +2573,304 @@ describe("Cloudflare Worker API", () => {
               "./scripts/run-mutations.sh imbalance",
             ],
           },
+        },
+      },
+    });
+  });
+
+  it("verifies a class-imbalance v5 patch through the frozen Worker authority", async () => {
+    const harness = await preparedScientificImbalanceHostedRunner();
+    const run = await completeScientificCompileAndQueueRun(
+      harness,
+      scientificImbalanceCandidateArtifacts,
+    );
+    const runJobId = run.dispatch.job.jobId;
+    expect(
+      (
+        await harness.app.request(`/api/runner/jobs/${runJobId}/start`, {
+          method: "POST",
+          headers: run.authorization,
+        })
+      ).status,
+    ).toBe(200);
+    const result = await scientificImbalanceResult(run.bundle);
+    const resultText = JSON.stringify(result);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${runJobId}/outputs/verified-result.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...run.authorization,
+              "content-type": "application/json",
+            },
+            body: resultText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    expect(
+      (
+        await postJson(
+          harness.app,
+          `/api/runner/jobs/${runJobId}/callback`,
+          {
+            schemaVersion: "1",
+            callbackId: "callback_imbalance_before_patch_v5",
+            idempotencyKey: "imbalance-before-patch-v5",
+            jobId: runJobId,
+            stateVersion: run.dispatch.job.stateVersion,
+            status: "VERIFIED",
+            outputHashes: [await sha256Text(resultText)],
+            finalEventCursor: 0,
+            occurredAt: "2026-07-14T10:00:04.000Z",
+          },
+          run.authorization,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await postJson(
+          harness.app,
+          `/api/sessions/${harness.sessionId}/revision`,
+          {
+            revision:
+              "Rare-event accuracy needs a majority baseline and class-specific evidence.",
+          },
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await postJson(
+          harness.app,
+          `/api/sessions/${harness.sessionId}/transfer`,
+          {
+            strategyChoice: "cost_aware_threshold",
+            riskChoice: "minority_false_negative_cost",
+            evidenceChoices: [
+              "confusion_matrix_exposes_misses",
+              "prevalence_shift_changes_precision",
+            ],
+          },
+        )
+      ).status,
+    ).toBe(200);
+
+    const patchQueued = await postJson(
+      harness.app,
+      `/api/sessions/${harness.sessionId}/patch/compile`,
+    );
+    expect(patchQueued.status).toBe(202);
+    const patchDispatch = harness.dispatcher.dispatched[2];
+    if (patchDispatch === undefined) {
+      throw new Error("class-imbalance v5 patch was not dispatched");
+    }
+    const inputObject = harness.runnerObjects.objects.get(
+      `runner-input/${patchDispatch.job.jobId}.json`,
+    );
+    if (inputObject === undefined) {
+      throw new Error("class-imbalance v5 patch bundle is missing");
+    }
+    const patchBundle = RunnerPatchCompileBundleV5Schema.parse(
+      JSON.parse(inputObject.body),
+    );
+    expect(patchBundle).toMatchObject({
+      approvedBeliefSpec: { concept: "class_imbalance" },
+      transferContractId: "manufacturing-rare-defect-v1",
+      transferResult: { taskId: "manufacturing-defect-transfer-01" },
+      patchContract: {
+        id: "imbalance-notebook-patch-v1",
+        allowedTransformations: [
+          "stratify_classification_holdout",
+          "add_majority_baseline",
+          "replace_accuracy_only_evaluation",
+        ],
+      },
+    });
+    const patchAuthorization = {
+      authorization: `Bearer ${patchDispatch.token}`,
+    };
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${patchDispatch.job.jobId}/start`,
+          { method: "POST", headers: patchAuthorization },
+        )
+      ).status,
+    ).toBe(200);
+    const targetCell = patchBundle.allowedCellIndices[0];
+    const targetField =
+      patchBundle.artifactManifest.schemaSummary.targetCandidates[0];
+    if (targetCell === undefined || targetField === undefined) {
+      throw new Error("class-imbalance patch target is unresolved");
+    }
+    const patchPlan = {
+      schemaVersion: "1" as const,
+      planId: "patch_plan_imbalance_scientific_v5",
+      sessionId: patchBundle.sessionId,
+      concept: "class_imbalance" as const,
+      conceptPackVersion: patchBundle.conceptPackVersion,
+      artifactManifestHash: patchBundle.artifactManifestHash,
+      sourceArtifactHash: patchBundle.artifactManifest.fileSha256,
+      transferResultHash: patchBundle.transferResult.resultHash,
+      verifiedResultHash: patchBundle.releaseAuthority.authoritativeResultHash,
+      evidenceRefs: patchBundle.approvedBeliefSpec.evidenceRefs,
+      targetCells: [targetCell],
+      targetField,
+      operations: [
+        {
+          id: "stratify_classification_holdout" as const,
+          cellIndex: targetCell,
+          reason: "Preserve rare-event prevalence in the holdout.",
+        },
+        {
+          id: "add_majority_baseline" as const,
+          cellIndex: targetCell,
+          reason: "Compute the trivial high-accuracy reference.",
+        },
+        {
+          id: "replace_accuracy_only_evaluation" as const,
+          cellIndex: targetCell,
+          reason: "Show minority errors and threshold-sensitive metrics.",
+        },
+      ],
+      preserveUnrelatedCells: true as const,
+      nonClaims: ["This does not choose a universal production threshold."],
+    };
+    const patchPlanText = JSON.stringify(patchPlan);
+    const rationaleText =
+      "This patch adds the registered rare-event evaluation block only.";
+    for (const [path, body, contentType] of [
+      ["patch-plan.json", patchPlanText, "application/json"],
+      ["public-rationale.md", rationaleText, "text/markdown"],
+    ] as const) {
+      expect(
+        (
+          await harness.app.request(
+            `/api/runner/jobs/${patchDispatch.job.jobId}/outputs/${path}`,
+            {
+              method: "PUT",
+              headers: {
+                ...patchAuthorization,
+                "content-type": contentType,
+              },
+              body,
+            },
+          )
+        ).status,
+      ).toBe(201);
+    }
+    const patchPlanHash = await sha256Text(patchPlanText);
+    const candidate = await postJson(
+      harness.app,
+      `/api/runner/jobs/${patchDispatch.job.jobId}/candidate`,
+      { attempt: 1, planSha256: patchPlanHash },
+      patchAuthorization,
+    );
+    expect(candidate.status).toBe(200);
+    await expect(candidate.json()).resolves.toMatchObject({
+      data: { status: "VERIFIED" },
+    });
+    const scopedSource = await harness.app.request(
+      `/api/runner/jobs/${patchDispatch.job.jobId}/source`,
+      { headers: patchAuthorization },
+    );
+    expect(scopedSource.status).toBe(200);
+    await expect(scopedSource.text()).resolves.toBe(imbalanceNotebookText);
+
+    const patchedNotebook = JSON.stringify({
+      cells: [
+        { cell_type: "markdown", source: ["Rare-event evaluation"] },
+        { cell_type: "code", source: ["# verified metric block"] },
+      ],
+      metadata: {},
+      nbformat: 4,
+      nbformat_minor: 5,
+    });
+    const patchedNotebookHash = await sha256Text(patchedNotebook);
+    const diff =
+      "@@ cell 2 @@\n- accuracy only\n+ majority baseline and minority metrics";
+    const patchPayload = {
+      schemaVersion: "1" as const,
+      id: "patch_imbalance_scientific_v5",
+      sessionId: patchBundle.sessionId,
+      status: "VERIFIED" as const,
+      sourceArtifactHash: patchBundle.artifactManifest.fileSha256,
+      patchedArtifactHash: patchedNotebookHash,
+      patchHash: await hashCanonical(diff),
+      modifiedCells: [targetCell],
+      diff,
+      verification: {
+        passed: true,
+        invariants: [
+          "STRATIFIED_HOLDOUT",
+          "MAJORITY_BASELINE_COMPUTED",
+          "MINORITY_METRICS_RECOMPUTED",
+        ],
+        unchangedCellHashes: ["f".repeat(64)],
+      },
+      generatedAt: patchBundle.requestedAt,
+    };
+    const patchResult = {
+      ...patchPayload,
+      resultHash: await hashCanonical(patchPayload),
+    };
+    const patchResultText = JSON.stringify(patchResult);
+    for (const [path, body, contentType] of [
+      ["patched-notebook.ipynb", patchedNotebook, "application/x-ipynb+json"],
+      ["patch-result.json", patchResultText, "application/json"],
+    ] as const) {
+      expect(
+        (
+          await harness.app.request(
+            `/api/runner/jobs/${patchDispatch.job.jobId}/outputs/${path}`,
+            {
+              method: "PUT",
+              headers: {
+                ...patchAuthorization,
+                "content-type": contentType,
+              },
+              body,
+            },
+          )
+        ).status,
+      ).toBe(201);
+    }
+    const patchJob = await harness.runnerJobs.find(patchDispatch.job.jobId);
+    if (patchJob === undefined) {
+      throw new Error("class-imbalance patch job disappeared");
+    }
+    const patchCallback = await postJson(
+      harness.app,
+      `/api/runner/jobs/${patchDispatch.job.jobId}/callback`,
+      {
+        schemaVersion: "1",
+        callbackId: "callback_imbalance_scientific_patch_v5",
+        idempotencyKey: "imbalance-scientific-patch-v5",
+        jobId: patchDispatch.job.jobId,
+        stateVersion: patchDispatch.job.stateVersion,
+        status: "VERIFIED",
+        outputHashes: [
+          patchPlanHash,
+          await sha256Text(rationaleText),
+          patchedNotebookHash,
+          await sha256Text(patchResultText),
+        ],
+        finalEventCursor: patchJob.eventCursor,
+        occurredAt: "2026-07-14T10:00:06.000Z",
+      },
+      patchAuthorization,
+    );
+    expect(patchCallback.status).toBe(200);
+    await expect(patchCallback.json()).resolves.toMatchObject({
+      data: {
+        runnerJob: { status: "VERIFIED" },
+        session: {
+          state: "PATCH_VERIFIED",
+          patchResult: { resultHash: patchResult.resultHash },
         },
       },
     });
