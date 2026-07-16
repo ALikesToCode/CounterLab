@@ -412,3 +412,26 @@ can pass.
   still fail an independent named invariant.
 - Use the generated public fixed-kernel result as the class-imbalance Worker
   integration source. Do not reuse the older synthetic helper as live authority.
+
+## 2026-07-16 — Keep both v5 patch paths on one frozen Worker boundary
+
+- Dispatch leakage and class-imbalance repair from the same strict v5 Patch
+  Compile envelope after their registered fixed transfer evaluator passes.
+- Keep notebook source sealed until the independent Patch Plan verifier accepts
+  the exact pack operations and allowed cell scope.
+- Accept the terminal callback only when the ordered Plan, rationale, copied
+  notebook, and Patch Result hashes match the frozen outputs exactly.
+- Stop native v5 at `PATCH_VERIFIED`; do not manufacture a legacy Belief Test or
+  Proof Bundle to make the later stage appear complete.
+
+## 2026-07-16 — Canonical JSON must write sorted keys directly
+
+- Preserve the compatibility repair that retains an own `__proto__` property
+  through null-prototype normalization; normal historical proof vectors remain
+  unchanged.
+- Do not treat sorting into a JavaScript object followed by `JSON.stringify` as
+  canonical authority: integer-like keys can be re-enumerated numerically.
+- Define the Capsule canonical profile with a direct object-text writer and
+  explicit UTF-16 key ordering compatible with the browser/RFC 8785 model.
+- Add cross-runtime vectors for integer-like keys, non-BMP Unicode keys, and
+  decomposed Unicode before issuing a Proof Capsule v2 hash.

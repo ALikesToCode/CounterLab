@@ -10,11 +10,11 @@ authority, replay compatibility, fixed kernels, or existing verifiers.
 
 ## Current phase
 
-Phases 8–10 and 14 — the v5 result, browser belief, deterministic transfer, and
-interactive authority pass for both hosted ML Subject Packs. The leakage Worker
-path now also reaches an immutable copied patch after genuine verifier
-reject-repair. Canonical authority repair, the equivalent imbalance callback,
-Boundary Map, Reasoning Diff v2, and Proof Capsule v2 are active
+Phases 10 and 14 — the complete local v5 result, browser belief, transfer,
+interactive, and patch authority pass for both hosted ML Subject Packs. The
+Worker paths now reach immutable copied patches after fixed verification, with
+the leakage path also exercising a genuine reject-repair. Remaining canonical
+cross-runtime vectors, Boundary Map, Reasoning Diff v2, and Proof Capsule v2 are active
 (`in_progress`). The current public deployment remains the qualified Experiment
 Plan v2 path until this compatibility-preserving upgrade passes focused tests
 and a new production smoke.
@@ -145,12 +145,12 @@ code, `apps/web/src/App.tsx`, or global CSS.
       result through the fixed manufacturing-defect transfer evaluator.
 - [x] Bind threshold/prevalence controls to the same frozen v5 authority and
       fixed kernel without a model call.
-- [ ] Run the strict v5 imbalance patch bundle through the full Worker
+- [x] Run the strict v5 imbalance patch bundle through the full Worker
       candidate/callback/frozen-download boundary.
 - [ ] Add the prevalence/threshold Boundary Sweep and mutations.
-- **Status:** in progress; the versioned compile, fixed run, and end-to-end
-  result release plus browser belief/transfer/interactive authority now pass
-  for the pack. Patch/proof and Boundary stages remain pending.
+- **Status:** in progress; versioned compile, fixed run, browser
+  belief/transfer/interactive authority, and the full frozen patch callback now
+  pass for the pack. Proof and Boundary stages remain pending.
 
 ### Phase 10 — Boundary Map engine
 
@@ -180,8 +180,9 @@ code, `apps/web/src/App.tsx`, or global CSS.
 
 ### Phase 14 — Proof Capsule v2
 
-- [ ] Repair the canonical `__proto__` collision under an explicit new profile
-      without changing historical Proof Bundle bytes.
+- [x] Preserve own `__proto__` keys without changing historical normal vectors.
+- [ ] Make integer-like and Unicode key ordering cross-runtime deterministic,
+      then bind the explicit canonical profile into new Capsule authority.
 - [ ] Add deterministic `.counterlab` archive, CLI validate/inspect/replay,
       corruption/mode tests, engine provenance, and v1 compatibility.
 - **Status:** pending

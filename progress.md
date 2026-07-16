@@ -1,6 +1,6 @@
 # Progress Log: CounterLab Studio upgrade
 
-## v5 leakage patch authority — 2026-07-16
+## v5 two-concept patch authority — 2026-07-16
 
 - Added a strict v5 Patch Compile bundle carrying Belief Spec, Prediction,
   frozen Experiment IR/selection/Plan lineage, Worker Evidence Verdict,
@@ -19,10 +19,18 @@
 - Native v5 stops at `PATCH_VERIFIED`; it does not issue the Belief-Test-based
   legacy Proof Bundle. Boundary Map, Reasoning Diff v2, and Proof Capsule v2
   remain pending.
-- Verification for this slice: Worker API 53/53, concept registry 12/12,
+- Added the equivalent class-imbalance Worker journey from fixed result through
+  transfer, scoped source release, verified Plan, exact callback hashes, frozen
+  copied notebook, and `PATCH_VERIFIED`.
+- Preserved own JSON `__proto__` keys in the two historical canonicalizers;
+  their 39 regression tests pass without changing normal historical vectors.
+  A subsequent audit found integer-like and non-BMP Unicode key-order vectors
+  that still require a cross-runtime canonical writer before Capsule issuance.
+- Verification for this slice: Worker API 54/54, concept registry 12/12,
   strict repository TypeScript passed, relevant v5 patch/runner tests 83/83,
-  and hosted Python patch tests 9/9. No build, dev server, deployment, browser
-  journey, or production smoke was run for this slice.
+  hosted Python patch tests 9/9, and proof/session canonical tests 39/39. No
+  build, dev server, deployment, browser journey, or production smoke was run
+  for this slice.
 
 ## v5.1 Scientific Engine Edition — 2026-07-15
 

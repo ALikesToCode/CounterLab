@@ -31,11 +31,10 @@ belief authority after refresh, and downstream session-core/Worker gates now
 resolve exact v5 evidence authority before revision and concept-specific
 transfer. Interactive reruns now derive from frozen compile/result authority
 without changing the Evidence Verdict. The strict v5 patch contract, runner,
-fixed Python verifier, and Worker leakage path now preserve that authority
-through genuine reject-repair, source sealing, exact terminal hashes, immutable
-patch artifacts, and `PATCH_VERIFIED`. Native Reasoning Diff v2, Boundary Map
-authority, Proof Capsule v2, and the equivalent full Worker imbalance callback
-remain unfinished.
+fixed Python verifier, and both Worker concept paths now preserve that authority
+through reject-repair or direct verification, source sealing, exact terminal
+hashes, immutable patch artifacts, and `PATCH_VERIFIED`. Native Reasoning Diff
+v2, Boundary Map authority, and Proof Capsule v2 remain unfinished.
 The current production deployment remains the qualified Experiment Plan v2
 path and has not been promoted to this worktree.
 
@@ -76,23 +75,27 @@ deployed registry digest remain distinct identities and are not interchangeable.
 | Browser and downstream evidence authority | done | Commits `f406f0e`, `22169c9`, and `3dbadd0` render exact v2 Belief Specs after refresh, fail closed on mixed or hash-mismatched authority, and route leakage/imbalance to their fixed transfer evaluators. | Preserve this authority tuple through interactive, patch, and proof migration. |
 | Interactive controls on v5 lineage | done locally | Commits `30ec305`, `ce88b9c`, and `ee3c78f` add a purpose-separated strict bundle, cross-language fixed derivation, frozen compile/result authority, both concept controls, and immutable session verdicts. | Requalify in the final image and production smoke. |
 | V5 deterministic transfer | done locally | Both genuine v5 concepts pass their registered fixed transfer evaluator; `INCONCLUSIVE` may transfer but remains patch-locked. | Requalify inside the complete release chain before production promotion. |
-| V5 artifact-specific patch | done locally for leakage; shared runner supports both packs | Commits `1d96fe0`, `3f8a653`, `ff5e03c`, `15799f9`, `a970fc0`, and `8822f4d` add the strict v5 bundle, independent Python checks, transfer evaluator binding, idempotent Worker dispatch, genuine verifier reject-repair, source sealing, exact four-output callback, immutable authority, and copied patch download without creating a legacy proof. | Add the equivalent full Worker imbalance callback test, then requalify both concepts in the final image. |
-| Reasoning Diff v2 and Proof Capsule v2 | active | Legacy Proof Bundle v1/v2 remains qualified and byte-compatible. The strict v5 patch stops honestly at `PATCH_VERIFIED`. | Repair and version canonical JSON authority, add Boundary Map authority, native Reasoning Diff v2, deterministic Capsule archive/validation/storage/download, and replay persistence. |
+| V5 artifact-specific patch | done locally for both packs | Commits `1d96fe0`, `3f8a653`, `ff5e03c`, `15799f9`, `a970fc0`, `8822f4d`, and `d2f2b92` add the strict v5 bundle, independent Python checks, transfer evaluator binding, idempotent Worker dispatch, genuine verifier reject-repair, source sealing, exact four-output callback, immutable authority, and copied patch download without creating a legacy proof. The Worker test now completes both concepts to `PATCH_VERIFIED`. | Requalify both concepts in the final image and production smoke. |
+| Canonical JSON authority | active | Commit `47f49a7` preserves own `__proto__` keys with null-prototype normalization while retaining historical vectors; proof/session canonical suites pass 39/39. A follow-up audit reproduced integer-like-key re-enumeration and non-BMP Unicode key-order differences across runtimes. | Add a direct canonical writer, cross-runtime vectors, and a named profile before Capsule issuance. |
+| Reasoning Diff v2 and Proof Capsule v2 | active | Legacy Proof Bundle v1/v2 remains qualified and byte-compatible. The strict v5 patch stops honestly at `PATCH_VERIFIED`. | Add Boundary Map authority, native Reasoning Diff v2, deterministic Capsule archive/validation/storage/download, and replay persistence. |
 | Boundary Map, simplified Theater, Judge Mode | pending | Contracts/UX requirements are recorded; existing UI remains the released Studio UI. | Implement only after the v5 ML authority loop passes. |
 | Physics/free-fall | blocked by phase order | No verified public support is claimed. | Start only after both live ML concepts pass the new production authority gate. |
 | Final release | pending | Previous production v2 smoke remains valid for that deployment. | Full suites, clean clone, engine gate, secret scan, deployment, CloakBrowser journeys, and exact-version production smoke. |
 
 Latest local v5 patch-authority verification (2026-07-16):
 
-- Worker API Vitest: 53/53 passed after the v5 patch callback integration.
+- Worker API Vitest: 54/54 passed after both v5 patch callback integrations.
 - Concept registry Vitest: 12/12 passed.
 - Relevant v5 patch contracts/runner Vitest: 83/83 passed before Worker
   integration; hosted Python patch tests: 9/9 passed.
+- Proof Bundle and session canonical suites: 39/39 passed, including distinct
+  hashes for an own `__proto__` key and unchanged historical vectors. Integer-like
+  and non-BMP Unicode cross-runtime vectors are the active canonical blocker.
 - Strict repository and Worker TypeScript: passed.
 - Git whitespace check: passed.
 - No `build`, `dev`, deployment, or production smoke was run for this slice.
-- Next active slice: repair and version canonical JSON authority, then add
-  Boundary Map, native Reasoning Diff, and Proof Capsule v2.
+- Next active slice: close the remaining cross-runtime canonical vectors, then
+  add signed Boundary Map authority, native Reasoning Diff, and Proof Capsule v2.
 
 ## Acceptance matrix
 
@@ -105,7 +108,7 @@ Latest local v5 patch-authority verification (2026-07-16):
 | Live analyst preview and approval            | pass    | Live calls require a hash-bound preview of the exact sanitized packet; sensitive-looking evidence requires explicit approval, and claim/artifact changes invalidate it.                                                                  |
 | Runner job/token/callback/event cursor model | pass    | D1 repository, optimistic transitions, Worker-held P-256 private signing, Container public-key verification, callback idempotency, cursor reconnect, scoped cancellation, recoverable dispatch acknowledgement, and browser-safe event schemas pass tests and production smoke. |
 | Artifact-specific hosted Experiment Plan     | pass    | Worker/runner integration compiles and independently verifies typed v2 Plans; rejected candidates release no result.                                                                                                                      |
-| V5 hosted scientific authority migration     | partial | Native Belief Spec, bounded compile/repair, fixed selection, fixture-bound fixed execution, Worker-owned tri-state result release, browser v2 belief rendering, deterministic transfer, frozen interactive controls, and the full leakage v5 patch callback now pass locally. The Worker imbalance patch callback, Boundary Map, Reasoning Diff v2, Capsule v2, and production promotion remain pending. |
+| V5 hosted scientific authority migration     | partial | Native Belief Spec, bounded compile/repair, fixed selection, fixture-bound fixed execution, Worker-owned tri-state result release, browser v2 belief rendering, deterministic transfer, frozen interactive controls, and both full v5 patch callbacks pass locally. Boundary Map, Reasoning Diff v2, Capsule v2, and production promotion remain pending. |
 | Fixed hosted result and cross-language hash  | pass    | Python v2 result hashes now use browser-compatible canonical JSON while legacy v1/replay hashes remain stable; TypeScript result verification passes both concepts.                                                                       |
 | Entity-leakage lab and mutations             | pass    | Computed random 0.984722, group 0.594444, ablation 0.673611, zero group overlap; the current CLI rejects 13/13 critical mutations and the achieved-metrics collector records the same 13/13 published set.                                |
 | Class-imbalance lab and mutations            | pass    | 6,000 rows, 1.0833% positives, majority accuracy 0.989333 with recall 0; threshold recall 0.3125; the current CLI rejects 19/19 critical mutations and the achieved-metrics collector records its narrower 15/15 published set.             |
@@ -149,15 +152,14 @@ Latest local v5 patch-authority verification (2026-07-16):
 
 ## Highest-risk remaining issue
 
-The highest remaining product risk is portable v5 proof authority. The leakage
-path now carries the frozen Belief Spec, Prediction, Experiment IR, selection,
+The highest remaining product risk is portable v5 proof authority. Both ML
+paths now carry the frozen Belief Spec, Prediction, Experiment IR, selection,
 result, Evidence Verdict, epistemic report, transfer, Patch Plan, and copied
-patch to `PATCH_VERIFIED`; it intentionally releases no legacy proof. A
-reproduced `__proto__` ambiguity in the historical object-materializing
-canonicalizers must be repaired under a versioned profile before new Capsule
-hashes are trusted. Boundary Map, Reasoning Diff v2, Capsule archive/storage,
-the full imbalance Worker callback, and final production qualification remain
-open. The current production deployment therefore stays on its qualified v2
+patch to `PATCH_VERIFIED`; they intentionally release no legacy proof. The
+own-key-loss ambiguity is repaired with stable historical vectors, while
+integer-like and non-BMP Unicode ordering remain open. Boundary Map, Reasoning
+Diff v2, Capsule archive/storage, replay persistence, and final production
+qualification remain open. The current production deployment stays on its qualified v2
 contract. Upstream Runtime Codex turn intermittency remains an operational
 risk; the runner fails closed and the previous production smoke proved its
 bounded recovery path. The reviewed vulnerability exception expires on

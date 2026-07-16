@@ -13,13 +13,18 @@
   remain sealed. The fixed patch callback accepts exactly Plan, rationale,
   notebook, and Patch Result hashes, freezes their bytes, and is idempotent
   after mutable runner output disappears.
+- Both leakage and class imbalance now exercise the complete native Worker
+  boundary through transfer and `PATCH_VERIFIED`; neither borrows a sample
+  result, sample patch, or legacy Belief Test.
 - Native v5 must not call the legacy Proof Bundle assembler because it requires
   Belief Test v1 and Experiment Plan v2 as primary authority. The Worker now
   stops honestly at `PATCH_VERIFIED` pending native Reasoning Diff and Capsule.
-- A read-only audit reproduced a canonical hash collision: object
-  materialization into `{}` drops an own JSON `__proto__` key. Historical proof
-  bytes must remain compatible, so new Proof Capsule authority needs an explicit
-  corrected canonicalization profile and regression vectors.
+- The own JSON `__proto__` key-loss collision is fixed by null-prototype
+  normalization while normal historical vectors remain unchanged. A follow-up
+  cross-runtime audit found that integer-like keys are still re-enumerated by
+  `JSON.stringify`, and Python/JavaScript differ for some non-BMP Unicode key
+  orderings. New Proof Capsule authority therefore still needs a direct
+  canonical writer, explicit profile, and cross-runtime regression vectors.
 - Strict Proof Capsule issuance also depends on a verified Boundary Map,
   immutable patch lineage, deterministic archive validation/storage, and replay
   persistence. None is marked complete yet.
