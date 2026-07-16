@@ -194,6 +194,9 @@ ${json(input.artifactManifest)}
 Public Subject Pack capabilities and candidate IDs:
 ${json(input.conceptPack)}
 
+Fixed scorer composition requirements:
+${json(input.conceptPack.planRequirements)}
+
 Discrimination Contract JSON Schema:
 ${json(input.schemas.discriminationContract)}
 

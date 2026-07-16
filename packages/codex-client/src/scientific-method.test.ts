@@ -136,7 +136,10 @@ function scientificInput(
         observableId: "optimism_gap",
         maxCells: 25,
       },
-      planRequirements: ["Keep model and preprocessing fixed."],
+      planRequirements: [
+        'Fixed scorer required heldConstantIds: ["model","seed","test_fraction","entity_field","primary_identity_setting","preprocessing","model_hyperparameters"].',
+        'Fixed scorer decisive pattern pairs: [{"currentPatternId":"leakage.small-gap","competingPatternId":"leakage.material-gap","separation":0.82}].',
+      ],
     },
     schemas: {
       discriminationContract: z.toJSONSchema(DiscriminationContractV1Schema),
@@ -184,6 +187,10 @@ describe("hosted scientific-method compiler", () => {
     expect(prompt).toContain("lab-scene.json");
     expect(prompt).toMatch(/selection must remain UNSELECTED/i);
     expect(prompt).toMatch(/fixed scorer/i);
+    expect(prompt).toContain("Fixed scorer composition requirements:");
+    expect(prompt).toContain("primary_identity_setting");
+    expect(prompt).toContain("leakage.small-gap");
+    expect(prompt).toContain("leakage.material-gap");
     expect(prompt).toMatch(/no literal result values/i);
     expect(prompt).toMatch(/copy conceptPack\.boundarySweep exactly/i);
     expect(prompt).not.toContain(generationDirectory);

@@ -8160,9 +8160,10 @@ describe("Cloudflare Worker API", () => {
         `runner-input/${dispatched.job.jobId}.json`,
       );
       if (storedInput === undefined) throw new Error("v5 input was not stored");
-      expect(
-        RunnerLabCompileBundleV5Schema.parse(JSON.parse(storedInput.body)),
-      ).toMatchObject({
+      const storedBundle = RunnerLabCompileBundleV5Schema.parse(
+        JSON.parse(storedInput.body),
+      );
+      expect(storedBundle).toMatchObject({
         schemaVersion: "5",
         approvedBeliefSpec: { id: beliefSpecId },
         conceptPack: {
@@ -8183,6 +8184,30 @@ describe("Cloudflare Worker API", () => {
           "public-rationale.md",
         ],
       });
+      const packContractHash = storedBundle.provenance.inputHashes[3];
+      expect(packContractHash).toBeDefined();
+      expect(storedBundle.provenance.promptHash).toBe(
+        await hashCanonical({
+          promptVersion: "scientific-method-compile-v2",
+          conceptPack: {
+            id: storedBundle.conceptPack.id,
+            version: storedBundle.conceptPack.version,
+          },
+          packContractHash,
+          candidateExperimentIds:
+            storedBundle.conceptPack.candidateExperimentIds,
+          boundarySweep: storedBundle.conceptPack.boundarySweep,
+          schemaHashes: {
+            discriminationContract: await hashCanonical(
+              storedBundle.schemas.discriminationContract,
+            ),
+            experimentIr: await hashCanonical(
+              storedBundle.schemas.experimentIr,
+            ),
+            labScene: await hashCanonical(storedBundle.schemas.labScene),
+          },
+        }),
+      );
       expect(await sessionRepository.listEvents(sessionId)).toEqual(
         expect.arrayContaining([
           expect.objectContaining({

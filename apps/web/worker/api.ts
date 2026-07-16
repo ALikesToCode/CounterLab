@@ -3789,6 +3789,7 @@ export function createApi(options: ApiOptions = {}) {
       const scientificPromptHash = await hashCanonical({
         promptVersion: "scientific-method-compile-v2",
         conceptPack: { id: pack.id, version: pack.version },
+        packContractHash,
         candidateExperimentIds: pack.scientificMethod.candidateExperimentIds,
         boundarySweep,
         schemaHashes: {
