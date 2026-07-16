@@ -255,6 +255,9 @@ importers:
       "@counterlab/contracts":
         specifier: workspace:*
         version: link:../../packages/contracts
+      "@counterlab/experiment-ir":
+        specifier: workspace:*
+        version: link:../../packages/experiment-ir
       "@counterlab/session-core":
         specifier: workspace:*
         version: link:../../packages/session-core

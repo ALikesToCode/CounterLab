@@ -1,9 +1,11 @@
 import {
-  RunnerJobInputBundleSchema,
   type PublicCompilerEvent,
   type RunnerCallback,
-  type RunnerJobInputBundle,
 } from "@counterlab/contracts";
+import {
+  VersionedRunnerJobInputBundleSchema,
+  type VersionedRunnerJobInputBundle,
+} from "@counterlab/experiment-ir";
 import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
 
@@ -75,14 +77,14 @@ export class HttpRunnerControlPlane implements RunnerControlPlane {
     }
   }
 
-  async getInput(signal?: AbortSignal): Promise<RunnerJobInputBundle> {
+  async getInput(signal?: AbortSignal): Promise<VersionedRunnerJobInputBundle> {
     const response = await this.request(
       `/api/runner/jobs/${this.jobId()}/input`,
       { method: "GET" },
       false,
       signal,
     );
-    return RunnerJobInputBundleSchema.parse(await response.json());
+    return VersionedRunnerJobInputBundleSchema.parse(await response.json());
   }
 
   async getSource(signal?: AbortSignal): Promise<string> {

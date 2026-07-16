@@ -14,15 +14,17 @@ import {
   PatchResultSchema,
   PublicCompilerEventSchema,
   RunnerCallbackSchema,
-  RunnerJobInputBundleSchema,
   type PublicCompilerEvent,
   type RunnerCallback,
   type RunnerLabCompileBundle,
   type RunnerLabRunBundle,
   type RunnerPatchCompileBundle,
-  type RunnerJobInputBundle,
   type RunnerOperationalMetrics,
 } from "@counterlab/contracts";
+import {
+  VersionedRunnerJobInputBundleSchema,
+  type VersionedRunnerJobInputBundle,
+} from "@counterlab/experiment-ir";
 
 const PLAN_PATH = "experiment-plan.json";
 const PATCH_PLAN_PATH = "patch-plan.json";
@@ -49,7 +51,7 @@ export type CandidateDecision = {
 };
 
 export interface RunnerControlPlane {
-  getInput(signal?: AbortSignal): Promise<RunnerJobInputBundle>;
+  getInput(signal?: AbortSignal): Promise<VersionedRunnerJobInputBundle>;
   getSource(signal?: AbortSignal): Promise<string>;
   start(signal?: AbortSignal): Promise<void>;
   resume(signal?: AbortSignal): Promise<void>;
@@ -219,13 +221,13 @@ export class HostedRunnerJobProcessor {
   }
 
   async run(jobId: string, signal?: AbortSignal): Promise<void> {
-    let bundle: RunnerJobInputBundle | undefined;
+    let bundle: VersionedRunnerJobInputBundle | undefined;
     let cursor = 0;
     let outputHashes: string[] = [];
     const operationalMetrics = emptyOperationalMetrics();
     try {
       throwIfCancelled(signal);
-      bundle = RunnerJobInputBundleSchema.parse(
+      bundle = VersionedRunnerJobInputBundleSchema.parse(
         await this.authorityCall(signal, () =>
           this.options.controlPlane.getInput(signal),
         ),
@@ -243,6 +245,14 @@ export class HostedRunnerJobProcessor {
       );
       throwIfCancelled(signal);
       cursor = await this.emit(jobId, cursor, { kind: "job.started" }, signal);
+
+      if (bundle.schemaVersion === "5") {
+        throw new RunnerProcessingError(
+          "RUNNER_V5_NOT_ENABLED",
+          "The scientific-method runner authority is not enabled for this deployment.",
+          false,
+        );
+      }
 
       const generationDirectory = await this.prepareWorkspace(jobId);
       if (bundle.kind === "LAB_RUN") {

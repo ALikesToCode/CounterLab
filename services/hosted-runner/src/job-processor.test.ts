@@ -18,13 +18,18 @@ import {
   RunnerLabCompileBundleSchema,
   RunnerLabRunBundleSchema,
   RunnerPatchCompileBundleSchema,
+  migrateBeliefTestV1ToV2,
   type PublicCompilerEvent,
   type RunnerCallback,
   type RunnerLabCompileBundle,
   type RunnerLabRunBundle,
   type RunnerPatchCompileBundle,
-  type RunnerJobInputBundle,
 } from "@counterlab/contracts";
+import {
+  RunnerLabCompileBundleV5Schema,
+  type RunnerLabCompileBundleV5,
+  type VersionedRunnerJobInputBundle,
+} from "@counterlab/experiment-ir";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -161,6 +166,46 @@ function bundle(jobId = "runner_job_1"): RunnerLabCompileBundle {
     experimentPlanSchema: { type: "object" },
     resourceLimits: { wallSeconds: 45, memoryMb: 768, maxRuns: 4 },
     permittedOutputs: ["experiment-plan.json", "public-rationale.md"],
+  });
+}
+
+function scientificBundleV5(
+  jobId = "runner_job_scientific_1",
+): RunnerLabCompileBundleV5 {
+  const legacy = bundle(jobId);
+  const migrated = migrateBeliefTestV1ToV2(legacy.approvedBeliefTest);
+  return RunnerLabCompileBundleV5Schema.parse({
+    schemaVersion: "5",
+    kind: "LAB_COMPILE",
+    jobId,
+    sessionId: legacy.sessionId,
+    stateVersion: legacy.stateVersion,
+    artifactManifestHash: legacy.artifactManifestHash,
+    approvedBeliefSpec: {
+      ...migrated,
+      learnerDecision: "CONFIRMED",
+    },
+    beliefSpecHash: "5".repeat(64),
+    prediction: legacy.prediction,
+    artifactManifest: legacy.artifactManifest,
+    conceptPack: {
+      ...legacy.conceptPack,
+      candidateExperimentIds: [
+        legacy.approvedBeliefTest.decisiveIntervention.id,
+      ],
+    },
+    schemas: {
+      discriminationContract: { type: "object" },
+      experimentIr: { type: "object" },
+      labScene: { type: "object" },
+    },
+    resourceLimits: legacy.resourceLimits,
+    permittedOutputs: [
+      "discrimination-contract.json",
+      "experiment-ir.json",
+      "lab-scene.json",
+      "public-rationale.md",
+    ],
   });
 }
 
@@ -415,11 +460,11 @@ class FakeControlPlane implements RunnerControlPlane {
   source = '{"nbformat":4,"cells":[]}';
 
   constructor(
-    private readonly input: RunnerJobInputBundle,
+    private readonly input: VersionedRunnerJobInputBundle,
     private readonly decisions: CandidateDecision[],
   ) {}
 
-  getInput(): Promise<RunnerJobInputBundle> {
+  getInput(): Promise<VersionedRunnerJobInputBundle> {
     return Promise.resolve(this.input);
   }
   start(): Promise<void> {
@@ -578,6 +623,35 @@ async function workspace(): Promise<string> {
 }
 
 describe("HostedRunnerJobProcessor", () => {
+  it("recognizes a v5 job but fails closed until scientific authority is enabled", async () => {
+    const compiler = new FakeCompiler({ schemaVersion: "2" });
+    const controlPlane = new FakeControlPlane(scientificBundleV5(), []);
+    const processor = new HostedRunnerJobProcessor({
+      workspaceRoot: await workspace(),
+      compiler,
+      controlPlane,
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_v5`,
+    });
+
+    await processor.run("runner_job_scientific_1");
+
+    expect(controlPlane.starts).toBe(1);
+    expect(controlPlane.candidateCalls).toBe(0);
+    expect(controlPlane.uploads.size).toBe(0);
+    expect(compiler.compileCalls).toBe(0);
+    expect(controlPlane.callbacks).toEqual([
+      expect.objectContaining({
+        status: "FAILED",
+        outputHashes: [],
+        error: expect.objectContaining({
+          code: "RUNNER_V5_NOT_ENABLED",
+          retryable: false,
+        }),
+      }),
+    ]);
+  });
+
   it("publishes only allow-listed files and completes a verified plan job", async () => {
     const compiler = new FakeCompiler({ schemaVersion: "2" });
     const controlPlane = new FakeControlPlane(bundle(), [verifiedDecision]);
