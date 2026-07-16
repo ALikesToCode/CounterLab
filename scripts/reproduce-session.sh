@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPLAY_ID="${1:-}"
+IMAGE="${COUNTERLAB_SANDBOX_IMAGE:-counterlab-runner:local}"
 
 if [[ "${REPLAY_ID}" != "leakage-01" ]]; then
   echo "Usage: ./scripts/reproduce-session.sh leakage-01" >&2
@@ -10,6 +11,6 @@ if [[ "${REPLAY_ID}" != "leakage-01" ]]; then
 fi
 
 cd "${ROOT_DIR}"
-bash scripts/sandbox-smoke.sh --build
+COUNTERLAB_SANDBOX_IMAGE="${IMAGE}" bash scripts/sandbox-smoke.sh
 PYTHONPATH=services/kernel/src:services/runner/src .venv/bin/python \
-  scripts/reproduce-session.py
+  scripts/reproduce-session.py --image "${IMAGE}"
