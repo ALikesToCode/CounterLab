@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   RunnerLabCompileBundleV5Schema,
+  RunnerScientificCandidateV5Schema,
   VersionedRunnerJobInputBundleSchema,
 } from "../src/index.js";
 
@@ -215,6 +216,30 @@ describe("Runner LAB_COMPILE bundle v5", () => {
         provenance: {
           ...runnerBundleV5().provenance,
           promptHash: "not-a-hash",
+        },
+      }),
+    ).toThrow();
+  });
+
+  it("binds a v5 candidate submission to all four generated artifacts", () => {
+    expect(
+      RunnerScientificCandidateV5Schema.parse({
+        schemaVersion: "5",
+        attempt: 1,
+        artifactHashes: {
+          "discrimination-contract.json": digest("1"),
+          "experiment-ir.json": digest("2"),
+          "lab-scene.json": digest("3"),
+          "public-rationale.md": digest("4"),
+        },
+      }),
+    ).toMatchObject({ schemaVersion: "5", attempt: 1 });
+    expect(() =>
+      RunnerScientificCandidateV5Schema.parse({
+        schemaVersion: "5",
+        attempt: 1,
+        artifactHashes: {
+          "experiment-ir.json": digest("2"),
         },
       }),
     ).toThrow();

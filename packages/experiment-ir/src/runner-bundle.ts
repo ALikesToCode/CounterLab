@@ -182,6 +182,25 @@ export type RunnerLabCompileBundleV5 = z.infer<
   typeof RunnerLabCompileBundleV5Schema
 >;
 
+export const RunnerScientificCandidateV5Schema = z
+  .object({
+    schemaVersion: z.literal("5"),
+    attempt: z.number().int().positive().max(3),
+    artifactHashes: z
+      .object({
+        "discrimination-contract.json": Sha256,
+        "experiment-ir.json": Sha256,
+        "lab-scene.json": Sha256,
+        "public-rationale.md": Sha256,
+      })
+      .strict(),
+  })
+  .strict();
+
+export type RunnerScientificCandidateV5 = z.infer<
+  typeof RunnerScientificCandidateV5Schema
+>;
+
 export const VersionedRunnerJobInputBundleSchema = z.union([
   RunnerJobInputBundleSchema,
   RunnerLabCompileBundleV5Schema,
