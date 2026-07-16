@@ -1865,6 +1865,54 @@ export const RunnerLabRunBundleSchema = z
 
 export type RunnerLabRunBundle = z.infer<typeof RunnerLabRunBundleSchema>;
 
+export const HostedPlanLineageV2Schema = z
+  .object({
+    status: z.literal("VERIFIED"),
+    jobId: NonEmptyString,
+    planHash: Sha256Schema,
+    source: z.literal("hosted-plan-v2"),
+  })
+  .passthrough();
+
+export const HostedExperimentLineageV5Schema = z
+  .object({
+    status: z.literal("VERIFIED"),
+    source: z.literal("hosted-experiment-ir-v5"),
+    jobId: NonEmptyString,
+    inputBundleHash: Sha256Schema,
+    artifactManifestHash: Sha256Schema,
+    beliefSpecHash: Sha256Schema,
+    predictionHash: Sha256Schema,
+    compilerArtifactHashes: z
+      .object({
+        "discrimination-contract.json": Sha256Schema,
+        "experiment-ir.json": Sha256Schema,
+        "lab-scene.json": Sha256Schema,
+        "public-rationale.md": Sha256Schema,
+      })
+      .strict(),
+    discriminationContractHash: Sha256Schema,
+    rawExperimentIrCanonicalHash: Sha256Schema,
+    labSceneHash: Sha256Schema,
+    scientificVerificationHash: Sha256Schema,
+    scientificVerifierVersion: z.literal(
+      "scientific-candidate-verifier-v1",
+    ),
+    selectionHash: Sha256Schema,
+    selectedExperimentIrHash: Sha256Schema,
+    projectedPlanHash: Sha256Schema,
+    scorerVersion: NonEmptyString,
+    projectionAdapterVersion: z.literal("experiment-ir-v5-to-plan-v2-v1"),
+  })
+  .strict();
+
+export const HostedLabLineageSchema = z.discriminatedUnion("source", [
+  HostedPlanLineageV2Schema,
+  HostedExperimentLineageV5Schema,
+]);
+
+export type HostedLabLineage = z.infer<typeof HostedLabLineageSchema>;
+
 export const RunnerPatchCompileBundleSchema = z
   .object({
     schemaVersion: z.literal("1"),

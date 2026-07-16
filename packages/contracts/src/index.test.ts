@@ -15,6 +15,7 @@ import {
   ExperimentPlanSchema,
   ExperimentPlanV2Schema,
   HostedVerifiedResultSetV2Schema,
+  HostedLabLineageSchema,
   InteractiveImbalanceRunRequestSchema,
   InteractiveLeakageRunRequestSchema,
   PatchResultSchema,
@@ -662,6 +663,51 @@ describe("hosted runner contracts", () => {
         sessionId: "session_crossed",
       }),
     ).toThrow(/lineage/i);
+  });
+
+  it("separates legacy hosted plans from v5 fixed scientific authority", () => {
+    const lineage = HostedLabLineageSchema.parse({
+      status: "VERIFIED",
+      source: "hosted-experiment-ir-v5",
+      jobId: "runner_job_compile_v5_1",
+      inputBundleHash: "0".repeat(64),
+      artifactManifestHash: "1".repeat(64),
+      beliefSpecHash: "2".repeat(64),
+      predictionHash: "3".repeat(64),
+      compilerArtifactHashes: {
+        "discrimination-contract.json": "4".repeat(64),
+        "experiment-ir.json": "5".repeat(64),
+        "lab-scene.json": "6".repeat(64),
+        "public-rationale.md": "7".repeat(64),
+      },
+      discriminationContractHash: "8".repeat(64),
+      rawExperimentIrCanonicalHash: "9".repeat(64),
+      labSceneHash: "a".repeat(64),
+      scientificVerificationHash: "b".repeat(64),
+      scientificVerifierVersion: "scientific-candidate-verifier-v1",
+      selectionHash: "c".repeat(64),
+      selectedExperimentIrHash: "d".repeat(64),
+      projectedPlanHash: "e".repeat(64),
+      scorerVersion: "experiment-scorer-v1",
+      projectionAdapterVersion: "experiment-ir-v5-to-plan-v2-v1",
+    });
+
+    expect(lineage.source).toBe("hosted-experiment-ir-v5");
+    expect(() =>
+      HostedLabLineageSchema.parse({
+        ...lineage,
+        planHash: "f".repeat(64),
+      }),
+    ).toThrow();
+    expect(
+      HostedLabLineageSchema.parse({
+        status: "VERIFIED",
+        jobId: "legacy_job",
+        planHash: "f".repeat(64),
+        source: "hosted-plan-v2",
+        invariantCount: 12,
+      }).source,
+    ).toBe("hosted-plan-v2");
   });
 
   it("bounds interactive leakage controls before a runner job is created", () => {
