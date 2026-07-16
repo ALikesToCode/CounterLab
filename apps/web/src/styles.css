@@ -6328,6 +6328,10 @@ body {
     min-height: 44px;
   }
 
+  .start-over-control {
+    font-size: 0;
+  }
+
   .proof-rail b,
   .start-over-control::before {
     font-size: 12px;
