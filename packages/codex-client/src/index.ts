@@ -28,10 +28,12 @@ export {
   buildCompileLabPrompt,
   buildCompileHostedExperimentPlanPrompt,
   buildCompileHostedPatchPlanPrompt,
+  buildCompileHostedScientificMethodPrompt,
   buildCompilePatchPrompt,
   buildRepairLabPrompt,
   buildRepairHostedExperimentPlanPrompt,
   buildRepairHostedPatchPlanPrompt,
+  buildRepairHostedScientificMethodPrompt,
 } from "./prompts.js";
 export { redactSecrets, sanitizeAppServerMessage } from "./sanitizer.js";
 export {
@@ -47,12 +49,14 @@ export {
   CompileLabInputSchema,
   CompileHostedExperimentPlanInputSchema,
   CompileHostedPatchPlanInputSchema,
+  CompileHostedScientificMethodInputSchema,
   CompilePatchInputSchema,
   CompilerEventSchema,
   CompilerSetupError,
   RepairLabInputSchema,
   RepairHostedExperimentPlanInputSchema,
   RepairHostedPatchPlanInputSchema,
+  RepairHostedScientificMethodInputSchema,
   ResourceLimitsSchema,
 } from "./types.js";
 export type {
@@ -60,6 +64,7 @@ export type {
   CompileLabInput,
   CompileHostedExperimentPlanInput,
   CompileHostedPatchPlanInput,
+  CompileHostedScientificMethodInput,
   CompilePatchInput,
   CompilerEvent,
   CompilerHealth,
@@ -67,4 +72,6 @@ export type {
   RepairLabInput,
   RepairHostedExperimentPlanInput,
   RepairHostedPatchPlanInput,
+  RepairHostedScientificMethodInput,
+  ScientificMethodCompiler,
 } from "./types.js";

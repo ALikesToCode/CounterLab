@@ -99,6 +99,42 @@ export type CompileHostedExperimentPlanInput = z.infer<
   typeof CompileHostedExperimentPlanInputSchema
 >;
 
+const HostedScientificConceptPackSchema = HostedConceptPackSchema.extend({
+  candidateExperimentIds: z.array(z.string().min(1).max(128)).min(1).max(8),
+}).strict();
+
+export const CompileHostedScientificMethodInputSchema =
+  BaseCompilationSchema.extend({
+    artifactManifestHash: z.string().regex(/^[a-f0-9]{64}$/i),
+    beliefSpecHash: z.string().regex(/^[a-f0-9]{64}$/i),
+    approvedBeliefSpec: JsonObjectSchema,
+    artifactManifest: JsonObjectSchema,
+    conceptPack: HostedScientificConceptPackSchema,
+    schemas: z
+      .object({
+        discriminationContract: JsonObjectSchema,
+        experimentIr: JsonObjectSchema,
+        labScene: JsonObjectSchema,
+      })
+      .strict(),
+    provenance: z
+      .object({
+        generatorId: z.string().min(1).max(96),
+        promptHash: z.string().regex(/^[a-f0-9]{64}$/i),
+        inputHashes: z
+          .array(z.string().regex(/^[a-f0-9]{64}$/i))
+          .min(1)
+          .max(20),
+      })
+      .strict(),
+    resourceLimits: HostedPlanResourceLimitsSchema,
+    permittedOutputs: z.array(z.string().min(1).max(128)).length(4),
+  }).strict();
+
+export type CompileHostedScientificMethodInput = z.infer<
+  typeof CompileHostedScientificMethodInputSchema
+>;
+
 const VerifierCounterexampleSchema = z
   .object({
     invariant: z.string().min(1).max(128),
@@ -143,6 +179,30 @@ export const RepairHostedExperimentPlanInputSchema =
 
 export type RepairHostedExperimentPlanInput = z.infer<
   typeof RepairHostedExperimentPlanInputSchema
+>;
+
+export const RepairHostedScientificMethodInputSchema =
+  CompileHostedScientificMethodInputSchema.extend({
+    repairAttempt: z.union([z.literal(1), z.literal(2)]),
+    verifierCounterexamples: z
+      .array(HostedVerifierCounterexampleSchema)
+      .min(1)
+      .max(24),
+    previousOutputHashes: z.record(
+      z.string(),
+      z.string().regex(/^[a-f0-9]{64}$/i),
+    ),
+    previousArtifacts: z
+      .object({
+        discriminationContract: JsonObjectSchema,
+        experimentIr: JsonObjectSchema,
+        labScene: JsonObjectSchema,
+      })
+      .strict(),
+  }).strict();
+
+export type RepairHostedScientificMethodInput = z.infer<
+  typeof RepairHostedScientificMethodInputSchema
 >;
 
 export const CompileHostedPatchPlanInputSchema = BaseCompilationSchema.extend({
@@ -348,6 +408,17 @@ export interface CodexCompiler {
     options?: CompilerExecutionOptions,
   ): AsyncIterable<CompilerEvent>;
   health(): Promise<CompilerHealth>;
+}
+
+export interface ScientificMethodCompiler {
+  compileScientificMethod(
+    input: CompileHostedScientificMethodInput,
+    options?: CompilerExecutionOptions,
+  ): AsyncIterable<CompilerEvent>;
+  repairScientificMethod(
+    input: RepairHostedScientificMethodInput,
+    options?: CompilerExecutionOptions,
+  ): AsyncIterable<CompilerEvent>;
 }
 
 export type CompilerSetupErrorCode =

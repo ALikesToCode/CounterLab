@@ -245,21 +245,52 @@ export const LabSceneBlockV2Schema = z.discriminatedUnion("type", [
   LimitationBlockSchema,
 ]);
 
+const LabSceneDraftShape = {
+  schemaVersion: z.literal("2"),
+  sceneId: BlockId,
+  sessionId: NonEmptyString,
+  concept: ConceptIdSchema,
+  supportLabel: z.enum(["VERIFIED_TEST", "GUIDED_VISUAL", "EXPLANATION_ONLY"]),
+  title: StaticCopy,
+  blocks: z.array(LabSceneBlockV2Schema).min(1).max(32),
+  assumptions: z.array(StaticCopy).min(1).max(12),
+  limitations: z.array(StaticCopy).min(1).max(12),
+} as const;
+
+export const LabSceneDraftV2Schema = z
+  .object(LabSceneDraftShape)
+  .strict()
+  .superRefine((scene, context) => {
+    const ids = new Set<string>();
+    for (const [index, block] of scene.blocks.entries()) {
+      if (ids.has(block.id)) {
+        context.addIssue({
+          code: "custom",
+          message: `duplicate scene block id: ${block.id}`,
+          path: ["blocks", index, "id"],
+        });
+      }
+      ids.add(block.id);
+    }
+    if (scene.supportLabel === "VERIFIED_TEST") {
+      context.addIssue({
+        code: "custom",
+        message: "only fixed verification may promote a draft to VERIFIED_TEST",
+        path: ["supportLabel"],
+      });
+    }
+    if (scene.blocks.some((block) => block.type === "ProofBadge")) {
+      context.addIssue({
+        code: "custom",
+        message: "only fixed verification may bind a ProofBadge",
+        path: ["blocks"],
+      });
+    }
+  });
+
 export const LabSceneV2Schema = z
   .object({
-    schemaVersion: z.literal("2"),
-    sceneId: BlockId,
-    sessionId: NonEmptyString,
-    concept: ConceptIdSchema,
-    supportLabel: z.enum([
-      "VERIFIED_TEST",
-      "GUIDED_VISUAL",
-      "EXPLANATION_ONLY",
-    ]),
-    title: StaticCopy,
-    blocks: z.array(LabSceneBlockV2Schema).min(1).max(32),
-    assumptions: z.array(StaticCopy).min(1).max(12),
-    limitations: z.array(StaticCopy).min(1).max(12),
+    ...LabSceneDraftShape,
     provenance: z
       .object({
         experimentIrHash: Sha256,
@@ -293,4 +324,5 @@ export const LabSceneV2Schema = z
   });
 
 export type LabSceneBlockV2 = z.infer<typeof LabSceneBlockV2Schema>;
+export type LabSceneDraftV2 = z.infer<typeof LabSceneDraftV2Schema>;
 export type LabSceneV2 = z.infer<typeof LabSceneV2Schema>;

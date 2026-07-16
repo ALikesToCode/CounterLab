@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { LabSceneV2Schema } from "../src/index.js";
+import { LabSceneDraftV2Schema, LabSceneV2Schema } from "../src/index.js";
 
 const digest = (character: string) => character.repeat(64);
 
@@ -51,6 +51,23 @@ function scene() {
 }
 
 describe("Lab Scene v2", () => {
+  it("accepts only an unbound draft before fixed code supplies provenance", () => {
+    const { provenance: _provenance, ...unbound } = scene();
+    const draft = {
+      ...unbound,
+      supportLabel: "GUIDED_VISUAL" as const,
+      blocks: unbound.blocks.filter((block) => block.type !== "ProofBadge"),
+    };
+    expect(LabSceneDraftV2Schema.parse(draft)).not.toHaveProperty("provenance");
+    expect(() => LabSceneV2Schema.parse(draft)).toThrow();
+    expect(() =>
+      LabSceneDraftV2Schema.parse({
+        ...draft,
+        supportLabel: "VERIFIED_TEST",
+      }),
+    ).toThrow(/fixed verification/i);
+  });
+
   it("accepts an allowlisted scene whose result blocks use signed bindings", () => {
     expect(LabSceneV2Schema.parse(scene()).blocks).toHaveLength(4);
   });
@@ -102,6 +119,18 @@ describe("Lab Scene v2", () => {
       $id: "https://counterlab.dev/schemas/lab-scene-v2.schema.json",
       title: "CounterLab bounded Lab Scene v2",
       ...z.toJSONSchema(LabSceneV2Schema),
+    });
+
+    const draft = JSON.parse(
+      await readFile(
+        new URL("../schemas/lab-scene-draft-v2.schema.json", import.meta.url),
+        "utf8",
+      ),
+    );
+    expect(draft).toEqual({
+      $id: "https://counterlab.dev/schemas/lab-scene-draft-v2.schema.json",
+      title: "CounterLab unverified Lab Scene draft v2",
+      ...z.toJSONSchema(LabSceneDraftV2Schema),
     });
   });
 });

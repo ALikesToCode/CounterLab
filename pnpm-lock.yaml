@@ -138,6 +138,15 @@ importers:
       "@counterlab/contracts":
         specifier: workspace:*
         version: link:../contracts
+      "@counterlab/experiment-ir":
+        specifier: workspace:*
+        version: link:../experiment-ir
+      "@counterlab/generative-ui-contracts":
+        specifier: workspace:*
+        version: link:../generative-ui-contracts
+      "@counterlab/session-core":
+        specifier: workspace:*
+        version: link:../session-core
       zod:
         specifier: 4.4.3
         version: 4.4.3

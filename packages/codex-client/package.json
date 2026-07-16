@@ -8,6 +8,9 @@
   },
   "dependencies": {
     "@counterlab/contracts": "workspace:*",
+    "@counterlab/experiment-ir": "workspace:*",
+    "@counterlab/generative-ui-contracts": "workspace:*",
+    "@counterlab/session-core": "workspace:*",
     "zod": "4.4.3"
   }
 }

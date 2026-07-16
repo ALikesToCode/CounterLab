@@ -49,6 +49,12 @@ const structuredPlanOutput = process.argv.includes("--structured-plan-output");
 const structuredPatchOutput = process.argv.includes(
   "--structured-patch-output",
 );
+const structuredScientificOutput = process.argv.includes(
+  "--structured-scientific-output",
+);
+const structuredScientificSelectedOutput = process.argv.includes(
+  "--structured-scientific-selected-output",
+);
 const structuredInvalidOutput = process.argv.includes(
   "--structured-invalid-output",
 );
@@ -184,6 +190,198 @@ function canonicalPatchPlan(evidenceRefs) {
   };
 }
 
+function canonicalScientificArtifacts(evidenceRefs) {
+  const currentStatement = "Behavioral signal generalizes to unseen accounts.";
+  const competingStatement =
+    "Repeated account identity inflates the row split.";
+  const currentPattern = "leakage.small-gap";
+  const competingPattern = "leakage.material-gap";
+  const nonClaim =
+    "This test does not establish performance for every deployment condition.";
+  const run = (runId, operation, dropIdentity) => ({
+    concept: "entity_leakage",
+    runId,
+    operation,
+    seed: 1729,
+    testFraction: 0.25,
+    entityField: "account_id",
+    dropIdentity,
+    model: "logistic_regression",
+  });
+  return {
+    discriminationContract: {
+      schemaVersion: "1",
+      contractId: "discrimination_test",
+      sessionId: "session_test",
+      concept: "entity_leakage",
+      conceptPackVersion: "2.0.0",
+      artifactManifestHash: "e".repeat(64),
+      beliefSpecId: "belief_test",
+      beliefSpecHash: "f".repeat(64),
+      hypotheses: [
+        {
+          id: "current",
+          statement: currentStatement,
+          decisivePatternId: currentPattern,
+        },
+        {
+          id: "competing",
+          statement: competingStatement,
+          decisivePatternId: competingPattern,
+        },
+      ],
+      candidateExperimentIds: ["group-holdout"],
+      changedVariableIds: ["split_strategy", "identity_feature"],
+      controlledVariableIds: ["model", "seed", "preprocessing"],
+      observableIds: ["accuracy", "entity_overlap_rate"],
+      inconclusiveConditionIds: ["gap-within-tolerance"],
+      whyThisTest:
+        "Holding the estimator fixed while separating complete accounts tests the deployment boundary directly.",
+      nonClaims: [nonClaim],
+      evidenceRefs,
+    },
+    experimentIr: {
+      schemaVersion: "5",
+      irId: "ir_test",
+      executionPlanId: "plan_test",
+      sessionId: "session_test",
+      concept: "entity_leakage",
+      conceptPackVersion: "2.0.0",
+      artifactManifestHash: "e".repeat(64),
+      beliefSpecId: "belief_test",
+      beliefSpecHash: "f".repeat(64),
+      evidenceRefs,
+      hypotheses: [
+        {
+          id: "current",
+          statement: currentStatement,
+          conditions: ["Deployment evaluates unseen accounts."],
+          nonClaims: [nonClaim],
+          predictedPattern: {
+            patternId: currentPattern,
+            description:
+              "Performance remains similar after complete accounts are held out.",
+          },
+        },
+        {
+          id: "competing",
+          statement: competingStatement,
+          conditions: ["Accounts repeat across rows."],
+          nonClaims: [nonClaim],
+          predictedPattern: {
+            patternId: competingPattern,
+            description:
+              "Performance falls after cross-partition account overlap is removed.",
+          },
+        },
+      ],
+      candidateExperiments: [
+        {
+          id: "group-holdout",
+          title: "Compare row and whole-account evaluation",
+          operationIds: [
+            "leakage.random_row_split",
+            "leakage.group_holdout",
+            "leakage.identity_ablation",
+          ],
+          baseline: run("random_rows", "leakage.random_row_split", false),
+          interventions: [
+            run("new_accounts", "leakage.group_holdout", false),
+            run("without_identity", "leakage.identity_ablation", true),
+          ],
+          heldConstantIds: [
+            "model",
+            "seed",
+            "test_fraction",
+            "entity_field",
+            "preprocessing",
+            "model_hyperparameters",
+          ],
+          changedVariableIds: ["split_strategy", "identity_feature"],
+          observableIds: ["accuracy", "entity_overlap_rate"],
+          hypothesisPatterns: [
+            { hypothesisId: "current", patternId: currentPattern },
+            { hypothesisId: "competing", patternId: competingPattern },
+          ],
+          inconclusiveConditionIds: ["gap-within-tolerance"],
+          complexityCost: 3,
+          discriminatesBecause:
+            "The registered runs compare deployment boundaries while preserving fixed model settings.",
+        },
+      ],
+      selection: { status: "UNSELECTED" },
+      visualizations: ["metric_comparison", "entity_overlap"],
+      inconclusiveConditions: [
+        {
+          id: "gap-within-tolerance",
+          description:
+            "The verified difference does not match either decisive pattern.",
+        },
+      ],
+      transfer: {
+        taskId: "forecasting_transfer_v1",
+        changedSurface: "Time-ordered forecasting with future-looking data.",
+        requiredActionIds: ["time_ordered_holdout"],
+        nonClaims: ["Transfer does not certify global mastery."],
+      },
+      nonClaims: [nonClaim],
+      provenance: {
+        kind: "codex",
+        generatorId: "codex-app-server-v1",
+        promptHash: "1".repeat(64),
+        inputHashes: ["e".repeat(64), "f".repeat(64)],
+      },
+      limitations: [
+        "The test applies to the supported notebook and fixed public kernel.",
+      ],
+      resourceLimits: { wallSeconds: 45, memoryMb: 768, maxRuns: 4 },
+    },
+    labScene: {
+      schemaVersion: "2",
+      sceneId: "scene_test",
+      sessionId: "session_test",
+      concept: "entity_leakage",
+      supportLabel: "GUIDED_VISUAL",
+      title: "Does the score survive a new-account boundary?",
+      blocks: [
+        {
+          id: "hypotheses",
+          type: "Hypothesis",
+          current: currentStatement,
+          competing: competingStatement,
+        },
+        {
+          id: "why",
+          type: "WhyThisTest",
+          text: "Change the account boundary while holding the estimator fixed.",
+        },
+        {
+          id: "group_metric",
+          type: "Metric",
+          label: "Whole-account accuracy",
+          resultBinding: "/runs/byId/new_accounts/metrics/accuracy",
+          unit: "proportion",
+        },
+      ],
+      assumptions: ["The fixed Subject Pack owns every metric."],
+      limitations: [nonClaim],
+    },
+  };
+}
+
+function scientificArtifactsForOutput(evidenceRefs) {
+  const artifacts = canonicalScientificArtifacts(evidenceRefs);
+  if (structuredScientificSelectedOutput) {
+    artifacts.experimentIr.selection = {
+      status: "LEGACY_SELECTED",
+      candidateId: "group-holdout",
+      adapterVersion: "forbidden-model-selection-v1",
+      notRescored: true,
+    };
+  }
+  return artifacts;
+}
+
 lines.on("line", (line) => {
   const message = JSON.parse(line);
   if (message.method === "initialize") {
@@ -293,7 +491,11 @@ lines.on("line", (line) => {
       return;
     }
     if (!failThisTurn) {
-      if (structuredPlanOutput || structuredPatchOutput) {
+      if (
+        structuredPlanOutput ||
+        structuredPatchOutput ||
+        structuredScientificOutput
+      ) {
         const evidenceRefs = structuredNullEvidenceOutput
           ? [
               {
@@ -327,11 +529,14 @@ lines.on("line", (line) => {
               text: JSON.stringify({
                 authoritativeArtifact: structuredInvalidOutput
                   ? { schemaVersion: "2" }
-                  : structuredPatchOutput
-                    ? canonicalPatchPlan(evidenceRefs)
-                    : canonicalExperimentPlan(evidenceRefs),
-                publicRationale:
-                  "Whole-entity holdout is the smallest fair test.",
+                  : structuredScientificOutput
+                    ? scientificArtifactsForOutput(evidenceRefs)
+                    : structuredPatchOutput
+                      ? canonicalPatchPlan(evidenceRefs)
+                      : canonicalExperimentPlan(evidenceRefs),
+                publicRationale: structuredScientificOutput
+                  ? "Whole-entity holdout changes only the deployment boundary."
+                  : "Whole-entity holdout is the smallest fair test.",
               }),
               phase: "final_answer",
               memoryCitation: null,

@@ -7,35 +7,51 @@ import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 
 import {
+  BeliefSpecV2Schema,
+  DiscriminationContractV1Schema,
   ExperimentPlanV2Schema,
   PatchPlanV1Schema,
 } from "@counterlab/contracts";
+import {
+  ExperimentIRV5Schema,
+  hashExperimentIR,
+} from "@counterlab/experiment-ir";
+import {
+  LabSceneDraftV2Schema,
+  LabSceneV2Schema,
+} from "@counterlab/generative-ui-contracts";
+import { hashCanonical } from "@counterlab/session-core";
 import { z } from "zod";
 
 import {
   buildCompileLabPrompt,
   buildCompileHostedExperimentPlanPrompt,
   buildCompileHostedPatchPlanPrompt,
+  buildCompileHostedScientificMethodPrompt,
   buildCompilePatchPrompt,
   buildRepairLabPrompt,
   buildRepairHostedExperimentPlanPrompt,
   buildRepairHostedPatchPlanPrompt,
+  buildRepairHostedScientificMethodPrompt,
 } from "./prompts.js";
 import { redactSecrets, sanitizeAppServerMessage } from "./sanitizer.js";
 import {
   CompileLabInputSchema,
   CompileHostedExperimentPlanInputSchema,
   CompileHostedPatchPlanInputSchema,
+  CompileHostedScientificMethodInputSchema,
   CompilePatchInputSchema,
   CompilerSetupError,
   JsonValueSchema,
   RepairLabInputSchema,
   RepairHostedExperimentPlanInputSchema,
   RepairHostedPatchPlanInputSchema,
+  RepairHostedScientificMethodInputSchema,
   type CodexCompiler,
   type CompileLabInput,
   type CompileHostedExperimentPlanInput,
   type CompileHostedPatchPlanInput,
+  type CompileHostedScientificMethodInput,
   type CompilePatchInput,
   type CompilerEvent,
   type CompilerExecutionOptions,
@@ -43,6 +59,7 @@ import {
   type RepairLabInput,
   type RepairHostedExperimentPlanInput,
   type RepairHostedPatchPlanInput,
+  type RepairHostedScientificMethodInput,
 } from "./types.js";
 
 const execFileAsync = promisify(execFile);
@@ -51,6 +68,9 @@ const MAX_STDERR_BYTES = 4_000;
 const MAX_APP_SERVER_ATTEMPTS = 3;
 const MAX_STRUCTURED_OUTPUT_BYTES = 1_048_576;
 const PUBLIC_RATIONALE_PATH = "public-rationale.md";
+const DISCRIMINATION_CONTRACT_PATH = "discrimination-contract.json";
+const EXPERIMENT_IR_PATH = "experiment-ir.json";
+const LAB_SCENE_PATH = "lab-scene.json";
 
 const StructuredHostedOutputSchema = z
   .object({
@@ -100,6 +120,25 @@ function structuredOutputSchema(
     required: ["authoritativeArtifact", "publicRationale"],
     additionalProperties: false,
   };
+}
+
+function scientificArtifactsOutputSchema(input: {
+  schemas: {
+    discriminationContract: Record<string, unknown>;
+    experimentIr: Record<string, unknown>;
+    labScene: Record<string, unknown>;
+  };
+}): Record<string, unknown> {
+  return structuredOutputSchema({
+    type: "object",
+    properties: {
+      discriminationContract: input.schemas.discriminationContract,
+      experimentIr: input.schemas.experimentIr,
+      labScene: input.schemas.labScene,
+    },
+    required: ["discriminationContract", "experimentIr", "labScene"],
+    additionalProperties: false,
+  });
 }
 
 function strictStructuredSchema(value: unknown): unknown {
@@ -235,6 +274,131 @@ async function materializeStructuredHostedOutput(
   );
 }
 
+async function materializeStructuredScientificOutput(
+  input: CompileHostedScientificMethodInput,
+  finalMessage: string,
+): Promise<void> {
+  if (Buffer.byteLength(finalMessage, "utf8") > MAX_STRUCTURED_OUTPUT_BYTES) {
+    throw new CompilerSetupError(
+      "CODEX_PROTOCOL_ERROR",
+      "Codex structured output exceeded the hosted size limit.",
+    );
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(finalMessage) as unknown;
+  } catch (error) {
+    throw new CompilerSetupError(
+      "CODEX_PROTOCOL_ERROR",
+      "Codex did not return schema-constrained scientific artifacts.",
+      { cause: error },
+    );
+  }
+
+  const envelope = StructuredHostedOutputSchema.parse(value);
+  const artifacts = z
+    .object({
+      discriminationContract: DiscriminationContractV1Schema,
+      experimentIr: ExperimentIRV5Schema,
+      labScene: LabSceneDraftV2Schema,
+    })
+    .strict()
+    .parse(removeModelBoundaryNullPlaceholders(envelope.authoritativeArtifact));
+  const beliefSpec = BeliefSpecV2Schema.parse(input.approvedBeliefSpec);
+  if (
+    artifacts.experimentIr.selection.status !== "UNSELECTED" ||
+    artifacts.discriminationContract.sessionId !== input.sessionId ||
+    artifacts.experimentIr.sessionId !== input.sessionId ||
+    artifacts.labScene.sessionId !== input.sessionId ||
+    artifacts.discriminationContract.artifactManifestHash !==
+      input.artifactManifestHash ||
+    artifacts.experimentIr.artifactManifestHash !==
+      input.artifactManifestHash ||
+    artifacts.discriminationContract.beliefSpecId !== beliefSpec.id ||
+    artifacts.experimentIr.beliefSpecId !== beliefSpec.id ||
+    artifacts.discriminationContract.beliefSpecHash !== input.beliefSpecHash ||
+    artifacts.experimentIr.beliefSpecHash !== input.beliefSpecHash ||
+    artifacts.discriminationContract.concept !== beliefSpec.concept ||
+    artifacts.experimentIr.concept !== beliefSpec.concept ||
+    artifacts.labScene.concept !== beliefSpec.concept ||
+    artifacts.discriminationContract.conceptPackVersion !==
+      input.conceptPack.version ||
+    artifacts.experimentIr.conceptPackVersion !== input.conceptPack.version ||
+    artifacts.experimentIr.provenance.kind !== "codex" ||
+    artifacts.experimentIr.provenance.generatorId !==
+      input.provenance.generatorId ||
+    artifacts.experimentIr.provenance.promptHash !==
+      input.provenance.promptHash ||
+    JSON.stringify(artifacts.experimentIr.provenance.inputHashes) !==
+      JSON.stringify(input.provenance.inputHashes) ||
+    artifacts.discriminationContract.hypotheses[0].statement !==
+      beliefSpec.hypotheses[0].statement ||
+    artifacts.discriminationContract.hypotheses[1].statement !==
+      beliefSpec.hypotheses[1].statement ||
+    artifacts.experimentIr.hypotheses[0].statement !==
+      beliefSpec.hypotheses[0].statement ||
+    artifacts.experimentIr.hypotheses[1].statement !==
+      beliefSpec.hypotheses[1].statement
+  ) {
+    throw new CompilerSetupError(
+      "CODEX_PROTOCOL_ERROR",
+      "Codex scientific artifacts failed immutable lineage or selection policy.",
+    );
+  }
+
+  const candidateIds = new Set(
+    artifacts.experimentIr.candidateExperiments.map(
+      (candidate) => candidate.id,
+    ),
+  );
+  const allowedCandidateIds = new Set(input.conceptPack.candidateExperimentIds);
+  const allowedOperationIds = new Set(input.conceptPack.allowedOperations);
+  if (
+    artifacts.discriminationContract.candidateExperimentIds.some(
+      (candidateId) => !candidateIds.has(candidateId),
+    ) ||
+    artifacts.experimentIr.candidateExperiments.some(
+      (candidate) =>
+        !allowedCandidateIds.has(candidate.id) ||
+        candidate.operationIds.some(
+          (operationId) => !allowedOperationIds.has(operationId),
+        ),
+    )
+  ) {
+    throw new CompilerSetupError(
+      "CODEX_PROTOCOL_ERROR",
+      "The Discrimination Contract references an unresolved candidate experiment.",
+    );
+  }
+
+  const scene = LabSceneV2Schema.parse({
+    ...artifacts.labScene,
+    provenance: {
+      discriminationContractHash: await hashCanonical(
+        artifacts.discriminationContract,
+      ),
+      experimentIrHash: await hashExperimentIR(artifacts.experimentIr),
+    },
+  });
+  const canonicalDirectory = await realpath(input.generationDirectory);
+  await writeBoundedFile(
+    directChild(canonicalDirectory, DISCRIMINATION_CONTRACT_PATH),
+    `${JSON.stringify(artifacts.discriminationContract, null, 2)}\n`,
+  );
+  await writeBoundedFile(
+    directChild(canonicalDirectory, EXPERIMENT_IR_PATH),
+    `${JSON.stringify(artifacts.experimentIr, null, 2)}\n`,
+  );
+  await writeBoundedFile(
+    directChild(canonicalDirectory, LAB_SCENE_PATH),
+    `${JSON.stringify(scene, null, 2)}\n`,
+  );
+  await writeBoundedFile(
+    directChild(canonicalDirectory, PUBLIC_RATIONALE_PATH),
+    `${envelope.publicRationale}\n`,
+  );
+}
+
 function materializedFileEvent(
   authoritativePath: "experiment-plan.json" | "patch-plan.json",
 ): CompilerEvent {
@@ -251,6 +415,28 @@ function materializedFileEvent(
       "@@ -0,0 +1 @@",
       "+[display-only rationale materialized by CounterLab]",
     ].join("\n"),
+    status: "completed",
+  };
+}
+
+function materializedScientificFileEvent(): CompilerEvent {
+  const files = [
+    DISCRIMINATION_CONTRACT_PATH,
+    EXPERIMENT_IR_PATH,
+    LAB_SCENE_PATH,
+    PUBLIC_RATIONALE_PATH,
+  ];
+  return {
+    type: "file_change",
+    files,
+    unifiedDiff: files
+      .flatMap((path) => [
+        "--- /dev/null",
+        `+++ b/${path}`,
+        "@@ -0,0 +1 @@",
+        "+[bounded artifact materialized by CounterLab]",
+      ])
+      .join("\n"),
     status: "completed",
   };
 }
@@ -886,6 +1072,52 @@ export class AppServerCodexCompiler implements CodexCompiler {
       },
     );
     yield materializedFileEvent("experiment-plan.json");
+  }
+
+  async *compileScientificMethod(
+    raw: CompileHostedScientificMethodInput,
+    options: CompilerExecutionOptions = {},
+  ): AsyncIterable<CompilerEvent> {
+    const input = parseInput(CompileHostedScientificMethodInputSchema, raw);
+    yield* this.run(
+      buildCompileHostedScientificMethodPrompt(input),
+      input.generationDirectory,
+      "plan",
+      options.signal,
+      {
+        outputSchema: scientificArtifactsOutputSchema(input),
+        materialize: (finalMessage) =>
+          materializeStructuredScientificOutput(input, finalMessage),
+      },
+    );
+    yield materializedScientificFileEvent();
+  }
+
+  async *repairScientificMethod(
+    raw: RepairHostedScientificMethodInput,
+    options: CompilerExecutionOptions = {},
+  ): AsyncIterable<CompilerEvent> {
+    const input = parseInput(RepairHostedScientificMethodInputSchema, raw);
+    for (const counterexample of input.verifierCounterexamples) {
+      yield {
+        type: "verifier_counterexample",
+        invariant: counterexample.invariant,
+        observed: counterexample.observed,
+        counterexample: counterexample.counterexample,
+      };
+    }
+    yield* this.run(
+      buildRepairHostedScientificMethodPrompt(input),
+      input.generationDirectory,
+      "repair",
+      options.signal,
+      {
+        outputSchema: scientificArtifactsOutputSchema(input),
+        materialize: (finalMessage) =>
+          materializeStructuredScientificOutput(input, finalMessage),
+      },
+    );
+    yield materializedScientificFileEvent();
   }
 
   async *compileHostedPatchPlan(

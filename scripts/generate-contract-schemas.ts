@@ -20,7 +20,10 @@ import {
   SubjectPackEngineBindingsSchema,
 } from "../packages/scientific-engine-registry/src/index.js";
 import { ExperimentIRV5Schema } from "../packages/experiment-ir/src/index.js";
-import { LabSceneV2Schema } from "../packages/generative-ui-contracts/src/index.js";
+import {
+  LabSceneDraftV2Schema,
+  LabSceneV2Schema,
+} from "../packages/generative-ui-contracts/src/index.js";
 
 const root = resolve(import.meta.dirname, "..");
 const schemas = [
@@ -84,6 +87,18 @@ const schemas = [
     id: "https://counterlab.dev/schemas/experiment-plan-v2.schema.json",
     title: "CounterLab hosted Experiment Plan v2",
     schema: ExperimentPlanV2Schema,
+  },
+  {
+    fileName: "lab-scene-draft-v2.schema.json",
+    id: "https://counterlab.dev/schemas/lab-scene-draft-v2.schema.json",
+    title: "CounterLab unverified Lab Scene draft v2",
+    schema: LabSceneDraftV2Schema,
+    destinations: [
+      resolve(
+        root,
+        "packages/generative-ui-contracts/schemas/lab-scene-draft-v2.schema.json",
+      ),
+    ],
   },
   {
     fileName: "lab-scene-v2.schema.json",

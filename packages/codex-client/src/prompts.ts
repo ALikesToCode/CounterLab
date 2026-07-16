@@ -1,18 +1,22 @@
 import {
   CompileLabInputSchema,
   CompileHostedExperimentPlanInputSchema,
+  CompileHostedScientificMethodInputSchema,
   CompileHostedPatchPlanInputSchema,
   CompilePatchInputSchema,
   CompilerSetupError,
   RepairLabInputSchema,
   RepairHostedExperimentPlanInputSchema,
+  RepairHostedScientificMethodInputSchema,
   RepairHostedPatchPlanInputSchema,
   type CompileLabInput,
   type CompileHostedExperimentPlanInput,
+  type CompileHostedScientificMethodInput,
   type CompileHostedPatchPlanInput,
   type CompilePatchInput,
   type RepairLabInput,
   type RepairHostedExperimentPlanInput,
+  type RepairHostedScientificMethodInput,
   type RepairHostedPatchPlanInput,
 } from "./types.js";
 
@@ -23,6 +27,12 @@ const LAB_FILES = [
 ].sort();
 const HOSTED_PLAN_OUTPUTS = [
   "experiment-plan.json",
+  "public-rationale.md",
+].sort();
+const HOSTED_SCIENTIFIC_OUTPUTS = [
+  "discrimination-contract.json",
+  "experiment-ir.json",
+  "lab-scene.json",
   "public-rationale.md",
 ].sort();
 const HOSTED_PATCH_OUTPUTS = ["patch-plan.json", "public-rationale.md"].sort();
@@ -47,6 +57,16 @@ function validateHostedPlanOutputs(files: string[]): void {
     throw new CompilerSetupError(
       "CODEX_INVALID_INPUT",
       "The hosted compiler may write only experiment-plan.json and public-rationale.md.",
+    );
+  }
+}
+
+function validateHostedScientificOutputs(files: string[]): void {
+  const actual = [...files].sort();
+  if (JSON.stringify(actual) !== JSON.stringify(HOSTED_SCIENTIFIC_OUTPUTS)) {
+    throw new CompilerSetupError(
+      "CODEX_INVALID_INPUT",
+      "The hosted v5 compiler may write only the four scientific artifacts: discrimination-contract.json, experiment-ir.json, lab-scene.json, and public-rationale.md.",
     );
   }
 }
@@ -129,6 +149,82 @@ Previous output hashes:
 ${json(input.previousOutputHashes)}
 
 Structured external-verifier counterexamples:
+${json(input.verifierCounterexamples)}
+`;
+}
+
+function renderHostedScientificMethodPrompt(
+  input: CompileHostedScientificMethodInput,
+): string {
+  validateHostedScientificOutputs(input.permittedOutputs);
+  return `You are the bounded CounterLab scientific-method compiler. Turn one learner-approved Belief Spec into candidate counterexperiments and a display-only scene using only the selected Subject Pack.
+
+Authority boundary:
+- Do not call tools or write files. Return one schema-constrained JSON object; fixed CounterLab code materializes only ${input.permittedOutputs.join(", ")}.
+- Produce discriminationContract, experimentIr, and labScene fields matching the supplied schemas. publicRationale is display-only.
+- Experiment IR selection must remain UNSELECTED. The fixed scorer, never Codex, selects the decisive experiment.
+- The Lab Scene is an unverified draft. Use GUIDED_VISUAL or EXPLANATION_ONLY, never VERIFIED_TEST or ProofBadge; fixed verification owns promotion.
+- Use operation IDs only. No literal result values are permitted. Do not include source code, commands, SQL, arbitrary formulas, imports, network actions, dynamic expressions, or raw paths.
+- Copy evidence only from the approved Belief Spec and sanitized Artifact Manifest. Do not invent cells, outputs, rows, support status, measurements, or results.
+- Preserve the supplied session, artifact, Belief Spec, Subject Pack, resource, and provenance lineage exactly.
+- State decisive patterns qualitatively and include explicit inconclusive conditions and non-claims.
+- Do not reveal private reasoning.
+
+Immutable lineage:
+${json({
+  sessionId: input.sessionId,
+  artifactManifestHash: input.artifactManifestHash,
+  beliefSpecId: input.approvedBeliefSpec.id,
+  beliefSpecHash: input.beliefSpecHash,
+  conceptPackVersion: input.conceptPack.version,
+  provenance: input.provenance,
+})}
+
+Approved Belief Spec:
+${json(input.approvedBeliefSpec)}
+
+Sanitized Artifact Manifest:
+${json(input.artifactManifest)}
+
+Public Subject Pack capabilities and candidate IDs:
+${json(input.conceptPack)}
+
+Discrimination Contract JSON Schema:
+${json(input.schemas.discriminationContract)}
+
+Experiment IR v5 JSON Schema:
+${json(input.schemas.experimentIr)}
+
+Unverified Lab Scene draft JSON Schema:
+${json(input.schemas.labScene)}
+
+Resource limits:
+${json(input.resourceLimits)}
+`;
+}
+
+export function buildCompileHostedScientificMethodPrompt(
+  raw: CompileHostedScientificMethodInput,
+): string {
+  return renderHostedScientificMethodPrompt(
+    CompileHostedScientificMethodInputSchema.parse(raw),
+  );
+}
+
+export function buildRepairHostedScientificMethodPrompt(
+  raw: RepairHostedScientificMethodInput,
+): string {
+  const input = RepairHostedScientificMethodInputSchema.parse(raw);
+  return `${renderHostedScientificMethodPrompt(input)}
+This is repair attempt ${input.repairAttempt} of at most 2. Correct only the structured findings. Preserve all valid lineage, evidence, controls, and non-claims. Keep Experiment IR selection UNSELECTED.
+
+Previous artifacts:
+${json(input.previousArtifacts)}
+
+Previous output hashes:
+${json(input.previousOutputHashes)}
+
+External scorer/verifier counterexamples:
 ${json(input.verifierCounterexamples)}
 `;
 }

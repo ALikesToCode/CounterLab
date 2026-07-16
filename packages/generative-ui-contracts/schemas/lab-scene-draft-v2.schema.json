@@ -1,0 +1,771 @@
+{
+  "$id": "https://counterlab.dev/schemas/lab-scene-draft-v2.schema.json",
+  "title": "CounterLab unverified Lab Scene draft v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "2"
+    },
+    "sceneId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+    },
+    "sessionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "concept": {
+      "type": "string",
+      "enum": ["entity_leakage", "class_imbalance"]
+    },
+    "supportLabel": {
+      "type": "string",
+      "enum": ["VERIFIED_TEST", "GUIDED_VISUAL", "EXPLANATION_ONLY"]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "blocks": {
+      "minItems": 1,
+      "maxItems": 32,
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+              },
+              "type": {
+                "type": "string",
+                "const": "Hypothesis"
+              },
+              "current": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "competing": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              }
+            },
+            "required": ["id", "type", "current", "competing"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+              },
+              "type": {
+                "type": "string",
+                "const": "Prediction"
+              },
+              "prompt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "immutableBinding": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 240,
+                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+              }
+            },
+            "required": ["id", "type", "prompt", "immutableBinding"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+              },
+              "type": {
+                "type": "string",
+                "const": "WhyThisTest"
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              }
+            },
+            "required": ["id", "type", "text"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+              },
+              "type": {
+                "type": "string",
+                "const": "Slider"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "operationId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "parameterId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "min": {
+                "type": "number"
+              },
+              "max": {
+                "type": "number"
+              },
+              "step": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "defaultValue": {
+                "type": "number"
+              },
+              "unit": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "label",
+              "operationId",
+              "parameterId",
+              "min",
+              "max",
+              "step",
+              "defaultValue",
+              "unit"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+              },
+              "type": {
+                "type": "string",
+                "const": "Toggle"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "operationId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "parameterId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "defaultValue": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "label",
+              "operationId",
+              "parameterId",
+              "defaultValue"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+              },
+              "type": {
+                "type": "string",
+                "const": "SegmentedControl"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "operationId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "parameterId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "options": {
+                "minItems": 2,
+                "maxItems": 6,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1000
+                    }
+                  },
+                  "required": ["value", "label"],
+                  "additionalProperties": false
+                }
+              },
+              "defaultValue": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "label",
+              "operationId",
+              "parameterId",
+              "options",
+              "defaultValue"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "resultBinding": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 240,
+                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+              },
+              "type": {
+                "type": "string",
+                "const": "Metric"
+              },
+              "unit": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": ["id", "label", "resultBinding", "type", "unit"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "resultBinding": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 240,
+                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+              },
+              "type": {
+                "type": "string",
+                "const": "BarChart"
+              },
+              "xLabel": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "yLabel": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "xUnit": {
+                "type": "string",
+                "minLength": 1
+              },
+              "yUnit": {
+                "type": "string",
+                "minLength": 1
+              },
+              "accessibleLabel": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "resultBinding",
+              "type",
+              "xLabel",
+              "yLabel",
+              "xUnit",
+              "yUnit",
+              "accessibleLabel"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "resultBinding": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 240,
+                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+              },
+              "type": {
+                "type": "string",
+                "const": "LineChart"
+              },
+              "xLabel": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "yLabel": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "xUnit": {
+                "type": "string",
+                "minLength": 1
+              },
+              "yUnit": {
+                "type": "string",
+                "minLength": 1
+              },
+              "accessibleLabel": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "resultBinding",
+              "type",
+              "xLabel",
+              "yLabel",
+              "xUnit",
+              "yUnit",
+              "accessibleLabel"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "resultBinding": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 240,
+                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+              },
+              "type": {
+                "type": "string",
+                "const": "Scatter"
+              },
+              "xLabel": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "yLabel": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "xUnit": {
+                "type": "string",
+                "minLength": 1
+              },
+              "yUnit": {
+                "type": "string",
+                "minLength": 1
+              },
+              "accessibleLabel": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "resultBinding",
+              "type",
+              "xLabel",
+              "yLabel",
+              "xUnit",
+              "yUnit",
+              "accessibleLabel"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "resultBinding": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 240,
+                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+              },
+              "type": {
+                "type": "string",
+                "const": "BoundaryMap"
+              },
+              "accessibleTableBinding": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 240,
+                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "resultBinding",
+              "type",
+              "accessibleTableBinding"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "resultBinding": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 240,
+                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+              },
+              "type": {
+                "type": "string",
+                "const": "MotionCanvas"
+              },
+              "accessibleTableBinding": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 240,
+                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+              },
+              "reducedMotionBinding": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 240,
+                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "resultBinding",
+              "type",
+              "accessibleTableBinding",
+              "reducedMotionBinding"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+              },
+              "type": {
+                "type": "string",
+                "const": "NotebookCell"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "evidenceBinding": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 240,
+                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+              }
+            },
+            "required": ["id", "type", "label", "evidenceBinding"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+              },
+              "type": {
+                "type": "string",
+                "const": "NotebookDiff"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "diffBinding": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 240,
+                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+              }
+            },
+            "required": ["id", "type", "label", "diffBinding"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+              },
+              "type": {
+                "type": "string",
+                "const": "Transfer"
+              },
+              "prompt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "evaluatorId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": ["id", "type", "prompt", "evaluatorId"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+              },
+              "type": {
+                "type": "string",
+                "const": "ReasoningDiff"
+              },
+              "resultBinding": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 240,
+                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+              }
+            },
+            "required": ["id", "type", "resultBinding"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+              },
+              "type": {
+                "type": "string",
+                "const": "ProofBadge"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "proofBinding": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 240,
+                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+              }
+            },
+            "required": ["id", "type", "label", "proofBinding"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+              },
+              "type": {
+                "type": "string",
+                "const": "Limitation"
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              }
+            },
+            "required": ["id", "type", "text"],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "assumptions": {
+      "minItems": 1,
+      "maxItems": 12,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      }
+    },
+    "limitations": {
+      "minItems": 1,
+      "maxItems": 12,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "sceneId",
+    "sessionId",
+    "concept",
+    "supportLabel",
+    "title",
+    "blocks",
+    "assumptions",
+    "limitations"
+  ],
+  "additionalProperties": false
+}
