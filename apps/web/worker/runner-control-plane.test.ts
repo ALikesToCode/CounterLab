@@ -162,7 +162,6 @@ describe("HttpRunnerDispatcher", () => {
     expect(startAndWaitForPorts).toHaveBeenCalledWith({
       ports: [8080],
       cancellationOptions: {
-        abort: expect.any(AbortSignal),
         instanceGetTimeoutMS: 10_000,
         portReadyTimeoutMS: 30_000,
       },

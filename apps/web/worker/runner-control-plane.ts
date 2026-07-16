@@ -22,7 +22,6 @@ type RunnerInstance = {
   startAndWaitForPorts(options: {
     ports: number[];
     cancellationOptions: {
-      abort?: AbortSignal;
       instanceGetTimeoutMS: number;
       portReadyTimeoutMS: number;
     };
@@ -151,14 +150,12 @@ export class CloudflareContainerRunnerDispatcher implements RunnerDispatcher {
 
   async dispatch(request: RunnerDispatchRequest): Promise<void> {
     const instance = this.binding.getByName(request.job.jobId);
-    const dispatchDeadline = AbortSignal.timeout(60_000);
     let lastFailure: unknown;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         await instance.startAndWaitForPorts({
           ports: [8080],
           cancellationOptions: {
-            abort: dispatchDeadline,
             instanceGetTimeoutMS: 10_000,
             portReadyTimeoutMS: 30_000,
           },
@@ -181,7 +178,7 @@ export class CloudflareContainerRunnerDispatcher implements RunnerDispatcher {
             jobId: request.job.jobId,
             controlPlaneUrl: request.controlPlaneUrl,
           }),
-          signal: dispatchDeadline,
+          signal: AbortSignal.timeout(30_000),
         });
       } catch (error) {
         lastFailure = error;
