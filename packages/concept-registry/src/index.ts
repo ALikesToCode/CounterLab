@@ -94,7 +94,11 @@ const leakageScoringPolicy = ExperimentScoringPolicySchema.parse({
     "leakage.entity_overlap",
     "leakage.controlled_comparison",
   ],
-  requiredOperationIds: ["leakage.group_holdout"],
+  requiredOperationIds: [
+    "leakage.random_row_split",
+    "leakage.group_holdout",
+    "leakage.identity_ablation",
+  ],
   requiredControlIds: [
     "model",
     "seed",
@@ -133,8 +137,9 @@ const imbalanceScoringPolicy = ExperimentScoringPolicySchema.parse({
   ],
   requiredOperationIds: [
     "imbalance.majority_baseline",
-    "imbalance.confusion_matrix",
+    "imbalance.stratified_holdout",
     "imbalance.threshold_sweep",
+    "imbalance.prevalence_sweep",
   ],
   requiredControlIds: ["model_scores", "seed", "evaluation_set"],
   allowedChangedVariableIds: ["decision_threshold", "class_prevalence"],

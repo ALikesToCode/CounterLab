@@ -280,7 +280,11 @@ describe("concept-pack registry", () => {
     ]);
     expect(leakage.scoringPolicy).toMatchObject({
       concept: "entity_leakage",
-      requiredOperationIds: ["leakage.group_holdout"],
+      requiredOperationIds: [
+        "leakage.random_row_split",
+        "leakage.group_holdout",
+        "leakage.identity_ablation",
+      ],
       requiredObservableIds: ["accuracy", "entity_overlap_rate"],
     });
 
@@ -289,8 +293,9 @@ describe("concept-pack registry", () => {
       concept: "class_imbalance",
       requiredOperationIds: [
         "imbalance.majority_baseline",
-        "imbalance.confusion_matrix",
+        "imbalance.stratified_holdout",
         "imbalance.threshold_sweep",
+        "imbalance.prevalence_sweep",
       ],
       requiredObservableIds: ["recall", "confusion_matrix", "prevalence"],
     });
