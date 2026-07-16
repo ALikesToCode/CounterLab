@@ -55,6 +55,9 @@ const structuredScientificOutput = process.argv.includes(
 const structuredScientificSelectedOutput = process.argv.includes(
   "--structured-scientific-selected-output",
 );
+const structuredScientificUnsafeBindingOutput = process.argv.includes(
+  "--structured-scientific-unsafe-binding-output",
+);
 const structuredInvalidOutput = process.argv.includes(
   "--structured-invalid-output",
 );
@@ -81,6 +84,12 @@ function isStrictStructuredSchema(value) {
   if (Array.isArray(value)) return value.every(isStrictStructuredSchema);
   if (value === null || typeof value !== "object") return true;
   if (Object.hasOwn(value, "oneOf")) return false;
+  if (
+    typeof value.pattern === "string" &&
+    /\(\?(?:[=!]|<[=!])/u.test(value.pattern)
+  ) {
+    return false;
+  }
   if (
     value.type === "array" &&
     (!Object.hasOwn(value, "items") || Object.hasOwn(value, "prefixItems"))
@@ -391,6 +400,9 @@ function scientificArtifactsForOutput(evidenceRefs) {
       adapterVersion: "forbidden-model-selection-v1",
       notRescored: true,
     };
+  }
+  if (structuredScientificUnsafeBindingOutput) {
+    artifacts.labScene.blocks[2].resultBinding = "//unsafe/result";
   }
   return artifacts;
 }

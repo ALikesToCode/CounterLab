@@ -27,6 +27,7 @@ import {
   type CompilerEvent,
   type RepairHostedScientificMethodInput,
 } from "./index.js";
+import { hasUnsupportedRegexLookaround } from "./app-server.js";
 
 const digest = (character: string) => character.repeat(64);
 const generationDirectory = "/tmp/counterlab/generated/session_test";
@@ -164,6 +165,18 @@ async function collect(iterable: AsyncIterable<CompilerEvent>) {
 }
 
 describe("hosted scientific-method compiler", () => {
+  it("detects lookaround assertions without stripping regex literals", () => {
+    for (const pattern of ["a(?=b)", "a(?!b)", "(?<=a)b", "(?<!a)b"])
+      expect(hasUnsupportedRegexLookaround(pattern)).toBe(true);
+    for (const pattern of [
+      "^[a-z]+$",
+      "[(?=]",
+      String.raw`\(\?=literal`,
+      "a(?:b)",
+    ])
+      expect(hasUnsupportedRegexLookaround(pattern)).toBe(false);
+  });
+
   it("asks Codex for unselected typed artifacts and preserves fixed authority", () => {
     const prompt = buildCompileHostedScientificMethodPrompt(scientificInput());
     expect(prompt).toContain("discrimination-contract.json");
@@ -295,6 +308,38 @@ describe("hosted scientific-method compiler", () => {
         "--expect-structured-turn",
         "--structured-scientific-output",
         "--structured-scientific-selected-output",
+      ],
+      timeoutMs: 2_000,
+      ...unisolatedTestProcess,
+    });
+
+    try {
+      await expect(
+        collect(compiler.compileScientificMethod(scientificInput(work))),
+      ).rejects.toMatchObject({ code: "CODEX_PROTOCOL_ERROR" });
+      for (const path of scientificInput(work).permittedOutputs) {
+        await expect(readFile(join(work, path), "utf8")).rejects.toMatchObject({
+          code: "ENOENT",
+        });
+      }
+    } finally {
+      await rm(work, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps full local binding validation after model-schema normalization", async () => {
+    const fakeServer = fileURLToPath(
+      new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
+    );
+    const work = await mkdtemp(join(tmpdir(), "counterlab-unsafe-binding-"));
+    const compiler = new AppServerCodexCompiler({
+      command: process.execPath,
+      commandArgs: [
+        fakeServer,
+        "--expect-structured-turn",
+        "--expect-strict-output-schema",
+        "--structured-scientific-output",
+        "--structured-scientific-unsafe-binding-output",
       ],
       timeoutMs: 2_000,
       ...unisolatedTestProcess,

@@ -141,6 +141,42 @@ function scientificArtifactsOutputSchema(input: {
   });
 }
 
+/** @internal Detects regex assertions unsupported by Responses schemas. */
+export function hasUnsupportedRegexLookaround(pattern: string): boolean {
+  let escaped = false;
+  let insideCharacterClass = false;
+  for (let index = 0; index < pattern.length; index += 1) {
+    const character = pattern[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (character === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (character === "[" && !insideCharacterClass) {
+      insideCharacterClass = true;
+      continue;
+    }
+    if (character === "]" && insideCharacterClass) {
+      insideCharacterClass = false;
+      continue;
+    }
+    if (insideCharacterClass || character !== "(" || pattern[index + 1] !== "?")
+      continue;
+    const assertion = pattern[index + 2];
+    if (assertion === "=" || assertion === "!") return true;
+    if (
+      assertion === "<" &&
+      (pattern[index + 3] === "=" || pattern[index + 3] === "!")
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function strictStructuredSchema(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(strictStructuredSchema);
   if (value === null || typeof value !== "object") return value;
@@ -151,6 +187,16 @@ function strictStructuredSchema(value: unknown): unknown {
     if (key === "$id" || key === "$schema" || key === "title") continue;
     if (key === "required" || key === "properties") continue;
     if (key === "prefixItems") continue;
+    // Responses structured outputs use a restricted regular-expression
+    // dialect. Keep the complete pattern in the local Zod authority, but do
+    // not send lookaround assertions that the model boundary cannot compile.
+    if (
+      key === "pattern" &&
+      typeof nested === "string" &&
+      hasUnsupportedRegexLookaround(nested)
+    ) {
+      continue;
+    }
     if (key === "oneOf") {
       output.anyOf = strictStructuredSchema(nested);
       continue;
