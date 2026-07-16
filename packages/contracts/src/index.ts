@@ -543,6 +543,83 @@ export const EvidenceVerdictSchema = z.discriminatedUnion("kind", [
 
 export type EvidenceVerdict = z.infer<typeof EvidenceVerdictSchema>;
 
+const ResultLiteralPattern = /(?:\b\d+\.\d+\b|\b\d+(?:\.\d+)?\s*%)/u;
+
+export const DiscriminationContractV1Schema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    contractId: NonEmptyString,
+    sessionId: NonEmptyString,
+    concept: ConceptIdSchema,
+    conceptPackVersion: NonEmptyString,
+    artifactManifestHash: Sha256Schema,
+    beliefSpecId: NonEmptyString,
+    beliefSpecHash: Sha256Schema,
+    hypotheses: z.tuple([
+      z
+        .object({
+          id: z.literal("current"),
+          statement: NonEmptyString,
+          decisivePatternId: NonEmptyString,
+        })
+        .strict(),
+      z
+        .object({
+          id: z.literal("competing"),
+          statement: NonEmptyString,
+          decisivePatternId: NonEmptyString,
+        })
+        .strict(),
+    ]),
+    candidateExperimentIds: z.array(NonEmptyString).min(1).max(8),
+    changedVariableIds: z.array(NonEmptyString).min(1).max(4),
+    controlledVariableIds: z.array(NonEmptyString).min(1).max(16),
+    observableIds: z.array(AllowedMetricSchema).min(1).max(12),
+    inconclusiveConditionIds: z.array(NonEmptyString).min(1).max(8),
+    whyThisTest: z.string().trim().min(20).max(1_000),
+    nonClaims: z.array(NonEmptyString).min(1).max(12),
+    evidenceRefs: z.array(EvidenceRefSchema).min(1).max(6),
+  })
+  .strict()
+  .superRefine((contract, context) => {
+    if (
+      contract.hypotheses[0].decisivePatternId ===
+      contract.hypotheses[1].decisivePatternId
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "hypotheses require different decisive patterns",
+        path: ["hypotheses", 1, "decisivePatternId"],
+      });
+    }
+    if (ResultLiteralPattern.test(contract.whyThisTest)) {
+      context.addIssue({
+        code: "custom",
+        message: "whyThisTest must not contain a verified result literal",
+        path: ["whyThisTest"],
+      });
+    }
+    for (const [field, values] of [
+      ["candidateExperimentIds", contract.candidateExperimentIds],
+      ["changedVariableIds", contract.changedVariableIds],
+      ["controlledVariableIds", contract.controlledVariableIds],
+      ["observableIds", contract.observableIds],
+      ["inconclusiveConditionIds", contract.inconclusiveConditionIds],
+    ] as const) {
+      if (new Set(values).size !== values.length) {
+        context.addIssue({
+          code: "custom",
+          message: `${field} must not contain duplicate IDs`,
+          path: [field],
+        });
+      }
+    }
+  });
+
+export type DiscriminationContractV1 = z.infer<
+  typeof DiscriminationContractV1Schema
+>;
+
 const LeakageFixedRunSpecSchema = z
   .object({
     concept: z.literal("entity_leakage"),
@@ -1027,6 +1104,9 @@ export function assertRunnerJobTransition(
 
 export const AllowedGeneratedPathSchema = z.enum([
   "experiment-plan.json",
+  "discrimination-contract.json",
+  "experiment-ir.json",
+  "lab-scene.json",
   "patch-plan.json",
   "public-rationale.md",
 ]);

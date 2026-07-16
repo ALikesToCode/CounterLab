@@ -1,0 +1,232 @@
+{
+  "$id": "https://counterlab.dev/schemas/discrimination-contract-v1.schema.json",
+  "title": "CounterLab Discrimination Contract v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1"
+    },
+    "contractId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sessionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "concept": {
+      "type": "string",
+      "enum": [
+        "entity_leakage",
+        "class_imbalance"
+      ]
+    },
+    "conceptPackVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifactManifestHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "beliefSpecId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "beliefSpecHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "hypotheses": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "const": "current"
+            },
+            "statement": {
+              "type": "string",
+              "minLength": 1
+            },
+            "decisivePatternId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "id",
+            "statement",
+            "decisivePatternId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "const": "competing"
+            },
+            "statement": {
+              "type": "string",
+              "minLength": 1
+            },
+            "decisivePatternId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "id",
+            "statement",
+            "decisivePatternId"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "candidateExperimentIds": {
+      "minItems": 1,
+      "maxItems": 8,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "changedVariableIds": {
+      "minItems": 1,
+      "maxItems": 4,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "controlledVariableIds": {
+      "minItems": 1,
+      "maxItems": 16,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "observableIds": {
+      "minItems": 1,
+      "maxItems": 12,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "accuracy",
+          "roc_auc",
+          "entity_overlap_rate",
+          "precision",
+          "recall",
+          "f1",
+          "pr_auc",
+          "confusion_matrix",
+          "prevalence"
+        ]
+      }
+    },
+    "inconclusiveConditionIds": {
+      "minItems": 1,
+      "maxItems": 8,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "whyThisTest": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 1000
+    },
+    "nonClaims": {
+      "minItems": 1,
+      "maxItems": 12,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "evidenceRefs": {
+      "minItems": 1,
+      "maxItems": 6,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "cellIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "outputIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "code",
+              "metric",
+              "schema",
+              "output",
+              "learner_claim"
+            ]
+          },
+          "hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "excerpt": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "relevance": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "kind",
+          "hash",
+          "excerpt",
+          "relevance"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "contractId",
+    "sessionId",
+    "concept",
+    "conceptPackVersion",
+    "artifactManifestHash",
+    "beliefSpecId",
+    "beliefSpecHash",
+    "hypotheses",
+    "candidateExperimentIds",
+    "changedVariableIds",
+    "controlledVariableIds",
+    "observableIds",
+    "inconclusiveConditionIds",
+    "whyThisTest",
+    "nonClaims",
+    "evidenceRefs"
+  ],
+  "additionalProperties": false
+}

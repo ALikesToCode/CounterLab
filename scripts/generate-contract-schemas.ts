@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import {
   BeliefSpecV2Schema,
+  DiscriminationContractV1Schema,
   EpistemicObservationV1Schema,
   EpistemicVerifierPolicyV1Schema,
   EvidenceVerdictSchema,
@@ -19,6 +20,7 @@ import {
   SubjectPackEngineBindingsSchema,
 } from "../packages/scientific-engine-registry/src/index.js";
 import { ExperimentIRV5Schema } from "../packages/experiment-ir/src/index.js";
+import { LabSceneV2Schema } from "../packages/generative-ui-contracts/src/index.js";
 
 const root = resolve(import.meta.dirname, "..");
 const schemas = [
@@ -29,6 +31,18 @@ const schemas = [
     schema: BeliefSpecV2Schema,
     destinations: [
       resolve(root, "packages/contracts/schemas/belief-spec-v2.schema.json"),
+    ],
+  },
+  {
+    fileName: "discrimination-contract-v1.schema.json",
+    id: "https://counterlab.dev/schemas/discrimination-contract-v1.schema.json",
+    title: "CounterLab Discrimination Contract v1",
+    schema: DiscriminationContractV1Schema,
+    destinations: [
+      resolve(
+        root,
+        "packages/contracts/schemas/discrimination-contract-v1.schema.json",
+      ),
     ],
   },
   {
@@ -70,6 +84,18 @@ const schemas = [
     id: "https://counterlab.dev/schemas/experiment-plan-v2.schema.json",
     title: "CounterLab hosted Experiment Plan v2",
     schema: ExperimentPlanV2Schema,
+  },
+  {
+    fileName: "lab-scene-v2.schema.json",
+    id: "https://counterlab.dev/schemas/lab-scene-v2.schema.json",
+    title: "CounterLab bounded Lab Scene v2",
+    schema: LabSceneV2Schema,
+    destinations: [
+      resolve(
+        root,
+        "packages/generative-ui-contracts/schemas/lab-scene-v2.schema.json",
+      ),
+    ],
   },
   {
     fileName: "patch-plan-v1.schema.json",

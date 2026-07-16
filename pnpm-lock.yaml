@@ -181,6 +181,15 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
+  packages/generative-ui-contracts:
+    dependencies:
+      "@counterlab/contracts":
+        specifier: workspace:*
+        version: link:../contracts
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+
   packages/notebook-parser:
     dependencies:
       "@counterlab/contracts":
