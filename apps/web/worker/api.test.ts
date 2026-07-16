@@ -5939,7 +5939,10 @@ describe("Cloudflare Worker API", () => {
       capsuleSigningEnv,
     );
     expect(hostedReplay.status).toBe(200);
-    await expect(hostedReplay.json()).resolves.toMatchObject({
+    const hostedReplayPayload = (await hostedReplay.json()) as {
+      data: Record<string, unknown>;
+    };
+    expect(hostedReplayPayload).toMatchObject({
       data: {
         schemaVersion: "2",
         replayId: publishedReplayPayload.data.replay.replayId,
@@ -5951,8 +5954,40 @@ describe("Cloudflare Worker API", () => {
         capsuleId: storedProofCapsule.capsuleId,
         rootHash: storedProofCapsule.rootHash,
         bytesHash: storedProofCapsule.bytesHash,
+        artifactManifest: {
+          artifactId: bundle.artifactManifest.artifactId,
+          fileSha256: bundle.artifactManifest.fileSha256,
+        },
+        beliefSpec: { id: bundle.approvedBeliefSpec.id },
+        prediction: { id: bundle.prediction.id },
+        verifiedResult: { resultHash: result.resultHash },
+        evidenceVerdict: { kind: "SUPPORTS", resultHash: result.resultHash },
+        boundary: {
+          result: { concept: "entity_leakage" },
+          report: { status: "VERIFIED" },
+          receipt: { resultHash: expect.any(String) },
+        },
+        revision: {
+          statement:
+            "Deployment units must determine the evaluation split before I trust generalization.",
+        },
+        transferResult: { outcome: "PASSED" },
+        patchResult: { resultHash: patchResult.resultHash },
+        reasoningDiff: {
+          schemaVersion: "2",
+          authority: { patchResultHash: patchResult.resultHash },
+        },
+        compilerEvents: expect.any(Array),
+        timeline: expect.any(Array),
+        limitations: expect.arrayContaining([
+          expect.stringMatching(/bounded experiment/iu),
+        ]),
       },
     });
+    const serializedHostedReplay = JSON.stringify(hostedReplayPayload);
+    expect(serializedHostedReplay).not.toContain("objectKey");
+    expect(serializedHostedReplay).not.toContain("patched-notebook.ipynb");
+    expect(serializedHostedReplay).not.toContain("private reasoning");
     const wrongCapsuleKey = await harness.app.request(
       `/api/sessions/${bundle.sessionId}/proof-capsule`,
       undefined,

@@ -100,6 +100,7 @@ import {
   type SessionRepository,
 } from "@counterlab/session-core";
 import {
+  projectProofCapsuleReplayV2,
   validateProofCapsulePayloadAuthorityV2,
   validateProofCapsuleV2,
 } from "@counterlab/proof-capsule";
@@ -8468,8 +8469,24 @@ export function createApi(options: ApiOptions = {}) {
         409,
       );
     }
+    const boundaryIntegrity =
+      validated.manifest.authority.boundary.receipt.integrity;
+    const replay = await projectProofCapsuleReplayV2(
+      validated,
+      record.metadata,
+      {
+        ...(boundaryIntegrity.mode === "hmac-signed" &&
+        context.env?.COUNTERLAB_SIGNING_KEY !== undefined
+          ? {
+              boundarySigningKeys: {
+                [boundaryIntegrity.keyId]: context.env.COUNTERLAB_SIGNING_KEY,
+              },
+            }
+          : {}),
+      },
+    );
     context.header("cache-control", "private, no-store");
-    return context.json(jsonSuccess(record.metadata));
+    return context.json(jsonSuccess(replay));
   });
 
   app.notFound((context) =>

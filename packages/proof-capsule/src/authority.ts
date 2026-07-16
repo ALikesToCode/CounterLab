@@ -13,11 +13,15 @@ import {
   PatchPlanV1Schema,
   PatchResultSchema,
   PredictionContractSchema,
+  ProofCapsuleReplayReceiptV2Schema,
+  ProofCapsuleReplayV2Schema,
   PublicCompilerEventSchema,
   ReasoningDiffV2Schema,
   TransferResultSchema,
   canonicalJsonV1,
   type EvidenceEvent,
+  type ProofCapsuleReplayReceiptV2,
+  type ProofCapsuleReplayV2,
 } from "@counterlab/contracts";
 import { getConceptPack } from "@counterlab/concept-registry";
 import {
@@ -689,4 +693,136 @@ export async function validateProofCapsulePayloadAuthorityV2(
     resultHash: authority.result.resultHash,
     patchResultHash: authority.patch.patchResultHash,
   };
+}
+
+export async function projectProofCapsuleReplayV2(
+  capsule: ValidatedProofCapsuleV2,
+  rawReceipt: ProofCapsuleReplayReceiptV2,
+  options: ProofCapsulePayloadAuthorityOptions = {},
+): Promise<ProofCapsuleReplayV2> {
+  const receipt = ProofCapsuleReplayReceiptV2Schema.parse(rawReceipt);
+  await validateProofCapsulePayloadAuthorityV2(capsule, options);
+  const { objectKey: _objectKey, ...publicReference } = capsule.reference;
+  assertEqual(
+    "replay receipt Capsule reference",
+    receipt.proofCapsule,
+    publicReference,
+  );
+
+  const artifactManifest = parseJsonEntry(
+    capsule,
+    "artifact-manifest.json",
+    ArtifactManifestSchema,
+    "Artifact Manifest",
+  );
+  const beliefSpec = parseJsonEntry(
+    capsule,
+    "belief-spec.json",
+    BeliefSpecV2Schema,
+    "Belief Spec",
+  );
+  const prediction = parseJsonEntry(
+    capsule,
+    "prediction.json",
+    PredictionContractSchema,
+    "Prediction",
+  );
+  const verifiedResult = parseJsonEntry(
+    capsule,
+    "signed-result.json",
+    HostedVerifiedResultSetV2Schema,
+    "signed result",
+  );
+  const evidenceVerdict = parseJsonEntry(
+    capsule,
+    "evidence-verdict.json",
+    EvidenceVerdictSchema,
+    "Evidence Verdict",
+  );
+  const verifierReports = parseJsonEntry(
+    capsule,
+    "verifier-report.json",
+    ProofCapsuleVerifierReportSetV2Schema,
+    "verifier report set",
+  );
+  const boundaryResult = parseJsonEntry(
+    capsule,
+    "boundary-map.json",
+    BoundaryMapResultV1Schema,
+    "Boundary Map",
+  );
+  const boundaryReceipt = parseJsonEntry(
+    capsule,
+    "boundary-map-receipt.json",
+    BoundaryMapReceiptV1Schema,
+    "Boundary receipt",
+  );
+  const revision = parseJsonEntry(
+    capsule,
+    "revision.json",
+    ProofCapsuleRevisionV1Schema,
+    "learner revision",
+  );
+  const transferResult = parseJsonEntry(
+    capsule,
+    "transfer-result.json",
+    TransferResultSchema,
+    "Transfer result",
+  );
+  const patchResult = parseJsonEntry(
+    capsule,
+    "patch-result.json",
+    PatchResultSchema,
+    "Patch Result",
+  );
+  const reasoningDiff = parseJsonEntry(
+    capsule,
+    "reasoning-diff.json",
+    ReasoningDiffV2Schema,
+    "Reasoning Diff",
+  );
+  const compilerEvents = parseJsonlEntry(
+    capsule,
+    "compiler-events.jsonl",
+    PublicCompilerEventSchema,
+    "compiler event stream",
+  );
+  const evidenceEvents = parseJsonlEntry(
+    capsule,
+    "event-chain.jsonl",
+    EvidenceEventSchema,
+    "evidence event chain",
+  );
+
+  return ProofCapsuleReplayV2Schema.parse({
+    ...receipt,
+    artifactManifest,
+    beliefSpec,
+    prediction,
+    verifiedResult,
+    evidenceVerdict,
+    boundary: {
+      result: boundaryResult,
+      report: verifierReports.boundaryVerification,
+      receipt: boundaryReceipt,
+    },
+    revision: {
+      statement: revision.statement,
+      recordedAt: revision.recordedAt,
+    },
+    transferResult,
+    patchResult,
+    reasoningDiff,
+    compilerEvents,
+    timeline: evidenceEvents.map(
+      ({ sequence, timestamp, actor, kind, eventHash }) => ({
+        sequence,
+        timestamp,
+        actor,
+        kind,
+        eventHash,
+      }),
+    ),
+    limitations: capsule.manifest.limitations,
+  });
 }

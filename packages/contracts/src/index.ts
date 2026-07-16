@@ -2997,6 +2997,103 @@ export type ProofCapsuleReplayReceiptV2 = z.infer<
   typeof ProofCapsuleReplayReceiptV2Schema
 >;
 
+const ProofCapsuleReplayTimelineEventV2Schema = z
+  .object({
+    sequence: z.number().int().positive(),
+    timestamp: z.iso.datetime({ offset: true }),
+    actor: z.enum([
+      "learner",
+      "gpt-5.6",
+      "codex",
+      "verifier",
+      "kernel",
+      "system",
+    ]),
+    kind: NonEmptyString,
+    eventHash: Sha256Schema,
+  })
+  .strict();
+
+export const ProofCapsuleReplayV2Schema =
+  ProofCapsuleReplayReceiptV2Schema.safeExtend({
+    artifactManifest: ArtifactManifestSchema,
+    beliefSpec: BeliefSpecV2Schema,
+    prediction: PredictionContractSchema,
+    verifiedResult: HostedVerifiedResultSetV2Schema,
+    evidenceVerdict: EvidenceVerdictSchema,
+    boundary: z
+      .object({
+        result: BoundaryMapResultV1Schema,
+        report: BoundaryMapVerificationReportV1Schema,
+        receipt: BoundaryMapReceiptV1Schema,
+      })
+      .strict(),
+    revision: z
+      .object({
+        statement: NonEmptyString,
+        recordedAt: z.iso.datetime({ offset: true }),
+      })
+      .strict(),
+    transferResult: TransferResultSchema,
+    patchResult: PatchResultSchema,
+    reasoningDiff: ReasoningDiffV2Schema,
+    compilerEvents: z.array(PublicCompilerEventSchema).min(1).max(1_024),
+    timeline: z.array(ProofCapsuleReplayTimelineEventV2Schema).min(1).max(512),
+    limitations: z.array(NonEmptyString).min(1).max(32),
+  }).superRefine((replay, context) => {
+    if (
+      replay.prediction.sessionId !== replay.sourceSessionId ||
+      replay.verifiedResult.sessionId !== replay.sourceSessionId ||
+      replay.boundary.result.sessionId !== replay.sourceSessionId ||
+      replay.boundary.receipt.sessionId !== replay.sourceSessionId ||
+      replay.transferResult.sessionId !== replay.sourceSessionId ||
+      replay.patchResult.sessionId !== replay.sourceSessionId ||
+      replay.reasoningDiff.sessionId !== replay.sourceSessionId
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Proof Capsule replay payload mixes session authority",
+        path: ["sourceSessionId"],
+      });
+    }
+    if (
+      replay.beliefSpec.concept !== replay.concept ||
+      replay.verifiedResult.concept !== replay.concept ||
+      replay.boundary.result.concept !== replay.concept ||
+      replay.reasoningDiff.concept !== replay.concept
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Proof Capsule replay payload mixes Subject Pack authority",
+        path: ["concept"],
+      });
+    }
+    if (
+      replay.verifiedResult.artifactManifestHash !==
+      replay.reasoningDiff.authority.artifactManifestHash
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "Proof Capsule replay result does not bind the Artifact Manifest",
+        path: ["verifiedResult", "artifactManifestHash"],
+      });
+    }
+    if (
+      replay.evidenceVerdict.kind === "SUPPORTS" &&
+      replay.evidenceVerdict.resultHash !== replay.verifiedResult.resultHash
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "Proof Capsule replay verdict does not bind the verified result",
+        path: ["evidenceVerdict"],
+      });
+    }
+  });
+
+export type ProofCapsuleReplayV2 = z.infer<typeof ProofCapsuleReplayV2Schema>;
+
 export const ProofCapsuleRefV2Schema = ProofCapsuleRefV2BaseSchema.superRefine(
   (reference, context) => {
     const expectedSuffix = `/${reference.bytesHash}.counterlab`;
