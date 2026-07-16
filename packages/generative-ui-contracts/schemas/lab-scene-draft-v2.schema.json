@@ -86,7 +86,7 @@
                 "type": "string",
                 "minLength": 2,
                 "maxLength": 240,
-                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+                "pattern": "^\\/[A-Za-z0-9_-][A-Za-z0-9_/-]*$"
               }
             },
             "required": ["id", "type", "prompt", "immutableBinding"],
@@ -293,7 +293,7 @@
                 "type": "string",
                 "minLength": 2,
                 "maxLength": 240,
-                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+                "pattern": "^\\/[A-Za-z0-9_-][A-Za-z0-9_/-]*$"
               },
               "type": {
                 "type": "string",
@@ -325,7 +325,7 @@
                 "type": "string",
                 "minLength": 2,
                 "maxLength": 240,
-                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+                "pattern": "^\\/[A-Za-z0-9_-][A-Za-z0-9_/-]*$"
               },
               "type": {
                 "type": "string",
@@ -386,7 +386,7 @@
                 "type": "string",
                 "minLength": 2,
                 "maxLength": 240,
-                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+                "pattern": "^\\/[A-Za-z0-9_-][A-Za-z0-9_/-]*$"
               },
               "type": {
                 "type": "string",
@@ -447,7 +447,7 @@
                 "type": "string",
                 "minLength": 2,
                 "maxLength": 240,
-                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+                "pattern": "^\\/[A-Za-z0-9_-][A-Za-z0-9_/-]*$"
               },
               "type": {
                 "type": "string",
@@ -508,7 +508,7 @@
                 "type": "string",
                 "minLength": 2,
                 "maxLength": 240,
-                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+                "pattern": "^\\/[A-Za-z0-9_-][A-Za-z0-9_/-]*$"
               },
               "type": {
                 "type": "string",
@@ -518,7 +518,7 @@
                 "type": "string",
                 "minLength": 2,
                 "maxLength": 240,
-                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+                "pattern": "^\\/[A-Za-z0-9_-][A-Za-z0-9_/-]*$"
               }
             },
             "required": [
@@ -548,7 +548,7 @@
                 "type": "string",
                 "minLength": 2,
                 "maxLength": 240,
-                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+                "pattern": "^\\/[A-Za-z0-9_-][A-Za-z0-9_/-]*$"
               },
               "type": {
                 "type": "string",
@@ -558,13 +558,13 @@
                 "type": "string",
                 "minLength": 2,
                 "maxLength": 240,
-                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+                "pattern": "^\\/[A-Za-z0-9_-][A-Za-z0-9_/-]*$"
               },
               "reducedMotionBinding": {
                 "type": "string",
                 "minLength": 2,
                 "maxLength": 240,
-                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+                "pattern": "^\\/[A-Za-z0-9_-][A-Za-z0-9_/-]*$"
               }
             },
             "required": [
@@ -599,7 +599,7 @@
                 "type": "string",
                 "minLength": 2,
                 "maxLength": 240,
-                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+                "pattern": "^\\/[A-Za-z0-9_-][A-Za-z0-9_/-]*$"
               }
             },
             "required": ["id", "type", "label", "evidenceBinding"],
@@ -627,7 +627,7 @@
                 "type": "string",
                 "minLength": 2,
                 "maxLength": 240,
-                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+                "pattern": "^\\/[A-Za-z0-9_-][A-Za-z0-9_/-]*$"
               }
             },
             "required": ["id", "type", "label", "diffBinding"],
@@ -676,7 +676,7 @@
                 "type": "string",
                 "minLength": 2,
                 "maxLength": 240,
-                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+                "pattern": "^\\/[A-Za-z0-9_-][A-Za-z0-9_/-]*$"
               }
             },
             "required": ["id", "type", "resultBinding"],
@@ -704,7 +704,7 @@
                 "type": "string",
                 "minLength": 2,
                 "maxLength": 240,
-                "pattern": "^\\/(?!\\/)(?!.*(?:\\.\\.|:|\\\\))[A-Za-z0-9_/-]+$"
+                "pattern": "^\\/[A-Za-z0-9_-][A-Za-z0-9_/-]*$"
               }
             },
             "required": ["id", "type", "label", "proofBinding"],

@@ -14,7 +14,7 @@ const ResultBinding = z
   .trim()
   .min(2)
   .max(240)
-  .regex(/^\/(?!\/)(?!.*(?:\.\.|:|\\))[A-Za-z0-9_/-]+$/u);
+  .regex(/^\/[A-Za-z0-9_-][A-Za-z0-9_/-]*$/u);
 
 const StaticCopy = z
   .string()

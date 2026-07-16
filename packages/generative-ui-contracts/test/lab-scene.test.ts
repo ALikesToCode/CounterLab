@@ -72,6 +72,44 @@ describe("Lab Scene v2", () => {
     expect(LabSceneV2Schema.parse(scene()).blocks).toHaveLength(4);
   });
 
+  it("publishes model-portable binding patterns without changing path policy", () => {
+    const metric = scene().blocks.find((block) => block.type === "Metric");
+    expect(metric).toBeDefined();
+    for (const resultBinding of [
+      "/runs/0",
+      "/runs/byId/customer_group_split/metrics/accuracy",
+      "/a_b-c/0",
+    ]) {
+      expect(() =>
+        LabSceneV2Schema.parse({
+          ...scene(),
+          blocks: scene().blocks.map((block) =>
+            block.type === "Metric" ? { ...metric, resultBinding } : block,
+          ),
+        }),
+      ).not.toThrow();
+    }
+    for (const resultBinding of [
+      "//runs/0",
+      "/runs/../secret",
+      "/runs:value",
+      String.raw`/runs\value`,
+      "/",
+    ]) {
+      expect(() =>
+        LabSceneV2Schema.parse({
+          ...scene(),
+          blocks: scene().blocks.map((block) =>
+            block.type === "Metric" ? { ...metric, resultBinding } : block,
+          ),
+        }),
+      ).toThrow();
+    }
+    expect(JSON.stringify(z.toJSONSchema(LabSceneV2Schema))).not.toContain(
+      "(?",
+    );
+  });
+
   it("rejects arbitrary components, executable presentation, and metric literals", () => {
     expect(() =>
       LabSceneV2Schema.parse({
