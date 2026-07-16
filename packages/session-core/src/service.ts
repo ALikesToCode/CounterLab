@@ -1,6 +1,7 @@
 import {
   BeliefSpecV2Schema,
   BeliefTestSchema,
+  BoundaryMapAuthorityRefV1Schema,
   EvidenceVerdictSchema,
   HostedVerifiedResultSetV2Schema,
   PatchResultSchema,
@@ -617,6 +618,82 @@ export class SessionService {
             verdict.technicalReportHash,
             epistemicReportHash,
             await hashCanonical(verdict),
+          ]),
+        ],
+      },
+    );
+  }
+
+  async recordBoundaryMapAuthority(
+    sessionId: string,
+    input: unknown,
+  ): Promise<CounterLabSession> {
+    const boundaryMapAuthority = BoundaryMapAuthorityRefV1Schema.parse(input);
+    const current = await this.requireSession(sessionId);
+    const authority = await resolveSessionEvidenceAuthority(current);
+    if (authority.protocol !== "v5" || authority.verdict === "REJECTED") {
+      throw new SessionInputError(
+        "Boundary Map authority requires releasable Belief Spec v2 evidence",
+      );
+    }
+
+    const receipt = boundaryMapAuthority.receipt;
+    const evidenceVerdictHash = await hashCanonical(authority.evidenceVerdict);
+    if (receipt.sessionId !== current.id) {
+      throw new SessionInputError(
+        "Boundary Map receipt session does not match the session",
+      );
+    }
+    if (
+      receipt.experimentIrHash !== authority.lineage.selectedExperimentIrHash
+    ) {
+      throw new SessionInputError(
+        "Boundary Map receipt Experiment IR hash does not match the selected experiment",
+      );
+    }
+    if (receipt.authoritativeResultHash !== authority.result.resultHash) {
+      throw new SessionInputError(
+        "Boundary Map receipt result hash does not match the authoritative result",
+      );
+    }
+    if (receipt.evidenceVerdictHash !== evidenceVerdictHash) {
+      throw new SessionInputError(
+        "Boundary Map receipt verdict hash does not match the Evidence Verdict",
+      );
+    }
+
+    const { integrity, receiptHash, ...receiptContent } = receipt;
+    if (integrity.contentHash !== (await hashCanonical(receiptContent))) {
+      throw new SessionInputError(
+        "Boundary Map receipt content hash is invalid",
+      );
+    }
+    if (
+      receiptHash !== (await hashCanonical({ ...receiptContent, integrity }))
+    ) {
+      throw new SessionInputError("Boundary Map receipt hash is invalid");
+    }
+
+    return this.transitionFrom(
+      current,
+      "BOUNDARY_VERIFIED",
+      { boundaryMapAuthority },
+      {
+        actor: "verifier",
+        kind: "boundary_map.verified",
+        payload: {
+          jobId: boundaryMapAuthority.jobId,
+          sweepId: boundaryMapAuthority.sweepId,
+          resultHash: boundaryMapAuthority.resultHash,
+          cellCount: boundaryMapAuthority.cellCount,
+        },
+        inputHashes: await sessionEvidenceInputHashes(authority),
+        outputHashes: [
+          ...new Set([
+            boundaryMapAuthority.resultHash,
+            boundaryMapAuthority.verificationReportHash,
+            integrity.contentHash,
+            receiptHash,
           ]),
         ],
       },

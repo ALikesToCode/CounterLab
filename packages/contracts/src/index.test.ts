@@ -610,6 +610,12 @@ describe("hosted runner contracts", () => {
     expect(
       RunnerRequestIdentityV1Schema.parse({
         ...base,
+        purpose: "LAB_RUN_BOUNDARY",
+      }).purpose,
+    ).toBe("LAB_RUN_BOUNDARY");
+    expect(
+      RunnerRequestIdentityV1Schema.parse({
+        ...base,
         purpose: "LAB_RUN_INTERACTIVE",
         configurationHash: "e".repeat(64),
       }).configurationHash,
@@ -893,6 +899,12 @@ describe("session transitions", () => {
       /invalid transition/i,
     );
     expect(SessionStateSchema.parse("TRANSFER_PASSED")).toBe("TRANSFER_PASSED");
+    expect(assertTransition("EXPERIMENT_COMPLETED", "BOUNDARY_VERIFIED")).toBe(
+      "BOUNDARY_VERIFIED",
+    );
+    expect(assertTransition("BOUNDARY_VERIFIED", "REVISION_RECORDED")).toBe(
+      "REVISION_RECORDED",
+    );
   });
 
   it("supports verifier and learner retry branches without skipping gates", () => {

@@ -159,6 +159,49 @@ const rejectedVerdict = {
 
 const EPISTEMIC_REPORT_HASH = "9".repeat(64);
 
+async function boundaryMapAuthority(
+  overrides: {
+    sessionId?: string;
+    experimentIrHash?: string;
+    authoritativeResultHash?: string;
+    evidenceVerdictHash?: string;
+    contentHash?: string;
+    receiptHash?: string;
+  } = {},
+) {
+  const receiptContent = {
+    schemaVersion: "1" as const,
+    canonicalProfile: "counterlab-canonical-json-v1" as const,
+    sessionId: overrides.sessionId ?? "session-1",
+    resultHash: "0".repeat(64),
+    verificationReportHash: "1".repeat(64),
+    experimentIrHash: overrides.experimentIrHash ?? supportsVerdict.irHash,
+    authoritativeResultHash:
+      overrides.authoritativeResultHash ?? hostedResultSet.resultHash,
+    evidenceVerdictHash:
+      overrides.evidenceVerdictHash ?? (await hashCanonical(supportsVerdict)),
+    issuedAt: "2026-07-14T04:00:09.000Z",
+  };
+  const integrity = {
+    mode: "integrity-hashed" as const,
+    algorithm: "sha256" as const,
+    contentHash: overrides.contentHash ?? (await hashCanonical(receiptContent)),
+  };
+  const unsignedReceipt = { ...receiptContent, integrity };
+  return {
+    jobId: "job-v5-boundary-1",
+    sweepId: "leakage-recurrence-sweep",
+    resultHash: receiptContent.resultHash,
+    verificationReportHash: receiptContent.verificationReportHash,
+    receipt: {
+      ...unsignedReceipt,
+      receiptHash:
+        overrides.receiptHash ?? (await hashCanonical(unsignedReceipt)),
+    },
+    cellCount: 25,
+  };
+}
+
 async function scientificLineage(beliefSpec: unknown) {
   return {
     schemaVersion: "5" as const,
@@ -526,6 +569,73 @@ describe("SessionService state machine", () => {
     expect(completed.evidenceVerdict).toEqual(inconclusiveVerdict);
     expect(completed.verifiedResult).toEqual(hostedResultSet);
     repository.close();
+  });
+
+  it("projects an independently verified Boundary Map authority into the session", async () => {
+    const { service, repository } = memoryService();
+    await throughVerifiedLab(service);
+    await service.recordEpistemicResult("session-1", {
+      result: hostedResultSet,
+      verdict: supportsVerdict,
+      epistemicReportHash: EPISTEMIC_REPORT_HASH,
+    });
+    const authority = await boundaryMapAuthority();
+
+    const bounded = await service.recordBoundaryMapAuthority(
+      "session-1",
+      authority,
+    );
+
+    expect(bounded).toMatchObject({
+      state: "BOUNDARY_VERIFIED",
+      boundaryMapAuthority: authority,
+    });
+    expect((await service.listEvents("session-1")).at(-1)).toMatchObject({
+      actor: "verifier",
+      kind: "boundary_map.verified",
+      payload: {
+        jobId: authority.jobId,
+        sweepId: authority.sweepId,
+        resultHash: authority.resultHash,
+        cellCount: authority.cellCount,
+      },
+    });
+    expect(verifyEvidenceChain(await service.listEvents("session-1"))).toEqual(
+      expect.objectContaining({ valid: true }),
+    );
+    repository.close();
+  });
+
+  it("rejects mismatched or corrupted Boundary Map authority without changing state", async () => {
+    const cases = [
+      { sessionId: "another-session" },
+      { experimentIrHash: "2".repeat(64) },
+      { authoritativeResultHash: "3".repeat(64) },
+      { evidenceVerdictHash: "4".repeat(64) },
+      { contentHash: "5".repeat(64) },
+      { receiptHash: "6".repeat(64) },
+    ] as const;
+
+    for (const overrides of cases) {
+      const { service, repository } = memoryService();
+      await throughVerifiedLab(service);
+      await service.recordEpistemicResult("session-1", {
+        result: hostedResultSet,
+        verdict: supportsVerdict,
+        epistemicReportHash: EPISTEMIC_REPORT_HASH,
+      });
+
+      await expect(
+        service.recordBoundaryMapAuthority(
+          "session-1",
+          await boundaryMapAuthority(overrides),
+        ),
+      ).rejects.toBeInstanceOf(SessionInputError);
+      const unchanged = await service.getSession("session-1");
+      expect(unchanged.state).toBe("EXPERIMENT_COMPLETED");
+      expect(unchanged.boundaryMapAuthority).toBeUndefined();
+      repository.close();
+    }
   });
 
   it("rejects mismatched epistemic release authority without changing state", async () => {

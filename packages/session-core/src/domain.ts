@@ -1,5 +1,6 @@
 import {
   assertTransition,
+  type BoundaryMapAuthorityRefV1,
   canonicalJsonV1,
   type EvidenceVerdict,
   EvidenceVerdictSchema,
@@ -58,6 +59,7 @@ export interface CounterLabSession {
   verifiedResult?: VerifiedResultSet;
   evidenceVerdict?: EvidenceVerdict;
   epistemicReportHash?: string;
+  boundaryMapAuthority?: BoundaryMapAuthorityRefV1;
   revision?: string;
   transferResult?: TransferResult;
   patchResult?: PatchResult;
