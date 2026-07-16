@@ -2,6 +2,8 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { migrateBeliefTestV1ToV2 } from "@counterlab/contracts";
+
 import { App } from "./App";
 import { sampleArtifact, sampleResult } from "./sample";
 
@@ -97,6 +99,16 @@ const imbalanceBeliefTest = {
       relevance: "Overall accuracy does not reveal rare-class misses.",
     },
   ],
+};
+
+const liveBeliefSpec = {
+  ...migrateBeliefTestV1ToV2(liveBeliefTest),
+  learnerDecision: "UNDECIDED" as const,
+};
+
+const liveImbalanceBeliefSpec = {
+  ...migrateBeliefTestV1ToV2(imbalanceBeliefTest),
+  learnerDecision: "CONFIRMED" as const,
 };
 
 const livePreview = {
@@ -209,7 +221,13 @@ function installApi(
     rejectLiveBelief?: boolean;
     beliefTest?: typeof liveBeliefTest | typeof imbalanceBeliefTest;
     stallRunner?: boolean;
-    restoredSessionState?: "INGESTED" | "LAB_COMPILING" | "LAB_VERIFIED";
+    restoredSessionState?:
+      | "INGESTED"
+      | "BELIEF_TEST_PROPOSED"
+      | "BELIEF_TEST_CONFIRMED"
+      | "LAB_COMPILING"
+      | "LAB_VERIFIED";
+    restoredSessionExtra?: Record<string, unknown>;
   } = {},
 ) {
   let activeMode:
@@ -263,6 +281,7 @@ function installApi(
           session(options.restoredSessionState ?? "LAB_COMPILING", 5, {
             artifactId: uploadedArtifact.artifactId,
             mode: { kind: "live_notebook" },
+            ...options.restoredSessionExtra,
           }),
         );
       }
@@ -542,7 +561,9 @@ describe("CounterLab judged flow", () => {
     );
 
     expect(
-      await screen.findByText(/live competing hypothesis/i),
+      await screen.findByRole("heading", {
+        name: /live competing hypothesis/i,
+      }),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/the claim targets unseen customers/i),
@@ -730,6 +751,69 @@ describe("CounterLab judged flow", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getByText(/live generation/i)).toBeInTheDocument();
+  });
+
+  it("renders the exact Belief Spec v2 after a live session refresh", async () => {
+    installApi({
+      restoredSessionState: "BELIEF_TEST_PROPOSED",
+      restoredSessionExtra: { beliefSpec: liveBeliefSpec },
+    });
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem("counterlab.mode", "live");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: liveBeliefSpec.hypotheses[0].statement,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: liveBeliefSpec.hypotheses[1].statement,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(liveBeliefSpec.evidenceRefs[0]!.relevance),
+    ).toBeInTheDocument();
+    expect(screen.getByText(liveBeliefSpec.claim)).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(
+      /customer_id encoded|98\.5% accuracy/i,
+    );
+  });
+
+  it("commits class-imbalance prediction wording from Belief Spec v2", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi({
+      restoredSessionState: "BELIEF_TEST_CONFIRMED",
+      restoredSessionExtra: { beliefSpec: liveImbalanceBeliefSpec },
+    });
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem("counterlab.mode", "live");
+
+    render(<App />);
+
+    await user.click(
+      await screen.findByRole("radio", {
+        name: /expose a serious minority-class problem/i,
+      }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /lock my answer and run the test/i }),
+    );
+
+    await vi.waitFor(() => {
+      const predictionRequest = fetcher.mock.calls.find(([path]) =>
+        String(path).endsWith("/prediction"),
+      );
+      expect(predictionRequest).toBeDefined();
+      expect(String(predictionRequest?.[1]?.body)).toContain(
+        "Minority metrics expose a serious evaluation problem",
+      );
+      expect(String(predictionRequest?.[1]?.body)).not.toContain(
+        "Accuracy falls materially",
+      );
+    });
   });
 
   it("uses class-imbalance language when the analyst routes a rare-event notebook", async () => {

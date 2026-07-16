@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import {
   ApiClientError,
   counterLabApi,
+  getSessionBeliefAuthority,
   type ArtifactView,
   type BeliefAnalysisPreview,
   type BeliefTest,
@@ -45,6 +46,84 @@ type PredictionChoice = "stays-high" | "falls" | "unsure";
 type TransferState =
   "locked" | "ready" | "failed" | "passed" | "patching" | "patched";
 type ReviewStep = "claim" | "belief" | "build" | "reality";
+
+type BeliefPresentation = {
+  schemaVersion: "1" | "2";
+  concept: BeliefTest["concept"];
+  claim: string;
+  current: {
+    statement: string;
+    predictedOutcome?: string;
+    conditions: string[];
+    nonClaims: string[];
+  };
+  competing: {
+    statement: string;
+    predictedOutcome?: string;
+    conditions: string[];
+    nonClaims: string[];
+  };
+  evidenceRefs: BeliefTest["evidenceRefs"];
+  alternatives: Array<{ label: string; rationale: string }>;
+  limitations: string[];
+};
+
+function uniqueStrings(values: readonly string[]): string[] {
+  return [...new Set(values)];
+}
+
+function sessionBeliefPresentation(
+  session: Pick<SessionView, "beliefTest" | "beliefSpec"> | null,
+): BeliefPresentation | undefined {
+  if (session === null) return undefined;
+  const authority = getSessionBeliefAuthority(session);
+  if (authority === undefined) return undefined;
+  if (authority.schemaVersion === "1") {
+    const { beliefTest } = authority;
+    return {
+      schemaVersion: "1",
+      concept: beliefTest.concept,
+      claim: beliefTest.learnerClaim,
+      current: {
+        ...beliefTest.currentHypothesis,
+        conditions: [],
+        nonClaims: beliefTest.uncertainty.limitations,
+      },
+      competing: {
+        ...beliefTest.competingHypothesis,
+        conditions: [],
+        nonClaims: beliefTest.uncertainty.limitations,
+      },
+      evidenceRefs: beliefTest.evidenceRefs,
+      alternatives: beliefTest.alternatives,
+      limitations: beliefTest.uncertainty.limitations,
+    };
+  }
+
+  const { beliefSpec } = authority;
+  const [current, competing] = beliefSpec.hypotheses;
+  return {
+    schemaVersion: "2",
+    concept: beliefSpec.concept,
+    claim: beliefSpec.claim,
+    current: {
+      statement: current.statement,
+      conditions: current.conditions,
+      nonClaims: current.nonClaims,
+    },
+    competing: {
+      statement: competing.statement,
+      conditions: competing.conditions,
+      nonClaims: competing.nonClaims,
+    },
+    evidenceRefs: beliefSpec.evidenceRefs,
+    alternatives: beliefSpec.alternatives.map(({ label, rationale }) => ({
+      label,
+      rationale,
+    })),
+    limitations: uniqueStrings([...current.nonClaims, ...competing.nonClaims]),
+  };
+}
 
 function presentationMode(mode: SessionView["mode"]): Mode {
   if (mode.kind === "sample_lesson") return "instant";
@@ -751,7 +830,7 @@ function ClaimScreen({
 
 function BeliefScreen({
   claim,
-  beliefTest,
+  belief,
   confirmed,
   confirm,
   prediction,
@@ -763,7 +842,7 @@ function BeliefScreen({
   stop,
 }: {
   claim: string;
-  beliefTest?: BeliefTest | undefined;
+  belief?: BeliefPresentation | undefined;
   confirmed: boolean;
   confirm: () => void;
   prediction: PredictionChoice | null;
@@ -774,7 +853,7 @@ function BeliefScreen({
   editClaim: () => void;
   stop: (reason: "rejected" | "insufficient") => void;
 }) {
-  const isImbalance = beliefTest?.concept === "class_imbalance";
+  const isImbalance = belief?.concept === "class_imbalance";
   const copy = isImbalance
     ? {
         currentLabel: "Idea A · Accuracy is enough",
@@ -851,15 +930,16 @@ function BeliefScreen({
       <section className="hypothesis-grid" aria-label="Competing hypotheses">
         <article className="hypothesis current">
           <p className="hypothesis-label">{copy.currentLabel}</p>
-          <h2>{copy.currentHypothesis}</h2>
+          <h2>{belief?.current.statement ?? copy.currentHypothesis}</h2>
           <p className="prediction-line">
-            <span>Predicts</span> {copy.currentPrediction}
+            <span>Predicts</span>{" "}
+            {belief?.current.predictedOutcome ?? copy.currentPrediction}
           </p>
-          {beliefTest !== undefined && (
+          {belief?.schemaVersion === "2" && (
             <details className="analyst-wording">
-              <summary>Show exact analyst wording</summary>
-              <p>{beliefTest.currentHypothesis.statement}</p>
-              <p>{beliefTest.currentHypothesis.predictedOutcome}</p>
+              <summary>Show conditions and limits</summary>
+              <p>Conditions: {belief.current.conditions.join(" ")}</p>
+              <p>Does not claim: {belief.current.nonClaims.join(" ")}</p>
             </details>
           )}
         </article>
@@ -868,22 +948,23 @@ function BeliefScreen({
         </div>
         <article className="hypothesis competing">
           <p className="hypothesis-label">{copy.competingLabel}</p>
-          <h2>{copy.competingHypothesis}</h2>
+          <h2>{belief?.competing.statement ?? copy.competingHypothesis}</h2>
           <p className="prediction-line">
-            <span>Predicts</span> {copy.competingPrediction}
+            <span>Predicts</span>{" "}
+            {belief?.competing.predictedOutcome ?? copy.competingPrediction}
           </p>
-          {beliefTest !== undefined && (
+          {belief?.schemaVersion === "2" && (
             <details className="analyst-wording">
-              <summary>Show exact analyst wording</summary>
-              <p>{beliefTest.competingHypothesis.statement}</p>
-              <p>{beliefTest.competingHypothesis.predictedOutcome}</p>
+              <summary>Show conditions and limits</summary>
+              <p>Conditions: {belief.competing.conditions.join(" ")}</p>
+              <p>Does not claim: {belief.competing.nonClaims.join(" ")}</p>
             </details>
           )}
         </article>
       </section>
 
       <section className="evidence-strip" aria-label="Evidence references">
-        {beliefTest === undefined ? (
+        {belief === undefined ? (
           <>
             <span className="evidence-chip">
               Cell 3 · source <strong>customer_id encoded</strong>
@@ -896,7 +977,7 @@ function BeliefScreen({
             </span>
           </>
         ) : (
-          beliefTest.evidenceRefs.slice(0, 3).map((evidence) => (
+          belief.evidenceRefs.slice(0, 3).map((evidence) => (
             <span className="evidence-chip" key={evidence.hash}>
               {evidence.cellIndex === undefined
                 ? evidence.kind
@@ -921,14 +1002,14 @@ function BeliefScreen({
         <details>
           <summary>Alternatives, limitations, and uncertainty</summary>
           <p>
-            {beliefTest === undefined
+            {belief === undefined
               ? "Class imbalance and temporal drift remain alternatives. The available notebook evidence is sufficient to test entity leakage, but this experiment does not establish production performance or causality."
-              : `${beliefTest.alternatives
+              : `${belief.alternatives
                   .map(
                     (alternative) =>
                       `${alternative.label}: ${alternative.rationale}`,
                   )
-                  .join(" ")} ${beliefTest.uncertainty.limitations.join(" ")}`}
+                  .join(" ")} ${belief.limitations.join(" ")}`}
           </p>
         </details>
       </section>
@@ -1333,6 +1414,7 @@ function ImbalanceReviewScreen({
   returnToCurrent: () => void;
   restart: () => void;
 }) {
+  const belief = sessionBeliefPresentation(session);
   const majority = result.runs.find(
     (run) => run.operation === "imbalance.majority_baseline",
   );
@@ -1381,7 +1463,7 @@ function ImbalanceReviewScreen({
             <p className="eyebrow purple">Your committed guess</p>
             <h2>{session?.prediction?.choice ?? "Prediction not committed"}</h2>
             <p>
-              {session?.beliefTest?.competingHypothesis.statement ??
+              {belief?.competing.statement ??
                 "Class rarity can make a weak detector look accurate."}
             </p>
           </>
@@ -1456,6 +1538,7 @@ function ReviewScreen({
   returnToCurrent: () => void;
   restart: () => void;
 }) {
+  const belief = sessionBeliefPresentation(session);
   if (result.concept === "class_imbalance") {
     return (
       <ImbalanceReviewScreen
@@ -1526,14 +1609,14 @@ function ReviewScreen({
             <article>
               <span>Story A</span>
               <strong>
-                {session?.beliefTest?.currentHypothesis.statement ??
+                {belief?.current.statement ??
                   "The score reflects a reusable pattern."}
               </strong>
             </article>
             <article>
               <span>Story B</span>
               <strong>
-                {session?.beliefTest?.competingHypothesis.statement ??
+                {belief?.competing.statement ??
                   "Repeated customer identity inflated the score."}
               </strong>
             </article>
@@ -3346,6 +3429,11 @@ export function App() {
   const [runnerJob, setRunnerJob] = useState<RunnerJob | null>(null);
   const runner = useRunnerEvents();
   const replay = mode === "replay";
+  const belief = sessionBeliefPresentation(session);
+  const effectiveClaim =
+    claim ||
+    belief?.claim ||
+    "The notebook accuracy proves generalization to new customers.";
 
   const reportError = (caught: unknown) => {
     if (caught instanceof Error && caught.name === "AbortError") return;
@@ -3849,7 +3937,7 @@ export function App() {
   const commitPrediction = () => {
     if (session === null || prediction === null) return;
     const labels: Record<PredictionChoice, string> =
-      session.beliefTest?.concept === "class_imbalance"
+      belief?.concept === "class_imbalance"
         ? {
             "stays-high": "Accuracy still supports useful rare-case detection",
             falls: "Minority metrics expose a serious evaluation problem",
@@ -3956,10 +4044,7 @@ export function App() {
           {reviewStep !== null && (
             <ReviewScreen
               step={reviewStep}
-              claim={
-                claim ||
-                "The notebook accuracy proves generalization to new customers."
-              }
+              claim={effectiveClaim}
               session={session}
               result={session?.verifiedResult ?? sampleResult}
               returnToCurrent={returnToCurrent}
@@ -3985,8 +4070,8 @@ export function App() {
           )}
           {reviewStep === null && stage === "belief" && (
             <BeliefScreen
-              claim={claim}
-              beliefTest={session?.beliefTest}
+              claim={effectiveClaim}
+              belief={belief}
               confirmed={confirmed}
               confirm={confirmBeliefTest}
               prediction={prediction}
@@ -4044,10 +4129,7 @@ export function App() {
             ))}
           {reviewStep === null && stage === "reality" && (
             <RealityScreen
-              claim={
-                claim ||
-                "The notebook accuracy proves generalization to new customers."
-              }
+              claim={effectiveClaim}
               prediction={prediction ?? "stays-high"}
               result={session?.verifiedResult ?? sampleResult}
               session={session}
