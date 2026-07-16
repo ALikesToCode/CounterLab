@@ -28,6 +28,9 @@
     {
       "class_name": "CounterLabRunner",
       "image": "../../Dockerfile.runner",
+      "image_vars": {
+        "COUNTERLAB_SOURCE_COMMIT": "eaedf3ea083f29512f8a2db148f1f632582ec444"
+      },
       "max_instances": 10,
       "instance_type": "basic",
       "ssh": {
