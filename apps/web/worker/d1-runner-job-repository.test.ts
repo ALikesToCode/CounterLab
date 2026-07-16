@@ -113,6 +113,93 @@ class SqliteD1Database {
 }
 
 describe("D1RunnerJobRepository", () => {
+  it("preserves valid request purposes while widening the Boundary Map constraint", () => {
+    const database = new SqliteD1Database();
+    const migrationDirectory = resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      "../migrations",
+    );
+    database.sqlite.exec("PRAGMA foreign_keys = ON");
+    for (const file of [
+      "0001_evidence_store.sql",
+      "0002_runner_jobs.sql",
+      "0003_runner_request_identity.sql",
+    ]) {
+      database.sqlite.exec(
+        readFileSync(resolve(migrationDirectory, file), "utf8"),
+      );
+    }
+    database.sqlite
+      .prepare(
+        `INSERT INTO artifacts
+          (id, file_name, file_sha256, manifest_json, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(
+        "artifact_existing",
+        "existing.ipynb",
+        "a".repeat(64),
+        "{}",
+        "2026-07-15T00:00:00.000Z",
+      );
+    database.sqlite
+      .prepare(
+        `INSERT INTO sessions
+          (id, artifact_id, state, version, aggregate_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        "session_existing",
+        "artifact_existing",
+        "PREDICTION_COMMITTED",
+        4,
+        "{}",
+        "2026-07-15T00:00:00.000Z",
+        "2026-07-15T00:00:00.000Z",
+      );
+    database.sqlite
+      .prepare(
+        `INSERT INTO runner_jobs
+          (id, session_id, kind, status, artifact_id, artifact_manifest_hash,
+           concept_pack_id, concept_pack_version, state_version, version,
+           event_cursor, job_json, created_at, updated_at, request_purpose,
+           request_fingerprint, request_identity_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        "job_existing",
+        "session_existing",
+        "LAB_RUN",
+        "VERIFIED",
+        "artifact_existing",
+        "b".repeat(64),
+        "entity_leakage",
+        "2.0.0",
+        4,
+        1,
+        0,
+        "{}",
+        "2026-07-15T00:00:00.000Z",
+        "2026-07-15T00:00:00.000Z",
+        "LAB_RUN_INTERACTIVE",
+        "c".repeat(64),
+        JSON.stringify({ purpose: "LAB_RUN_INTERACTIVE" }),
+      );
+
+    database.sqlite.exec(
+      readFileSync(
+        resolve(migrationDirectory, "0004_boundary_request_purpose.sql"),
+        "utf8",
+      ),
+    );
+
+    expect(
+      database.sqlite
+        .prepare("SELECT request_purpose FROM runner_jobs WHERE id = ?")
+        .get("job_existing"),
+    ).toEqual({ request_purpose: "LAB_RUN_INTERACTIVE" });
+  });
+
   it("persists the distinct Boundary Map request purpose", async () => {
     const database = new SqliteD1Database();
     database.migrate();

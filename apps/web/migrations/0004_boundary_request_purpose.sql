@@ -1,4 +1,4 @@
-ALTER TABLE runner_jobs DROP COLUMN request_purpose;
+ALTER TABLE runner_jobs RENAME COLUMN request_purpose TO request_purpose_v1;
 
 ALTER TABLE runner_jobs ADD COLUMN request_purpose TEXT
   CHECK (
@@ -10,3 +10,9 @@ ALTER TABLE runner_jobs ADD COLUMN request_purpose TEXT
       'PATCH_COMPILE'
     )
   );
+
+UPDATE runner_jobs
+SET request_purpose = request_purpose_v1
+WHERE request_purpose_v1 IS NOT NULL;
+
+ALTER TABLE runner_jobs DROP COLUMN request_purpose_v1;
