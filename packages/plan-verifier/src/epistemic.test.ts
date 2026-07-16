@@ -275,6 +275,7 @@ async function resultFor(
       throw new Error("test fixture supports leakage only");
     }
     const grouped = spec.operation === "leakage.group_holdout";
+    const ablated = spec.operation === "leakage.identity_ablation";
     return {
       id: spec.runId,
       operation: spec.operation,
@@ -287,8 +288,8 @@ async function resultFor(
       featureSetFingerprint: spec.dropIdentity ? digest("6") : digest("7"),
       pipelineFingerprint: digest("5"),
       metrics: {
-        accuracy: grouped ? 0.59 : 0.985,
-        rocAuc: grouped ? 0.64 : 0.99,
+        accuracy: grouped ? 0.59 : ablated ? 0.62 : 0.985,
+        rocAuc: grouped ? 0.64 : ablated ? 0.66 : 0.99,
       },
       sampleSizes: { train: 1_350, test: 450 },
       entityCounts: { train: 360, test: 120 },
@@ -663,9 +664,10 @@ describe("epistemic verifier authority", () => {
           ...value.ir,
           selection: {
             ...value.ir.selection,
-            eligibleCandidateIds: [
-              ...value.ir.selection.eligibleCandidateIds,
-            ].reverse(),
+            normalizedScore: Math.max(
+              0,
+              value.ir.selection.normalizedScore - 0.01,
+            ),
           },
         }),
       };
@@ -748,11 +750,16 @@ describe("epistemic verifier authority", () => {
         candidateExperiments: candidates,
       });
       if (value.result.concept !== "entity_leakage") return value;
+      const changedRunIds = new Set(
+        candidates
+          .find((candidate) => candidate.id === selectedId)
+          ?.interventions.map((run) => run.runId) ?? [],
+      );
       const runs = value.result.runs.map((run) =>
-        run.operation === "leakage.group_holdout" ? { ...run, seed: 99 } : run,
+        changedRunIds.has(run.id) ? { ...run, seed: 99 } : run,
       );
       const chartData = value.result.chartData.map((row) =>
-        row.splitStrategy === "group" ? { ...row, seed: 99 } : row,
+        changedRunIds.has(row.runId) ? { ...row, seed: 99 } : row,
       );
       return {
         ...value,
