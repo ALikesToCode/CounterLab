@@ -13,6 +13,7 @@ import {
 import {
   APPROVED_LEAKAGE_SAMPLE_SHA256,
   BELIEF_ANALYST_INSTRUCTIONS,
+  BELIEF_SPEC_ANALYST_INSTRUCTIONS,
   ApprovedSampleBeliefAnalyst,
   BeliefAnalystError,
   DisabledBeliefAnalyst,
@@ -253,6 +254,67 @@ function imbalanceModelOutput(artifact = imbalanceManifest()) {
   };
 }
 
+function liveBeliefSpecOutput(
+  artifact = manifest(),
+  overrides: Record<string, unknown> = {},
+) {
+  const codeEvidence = {
+    cellIndex: 2,
+    outputIndex: null,
+    kind: "code" as const,
+    hash: artifact.cells[0]!.sourceSha256,
+    excerpt: "train_test_split(X, y)",
+    relevance: "The split is row-wise.",
+  };
+  const schemaEvidence = {
+    cellIndex: null,
+    outputIndex: null,
+    kind: "schema" as const,
+    hash: schemaSummaryHash(artifact.schemaSummary),
+    excerpt: "customer_id is an entity identifier",
+    relevance: "Repeated entities can cross a row split.",
+  };
+
+  return {
+    schemaVersion: "2" as const,
+    evidenceRefs: [codeEvidence, schemaEvidence],
+    hypotheses: [
+      {
+        id: "current" as const,
+        statement: "Random-row accuracy measures new-customer generalization.",
+        conditions: ["Rows are representative of future customers."],
+        nonClaims: ["This does not establish performance for every cohort."],
+        evidence: [codeEvidence],
+        supportedCandidateExperimentIds: ["group-holdout"],
+      },
+      {
+        id: "competing" as const,
+        statement:
+          "Repeated customer identity inflates the random-row evaluation.",
+        conditions: ["The same customers recur across observations."],
+        nonClaims: ["A group holdout does not prove the model is useless."],
+        evidence: [schemaEvidence],
+        supportedCandidateExperimentIds: ["group-holdout-plus-ablation"],
+      },
+    ],
+    alternatives: [
+      {
+        id: "class-imbalance",
+        label: "Class imbalance",
+        statement: "Accuracy may be dominated by the majority class.",
+        rationale: "This is plausible but does not explain entity overlap.",
+        conditions: ["The target is rare."],
+        nonClaims: ["Rarity alone does not establish identity leakage."],
+        evidence: [schemaEvidence],
+        supportedCandidateExperimentIds: ["group-holdout"],
+      },
+    ],
+    uncertainty: 0.12,
+    supportState: "SUPPORTED" as const,
+    ...overrides,
+  };
+}
+
 class CapturingTransport implements ResponsesTransport {
   public request: Parameters<ResponsesTransport["parse"]>[0] | undefined;
 
@@ -466,6 +528,132 @@ describe("evidence resolution", () => {
 });
 
 describe("LiveBeliefAnalyst", () => {
+  it("proposes a native v2 Belief Spec without granting the model learner authority", async () => {
+    const artifact = manifest();
+    const transport = new CapturingTransport({
+      outputParsed: liveBeliefSpecOutput(artifact),
+      refusals: [],
+      responseId: "resp_v2_1",
+      modelId: "gpt-5.6",
+    });
+    const analyst = new LiveBeliefAnalyst({
+      apiKey: "server-only-key",
+      model: "gpt-5.6",
+      transport,
+    });
+
+    const result = await analyst.proposeBeliefSpec({
+      sessionId: "session_v2_1",
+      learnerClaim: claim,
+      manifest: artifact,
+      concept: "entity_leakage",
+    });
+
+    expect(result.beliefSpec).toMatchObject({
+      schemaVersion: "2",
+      concept: "entity_leakage",
+      claim,
+      learnerDecision: "UNDECIDED",
+      hypotheses: [
+        { id: "current", supportedCandidateExperimentIds: ["group-holdout"] },
+        {
+          id: "competing",
+          supportedCandidateExperimentIds: ["group-holdout-plus-ablation"],
+        },
+      ],
+    });
+    expect(result.beliefSpec.id).toMatch(/^belief_[a-f0-9]{20}$/);
+    expect(result.provenance).toMatchObject({
+      mode: "live",
+      modelId: "gpt-5.6",
+      responseId: "resp_v2_1",
+    });
+    expect(transport.request).toMatchObject({
+      model: "gpt-5.6",
+      store: false,
+      safety_identifier: deriveSafetyIdentifier("session_v2_1"),
+    });
+    expect(transport.request?.instructions).toBe(
+      BELIEF_SPEC_ANALYST_INSTRUCTIONS,
+    );
+    expect(JSON.parse(transport.request!.input)).toMatchObject({
+      conceptPack: {
+        candidateExperimentIds: [
+          "group-holdout",
+          "group-holdout-plus-ablation",
+        ],
+      },
+    });
+  });
+
+  it("rejects unregistered v2 candidate experiments before state can advance", async () => {
+    const invalid = liveBeliefSpecOutput(manifest(), {
+      hypotheses: [
+        {
+          ...liveBeliefSpecOutput().hypotheses[0],
+          supportedCandidateExperimentIds: ["model-authored-operation"],
+        },
+        liveBeliefSpecOutput().hypotheses[1],
+      ],
+    });
+    const analyst = new LiveBeliefAnalyst({
+      apiKey: "server-only-key",
+      transport: new CapturingTransport({
+        outputParsed: invalid,
+        refusals: [],
+      }),
+    });
+
+    await expect(
+      analyst.proposeBeliefSpec({
+        sessionId: "session_v2_invalid",
+        learnerClaim: claim,
+        manifest: manifest(),
+        concept: "entity_leakage",
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+
+  it("accepts a v2 insufficient-evidence result without fabricated references", async () => {
+    const analyst = new LiveBeliefAnalyst({
+      apiKey: "server-only-key",
+      transport: new CapturingTransport({
+        outputParsed: liveBeliefSpecOutput(manifest(), {
+          evidenceRefs: [],
+          hypotheses: [
+            {
+              ...liveBeliefSpecOutput().hypotheses[0],
+              evidence: [],
+              supportedCandidateExperimentIds: [],
+            },
+            {
+              ...liveBeliefSpecOutput().hypotheses[1],
+              evidence: [],
+              supportedCandidateExperimentIds: [],
+            },
+          ],
+          alternatives: [],
+          uncertainty: 0.84,
+          supportState: "INSUFFICIENT_EVIDENCE",
+        }),
+        refusals: [],
+      }),
+    });
+
+    const result = await analyst.proposeBeliefSpec({
+      sessionId: "session_v2_insufficient",
+      learnerClaim: claim,
+      manifest: manifest(),
+      concept: "entity_leakage",
+    });
+
+    expect(result.beliefSpec).toMatchObject({
+      supportState: "INSUFFICIENT_EVIDENCE",
+      evidenceRefs: [],
+      learnerDecision: "UNDECIDED",
+    });
+  });
+
   it("uses the Responses structured-output contract and revalidates locally", async () => {
     const transport = new CapturingTransport({
       outputParsed: liveModelOutput(),

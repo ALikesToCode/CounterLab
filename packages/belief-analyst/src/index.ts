@@ -41,6 +41,23 @@ Use only the supplied sanitized evidence. Every evidence reference must copy an 
 
 ${conceptInstructions}`;
 
+export const BELIEF_SPEC_ANALYST_INSTRUCTIONS = `You are CounterLab's reasoning analyst. Propose two meaningfully different models of the learner's claim using only the sanitized artifact evidence and the selected Concept Pack below. Do not execute code, invent results, grade mastery, choose for the learner, or decide verification.
+
+Every evidence item must copy an exact supplied hash. Use null for an inapplicable cellIndex or outputIndex. Hypothesis and alternative evidence must be selected from the top-level evidenceRefs. Candidate experiment IDs must come only from the selected Concept Pack's candidateExperimentIds. State explicit conditions and at least one non-claim for each hypothesis. If the evidence cannot support a discriminating experiment, return INSUFFICIENT_EVIDENCE with empty evidence and candidate lists. CounterLab will bind the original claim, concept, identifier, and UNDECIDED learner state after local validation.
+
+${conceptInstructions}`;
+
+const EvidenceRefWireSchema = z
+  .object({
+    cellIndex: z.number().int().nonnegative().nullable(),
+    outputIndex: z.number().int().nonnegative().nullable(),
+    kind: z.enum(["code", "metric", "schema", "output", "learner_claim"]),
+    hash: z.string().regex(SHA256_PATTERN),
+    excerpt: z.string(),
+    relevance: z.string().trim().min(1),
+  })
+  .strict();
+
 const BeliefTestWireSchema = z
   .object({
     schemaVersion: z.literal("1"),
@@ -59,26 +76,7 @@ const BeliefTestWireSchema = z
         predictedOutcome: z.string().trim().min(1),
       })
       .strict(),
-    evidenceRefs: z
-      .array(
-        z
-          .object({
-            cellIndex: z.number().int().nonnegative().nullable(),
-            outputIndex: z.number().int().nonnegative().nullable(),
-            kind: z.enum([
-              "code",
-              "metric",
-              "schema",
-              "output",
-              "learner_claim",
-            ]),
-            hash: z.string().regex(SHA256_PATTERN),
-            excerpt: z.string(),
-            relevance: z.string().trim().min(1),
-          })
-          .strict(),
-      )
-      .max(3),
+    evidenceRefs: z.array(EvidenceRefWireSchema).max(3),
     alternatives: z.array(
       z
         .object({
@@ -104,6 +102,48 @@ const BeliefTestWireSchema = z
       })
       .strict(),
     requiresLearnerConfirmation: z.literal(true),
+  })
+  .strict();
+
+const PrimaryHypothesisWireSchema = z
+  .object({
+    id: z.enum(["current", "competing"]),
+    statement: z.string().trim().min(1),
+    conditions: z.array(z.string().trim().min(1)).min(1),
+    nonClaims: z.array(z.string().trim().min(1)).min(1),
+    evidence: z.array(EvidenceRefWireSchema).max(6),
+    supportedCandidateExperimentIds: z.array(z.string().trim().min(1)).max(12),
+  })
+  .strict();
+
+const BeliefSpecV2WireSchema = z
+  .object({
+    schemaVersion: z.literal("2"),
+    evidenceRefs: z.array(EvidenceRefWireSchema).max(6),
+    hypotheses: z.tuple([
+      PrimaryHypothesisWireSchema,
+      PrimaryHypothesisWireSchema,
+    ]),
+    alternatives: z
+      .array(
+        z
+          .object({
+            id: z.string().trim().min(1),
+            label: z.string().trim().min(1),
+            statement: z.string().trim().min(1),
+            rationale: z.string().trim().min(1),
+            conditions: z.array(z.string().trim().min(1)).min(1),
+            nonClaims: z.array(z.string().trim().min(1)).min(1),
+            evidence: z.array(EvidenceRefWireSchema).max(6),
+            supportedCandidateExperimentIds: z
+              .array(z.string().trim().min(1))
+              .max(12),
+          })
+          .strict(),
+      )
+      .max(8),
+    uncertainty: z.number().finite().min(0).max(1),
+    supportState: z.enum(["SUPPORTED", "PARTIAL", "INSUFFICIENT_EVIDENCE"]),
   })
   .strict();
 
@@ -174,8 +214,20 @@ export type BeliefAnalystResult = {
       };
 };
 
+export type BeliefSpecAnalystResult = {
+  beliefSpec: BeliefSpecV2;
+  provenance: Extract<BeliefAnalystResult["provenance"], { mode: "live" }>;
+};
+
 export interface BeliefAnalyst {
   propose(input: BeliefAnalystInput): Promise<BeliefAnalystResult>;
+  health(): Promise<BeliefAnalystHealth>;
+}
+
+export interface BeliefSpecAnalyst {
+  proposeBeliefSpec(
+    input: BeliefAnalystInput,
+  ): Promise<BeliefSpecAnalystResult>;
   health(): Promise<BeliefAnalystHealth>;
 }
 
@@ -211,6 +263,7 @@ type SanitizedAnalystContext = {
     id: ConceptId;
     version: string;
     learnerQuestion: string;
+    candidateExperimentIds: string[];
   };
   support: {
     status: ArtifactManifest["support"]["status"];
@@ -349,6 +402,9 @@ export function buildSanitizedAnalystContext(
       id: conceptPack.id,
       version: conceptPack.version,
       learnerQuestion: conceptPack.learnerQuestion,
+      candidateExperimentIds: [
+        ...conceptPack.scientificMethod.candidateExperimentIds,
+      ],
     },
     support: {
       status: manifest.support.status,
@@ -528,6 +584,93 @@ function fromWire(value: unknown, input: BeliefAnalystInput): BeliefTest {
   }
 
   resolveBeliefTestEvidence(parsed.data, input.manifest, input.learnerClaim);
+  return parsed.data;
+}
+
+function withoutNullableIndexes(
+  evidence: z.infer<typeof EvidenceRefWireSchema>,
+): EvidenceRef {
+  return {
+    kind: evidence.kind,
+    hash: evidence.hash,
+    excerpt: evidence.excerpt,
+    relevance: evidence.relevance,
+    ...(evidence.cellIndex === null ? {} : { cellIndex: evidence.cellIndex }),
+    ...(evidence.outputIndex === null
+      ? {}
+      : { outputIndex: evidence.outputIndex }),
+  };
+}
+
+function fromBeliefSpecWire(
+  value: unknown,
+  input: BeliefAnalystInput,
+): BeliefSpecV2 {
+  const wire = BeliefSpecV2WireSchema.safeParse(value);
+  if (!wire.success) {
+    throw new BeliefAnalystError(
+      "INVALID_RESPONSE",
+      "the model response does not match the Belief Spec v2 wire schema",
+      { issues: wire.error.issues },
+    );
+  }
+
+  const mapHypothesis = (
+    hypothesis: z.infer<typeof PrimaryHypothesisWireSchema>,
+  ) => ({
+    ...hypothesis,
+    evidence: hypothesis.evidence.map(withoutNullableIndexes),
+  });
+  const evidenceRefs = wire.data.evidenceRefs.map(withoutNullableIndexes);
+  const candidate = {
+    schemaVersion: "2" as const,
+    id: `belief_${hashJson({
+      artifact: input.manifest.fileSha256,
+      claim: input.learnerClaim,
+      concept: input.concept,
+      hypotheses: wire.data.hypotheses.map(({ id, statement }) => ({
+        id,
+        statement,
+      })),
+    }).slice(0, 20)}`,
+    concept: input.concept,
+    claim: input.learnerClaim,
+    evidenceRefs,
+    hypotheses: wire.data.hypotheses.map(mapHypothesis),
+    alternatives: wire.data.alternatives.map((alternative) => ({
+      ...alternative,
+      evidence: alternative.evidence.map(withoutNullableIndexes),
+    })),
+    uncertainty: wire.data.uncertainty,
+    supportState: wire.data.supportState,
+    learnerDecision: "UNDECIDED" as const,
+  };
+  const parsed = BeliefSpecV2Schema.safeParse(candidate);
+  if (!parsed.success) {
+    throw new BeliefAnalystError(
+      "INVALID_RESPONSE",
+      "the model response failed CounterLab's local Belief Spec v2 schema",
+      { issues: parsed.error.issues },
+    );
+  }
+
+  const allowedCandidateIds = new Set(
+    getConceptPack(input.concept).scientificMethod.candidateExperimentIds,
+  );
+  const hypotheses = [...parsed.data.hypotheses, ...parsed.data.alternatives];
+  for (const hypothesis of hypotheses) {
+    for (const candidateId of hypothesis.supportedCandidateExperimentIds) {
+      if (!allowedCandidateIds.has(candidateId)) {
+        throw new BeliefAnalystError(
+          "INVALID_RESPONSE",
+          `the model response used an unregistered candidate experiment: ${candidateId}`,
+          { candidateId },
+        );
+      }
+    }
+  }
+
+  resolveBeliefSpecV2Evidence(parsed.data, input.manifest);
   return parsed.data;
 }
 
@@ -722,7 +865,7 @@ export type LiveBeliefAnalystOptions = {
   transport?: ResponsesTransport;
 };
 
-export class LiveBeliefAnalyst implements BeliefAnalyst {
+export class LiveBeliefAnalyst implements BeliefAnalyst, BeliefSpecAnalyst {
   private readonly model: string;
   private readonly reasoningEffort: ReasoningEffort;
   private readonly transport: ResponsesTransport;
@@ -795,6 +938,58 @@ export class LiveBeliefAnalyst implements BeliefAnalyst {
           : { responseId: response.responseId }),
         promptHash: hashJson({
           instructions: BELIEF_ANALYST_INSTRUCTIONS,
+          input: serializedContext,
+          model: this.model,
+          reasoningEffort: this.reasoningEffort,
+        }),
+      },
+    };
+  }
+
+  public async proposeBeliefSpec(
+    input: BeliefAnalystInput,
+  ): Promise<BeliefSpecAnalystResult> {
+    const context = buildSanitizedAnalystContext(input);
+    const serializedContext = JSON.stringify(context);
+    const response = await this.transport.parse({
+      model: this.model,
+      instructions: BELIEF_SPEC_ANALYST_INSTRUCTIONS,
+      input: serializedContext,
+      text: {
+        format: zodTextFormat(
+          BeliefSpecV2WireSchema,
+          "counterlab_belief_spec_v2",
+        ),
+      },
+      reasoning: { effort: this.reasoningEffort },
+      store: false,
+      safety_identifier: deriveSafetyIdentifier(input.sessionId),
+    });
+
+    if (response.refusals.length > 0) {
+      throw new BeliefAnalystError(
+        "MODEL_REFUSAL",
+        "the reasoning analyst refused the request",
+        { refusal: response.refusals[0] },
+      );
+    }
+    if (response.outputParsed === null || response.outputParsed === undefined) {
+      throw new BeliefAnalystError(
+        "INVALID_RESPONSE",
+        "the reasoning analyst returned no structured Belief Spec",
+      );
+    }
+
+    return {
+      beliefSpec: fromBeliefSpecWire(response.outputParsed, input),
+      provenance: {
+        mode: "live",
+        modelId: response.modelId ?? this.model,
+        ...(response.responseId === undefined
+          ? {}
+          : { responseId: response.responseId }),
+        promptHash: hashJson({
+          instructions: BELIEF_SPEC_ANALYST_INSTRUCTIONS,
           input: serializedContext,
           model: this.model,
           reasoningEffort: this.reasoningEffort,
@@ -943,7 +1138,7 @@ export class ApprovedSampleBeliefAnalyst implements BeliefAnalyst {
   }
 }
 
-export class DisabledBeliefAnalyst implements BeliefAnalyst {
+export class DisabledBeliefAnalyst implements BeliefAnalyst, BeliefSpecAnalyst {
   public constructor(
     private readonly reason = "OPENAI_API_KEY is not configured",
   ) {}
@@ -955,6 +1150,14 @@ export class DisabledBeliefAnalyst implements BeliefAnalyst {
   public async propose(
     _input: BeliefAnalystInput,
   ): Promise<BeliefAnalystResult> {
+    throw new BeliefAnalystError("LIVE_UNAVAILABLE", this.reason, {
+      availableAlternatives: ["approved-sample", "verified-replay"],
+    });
+  }
+
+  public async proposeBeliefSpec(
+    _input: BeliefAnalystInput,
+  ): Promise<BeliefSpecAnalystResult> {
     throw new BeliefAnalystError("LIVE_UNAVAILABLE", this.reason, {
       availableAlternatives: ["approved-sample", "verified-replay"],
     });
@@ -974,7 +1177,7 @@ const REASONING_EFFORTS = new Set<ReasoningEffort>([
 export function createLiveBeliefAnalystFromEnv(
   env: Readonly<Record<string, string | undefined>>,
   overrides: { transport?: ResponsesTransport } = {},
-): BeliefAnalyst {
+): BeliefAnalyst & BeliefSpecAnalyst {
   const apiKey = env.OPENAI_API_KEY?.trim();
   if (apiKey === undefined || apiKey.length === 0) {
     return new DisabledBeliefAnalyst();
