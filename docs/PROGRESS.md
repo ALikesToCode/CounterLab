@@ -45,8 +45,13 @@ pack-owned grids, and exact-request authorization. Its independent verifier,
 strict purpose-separated runner contract, and fixed hosted execution now pass
 locally. Worker-owned immutable freeze, independent verification, HMAC-signed
 receipt, session projection, authority-checked retrieval, rejection handling,
-and revision gating now pass for both concepts. The accessible learner renderer
-remains in progress.
+and revision gating now pass for both concepts. The browser now parses that
+authority strictly, starts and reconnects Boundary jobs, releases no cells
+before verification, renders a keyboard-inspectable semantic map, and keeps
+revision locked until the receipt is present. Both live ML paths also render the
+native six-dimension Reasoning Diff and download the immutable `.counterlab`
+Proof Capsule directly; historical sample and replay paths retain their own
+labelled authority.
 The current production scientific authority remains the qualified Experiment
 Plan v2 path and has not been promoted to the in-progress v5.1 worktree. The
 focused Experiment Theater UI was backported onto that qualified production
@@ -88,11 +93,12 @@ deployed registry digest remain distinct identities and are not interchangeable.
   interactive fixed-kernel controls; deterministic transfer; verified copied
   notebook patches for both ML packs; canonical JSON parity; and end-to-end
   Boundary Map dispatch, fixed execution, rejection, Worker verification,
-  integrity/HMAC receipt, retrieval, revision gating, native Reasoning Diff v2, and
-  deterministic Proof Capsule v2 issuance/download/CLI replay.
-- **In progress:** accessible Boundary Map and Reasoning Diff learner rendering,
-  plus the Studio Proof Capsule download surface.
-- **Pending:** hosted v5 capsule replay persistence; final Studio/Judge integration;
+  integrity/HMAC receipt, retrieval, revision gating, verified-only accessible
+  rendering, native Reasoning Diff v2, deterministic Proof Capsule v2
+  issuance/download/CLI replay, direct learner download, and the six-stage
+  Studio vocabulary with keyboard-operable Evidence & proof tabs.
+- **In progress:** hosted v5 Capsule replay persistence and browser projection.
+- **Pending:** final Studio/Judge integration;
   clean-clone, engine, secret, browser, accessibility, and performance gates;
   final Container/Worker promotion and exact-version production smoke.
 - **Blocked by phase order:** verified physics/free-fall and learner-impact
@@ -114,9 +120,9 @@ deployed registry digest remain distinct identities and are not interchangeable.
 | V5 deterministic transfer | done locally | Both genuine v5 concepts pass their registered fixed transfer evaluator; `INCONCLUSIVE` may transfer but remains patch-locked. | Requalify inside the complete release chain before production promotion. |
 | V5 artifact-specific patch | done locally for both packs | Commits `1d96fe0`, `3f8a653`, `ff5e03c`, `15799f9`, `a970fc0`, `8822f4d`, and `d2f2b92` add the strict v5 bundle, independent Python checks, transfer evaluator binding, idempotent Worker dispatch, genuine verifier reject-repair, source sealing, exact four-output callback, immutable authority, and copied patch download without creating a legacy proof. The Worker test now completes both concepts to `PATCH_VERIFIED`. | Requalify both concepts in the final image and production smoke. |
 | Canonical JSON authority | done locally | Commits `47f49a7` and `b4a68ff` preserve dangerous own keys, write sorted object text directly, use UTF-16 key order in both runtimes, reject lone surrogates, preserve Unicode normalization, and pass shared hash vectors without changing normal historical evidence. Proof Capsule v2 records `counterlab-canonical-json-v1`. | Rerun final release vectors after the last lock/source change. |
-| Reasoning Diff v2 and Proof Capsule v2 | done locally | Commits `ccf8dc2`, `8334d87`, `337fc9a`, `d44f001`, `e42d26e`, `e42b3a2`, and `0b252b2` add native session authority, deterministic canonical archives, semantic verification, immutable content-addressed storage, safe public receipts, HMAC/integrity policy, exact-byte download, duplicate-callback recovery, tamper rejection, and validate/inspect/replay CLI support for both ML packs. No v5 object is cast into the legacy proof. | Add hosted capsule replay persistence and learner/Judge surfaces, regenerate the engine snapshot after the final lock, then requalify the image and production paths. |
-| Boundary Map authority | done locally | Commits through `5b89084` and `77e1cba` bind the exact pack sweep into compile authority, execute only registered grids, freeze exact runner bytes, independently reverify lineage and values, issue an integrity/HMAC receipt using Worker time, reject without result release, expose immutable authority-checked retrieval, and gate v5 revision. Leakage and imbalance, duplicate callback, wrong-key, race, and rejection paths pass. | Add the accessible learner renderer, then requalify both concepts in the final image and production smoke. |
-| Simplified Theater and Judge Mode | partial locally | `DESIGN.md`, the focused-theater plan, and commit `01ac1d7` remove the permanent agent cockpit, widen the learner canvas, consolidate authority into one evidence rail plus the collapsed proof drawer, and raise Studio typography and controls to the documented floor. | Run updated desktop/390 px CloakBrowser journeys after the owner starts the forbidden local dev surface; Boundary Map data and the full six-stage vocabulary remain pending. |
+| Reasoning Diff v2 and Proof Capsule v2 | done locally | Commits `ccf8dc2`, `8334d87`, `337fc9a`, `d44f001`, `e42d26e`, `e42b3a2`, `0b252b2`, `9c4fc23`, `86aa314`, and `c4d78ee` add native session authority, deterministic canonical archives, semantic verification, immutable content-addressed storage, safe public receipts, HMAC/integrity policy, exact-byte download, duplicate-callback recovery, tamper rejection, validate/inspect/replay CLI support, a six-dimension learner Reasoning Diff, and direct `.counterlab` download for both ML packs. No v5 object is cast into legacy proof. | Add hosted Capsule replay persistence and Judge projection, regenerate the engine snapshot after the final lock, then requalify the image and production paths. |
+| Boundary Map authority and learner rendering | done locally | Commits through `5b89084`, `77e1cba`, `9c4fc23`, and `f50bab1` bind the exact pack sweep into compile authority, execute only registered grids, freeze and independently reverify lineage and values, issue an integrity/HMAC receipt, reject without result release, expose immutable authority-checked retrieval, gate revision, and render only a verified map with a semantic table and keyboard cell inspection. Both concepts and rejection/reconnect paths are covered. | Requalify both concepts in the final image and run the current desktop/390 px browser journey. |
+| Simplified Theater and Judge Mode | partial locally | `DESIGN.md`, the focused-theater plan, commit `01ac1d7`, and commit `e381fc2` remove the permanent agent cockpit, widen the learner canvas, consolidate technical evidence into a collapsed Evidence & proof drawer, enforce Question → Prediction → Test → Boundary → Apply → Repair, and add keyboard tab navigation. | Complete the hosted Capsule replay and final Judge projection, then run updated desktop/390 px CloakBrowser journeys after the owner starts the forbidden local surface or after deployment. |
 | Physics/free-fall | blocked by phase order | No verified public support is claimed. | Start only after both live ML concepts pass the new production authority gate. |
 | Final release | pending | Previous production v2 smoke remains valid for that deployment. | Full suites, clean clone, engine gate, secret scan, deployment, CloakBrowser journeys, and exact-version production smoke. |
 
@@ -153,14 +159,18 @@ Latest local v5.1 verification checkpoint (2026-07-16):
 - Focused Theater React tests: 3/3 passed; strict web/Worker TypeScript and
   targeted Prettier checks passed. `DESIGN.md` lint reports 0 warnings and 0
   errors.
+- Current learner-surface React/API suite: 153/153 passed after strict public
+  proof parsing, verified-only Boundary rendering, revision gating, native
+  Reasoning Diff/Capsule review, six-stage navigation, and keyboard proof tabs;
+  strict web TypeScript passed. Shared contract tests: 39/39 passed.
 - Current live Worker test fixtures resolve pack versions from the registry;
   historical signed replay/contract fixtures remain on their original versions.
 - Git whitespace check: passed.
 - No `build`, `dev`, deployment, or production smoke was run for this slice.
 - The recorded scientific-engine candidate remains source-bound to lock hash
   `48443375…`; current worktree drift is an explicit fail-closed release finding.
-- Next active slice: render the verified Boundary Map and Reasoning Diff in the
-  learner journey, expose Capsule download/replay without technical clutter,
+- Next active slice: persist and project a visibly labelled hosted Capsule
+  replay without creating new model authority, integrate it into Judge Mode,
   then run the current-tree release and production qualification gates.
 
 ## Acceptance matrix
@@ -174,15 +184,15 @@ Latest local v5.1 verification checkpoint (2026-07-16):
 | Live analyst preview and approval            | pass    | Live calls require a hash-bound preview of the exact sanitized packet; sensitive-looking evidence requires explicit approval, and claim/artifact changes invalidate it.                                                                  |
 | Runner job/token/callback/event cursor model | pass    | D1 repository, optimistic transitions, Worker-held P-256 private signing, Container public-key verification, callback idempotency, cursor reconnect, scoped cancellation, recoverable dispatch acknowledgement, and browser-safe event schemas pass tests and production smoke. |
 | Artifact-specific hosted Experiment Plan     | pass    | Worker/runner integration compiles and independently verifies typed v2 Plans; rejected candidates release no result.                                                                                                                      |
-| V5 hosted scientific authority migration     | partial | Native Belief Spec, bounded compile/repair, fixed selection, fixture-bound fixed execution, Worker-owned tri-state result release, browser v2 belief rendering, deterministic transfer, frozen interactive controls, both full v5 patch callbacks, both Boundary Map authority paths, Reasoning Diff v2, and Proof Capsule v2 pass locally. Learner rendering, hosted replay persistence, image requalification, and production promotion remain pending. |
+| V5 hosted scientific authority migration     | partial | Native Belief Spec, bounded compile/repair, fixed selection, fixture-bound fixed execution, Worker-owned tri-state result release, browser v2 belief rendering, deterministic transfer, frozen interactive controls, both full v5 patch callbacks, both Boundary Map authority/rendering paths, Reasoning Diff v2, and Proof Capsule v2 download pass locally. Hosted replay persistence, image requalification, and production promotion remain pending. |
 | Fixed hosted result and cross-language hash  | pass    | Python v2 result hashes now use browser-compatible canonical JSON while legacy v1/replay hashes remain stable; TypeScript result verification passes both concepts.                                                                       |
 | Entity-leakage lab and mutations             | pass    | Computed random 0.984722, group 0.594444, ablation 0.673611, zero group overlap; the current CLI rejects 13/13 critical mutations and the achieved-metrics collector records the same 13/13 published set.                                |
 | Class-imbalance lab and mutations            | pass    | 6,000 rows, 1.0833% positives, majority accuracy 0.989333 with recall 0; threshold recall 0.3125; the current CLI rejects 19/19 critical mutations and the achieved-metrics collector records its narrower 15/15 published set.             |
 | Interactive fixed-kernel controls            | pass    | Leakage split/entity/ablation/test-fraction and imbalance threshold/prevalence/metric focus dispatch verified configurations; authoritative results remain immutable.                                                                     |
 | Transfer-gated artifact patch                | pass    | Fixed forecasting/manufacturing evaluators gate source-free Patch Plans; both concept patch engines preserve unrelated cells and fail closed on verifier mutations.                                                                       |
 | Non-sample leakage patch                     | pass    | Three logistic-regression held-out styles compile through the registered one-cell group/identity transformation; entity aliases and patch mutations are tested.                                                                           |
-| Reasoning Diff and portable proof            | partial | Legacy Worker integration remains byte-compatible. Native v5 now independently rebuilds frozen compile/result/Boundary/transfer/patch authority, issues Reasoning Diff v2, and stores/downloads a semantically validated content-addressed Proof Capsule. Its local CLI validates, inspects, and reconstructs a visibly labelled capsule replay. Hosted replay persistence, learner UI, final image qualification, and production proof remain pending. |
-| Studio navigation and resume                 | pass    | Explicit completed-stage review, recent sessions, canonical refresh restoration, Start over, focused project/evidence rail, command palette, collapsed proof console, and no-permanent-cockpit contract have React tests.                  |
+| Reasoning Diff and portable proof            | partial | Legacy Worker integration remains byte-compatible. Native v5 independently rebuilds frozen compile/result/Boundary/transfer/patch authority, issues Reasoning Diff v2, stores/downloads a semantically validated content-addressed Proof Capsule, and renders its six learner-facing dimensions with direct Capsule export. Its local CLI validates, inspects, and reconstructs a visibly labelled Capsule replay. Hosted replay persistence, final image qualification, and production proof remain pending. |
+| Studio navigation and resume                 | pass    | Explicit completed-stage review, recent sessions, canonical refresh restoration, Start over, focused project/evidence rail, command palette, collapsed Evidence & proof drawer, Question → Prediction → Test → Boundary → Apply → Repair progress, keyboard tab navigation, and no-permanent-cockpit contract have React tests. |
 | Constrained generative UI                    | pass    | `json-render` composes only trusted public proof components from sanitized events; it has no action registry and no validity authority.                                                                                                   |
 | Private operational diagnostics              | pass    | Secret-protected Worker aggregation reports queue/phase timing samples, repairs, token usage, concept, support, and failures without notebook or session/artifact/job identifiers.                                                         |
 | Held-out intake/routing                      | pass    | `counterlab-held-out-v2`: 10/10 cases pass; four leakage, four imbalance, two unsupported.                                                                                                                                                |
@@ -219,15 +229,16 @@ Latest local v5.1 verification checkpoint (2026-07-16):
 
 ## Highest-risk remaining issue
 
-The highest remaining product risk is presenting and promoting the native v5
-authority without weakening it. Both ML paths now continue from their frozen
-Belief Spec, Prediction, Experiment IR, selection, result, Evidence Verdict,
+The highest remaining product risk is persisting and replaying native v5
+authority without weakening or relabelling it. Both ML paths now continue from
+their frozen Belief Spec, Prediction, Experiment IR, selection, result, Evidence Verdict,
 Boundary receipt, transfer, Patch Plan, and copied patch through Reasoning Diff
 v2 and a semantically verified Proof Capsule v2. The local archive, immutable
-storage, download, HMAC policy, and labelled CLI replay are complete. Hosted
-replay persistence, accessible Boundary/Reasoning Diff rendering, learner-facing
-Capsule controls, engine/image requalification, and final production smoke
-remain open. The current production deployment stays on its qualified v2
+storage, download, HMAC policy, labelled CLI replay, verified Boundary renderer,
+six-dimension learner diff, and direct Capsule export are complete. Hosted
+Capsule replay persistence/browser projection, final Judge integration,
+engine/image requalification, current browser execution, and final production
+smoke remain open. The current production deployment stays on its qualified v2
 contract.
 Upstream Runtime Codex turn intermittency remains an operational
 risk; the runner fails closed and the previous production smoke proved its

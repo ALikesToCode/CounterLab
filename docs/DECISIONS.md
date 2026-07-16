@@ -558,3 +558,22 @@ can pass.
   that exact-version smoke result.
 - Verify the real sample route with CloakBrowser at desktop and 390 px, and fix
   the responsive reset-label cascade before final handoff.
+
+## 2026-07-16 — Learner proof surfaces consume authority; they do not create it
+
+- Require native live sessions to obtain Worker-issued Boundary Map authority
+  before revision. The browser may start or reconnect the bounded job, but it
+  releases no map cells and exposes no revision action until strict response
+  validation and authority-hash checks pass.
+- Render Boundary Maps and Reasoning Diffs with fixed React components bound to
+  verified payload paths. A semantic table, exact units, assumptions,
+  non-claims, and integrity status remain available without giving generated UI
+  state-transition or validity authority.
+- Wait for `PROOF_CAPSULE_ISSUED`, not the transient
+  `REASONING_DIFF_ISSUED`, before treating native patch work as complete. This
+  prevents refresh and polling races from stranding a verified live session.
+- Expose only the browser-safe Proof Capsule receipt. The private R2 object key
+  is omitted by contract; download uses a session-bound Worker route.
+- Keep legacy sample/replay rendering compatible and labelled. Native live
+  authority is never synthesized from the bundled lesson, and hosted Capsule
+  replay remains a separate pending persistence/projection slice.
