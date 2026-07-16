@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export { CANONICAL_JSON_PROFILE, canonicalJsonV1 } from "./canonical-json.js";
+
 const Sha256Schema = z
   .string()
   .regex(/^[a-f0-9]{64}$/, "expected a lowercase SHA-256 digest");
@@ -1903,9 +1905,7 @@ export const HostedExperimentLineageV5Schema = z
     rawExperimentIrCanonicalHash: Sha256Schema,
     labSceneHash: Sha256Schema,
     candidateVerificationReportHash: Sha256Schema,
-    scientificVerifierVersion: z.literal(
-      "scientific-candidate-verifier-v1",
-    ),
+    scientificVerifierVersion: z.literal("scientific-candidate-verifier-v1"),
     selectionHash: Sha256Schema,
     selectedExperimentIrHash: Sha256Schema,
     projectedPlanHash: Sha256Schema,

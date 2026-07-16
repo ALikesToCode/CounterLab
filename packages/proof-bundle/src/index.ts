@@ -1,6 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 import {
+  canonicalJsonV1,
   EvidenceEventSchema,
   EvidenceEventUnsignedSchema,
   ProofBundleDraftSchema,
@@ -17,71 +18,8 @@ export type {
   ProofBundleDraft,
 } from "@counterlab/contracts";
 
-type CanonicalValue =
-  | null
-  | boolean
-  | number
-  | string
-  | CanonicalValue[]
-  | { [key: string]: CanonicalValue };
-
-function normalizeCanonical(
-  value: unknown,
-  ancestors: WeakSet<object>,
-): CanonicalValue {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "boolean"
-  ) {
-    return value;
-  }
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) {
-      throw new TypeError("canonical JSON does not support non-finite numbers");
-    }
-    return Object.is(value, -0) ? 0 : value;
-  }
-  if (Array.isArray(value)) {
-    if (ancestors.has(value)) {
-      throw new TypeError("canonical JSON does not support cyclic values");
-    }
-    ancestors.add(value);
-    const normalized: CanonicalValue[] = [];
-    for (let index = 0; index < value.length; index += 1) {
-      if (!(index in value)) {
-        throw new TypeError("canonical JSON does not support sparse arrays");
-      }
-      normalized.push(normalizeCanonical(value[index], ancestors));
-    }
-    ancestors.delete(value);
-    return normalized;
-  }
-  if (typeof value === "object") {
-    const object = value as object;
-    const prototype = Object.getPrototypeOf(object);
-    if (prototype !== Object.prototype && prototype !== null) {
-      throw new TypeError("canonical JSON supports only plain objects");
-    }
-    if (ancestors.has(object)) {
-      throw new TypeError("canonical JSON does not support cyclic values");
-    }
-    ancestors.add(object);
-    const normalized = Object.create(null) as Record<string, CanonicalValue>;
-    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
-      normalized[key] = normalizeCanonical(
-        (value as Record<string, unknown>)[key],
-        ancestors,
-      );
-    }
-    ancestors.delete(object);
-    return normalized;
-  }
-  throw new TypeError(`canonical JSON does not support ${typeof value} values`);
-}
-
 export function canonicalJson(value: unknown): string {
-  return JSON.stringify(normalizeCanonical(value, new WeakSet<object>()));
+  return canonicalJsonV1(value);
 }
 
 export function hashCanonicalJson(value: unknown): string {

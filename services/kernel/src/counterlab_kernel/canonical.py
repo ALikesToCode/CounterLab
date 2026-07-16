@@ -82,6 +82,23 @@ def _browser_number(value: int | float) -> str:
     return f"{mantissa}e{sign}{exponent}"
 
 
+def _assert_valid_unicode(value: str) -> None:
+    if any(0xD800 <= ord(character) <= 0xDFFF for character in value):
+        raise ValueError(
+            "browser canonical JSON does not support unpaired Unicode surrogates"
+        )
+
+
+def _browser_string(value: str) -> str:
+    _assert_valid_unicode(value)
+    return json.dumps(value, ensure_ascii=False, allow_nan=False)
+
+
+def _utf16_sort_key(value: str) -> bytes:
+    _assert_valid_unicode(value)
+    return value.encode("utf-16-be")
+
+
 def canonical_json_browser(value: Any) -> str:
     """Canonical JSON for v2 payloads hashed in both Python and a Worker."""
 
@@ -92,13 +109,13 @@ def canonical_json_browser(value: Any) -> str:
     if isinstance(value, (int, float)):
         return _browser_number(value)
     if isinstance(value, str):
-        return json.dumps(value, ensure_ascii=False, allow_nan=False)
+        return _browser_string(value)
     if isinstance(value, Mapping):
         if not all(isinstance(key, str) for key in value):
             raise TypeError("canonical JSON object keys must be strings")
         return "{" + ",".join(
-            f"{json.dumps(key, ensure_ascii=False)}:{canonical_json_browser(value[key])}"
-            for key in sorted(value)
+            f"{_browser_string(key)}:{canonical_json_browser(value[key])}"
+            for key in sorted(value, key=_utf16_sort_key)
         ) + "}"
     if isinstance(value, Sequence) and not isinstance(
         value, (str, bytes, bytearray)

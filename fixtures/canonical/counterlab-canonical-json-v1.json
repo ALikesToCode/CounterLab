@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "1",
+  "profile": "counterlab-canonical-json-v1",
+  "vectors": [
+    {
+      "id": "integer-like-keys",
+      "value": { "2": 2, "10": 10, "a": 0, "01": 1 },
+      "canonical": "{\"01\":1,\"10\":10,\"2\":2,\"a\":0}",
+      "sha256": "c523d3a236244deb2bef2eadd90c88ce09b32c2c489e817bc27e5990ded9d429"
+    },
+    {
+      "id": "utf16-key-order",
+      "value": {
+        "\r": "Carriage Return",
+        "1": "One",
+        "": "Control",
+        "ö": "Latin Small Letter O With Diaeresis",
+        "€": "Euro Sign",
+        "😀": "Emoji: Grinning Face",
+        "דּ": "Hebrew Letter Dalet With Dagesh"
+      },
+      "canonical": "{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"\":\"Control\",\"ö\":\"Latin Small Letter O With Diaeresis\",\"€\":\"Euro Sign\",\"😀\":\"Emoji: Grinning Face\",\"דּ\":\"Hebrew Letter Dalet With Dagesh\"}",
+      "sha256": "5e321556d22018a9656991a9e94f77ec175fa193e52a2429d312f8419ec8b08c"
+    },
+    {
+      "id": "composite",
+      "value": {
+        "A": "upper",
+        "__proto__": { "x": 1 },
+        "a": [null, true, false, -0.0, 1.5, 1e-7, 1e-6, 1e20, 1e21],
+        "accent": "é",
+        "bmp": "é"
+      },
+      "canonical": "{\"A\":\"upper\",\"__proto__\":{\"x\":1},\"a\":[null,true,false,0,1.5,1e-7,0.000001,100000000000000000000,1e+21],\"accent\":\"é\",\"bmp\":\"é\"}",
+      "sha256": "81e3918631e7bcb4139af089d2d7e86b2af8f6bc0c1b84a4ff37a96f675b0546"
+    },
+    {
+      "id": "numbers",
+      "value": [
+        0, -0.0, 333333333.3333333, 1e30, 4.5, 0.002, 1e-27, 5e-324,
+        1.7976931348623157e308, 9007199254740991
+      ],
+      "canonical": "[0,0,333333333.3333333,1e+30,4.5,0.002,1e-27,5e-324,1.7976931348623157e+308,9007199254740991]",
+      "sha256": "74f933abb39bf0f181d39856296bc1093f372f9b26745019814b59018e56803f"
+    },
+    {
+      "id": "dangerous-keys",
+      "value": {
+        "__proto__": { "x": 1 },
+        "constructor": 2,
+        "prototype": 3,
+        "safe": 1
+      },
+      "canonical": "{\"__proto__\":{\"x\":1},\"constructor\":2,\"prototype\":3,\"safe\":1}",
+      "sha256": "c770c317f8d7cf1bc88ee2d5147084c351e8687e9122063ae1959b353caa8634"
+    },
+    {
+      "id": "unicode-preservation",
+      "value": { "nfc": "é", "nfd": "é" },
+      "canonical": "{\"nfc\":\"é\",\"nfd\":\"é\"}",
+      "sha256": "79eae438d105e852f86ea598ffdda91643386fad0b4f336b941528d30fbf1558"
+    }
+  ]
+}

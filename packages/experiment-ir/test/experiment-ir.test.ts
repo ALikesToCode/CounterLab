@@ -289,6 +289,17 @@ describe("Experiment IR v5", () => {
     );
   });
 
+  it("preserves Unicode normalization so Python and Worker hash the same IR", () => {
+    const decomposed = "e\u0301";
+    const ir = {
+      ...nativeIR(),
+      limitations: [decomposed],
+    };
+
+    expect(canonicalizeExperimentIR(ir)).toContain(JSON.stringify(decomposed));
+    expect(canonicalizeExperimentIR(ir)).not.toContain(JSON.stringify("é"));
+  });
+
   it("adapts legacy Plan v2 without changing execution semantics", async () => {
     const plan = leakagePlan();
     const sourcePlanHash = hash("e");

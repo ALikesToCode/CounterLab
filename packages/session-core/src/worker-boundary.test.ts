@@ -48,6 +48,24 @@ describe("Worker runtime boundary", () => {
     expect(proofCanonicalJson(vector)).toBe(golden);
   });
 
+  it("matches lexical and UTF-16 key order without integer re-enumeration", () => {
+    const vectors = [
+      {
+        value: { "2": 2, "10": 10, a: 0, "01": 1 },
+        golden: '{"01":1,"10":10,"2":2,"a":0}',
+      },
+      {
+        value: { "\r": "return", "1": "one", "\ue000": "bmp", "😀": "astral" },
+        golden: '{"\\r":"return","1":"one","😀":"astral","":"bmp"}',
+      },
+    ];
+
+    for (const vector of vectors) {
+      expect(canonicalJson(vector.value)).toBe(vector.golden);
+      expect(proofCanonicalJson(vector.value)).toBe(vector.golden);
+    }
+  });
+
   it("rejects values that proof-bundle canonical JSON cannot represent", () => {
     const sparse = new Array(1);
     const invalidValues = [
