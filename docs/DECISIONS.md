@@ -1,5 +1,25 @@
 # Decisions
 
+## 2026-07-16 — Freeze native v5 patch authority before proof issuance
+
+- Keep the Experiment IR transfer contract ID distinct from the fixed transfer
+  evaluator task ID and bind both through the Subject Pack registry.
+- Let Codex create only `patch-plan.json` and display-only
+  `public-rationale.md`; keep notebook bytes sealed until the external Patch
+  Plan verifier accepts the current candidate.
+- Close the runner boundary on an exact ordered four-output hash set and freeze
+  the Patch Plan, rationale, verification report, Patch Result, and copied
+  notebook under Worker-owned immutable authority.
+- Reconstruct the complete frozen compile/result/verdict/transfer tuple at
+  dispatch, candidate, source, and callback boundaries. A self-consistent
+  runner bundle is not enough if current session authority differs.
+- Preserve legacy Proof Bundle v1/v2. A native Belief Spec/Experiment IR session
+  stops at `PATCH_VERIFIED` until Reasoning Diff v2, Boundary Map authority, and
+  Proof Capsule v2 exist; it must never be cast into a Belief Test proof.
+- Repair the reproduced `__proto__` canonicalization ambiguity under a new
+  explicit profile before issuing new Capsule hashes. Historical signed bytes
+  remain unchanged.
+
 ## 2026-07-16 — Treat interactive runs as verified exploration, not new evidence
 
 - Give v5 interactive jobs a separate strict `INTERACTIVE` bundle rather than

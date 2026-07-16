@@ -1,5 +1,29 @@
 # Findings: CounterLab Studio upgrade
 
+## 2026-07-16 v5 patch and proof boundary
+
+- The strict v5 Patch Compile bundle and fixed runner/Python path existed before
+  Worker migration, but the Worker still required `beliefTest` and returned 409
+  for a native `beliefSpec` session. Commits `15799f9`, `a970fc0`, and
+  `8822f4d` remove that dead boundary without weakening legacy behavior.
+- The Experiment IR transfer contract ID and deterministic evaluator task ID
+  are separate authorities. Both are now registered and checked; comparing
+  them as if identical would dead-end every valid v5 repair.
+- A native v5 Patch Plan can now be rejected and repaired while source bytes
+  remain sealed. The fixed patch callback accepts exactly Plan, rationale,
+  notebook, and Patch Result hashes, freezes their bytes, and is idempotent
+  after mutable runner output disappears.
+- Native v5 must not call the legacy Proof Bundle assembler because it requires
+  Belief Test v1 and Experiment Plan v2 as primary authority. The Worker now
+  stops honestly at `PATCH_VERIFIED` pending native Reasoning Diff and Capsule.
+- A read-only audit reproduced a canonical hash collision: object
+  materialization into `{}` drops an own JSON `__proto__` key. Historical proof
+  bytes must remain compatible, so new Proof Capsule authority needs an explicit
+  corrected canonicalization profile and regression vectors.
+- Strict Proof Capsule issuance also depends on a verified Boundary Map,
+  immutable patch lineage, deterministic archive validation/storage, and replay
+  persistence. None is marked complete yet.
+
 ## 2026-07-15 v5.1 scientific-engine upgrade
 
 - The current repository is already a substantial production release: live

@@ -1,5 +1,29 @@
 # Progress Log: CounterLab Studio upgrade
 
+## v5 leakage patch authority — 2026-07-16
+
+- Added a strict v5 Patch Compile bundle carrying Belief Spec, Prediction,
+  frozen Experiment IR/selection/Plan lineage, Worker Evidence Verdict,
+  epistemic report hash, full deterministic transfer, and bounded patch scope.
+- Bound the Subject Pack transfer contract separately from its concrete fixed
+  evaluator task; the Worker and independent Python verifier check both.
+- Routed the hosted runner through Patch Plan generation and the fixed Python
+  patch engine without exposing notebook bytes before external verification.
+- Added a Worker integration that observes a real Patch Plan rejection, keeps
+  source sealed, repairs on attempt two, verifies again, and then permits only
+  the scoped source notebook.
+- Closed the callback on an exact ordered four-output set, froze Patch Plan,
+  display-only rationale, verification report, Patch Result, and patched
+  notebook under Worker-owned authority, and proved duplicate recovery after
+  mutable runner outputs were deleted.
+- Native v5 stops at `PATCH_VERIFIED`; it does not issue the Belief-Test-based
+  legacy Proof Bundle. Boundary Map, Reasoning Diff v2, and Proof Capsule v2
+  remain pending.
+- Verification for this slice: Worker API 53/53, concept registry 12/12,
+  strict repository TypeScript passed, relevant v5 patch/runner tests 83/83,
+  and hosted Python patch tests 9/9. No build, dev server, deployment, browser
+  journey, or production smoke was run for this slice.
+
 ## v5.1 Scientific Engine Edition — 2026-07-15
 
 - Began the new implementation mandate under the supplied Ultra Execution

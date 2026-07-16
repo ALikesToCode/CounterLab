@@ -10,11 +10,14 @@ authority, replay compatibility, fixed kernels, or existing verifiers.
 
 ## Current phase
 
-Phases 8–9 — the completed v5 result, browser belief, deterministic-transfer,
-and interactive authority now pass for both hosted ML Subject Packs; migrate
-patch and proof stages next (`in_progress`). The current public deployment
-remains the qualified Experiment Plan v2 path until this compatibility-preserving
-upgrade passes focused tests and a new production smoke.
+Phases 8–10 and 14 — the v5 result, browser belief, deterministic transfer, and
+interactive authority pass for both hosted ML Subject Packs. The leakage Worker
+path now also reaches an immutable copied patch after genuine verifier
+reject-repair. Canonical authority repair, the equivalent imbalance callback,
+Boundary Map, Reasoning Diff v2, and Proof Capsule v2 are active
+(`in_progress`). The current public deployment remains the qualified Experiment
+Plan v2 path until this compatibility-preserving upgrade passes focused tests
+and a new production smoke.
 
 ## Lead-owned critical surfaces
 
@@ -123,11 +126,14 @@ code, `apps/web/src/App.tsx`, or global CSS.
       result through the fixed forecasting transfer evaluator.
 - [x] Bind fixed interactive controls to frozen v5 compile/result authority
       without replacing the authoritative Evidence Verdict.
+- [x] Carry the frozen v5 authority through Patch Plan rejection/repair, scoped
+      source release, exact callback hashes, and an immutable copied patch.
 - [ ] Add a signed recurrence/signal Boundary Sweep
       and mutations while preserving v1.
 - **Status:** in progress; compile, fixed execution, and tri-state release are
-  integrated, browser belief/transfer/interactive authority passes, and
-  patch/proof and Boundary Map stages are not yet released.
+  integrated, browser belief/transfer/interactive authority passes, and the
+  leakage patch reaches `PATCH_VERIFIED`. Native proof and Boundary Map stages
+  are not yet released.
 
 ### Phase 9 — class-imbalance integration
 
@@ -139,6 +145,8 @@ code, `apps/web/src/App.tsx`, or global CSS.
       result through the fixed manufacturing-defect transfer evaluator.
 - [x] Bind threshold/prevalence controls to the same frozen v5 authority and
       fixed kernel without a model call.
+- [ ] Run the strict v5 imbalance patch bundle through the full Worker
+      candidate/callback/frozen-download boundary.
 - [ ] Add the prevalence/threshold Boundary Sweep and mutations.
 - **Status:** in progress; the versioned compile, fixed run, and end-to-end
   result release plus browser belief/transfer/interactive authority now pass
@@ -172,6 +180,8 @@ code, `apps/web/src/App.tsx`, or global CSS.
 
 ### Phase 14 — Proof Capsule v2
 
+- [ ] Repair the canonical `__proto__` collision under an explicit new profile
+      without changing historical Proof Bundle bytes.
 - [ ] Add deterministic `.counterlab` archive, CLI validate/inspect/replay,
       corruption/mode tests, engine provenance, and v1 compatibility.
 - **Status:** pending
