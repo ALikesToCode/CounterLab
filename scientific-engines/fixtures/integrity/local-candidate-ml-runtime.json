@@ -3,8 +3,8 @@
   "evidenceKind": "local-candidate-runtime-summary",
   "capturedAt": "2026-07-16T21:08:15Z",
   "environmentId": "counterlab-runner-linux-amd64-v2",
-  "imageDigest": "sha256:689bcb7b990763cecc31110f6509e3b65f8d5b0c0c00b7815e86c5be61bfdcca",
-  "sourceCommit": "7283d8ccb448c3cdfc9e885610a5b141b583d92f",
+  "imageDigest": "sha256:5aa42f2f127104dfaa94514b41c4d0a92bfb0c6e42f500ea164d98b66233aed2",
+  "sourceCommit": "338c47dc3c2609a3a19f9b24fc9be3508944d524",
   "observedVersions": {
     "cpython": "3.13.14",
     "counterlab-fixed-ml-kernel": "0.1.0",

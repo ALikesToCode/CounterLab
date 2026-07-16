@@ -10,7 +10,9 @@
       "licenseId": "MIT",
       "licenseFileHash": "4280a28f28fccb8e7653bbd5ecf70470d4a269849b13e60a6d490204cd476cd1",
       "runtime": "server_python",
-      "roles": ["authoritative_solver"],
+      "roles": [
+        "authoritative_solver"
+      ],
       "capabilities": [
         "canonical_result_serialization",
         "fixed_class_imbalance_operations",
@@ -44,13 +46,21 @@
         "maxOutputBytes": 8388608
       },
       "validation": {
-        "oracleStrategyIds": ["ml-independent-fixtures-v2"],
-        "goldenFixtureIds": ["ml-kernel-golden-v1"],
-        "metamorphicPropertyIds": ["ml-row-order-invariance-v1"],
-        "upgradeDriftFixtureIds": ["ml-engine-upgrade-drift-v1"]
+        "oracleStrategyIds": [
+          "ml-independent-fixtures-v2"
+        ],
+        "goldenFixtureIds": [
+          "ml-kernel-golden-v1"
+        ],
+        "metamorphicPropertyIds": [
+          "ml-row-order-invariance-v1"
+        ],
+        "upgradeDriftFixtureIds": [
+          "ml-engine-upgrade-drift-v1"
+        ]
       },
       "attribution": "CounterLab contributors; MIT license.",
-      "integrityHash": "2c0cbe485d3e73b8a033339b5c6032a330bc56563a53f255ab744ecf94be5789"
+      "integrityHash": "275a2b897eb87189f238f56edeafa3b92946dde074bee2cc2da3c46b9f704b5b"
     },
     {
       "id": "numpy",
@@ -61,7 +71,9 @@
       "licenseId": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0",
       "licenseFileHash": "4860083caa0de2ac3292ca98bd074bd8f45d8b32624e37b1e70a240bff61e488",
       "runtime": "server_python",
-      "roles": ["authoritative_solver"],
+      "roles": [
+        "authoritative_solver"
+      ],
       "capabilities": [
         "bounded_numeric_arrays",
         "deterministic_seeded_numeric_primitives"
@@ -94,13 +106,21 @@
         "maxOutputBytes": 8388608
       },
       "validation": {
-        "oracleStrategyIds": ["ml-independent-fixtures-v2"],
-        "goldenFixtureIds": ["ml-kernel-golden-v1"],
-        "metamorphicPropertyIds": ["ml-row-order-invariance-v1"],
-        "upgradeDriftFixtureIds": ["ml-engine-upgrade-drift-v1"]
+        "oracleStrategyIds": [
+          "ml-independent-fixtures-v2"
+        ],
+        "goldenFixtureIds": [
+          "ml-kernel-golden-v1"
+        ],
+        "metamorphicPropertyIds": [
+          "ml-row-order-invariance-v1"
+        ],
+        "upgradeDriftFixtureIds": [
+          "ml-engine-upgrade-drift-v1"
+        ]
       },
       "attribution": "NumPy Developers; BSD-3-Clause and bundled third-party notices.",
-      "integrityHash": "34ad5c5649408af01c720e83417c5ecb8dd3597284c80927d90dcc4d9b5363da"
+      "integrityHash": "73a7dff08a5a818c6f0ed7ff1b588eeef738a10d94a3f2aa42d925e4ebd55c17"
     },
     {
       "id": "pandas",
@@ -111,7 +131,9 @@
       "licenseId": "BSD-3-Clause",
       "licenseFileHash": "3a7c6c317811be6c67da119ea1a8e8e98c118d430b820aa61a34d5f89b55c777",
       "runtime": "server_python",
-      "roles": ["authoritative_solver"],
+      "roles": [
+        "authoritative_solver"
+      ],
       "capabilities": [
         "bounded_tabular_transforms",
         "canonical_fixture_ingestion"
@@ -143,13 +165,21 @@
         "maxOutputBytes": 8388608
       },
       "validation": {
-        "oracleStrategyIds": ["ml-independent-fixtures-v2"],
-        "goldenFixtureIds": ["ml-kernel-golden-v1"],
-        "metamorphicPropertyIds": ["ml-row-order-invariance-v1"],
-        "upgradeDriftFixtureIds": ["ml-engine-upgrade-drift-v1"]
+        "oracleStrategyIds": [
+          "ml-independent-fixtures-v2"
+        ],
+        "goldenFixtureIds": [
+          "ml-kernel-golden-v1"
+        ],
+        "metamorphicPropertyIds": [
+          "ml-row-order-invariance-v1"
+        ],
+        "upgradeDriftFixtureIds": [
+          "ml-engine-upgrade-drift-v1"
+        ]
       },
       "attribution": "pandas development team; BSD-3-Clause license.",
-      "integrityHash": "1682b221b76bbb3a4eaa61ca3a48d39860b297001fd8cf3b86417427bfd7380e"
+      "integrityHash": "e3a5f1a1f14638084b28d9bc0701685441539c88bba7c41a30d920bd97f76373"
     },
     {
       "id": "scikit-learn",
@@ -160,7 +190,9 @@
       "licenseId": "BSD-3-Clause",
       "licenseFileHash": "8752dfe82d4a768e76ee309b202e7b33906d1ea9004d68cc61564391cc6b1a96",
       "runtime": "server_python",
-      "roles": ["authoritative_solver"],
+      "roles": [
+        "authoritative_solver"
+      ],
       "capabilities": [
         "fixed_classification_metrics",
         "fixed_group_and_stratified_splits",
@@ -193,13 +225,21 @@
         "maxOutputBytes": 8388608
       },
       "validation": {
-        "oracleStrategyIds": ["ml-independent-fixtures-v2"],
-        "goldenFixtureIds": ["ml-kernel-golden-v1"],
-        "metamorphicPropertyIds": ["ml-row-order-invariance-v1"],
-        "upgradeDriftFixtureIds": ["ml-engine-upgrade-drift-v1"]
+        "oracleStrategyIds": [
+          "ml-independent-fixtures-v2"
+        ],
+        "goldenFixtureIds": [
+          "ml-kernel-golden-v1"
+        ],
+        "metamorphicPropertyIds": [
+          "ml-row-order-invariance-v1"
+        ],
+        "upgradeDriftFixtureIds": [
+          "ml-engine-upgrade-drift-v1"
+        ]
       },
       "attribution": "scikit-learn developers; BSD-3-Clause license.",
-      "integrityHash": "46edf7d33379c13c4b928fca05dac61c96298af79ca8f196e92b7195dd31164c"
+      "integrityHash": "0b3fc5f6af64fa7db777d781eeb1c5b51c6e68bf8c4d282ca2ce6beb42c1ff97"
     }
   ]
 }

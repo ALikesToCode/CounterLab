@@ -67,7 +67,9 @@
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-oracle-integrity-v2",
           "integrityHash": "cc42db5965fc0cb8944c221c333b68fdfd3c413606a074fe0138178f80b50b52",
-          "validationEvidenceIds": ["ml-independent-fixtures-v2"],
+          "validationEvidenceIds": [
+            "ml-independent-fixtures-v2"
+          ],
           "reason": "Independent simple fixtures and primitive count checks validate the fixed outputs."
         },
         "unitValidator": {
@@ -80,7 +82,9 @@
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-renderer-integrity-v2",
           "integrityHash": "21a60213952589c39051213db58415b900a2b509511e9a1dd43bdecc69bce18b",
-          "validationEvidenceIds": ["signed-result-binding-v2"],
+          "validationEvidenceIds": [
+            "signed-result-binding-v2"
+          ],
           "reason": "Fixed React blocks render only signed canonical result paths."
         },
         "propertyTestGenerator": {
@@ -89,7 +93,9 @@
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-mutations-integrity-v2",
           "integrityHash": "ad2d1eaba323dc6debde9d7804e84b50d0cbbcf8c44163da5a05af7391149c22",
-          "validationEvidenceIds": ["ml-row-order-invariance-v1"],
+          "validationEvidenceIds": [
+            "ml-row-order-invariance-v1"
+          ],
           "reason": "The frozen mutation catalogue exercises verifier and determinism properties."
         },
         "secondaryComparator": {
@@ -164,7 +170,9 @@
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-oracle-integrity-v2",
           "integrityHash": "cc42db5965fc0cb8944c221c333b68fdfd3c413606a074fe0138178f80b50b52",
-          "validationEvidenceIds": ["ml-independent-fixtures-v2"],
+          "validationEvidenceIds": [
+            "ml-independent-fixtures-v2"
+          ],
           "reason": "Independent simple fixtures and primitive overlap checks validate the fixed outputs."
         },
         "unitValidator": {
@@ -177,7 +185,9 @@
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-renderer-integrity-v2",
           "integrityHash": "21a60213952589c39051213db58415b900a2b509511e9a1dd43bdecc69bce18b",
-          "validationEvidenceIds": ["signed-result-binding-v2"],
+          "validationEvidenceIds": [
+            "signed-result-binding-v2"
+          ],
           "reason": "Fixed React blocks render only signed canonical result paths."
         },
         "propertyTestGenerator": {
@@ -186,7 +196,9 @@
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-mutations-integrity-v2",
           "integrityHash": "ad2d1eaba323dc6debde9d7804e84b50d0cbbcf8c44163da5a05af7391149c22",
-          "validationEvidenceIds": ["ml-row-order-invariance-v1"],
+          "validationEvidenceIds": [
+            "ml-row-order-invariance-v1"
+          ],
           "reason": "The frozen mutation catalogue exercises verifier and determinism properties."
         },
         "secondaryComparator": {

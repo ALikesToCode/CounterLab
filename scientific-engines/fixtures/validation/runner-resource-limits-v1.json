@@ -9,7 +9,7 @@
     "diskMb": 4000
   },
   "job": {
-    "wallSeconds": 150,
+    "wallSeconds": 420,
     "maximumAutomaticRepairs": 2,
     "networkPolicyForGeneratedArtifacts": "denied",
     "generatedCodeExecution": "not used in the hosted plan compiler"
