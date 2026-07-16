@@ -808,7 +808,9 @@
             "f1",
             "pr_auc",
             "confusion_matrix",
-            "prevalence"
+            "prevalence",
+            "optimism_gap",
+            "accuracy_f1_gap"
           ]
         },
         "maxCells": {

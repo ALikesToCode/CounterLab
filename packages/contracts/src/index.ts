@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { CANONICAL_JSON_PROFILE } from "./canonical-json.js";
+
 export { CANONICAL_JSON_PROFILE, canonicalJsonV1 } from "./canonical-json.js";
 
 const Sha256Schema = z
@@ -311,6 +313,14 @@ export const AllowedMetricSchema = z.enum([
 
 export type AllowedMetric = z.infer<typeof AllowedMetricSchema>;
 
+export const BoundaryObservableIdSchema = z.enum([
+  ...AllowedMetricSchema.options,
+  "optimism_gap",
+  "accuracy_f1_gap",
+]);
+
+export type BoundaryObservableId = z.infer<typeof BoundaryObservableIdSchema>;
+
 export const AllowedVisualizationSchema = z.enum([
   "metric_comparison",
   "entity_overlap",
@@ -439,7 +449,7 @@ const BoundarySweepPolicySchema = z
     sweepId: EpistemicTokenIdSchema,
     axisIds: z.array(EpistemicTokenIdSchema).min(1).max(2),
     gridPresetId: EpistemicTokenIdSchema,
-    observableId: AllowedMetricSchema,
+    observableId: BoundaryObservableIdSchema,
     maxCells: z.number().int().positive().max(2_500),
     resultPathPrefix: SignedResultPathSchema,
   })
@@ -544,6 +554,357 @@ export const EvidenceVerdictSchema = z.discriminatedUnion("kind", [
 ]);
 
 export type EvidenceVerdict = z.infer<typeof EvidenceVerdictSchema>;
+
+export const BoundaryAxisPointV1Schema = z
+  .object({
+    id: EpistemicTokenIdSchema,
+    value: z.number().finite(),
+    label: NonEmptyString.max(120),
+  })
+  .strict();
+
+export const BoundaryAxisV1Schema = z
+  .object({
+    id: EpistemicTokenIdSchema,
+    label: NonEmptyString.max(160),
+    unit: NonEmptyString.max(80),
+    points: z.array(BoundaryAxisPointV1Schema).min(2).max(50),
+  })
+  .strict()
+  .superRefine((axis, context) => {
+    const ids = new Set<string>();
+    const values = new Set<number>();
+    for (const [index, point] of axis.points.entries()) {
+      if (ids.has(point.id)) {
+        context.addIssue({
+          code: "custom",
+          message: `duplicate axis point id: ${point.id}`,
+          path: ["points", index, "id"],
+        });
+      }
+      if (values.has(point.value)) {
+        context.addIssue({
+          code: "custom",
+          message: `duplicate axis point value: ${point.value}`,
+          path: ["points", index, "value"],
+        });
+      }
+      ids.add(point.id);
+      values.add(point.value);
+    }
+  });
+
+export type BoundaryAxisPointV1 = z.infer<typeof BoundaryAxisPointV1Schema>;
+export type BoundaryAxisV1 = z.infer<typeof BoundaryAxisV1Schema>;
+
+const BoundaryCoordinateV1Schema = z
+  .object({
+    axisId: EpistemicTokenIdSchema,
+    pointId: EpistemicTokenIdSchema,
+    value: z.number().finite(),
+  })
+  .strict();
+
+const BoundaryCellBaseV1Schema = z.object({
+  cellId: EpistemicTokenIdSchema,
+  coordinates: z.tuple([
+    BoundaryCoordinateV1Schema,
+    BoundaryCoordinateV1Schema,
+  ]),
+  classificationId: EpistemicTokenIdSchema,
+});
+
+const BoundaryProportionSchema = z.number().finite().min(0).max(1);
+
+export const LeakageBoundaryMapCellV1Schema = BoundaryCellBaseV1Schema.extend({
+  concept: z.literal("entity_leakage"),
+  randomAccuracy: BoundaryProportionSchema,
+  groupAccuracy: BoundaryProportionSchema,
+  optimismGap: z.number().finite().min(-1).max(1),
+  randomEntityOverlap: z
+    .object({
+      count: z.number().int().nonnegative(),
+      rate: BoundaryProportionSchema,
+    })
+    .strict(),
+  groupEntityOverlap: z
+    .object({
+      count: z.number().int().nonnegative(),
+      rate: BoundaryProportionSchema,
+    })
+    .strict(),
+  sampleSizes: z
+    .object({
+      randomTest: z.number().int().positive(),
+      groupTest: z.number().int().positive(),
+    })
+    .strict(),
+  fixtureViewHash: Sha256Schema,
+  randomPipelineFingerprint: Sha256Schema,
+  groupPipelineFingerprint: Sha256Schema,
+}).strict();
+
+export const ImbalanceBoundaryMapCellV1Schema = BoundaryCellBaseV1Schema.extend(
+  {
+    concept: z.literal("class_imbalance"),
+    prevalenceScenario: z.enum(["rarer", "observed", "more_common"]),
+    prevalence: BoundaryProportionSchema,
+    threshold: BoundaryProportionSchema,
+    metrics: z
+      .object({
+        accuracy: BoundaryProportionSchema,
+        precision: BoundaryProportionSchema,
+        recall: BoundaryProportionSchema,
+        f1: BoundaryProportionSchema,
+        prAuc: BoundaryProportionSchema,
+        rocAuc: BoundaryProportionSchema,
+      })
+      .strict(),
+    confusion: z
+      .object({
+        trueNegative: z.number().int().nonnegative(),
+        falsePositive: z.number().int().nonnegative(),
+        falseNegative: z.number().int().nonnegative(),
+        truePositive: z.number().int().nonnegative(),
+      })
+      .strict(),
+    predictedPositiveRate: BoundaryProportionSchema,
+    sampleSize: z.number().int().positive(),
+    scoreFingerprint: Sha256Schema,
+    pipelineFingerprint: Sha256Schema,
+  },
+).strict();
+
+export const BoundaryMapCellV1Schema = z.discriminatedUnion("concept", [
+  LeakageBoundaryMapCellV1Schema,
+  ImbalanceBoundaryMapCellV1Schema,
+]);
+
+export type BoundaryMapCellV1 = z.infer<typeof BoundaryMapCellV1Schema>;
+
+const BoundaryClassificationV1Schema = z
+  .object({
+    id: EpistemicTokenIdSchema,
+    label: NonEmptyString.max(160),
+    description: NonEmptyString.max(500),
+  })
+  .strict();
+
+export const BoundaryMapResultV1Schema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    canonicalProfile: z.literal(CANONICAL_JSON_PROFILE),
+    boundaryMapId: NonEmptyString,
+    sessionId: NonEmptyString,
+    concept: ConceptIdSchema,
+    conceptPackVersion: NonEmptyString,
+    artifactManifestHash: Sha256Schema,
+    experimentIrHash: Sha256Schema,
+    authoritativeResultHash: Sha256Schema,
+    evidenceVerdictHash: Sha256Schema,
+    sweepId: EpistemicTokenIdSchema,
+    gridPresetId: EpistemicTokenIdSchema,
+    seed: z.number().int().nonnegative(),
+    kernelVersion: NonEmptyString,
+    axes: z.tuple([BoundaryAxisV1Schema, BoundaryAxisV1Schema]),
+    cells: z.array(BoundaryMapCellV1Schema).min(4).max(2_500),
+    classifications: z.array(BoundaryClassificationV1Schema).min(2).max(12),
+    units: z.record(EpistemicTokenIdSchema, NonEmptyString.max(80)),
+    assumptions: z.array(NonEmptyString.max(500)).min(1).max(12),
+    nonClaims: z.array(NonEmptyString.max(500)).min(1).max(12),
+    resultHash: Sha256Schema,
+  })
+  .strict()
+  .superRefine((result, context) => {
+    const [firstAxis, secondAxis] = result.axes;
+    if (firstAxis.id === secondAxis.id) {
+      context.addIssue({
+        code: "custom",
+        message: "Boundary Map axes must be unique",
+        path: ["axes", 1, "id"],
+      });
+    }
+    const expectedCells = firstAxis.points.length * secondAxis.points.length;
+    if (result.cells.length !== expectedCells) {
+      context.addIssue({
+        code: "custom",
+        message: `Boundary Map grid requires ${expectedCells} cells`,
+        path: ["cells"],
+      });
+    }
+    const classificationIds = new Set(
+      result.classifications.map((classification) => classification.id),
+    );
+    if (classificationIds.size !== result.classifications.length) {
+      context.addIssue({
+        code: "custom",
+        message: "Boundary Map classifications must be unique",
+        path: ["classifications"],
+      });
+    }
+    const pointsByAxis = new Map(
+      result.axes.map((axis) => [
+        axis.id,
+        new Map(axis.points.map((point) => [point.id, point.value])),
+      ]),
+    );
+    const coordinates = new Set<string>();
+    for (const [index, cell] of result.cells.entries()) {
+      if (cell.concept !== result.concept) {
+        context.addIssue({
+          code: "custom",
+          message: "Boundary Map cell concept must match the result concept",
+          path: ["cells", index, "concept"],
+        });
+      }
+      if (!classificationIds.has(cell.classificationId)) {
+        context.addIssue({
+          code: "custom",
+          message: "Boundary Map classification must resolve",
+          path: ["cells", index, "classificationId"],
+        });
+      }
+      for (const [coordinateIndex, coordinate] of cell.coordinates.entries()) {
+        const axis = result.axes[coordinateIndex];
+        const pointValue = pointsByAxis
+          .get(coordinate.axisId)
+          ?.get(coordinate.pointId);
+        if (
+          axis === undefined ||
+          axis.id !== coordinate.axisId ||
+          pointValue === undefined ||
+          !Object.is(pointValue, coordinate.value)
+        ) {
+          context.addIssue({
+            code: "custom",
+            message: "Boundary Map coordinate must resolve to its ordered axis",
+            path: ["cells", index, "coordinates", coordinateIndex],
+          });
+        }
+      }
+      const coordinateKey = cell.coordinates
+        .map((coordinate) => `${coordinate.axisId}:${coordinate.pointId}`)
+        .join("|");
+      if (coordinates.has(coordinateKey)) {
+        context.addIssue({
+          code: "custom",
+          message: `duplicate Boundary Map coordinate: ${coordinateKey}`,
+          path: ["cells", index, "coordinates"],
+        });
+      }
+      coordinates.add(coordinateKey);
+    }
+  });
+
+export type BoundaryMapResultV1 = z.infer<typeof BoundaryMapResultV1Schema>;
+
+const BoundaryMapInvariantV1Schema = z
+  .object({
+    name: EpistemicTokenIdSchema,
+    passed: z.boolean(),
+    observed: z.unknown(),
+    expected: z.unknown(),
+    counterexample: z.string().max(1_000).optional(),
+  })
+  .strict();
+
+export const BoundaryMapVerificationReportV1Schema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    status: z.enum(["VERIFIED", "REJECTED"]),
+    verifierVersion: z.literal("boundary-map-verifier-v1"),
+    resultHash: Sha256Schema,
+    invariantCount: z.number().int().nonnegative(),
+    invariants: z.array(BoundaryMapInvariantV1Schema).min(1).max(100),
+    reportHash: Sha256Schema,
+  })
+  .strict()
+  .superRefine((report, context) => {
+    if (report.invariantCount !== report.invariants.length) {
+      context.addIssue({
+        code: "custom",
+        message: "Boundary Map invariantCount must match the invariant list",
+        path: ["invariantCount"],
+      });
+    }
+    const allPassed = report.invariants.every((invariant) => invariant.passed);
+    if ((report.status === "VERIFIED") !== allPassed) {
+      context.addIssue({
+        code: "custom",
+        message: "Boundary Map status must agree with every invariant",
+        path: ["status"],
+      });
+    }
+  });
+
+export type BoundaryMapVerificationReportV1 = z.infer<
+  typeof BoundaryMapVerificationReportV1Schema
+>;
+
+const BoundaryMapIntegrityV1Schema = z.discriminatedUnion("mode", [
+  z
+    .object({
+      mode: z.literal("integrity-hashed"),
+      algorithm: z.literal("sha256"),
+      contentHash: Sha256Schema,
+    })
+    .strict(),
+  z
+    .object({
+      mode: z.literal("hmac-signed"),
+      algorithm: z.literal("hmac-sha256"),
+      contentHash: Sha256Schema,
+      signature: Sha256Schema,
+      keyId: EpistemicTokenIdSchema,
+    })
+    .strict(),
+]);
+
+export const BoundaryMapReceiptV1Schema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    canonicalProfile: z.literal(CANONICAL_JSON_PROFILE),
+    sessionId: NonEmptyString,
+    resultHash: Sha256Schema,
+    verificationReportHash: Sha256Schema,
+    experimentIrHash: Sha256Schema,
+    authoritativeResultHash: Sha256Schema,
+    evidenceVerdictHash: Sha256Schema,
+    issuedAt: z.iso.datetime({ offset: true }),
+    integrity: BoundaryMapIntegrityV1Schema,
+    receiptHash: Sha256Schema,
+  })
+  .strict();
+
+export type BoundaryMapReceiptV1 = z.infer<typeof BoundaryMapReceiptV1Schema>;
+
+export const BoundaryMapAuthorityRefV1Schema = z
+  .object({
+    jobId: NonEmptyString,
+    sweepId: EpistemicTokenIdSchema,
+    resultHash: Sha256Schema,
+    verificationReportHash: Sha256Schema,
+    receipt: BoundaryMapReceiptV1Schema,
+    cellCount: z.number().int().positive().max(2_500),
+  })
+  .strict()
+  .superRefine((authority, context) => {
+    if (
+      authority.resultHash !== authority.receipt.resultHash ||
+      authority.verificationReportHash !==
+        authority.receipt.verificationReportHash
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Boundary Map authority hashes must match its receipt",
+        path: ["receipt"],
+      });
+    }
+  });
+
+export type BoundaryMapAuthorityRefV1 = z.infer<
+  typeof BoundaryMapAuthorityRefV1Schema
+>;
 
 const ResultLiteralPattern = /(?:\b\d+\.\d+\b|\b\d+(?:\.\d+)?\s*%)/u;
 

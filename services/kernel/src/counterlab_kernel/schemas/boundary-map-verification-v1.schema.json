@@ -1,0 +1,76 @@
+{
+  "$id": "https://counterlab.dev/schemas/boundary-map-verification-v1.schema.json",
+  "title": "CounterLab Boundary Map verification report v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "VERIFIED",
+        "REJECTED"
+      ]
+    },
+    "verifierVersion": {
+      "type": "string",
+      "const": "boundary-map-verifier-v1"
+    },
+    "resultHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "invariantCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "invariants": {
+      "minItems": 1,
+      "maxItems": 100,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "observed": {},
+          "expected": {},
+          "counterexample": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "name",
+          "passed",
+          "observed",
+          "expected"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "reportHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "status",
+    "verifierVersion",
+    "resultHash",
+    "invariantCount",
+    "invariants",
+    "reportHash"
+  ],
+  "additionalProperties": false
+}

@@ -196,6 +196,15 @@ describe("Experiment IR v5", () => {
     expect(() =>
       ExperimentIRV5Schema.parse({ ...nativeIR(), result: 0.99 }),
     ).toThrow();
+    expect(
+      ExperimentIRV5Schema.parse({
+        ...nativeIR(),
+        boundarySweep: {
+          ...nativeIR().boundarySweep,
+          observableId: "optimism_gap",
+        },
+      }).boundarySweep?.observableId,
+    ).toBe("optimism_gap");
     expect(() =>
       ExperimentIRV5Schema.parse({
         ...nativeIR(),

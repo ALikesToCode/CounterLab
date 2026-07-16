@@ -1,0 +1,643 @@
+{
+  "$id": "https://counterlab.dev/schemas/boundary-map-result-v1.schema.json",
+  "title": "CounterLab Boundary Map result v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1"
+    },
+    "canonicalProfile": {
+      "type": "string",
+      "const": "counterlab-canonical-json-v1"
+    },
+    "boundaryMapId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sessionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "concept": {
+      "type": "string",
+      "enum": [
+        "entity_leakage",
+        "class_imbalance"
+      ]
+    },
+    "conceptPackVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifactManifestHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "experimentIrHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "authoritativeResultHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "evidenceVerdictHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "sweepId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+    },
+    "gridPresetId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "kernelVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "axes": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+            },
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "unit": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "points": {
+              "minItems": 2,
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+                  },
+                  "value": {
+                    "type": "number"
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  }
+                },
+                "required": [
+                  "id",
+                  "value",
+                  "label"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "id",
+            "label",
+            "unit",
+            "points"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+            },
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "unit": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "points": {
+              "minItems": 2,
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+                  },
+                  "value": {
+                    "type": "number"
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  }
+                },
+                "required": [
+                  "id",
+                  "value",
+                  "label"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "id",
+            "label",
+            "unit",
+            "points"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "cells": {
+      "minItems": 4,
+      "maxItems": 2500,
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "cellId": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+              },
+              "coordinates": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "axisId": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+                      },
+                      "pointId": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+                      },
+                      "value": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "axisId",
+                      "pointId",
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "axisId": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+                      },
+                      "pointId": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+                      },
+                      "value": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "axisId",
+                      "pointId",
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "classificationId": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+              },
+              "concept": {
+                "type": "string",
+                "const": "entity_leakage"
+              },
+              "randomAccuracy": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "groupAccuracy": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "optimismGap": {
+                "type": "number",
+                "minimum": -1,
+                "maximum": 1
+              },
+              "randomEntityOverlap": {
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "rate": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "required": [
+                  "count",
+                  "rate"
+                ],
+                "additionalProperties": false
+              },
+              "groupEntityOverlap": {
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "rate": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "required": [
+                  "count",
+                  "rate"
+                ],
+                "additionalProperties": false
+              },
+              "sampleSizes": {
+                "type": "object",
+                "properties": {
+                  "randomTest": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "groupTest": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "randomTest",
+                  "groupTest"
+                ],
+                "additionalProperties": false
+              },
+              "fixtureViewHash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "randomPipelineFingerprint": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "groupPipelineFingerprint": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            },
+            "required": [
+              "cellId",
+              "coordinates",
+              "classificationId",
+              "concept",
+              "randomAccuracy",
+              "groupAccuracy",
+              "optimismGap",
+              "randomEntityOverlap",
+              "groupEntityOverlap",
+              "sampleSizes",
+              "fixtureViewHash",
+              "randomPipelineFingerprint",
+              "groupPipelineFingerprint"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "cellId": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+              },
+              "coordinates": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "axisId": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+                      },
+                      "pointId": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+                      },
+                      "value": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "axisId",
+                      "pointId",
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "axisId": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+                      },
+                      "pointId": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+                      },
+                      "value": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "axisId",
+                      "pointId",
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "classificationId": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+              },
+              "concept": {
+                "type": "string",
+                "const": "class_imbalance"
+              },
+              "prevalenceScenario": {
+                "type": "string",
+                "enum": [
+                  "rarer",
+                  "observed",
+                  "more_common"
+                ]
+              },
+              "prevalence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "threshold": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "metrics": {
+                "type": "object",
+                "properties": {
+                  "accuracy": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "precision": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "recall": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "f1": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "prAuc": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "rocAuc": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "required": [
+                  "accuracy",
+                  "precision",
+                  "recall",
+                  "f1",
+                  "prAuc",
+                  "rocAuc"
+                ],
+                "additionalProperties": false
+              },
+              "confusion": {
+                "type": "object",
+                "properties": {
+                  "trueNegative": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "falsePositive": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "falseNegative": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "truePositive": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "trueNegative",
+                  "falsePositive",
+                  "falseNegative",
+                  "truePositive"
+                ],
+                "additionalProperties": false
+              },
+              "predictedPositiveRate": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "sampleSize": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "scoreFingerprint": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "pipelineFingerprint": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            },
+            "required": [
+              "cellId",
+              "coordinates",
+              "classificationId",
+              "concept",
+              "prevalenceScenario",
+              "prevalence",
+              "threshold",
+              "metrics",
+              "confusion",
+              "predictedPositiveRate",
+              "sampleSize",
+              "scoreFingerprint",
+              "pipelineFingerprint"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "classifications": {
+      "minItems": 2,
+      "maxItems": 12,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "units": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9._:-]{0,95}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 80
+      }
+    },
+    "assumptions": {
+      "minItems": 1,
+      "maxItems": 12,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    },
+    "nonClaims": {
+      "minItems": 1,
+      "maxItems": 12,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    },
+    "resultHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "canonicalProfile",
+    "boundaryMapId",
+    "sessionId",
+    "concept",
+    "conceptPackVersion",
+    "artifactManifestHash",
+    "experimentIrHash",
+    "authoritativeResultHash",
+    "evidenceVerdictHash",
+    "sweepId",
+    "gridPresetId",
+    "seed",
+    "kernelVersion",
+    "axes",
+    "cells",
+    "classifications",
+    "units",
+    "assumptions",
+    "nonClaims",
+    "resultHash"
+  ],
+  "additionalProperties": false
+}

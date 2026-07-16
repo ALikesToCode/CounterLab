@@ -5,6 +5,9 @@ import { z } from "zod";
 
 import {
   BeliefSpecV2Schema,
+  BoundaryMapReceiptV1Schema,
+  BoundaryMapResultV1Schema,
+  BoundaryMapVerificationReportV1Schema,
   DiscriminationContractV1Schema,
   EpistemicObservationV1Schema,
   EpistemicVerifierPolicyV1Schema,
@@ -27,6 +30,24 @@ import {
 
 const root = resolve(import.meta.dirname, "..");
 const schemas = [
+  {
+    fileName: "boundary-map-result-v1.schema.json",
+    id: "https://counterlab.dev/schemas/boundary-map-result-v1.schema.json",
+    title: "CounterLab Boundary Map result v1",
+    schema: BoundaryMapResultV1Schema,
+  },
+  {
+    fileName: "boundary-map-verification-v1.schema.json",
+    id: "https://counterlab.dev/schemas/boundary-map-verification-v1.schema.json",
+    title: "CounterLab Boundary Map verification report v1",
+    schema: BoundaryMapVerificationReportV1Schema,
+  },
+  {
+    fileName: "boundary-map-receipt-v1.schema.json",
+    id: "https://counterlab.dev/schemas/boundary-map-receipt-v1.schema.json",
+    title: "CounterLab Boundary Map receipt v1",
+    schema: BoundaryMapReceiptV1Schema,
+  },
   {
     fileName: "belief-spec-v2.schema.json",
     id: "https://counterlab.dev/schemas/belief-spec-v2.schema.json",

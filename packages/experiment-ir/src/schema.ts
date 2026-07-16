@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   AllowedMetricSchema,
   AllowedVisualizationSchema,
+  BoundaryObservableIdSchema,
   ConceptIdSchema,
   EvidenceRefSchema,
   FixedOperationIdSchema,
@@ -199,7 +200,7 @@ const BoundarySweepRequestSchema = z
     sweepId: TokenIdSchema,
     axisIds: z.array(TokenIdSchema).min(1).max(2),
     gridPresetId: TokenIdSchema,
-    observableId: AllowedMetricSchema,
+    observableId: BoundaryObservableIdSchema,
     maxCells: z.number().int().positive().max(2_500),
   })
   .strict()
