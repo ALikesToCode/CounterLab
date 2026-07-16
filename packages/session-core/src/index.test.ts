@@ -293,6 +293,9 @@ describe("SessionService state machine", () => {
       "belief_spec.confirmed",
       "prediction.committed",
     ]);
+    expect(
+      events.find(({ kind }) => kind === "belief_spec.confirmed")?.payload,
+    ).toEqual({ beliefSpecId: beliefSpec.id });
     repository.close();
   });
 

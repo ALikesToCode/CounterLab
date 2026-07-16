@@ -304,9 +304,10 @@ export class SessionService {
           confirmedBeliefSpec === undefined
             ? "belief_test.confirmed"
             : "belief_spec.confirmed",
-        payload: {
-          beliefTestId: getObjectString(beliefAuthority, "id"),
-        },
+        payload:
+          confirmedBeliefSpec === undefined
+            ? { beliefTestId: getObjectString(beliefAuthority, "id") }
+            : { beliefSpecId: getObjectString(beliefAuthority, "id") },
         inputHashes: [await hashCanonical(beliefAuthority)],
         ...(confirmedBeliefSpec === undefined
           ? {}
