@@ -978,37 +978,6 @@ test("a configured hosted runner completes an untouched leakage notebook", async
   const initialCheckpoint = await browserRunnerCheckpoint(page);
   expect(initialCheckpoint).not.toBeNull();
 
-  const duplicateCompile = await page.evaluate(async (sessionId) => {
-    const response = await fetch(
-      `/api/sessions/${encodeURIComponent(sessionId)}/lab/compile`,
-      { method: "POST" },
-    );
-    return { status: response.status, body: await response.json() };
-  }, initialCheckpoint!.sessionId);
-  expect(duplicateCompile.status).toBe(202);
-  expect(duplicateCompile.body).toMatchObject({
-    ok: true,
-    data: {
-      reused: true,
-      runnerJob: { jobId: initialCheckpoint!.jobId },
-    },
-  });
-
-  const resumedRequest = page.waitForRequest(
-    (request) => {
-      const url = new URL(request.url());
-      return (
-        url.pathname.includes(`/jobs/${initialCheckpoint!.jobId}/events`) &&
-        Number(url.searchParams.get("after")) > 0
-      );
-    },
-    { timeout: 60_000 },
-  );
-  await page.reload();
-  const resumedAfter = Number(
-    new URL((await resumedRequest).url()).searchParams.get("after"),
-  );
-  expect(resumedAfter).toBeGreaterThan(0);
   await expect(
     page.getByRole("button", { name: /Cancel this test/i }),
   ).toBeVisible();
@@ -1050,6 +1019,56 @@ test("a configured hosted runner completes an untouched leakage notebook", async
   });
 
   await page.getByRole("button", { name: /Retry protected compile/i }).click();
+
+  await expect
+    .poll(
+      async () => {
+        const checkpoint = await browserRunnerCheckpoint(page);
+        return checkpoint?.jobId !== initialCheckpoint!.jobId
+          ? (checkpoint?.cursor ?? 0)
+          : 0;
+      },
+      {
+        timeout: 120_000,
+        message: "the retry compiler should persist a new public cursor",
+      },
+    )
+    .toBeGreaterThan(0);
+  const retryCheckpoint = await browserRunnerCheckpoint(page);
+  expect(retryCheckpoint).not.toBeNull();
+  expect(retryCheckpoint!.jobId).not.toBe(initialCheckpoint!.jobId);
+
+  const duplicateCompile = await page.evaluate(async (sessionId) => {
+    const response = await fetch(
+      `/api/sessions/${encodeURIComponent(sessionId)}/lab/compile`,
+      { method: "POST" },
+    );
+    return { status: response.status, body: await response.json() };
+  }, retryCheckpoint!.sessionId);
+  expect(duplicateCompile.status).toBe(202);
+  expect(duplicateCompile.body).toMatchObject({
+    ok: true,
+    data: {
+      reused: true,
+      runnerJob: { jobId: retryCheckpoint!.jobId },
+    },
+  });
+
+  const resumedRequest = page.waitForRequest(
+    (request) => {
+      const url = new URL(request.url());
+      return (
+        url.pathname.includes(`/jobs/${retryCheckpoint!.jobId}/events`) &&
+        Number(url.searchParams.get("after")) > 0
+      );
+    },
+    { timeout: 60_000 },
+  );
+  await page.reload();
+  const resumedAfter = Number(
+    new URL((await resumedRequest).url()).searchParams.get("after"),
+  );
+  expect(resumedAfter).toBeGreaterThan(0);
 
   await waitForVerifiedLiveCompile(page);
   await page.getByRole("button", { name: /Show me what happened/i }).click();
