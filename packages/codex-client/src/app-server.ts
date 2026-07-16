@@ -1151,8 +1151,8 @@ export class AppServerCodexCompiler implements CodexCompiler {
       if (!phaseSucceeded) {
         yield { type: "status", phase, status: "failed" };
         throw new CompilerSetupError(
-          "CODEX_PROCESS_EXITED",
-          "Codex App Server did not complete the requested turn.",
+          "CODEX_TURN_FAILED",
+          "Codex App Server reported a failed or interrupted turn.",
         );
       }
       if (structured !== undefined) {

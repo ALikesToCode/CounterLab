@@ -721,7 +721,7 @@ describe("hosted plan-only compiler", () => {
     }
   });
 
-  it("restarts two App Servers whose turns fail before material compiler output", async () => {
+  it("does not misclassify or restart a failed turn as a process exit", async () => {
     const fakeServer = fileURLToPath(
       new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
     );
@@ -743,11 +743,11 @@ describe("hosted plan-only compiler", () => {
     try {
       await expect(
         collect(compiler.compileExperimentPlan(hostedPlanInput(work))),
-      ).resolves.toContainEqual({
-        type: "status",
-        phase: "plan",
-        status: "completed",
+      ).rejects.toMatchObject({
+        name: "CompilerSetupError",
+        code: "CODEX_TURN_FAILED",
       });
+      expect(await readFile(failureMarker, "utf8")).toBe("1");
     } finally {
       await rm(work, { recursive: true, force: true });
     }
@@ -1164,7 +1164,7 @@ describe("AppServerCodexCompiler stdio transport", () => {
 
     expect(failure).toMatchObject({
       name: "CompilerSetupError",
-      code: "CODEX_PROCESS_EXITED",
+      code: "CODEX_TURN_FAILED",
     });
     expect(events).toContainEqual({
       type: "status",
