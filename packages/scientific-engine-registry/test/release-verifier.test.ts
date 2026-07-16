@@ -35,14 +35,19 @@ describe("scientific engine release verifier", () => {
 
   it("reports current lock drift from the recorded source-bound candidate", async () => {
     const snapshot = await loadScientificEngineSnapshot(root);
+    const recordedPnpmLockHash =
+      snapshot.runtimeManifest.lockHashes["pnpm-lock"];
+    if (recordedPnpmLockHash === undefined) {
+      throw new Error(
+        "scientific engine evidence is missing the pnpm lock hash",
+      );
+    }
 
     await expect(verifyEvidenceFiles(root, snapshot)).resolves.toEqual([
       expect.objectContaining({
         code: "EVIDENCE_HASH_MISMATCH",
         path: "pnpm-lock.yaml",
-        message: expect.stringContaining(
-          snapshot.runtimeManifest.lockHashes["pnpm-lock"],
-        ),
+        message: expect.stringContaining(recordedPnpmLockHash),
       }),
     ]);
   });
