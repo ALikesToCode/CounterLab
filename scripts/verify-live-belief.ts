@@ -30,7 +30,7 @@ const claim =
     ? "The high test accuracy proves this classifier catches rare fraud."
     : "The high random-split accuracy proves generalization to new customers.";
 const analyst = createLiveBeliefAnalystFromEnv(process.env);
-const result = await analyst.propose({
+const result = await analyst.proposeBeliefSpec({
   sessionId: `verify_${manifest.fileSha256.slice(0, 16)}`,
   learnerClaim: claim,
   manifest,
@@ -41,9 +41,10 @@ console.log(
   JSON.stringify(
     {
       status: "VERIFIED",
-      concept: result.beliefTest.concept,
-      insufficientEvidence: result.beliefTest.uncertainty.insufficientEvidence,
-      evidenceReferences: result.beliefTest.evidenceRefs.map((reference) => ({
+      schemaVersion: result.beliefSpec.schemaVersion,
+      concept: result.beliefSpec.concept,
+      supportState: result.beliefSpec.supportState,
+      evidenceReferences: result.beliefSpec.evidenceRefs.map((reference) => ({
         kind: reference.kind,
         cellIndex: reference.cellIndex ?? null,
         outputIndex: reference.outputIndex ?? null,
