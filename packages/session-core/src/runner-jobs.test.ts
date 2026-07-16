@@ -404,4 +404,42 @@ describe("RunnerJobService", () => {
       ),
     ).rejects.toThrow(/terminal/i);
   });
+
+  it("can terminalize a job after the control plane closes runner writes", async () => {
+    const harness = service();
+    const queued = await harness.service.createJob(jobInput());
+    const starting = await harness.service.transition(
+      queued.jobId,
+      queued.jobVersion,
+      "STARTING",
+      { runnerIdentity: "runner-container-test" },
+    );
+    const running = await harness.service.transition(
+      starting.jobId,
+      starting.jobVersion,
+      "RUNNING",
+    );
+    const awaiting = await harness.service.transition(
+      running.jobId,
+      running.jobVersion,
+      "AWAITING_APPROVAL",
+    );
+
+    const completed = await harness.service.recordCallback({
+      schemaVersion: "1",
+      callbackId: "callback_after_boundary_close",
+      idempotencyKey: "job_live_1:verified:boundary-close",
+      jobId: awaiting.jobId,
+      stateVersion: 4,
+      status: "VERIFIED",
+      outputHashes: [HASH_C],
+      finalEventCursor: 0,
+      occurredAt: "2026-07-15T00:00:05.000Z",
+    });
+
+    expect(completed).toMatchObject({
+      duplicate: false,
+      job: { status: "VERIFIED" },
+    });
+  });
 });

@@ -1073,7 +1073,14 @@ const runnerTransitions: Readonly<
     "CANCELLED",
     "TIMED_OUT",
   ],
-  AWAITING_APPROVAL: ["RUNNING", "FAILED", "CANCELLED", "TIMED_OUT"],
+  AWAITING_APPROVAL: [
+    "RUNNING",
+    "VERIFIED",
+    "REJECTED",
+    "FAILED",
+    "CANCELLED",
+    "TIMED_OUT",
+  ],
   REPAIRING: [
     "RUNNING",
     "VERIFIED",

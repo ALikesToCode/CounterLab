@@ -32,6 +32,7 @@ import {
   RunnerLabRunBundleV5Schema,
   hashExperimentIR,
   type RunnerLabCompileBundleV5,
+  type RunnerLabRunBundleV5,
 } from "@counterlab/experiment-ir";
 
 import sourceNotebookText from "../../../fixtures/notebooks/customer_churn_leakage.ipynb?raw";
@@ -242,6 +243,29 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
   ): Promise<void> {
     await this.save(job, expectedVersion);
     this.callbacks.set(callback.idempotencyKey, structuredClone(callback));
+  }
+}
+
+class InterruptibleRunnerJobRepository extends MemoryRunnerJobRepository {
+  private authorityAppendsUntilFailure: number | undefined;
+
+  interruptAfterAuthorityAppends(count: number): void {
+    this.authorityAppendsUntilFailure = count;
+  }
+
+  override async appendEvent(
+    job: RunnerJob,
+    expectedVersion: number,
+    event: PublicCompilerEvent,
+  ): Promise<void> {
+    if (this.authorityAppendsUntilFailure !== undefined) {
+      this.authorityAppendsUntilFailure -= 1;
+      if (this.authorityAppendsUntilFailure === 0) {
+        this.authorityAppendsUntilFailure = undefined;
+        throw new Error("simulated authority event interruption");
+      }
+    }
+    await super.appendEvent(job, expectedVersion, event);
   }
 }
 
@@ -617,7 +641,9 @@ function structuredResponsesResult(output: unknown): Response {
   );
 }
 
-async function preparedScientificHostedRunner() {
+async function preparedScientificHostedRunner(
+  runnerJobs: MemoryRunnerJobRepository = new MemoryRunnerJobRepository(),
+) {
   const harness = await sessionHarness("live");
   const artifact = await harness.artifactStore.find(
     "artifact_uploaded_not_sample",
@@ -678,7 +704,6 @@ async function preparedScientificHostedRunner() {
   if (session?.beliefSpec === undefined || session.prediction === undefined) {
     throw new Error("live v5 contracts are missing");
   }
-  const runnerJobs = new MemoryRunnerJobRepository();
   const runnerObjects = new MemoryRunnerObjectStore();
   const dispatcher = new CapturingRunnerDispatcher();
   let runnerIdSequence = 0;
@@ -958,6 +983,112 @@ async function stageScientificCandidate(
   };
   expect(payload.data.status).toBe("VERIFIED");
   return { artifactHashes, artifacts, authorization, jobId, payload };
+}
+
+async function completeScientificCompileAndQueueRun(
+  harness: Awaited<ReturnType<typeof preparedScientificHostedRunner>>,
+) {
+  const staged = await stageScientificCandidate(harness);
+  const compileCallback = await postJson(
+    harness.app,
+    `/api/runner/jobs/${staged.jobId}/callback`,
+    {
+      schemaVersion: "1",
+      callbackId: "callback_scientific_compile_for_run",
+      idempotencyKey: "scientific-compile-for-run-complete",
+      jobId: staged.jobId,
+      stateVersion: harness.dispatch.job.stateVersion,
+      status: "VERIFIED",
+      outputHashes: Object.values(staged.artifactHashes),
+      finalEventCursor: staged.payload.data.runnerJob.eventCursor,
+      occurredAt: "2026-07-14T10:00:01.000Z",
+    },
+    staged.authorization,
+  );
+  expect(compileCallback.status).toBe(200);
+  const queuedRun = await postJson(
+    harness.app,
+    `/api/sessions/${harness.bundle.sessionId}/lab/run`,
+  );
+  expect(queuedRun.status).toBe(202);
+  const dispatch = harness.dispatcher.dispatched[1];
+  if (dispatch === undefined) throw new Error("v5 run was not dispatched");
+  const input = harness.runnerObjects.objects.get(
+    `runner-input/${dispatch.job.jobId}.json`,
+  );
+  if (input === undefined) throw new Error("v5 run input is missing");
+  return {
+    staged,
+    dispatch,
+    bundle: RunnerLabRunBundleV5Schema.parse(JSON.parse(input.body)),
+    authorization: { authorization: `Bearer ${dispatch.token}` },
+  };
+}
+
+async function scientificLeakageResult(bundle: RunnerLabRunBundleV5) {
+  if (bundle.projectedPlan.concept !== "entity_leakage") {
+    throw new Error("test result helper requires the leakage Subject Pack");
+  }
+  const sourceByOperation = new Map([
+    ["leakage.random_row_split", sampleResult.runs[0]],
+    ["leakage.group_holdout", sampleResult.runs[1]],
+    ["leakage.identity_ablation", sampleResult.runs[2]],
+  ] as const);
+  const specifications = [
+    bundle.projectedPlan.baseline,
+    ...bundle.projectedPlan.interventions,
+  ];
+  const runs = specifications.map((specification) => {
+    if (specification.concept !== "entity_leakage") {
+      throw new Error("mixed-concept test Plan is unsupported");
+    }
+    const source = sourceByOperation.get(specification.operation);
+    if (source === undefined) {
+      throw new Error(`missing test run for ${specification.operation}`);
+    }
+    return {
+      ...source,
+      id: specification.runId,
+      operation: specification.operation,
+      splitStrategy:
+        specification.operation === "leakage.group_holdout"
+          ? ("group" as const)
+          : ("random" as const),
+      groupBy:
+        specification.operation === "leakage.group_holdout"
+          ? specification.entityField
+          : null,
+      dropFeatures: specification.dropIdentity
+        ? [specification.entityField]
+        : [],
+      model: specification.model,
+      seed: specification.seed,
+    };
+  });
+  const payload = {
+    schemaVersion: "2" as const,
+    concept: "entity_leakage" as const,
+    planId: bundle.projectedPlan.planId,
+    sessionId: bundle.sessionId,
+    artifactManifestHash: bundle.artifactManifestHash,
+    conceptPackVersion: bundle.selectedExperimentIr.conceptPackVersion,
+    fixture: sampleResult.fixture,
+    kernelVersion: sampleResult.kernelVersion,
+    seed: bundle.projectedPlan.baseline.seed,
+    runs,
+    chartData: runs.map((run) => ({
+      runId: run.id,
+      splitStrategy: run.splitStrategy,
+      accuracy: run.metrics.accuracy,
+      rocAuc: run.metrics.rocAuc,
+      sampleSize: run.sampleSizes.test,
+      seed: run.seed,
+    })),
+  };
+  return HostedVerifiedResultSetV2Schema.parse({
+    ...payload,
+    resultHash: await hashCanonical(payload),
+  });
 }
 
 function imbalanceArtifactManifest(): ArtifactManifest {
@@ -3290,6 +3421,598 @@ describe("Cloudflare Worker API", () => {
       },
     });
     expect(harness.dispatcher.dispatched).toHaveLength(2);
+  });
+
+  it("releases a v5 fixed result only after Worker-owned epistemic verification", async () => {
+    const harness = await preparedScientificHostedRunner();
+    const run = await completeScientificCompileAndQueueRun(harness);
+    const jobId = run.dispatch.job.jobId;
+    expect(
+      (
+        await harness.app.request(`/api/runner/jobs/${jobId}/start`, {
+          method: "POST",
+          headers: run.authorization,
+        })
+      ).status,
+    ).toBe(200);
+    for (const event of [
+      {
+        schemaVersion: "1" as const,
+        eventId: "event_v5_run_started",
+        jobId,
+        cursor: 1,
+        at: "2026-07-14T10:00:02.000Z",
+        kind: "job.started" as const,
+      },
+      {
+        schemaVersion: "1" as const,
+        eventId: "event_v5_kernel_completed",
+        jobId,
+        cursor: 2,
+        at: "2026-07-14T10:00:03.000Z",
+        kind: "command.completed" as const,
+        label: "Execute fixed kernel",
+        exitCode: 0,
+        durationMs: 18,
+        excerpt: "Fixed result bytes uploaded for external verification.",
+      },
+    ]) {
+      const accepted = await postJson(
+        harness.app,
+        `/api/runner/jobs/${jobId}/events`,
+        event,
+        run.authorization,
+      );
+      expect(accepted.status).toBe(201);
+    }
+    const result = await scientificLeakageResult(run.bundle);
+    const resultText = JSON.stringify(result);
+    const resultFileHash = await sha256Text(resultText);
+    const uploaded = await harness.app.request(
+      `/api/runner/jobs/${jobId}/outputs/verified-result.json`,
+      {
+        method: "PUT",
+        headers: {
+          ...run.authorization,
+          "content-type": "application/json",
+        },
+        body: resultText,
+      },
+    );
+    expect(uploaded.status).toBe(201);
+    expect(
+      (await harness.runnerJobs.listEvents(jobId, 0)).map(
+        (event) => event.kind,
+      ),
+    ).toEqual(["job.started", "command.completed"]);
+
+    const callbackBody = {
+      schemaVersion: "1" as const,
+      callbackId: "callback_scientific_run_v5",
+      idempotencyKey: "scientific-run-v5-complete",
+      jobId,
+      stateVersion: run.dispatch.job.stateVersion,
+      status: "VERIFIED" as const,
+      outputHashes: [resultFileHash],
+      finalEventCursor: 2,
+      occurredAt: "2026-07-14T10:00:04.000Z",
+    };
+    const callback = await postJson(
+      harness.app,
+      `/api/runner/jobs/${jobId}/callback`,
+      callbackBody,
+      run.authorization,
+    );
+    expect(callback.status).toBe(200);
+    await expect(callback.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        duplicate: false,
+        runnerJob: { status: "VERIFIED", eventCursor: 4 },
+        session: {
+          state: "EXPERIMENT_COMPLETED",
+          verifiedResult: { resultHash: result.resultHash },
+          evidenceVerdict: {
+            kind: "SUPPORTS",
+            hypothesisId: "competing",
+            resultHash: result.resultHash,
+          },
+          epistemicReportHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        },
+        verification: {
+          status: "VERIFIED",
+          verdict: { kind: "SUPPORTS", resultHash: result.resultHash },
+          technicalReport: { status: "VERIFIED" },
+        },
+      },
+    });
+    expect(
+      (await harness.runnerJobs.listEvents(jobId, 0)).map((event) => ({
+        cursor: event.cursor,
+        kind: event.kind,
+        at: event.at,
+      })),
+    ).toEqual([
+      {
+        cursor: 1,
+        kind: "job.started",
+        at: "2026-07-14T10:00:02.000Z",
+      },
+      {
+        cursor: 2,
+        kind: "command.completed",
+        at: "2026-07-14T10:00:03.000Z",
+      },
+      {
+        cursor: 3,
+        kind: "verifier.verified",
+        at: "2026-07-14T10:00:00.000Z",
+      },
+      {
+        cursor: 4,
+        kind: "result.ready",
+        at: "2026-07-14T10:00:00.000Z",
+      },
+    ]);
+    for (const file of [
+      "technical-verification.json",
+      "epistemic-verification.json",
+      "evidence-verdict.json",
+    ]) {
+      expect(
+        harness.runnerObjects.objects.has(`runner-authority/${jobId}/${file}`),
+      ).toBe(true);
+    }
+
+    const revised = await postJson(
+      harness.app,
+      `/api/sessions/${harness.bundle.sessionId}/revision`,
+      {
+        revision:
+          "Deployment units must determine the evaluation split before I trust generalization.",
+      },
+    );
+    expect(revised.status).toBe(200);
+    const duplicate = await postJson(
+      harness.app,
+      `/api/runner/jobs/${jobId}/callback`,
+      callbackBody,
+      run.authorization,
+    );
+    expect(duplicate.status).toBe(200);
+    await expect(duplicate.json()).resolves.toMatchObject({
+      data: {
+        duplicate: true,
+        runnerJob: { eventCursor: 4 },
+        session: { state: "REVISION_RECORDED" },
+      },
+    });
+    expect(await harness.runnerJobs.listEvents(jobId, 0)).toHaveLength(4);
+  });
+
+  it("resumes a v5 callback after a partial Worker authority-event append", async () => {
+    const runnerJobs = new InterruptibleRunnerJobRepository();
+    const harness = await preparedScientificHostedRunner(runnerJobs);
+    const run = await completeScientificCompileAndQueueRun(harness);
+    const jobId = run.dispatch.job.jobId;
+    expect(
+      (
+        await harness.app.request(`/api/runner/jobs/${jobId}/start`, {
+          method: "POST",
+          headers: run.authorization,
+        })
+      ).status,
+    ).toBe(200);
+    const result = await scientificLeakageResult(run.bundle);
+    const resultText = JSON.stringify(result);
+    const resultFileHash = await sha256Text(resultText);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${jobId}/outputs/verified-result.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...run.authorization,
+              "content-type": "application/json",
+            },
+            body: resultText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    const callbackBody = {
+      schemaVersion: "1" as const,
+      callbackId: "callback_scientific_run_interrupted",
+      idempotencyKey: "scientific-run-interrupted",
+      jobId,
+      stateVersion: run.dispatch.job.stateVersion,
+      status: "VERIFIED" as const,
+      outputHashes: [resultFileHash],
+      finalEventCursor: 0,
+      occurredAt: "2026-07-14T10:00:04.000Z",
+    };
+    runnerJobs.interruptAfterAuthorityAppends(2);
+    const interrupted = await postJson(
+      harness.app,
+      `/api/runner/jobs/${jobId}/callback`,
+      callbackBody,
+      run.authorization,
+    );
+    expect(interrupted.status).toBe(500);
+    expect((await runnerJobs.find(jobId))?.status).toBe("AWAITING_APPROVAL");
+    expect(
+      (await runnerJobs.listEvents(jobId, 0)).map((event) => event.kind),
+    ).toEqual(["verifier.verified"]);
+    expect(
+      (await harness.sessionRepository.find(harness.bundle.sessionId))?.state,
+    ).toBe("LAB_VERIFIED");
+    const lateEvent = await postJson(
+      harness.app,
+      `/api/runner/jobs/${jobId}/events`,
+      {
+        schemaVersion: "1",
+        eventId: "late_runner_event",
+        jobId,
+        cursor: 2,
+        at: "2026-07-14T10:00:05.000Z",
+        kind: "command.completed",
+        label: "Late runner write",
+        exitCode: 0,
+        durationMs: 1,
+        excerpt: "This event arrived after the runner boundary closed.",
+      },
+      run.authorization,
+    );
+    expect(lateEvent.status).toBe(409);
+    await expect(lateEvent.json()).resolves.toMatchObject({
+      error: { code: "RUNNER_JOB_NOT_ACTIVE" },
+    });
+    harness.runnerObjects.objects.set(
+      `runner-output/${jobId}/verified-result.json`,
+      {
+        body: JSON.stringify({ tampered: true }),
+        contentType: "application/json",
+      },
+    );
+
+    const recovered = await postJson(
+      harness.app,
+      `/api/runner/jobs/${jobId}/callback`,
+      callbackBody,
+      run.authorization,
+    );
+    expect(recovered.status).toBe(200);
+    await expect(recovered.json()).resolves.toMatchObject({
+      data: {
+        duplicate: false,
+        runnerJob: { status: "VERIFIED", eventCursor: 2 },
+        session: {
+          state: "EXPERIMENT_COMPLETED",
+          evidenceVerdict: { kind: "SUPPORTS" },
+        },
+      },
+    });
+    expect(
+      (await runnerJobs.listEvents(jobId, 0)).map((event) => event.kind),
+    ).toEqual(["verifier.verified", "result.ready"]);
+  });
+
+  it("reserves v5 verifier and result events for the Worker control plane", async () => {
+    const harness = await preparedScientificHostedRunner();
+    const run = await completeScientificCompileAndQueueRun(harness);
+    const jobId = run.dispatch.job.jobId;
+    expect(
+      (
+        await harness.app.request(`/api/runner/jobs/${jobId}/start`, {
+          method: "POST",
+          headers: run.authorization,
+        })
+      ).status,
+    ).toBe(200);
+    for (const [kind, extra] of [
+      ["verifier.verified", { invariantCount: 8, mutationCount: 0 }],
+      [
+        "verifier.rejected",
+        {
+          invariant: "TECHNICAL_VERIFICATION_FAILED",
+          observed: "runner claim",
+          expected: "Worker authority",
+          counterexample: "The runner cannot decide verification.",
+        },
+      ],
+      ["result.ready", { resultHash: "a".repeat(64) }],
+    ] as const) {
+      const response = await postJson(
+        harness.app,
+        `/api/runner/jobs/${jobId}/events`,
+        {
+          schemaVersion: "1",
+          eventId: `forbidden_${kind}`,
+          jobId,
+          cursor: 1,
+          at: "2026-07-14T10:00:02.000Z",
+          kind,
+          ...extra,
+        },
+        run.authorization,
+      );
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "RUNNER_EVENT_NOT_PERMITTED" },
+      });
+    }
+    expect(await harness.runnerJobs.listEvents(jobId, 0)).toEqual([]);
+  });
+
+  it("rejects extra v5 result hashes instead of accepting a partial match", async () => {
+    const harness = await preparedScientificHostedRunner();
+    const run = await completeScientificCompileAndQueueRun(harness);
+    const jobId = run.dispatch.job.jobId;
+    expect(
+      (
+        await harness.app.request(`/api/runner/jobs/${jobId}/start`, {
+          method: "POST",
+          headers: run.authorization,
+        })
+      ).status,
+    ).toBe(200);
+    const result = await scientificLeakageResult(run.bundle);
+    const resultText = JSON.stringify(result);
+    const resultFileHash = await sha256Text(resultText);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${jobId}/outputs/verified-result.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...run.authorization,
+              "content-type": "application/json",
+            },
+            body: resultText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    const callback = await postJson(
+      harness.app,
+      `/api/runner/jobs/${jobId}/callback`,
+      {
+        schemaVersion: "1",
+        callbackId: "callback_scientific_run_extra_hash",
+        idempotencyKey: "scientific-run-extra-hash",
+        jobId,
+        stateVersion: run.dispatch.job.stateVersion,
+        status: "VERIFIED",
+        outputHashes: [resultFileHash, "f".repeat(64)],
+        finalEventCursor: 0,
+        occurredAt: "2026-07-14T10:00:04.000Z",
+      },
+      run.authorization,
+    );
+    expect(callback.status).toBe(200);
+    await expect(callback.json()).resolves.toMatchObject({
+      data: {
+        runnerJob: {
+          status: "REJECTED",
+          error: { code: "RUNNER_OUTPUT_HASH_MISMATCH" },
+        },
+        session: { state: "LAB_VERIFIED" },
+      },
+    });
+    expect(
+      (await harness.sessionRepository.find(harness.bundle.sessionId))
+        ?.verifiedResult,
+    ).toBeUndefined();
+  });
+
+  it("persists a v5 technical rejection without releasing a result", async () => {
+    const harness = await preparedScientificHostedRunner();
+    const run = await completeScientificCompileAndQueueRun(harness);
+    const jobId = run.dispatch.job.jobId;
+    expect(
+      (
+        await harness.app.request(`/api/runner/jobs/${jobId}/start`, {
+          method: "POST",
+          headers: run.authorization,
+        })
+      ).status,
+    ).toBe(200);
+    const valid = await scientificLeakageResult(run.bundle);
+    if (valid.concept !== "entity_leakage") {
+      throw new Error("expected a leakage test result");
+    }
+    const mutatedRuns = valid.runs.map((resultRun) =>
+      resultRun.operation === "leakage.group_holdout"
+        ? {
+            ...resultRun,
+            entityOverlap: { count: 1, rate: 0.01 },
+          }
+        : resultRun,
+    );
+    const { resultHash: _validResultHash, ...validPayload } = valid;
+    const mutatedPayload = { ...validPayload, runs: mutatedRuns };
+    const result = HostedVerifiedResultSetV2Schema.parse({
+      ...mutatedPayload,
+      resultHash: await hashCanonical(mutatedPayload),
+    });
+    const resultText = JSON.stringify(result);
+    const resultFileHash = await sha256Text(resultText);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${jobId}/outputs/verified-result.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...run.authorization,
+              "content-type": "application/json",
+            },
+            body: resultText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    const callbackBody = {
+      schemaVersion: "1" as const,
+      callbackId: "callback_scientific_run_rejected",
+      idempotencyKey: "scientific-run-rejected",
+      jobId,
+      stateVersion: run.dispatch.job.stateVersion,
+      status: "VERIFIED" as const,
+      outputHashes: [resultFileHash],
+      finalEventCursor: 0,
+      occurredAt: "2026-07-14T10:00:04.000Z",
+    };
+    const callback = await postJson(
+      harness.app,
+      `/api/runner/jobs/${jobId}/callback`,
+      callbackBody,
+      run.authorization,
+    );
+    expect(callback.status).toBe(200);
+    await expect(callback.json()).resolves.toMatchObject({
+      data: {
+        duplicate: false,
+        runnerJob: {
+          status: "REJECTED",
+          error: { code: "EPISTEMIC_VERIFIER_REJECTED" },
+          eventCursor: 1,
+        },
+        session: {
+          state: "LAB_VERIFIED",
+          evidenceVerdict: {
+            kind: "REJECTED",
+            resultReleased: false,
+          },
+          epistemicReportHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        },
+        verification: {
+          status: "REJECTED",
+          technicalReport: { status: "REJECTED" },
+          verdict: { kind: "REJECTED", resultReleased: false },
+        },
+      },
+    });
+    const stored = await harness.sessionRepository.find(
+      harness.bundle.sessionId,
+    );
+    expect(stored?.verifiedResult).toBeUndefined();
+    expect(
+      (await harness.runnerJobs.listEvents(jobId, 0)).map(
+        (event) => event.kind,
+      ),
+    ).toEqual(["verifier.rejected"]);
+
+    const duplicate = await postJson(
+      harness.app,
+      `/api/runner/jobs/${jobId}/callback`,
+      callbackBody,
+      run.authorization,
+    );
+    expect(duplicate.status).toBe(200);
+    await expect(duplicate.json()).resolves.toMatchObject({
+      data: { duplicate: true, runnerJob: { eventCursor: 1 } },
+    });
+    expect(
+      (
+        await harness.sessionRepository.listEvents(harness.bundle.sessionId)
+      ).filter((event) => event.kind === "experiment.evidence_rejected"),
+    ).toHaveLength(1);
+  });
+
+  it("releases a declared inconclusive v5 result as educational evidence", async () => {
+    const harness = await preparedScientificHostedRunner();
+    const run = await completeScientificCompileAndQueueRun(harness);
+    const jobId = run.dispatch.job.jobId;
+    expect(
+      (
+        await harness.app.request(`/api/runner/jobs/${jobId}/start`, {
+          method: "POST",
+          headers: run.authorization,
+        })
+      ).status,
+    ).toBe(200);
+    const decisive = await scientificLeakageResult(run.bundle);
+    if (decisive.concept !== "entity_leakage") {
+      throw new Error("expected a leakage test result");
+    }
+    const accuracyByOperation = new Map<string, number>([
+      ["leakage.random_row_split", 0.7],
+      ["leakage.group_holdout", 0.65],
+      ["leakage.identity_ablation", 0.64],
+    ]);
+    const runs = decisive.runs.map((resultRun) => ({
+      ...resultRun,
+      metrics: {
+        ...resultRun.metrics,
+        accuracy: accuracyByOperation.get(resultRun.operation)!,
+      },
+    }));
+    const chartData = decisive.chartData.map((chart) => ({
+      ...chart,
+      accuracy: runs.find((resultRun) => resultRun.id === chart.runId)!.metrics
+        .accuracy,
+    }));
+    const { resultHash: _decisiveResultHash, ...decisivePayload } = decisive;
+    const inconclusivePayload = { ...decisivePayload, runs, chartData };
+    const result = HostedVerifiedResultSetV2Schema.parse({
+      ...inconclusivePayload,
+      resultHash: await hashCanonical(inconclusivePayload),
+    });
+    const resultText = JSON.stringify(result);
+    const resultFileHash = await sha256Text(resultText);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${jobId}/outputs/verified-result.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...run.authorization,
+              "content-type": "application/json",
+            },
+            body: resultText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    const callback = await postJson(
+      harness.app,
+      `/api/runner/jobs/${jobId}/callback`,
+      {
+        schemaVersion: "1",
+        callbackId: "callback_scientific_run_inconclusive",
+        idempotencyKey: "scientific-run-inconclusive",
+        jobId,
+        stateVersion: run.dispatch.job.stateVersion,
+        status: "VERIFIED",
+        outputHashes: [resultFileHash],
+        finalEventCursor: 0,
+        occurredAt: "2026-07-14T10:00:04.000Z",
+      },
+      run.authorization,
+    );
+    expect(callback.status).toBe(200);
+    await expect(callback.json()).resolves.toMatchObject({
+      data: {
+        runnerJob: { status: "VERIFIED", eventCursor: 2 },
+        session: {
+          state: "EXPERIMENT_COMPLETED",
+          verifiedResult: { resultHash: result.resultHash },
+          evidenceVerdict: {
+            kind: "INCONCLUSIVE",
+            reasonCode: "GAP_WITHIN_TOLERANCE",
+            resultHash: result.resultHash,
+          },
+        },
+        verification: {
+          status: "VERIFIED",
+          verdict: { kind: "INCONCLUSIVE" },
+        },
+      },
+    });
   });
 
   it("re-verifies final v5 compiler bytes before projecting verified authority", async () => {
