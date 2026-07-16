@@ -957,9 +957,11 @@ test("a configured hosted runner completes an untouched leakage notebook", async
   await expect(
     page.getByRole("heading", { name: /Which explanation fits/i }),
   ).toBeVisible({ timeout: 210_000 });
-  await expect(
-    page.getByText(/The model partly remembers customers/i),
-  ).toBeVisible();
+  const hypotheses = page.getByRole("region", {
+    name: "Competing hypotheses",
+  });
+  await expect(hypotheses.getByRole("heading")).toHaveCount(2);
+  await expect(hypotheses.getByText(/Idea B · Customer memory/i)).toBeVisible();
   await page
     .getByRole("button", { name: /These two ideas make sense/i })
     .click();
