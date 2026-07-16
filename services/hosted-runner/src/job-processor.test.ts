@@ -212,6 +212,13 @@ function scientificBundleV5(
       candidateExperimentIds: [
         legacy.approvedBeliefTest.decisiveIntervention.id,
       ],
+      boundarySweep: {
+        sweepId: "leakage-recurrence-sweep",
+        axisIds: ["test_fraction", "observations_per_entity"],
+        gridPresetId: "leakage-boundary-grid-v1",
+        observableId: "optimism_gap",
+        maxCells: 25,
+      },
     },
     schemas: {
       discriminationContract: { type: "object" },
@@ -1208,6 +1215,9 @@ describe("HostedRunnerJobProcessor", () => {
     await processor.run("runner_job_scientific_1");
 
     expect(scientificCompiler.compileCalls).toHaveLength(1);
+    expect(
+      scientificCompiler.compileCalls[0]?.conceptPack.boundarySweep,
+    ).toEqual(scientificBundleV5().conceptPack.boundarySweep);
     expect(compiler.compileCalls).toBe(0);
     expect([...controlPlane.uploads.keys()].sort()).toEqual([
       "discrimination-contract.json",
@@ -1498,7 +1508,8 @@ describe("HostedRunnerJobProcessor", () => {
     ]);
     expect(controlPlane.events[1]).toMatchObject({
       label: "Fixed kernel computed the Boundary Map",
-      excerpt: "4 signed grid cells computed; host verification is required.",
+      excerpt:
+        "4 candidate grid cells computed; host verification is required.",
     });
     expect(controlPlane.callbacks[0]).toMatchObject({
       status: "VERIFIED",

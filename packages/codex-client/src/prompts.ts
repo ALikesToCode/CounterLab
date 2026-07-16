@@ -168,6 +168,11 @@ Authority boundary:
 - Copy evidence only from the approved Belief Spec and sanitized Artifact Manifest. Do not invent cells, outputs, rows, support status, measurements, or results.
 - Preserve the supplied session, artifact, Belief Spec, Subject Pack, resource, and provenance lineage exactly.
 - State decisive patterns qualitatively and include explicit inconclusive conditions and non-claims.
+- ${
+    input.conceptPack.boundarySweep === undefined
+      ? "Do not invent a Boundary Sweep when the historical compiler bundle does not declare one."
+      : "Copy conceptPack.boundarySweep exactly into experimentIr.boundarySweep; do not rename, reorder, omit, or extend its fields."
+  }
 - Do not reveal private reasoning.
 
 Immutable lineage:

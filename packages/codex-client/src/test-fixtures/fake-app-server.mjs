@@ -311,6 +311,13 @@ function canonicalScientificArtifacts(evidenceRefs) {
       ],
       selection: { status: "UNSELECTED" },
       visualizations: ["metric_comparison", "entity_overlap"],
+      boundarySweep: {
+        sweepId: "leakage-recurrence-sweep",
+        axisIds: ["test_fraction", "observations_per_entity"],
+        gridPresetId: "leakage-boundary-grid-v1",
+        observableId: "optimism_gap",
+        maxCells: 25,
+      },
       inconclusiveConditions: [
         {
           id: "gap-within-tolerance",

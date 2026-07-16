@@ -315,7 +315,7 @@ export class HostedRunnerJobProcessor {
         let releasedResultHash: string | undefined;
         if (isBoundaryRun) {
           const boundaryResult = BoundaryMapResultV1Schema.parse(rawResult);
-          commandExcerpt = `${boundaryResult.cells.length} signed grid cells computed; host verification is required.`;
+          commandExcerpt = `${boundaryResult.cells.length} candidate grid cells computed; host verification is required.`;
         } else {
           const verifiedResult =
             HostedVerifiedResultSetV2Schema.parse(rawResult);
@@ -885,6 +885,9 @@ export class HostedRunnerJobProcessor {
         allowedVisualizations: [...bundle.conceptPack.allowedVisualizations],
         verifierInvariants: [...bundle.conceptPack.verifierInvariants],
         candidateExperimentIds: [...bundle.conceptPack.candidateExperimentIds],
+        ...(bundle.conceptPack.boundarySweep === undefined
+          ? {}
+          : { boundarySweep: bundle.conceptPack.boundarySweep }),
         planRequirements: [...bundle.conceptPack.planRequirements],
       },
       schemas: bundle.schemas,

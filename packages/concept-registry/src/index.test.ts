@@ -275,6 +275,7 @@ describe("concept-pack registry", () => {
   it("registers exact bounded Boundary Map grids for both released packs", () => {
     const leakage = getConceptPack("entity_leakage");
     expect(leakage.scientificMethod.boundaryMap).toMatchObject({
+      seed: 1729,
       sweepId: "leakage-recurrence-sweep",
       gridPresetId: "leakage-boundary-grid-v1",
       observableId: "optimism_gap",
@@ -301,6 +302,7 @@ describe("concept-pack registry", () => {
 
     const imbalance = getConceptPack("class_imbalance");
     expect(imbalance.scientificMethod.boundaryMap).toMatchObject({
+      seed: 2603,
       sweepId: "imbalance-threshold-prevalence-sweep",
       gridPresetId: "imbalance-boundary-grid-v1",
       observableId: "f1",

@@ -128,6 +128,13 @@ function scientificInput(
       allowedVisualizations: ["metric_comparison", "entity_overlap"],
       verifierInvariants: ["zero_group_overlap"],
       candidateExperimentIds: ["group-holdout"],
+      boundarySweep: {
+        sweepId: "leakage-recurrence-sweep",
+        axisIds: ["test_fraction", "observations_per_entity"],
+        gridPresetId: "leakage-boundary-grid-v1",
+        observableId: "optimism_gap",
+        maxCells: 25,
+      },
       planRequirements: ["Keep model and preprocessing fixed."],
     },
     schemas: {
@@ -165,6 +172,7 @@ describe("hosted scientific-method compiler", () => {
     expect(prompt).toMatch(/selection must remain UNSELECTED/i);
     expect(prompt).toMatch(/fixed scorer/i);
     expect(prompt).toMatch(/no literal result values/i);
+    expect(prompt).toMatch(/copy conceptPack\.boundarySweep exactly/i);
     expect(prompt).not.toContain(generationDirectory);
   });
 

@@ -180,6 +180,16 @@ async function scientificFixture(): Promise<{
       allowedVisualizations: pack.allowedVisualizations,
       verifierInvariants: pack.verifierContract.invariants,
       candidateExperimentIds: pack.scientificMethod.candidateExperimentIds,
+      boundarySweep: {
+        sweepId: pack.scientificMethod.boundaryMap.sweepId,
+        axisIds: [
+          pack.scientificMethod.boundaryMap.axes[0].id,
+          pack.scientificMethod.boundaryMap.axes[1].id,
+        ],
+        gridPresetId: pack.scientificMethod.boundaryMap.gridPresetId,
+        observableId: pack.scientificMethod.boundaryMap.observableId,
+        maxCells: pack.scientificMethod.boundaryMap.maxCells,
+      },
       planRequirements: pack.experimentPlanRules,
     },
     schemas: {
@@ -330,6 +340,7 @@ async function scientificFixture(): Promise<{
     ],
     selection: { status: "UNSELECTED" },
     visualizations: ["metric_comparison", "entity_overlap"],
+    boundarySweep: bundle.conceptPack.boundarySweep,
     inconclusiveConditions: [
       {
         id: "gap-within-tolerance",
@@ -555,6 +566,26 @@ describe("scientific v5 candidate verification", () => {
     );
     expect(result.selectedIr?.boundarySweep).toEqual(
       experimentIr.boundarySweep,
+    );
+  });
+
+  it("rejects omission of the Boundary Sweep declared by a new compiler bundle", async () => {
+    const fixture = await scientificFixture();
+    const { boundarySweep: _boundarySweep, ...withoutBoundary } =
+      fixture.artifacts.experimentIr;
+    const experimentIr = ExperimentIRV5Schema.parse(withoutBoundary);
+    const input = await replaceIr(fixture, experimentIr);
+
+    const result = await scientificVerifier()(input);
+
+    expect(result.disposition).toBe("REPAIRABLE_REJECTION");
+    expect(result.report.invariants).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "boundary_sweep_contract",
+          passed: false,
+        }),
+      ]),
     );
   });
 

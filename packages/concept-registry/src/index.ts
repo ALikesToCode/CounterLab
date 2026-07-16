@@ -62,6 +62,7 @@ export type BoundaryMapAxisDefinition = {
 
 export type SubjectPackBoundaryMapDefinition = {
   schemaVersion: "1";
+  seed: number;
   sweepId: string;
   gridPresetId: string;
   observableId: BoundaryObservableId;
@@ -245,6 +246,7 @@ const leakageForbiddenClaims = [
 
 const leakageBoundaryMap = {
   schemaVersion: "1",
+  seed: 1729,
   sweepId: "leakage-recurrence-sweep",
   gridPresetId: "leakage-boundary-grid-v1",
   observableId: "optimism_gap",
@@ -371,6 +373,7 @@ const imbalanceForbiddenClaims = [
 
 const imbalanceBoundaryMap = {
   schemaVersion: "1",
+  seed: 2603,
   sweepId: "imbalance-threshold-prevalence-sweep",
   gridPresetId: "imbalance-boundary-grid-v1",
   observableId: "f1",

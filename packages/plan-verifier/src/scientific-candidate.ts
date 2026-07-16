@@ -182,7 +182,11 @@ async function evidenceResolves(
   );
 }
 
-function fixedPackSnapshot(pack: ReturnType<typeof getConceptPack>) {
+function fixedPackSnapshot(
+  pack: ReturnType<typeof getConceptPack>,
+  includeBoundarySweep: boolean,
+) {
+  const boundary = pack.scientificMethod.boundaryMap;
   return {
     id: pack.id,
     version: pack.version,
@@ -192,6 +196,17 @@ function fixedPackSnapshot(pack: ReturnType<typeof getConceptPack>) {
     allowedVisualizations: pack.allowedVisualizations,
     verifierInvariants: pack.verifierContract.invariants,
     candidateExperimentIds: pack.scientificMethod.candidateExperimentIds,
+    ...(includeBoundarySweep
+      ? {
+          boundarySweep: {
+            sweepId: boundary.sweepId,
+            axisIds: [boundary.axes[0].id, boundary.axes[1].id],
+            gridPresetId: boundary.gridPresetId,
+            observableId: boundary.observableId,
+            maxCells: boundary.maxCells,
+          },
+        }
+      : {}),
     planRequirements: pack.experimentPlanRules,
   };
 }
@@ -479,7 +494,13 @@ export async function verifyScientificCandidateV5(
       manifestHash === bundle.artifactManifestHash &&
         beliefSpecHash === bundle.beliefSpecHash &&
         predictionHash === bundle.prediction.immutableHash &&
-        sameJson(bundle.conceptPack, fixedPackSnapshot(pack)),
+        sameJson(
+          bundle.conceptPack,
+          fixedPackSnapshot(
+            pack,
+            bundle.conceptPack.boundarySweep !== undefined,
+          ),
+        ),
       {
         manifestHashMatches: manifestHash === bundle.artifactManifestHash,
         beliefSpecHashMatches: beliefSpecHash === bundle.beliefSpecHash,
@@ -487,7 +508,10 @@ export async function verifyScientificCandidateV5(
           predictionHash === bundle.prediction.immutableHash,
         packSnapshotMatches: sameJson(
           bundle.conceptPack,
-          fixedPackSnapshot(pack),
+          fixedPackSnapshot(
+            pack,
+            bundle.conceptPack.boundarySweep !== undefined,
+          ),
         ),
       },
       "canonical manifest, Belief Spec, Prediction, and frozen Subject Pack",
@@ -595,27 +619,34 @@ export async function verifyScientificCandidateV5(
     ),
     (() => {
       const request = rawIr.boundarySweep;
+      const declared = bundle.conceptPack.boundarySweep;
       const contract =
         request === undefined
           ? undefined
           : pack.scientificMethod.epistemic.policy.boundarySweeps.find(
               (candidate) => candidate.sweepId === request.sweepId,
             );
+      const matchesRegisteredContract =
+        request !== undefined &&
+        contract !== undefined &&
+        sameJson(contract.axisIds, request.axisIds) &&
+        contract.gridPresetId === request.gridPresetId &&
+        contract.observableId === request.observableId &&
+        contract.maxCells === request.maxCells;
       const authorized =
-        request === undefined ||
-        (contract !== undefined &&
-          sameJson(contract.axisIds, request.axisIds) &&
-          contract.gridPresetId === request.gridPresetId &&
-          contract.observableId === request.observableId &&
-          contract.maxCells === request.maxCells);
+        declared === undefined
+          ? request === undefined || matchesRegisteredContract
+          : request !== undefined &&
+            sameJson(declared, request) &&
+            matchesRegisteredContract;
       return invariant(
         "boundary_sweep_contract",
         authorized,
         request ?? null,
-        contract ?? null,
+        declared ?? contract ?? null,
         authorized
           ? undefined
-          : "The Boundary Sweep must match one exact frozen Subject Pack contract.",
+          : "The Experiment IR must include the exact frozen Boundary Sweep declared by the compiler bundle and Subject Pack.",
       );
     })(),
     invariant(

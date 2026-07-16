@@ -900,18 +900,13 @@ def _execute_v5_boundary(bundle: Mapping[str, Any]) -> dict[str, Any]:
         )
 
     seed = bundle.get("seed")
-    runs = _selected_candidate_runs(selected_ir)
-    run_seeds = {run.get("seed") for run in runs}
     if (
         isinstance(seed, bool)
         or not isinstance(seed, int)
         or seed < 0
-        or run_seeds != {seed}
         or seed != _REGISTERED_BOUNDARY_SEEDS[str(concept)]
     ):
-        raise HostedLabRunError(
-            "Boundary Map seed does not match selected candidate runs"
-        )
+        raise HostedLabRunError("Boundary Map seed is not the registered fixed seed")
 
     release_authority = _mapping(
         bundle.get("releaseAuthority"), "releaseAuthority"

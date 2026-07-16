@@ -115,6 +115,13 @@ function runnerBundleV5() {
       ],
       verifierInvariants: ["zero_group_overlap"],
       candidateExperimentIds: ["group-holdout"],
+      boundarySweep: {
+        sweepId: "leakage-recurrence-sweep",
+        axisIds: ["test_fraction", "observations_per_entity"] as const,
+        gridPresetId: "leakage-boundary-grid-v1",
+        observableId: "optimism_gap" as const,
+        maxCells: 25,
+      },
       planRequirements: ["Hold the estimator and preprocessing fixed."],
     },
     schemas: {
@@ -586,6 +593,25 @@ describe("Runner LAB_COMPILE bundle v5", () => {
     }
   });
 
+  it("carries the public Boundary Sweep contract without invalidating historical v5 bundles", () => {
+    const bundle = runnerBundleV5();
+    expect(
+      RunnerLabCompileBundleV5Schema.parse(bundle).conceptPack.boundarySweep,
+    ).toEqual({
+      sweepId: "leakage-recurrence-sweep",
+      axisIds: ["test_fraction", "observations_per_entity"],
+      gridPresetId: "leakage-boundary-grid-v1",
+      observableId: "optimism_gap",
+      maxCells: 25,
+    });
+    const { boundarySweep: _boundarySweep, ...conceptPack } =
+      bundle.conceptPack;
+    expect(
+      RunnerLabCompileBundleV5Schema.parse({ ...bundle, conceptPack })
+        .conceptPack.boundarySweep,
+    ).toBeUndefined();
+  });
+
   it("rejects unresolved manifest evidence, mixed v1 fields, and extra outputs", () => {
     expect(() =>
       RunnerLabCompileBundleV5Schema.parse({
@@ -977,6 +1003,22 @@ describe("Runner Boundary Map LAB_RUN bundle v5", () => {
       },
       permittedOutputs: ["boundary-map.json"],
     });
+  });
+
+  it("keeps the pack-owned Boundary seed independent from the primary split seed", () => {
+    const source = boundaryMapBundleV5();
+    const selection = source.selectedExperimentIr.selection;
+    if (selection.status !== "SELECTED") throw new Error("selection missing");
+    const selected = source.selectedExperimentIr.candidateExperiments.find(
+      (candidate) => candidate.id === selection.candidateId,
+    );
+    if (selected === undefined) throw new Error("candidate missing");
+    selected.baseline.seed = 42;
+    for (const intervention of selected.interventions) intervention.seed = 42;
+
+    expect(RunnerBoundaryMapBundleV5Schema.safeParse(source).success).toBe(
+      true,
+    );
   });
 
   it("rejects missing or drifted Boundary Sweep authority", () => {

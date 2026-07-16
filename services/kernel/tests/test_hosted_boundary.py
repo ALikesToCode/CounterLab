@@ -301,6 +301,24 @@ def test_hosted_boundary_accepts_a_valid_inconclusive_release() -> None:
     assert result["evidenceVerdictHash"] == release["evidenceVerdictHash"]  # type: ignore[index]
 
 
+def test_hosted_boundary_uses_pack_seed_independently_from_primary_split_seed() -> None:
+    bundle = boundary_bundle()
+    selected_ir = bundle["selectedExperimentIr"]
+    selection = selected_ir["selection"]
+    candidate = next(
+        candidate
+        for candidate in selected_ir["candidateExperiments"]
+        if candidate["id"] == selection["candidateId"]
+    )
+    for run in [candidate["baseline"], *candidate["interventions"]]:
+        run["seed"] = 42
+    _reauthorize_selected_ir(bundle)
+
+    result = execute_hosted_lab_run(bundle)
+
+    assert result["seed"] == 1729
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
@@ -377,7 +395,7 @@ def test_hosted_boundary_rejects_an_ir_authorized_but_unregistered_sweep(
         ),
         (
             lambda bundle: bundle.update({"seed": 2603}),
-            "seed does not match selected candidate runs",
+            "registered fixed seed",
         ),
         (
             lambda bundle: bundle.update({"permittedOutputs": ["result.json"]}),

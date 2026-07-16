@@ -38,6 +38,25 @@ const ReasonCode = z
   .string()
   .regex(/^[A-Z][A-Z0-9_]{0,95}$/u, "expected an uppercase reason code");
 
+export const RunnerBoundarySweepRequestV5Schema = z
+  .object({
+    sweepId: TokenId,
+    axisIds: z.tuple([TokenId, TokenId]).readonly(),
+    gridPresetId: TokenId,
+    observableId: BoundaryObservableIdSchema,
+    maxCells: z.number().int().positive().max(2_500),
+  })
+  .strict()
+  .superRefine((request, context) => {
+    if (request.axisIds[0] === request.axisIds[1]) {
+      context.addIssue({
+        code: "custom",
+        message: "Boundary Map axes must be unique",
+        path: ["axisIds", 1],
+      });
+    }
+  });
+
 function sameJson(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -89,6 +108,7 @@ export const RunnerLabCompileBundleV5Schema = z
           .max(16),
         verifierInvariants: z.array(NonEmptyString).min(1).max(24),
         candidateExperimentIds: z.array(NonEmptyString).min(1).max(8),
+        boundarySweep: RunnerBoundarySweepRequestV5Schema.optional(),
         planRequirements: z.array(NonEmptyString).min(1).max(16),
       })
       .strict(),
@@ -928,25 +948,6 @@ export type RunnerLabInteractiveRunBundleV5 = z.infer<
   typeof RunnerLabInteractiveRunBundleV5Schema
 >;
 
-const RunnerBoundarySweepRequestV5Schema = z
-  .object({
-    sweepId: TokenId,
-    axisIds: z.tuple([TokenId, TokenId]).readonly(),
-    gridPresetId: TokenId,
-    observableId: BoundaryObservableIdSchema,
-    maxCells: z.number().int().positive().max(2_500),
-  })
-  .strict()
-  .superRefine((request, context) => {
-    if (request.axisIds[0] === request.axisIds[1]) {
-      context.addIssue({
-        code: "custom",
-        message: "Boundary Map axes must be unique",
-        path: ["axisIds", 1],
-      });
-    }
-  });
-
 export const RunnerBoundaryMapBundleV5Schema = z
   .object({
     schemaVersion: z.literal("5"),
@@ -1050,17 +1051,15 @@ export const RunnerBoundaryMapBundleV5Schema = z
           "selectedExperimentIr",
           "selection",
         ]);
-      } else {
-        const runSeeds = [
-          selectedCandidate.baseline.seed,
-          ...selectedCandidate.interventions.map((run) => run.seed),
-        ];
-        if (runSeeds.some((seed) => seed !== bundle.seed)) {
-          issue("Boundary Map seed must match every selected fixed run", [
-            "seed",
-          ]);
-        }
       }
+    }
+
+    const registeredBoundarySeed =
+      ir.concept === "entity_leakage" ? 1729 : 2603;
+    if (bundle.seed !== registeredBoundarySeed) {
+      issue("Boundary Map seed must match the registered fixed sweep", [
+        "seed",
+      ]);
     }
 
     if (verdict.kind === "REJECTED") {
