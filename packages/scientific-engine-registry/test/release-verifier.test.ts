@@ -17,13 +17,34 @@ import {
 const root = resolve(import.meta.dirname, "../../..");
 
 describe("scientific engine release verifier", () => {
-  it("accepts the repository evidence and canonical snapshot", async () => {
+  it("accepts immutable evidence and the source-bound canonical snapshot", async () => {
     const snapshot = await loadScientificEngineSnapshot(root);
+    const immutableEvidence = structuredClone(snapshot);
+    immutableEvidence.evidenceCatalog.records =
+      immutableEvidence.evidenceCatalog.records.filter(
+        (record) => record.id !== "pnpm-lock",
+      );
 
-    await expect(verifyEvidenceFiles(root, snapshot)).resolves.toEqual([]);
+    await expect(verifyEvidenceFiles(root, immutableEvidence)).resolves.toEqual(
+      [],
+    );
     await expect(verifyPinnedSources(root)).resolves.toEqual([]);
     await expect(verifySboms(root, snapshot)).resolves.toEqual([]);
     await expect(verifySnapshotArtifacts(root, snapshot)).resolves.toEqual([]);
+  });
+
+  it("reports current lock drift from the recorded source-bound candidate", async () => {
+    const snapshot = await loadScientificEngineSnapshot(root);
+
+    await expect(verifyEvidenceFiles(root, snapshot)).resolves.toEqual([
+      expect.objectContaining({
+        code: "EVIDENCE_HASH_MISMATCH",
+        path: "pnpm-lock.yaml",
+        message: expect.stringContaining(
+          snapshot.runtimeManifest.lockHashes["pnpm-lock"],
+        ),
+      }),
+    ]);
   });
 
   it("detects a catalog hash that no longer matches its evidence bytes", async () => {
