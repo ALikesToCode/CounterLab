@@ -118,6 +118,12 @@ const TERMINAL_JOB_STATUSES = new Set<RunnerJobStatus>([
   "CANCELLED",
   "TIMED_OUT",
 ]);
+const REUSABLE_STARTED_JOB_STATUSES = new Set<RunnerJobStatus>([
+  "RUNNING",
+  "AWAITING_APPROVAL",
+  "REPAIRING",
+]);
+const START_CONFLICT_RETRY_LIMIT = 3;
 
 export class RunnerJobService {
   private readonly clock: RunnerClock;
@@ -295,6 +301,37 @@ export class RunnerJobService {
     });
     await this.repository.save(next, current.jobVersion);
     return structuredClone(next);
+  }
+
+  async startJob(
+    jobId: string,
+    runnerIdentity: string,
+  ): Promise<{ job: RunnerJob; reused: boolean }> {
+    for (let attempt = 0; attempt < START_CONFLICT_RETRY_LIMIT; attempt += 1) {
+      const current = await this.getJob(jobId);
+      if (REUSABLE_STARTED_JOB_STATUSES.has(current.status)) {
+        return { job: current, reused: true };
+      }
+      if (current.status !== "STARTING") {
+        throw new RunnerCallbackStateError(
+          `Runner job ${jobId} cannot start from ${current.status}`,
+        );
+      }
+      try {
+        return {
+          job: await this.transition(
+            current.jobId,
+            current.jobVersion,
+            "RUNNING",
+            { runnerIdentity },
+          ),
+          reused: false,
+        };
+      } catch (error) {
+        if (!(error instanceof ConcurrentRunnerJobUpdateError)) throw error;
+      }
+    }
+    throw new ConcurrentRunnerJobUpdateError(jobId);
   }
 
   async transition(

@@ -65,11 +65,16 @@ import type {
   RunnerDispatcher,
   RunnerObjectStore,
 } from "./runner-control-plane";
-import { generateRunnerJobTokenKeyPair } from "./runner-token";
+import {
+  generateRunnerJobTokenKeyPair,
+  verifyRunnerJobToken,
+} from "./runner-token";
 import { summarizeOperationalRows } from "./operational-diagnostics";
 
-const { privateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY } =
-  await generateRunnerJobTokenKeyPair();
+const {
+  privateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
+  publicKey: TEST_RUNNER_VERIFYING_PUBLIC_KEY,
+} = await generateRunnerJobTokenKeyPair();
 const LIVE_LEAKAGE_PACK_VERSION = getConceptPack("entity_leakage").version;
 const LIVE_IMBALANCE_PACK_VERSION = getConceptPack("class_imbalance").version;
 
@@ -4395,6 +4400,64 @@ describe("Cloudflare Worker API", () => {
     await expect(download.text()).resolves.toBe(patchedNotebookText);
   });
 
+  it("budgets a v5 compiler job through two bounded repairs and scopes its token past the deadline", async () => {
+    const harness = await preparedScientificHostedRunner();
+    const claims = await verifyRunnerJobToken(
+      harness.dispatch.token,
+      TEST_RUNNER_VERIFYING_PUBLIC_KEY,
+      {
+        nowEpochSeconds: Date.parse("2026-07-14T10:00:00.000Z") / 1_000,
+        jobId: harness.dispatch.job.jobId,
+        purpose: "RUN_JOB",
+      },
+    );
+
+    expect(harness.dispatch.job).toMatchObject({
+      kind: "LAB_COMPILE",
+      maxAttempts: 3,
+      timeoutSeconds: 420,
+    });
+    expect(harness.bundle.resourceLimits.wallSeconds).toBe(120);
+    expect(claims.expiresAt - claims.issuedAt).toBe(
+      harness.dispatch.job.timeoutSeconds + 120,
+    );
+    expect(claims.expiresAt - claims.issuedAt).toBeLessThanOrEqual(900);
+  });
+
+  it("reuses an authenticated duplicate runner start without advancing its version", async () => {
+    const harness = await preparedScientificHostedRunner();
+    const jobId = harness.dispatch.job.jobId;
+    const authorization = {
+      authorization: `Bearer ${harness.dispatch.token}`,
+    };
+    const first = await harness.app.request(`/api/runner/jobs/${jobId}/start`, {
+      method: "POST",
+      headers: authorization,
+    });
+    expect(first.status).toBe(200);
+    const firstBody = (await first.json()) as {
+      data: { runnerJob: RunnerJob; reused?: boolean };
+    };
+
+    const duplicate = await harness.app.request(
+      `/api/runner/jobs/${jobId}/start`,
+      { method: "POST", headers: authorization },
+    );
+    expect(duplicate.status).toBe(200);
+    const duplicateBody = (await duplicate.json()) as {
+      data: { runnerJob: RunnerJob; reused?: boolean };
+    };
+    expect(duplicateBody).toMatchObject({
+      data: {
+        runnerJob: { jobId, status: "RUNNING" },
+        reused: true,
+      },
+    });
+    expect(duplicateBody.data.runnerJob.jobVersion).toBe(
+      firstBody.data.runnerJob.jobVersion,
+    );
+  });
+
   it("accepts exactly four v5 artifacts, fixes selection, and persists the projected execution plan", async () => {
     const harness = await preparedScientificHostedRunner();
     const jobId = harness.dispatch.job.jobId;
@@ -5487,6 +5550,11 @@ describe("Cloudflare Worker API", () => {
     if (patchDispatch === undefined) {
       throw new Error("v5 patch runner was not dispatched");
     }
+    expect(patchDispatch.job).toMatchObject({
+      kind: "PATCH_COMPILE",
+      maxAttempts: 3,
+      timeoutSeconds: 420,
+    });
     const inputObject = harness.runnerObjects.objects.get(
       `runner-input/${patchDispatch.job.jobId}.json`,
     );

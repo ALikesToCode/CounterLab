@@ -207,6 +207,15 @@ export interface ApiOptions {
   id?: (prefix: string) => string;
 }
 
+const SCIENTIFIC_COMPILER_ATTEMPT_WALL_SECONDS = 120;
+const SCIENTIFIC_COMPILER_MAX_ATTEMPTS = 3;
+const SCIENTIFIC_COMPILER_CONTROL_PLANE_RESERVE_SECONDS = 60;
+const SCIENTIFIC_COMPILER_JOB_TIMEOUT_SECONDS =
+  SCIENTIFIC_COMPILER_ATTEMPT_WALL_SECONDS * SCIENTIFIC_COMPILER_MAX_ATTEMPTS +
+  SCIENTIFIC_COMPILER_CONTROL_PLANE_RESERVE_SECONDS;
+const RUNNER_JOB_TOKEN_GRACE_SECONDS = 120;
+const MAX_RUNNER_JOB_TOKEN_TTL_SECONDS = 900;
+
 const JsonObjectSchema = z.record(z.string(), z.unknown());
 const HostedPlanLineageSchema = z
   .object({
@@ -623,6 +632,10 @@ async function dispatchRecoverableRunnerJob(input: {
     requestNow(input.options).getTime() / 1_000,
   );
   const inputBundleKey = `runner-input/${dispatchJob.jobId}.json`;
+  const tokenTtlSeconds = Math.min(
+    dispatchJob.timeoutSeconds + RUNNER_JOB_TOKEN_GRACE_SECONDS,
+    MAX_RUNNER_JOB_TOKEN_TTL_SECONDS,
+  );
   const token = await issueRunnerJobToken(
     {
       schemaVersion: "2",
@@ -639,7 +652,7 @@ async function dispatchRecoverableRunnerJob(input: {
       callbackPath: `/api/runner/jobs/${dispatchJob.jobId}/callback`,
       stateVersion: dispatchJob.stateVersion,
       issuedAt: nowEpochSeconds,
-      expiresAt: nowEpochSeconds + 300,
+      expiresAt: nowEpochSeconds + tokenTtlSeconds,
     },
     runnerSigningPrivateKey(input.context, input.options),
   );
@@ -3804,7 +3817,7 @@ export function createApi(options: ApiOptions = {}) {
                 },
                 boundarySweep,
                 resourceLimits: {
-                  wallSeconds: 45,
+                  wallSeconds: SCIENTIFIC_COMPILER_ATTEMPT_WALL_SECONDS,
                   memoryMb: 768,
                   maxRuns: 4,
                 },
@@ -3931,7 +3944,7 @@ export function createApi(options: ApiOptions = {}) {
                 ],
               },
               resourceLimits: {
-                wallSeconds: 45,
+                wallSeconds: SCIENTIFIC_COMPILER_ATTEMPT_WALL_SECONDS,
                 memoryMb: 768,
                 maxRuns: 4,
               },
@@ -3964,8 +3977,10 @@ export function createApi(options: ApiOptions = {}) {
         ],
         requestIdentity,
         stateVersion: started.version,
-        maxAttempts: 3,
-        timeoutSeconds: 180,
+        maxAttempts: SCIENTIFIC_COMPILER_MAX_ATTEMPTS,
+        timeoutSeconds: v5Compile
+          ? SCIENTIFIC_COMPILER_JOB_TIMEOUT_SECONDS
+          : 180,
       });
       const starting = await dispatchRecoverableRunnerJob({
         context,
@@ -4146,13 +4161,16 @@ export function createApi(options: ApiOptions = {}) {
   app.post("/api/runner/jobs/:jobId/start", async (context) => {
     const jobId = context.req.param("jobId");
     const { job } = await authorizeRunner(context, options, jobId);
-    const started = await runnerJobService(context, options).transition(
+    const started = await runnerJobService(context, options).startJob(
       jobId,
-      job.jobVersion,
-      "RUNNING",
-      { runnerIdentity: job.runnerIdentity ?? "authenticated-runner" },
+      job.runnerIdentity ?? "authenticated-runner",
     );
-    return context.json(jsonSuccess({ runnerJob: started }));
+    return context.json(
+      jsonSuccess({
+        runnerJob: started.job,
+        ...(started.reused ? { reused: true as const } : {}),
+      }),
+    );
   });
 
   app.post("/api/runner/jobs/:jobId/events", async (context) => {
@@ -8012,8 +8030,8 @@ export function createApi(options: ApiOptions = {}) {
           inputHashes: [...Object.values(authorityInputHashes), bundleHash],
           requestIdentity,
           stateVersion: started.version,
-          maxAttempts: 3,
-          timeoutSeconds: 180,
+          maxAttempts: SCIENTIFIC_COMPILER_MAX_ATTEMPTS,
+          timeoutSeconds: SCIENTIFIC_COMPILER_JOB_TIMEOUT_SECONDS,
         });
         const starting = await dispatchRecoverableRunnerJob({
           context,

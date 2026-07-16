@@ -126,6 +126,26 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
   }
 }
 
+class StartRaceRunnerJobRepository extends MemoryRunnerJobRepository {
+  private injectAcknowledgement = true;
+
+  override async save(job: RunnerJob, expectedVersion: number): Promise<void> {
+    if (this.injectAcknowledgement && job.status === "RUNNING") {
+      this.injectAcknowledgement = false;
+      const current = this.jobs.get(job.jobId);
+      if (current === undefined) throw new Error("runner job disappeared");
+      this.jobs.set(job.jobId, {
+        ...current,
+        dispatchAcknowledgedAt: "2026-07-15T00:00:02.000Z",
+        jobVersion: current.jobVersion + 1,
+        updatedAt: "2026-07-15T00:00:02.000Z",
+      });
+      throw new ConcurrentRunnerJobUpdateError(job.jobId);
+    }
+    await super.save(job, expectedVersion);
+  }
+}
+
 const HASH_A = "a".repeat(64);
 const HASH_B = "b".repeat(64);
 const HASH_C = "c".repeat(64);
@@ -294,6 +314,35 @@ describe("RunnerJobService", () => {
     await expect(
       harness.service.transition(queued.jobId, 1, "RUNNING"),
     ).rejects.toBeInstanceOf(ConcurrentRunnerJobUpdateError);
+  });
+
+  it("starts once across a dispatch-acknowledgement race and reuses duplicate starts", async () => {
+    const harness = service(new StartRaceRunnerJobRepository());
+    const queued = await harness.service.createJob(jobInput());
+    const starting = await harness.service.transition(
+      queued.jobId,
+      queued.jobVersion,
+      "STARTING",
+      { runnerIdentity: "runner-container-test" },
+    );
+
+    const first = await harness.service.startJob(
+      starting.jobId,
+      "runner-container-test",
+    );
+    const duplicate = await harness.service.startJob(
+      starting.jobId,
+      "runner-container-test",
+    );
+
+    expect(first).toMatchObject({
+      reused: false,
+      job: {
+        status: "RUNNING",
+        dispatchAcknowledgedAt: "2026-07-15T00:00:02.000Z",
+      },
+    });
+    expect(duplicate).toEqual({ job: first.job, reused: true });
   });
 
   it("persists browser-safe events in cursor order and reconnects after a cursor", async () => {
