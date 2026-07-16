@@ -528,16 +528,46 @@ describe("scientific v5 candidate verification", () => {
     expect(result).not.toHaveProperty("executionPlan");
   });
 
-  it("rejects a compiler-authored Boundary Sweep before selecting or projecting", async () => {
+  it("accepts only the exact pack-owned Boundary Sweep request before selection", async () => {
     const fixture = await scientificFixture();
     const experimentIr = ExperimentIRV5Schema.parse({
       ...fixture.artifacts.experimentIr,
       boundarySweep: {
         sweepId: "leakage-recurrence-sweep",
-        axisIds: ["entity_recurrence", "identity_signal_strength"],
+        axisIds: ["test_fraction", "observations_per_entity"],
         gridPresetId: "leakage-boundary-grid-v1",
-        observableId: "accuracy",
-        maxCells: 625,
+        observableId: "optimism_gap",
+        maxCells: 25,
+      },
+    });
+    const input = await replaceIr(fixture, experimentIr);
+
+    const result = await scientificVerifier()(input);
+
+    expect(result.disposition).toBe("VERIFIED");
+    expect(result.report.invariants).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "boundary_sweep_contract",
+          passed: true,
+        }),
+      ]),
+    );
+    expect(result.selectedIr?.boundarySweep).toEqual(
+      experimentIr.boundarySweep,
+    );
+  });
+
+  it("rejects a Boundary Sweep that changes the frozen grid", async () => {
+    const fixture = await scientificFixture();
+    const experimentIr = ExperimentIRV5Schema.parse({
+      ...fixture.artifacts.experimentIr,
+      boundarySweep: {
+        sweepId: "leakage-recurrence-sweep",
+        axisIds: ["test_fraction", "observations_per_entity"],
+        gridPresetId: "leakage-boundary-grid-v1",
+        observableId: "optimism_gap",
+        maxCells: 24,
       },
     });
     const input = await replaceIr(fixture, experimentIr);
@@ -548,12 +578,11 @@ describe("scientific v5 candidate verification", () => {
     expect(result.report.invariants).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          name: "boundary_sweep_unauthorized",
+          name: "boundary_sweep_contract",
           passed: false,
         }),
       ]),
     );
     expect(result).not.toHaveProperty("selectedIr");
-    expect(result).not.toHaveProperty("executionPlan");
   });
 });

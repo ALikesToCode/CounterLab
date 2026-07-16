@@ -9,6 +9,7 @@ import {
   type BeliefSpecV2,
   type BeliefTest,
 } from "@counterlab/contracts";
+import { getConceptPack } from "@counterlab/concept-registry";
 
 import {
   APPROVED_LEAKAGE_SAMPLE_SHA256,
@@ -801,7 +802,10 @@ describe("LiveBeliefAnalyst", () => {
     expect(BELIEF_ANALYST_INSTRUCTIONS).toContain("majority baseline");
     expect(JSON.parse(transport.request!.input)).toMatchObject({
       concept: "class_imbalance",
-      conceptPack: { id: "class_imbalance", version: "1.0.0" },
+      conceptPack: {
+        id: "class_imbalance",
+        version: getConceptPack("class_imbalance").version,
+      },
     });
   });
 });

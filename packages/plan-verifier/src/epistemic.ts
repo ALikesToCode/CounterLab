@@ -783,12 +783,11 @@ function verifyBoundaryRequest(
     contract.gridPresetId === ir.boundarySweep.gridPresetId &&
     contract.observableId === ir.boundarySweep.observableId &&
     contract.maxCells === ir.boundarySweep.maxCells;
+  if (contractMatches) return;
   addFinding(
     "BOUNDARY_SWEEP_UNAUTHORIZED",
-    contractMatches
-      ? "The authorized Boundary Sweep has no independently signed Boundary Map result yet."
-      : "The Experiment IR requests a Boundary Sweep outside the frozen Subject Pack contract.",
-    contractMatches ? "missing signed boundary binding" : ir.boundarySweep,
+    "The Experiment IR requests a Boundary Sweep outside the frozen Subject Pack contract.",
+    ir.boundarySweep,
     contract ?? "an authorized boundary contract",
   );
 }

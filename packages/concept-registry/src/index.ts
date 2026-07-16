@@ -2,6 +2,7 @@ import type {
   AllowedMetric,
   AllowedVisualization,
   ArtifactManifest,
+  BoundaryObservableId,
   ConceptId,
   ConceptRoutingDecision,
   EpistemicOutcomeV1,
@@ -46,6 +47,35 @@ export interface SubjectPackEpistemicAdapter {
     result: HostedVerifiedResultSetV2,
   ): string | undefined;
 }
+
+export type BoundaryMapAxisDefinition = {
+  id: string;
+  label: string;
+  unit: string;
+  points: readonly {
+    id: string;
+    label: string;
+    input: string | number;
+  }[];
+};
+
+export type SubjectPackBoundaryMapDefinition = {
+  schemaVersion: "1";
+  sweepId: string;
+  gridPresetId: string;
+  observableId: BoundaryObservableId;
+  maxCells: number;
+  axes: readonly [BoundaryMapAxisDefinition, BoundaryMapAxisDefinition];
+  classificationPolicyId: string;
+  classifications: readonly {
+    id: string;
+    label: string;
+    description: string;
+  }[];
+  assumptions: readonly string[];
+  nonClaims: readonly string[];
+  resultPathPrefix: string;
+};
 
 export type FixedResultAuthority =
   | {
@@ -94,6 +124,7 @@ export interface ConceptPackDefinition {
     candidateExperimentIds: readonly string[];
     scoringPolicy: ExperimentScoringPolicy;
     epistemic: SubjectPackEpistemicAdapter;
+    boundaryMap: SubjectPackBoundaryMapDefinition;
     defaultPresentation: {
       scope: string;
       learnerFacingClaims: readonly string[];
@@ -106,8 +137,7 @@ export interface ConceptPackDefinition {
   transferTask: {
     id: string;
     evaluatorTaskId:
-      | "forecasting-future-leakage-01"
-      | "manufacturing-defect-transfer-01";
+      "forecasting-future-leakage-01" | "manufacturing-defect-transfer-01";
     title: string;
   };
   patchContract: {
@@ -211,9 +241,70 @@ const leakageForbiddenClaims = [
   "This proves the learner has mastered leakage.",
 ] as const;
 
+const leakageBoundaryMap = {
+  schemaVersion: "1",
+  sweepId: "leakage-recurrence-sweep",
+  gridPresetId: "leakage-boundary-grid-v1",
+  observableId: "optimism_gap",
+  maxCells: 25,
+  axes: [
+    {
+      id: "test_fraction",
+      label: "Test fraction",
+      unit: "proportion",
+      points: [
+        { id: "test-fraction-10", label: "10%", input: 0.1 },
+        { id: "test-fraction-20", label: "20%", input: 0.2 },
+        { id: "test-fraction-30", label: "30%", input: 0.3 },
+        { id: "test-fraction-40", label: "40%", input: 0.4 },
+        { id: "test-fraction-50", label: "50%", input: 0.5 },
+      ],
+    },
+    {
+      id: "observations_per_entity",
+      label: "Observations per customer",
+      unit: "observations/customer",
+      points: [
+        { id: "observations-1", label: "1 observation", input: 1 },
+        { id: "observations-2", label: "2 observations", input: 2 },
+        { id: "observations-3", label: "3 observations", input: 3 },
+        { id: "observations-4", label: "4 observations", input: 4 },
+        { id: "observations-6", label: "6 observations", input: 6 },
+      ],
+    },
+  ],
+  classificationPolicyId: "leakage-optimism-gap-v1",
+  classifications: [
+    {
+      id: "material",
+      label: "Material optimism",
+      description: "Random-row optimism is at least 0.10.",
+    },
+    {
+      id: "transition",
+      label: "Transition region",
+      description: "Random-row optimism is above 0.03 and below 0.10.",
+    },
+    {
+      id: "little",
+      label: "Little observed gap",
+      description: "Random-row optimism is at most 0.03.",
+    },
+  ],
+  assumptions: [
+    "The estimator, preprocessing, seed, and feature set stay fixed within each comparison.",
+    "Each fixture view retains the first canonical observations for every customer.",
+  ],
+  nonClaims: [
+    "A small observed gap does not prove that row splitting is universally safe.",
+    "The map does not establish performance for unrelated datasets.",
+  ],
+  resultPathPrefix: "/boundaryMaps/leakage_recurrence",
+} as const satisfies SubjectPackBoundaryMapDefinition;
+
 const leakageEpistemicPolicy = EpistemicVerifierPolicyV1Schema.parse({
   schemaVersion: "1",
-  policyVersion: "leakage-epistemic-policy-v1",
+  policyVersion: "leakage-epistemic-policy-v2",
   verifierVersion: "epistemic-verifier-v1",
   classifierId: "leakage-outcome-classifier-v1",
   concept: "entity_leakage",
@@ -225,12 +316,12 @@ const leakageEpistemicPolicy = EpistemicVerifierPolicyV1Schema.parse({
   ],
   boundarySweeps: [
     {
-      sweepId: "leakage-recurrence-sweep",
-      axisIds: ["entity_recurrence", "identity_signal_strength"],
-      gridPresetId: "leakage-boundary-grid-v1",
-      observableId: "accuracy",
-      maxCells: 625,
-      resultPathPrefix: "/boundaryMaps/leakage_recurrence",
+      sweepId: leakageBoundaryMap.sweepId,
+      axisIds: leakageBoundaryMap.axes.map((axis) => axis.id),
+      gridPresetId: leakageBoundaryMap.gridPresetId,
+      observableId: leakageBoundaryMap.observableId,
+      maxCells: leakageBoundaryMap.maxCells,
+      resultPathPrefix: leakageBoundaryMap.resultPathPrefix,
     },
   ],
   approvedClaims: leakageApprovedClaims,
@@ -247,9 +338,72 @@ const imbalanceForbiddenClaims = [
   "This proves the learner has mastered class imbalance.",
 ] as const;
 
+const imbalanceBoundaryMap = {
+  schemaVersion: "1",
+  sweepId: "imbalance-threshold-prevalence-sweep",
+  gridPresetId: "imbalance-boundary-grid-v1",
+  observableId: "f1",
+  maxCells: 15,
+  axes: [
+    {
+      id: "class_prevalence",
+      label: "Positive-class prevalence",
+      unit: "proportion",
+      points: [
+        { id: "rarer", label: "Rarer", input: "rarer" },
+        { id: "observed", label: "Observed", input: "observed" },
+        {
+          id: "more_common",
+          label: "More common",
+          input: "more_common",
+        },
+      ],
+    },
+    {
+      id: "decision_threshold",
+      label: "Decision threshold",
+      unit: "probability",
+      points: [
+        { id: "threshold-10", label: "0.1", input: 0.1 },
+        { id: "threshold-20", label: "0.2", input: 0.2 },
+        { id: "threshold-30", label: "0.3", input: 0.3 },
+        { id: "threshold-40", label: "0.4", input: 0.4 },
+        { id: "threshold-50", label: "0.5", input: 0.5 },
+      ],
+    },
+  ],
+  classificationPolicyId: "imbalance-f1-v1",
+  classifications: [
+    {
+      id: "strong",
+      label: "Stronger balanced utility",
+      description: "The fixed F1 score is at least 0.30.",
+    },
+    {
+      id: "tradeoff",
+      label: "Tradeoff region",
+      description: "The fixed F1 score is at least 0.20 and below 0.30.",
+    },
+    {
+      id: "weak",
+      label: "Weak minority utility",
+      description: "The fixed F1 score is below 0.20.",
+    },
+  ],
+  assumptions: [
+    "Model scores and evaluation rows stay fixed while threshold changes within one prevalence scenario.",
+    "Prevalence scenarios are deterministic pack-owned resamples of the same holdout.",
+  ],
+  nonClaims: [
+    "The map does not select a production threshold or encode deployment costs.",
+    "The map does not establish utility for unrelated rare-event systems.",
+  ],
+  resultPathPrefix: "/boundaryMaps/threshold_prevalence",
+} as const satisfies SubjectPackBoundaryMapDefinition;
+
 const imbalanceEpistemicPolicy = EpistemicVerifierPolicyV1Schema.parse({
   schemaVersion: "1",
-  policyVersion: "imbalance-epistemic-policy-v1",
+  policyVersion: "imbalance-epistemic-policy-v2",
   verifierVersion: "epistemic-verifier-v1",
   classifierId: "imbalance-outcome-classifier-v1",
   concept: "class_imbalance",
@@ -266,12 +420,12 @@ const imbalanceEpistemicPolicy = EpistemicVerifierPolicyV1Schema.parse({
   ],
   boundarySweeps: [
     {
-      sweepId: "imbalance-threshold-prevalence-sweep",
-      axisIds: ["class_prevalence", "decision_threshold"],
-      gridPresetId: "imbalance-boundary-grid-v1",
-      observableId: "recall",
-      maxCells: 625,
-      resultPathPrefix: "/boundaryMaps/threshold_prevalence",
+      sweepId: imbalanceBoundaryMap.sweepId,
+      axisIds: imbalanceBoundaryMap.axes.map((axis) => axis.id),
+      gridPresetId: imbalanceBoundaryMap.gridPresetId,
+      observableId: imbalanceBoundaryMap.observableId,
+      maxCells: imbalanceBoundaryMap.maxCells,
+      resultPathPrefix: imbalanceBoundaryMap.resultPathPrefix,
     },
   ],
   approvedClaims: imbalanceApprovedClaims,
@@ -701,7 +855,7 @@ function imbalanceSupport(manifest: ArtifactManifest): SupportDetection {
 
 const leakagePack = deepFreeze({
   id: "entity_leakage",
-  version: "2.0.0",
+  version: "2.1.0",
   releaseStatus: "released",
   title: "Entity leakage",
   learnerQuestion:
@@ -750,6 +904,7 @@ const leakagePack = deepFreeze({
   scientificMethod: {
     candidateExperimentIds: ["group-holdout", "group-holdout-plus-ablation"],
     scoringPolicy: leakageScoringPolicy,
+    boundaryMap: leakageBoundaryMap,
     epistemic: {
       policy: leakageEpistemicPolicy,
       classifyOutcome: classifyLeakageOutcome,
@@ -789,7 +944,7 @@ const leakagePack = deepFreeze({
 
 const imbalancePack = deepFreeze({
   id: "class_imbalance",
-  version: "1.0.0",
+  version: "1.1.0",
   releaseStatus: "released",
   title: "Class imbalance and metric choice",
   learnerQuestion:
@@ -856,6 +1011,7 @@ const imbalancePack = deepFreeze({
       "prevalence-and-threshold-sweep",
     ],
     scoringPolicy: imbalanceScoringPolicy,
+    boundaryMap: imbalanceBoundaryMap,
     epistemic: {
       policy: imbalanceEpistemicPolicy,
       classifyOutcome: classifyImbalanceOutcome,

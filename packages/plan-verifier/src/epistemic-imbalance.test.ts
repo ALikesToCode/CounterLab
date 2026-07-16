@@ -118,7 +118,7 @@ async function selectedIr(stratifiedThreshold = 0.5) {
     planId: "plan-imbalance-1",
     sessionId: "session-imbalance-1",
     concept: "class_imbalance",
-    conceptPackVersion: "1.0.0",
+    conceptPackVersion: getConceptPack("class_imbalance").version,
     artifactManifestHash: manifestHash,
     beliefTestId: beliefSpec.id,
     evidenceRefs: [evidence],
@@ -289,7 +289,14 @@ async function resultFor(
   region: GoldenRegion = "competing",
 ): Promise<HostedImbalanceResultV2> {
   const plan = projectExperimentIRV5ToPlanV2(ir);
-  const result = readGolden(region);
+  const golden = readGolden(region);
+  const result =
+    golden.conceptPackVersion === plan.conceptPackVersion
+      ? golden
+      : await rehash({
+          ...golden,
+          conceptPackVersion: plan.conceptPackVersion,
+        });
   if (
     plan.concept !== "class_imbalance" ||
     result.concept !== "class_imbalance"

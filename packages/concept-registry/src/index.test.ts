@@ -145,7 +145,7 @@ describe("concept-pack registry", () => {
     expect(decision).toMatchObject({
       kind: "selected",
       concept: "class_imbalance",
-      conceptPackVersion: "1.0.0",
+      conceptPackVersion: "1.1.0",
     });
     if (decision.kind !== "selected") throw new Error("expected selection");
     expect(decision.evidence).toEqual(
@@ -270,6 +270,56 @@ describe("concept-pack registry", () => {
     expect(getConceptPack("class_imbalance").allowedOperations).toContain(
       "imbalance.prevalence_sweep",
     );
+  });
+
+  it("registers exact bounded Boundary Map grids for both released packs", () => {
+    const leakage = getConceptPack("entity_leakage");
+    expect(leakage.scientificMethod.boundaryMap).toMatchObject({
+      sweepId: "leakage-recurrence-sweep",
+      gridPresetId: "leakage-boundary-grid-v1",
+      observableId: "optimism_gap",
+      maxCells: 25,
+    });
+    expect(
+      leakage.scientificMethod.boundaryMap.axes.map((axis) => ({
+        id: axis.id,
+        points: axis.points.map((point) => point.input),
+      })),
+    ).toEqual([
+      { id: "test_fraction", points: [0.1, 0.2, 0.3, 0.4, 0.5] },
+      { id: "observations_per_entity", points: [1, 2, 3, 4, 6] },
+    ]);
+
+    const imbalance = getConceptPack("class_imbalance");
+    expect(imbalance.scientificMethod.boundaryMap).toMatchObject({
+      sweepId: "imbalance-threshold-prevalence-sweep",
+      gridPresetId: "imbalance-boundary-grid-v1",
+      observableId: "f1",
+      maxCells: 15,
+    });
+    expect(
+      imbalance.scientificMethod.boundaryMap.axes.map((axis) => ({
+        id: axis.id,
+        points: axis.points.map((point) => point.input),
+      })),
+    ).toEqual([
+      {
+        id: "class_prevalence",
+        points: ["rarer", "observed", "more_common"],
+      },
+      { id: "decision_threshold", points: [0.1, 0.2, 0.3, 0.4, 0.5] },
+    ]);
+
+    for (const pack of [leakage, imbalance]) {
+      const policy = pack.scientificMethod.epistemic.policy.boundarySweeps[0];
+      expect(policy).toMatchObject({
+        sweepId: pack.scientificMethod.boundaryMap.sweepId,
+        axisIds: pack.scientificMethod.boundaryMap.axes.map((axis) => axis.id),
+        gridPresetId: pack.scientificMethod.boundaryMap.gridPresetId,
+        observableId: pack.scientificMethod.boundaryMap.observableId,
+        maxCells: pack.scientificMethod.boundaryMap.maxCells,
+      });
+    }
   });
 
   it("binds each transfer contract to its fixed evaluator task", () => {

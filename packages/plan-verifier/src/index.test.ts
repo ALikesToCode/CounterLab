@@ -7,6 +7,7 @@ import type {
   HostedVerifiedResultSetV2,
 } from "@counterlab/contracts";
 import { migrateBeliefTestV1ToV2 } from "@counterlab/contracts";
+import { getConceptPack } from "@counterlab/concept-registry";
 import { hashCanonical } from "@counterlab/session-core";
 
 import {
@@ -127,7 +128,7 @@ async function plan(): Promise<LeakageExperimentPlan> {
     planId: "plan_live_1",
     sessionId: "session_live_1",
     concept: "entity_leakage",
-    conceptPackVersion: "2.0.0",
+    conceptPackVersion: getConceptPack("entity_leakage").version,
     artifactManifestHash: await hashCanonical(artifact),
     beliefTestId: "belief_live_1",
     evidenceRefs: belief().evidenceRefs,
@@ -291,7 +292,7 @@ describe("hosted Experiment Plan verifier", () => {
       planId: "plan_imbalance_1",
       sessionId: "session_imbalance_1",
       concept: "class_imbalance",
-      conceptPackVersion: "1.0.0",
+      conceptPackVersion: getConceptPack("class_imbalance").version,
       artifactManifestHash: await hashCanonical(artifact),
       beliefTestId: imbalanceBelief.id,
       evidenceRefs: imbalanceBelief.evidenceRefs,
@@ -698,7 +699,7 @@ describe("hosted Patch Plan verifier", () => {
       beliefTest: belief(),
       verifiedResultHash: "d".repeat(64),
       transferResultHash: "e".repeat(64),
-      conceptPackVersion: "2.0.0",
+      conceptPackVersion: experimentPlan.conceptPackVersion,
       allowedTransformations: [
         "replace_row_split_with_group_holdout",
         "exclude_entity_feature",
@@ -778,7 +779,7 @@ describe("hosted Patch Plan verifier", () => {
         beliefSpec,
         verifiedResultHash: "d".repeat(64),
         transferResultHash: "e".repeat(64),
-        conceptPackVersion: "2.0.0",
+        conceptPackVersion: experimentPlan.conceptPackVersion,
         allowedTransformations: [
           "replace_row_split_with_group_holdout",
           "exclude_entity_feature",
@@ -803,7 +804,7 @@ describe("hosted Patch Plan verifier", () => {
       planId: "patch_plan_imbalance_1",
       sessionId: "session_imbalance_patch",
       concept: "class_imbalance" as const,
-      conceptPackVersion: "1.0.0",
+      conceptPackVersion: getConceptPack("class_imbalance").version,
       artifactManifestHash: await hashCanonical(artifact),
       sourceArtifactHash: artifact.fileSha256,
       transferResultHash: "e".repeat(64),
@@ -839,7 +840,7 @@ describe("hosted Patch Plan verifier", () => {
         beliefTest: imbalanceBelief,
         verifiedResultHash: "d".repeat(64),
         transferResultHash: "e".repeat(64),
-        conceptPackVersion: "1.0.0",
+        conceptPackVersion: patchPlan.conceptPackVersion,
         allowedTransformations: [
           "stratify_classification_holdout",
           "add_majority_baseline",

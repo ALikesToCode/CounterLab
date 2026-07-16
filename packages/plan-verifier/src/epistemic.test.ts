@@ -126,7 +126,7 @@ async function selectedIr() {
     planId: "plan-1",
     sessionId: "session-1",
     concept: "entity_leakage",
-    conceptPackVersion: "2.0.0",
+    conceptPackVersion: getConceptPack("entity_leakage").version,
     artifactManifestHash: manifestHash,
     beliefTestId: beliefSpec.id,
     evidenceRefs: [evidence],
@@ -901,22 +901,39 @@ describe("epistemic verifier authority", () => {
     );
   });
 
-  it("rejects a Boundary Sweep until an independently signed map is bound", async () => {
+  it("accepts the exact deferred Boundary Sweep and rejects contract drift", async () => {
     const report = await verify((value) => ({
       ...value,
       ir: ExperimentIRV5Schema.parse({
         ...value.ir,
         boundarySweep: {
           sweepId: "leakage-recurrence-sweep",
-          axisIds: ["entity_recurrence", "identity_signal_strength"],
+          axisIds: ["test_fraction", "observations_per_entity"],
           gridPresetId: "leakage-boundary-grid-v1",
-          observableId: "accuracy",
-          maxCells: 625,
+          observableId: "optimism_gap",
+          maxCells: 25,
         },
       }),
     }));
 
-    expect(report.findings.map((finding) => finding.code)).toContain(
+    expect(report.findings.map((finding) => finding.code)).not.toContain(
+      "BOUNDARY_SWEEP_UNAUTHORIZED",
+    );
+
+    const drifted = await verify((value) => ({
+      ...value,
+      ir: ExperimentIRV5Schema.parse({
+        ...value.ir,
+        boundarySweep: {
+          sweepId: "leakage-recurrence-sweep",
+          axisIds: ["test_fraction", "observations_per_entity"],
+          gridPresetId: "leakage-boundary-grid-v1",
+          observableId: "optimism_gap",
+          maxCells: 24,
+        },
+      }),
+    }));
+    expect(drifted.findings.map((finding) => finding.code)).toContain(
       "BOUNDARY_SWEEP_UNAUTHORIZED",
     );
   });

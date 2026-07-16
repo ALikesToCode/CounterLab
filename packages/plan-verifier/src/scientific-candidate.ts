@@ -593,15 +593,31 @@ export async function verifyScientificCandidateV5(
         boundarySweepHandledSeparately: true,
       },
     ),
-    invariant(
-      "boundary_sweep_unauthorized",
-      rawIr.boundarySweep === undefined,
-      rawIr.boundarySweep === undefined ? null : rawIr.boundarySweep.sweepId,
-      null,
-      rawIr.boundarySweep === undefined
-        ? undefined
-        : "A Boundary Sweep cannot enter the authoritative path before a signed Boundary Map is available.",
-    ),
+    (() => {
+      const request = rawIr.boundarySweep;
+      const contract =
+        request === undefined
+          ? undefined
+          : pack.scientificMethod.epistemic.policy.boundarySweeps.find(
+              (candidate) => candidate.sweepId === request.sweepId,
+            );
+      const authorized =
+        request === undefined ||
+        (contract !== undefined &&
+          sameJson(contract.axisIds, request.axisIds) &&
+          contract.gridPresetId === request.gridPresetId &&
+          contract.observableId === request.observableId &&
+          contract.maxCells === request.maxCells);
+      return invariant(
+        "boundary_sweep_contract",
+        authorized,
+        request ?? null,
+        contract ?? null,
+        authorized
+          ? undefined
+          : "The Boundary Sweep must match one exact frozen Subject Pack contract.",
+      );
+    })(),
     invariant(
       "lab_scene_provenance",
       scene.provenance.discriminationContractHash === contractHash &&
