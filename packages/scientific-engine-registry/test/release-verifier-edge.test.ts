@@ -1,6 +1,7 @@
+import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -52,6 +53,53 @@ describe("scientific engine release verifier edge cases", () => {
     expect(findings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ code: "EVIDENCE_NOT_VERIFIED" }),
+      ]),
+    );
+  });
+
+  it("rejects stale source hashes nested inside internal integrity evidence", async () => {
+    const root = await createTemporaryRoot();
+    const evidencePath = join(
+      root,
+      "scientific-engines",
+      "fixtures",
+      "validation",
+      "internal-oracle-integrity-v1.json",
+    );
+    const sourcePath = join(root, "services", "kernel", "oracle.py");
+    await mkdir(resolve(evidencePath, ".."), { recursive: true });
+    await mkdir(resolve(sourcePath, ".."), { recursive: true });
+    await writeFile(sourcePath, "def verify():\n    return True\n", "utf8");
+    const evidence = `${JSON.stringify(
+      {
+        schemaVersion: "1",
+        evidenceId: "internal-oracle-integrity-v1",
+        kind: "integrity",
+        files: {
+          "services/kernel/oracle.py": "0".repeat(64),
+        },
+      },
+      null,
+      2,
+    )}\n`;
+    await writeFile(evidencePath, evidence, "utf8");
+
+    const snapshot = await loadScientificEngineSnapshot(repositoryRoot);
+    const tampered = structuredClone(snapshot);
+    const record = tampered.evidenceCatalog.records.find(
+      (candidate) => candidate.id === "internal-oracle-integrity-v1",
+    )!;
+    record.path = relative(root, evidencePath);
+    record.sha256 = createHash("sha256").update(evidence).digest("hex");
+
+    const findings = await verifyEvidenceFiles(root, tampered);
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "INTERNAL_INTEGRITY_FILE_HASH_MISMATCH",
+          path: "services/kernel/oracle.py",
+        }),
       ]),
     );
   });

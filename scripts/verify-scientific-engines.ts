@@ -161,6 +161,82 @@ export async function verifyEvidenceFiles(
           ),
         );
       }
+
+      if (record.kind === "integrity") {
+        const evidence = object(
+          JSON.parse(bytes.toString("utf8")) as unknown,
+        );
+        const declaredFiles = object(evidence?.files);
+        for (const [nestedPath, expectedHash] of Object.entries(
+          declaredFiles ?? {},
+        )) {
+          if (typeof expectedHash !== "string" || !SHA256.test(expectedHash)) {
+            findings.push(
+              finding(
+                "INTERNAL_INTEGRITY_HASH_INVALID",
+                nestedPath,
+                `Integrity evidence ${record.id} declares an invalid SHA-256.`,
+              ),
+            );
+            continue;
+          }
+          const nestedDeclaredPath = resolve(rootPath, nestedPath);
+          if (!isWithin(rootPath, nestedDeclaredPath)) {
+            findings.push(
+              finding(
+                "INTERNAL_INTEGRITY_PATH_OUTSIDE_ROOT",
+                nestedPath,
+                `Integrity evidence ${record.id} resolves outside the repository root.`,
+              ),
+            );
+            continue;
+          }
+          try {
+            const nestedStat = await lstat(nestedDeclaredPath);
+            if (!nestedStat.isFile() && !nestedStat.isSymbolicLink()) {
+              findings.push(
+                finding(
+                  "INTERNAL_INTEGRITY_NOT_FILE",
+                  nestedPath,
+                  `Integrity evidence ${record.id} does not resolve to a regular file.`,
+                ),
+              );
+              continue;
+            }
+            const nestedCanonicalPath = await realpath(nestedDeclaredPath);
+            if (!isWithin(canonicalRoot, nestedCanonicalPath)) {
+              findings.push(
+                finding(
+                  "INTERNAL_INTEGRITY_PATH_OUTSIDE_ROOT",
+                  nestedPath,
+                  `Integrity evidence ${record.id} escapes the repository through a symbolic link.`,
+                ),
+              );
+              continue;
+            }
+            const nestedObservedHash = sha256(
+              await readFile(nestedCanonicalPath),
+            );
+            if (nestedObservedHash !== expectedHash) {
+              findings.push(
+                finding(
+                  "INTERNAL_INTEGRITY_FILE_HASH_MISMATCH",
+                  nestedPath,
+                  `Integrity evidence ${record.id} declares ${expectedHash}, observed ${nestedObservedHash}.`,
+                ),
+              );
+            }
+          } catch (error) {
+            findings.push(
+              finding(
+                "INTERNAL_INTEGRITY_FILE_MISSING",
+                nestedPath,
+                `Integrity evidence ${record.id} cannot read its declared file: ${error instanceof Error ? error.message : String(error)}`,
+              ),
+            );
+          }
+        }
+      }
     } catch (error) {
       findings.push(
         finding(
