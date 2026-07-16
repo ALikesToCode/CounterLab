@@ -291,10 +291,10 @@ can pass.
 - Rebuild the runner whenever a Docker-copied contract, schema, or package
   changes; do not inherit evidence from an earlier locally qualified image.
 - Bind the current candidate to source commit
-  `691ec9e837520fb026c9ff224b9eb4f74d89b34f`, local image digest
-  `sha256:9e4af342bf2eda15ffaff63105f85c0970188059ca9c05c74d44882efc226eb3`,
+  `095d485370e70d3b502023665fea4ebf156697ad`, local image digest
+  `sha256:94c1987e54b5074b3eb075f5924ec9d757d8579584d6d59b129124065272f934`,
   and authority hash
-  `382b21034b115199a5010019b43b13fc71648f6a12709c24af85d5bad44d820d`.
+  `d7677c79914505c11cc0474a0f3e4be7527173ea27c5640b65c7b8a373a8e881`.
 - Keep local OCI identity distinct from a future Cloudflare registry/deployment
   digest. Promotion requires deployment evidence and a new public smoke.
 - Record build-tool provenance separately from installed runtime tools and
