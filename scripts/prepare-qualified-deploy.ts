@@ -26,16 +26,16 @@ export type QualifiedReleaseObservation = {
   ociSourceTreeSha256: string;
   engineAuthorityHash: string;
   runtimeManifestHash: string;
+  registryImage: string;
+  registryDigest: string;
+  registryResolvedAt: string;
   currentCommit: string;
   sourceIsAncestor: boolean;
   changedPaths: string[];
   observedAt: string;
 };
 
-const RELEASE_EVIDENCE_PATHS = [
-  "scientific-engines/",
-  "docs/sbom/",
-] as const;
+const RELEASE_EVIDENCE_PATHS = ["scientific-engines/", "docs/sbom/"] as const;
 const RELEASE_EVIDENCE_FILES = new Set([
   "docs/DECISIONS.md",
   "docs/DEPENDENCY_ADMISSION.md",
@@ -68,28 +68,119 @@ function evidenceOnly(path: string): boolean {
   );
 }
 
-export function collectQualifiedReleaseObservation(input: {
+function assertQualifiedObservation(
+  observation: QualifiedReleaseObservation,
+): void {
+  if (!observation.sourceIsAncestor) {
+    throw new Error(
+      "qualified source commit is not an ancestor of the evidence commit",
+    );
+  }
+  const unauthorized = observation.changedPaths.filter(
+    (path) => !evidenceOnly(path),
+  );
+  if (unauthorized.length > 0) {
+    throw new Error(
+      `qualified evidence commit changes runtime source: ${unauthorized.join(", ")}`,
+    );
+  }
+}
+
+async function resolveRegistryDigest(input: {
   root: string;
-  receipt: unknown;
-}): QualifiedReleaseObservation {
+  registryImage: string;
+}): Promise<{ digest: string; resolvedAt: string }> {
+  const imageUrl = new URL(`https://${input.registryImage}`);
+  if (imageUrl.hostname !== "registry.cloudflare.com") {
+    throw new Error(
+      "qualified registry image must use registry.cloudflare.com",
+    );
+  }
+  const match = imageUrl.pathname.match(
+    /^\/([A-Za-z0-9_-]{3,64})\/(counterlab-runner):([^/]+)$/,
+  );
+  if (match === null) {
+    throw new Error(
+      "qualified registry image has an invalid account, repository, or tag",
+    );
+  }
+  const credentials = JSON.parse(
+    commandText(input.root, "pnpm", [
+      "exec",
+      "wrangler",
+      "containers",
+      "registries",
+      "credentials",
+      "registry.cloudflare.com",
+      "--pull",
+      "--expiration-minutes",
+      "5",
+      "--json",
+      "--config",
+      "apps/web/wrangler.jsonc",
+    ]),
+  ) as {
+    account_id?: string;
+    registry_host?: string;
+    username?: string;
+    password?: string;
+  };
+  if (
+    credentials.account_id !== match[1] ||
+    credentials.registry_host !== "registry.cloudflare.com" ||
+    typeof credentials.username !== "string" ||
+    typeof credentials.password !== "string"
+  ) {
+    throw new Error("Cloudflare returned invalid scoped registry credentials");
+  }
+  const response = await fetch(
+    `https://registry.cloudflare.com/v2/${match[1]}/${match[2]}/manifests/${match[3]}`,
+    {
+      method: "HEAD",
+      headers: {
+        Accept:
+          "application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json",
+        Authorization: `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString("base64")}`,
+      },
+    },
+  );
+  if (!response.ok) {
+    throw new Error(
+      `qualified registry image could not be resolved (${response.status})`,
+    );
+  }
+  const digest = response.headers.get("Docker-Content-Digest") ?? "";
+  if (!/^sha256:[a-f0-9]{64}$/.test(digest)) {
+    throw new Error(
+      "qualified registry image returned no valid manifest digest",
+    );
+  }
+  return { digest, resolvedAt: new Date().toISOString() };
+}
+
+export async function collectRunnerReleaseEvidence(input: {
+  root: string;
+  sourceCommit: string;
+  localImageTag: string;
+  registryImage: string;
+}): Promise<QualifiedReleaseObservation> {
   const root = resolve(input.root);
-  const receipt = QualifiedRunnerReleaseSchema.parse(input.receipt);
   const currentCommit = commandText(root, "git", ["rev-parse", "HEAD"]);
   const ancestry = spawnSync(
     "git",
-    ["merge-base", "--is-ancestor", receipt.sourceCommit, currentCommit],
+    ["merge-base", "--is-ancestor", input.sourceCommit, currentCommit],
     { cwd: root, stdio: "ignore" },
   );
   const changedPaths = commandText(root, "git", [
     "diff",
     "--name-only",
     "--diff-filter=ACMRT",
-    `${receipt.sourceCommit}..${currentCommit}`,
+    `${input.sourceCommit}..${currentCommit}`,
   ])
     .split("\n")
     .filter(Boolean);
   const imageInspect = JSON.parse(
-    commandText(root, "docker", ["image", "inspect", receipt.localImageTag]),
+    commandText(root, "docker", ["image", "inspect", input.localImageTag]),
   ) as Array<{
     Id?: string;
     Config?: { Labels?: Record<string, string>; User?: string };
@@ -102,32 +193,46 @@ export function collectQualifiedReleaseObservation(input: {
     throw new Error("qualified local image must run as 10001:10001");
   }
   const snapshotHash = JSON.parse(
-    readFileSync(resolve(root, "scientific-engines/snapshot-hash.json"), "utf8"),
+    readFileSync(
+      resolve(root, "scientific-engines/snapshot-hash.json"),
+      "utf8",
+    ),
   ) as { authorityHash?: string };
   const runtimeManifest = JSON.parse(
-    readFileSync(resolve(root, "scientific-engines/runtime-manifest.json"), "utf8"),
+    readFileSync(
+      resolve(root, "scientific-engines/runtime-manifest.json"),
+      "utf8",
+    ),
   ) as unknown;
+  const registry = await resolveRegistryDigest({
+    root,
+    registryImage: input.registryImage,
+  });
 
   return {
-    sourceCommit: receipt.sourceCommit,
+    sourceCommit: input.sourceCommit,
     sourceArchiveSha256: sha256(
-      commandBuffer(root, "git", ["archive", "--format=tar", receipt.sourceCommit]),
+      commandBuffer(root, "git", [
+        "archive",
+        "--format=tar",
+        input.sourceCommit,
+      ]),
     ),
     sourceTreeSha256: sha256(
       commandBuffer(root, "git", [
         "ls-tree",
         "-r",
         "--full-tree",
-        receipt.sourceCommit,
+        input.sourceCommit,
       ]),
     ),
     dockerfileSha256: sha256(
       commandBuffer(root, "git", [
         "show",
-        `${receipt.sourceCommit}:Dockerfile.runner`,
+        `${input.sourceCommit}:Dockerfile.runner`,
       ]),
     ),
-    localImageTag: receipt.localImageTag,
+    localImageTag: input.localImageTag,
     localImageDigest: image.Id ?? "",
     ociRevision:
       image.Config?.Labels?.["org.opencontainers.image.revision"] ?? "",
@@ -135,11 +240,54 @@ export function collectQualifiedReleaseObservation(input: {
       image.Config?.Labels?.["io.counterlab.source-tree-sha256"] ?? "",
     engineAuthorityHash: snapshotHash.authorityHash ?? "",
     runtimeManifestHash: sha256(canonicalJson(runtimeManifest)),
+    registryImage: input.registryImage,
+    registryDigest: registry.digest,
+    registryResolvedAt: registry.resolvedAt,
     currentCommit,
     sourceIsAncestor: ancestry.status === 0,
     changedPaths,
     observedAt: new Date().toISOString(),
   };
+}
+
+export async function collectQualifiedReleaseObservation(input: {
+  root: string;
+  receipt: unknown;
+}): Promise<QualifiedReleaseObservation> {
+  const receipt = QualifiedRunnerReleaseSchema.parse(input.receipt);
+  return collectRunnerReleaseEvidence({
+    root: input.root,
+    sourceCommit: receipt.sourceCommit,
+    localImageTag: receipt.localImageTag,
+    registryImage: receipt.registryImage,
+  });
+}
+
+export function createQualifiedRunnerRelease(
+  observation: QualifiedReleaseObservation,
+  qualifiedAt = new Date().toISOString(),
+): unknown {
+  assertQualifiedObservation(observation);
+  return QualifiedRunnerReleaseSchema.parse({
+    schemaVersion: "2",
+    status: "VERIFIED",
+    sourceCommit: observation.sourceCommit,
+    sourceArchiveSha256: observation.sourceArchiveSha256,
+    sourceTreeSha256: observation.sourceTreeSha256,
+    dockerfileSha256: observation.dockerfileSha256,
+    localImageTag: observation.localImageTag,
+    localImageDigest: observation.localImageDigest,
+    ociRevision: observation.ociRevision,
+    ociSourceTreeSha256: observation.ociSourceTreeSha256,
+    engineAuthorityHash: observation.engineAuthorityHash,
+    runtimeManifestHash: observation.runtimeManifestHash,
+    evidenceCommit: observation.currentCommit,
+    registryImage: observation.registryImage,
+    registryDigest: observation.registryDigest,
+    registryResolvedAt: observation.registryResolvedAt,
+    qualifiedAt,
+    verifierVersion: "counterlab-release-v2",
+  });
 }
 
 function argumentsFrom(argv: string[]): Arguments {
@@ -194,8 +342,16 @@ export function qualifiedDeployConfig(input: {
       receipt.sourceArchiveSha256,
       input.observation.sourceArchiveSha256,
     ],
-    ["source tree", receipt.sourceTreeSha256, input.observation.sourceTreeSha256],
-    ["Dockerfile", receipt.dockerfileSha256, input.observation.dockerfileSha256],
+    [
+      "source tree",
+      receipt.sourceTreeSha256,
+      input.observation.sourceTreeSha256,
+    ],
+    [
+      "Dockerfile",
+      receipt.dockerfileSha256,
+      input.observation.dockerfileSha256,
+    ],
     ["local image tag", receipt.localImageTag, input.observation.localImageTag],
     [
       "local image digest",
@@ -218,6 +374,12 @@ export function qualifiedDeployConfig(input: {
       receipt.runtimeManifestHash,
       input.observation.runtimeManifestHash,
     ],
+    ["registry image", receipt.registryImage, input.observation.registryImage],
+    [
+      "registry digest",
+      receipt.registryDigest,
+      input.observation.registryDigest,
+    ],
   ];
   for (const [label, expected, observed] of comparisons) {
     if (expected !== observed) {
@@ -229,17 +391,7 @@ export function qualifiedDeployConfig(input: {
   if (input.observation.currentCommit !== receipt.evidenceCommit) {
     throw new Error("qualified evidence commit is not the current HEAD");
   }
-  if (!input.observation.sourceIsAncestor) {
-    throw new Error("qualified source commit is not an ancestor of the evidence commit");
-  }
-  const unauthorized = input.observation.changedPaths.filter(
-    (path) => !evidenceOnly(path),
-  );
-  if (unauthorized.length > 0) {
-    throw new Error(
-      `qualified evidence commit changes runtime source: ${unauthorized.join(", ")}`,
-    );
-  }
+  assertQualifiedObservation(input.observation);
   const qualifiedAt = Date.parse(receipt.qualifiedAt);
   const observedAt = Date.parse(input.observation.observedAt);
   if (
@@ -259,10 +411,19 @@ export function qualifiedDeployConfig(input: {
     );
   }
   if (imageMatch[2] !== receipt.sourceCommit) {
-    throw new Error("qualified image tag does not match the receipt source commit");
+    throw new Error(
+      "qualified image tag does not match the receipt source commit",
+    );
+  }
+  if (input.image !== receipt.registryImage) {
+    throw new Error(
+      "qualified image does not match the promoted registry image",
+    );
   }
   if (config.account_id !== imageMatch[1]) {
-    throw new Error("qualified image account does not match Wrangler account_id");
+    throw new Error(
+      "qualified image account does not match Wrangler account_id",
+    );
   }
 
   if (!Array.isArray(config.containers) || config.containers.length !== 1) {
@@ -286,7 +447,7 @@ async function main(): Promise<void> {
     readFile(resolve(args.receipt), "utf8"),
   ]);
   const receipt = JSON.parse(receiptText) as unknown;
-  const observation = collectQualifiedReleaseObservation({
+  const observation = await collectQualifiedReleaseObservation({
     root: resolve(import.meta.dirname, ".."),
     receipt,
   });

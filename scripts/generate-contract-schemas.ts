@@ -20,6 +20,7 @@ import {
   ScientificEngineRegistrySchema,
   ScientificEngineRuntimeManifestSchema,
   ScientificEngineSnapshotSchema,
+  QualifiedRunnerReleaseSchema,
   SubjectPackEngineBindingsSchema,
 } from "../packages/scientific-engine-registry/src/index.js";
 import { ExperimentIRV5Schema } from "../packages/experiment-ir/src/index.js";
@@ -196,6 +197,18 @@ const schemas = [
       resolve(
         root,
         "scientific-engines/schemas/scientific-engine-evidence-v1.schema.json",
+      ),
+    ],
+  },
+  {
+    fileName: "qualified-runner-release-v2.schema.json",
+    id: "https://counterlab.dev/schemas/qualified-runner-release-v2.schema.json",
+    title: "CounterLab qualified runner release v2",
+    schema: QualifiedRunnerReleaseSchema,
+    destinations: [
+      resolve(
+        root,
+        "scientific-engines/schemas/qualified-runner-release-v2.schema.json",
       ),
     ],
   },

@@ -80,6 +80,21 @@ describe("Cloudflare static asset routing", () => {
     expect(buildIndex).toBeGreaterThan(verifyIndex);
   });
 
+  it("builds a source-bound runner only from an exact Git archive", () => {
+    const path = resolve(
+      process.cwd(),
+      "../../scripts/build-source-bound-runner.sh",
+    );
+    expect(existsSync(path)).toBe(true);
+    const script = readFileSync(path, "utf8");
+
+    expect(script).toContain("git archive --format=tar");
+    expect(script).toContain("COUNTERLAB_SOURCE_COMMIT");
+    expect(script).toContain("COUNTERLAB_SOURCE_TREE_SHA256");
+    expect(script).toContain('"${ARCHIVE_ROOT}"');
+    expect(script).not.toMatch(/docker build[\s\S]*"\$\{ROOT_DIR\}"/);
+  });
+
   it("copies the complete hosted-runner workspace dependency closure", () => {
     const root = resolve(process.cwd(), "../..");
     const packageDirectories = readdirSync(resolve(root, "packages"), {
@@ -104,7 +119,10 @@ describe("Cloudflare static asset routing", () => {
       });
     }
     const hostedRunner = JSON.parse(
-      readFileSync(resolve(root, "services/hosted-runner/package.json"), "utf8"),
+      readFileSync(
+        resolve(root, "services/hosted-runner/package.json"),
+        "utf8",
+      ),
     ) as { dependencies?: Record<string, string> };
     const queue = Object.entries(hostedRunner.dependencies ?? {})
       .filter(([, version]) => version.startsWith("workspace:"))
@@ -127,8 +145,14 @@ describe("Cloudflare static asset routing", () => {
     for (const name of required) {
       const workspace = workspaces.get(name)!;
       const source = relative(root, workspace.directory);
-      expect(dockerfile, `${name} must be present in the build context`).toMatch(
-        new RegExp(`^COPY ${source.replaceAll("/", "\\/")} \\.\\/${source.replaceAll("/", "\\/")}$`, "m"),
+      expect(
+        dockerfile,
+        `${name} must be present in the build context`,
+      ).toMatch(
+        new RegExp(
+          `^COPY ${source.replaceAll("/", "\\/")} \\.\\/${source.replaceAll("/", "\\/")}$`,
+          "m",
+        ),
       );
     }
   });
@@ -138,7 +162,7 @@ describe("Cloudflare static asset routing", () => {
     const evidenceCommit = "2".repeat(40);
     const image = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
     const receipt = {
-      schemaVersion: "1",
+      schemaVersion: "2",
       status: "VERIFIED",
       sourceCommit,
       sourceArchiveSha256: "b".repeat(64),
@@ -151,8 +175,11 @@ describe("Cloudflare static asset routing", () => {
       engineAuthorityHash: "f".repeat(64),
       runtimeManifestHash: "1".repeat(64),
       evidenceCommit,
-      qualifiedAt: "2026-07-16T16:00:00.000Z",
-      verifierVersion: "counterlab-release-v1",
+      registryImage: image,
+      registryDigest: `sha256:${"3".repeat(64)}`,
+      registryResolvedAt: "2026-07-16T16:20:00.000Z",
+      qualifiedAt: "2026-07-16T16:30:00.000Z",
+      verifierVersion: "counterlab-release-v2",
     };
     const generated = qualifiedDeployConfig({
       config: {
@@ -181,6 +208,9 @@ describe("Cloudflare static asset routing", () => {
         ociSourceTreeSha256: receipt.ociSourceTreeSha256,
         engineAuthorityHash: receipt.engineAuthorityHash,
         runtimeManifestHash: receipt.runtimeManifestHash,
+        registryImage: receipt.registryImage,
+        registryDigest: receipt.registryDigest,
+        registryResolvedAt: receipt.registryResolvedAt,
         currentCommit: evidenceCommit,
         sourceIsAncestor: true,
         changedPaths: ["scientific-engines/snapshot.json"],
@@ -191,19 +221,19 @@ describe("Cloudflare static asset routing", () => {
     expect(generated.containers).toEqual([
       expect.objectContaining({ class_name: "CounterLabRunner", image }),
     ]);
-    expect((generated.containers as Array<Record<string, unknown>>)[0]).not.toHaveProperty(
-      "image_vars",
-    );
-    expect((generated.containers as Array<Record<string, unknown>>)[0]).not.toHaveProperty(
-      "image_build_context",
-    );
+    expect(
+      (generated.containers as Array<Record<string, unknown>>)[0],
+    ).not.toHaveProperty("image_vars");
+    expect(
+      (generated.containers as Array<Record<string, unknown>>)[0],
+    ).not.toHaveProperty("image_build_context");
   });
 
   it("rejects a qualified receipt that does not match recomputed release evidence", () => {
     const sourceCommit = "a".repeat(40);
     const image = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
     const receipt = {
-      schemaVersion: "1",
+      schemaVersion: "2",
       status: "VERIFIED",
       sourceCommit,
       sourceArchiveSha256: "b".repeat(64),
@@ -216,8 +246,11 @@ describe("Cloudflare static asset routing", () => {
       engineAuthorityHash: "f".repeat(64),
       runtimeManifestHash: "1".repeat(64),
       evidenceCommit: "2".repeat(40),
+      registryImage: image,
+      registryDigest: `sha256:${"3".repeat(64)}`,
+      registryResolvedAt: "2026-07-16T15:55:00.000Z",
       qualifiedAt: "2026-07-16T16:00:00.000Z",
-      verifierVersion: "counterlab-release-v1",
+      verifierVersion: "counterlab-release-v2",
     };
 
     expect(() =>

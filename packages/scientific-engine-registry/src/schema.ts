@@ -392,7 +392,7 @@ export const ScientificEngineSnapshotSchema = z.strictObject({
   evidenceCatalog: ScientificEngineEvidenceCatalogSchema,
 });
 
-export const QualifiedRunnerReleaseSchema = z
+export const QualifiedRunnerReleaseV1Schema = z
   .strictObject({
     schemaVersion: z.literal("1"),
     status: z.literal("VERIFIED"),
@@ -400,9 +400,7 @@ export const QualifiedRunnerReleaseSchema = z
     sourceArchiveSha256: Sha256Schema,
     sourceTreeSha256: Sha256Schema,
     dockerfileSha256: Sha256Schema,
-    localImageTag: z
-      .string()
-      .regex(/^counterlab-runner:git-[a-f0-9]{40}$/),
+    localImageTag: z.string().regex(/^counterlab-runner:git-[a-f0-9]{40}$/),
     localImageDigest: OciDigestSchema,
     ociRevision: GitCommitSchema,
     ociSourceTreeSha256: Sha256Schema,
@@ -434,6 +432,74 @@ export const QualifiedRunnerReleaseSchema = z
         code: "custom",
         path: ["localImageTag"],
         message: "the local image tag must be immutable and source-bound",
+      });
+    }
+  });
+
+export const QualifiedRunnerReleaseSchema = z
+  .strictObject({
+    schemaVersion: z.literal("2"),
+    status: z.literal("VERIFIED"),
+    sourceCommit: GitCommitSchema,
+    sourceArchiveSha256: Sha256Schema,
+    sourceTreeSha256: Sha256Schema,
+    dockerfileSha256: Sha256Schema,
+    localImageTag: z.string().regex(/^counterlab-runner:git-[a-f0-9]{40}$/),
+    localImageDigest: OciDigestSchema,
+    ociRevision: GitCommitSchema,
+    ociSourceTreeSha256: Sha256Schema,
+    engineAuthorityHash: Sha256Schema,
+    runtimeManifestHash: Sha256Schema,
+    evidenceCommit: GitCommitSchema,
+    registryImage: z
+      .string()
+      .regex(
+        /^registry\.cloudflare\.com\/[A-Za-z0-9_-]{3,64}\/counterlab-runner:git-[a-f0-9]{40}$/,
+      ),
+    registryDigest: OciDigestSchema,
+    registryResolvedAt: z.iso.datetime({ offset: true }),
+    qualifiedAt: z.iso.datetime({ offset: true }),
+    verifierVersion: StableIdSchema,
+  })
+  .superRefine((release, context) => {
+    if (release.ociRevision !== release.sourceCommit) {
+      context.addIssue({
+        code: "custom",
+        path: ["ociRevision"],
+        message: "the OCI revision must equal the qualified source commit",
+      });
+    }
+    if (release.ociSourceTreeSha256 !== release.sourceTreeSha256) {
+      context.addIssue({
+        code: "custom",
+        path: ["ociSourceTreeSha256"],
+        message: "the OCI source-tree label must equal the qualified tree hash",
+      });
+    }
+    if (
+      release.localImageTag !== `counterlab-runner:git-${release.sourceCommit}`
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["localImageTag"],
+        message: "the local image tag must be immutable and source-bound",
+      });
+    }
+    if (!release.registryImage.endsWith(`:git-${release.sourceCommit}`)) {
+      context.addIssue({
+        code: "custom",
+        path: ["registryImage"],
+        message:
+          "the registry image tag must equal the qualified source commit",
+      });
+    }
+    if (
+      Date.parse(release.registryResolvedAt) > Date.parse(release.qualifiedAt)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["registryResolvedAt"],
+        message: "the registry digest must be resolved before qualification",
       });
     }
   });

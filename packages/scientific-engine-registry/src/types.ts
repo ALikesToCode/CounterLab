@@ -10,6 +10,7 @@ import {
   ScientificEngineRuntimeManifestSchema,
   ScientificEngineSnapshotSchema,
   QualifiedRunnerReleaseSchema,
+  QualifiedRunnerReleaseV1Schema,
   SubjectPackAuthorityBindingSchema,
   SubjectPackEngineBindingSchema,
   SubjectPackEngineBindingsSchema,
@@ -48,4 +49,7 @@ export type ScientificEngineSnapshot = z.infer<
 >;
 export type QualifiedRunnerRelease = z.infer<
   typeof QualifiedRunnerReleaseSchema
+>;
+export type QualifiedRunnerReleaseV1 = z.infer<
+  typeof QualifiedRunnerReleaseV1Schema
 >;
