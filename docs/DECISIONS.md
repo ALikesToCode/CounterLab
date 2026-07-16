@@ -285,3 +285,17 @@ can pass.
   cannot be relabelled as Cloudflare production evidence.
 - Require live Proof Bundle v2 output to include the canonical scientific-engine
   authority hash, and make a mismatched expected authority fail validation.
+
+## 2026-07-16 — Requalify after every source-bound runner change
+
+- Rebuild the runner whenever a Docker-copied contract, schema, or package
+  changes; do not inherit evidence from an earlier locally qualified image.
+- Bind the current candidate to source commit
+  `eaedf3ea083f29512f8a2db148f1f632582ec444`, local image digest
+  `sha256:25e04f049b1dff5220f12bf63d584246d225fc31a17d0c0cad21b4388da4ec61`,
+  and authority hash
+  `bea6f1be77f8318f4694b0e9da028440983038d34001890719dcad2d96f210b4`.
+- Keep local OCI identity distinct from a future Cloudflare registry/deployment
+  digest. Promotion requires deployment evidence and a new public smoke.
+- Record build-tool provenance separately from installed runtime tools and
+  reject malformed or truncated base-image digests in release evidence.

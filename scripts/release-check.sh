@@ -8,7 +8,7 @@ cd "${ROOT_DIR}"
 
 if [[ -z "${ENGINE_IMAGE}" ]]; then
   echo "COUNTERLAB_ENGINE_IMAGE must name the exact qualified runner image." >&2
-  echo "Example: COUNTERLAB_ENGINE_IMAGE=counterlab-runner:engine-registry-v4 ./scripts/release-check.sh" >&2
+  echo "Example: COUNTERLAB_ENGINE_IMAGE=counterlab-runner:engine-registry-v5 ./scripts/release-check.sh" >&2
   exit 2
 fi
 
