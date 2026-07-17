@@ -182,6 +182,10 @@ def test_imbalance_boundary_map_executes_fixed_scores_across_the_grid(
         0.5,
     ]
     assert len(imbalance_map["cells"]) == 15
+    assert imbalance_map["nonClaims"] == [
+        "The map does not select a production threshold or encode deployment costs.",
+        "This bounded fixture does not establish utility for unrelated rare-event systems.",
+    ]
 
     coordinates = [
         (
