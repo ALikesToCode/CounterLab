@@ -21,7 +21,7 @@ import {
 import { z } from "zod";
 
 import { projectExperimentIRV5ToPlanV2 } from "./migrate.js";
-import { ExperimentIRV5Schema } from "./schema.js";
+import { ExperimentIRV5Schema, TransferContractSchema } from "./schema.js";
 
 const NonEmptyString = z.string().trim().min(1);
 const Sha256 = z
@@ -53,6 +53,24 @@ export const RunnerBoundarySweepRequestV5Schema = z
         code: "custom",
         message: "Boundary Map axes must be unique",
         path: ["axisIds", 1],
+      });
+    }
+  });
+
+export const RunnerTransferTaskV5Schema = z
+  .object({
+    id: TokenId,
+    evaluatorTaskId: TokenId,
+    title: NonEmptyString.max(240),
+    experimentIrContract: TransferContractSchema,
+  })
+  .strict()
+  .superRefine((task, context) => {
+    if (task.id !== task.experimentIrContract.taskId) {
+      context.addIssue({
+        code: "custom",
+        message: "transfer task ID must match its Experiment IR contract",
+        path: ["experimentIrContract", "taskId"],
       });
     }
   });
@@ -109,6 +127,9 @@ export const RunnerLabCompileBundleV5Schema = z
         verifierInvariants: z.array(NonEmptyString).min(1).max(24),
         candidateExperimentIds: z.array(NonEmptyString).min(1).max(8),
         boundarySweep: RunnerBoundarySweepRequestV5Schema.optional(),
+        // Optional only so stored pre-authority v5 bundles remain parseable.
+        // New live jobs always include this and the verifier rejects omission.
+        transferTask: RunnerTransferTaskV5Schema.optional(),
         planRequirements: z.array(NonEmptyString).min(1).max(16),
       })
       .strict(),
@@ -366,9 +387,10 @@ export const RunnerLabRunBundleV5Schema = z
           })
           .strict(),
         rawExperimentIrCanonicalHash: Sha256,
-        scientificVerifierVersion: z.literal(
+        scientificVerifierVersion: z.enum([
           "scientific-candidate-verifier-v1",
-        ),
+          "scientific-candidate-verifier-v2",
+        ]),
         candidateVerificationReportHash: Sha256,
         scorerVersion: TokenId,
         projectionAdapterVersion: z.literal("experiment-ir-v5-to-plan-v2-v1"),

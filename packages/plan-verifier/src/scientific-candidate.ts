@@ -65,7 +65,8 @@ export type ScientificCandidateReportV1 = {
     | "SELECTED"
     | "SCIENTIFIC_CANDIDATE_INVALID"
     | "INCONCLUSIVE_NO_DECISIVE_TEST";
-  verifierVersion: "scientific-candidate-verifier-v1";
+  verifierVersion:
+    "scientific-candidate-verifier-v1" | "scientific-candidate-verifier-v2";
   discriminationContractHash: string;
   rawExperimentIrHash: string;
   labSceneHash: string;
@@ -185,6 +186,7 @@ async function evidenceResolves(
 function fixedPackSnapshot(
   pack: ReturnType<typeof getConceptPack>,
   includeBoundarySweep: boolean,
+  includeTransferTask: boolean,
 ) {
   const boundary = pack.scientificMethod.boundaryMap;
   return {
@@ -207,6 +209,7 @@ function fixedPackSnapshot(
           },
         }
       : {}),
+    ...(includeTransferTask ? { transferTask: pack.transferTask } : {}),
     planRequirements: pack.experimentPlanRules,
   };
 }
@@ -356,13 +359,15 @@ async function rejectionReport(
   options: {
     reasonCode?: ScientificCandidateReportV1["reasonCode"];
     selection?: ExperimentSelection;
+    verifierVersion?: ScientificCandidateReportV1["verifierVersion"];
   } = {},
 ): Promise<ScientificCandidateReportV1> {
   return {
     schemaVersion: "1",
     status: "REJECTED",
     reasonCode: options.reasonCode ?? "SCIENTIFIC_CANDIDATE_INVALID",
-    verifierVersion: "scientific-candidate-verifier-v1",
+    verifierVersion:
+      options.verifierVersion ?? "scientific-candidate-verifier-v1",
     discriminationContractHash: await hashCanonical(
       artifacts.discriminationContract,
     ),
@@ -388,6 +393,11 @@ export async function verifyScientificCandidateV5(
   const rationaleResult = PublicRationaleSchema.safeParse(
     input.artifacts.publicRationale,
   );
+  const verifierVersion: ScientificCandidateReportV1["verifierVersion"] =
+    bundleResult.success &&
+    bundleResult.data.conceptPack.transferTask !== undefined
+      ? "scientific-candidate-verifier-v2"
+      : "scientific-candidate-verifier-v1";
   if (
     !bundleResult.success ||
     !contractResult.success ||
@@ -420,7 +430,9 @@ export async function verifyScientificCandidateV5(
     ];
     return {
       disposition: "REPAIRABLE_REJECTION",
-      report: await rejectionReport(input.artifacts, checks),
+      report: await rejectionReport(input.artifacts, checks, {
+        verifierVersion,
+      }),
     };
   }
 
@@ -505,6 +517,30 @@ export async function verifyScientificCandidateV5(
       hashCanonical(contract.candidateExperimentIds),
       hashCanonical(candidateIds),
     ]);
+  const expectedTransferContract = pack.transferTask.experimentIrContract;
+  const declaredTransferTask = bundle.conceptPack.transferTask;
+  const [transferContractHash, expectedTransferContractHash] =
+    await Promise.all([
+      hashCanonical(rawIr.transfer),
+      hashCanonical(expectedTransferContract),
+    ]);
+  const transferContractMatches = sameJson(
+    rawIr.transfer,
+    expectedTransferContract,
+  );
+  const bundleTransferContractMatches = sameJson(
+    declaredTransferTask,
+    pack.transferTask,
+  );
+  const sceneTransferEvaluatorIds = scene.blocks
+    .filter((block) => block.type === "Transfer")
+    .map((block) => block.evaluatorId);
+  const sceneTransferEvaluatorHash = await hashCanonical(
+    sceneTransferEvaluatorIds,
+  );
+  const sceneTransferBindingsMatch = sceneTransferEvaluatorIds.every(
+    (evaluatorId) => evaluatorId === pack.transferTask.evaluatorTaskId,
+  );
   const allowedCandidateIds = new Set(
     pack.scientificMethod.candidateExperimentIds,
   );
@@ -519,6 +555,7 @@ export async function verifyScientificCandidateV5(
           fixedPackSnapshot(
             pack,
             bundle.conceptPack.boundarySweep !== undefined,
+            bundle.conceptPack.transferTask !== undefined,
           ),
         ),
       {
@@ -531,6 +568,7 @@ export async function verifyScientificCandidateV5(
           fixedPackSnapshot(
             pack,
             bundle.conceptPack.boundarySweep !== undefined,
+            bundle.conceptPack.transferTask !== undefined,
           ),
         ),
       },
@@ -659,6 +697,34 @@ export async function verifyScientificCandidateV5(
         boundarySweepHandledSeparately: true,
       },
     ),
+    ...(bundle.conceptPack.transferTask === undefined
+      ? []
+      : [
+          invariant(
+            "transfer_contract",
+            transferContractMatches &&
+              bundleTransferContractMatches &&
+              sceneTransferBindingsMatch,
+            {
+              taskId: rawIr.transfer.taskId,
+              transferContractHash,
+              transferContractMatches,
+              bundleTransferContractMatches,
+              sceneTransferBlockCount: sceneTransferEvaluatorIds.length,
+              sceneTransferEvaluatorHash,
+              sceneTransferBindingsMatch,
+            },
+            {
+              taskId: expectedTransferContract.taskId,
+              transferContractHash: expectedTransferContractHash,
+              transferContractMatches: true,
+              bundleTransferContractMatches: true,
+              evaluatorTaskId: pack.transferTask.evaluatorTaskId,
+              sceneTransferBindingsMatch: true,
+            },
+            "The Experiment IR must copy the complete frozen Subject Pack transfer contract, and any Transfer scene block must use the fixed evaluator.",
+          ),
+        ]),
     (() => {
       const request = rawIr.boundarySweep;
       const declared = bundle.conceptPack.boundarySweep;
@@ -732,7 +798,9 @@ export async function verifyScientificCandidateV5(
   if (checks.some((check) => !check.passed)) {
     return {
       disposition: "REPAIRABLE_REJECTION",
-      report: await rejectionReport(input.artifacts, checks),
+      report: await rejectionReport(input.artifacts, checks, {
+        verifierVersion,
+      }),
     };
   }
 
@@ -753,7 +821,11 @@ export async function verifyScientificCandidateV5(
     const report = await rejectionReport(
       input.artifacts,
       [...checks, selectionCheck],
-      { reasonCode: "INCONCLUSIVE_NO_DECISIVE_TEST", selection },
+      {
+        reasonCode: "INCONCLUSIVE_NO_DECISIVE_TEST",
+        selection,
+        verifierVersion,
+      },
     );
     return {
       disposition: "INCONCLUSIVE_NO_DECISIVE_TEST",
@@ -854,7 +926,10 @@ export async function verifyScientificCandidateV5(
     return {
       disposition: "REPAIRABLE_REJECTION",
       selection,
-      report: await rejectionReport(input.artifacts, allChecks, { selection }),
+      report: await rejectionReport(input.artifacts, allChecks, {
+        selection,
+        verifierVersion,
+      }),
     };
   }
 
@@ -869,7 +944,7 @@ export async function verifyScientificCandidateV5(
     schemaVersion: "1",
     status: "VERIFIED",
     reasonCode: "SELECTED",
-    verifierVersion: "scientific-candidate-verifier-v1",
+    verifierVersion,
     discriminationContractHash: contractHash,
     rawExperimentIrHash: rawIrHash,
     labSceneHash,

@@ -136,6 +136,17 @@ function scientificInput(
         observableId: "optimism_gap",
         maxCells: 25,
       },
+      transferTask: {
+        id: "forecast-future-leakage-v1",
+        evaluatorTaskId: "forecasting-future-leakage-01",
+        title: "Choose an evaluation boundary that cannot see the future",
+        experimentIrContract: {
+          taskId: "forecast-future-leakage-v1",
+          changedSurface: "Time-ordered forecasting",
+          requiredActionIds: ["time_ordered_holdout"],
+          nonClaims: ["This transfer does not certify global mastery."],
+        },
+      },
       planRequirements: [
         'Fixed scorer required heldConstantIds: ["model","seed","test_fraction","entity_field","primary_identity_setting","preprocessing","model_hyperparameters"].',
         'Fixed scorer decisive pattern pairs: [{"currentPatternId":"leakage.small-gap","competingPatternId":"leakage.material-gap","separation":0.82}].',
@@ -205,6 +216,13 @@ describe("hosted scientific-method compiler", () => {
     );
     expect(prompt).toMatch(/no literal result values/i);
     expect(prompt).toMatch(/copy conceptPack\.boundarySweep exactly/i);
+    expect(prompt).toMatch(
+      /copy conceptPack\.transferTask\.experimentIrContract exactly into experimentIr\.transfer/i,
+    );
+    expect(prompt).toContain("forecast-future-leakage-v1");
+    expect(prompt).toContain("forecasting-future-leakage-01");
+    expect(prompt).toMatch(/Transfer block.*evaluatorId/i);
+    expect(prompt).toMatch(/do not rename, reorder, omit, extend, or author/i);
     expect(prompt).not.toContain(generationDirectory);
   });
 

@@ -1070,6 +1070,8 @@ async function resolveRunnerPatchAuthorityV5(input: {
     bundledEvidenceVerdictHash,
     transferResultHash,
     bundledTransferResultHash,
+    selectedTransferContractHash,
+    expectedTransferContractHash,
     patchContractHash,
   ] = await Promise.all([
     hashCanonical(input.bundle),
@@ -1089,6 +1091,8 @@ async function resolveRunnerPatchAuthorityV5(input: {
     hashCanonical(input.bundle.releaseAuthority.evidenceVerdict),
     hashCanonical(input.session.transferResult),
     hashCanonical(input.bundle.transferResult),
+    hashCanonical(frozenCompile.selectedExperimentIr.transfer),
+    hashCanonical(pack.transferTask.experimentIrContract),
     hashCanonical({
       id: pack.patchContract.id,
       allowedTransformations: pack.patchContract.allowedTransformations,
@@ -1138,6 +1142,7 @@ async function resolveRunnerPatchAuthorityV5(input: {
       input.session.transferResult.resultHash ||
     input.bundle.transferContractId !== pack.transferTask.id ||
     input.bundle.transferResult.taskId !== pack.transferTask.evaluatorTaskId ||
+    selectedTransferContractHash !== expectedTransferContractHash ||
     input.bundle.patchContract.id !== pack.patchContract.id ||
     JSON.stringify(input.job.inputHashes) !==
       JSON.stringify(expectedInputHashes)
@@ -3783,15 +3788,21 @@ export function createApi(options: ApiOptions = {}) {
         allowedVisualizations: pack.allowedVisualizations,
         verifierInvariants: pack.verifierContract.invariants,
         candidateExperimentIds: pack.scientificMethod.candidateExperimentIds,
-        ...(v5Compile ? { boundarySweep } : {}),
+        ...(v5Compile
+          ? {
+              boundarySweep,
+              transferTask: pack.transferTask,
+            }
+          : {}),
         planRequirements: pack.experimentPlanRules,
       });
       const scientificPromptHash = await hashCanonical({
-        promptVersion: "scientific-method-compile-v2",
+        promptVersion: "scientific-method-compile-v3",
         conceptPack: { id: pack.id, version: pack.version },
         packContractHash,
         candidateExperimentIds: pack.scientificMethod.candidateExperimentIds,
         boundarySweep,
+        transferTask: pack.transferTask,
         schemaHashes: {
           discriminationContract: await hashCanonical(
             discriminationContractSchema,
@@ -3849,6 +3860,7 @@ export function createApi(options: ApiOptions = {}) {
           [v5Compile ? "beliefSpec" : "beliefTest"]: beliefAuthorityHash,
           prediction: current.prediction.immutableHash,
           conceptPack: packContractHash,
+          ...(v5Compile ? { compilerPrompt: scientificPromptHash } : {}),
         },
       });
       const jobs = runnerJobService(context, options);
@@ -3927,6 +3939,7 @@ export function createApi(options: ApiOptions = {}) {
                 candidateExperimentIds:
                   pack.scientificMethod.candidateExperimentIds,
                 boundarySweep,
+                transferTask: pack.transferTask,
                 planRequirements: pack.experimentPlanRules,
               },
               schemas: {
@@ -7903,8 +7916,8 @@ export function createApi(options: ApiOptions = {}) {
           lineage: evidenceAuthority.lineage,
         });
         if (
-          frozenCompile.selectedExperimentIr.transfer.taskId !==
-          pack.transferTask.id
+          (await hashCanonical(frozenCompile.selectedExperimentIr.transfer)) !==
+          (await hashCanonical(pack.transferTask.experimentIrContract))
         ) {
           throw new ApiInputError(
             "LIVE_PATCH_TRANSFER_MISMATCH",

@@ -1000,6 +1000,11 @@ async function preparedScientificImbalanceHostedRunner(
 }
 
 async function scientificCandidateArtifacts(bundle: RunnerLabCompileBundleV5) {
+  const transferContract =
+    bundle.conceptPack.transferTask?.experimentIrContract;
+  if (transferContract === undefined) {
+    throw new Error("scientific compiler transfer authority is missing");
+  }
   const entityField = bundle.artifactManifest.schemaSummary.entityCandidates[0];
   if (entityField === undefined) throw new Error("entity field is missing");
   const candidateId = "group-holdout-plus-ablation";
@@ -1140,12 +1145,7 @@ async function scientificCandidateArtifacts(bundle: RunnerLabCompileBundleV5) {
         nextExperimentId: candidateId,
       },
     ],
-    transfer: {
-      taskId: "forecast-future-leakage-v1",
-      changedSurface: "Time-ordered forecasting",
-      requiredActionIds: ["time_ordered_holdout"],
-      nonClaims: ["This transfer does not certify global mastery."],
-    },
+    transfer: transferContract,
     nonClaims: [
       "This test does not establish performance for every future customer.",
     ],
@@ -1194,6 +1194,11 @@ async function scientificCandidateArtifacts(bundle: RunnerLabCompileBundleV5) {
 async function scientificImbalanceCandidateArtifacts(
   bundle: RunnerLabCompileBundleV5,
 ) {
+  const transferContract =
+    bundle.conceptPack.transferTask?.experimentIrContract;
+  if (transferContract === undefined) {
+    throw new Error("scientific compiler transfer authority is missing");
+  }
   if (bundle.approvedBeliefSpec.concept !== "class_imbalance") {
     throw new Error("test candidate requires the class-imbalance Subject Pack");
   }
@@ -1364,12 +1369,7 @@ async function scientificImbalanceCandidateArtifacts(
         nextExperimentId: "prevalence-and-threshold-sweep",
       },
     ],
-    transfer: {
-      taskId: "manufacturing-rare-defect-v1",
-      changedSurface: "Rare manufacturing defects with asymmetric cost",
-      requiredActionIds: ["choose_minority_sensitive_metric"],
-      nonClaims: ["This transfer does not certify global mastery."],
-    },
+    transfer: transferContract,
     nonClaims: ["This test does not choose a universal production threshold."],
     provenance: { kind: "codex", ...bundle.provenance },
     limitations: [
@@ -4643,7 +4643,7 @@ describe("Cloudflare Worker API", () => {
         verification: {
           status: "VERIFIED",
           reasonCode: "SELECTED",
-          verifierVersion: "scientific-candidate-verifier-v1",
+          verifierVersion: "scientific-candidate-verifier-v2",
         },
       },
     });
@@ -4694,7 +4694,7 @@ describe("Cloudflare Worker API", () => {
       },
       provenance: {
         compileJobId: jobId,
-        scientificVerifierVersion: "scientific-candidate-verifier-v1",
+        scientificVerifierVersion: "scientific-candidate-verifier-v2",
         scorerVersion: "experiment-scorer-v1",
       },
       permittedOutputs: ["verified-result.json"],
@@ -4713,6 +4713,238 @@ describe("Cloudflare Worker API", () => {
       },
     });
     expect(harness.dispatcher.dispatched).toHaveLength(2);
+  });
+
+  it("rejects pack-incompatible transfer contracts for both live concepts before releasing execution authority", async () => {
+    const cases: Array<{
+      label: string;
+      createHarness: () => Promise<ScientificHostedRunnerHarness>;
+      createArtifacts: ScientificCandidateFactory;
+    }> = [
+      {
+        label: "entity leakage",
+        createHarness: preparedScientificHostedRunner,
+        createArtifacts: scientificCandidateArtifacts,
+      },
+      {
+        label: "class imbalance",
+        createHarness: preparedScientificImbalanceHostedRunner,
+        createArtifacts: scientificImbalanceCandidateArtifacts,
+      },
+    ];
+
+    for (const testCase of cases) {
+      const harness = await testCase.createHarness();
+      const jobId = harness.dispatch.job.jobId;
+      const authorization = {
+        authorization: `Bearer ${harness.dispatch.token}`,
+      };
+      expect(
+        (
+          await harness.app.request(`/api/runner/jobs/${jobId}/start`, {
+            method: "POST",
+            headers: authorization,
+          })
+        ).status,
+        testCase.label,
+      ).toBe(200);
+
+      const artifacts = await testCase.createArtifacts(harness.bundle);
+      const rawIr = ExperimentIRV5Schema.parse(
+        JSON.parse(artifacts["experiment-ir.json"]),
+      );
+      const privateModelText = `Do not echo model-authored ${testCase.label} transfer prose.`;
+      const mutatedIr = ExperimentIRV5Schema.parse({
+        ...rawIr,
+        transfer: {
+          taskId: "transfer.foreign-contract",
+          changedSurface: privateModelText,
+          requiredActionIds: ["foreign_action"],
+          nonClaims: [privateModelText],
+        },
+      });
+      const rawScene = LabSceneV2Schema.parse(
+        JSON.parse(artifacts["lab-scene.json"]),
+      );
+      const mutatedScene = LabSceneV2Schema.parse({
+        ...rawScene,
+        provenance: {
+          ...rawScene.provenance,
+          experimentIrHash: await hashExperimentIR(mutatedIr),
+        },
+      });
+      const mutatedArtifacts: ScientificCandidateArtifacts = {
+        ...artifacts,
+        "experiment-ir.json": JSON.stringify(mutatedIr),
+        "lab-scene.json": JSON.stringify(mutatedScene),
+      };
+      const artifactHashes = {} as Record<
+        keyof ScientificCandidateArtifacts,
+        string
+      >;
+      for (const [path, body] of Object.entries(mutatedArtifacts) as Array<
+        [keyof ScientificCandidateArtifacts, string]
+      >) {
+        const upload = await harness.app.request(
+          `/api/runner/jobs/${jobId}/outputs/${path}`,
+          {
+            method: "PUT",
+            headers: {
+              ...authorization,
+              "content-type": path.endsWith(".json")
+                ? "application/json"
+                : "text/markdown; charset=utf-8",
+            },
+            body,
+          },
+        );
+        expect(upload.status, `${testCase.label}: ${path}`).toBe(201);
+        artifactHashes[path] = await sha256Text(body);
+      }
+
+      const candidate = await postJson(
+        harness.app,
+        `/api/runner/jobs/${jobId}/candidate`,
+        { schemaVersion: "5", attempt: 1, artifactHashes },
+        authorization,
+      );
+      expect(candidate.status, testCase.label).toBe(200);
+      const candidateBody = (await candidate.json()) as {
+        data: {
+          counterexamples: Array<{ invariant: string }>;
+          runnerJob: RunnerJob;
+        };
+      };
+      expect(candidateBody).toMatchObject({
+        data: {
+          status: "REJECTED",
+          canRepair: true,
+          counterexamples: expect.arrayContaining([
+            expect.objectContaining({ invariant: "transfer_contract" }),
+          ]),
+          runnerJob: { status: "REPAIRING", attempt: 2 },
+        },
+      });
+      expect(JSON.stringify(candidateBody)).not.toContain(privateModelText);
+
+      const authorityKeys = [...harness.runnerObjects.objects.keys()].filter(
+        (key) => key.startsWith(`runner-authority/${jobId}/`),
+      );
+      expect(authorityKeys).toContain(
+        `runner-authority/${jobId}/candidate-verification.json`,
+      );
+      expect(authorityKeys).not.toContain(
+        `runner-authority/${jobId}/selected-experiment-ir.json`,
+      );
+      expect(authorityKeys).not.toContain(
+        `runner-authority/${jobId}/experiment-plan.json`,
+      );
+
+      const run = await postJson(
+        harness.app,
+        `/api/sessions/${harness.bundle.sessionId}/lab/run`,
+      );
+      expect(run.status, testCase.label).toBe(409);
+      await expect(run.json()).resolves.toMatchObject({
+        error: { code: "LIVE_CONTRACTS_REQUIRED" },
+      });
+      const patch = await postJson(
+        harness.app,
+        `/api/sessions/${harness.bundle.sessionId}/patch/compile`,
+      );
+      expect(patch.status, testCase.label).toBe(409);
+      await expect(patch.json()).resolves.toMatchObject({
+        error: { code: "LIVE_PATCH_CONTRACTS_REQUIRED" },
+      });
+      expect(harness.dispatcher.dispatched).toHaveLength(1);
+
+      const session = await harness.sessionRepository.find(
+        harness.bundle.sessionId,
+      );
+      expect(session).not.toHaveProperty("labVerification");
+      expect(session).not.toHaveProperty("verifiedResult");
+      expect(session).not.toHaveProperty("transferResult");
+      expect(session).not.toHaveProperty("patchResult");
+      const publicEvents = await harness.runnerJobs.listEvents(jobId, 0);
+      expect(JSON.stringify(publicEvents)).not.toContain(privateModelText);
+
+      const resume = await harness.app.request(
+        `/api/runner/jobs/${jobId}/resume`,
+        { method: "POST", headers: authorization },
+      );
+      expect(resume.status, testCase.label).toBe(200);
+      const repairedHashes = {} as Record<
+        keyof ScientificCandidateArtifacts,
+        string
+      >;
+      for (const [path, body] of Object.entries(artifacts) as Array<
+        [keyof ScientificCandidateArtifacts, string]
+      >) {
+        const upload = await harness.app.request(
+          `/api/runner/jobs/${jobId}/outputs/${path}`,
+          {
+            method: "PUT",
+            headers: {
+              ...authorization,
+              "content-type": path.endsWith(".json")
+                ? "application/json"
+                : "text/markdown; charset=utf-8",
+            },
+            body,
+          },
+        );
+        expect(upload.status, `${testCase.label}: repaired ${path}`).toBe(201);
+        repairedHashes[path] = await sha256Text(body);
+      }
+      const repairedCandidate = await postJson(
+        harness.app,
+        `/api/runner/jobs/${jobId}/candidate`,
+        { schemaVersion: "5", attempt: 2, artifactHashes: repairedHashes },
+        authorization,
+      );
+      expect(repairedCandidate.status, testCase.label).toBe(200);
+      const repairedBody = (await repairedCandidate.json()) as {
+        data: { runnerJob: RunnerJob };
+      };
+      expect(repairedBody).toMatchObject({
+        data: {
+          status: "VERIFIED",
+          canRepair: false,
+          runnerJob: { status: "RUNNING", attempt: 2 },
+          verification: { status: "VERIFIED" },
+        },
+      });
+      const callback = await postJson(
+        harness.app,
+        `/api/runner/jobs/${jobId}/callback`,
+        {
+          schemaVersion: "1",
+          callbackId: `callback_transfer_repair_${harness.bundle.conceptPack.id}`,
+          idempotencyKey: `transfer-repair-${harness.bundle.conceptPack.id}`,
+          jobId,
+          stateVersion: harness.dispatch.job.stateVersion,
+          status: "VERIFIED",
+          outputHashes: Object.values(repairedHashes),
+          finalEventCursor: repairedBody.data.runnerJob.eventCursor,
+          occurredAt: "2026-07-14T10:00:01.000Z",
+        },
+        authorization,
+      );
+      expect(callback.status, testCase.label).toBe(200);
+      await expect(callback.json()).resolves.toMatchObject({
+        data: {
+          runnerJob: { status: "VERIFIED", attempt: 2 },
+          session: { state: "LAB_VERIFIED" },
+          verification: { status: "VERIFIED" },
+        },
+      });
+      const repairedRun = await postJson(
+        harness.app,
+        `/api/sessions/${harness.bundle.sessionId}/lab/run`,
+      );
+      expect(repairedRun.status, testCase.label).toBe(202);
+      expect(harness.dispatcher.dispatched).toHaveLength(2);
+    }
   });
 
   it("releases a v5 fixed result only after Worker-owned epistemic verification", async () => {
@@ -8176,6 +8408,16 @@ describe("Cloudflare Worker API", () => {
             'Fixed scorer allowed changedVariableIds: ["split_strategy","identity_feature"].',
             'Fixed scorer decisive pattern pairs: [{"currentPatternId":"leakage.small-gap","competingPatternId":"leakage.material-gap","separation":0.82}].',
           ]),
+          transferTask: {
+            id: "forecast-future-leakage-v1",
+            evaluatorTaskId: "forecasting-future-leakage-01",
+            experimentIrContract: {
+              taskId: "forecast-future-leakage-v1",
+              changedSurface: "Time-ordered forecasting",
+              requiredActionIds: ["time_ordered_holdout"],
+              nonClaims: ["This transfer does not certify global mastery."],
+            },
+          },
         },
         permittedOutputs: [
           "discrimination-contract.json",
@@ -8186,9 +8428,12 @@ describe("Cloudflare Worker API", () => {
       });
       const packContractHash = storedBundle.provenance.inputHashes[3];
       expect(packContractHash).toBeDefined();
+      expect(
+        dispatched.job.requestIdentity?.authorityInputHashes.compilerPrompt,
+      ).toBe(storedBundle.provenance.promptHash);
       expect(storedBundle.provenance.promptHash).toBe(
         await hashCanonical({
-          promptVersion: "scientific-method-compile-v2",
+          promptVersion: "scientific-method-compile-v3",
           conceptPack: {
             id: storedBundle.conceptPack.id,
             version: storedBundle.conceptPack.version,
@@ -8197,6 +8442,7 @@ describe("Cloudflare Worker API", () => {
           candidateExperimentIds:
             storedBundle.conceptPack.candidateExperimentIds,
           boundarySweep: storedBundle.conceptPack.boundarySweep,
+          transferTask: storedBundle.conceptPack.transferTask,
           schemaHashes: {
             discriminationContract: await hashCanonical(
               storedBundle.schemas.discriminationContract,

@@ -13,7 +13,10 @@ import type {
   PatchOperationId,
 } from "@counterlab/contracts";
 import { EpistemicVerifierPolicyV1Schema } from "@counterlab/contracts";
-import type { CandidateExperiment } from "@counterlab/experiment-ir";
+import type {
+  CandidateExperiment,
+  TransferContract,
+} from "@counterlab/experiment-ir";
 import {
   ExperimentScoringPolicySchema,
   type ExperimentScoringPolicy,
@@ -142,6 +145,7 @@ export interface ConceptPackDefinition {
     evaluatorTaskId:
       "forecasting-future-leakage-01" | "manufacturing-defect-transfer-01";
     title: string;
+    experimentIrContract: TransferContract;
   };
   patchContract: {
     id: string;
@@ -995,6 +999,12 @@ const leakagePack = deepFreeze({
     id: "forecast-future-leakage-v1",
     evaluatorTaskId: "forecasting-future-leakage-01",
     title: "Choose an evaluation boundary that cannot see the future",
+    experimentIrContract: {
+      taskId: "forecast-future-leakage-v1",
+      changedSurface: "Time-ordered forecasting",
+      requiredActionIds: ["time_ordered_holdout"],
+      nonClaims: ["This transfer does not certify global mastery."],
+    },
   },
   patchContract: {
     id: "leakage-notebook-patch-v2",
@@ -1106,6 +1116,12 @@ const imbalancePack = deepFreeze({
     id: "manufacturing-rare-defect-v1",
     evaluatorTaskId: "manufacturing-defect-transfer-01",
     title: "Choose evidence for a rare manufacturing defect alert",
+    experimentIrContract: {
+      taskId: "manufacturing-rare-defect-v1",
+      changedSurface: "Rare manufacturing defects with asymmetric cost",
+      requiredActionIds: ["choose_minority_sensitive_metric"],
+      nonClaims: ["This transfer does not certify global mastery."],
+    },
   },
   patchContract: {
     id: "imbalance-notebook-patch-v1",

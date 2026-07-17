@@ -203,6 +203,7 @@ async function scientificFixture(): Promise<{
         observableId: pack.scientificMethod.boundaryMap.observableId,
         maxCells: pack.scientificMethod.boundaryMap.maxCells,
       },
+      transferTask: pack.transferTask,
       planRequirements: pack.experimentPlanRules,
     },
     schemas: {
@@ -362,12 +363,7 @@ async function scientificFixture(): Promise<{
         nextExperimentId: candidateId,
       },
     ],
-    transfer: {
-      taskId: "forecast-future-leakage-v1",
-      changedSurface: "Time-ordered forecasting",
-      requiredActionIds: ["time_ordered_holdout"],
-      nonClaims: ["This transfer does not certify global mastery."],
-    },
+    transfer: bundle.conceptPack.transferTask?.experimentIrContract,
     nonClaims: discriminationContract.nonClaims,
     provenance: { kind: "codex", ...bundle.provenance },
     limitations: [
@@ -466,7 +462,10 @@ describe("scientific v5 candidate verification", () => {
 
     expect(result).toMatchObject({
       disposition: "VERIFIED",
-      report: { status: "VERIFIED" },
+      report: {
+        status: "VERIFIED",
+        verifierVersion: "scientific-candidate-verifier-v2",
+      },
       selection: {
         selectedCandidateId: "group-holdout-plus-ablation",
         scorerVersion: "experiment-scorer-v1",
@@ -509,6 +508,126 @@ describe("scientific v5 candidate verification", () => {
     });
     expect(result.selectedIr?.selection).toMatchObject({ status: "SELECTED" });
     expect(result.selectedIr).not.toBe(input.artifacts.experimentIr);
+  });
+
+  it.each([
+    {
+      label: "foreign task ID",
+      update: {
+        taskId: "transfer.unseen-entity-evaluation",
+        changedSurface: "Repeated customer evaluation",
+        requiredActionIds: ["hold_out_customers"],
+        nonClaims: ["Model-authored transfer prose must not be echoed."],
+      },
+    },
+    {
+      label: "semantic drift under the correct task ID",
+      update: {
+        taskId: "forecast-future-leakage-v1",
+        changedSurface: "Time-ordered forecasting",
+        requiredActionIds: ["remove_future_feature"],
+        nonClaims: ["A changed limitation must not pass exact binding."],
+      },
+    },
+  ])("rejects $label before selection or execution", async ({ update }) => {
+    const fixture = await scientificFixture();
+    const experimentIr = ExperimentIRV5Schema.parse({
+      ...fixture.artifacts.experimentIr,
+      transfer: update,
+    });
+    const input = await replaceIr(fixture, experimentIr);
+
+    const result = await scientificVerifier()(input);
+    const finding = result.report.invariants?.find(
+      (candidate) => candidate.name === "transfer_contract",
+    );
+
+    expect(result.disposition).toBe("REPAIRABLE_REJECTION");
+    expect(finding).toMatchObject({
+      passed: false,
+      observed: {
+        taskId: update.taskId,
+        transferContractMatches: false,
+      },
+      expected: {
+        taskId: "forecast-future-leakage-v1",
+        transferContractMatches: true,
+      },
+    });
+    expect(finding?.observed).toHaveProperty("transferContractHash");
+    expect(finding?.expected).toHaveProperty("transferContractHash");
+    expect(result).not.toHaveProperty("selectedIr");
+    expect(result).not.toHaveProperty("executionPlan");
+    expect(JSON.stringify(finding)).not.toContain(update.changedSurface);
+    expect(JSON.stringify(finding)).not.toContain(update.nonClaims[0]);
+  });
+
+  it("rejects a Transfer scene block bound to a non-pack evaluator", async () => {
+    const fixture = await scientificFixture();
+    fixture.artifacts.labScene = LabSceneV2Schema.parse({
+      ...fixture.artifacts.labScene,
+      blocks: [
+        ...fixture.artifacts.labScene.blocks,
+        {
+          id: "transfer",
+          type: "Transfer",
+          prompt: "Apply the rule to a new surface.",
+          evaluatorId: "model-authored-evaluator",
+        },
+      ],
+    });
+
+    const result = await scientificVerifier()(fixture);
+    const finding = result.report.invariants?.find(
+      (candidate) => candidate.name === "transfer_contract",
+    );
+
+    expect(result.disposition).toBe("REPAIRABLE_REJECTION");
+    expect(finding).toMatchObject({
+      passed: false,
+      observed: {
+        sceneTransferBlockCount: 1,
+        sceneTransferEvaluatorHash: await hashCanonical([
+          "model-authored-evaluator",
+        ]),
+        sceneTransferBindingsMatch: false,
+      },
+      expected: {
+        evaluatorTaskId: "forecasting-future-leakage-01",
+        sceneTransferBindingsMatch: true,
+      },
+    });
+    expect(result).not.toHaveProperty("selectedIr");
+    expect(result).not.toHaveProperty("executionPlan");
+    expect(JSON.stringify(finding)).not.toContain("model-authored-evaluator");
+  });
+
+  it("preserves historical v5 verification when the old bundle has no transfer descriptor", async () => {
+    const fixture = await scientificFixture();
+    const { transferTask: _transferTask, ...conceptPack } =
+      fixture.bundle.conceptPack;
+    const historical = {
+      ...fixture,
+      bundle: RunnerLabCompileBundleV5Schema.parse({
+        ...fixture.bundle,
+        conceptPack,
+      }),
+    };
+
+    const result = await scientificVerifier()(historical);
+
+    expect(result.disposition).toBe("VERIFIED");
+    expect(result.report).toMatchObject({
+      verifierVersion: "scientific-candidate-verifier-v1",
+    });
+    expect(await hashCanonical(result.report)).toBe(
+      "de1d35aad3dbf18d0e7427fe5077b63bd79267854eb115600e4682987c08989c",
+    );
+    expect(result.report.invariants).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "transfer_contract" }),
+      ]),
+    );
   });
 
   it("returns an inconclusive disposition and no plan when no candidate is decisive", async () => {

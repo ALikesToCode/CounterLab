@@ -341,10 +341,10 @@ function canonicalScientificArtifacts(evidenceRefs) {
         },
       ],
       transfer: {
-        taskId: "forecasting_transfer_v1",
-        changedSurface: "Time-ordered forecasting with future-looking data.",
+        taskId: "forecast-future-leakage-v1",
+        changedSurface: "Time-ordered forecasting",
         requiredActionIds: ["time_ordered_holdout"],
-        nonClaims: ["Transfer does not certify global mastery."],
+        nonClaims: ["This transfer does not certify global mastery."],
       },
       nonClaims: [nonClaim],
       provenance: {

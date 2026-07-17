@@ -417,7 +417,7 @@ def v5_bundle() -> dict[str, object]:
             "rawExperimentIrCanonicalHash": expected_hashes[
                 "rawExperimentIrCanonical"
             ],
-            "scientificVerifierVersion": "scientific-candidate-verifier-v1",
+            "scientificVerifierVersion": "scientific-candidate-verifier-v2",
             "candidateVerificationReportHash": expected_hashes[
                 "candidateVerificationReport"
             ],
@@ -492,7 +492,7 @@ def interactive_v5_bundle() -> dict[str, object]:
         "rawExperimentIrCanonicalHash": authoritative["expectedHashes"]["rawExperimentIrCanonical"],  # type: ignore[index]
         "labSceneHash": "8" * 64,
         "candidateVerificationReportHash": authoritative["expectedHashes"]["candidateVerificationReport"],  # type: ignore[index]
-        "scientificVerifierVersion": "scientific-candidate-verifier-v1",
+        "scientificVerifierVersion": "scientific-candidate-verifier-v2",
         "selectionHash": authoritative["expectedHashes"]["experimentSelection"],  # type: ignore[index]
         "selectedExperimentIrHash": authoritative["selectedExperimentIrHash"],
         "projectedPlanHash": authoritative["expectedHashes"]["projectedPlan"],  # type: ignore[index]

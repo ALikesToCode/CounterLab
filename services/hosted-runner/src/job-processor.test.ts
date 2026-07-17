@@ -219,6 +219,17 @@ function scientificBundleV5(
         observableId: "optimism_gap",
         maxCells: 25,
       },
+      transferTask: {
+        id: "forecast-future-leakage-v1",
+        evaluatorTaskId: "forecasting-future-leakage-01",
+        title: "Choose an evaluation boundary that cannot see the future",
+        experimentIrContract: {
+          taskId: "forecast-future-leakage-v1",
+          changedSurface: "Time-ordered forecasting",
+          requiredActionIds: ["time_ordered_holdout"],
+          nonClaims: ["This transfer does not certify global mastery."],
+        },
+      },
     },
     schemas: {
       discriminationContract: { type: "object" },
@@ -365,16 +376,16 @@ function patchBundle(jobId = "runner_job_patch_1"): RunnerPatchCompileBundle {
 
 async function scientificArtifacts() {
   const bundleV5 = scientificBundleV5();
+  const transferContract =
+    bundleV5.conceptPack.transferTask?.experimentIrContract;
+  if (transferContract === undefined) {
+    throw new Error("scientific compiler transfer authority is missing");
+  }
   const execution = await runBundle("scientific_projection");
   const migrated = migrateExperimentPlanV2ToIRV5(execution.experimentPlan, {
     beliefSpecHash: bundleV5.beliefSpecHash,
     sourcePlanHash: "7".repeat(64),
-    transfer: {
-      taskId: "forecast-future-leakage-v1",
-      changedSurface: "Time-ordered forecasting",
-      requiredActionIds: ["time_ordered_holdout"],
-      nonClaims: ["This transfer does not certify mastery."],
-    },
+    transfer: transferContract,
   });
   const candidateId = bundleV5.conceptPack.candidateExperimentIds[0]!;
   const candidate = migrated.candidateExperiments[0]!;
@@ -1218,6 +1229,9 @@ describe("HostedRunnerJobProcessor", () => {
     expect(
       scientificCompiler.compileCalls[0]?.conceptPack.boundarySweep,
     ).toEqual(scientificBundleV5().conceptPack.boundarySweep);
+    expect(
+      scientificCompiler.compileCalls[0]?.conceptPack.transferTask,
+    ).toEqual(scientificBundleV5().conceptPack.transferTask);
     expect(compiler.compileCalls).toBe(0);
     expect([...controlPlane.uploads.keys()].sort()).toEqual([
       "discrimination-contract.json",

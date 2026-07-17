@@ -595,7 +595,10 @@ def _execute_v5_interactive(bundle: Mapping[str, Any]) -> dict[str, Any]:
         or compile_authority.get("status") != "VERIFIED"
         or compile_authority.get("source") != "hosted-experiment-ir-v5"
         or compile_authority.get("scientificVerifierVersion")
-        != "scientific-candidate-verifier-v1"
+        not in {
+            "scientific-candidate-verifier-v1",
+            "scientific-candidate-verifier-v2",
+        }
         or compile_authority.get("projectionAdapterVersion")
         != "experiment-ir-v5-to-plan-v2-v1"
         or compile_authority.get("scorerVersion") != selection.get("scorerVersion")
@@ -1037,7 +1040,10 @@ def _execute_v5(bundle: Mapping[str, Any]) -> dict[str, Any]:
         or provenance.get("candidateVerificationReportHash")
         != expected.get("candidateVerificationReport")
         or provenance.get("scientificVerifierVersion")
-        != "scientific-candidate-verifier-v1"
+        not in {
+            "scientific-candidate-verifier-v1",
+            "scientific-candidate-verifier-v2",
+        }
         or provenance.get("scorerVersion") != selection.get("scorerVersion")
         or provenance.get("projectionAdapterVersion")
         != "experiment-ir-v5-to-plan-v2-v1"

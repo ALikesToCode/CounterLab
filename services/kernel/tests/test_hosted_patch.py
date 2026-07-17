@@ -152,7 +152,12 @@ def _v5_leakage_patch_case() -> tuple[bytes, dict[str, object], dict[str, object
             "normalizedScore": fixed_selection["normalizedScore"],
             "scorerVersion": fixed_selection["scorerVersion"],
         },
-        "transfer": {"taskId": "forecast-future-leakage-v1"},
+        "transfer": {
+            "taskId": "forecast-future-leakage-v1",
+            "changedSurface": "Time-ordered forecasting",
+            "requiredActionIds": ["time_ordered_holdout"],
+            "nonClaims": ["This transfer does not certify global mastery."],
+        },
     }
     selected_ir_hash = sha256_json_browser(selected_ir)
     release_result_hash = "c" * 64
@@ -221,7 +226,7 @@ def _v5_leakage_patch_case() -> tuple[bytes, dict[str, object], dict[str, object
             "rawExperimentIrCanonicalHash": "6" * 64,
             "labSceneHash": "4" * 64,
             "candidateVerificationReportHash": "7" * 64,
-            "scientificVerifierVersion": "scientific-candidate-verifier-v1",
+            "scientificVerifierVersion": "scientific-candidate-verifier-v2",
             "selectionHash": sha256_json_browser(fixed_selection),
             "selectedExperimentIrHash": selected_ir_hash,
             "projectedPlanHash": sha256_json_browser(base_plan),
@@ -289,6 +294,24 @@ def _v5_leakage_patch_case() -> tuple[bytes, dict[str, object], dict[str, object
     return source, bundle, patch_plan
 
 
+def _mutate_v5_transfer_semantics(bundle: dict[str, object]) -> None:
+    selected_ir = bundle["selectedExperimentIr"]
+    assert isinstance(selected_ir, dict)
+    transfer = selected_ir["transfer"]
+    assert isinstance(transfer, dict)
+    transfer["requiredActionIds"] = ["foreign_action"]
+    selected_ir_hash = sha256_json_browser(selected_ir)
+    compile_authority = bundle["compileAuthority"]
+    assert isinstance(compile_authority, dict)
+    compile_authority["selectedExperimentIrHash"] = selected_ir_hash
+    release = bundle["releaseAuthority"]
+    assert isinstance(release, dict)
+    verdict = release["evidenceVerdict"]
+    assert isinstance(verdict, dict)
+    verdict["irHash"] = selected_ir_hash
+    release["evidenceVerdictHash"] = sha256_json_browser(verdict)
+
+
 def test_hosted_v5_patch_requires_scientific_and_transfer_authority(
     tmp_path: Path,
 ) -> None:
@@ -328,6 +351,7 @@ def test_hosted_v5_patch_requires_scientific_and_transfer_authority(
             ),
             "transfer",
         ),
+        (_mutate_v5_transfer_semantics, "transfer"),
         (
             lambda bundle: bundle["fixedSelection"].update(  # type: ignore[union-attr]
                 {"selectedCandidateId": "different-candidate"}

@@ -44,6 +44,20 @@ _TRANSFER_RESULT_TASKS = {
     "entity_leakage": "forecasting-future-leakage-01",
     "class_imbalance": "manufacturing-defect-transfer-01",
 }
+_TRANSFER_IR_CONTRACTS = {
+    "entity_leakage": {
+        "taskId": "forecast-future-leakage-v1",
+        "changedSurface": "Time-ordered forecasting",
+        "requiredActionIds": ["time_ordered_holdout"],
+        "nonClaims": ["This transfer does not certify global mastery."],
+    },
+    "class_imbalance": {
+        "taskId": "manufacturing-rare-defect-v1",
+        "changedSurface": "Rare manufacturing defects with asymmetric cost",
+        "requiredActionIds": ["choose_minority_sensitive_metric"],
+        "nonClaims": ["This transfer does not certify global mastery."],
+    },
+}
 _PATCH_PLAN_BASE_KEYS = frozenset({
         "schemaVersion",
         "planId",
@@ -354,6 +368,7 @@ def _validate_v5_patch_bundle(bundle: Mapping[str, Any]) -> None:
         transfer.get("outcome") != "PASSED"
         or not all(_mapping(check, "transfer check").get("passed") is True for check in checks)
         or bundle.get("transferContractId") != transfer_task.get("taskId")
+        or transfer_task != _TRANSFER_IR_CONTRACTS.get(str(concept))
         or transfer.get("taskId") != _TRANSFER_RESULT_TASKS.get(str(concept))
         or transfer_hash != sha256_json_browser(transfer_base)
     ):

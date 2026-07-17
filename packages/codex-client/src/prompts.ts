@@ -177,6 +177,11 @@ Authority boundary:
       ? "Do not invent a Boundary Sweep when the historical compiler bundle does not declare one."
       : "Copy conceptPack.boundarySweep exactly into experimentIr.boundarySweep; do not rename, reorder, omit, or extend its fields."
   }
+- ${
+    input.conceptPack.transferTask === undefined
+      ? "This historical compiler bundle does not declare a frozen transfer contract; do not invent transfer authority."
+      : "Copy conceptPack.transferTask.experimentIrContract exactly into experimentIr.transfer; do not rename, reorder, omit, extend, or author any transfer field. If labScene contains a Transfer block, set its evaluatorId to conceptPack.transferTask.evaluatorTaskId exactly."
+  }
 - Do not reveal private reasoning.
 
 Immutable lineage:
@@ -229,6 +234,7 @@ export function buildRepairHostedScientificMethodPrompt(
   const input = RepairHostedScientificMethodInputSchema.parse(raw);
   return `${renderHostedScientificMethodPrompt(input)}
 This is repair attempt ${input.repairAttempt} of at most 2. Correct only the structured findings. Preserve all valid lineage, evidence, controls, and non-claims. Keep Experiment IR selection UNSELECTED.
+When transfer_contract is rejected, replace experimentIr.transfer with conceptPack.transferTask.experimentIrContract in full and bind every Transfer block evaluatorId to conceptPack.transferTask.evaluatorTaskId; do not preserve any rejected transfer field.
 
 Previous artifacts:
 ${json(input.previousArtifacts)}

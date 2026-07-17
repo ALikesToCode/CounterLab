@@ -122,6 +122,17 @@ function runnerBundleV5() {
         observableId: "optimism_gap" as const,
         maxCells: 25,
       },
+      transferTask: {
+        id: "forecast-future-leakage-v1",
+        evaluatorTaskId: "forecasting-future-leakage-01",
+        title: "Choose an evaluation boundary that cannot see the future",
+        experimentIrContract: {
+          taskId: "forecast-future-leakage-v1",
+          changedSurface: "Time-ordered forecasting",
+          requiredActionIds: ["time_ordered_holdout"],
+          nonClaims: ["This transfer does not certify global mastery."],
+        },
+      },
       planRequirements: ["Hold the estimator and preprocessing fixed."],
     },
     schemas: {
@@ -258,12 +269,7 @@ function labRunBundleV5() {
           "The measured gap is too small to distinguish the hypotheses.",
       },
     ],
-    transfer: {
-      taskId: "forecast-future-leakage-v1",
-      changedSurface: "Time-ordered forecasting with future-looking features.",
-      requiredActionIds: ["time-ordered-holdout"],
-      nonClaims: ["Transfer does not certify global mastery."],
-    },
+    transfer: compile.conceptPack.transferTask!.experimentIrContract,
     nonClaims: ["This does not prove performance for every future customer."],
     provenance: {
       kind: "codex" as const,
@@ -610,6 +616,44 @@ describe("Runner LAB_COMPILE bundle v5", () => {
       RunnerLabCompileBundleV5Schema.parse({ ...bundle, conceptPack })
         .conceptPack.boundarySweep,
     ).toBeUndefined();
+  });
+
+  it("carries the frozen transfer contract without invalidating historical v5 bundle parsing", () => {
+    const bundle = runnerBundleV5();
+    expect(
+      RunnerLabCompileBundleV5Schema.parse(bundle).conceptPack.transferTask,
+    ).toEqual({
+      id: "forecast-future-leakage-v1",
+      evaluatorTaskId: "forecasting-future-leakage-01",
+      title: "Choose an evaluation boundary that cannot see the future",
+      experimentIrContract: {
+        taskId: "forecast-future-leakage-v1",
+        changedSurface: "Time-ordered forecasting",
+        requiredActionIds: ["time_ordered_holdout"],
+        nonClaims: ["This transfer does not certify global mastery."],
+      },
+    });
+    const { transferTask: _transferTask, ...conceptPack } = bundle.conceptPack;
+    expect(
+      RunnerLabCompileBundleV5Schema.parse({ ...bundle, conceptPack })
+        .conceptPack.transferTask,
+    ).toBeUndefined();
+  });
+
+  it("rejects a transfer descriptor whose public task ID diverges from its IR contract", () => {
+    const bundle = runnerBundleV5();
+    expect(() =>
+      RunnerLabCompileBundleV5Schema.parse({
+        ...bundle,
+        conceptPack: {
+          ...bundle.conceptPack,
+          transferTask: {
+            ...bundle.conceptPack.transferTask,
+            id: "different-transfer-contract",
+          },
+        },
+      }),
+    ).toThrow(/transfer task ID/i);
   });
 
   it("rejects unresolved manifest evidence, mixed v1 fields, and extra outputs", () => {

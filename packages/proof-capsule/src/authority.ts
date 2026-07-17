@@ -613,6 +613,8 @@ export async function validateProofCapsulePayloadAuthorityV2(
   if (
     transfer.outcome !== "PASSED" ||
     experimentIr.transfer.taskId !== subjectPack.transferTask.id ||
+    JSON.stringify(experimentIr.transfer) !==
+      JSON.stringify(subjectPack.transferTask.experimentIrContract) ||
     transfer.taskId !== subjectPack.transferTask.evaluatorTaskId ||
     patchPlan.artifactManifestHash !== authority.lineage.artifactManifestHash ||
     patchPlan.sourceArtifactHash !== artifactManifest.fileSha256 ||

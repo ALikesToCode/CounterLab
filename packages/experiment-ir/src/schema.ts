@@ -214,7 +214,7 @@ const BoundarySweepRequestSchema = z
     }
   });
 
-const TransferContractSchema = z
+export const TransferContractSchema = z
   .object({
     taskId: TokenIdSchema,
     changedSurface: NonEmptyString,
@@ -447,6 +447,7 @@ export const ExperimentIRV5Schema = z
   });
 
 export type ExperimentIRV5 = z.infer<typeof ExperimentIRV5Schema>;
+export type TransferContract = z.infer<typeof TransferContractSchema>;
 export type CandidateExperiment = z.infer<typeof CandidateExperimentSchema>;
 export type ExperimentSelectionState = z.infer<
   typeof ExperimentSelectionStateSchema
