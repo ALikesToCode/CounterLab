@@ -5,21 +5,21 @@
   "packageName": "counterlab-kernel",
   "exactVersion": "0.1.0",
   "environmentId": "counterlab-runner-linux-amd64-v2",
-  "imageDigest": "sha256:9a15c85acb07ecc72e8be157ee20d8cee1409a6c3069ebadb72d72e939db72c8",
+  "imageDigest": "sha256:26357c4e3cfa780904399da18e73c85a2c2edf29637b2a49ab7c663f6730e31a",
   "sourceBinding": {
     "status": "BOUND",
-    "commit": "e177f4b0251633342dfc184b9c0318895b7aa896",
+    "commit": "4f2f5ea0958917cd8faffd29fcec230708d3348d",
     "ociLabel": "org.opencontainers.image.revision"
   },
   "artifact": {
-    "sha256": "5dc8621ed67190645544a85184a8c1dc24ef14b6b26154f31f93469042b10276",
+    "sha256": "c4e6133f18adea7351fa28ae172ec33352a7e6d4be8b23ecf7f9cce7ed6726b8",
     "pathInImage": "/opt/counterlab-wheelhouse/counterlab_kernel-0.1.0-py3-none-any.whl",
     "buildLockSha256": "3f81fa90d6adf1e490ab6d104f824f1aabc7d2405be81c9f25be89195d434301",
     "reproducibility": "Two clean builder executions produced byte-identical wheels."
   },
   "installed": {
     "metadataSha256": "016947c264f91f5b03239c58b4465c05a4f7a9cd7f278ead21427065d0fcaeb9",
-    "recordSha256": "4d1655dd664aedb3b7ebb2d21d963b2938b764bfda62b3681c1a0ffe6cad13e1",
+    "recordSha256": "89dd90faa7dc4d82e064379ad6422d4d80daa0ea29ff16e6213e2f37d431540d",
     "licenseExpression": "MIT",
     "licenseSha256": "4280a28f28fccb8e7653bbd5ecf70470d4a269849b13e60a6d490204cd476cd1"
   },

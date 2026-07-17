@@ -66,7 +66,7 @@
           "authorityId": "counterlab-independent-fixtures",
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-oracle-integrity-v2",
-          "integrityHash": "c0c57ffeaf5c14e643c11bfcf6c12bbede773d71b502d164f47af810946de589",
+          "integrityHash": "80a363b38c8cd617722735ff248058ee680287efd34655a8865c715ca4df42ec",
           "validationEvidenceIds": [
             "ml-independent-fixtures-v2"
           ],
@@ -92,7 +92,7 @@
           "authorityId": "counterlab-mutation-matrix",
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-mutations-integrity-v2",
-          "integrityHash": "86190da0cc0da71b19bc67776e4a660e4ec66f377525ac201e3bdf318632122c",
+          "integrityHash": "1ac0c8c5b6b258e362946ac312b1af0940612d423f55398853faee61cdbb5078",
           "validationEvidenceIds": [
             "ml-row-order-invariance-v1"
           ],
@@ -169,7 +169,7 @@
           "authorityId": "counterlab-independent-fixtures",
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-oracle-integrity-v2",
-          "integrityHash": "c0c57ffeaf5c14e643c11bfcf6c12bbede773d71b502d164f47af810946de589",
+          "integrityHash": "80a363b38c8cd617722735ff248058ee680287efd34655a8865c715ca4df42ec",
           "validationEvidenceIds": [
             "ml-independent-fixtures-v2"
           ],
@@ -195,7 +195,7 @@
           "authorityId": "counterlab-mutation-matrix",
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-mutations-integrity-v2",
-          "integrityHash": "86190da0cc0da71b19bc67776e4a660e4ec66f377525ac201e3bdf318632122c",
+          "integrityHash": "1ac0c8c5b6b258e362946ac312b1af0940612d423f55398853faee61cdbb5078",
           "validationEvidenceIds": [
             "ml-row-order-invariance-v1"
           ],

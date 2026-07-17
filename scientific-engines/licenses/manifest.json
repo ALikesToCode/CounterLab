@@ -1,8 +1,8 @@
 {
   "schemaVersion": "1",
   "scope": "scientific-engine-local-candidate",
-  "imageDigest": "sha256:9a15c85acb07ecc72e8be157ee20d8cee1409a6c3069ebadb72d72e939db72c8",
-  "capturedOn": "2026-07-16",
+  "imageDigest": "sha256:26357c4e3cfa780904399da18e73c85a2c2edf29637b2a49ab7c663f6730e31a",
+  "capturedOn": "2026-07-17",
   "entries": [
     {
       "engineId": "cpython-runtime",
