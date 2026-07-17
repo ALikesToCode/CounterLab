@@ -2359,9 +2359,7 @@ function LeakageRealityScreen({
             proofCapsuleDownloadUrl={counterLabApi.proofCapsuleDownloadUrl(
               session.sessionId,
             )}
-            publishReplay={() =>
-              counterLabApi.publishReplay(session.sessionId)
-            }
+            publishReplay={() => counterLabApi.publishReplay(session.sessionId)}
           />
         ) : (
           <section className="reasoning-diff panel">
@@ -3852,6 +3850,11 @@ export function App() {
           restored.state !== "INGESTED" &&
             restored.state !== "BELIEF_TEST_PROPOSED",
         );
+        // The route is safe to synchronize as soon as the persisted session
+        // and artifact have been restored. A resumed runner may still fail;
+        // keeping hydration disabled until that network job succeeds would
+        // freeze later retry navigation on the stale URL.
+        setRouteHydrated(true);
         if (restored.state === "INGESTED") setStage("claim");
         else if (
           restored.state === "BELIEF_TEST_PROPOSED" ||
@@ -3875,7 +3878,6 @@ export function App() {
         } else {
           setStage("reality");
         }
-        if (active) setRouteHydrated(true);
       } catch (caught) {
         if (active) reportError(caught);
       } finally {
@@ -3891,7 +3893,11 @@ export function App() {
 
   useLayoutEffect(() => {
     resetViewport(
-      judgeMode ? "judge-title" : stage === "landing" ? "landing-title" : undefined,
+      judgeMode
+        ? "judge-title"
+        : stage === "landing"
+          ? "landing-title"
+          : undefined,
     );
   }, [judgeMode, stage]);
 

@@ -222,6 +222,7 @@ function installApi(
     rejectLiveBelief?: boolean;
     beliefTest?: typeof liveBeliefTest | typeof imbalanceBeliefTest;
     stallRunner?: boolean;
+    failRunnerResume?: boolean;
     restoredSessionState?:
       | "INGESTED"
       | "BELIEF_TEST_PROPOSED"
@@ -289,6 +290,19 @@ function installApi(
         );
       }
       if (path.includes("/jobs/runner_job_ui/events?after=")) {
+        if (options.failRunnerResume) {
+          return response({
+            events: [],
+            nextCursor: 0,
+            jobStatus: "FAILED",
+            terminal: true,
+            jobError: {
+              code: "CODEX_TURN_FAILED",
+              message: "The bounded compiler turn failed.",
+              retryable: false,
+            },
+          });
+        }
         return response({
           events: [],
           nextCursor: 0,
@@ -800,6 +814,22 @@ describe("CounterLab judged flow", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getByText(/live generation/i)).toBeInTheDocument();
+  });
+
+  it("keeps URL synchronization active when a restored runner resume fails", async () => {
+    installApi({
+      restoredSessionState: "LAB_COMPILING",
+      stallRunner: true,
+      failRunnerResume: true,
+    });
+    window.history.replaceState({}, "", "/proof/session_ui");
+
+    render(<App />);
+
+    expect(
+      await screen.findByText(/the bounded compiler turn failed/i),
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/session/session_ui");
   });
 
   it("renders the exact Belief Spec v2 after a live session refresh", async () => {
