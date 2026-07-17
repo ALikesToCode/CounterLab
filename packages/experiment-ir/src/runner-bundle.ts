@@ -668,16 +668,29 @@ export type InteractiveRunConfigurationV5 = z.infer<
   typeof InteractiveRunConfigurationV5Schema
 >;
 
+export const InteractivePlanDerivationVersionSchema = z.enum([
+  "interactive-plan-v5-derivation-v1",
+  "interactive-plan-v5-derivation-v2",
+]);
+
+export type InteractivePlanDerivationVersion = z.infer<
+  typeof InteractivePlanDerivationVersionSchema
+>;
+
 export function deriveInteractivePlanV5(
   basePlanCandidate: unknown,
   configurationCandidate: unknown,
   configurationHashCandidate: unknown,
+  derivationVersionCandidate: unknown = "interactive-plan-v5-derivation-v2",
 ): { interactivePlan: ExperimentPlanV2; selectedRunId: string } {
   const basePlan = ExperimentPlanV2Schema.parse(basePlanCandidate);
   const configuration = InteractiveRunConfigurationV5Schema.parse(
     configurationCandidate,
   );
   const configurationHash = Sha256.parse(configurationHashCandidate);
+  const derivationVersion = InteractivePlanDerivationVersionSchema.parse(
+    derivationVersionCandidate,
+  );
   const selectedRunId = `interactive-${configurationHash.slice(0, 16)}`;
   const planId = `interactive-plan-${configurationHash.slice(0, 16)}`;
 
@@ -687,24 +700,65 @@ export function deriveInteractivePlanV5(
         "class-imbalance controls require a class-imbalance base Plan",
       );
     }
-    const targetOperation =
-      configuration.prevalenceScenario === "observed"
-        ? "imbalance.threshold_sweep"
-        : "imbalance.prevalence_sweep";
-    let selected = false;
-    const interventions = basePlan.interventions.map((run) => {
-      if (run.operation !== targetOperation) return run;
-      selected = true;
+    if (derivationVersion === "interactive-plan-v5-derivation-v1") {
+      const targetOperation =
+        configuration.prevalenceScenario === "observed"
+          ? "imbalance.threshold_sweep"
+          : "imbalance.prevalence_sweep";
+      let selected = false;
+      const interventions = basePlan.interventions.map((run) => {
+        if (run.operation !== targetOperation) return run;
+        selected = true;
+        return {
+          ...run,
+          runId: selectedRunId,
+          threshold: configuration.threshold,
+          prevalenceScenario: configuration.prevalenceScenario,
+        };
+      });
+      if (!selected) {
+        throw new TypeError(
+          "base Plan is missing the registered class-imbalance control",
+        );
+      }
       return {
-        ...run,
-        runId: selectedRunId,
-        threshold: configuration.threshold,
-        prevalenceScenario: configuration.prevalenceScenario,
+        selectedRunId,
+        interactivePlan: ExperimentPlanV2Schema.parse({
+          ...basePlan,
+          planId,
+          interventions,
+        }),
       };
+    }
+    const selectsThreshold = configuration.prevalenceScenario === "observed";
+    let thresholdAligned = false;
+    let prevalenceAligned = false;
+    const interventions = basePlan.interventions.map((run) => {
+      if (run.operation === "imbalance.threshold_sweep") {
+        thresholdAligned = true;
+        return {
+          ...run,
+          runId: selectsThreshold ? selectedRunId : run.runId,
+          threshold: configuration.threshold,
+          prevalenceScenario: "observed" as const,
+        };
+      }
+      if (run.operation === "imbalance.prevalence_sweep") {
+        prevalenceAligned = true;
+        return {
+          ...run,
+          runId: selectsThreshold ? run.runId : selectedRunId,
+          threshold: configuration.threshold,
+          prevalenceScenario: selectsThreshold
+            ? run.prevalenceScenario
+            : configuration.prevalenceScenario,
+        };
+      }
+      return run;
     });
-    if (!selected) {
+    if (!thresholdAligned || !prevalenceAligned) {
       throw new TypeError(
-        "base Plan is missing the registered class-imbalance control",
+        "base Plan is missing a registered class-imbalance comparison control",
       );
     }
     return {
@@ -788,7 +842,7 @@ export const RunnerLabInteractiveRunBundleV5Schema = z
       .strict(),
     configuration: InteractiveRunConfigurationV5Schema,
     configurationHash: Sha256,
-    derivationVersion: z.literal("interactive-plan-v5-derivation-v1"),
+    derivationVersion: InteractivePlanDerivationVersionSchema,
     selectedRunId: z
       .string()
       .regex(/^interactive-[a-f0-9]{16}$/u, "invalid interactive run ID"),
@@ -922,6 +976,7 @@ export const RunnerLabInteractiveRunBundleV5Schema = z
         plan,
         bundle.configuration,
         bundle.configurationHash,
+        bundle.derivationVersion,
       );
       if (
         derived.selectedRunId !== bundle.selectedRunId ||

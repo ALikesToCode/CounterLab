@@ -5,7 +5,11 @@ from copy import deepcopy
 import pytest
 
 from counterlab_kernel.canonical import sha256_json
-from counterlab_kernel.hosted_run import execute_hosted_lab_run
+from counterlab_kernel.hosted_run import (
+    HostedLabRunError,
+    _derive_interactive_plan_v5,
+    execute_hosted_lab_run,
+)
 from counterlab_kernel.imbalance import generate_imbalance_fixture
 from counterlab_kernel.plan import (
     ExperimentPlanValidationError,
@@ -190,6 +194,137 @@ def test_fixed_interpreter_executes_imbalance_plan_deterministically() -> None:
         "rarer_deployment",
     ]
     assert first["resultHash"] == second["resultHash"]
+
+
+@pytest.mark.parametrize(
+    "prevalence_scenario",
+    ["observed", "rarer", "more_common"],
+)
+def test_interactive_scenario_keeps_threshold_comparison_valid(
+    prevalence_scenario: str,
+) -> None:
+    configuration = {
+        "schemaVersion": "1",
+        "concept": "class_imbalance",
+        "threshold": 0.2,
+        "prevalenceScenario": prevalence_scenario,
+        "metricFocus": "recall",
+    }
+    derived, selected_run_id = _derive_interactive_plan_v5(
+        plan(),
+        configuration,
+        "f" * 64,
+    )
+
+    validated = validate_experiment_plan(derived, manifest(), learner_claim=CLAIM)
+    result = interpret_experiment_plan(
+        validated,
+        manifest(),
+        generate_imbalance_fixture(),
+        learner_claim=CLAIM,
+    )
+    threshold = next(
+        run
+        for run in validated["interventions"]
+        if run["operation"] == "imbalance.threshold_sweep"
+    )
+    prevalence = next(
+        run
+        for run in validated["interventions"]
+        if run["operation"] == "imbalance.prevalence_sweep"
+    )
+
+    assert threshold["runId"] == (
+        selected_run_id
+        if prevalence_scenario == "observed"
+        else "lower_decision_threshold"
+    )
+    assert threshold["threshold"] == 0.2
+    assert threshold["prevalenceScenario"] == "observed"
+    assert prevalence["runId"] == (
+        "rarer_deployment"
+        if prevalence_scenario == "observed"
+        else selected_run_id
+    )
+    assert prevalence["threshold"] == 0.2
+    assert prevalence["prevalenceScenario"] == (
+        "rarer" if prevalence_scenario == "observed" else prevalence_scenario
+    )
+    assert any(run["id"] == selected_run_id for run in result["runs"])
+
+
+def test_stored_v1_imbalance_interactive_derivation_remains_reproducible() -> None:
+    derived, selected_run_id = _derive_interactive_plan_v5(
+        plan(),
+        {
+            "schemaVersion": "1",
+            "concept": "class_imbalance",
+            "threshold": 0.25,
+            "prevalenceScenario": "rarer",
+            "metricFocus": "recall",
+        },
+        "e" * 64,
+        "interactive-plan-v5-derivation-v1",
+    )
+
+    validated = validate_experiment_plan(derived, manifest(), learner_claim=CLAIM)
+    result = interpret_experiment_plan(
+        validated,
+        manifest(),
+        generate_imbalance_fixture(),
+        learner_claim=CLAIM,
+    )
+
+    assert any(run["id"] == selected_run_id for run in result["runs"])
+
+
+def test_v1_derivation_preserves_historical_selection_only_behavior() -> None:
+    derived, selected_run_id = _derive_interactive_plan_v5(
+        plan(),
+        {
+            "schemaVersion": "1",
+            "concept": "class_imbalance",
+            "threshold": 0.2,
+            "prevalenceScenario": "rarer",
+            "metricFocus": "recall",
+        },
+        "d" * 64,
+        "interactive-plan-v5-derivation-v1",
+    )
+    threshold = next(
+        run
+        for run in derived["interventions"]
+        if run["operation"] == "imbalance.threshold_sweep"
+    )
+    prevalence = next(
+        run
+        for run in derived["interventions"]
+        if run["operation"] == "imbalance.prevalence_sweep"
+    )
+
+    assert threshold["runId"] == "lower_decision_threshold"
+    assert threshold["threshold"] == 0.25
+    assert prevalence["runId"] == selected_run_id
+    assert prevalence["threshold"] == 0.2
+
+
+def test_stored_v1_derivation_rejects_invalid_interactive_controls() -> None:
+    with pytest.raises(
+        HostedLabRunError,
+        match="class-imbalance interactive configuration is invalid",
+    ):
+        _derive_interactive_plan_v5(
+            plan(),
+            {
+                "schemaVersion": "1",
+                "concept": "class_imbalance",
+                "threshold": 0.25,
+                "prevalenceScenario": "rarer",
+                "metricFocus": "accuracy",
+            },
+            "e" * 64,
+            "interactive-plan-v5-derivation-v1",
+        )
 
 
 def test_hosted_runner_uses_only_the_registered_imbalance_fixture() -> None:

@@ -439,7 +439,7 @@ function interactiveLabRunBundleV5() {
     },
     configuration,
     configurationHash,
-    derivationVersion: "interactive-plan-v5-derivation-v1" as const,
+    derivationVersion: "interactive-plan-v5-derivation-v2" as const,
     selectedRunId,
     interactivePlan,
     interactivePlanHash: digest("b"),
@@ -449,6 +449,98 @@ function interactiveLabRunBundleV5() {
       authorityHash: configurationHash,
     },
     permittedOutputs: ["verified-result.json" as const],
+  };
+}
+
+function imbalancePlanV2() {
+  const evidence = {
+    cellIndex: 3,
+    outputIndex: 0,
+    kind: "metric" as const,
+    hash: digest("1"),
+    excerpt: "accuracy = 0.988; recall = 0",
+    relevance: "The reported accuracy hides the minority-class outcome.",
+  };
+  return {
+    schemaVersion: "2" as const,
+    planId: "imbalance-plan-1",
+    sessionId: "session-imbalance-1",
+    concept: "class_imbalance" as const,
+    conceptPackVersion: "1.1.0",
+    artifactManifestHash: digest("2"),
+    beliefTestId: "belief-imbalance-1",
+    evidenceRefs: [evidence],
+    baseline: {
+      concept: "class_imbalance" as const,
+      runId: "majority-baseline",
+      operation: "imbalance.majority_baseline" as const,
+      seed: 42,
+      threshold: 0.5,
+      prevalenceScenario: "observed" as const,
+      model: "majority_baseline" as const,
+    },
+    interventions: [
+      {
+        concept: "class_imbalance" as const,
+        runId: "stratified-holdout",
+        operation: "imbalance.stratified_holdout" as const,
+        seed: 42,
+        threshold: 0.5,
+        prevalenceScenario: "observed" as const,
+        model: "logistic_regression" as const,
+      },
+      {
+        concept: "class_imbalance" as const,
+        runId: "threshold-sweep",
+        operation: "imbalance.threshold_sweep" as const,
+        seed: 42,
+        threshold: 0.35,
+        prevalenceScenario: "observed" as const,
+        model: "logistic_regression" as const,
+      },
+      {
+        concept: "class_imbalance" as const,
+        runId: "prevalence-sweep",
+        operation: "imbalance.prevalence_sweep" as const,
+        seed: 42,
+        threshold: 0.35,
+        prevalenceScenario: "rarer" as const,
+        model: "logistic_regression" as const,
+      },
+    ],
+    controlledVariables: ["model_scores", "seed", "evaluation_set"],
+    changedVariables: ["decision_threshold", "class_prevalence"],
+    metrics: [
+      "accuracy" as const,
+      "precision" as const,
+      "recall" as const,
+      "f1" as const,
+      "pr_auc" as const,
+      "roc_auc" as const,
+      "confusion_matrix" as const,
+      "prevalence" as const,
+    ],
+    visualizations: [
+      "metric_comparison" as const,
+      "confusion_matrix" as const,
+      "threshold_curve" as const,
+      "prevalence_sensitivity" as const,
+    ],
+    discriminatesBecause:
+      "The comparison holds model scores fixed while threshold and prevalence are varied in registered runs.",
+    expectedPatterns: [
+      {
+        hypothesisId: "current" as const,
+        qualitativeOutcome: "Minority detection remains useful.",
+      },
+      {
+        hypothesisId: "competing" as const,
+        qualitativeOutcome:
+          "Accuracy remains high while minority recall fails.",
+      },
+    ],
+    nonClaims: ["Accuracy alone does not establish deployment utility."],
+    resourceLimits: { wallSeconds: 120, memoryMb: 768, maxRuns: 4 },
   };
 }
 
@@ -933,6 +1025,72 @@ describe("Runner LAB_RUN bundle v5", () => {
 });
 
 describe("Runner interactive LAB_RUN bundle v5", () => {
+  it.each(["rarer", "more_common"] as const)(
+    "keeps threshold and prevalence comparisons aligned for a %s scenario",
+    (prevalenceScenario) => {
+      const configurationHash = digest("f");
+      const { interactivePlan, selectedRunId } = deriveInteractivePlanV5(
+        imbalancePlanV2(),
+        {
+          schemaVersion: "1",
+          concept: "class_imbalance",
+          threshold: 0.2,
+          prevalenceScenario,
+          metricFocus: "recall",
+        },
+        configurationHash,
+      );
+      const threshold = interactivePlan.interventions.find(
+        (run) => run.operation === "imbalance.threshold_sweep",
+      );
+      const prevalence = interactivePlan.interventions.find(
+        (run) => run.operation === "imbalance.prevalence_sweep",
+      );
+
+      expect(threshold).toMatchObject({
+        runId: "threshold-sweep",
+        threshold: 0.2,
+        prevalenceScenario: "observed",
+      });
+      expect(prevalence).toMatchObject({
+        runId: selectedRunId,
+        threshold: 0.2,
+        prevalenceScenario,
+      });
+    },
+  );
+
+  it("keeps the prevalence comparison aligned when the observed threshold changes", () => {
+    const { interactivePlan, selectedRunId } = deriveInteractivePlanV5(
+      imbalancePlanV2(),
+      {
+        schemaVersion: "1",
+        concept: "class_imbalance",
+        threshold: 0.2,
+        prevalenceScenario: "observed",
+        metricFocus: "recall",
+      },
+      digest("0"),
+    );
+    const threshold = interactivePlan.interventions.find(
+      (run) => run.operation === "imbalance.threshold_sweep",
+    );
+    const prevalence = interactivePlan.interventions.find(
+      (run) => run.operation === "imbalance.prevalence_sweep",
+    );
+
+    expect(threshold).toMatchObject({
+      runId: selectedRunId,
+      threshold: 0.2,
+      prevalenceScenario: "observed",
+    });
+    expect(prevalence).toMatchObject({
+      runId: "prevalence-sweep",
+      threshold: 0.2,
+      prevalenceScenario: "rarer",
+    });
+  });
+
   it("accepts a purpose-separated run bound to frozen compile and release authority", () => {
     const parsed = RunnerLabInteractiveRunBundleV5Schema.safeParse(
       interactiveLabRunBundleV5(),
@@ -948,7 +1106,7 @@ describe("Runner interactive LAB_RUN bundle v5", () => {
       schemaVersion: "5",
       kind: "LAB_RUN",
       purpose: "INTERACTIVE",
-      derivationVersion: "interactive-plan-v5-derivation-v1",
+      derivationVersion: "interactive-plan-v5-derivation-v2",
       selectedRunId: `interactive-${digest("e").slice(0, 16)}`,
       permittedOutputs: ["verified-result.json"],
     });
@@ -982,6 +1140,49 @@ describe("Runner interactive LAB_RUN bundle v5", () => {
         },
       }).success,
     ).toBe(false);
+  });
+
+  it("continues to validate stored v1 leakage derivations", () => {
+    const source = interactiveLabRunBundleV5();
+
+    expect(
+      RunnerLabInteractiveRunBundleV5Schema.safeParse({
+        ...source,
+        derivationVersion: "interactive-plan-v5-derivation-v1",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("preserves the stored v1 imbalance derivation semantics", () => {
+    const { interactivePlan, selectedRunId } = deriveInteractivePlanV5(
+      imbalancePlanV2(),
+      {
+        schemaVersion: "1",
+        concept: "class_imbalance",
+        threshold: 0.2,
+        prevalenceScenario: "rarer",
+        metricFocus: "recall",
+      },
+      digest("3"),
+      "interactive-plan-v5-derivation-v1",
+    );
+    const threshold = interactivePlan.interventions.find(
+      (run) => run.operation === "imbalance.threshold_sweep",
+    );
+    const prevalence = interactivePlan.interventions.find(
+      (run) => run.operation === "imbalance.prevalence_sweep",
+    );
+
+    expect(threshold).toMatchObject({
+      runId: "threshold-sweep",
+      threshold: 0.35,
+      prevalenceScenario: "observed",
+    });
+    expect(prevalence).toMatchObject({
+      runId: selectedRunId,
+      threshold: 0.2,
+      prevalenceScenario: "rarer",
+    });
   });
 
   it("rejects compile selection drift and a plan not derived from its configuration", () => {

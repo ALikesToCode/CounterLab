@@ -7051,12 +7051,14 @@ export function createApi(options: ApiOptions = {}) {
         epistemicReportHash: evidenceAuthority.epistemicReportHash,
         configuration,
       });
+      const derivationVersion = "interactive-plan-v5-derivation-v2" as const;
       let derived: ReturnType<typeof deriveInteractivePlanV5>;
       try {
         derived = deriveInteractivePlanV5(
           frozenCompile.projectedPlan,
           configuration,
           configurationHash,
+          derivationVersion,
         );
       } catch {
         throw new ApiInputError(
@@ -7093,7 +7095,7 @@ export function createApi(options: ApiOptions = {}) {
         },
         configuration,
         configurationHash,
-        derivationVersion: "interactive-plan-v5-derivation-v1",
+        derivationVersion,
         selectedRunId: derived.selectedRunId,
         interactivePlan: derived.interactivePlan,
         interactivePlanHash,

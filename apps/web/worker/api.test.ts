@@ -6902,8 +6902,8 @@ describe("Cloudflare Worker API", () => {
       {
         schemaVersion: "1",
         concept: "class_imbalance",
-        threshold: 0.25,
-        prevalenceScenario: "observed",
+        threshold: 0.2,
+        prevalenceScenario: "rarer",
         metricFocus: "recall",
       },
     );
@@ -6926,8 +6926,16 @@ describe("Cloudflare Worker API", () => {
         (runSpec) => runSpec.runId === bundle.selectedRunId,
       ),
     ).toMatchObject({
-      operation: "imbalance.threshold_sweep",
-      threshold: 0.25,
+      operation: "imbalance.prevalence_sweep",
+      threshold: 0.2,
+      prevalenceScenario: "rarer",
+    });
+    expect(
+      bundle.interactivePlan.interventions.find(
+        (runSpec) => runSpec.operation === "imbalance.threshold_sweep",
+      ),
+    ).toMatchObject({
+      threshold: 0.2,
       prevalenceScenario: "observed",
     });
     const result = await scientificImbalanceResult({

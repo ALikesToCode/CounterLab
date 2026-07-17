@@ -404,7 +404,13 @@ def _derive_interactive_plan_v5(
     base_plan: Mapping[str, Any],
     configuration: Mapping[str, Any],
     configuration_hash: str,
+    derivation_version: str = "interactive-plan-v5-derivation-v2",
 ) -> tuple[dict[str, Any], str]:
+    if derivation_version not in {
+        "interactive-plan-v5-derivation-v1",
+        "interactive-plan-v5-derivation-v2",
+    }:
+        raise HostedLabRunError("interactive Plan derivation version is invalid")
     selected_run_id = f"interactive-{configuration_hash[:16]}"
     plan_id = f"interactive-plan-{configuration_hash[:16]}"
     derived = deepcopy(dict(base_plan))
@@ -416,10 +422,6 @@ def _derive_interactive_plan_v5(
             _V5_IMBALANCE_CONFIGURATION_KEYS,
             "class-imbalance interactive configuration",
         )
-        if base_plan.get("concept") != "class_imbalance":
-            raise HostedLabRunError(
-                "class-imbalance controls require a class-imbalance base Plan"
-            )
         if (
             configuration.get("schemaVersion") != "1"
             or configuration.get("prevalenceScenario")
@@ -432,28 +434,71 @@ def _derive_interactive_plan_v5(
             raise HostedLabRunError(
                 "class-imbalance interactive configuration is invalid"
             )
-        target_operation = (
-            "imbalance.threshold_sweep"
-            if configuration.get("prevalenceScenario") == "observed"
-            else "imbalance.prevalence_sweep"
-        )
-        selected = False
+        if base_plan.get("concept") != "class_imbalance":
+            raise HostedLabRunError(
+                "class-imbalance controls require a class-imbalance base Plan"
+            )
+        if derivation_version == "interactive-plan-v5-derivation-v1":
+            target_operation = (
+                "imbalance.threshold_sweep"
+                if configuration.get("prevalenceScenario") == "observed"
+                else "imbalance.prevalence_sweep"
+            )
+            selected = False
+            interventions = derived.get("interventions")
+            if not isinstance(interventions, list):
+                raise HostedLabRunError("interactive Plan interventions are invalid")
+            for run in interventions:
+                if isinstance(run, dict) and run.get("operation") == target_operation:
+                    selected = True
+                    run.update(
+                        {
+                            "runId": selected_run_id,
+                            "threshold": configuration["threshold"],
+                            "prevalenceScenario": configuration[
+                                "prevalenceScenario"
+                            ],
+                        }
+                    )
+            if not selected:
+                raise HostedLabRunError(
+                    "base Plan is missing the registered class-imbalance control"
+                )
+            return derived, selected_run_id
+        selects_threshold = configuration.get("prevalenceScenario") == "observed"
+        threshold_aligned = False
+        prevalence_aligned = False
         interventions = derived.get("interventions")
         if not isinstance(interventions, list):
             raise HostedLabRunError("interactive Plan interventions are invalid")
         for run in interventions:
-            if isinstance(run, dict) and run.get("operation") == target_operation:
-                selected = True
+            if not isinstance(run, dict):
+                continue
+            if run.get("operation") == "imbalance.threshold_sweep":
+                threshold_aligned = True
                 run.update(
                     {
-                        "runId": selected_run_id,
+                        "runId": selected_run_id if selects_threshold else run["runId"],
                         "threshold": configuration["threshold"],
-                        "prevalenceScenario": configuration["prevalenceScenario"],
+                        "prevalenceScenario": "observed",
                     }
                 )
-        if not selected:
+            elif run.get("operation") == "imbalance.prevalence_sweep":
+                prevalence_aligned = True
+                run.update(
+                    {
+                        "runId": run["runId"] if selects_threshold else selected_run_id,
+                        "threshold": configuration["threshold"],
+                        "prevalenceScenario": (
+                            run["prevalenceScenario"]
+                            if selects_threshold
+                            else configuration["prevalenceScenario"]
+                        ),
+                    }
+                )
+        if not threshold_aligned or not prevalence_aligned:
             raise HostedLabRunError(
-                "base Plan is missing the registered class-imbalance control"
+                "base Plan is missing a registered class-imbalance comparison control"
             )
         return derived, selected_run_id
 
@@ -519,7 +564,10 @@ def _execute_v5_interactive(bundle: Mapping[str, Any]) -> dict[str, Any]:
         raise HostedLabRunError(
             "hosted interactive LAB_RUN v5 output policy is invalid"
         )
-    if bundle.get("derivationVersion") != "interactive-plan-v5-derivation-v1":
+    if bundle.get("derivationVersion") not in {
+        "interactive-plan-v5-derivation-v1",
+        "interactive-plan-v5-derivation-v2",
+    }:
         raise HostedLabRunError("interactive Plan derivation version is invalid")
 
     manifest = _mapping(bundle.get("artifactManifest"), "artifactManifest")
@@ -734,6 +782,7 @@ def _execute_v5_interactive(bundle: Mapping[str, Any]) -> dict[str, Any]:
         base_plan,
         configuration,
         configuration_hash,
+        str(bundle.get("derivationVersion")),
     )
     if (
         bundle.get("selectedRunId") != selected_run_id
