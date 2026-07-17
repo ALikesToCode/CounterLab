@@ -5,10 +5,10 @@
   "packageName": "scikit-learn",
   "exactVersion": "1.9.0",
   "environmentId": "counterlab-runner-linux-amd64-v2",
-  "imageDigest": "sha256:73285a9ec06ec9b3202a02e483a281c43810fe39f9e4be0bec4a8100aa159bc0",
+  "imageDigest": "sha256:9a15c85acb07ecc72e8be157ee20d8cee1409a6c3069ebadb72d72e939db72c8",
   "sourceBinding": {
     "status": "BOUND",
-    "commit": "8c23c054ebfc50126c89d6afb58ba8501afe6bd5",
+    "commit": "e177f4b0251633342dfc184b9c0318895b7aa896",
     "ociLabel": "org.opencontainers.image.revision"
   },
   "artifact": {
