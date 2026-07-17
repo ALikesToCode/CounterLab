@@ -1131,8 +1131,8 @@ test("a configured hosted runner completes an untouched leakage notebook", async
 
   await page.getByRole("button", { name: /Verify notebook patch/i }).click();
   await waitForVerifiedPatch({
-    success: page.getByRole("heading", {
-      name: /You found the hidden shortcut/i,
+    success: page.getByRole("link", {
+      name: /Download repaired notebook/i,
     }),
     failure: page.locator(
       ".lesson-phase.live-compiler > .transfer-result[role='alert']",
@@ -1265,8 +1265,8 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
 
   await page.getByRole("button", { name: /Verify notebook repair/i }).click();
   await waitForVerifiedPatch({
-    success: page.getByRole("heading", {
-      name: /Your notebook copy passed the repair checks/i,
+    success: page.getByRole("link", {
+      name: /Download repaired notebook/i,
     }),
     failure: page.locator(".imbalance-patch-gate [role='alert']"),
     retry: page.getByRole("button", { name: /Verify notebook repair/i }),
