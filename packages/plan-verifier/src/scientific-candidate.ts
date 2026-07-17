@@ -449,12 +449,23 @@ export async function verifyScientificCandidateV5(
     hashExperimentIR(rawIr),
   ]);
   const support = pack.supportDetector(bundle.artifactManifest);
-  const approvedEvidence = new Set(
-    bundle.approvedBeliefSpec.evidenceRefs.map(evidenceAuthorityKey),
-  );
   const supportEvidence = new Set(support.evidence.map(evidenceAuthorityKey));
   const contractEvidence = contract.evidenceRefs.map(evidenceAuthorityKey);
   const irEvidence = rawIr.evidenceRefs.map(evidenceAuthorityKey);
+  const contractMatchesApproved = sameJson(
+    contract.evidenceRefs,
+    bundle.approvedBeliefSpec.evidenceRefs,
+  );
+  const experimentIrMatchesApproved = sameJson(
+    rawIr.evidenceRefs,
+    bundle.approvedBeliefSpec.evidenceRefs,
+  );
+  const [approvedEvidenceHash, contractEvidenceHash, experimentIrEvidenceHash] =
+    await Promise.all([
+      hashCanonical(bundle.approvedBeliefSpec.evidenceRefs),
+      hashCanonical(contract.evidenceRefs),
+      hashCanonical(rawIr.evidenceRefs),
+    ]);
   const allEvidenceResolves = (
     await Promise.all(
       [...contract.evidenceRefs, ...rawIr.evidenceRefs].map((evidence) =>
@@ -584,18 +595,30 @@ export async function verifyScientificCandidateV5(
     invariant(
       "evidence_lineage",
       allEvidenceResolves &&
-        sameSet(contractEvidence, irEvidence) &&
-        contractEvidence.every((key) => approvedEvidence.has(key)) &&
+        contractMatchesApproved &&
+        experimentIrMatchesApproved &&
         irEvidence.some((key) => supportEvidence.has(key)),
       {
         allEvidenceResolves,
         contractCount: contractEvidence.length,
         irCount: irEvidence.length,
+        contractMatchesApproved,
+        experimentIrMatchesApproved,
+        approvedEvidenceHash,
+        contractEvidenceHash,
+        experimentIrEvidenceHash,
         usesPackRoutingEvidence: irEvidence.some((key) =>
           supportEvidence.has(key),
         ),
       },
-      "approved, resolving Artifact Manifest evidence including Subject Pack routing evidence",
+      {
+        contractMatchesApproved: true,
+        experimentIrMatchesApproved: true,
+        approvedEvidenceHash,
+        resolvingArtifactEvidence: true,
+        includesSubjectPackRoutingEvidence: true,
+      },
+      "The Discrimination Contract and Experiment IR must copy the approved Belief Spec evidenceRefs exactly and in order.",
     ),
     invariant(
       "candidate_lineage",

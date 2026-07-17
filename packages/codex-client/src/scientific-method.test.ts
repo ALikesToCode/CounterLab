@@ -197,6 +197,9 @@ describe("hosted scientific-method compiler", () => {
     expect(prompt).toMatch(
       /discriminationContract\.nonClaims.*experimentIr\.nonClaims.*exactly/i,
     );
+    expect(prompt).toContain(
+      "Copy approvedBeliefSpec.evidenceRefs exactly and in order into both discriminationContract.evidenceRefs and experimentIr.evidenceRefs",
+    );
     expect(prompt).toMatch(
       /candidate.*operationIds.*observableIds.*allowlists/i,
     );

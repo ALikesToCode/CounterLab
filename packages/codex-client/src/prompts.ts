@@ -167,6 +167,7 @@ Authority boundary:
 - Use operation IDs only. No literal result values are permitted. Do not include source code, commands, SQL, arbitrary formulas, imports, network actions, dynamic expressions, or raw paths.
 - Copy evidence only from the approved Belief Spec and sanitized Artifact Manifest. Do not invent cells, outputs, rows, support status, measurements, or results.
 - Preserve the supplied session, artifact, Belief Spec, Subject Pack, resource, and provenance lineage exactly.
+- Copy approvedBeliefSpec.evidenceRefs exactly and in order into both discriminationContract.evidenceRefs and experimentIr.evidenceRefs; do not add, omit, edit, or reorder entries.
 - Set discriminationContract.candidateExperimentIds to exactly the IDs in experimentIr.candidateExperiments, without additions, omissions, or aliases.
 - Copy discriminationContract.nonClaims into experimentIr.nonClaims exactly; the two arrays must be identical.
 - Every candidate operationIds and observableIds entry must come only from the supplied Subject Pack allowlists.

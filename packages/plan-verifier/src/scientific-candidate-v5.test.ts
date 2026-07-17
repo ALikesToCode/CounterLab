@@ -81,6 +81,14 @@ async function scientificFixture(): Promise<{
     excerpt: "train_test_split(X, y, test_size=0.25, random_state=42)",
     relevance: "This cell defines a row-wise evaluation boundary.",
   };
+  const metricEvidence = {
+    cellIndex: 2,
+    outputIndex: 0,
+    kind: "metric" as const,
+    hash: digest("c"),
+    excerpt: "accuracy = 0.985",
+    relevance: "This stored output is the claim's reported score.",
+  };
   const artifactManifest = ArtifactManifestSchema.parse({
     artifactId: "artifact-scientific-v5",
     fileName: "customer-evaluation.ipynb",
@@ -124,7 +132,7 @@ async function scientificFixture(): Promise<{
     id: "belief-scientific-v5",
     concept: "entity_leakage",
     claim: "The row-split score proves performance for unseen customers.",
-    evidenceRefs: [evidence],
+    evidenceRefs: [evidence, metricEvidence],
     hypotheses: [
       {
         id: "current",
@@ -132,7 +140,7 @@ async function scientificFixture(): Promise<{
           "The learned behavioral signal generalizes to new customers.",
         conditions: ["The evaluation unit matches the deployment unit."],
         nonClaims: ["This does not establish every future deployment."],
-        evidence: [evidence],
+        evidence: [evidence, metricEvidence],
         supportedCandidateExperimentIds: ["group-holdout-plus-ablation"],
       },
       {
@@ -140,7 +148,7 @@ async function scientificFixture(): Promise<{
         statement: "Repeated customer identity inflates row-split performance.",
         conditions: ["Customers repeat across observed rows."],
         nonClaims: ["This does not claim the model has no useful signal."],
-        evidence: [evidence],
+        evidence: [evidence, metricEvidence],
         supportedCandidateExperimentIds: ["group-holdout-plus-ablation"],
       },
     ],
@@ -594,6 +602,60 @@ describe("scientific v5 candidate verification", () => {
     expect(JSON.stringify(finding)).not.toContain(
       discriminationContract.nonClaims[0],
     );
+  });
+
+  it("rejects reordered Belief Spec evidence before fixed execution", async () => {
+    const fixture = await scientificFixture();
+    const reorderedEvidence = [
+      ...fixture.bundle.approvedBeliefSpec.evidenceRefs,
+    ].reverse();
+    const discriminationContract = DiscriminationContractV1Schema.parse({
+      ...fixture.artifacts.discriminationContract,
+      evidenceRefs: reorderedEvidence,
+    });
+    const experimentIr = ExperimentIRV5Schema.parse({
+      ...fixture.artifacts.experimentIr,
+      evidenceRefs: reorderedEvidence,
+    });
+    const input = {
+      bundle: fixture.bundle,
+      artifacts: {
+        ...fixture.artifacts,
+        discriminationContract,
+        experimentIr,
+        labScene: await sceneFor(
+          fixture.bundle,
+          discriminationContract,
+          experimentIr,
+        ),
+      },
+    };
+
+    const result = await scientificVerifier()(input);
+    const finding = result.report.invariants?.find(
+      (candidate) => candidate.name === "evidence_lineage",
+    );
+
+    expect(result.disposition).toBe("REPAIRABLE_REJECTION");
+    expect(finding).toMatchObject({
+      passed: false,
+      observed: {
+        contractMatchesApproved: false,
+        experimentIrMatchesApproved: false,
+        approvedEvidenceHash: await hashCanonical(
+          fixture.bundle.approvedBeliefSpec.evidenceRefs,
+        ),
+        contractEvidenceHash: await hashCanonical(reorderedEvidence),
+        experimentIrEvidenceHash: await hashCanonical(reorderedEvidence),
+      },
+      expected: {
+        contractMatchesApproved: true,
+        experimentIrMatchesApproved: true,
+      },
+    });
+    for (const evidenceRef of fixture.bundle.approvedBeliefSpec.evidenceRefs) {
+      expect(JSON.stringify(finding)).not.toContain(evidenceRef.excerpt);
+    }
   });
 
   it("reports a contract-to-IR candidate ID mismatch without echoing unbounded contract text", async () => {
