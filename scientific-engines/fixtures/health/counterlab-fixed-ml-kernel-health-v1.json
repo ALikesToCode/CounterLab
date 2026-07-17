@@ -4,7 +4,7 @@
   "kind": "health_report",
   "engineId": "counterlab-fixed-ml-kernel",
   "environmentId": "counterlab-runner-linux-amd64-v2",
-  "imageDigest": "sha256:a0056abe027852a43b6212aba6087c5c61138476ac777fbc978937793c63ff45",
+  "imageDigest": "sha256:f8c0afc555883604b9ce50eb4f57a9382c5521f2359ef59375b6f4e6f5e0efa4",
   "observedVersion": "0.1.0",
   "checks": {
     "pipCheck": "PASSED",
