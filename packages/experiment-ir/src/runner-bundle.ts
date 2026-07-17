@@ -75,6 +75,36 @@ export const RunnerTransferTaskV5Schema = z
     }
   });
 
+export const RunnerFixedExecutionContractV5Schema = z
+  .object({
+    runSeed: z.number().int().nonnegative().max(2_147_483_647),
+    inconclusiveOutcomes: z
+      .array(
+        z
+          .object({
+            conditionId: TokenId,
+            description: NonEmptyString.max(512),
+            nextExperimentId: TokenId.optional(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(8),
+  })
+  .strict()
+  .superRefine((contract, context) => {
+    const conditionIds = contract.inconclusiveOutcomes.map(
+      (outcome) => outcome.conditionId,
+    );
+    if (new Set(conditionIds).size !== conditionIds.length) {
+      context.addIssue({
+        code: "custom",
+        message: "fixed inconclusive outcome IDs must be unique",
+        path: ["inconclusiveOutcomes"],
+      });
+    }
+  });
+
 function sameJson(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -127,6 +157,9 @@ export const RunnerLabCompileBundleV5Schema = z
         verifierInvariants: z.array(NonEmptyString).min(1).max(24),
         candidateExperimentIds: z.array(NonEmptyString).min(1).max(8),
         boundarySweep: RunnerBoundarySweepRequestV5Schema.optional(),
+        // Optional only so stored v1/v2 scientific bundles remain parseable.
+        // New live jobs always include this descriptor and use verifier v3.
+        fixedExecutionContract: RunnerFixedExecutionContractV5Schema.optional(),
         // Optional only so stored pre-authority v5 bundles remain parseable.
         // New live jobs always include this and the verifier rejects omission.
         transferTask: RunnerTransferTaskV5Schema.optional(),
@@ -390,6 +423,7 @@ export const RunnerLabRunBundleV5Schema = z
         scientificVerifierVersion: z.enum([
           "scientific-candidate-verifier-v1",
           "scientific-candidate-verifier-v2",
+          "scientific-candidate-verifier-v3",
         ]),
         candidateVerificationReportHash: Sha256,
         scorerVersion: TokenId,

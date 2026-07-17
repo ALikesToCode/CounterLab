@@ -66,7 +66,9 @@ export type ScientificCandidateReportV1 = {
     | "SCIENTIFIC_CANDIDATE_INVALID"
     | "INCONCLUSIVE_NO_DECISIVE_TEST";
   verifierVersion:
-    "scientific-candidate-verifier-v1" | "scientific-candidate-verifier-v2";
+    | "scientific-candidate-verifier-v1"
+    | "scientific-candidate-verifier-v2"
+    | "scientific-candidate-verifier-v3";
   discriminationContractHash: string;
   rawExperimentIrHash: string;
   labSceneHash: string;
@@ -148,6 +150,18 @@ function sameSet(left: readonly string[], right: readonly string[]): boolean {
   );
 }
 
+function canonicalInconclusiveOutcomes(
+  outcomes: readonly {
+    conditionId: string;
+    description: string;
+    nextExperimentId?: string;
+  }[],
+): { conditionId: string; description: string; nextExperimentId?: string }[] {
+  return [...outcomes].sort((left, right) =>
+    left.conditionId.localeCompare(right.conditionId),
+  );
+}
+
 function evidenceAuthorityKey(evidence: EvidenceRef): string {
   return [
     evidence.kind,
@@ -186,6 +200,7 @@ async function evidenceResolves(
 function fixedPackSnapshot(
   pack: ReturnType<typeof getConceptPack>,
   includeBoundarySweep: boolean,
+  includeFixedExecutionContract: boolean,
   includeTransferTask: boolean,
 ) {
   const boundary = pack.scientificMethod.boundaryMap;
@@ -209,6 +224,9 @@ function fixedPackSnapshot(
           },
         }
       : {}),
+    ...(includeFixedExecutionContract
+      ? { fixedExecutionContract: pack.scientificMethod.fixedExecutionContract }
+      : {}),
     ...(includeTransferTask ? { transferTask: pack.transferTask } : {}),
     planRequirements: pack.experimentPlanRules,
   };
@@ -217,6 +235,7 @@ function fixedPackSnapshot(
 function selectedExecutionSemantics(
   ir: ExperimentIRV5,
   plan: ExperimentPlanV2,
+  enforceFixedExecutionContract: boolean,
 ): { passed: boolean; observed: unknown; expected: unknown } {
   if (ir.selection.status !== "SELECTED") {
     return {
@@ -238,6 +257,13 @@ function selectedExecutionSemantics(
   }
   const runs = [candidate.baseline, ...candidate.interventions];
   const operations = runs.map((run) => run.operation);
+  const pack = getConceptPack(ir.concept);
+  const runSeeds = runs.map((run) => run.seed);
+  const fixedSeedMatches =
+    !enforceFixedExecutionContract ||
+    runSeeds.every(
+      (seed) => seed === pack.scientificMethod.fixedExecutionContract.runSeed,
+    );
 
   if (ir.concept === "entity_leakage") {
     const baseline = runs.find(
@@ -275,6 +301,7 @@ function selectedExecutionSemantics(
       passed:
         sameSet(operations, expectedOperations) &&
         controlsMatch &&
+        fixedSeedMatches &&
         sameSet(candidate.changedVariableIds, [
           "split_strategy",
           "identity_feature",
@@ -284,11 +311,15 @@ function selectedExecutionSemantics(
         operations,
         changedVariableIds: candidate.changedVariableIds,
         controlsMatch,
+        ...(enforceFixedExecutionContract ? { runSeeds } : {}),
       },
       expected: {
         operations: expectedOperations,
         changedVariableIds: ["split_strategy", "identity_feature"],
         controlsMatch: true,
+        ...(enforceFixedExecutionContract
+          ? { runSeed: pack.scientificMethod.fixedExecutionContract.runSeed }
+          : {}),
       },
     };
   }
@@ -325,11 +356,11 @@ function selectedExecutionSemantics(
     threshold.threshold !== stratified.threshold &&
     prevalence.threshold === threshold.threshold &&
     prevalence.prevalenceScenario !== threshold.prevalenceScenario;
-  const pack = getConceptPack("class_imbalance");
   return {
     passed:
       sameSet(operations, expectedOperations) &&
       controlsMatch &&
+      fixedSeedMatches &&
       sameSet(candidate.changedVariableIds, [
         "decision_threshold",
         "class_prevalence",
@@ -340,6 +371,7 @@ function selectedExecutionSemantics(
       operations,
       changedVariableIds: candidate.changedVariableIds,
       controlsMatch,
+      ...(enforceFixedExecutionContract ? { runSeeds } : {}),
       metrics: plan.metrics,
       visualizations: plan.visualizations,
     },
@@ -347,6 +379,9 @@ function selectedExecutionSemantics(
       operations: expectedOperations,
       changedVariableIds: ["decision_threshold", "class_prevalence"],
       controlsMatch: true,
+      ...(enforceFixedExecutionContract
+        ? { runSeed: pack.scientificMethod.fixedExecutionContract.runSeed }
+        : {}),
       metrics: pack.allowedMetrics,
       visualizations: pack.allowedVisualizations,
     },
@@ -395,9 +430,12 @@ export async function verifyScientificCandidateV5(
   );
   const verifierVersion: ScientificCandidateReportV1["verifierVersion"] =
     bundleResult.success &&
-    bundleResult.data.conceptPack.transferTask !== undefined
-      ? "scientific-candidate-verifier-v2"
-      : "scientific-candidate-verifier-v1";
+    bundleResult.data.conceptPack.fixedExecutionContract !== undefined
+      ? "scientific-candidate-verifier-v3"
+      : bundleResult.success &&
+          bundleResult.data.conceptPack.transferTask !== undefined
+        ? "scientific-candidate-verifier-v2"
+        : "scientific-candidate-verifier-v1";
   if (
     !bundleResult.success ||
     !contractResult.success ||
@@ -555,6 +593,7 @@ export async function verifyScientificCandidateV5(
           fixedPackSnapshot(
             pack,
             bundle.conceptPack.boundarySweep !== undefined,
+            bundle.conceptPack.fixedExecutionContract !== undefined,
             bundle.conceptPack.transferTask !== undefined,
           ),
         ),
@@ -568,6 +607,7 @@ export async function verifyScientificCandidateV5(
           fixedPackSnapshot(
             pack,
             bundle.conceptPack.boundarySweep !== undefined,
+            bundle.conceptPack.fixedExecutionContract !== undefined,
             bundle.conceptPack.transferTask !== undefined,
           ),
         ),
@@ -845,12 +885,28 @@ export async function verifyScientificCandidateV5(
   const selectedSemantics = selectedExecutionSemantics(
     selectedIr,
     executionPlan,
+    bundle.conceptPack.fixedExecutionContract !== undefined,
   );
   const nonClaimsMatch = sameSet(contract.nonClaims, selectedIr.nonClaims);
   const [contractNonClaimsHash, experimentIrNonClaimsHash] = await Promise.all([
     hashCanonical(contract.nonClaims),
     hashCanonical(selectedIr.nonClaims),
   ]);
+  const declaredInconclusiveOutcomes = canonicalInconclusiveOutcomes(
+    selectedIr.inconclusiveConditions.map((condition) => ({
+      conditionId: condition.id,
+      description: condition.description,
+      ...(condition.nextExperimentId === undefined
+        ? {}
+        : { nextExperimentId: condition.nextExperimentId }),
+    })),
+  );
+  const fixedInconclusiveOutcomes = canonicalInconclusiveOutcomes(
+    pack.scientificMethod.fixedExecutionContract.inconclusiveOutcomes,
+  );
+  const fixedInconclusiveConditionIds = fixedInconclusiveOutcomes.map(
+    (outcome) => outcome.conditionId,
+  );
   const postSelectionChecks = [
     invariant(
       "discrimination_binding",
@@ -893,6 +949,27 @@ export async function verifyScientificCandidateV5(
       },
       "The Discrimination Contract must exactly bind the fixed-selected candidate and copy Experiment IR non-claims verbatim.",
     ),
+    ...(bundle.conceptPack.fixedExecutionContract === undefined
+      ? []
+      : [
+          invariant(
+            "epistemic_outcome_coverage",
+            sameSet(
+              selectedCandidate.inconclusiveConditionIds,
+              fixedInconclusiveConditionIds,
+            ) &&
+              sameJson(declaredInconclusiveOutcomes, fixedInconclusiveOutcomes),
+            {
+              selectedConditionIds: selectedCandidate.inconclusiveConditionIds,
+              inconclusiveOutcomes: declaredInconclusiveOutcomes,
+            },
+            {
+              selectedConditionIds: fixedInconclusiveConditionIds,
+              inconclusiveOutcomes: fixedInconclusiveOutcomes,
+            },
+            "The selected experiment must represent every inconclusive outcome emitted by the fixed Subject Pack classifier, with the exact description and follow-up experiment binding.",
+          ),
+        ]),
     invariant(
       "selected_execution_semantics",
       selectedSemantics.passed,

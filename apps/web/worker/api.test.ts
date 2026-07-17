@@ -34,6 +34,7 @@ import {
 import { runProofCapsuleCli } from "@counterlab/proof-capsule/node-cli";
 import { schemaSummaryHash } from "@counterlab/belief-analyst";
 import { getConceptPack } from "@counterlab/concept-registry";
+import { verifyScientificCandidateV5 } from "@counterlab/plan-verifier";
 import {
   ExperimentIRV5Schema,
   RunnerBoundaryMapBundleV5Schema,
@@ -1012,7 +1013,7 @@ async function scientificCandidateArtifacts(bundle: RunnerLabCompileBundleV5) {
     concept: "entity_leakage" as const,
     runId: "random_rows",
     operation: "leakage.random_row_split" as const,
-    seed: 42,
+    seed: 1729,
     testFraction: 0.25,
     entityField,
     dropIdentity: false,
@@ -4643,7 +4644,7 @@ describe("Cloudflare Worker API", () => {
         verification: {
           status: "VERIFIED",
           reasonCode: "SELECTED",
-          verifierVersion: "scientific-candidate-verifier-v2",
+          verifierVersion: "scientific-candidate-verifier-v3",
         },
       },
     });
@@ -4694,7 +4695,7 @@ describe("Cloudflare Worker API", () => {
       },
       provenance: {
         compileJobId: jobId,
-        scientificVerifierVersion: "scientific-candidate-verifier-v2",
+        scientificVerifierVersion: "scientific-candidate-verifier-v3",
         scorerVersion: "experiment-scorer-v1",
       },
       permittedOutputs: ["verified-result.json"],
@@ -5221,7 +5222,7 @@ describe("Cloudflare Worker API", () => {
     expect(boundaryBundle.selectedExperimentIr.candidateExperiments).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          baseline: expect.objectContaining({ seed: 42 }),
+          baseline: expect.objectContaining({ seed: 1729 }),
         }),
       ]),
     );
@@ -6835,6 +6836,74 @@ describe("Cloudflare Worker API", () => {
     });
   });
 
+  it("rejects class-imbalance seed drift before fixed execution authority is released", async () => {
+    const harness = await preparedScientificImbalanceHostedRunner();
+    expect(harness.bundle.conceptPack.fixedExecutionContract).toEqual({
+      runSeed: 2603,
+      inconclusiveOutcomes: [
+        {
+          conditionId: "minority-utility-uncertain",
+          description: "Minority utility falls between decisive thresholds.",
+          nextExperimentId: "prevalence-and-threshold-sweep",
+        },
+      ],
+    });
+    const artifacts = await scientificImbalanceCandidateArtifacts(
+      harness.bundle,
+    );
+    const rawIr = ExperimentIRV5Schema.parse(
+      JSON.parse(artifacts["experiment-ir.json"]),
+    );
+    const driftedIr = ExperimentIRV5Schema.parse({
+      ...rawIr,
+      candidateExperiments: rawIr.candidateExperiments.map((candidate) => ({
+        ...candidate,
+        baseline: { ...candidate.baseline, seed: 17 },
+        interventions: candidate.interventions.map((run) => ({
+          ...run,
+          seed: 17,
+        })),
+      })),
+    });
+    const rawScene = LabSceneV2Schema.parse(
+      JSON.parse(artifacts["lab-scene.json"]),
+    );
+    const driftedScene = LabSceneV2Schema.parse({
+      ...rawScene,
+      provenance: {
+        ...rawScene.provenance,
+        experimentIrHash: await hashExperimentIR(driftedIr),
+      },
+    });
+
+    const verification = await verifyScientificCandidateV5({
+      bundle: harness.bundle,
+      artifacts: {
+        discriminationContract: JSON.parse(
+          artifacts["discrimination-contract.json"],
+        ),
+        experimentIr: driftedIr,
+        labScene: driftedScene,
+        publicRationale: artifacts["public-rationale.md"],
+      },
+    });
+    const seedFinding = verification.report.invariants.find(
+      (invariant) => invariant.name === "selected_execution_semantics",
+    );
+
+    expect(verification).toMatchObject({
+      disposition: "REPAIRABLE_REJECTION",
+      report: { verifierVersion: "scientific-candidate-verifier-v3" },
+    });
+    expect(seedFinding).toMatchObject({
+      passed: false,
+      observed: { runSeeds: [17, 17, 17, 17] },
+      expected: { runSeed: 2603 },
+    });
+    expect(verification).not.toHaveProperty("selectedIr");
+    expect(verification).not.toHaveProperty("executionPlan");
+  });
+
   it("runs class-imbalance v5 controls through the fixed interactive authority", async () => {
     const harness = await preparedScientificImbalanceHostedRunner();
     const run = await completeScientificCompileAndQueueRun(
@@ -8411,6 +8480,17 @@ describe("Cloudflare Worker API", () => {
             "group-holdout",
             "group-holdout-plus-ablation",
           ],
+          fixedExecutionContract: {
+            runSeed: 1729,
+            inconclusiveOutcomes: [
+              {
+                conditionId: "gap-within-tolerance",
+                description:
+                  "The measured gap falls between the two decisive patterns.",
+                nextExperimentId: "group-holdout-plus-ablation",
+              },
+            ],
+          },
           planRequirements: expect.arrayContaining([
             'Fixed scorer required heldConstantIds: ["model","seed","test_fraction","entity_field","primary_identity_setting","preprocessing","model_hyperparameters"].',
             'Fixed scorer allowed changedVariableIds: ["split_strategy","identity_feature"].',
@@ -8441,7 +8521,7 @@ describe("Cloudflare Worker API", () => {
       ).toBe(storedBundle.provenance.promptHash);
       expect(storedBundle.provenance.promptHash).toBe(
         await hashCanonical({
-          promptVersion: "scientific-method-compile-v3",
+          promptVersion: "scientific-method-compile-v4",
           conceptPack: {
             id: storedBundle.conceptPack.id,
             version: storedBundle.conceptPack.version,
@@ -8450,6 +8530,8 @@ describe("Cloudflare Worker API", () => {
           candidateExperimentIds:
             storedBundle.conceptPack.candidateExperimentIds,
           boundarySweep: storedBundle.conceptPack.boundarySweep,
+          fixedExecutionContract:
+            storedBundle.conceptPack.fixedExecutionContract,
           transferTask: storedBundle.conceptPack.transferTask,
           schemaHashes: {
             discriminationContract: await hashCanonical(

@@ -272,6 +272,34 @@ describe("concept-pack registry", () => {
     );
   });
 
+  it("registers the fixed live seeds and representable inconclusive outcomes", () => {
+    expect(
+      getConceptPack("entity_leakage").scientificMethod.fixedExecutionContract,
+    ).toEqual({
+      runSeed: 1729,
+      inconclusiveOutcomes: [
+        {
+          conditionId: "gap-within-tolerance",
+          description:
+            "The measured gap falls between the two decisive patterns.",
+          nextExperimentId: "group-holdout-plus-ablation",
+        },
+      ],
+    });
+    expect(
+      getConceptPack("class_imbalance").scientificMethod.fixedExecutionContract,
+    ).toEqual({
+      runSeed: 2603,
+      inconclusiveOutcomes: [
+        {
+          conditionId: "minority-utility-uncertain",
+          description: "Minority utility falls between decisive thresholds.",
+          nextExperimentId: "prevalence-and-threshold-sweep",
+        },
+      ],
+    });
+  });
+
   it("registers exact bounded Boundary Map grids for both released packs", () => {
     const leakage = getConceptPack("entity_leakage");
     expect(leakage.scientificMethod.boundaryMap).toMatchObject({

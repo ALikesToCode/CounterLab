@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import {
   RunnerBoundarySweepRequestV5Schema,
+  RunnerFixedExecutionContractV5Schema,
   RunnerTransferTaskV5Schema,
 } from "@counterlab/experiment-ir";
 
@@ -107,6 +108,7 @@ export type CompileHostedExperimentPlanInput = z.infer<
 const HostedScientificConceptPackSchema = HostedConceptPackSchema.extend({
   candidateExperimentIds: z.array(z.string().min(1).max(128)).min(1).max(8),
   boundarySweep: RunnerBoundarySweepRequestV5Schema.optional(),
+  fixedExecutionContract: RunnerFixedExecutionContractV5Schema.optional(),
   transferTask: RunnerTransferTaskV5Schema.optional(),
 }).strict();
 

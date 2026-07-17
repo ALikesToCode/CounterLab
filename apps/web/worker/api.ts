@@ -3791,17 +3791,20 @@ export function createApi(options: ApiOptions = {}) {
         ...(v5Compile
           ? {
               boundarySweep,
+              fixedExecutionContract:
+                pack.scientificMethod.fixedExecutionContract,
               transferTask: pack.transferTask,
             }
           : {}),
         planRequirements: pack.experimentPlanRules,
       });
       const scientificPromptHash = await hashCanonical({
-        promptVersion: "scientific-method-compile-v3",
+        promptVersion: "scientific-method-compile-v4",
         conceptPack: { id: pack.id, version: pack.version },
         packContractHash,
         candidateExperimentIds: pack.scientificMethod.candidateExperimentIds,
         boundarySweep,
+        fixedExecutionContract: pack.scientificMethod.fixedExecutionContract,
         transferTask: pack.transferTask,
         schemaHashes: {
           discriminationContract: await hashCanonical(
@@ -3828,6 +3831,8 @@ export function createApi(options: ApiOptions = {}) {
                   labSceneDraftSchema,
                 },
                 boundarySweep,
+                fixedExecutionContract:
+                  pack.scientificMethod.fixedExecutionContract,
                 resourceLimits: {
                   wallSeconds: SCIENTIFIC_COMPILER_ATTEMPT_WALL_SECONDS,
                   memoryMb: 768,
@@ -3939,6 +3944,8 @@ export function createApi(options: ApiOptions = {}) {
                 candidateExperimentIds:
                   pack.scientificMethod.candidateExperimentIds,
                 boundarySweep,
+                fixedExecutionContract:
+                  pack.scientificMethod.fixedExecutionContract,
                 transferTask: pack.transferTask,
                 planRequirements: pack.experimentPlanRules,
               },

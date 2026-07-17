@@ -70,7 +70,7 @@ function scientificVerifier(): VerifyScientificCandidateV5 {
   return candidate as VerifyScientificCandidateV5;
 }
 
-async function scientificFixture(): Promise<{
+async function scientificFixture(runSeed = 1729): Promise<{
   bundle: RunnerLabCompileBundleV5;
   artifacts: ScientificCandidateArtifacts;
 }> {
@@ -78,7 +78,7 @@ async function scientificFixture(): Promise<{
     cellIndex: 2,
     kind: "code" as const,
     hash: digest("a"),
-    excerpt: "train_test_split(X, y, test_size=0.25, random_state=42)",
+    excerpt: `train_test_split(X, y, test_size=0.25, random_state=${runSeed})`,
     relevance: "This cell defines a row-wise evaluation boundary.",
   };
   const metricEvidence = {
@@ -193,6 +193,7 @@ async function scientificFixture(): Promise<{
       allowedVisualizations: pack.allowedVisualizations,
       verifierInvariants: pack.verifierContract.invariants,
       candidateExperimentIds: pack.scientificMethod.candidateExperimentIds,
+      fixedExecutionContract: pack.scientificMethod.fixedExecutionContract,
       boundarySweep: {
         sweepId: pack.scientificMethod.boundaryMap.sweepId,
         axisIds: [
@@ -234,7 +235,7 @@ async function scientificFixture(): Promise<{
     concept: "entity_leakage" as const,
     runId: "random-rows",
     operation: "leakage.random_row_split" as const,
-    seed: 42,
+    seed: runSeed,
     testFraction: 0.25,
     entityField: "customer_id",
     dropIdentity: false,
@@ -464,7 +465,7 @@ describe("scientific v5 candidate verification", () => {
       disposition: "VERIFIED",
       report: {
         status: "VERIFIED",
-        verifierVersion: "scientific-candidate-verifier-v2",
+        verifierVersion: "scientific-candidate-verifier-v3",
       },
       selection: {
         selectedCandidateId: "group-holdout-plus-ablation",
@@ -603,9 +604,12 @@ describe("scientific v5 candidate verification", () => {
   });
 
   it("preserves historical v5 verification when the old bundle has no transfer descriptor", async () => {
-    const fixture = await scientificFixture();
-    const { transferTask: _transferTask, ...conceptPack } =
-      fixture.bundle.conceptPack;
+    const fixture = await scientificFixture(42);
+    const {
+      fixedExecutionContract: _fixedExecutionContract,
+      transferTask: _transferTask,
+      ...conceptPack
+    } = fixture.bundle.conceptPack;
     const historical = {
       ...fixture,
       bundle: RunnerLabCompileBundleV5Schema.parse({
@@ -626,6 +630,31 @@ describe("scientific v5 candidate verification", () => {
     expect(result.report.invariants).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: "transfer_contract" }),
+      ]),
+    );
+  });
+
+  it("preserves transfer-aware v2 verification when the fixed execution descriptor is absent", async () => {
+    const fixture = await scientificFixture(42);
+    const { fixedExecutionContract: _fixedExecutionContract, ...conceptPack } =
+      fixture.bundle.conceptPack;
+    const historical = {
+      ...fixture,
+      bundle: RunnerLabCompileBundleV5Schema.parse({
+        ...fixture.bundle,
+        conceptPack,
+      }),
+    };
+
+    const result = await scientificVerifier()(historical);
+
+    expect(result).toMatchObject({
+      disposition: "VERIFIED",
+      report: { verifierVersion: "scientific-candidate-verifier-v2" },
+    });
+    expect(result.report.invariants).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "epistemic_outcome_coverage" }),
       ]),
     );
   });
@@ -721,6 +750,111 @@ describe("scientific v5 candidate verification", () => {
     expect(JSON.stringify(finding)).not.toContain(
       discriminationContract.nonClaims[0],
     );
+  });
+
+  it("rejects a selected experiment that cannot represent the fixed classifier inconclusive outcome", async () => {
+    const fixture = await scientificFixture();
+    const unsupportedConditionId = "model-authored-uncertain-region";
+    const discriminationContract = DiscriminationContractV1Schema.parse({
+      ...fixture.artifacts.discriminationContract,
+      inconclusiveConditionIds: [unsupportedConditionId],
+    });
+    const experimentIr = ExperimentIRV5Schema.parse({
+      ...fixture.artifacts.experimentIr,
+      candidateExperiments:
+        fixture.artifacts.experimentIr.candidateExperiments.map(
+          (candidate) => ({
+            ...candidate,
+            inconclusiveConditionIds: [unsupportedConditionId],
+          }),
+        ),
+      inconclusiveConditions: [
+        {
+          id: unsupportedConditionId,
+          description:
+            "The model-authored contract declares a different uncertain region.",
+          nextExperimentId: "group-holdout-plus-ablation",
+        },
+      ],
+    });
+    const input = {
+      ...fixture,
+      artifacts: {
+        ...fixture.artifacts,
+        discriminationContract,
+        experimentIr,
+        labScene: await sceneFor(
+          fixture.bundle,
+          discriminationContract,
+          experimentIr,
+        ),
+      },
+    };
+
+    const result = await scientificVerifier()(input);
+    const finding = result.report.invariants?.find(
+      (candidate) => candidate.name === "epistemic_outcome_coverage",
+    );
+
+    expect(result.disposition).toBe("REPAIRABLE_REJECTION");
+    expect(finding).toMatchObject({
+      passed: false,
+      observed: {
+        inconclusiveOutcomes: [
+          {
+            conditionId: unsupportedConditionId,
+            description:
+              "The model-authored contract declares a different uncertain region.",
+            nextExperimentId: "group-holdout-plus-ablation",
+          },
+        ],
+      },
+      expected: {
+        inconclusiveOutcomes: [
+          {
+            conditionId: "gap-within-tolerance",
+            description:
+              "The measured gap falls between the two decisive patterns.",
+            nextExperimentId: "group-holdout-plus-ablation",
+          },
+        ],
+      },
+    });
+    expect(result).not.toHaveProperty("selectedIr");
+    expect(result).not.toHaveProperty("executionPlan");
+  });
+
+  it("rejects a model-authored seed that drifts from the fixed run contract", async () => {
+    const fixture = await scientificFixture();
+    const experimentIr = ExperimentIRV5Schema.parse({
+      ...fixture.artifacts.experimentIr,
+      candidateExperiments:
+        fixture.artifacts.experimentIr.candidateExperiments.map(
+          (candidate) => ({
+            ...candidate,
+            baseline: { ...candidate.baseline, seed: 17 },
+            interventions: candidate.interventions.map((run) => ({
+              ...run,
+              seed: 17,
+            })),
+          }),
+        ),
+    });
+    const input = await replaceIr(fixture, experimentIr);
+
+    const result = await scientificVerifier()(input);
+    const finding = result.report.invariants?.find(
+      (candidate) => candidate.name === "selected_execution_semantics",
+    );
+
+    expect(result.disposition).toBe("REPAIRABLE_REJECTION");
+    expect(finding).toMatchObject({
+      passed: false,
+      observed: { runSeeds: [17, 17, 17] },
+      expected: { runSeed: 1729 },
+    });
+    expect(result).not.toHaveProperty("selectedIr");
+    expect(result).not.toHaveProperty("executionPlan");
   });
 
   it("rejects reordered Belief Spec evidence before fixed execution", async () => {

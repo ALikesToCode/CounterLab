@@ -457,6 +457,17 @@ def test_v5_hosted_lab_run_validates_selected_ir_and_fixed_fixture_authority() -
         execute_hosted_lab_run(executable_ir)
 
 
+def test_v5_hosted_lab_run_accepts_current_scientific_verifier_lineage() -> None:
+    bundle = v5_bundle()
+    bundle["provenance"]["scientificVerifierVersion"] = (  # type: ignore[index]
+        "scientific-candidate-verifier-v3"
+    )
+
+    result = execute_hosted_lab_run(bundle)
+
+    assert result["schemaVersion"] == "2"
+
+
 def interactive_v5_bundle() -> dict[str, object]:
     authoritative = v5_bundle()
     configuration = {
@@ -577,6 +588,17 @@ def test_v5_interactive_run_rederives_plan_and_executes_selected_control() -> No
     assert result["planId"] == bundle["interactivePlan"]["planId"]  # type: ignore[index]
     assert selected["splitStrategy"] == "group"
     assert selected["entityOverlap"]["count"] == 0
+
+
+def test_v5_interactive_run_accepts_current_scientific_verifier_lineage() -> None:
+    bundle = interactive_v5_bundle()
+    bundle["compileAuthority"]["scientificVerifierVersion"] = (  # type: ignore[index]
+        "scientific-candidate-verifier-v3"
+    )
+
+    result = execute_hosted_lab_run(bundle)
+
+    assert result["schemaVersion"] == "2"
 
 
 @pytest.mark.parametrize(

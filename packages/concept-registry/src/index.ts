@@ -129,6 +129,14 @@ export interface ConceptPackDefinition {
   scientificMethod: {
     candidateExperimentIds: readonly string[];
     scoringPolicy: ExperimentScoringPolicy;
+    fixedExecutionContract: {
+      runSeed: number;
+      inconclusiveOutcomes: readonly {
+        conditionId: string;
+        description: string;
+        nextExperimentId?: string;
+      }[];
+    };
     epistemic: SubjectPackEpistemicAdapter;
     boundaryMap: SubjectPackBoundaryMapDefinition;
     defaultPresentation: {
@@ -378,6 +386,14 @@ const leakageEpistemicPolicy = EpistemicVerifierPolicyV1Schema.parse({
   forbiddenClaims: leakageForbiddenClaims,
 });
 
+const leakageInconclusiveOutcomes = [
+  {
+    conditionId: "gap-within-tolerance",
+    description: "The measured gap falls between the two decisive patterns.",
+    nextExperimentId: "group-holdout-plus-ablation",
+  },
+] as const;
+
 const imbalanceApprovedClaims = [
   "This verified run reports class-specific performance for the documented fixture, split, threshold, and prevalence.",
   "The fixed majority baseline and confusion-matrix totals were verified for this run.",
@@ -499,6 +515,14 @@ const imbalanceEpistemicPolicy = EpistemicVerifierPolicyV1Schema.parse({
   approvedClaims: imbalanceApprovedClaims,
   forbiddenClaims: imbalanceForbiddenClaims,
 });
+
+const imbalanceInconclusiveOutcomes = [
+  {
+    conditionId: "minority-utility-uncertain",
+    description: "Minority utility falls between decisive thresholds.",
+    nextExperimentId: "prevalence-and-threshold-sweep",
+  },
+] as const;
 
 function classifyLeakageOutcome(
   result: HostedVerifiedResultSetV2,
@@ -973,6 +997,10 @@ const leakagePack = deepFreeze({
   scientificMethod: {
     candidateExperimentIds: ["group-holdout", "group-holdout-plus-ablation"],
     scoringPolicy: leakageScoringPolicy,
+    fixedExecutionContract: {
+      runSeed: 1729,
+      inconclusiveOutcomes: leakageInconclusiveOutcomes,
+    },
     boundaryMap: leakageBoundaryMap,
     epistemic: {
       policy: leakageEpistemicPolicy,
@@ -1087,6 +1115,10 @@ const imbalancePack = deepFreeze({
       "prevalence-and-threshold-sweep",
     ],
     scoringPolicy: imbalanceScoringPolicy,
+    fixedExecutionContract: {
+      runSeed: 2603,
+      inconclusiveOutcomes: imbalanceInconclusiveOutcomes,
+    },
     boundaryMap: imbalanceBoundaryMap,
     epistemic: {
       policy: imbalanceEpistemicPolicy,

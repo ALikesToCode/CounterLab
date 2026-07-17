@@ -173,6 +173,11 @@ Authority boundary:
 - Every candidate operationIds and observableIds entry must come only from the supplied Subject Pack allowlists.
 - State decisive patterns qualitatively and include explicit inconclusive conditions and non-claims.
 - ${
+    input.conceptPack.fixedExecutionContract === undefined
+      ? "This historical compiler bundle has no fixed execution descriptor; preserve its existing compatibility contract."
+      : "Use conceptPack.fixedExecutionContract.runSeed for every run. Copy its inconclusive outcome IDs into discriminationContract.inconclusiveConditionIds and every candidate inconclusiveConditionIds. For each descriptor, create one experimentIr.inconclusiveConditions entry with id equal to conditionId and copy description and nextExperimentId exactly."
+  }
+- ${
     input.conceptPack.boundarySweep === undefined
       ? "Do not invent a Boundary Sweep when the historical compiler bundle does not declare one."
       : "Copy conceptPack.boundarySweep exactly into experimentIr.boundarySweep; do not rename, reorder, omit, or extend its fields."

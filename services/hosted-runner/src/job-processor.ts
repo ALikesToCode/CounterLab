@@ -953,6 +953,11 @@ export class HostedRunnerJobProcessor {
         ...(bundle.conceptPack.boundarySweep === undefined
           ? {}
           : { boundarySweep: bundle.conceptPack.boundarySweep }),
+        ...(bundle.conceptPack.fixedExecutionContract === undefined
+          ? {}
+          : {
+              fixedExecutionContract: bundle.conceptPack.fixedExecutionContract,
+            }),
         ...(bundle.conceptPack.transferTask === undefined
           ? {}
           : { transferTask: bundle.conceptPack.transferTask }),

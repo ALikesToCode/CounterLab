@@ -136,6 +136,17 @@ function scientificInput(
         observableId: "optimism_gap",
         maxCells: 25,
       },
+      fixedExecutionContract: {
+        runSeed: 1729,
+        inconclusiveOutcomes: [
+          {
+            conditionId: "gap-within-tolerance",
+            description:
+              "The measured gap falls between the two decisive patterns.",
+            nextExperimentId: "group-holdout-plus-ablation",
+          },
+        ],
+      },
       transferTask: {
         id: "forecast-future-leakage-v1",
         evaluatorTaskId: "forecasting-future-leakage-01",
@@ -216,6 +227,12 @@ describe("hosted scientific-method compiler", () => {
     );
     expect(prompt).toMatch(/no literal result values/i);
     expect(prompt).toMatch(/copy conceptPack\.boundarySweep exactly/i);
+    expect(prompt).toMatch(/fixedExecutionContract\.runSeed for every run/i);
+    expect(prompt).toMatch(
+      /experimentIr\.inconclusiveConditions entry with id equal to conditionId/i,
+    );
+    expect(prompt).toContain("gap-within-tolerance");
+    expect(prompt).toContain("1729");
     expect(prompt).toMatch(
       /copy conceptPack\.transferTask\.experimentIrContract exactly into experimentIr\.transfer/i,
     );

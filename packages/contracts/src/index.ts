@@ -2271,6 +2271,7 @@ export const HostedExperimentLineageV5Schema = z
     scientificVerifierVersion: z.enum([
       "scientific-candidate-verifier-v1",
       "scientific-candidate-verifier-v2",
+      "scientific-candidate-verifier-v3",
     ]),
     selectionHash: Sha256Schema,
     selectedExperimentIrHash: Sha256Schema,

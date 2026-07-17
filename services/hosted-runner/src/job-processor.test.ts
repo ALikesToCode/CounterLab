@@ -219,6 +219,17 @@ function scientificBundleV5(
         observableId: "optimism_gap",
         maxCells: 25,
       },
+      fixedExecutionContract: {
+        runSeed: 1729,
+        inconclusiveOutcomes: [
+          {
+            conditionId: "gap-within-tolerance",
+            description:
+              "The measured gap falls between the two decisive patterns.",
+            nextExperimentId: "group-holdout-plus-ablation",
+          },
+        ],
+      },
       transferTask: {
         id: "forecast-future-leakage-v1",
         evaluatorTaskId: "forecasting-future-leakage-01",
@@ -1232,6 +1243,9 @@ describe("HostedRunnerJobProcessor", () => {
     expect(
       scientificCompiler.compileCalls[0]?.conceptPack.transferTask,
     ).toEqual(scientificBundleV5().conceptPack.transferTask);
+    expect(
+      scientificCompiler.compileCalls[0]?.conceptPack.fixedExecutionContract,
+    ).toEqual(scientificBundleV5().conceptPack.fixedExecutionContract);
     expect(compiler.compileCalls).toBe(0);
     expect([...controlPlane.uploads.keys()].sort()).toEqual([
       "discrimination-contract.json",
