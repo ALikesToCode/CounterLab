@@ -15,15 +15,15 @@
       ]
     },
     "component": {
-      "bom-ref": "13eb330cfc2259d0",
+      "bom-ref": "f4e4db032768c1b8",
       "type": "container",
       "name": "counterlab-runner",
-      "version": "git-e1e2e86234d42b65d653583d65bcc19e0b0c6486"
+      "version": "git-8716d3349a7bd0ebf92a7da3a52033cd86476423"
     },
     "properties": [
       {
         "name": "syft:image:labels:io.counterlab.source-tree-sha256",
-        "value": "18c77b13022eba2c5a0f4786358d512d7092f153723af4143fbc258aaab7de30"
+        "value": "7a99ce16aaae248617d7b3c143a0c32971b93477bd152d1f008579acc7815006"
       },
       {
         "name": "syft:image:labels:org.opencontainers.image.licenses",
@@ -31,7 +31,7 @@
       },
       {
         "name": "syft:image:labels:org.opencontainers.image.revision",
-        "value": "e1e2e86234d42b65d653583d65bcc19e0b0c6486"
+        "value": "8716d3349a7bd0ebf92a7da3a52033cd86476423"
       },
       {
         "name": "syft:image:labels:org.opencontainers.image.source",
@@ -611,6 +611,21 @@
       ]
     },
     {
+      "bom-ref": "032258e542c8b5bd",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/python_dateutil-2.9.0.post0.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "7a3c35abd86cd96034d5afb0d4b241dc9e13e6f8"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "a9d436da322be808332f98d88325998e87cb693a678a9969feb4cfad729a6e93"
+        }
+      ]
+    },
+    {
       "bom-ref": "03365bffafbfeb8e",
       "type": "file",
       "name": "/usr/share/zoneinfo/Etc/GMT-5",
@@ -851,21 +866,6 @@
       ]
     },
     {
-      "bom-ref": "051c60bdf688aecf",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/joblib-1.5.3.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "702be4b43153aadae231aeb0f51c73461c7e1e6b"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "d09a7ef54d8593e9c20f88538cea4cbc783f8c1b3488d076b69c6a425fecb7a5"
-        }
-      ]
-    },
-    {
       "bom-ref": "051d99cd5c587411",
       "type": "file",
       "name": "/usr/share/zoneinfo/Africa/Porto-Novo",
@@ -1102,6 +1102,21 @@
         {
           "alg": "SHA-256",
           "content": "0ef2fb4cf229c24d8047accaf7d668a0542432ade900b9031054c8938f9370ac"
+        }
+      ]
+    },
+    {
+      "bom-ref": "0763ac426d120bed",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/typing_extensions-4.16.0.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "510f2798ee23c416b9c396ef607b3da53555e29a"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "b05084ca1d50879865178d9fff9fabeab61bdfb1f361bfbde95421ffc8f9be46"
         }
       ]
     },
@@ -1376,6 +1391,21 @@
       ]
     },
     {
+      "bom-ref": "097a5b914b0d9a83",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/scikit_learn-1.9.0.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "c366a5f76be3ab1b6f85463aff84bc8e473fe8a9"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "ee61a579f42d3edabe3e483db483475e33fffec04d7f3e69c539527bd93eaca6"
+        }
+      ]
+    },
+    {
       "bom-ref": "09a5c628c42a6b51",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/perl-base/unicore/lib/Scx/Khoj.pl",
@@ -1601,6 +1631,21 @@
       ]
     },
     {
+      "bom-ref": "0b318655d7a47711",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/rpds_py-2026.6.3.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "845731d7b92371c9efb02b4177b81ee878ed2a34"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "f8be7b17da3980b2c48596941411a43c70ac41b1e2d530aa531f2c15eab2eb1c"
+        }
+      ]
+    },
+    {
       "bom-ref": "0b4b5ab4f9cc3d5c",
       "type": "file",
       "name": "/etc/security/pwhistory.conf",
@@ -1612,21 +1657,6 @@
         {
           "alg": "SHA-256",
           "content": "6fa9916addc229208b1a4834cf3223560c6cb211cfe75473d512b2fdb042b431"
-        }
-      ]
-    },
-    {
-      "bom-ref": "0b703fe230328c59",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pip-26.1.2.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "b9c273790636f68b2014c2589b4e9bc7a91a6eac"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "b08291eb89f83c13f673ca533cc8508669d069fbb698569d976ec8286012fb35"
         }
       ]
     },
@@ -1900,21 +1930,6 @@
       ]
     },
     {
-      "bom-ref": "0cbddf66b3f1af66",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/scipy-1.18.0.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "f89b216ab5d88482ffd86e311fc86e4df7a624f6"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "157bd150af3af33b40ec61489be8153752b269fb10c4b45b8cea5104f3235420"
-        }
-      ]
-    },
-    {
       "bom-ref": "0d25e81732c5d9bc",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/perl-base/unicore/lib/Jg/Hah.pl",
@@ -1990,17 +2005,17 @@
       ]
     },
     {
-      "bom-ref": "0da7c7775663e6c7",
+      "bom-ref": "0e245a50cc52f1f3",
       "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/scikit_learn-1.9.0.dist-info/RECORD",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pandas-2.3.3.dist-info/RECORD",
       "hashes": [
         {
           "alg": "SHA-1",
-          "content": "e2ed0ec74a1437accd9efcd330cdf99932167c33"
+          "content": "0c976046985bee8d8f4b22abcc1042927c06d58f"
         },
         {
           "alg": "SHA-256",
-          "content": "a62ba93a45e254b0d4d04cf810e4136ac41d4bb3ae25dd98712f82878107970f"
+          "content": "1b33d5a60bc3e921e73ae6b7e26e162b1e8c8973c822784717d91bb396ab6765"
         }
       ]
     },
@@ -2166,6 +2181,21 @@
         {
           "alg": "SHA-256",
           "content": "b9d52bf125a8ebca3f854df9f96c914aa4f0234dd389ac2157c932219703ab38"
+        }
+      ]
+    },
+    {
+      "bom-ref": "0f6c7eb57dc26e7c",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/rpds_py-2026.6.3.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "337eb816578def0bee8b17b68f3baddaf8354abf"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "ee025df0af2961fb75937b0d8f2272aef70f2b0d8a5a217bb9bbf8418bc49a76"
         }
       ]
     },
@@ -2556,21 +2586,6 @@
         {
           "alg": "SHA-256",
           "content": "436788729ab71d794a66954d62e930c723e624587f39beb2f4f86ff1000b1d29"
-        }
-      ]
-    },
-    {
-      "bom-ref": "12bbc62a824871f8",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/python_dateutil-2.9.0.post0.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "910ea998f9986d160d738c9a49bd50a8bc360af8"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "72f6367f463719163e2be6a70f3bd77d9aaf6a382ece9c246532e0c9bc3eb2fa"
         }
       ]
     },
@@ -3636,6 +3651,21 @@
         {
           "alg": "SHA-256",
           "content": "1f433ece4113953ca63becf506af4295e6f805492b006aa32b13e9dfa573d932"
+        }
+      ]
+    },
+    {
+      "bom-ref": "19524db6ca81e494",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/narwhals-2.24.0.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "9ce4f730bf5b4e4259796dcb8751320fd7b1a49b"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "817b5790898e22de52ff30889f663d44d18f2876b7ed7f1e6c14ed6dd3e56dfb"
         }
       ]
     },
@@ -4810,21 +4840,6 @@
       ]
     },
     {
-      "bom-ref": "1fa0c589e80f0b6f",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/joblib-1.5.3.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "1d59d01f644bc9d3be817e935db7f249a608efaa"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "cee9c60896ae4e7a965a840fbde50d111d2f8018f61201d1ed2e9fc3dd4883e6"
-        }
-      ]
-    },
-    {
       "bom-ref": "1fa6bfd88b65cec8",
       "type": "file",
       "name": "/usr/share/ca-certificates/mozilla/Microsoft_ECC_Root_Certificate_Authority_2017.crt",
@@ -5500,6 +5515,21 @@
       ]
     },
     {
+      "bom-ref": "23bc4c232c76f02d",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/jsonschema_specifications-2025.9.1.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "ad0f2e068b065ac5d8bf71de19e36f1fc89ea8a4"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "53d0b453d30e5a6f728fbbed975d58b4e25f143383775f47eed068d30c321314"
+        }
+      ]
+    },
+    {
       "bom-ref": "23d501beed2d561c",
       "type": "file",
       "name": "/var/lib/dpkg/info/netbase.postinst",
@@ -5766,6 +5796,21 @@
         {
           "alg": "SHA-256",
           "content": "2a92f3d953c0a2b2953ff87d61190292cb612a51579d39ae608ee68c26449de7"
+        }
+      ]
+    },
+    {
+      "bom-ref": "25aef11db980a9b3",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/six-1.17.0.dist-info/top_level.txt",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "cfa698ef88230fbe6862cb300268a3a647ecc71d"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "fe2547fe2604b445e70fc9d819062960552f9145bdb043b51986e478a4806a2b"
         }
       ]
     },
@@ -6325,21 +6370,6 @@
       ]
     },
     {
-      "bom-ref": "28b4341c376462fd",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pytz-2026.2.dist-info/top_level.txt",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "df4be193ca784c3d406d96318c1b78372cf46eb3"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "eb145896df77e2fd721dbd4922b5e01f21b19f772a002bddfb213cb248bf91c7"
-        }
-      ]
-    },
-    {
       "bom-ref": "28b752589dab2aeb",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/perl-base/unicore/lib/Ccc/AR.pl",
@@ -6655,6 +6685,21 @@
       ]
     },
     {
+      "bom-ref": "2b118bb7ba8bc1f5",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/fastjsonschema-2.21.2.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "41804a6447dbc54b352a166371294e97cfcf9b97"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "1be8143a33df0ecf82b993d95e91180e28bdf2d128f9a8d03f68bf099d7b69f3"
+        }
+      ]
+    },
+    {
       "bom-ref": "2b148c7cf38765f1",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/perl-base/unicore/lib/Jg/Tah.pl",
@@ -6696,6 +6741,21 @@
         {
           "alg": "SHA-256",
           "content": "72bb46d9640fcd9cb51a84e6786ab9be9c84ef8ebcf755ab6d0a2f2deb2cce82"
+        }
+      ]
+    },
+    {
+      "bom-ref": "2bcd33e5a5d14409",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/python_dateutil-2.9.0.post0.dist-info/top_level.txt",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "600c004f1f1dc5b324d955fcae3b1ba9c967bacc"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "e2d8dd5a485166f17b2c0fc161efcbf60076c3fa766becf9cba02b8da464a2df"
         }
       ]
     },
@@ -6831,6 +6891,21 @@
         {
           "alg": "SHA-256",
           "content": "21654b9cdc56b56965156d46940d2cc2d9b058f78fa4d672cc6a844c516e9187"
+        }
+      ]
+    },
+    {
+      "bom-ref": "2cd5dd75d11ffbbc",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/joblib-1.5.3.dist-info/top_level.txt",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "811f65e4ae50d1ab054a02f417b7d3669a4bf3a9"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "3f42eca19e398012fb7242f896a42deed75bac70f8c6555885f7e684779e4ff5"
         }
       ]
     },
@@ -7011,21 +7086,6 @@
         {
           "alg": "SHA-256",
           "content": "d18d81e196ec08a86eee1ccf688ac75d985fd2811c0e23350296fe3183c6d93e"
-        }
-      ]
-    },
-    {
-      "bom-ref": "2df145adfdd77cba",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/jupyter_core-5.9.1.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "e43c14e03eba9087ab60514e176a466198a68ebf"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "58e3ee5d3ed50459b879522477dc82db438fbcc161e316390e57befbd0a2370c"
         }
       ]
     },
@@ -7555,6 +7615,21 @@
       ]
     },
     {
+      "bom-ref": "30f125e97179e835",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/platformdirs-4.10.0.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "9480910ad1eeacaa4d02a125d789a7e065633d3a"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "2b4f82f4c63b17100b401b26b60980016704c1c5f6dfc3b6a7094e9e37a78a41"
+        }
+      ]
+    },
+    {
       "bom-ref": "3115f8aaff057411",
       "type": "file",
       "name": "/usr/share/zoneinfo/Factory",
@@ -7626,21 +7701,6 @@
         {
           "alg": "SHA-256",
           "content": "64111195f36e838121e0b30a799a736cd4ea4c9ea40b418e02635cba9a37a2c6"
-        }
-      ]
-    },
-    {
-      "bom-ref": "31600642c0206b28",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pandas-2.3.3.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "0c976046985bee8d8f4b22abcc1042927c06d58f"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "1b33d5a60bc3e921e73ae6b7e26e162b1e8c8973c822784717d91bb396ab6765"
         }
       ]
     },
@@ -7765,21 +7825,6 @@
       ]
     },
     {
-      "bom-ref": "3210fe50267fc61f",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/traitlets-5.15.1.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "def155c7f76f65affa490abaadfe59680f2ea162"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "0a009dc773b068b44d96b4f4170dd7067c54db0f3ba35d972f8161a589b5a959"
-        }
-      ]
-    },
-    {
       "bom-ref": "3212322cd1f8b231",
       "type": "file",
       "name": "/var/lib/dpkg/info/apt.preinst",
@@ -7791,6 +7836,21 @@
         {
           "alg": "SHA-256",
           "content": "a8007a3c0d266dcecef6b554083ac437871aee4f3c971c3d412cc9b71d518601"
+        }
+      ]
+    },
+    {
+      "bom-ref": "32380b69c02bd780",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/numpy-2.4.6.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "2950bbbc5c64966b844e233269e70a4e0c99382e"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "563cb1165c8c1cb689d0da3b81bba440cf69c0ed0074ad6a0f35de50fe7e75d9"
         }
       ]
     },
@@ -8350,21 +8410,6 @@
       ]
     },
     {
-      "bom-ref": "355a55e054f48032",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/jsonschema_specifications-2025.9.1.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "ad0f2e068b065ac5d8bf71de19e36f1fc89ea8a4"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "53d0b453d30e5a6f728fbbed975d58b4e25f143383775f47eed068d30c321314"
-        }
-      ]
-    },
-    {
       "bom-ref": "35622f82ed16364b",
       "type": "file",
       "name": "/var/lib/dpkg/info/dash.postinst",
@@ -8466,6 +8511,21 @@
         {
           "alg": "SHA-256",
           "content": "26dd6c8a6a2a5e826eef5f26efb280288d30875e4b58da828fafc941e8c6bf59"
+        }
+      ]
+    },
+    {
+      "bom-ref": "3617f58b0f099140",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/referencing-0.37.0.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "f6fa004340bef5d23995b09dab75ce12e3f367a7"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "c93b00e6ab1524fd60848376604c189a114374776475c25a31d57be47b29de6a"
         }
       ]
     },
@@ -8725,21 +8785,6 @@
       ]
     },
     {
-      "bom-ref": "380d252d4e48111a",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/numpy-2.4.6.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "46f47f5195a0b408d6f61f0db28e95ef1eb09080"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "b082c52ccbe3b880bae177c35171b52ed6c947f3ad71e3762f2723f60a411de0"
-        }
-      ]
-    },
-    {
       "bom-ref": "3814805ea114888a",
       "type": "file",
       "name": "/usr/share/zoneinfo/America/Montevideo",
@@ -8995,6 +9040,21 @@
       ]
     },
     {
+      "bom-ref": "3930b649f94f654f",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/tzdata-2026.3.dist-info/top_level.txt",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "b65a137ac301b1951960e7470060a0b43733f60a"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "30ee90a82d3146b37aec687dc54fe732669dc015656333cd92afe1e2062ecda4"
+        }
+      ]
+    },
+    {
       "bom-ref": "393a7d2a165750b7",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/perl-base/unicore/lib/Nv/300.pl",
@@ -9096,21 +9156,6 @@
         {
           "alg": "SHA-256",
           "content": "d8051fa46d19fc8a1409f00289962505ae7f1a1d2779d112dff790c02a77e1b4"
-        }
-      ]
-    },
-    {
-      "bom-ref": "39669aedadd61438",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/typing_extensions-4.16.0.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "b5bd3d6870e5f23bb8a6a3efe82a9a566f65d6b6"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "d7a220918ed91a6af1abf9508f734fe5d2c2f6b438ee519cc73ee4e60e6e665d"
         }
       ]
     },
@@ -9246,21 +9291,6 @@
         {
           "alg": "SHA-256",
           "content": "d80f6e166c12c28140e68d9e9352c0d2e72884f9cce368215af0fd0f94dd9c99"
-        }
-      ]
-    },
-    {
-      "bom-ref": "3a036e1e5524342c",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/jsonschema_specifications-2025.9.1.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "ac33f477be9d3336ae67bc454f68a9ff39c91cf3"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "35abd41757f32b4ea24756920ded47b70173d77cbc052a5a6d3ab583b2e8d89d"
         }
       ]
     },
@@ -9445,21 +9475,6 @@
       ]
     },
     {
-      "bom-ref": "3beb25dfb1111f60",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/six-1.17.0.dist-info/top_level.txt",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "cfa698ef88230fbe6862cb300268a3a647ecc71d"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "fe2547fe2604b445e70fc9d819062960552f9145bdb043b51986e478a4806a2b"
-        }
-      ]
-    },
-    {
       "bom-ref": "3becefc9f14f7542",
       "type": "file",
       "name": "/usr/lib/dpkg/methods/apt/update",
@@ -9561,21 +9576,6 @@
         {
           "alg": "SHA-256",
           "content": "83065ad694377a3b0cd2bd474ebb6580e05fb89dd53c539bc4c3b28b58f5c16a"
-        }
-      ]
-    },
-    {
-      "bom-ref": "3ca634b5947fef65",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/attrs-26.1.0.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "7cf5b42b86709af5b8006faf5e5a5313f8f11c73"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "40de9b239d81f3e4ff3b005e4749cda91549d56e10415ffce54a25c0c995df10"
         }
       ]
     },
@@ -10375,21 +10375,6 @@
       ]
     },
     {
-      "bom-ref": "417d246a2fbf4778",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/six-1.17.0.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "80111bdc2568e95828cfa47ace74b15c586458a9"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "bafb3c8d874f8b2d5fb9f9405cd78c2e455bbc3de9d486a3fea5df267c5d302d"
-        }
-      ]
-    },
-    {
       "bom-ref": "419406cbf905cd14",
       "type": "file",
       "name": "/usr/share/ca-certificates/mozilla/Autoridad_de_Certificacion_Firmaprofesional_CIF_A62634068.crt",
@@ -10735,21 +10720,6 @@
       ]
     },
     {
-      "bom-ref": "43a65ff99af6157e",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/platformdirs-4.10.0.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "9480910ad1eeacaa4d02a125d789a7e065633d3a"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "2b4f82f4c63b17100b401b26b60980016704c1c5f6dfc3b6a7094e9e37a78a41"
-        }
-      ]
-    },
-    {
       "bom-ref": "43b2c0aba0d8fc1f",
       "type": "file",
       "name": "/usr/sbin/blkzone",
@@ -10761,21 +10731,6 @@
         {
           "alg": "SHA-256",
           "content": "5a58b0b821a9c5e9193f11c02bc5f12451d13fd911793b0e640b8144cf570af2"
-        }
-      ]
-    },
-    {
-      "bom-ref": "43eaa5a49f9232ca",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/six-1.17.0.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "483a26554261f6c839703c0e1183f3ef33ff97f1"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "562042078c2752549f6d8a7c86dbc5dd708088a7be6d80672ec7b07100b72468"
         }
       ]
     },
@@ -11185,21 +11140,6 @@
       ]
     },
     {
-      "bom-ref": "46370d10d9968aaa",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/typing_extensions-4.16.0.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "510f2798ee23c416b9c396ef607b3da53555e29a"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "b05084ca1d50879865178d9fff9fabeab61bdfb1f361bfbde95421ffc8f9be46"
-        }
-      ]
-    },
-    {
       "bom-ref": "46377ee08532cd61",
       "type": "file",
       "name": "/usr/share/zoneinfo/America/Adak",
@@ -11331,6 +11271,21 @@
         {
           "alg": "SHA-256",
           "content": "0cab5a123f1f43ddb26c84d3594e019b5eb44bda732665156e36964677a7c54e"
+        }
+      ]
+    },
+    {
+      "bom-ref": "476e4807f44b1fe5",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/scipy-1.18.0.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "f89b216ab5d88482ffd86e311fc86e4df7a624f6"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "157bd150af3af33b40ec61489be8153752b269fb10c4b45b8cea5104f3235420"
         }
       ]
     },
@@ -11995,6 +11950,21 @@
       ]
     },
     {
+      "bom-ref": "4b1091a6203b19c5",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/counterlab_kernel-0.1.0.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "2b3ef1fbe39fff60d4a89a024c49ae059a6f4532"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "10294c635700e05487097c12c94b5bd558b0492feee54a31efa40b9e66ac9cad"
+        }
+      ]
+    },
+    {
       "bom-ref": "4b360523c32e838e",
       "type": "file",
       "name": "/var/lib/dpkg/info/perl-base.md5sums",
@@ -12006,6 +11976,21 @@
         {
           "alg": "SHA-256",
           "content": "df0fd9b5c6bd98628a05f686c07afea9cc27d5c2546eeaad30592d667f6adf83"
+        }
+      ]
+    },
+    {
+      "bom-ref": "4b5abe073ec66082",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/attrs-26.1.0.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "7cf5b42b86709af5b8006faf5e5a5313f8f11c73"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "40de9b239d81f3e4ff3b005e4749cda91549d56e10415ffce54a25c0c995df10"
         }
       ]
     },
@@ -12081,21 +12066,6 @@
         {
           "alg": "SHA-256",
           "content": "7dddcec6f7d492ab43f8b9ce79f613fd8af0b977f59c47c1d5dae16a1261e674"
-        }
-      ]
-    },
-    {
-      "bom-ref": "4bb5b4f0ce1e550d",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pandas-2.3.3.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "4d2721815912ff48a87b19cfa30da77c9ecad9db"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "40ee953dc7ca155840b639a1881ff84578075187fce0ac20eeda55a7fa0d9a90"
         }
       ]
     },
@@ -12630,7 +12600,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:e582b9b2b23d7278e1cc847942ed0f7e52f68be240c352fa241bbf8754cc0c23"
+          "value": "sha256:9c96a16774fbcf7decebd24b5a15b9690e7b54811b47acadeb0508c59866d5b2"
         },
         {
           "name": "syft:location:0:path",
@@ -13250,21 +13220,6 @@
         {
           "alg": "SHA-256",
           "content": "5387b33943963d2e47f05b3f37926f2d454f9ded33ca857e56ffb33b3adb999d"
-        }
-      ]
-    },
-    {
-      "bom-ref": "51efd1cc0f26e08a",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/referencing-0.37.0.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "513d9b80fd881b6590bcd36d55e2d7df6a1754c2"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "04809580a3978099fe22d6316e0964d4ac3d2d8dd78333b3f72c780eb4211b0a"
         }
       ]
     },
@@ -14514,6 +14469,21 @@
       ]
     },
     {
+      "bom-ref": "5992816bdb674073",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/threadpoolctl-3.6.0.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "3f2e15aac693e8731bbf01c6548f24e3f19d7275"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "a45df8d07ea1883d772183a501d7d526076aa70dfcfddb276a2cbdc04def5341"
+        }
+      ]
+    },
+    {
       "bom-ref": "59ac7a92c45fc40a",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/gconv/GOST_19768-74.so",
@@ -14799,6 +14769,21 @@
       ]
     },
     {
+      "bom-ref": "5b63b92114db2c05",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pytz-2026.2.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "ef5e7c6bcf27ff3d88a0229bcd083cfc6cdb6b81"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "56b1e4933e430bf524cc2cc6621bcd64cda12947ed22978d0ee241cd7f02f588"
+        }
+      ]
+    },
+    {
       "bom-ref": "5b862252d81b93e6",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/perl-base/unicore/To/Sc.pl",
@@ -14855,21 +14840,6 @@
         {
           "alg": "SHA-256",
           "content": "6feedcf06942c0b3e970cd45eace6e97aed4c917dfc8a66c65025ed7ffb2a887"
-        }
-      ]
-    },
-    {
-      "bom-ref": "5c32a8f93a5b5c54",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pip/_vendor/distlib/w64.exe",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "34d3e30bcbf87581902409bf5f621f48c5fc2b10"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "7a319ffaba23a017d7b1e18ba726ba6c54c53d6446db55f92af53c279894f8ad"
         }
       ]
     },
@@ -15044,7 +15014,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:e582b9b2b23d7278e1cc847942ed0f7e52f68be240c352fa241bbf8754cc0c23"
+          "value": "sha256:9c96a16774fbcf7decebd24b5a15b9690e7b54811b47acadeb0508c59866d5b2"
         },
         {
           "name": "syft:location:0:path",
@@ -15338,21 +15308,6 @@
       ]
     },
     {
-      "bom-ref": "5e9ad988fdab27f3",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/jsonschema-4.26.0.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "edec54112710bd8a9b5061b34f5c706c534997fa"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "d9a623235a52ca7d217192b6518bf74ed5b5dba4b33544f8dce19942eb1bd575"
-        }
-      ]
-    },
-    {
       "bom-ref": "5eaec366be5e286d",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/gconv/CP1125.so",
@@ -15379,6 +15334,21 @@
         {
           "alg": "SHA-256",
           "content": "5ca63d40a3cf2c18349e92deb80022e27f9a5faea64d914b9cad8235165323fa"
+        }
+      ]
+    },
+    {
+      "bom-ref": "5ee4af249293a8db",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pip/_vendor/distlib/w32.exe",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "3a1e4e67422d9dd54f7e8bba2bb014474d2f6ea0"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "47872cc77f8e18cf642f868f23340a468e537e64521d9a3a416c8b84384d064b"
         }
       ]
     },
@@ -15934,21 +15904,6 @@
         {
           "alg": "SHA-256",
           "content": "de2e7b1bc7a2aed4e5866d3655d1041206c27caf376ee81bfc4012e8225e0e7c"
-        }
-      ]
-    },
-    {
-      "bom-ref": "61e1d4425caed439",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/platformdirs-4.10.0.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "bb406b28eed846f4cc38b2a9cf5ac80d531afc98"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "c4ee18f5b6d2b38512a30c289200b1463f298a8261c8fa63f2584ea97e93cf78"
         }
       ]
     },
@@ -16678,7 +16633,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:e582b9b2b23d7278e1cc847942ed0f7e52f68be240c352fa241bbf8754cc0c23"
+          "value": "sha256:9c96a16774fbcf7decebd24b5a15b9690e7b54811b47acadeb0508c59866d5b2"
         },
         {
           "name": "syft:location:0:path",
@@ -17076,6 +17031,21 @@
       ]
     },
     {
+      "bom-ref": "6825db9a6f5f362a",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/attrs-26.1.0.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "89068272cc1dc340d8fd910a62be241c42414339"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "4cd40e690f23bf37cbcad34efd6758e062df1df07c86833f7e3ce95bf1fa38cc"
+        }
+      ]
+    },
+    {
       "bom-ref": "682f6f5ae03a7b28",
       "type": "file",
       "name": "/usr/bin/fmt",
@@ -17417,21 +17387,6 @@
         {
           "alg": "SHA-256",
           "content": "cf1470021aff7013163f2113df233ee87dfe9e711123c88d0fa814cb34597532"
-        }
-      ]
-    },
-    {
-      "bom-ref": "69aa0af20eeb8d7f",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pip-26.1.2.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "a7bf7d835bfb15c4b8387f102ccd7a5684e456f5"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "17832de47b5dc23e46253ba16462520036f28d9a27d5c30157784952ca4e69b2"
         }
       ]
     },
@@ -17852,6 +17807,21 @@
         {
           "alg": "SHA-256",
           "content": "de1551af16dcdd61408bbe262dc16234c9a2373d2088599767924c63a1a42505"
+        }
+      ]
+    },
+    {
+      "bom-ref": "6bfe93a3e1f6d202",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pytz-2026.2.dist-info/top_level.txt",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "df4be193ca784c3d406d96318c1b78372cf46eb3"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "eb145896df77e2fd721dbd4922b5e01f21b19f772a002bddfb213cb248bf91c7"
         }
       ]
     },
@@ -18576,6 +18546,21 @@
       ]
     },
     {
+      "bom-ref": "707df5a5eeffd07c",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/joblib-1.5.3.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "1d59d01f644bc9d3be817e935db7f249a608efaa"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "cee9c60896ae4e7a965a840fbde50d111d2f8018f61201d1ed2e9fc3dd4883e6"
+        }
+      ]
+    },
+    {
       "bom-ref": "708488b60d1028b1",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/libffi.so.8.1.4",
@@ -18587,6 +18572,21 @@
         {
           "alg": "SHA-256",
           "content": "922024ec5a23f7de1095b1cff2f6cbfb377b5d58cd51fd0ec2e8fe35427653e2"
+        }
+      ]
+    },
+    {
+      "bom-ref": "70a37230f94cbe88",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/scikit_learn-1.9.0.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "e2ed0ec74a1437accd9efcd330cdf99932167c33"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "a62ba93a45e254b0d4d04cf810e4136ac41d4bb3ae25dd98712f82878107970f"
         }
       ]
     },
@@ -18812,21 +18812,6 @@
         {
           "alg": "SHA-256",
           "content": "edd383958ce315a642cdfa6aa3fbe2779aa5c674b305fe910449b90cee594c58"
-        }
-      ]
-    },
-    {
-      "bom-ref": "72caf49d66e1c08f",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/numpy-2.4.6.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "2950bbbc5c64966b844e233269e70a4e0c99382e"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "563cb1165c8c1cb689d0da3b81bba440cf69c0ed0074ad6a0f35de50fe7e75d9"
         }
       ]
     },
@@ -19337,6 +19322,21 @@
         {
           "alg": "SHA-256",
           "content": "5652a615ea7a55671cc695f5056d57f8fe66608ec04ed5360215ce700118ac2a"
+        }
+      ]
+    },
+    {
+      "bom-ref": "76a6dd697e6e0931",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/nbformat-5.10.4.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "212bbea3c3317c06be1d3a321f028174bc9620b4"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "7424d680e3abe693cfca3e71256efad9173987f9f6e8d1ca1adeb03efb54f124"
         }
       ]
     },
@@ -19911,21 +19911,6 @@
       ]
     },
     {
-      "bom-ref": "7a8653353fa8d2b2",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pip/_vendor/distlib/t64-arm.exe",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "c88f99bb82cbbf96992c36b61f6c614a15abc9d6"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "ebc4c06b7d95e74e315419ee7e88e1d0f71e9e9477538c00a93a9ff8c66a6cfc"
-        }
-      ]
-    },
-    {
       "bom-ref": "7aa7ad255b3ea8fe",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/perl-base/unicore/To/Uc.pl",
@@ -20105,21 +20090,6 @@
       ]
     },
     {
-      "bom-ref": "7badcfb6dc58f494",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pip/_vendor/distlib/w32.exe",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "3a1e4e67422d9dd54f7e8bba2bb014474d2f6ea0"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "47872cc77f8e18cf642f868f23340a468e537e64521d9a3a416c8b84384d064b"
-        }
-      ]
-    },
-    {
       "bom-ref": "7bb3c5e37a9ab6f3",
       "type": "file",
       "name": "/usr/share/zoneinfo/Asia/Barnaul",
@@ -20146,6 +20116,21 @@
         {
           "alg": "SHA-256",
           "content": "65e183663c15551a1e47e27ae36cc49cddba04f2f9f1589324b6f09e4ee92d79"
+        }
+      ]
+    },
+    {
+      "bom-ref": "7bc8913a3f988292",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pip-26.1.2.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "b9c273790636f68b2014c2589b4e9bc7a91a6eac"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "b08291eb89f83c13f673ca533cc8508669d069fbb698569d976ec8286012fb35"
         }
       ]
     },
@@ -20320,7 +20305,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:e582b9b2b23d7278e1cc847942ed0f7e52f68be240c352fa241bbf8754cc0c23"
+          "value": "sha256:9c96a16774fbcf7decebd24b5a15b9690e7b54811b47acadeb0508c59866d5b2"
         },
         {
           "name": "syft:location:0:path",
@@ -20340,21 +20325,6 @@
         {
           "alg": "SHA-256",
           "content": "38182b8eca471f6004ec770a384cafe83749f71cc39c881751ca191debeba66c"
-        }
-      ]
-    },
-    {
-      "bom-ref": "7d0fc3d8da213477",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/narwhals-2.24.0.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "49c8cb8f7d7a909ef0075997c6226d812382d5f2"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "c8aa441e88f6ee9e37ac5232c33552426f87a6a200c6c66038d37c17b3c1ca56"
         }
       ]
     },
@@ -20809,21 +20779,6 @@
       ]
     },
     {
-      "bom-ref": "7ff16a2234946854",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/threadpoolctl-3.6.0.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "3f2e15aac693e8731bbf01c6548f24e3f19d7275"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "a45df8d07ea1883d772183a501d7d526076aa70dfcfddb276a2cbdc04def5341"
-        }
-      ]
-    },
-    {
       "bom-ref": "7ffbc3c31ddb3513",
       "type": "file",
       "name": "/usr/bin/zfgrep",
@@ -21169,21 +21124,6 @@
       ]
     },
     {
-      "bom-ref": "8204a15dbaf421e6",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/jsonschema-4.26.0.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "94b3d1a46cf55d74e42c401eaf4a4b71c76cee31"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "05b189866ca98a96da3934bf6b83687ced3ff85325273b77e16b705f6d8b26d2"
-        }
-      ]
-    },
-    {
       "bom-ref": "822f7cde3e35989f",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/perl-base/unicore/lib/Scx/Bopo.pl",
@@ -21244,6 +21184,21 @@
       ]
     },
     {
+      "bom-ref": "8265ce2838a8c4f9",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/six-1.17.0.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "483a26554261f6c839703c0e1183f3ef33ff97f1"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "562042078c2752549f6d8a7c86dbc5dd708088a7be6d80672ec7b07100b72468"
+        }
+      ]
+    },
+    {
       "bom-ref": "82672431cb4c26ce",
       "type": "file",
       "name": "/usr/share/zoneinfo/Africa/Harare",
@@ -21255,6 +21210,21 @@
         {
           "alg": "SHA-256",
           "content": "22720486f3e24b8e4b4f746afd2e0020f22d3a6c055b79579457e3efc2373ee5"
+        }
+      ]
+    },
+    {
+      "bom-ref": "828b5bfc05339d4b",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/jsonschema_specifications-2025.9.1.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "ac33f477be9d3336ae67bc454f68a9ff39c91cf3"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "35abd41757f32b4ea24756920ded47b70173d77cbc052a5a6d3ab583b2e8d89d"
         }
       ]
     },
@@ -21364,21 +21334,6 @@
       ]
     },
     {
-      "bom-ref": "8310e0c1209c7c79",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pip/_vendor/distlib/w64-arm.exe",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "e0db21e02eea22f0da5b44745d1dd0184ddc6ebe"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "c5dc9884a8f458371550e09bd396e5418bf375820a31b9899f6499bf391c7b2e"
-        }
-      ]
-    },
-    {
       "bom-ref": "8316283a538379e1",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/perl-base/unicore/lib/InSC/Number.pl",
@@ -21390,6 +21345,21 @@
         {
           "alg": "SHA-256",
           "content": "a264f1e1c6d3609a1b75658db7b57c04996ee40f2a8d8bec198a056b0a5478b3"
+        }
+      ]
+    },
+    {
+      "bom-ref": "83238bd04f923d88",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/traitlets-5.15.1.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "cb7904a6202f27f68c9cb48adf78d8fb3dce318f"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "156c6a358f7141b7404240aa206c23487eff9308fdf286e2fe3ac971fae0cb00"
         }
       ]
     },
@@ -21480,21 +21450,6 @@
         {
           "alg": "SHA-256",
           "content": "2630eeb7e722f660ef4df14899437b18d2cbc092f66304427c0538257a08bda2"
-        }
-      ]
-    },
-    {
-      "bom-ref": "83545089a6db0de6",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/counterlab_kernel-0.1.0.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "4dab58b3098de5c333b6b40abf152bdf68435f0f"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "016947c264f91f5b03239c58b4465c05a4f7a9cd7f278ead21427065d0fcaeb9"
         }
       ]
     },
@@ -21854,6 +21809,21 @@
         {
           "alg": "SHA-256",
           "content": "2c8f4bb15dd77090b497e2a841ff3323ecbbae4f9dbb9edead2f8dd8fb5d8bb4"
+        }
+      ]
+    },
+    {
+      "bom-ref": "85d2ff2709c4e50f",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/tzdata-2026.3.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "d50ead73a4ffb4842025147ccf0cea513309ed3e"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "8f9f4ae062c3c9af93f22cff46986c4735d15d1306a413df291d5b67301db0eb"
         }
       ]
     },
@@ -22298,7 +22268,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:e582b9b2b23d7278e1cc847942ed0f7e52f68be240c352fa241bbf8754cc0c23"
+          "value": "sha256:9c96a16774fbcf7decebd24b5a15b9690e7b54811b47acadeb0508c59866d5b2"
         },
         {
           "name": "syft:location:0:path",
@@ -22798,6 +22768,21 @@
         {
           "alg": "SHA-256",
           "content": "38633817061f9d161c8b14c1ff72c9f223e8208d977a4c15d843010611a5dded"
+        }
+      ]
+    },
+    {
+      "bom-ref": "8cb6cd15cdda2839",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/referencing-0.37.0.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "513d9b80fd881b6590bcd36d55e2d7df6a1754c2"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "04809580a3978099fe22d6316e0964d4ac3d2d8dd78333b3f72c780eb4211b0a"
         }
       ]
     },
@@ -23612,6 +23597,21 @@
       ]
     },
     {
+      "bom-ref": "913b3176070df58e",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/platformdirs-4.10.0.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "bb406b28eed846f4cc38b2a9cf5ac80d531afc98"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "c4ee18f5b6d2b38512a30c289200b1463f298a8261c8fa63f2584ea97e93cf78"
+        }
+      ]
+    },
+    {
       "bom-ref": "9194e2662ae2ffa2",
       "type": "file",
       "name": "/usr/share/ca-certificates/mozilla/GTS_Root_R1.crt",
@@ -23968,6 +23968,21 @@
         {
           "alg": "SHA-256",
           "content": "aafc70a4c5eefa8149106bbb9655b039b29d65129139996633ba006b3de2e54d"
+        }
+      ]
+    },
+    {
+      "bom-ref": "93f8d3e384b0b02e",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pip/_vendor/distlib/t32.exe",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "c6f8034e2e8183d35d3f2b035405294ee01fa273"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "6b4195e640a85ac32eb6f9628822a622057df1e459df7c17a12f97aeabc9415b"
         }
       ]
     },
@@ -24377,6 +24392,21 @@
       ]
     },
     {
+      "bom-ref": "969ba165fb945c39",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/numpy-2.4.6.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "46f47f5195a0b408d6f61f0db28e95ef1eb09080"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "b082c52ccbe3b880bae177c35171b52ed6c947f3ad71e3762f2723f60a411de0"
+        }
+      ]
+    },
+    {
       "bom-ref": "96a5f0422132b8c7",
       "type": "file",
       "name": "/usr/share/common-licenses/LGPL-2.1",
@@ -24437,6 +24467,21 @@
       ]
     },
     {
+      "bom-ref": "970681ce28231b1e",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pip/_vendor/distlib/w64-arm.exe",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "e0db21e02eea22f0da5b44745d1dd0184ddc6ebe"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "c5dc9884a8f458371550e09bd396e5418bf375820a31b9899f6499bf391c7b2e"
+        }
+      ]
+    },
+    {
       "bom-ref": "9723e7cbaa1e8379",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/gconv/libJIS.so",
@@ -24452,6 +24497,21 @@
       ]
     },
     {
+      "bom-ref": "972f809d6f0b7c09",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/jsonschema-4.26.0.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "94b3d1a46cf55d74e42c401eaf4a4b71c76cee31"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "05b189866ca98a96da3934bf6b83687ced3ff85325273b77e16b705f6d8b26d2"
+        }
+      ]
+    },
+    {
       "bom-ref": "97443a95d84de074",
       "type": "file",
       "name": "/usr/bin/sha256sum",
@@ -24463,21 +24523,6 @@
         {
           "alg": "SHA-256",
           "content": "89f8c1d1ba3c76138f3771e1a91e2796ade6180b1c1e4258c04698ff32787c97"
-        }
-      ]
-    },
-    {
-      "bom-ref": "974769a2a61c6934",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/nbformat-5.10.4.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "bffa37a48a0afd17efcad22050c54a20168b1479"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "9baeb7e29107357c02b33f7bd905de8ea42e6e1659a40d136cf04a4962f2663a"
         }
       ]
     },
@@ -24812,21 +24857,6 @@
       ]
     },
     {
-      "bom-ref": "98934e019a66067e",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/python_dateutil-2.9.0.post0.dist-info/top_level.txt",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "600c004f1f1dc5b324d955fcae3b1ba9c967bacc"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "e2d8dd5a485166f17b2c0fc161efcbf60076c3fa766becf9cba02b8da464a2df"
-        }
-      ]
-    },
-    {
       "bom-ref": "989b71871e654ce2",
       "type": "file",
       "name": "/usr/share/perl5/Debconf/Element/Teletype/Text.pm",
@@ -24943,21 +24973,6 @@
         {
           "alg": "SHA-256",
           "content": "972b0819815ca5768198d0af721c695c13d5f233774db948164700294a5fb61f"
-        }
-      ]
-    },
-    {
-      "bom-ref": "993607c2c504ad3a",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/nbformat-5.10.4.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "212bbea3c3317c06be1d3a321f028174bc9620b4"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "7424d680e3abe693cfca3e71256efad9173987f9f6e8d1ca1adeb03efb54f124"
         }
       ]
     },
@@ -25168,21 +25183,6 @@
         {
           "alg": "SHA-256",
           "content": "e24ec8bf5c285f86ada9e3caadcbcc403d9593d4e699aeeb5bf016fd1eb6a427"
-        }
-      ]
-    },
-    {
-      "bom-ref": "9ab08abce5ac8db8",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/scikit_learn-1.9.0.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "c366a5f76be3ab1b6f85463aff84bc8e473fe8a9"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "ee61a579f42d3edabe3e483db483475e33fffec04d7f3e69c539527bd93eaca6"
         }
       ]
     },
@@ -25543,6 +25543,21 @@
         {
           "alg": "SHA-256",
           "content": "555ed6cfc95b70d0e209ffcbfbcef31670cf50bea5e9ff686f6f9c456acb0f46"
+        }
+      ]
+    },
+    {
+      "bom-ref": "9caa64700351b0af",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/python_dateutil-2.9.0.post0.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "910ea998f9986d160d738c9a49bd50a8bc360af8"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "72f6367f463719163e2be6a70f3bd77d9aaf6a382ece9c246532e0c9bc3eb2fa"
         }
       ]
     },
@@ -26237,6 +26252,21 @@
       ]
     },
     {
+      "bom-ref": "a0c1701a0bb7da63",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/scipy-1.18.0.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "954ae7eb3d6f41a37037d73a21e02bab94457551"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "86320bc4418be016a157d6b2e4f0dc2db689fccd0aea9b7f96d6c4826e2a61e4"
+        }
+      ]
+    },
+    {
       "bom-ref": "a0d6a8930708f8ae",
       "type": "file",
       "name": "/usr/share/bash-completion/completions/rev",
@@ -26488,21 +26518,6 @@
         {
           "alg": "SHA-256",
           "content": "cb6aaa4906f42c1648f9a7eb2beecaa111287b09c9fa677c5dd393515403b8a5"
-        }
-      ]
-    },
-    {
-      "bom-ref": "a26db3c059ef2129",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pip/_vendor/distlib/t32.exe",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "c6f8034e2e8183d35d3f2b035405294ee01fa273"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "6b4195e640a85ac32eb6f9628822a622057df1e459df7c17a12f97aeabc9415b"
         }
       ]
     },
@@ -26777,6 +26792,21 @@
       ]
     },
     {
+      "bom-ref": "a52b3f659bbf38e7",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/fastjsonschema-2.21.2.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "14478410e46ed7768cf793f732b14a9afa8713c3"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "0556da49cf01e467e94d7171582997a1896c01d3f822bd9ae6fffe8417b5a3cd"
+        }
+      ]
+    },
+    {
       "bom-ref": "a53c4bf805e96791",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/gconv/ECMA-CYRILLIC.so",
@@ -26998,21 +27028,6 @@
         {
           "alg": "SHA-256",
           "content": "b97607f3fa16d3713acf4fe251548460388e9dd497442befb1e6b19062ee55dc"
-        }
-      ]
-    },
-    {
-      "bom-ref": "a6f8c745fdb2e293",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/traitlets-5.15.1.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "cb7904a6202f27f68c9cb48adf78d8fb3dce318f"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "156c6a358f7141b7404240aa206c23487eff9308fdf286e2fe3ac971fae0cb00"
         }
       ]
     },
@@ -27541,21 +27556,6 @@
       ]
     },
     {
-      "bom-ref": "aa750327fe4c39e7",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/rpds_py-2026.6.3.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "337eb816578def0bee8b17b68f3baddaf8354abf"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "ee025df0af2961fb75937b0d8f2272aef70f2b0d8a5a217bb9bbf8418bc49a76"
-        }
-      ]
-    },
-    {
       "bom-ref": "aa79863d99e569af",
       "type": "file",
       "name": "/usr/share/zoneinfo/America/Cancun",
@@ -27567,6 +27567,21 @@
         {
           "alg": "SHA-256",
           "content": "11d574370d968cced59e3147a2ae63b126cbbae13b78fd4e13be2eb44c96246e"
+        }
+      ]
+    },
+    {
+      "bom-ref": "aab38432ad6f133b",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/nbformat-5.10.4.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "bffa37a48a0afd17efcad22050c54a20168b1479"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "9baeb7e29107357c02b33f7bd905de8ea42e6e1659a40d136cf04a4962f2663a"
         }
       ]
     },
@@ -27736,21 +27751,6 @@
       ]
     },
     {
-      "bom-ref": "abe99f0e3bfd29b4",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/scipy-1.18.0.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "954ae7eb3d6f41a37037d73a21e02bab94457551"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "86320bc4418be016a157d6b2e4f0dc2db689fccd0aea9b7f96d6c4826e2a61e4"
-        }
-      ]
-    },
-    {
       "bom-ref": "abf462687b95984b",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/perl-base/auto/List/Util/Util.so",
@@ -27912,6 +27912,21 @@
         {
           "alg": "SHA-256",
           "content": "8d8bb66dc6b7c7dfac5e7f677d26e9fffe16488d79babc106e7e512cdfbe5c6b"
+        }
+      ]
+    },
+    {
+      "bom-ref": "ad369a5e107c561c",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/joblib-1.5.3.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "702be4b43153aadae231aeb0f51c73461c7e1e6b"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "d09a7ef54d8593e9c20f88538cea4cbc783f8c1b3488d076b69c6a425fecb7a5"
         }
       ]
     },
@@ -28182,6 +28197,21 @@
         {
           "alg": "SHA-256",
           "content": "93101fa7085b570efcc9fac41af7deeead6f797b4b097899753311de080b0433"
+        }
+      ]
+    },
+    {
+      "bom-ref": "aeee0d41a2866461",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/counterlab_kernel-0.1.0.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "4dab58b3098de5c333b6b40abf152bdf68435f0f"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "016947c264f91f5b03239c58b4465c05a4f7a9cd7f278ead21427065d0fcaeb9"
         }
       ]
     },
@@ -29731,21 +29761,6 @@
       ]
     },
     {
-      "bom-ref": "b915a5b8cf44a66b",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/narwhals-2.24.0.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "9ce4f730bf5b4e4259796dcb8751320fd7b1a49b"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "817b5790898e22de52ff30889f663d44d18f2876b7ed7f1e6c14ed6dd3e56dfb"
-        }
-      ]
-    },
-    {
       "bom-ref": "b91d7078ae269b63",
       "type": "file",
       "name": "/var/lib/dpkg/info/debianutils.postrm",
@@ -30886,17 +30901,17 @@
       ]
     },
     {
-      "bom-ref": "c097e85d25027506",
+      "bom-ref": "c084c4e0f86a932a",
       "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/fastjsonschema-2.21.2.dist-info/METADATA",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/tzdata-2026.3.dist-info/METADATA",
       "hashes": [
         {
           "alg": "SHA-1",
-          "content": "41804a6447dbc54b352a166371294e97cfcf9b97"
+          "content": "2099c46375b1deb17235976c0c37efe270dcf8e5"
         },
         {
           "alg": "SHA-256",
-          "content": "1be8143a33df0ecf82b993d95e91180e28bdf2d128f9a8d03f68bf099d7b69f3"
+          "content": "511c019df477939fe7f4c38e32ad74a570c4ebb05b13fd2fffd0f0f2dbe6f7b1"
         }
       ]
     },
@@ -31276,6 +31291,21 @@
       ]
     },
     {
+      "bom-ref": "c2e908bb9ccaba40",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/jsonschema-4.26.0.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "edec54112710bd8a9b5061b34f5c706c534997fa"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "d9a623235a52ca7d217192b6518bf74ed5b5dba4b33544f8dce19942eb1bd575"
+        }
+      ]
+    },
+    {
       "bom-ref": "c317c336c8cf124f",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/perl-base/Getopt/Long/Parser.pm",
@@ -31332,6 +31362,21 @@
         {
           "alg": "SHA-256",
           "content": "ce035eedb6f86cb668f659e4ca6b56ecc779788eaf4ba56062217dca86d62e39"
+        }
+      ]
+    },
+    {
+      "bom-ref": "c34f508d0255cdb4",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pip-26.1.2.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "a7bf7d835bfb15c4b8387f102ccd7a5684e456f5"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "17832de47b5dc23e46253ba16462520036f28d9a27d5c30157784952ca4e69b2"
         }
       ]
     },
@@ -31662,6 +31707,21 @@
         {
           "alg": "SHA-256",
           "content": "99291a4411992de52b9bcf0478771a5a711ddf95a7f808361b5d07b48dc6d9f8"
+        }
+      ]
+    },
+    {
+      "bom-ref": "c4df7f311f452cc2",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pandas-2.3.3.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "4d2721815912ff48a87b19cfa30da77c9ecad9db"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "40ee953dc7ca155840b639a1881ff84578075187fce0ac20eeda55a7fa0d9a90"
         }
       ]
     },
@@ -32191,21 +32251,6 @@
       ]
     },
     {
-      "bom-ref": "c8b846fe6c7861da",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/rpds_py-2026.6.3.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "845731d7b92371c9efb02b4177b81ee878ed2a34"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "f8be7b17da3980b2c48596941411a43c70ac41b1e2d530aa531f2c15eab2eb1c"
-        }
-      ]
-    },
-    {
       "bom-ref": "c8b9e8710562a8c5",
       "type": "file",
       "name": "/usr/share/terminfo/a/ansi",
@@ -32232,6 +32277,21 @@
         {
           "alg": "SHA-256",
           "content": "de1f5d71057c93bcef3f643fe2ad7d9e18daa3465324c5ca42ef519da47e0143"
+        }
+      ]
+    },
+    {
+      "bom-ref": "c8e4b10654f56791",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pip/_vendor/distlib/t64-arm.exe",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "c88f99bb82cbbf96992c36b61f6c614a15abc9d6"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "ebc4c06b7d95e74e315419ee7e88e1d0f71e9e9477538c00a93a9ff8c66a6cfc"
         }
       ]
     },
@@ -32731,21 +32791,6 @@
       ]
     },
     {
-      "bom-ref": "cc1a618983661187",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/joblib-1.5.3.dist-info/top_level.txt",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "811f65e4ae50d1ab054a02f417b7d3669a4bf3a9"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "3f42eca19e398012fb7242f896a42deed75bac70f8c6555885f7e684779e4ff5"
-        }
-      ]
-    },
-    {
       "bom-ref": "cc22f9eabd39dca6",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/gconv/IBM1140.so",
@@ -32772,21 +32817,6 @@
         {
           "alg": "SHA-256",
           "content": "9f2fdd4b4e7706dda74e8e443e1e1da0fbbb19c62a58e230e90d648b69177c35"
-        }
-      ]
-    },
-    {
-      "bom-ref": "cc469c28550cffe4",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/jupyter_core-5.9.1.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "1e84b98c8e28ef54dc4a492130d9bf0b8e4f2f9a"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "68a656d7e2ebe45d40becf6032998192790d8a7536942f72167d79b8559e5ded"
         }
       ]
     },
@@ -32941,17 +32971,17 @@
       ]
     },
     {
-      "bom-ref": "cd618df6d2e8c42d",
+      "bom-ref": "cd4a91b13cf4a73b",
       "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/attrs-26.1.0.dist-info/METADATA",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/fastjsonschema-2.21.2.dist-info/top_level.txt",
       "hashes": [
         {
           "alg": "SHA-1",
-          "content": "89068272cc1dc340d8fd910a62be241c42414339"
+          "content": "28d86b232e310b91c02e28b0442b54cd175b0cfc"
         },
         {
           "alg": "SHA-256",
-          "content": "4cd40e690f23bf37cbcad34efd6758e062df1df07c86833f7e3ce95bf1fa38cc"
+          "content": "f1141c3c31575c764a76e4e3833ba0a4f356df3223c454f46b14e1e14b13ea01"
         }
       ]
     },
@@ -33811,6 +33841,21 @@
       ]
     },
     {
+      "bom-ref": "d2a34f5d6cf1cf37",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pip/_vendor/distlib/w64.exe",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "34d3e30bcbf87581902409bf5f621f48c5fc2b10"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "7a319ffaba23a017d7b1e18ba726ba6c54c53d6446db55f92af53c279894f8ad"
+        }
+      ]
+    },
+    {
       "bom-ref": "d2a8c11f4a77de7a",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/perl-base/unicore/lib/InSC/Consona8.pl",
@@ -34197,6 +34242,21 @@
         {
           "alg": "SHA-256",
           "content": "d48484d608c8b93a177f45a7edd828ce7c8a760d40c9779e6f028d5fe2eed159"
+        }
+      ]
+    },
+    {
+      "bom-ref": "d540078c2a0ee768",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pytz-2026.2.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "7eca3c2234523d6d5499891a7dd39814bb3330e3"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "8082bae7ad5ef0161764a699c12c674a2c85735fbbf96f2ff27def266fa17f00"
         }
       ]
     },
@@ -34816,6 +34876,21 @@
       ]
     },
     {
+      "bom-ref": "d921a3e56bb70943",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/jupyter_core-5.9.1.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "1e84b98c8e28ef54dc4a492130d9bf0b8e4f2f9a"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "68a656d7e2ebe45d40becf6032998192790d8a7536942f72167d79b8559e5ded"
+        }
+      ]
+    },
+    {
       "bom-ref": "d92c35526f816d7b",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/perl-base/unicore/lib/Nv/30.pl",
@@ -34902,21 +34977,6 @@
         {
           "alg": "SHA-256",
           "content": "10b2e85c3e0ebb8ebc6ef72892260bbede80bfaa4a89ecee6019513d879a25de"
-        }
-      ]
-    },
-    {
-      "bom-ref": "d9e31be1ce59303c",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/fastjsonschema-2.21.2.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "14478410e46ed7768cf793f732b14a9afa8713c3"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "0556da49cf01e467e94d7171582997a1896c01d3f822bd9ae6fffe8417b5a3cd"
         }
       ]
     },
@@ -35206,21 +35266,6 @@
       ]
     },
     {
-      "bom-ref": "dc4f3e23076a3282",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/threadpoolctl-3.6.0.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "1217c86ae429ca83c5585b8104e19ff6f73c1f2f"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "de2117d4de384fa382d94b293e2e47092620b6afd12e10d59e2c0892bdadcfd1"
-        }
-      ]
-    },
-    {
       "bom-ref": "dcaf41bfd98af8d4",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/gconv/BIG5HKSCS.so",
@@ -35487,21 +35532,6 @@
         {
           "alg": "SHA-256",
           "content": "c5743e1ea6794112058fa98a3d97c51e787184d2e5d79e838975202d37e1eb71"
-        }
-      ]
-    },
-    {
-      "bom-ref": "ddbcbce7f90ec753",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/counterlab_kernel-0.1.0.dist-info/top_level.txt",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "5f1eea2477634c22457f88131166824d61f86e86"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "147cc0a0e853c29818fbf258aad39c50c97053a2c2857cc42b814efacd9f1250"
         }
       ]
     },
@@ -35971,21 +36001,6 @@
       ]
     },
     {
-      "bom-ref": "e0d40d8fb89fa194",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pip/_vendor/distlib/t64.exe",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "0d0c5e3b06f56ad12a77da46ab3fdab81acda628"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "81a618f21cb87db9076134e70388b6e9cb7c2106739011b6a51772d22cae06b7"
-        }
-      ]
-    },
-    {
       "bom-ref": "e0d50b9f47732559",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/gconv/UHC.so",
@@ -36376,21 +36391,6 @@
       ]
     },
     {
-      "bom-ref": "e2f8eb4f2d80c1f4",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/fastjsonschema-2.21.2.dist-info/top_level.txt",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "28d86b232e310b91c02e28b0442b54cd175b0cfc"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "f1141c3c31575c764a76e4e3833ba0a4f356df3223c454f46b14e1e14b13ea01"
-        }
-      ]
-    },
-    {
       "bom-ref": "e30afe4b723aaca4",
       "type": "file",
       "name": "/usr/lib/x86_64-linux-gnu/perl-base/unicore/lib/Hst/NA.pl",
@@ -36571,6 +36571,21 @@
       ]
     },
     {
+      "bom-ref": "e43a5410f75eaa7b",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/typing_extensions-4.16.0.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "b5bd3d6870e5f23bb8a6a3efe82a9a566f65d6b6"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "d7a220918ed91a6af1abf9508f734fe5d2c2f6b438ee519cc73ee4e60e6e665d"
+        }
+      ]
+    },
+    {
       "bom-ref": "e459dc779a851b70",
       "type": "file",
       "name": "/usr/share/perl5/Debconf/DbDriver/Backup.pm",
@@ -36582,21 +36597,6 @@
         {
           "alg": "SHA-256",
           "content": "3620ba1981937ffe39fd1365561e751dc11a78ce4b9087bf04858c2e90a5e952"
-        }
-      ]
-    },
-    {
-      "bom-ref": "e465aa90a5eda666",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pytz-2026.2.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "ef5e7c6bcf27ff3d88a0229bcd083cfc6cdb6b81"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "56b1e4933e430bf524cc2cc6621bcd64cda12947ed22978d0ee241cd7f02f588"
         }
       ]
     },
@@ -36747,6 +36747,21 @@
         {
           "alg": "SHA-256",
           "content": "79e9f88ab505186e36f440c88bc37e103e1a9369a0ebe382c4a04bd70b91c027"
+        }
+      ]
+    },
+    {
+      "bom-ref": "e52b9d73ff8ff864",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/narwhals-2.24.0.dist-info/METADATA",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "49c8cb8f7d7a909ef0075997c6226d812382d5f2"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "c8aa441e88f6ee9e37ac5232c33552426f87a6a200c6c66038d37c17b3c1ca56"
         }
       ]
     },
@@ -36927,21 +36942,6 @@
         {
           "alg": "SHA-256",
           "content": "8c93b2ae43dac3c2d688d227609d713f71620d3f0980ebf6bbb371c6eb542108"
-        }
-      ]
-    },
-    {
-      "bom-ref": "e6721486a70e522f",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pytz-2026.2.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "7eca3c2234523d6d5499891a7dd39814bb3330e3"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "8082bae7ad5ef0161764a699c12c674a2c85735fbbf96f2ff27def266fa17f00"
         }
       ]
     },
@@ -37216,6 +37216,21 @@
       ]
     },
     {
+      "bom-ref": "e8564c9911a64fec",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/counterlab_kernel-0.1.0.dist-info/top_level.txt",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "5f1eea2477634c22457f88131166824d61f86e86"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "147cc0a0e853c29818fbf258aad39c50c97053a2c2857cc42b814efacd9f1250"
+        }
+      ]
+    },
+    {
       "bom-ref": "e8686b1e137ae49b",
       "type": "file",
       "name": "/var/lib/dpkg/info/debconf.postinst",
@@ -37261,21 +37276,6 @@
       ]
     },
     {
-      "bom-ref": "e89f00fab8460f3e",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/counterlab_kernel-0.1.0.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "c398e017f56d111b2c187fc0c77acbc48ed3fdf6"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "25fb7b22a9b91a1fc31949582ef0fc7d88f7e73262ad1fcccc52c2db1a29049b"
-        }
-      ]
-    },
-    {
       "bom-ref": "e8c724b8610c9242",
       "type": "file",
       "name": "/usr/sbin/chpasswd",
@@ -37287,6 +37287,21 @@
         {
           "alg": "SHA-256",
           "content": "58131b1a88b30a8ae483661ac3b8dbecd8601c41c9e8355a13e887d53c97b319"
+        }
+      ]
+    },
+    {
+      "bom-ref": "e8c8e790f05dd183",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/pip/_vendor/distlib/t64.exe",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "0d0c5e3b06f56ad12a77da46ab3fdab81acda628"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "81a618f21cb87db9076134e70388b6e9cb7c2106739011b6a51772d22cae06b7"
         }
       ]
     },
@@ -37466,6 +37481,21 @@
         {
           "alg": "SHA-256",
           "content": "d26334da333bb6b788e0253b45a94d289d536f31829be1149d4e96e732888fd8"
+        }
+      ]
+    },
+    {
+      "bom-ref": "e9961909324904c9",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/threadpoolctl-3.6.0.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "1217c86ae429ca83c5585b8104e19ff6f73c1f2f"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "de2117d4de384fa382d94b293e2e47092620b6afd12e10d59e2c0892bdadcfd1"
         }
       ]
     },
@@ -38145,21 +38175,6 @@
       ]
     },
     {
-      "bom-ref": "ef1450f9eeb2a71c",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/tzdata-2026.3.dist-info/top_level.txt",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "b65a137ac301b1951960e7470060a0b43733f60a"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "30ee90a82d3146b37aec687dc54fe732669dc015656333cd92afe1e2062ecda4"
-        }
-      ]
-    },
-    {
       "bom-ref": "ef18662838912591",
       "type": "file",
       "name": "/usr/share/zoneinfo/America/Rankin_Inlet",
@@ -38310,6 +38325,21 @@
       ]
     },
     {
+      "bom-ref": "f024c1d044c95ca9",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/jupyter_core-5.9.1.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "e43c14e03eba9087ab60514e176a466198a68ebf"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "58e3ee5d3ed50459b879522477dc82db438fbcc161e316390e57befbd0a2370c"
+        }
+      ]
+    },
+    {
       "bom-ref": "f03b4720241bd494",
       "type": "file",
       "name": "/usr/bin/base64",
@@ -38426,21 +38456,6 @@
         {
           "alg": "SHA-256",
           "content": "b92315da16568fe572061141c02f79d3071385f3778eae8a9727044a64132ce0"
-        }
-      ]
-    },
-    {
-      "bom-ref": "f09b46c42cec7065",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/tzdata-2026.3.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "2099c46375b1deb17235976c0c37efe270dcf8e5"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "511c019df477939fe7f4c38e32ad74a570c4ebb05b13fd2fffd0f0f2dbe6f7b1"
         }
       ]
     },
@@ -38780,7 +38795,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:e582b9b2b23d7278e1cc847942ed0f7e52f68be240c352fa241bbf8754cc0c23"
+          "value": "sha256:9c96a16774fbcf7decebd24b5a15b9690e7b54811b47acadeb0508c59866d5b2"
         },
         {
           "name": "syft:location:0:path",
@@ -38815,21 +38830,6 @@
         {
           "alg": "SHA-256",
           "content": "67072be139e90c73ed25007ac92f0525909a7c6d6829aecc2ceff86f9568f98b"
-        }
-      ]
-    },
-    {
-      "bom-ref": "f252a26338506563",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/referencing-0.37.0.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "f6fa004340bef5d23995b09dab75ce12e3f367a7"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "c93b00e6ab1524fd60848376604c189a114374776475c25a31d57be47b29de6a"
         }
       ]
     },
@@ -39355,6 +39355,21 @@
         {
           "alg": "SHA-256",
           "content": "670423a06efc1c8f9afd4fd49ce19654281945e370db20a7f1b7f41dc0f78cf8"
+        }
+      ]
+    },
+    {
+      "bom-ref": "f5a0e44b2588f50c",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/traitlets-5.15.1.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "def155c7f76f65affa490abaadfe59680f2ea162"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "0a009dc773b068b44d96b4f4170dd7067c54db0f3ba35d972f8161a589b5a959"
         }
       ]
     },
@@ -40514,6 +40529,21 @@
       ]
     },
     {
+      "bom-ref": "fccb44725f4d8e77",
+      "type": "file",
+      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/six-1.17.0.dist-info/RECORD",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "80111bdc2568e95828cfa47ace74b15c586458a9"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "bafb3c8d874f8b2d5fb9f9405cd78c2e455bbc3de9d486a3fea5df267c5d302d"
+        }
+      ]
+    },
+    {
       "bom-ref": "fcdd15c2d0168698",
       "type": "file",
       "name": "/var/lib/dpkg/info/libc-bin.list",
@@ -40694,21 +40724,6 @@
       ]
     },
     {
-      "bom-ref": "fdde34a701f0cbde",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/python_dateutil-2.9.0.post0.dist-info/METADATA",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "7a3c35abd86cd96034d5afb0d4b241dc9e13e6f8"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "a9d436da322be808332f98d88325998e87cb693a678a9969feb4cfad729a6e93"
-        }
-      ]
-    },
-    {
       "bom-ref": "fde375057419bbfc",
       "type": "file",
       "name": "/usr/share/terminfo/m/mach-color",
@@ -40735,21 +40750,6 @@
         {
           "alg": "SHA-256",
           "content": "fe64d4b3ae749db5ec57b04ed9203c748fff446f57b9665fad988435d89c9e43"
-        }
-      ]
-    },
-    {
-      "bom-ref": "fe06865140bf0f88",
-      "type": "file",
-      "name": "/opt/counterlab-venv/lib/python3.13/site-packages/tzdata-2026.3.dist-info/RECORD",
-      "hashes": [
-        {
-          "alg": "SHA-1",
-          "content": "d50ead73a4ffb4842025147ccf0cea513309ed3e"
-        },
-        {
-          "alg": "SHA-256",
-          "content": "8f9f4ae062c3c9af93f22cff46986c4735d15d1306a413df291d5b67301db0eb"
         }
       ]
     },
@@ -51222,7 +51222,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -51230,7 +51230,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -51239,7 +51239,7 @@
       ]
     },
     {
-      "bom-ref": "pkg:pypi/counterlab-kernel@0.1.0?package-id=7f88ff1218ad8fa5",
+      "bom-ref": "pkg:pypi/counterlab-kernel@0.1.0?package-id=128bf6c35f8fcbeb",
       "type": "library",
       "name": "counterlab-kernel",
       "version": "0.1.0",
@@ -51395,7 +51395,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -51403,7 +51403,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -51411,7 +51411,7 @@
         },
         {
           "name": "syft:location:2:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:2:path",
@@ -51557,7 +51557,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -51565,7 +51565,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -51573,7 +51573,7 @@
         },
         {
           "name": "syft:location:2:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:2:path",
@@ -51707,7 +51707,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -51715,7 +51715,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -51723,7 +51723,7 @@
         },
         {
           "name": "syft:location:2:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:2:path",
@@ -51953,7 +51953,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -51961,7 +51961,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -52095,7 +52095,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -52103,7 +52103,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -52333,7 +52333,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -52341,7 +52341,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -52511,7 +52511,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -52519,7 +52519,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -52653,7 +52653,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -52661,7 +52661,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -52781,7 +52781,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -52789,7 +52789,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -52923,7 +52923,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -52931,7 +52931,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -53231,7 +53231,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:e582b9b2b23d7278e1cc847942ed0f7e52f68be240c352fa241bbf8754cc0c23"
+          "value": "sha256:9c96a16774fbcf7decebd24b5a15b9690e7b54811b47acadeb0508c59866d5b2"
         },
         {
           "name": "syft:location:0:path",
@@ -53239,7 +53239,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:e582b9b2b23d7278e1cc847942ed0f7e52f68be240c352fa241bbf8754cc0c23"
+          "value": "sha256:9c96a16774fbcf7decebd24b5a15b9690e7b54811b47acadeb0508c59866d5b2"
         },
         {
           "name": "syft:location:1:path",
@@ -53324,7 +53324,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -53332,7 +53332,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -53442,7 +53442,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -53450,7 +53450,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -53458,7 +53458,7 @@
         },
         {
           "name": "syft:location:2:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:2:path",
@@ -53616,7 +53616,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -53624,7 +53624,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -53632,7 +53632,7 @@
         },
         {
           "name": "syft:location:2:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:2:path",
@@ -53766,7 +53766,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -53774,7 +53774,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -54004,7 +54004,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -54012,7 +54012,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -54177,7 +54177,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -54185,7 +54185,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -54270,7 +54270,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -54278,7 +54278,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -54436,7 +54436,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -54444,7 +54444,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -54452,7 +54452,7 @@
         },
         {
           "name": "syft:location:2:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:2:path",
@@ -54622,7 +54622,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -54630,7 +54630,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -54764,7 +54764,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -54772,7 +54772,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -54938,7 +54938,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -54946,7 +54946,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -55116,7 +55116,7 @@
         },
         {
           "name": "syft:location:0:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:0:path",
@@ -55124,7 +55124,7 @@
         },
         {
           "name": "syft:location:1:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:1:path",
@@ -55132,7 +55132,7 @@
         },
         {
           "name": "syft:location:2:layerID",
-          "value": "sha256:7c905184136db12dd63efff4f841863dc4149c4c0d91781f31a87e20441b8978"
+          "value": "sha256:eed441c47699da006c9d0ae79d26ef8c986b47ccda839cd1fa4dbf9a6d7e7c2d"
         },
         {
           "name": "syft:location:2:path",
@@ -55739,7 +55739,7 @@
       ]
     },
     {
-      "ref": "pkg:pypi/counterlab-kernel@0.1.0?package-id=7f88ff1218ad8fa5",
+      "ref": "pkg:pypi/counterlab-kernel@0.1.0?package-id=128bf6c35f8fcbeb",
       "dependsOn": [
         "pkg:pypi/jsonschema@4.26.0?package-id=d6f7407f25c433cb",
         "pkg:pypi/nbformat@5.10.4?package-id=0934d771fc9fae9b",
