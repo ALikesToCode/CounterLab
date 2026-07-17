@@ -375,6 +375,35 @@ async function waitForVerifiedPatch({
   await expect(success).toBeVisible({ timeout: 360_000 });
 }
 
+async function revealVerifiedBoundary(page: Page) {
+  const verified = page.getByRole("heading", {
+    name: /Where does the result change/i,
+  });
+  const retry = page.getByRole("button", {
+    name: /Retry Boundary verification/i,
+  });
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await page
+      .getByRole("button", {
+        name:
+          attempt === 0
+            ? /Map the boundary/i
+            : /Retry Boundary verification/i,
+      })
+      .click();
+    await expect(verified.or(retry)).toBeVisible({ timeout: 180_000 });
+    if (await verified.isVisible()) {
+      await expect(
+        page.getByRole("table", { name: /Verified Boundary Map values/i }),
+      ).toBeVisible();
+      return;
+    }
+  }
+
+  await expect(verified).toBeVisible({ timeout: 180_000 });
+}
+
 test("Judge Mode distinguishes every authority path", async ({ page }) => {
   const healthResponse = await page.request.get("/api/health");
   expect(healthResponse.ok()).toBe(true);
@@ -1087,6 +1116,7 @@ test("a configured hosted runner completes an untouched leakage notebook", async
   await expect(page.getByText(/Verified exploratory result/i)).toBeVisible({
     timeout: 180_000,
   });
+  await revealVerifiedBoundary(page);
 
   await page.getByLabel("Your revised mental model").fill(revision);
   await page
@@ -1216,6 +1246,7 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
   await expect(page.getByText(/Verified exploratory result/i)).toBeVisible({
     timeout: 180_000,
   });
+  await revealVerifiedBoundary(page);
 
   await page
     .getByLabel("Your revised mental model")
