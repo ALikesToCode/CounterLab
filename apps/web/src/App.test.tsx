@@ -132,6 +132,21 @@ const livePreview = {
   },
 };
 
+const sensitiveLivePreview = {
+  ...livePreview,
+  requiresSensitiveApproval: true,
+  sanitizedContent: {
+    ...livePreview.sanitizedContent,
+    evidence: [
+      {
+        cellIndex: 3,
+        kind: "code",
+        excerpt: "token = '[REDACTED_SECRET]'",
+      },
+    ],
+  },
+};
+
 const operationByRun = {
   random_row_split: "leakage.random_row_split",
   customer_group_split: "leakage.group_holdout",
@@ -151,6 +166,17 @@ const liveResult = {
       operationByRun[run.id as keyof typeof operationByRun] ??
       "leakage.random_row_split",
   })),
+};
+
+const committedPrediction = {
+  schemaVersion: "1" as const,
+  id: "prediction_ui",
+  sessionId: "session_ui",
+  beliefTestId: liveBeliefSpec.id,
+  choice: "Accuracy falls materially",
+  confidence: 88,
+  committedAt: "2026-07-14T09:03:00.000Z",
+  immutableHash: "f".repeat(64),
 };
 
 const liveRunnerJob = {
@@ -223,6 +249,7 @@ function installApi(
     beliefTest?: typeof liveBeliefTest | typeof imbalanceBeliefTest;
     stallRunner?: boolean;
     failRunnerResume?: boolean;
+    preview?: typeof livePreview | typeof sensitiveLivePreview;
     restoredSessionState?:
       | "INGESTED"
       | "BELIEF_TEST_PROPOSED"
@@ -332,7 +359,7 @@ function installApi(
         });
       }
       if (path.endsWith("/belief-test/preview")) {
-        return response(livePreview);
+        return response(options.preview ?? livePreview);
       }
       if (path.endsWith("/belief-test")) {
         if (activeMode.kind === "live_notebook" && options.rejectLiveBelief) {
@@ -467,6 +494,22 @@ async function openLiveSetup(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: /test this claim/i }));
 }
 
+async function openSampleModelDuel(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(
+    screen.getByRole("button", { name: /try verified sample/i }),
+  );
+  await screen.findByRole("heading", {
+    name: /what do you think the score means/i,
+  });
+  await user.type(
+    screen.getByLabelText(/your claim/i),
+    "The high score means the model will work for new customers.",
+  );
+  await user.click(
+    screen.getByRole("button", { name: /compare two explanations/i }),
+  );
+}
+
 describe("CounterLab judged flow", () => {
   it("keeps Judge Mode on its own refresh-safe route", async () => {
     window.localStorage.setItem("counterlab.mode", "live");
@@ -571,6 +614,27 @@ describe("CounterLab judged flow", () => {
     ).toBe(false);
   });
 
+  it("tells the notebook evidence story with exact references", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(
+      screen.getByRole("button", { name: /try verified sample/i }),
+    );
+
+    const story = within(
+      await screen.findByRole("region", { name: /notebook evidence story/i }),
+    );
+    const exactReferences = within(
+      story.getByRole("list", { name: /exact evidence references/i }),
+    );
+    expect(exactReferences.getByText("Cell 3 · output 0")).toBeInTheDocument();
+    expect(exactReferences.getByText("Cell 3 · source")).toBeInTheDocument();
+    expect(story.getByText(/score shown in the notebook/i)).toBeInTheDocument();
+    await user.click(story.getByText(/full evidence and integrity/i));
+    expect(story.getByText(/sha-256/i)).toBeInTheDocument();
+  });
+
   it("shows an honest unavailable state when live reasoning is not configured", async () => {
     const user = userEvent.setup();
     installApi({ liveGpt: "server-key-required" });
@@ -586,6 +650,52 @@ describe("CounterLab judged flow", () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/nothing was sent/i)).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(/OPENAI|GPT-|https?:\/\//i);
+  });
+
+  it("requires approval for a sensitive-looking sanitized preview", async () => {
+    const user = userEvent.setup();
+    installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      preview: sensitiveLivePreview,
+    });
+    render(<App />);
+
+    await openLiveSetup(user);
+    await user.click(
+      await screen.findByRole("button", {
+        name: /continue with my notebook/i,
+      }),
+    );
+    await user.upload(
+      screen.getByLabelText(/use a different notebook/i),
+      new File(["{}"], uploadedArtifact.fileName, {
+        type: "application/json",
+      }),
+    );
+    const liveClaim = screen.getByLabelText(/your claim/i);
+    await user.clear(liveClaim);
+    await user.type(
+      liveClaim,
+      "The notebook accuracy proves generalization to new customers.",
+    );
+    await user.click(
+      screen.getByRole("button", { name: /compare two explanations/i }),
+    );
+
+    const sendButton = await screen.findByRole("button", {
+      name: /send this evidence/i,
+    });
+    expect(sendButton).toBeDisabled();
+    expect(
+      screen.getByText(/redacted sensitive-looking excerpt/i),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: /reviewed the redacted sensitive-looking excerpt/i,
+      }),
+    );
+    expect(sendButton).toBeEnabled();
   });
 
   it("starts a configured live notebook and completes the hosted artifact-specific lab", async () => {
@@ -633,6 +743,24 @@ describe("CounterLab judged flow", () => {
         name: /review the evidence sent for analysis/i,
       }),
     ).toBeInTheDocument();
+    const packetSummary = screen.getByRole("complementary", {
+      name: /privacy packet summary/i,
+    });
+    expect(within(packetSummary).getByText(/your claim/i)).toBeInTheDocument();
+    expect(
+      within(packetSummary).getByText(/short notebook excerpts/i),
+    ).toBeInTheDocument();
+    expect(
+      within(packetSummary).getByText(/schema names/i),
+    ).toBeInTheDocument();
+    expect(within(packetSummary).getByText(/no raw rows/i)).toBeInTheDocument();
+    expect(
+      within(packetSummary).getByText(/no notebook file/i),
+    ).toBeInTheDocument();
+    expect(
+      within(packetSummary).getByText(/no local paths/i),
+    ).toBeInTheDocument();
+    await user.click(within(packetSummary).getByText(/review exact packet/i));
     expect(screen.getByText(/train_test_split/)).toBeInTheDocument();
     expect(
       fetcher.mock.calls.some(([path]) =>
@@ -644,10 +772,9 @@ describe("CounterLab judged flow", () => {
     );
 
     expect(
-      await screen.findByRole("heading", {
-        name: /live competing hypothesis/i,
-      }),
+      await screen.findByRole("region", { name: /model duel/i }),
     ).toBeInTheDocument();
+    expect(screen.getByText(/live competing hypothesis/i)).toBeInTheDocument();
     expect(
       screen.getByText(/the claim targets unseen customers/i),
     ).toBeInTheDocument();
@@ -655,10 +782,12 @@ describe("CounterLab judged flow", () => {
       screen.getByText(/customer_id identifies the evaluation boundary/i),
     ).toBeInTheDocument();
     await user.click(
-      screen.getByRole("button", { name: /these two ideas make sense/i }),
+      screen.getByRole("button", { name: /yes, this captures my view/i }),
     );
     await user.click(screen.getByRole("radio", { name: /remain near 98/i }));
-    await user.click(screen.getByRole("button", { name: /lock my answer/i }));
+    await user.click(
+      screen.getByRole("button", { name: /seal my prediction/i }),
+    );
 
     expect(
       await screen.findByRole("heading", { name: /the result is ready/i }),
@@ -728,6 +857,68 @@ describe("CounterLab judged flow", () => {
     await vi.waitFor(() =>
       expect(document.getElementById("learner-progress")).toHaveFocus(),
     );
+  });
+
+  it("keeps the two models equal and lets the learner edit their meaning", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await openSampleModelDuel(user);
+
+    const duel = await screen.findByRole("region", { name: /model duel/i });
+    expect(
+      within(duel).getByRole("article", {
+        name: /your current explanation/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(duel).getByRole("article", {
+        name: /alternative counterlab will test/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: /does your current explanation capture what you mean/i,
+      }),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /edit my explanation/i }),
+    );
+    expect(
+      await screen.findByRole("heading", {
+        name: /what do you think the score means/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/your claim/i)).toHaveValue(
+      "The high score means the model will work for new customers.",
+    );
+  });
+
+  it("records not-enough-evidence without sealing a prediction", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi();
+    render(<App />);
+    await openSampleModelDuel(user);
+
+    await user.click(screen.getByText(/more ways to respond/i));
+    await user.click(
+      screen.getByRole("button", { name: /not enough evidence/i }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /what do you think the score means/i,
+      }),
+    ).toBeInTheDocument();
+    const responseRequest = fetcher.mock.calls.find(
+      ([path, init]) =>
+        String(path).endsWith("/belief-test/confirm") &&
+        String(init?.body).includes("insufficient_evidence"),
+    );
+    expect(responseRequest).toBeDefined();
+    expect(
+      fetcher.mock.calls.some(([path]) => String(path).endsWith("/prediction")),
+    ).toBe(false);
   });
 
   it("keeps the first failed live request provider-neutral and on the claim screen", async () => {
@@ -918,14 +1109,10 @@ describe("CounterLab judged flow", () => {
     render(<App />);
 
     expect(
-      await screen.findByRole("heading", {
-        name: liveBeliefSpec.hypotheses[0].statement,
-      }),
+      await screen.findByText(liveBeliefSpec.hypotheses[0].statement),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", {
-        name: liveBeliefSpec.hypotheses[1].statement,
-      }),
+      screen.getByText(liveBeliefSpec.hypotheses[1].statement),
     ).toBeInTheDocument();
     expect(
       screen.getByText(liveBeliefSpec.evidenceRefs[0]!.relevance),
@@ -934,6 +1121,32 @@ describe("CounterLab judged flow", () => {
     expect(document.body).not.toHaveTextContent(
       /customer_id encoded|98\.5% accuracy/i,
     );
+  });
+
+  it("restores the immutable Prediction Seal after refresh", async () => {
+    installApi({
+      restoredSessionState: "LAB_VERIFIED",
+      restoredSessionExtra: {
+        beliefSpec: liveBeliefSpec,
+        prediction: committedPrediction,
+        verifiedResult: liveResult,
+      },
+    });
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem("counterlab.mode", "live");
+    window.history.replaceState({}, "", "/session/session_ui");
+
+    render(<App />);
+
+    const seal = within(
+      await screen.findByRole("region", { name: /sealed prediction/i }),
+    );
+    expect(seal.getByText(committedPrediction.choice)).toBeInTheDocument();
+    expect(seal.getByText("88%")).toBeInTheDocument();
+    expect(seal.queryByRole("radio")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /the result is ready/i }),
+    ).toBeInTheDocument();
   });
 
   it("commits class-imbalance prediction wording from Belief Spec v2", async () => {
@@ -954,7 +1167,7 @@ describe("CounterLab judged flow", () => {
       }),
     );
     await user.click(
-      screen.getByRole("button", { name: /lock my answer and run the test/i }),
+      screen.getByRole("button", { name: /seal my prediction/i }),
     );
 
     await vi.waitFor(() => {
@@ -1023,7 +1236,10 @@ describe("CounterLab judged flow", () => {
         name: /what do you think the score means/i,
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/cell 3 · output 0/i)).toBeInTheDocument();
+    const exactReferences = within(
+      screen.getByRole("list", { name: /exact evidence references/i }),
+    );
+    expect(exactReferences.getByText(/cell 3 · output 0/i)).toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: /here.s what changed/i }),
     ).not.toBeInTheDocument();
@@ -1039,7 +1255,9 @@ describe("CounterLab judged flow", () => {
     await user.click(continueButton);
 
     expect(
-      await screen.findByRole("heading", { name: "Which explanation fits?" }),
+      await screen.findByRole("heading", {
+        name: /does your current explanation capture what you mean/i,
+      }),
     ).toBeInTheDocument();
     expect(screen.getByText(/partly remembers customers/i)).toBeInTheDocument();
     expect(
@@ -1047,13 +1265,15 @@ describe("CounterLab judged flow", () => {
     ).not.toBeInTheDocument();
 
     await user.click(
-      screen.getByRole("button", { name: /these two ideas make sense/i }),
+      screen.getByRole("button", { name: /yes, this captures my view/i }),
     );
     await user.click(screen.getByRole("radio", { name: /remain near 98/i }));
-    await user.click(screen.getByRole("button", { name: /lock my answer/i }));
+    await user.click(
+      screen.getByRole("button", { name: /seal my prediction/i }),
+    );
 
     expect(
-      await screen.findByText("Your answer is locked", { selector: "strong" }),
+      await screen.findByRole("region", { name: /sealed prediction/i }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: /the fair test is ready/i }),

@@ -1,0 +1,232 @@
+.seal {
+  padding: clamp(20px, 4vw, 30px);
+  border: 1px solid #d8dee6;
+  border-radius: 14px;
+  color: #07152a;
+  background: #fff;
+  font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
+}
+
+.seal > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.seal > header span {
+  color: #955f00;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.seal > header h2 {
+  max-width: 680px;
+  margin: 8px 0 0;
+  font-family: "Newsreader Variable", "Iowan Old Style", Georgia, serif;
+  font-size: clamp(28px, 4vw, 38px);
+  font-weight: 520;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+}
+
+.comparison {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  margin-top: 20px;
+}
+
+.comparison article {
+  padding: 16px;
+  border: 1px solid #e1e6ec;
+  border-radius: 10px;
+  background: #f7f8fa;
+}
+
+.comparison article span,
+.comparison article strong {
+  display: block;
+}
+
+.comparison article span {
+  color: #4c5d73;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.comparison article strong {
+  margin-top: 6px;
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.arrow {
+  align-self: center;
+  color: #955f00;
+  font-size: 20px;
+}
+
+.options {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 22px 0 0;
+  border: 0;
+}
+
+.options legend {
+  margin-bottom: 10px;
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.options label {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #d8dee6;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.options label:has(input:checked) {
+  border-color: #955f00;
+  background: #fff8e4;
+}
+
+.options input {
+  width: 20px;
+  height: 20px;
+  accent-color: #955f00;
+}
+
+.options input:focus-visible,
+.confidence input:focus-visible,
+.commit:focus-visible {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 3px;
+}
+
+.options label > span {
+  display: grid;
+  gap: 3px;
+}
+
+.options strong {
+  font-size: 15px;
+}
+
+.options small {
+  color: #4c5d73;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.confidence {
+  display: grid;
+  gap: 9px;
+  margin-top: 18px;
+  font-size: 15px;
+}
+
+.confidence input {
+  min-height: 44px;
+  accent-color: #955f00;
+}
+
+.commit {
+  min-height: 44px;
+  padding: 10px 16px;
+  margin-top: 18px;
+  border: 1px solid #955f00;
+  border-radius: 10px;
+  color: #fff;
+  background: #955f00;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.commit:hover:not(:disabled) {
+  background: #704700;
+}
+
+.commit:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.committed {
+  border-color: #e1bc67;
+  background: #fff1ca;
+}
+
+.committed > header {
+  align-items: center;
+}
+
+.committed > header > span {
+  font-size: 15px;
+}
+
+.committed > header > strong {
+  font-size: 22px;
+}
+
+.sealedSummary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0 0;
+}
+
+.sealedSummary > div {
+  padding: 12px;
+  border: 1px solid rgb(149 95 0 / 24%);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 58%);
+}
+
+.sealedSummary dt {
+  color: #704700;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sealedSummary dd {
+  margin: 6px 0 0;
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.committed > p {
+  margin: 14px 0 0;
+  color: #704700;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@media (max-width: 620px) {
+  .comparison,
+  .sealedSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .arrow {
+    justify-self: center;
+    transform: rotate(90deg);
+  }
+
+  .commit {
+    width: 100%;
+  }
+}

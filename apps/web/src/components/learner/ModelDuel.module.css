@@ -1,0 +1,223 @@
+.duel {
+  color: #07152a;
+  font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
+}
+
+.duel > header {
+  max-width: 760px;
+}
+
+.duel > header > span,
+.modelLabel {
+  color: #4c5d73;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.duel > header h2 {
+  margin: 8px 0 0;
+  font-family: "Newsreader Variable", "Iowan Old Style", Georgia, serif;
+  font-size: clamp(32px, 5vw, 46px);
+  font-weight: 520;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+
+.duel > header p {
+  margin: 14px 0 0;
+  color: #4c5d73;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.models {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+  margin-top: 24px;
+}
+
+.model {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding: 22px;
+  border: 1px solid #cfd7e1;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.modelStatement {
+  margin: 12px 0 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.model h3 {
+  margin: 0;
+}
+
+.prediction {
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+  margin: 18px 0 0;
+  border: 1px solid #e1e6ec;
+  border-radius: 10px;
+  color: #24374d;
+  background: #f7f8fa;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.prediction strong {
+  color: #4c5d73;
+  font-size: 12px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.versus {
+  align-self: center;
+  color: #66768a;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.scope {
+  margin-top: auto;
+  padding-top: 10px;
+}
+
+.scope summary,
+.tertiary summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  width: fit-content;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: #245eea;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+  list-style: none;
+}
+
+.scope summary::-webkit-details-marker,
+.tertiary summary::-webkit-details-marker {
+  display: none;
+}
+
+.scope summary:focus-visible,
+.tertiary summary:focus-visible,
+.actions button:focus-visible,
+.tertiary button:focus-visible {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 2px;
+}
+
+.scope > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #f7f8fa;
+}
+
+.scope h4 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.scope ul {
+  padding-left: 18px;
+  margin: 7px 0 0;
+  color: #4c5d73;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.actions button,
+.tertiary button {
+  min-height: 44px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.primary {
+  border: 1px solid #245eea;
+  color: #fff;
+  background: #245eea;
+}
+
+.primary:hover {
+  background: #143d9d;
+}
+
+.secondary,
+.tertiary button {
+  border: 1px solid #cfd7e1;
+  color: #245eea;
+  background: #fff;
+}
+
+.tertiary {
+  margin-top: 6px;
+}
+
+.tertiary > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.confirmed {
+  width: fit-content;
+  padding: 12px 14px;
+  margin: 20px 0 0;
+  border: 1px solid #8dd8d0;
+  border-radius: 10px;
+  color: #075f5d;
+  background: #dff6f2;
+  font-size: 15px;
+  font-weight: 750;
+}
+
+@media (max-width: 760px) {
+  .models {
+    grid-template-columns: 1fr;
+  }
+
+  .versus {
+    justify-self: center;
+  }
+}
+
+@media (max-width: 520px) {
+  .scope > div {
+    grid-template-columns: 1fr;
+  }
+
+  .actions button,
+  .tertiary button {
+    width: 100%;
+  }
+}

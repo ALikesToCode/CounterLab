@@ -29,6 +29,17 @@ import { CounterLabStudio } from "./app/CounterLabStudio";
 import { parseStudioLocation, studioPath } from "./app/AppRouter";
 import { LearnerCoach } from "./components/learner/LearnerCoach";
 import { LearnerProgress } from "./components/learner/LearnerProgress";
+import { ModelDuel, type DuelModel } from "./components/learner/ModelDuel";
+import {
+  NotebookEvidenceStory,
+  type NotebookEvidenceReference,
+} from "./components/learner/NotebookEvidenceStory";
+import {
+  PredictionSeal,
+  type PredictionDisplay,
+  type PredictionOption,
+} from "./components/learner/PredictionSeal";
+import { PrivacyPacketSummary } from "./components/learner/PrivacyPacketSummary";
 import { QuestionComposer } from "./components/learner/QuestionComposer";
 import type { LearnerStageId } from "./components/learner/learnerStages";
 import { InteractiveImbalanceLab } from "./components/lesson/InteractiveImbalanceLab";
@@ -250,6 +261,124 @@ const percent = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 1,
 });
 
+function notebookScoreDisplay(
+  artifact: ArtifactView | null,
+): PredictionDisplay {
+  if (artifact?.fileSha256 === sampleArtifact.fileSha256) {
+    return {
+      label: "Score shown in the notebook",
+      value: percent.format(getRun("random_row_split").metrics.accuracy),
+    };
+  }
+  const metric = artifact?.cells.flatMap((cell) => cell.metricCandidates).at(0);
+  return metric === undefined
+    ? { label: "Displayed notebook metric", value: "Not available" }
+    : {
+        label: `${metric.name} shown in the notebook`,
+        value: metric.value.toLocaleString(),
+      };
+}
+
+function notebookEvidenceReferences(
+  artifact: ArtifactView | null,
+): readonly NotebookEvidenceReference[] {
+  if (artifact?.fileSha256 === sampleArtifact.fileSha256) {
+    return [
+      {
+        id: "sample-cell-3-output-0",
+        reference: "Cell 3 · output 0",
+        relevance: "This is the notebook score behind your question.",
+        excerpt: `accuracy: ${getRun("random_row_split").metrics.accuracy}`,
+      },
+      {
+        id: "sample-cell-3-source",
+        reference: "Cell 3 · source",
+        relevance:
+          "The split and customer identity determine whether familiar entities cross the test boundary.",
+        excerpt:
+          "train_test_split includes customer_id among the model inputs.",
+      },
+    ];
+  }
+  if (artifact === null) return [];
+  const metricReferences = artifact.cells.flatMap((cell) =>
+    cell.metricCandidates.map((metric) => ({
+      id:
+        cell.outputHashes[metric.outputIndex] ??
+        `${cell.sourceSha256}-${metric.outputIndex}-${metric.name}`,
+      reference: `Cell ${cell.index} · output ${metric.outputIndex}`,
+      relevance: `${metric.name} is displayed notebook evidence attached to this question.`,
+      excerpt: `${metric.name}: ${metric.value.toLocaleString()}`,
+    })),
+  );
+  if (metricReferences.length > 0) return metricReferences.slice(0, 3);
+  return artifact.cells.slice(0, 3).map((cell) => ({
+    id: cell.sourceSha256,
+    reference: `Cell ${cell.index} · source`,
+    relevance: "This safe excerpt is part of the supported notebook evidence.",
+    excerpt: cell.sourceExcerpt,
+  }));
+}
+
+function predictionOptionsFor(
+  concept: BeliefTest["concept"] | undefined,
+): readonly PredictionOption[] {
+  if (concept === "class_imbalance") {
+    return [
+      {
+        value: "stays-high",
+        label: "Still support the high-score claim",
+        description:
+          "Rare-class recall and PR-AUC confirm the overall accuracy.",
+      },
+      {
+        value: "falls",
+        label: "Expose a serious minority-class problem",
+        description:
+          "The majority baseline or missed positives explain the high score.",
+      },
+      {
+        value: "unsure",
+        label: "I am unsure",
+        description: "The intervention is still worth running.",
+      },
+    ];
+  }
+  return [
+    {
+      value: "stays-high",
+      label: "Remain near 98%",
+      description: "The notebook result reflects a reusable signal.",
+    },
+    {
+      value: "falls",
+      label: "Fall materially",
+      description: "The random split is benefiting from repeated identities.",
+    },
+    {
+      value: "unsure",
+      label: "I am unsure",
+      description: "The intervention is still worth running.",
+    },
+  ];
+}
+
+function interventionExpectation(
+  concept: BeliefTest["concept"] | undefined,
+  prediction: PredictionChoice | null,
+): PredictionDisplay {
+  const selected = predictionOptionsFor(concept).find(
+    (option) => option.value === prediction,
+  );
+  return {
+    label:
+      concept === "class_imbalance"
+        ? "Expected minority-performance result"
+        : "Expected whole-customer result",
+    value: selected?.label ?? "Choose an expectation",
+  };
+}
+
 function Mark({ name }: { name: "arrow" | "check" | "lock" | "spark" }) {
   const paths = {
     arrow: <path d="M5 12h13m-5-5 5 5-5 5" />,
@@ -414,16 +543,10 @@ function ClaimScreen({
   uploadNotebook: (file: File) => void;
   busy: boolean;
 }) {
-  const random = getRun("random_row_split");
   const isSample = artifact?.fileSha256 === sampleArtifact.fileSha256;
-  const metricCandidates =
-    artifact?.cells.flatMap((cell) =>
-      cell.metricCandidates.map((metric) => ({
-        ...metric,
-        cellIndex: cell.index,
-      })),
-    ) ?? [];
   const supported = artifact?.support.status === "SUPPORTED";
+  const evidenceReferences = notebookEvidenceReferences(artifact);
+  const headlineMetric = notebookScoreDisplay(artifact);
   return (
     <main className="workspace shell">
       <div className="screen-intro">
@@ -454,53 +577,25 @@ function ClaimScreen({
           <p className="file-name">
             {artifact?.fileName ?? "Preparing artifact…"}
           </p>
-          {isSample ? (
-            <div className="headline-metric">
-              <span>{percent.format(random.metrics.accuracy)}</span>
-              <small>score shown in the notebook</small>
-            </div>
-          ) : metricCandidates[0] ? (
-            <div className="headline-metric">
-              <span>{metricCandidates[0].value.toLocaleString()}</span>
-              <small>
-                {metricCandidates[0].name} · displayed notebook output
-              </small>
-            </div>
-          ) : (
-            <p className="evidence-empty">
-              No safe displayed metric was extracted.
-            </p>
-          )}
-          <div className="evidence-list">
-            {isSample ? (
-              <>
-                <div className="evidence-row">
-                  <span className="evidence-ref">Cell 3 · output 0</span>
-                  <span>The test mixed rows from the same customers.</span>
-                </div>
-                <div className="evidence-row">
-                  <span className="evidence-ref">Cell 3 · source</span>
-                  <span>
-                    The model can use <code>customer_id</code>.
-                  </span>
-                </div>
-              </>
-            ) : (
-              metricCandidates.slice(0, 3).map((metric) => (
-                <div
-                  className="evidence-row"
-                  key={`${metric.cellIndex}-${metric.outputIndex}-${metric.name}`}
-                >
-                  <span className="evidence-ref">
-                    Cell {metric.cellIndex} · output {metric.outputIndex}
-                  </span>
-                  <span>
-                    {metric.name}: {metric.value.toLocaleString()}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
+          <NotebookEvidenceStory
+            title="What this notebook actually shows"
+            headlineMetric={headlineMetric}
+            references={evidenceReferences}
+            integrity={[
+              {
+                label: "Notebook SHA-256",
+                value: artifact?.fileSha256 ?? "Pending intake",
+              },
+              {
+                label: "Evidence cells",
+                value: String(artifact?.cells.length ?? 0),
+              },
+              {
+                label: "Support decision",
+                value: artifact?.support.status ?? "Pending",
+              },
+            ]}
+          />
           {artifact !== null && artifact.support.reasons.length > 0 && (
             <div className="support-warning" role="status">
               <strong>Notebook support limits</strong>
@@ -529,31 +624,6 @@ function ClaimScreen({
               </p>
             </aside>
           )}
-          <details>
-            <summary>Artifact integrity</summary>
-            <dl className="provenance-list">
-              <div>
-                <dt>Rows</dt>
-                <dd>
-                  {artifact?.schemaSummary.rowCount?.toLocaleString() ??
-                    "Not inferred"}
-                </dd>
-              </div>
-              <div>
-                <dt>Entity candidates</dt>
-                <dd>
-                  {artifact?.schemaSummary.entityCandidates.join(", ") ||
-                    "None"}
-                </dd>
-              </div>
-              <div>
-                <dt>SHA-256</dt>
-                <dd>
-                  <code>{artifact?.fileSha256.slice(0, 16) ?? "pending"}…</code>
-                </dd>
-              </div>
-            </dl>
-          </details>
           <label className="upload-control">
             <span className="upload-title">
               <Mark name="spark" /> Use a different notebook
@@ -627,15 +697,9 @@ function ClaimScreen({
                   {analysisPreview.conceptTitle}
                 </span>
               </div>
-              <p>
-                This sanitized bundle contains notebook structure and short
-                evidence excerpts—not raw rows, local paths, or notebook bytes.
-              </p>
-              <pre aria-label="Exact sanitized analyst input">
-                <code>
-                  {JSON.stringify(analysisPreview.sanitizedContent, null, 2)}
-                </code>
-              </pre>
+              <PrivacyPacketSummary
+                packet={{ exactPacket: analysisPreview.sanitizedContent }}
+              />
               {analysisPreview.requiresSensitiveApproval && (
                 <label className="sensitive-approval">
                   <input
@@ -684,6 +748,7 @@ function ClaimScreen({
 function BeliefScreen({
   claim,
   belief,
+  notebookScore,
   confirmed,
   confirm,
   prediction,
@@ -696,6 +761,7 @@ function BeliefScreen({
 }: {
   claim: string;
   belief?: BeliefPresentation | undefined;
+  notebookScore: PredictionDisplay;
   confirmed: boolean;
   confirm: () => void;
   prediction: PredictionChoice | null;
@@ -709,12 +775,10 @@ function BeliefScreen({
   const isImbalance = belief?.concept === "class_imbalance";
   const copy = isImbalance
     ? {
-        currentLabel: "Idea A · Accuracy is enough",
         currentHypothesis:
           "The high overall score means the model catches the rare cases that matter.",
         currentPrediction:
           "Minority recall should also be strong and clearly beat a majority-only baseline.",
-        competingLabel: "Idea B · Rarity hides failure",
         competingHypothesis:
           "The common class makes accuracy look excellent even when rare cases are missed.",
         competingPrediction:
@@ -724,21 +788,11 @@ function BeliefScreen({
         intervention:
           "We keep the data and scoring model fixed. We expose class-specific errors, then test a bounded threshold change.",
         help: "If accuracy reflects useful rare-event detection, recall should stay strong and beat the majority baseline. If rarity hides failure, class-specific evidence will reveal the gap.",
-        predictionLegend:
-          "When we inspect minority performance, the evidence will…",
-        staysTitle: "Still support the high-score claim",
-        staysDetail:
-          "Rare-class recall and PR-AUC confirm the overall accuracy.",
-        fallsTitle: "Expose a serious minority-class problem",
-        fallsDetail:
-          "The majority baseline or missed positives explain the high score.",
       }
     : {
-        currentLabel: "Idea A · A useful pattern",
         currentHypothesis:
           "The model learned a useful pattern that will work for new customers.",
         currentPrediction: "The score stays close to 98% for new customers.",
-        competingLabel: "Idea B · Customer memory",
         competingHypothesis:
           "The model partly remembers customers it already saw.",
         competingPrediction:
@@ -748,18 +802,30 @@ function BeliefScreen({
         intervention:
           "We keep the model the same. We change who appears in the test, then check what happens without customer ID.",
         help: "If the model learned a reusable pattern, the score should stay high. If it remembers customers, the score should fall. The two ideas now predict different outcomes.",
-        predictionLegend: "If we hold out entire customers, accuracy will…",
-        staysTitle: "Remain near 98%",
-        staysDetail: "The notebook result reflects a reusable signal.",
-        fallsTitle: "Fall materially",
-        fallsDetail: "The random split is benefiting from repeated identities.",
       };
+  const currentModel: DuelModel = {
+    statement: belief?.current.statement ?? copy.currentHypothesis,
+    prediction: belief?.current.predictedOutcome ?? copy.currentPrediction,
+    conditions: belief?.current.conditions ?? [],
+    nonClaims: belief?.current.nonClaims ?? [
+      "This explanation does not establish performance outside the supplied notebook evidence.",
+    ],
+  };
+  const alternativeModel: DuelModel = {
+    statement: belief?.competing.statement ?? copy.competingHypothesis,
+    prediction: belief?.competing.predictedOutcome ?? copy.competingPrediction,
+    conditions: belief?.competing.conditions ?? [],
+    nonClaims: belief?.competing.nonClaims ?? [
+      "This explanation does not claim every model feature is leakage.",
+    ],
+  };
+  const predictionOptions = predictionOptionsFor(belief?.concept);
 
   return (
     <main className="workspace shell">
       <div className="screen-intro compact">
         <p className="eyebrow">Prediction · Your explanation</p>
-        <h1>Which explanation fits?</h1>
+        <h1>Check your explanation before the test.</h1>
         <p>
           Both ideas could explain the high score. A fair test will separate
           them.
@@ -776,41 +842,15 @@ function BeliefScreen({
         <blockquote>{claim}</blockquote>
       </section>
 
-      <section className="hypothesis-grid" aria-label="Competing hypotheses">
-        <article className="hypothesis current">
-          <p className="hypothesis-label">{copy.currentLabel}</p>
-          <h2>{belief?.current.statement ?? copy.currentHypothesis}</h2>
-          <p className="prediction-line">
-            <span>Predicts</span>{" "}
-            {belief?.current.predictedOutcome ?? copy.currentPrediction}
-          </p>
-          {belief?.schemaVersion === "2" && (
-            <details className="analyst-wording">
-              <summary>Show conditions and limits</summary>
-              <p>Conditions: {belief.current.conditions.join(" ")}</p>
-              <p>Does not claim: {belief.current.nonClaims.join(" ")}</p>
-            </details>
-          )}
-        </article>
-        <div className="versus" aria-hidden="true">
-          vs
-        </div>
-        <article className="hypothesis competing">
-          <p className="hypothesis-label">{copy.competingLabel}</p>
-          <h2>{belief?.competing.statement ?? copy.competingHypothesis}</h2>
-          <p className="prediction-line">
-            <span>Predicts</span>{" "}
-            {belief?.competing.predictedOutcome ?? copy.competingPrediction}
-          </p>
-          {belief?.schemaVersion === "2" && (
-            <details className="analyst-wording">
-              <summary>Show conditions and limits</summary>
-              <p>Conditions: {belief.competing.conditions.join(" ")}</p>
-              <p>Does not claim: {belief.competing.nonClaims.join(" ")}</p>
-            </details>
-          )}
-        </article>
-      </section>
+      <ModelDuel
+        current={currentModel}
+        alternative={alternativeModel}
+        confirmed={confirmed}
+        onConfirm={confirm}
+        onEdit={editClaim}
+        onInsufficientEvidence={() => stop("insufficient")}
+        onReject={() => stop("rejected")}
+      />
 
       <section className="evidence-strip" aria-label="Evidence references">
         {belief === undefined ? (
@@ -868,107 +908,29 @@ function BeliefScreen({
         <p>{copy.help}</p>
       </details>
 
-      {!confirmed ? (
-        <div className="action-cluster">
-          <button
-            className="button button-primary"
-            type="button"
-            onClick={confirm}
-          >
-            These two ideas make sense <Mark name="check" />
-          </button>
-          <button
-            className="button button-quiet"
-            type="button"
-            onClick={editClaim}
-          >
-            Edit claim
-          </button>
-          <button
-            className="button button-quiet"
-            type="button"
-            onClick={() => stop("rejected")}
-          >
-            Reject
-          </button>
-          <button
-            className="button button-quiet"
-            type="button"
-            onClick={() => stop("insufficient")}
-          >
-            Insufficient evidence
-          </button>
-        </div>
-      ) : (
-        <section
-          className="prediction-contract panel"
-          aria-labelledby="prediction-heading"
-        >
-          <div className="prediction-title">
-            <div>
-              <p className="eyebrow gold">Prediction Contract</p>
-              <h2 id="prediction-heading">What do you think will happen?</h2>
-            </div>
-            <Mark name="lock" />
-          </div>
-          <fieldset>
-            <legend>{copy.predictionLegend}</legend>
-            <label className="choice">
-              <input
-                type="radio"
-                name="prediction"
-                checked={prediction === "stays-high"}
-                onChange={() => setPrediction("stays-high")}
-              />
-              <span>
-                <strong>{copy.staysTitle}</strong>
-                <small>{copy.staysDetail}</small>
-              </span>
-            </label>
-            <label className="choice">
-              <input
-                type="radio"
-                name="prediction"
-                checked={prediction === "falls"}
-                onChange={() => setPrediction("falls")}
-              />
-              <span>
-                <strong>{copy.fallsTitle}</strong>
-                <small>{copy.fallsDetail}</small>
-              </span>
-            </label>
-            <label className="choice">
-              <input
-                type="radio"
-                name="prediction"
-                checked={prediction === "unsure"}
-                onChange={() => setPrediction("unsure")}
-              />
-              <span>
-                <strong>I am unsure</strong>
-                <small>The intervention is still worth running.</small>
-              </span>
-            </label>
-          </fieldset>
-          <label className="confidence-control">
-            Confidence <strong>{confidence}%</strong>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={confidence}
-              onChange={(event) => setConfidence(Number(event.target.value))}
-            />
-          </label>
-          <button
-            className="button button-gold"
-            type="button"
-            disabled={prediction === null}
-            onClick={commitPrediction}
-          >
-            Lock my answer and run the test <Mark name="lock" />
-          </button>
-        </section>
+      {confirmed && (
+        <PredictionSeal
+          notebookScore={notebookScore}
+          interventionExpectation={interventionExpectation(
+            belief?.concept,
+            prediction,
+          )}
+          options={predictionOptions}
+          choice={prediction}
+          confidence={confidence}
+          committed={false}
+          onChoiceChange={(choice) => {
+            if (
+              choice === "stays-high" ||
+              choice === "falls" ||
+              choice === "unsure"
+            ) {
+              setPrediction(choice);
+            }
+          }}
+          onConfidenceChange={setConfidence}
+          onCommit={commitPrediction}
+        />
       )}
     </main>
   );
@@ -984,10 +946,20 @@ const compilerSteps = [
 function BuildScreen({
   mode,
   resultReady,
+  notebookScore,
+  concept,
+  predictionChoice,
+  sealedCategoricalChoice,
+  confidence,
   openResult,
 }: {
   mode: Mode;
   resultReady: boolean;
+  notebookScore: PredictionDisplay;
+  concept: BeliefTest["concept"] | undefined;
+  predictionChoice: PredictionChoice | null;
+  sealedCategoricalChoice: string | null;
+  confidence: number;
   openResult: () => void;
 }) {
   return (
@@ -1009,11 +981,28 @@ function BuildScreen({
         why="Your prediction is sealed, and the result comes from the verified fixed-kernel test rather than the tutor."
       />
 
-      <div className="lock-notice">
-        <Mark name="lock" />
-        <strong>Your answer is locked</strong>
-        <span>It was saved before any new result was shown.</span>
-      </div>
+      {sealedCategoricalChoice === null ? (
+        <div className="lock-notice">
+          <Mark name="lock" />
+          <strong>Stored replay prediction</strong>
+          <span>The replay preserves the recorded pre-result evidence.</span>
+        </div>
+      ) : (
+        <PredictionSeal
+          notebookScore={notebookScore}
+          interventionExpectation={interventionExpectation(
+            concept,
+            predictionChoice,
+          )}
+          options={predictionOptionsFor(concept)}
+          choice={sealedCategoricalChoice}
+          confidence={confidence}
+          committed
+          onChoiceChange={() => undefined}
+          onConfidenceChange={() => undefined}
+          onCommit={() => undefined}
+        />
+      )}
 
       <div className="build-layout">
         <section className="pipeline panel" aria-labelledby="pipeline-title">
@@ -4248,6 +4237,7 @@ export function App() {
             <BeliefScreen
               claim={effectiveClaim}
               belief={belief}
+              notebookScore={notebookScoreDisplay(artifact)}
               confirmed={confirmed}
               confirm={confirmBeliefTest}
               prediction={prediction}
@@ -4334,6 +4324,13 @@ export function App() {
               <BuildScreen
                 mode={mode}
                 resultReady={verifiedResult !== undefined}
+                notebookScore={notebookScoreDisplay(artifact)}
+                concept={belief?.concept}
+                predictionChoice={prediction}
+                sealedCategoricalChoice={
+                  session?.prediction?.choice ?? prediction
+                }
+                confidence={session?.prediction?.confidence ?? confidence}
                 openResult={openResult}
               />
             ))}
