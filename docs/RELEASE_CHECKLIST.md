@@ -212,6 +212,13 @@ or production evidence above does not qualify this source.
       spec file and refuses credentialed/non-loopback target URLs.
 - [x] Missing `CLOAK_CDP_ENDPOINT` failed closed with status 1; no stock Chromium
       fallback was launched.
+- [x] Post-audit scientific-engine verifier passed 8/8; Python kernel passed
+      179/179; leakage mutations detected 13/13; imbalance mutations detected
+      19/19.
+- [x] Held-out intake/routing passed 10/10 and fixed completion passed 7/8; the
+      unsupported RandomForest patch remains an intentional refusal.
+- [x] All six D1 migrations, including `0006_learner_interactions.sql`, applied
+      successfully to a fresh repository-contained local database.
 - [x] Verified Sample Playground was explicitly omitted because no independently
       admitted fixture authority existed; no browser metric computation or mode
       fallback was introduced.
@@ -222,6 +229,9 @@ or production evidence above does not qualify this source.
 - [ ] Capture current-source screenshots and measure Web Vitals.
 - [ ] Make the full root Vitest/release gate green or approve narrowly documented
       environment-specific exclusions.
+- [ ] Supply a repository-contained Cloudflare authentication session or API
+      token and a current exact-source qualified runner image/receipt. The
+      contained Wrangler session is currently unauthenticated.
 - [ ] Run a clean-clone release check, exact-image qualification, deployment,
       and exact-version production smoke.
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "2",
   "benchmarkId": "counterlab-held-out-v2",
-  "executedAt": "2026-07-16T05:11:29.905Z",
+  "executedAt": "2026-07-18T11:44:52.810Z",
   "parser": "@counterlab/notebook-parser",
   "executionMode": "safe_parse_plus_fixed_contract_completion",
   "labelsSha256": "3ca1d08a8a96f807c8fbe81d96632d2eb2d6b473850301f6d048ebc9016dfc18",
@@ -78,9 +78,9 @@
         "transferPassed": true,
         "patchVerified": true,
         "unchangedCellCount": 1,
-        "resultHash": "bedaa2bc93fa8fff97ca308345ee1d10c51d9b556e0d6c609517fd215f7eaf6e",
+        "resultHash": "f2cc4b758a1f41d86d501f1c9f8b2747f9e726eea32a3ac2bb671ce84fd33ada",
         "patchHash": "301ee38de473f32c9ab61016b256c43cc9438a40ed28716a66a0f405b28df391",
-        "durationMs": 3729,
+        "durationMs": 3806,
         "failureCode": null
       },
       "passed": true
@@ -134,9 +134,9 @@
         "transferPassed": true,
         "patchVerified": true,
         "unchangedCellCount": 1,
-        "resultHash": "16ead39865eb4f3723f47be833ef4bb98ba0aef7b08bd1e3c0a927900c625b3b",
+        "resultHash": "8e429b2a27d53ded9d91bb93000ec097738197e34c7fc1fd1e324bfb1bd9f3e8",
         "patchHash": "bbd5e8e905b13ab7bebbadbddbe5484f1876bf669ce018293d79d3424bc23ac7",
-        "durationMs": 3549,
+        "durationMs": 3734,
         "failureCode": null
       },
       "passed": true
@@ -191,9 +191,9 @@
         "transferPassed": true,
         "patchVerified": true,
         "unchangedCellCount": 1,
-        "resultHash": "b2828687ecc5a3a0236165edd6b7e66994a31ab60a82b21c395bceb9cdda2985",
+        "resultHash": "e86007011ca35531c0e7a44e35d53c680cbbe2a68eee7e98bd1bd108c4420131",
         "patchHash": "883a3b7eb0d395727fd71af1f181c21e93cd2bc56df95e7e6fda0998cd0c84a8",
-        "durationMs": 3455,
+        "durationMs": 3684,
         "failureCode": null
       },
       "passed": true
@@ -246,9 +246,9 @@
         "transferPassed": true,
         "patchVerified": false,
         "unchangedCellCount": 0,
-        "resultHash": "954b63790618f633c07e338781a0a1f7221c9b505da9a7a27a99fb366c1bcf33",
+        "resultHash": "ac9a59ccb6bef119212c86c0c79db6614cd0a8c1fbc4a9aaf0d832e7ee627d52",
         "patchHash": null,
-        "durationMs": 3378,
+        "durationMs": 3481,
         "failureCode": "PATCH_ESTIMATOR_OUTSIDE_CONTRACT"
       },
       "passed": true
@@ -298,9 +298,9 @@
         "transferPassed": true,
         "patchVerified": true,
         "unchangedCellCount": 1,
-        "resultHash": "55c5a03b9d3ff04aaee35033d09f4ffc54572c2ec31933c2c54b71155f0dcd3e",
+        "resultHash": "ac172206578cc240cdd089f4183fcf3eea8475d61901097b7344f6a35c51c396",
         "patchHash": "8a766ee56a0a3d6c51cc3feaf4a1588833e81e50359e43e044934048b8a94734",
-        "durationMs": 3820,
+        "durationMs": 4090,
         "failureCode": null
       },
       "passed": true
@@ -355,9 +355,9 @@
         "transferPassed": true,
         "patchVerified": true,
         "unchangedCellCount": 1,
-        "resultHash": "1f82320d63bc4a0eb3714b113a13b271e800bdac9d23c6c5bb11958752b31852",
+        "resultHash": "80f4bdd01aa7c7f21fe737b5cb0e7a32d52c04544571be2273c005a60e438d5d",
         "patchHash": "4bdfbe563622aba7d048ac03575cf3b8be755b9a8c572f24d0c795953d1a54a5",
-        "durationMs": 3769,
+        "durationMs": 4106,
         "failureCode": null
       },
       "passed": true
@@ -410,9 +410,9 @@
         "transferPassed": true,
         "patchVerified": true,
         "unchangedCellCount": 1,
-        "resultHash": "cd93e10104b6279e1ba90695c310855ff102f3bc5116e1bb77b5d424c3f51287",
+        "resultHash": "abb6b197f9bab15804d7e3b8bc295b9e4ec29fb9b17b8eb5edb8851aae301696",
         "patchHash": "88879bc55684c680f18a580244d3601677d5665bcf7d68a4601dfe4f0ce578a9",
-        "durationMs": 3790,
+        "durationMs": 4067,
         "failureCode": null
       },
       "passed": true
@@ -465,9 +465,9 @@
         "transferPassed": true,
         "patchVerified": true,
         "unchangedCellCount": 1,
-        "resultHash": "2241baaa0c1cb20118fa2eb6e10bc8a4b697ef0a5ac6fa1b686501286bdfba7d",
+        "resultHash": "e3a90e1c6b041327b743f1ffb86d2d2290e9aace981f9303f235917165b1443b",
         "patchHash": "53fb10890b54cc5ed345041f5bed29253fb9c460a979ebf6dd22c99d0b6da242",
-        "durationMs": 3796,
+        "durationMs": 4355,
         "failureCode": null
       },
       "passed": true

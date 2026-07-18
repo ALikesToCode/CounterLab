@@ -4,15 +4,15 @@ Recorded: 2026-07-18
 
 ## Recovery checkpoint
 
-| Field | Recorded value |
-| --- | --- |
-| Repository root | `/home/mysterious/storage/github/CounterLab` |
-| Starting commit | `13ab87672ecd33345ac0d697a93d121f9603b1aa` |
-| Working branch | `feat/learner-ux-v6.1` |
-| Preservation commit | `b4e23cab432d4c7a6924bf2c6b19b6ebe336990a` |
+| Field                | Recorded value                                         |
+| -------------------- | ------------------------------------------------------ |
+| Repository root      | `/home/mysterious/storage/github/CounterLab`           |
+| Starting commit      | `13ab87672ecd33345ac0d697a93d121f9603b1aa`             |
+| Working branch       | `feat/learner-ux-v6.1`                                 |
+| Preservation commit  | `b4e23cab432d4c7a6924bf2c6b19b6ebe336990a`             |
 | Initial working tree | Modified `AGENTS.md`; untracked `COUNTERLAB_REPO_ROOT` |
-| Preserved change | Repository-only filesystem boundary and root marker |
-| Initial secret scan | Passed across 536 repository files |
+| Preserved change     | Repository-only filesystem boundary and root marker    |
+| Initial secret scan  | Passed across 536 repository files                     |
 
 The logical checkout path `/home/mysterious/github/CounterLab` resolves to the
 physical Git root above. All work in this pass uses the physical root.
@@ -41,18 +41,18 @@ This pass must not claim pixel parity with the missing prototype.
 
 ## Current screen inventory
 
-| Route or state | Current learner surface | Existing strength | v6.1 issue |
-| --- | --- | --- | --- |
-| `/` | Mode-led hero, sample answer preview, three-step explanation, repeated sample/replay cards | Honest sample/live/replay entry points and support note | The question is not primary, the central sample result is spoiled, and Judge Mode competes above the fold |
-| `/new` | Live capability check | Honest unavailable state | Operational capability appears before the learner frames a Question |
-| `claim` | Notebook evidence card, upload, support decision, claim form, optional raw sanitized packet | Exact cells, support refusal, file integrity, read-never-run copy | Evidence, claim, upload, support limits, and privacy approval compete for attention |
-| `belief` | Two hypotheses, evidence chips, intervention, confirmation, Prediction form | Evidence-linked alternatives and immutable Prediction API | The confirmation and Prediction beats form one long screen; learner-facing copy still exposes legacy contract vocabulary |
-| `live-compile` | Public compiler trace plus auto-open proof console | Sanitized reconnectable events | Technical events are duplicated instead of translated into one learner-facing fair-test story |
-| `build` | Static four-check summary and reveal action | Result remains behind a learner action | Copy says the result is ready before `/lab/run` returns `EXPERIMENT_COMPLETED` |
-| `reality` | Result, exploration, Boundary, revision, transfer, patch, completion | Verified-only values, deterministic transfer, patch lock, Proof artifacts | Boundary, Apply, and Repair are compressed into one long screen family |
-| `/replay/:id` | Legacy replay intro or read-only Proof Capsule replay | Persistent provenance and no new model call | Must stay separate from mutable sample/live presentation controls |
-| `/proof/:id` | Restored completed session in the Reality surface | Exact persisted authority | No distinct learner-first completion shell |
-| `/judge` | Evidence-first Judge Mode | Honest mode distinctions and limits | Keep as a secondary header action, not the primary learner entry |
+| Route or state | Current learner surface                                                                     | Existing strength                                                         | v6.1 issue                                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `/`            | Mode-led hero, sample answer preview, three-step explanation, repeated sample/replay cards  | Honest sample/live/replay entry points and support note                   | The question is not primary, the central sample result is spoiled, and Judge Mode competes above the fold                |
+| `/new`         | Live capability check                                                                       | Honest unavailable state                                                  | Operational capability appears before the learner frames a Question                                                      |
+| `claim`        | Notebook evidence card, upload, support decision, claim form, optional raw sanitized packet | Exact cells, support refusal, file integrity, read-never-run copy         | Evidence, claim, upload, support limits, and privacy approval compete for attention                                      |
+| `belief`       | Two hypotheses, evidence chips, intervention, confirmation, Prediction form                 | Evidence-linked alternatives and immutable Prediction API                 | The confirmation and Prediction beats form one long screen; learner-facing copy still exposes legacy contract vocabulary |
+| `live-compile` | Public compiler trace plus auto-open proof console                                          | Sanitized reconnectable events                                            | Technical events are duplicated instead of translated into one learner-facing fair-test story                            |
+| `build`        | Static four-check summary and reveal action                                                 | Result remains behind a learner action                                    | Copy says the result is ready before `/lab/run` returns `EXPERIMENT_COMPLETED`                                           |
+| `reality`      | Result, exploration, Boundary, revision, transfer, patch, completion                        | Verified-only values, deterministic transfer, patch lock, Proof artifacts | Boundary, Apply, and Repair are compressed into one long screen family                                                   |
+| `/replay/:id`  | Legacy replay intro or read-only Proof Capsule replay                                       | Persistent provenance and no new model call                               | Must stay separate from mutable sample/live presentation controls                                                        |
+| `/proof/:id`   | Restored completed session in the Reality surface                                           | Exact persisted authority                                                 | No distinct learner-first completion shell                                                                               |
+| `/judge`       | Evidence-first Judge Mode                                                                   | Honest mode distinctions and limits                                       | Keep as a secondary header action, not the primary learner entry                                                         |
 
 ## Duplicate navigation inventory
 
@@ -79,36 +79,36 @@ Question -> Prediction -> Test -> Boundary -> Apply -> Repair
 The presentation position is derived from existing state; it does not create a
 second session state machine.
 
-| Learner stage | Existing UI/state inputs |
-| --- | --- |
-| Question | `landing`, `live-setup`, `claim`, `INGESTED` |
-| Prediction | `belief`, `BELIEF_TEST_PROPOSED`, `BELIEF_TEST_CONFIRMED` |
-| Test | `build`, `live-compile`, `PREDICTION_COMMITTED`, `LAB_COMPILING`, `LAB_REJECTED`, `LAB_VERIFIED` |
-| Boundary | `reality`, `EXPERIMENT_COMPLETED`, `BOUNDARY_VERIFIED` |
-| Apply | `REVISION_RECORDED`, `TRANSFER_IN_PROGRESS`, `TRANSFER_FAILED` |
-| Repair | `TRANSFER_PASSED`, every `PATCH_*` state, `REASONING_DIFF_ISSUED`, `PROOF_CAPSULE_ISSUED` |
+| Learner stage | Existing UI/state inputs                                                                         |
+| ------------- | ------------------------------------------------------------------------------------------------ |
+| Question      | `landing`, `live-setup`, `claim`, `INGESTED`                                                     |
+| Prediction    | `belief`, `BELIEF_TEST_PROPOSED`, `BELIEF_TEST_CONFIRMED`                                        |
+| Test          | `build`, `live-compile`, `PREDICTION_COMMITTED`, `LAB_COMPILING`, `LAB_REJECTED`, `LAB_VERIFIED` |
+| Boundary      | `reality`, `EXPERIMENT_COMPLETED`, `BOUNDARY_VERIFIED`                                           |
+| Apply         | `REVISION_RECORDED`, `TRANSFER_IN_PROGRESS`, `TRANSFER_FAILED`                                   |
+| Repair        | `TRANSFER_PASSED`, every `PATCH_*` state, `REASONING_DIFF_ISSUED`, `PROOF_CAPSULE_ISSUED`        |
 
 `TRANSFER_PASSED` means Apply is complete and Repair is current. The active
 stage and the set of reviewable completed stages must remain separate values.
 
 ## Component reuse and state/API mapping
 
-| Learner component | Reused evidence or state | Existing action/API | Authority guard |
-| --- | --- | --- | --- |
-| `LearnerProgress` | UI stage plus `SessionView.state` | None | One shared mapper; completed review is read-only |
-| `LearnerCoach` | Current `LearningGuide` copy | None | Compact next action; rationale only in disclosure |
-| `NotebookEvidenceStory` | `ArtifactView.cells`, metric candidates, support reasons, schema summary, hashes | `uploadArtifact`, `getArtifact` | A live session never receives bundled sample results |
-| Privacy summary | `BeliefAnalysisPreview` | `previewBeliefAnalysis`, existing proposal | Summary first; exact sanitized JSON remains reviewable |
-| `ModelDuel` | `sessionBeliefPresentation`, evidence references, conditions, non-claims | `confirmBeliefTest`, `respondToBeliefTest` | Ask whether wording captures the learner's view, never which hypothesis is correct |
-| `PredictionSeal` | Existing categorical choice, confidence, persisted `session.prediction` | `commitPrediction` | Preserve payload and immutability; no result beforehand |
-| `FairTestBuilder` | `PublicCompilerEvent`, `RunnerJob`, existing event sanitizer | `compileLab`, reconnect/cancel, `runLab` | Translate only events that occurred; no private reasoning or static verification claims |
-| `ExperimentTheater` | Authorized `verifiedResult`, verdict, exact tables, current interactive labs | Existing sample lookup or live runner actions | Local views never alter session state and never invent values |
-| `ReflectionBuilder` | Existing revision string | `recordRevision` | Clause builder and free text serialize to the same ungraded payload |
-| `TimelineTransfer` | Existing leakage split/risk choices | `submitTransfer` | Visual and native controls share one state and identifiers |
-| `CostTransfer` | Existing imbalance strategy/risk/evidence choices | `submitTransfer` | Matrix is explanatory; fixed evaluator is unchanged |
-| `RepairPreview` | Registered expected patch scope | `compilePatch` | UI preview cannot authorize or validate a patch |
-| `LearnerCompletion` | Reasoning Diff, patch and Capsule receipts/downloads | Existing download URLs | Capability first; hashes and limitations remain in Evidence & proof |
-| `NeedAHint` | Fixed Subject Pack copy and evidence reference | No model call | Deterministic, non-authoritative, and non-answer-leaking |
+| Learner component       | Reused evidence or state                                                         | Existing action/API                           | Authority guard                                                                         |
+| ----------------------- | -------------------------------------------------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `LearnerProgress`       | UI stage plus `SessionView.state`                                                | None                                          | One shared mapper; completed review is read-only                                        |
+| `LearnerCoach`          | Current `LearningGuide` copy                                                     | None                                          | Compact next action; rationale only in disclosure                                       |
+| `NotebookEvidenceStory` | `ArtifactView.cells`, metric candidates, support reasons, schema summary, hashes | `uploadArtifact`, `getArtifact`               | A live session never receives bundled sample results                                    |
+| Privacy summary         | `BeliefAnalysisPreview`                                                          | `previewBeliefAnalysis`, existing proposal    | Summary first; exact sanitized JSON remains reviewable                                  |
+| `ModelDuel`             | `sessionBeliefPresentation`, evidence references, conditions, non-claims         | `confirmBeliefTest`, `respondToBeliefTest`    | Ask whether wording captures the learner's view, never which hypothesis is correct      |
+| `PredictionSeal`        | Existing categorical choice, confidence, persisted `session.prediction`          | `commitPrediction`                            | Preserve payload and immutability; no result beforehand                                 |
+| `FairTestBuilder`       | `PublicCompilerEvent`, `RunnerJob`, existing event sanitizer                     | `compileLab`, reconnect/cancel, `runLab`      | Translate only events that occurred; no private reasoning or static verification claims |
+| `ExperimentTheater`     | Authorized `verifiedResult`, verdict, exact tables, current interactive labs     | Existing sample lookup or live runner actions | Local views never alter session state and never invent values                           |
+| `ReflectionBuilder`     | Existing revision string                                                         | `recordRevision`                              | Clause builder and free text serialize to the same ungraded payload                     |
+| `TimelineTransfer`      | Existing leakage split/risk choices                                              | `submitTransfer`                              | Visual and native controls share one state and identifiers                              |
+| `CostTransfer`          | Existing imbalance strategy/risk/evidence choices                                | `submitTransfer`                              | Matrix is explanatory; fixed evaluator is unchanged                                     |
+| `RepairPreview`         | Registered expected patch scope                                                  | `compilePatch`                                | UI preview cannot authorize or validate a patch                                         |
+| `LearnerCompletion`     | Reasoning Diff, patch and Capsule receipts/downloads                             | Existing download URLs                        | Capability first; hashes and limitations remain in Evidence & proof                     |
+| `NeedAHint`             | Fixed Subject Pack copy and evidence reference                                   | No model call                                 | Deterministic, non-authoritative, and non-answer-leaking                                |
 
 ## Authority and product risks
 
@@ -177,15 +177,15 @@ build-time fixture plus exact browser-local lookup, not a new sample endpoint.
 
 ## File ownership plan
 
-| Owner | Exclusive scope |
-| --- | --- |
-| Lead | `App.tsx`, global routing/state, `CounterLabStudio`, global CSS, API/Worker interaction telemetry, shared contracts, package/lock files, fixture registries, release scripts, root documentation, integration and commits |
-| Learner components | New isolated files under `apps/web/src/components/learner/` and `apps/web/src/features/learner/`, colocated module styles and tests; never `App.tsx` |
-| Sample playground | Isolated generator/fixture/eval files assigned after the fixture audit; no kernel, formula, scorer, verifier, endpoint, or session-semantic change |
-| Boundary Hunt | New Hunt files and explicitly assigned Boundary presentation files; no Boundary computation, hashes, receipts, or verifier changes |
-| Accessibility | Exact isolated test or component files assigned after integration; no global CSS rewrite |
-| Browser QA | New Playwright learner files and helpers; existing authority journey remains an independent regression |
-| Documentation | Draft learner copy/evidence only; lead integrates root docs |
+| Owner              | Exclusive scope                                                                                                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lead               | `App.tsx`, global routing/state, `CounterLabStudio`, global CSS, API/Worker interaction telemetry, shared contracts, package/lock files, fixture registries, release scripts, root documentation, integration and commits |
+| Learner components | New isolated files under `apps/web/src/components/learner/` and `apps/web/src/features/learner/`, colocated module styles and tests; never `App.tsx`                                                                      |
+| Sample playground  | Isolated generator/fixture/eval files assigned after the fixture audit; no kernel, formula, scorer, verifier, endpoint, or session-semantic change                                                                        |
+| Boundary Hunt      | New Hunt files and explicitly assigned Boundary presentation files; no Boundary computation, hashes, receipts, or verifier changes                                                                                        |
+| Accessibility      | Exact isolated test or component files assigned after integration; no global CSS rewrite                                                                                                                                  |
+| Browser QA         | New Playwright learner files and helpers; existing authority journey remains an independent regression                                                                                                                    |
+| Documentation      | Draft learner copy/evidence only; lead integrates root docs                                                                                                                                                               |
 
 No two agents may edit the same file, shared state, CSS entry point, fixture
 registry, or test file. Subagents do not commit.

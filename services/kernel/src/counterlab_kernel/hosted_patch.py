@@ -433,10 +433,11 @@ def _validate_patch_plan(
         else bundle.get("transferSummary"),
         "transfer authority",
     )
-    expected_pack_version = (
-        bundle.get("conceptPackVersion")
-        if bundle.get("schemaVersion") == "5"
-        else ("2.0.0" if concept == "entity_leakage" else "1.0.0")
+    legacy_pack_version = (
+        "2.0.0" if concept == "entity_leakage" else "1.0.0"
+    )
+    expected_pack_version = bundle.get(
+        "conceptPackVersion", legacy_pack_version
     )
     if (
         plan.get("schemaVersion") != "1"

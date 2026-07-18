@@ -14,12 +14,15 @@ CostTransfer; RepairPreview; capability-first completion; deterministic hints;
 and privacy-safe interaction evidence. Milestone commits run from `273e2b8`
 through `755f698`; the recovery checkpoint is `b4e23ca`.
 
-This UX pass did not change notebook intake, mode provenance, Belief Spec or
-Prediction semantics, Experiment IR, candidate scoring, fixed kernels, metric
-formulas, Boundary computation, transfer evaluation, patch authority, Reasoning
-Diff, Proof Capsule, or deployment configuration. The interaction components
-consume existing signed or integrity-bound data and do not calculate
-authoritative metrics in the browser.
+The learner UX milestones did not change notebook intake, mode provenance,
+Belief Spec or Prediction semantics, Experiment IR, candidate scoring, metric
+formulas, Boundary computation, transfer evaluation, patch operations,
+Reasoning Diff, Proof Capsule, or deployment configuration. A post-milestone
+release repair made new schema-v1 held-out patch bundles bind the current
+Subject Pack version while retaining the historical fallback for old bundles;
+it did not widen patch authority. The interaction components consume existing
+signed or integrity-bound data and do not calculate authoritative metrics in
+the browser.
 
 Milestone 4, the interactive Verified Sample Playground, was intentionally
 omitted. No independently admitted fixed-kernel fixture authority existed for
@@ -27,18 +30,29 @@ the proposed matrix; hashing a fixture alongside the output produced by the
 same generator would be self-authentication. The sample therefore remains
 fixed, live exploration remains runner-backed, and replay remains read-only.
 
-Final Milestone 8 local evidence: web Vitest passed 45 files and 254 tests;
-repository, web, and Worker TypeScript checks passed; the Vite/Worker build
-passed; and the secret scan passed across 597 files. The Cloak-only Playwright
-suite collected 22 tests from one spec file. No browser tests were executed:
-`CLOAK_CDP_ENDPOINT` was absent, the harness exited 1, and it refused to launch
-stock Chromium. Consequently there are no current-branch screenshots,
-screen-reader sessions, rendered viewport/accessibility results, or Web Vitals.
-An earlier full root Vitest attempt had 33 files/439 tests pass and 7 files/29
-tests fail across sandbox isolation, loopback `EPERM`, runtime/mode assumptions,
-Codex child-process requirements, and release-source drift; it is not a green
-release gate. The final Milestone 9 documentation-state secret scan passed
-across 598 files.
+Post-Milestone 9 local evidence: web Vitest passed 45 files and 254 tests;
+repository, web, and Worker TypeScript checks passed; the scientific-engine
+release verifier passed 8/8; the Python kernel passed 179/179; leakage and
+imbalance mutation gates detected 13/13 and 19/19; held-out intake passed 10/10
+with the intended 7/8 fixed completions; the held-out Vitest configuration
+passed 2 files/6 tests; and all six D1 migrations applied to a fresh local
+repository-contained database. The Vite/Worker build and 598-file secret scan
+passed.
+
+The complete root Vitest gate now passes 465/468 tests, and the combined Python
+kernel/runner gate passes 228/231. The remaining three tests in each gate are
+POSIX permission-mode assertions that this managed filesystem reports as
+`0700`; the security assertions were not weakened. The Cloak-only Playwright
+suite collected 22 tests, but no browser tests executed: the endpoint was absent
+and the constitution-mandated CloakBrowser executable was not installed. There
+are therefore no current-branch screenshots, screen-reader sessions, rendered
+viewport/accessibility results, or Web Vitals.
+
+Wrangler 4.110.0 reports the repository-contained session is unauthenticated.
+No Cloudflare API token, current qualified runner image, or qualification
+receipt was available, and this host cannot create the Docker bridge needed by
+the Container-backed local dev/build path. No remote migration, deployment, or
+production smoke is claimed.
 
 The complete local evidence, performance sizes, and remaining manual checks are
 recorded in

@@ -482,6 +482,7 @@ export async function runHeldOutCompletion(
       stateVersion: 2,
       requestedAt: "2026-07-15T00:00:00.000Z",
       artifactManifestHash: plan.artifactManifestHash,
+      conceptPackVersion: pack.version,
       artifactManifest: input.manifest,
       approvedBeliefTest: belief,
       verifiedResultSummary: {
@@ -554,7 +555,9 @@ export async function runHeldOutCompletion(
     state.failureCode = failureCode(error);
   } finally {
     state.durationMs = Date.now() - startedAt;
-    await rm(work, { recursive: true, force: true });
+    if (process.env.COUNTERLAB_RETAIN_HELD_OUT_WORK !== "1") {
+      await rm(work, { recursive: true, force: true });
+    }
   }
   return state;
 }

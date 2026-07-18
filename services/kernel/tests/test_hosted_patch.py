@@ -724,7 +724,7 @@ def test_hosted_patch_supports_a_resolved_non_sample_leakage_evaluation(
         "planId": "patch_plan_held_out_leakage",
         "sessionId": "session_held_out_leakage",
         "concept": "entity_leakage",
-        "conceptPackVersion": "2.0.0",
+        "conceptPackVersion": "2.1.0",
         "artifactManifestHash": manifest_hash,
         "sourceArtifactHash": source_hash,
         "transferResultHash": "b" * 64,
@@ -764,6 +764,7 @@ def test_hosted_patch_supports_a_resolved_non_sample_leakage_evaluation(
         "stateVersion": 9,
         "requestedAt": "2026-07-15T10:00:00.000Z",
         "artifactManifestHash": manifest_hash,
+        "conceptPackVersion": "2.1.0",
         "artifactManifest": manifest,
         "approvedBeliefTest": {
             "concept": "entity_leakage",

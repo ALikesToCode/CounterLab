@@ -175,7 +175,7 @@
       "id": "internal-renderer-integrity-v2",
       "kind": "integrity",
       "path": "scientific-engines/fixtures/validation/internal-renderer-integrity-v2.json",
-      "sha256": "7a8f89b74c83a464dcd77b9015f3d1901d9c54b1cf6343e9ab104994f5c43345",
+      "sha256": "6af22e23f2b21d3b55da7fc30a8e4d86039174b6100f8debb1526e71b37510e0",
       "status": "VERIFIED",
       "limitations": [
         "Renderer v2 authority is limited to the hash-bound allowlisted components."
@@ -185,7 +185,7 @@
       "id": "internal-mutations-integrity-v2",
       "kind": "integrity",
       "path": "scientific-engines/fixtures/validation/internal-mutations-integrity-v2.json",
-      "sha256": "17076a39d3e74e1955243b9ac71f805985d807feb72768a072c5aafabea9e58b",
+      "sha256": "496141d52749c5d77ce88ffcaec194c2d6fe18ab0502be57c5fd65c66264c9ba",
       "status": "VERIFIED",
       "limitations": []
     },

@@ -648,3 +648,16 @@ can pass.
 - When the endpoint is absent, allow static test collection but report zero
   executed journeys, screenshots, screen-reader sessions, and Web Vitals. Do
   not substitute historical browser evidence for the current source.
+
+## 2026-07-18 — Bind current pack versions without rewriting legacy patches
+
+- Include the exact current Subject Pack version in new schema-v1 held-out
+  patch bundles so the Python patch boundary verifies the same lineage as the
+  TypeScript verifier.
+- Preserve the historical leakage `2.0.0` and imbalance `1.0.0` defaults only
+  for stored schema-v1 bundles that predate the explicit field.
+- Do not widen registered patch operations, transfer requirements, allowed
+  cells, or verification conditions. The compatibility repair changes lineage
+  resolution, not patch authority.
+- Retain held-out workspaces when the release audit requests it, so repository
+  testing does not depend on recursive deletion.
