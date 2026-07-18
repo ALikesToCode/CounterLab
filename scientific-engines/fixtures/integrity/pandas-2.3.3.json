@@ -5,10 +5,10 @@
   "packageName": "pandas",
   "exactVersion": "2.3.3",
   "environmentId": "counterlab-runner-linux-amd64-v2",
-  "imageDigest": "sha256:452351f4e9167e8a2cd30fc82c389d87d103d348b62a1ade097cf130a0f96ac5",
+  "imageDigest": "sha256:3712687f2e90496a3805c62a5cfac7473b328a0ba2e1d45ad46a6b1d1dff59c4",
   "sourceBinding": {
     "status": "BOUND",
-    "commit": "714e5e7b42d39da6dea3b7d4fa181e0984f93568",
+    "commit": "7ba24f06ccc55c99ff9e83c8595968f32d602f8f",
     "ociLabel": "org.opencontainers.image.revision"
   },
   "artifact": {

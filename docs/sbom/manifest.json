@@ -1,11 +1,11 @@
 {
   "schemaVersion": "1",
-  "generatedAt": "2026-07-18T15:50:00Z",
+  "generatedAt": "2026-07-18T17:38:42Z",
   "environmentId": "counterlab-runner-linux-amd64-v2",
   "environmentKind": "local_candidate",
-  "sourceCommit": "714e5e7b42d39da6dea3b7d4fa181e0984f93568",
-  "imageDigest": "sha256:452351f4e9167e8a2cd30fc82c389d87d103d348b62a1ade097cf130a0f96ac5",
-  "registryHash": "b61bdb976e6622187b7d4b6d67d895beed64619e30b6666e379b231665b039ec",
+  "sourceCommit": "7ba24f06ccc55c99ff9e83c8595968f32d602f8f",
+  "imageDigest": "sha256:3712687f2e90496a3805c62a5cfac7473b328a0ba2e1d45ad46a6b1d1dff59c4",
+  "registryHash": "d08c14bc5c471c4cdcda9a3dfc9b98cbd804d4704b48962f2cdafbffe26bc025",
   "bindingsHash": "72fcab0d67b5729717e98c28ea8c8c7ed91930a54a294eb3ce64e91faf48d7c2",
   "documents": [
     {
@@ -39,8 +39,8 @@
       "format": "CycloneDX",
       "specVersion": "1.6",
       "componentCount": 2839,
-      "sha256": "926f1cf05e917463acd5d65cbdb3b5a6f0eab7e3ed66959a8558efa40c87d319",
-      "generator": "syft 1.44.0 counterlab-runner:git-714e5e7b42d39da6dea3b7d4fa181e0984f93568 -o cyclonedx-json",
+      "sha256": "54eb8a0395bf1975d4283cd7cb48e1ee6ec8509d3fc913c99aefbc2c61f7ddd6",
+      "generator": "syft 1.44.0 counterlab-runner:git-7ba24f06ccc55c99ff9e83c8595968f32d602f8f -o cyclonedx-json",
       "toolLockPath": "docs/sbom/tool-lock.json",
       "toolLockSha256": "a80b273e8da8691c1c8695c7ccd351612ffcf69c9abb80a7768973dd210cef75"
     }

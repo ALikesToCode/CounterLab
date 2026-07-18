@@ -20,7 +20,7 @@
     "staticAstScan": "PASSED"
   },
   "evidenceKind": "reachability-report",
-  "imageDigest": "sha256:452351f4e9167e8a2cd30fc82c389d87d103d348b62a1ade097cf130a0f96ac5",
+  "imageDigest": "sha256:3712687f2e90496a3805c62a5cfac7473b328a0ba2e1d45ad46a6b1d1dff59c4",
   "limitations": [
     "This proves bounded non-reachability for the fixed hosted paths, not whole-program safety.",
     "The review expires and must be rerun when any recorded binding changes."
@@ -31,7 +31,7 @@
   },
   "pythonVersion": "3.13.14",
   "review": {
-    "expiresAt": "2026-08-01T15:50:00Z",
+    "expiresAt": "2026-08-01T17:38:42Z",
     "kevCatalogSha256": "41d27023a5912a49ca2b06370550fa6da50e35794c269766a6332618d82f243e",
     "kevCatalogVersion": "2026.07.16",
     "kevCheckedAt": "2026-07-18T13:14:22Z",
@@ -46,11 +46,11 @@
       "Python or vulnerable module bytes change",
       "scanner database or vulnerability status changes"
     ],
-    "reviewedAt": "2026-07-18T15:50:00Z"
+    "reviewedAt": "2026-07-18T17:38:42Z"
   },
-  "sbomSha256": "926f1cf05e917463acd5d65cbdb3b5a6f0eab7e3ed66959a8558efa40c87d319",
+  "sbomSha256": "54eb8a0395bf1975d4283cd7cb48e1ee6ec8509d3fc913c99aefbc2c61f7ddd6",
   "schemaVersion": "1",
-  "sourceCommit": "714e5e7b42d39da6dea3b7d4fa181e0984f93568",
+  "sourceCommit": "7ba24f06ccc55c99ff9e83c8595968f32d602f8f",
   "status": "VERIFIED",
   "vulnerabilityId": "CVE-2026-15308"
 }
