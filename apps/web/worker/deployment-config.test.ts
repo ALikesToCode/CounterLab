@@ -157,6 +157,18 @@ describe("Cloudflare static asset routing", () => {
     }
   });
 
+  it("pins an absolute OCI entrypoint for Cloudflare Container startup", () => {
+    const dockerfile = readFileSync(
+      resolve(process.cwd(), "../../Dockerfile.runner"),
+      "utf8",
+    );
+
+    expect(dockerfile).toContain(
+      'ENTRYPOINT ["/usr/local/bin/node", "/app/runner.mjs"]',
+    );
+    expect(dockerfile).not.toContain('CMD ["node", "/app/runner.mjs"]');
+  });
+
   it("generates a deploy config from a source-bound qualified image receipt", () => {
     const sourceCommit = "a".repeat(40);
     const evidenceCommit = "2".repeat(40);
