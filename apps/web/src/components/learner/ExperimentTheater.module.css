@@ -1,14 +1,14 @@
 .theater {
-  --theater-night: #061326;
-  --theater-raised: #0d2038;
-  --theater-line: rgb(212 232 245 / 18%);
-  --theater-copy: #f4f8fb;
-  --theater-muted: #a7b7c9;
+  --theater-night: var(--night);
+  --theater-raised: var(--paper-raised);
+  --theater-line: var(--line);
+  --theater-copy: var(--ink);
+  --theater-muted: var(--ink-soft);
   padding: clamp(22px, 4vw, 38px);
   border-radius: 18px;
   color: var(--theater-copy);
   background: var(--theater-night);
-  box-shadow: 0 20px 48px rgb(6 19 38 / 20%);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.50);
   font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
 }
 
@@ -30,7 +30,7 @@
 
 .header h2 {
   margin: 7px 0 0;
-  font-family: "Newsreader Variable", "Iowan Old Style", Georgia, serif;
+  font-family: var(--display);
   font-size: clamp(34px, 5vw, 50px);
   font-weight: 520;
   letter-spacing: -0.03em;
@@ -42,9 +42,9 @@
   min-height: 44px;
   align-items: center;
   padding: 9px 12px;
-  border: 1px solid #63cfc4;
+  border: 1px solid var(--aqua);
   border-radius: 999px;
-  color: #7ff1e4;
+  color: var(--aqua-bright);
   font-size: 13px;
 }
 
@@ -54,10 +54,10 @@
   top: 12px;
   padding: 15px 18px;
   margin-top: 22px;
-  border: 1px solid #d4a63b;
+  border: 1px solid var(--gold);
   border-radius: 12px;
-  color: #fff4d6;
-  background: #3a2b0d;
+  color: var(--gold-bright);
+  background: var(--gold-soft);
 }
 
 .prediction p {
@@ -79,7 +79,7 @@
 }
 
 .locked strong {
-  font-family: "Newsreader Variable", serif;
+  font-family: var(--display);
   font-size: 28px;
   font-weight: 520;
 }
@@ -137,7 +137,7 @@
 
 .comparison article strong {
   margin-top: 7px;
-  color: #fff;
+  color: var(--ink);
   font-size: clamp(42px, 8vw, 76px);
   letter-spacing: -0.045em;
   line-height: 0.95;
@@ -151,7 +151,7 @@
 }
 
 .comparison > div > span {
-  color: #7ff1e4;
+  color: var(--aqua-bright);
   font-size: 26px;
 }
 
@@ -198,18 +198,18 @@
 }
 
 .viewTabs button small {
-  color: #7ff1e4;
+  color: var(--aqua-bright);
   font-size: 12px;
 }
 
 .viewTabs button[aria-selected="true"] {
-  color: #061326;
-  border-color: #7ff1e4;
-  background: #7ff1e4;
+  color: var(--ink);
+  border-color: var(--aqua);
+  background: var(--aqua-soft);
 }
 
 .viewTabs button[aria-selected="true"] small {
-  color: #234d4a;
+  color: var(--aqua);
 }
 
 .viewTabs button:disabled {
@@ -219,7 +219,7 @@
 
 .viewTabs button:focus-visible,
 .viewPanel h3:focus-visible {
-  outline: 3px solid #f4f8fb;
+  outline: 3px solid var(--line);
   outline-offset: 3px;
 }
 
@@ -236,7 +236,7 @@
 .viewPanel > h3 {
   width: fit-content;
   margin: 0;
-  font-family: "Newsreader Variable", serif;
+  font-family: var(--display);
   font-size: 28px;
   font-weight: 520;
 }

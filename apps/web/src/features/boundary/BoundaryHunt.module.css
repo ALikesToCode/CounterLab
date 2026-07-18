@@ -2,11 +2,11 @@
   display: grid;
   gap: 20px;
   padding: clamp(22px, 4vw, 36px);
-  color: #13253e;
-  border: 1px solid #cbd8e4;
+  color: var(--ink);
+  border: 1px solid var(--line);
   border-radius: 20px;
-  background: #fbfcfa;
-  box-shadow: 0 22px 62px rgb(11 31 55 / 9%);
+  background: var(--night-raised);
+  box-shadow: 0 22px 62px rgba(0, 0, 0, 0.22);
 }
 
 .header {
@@ -14,7 +14,7 @@
 }
 
 .header > span {
-  color: #147f78;
+  color: var(--aqua);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.1em;
@@ -38,12 +38,12 @@
 
 .header p {
   margin: 0;
-  color: #52657b;
+  color: var(--ink-soft);
 }
 
 .header .evidenceLinkTarget {
   margin-top: 8px;
-  color: #637488;
+  color: var(--ink-soft);
   font-size: 13px;
 }
 
@@ -56,7 +56,7 @@
 
 .options legend {
   margin-bottom: 10px;
-  color: #27425f;
+  color: var(--ink);
   font-size: 15px;
   font-weight: 780;
 }
@@ -75,9 +75,9 @@
   align-items: center;
   min-height: 72px;
   padding: 12px 14px 12px 50px;
-  border: 2px solid #d2dce5;
+  border: 2px solid var(--line);
   border-radius: 13px;
-  background: white;
+  background: var(--paper);
   cursor: pointer;
   transition:
     border-color 180ms ease,
@@ -87,11 +87,11 @@
 
 .option:hover {
   transform: translateY(-1px);
-  border-color: #9bb3ca;
+  border-color: var(--line);
 }
 
 .option:has(input:focus-visible) {
-  outline: 3px solid #235ee7;
+  outline: 3px solid var(--line-strong);
   outline-offset: 2px;
 }
 
@@ -101,17 +101,17 @@
   width: 22px;
   height: 22px;
   margin: 0;
-  accent-color: #235ee7;
+  accent-color: var(--accent);
 }
 
 .selected {
-  border-color: #235ee7;
-  box-shadow: 0 0 0 2px rgb(35 94 231 / 10%);
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 2px rgba(250, 250, 250, 0.1);
 }
 
 .attempted {
-  border-color: #147f78;
-  background: #edf9f7;
+  border-color: var(--aqua);
+  background: var(--aqua-soft);
 }
 
 .coordinate {
@@ -121,7 +121,7 @@
 }
 
 .coordinate small {
-  color: #637488;
+  color: var(--ink-soft);
   font-size: 12px;
   line-height: 1.3;
 }
@@ -133,7 +133,7 @@
 }
 
 .separator {
-  color: #8491a0;
+  color: var(--ink-soft);
   font-size: 16px;
 }
 
@@ -147,11 +147,11 @@
 }
 
 .attemptedMark {
-  color: #0c625d;
+  color: var(--aqua);
 }
 
 .referenceMark {
-  color: #52657b;
+  color: var(--ink-soft);
 }
 
 .actions {
@@ -171,7 +171,7 @@
 .actions button:focus-visible,
 .hint summary:focus-visible,
 .hint a:focus-visible {
-  outline: 3px solid #235ee7;
+  outline: 3px solid var(--line-strong);
   outline-offset: 2px;
 }
 
@@ -181,19 +181,19 @@
 }
 
 .primaryAction {
-  color: white;
-  border: 1px solid #235ee7;
-  background: #235ee7;
+  color: var(--accent-ink);
+  border: 1px solid var(--line-strong);
+  background: var(--accent);
 }
 
 .secondaryAction {
-  color: #173f6d;
-  border: 1px solid #9bb3ca;
-  background: white;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  background: var(--paper);
 }
 
 .skipAction {
-  color: #52657b;
+  color: var(--ink-soft);
   border: 1px solid transparent;
   background: transparent;
 }
@@ -201,10 +201,10 @@
 .feedback {
   min-height: 72px;
   padding: 15px 17px;
-  color: #18324e;
-  border: 1px solid #b8dcd7;
+  color: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--aqua) 45%, var(--line));
   border-radius: 12px;
-  background: #edf9f7;
+  background: var(--aqua-soft);
 }
 
 .feedback strong {
@@ -213,11 +213,11 @@
 
 .feedback p {
   margin: 4px 0 0;
-  color: #52657b;
+  color: var(--ink-soft);
 }
 
 .hint {
-  border-top: 1px solid #d9e2e8;
+  border-top: 1px solid var(--line);
   padding-top: 12px;
 }
 
@@ -226,7 +226,7 @@
   align-items: center;
   min-height: 44px;
   width: fit-content;
-  color: #27425f;
+  color: var(--ink);
   font-size: 15px;
   font-weight: 760;
   cursor: pointer;
@@ -235,14 +235,14 @@
 .hint p {
   max-width: 680px;
   margin: 4px 0 7px;
-  color: #52657b;
+  color: var(--ink-soft);
 }
 
 .hint a {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  color: #174fae;
+  color: var(--ink-soft);
   font-weight: 740;
 }
 

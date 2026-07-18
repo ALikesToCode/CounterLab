@@ -1,8 +1,8 @@
 .hint {
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  color: #07152a;
-  background: #fff;
+  color: var(--ink);
+  background: var(--paper);
   font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
 }
 
@@ -12,7 +12,7 @@
   align-items: center;
   width: fit-content;
   padding: 8px 14px;
-  color: #245eea;
+  color: var(--ink);
   font-size: 15px;
   font-weight: 760;
   cursor: pointer;
@@ -20,7 +20,7 @@
 
 .hint summary:focus-visible,
 .hint a:focus-visible {
-  outline: 3px solid #1d4ed8;
+  outline: 3px solid var(--line-strong);
   outline-offset: 3px;
 }
 
@@ -31,7 +31,7 @@
 .hintBody p {
   max-width: 680px;
   margin: 0;
-  color: #24364d;
+  color: var(--ink);
   font-size: 15px;
   line-height: 1.6;
 }
@@ -41,7 +41,7 @@
   min-height: 44px;
   align-items: center;
   margin-top: 4px;
-  color: #245eea;
+  color: var(--ink);
   font-size: 13px;
   font-weight: 760;
   text-underline-offset: 3px;

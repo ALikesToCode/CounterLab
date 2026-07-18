@@ -2,10 +2,10 @@
   display: grid;
   gap: 20px;
   padding: clamp(22px, 4vw, 36px);
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--line);
   border-radius: 18px;
-  color: #07152a;
-  background: #fffdf8;
+  color: var(--ink);
+  background: var(--gold-soft);
   font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
 }
 
@@ -13,7 +13,7 @@
 .capability h2 {
   max-width: 760px;
   margin: 0;
-  font-family: "Newsreader Variable", "Iowan Old Style", Georgia, serif;
+  font-family: var(--display);
   font-size: clamp(30px, 5vw, 48px);
   font-weight: 520;
   letter-spacing: -0.025em;
@@ -34,7 +34,7 @@
 }
 
 .comparison span {
-  color: #4c5d73;
+  color: var(--ink-soft);
   font-size: 15px;
   font-weight: 650;
 }
@@ -42,9 +42,9 @@
 .reasoning,
 .transfer {
   padding: 18px;
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fff;
+  background: var(--paper);
 }
 
 .reasoning h3,
@@ -65,15 +65,15 @@
   min-width: 0;
   padding: 14px;
   border-radius: 10px;
-  background: #f7f8fa;
+  background: var(--paper-raised);
 }
 
 .reasoning dl > div:last-child {
-  background: #f3fbf9;
+  background: var(--aqua-soft);
 }
 
 .reasoning dt {
-  color: #4c5d73;
+  color: var(--ink-soft);
   font-size: 13px;
   font-weight: 800;
 }
@@ -86,19 +86,19 @@
 }
 
 .transfer {
-  border-color: #b8dcd7;
-  background: #f3fbf9;
+  border-color: color-mix(in srgb, var(--aqua) 45%, var(--line));
+  background: var(--aqua-soft);
 }
 
 .transfer p {
   margin: 7px 0 0;
-  color: #4c5d73;
+  color: var(--ink-soft);
   font-size: 15px;
   line-height: 1.55;
 }
 
 .transfer .transferLabel {
-  color: #075e5c;
+  color: var(--aqua);
   font-size: 17px;
   font-weight: 800;
 }
@@ -123,7 +123,7 @@
 
 .actions button:focus-visible,
 .evidence summary:focus-visible {
-  outline: 3px solid #1d4ed8;
+  outline: 3px solid var(--line-strong);
   outline-offset: 3px;
 }
 
@@ -133,24 +133,24 @@
 }
 
 .primaryAction {
-  color: #fff;
-  background: #245eea;
+  color: var(--accent-ink);
+  background: var(--accent);
 }
 
 .secondaryAction {
-  border-color: #245eea !important;
-  color: #245eea;
-  background: #fff;
+  border-color: var(--line-strong) !important;
+  color: var(--ink);
+  background: var(--paper);
 }
 
 .tertiaryAction {
-  border-color: #c8d0da !important;
-  color: #24364d;
-  background: #f7f8fa;
+  border-color: var(--line) !important;
+  color: var(--ink);
+  background: var(--paper-raised);
 }
 
 .evidence {
-  border-top: 1px solid #d8dee6;
+  border-top: 1px solid var(--line);
 }
 
 .evidence summary {
@@ -159,7 +159,7 @@
   align-items: center;
   width: fit-content;
   padding: 8px 2px;
-  color: #245eea;
+  color: var(--ink);
   font-size: 15px;
   font-weight: 760;
   cursor: pointer;
@@ -167,10 +167,10 @@
 
 .evidenceBody {
   padding: 15px;
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  color: #24364d;
-  background: #fff;
+  color: var(--ink);
+  background: var(--paper);
   font-size: 15px;
   line-height: 1.6;
 }

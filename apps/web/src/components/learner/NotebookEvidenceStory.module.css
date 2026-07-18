@@ -1,9 +1,9 @@
 .story {
   padding: clamp(20px, 4vw, 30px);
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--line);
   border-radius: 14px;
-  color: #07152a;
-  background: #fff;
+  color: var(--ink);
+  background: var(--paper);
   font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
 }
 
@@ -15,7 +15,7 @@
 }
 
 .header > div:first-child > span {
-  color: #4c5d73;
+  color: var(--ink-soft);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -24,7 +24,7 @@
 
 .header h2 {
   margin: 7px 0 0;
-  font-family: "Newsreader Variable", "Iowan Old Style", Georgia, serif;
+  font-family: var(--display);
   font-size: clamp(28px, 4vw, 38px);
   font-weight: 520;
   letter-spacing: -0.025em;
@@ -35,9 +35,9 @@
   flex: 0 0 auto;
   min-width: 150px;
   padding: 14px 16px;
-  border-left: 3px solid #245eea;
+  border-left: 3px solid var(--line-strong);
   border-radius: 10px;
-  background: #f7f8fa;
+  background: var(--paper-raised);
 }
 
 .metric strong,
@@ -52,7 +52,7 @@
 
 .metric span {
   margin-top: 7px;
-  color: #4c5d73;
+  color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.4;
 }
@@ -71,14 +71,14 @@
   gap: 16px;
   align-items: start;
   padding: 14px;
-  border: 1px solid #e1e6ec;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: #fff;
+  background: var(--paper);
 }
 
 .references code,
 .disclosure dt {
-  color: #143d9d;
+  color: var(--ink);
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 12px;
   font-weight: 750;
@@ -102,7 +102,7 @@
   width: fit-content;
   padding: 8px 10px;
   border-radius: 10px;
-  color: #245eea;
+  color: var(--ink);
   font-size: 13px;
   font-weight: 750;
   cursor: pointer;
@@ -114,7 +114,7 @@
 }
 
 .disclosure summary:focus-visible {
-  outline: 3px solid #1d4ed8;
+  outline: 3px solid var(--line-strong);
   outline-offset: 2px;
 }
 
@@ -123,9 +123,9 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
   padding: 18px;
-  border: 1px solid #e1e6ec;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: #f7f8fa;
+  background: var(--paper-raised);
 }
 
 .disclosureBody h3 {
@@ -146,7 +146,7 @@
 .disclosure dd {
   margin: 4px 0 0;
   overflow-wrap: anywhere;
-  color: #4c5d73;
+  color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.55;
 }

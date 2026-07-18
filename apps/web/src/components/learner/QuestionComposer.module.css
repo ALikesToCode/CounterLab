@@ -1,6 +1,6 @@
 .composer {
   width: min(820px, 100%);
-  color: #f5f8fc;
+  color: var(--ink-soft);
   font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
 }
 
@@ -10,9 +10,9 @@
   padding: 3px;
   display: grid;
   grid-template-columns: repeat(2, minmax(112px, 1fr));
-  border: 1px solid #29292e;
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
-  background: #111113;
+  background: var(--night);
 }
 
 .intentSwitch button {
@@ -21,7 +21,7 @@
   padding: 9px 16px;
   border: 0;
   border-radius: 999px;
-  color: #9eacc0;
+  color: var(--ink-soft);
   background: transparent;
   font: inherit;
   font-size: 15px;
@@ -30,19 +30,19 @@
 }
 
 .intentSwitch button:hover:not(:disabled) {
-  color: #f5f8fc;
-  background: #1a1a1e;
+  color: var(--ink-soft);
+  background: var(--night-raised);
 }
 
 .intentSwitch .intentActive {
-  color: #fff;
-  background: #252529;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 32%);
+  color: var(--ink);
+  background: var(--night-raised);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.58);
 }
 
 .intentNote {
   margin: 10px auto -6px;
-  color: #9a9aa3;
+  color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.5;
   text-align: center;
@@ -51,19 +51,18 @@
 .form {
   margin-top: 18px;
   overflow: hidden;
-  border: 1px solid #34343a;
+  border: 1px solid var(--line-strong);
   border-radius: 16px;
-  background: #202023;
-  box-shadow:
-    0 24px 58px rgb(0 0 0 / 34%),
+  background: var(--night-raised);
+  box-shadow: 0 24px 58px rgba(0, 0, 0, 0.45),
     inset 0 1px 0 rgb(255 255 255 / 5%);
 }
 
 .form:focus-within {
-  border-color: #7ea6ff;
+  border-color: var(--line);
   box-shadow:
-    0 0 0 3px rgb(126 166 255 / 22%),
-    0 24px 58px rgb(0 0 0 / 34%);
+    0 0 0 3px rgba(250, 250, 250, 0.22),
+    0 24px 58px rgba(250, 250, 250, 0.18);
 }
 
 .form textarea {
@@ -74,7 +73,7 @@
   padding: 22px;
   border: 0;
   outline: 0;
-  color: #f8fbff;
+  color: var(--ink-soft);
   background: transparent;
   font: inherit;
   font-size: 17px;
@@ -82,7 +81,7 @@
 }
 
 .form textarea::placeholder {
-  color: #9ba9bd;
+  color: var(--ink-soft);
   opacity: 1;
 }
 
@@ -92,7 +91,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 12px;
-  border-top: 1px solid #34343a;
+  border-top: 1px solid var(--line-strong);
 }
 
 .attach {
@@ -102,27 +101,27 @@
   align-items: center;
   padding: 10px 12px;
   border-radius: 10px;
-  color: #aac4ff;
+  color: var(--ink-soft);
   font-size: 15px;
   font-weight: 750;
   cursor: pointer;
 }
 
 .attach:hover {
-  color: #fff;
-  background: rgb(126 166 255 / 12%);
+  color: var(--ink);
+  background: rgba(250, 250, 250, 0.12);
 }
 
 .attach.controlDisabled,
 .attach.controlDisabled:hover {
-  color: #aac4ff;
+  color: var(--ink-soft);
   background: transparent;
   cursor: not-allowed;
   opacity: 0.5;
 }
 
 .attach:focus-within {
-  outline: 3px solid #9cbaff;
+  outline: 3px solid var(--line);
   outline-offset: 2px;
 }
 
@@ -145,10 +144,10 @@
   align-items: center;
   justify-content: center;
   padding: 11px 18px;
-  border: 1px solid #90b0ff;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  color: #071326;
-  background: #8eafff;
+  color: var(--accent-ink);
+  background: var(--accent);
   font: inherit;
   font-size: 15px;
   font-weight: 800;
@@ -156,8 +155,8 @@
 }
 
 .submit:hover:not(:disabled) {
-  border-color: #bad0ff;
-  background: #adc6ff;
+  border-color: var(--line);
+  background: var(--paper-raised);
 }
 
 .intentSwitch button:disabled,
@@ -170,7 +169,7 @@
 .intentSwitch button:focus-visible,
 .submit:focus-visible,
 .promptGroup button:focus-visible {
-  outline: 3px solid #9cbaff;
+  outline: 3px solid var(--line);
   outline-offset: 3px;
 }
 
@@ -181,7 +180,7 @@
 .promptGroup > span {
   display: block;
   margin-bottom: 4px;
-  color: #8f9db1;
+  color: var(--ink-soft);
   font-size: 13px;
   font-weight: 700;
 }
@@ -196,7 +195,7 @@
   min-height: 44px;
   padding: 9px 0;
   border: 0;
-  color: #abc4ff;
+  color: var(--ink-soft);
   background: transparent;
   font: inherit;
   font-size: 15px;
@@ -207,12 +206,12 @@
 
 .promptGroup button::before {
   margin-right: 8px;
-  color: #7189b4;
+  color: var(--ink-soft);
   content: "↗";
 }
 
 .promptGroup button:hover:not(:disabled) {
-  color: #fff;
+  color: var(--ink);
   text-decoration: underline;
   text-underline-offset: 4px;
 }

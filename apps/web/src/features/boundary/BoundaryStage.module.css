@@ -5,13 +5,13 @@
   align-items: start;
   min-height: 250px;
   padding: clamp(24px, 4vw, 40px);
-  color: #e9f3f5;
-  border: 1px solid rgb(120 223 213 / 26%);
+  color: var(--aqua-bright);
+  border: 1px solid rgba(46, 196, 160, 0.26);
   border-radius: 20px;
   background:
-    radial-gradient(circle at 10% 0%, rgb(44 191 178 / 18%), transparent 38%),
-    #0b2036;
-  box-shadow: 0 24px 64px rgb(7 23 41 / 18%);
+    radial-gradient(circle at 10% 0%, rgba(46, 196, 160, 0.18), transparent 38%),
+    var(--night);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
 }
 
 .stage > div:last-child {
@@ -19,7 +19,7 @@
 }
 
 .stage span {
-  color: #78dfd5;
+  color: var(--aqua-bright);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -28,7 +28,7 @@
 
 .stage h2 {
   margin: 6px 0 9px;
-  color: white;
+  color: var(--ink);
   font: 600 clamp(30px, 4vw, 44px) / 1.04 var(--serif);
   letter-spacing: -0.025em;
   text-wrap: balance;
@@ -37,7 +37,7 @@
 .stage p {
   max-width: 690px;
   margin: 0 0 19px;
-  color: #b9cbd4;
+  color: var(--ink-soft);
   font-size: 15px;
   line-height: 1.65;
 }
@@ -47,8 +47,8 @@
   width: 54px;
   height: 54px;
   place-items: center;
-  color: #78dfd5;
-  border: 1px solid rgb(120 223 213 / 40%);
+  color: var(--aqua-bright);
+  border: 1px solid rgba(46, 196, 160, 0.4);
   border-radius: 50%;
   font: 750 13px/1 var(--mono);
 }
@@ -57,9 +57,9 @@
   width: 20px;
   height: 20px;
   margin: 10px;
-  border: 3px solid #78dfd5;
+  border: 3px solid var(--aqua);
   border-radius: 50%;
-  background: radial-gradient(circle, #78dfd5 0 3px, transparent 4px);
+  background: radial-gradient(circle, var(--aqua-soft) 0 3px, transparent 4px);
 }
 
 .events {
@@ -72,18 +72,18 @@
 
 .events li {
   padding: 7px 10px;
-  color: #d3e3e8;
-  border-left: 2px solid #58cabe;
+  color: var(--aqua-bright);
+  border-left: 2px solid var(--aqua);
   background: rgb(255 255 255 / 5%);
   font-size: 13px;
 }
 
 .error {
   padding: 11px 13px;
-  color: #ffe1e5 !important;
-  border: 1px solid rgb(255 122 139 / 38%);
+  color: var(--red) !important;
+  border: 1px solid rgba(229, 72, 77, 0.38);
   border-radius: 10px;
-  background: rgb(153 36 53 / 18%);
+  background: rgba(229, 72, 77, 0.18);
 }
 
 @media (max-width: 620px) {

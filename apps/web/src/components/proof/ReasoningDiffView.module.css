@@ -2,12 +2,12 @@
   display: grid;
   gap: 22px;
   padding: clamp(24px, 4vw, 42px);
-  color: #17283e;
-  border: 1px solid #cfd8df;
+  color: var(--ink);
+  border: 1px solid var(--line);
   border-radius: 22px;
   background:
-    linear-gradient(90deg, rgb(198 145 37 / 7%), transparent 28%), #fffefa;
-  box-shadow: 0 24px 70px rgb(17 35 55 / 10%);
+    linear-gradient(90deg, rgba(224, 179, 86, 0.07), transparent 28%), var(--gold-soft);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.25);
 }
 
 .completionEvidence {
@@ -21,10 +21,10 @@
   display: grid;
   align-content: start;
   gap: 14px;
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  color: #4c5d73;
-  background: #fff;
+  color: var(--ink-soft);
+  background: var(--paper);
   font-size: 15px;
 }
 
@@ -37,10 +37,10 @@
   min-width: 44px;
   min-height: 44px;
   padding: 10px 14px;
-  color: #fff;
+  color: var(--accent-ink);
   border: 0;
   border-radius: 8px;
-  background: #245eea;
+  background: var(--accent);
   font: inherit;
   font-weight: 750;
 }
@@ -52,7 +52,7 @@
 
 .completionEvidence > section > p {
   margin: 7px 0 0;
-  color: #4c5d73;
+  color: var(--ink-soft);
   font-size: 15px;
   line-height: 1.55;
 }
@@ -75,7 +75,7 @@
 .header span,
 .repair span,
 .capsule span {
-  color: #8b6418;
+  color: var(--gold);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.11em;
@@ -100,16 +100,16 @@
 
 .header p {
   margin: 0;
-  color: #58687a;
+  color: var(--ink-soft);
 }
 
 .header > strong {
   flex: 0 0 auto;
   padding: 10px 12px;
-  color: #126c67;
-  border: 1px solid rgb(25 151 141 / 28%);
+  color: var(--aqua);
+  border: 1px solid rgba(46, 196, 160, 0.28);
   border-radius: 999px;
-  background: rgb(25 151 141 / 8%);
+  background: rgba(46, 196, 160, 0.08);
   font-size: 13px;
 }
 
@@ -118,7 +118,7 @@
   gap: 0;
   margin: 0;
   padding: 0;
-  border-block: 1px solid #d8dee3;
+  border-block: 1px solid var(--line);
   list-style: none;
 }
 
@@ -127,7 +127,7 @@
   grid-template-columns: 145px minmax(0, 1fr);
   gap: 18px;
   padding: 18px 0;
-  border-bottom: 1px solid #e1e5e8;
+  border-bottom: 1px solid var(--line);
 }
 
 .ledger > li:last-child {
@@ -141,7 +141,7 @@
 }
 
 .dimension span {
-  color: #99a3ad;
+  color: var(--ink-soft);
   font: 12px/1 var(--mono);
 }
 
@@ -162,22 +162,22 @@
 .ledger dl > div {
   min-height: 92px;
   padding: 14px 16px;
-  border: 1px solid #dce2e6;
+  border: 1px solid var(--line);
   border-radius: 12px;
 }
 
 .before {
-  background: #f5f1e8;
+  background: var(--gold-soft);
 }
 
 .after {
-  border-color: rgb(30 157 146 / 28%) !important;
-  background: #f3fbf9;
+  border-color: rgba(46, 196, 160, 0.28) !important;
+  background: var(--aqua-soft);
 }
 
 .ledger dt {
   margin-bottom: 7px;
-  color: #697789;
+  color: var(--ink-soft);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -202,24 +202,24 @@
   gap: 22px;
   align-items: center;
   padding: 20px;
-  color: #e9f3f5;
+  color: var(--aqua-bright);
   border-radius: 16px;
-  background: #0d263d;
+  background: var(--night);
 }
 
 .repair span {
-  color: #7fe0d6;
+  color: var(--aqua-bright);
 }
 
 .repair h3 {
   margin: 5px 0 4px;
-  color: white;
+  color: var(--ink);
   font: 600 25px/1.1 var(--serif);
 }
 
 .repair p {
   margin: 0;
-  color: #bdd0d8;
+  color: var(--ink-soft);
 }
 
 .primaryAction,
@@ -236,30 +236,30 @@
 }
 
 .primaryAction {
-  color: #211802;
-  background: #f3c75d;
+  color: var(--accent-ink);
+  background: var(--gold-bright);
 }
 
 .primaryAction:focus-visible,
 .capsuleAction:focus-visible,
 .patchDetails summary:focus-visible,
 .proof summary:focus-visible {
-  outline: 3px solid #2d68ed;
+  outline: 3px solid var(--line-strong);
   outline-offset: 3px;
 }
 
 .patchDetails,
 .proof {
-  border: 1px solid #d8e0e5;
+  border: 1px solid var(--line);
   border-radius: 13px;
-  background: #f8faf9;
+  background: var(--night-raised);
 }
 
 .patchDetails summary,
 .proof summary {
   min-height: 48px;
   padding: 14px 16px;
-  color: #2d465f;
+  color: var(--ink);
   font-size: 15px;
   font-weight: 800;
   cursor: pointer;
@@ -270,9 +270,9 @@
   overflow: auto;
   margin: 0 16px 16px;
   padding: 15px;
-  color: #d9e6ec;
+  color: var(--ink-soft);
   border-radius: 10px;
-  background: #0b1c2d;
+  background: var(--night);
   font: 13px/1.55 var(--mono);
 }
 
@@ -287,8 +287,8 @@
 
 .patchDetails li {
   padding: 7px 9px;
-  color: #176862;
-  border: 1px solid rgb(25 151 141 / 23%);
+  color: var(--aqua);
+  border: 1px solid rgba(46, 196, 160, 0.23);
   border-radius: 999px;
   font-size: 12px;
   font-weight: 750;
@@ -300,14 +300,14 @@
   gap: 22px;
   align-items: center;
   padding: 20px;
-  border: 1px solid rgb(28 142 133 / 28%);
+  border: 1px solid rgba(46, 196, 160, 0.28);
   border-radius: 16px;
   background:
-    linear-gradient(135deg, rgb(39 171 159 / 11%), transparent 55%), white;
+    linear-gradient(135deg, rgba(46, 196, 160, 0.11), transparent 55%), var(--paper);
 }
 
 .capsule span {
-  color: #147b74;
+  color: var(--aqua);
 }
 
 .capsule h3 {
@@ -317,7 +317,7 @@
 
 .capsule p {
   margin: 0;
-  color: #5a6b7b;
+  color: var(--ink-soft);
 }
 
 .capsule dl {
@@ -334,20 +334,20 @@
 }
 
 .capsule dt {
-  color: #718091;
+  color: var(--ink-soft);
   font-size: 12px;
 }
 
 .capsule dd {
   margin: 0;
-  color: #223a53;
+  color: var(--ink);
   font: 13px/1.4 var(--mono);
   overflow-wrap: anywhere;
 }
 
 .capsuleAction {
-  color: white;
-  background: #145e78;
+  color: var(--ink);
+  background: var(--aqua-soft);
 }
 
 .proofBody {
@@ -374,18 +374,18 @@
 .proofBody dl > div {
   min-width: 0;
   padding: 8px;
-  background: white;
+  background: var(--paper);
 }
 
 .proofBody dt {
-  color: #758294;
+  color: var(--ink-soft);
   font-size: 12px;
 }
 
 .proofBody dd {
   overflow: hidden;
   margin: 3px 0 0;
-  color: #294058;
+  color: var(--ink);
   font: 12px/1.4 var(--mono);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -397,7 +397,7 @@
 }
 
 .proofBody p {
-  color: #627285;
+  color: var(--ink-soft);
 }
 
 @media (max-width: 800px) {

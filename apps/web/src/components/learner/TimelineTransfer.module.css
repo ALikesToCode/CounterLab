@@ -1,14 +1,14 @@
 .transfer {
   padding: clamp(20px, 4vw, 32px);
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--line);
   border-radius: 16px;
-  color: #07152a;
-  background: #fffdf8;
+  color: var(--ink);
+  background: var(--gold-soft);
   font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
 }
 
 .transfer header > span {
-  color: #007a78;
+  color: var(--aqua);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -17,7 +17,7 @@
 
 .transfer header h2 {
   margin: 7px 0 0;
-  font-family: "Newsreader Variable", "Iowan Old Style", Georgia, serif;
+  font-family: var(--display);
   font-size: clamp(28px, 5vw, 40px);
   font-weight: 520;
   letter-spacing: -0.025em;
@@ -27,7 +27,7 @@
 .transfer header p {
   max-width: 760px;
   margin: 10px 0 0;
-  color: #4c5d73;
+  color: var(--ink-soft);
   font-size: 15px;
   line-height: 1.6;
 }
@@ -36,9 +36,9 @@
   padding: clamp(18px, 4vw, 28px);
   margin: 22px 0 0;
   overflow: hidden;
-  border: 1px solid #cbd8e8;
+  border: 1px solid var(--line);
   border-radius: 14px;
-  background: #f4f7fc;
+  background: var(--paper-raised);
 }
 
 .labels,
@@ -50,7 +50,7 @@
 }
 
 .labels {
-  color: #4c5d73;
+  color: var(--ink-soft);
   font-size: 12px;
   letter-spacing: 0.06em;
 }
@@ -71,8 +71,8 @@
 .track span {
   padding: 9px 12px;
   border-radius: 8px;
-  color: #17345c;
-  background: #dbe8fb;
+  color: var(--ink);
+  background: var(--paper-raised);
   font-size: 15px;
   font-weight: 750;
   text-align: center;
@@ -82,19 +82,19 @@
   justify-self: center;
   width: 2px;
   height: 64px;
-  background: #245eea;
+  background: var(--accent);
 }
 
 .track[data-split-visual="mixed"] span {
-  border: 1px dashed #78621d;
-  background: #fff4cf;
+  border: 1px dashed var(--gold);
+  background: var(--gold-soft);
 }
 
 .feature {
   position: relative;
   min-height: 66px;
   padding-top: 12px;
-  border-top: 1px solid #cbd8e8;
+  border-top: 1px solid var(--line);
 }
 
 .feature > span,
@@ -108,7 +108,7 @@
 }
 
 .feature > strong {
-  color: #4c5d73;
+  color: var(--ink-soft);
   text-align: right;
 }
 
@@ -117,19 +117,19 @@
   width: 48px;
   height: 3px;
   border-radius: 999px;
-  background: #9aa8ba;
+  background: var(--accent);
 }
 
 .feature[data-crosses-now="true"] i {
   width: 88px;
-  background: #b78a16;
+  background: var(--gold-soft);
 }
 
 .timeline figcaption {
   padding-top: 12px;
   margin-top: 10px;
-  border-top: 1px solid #cbd8e8;
-  color: #4c5d73;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.55;
 }
@@ -147,9 +147,9 @@
   gap: 8px;
   min-width: 0;
   padding: 16px;
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fff;
+  background: var(--paper);
 }
 
 .questions legend {
@@ -166,18 +166,18 @@
   gap: 10px;
   align-items: center;
   padding: 9px 10px;
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--line);
   border-radius: 9px;
   cursor: pointer;
 }
 
 .questions label:has(input:checked) {
-  border-color: #245eea;
-  background: #f2f6ff;
+  border-color: var(--line-strong);
+  background: var(--paper-raised);
 }
 
 .questions label:has(input:focus-visible) {
-  outline: 3px solid #1d4ed8;
+  outline: 3px solid var(--line-strong);
   outline-offset: 2px;
 }
 
@@ -185,7 +185,7 @@
   width: 20px;
   height: 20px;
   margin: 0;
-  accent-color: #245eea;
+  accent-color: var(--accent);
 }
 
 .questions label span {
@@ -199,7 +199,7 @@
 }
 
 .questions label small {
-  color: #4c5d73;
+  color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.4;
 }

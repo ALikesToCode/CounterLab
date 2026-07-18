@@ -1,14 +1,14 @@
 .progress {
-  color: #07152a;
+  color: var(--ink);
   font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
 }
 
 .desktop {
   display: block;
   padding: 8px;
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--line);
   border-radius: 14px;
-  background: #fff;
+  background: var(--paper);
 }
 
 .stageList {
@@ -36,7 +36,7 @@
   padding: 8px;
   border: 0;
   border-radius: 10px;
-  color: #4c5d73;
+  color: var(--ink-soft);
   background: transparent;
   font: inherit;
   font-size: 13px;
@@ -45,17 +45,17 @@
 }
 
 .stageButton {
-  color: #245eea;
+  color: var(--ink);
   cursor: pointer;
 }
 
 .stageButton:hover {
-  background: #edf3ff;
+  background: var(--paper-raised);
 }
 
 .stageButton:focus-visible,
 .mobileSummary:focus-visible {
-  outline: 3px solid #1d4ed8;
+  outline: 3px solid var(--line-strong);
   outline-offset: 3px;
 }
 
@@ -65,31 +65,31 @@
   width: 24px;
   height: 24px;
   place-items: center;
-  border: 1px solid #b8c3d0;
+  border: 1px solid var(--line);
   border-radius: 50%;
   font-size: 12px;
   line-height: 1;
 }
 
 .completed .marker {
-  color: #007a78;
-  border-color: #8dd8d0;
-  background: #dff6f2;
+  color: var(--aqua);
+  border-color: var(--aqua);
+  background: var(--aqua-soft);
 }
 
 .current .stageLabel {
-  color: #143d9d;
-  background: #edf3ff;
+  color: var(--ink);
+  background: var(--paper-raised);
 }
 
 .current .marker {
-  color: #fff;
-  border-color: #245eea;
-  background: #245eea;
+  color: var(--accent-ink);
+  border-color: var(--line-strong);
+  background: var(--accent);
 }
 
 .future .stageLabel {
-  color: #77869a;
+  color: var(--ink-soft);
 }
 
 .mobile {
@@ -102,9 +102,9 @@
   justify-content: space-between;
   gap: 16px;
   padding: 10px 14px;
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: #fff;
+  background: var(--paper);
   cursor: pointer;
   list-style: none;
 }
@@ -114,7 +114,7 @@
 }
 
 .mobileSummary span {
-  color: #4c5d73;
+  color: var(--ink-soft);
   font-size: 13px;
 }
 
@@ -124,10 +124,10 @@
 
 .mobilePanel {
   padding: 18px;
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--line);
   border-radius: 18px 18px 0 0;
-  background: #fff;
-  box-shadow: 0 -12px 34px rgb(7 21 42 / 18%);
+  background: var(--paper);
+  box-shadow: 0 -12px 34px rgba(0, 0, 0, 0.45);
 }
 
 .mobilePanelHeading {
@@ -144,7 +144,7 @@
 }
 
 .mobilePanelHeading strong {
-  color: #4c5d73;
+  color: var(--ink-soft);
   font-size: 13px;
 }
 

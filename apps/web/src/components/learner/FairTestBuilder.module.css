@@ -1,5 +1,5 @@
 .builder {
-  color: #07152a;
+  color: var(--ink);
   font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
 }
 
@@ -14,7 +14,7 @@
 .why span,
 .controls article > span,
 .repairStory > span {
-  color: #4c5d73;
+  color: var(--ink-soft);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -23,7 +23,7 @@
 
 .header h2 {
   margin: 7px 0 0;
-  font-family: "Newsreader Variable", "Iowan Old Style", Georgia, serif;
+  font-family: var(--display);
   font-size: clamp(32px, 5vw, 46px);
   font-weight: 520;
   letter-spacing: -0.025em;
@@ -36,10 +36,10 @@
   align-items: center;
   gap: 8px;
   padding: 9px 12px;
-  border: 1px solid #b8dcd7;
+  border: 1px solid color-mix(in srgb, var(--aqua) 45%, var(--line));
   border-radius: 999px;
-  color: #007a78;
-  background: #f3fbf9;
+  color: var(--aqua);
+  background: var(--aqua-soft);
   font-size: 13px;
   line-height: 1.4;
 }
@@ -58,9 +58,9 @@
   align-items: start;
   padding: 22px;
   margin-top: 22px;
-  border: 1px solid #cdd9eb;
+  border: 1px solid var(--line);
   border-radius: 14px;
-  background: #f4f7fc;
+  background: var(--paper-raised);
 }
 
 .why h3 {
@@ -71,7 +71,7 @@
 
 .why p {
   margin: 0;
-  color: #4c5d73;
+  color: var(--ink-soft);
   font-size: 15px;
   line-height: 1.6;
 }
@@ -85,9 +85,9 @@
 
 .controls article {
   padding: 18px;
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fff;
+  background: var(--paper);
 }
 
 .controls article > strong {
@@ -113,7 +113,7 @@
 
 .controls li::before {
   content: "✓ ";
-  color: #007a78;
+  color: var(--aqua);
   font-weight: 800;
 }
 
@@ -140,9 +140,9 @@
   gap: 12px;
   align-items: start;
   padding: 13px 15px;
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: #fff;
+  background: var(--paper);
 }
 
 .progress li > i {
@@ -154,26 +154,26 @@
 }
 
 .progress li.working {
-  color: #245eea;
+  color: var(--ink);
 }
 
 .progress li.verified {
-  color: #007a78;
+  color: var(--aqua);
 }
 
 .progress li.rejected {
-  color: #b5363a;
+  color: var(--red);
 }
 
 .progress li strong {
-  color: #07152a;
+  color: var(--ink);
   font-size: 15px;
   line-height: 1.4;
 }
 
 .progress li p {
   margin: 3px 0 0;
-  color: #4c5d73;
+  color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -181,10 +181,10 @@
 .repairStory {
   padding: 20px;
   margin-top: 18px;
-  border: 1px solid #e2b1ad;
+  border: 1px solid color-mix(in srgb, var(--red) 50%, var(--line));
   border-radius: 12px;
-  color: #07152a;
-  background: #fbe8e7;
+  color: var(--ink);
+  background: var(--red-soft);
 }
 
 .repairStory h3 {
@@ -216,7 +216,7 @@
   width: fit-content;
   padding: 8px 10px;
   border-radius: 10px;
-  color: #245eea;
+  color: var(--ink);
   font-size: 13px;
   font-weight: 750;
   cursor: pointer;
@@ -228,7 +228,7 @@
 }
 
 .technical summary:focus-visible {
-  outline: 3px solid #1d4ed8;
+  outline: 3px solid var(--line-strong);
   outline-offset: 2px;
 }
 
@@ -236,9 +236,9 @@
 .technical > p {
   padding: 16px;
   margin: 4px 0 0;
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: #f7f8fa;
+  background: var(--paper-raised);
 }
 
 .technical dl {
@@ -261,7 +261,7 @@
 .technical > p {
   margin: 0;
   overflow-wrap: anywhere;
-  color: #4c5d73;
+  color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.55;
 }

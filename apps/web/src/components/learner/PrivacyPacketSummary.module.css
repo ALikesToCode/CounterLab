@@ -1,9 +1,9 @@
 .summary {
   padding: 20px;
-  border: 1px solid #b8dcd7;
+  border: 1px solid color-mix(in srgb, var(--aqua) 45%, var(--line));
   border-radius: 14px;
-  color: #07152a;
-  background: #f3fbf9;
+  color: var(--ink);
+  background: var(--aqua-soft);
   font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
 }
 
@@ -31,18 +31,18 @@
 .columns li {
   padding: 7px 10px;
   border-radius: 8px;
-  color: #23364c;
-  background: #fff;
+  color: var(--ink);
+  background: var(--paper);
   font-size: 15px;
   line-height: 1.45;
 }
 
 .included li {
-  border-left: 3px solid #007a78;
+  border-left: 3px solid var(--aqua);
 }
 
 .excluded li {
-  border-left: 3px solid #67778b;
+  border-left: 3px solid var(--line-strong);
 }
 
 .packet {
@@ -56,7 +56,7 @@
   width: fit-content;
   padding: 8px 10px;
   border-radius: 10px;
-  color: #245eea;
+  color: var(--ink);
   font-size: 13px;
   font-weight: 750;
   cursor: pointer;
@@ -68,7 +68,7 @@
 }
 
 .packet summary:focus-visible {
-  outline: 3px solid #1d4ed8;
+  outline: 3px solid var(--line-strong);
   outline-offset: 2px;
 }
 
@@ -77,10 +77,10 @@
   padding: 14px;
   margin: 6px 0 0;
   overflow: auto;
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  color: #d9e8f5;
-  background: #061326;
+  color: var(--ink-soft);
+  background: var(--night);
   font-size: 13px;
   line-height: 1.55;
   white-space: pre-wrap;

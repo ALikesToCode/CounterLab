@@ -1,5 +1,5 @@
 .duel {
-  color: #07152a;
+  color: var(--ink);
   font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
 }
 
@@ -9,7 +9,7 @@
 
 .duel > header > span,
 .modelLabel {
-  color: #4c5d73;
+  color: var(--ink-soft);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -18,7 +18,7 @@
 
 .duel > header h2 {
   margin: 8px 0 0;
-  font-family: "Newsreader Variable", "Iowan Old Style", Georgia, serif;
+  font-family: var(--display);
   font-size: clamp(32px, 5vw, 46px);
   font-weight: 520;
   letter-spacing: -0.025em;
@@ -27,7 +27,7 @@
 
 .duel > header p {
   margin: 14px 0 0;
-  color: #4c5d73;
+  color: var(--ink-soft);
   font-size: 15px;
   line-height: 1.6;
 }
@@ -45,9 +45,9 @@
   min-width: 0;
   flex-direction: column;
   padding: 22px;
-  border: 1px solid #cfd7e1;
+  border: 1px solid var(--line);
   border-radius: 14px;
-  background: #fff;
+  background: var(--paper);
 }
 
 .modelStatement {
@@ -66,16 +66,16 @@
   gap: 5px;
   padding: 14px;
   margin: 18px 0 0;
-  border: 1px solid #e1e6ec;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  color: #24374d;
-  background: #f7f8fa;
+  color: var(--ink);
+  background: var(--paper-raised);
   font-size: 15px;
   line-height: 1.55;
 }
 
 .prediction strong {
-  color: #4c5d73;
+  color: var(--ink-soft);
   font-size: 12px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -83,7 +83,7 @@
 
 .versus {
   align-self: center;
-  color: #66768a;
+  color: var(--ink-soft);
   font-size: 13px;
   font-weight: 750;
 }
@@ -101,7 +101,7 @@
   width: fit-content;
   padding: 8px 10px;
   border-radius: 10px;
-  color: #245eea;
+  color: var(--ink);
   font-size: 13px;
   font-weight: 750;
   cursor: pointer;
@@ -117,7 +117,7 @@
 .tertiary summary:focus-visible,
 .actions button:focus-visible,
 .tertiary button:focus-visible {
-  outline: 3px solid #1d4ed8;
+  outline: 3px solid var(--line-strong);
   outline-offset: 2px;
 }
 
@@ -127,7 +127,7 @@
   gap: 12px;
   padding: 12px;
   border-radius: 10px;
-  background: #f7f8fa;
+  background: var(--paper-raised);
 }
 
 .scope h4 {
@@ -138,7 +138,7 @@
 .scope ul {
   padding-left: 18px;
   margin: 7px 0 0;
-  color: #4c5d73;
+  color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -162,20 +162,20 @@
 }
 
 .primary {
-  border: 1px solid #245eea;
-  color: #fff;
-  background: #245eea;
+  border: 1px solid var(--line-strong);
+  color: var(--accent-ink);
+  background: var(--accent);
 }
 
 .primary:hover {
-  background: #143d9d;
+  background: var(--accent);
 }
 
 .secondary,
 .tertiary button {
-  border: 1px solid #cfd7e1;
-  color: #245eea;
-  background: #fff;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--paper);
 }
 
 .tertiary {
@@ -193,10 +193,10 @@
   width: fit-content;
   padding: 12px 14px;
   margin: 20px 0 0;
-  border: 1px solid #8dd8d0;
+  border: 1px solid var(--aqua);
   border-radius: 10px;
-  color: #075f5d;
-  background: #dff6f2;
+  color: var(--aqua);
+  background: var(--aqua-soft);
   font-size: 15px;
   font-weight: 750;
 }
