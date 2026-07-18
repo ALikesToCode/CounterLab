@@ -45,10 +45,10 @@
 
   /* Legacy semantic aliases (kept for older rules; same palette) */
   --navy: #0a0a0a;
-  --blue: #245eea;
-  --blue-hover: #1749c6;
-  --blue-deep: #8eb4ff;
-  --blue-ink: #ffffff;
+  --blue: #fafafa;
+  --blue-hover: #cfcfcf;
+  --blue-deep: #cfcfcf;
+  --blue-ink: #090909;
 
   --sans:
     "Instrument Sans Variable", "Avenir Next", ui-sans-serif, system-ui,

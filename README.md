@@ -174,6 +174,8 @@ single-job token to the process-capable Container binding; when that binding or
 its credentials are absent, live mode fails with a typed unavailable state and
 never substitutes sample or replay evidence. Details are in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+The browser route, component, and styling map is in
+[docs/FRONTEND_MAP.md](docs/FRONTEND_MAP.md); `DESIGN.md` is the visual contract.
 
 The proof console also uses `json-render` for a constrained generative view of
 sanitized public events. The catalogue contains only trusted CounterLab cards,

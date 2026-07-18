@@ -1,40 +1,41 @@
 ---
 version: alpha
-name: CounterLab Evidence Instrument
-description: A calm scientific workspace that pairs a warm learner canvas with deep-navy evidence chrome, editorial conclusions, precise interface typography, and scarce semantic accents. The interface keeps one learner action dominant while technical authority stays available through progressive disclosure.
+name: CounterLab Monochrome Instrument
+description: A black-first scientific workspace built from one white, one black, neutral depth, precise interface typography, and scarce evidence-state accents. The interface keeps one learner action dominant while technical authority stays available through progressive disclosure.
 
 colors:
-  canvas: "#f3f1eb"
-  surface: "#ffffff"
-  surface-soft: "#f7f8fa"
-  ink: "#07152a"
-  ink-soft: "#4c5d73"
-  night: "#061326"
-  night-raised: "#0d2038"
-  on-night: "#f4f8fb"
-  on-night-muted: "#a7b7c9"
-  primary: "#245eea"
-  primary-active: "#143d9d"
-  on-primary: "#ffffff"
-  verified: "#007a78"
-  verified-soft: "#dff6f2"
-  prediction: "#955f00"
-  prediction-soft: "#fff1ca"
-  danger: "#b5363a"
-  danger-soft: "#fbe8e7"
-  focus: "#1d4ed8"
+  canvas: "#000000"
+  surface: "#0a0a0a"
+  surface-soft: "#141414"
+  control: "#202020"
+  ink: "#fafafa"
+  ink-soft: "#a1a1a1"
+  line: "#262626"
+  line-strong: "#3d3d3d"
+  primary: "#fafafa"
+  primary-active: "#cfcfcf"
+  on-primary: "#090909"
+  verified: "#2ec4a0"
+  verified-soft: "rgba(46, 196, 160, 0.14)"
+  prediction: "#e0b356"
+  prediction-soft: "rgba(224, 179, 86, 0.13)"
+  replay: "#a79bff"
+  replay-soft: "rgba(167, 155, 255, 0.13)"
+  danger: "#e5484d"
+  danger-soft: "rgba(229, 72, 77, 0.13)"
+  focus: "#91b7ff"
 
 typography:
   display:
-    fontFamily: "Newsreader Variable, Iowan Old Style, Georgia, serif"
+    fontFamily: "Instrument Sans Variable, Avenir Next, sans-serif"
     fontSize: 64px
-    fontWeight: 520
+    fontWeight: 560
     lineHeight: 1.02
     letterSpacing: -2.4px
   heading:
-    fontFamily: "Newsreader Variable, Iowan Old Style, Georgia, serif"
+    fontFamily: "Instrument Sans Variable, Avenir Next, sans-serif"
     fontSize: 36px
-    fontWeight: 520
+    fontWeight: 560
     lineHeight: 1.12
     letterSpacing: -1px
   title:
@@ -90,13 +91,13 @@ components:
     typography: "{typography.body}"
     padding: "{spacing.xxl}"
   evidence-sidebar:
-    backgroundColor: "{colors.night}"
-    textColor: "{colors.on-night}"
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
     typography: "{typography.secondary}"
     padding: "{spacing.lg}"
   evidence-sidebar-item:
-    backgroundColor: "{colors.night-raised}"
-    textColor: "{colors.on-night-muted}"
+    backgroundColor: "{colors.surface-soft}"
+    textColor: "{colors.ink-soft}"
     typography: "{typography.secondary}"
     rounded: "{rounded.control}"
     padding: "{spacing.md}"
@@ -157,9 +158,9 @@ components:
 
 ## Direction
 
-CounterLab should feel like a precise scientific instrument, not an agent dashboard. The learner works on a warm, quiet canvas while provenance and fixed-system evidence sit in deep-navy chrome. Editorial serif type is reserved for questions, predictions, and conclusions; interface sans carries actions and explanations; monospace identifies evidence, units, hashes, and verifier state.
+CounterLab should feel like a precise scientific instrument, not an agent dashboard and not a light product with dark paint applied. The learner works on a true-black field. Near-black surfaces, hairline gray borders, disciplined spacing, and high-contrast sans typography establish depth without card clutter or decorative glow.
 
-The memorable moment is the transition from a sealed Prediction to a verified Test: gold marks what the learner committed, aqua marks what fixed computation verified, and the result stays absent until signed data arrives. Blue belongs to the current learner action. Red appears only for rejected invariants or contradicted expectations.
+White belongs to the dominant learner action. Blue is limited to the keyboard focus indicator. Gold marks what the learner committed, aqua marks what fixed computation verified, purple labels replay authority, and red appears only for rejected invariants or contradicted expectations. Semantic color never decorates unsupported claims.
 
 ## Layout
 
@@ -173,7 +174,7 @@ The memorable moment is the transition from a sealed Prediction to a verified Te
 
 ## Components and states
 
-- Primary buttons are rectangular blue controls with a 44 px minimum height. Pills are reserved for status.
+- Primary buttons are rectangular white controls with black text and a 44 px minimum height. Pills are reserved for status.
 - Evidence cards pair a plain-language statement with an adjacent source reference; they do not decorate unsupported claims.
 - Verified seals use aqua only after technical and epistemic verification.
 - Prediction locks use gold and remain visibly immutable after commitment.
@@ -187,10 +188,10 @@ Use 160–240 ms opacity and transform transitions for drawers, focus changes, a
 
 ## Inspiration synthesis
 
-- **Sentry** informed the decisive dark/light authority split and technical-console cadence. CounterLab removes the mascots, neon palette, and cockpit density.
-- **Notion** informed sober rectangular controls, warm workspace surfaces, and 12–14 px card geometry. CounterLab keeps its own editorial serif and scientific semantics.
-- **ClickHouse** informed the use of real computed values and code-shaped evidence as the visual proof, never abstract AI decoration. CounterLab uses aqua and gold rather than an electric-yellow identity.
-- **Ferrari** supplied the contrast reference: generous restraint, modest display weight, and one scarce high-energy accent. CounterLab mutates that restraint into an evidence-first education surface without automotive imagery or branding.
+- **Apple** informs the black field, exact type hierarchy, generous negative space, and preference for one obvious action.
+- **Vercel** informs monochrome surfaces, fine borders, compact geometry, white primary actions, and technical clarity without dashboard density.
+- **ChatGPT** informs the calm conversational entry and centered composer, without turning the scientific workflow into an unstructured chat transcript.
+- **ClickHouse** informs the use of real computed values and code-shaped evidence as visual proof, never abstract AI decoration.
 
 ## Do
 
