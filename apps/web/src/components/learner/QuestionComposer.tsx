@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from "react";
+import { useId, type FormEvent, type RefObject } from "react";
 
 import styles from "./QuestionComposer.module.css";
 
@@ -7,15 +7,12 @@ export const defaultSamplePrompts = [
   "Does high accuracy mean the rare cases are being caught?",
 ] as const;
 
-type ComposerIntent = "question" | "notebook";
-
 export type QuestionComposerProps = {
   value: string;
   onChange: (value: string) => void;
   onAttachNotebook: (file: File) => void;
   onSubmit: () => void;
-  onStartSample: () => void;
-  onOpenReplay: () => void;
+  inputRef?: RefObject<HTMLTextAreaElement | null>;
   samplePrompts?: readonly string[];
   busy?: boolean;
 };
@@ -25,11 +22,11 @@ export function QuestionComposer({
   onChange,
   onAttachNotebook,
   onSubmit,
+  inputRef,
   samplePrompts = defaultSamplePrompts,
   busy = false,
 }: QuestionComposerProps) {
   const inputId = useId();
-  const [intent, setIntent] = useState<ComposerIntent>("question");
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -37,55 +34,19 @@ export function QuestionComposer({
     onSubmit();
   };
 
-  const placeholder =
-    intent === "question"
-      ? "State a claim you want to test…"
-      : "What claim should this notebook help test?";
-
   return (
     <section className={styles.composer} aria-label="Question composer">
-      <div
-        className={styles.intentSwitch}
-        role="group"
-        aria-label="Choose input type"
-      >
-        <button
-          type="button"
-          className={intent === "question" ? styles.intentActive : undefined}
-          aria-pressed={intent === "question"}
-          disabled={busy}
-          onClick={() => setIntent("question")}
-        >
-          Question
-        </button>
-        <button
-          type="button"
-          className={intent === "notebook" ? styles.intentActive : undefined}
-          aria-pressed={intent === "notebook"}
-          disabled={busy}
-          onClick={() => setIntent("notebook")}
-        >
-          Notebook
-        </button>
-      </div>
-
-      {intent === "notebook" ? (
-        <p className={styles.intentNote}>
-          Attach a supported .ipynb. CounterLab reads its evidence and never
-          executes cells.
-        </p>
-      ) : null}
-
       <form className={styles.form} onSubmit={submit} aria-label="Test a claim">
         <label className={styles.srOnly} htmlFor={inputId}>
           Your question or claim
         </label>
         <textarea
+          ref={inputRef}
           id={inputId}
           value={value}
-          rows={5}
+          rows={2}
           disabled={busy}
-          placeholder={placeholder}
+          placeholder="State a claim or attach a notebook…"
           onChange={(event) => onChange(event.target.value)}
         />
 
@@ -104,11 +65,7 @@ export function QuestionComposer({
                 if (file !== undefined) onAttachNotebook(file);
               }}
             />
-            <span>
-              {intent === "notebook"
-                ? "+ Attach supported .ipynb"
-                : "+ Attach notebook"}
-            </span>
+            <span>+ Attach notebook</span>
           </label>
           <button
             className={styles.submit}
@@ -121,7 +78,7 @@ export function QuestionComposer({
       </form>
 
       <div className={styles.promptGroup} aria-label="Prompt starters">
-        <span>Prompt starters</span>
+        <span>Try a question</span>
         <div>
           {samplePrompts.map((prompt) => (
             <button

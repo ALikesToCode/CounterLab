@@ -718,6 +718,8 @@ function Landing({
   const hint = subjectPackHint(undefined, "question");
   const [railOpen, setRailOpen] = useState(false);
   const railToggleRef = useRef<HTMLButtonElement>(null);
+  const proofDetailsRef = useRef<HTMLDetailsElement>(null);
+  const composerInputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!railOpen) return;
@@ -770,53 +772,78 @@ function Landing({
           <button
             className="landing-new-question"
             type="button"
+            aria-label="New question"
             onClick={() => {
               setRailOpen(false);
               updateClaim("");
+              composerInputRef.current?.focus();
             }}
           >
-            <span aria-hidden="true">+</span>
-            New question
+            <span className="landing-rail-icon" aria-hidden="true">
+              +
+            </span>
+            <span className="landing-rail-label">New question</span>
           </button>
 
           <div className="landing-rail-group">
             <span>Start with evidence</span>
-            <button type="button" disabled={busy} onClick={startSample}>
-              Try verified sample
+            <button
+              type="button"
+              disabled={busy}
+              aria-label="Try verified sample"
+              onClick={startSample}
+            >
+              <span className="landing-rail-icon" aria-hidden="true">
+                S
+              </span>
+              <span className="landing-rail-label">Verified sample</span>
             </button>
-            <button type="button" disabled={busy} onClick={openReplay}>
-              Watch verified replay
+            <button
+              type="button"
+              disabled={busy}
+              aria-label="Watch verified replay"
+              onClick={openReplay}
+            >
+              <span className="landing-rail-icon" aria-hidden="true">
+                R
+              </span>
+              <span className="landing-rail-label">Verified replay</span>
             </button>
           </div>
 
           <div className="landing-rail-group landing-rail-secondary">
-            <a href="/judge">Judge Mode</a>
+            <a href="/judge" aria-label="Judge Mode">
+              <span className="landing-rail-icon" aria-hidden="true">
+                J
+              </span>
+              <span className="landing-rail-label">Judge Mode</span>
+            </a>
             <a
               href="#landing-support-note"
+              aria-label="How proof works"
               onClick={() => {
                 setRailOpen(false);
-                document.getElementById("landing-support-note")?.focus();
+                if (proofDetailsRef.current !== null) {
+                  proofDetailsRef.current.open = true;
+                  proofDetailsRef.current.querySelector("summary")?.focus();
+                }
               }}
             >
-              How proof works
+              <span className="landing-rail-icon" aria-hidden="true">
+                ?
+              </span>
+              <span className="landing-rail-label">How proof works</span>
             </a>
           </div>
         </nav>
-
-        <p className="landing-rail-trust">No account needed</p>
       </aside>
 
       <section className="landing-canvas" aria-labelledby="landing-title">
         <div className="question-first-layout">
           <div className="landing-intro">
-            <p>Ask like chat. Prove it like science.</p>
             <h1 id="landing-title" tabIndex={-1}>
               What result are you trying to understand?
             </h1>
-            <span>
-              State the claim. If you have a notebook, attach it—we read the
-              evidence and never run the cells.
-            </span>
           </div>
 
           <QuestionComposer
@@ -824,8 +851,7 @@ function Landing({
             onChange={updateClaim}
             onAttachNotebook={attachNotebook}
             onSubmit={testClaim}
-            onStartSample={startSample}
-            onOpenReplay={openReplay}
+            inputRef={composerInputRef}
             busy={busy}
           />
 
@@ -834,16 +860,28 @@ function Landing({
             id="landing-support-note"
             tabIndex={-1}
           >
-            <p>
-              <strong>How proof works:</strong> fixed kernels calculate the
-              result, then frozen checks verify the evidence binding before it
-              appears.
+            <p className="landing-trust-line">
+              No account needed <span aria-hidden="true">·</span> Supported
+              Python/scikit-learn notebooks <span aria-hidden="true">·</span>
+              We read the evidence and never run the cells
             </p>
-            <p id="landing-supported-evidence">
-              <strong>Supported today:</strong> documented Python/scikit-learn
-              Jupyter notebooks for entity leakage and class imbalance.
-              Unsupported evidence is refused, not guessed.
-            </p>
+            <details
+              ref={proofDetailsRef}
+              className="landing-evidence-disclosure"
+            >
+              <summary>Evidence &amp; proof</summary>
+              <div>
+                <p>
+                  Fixed kernels calculate the result, then frozen checks verify
+                  the evidence binding before it appears.
+                </p>
+                <p id="landing-supported-evidence">
+                  <strong>Supported today:</strong> documented
+                  Python/scikit-learn Jupyter notebooks for entity leakage and
+                  class imbalance. Unsupported evidence is refused, not guessed.
+                </p>
+              </div>
+            </details>
             <NeedAHint
               hintId={hint.id}
               hint={hint.copy}

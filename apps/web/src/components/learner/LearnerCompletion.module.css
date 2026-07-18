@@ -6,7 +6,7 @@
   border-radius: 18px;
   color: var(--ink);
   background: var(--gold-soft);
-  font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
+  font-family: var(--sans);
 }
 
 .capability h1,
@@ -123,7 +123,7 @@
 
 .actions button:focus-visible,
 .evidence summary:focus-visible {
-  outline: 3px solid var(--line-strong);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
 }
 

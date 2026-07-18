@@ -9,7 +9,7 @@
   border-radius: 10px;
   color: var(--ink);
   background: var(--paper);
-  font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
+  font-family: var(--sans);
 }
 
 .coach > p {
@@ -41,7 +41,7 @@
 }
 
 .why summary:focus-visible {
-  outline: 3px solid var(--line-strong);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -57,7 +57,7 @@
   border-radius: 10px;
   color: var(--ink-soft);
   background: var(--paper-raised);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.30);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
   font-size: 13px;
   line-height: 1.55;
 }

@@ -91,7 +91,7 @@
 }
 
 .option:has(input:focus-visible) {
-  outline: 3px solid var(--line-strong);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -171,7 +171,7 @@
 .actions button:focus-visible,
 .hint summary:focus-visible,
 .hint a:focus-visible {
-  outline: 3px solid var(--line-strong);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 

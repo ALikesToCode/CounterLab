@@ -8,14 +8,10 @@ import { QuestionComposer } from "./QuestionComposer";
 function ControlledComposer({
   onAttachNotebook = vi.fn(),
   onSubmit = vi.fn(),
-  onStartSample = vi.fn(),
-  onOpenReplay = vi.fn(),
   busy = false,
 }: {
   onAttachNotebook?: (file: File) => void;
   onSubmit?: () => void;
-  onStartSample?: () => void;
-  onOpenReplay?: () => void;
   busy?: boolean;
 }) {
   const [value, setValue] = useState("");
@@ -25,8 +21,6 @@ function ControlledComposer({
       onChange={setValue}
       onAttachNotebook={onAttachNotebook}
       onSubmit={onSubmit}
-      onStartSample={onStartSample}
-      onOpenReplay={onOpenReplay}
       busy={busy}
     />
   );
@@ -35,12 +29,11 @@ function ControlledComposer({
 describe("QuestionComposer", () => {
   it("keeps the landing heading outside the composer and shows sparse prompt actions", async () => {
     const user = userEvent.setup();
-    const startSample = vi.fn();
-    render(<ControlledComposer onStartSample={startSample} />);
+    render(<ControlledComposer />);
 
     expect(screen.queryByRole("heading")).not.toBeInTheDocument();
     const input = screen.getByPlaceholderText(
-      "State a claim you want to test…",
+      "State a claim or attach a notebook…",
     );
     expect(input).toHaveAccessibleName("Your question or claim");
 
@@ -52,7 +45,6 @@ describe("QuestionComposer", () => {
     expect(input).toHaveValue(
       "Why did my model score highly but fail on new customers?",
     );
-    expect(startSample).not.toHaveBeenCalled();
     expect(
       screen.queryByRole("button", { name: "Try verified sample" }),
     ).not.toBeInTheDocument();
@@ -61,49 +53,32 @@ describe("QuestionComposer", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("switches local intent by keyboard without invoking any parent action", async () => {
-    const user = userEvent.setup();
+  it("offers one question action with notebook attachment available in place", () => {
     const change = vi.fn();
     const attach = vi.fn();
     const submit = vi.fn();
-    const sample = vi.fn();
-    const replay = vi.fn();
     render(
       <QuestionComposer
         value=""
         onChange={change}
         onAttachNotebook={attach}
         onSubmit={submit}
-        onStartSample={sample}
-        onOpenReplay={replay}
       />,
     );
 
-    const question = screen.getByRole("button", { name: "Question" });
-    const notebook = screen.getByRole("button", { name: "Notebook" });
-    expect(question).toHaveAttribute("aria-pressed", "true");
-    expect(notebook).toHaveAttribute("aria-pressed", "false");
-
-    notebook.focus();
-    await user.keyboard("{Enter}");
-    expect(notebook).toHaveAttribute("aria-pressed", "true");
     expect(
-      screen.getByPlaceholderText("What claim should this notebook help test?"),
+      screen.getByPlaceholderText("State a claim or attach a notebook…"),
     ).toBeInTheDocument();
-    expect(screen.getByText(/attach a supported .ipynb/i)).toBeInTheDocument();
-    expect(screen.getByText("+ Attach supported .ipynb")).toBeInTheDocument();
+    expect(screen.getByText("+ Attach notebook")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Question" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Notebook" }),
+    ).not.toBeInTheDocument();
     expect(change).not.toHaveBeenCalled();
     expect(attach).not.toHaveBeenCalled();
     expect(submit).not.toHaveBeenCalled();
-    expect(sample).not.toHaveBeenCalled();
-    expect(replay).not.toHaveBeenCalled();
-
-    question.focus();
-    await user.keyboard(" ");
-    expect(question).toHaveAttribute("aria-pressed", "true");
-    expect(
-      screen.getByPlaceholderText("State a claim you want to test…"),
-    ).toBeInTheDocument();
   });
 
   it("passes an attached notebook to the parent without changing submit semantics", async () => {
@@ -133,7 +108,7 @@ describe("QuestionComposer", () => {
     });
     expect(submitButton).toBeDisabled();
     await user.type(
-      screen.getByPlaceholderText("State a claim you want to test…"),
+      screen.getByPlaceholderText("State a claim or attach a notebook…"),
       "Does this score hold for unseen customers?",
     );
     expect(submitButton).toBeEnabled();
@@ -145,8 +120,6 @@ describe("QuestionComposer", () => {
   it("disables every local action while a test is being prepared", () => {
     render(<ControlledComposer busy />);
 
-    expect(screen.getByRole("button", { name: "Question" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Notebook" })).toBeDisabled();
     expect(screen.getByLabelText("Your question or claim")).toBeDisabled();
     const fileInput = screen.getByLabelText("Attach notebook");
     expect(fileInput).toBeDisabled();

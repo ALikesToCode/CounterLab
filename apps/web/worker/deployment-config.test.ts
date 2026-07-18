@@ -350,9 +350,39 @@ describe("Cloudflare static asset routing", () => {
         4.5,
       );
     }
+    for (const [foreground, background] of [
+      ["accent-ink", "accent"],
+      ["blue-ink", "blue"],
+      ["purple-ink", "purple"],
+      ["aqua-ink", "aqua-bright"],
+      ["gold-ink", "gold-bright"],
+    ] as const) {
+      expect(
+        contrast(variables[foreground]!, variables[background]!),
+        `${foreground} on ${background}`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+
+    expect(css).toMatch(
+      /\.api-progress\s*\{\s*color:\s*var\(--ink-soft\);\s*\}/,
+    );
+  });
+
+  it("keeps dark-theme fonts resolvable and focus indicators visible", () => {
+    const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf-8");
+    const variables = Object.fromEntries(
+      [...css.matchAll(/--([a-z-]+):\s*(#[0-9a-f]{6})/g)].map((match) => [
+        match[1]!,
+        match[2]!,
+      ]),
+    );
+
+    expect([...css.matchAll(/--([a-z-]+):\s*var\(--\1\)/g)]).toHaveLength(0);
     expect(
-      contrast(variables.blue!, "#ffffff"),
-      "blue button",
-    ).toBeGreaterThanOrEqual(4.5);
+      contrast(variables["focus-ring"]!, variables.night!),
+      "focus ring",
+    ).toBeGreaterThanOrEqual(3);
+    expect(css).not.toContain("outline: 3px solid var(--line);");
+    expect(css).not.toContain("outline: 3px solid var(--line-strong);");
   });
 });

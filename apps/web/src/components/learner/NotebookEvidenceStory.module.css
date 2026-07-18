@@ -4,7 +4,7 @@
   border-radius: 14px;
   color: var(--ink);
   background: var(--paper);
-  font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
+  font-family: var(--sans);
 }
 
 .header {
@@ -79,7 +79,7 @@
 .references code,
 .disclosure dt {
   color: var(--ink);
-  font-family: "SFMono-Regular", Consolas, monospace;
+  font-family: var(--mono);
   font-size: 12px;
   font-weight: 750;
   line-height: 1.45;
@@ -114,7 +114,7 @@
 }
 
 .disclosure summary:focus-visible {
-  outline: 3px solid var(--line-strong);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 

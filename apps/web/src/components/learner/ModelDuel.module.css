@@ -1,6 +1,6 @@
 .duel {
   color: var(--ink);
-  font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
+  font-family: var(--sans);
 }
 
 .duel > header {
@@ -117,7 +117,7 @@
 .tertiary summary:focus-visible,
 .actions button:focus-visible,
 .tertiary button:focus-visible {
-  outline: 3px solid var(--line-strong);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 

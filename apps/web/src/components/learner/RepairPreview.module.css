@@ -4,7 +4,7 @@
   border-radius: 16px;
   color: var(--ink);
   background: var(--gold-soft);
-  font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
+  font-family: var(--sans);
 }
 
 .preview header > span {

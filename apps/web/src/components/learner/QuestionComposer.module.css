@@ -1,79 +1,36 @@
 .composer {
-  width: min(820px, 100%);
+  width: min(780px, 100%);
   color: var(--ink-soft);
-  font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
-}
-
-.intentSwitch {
-  width: fit-content;
-  margin-inline: auto;
-  padding: 3px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(112px, 1fr));
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  background: var(--night);
-}
-
-.intentSwitch button {
-  position: relative;
-  min-height: 44px;
-  padding: 9px 16px;
-  border: 0;
-  border-radius: 999px;
-  color: var(--ink-soft);
-  background: transparent;
-  font: inherit;
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.intentSwitch button:hover:not(:disabled) {
-  color: var(--ink-soft);
-  background: var(--night-raised);
-}
-
-.intentSwitch .intentActive {
-  color: var(--ink);
-  background: var(--night-raised);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.58);
-}
-
-.intentNote {
-  margin: 10px auto -6px;
-  color: var(--ink-soft);
-  font-size: 13px;
-  line-height: 1.5;
-  text-align: center;
+  font-family: var(--sans);
 }
 
 .form {
-  margin-top: 18px;
+  margin-top: 0;
   overflow: hidden;
   border: 1px solid var(--line-strong);
-  border-radius: 16px;
-  background: var(--night-raised);
-  box-shadow: 0 24px 58px rgba(0, 0, 0, 0.45),
+  border-radius: 24px;
+  background: var(--control);
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.38),
     inset 0 1px 0 rgb(255 255 255 / 5%);
 }
 
 .form:focus-within {
-  border-color: var(--line);
+  border-color: var(--line-focus);
   box-shadow:
-    0 0 0 3px rgba(250, 250, 250, 0.22),
-    0 24px 58px rgba(250, 250, 250, 0.18);
+    0 0 0 2px rgba(145, 183, 255, 0.32),
+    0 18px 44px rgba(0, 0, 0, 0.42);
 }
 
 .form textarea {
   display: block;
   width: 100%;
-  min-height: 150px;
+  min-height: 82px;
   resize: vertical;
-  padding: 22px;
+  padding: 18px 20px 8px;
   border: 0;
   outline: 0;
-  color: var(--ink-soft);
+  color: var(--ink);
   background: transparent;
   font: inherit;
   font-size: 17px;
@@ -90,8 +47,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px;
-  border-top: 1px solid var(--line-strong);
+  padding: 8px 10px 10px;
+  border-top: 0;
 }
 
 .attach {
@@ -121,7 +78,7 @@
 }
 
 .attach:focus-within {
-  outline: 3px solid var(--line);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -155,31 +112,30 @@
 }
 
 .submit:hover:not(:disabled) {
-  border-color: var(--line);
-  background: var(--paper-raised);
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
 }
 
-.intentSwitch button:disabled,
 .submit:disabled,
 .promptGroup button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
 
-.intentSwitch button:focus-visible,
 .submit:focus-visible,
 .promptGroup button:focus-visible {
-  outline: 3px solid var(--line);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
 }
 
 .promptGroup {
-  margin-top: 22px;
+  width: min(640px, 100%);
+  margin: 16px auto 0;
 }
 
 .promptGroup > span {
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   color: var(--ink-soft);
   font-size: 13px;
   font-weight: 700;
@@ -187,20 +143,20 @@
 
 .promptGroup > div {
   display: grid;
-  justify-items: start;
+  justify-items: stretch;
   gap: 0;
 }
 
 .promptGroup button {
   min-height: 44px;
-  padding: 9px 0;
+  padding: 8px 10px;
   border: 0;
   color: var(--ink-soft);
   background: transparent;
   font: inherit;
   font-size: 15px;
   line-height: 1.45;
-  text-align: left;
+  text-align: center;
   cursor: pointer;
 }
 
@@ -212,29 +168,30 @@
 
 .promptGroup button:hover:not(:disabled) {
   color: var(--ink);
-  text-decoration: underline;
-  text-underline-offset: 4px;
+  background: var(--paper-raised);
+  border-radius: 10px;
 }
 
 @media (max-width: 620px) {
-  .intentSwitch {
-    width: 100%;
-  }
-
   .form textarea {
-    min-height: 136px;
-    padding: 18px;
+    min-height: 72px;
+    padding: 16px 16px 6px;
   }
 
   .composerActions {
-    align-items: stretch;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
   }
 
   .attach,
   .submit {
-    width: 100%;
-    justify-content: center;
+    width: auto;
+    font-size: 14px;
+  }
+
+  .attach {
+    flex: 1;
+    justify-content: flex-start;
   }
 
   .promptGroup button {

@@ -8,8 +8,8 @@
   border-radius: 18px;
   color: var(--theater-copy);
   background: var(--theater-night);
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.50);
-  font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.5);
+  font-family: var(--sans);
 }
 
 .header {
@@ -219,7 +219,7 @@
 
 .viewTabs button:focus-visible,
 .viewPanel h3:focus-visible {
-  outline: 3px solid var(--line);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
 }
 

@@ -4,7 +4,7 @@
   border-radius: 14px;
   color: var(--ink);
   background: var(--aqua-soft);
-  font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
+  font-family: var(--sans);
 }
 
 .summary h2 {
@@ -68,7 +68,7 @@
 }
 
 .packet summary:focus-visible {
-  outline: 3px solid var(--line-strong);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 

@@ -586,17 +586,23 @@ describe("CounterLab judged flow", () => {
         name: /start a counterlab investigation/i,
       }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Question" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(screen.getByRole("button", { name: "Notebook" })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
+    expect(
+      screen.getByPlaceholderText("State a claim or attach a notebook…"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Question" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /test this claim/i }),
     ).toBeDisabled();
+    const proofSummary = screen.getByText("Evidence & proof");
+    await user.click(screen.getByRole("link", { name: /how proof works/i }));
+    expect(proofSummary.closest("details")).toHaveAttribute("open");
+    expect(proofSummary).toHaveFocus();
+
+    const questionInput = screen.getByPlaceholderText(
+      "State a claim or attach a notebook…",
+    );
     await user.click(
       screen.getByRole("button", {
         name: /why did my model score highly but fail/i,
@@ -605,6 +611,9 @@ describe("CounterLab judged flow", () => {
     expect(
       screen.getByRole("button", { name: /test this claim/i }),
     ).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "New question" }));
+    expect(questionInput).toHaveValue("");
+    expect(questionInput).toHaveFocus();
     expect(document.body).not.toHaveTextContent(/98\.5|59\.4/);
     expect(document.body).not.toHaveTextContent(
       /formalize|discriminating|canonical|mutation/i,

@@ -173,7 +173,9 @@
   border-radius: 10px;
   background: var(--aqua-soft);
   cursor: pointer;
-  transition: transform 180ms ease, border-color 180ms ease;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease;
 }
 
 .grid button:hover {
@@ -181,7 +183,7 @@
 }
 
 .grid button:focus-visible {
-  outline: 3px solid var(--line-strong);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 

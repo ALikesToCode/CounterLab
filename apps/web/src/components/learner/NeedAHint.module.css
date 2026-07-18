@@ -3,7 +3,7 @@
   border-radius: 10px;
   color: var(--ink);
   background: var(--paper);
-  font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
+  font-family: var(--sans);
 }
 
 .hint summary {
@@ -20,7 +20,7 @@
 
 .hint summary:focus-visible,
 .hint a:focus-visible {
-  outline: 3px solid var(--line-strong);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
 }
 

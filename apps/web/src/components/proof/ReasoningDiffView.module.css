@@ -6,7 +6,8 @@
   border: 1px solid var(--line);
   border-radius: 22px;
   background:
-    linear-gradient(90deg, rgba(224, 179, 86, 0.07), transparent 28%), var(--gold-soft);
+    linear-gradient(90deg, rgba(224, 179, 86, 0.07), transparent 28%),
+    var(--gold-soft);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.25);
 }
 
@@ -244,7 +245,7 @@
 .capsuleAction:focus-visible,
 .patchDetails summary:focus-visible,
 .proof summary:focus-visible {
-  outline: 3px solid var(--line-strong);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
 }
 
@@ -303,7 +304,8 @@
   border: 1px solid rgba(46, 196, 160, 0.28);
   border-radius: 16px;
   background:
-    linear-gradient(135deg, rgba(46, 196, 160, 0.11), transparent 55%), var(--paper);
+    linear-gradient(135deg, rgba(46, 196, 160, 0.11), transparent 55%),
+    var(--paper);
 }
 
 .capsule span {
