@@ -92,7 +92,9 @@ describe("Cloudflare static asset routing", () => {
     expect(script).toContain("COUNTERLAB_SOURCE_COMMIT");
     expect(script).toContain("COUNTERLAB_SOURCE_TREE_SHA256");
     expect(script).toContain('"${ARCHIVE_ROOT}"');
-    expect(script).not.toMatch(/docker build[\s\S]*"\$\{ROOT_DIR\}"/);
+    expect(script).toContain("COUNTERLAB_BUILDKIT_ADDR");
+    expect(script).toContain("scripts/normalize_runner_oci.py");
+    expect(script).not.toContain("docker build");
     expect(script).toContain("node_modules/.cache/counterlab-v6.1");
     expect(script).not.toContain("mktemp");
     expect(script).not.toMatch(/\brm\s+-/);
@@ -104,9 +106,16 @@ describe("Cloudflare static asset routing", () => {
       "utf8",
     );
 
-    expect(script).toContain('docker run --name "${STARTUP_CONTAINER}"');
-    expect(script).toContain('docker run --name "${RUNTIME_CONTAINER}"');
+    expect(script).toContain(
+      '"${DOCKER_BIN}" run --name "${STARTUP_CONTAINER}"',
+    );
+    expect(script).toContain(
+      '"${DOCKER_BIN}" run --name "${RUNTIME_CONTAINER}"',
+    );
     expect(script).not.toContain("docker run --rm");
+    expect(script).toContain(
+      "Docker-compatible adapter must be contained inside the repository.",
+    );
   });
 
   it("copies the complete hosted-runner workspace dependency closure", () => {
@@ -203,7 +212,9 @@ describe("Cloudflare static asset routing", () => {
       resolve(process.cwd(), "../../scripts/verify-scientific-engines.sh"),
       "utf8",
     );
-    const probeStart = verifier.indexOf('STARTUP_PROBE_OUTPUT="$(docker run');
+    const probeStart = verifier.indexOf(
+      'STARTUP_PROBE_OUTPUT="$("${DOCKER_BIN}" run',
+    );
     const probeEnd = verifier.indexOf("# The preceding probe", probeStart);
     const probe = verifier.slice(probeStart, probeEnd);
 

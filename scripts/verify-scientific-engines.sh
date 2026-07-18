@@ -82,14 +82,23 @@ if [[ -z "${IMAGE}" ]]; then
   exit 2
 fi
 
-command -v docker >/dev/null 2>&1 || {
-  echo "Docker is required to inspect the supplied runner image." >&2
+DOCKER_BIN="$(command -v docker || true)"
+[[ -n "${DOCKER_BIN}" ]] || {
+  echo "A repository-contained Docker-compatible exact-image adapter is required." >&2
   exit 2
 }
+DOCKER_BIN="$(realpath -e -- "${DOCKER_BIN}")"
+case "${DOCKER_BIN}" in
+  "${ROOT_DIR}"/*) ;;
+  *)
+    echo "Docker-compatible adapter must be contained inside the repository." >&2
+    exit 2
+    ;;
+esac
 
-IMAGE_DIGEST="$(docker image inspect "${IMAGE}" --format '{{.Id}}')"
-SOURCE_COMMIT="$(docker image inspect "${IMAGE}" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
-IMAGE_USER="$(docker image inspect "${IMAGE}" --format '{{.Config.User}}')"
+IMAGE_DIGEST="$("${DOCKER_BIN}" image inspect "${IMAGE}" --format '{{.Id}}')"
+SOURCE_COMMIT="$("${DOCKER_BIN}" image inspect "${IMAGE}" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
+IMAGE_USER="$("${DOCKER_BIN}" image inspect "${IMAGE}" --format '{{.Config.User}}')"
 if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
   echo "Runner image does not expose a valid sha256 image ID." >&2
   exit 1
@@ -107,7 +116,7 @@ RUN_ID="${SOURCE_COMMIT:0:12}-$$"
 STARTUP_CONTAINER="counterlab-startup-${RUN_ID}"
 RUNTIME_CONTAINER="counterlab-runtime-${RUN_ID}"
 
-STARTUP_PROBE_OUTPUT="$(docker run --name "${STARTUP_CONTAINER}" \
+STARTUP_PROBE_OUTPUT="$("${DOCKER_BIN}" run --name "${STARTUP_CONTAINER}" \
   --network none \
   --read-only \
   --tmpfs /counterlab-runtime:rw,noexec,nosuid,size=64m \
@@ -132,7 +141,7 @@ node -e '
 # The preceding probe executes the real OCI entrypoint as Config.User. This
 # second run adopts the host identity only so the exact-image verifier can read
 # the repository evidence mounted read-only.
-docker run --name "${RUNTIME_CONTAINER}" \
+"${DOCKER_BIN}" run --name "${RUNTIME_CONTAINER}" \
   --user "$(id -u):$(id -g)" \
   --network none \
   --read-only \
