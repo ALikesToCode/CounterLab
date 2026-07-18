@@ -18,13 +18,18 @@ def _fixture_layer() -> bytes:
                 ("usr/local/bin/node", tarfile.REGTYPE, b"node"),
                 ("app/", tarfile.DIRTYPE, b""),
                 ("app/runner.mjs", tarfile.REGTYPE, b"runner"),
+                ("app/config.json", tarfile.REGTYPE, b"{}"),
+                ("work/", tarfile.DIRTYPE, b""),
+                ("work/jobs/", tarfile.DIRTYPE, b""),
+                ("run/", tarfile.DIRTYPE, b""),
+                ("run/counterlab-codex/", tarfile.DIRTYPE, b""),
                 ("unrelated", tarfile.REGTYPE, b"evidence"),
             ):
                 member = tarfile.TarInfo(name)
                 member.type = kind
                 member.mode = 0o700
-                member.uid = 0
-                member.gid = 0
+                member.uid = 10001 if name.startswith("app/") else 0
+                member.gid = 10001 if name.startswith("app/") else 0
                 member.size = len(body)
                 archive.addfile(member, io.BytesIO(body) if body else None)
     return output.getvalue()
@@ -39,14 +44,22 @@ def test_rewrites_only_reviewed_runtime_metadata() -> None:
     normalized, report = rewrite_layer_bytes(_fixture_layer())
     members = _members(normalized)
 
-    assert report.changed_entries == 6
+    assert report.changed_entries == 11
     assert members["usr"].mode == 0o755
     assert members["usr/local/bin/node"].mode == 0o555
     assert members["usr/local/bin/node"].uid == 0
-    assert members["app"].mode == 0o500
-    assert members["app"].uid == 10001
-    assert members["app/runner.mjs"].mode == 0o500
-    assert members["app/runner.mjs"].uid == 10001
+    assert members["app"].mode == 0o555
+    assert members["app"].uid == 0
+    assert members["app/runner.mjs"].mode == 0o555
+    assert members["app/runner.mjs"].uid == 0
+    assert members["app/config.json"].mode == 0o444
+    assert members["app/config.json"].uid == 0
+    assert members["work/jobs"].mode == 0o700
+    assert members["work/jobs"].uid == 10001
+    assert members["work/jobs"].gid == 10001
+    assert members["run/counterlab-codex"].mode == 0o700
+    assert members["run/counterlab-codex"].uid == 10001
+    assert members["run/counterlab-codex"].gid == 10001
     assert members["unrelated"].mode == 0o700
     assert members["unrelated"].uid == 0
 

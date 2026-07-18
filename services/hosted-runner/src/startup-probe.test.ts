@@ -16,6 +16,13 @@ describe("hosted runner startup probe", () => {
         _options: { env: NodeJS.ProcessEnv; timeout: number },
       ) => undefined,
     );
+    const stat = vi.fn(async (path: string) => ({
+      uid: 0,
+      gid: 0,
+      mode: 0o555,
+      isDirectory: () => path === "/runtime/app",
+      isFile: () => path === "/runtime/runner.mjs",
+    }));
 
     const result = await runHostedRunnerStartupProbe({
       environment: {
@@ -30,8 +37,12 @@ describe("hosted runner startup probe", () => {
       },
       nodeExecutable: "/runtime/node",
       bundlePath: "/runtime/runner.mjs",
+      appRoot: "/runtime/app",
       access: access as unknown as typeof import("node:fs/promises").access,
       mkdir: mkdir as unknown as typeof import("node:fs/promises").mkdir,
+      stat: stat as unknown as typeof import("node:fs/promises").stat,
+      getUid: () => 10001,
+      getGid: () => 10001,
       execute,
     });
 
@@ -39,8 +50,20 @@ describe("hosted runner startup probe", () => {
       status: "ready",
       service: "counterlab-hosted-runner",
       probe: "non-root-startup",
-      checks: ["entrypoint", "codex", "python", "setpriv", "writable-roots"],
+      checks: [
+        "entrypoint",
+        "non-root-user",
+        "immutable-paths",
+        "codex",
+        "python",
+        "setpriv",
+        "writable-roots",
+      ],
     });
+    expect(stat.mock.calls.map(([path]) => path)).toEqual([
+      "/runtime/app",
+      "/runtime/runner.mjs",
+    ]);
     expect(access.mock.calls.map(([path]) => path)).toEqual([
       "/runtime/node",
       "/runtime/runner.mjs",
@@ -66,12 +89,35 @@ describe("hosted runner startup probe", () => {
   it("fails closed when a runtime executable cannot be launched", async () => {
     await expect(
       runHostedRunnerStartupProbe({
+        bundlePath: "/app/runner.mjs",
         access: async () => undefined,
         mkdir: async () => undefined as never,
+        stat: (async (
+          path: Parameters<typeof import("node:fs/promises").stat>[0],
+        ) => ({
+          uid: 0,
+          gid: 0,
+          mode: 0o555,
+          isDirectory: () => path === "/app",
+          isFile: () => path === "/app/runner.mjs",
+        })) as unknown as typeof import("node:fs/promises").stat,
+        getUid: () => 10001,
+        getGid: () => 10001,
         execute: async () => {
           throw new Error("not executable");
         },
       }),
     ).rejects.toThrow("not executable");
+  });
+
+  it("fails closed when PID 1 is not the declared non-root identity", async () => {
+    await expect(
+      runHostedRunnerStartupProbe({
+        getUid: () => 0,
+        getGid: () => 0,
+      }),
+    ).rejects.toThrow(
+      "Hosted runner startup probe requires uid/gid 10001:10001; observed 0:0",
+    );
   });
 });

@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { constants } from "node:fs";
-import { access, mkdir } from "node:fs/promises";
+import { access, mkdir, stat } from "node:fs/promises";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -15,8 +15,12 @@ export type HostedRunnerStartupProbeOptions = {
   environment?: NodeJS.ProcessEnv;
   nodeExecutable?: string;
   bundlePath?: string;
+  appRoot?: string;
   access?: typeof access;
   mkdir?: typeof mkdir;
+  stat?: typeof stat;
+  getUid?: () => number | undefined;
+  getGid?: () => number | undefined;
   execute?: Execute;
 };
 
@@ -24,7 +28,15 @@ export type HostedRunnerStartupProbeResult = {
   status: "ready";
   service: "counterlab-hosted-runner";
   probe: "non-root-startup";
-  checks: ["entrypoint", "codex", "python", "setpriv", "writable-roots"];
+  checks: [
+    "entrypoint",
+    "non-root-user",
+    "immutable-paths",
+    "codex",
+    "python",
+    "setpriv",
+    "writable-roots",
+  ];
 };
 
 export async function runHostedRunnerStartupProbe(
@@ -33,6 +45,9 @@ export async function runHostedRunnerStartupProbe(
   const environment = options.environment ?? process.env;
   const accessFile = options.access ?? access;
   const makeDirectory = options.mkdir ?? mkdir;
+  const readMetadata = options.stat ?? stat;
+  const uid = (options.getUid ?? process.getuid)?.();
+  const gid = (options.getGid ?? process.getgid)?.();
   const execute =
     options.execute ??
     (async (executable, args, executionOptions) => {
@@ -40,6 +55,7 @@ export async function runHostedRunnerStartupProbe(
     });
   const nodeExecutable = options.nodeExecutable ?? process.execPath;
   const bundlePath = options.bundlePath ?? new URL(import.meta.url).pathname;
+  const appRoot = options.appRoot ?? "/app";
   const workspaceRoot = environment.COUNTERLAB_RUNNER_WORK_ROOT ?? "/work/jobs";
   const codexHomeRoot =
     environment.COUNTERLAB_CODEX_HOME_ROOT ?? "/run/counterlab-codex";
@@ -50,6 +66,30 @@ export async function runHostedRunnerStartupProbe(
   const pythonExecutable =
     environment.COUNTERLAB_PYTHON_EXECUTABLE ??
     "/opt/counterlab-venv/bin/python";
+
+  if (uid !== 10001 || gid !== 10001) {
+    throw new Error(
+      `Hosted runner startup probe requires uid/gid 10001:10001; observed ${String(uid)}:${String(gid)}`,
+    );
+  }
+  const [appMetadata, bundleMetadata] = await Promise.all([
+    readMetadata(appRoot),
+    readMetadata(bundlePath),
+  ]);
+  if (
+    !appMetadata.isDirectory() ||
+    appMetadata.uid !== 0 ||
+    appMetadata.gid !== 0 ||
+    (appMetadata.mode & 0o777) !== 0o555 ||
+    !bundleMetadata.isFile() ||
+    bundleMetadata.uid !== 0 ||
+    bundleMetadata.gid !== 0 ||
+    (bundleMetadata.mode & 0o777) !== 0o555
+  ) {
+    throw new Error(
+      "Hosted runner immutable application paths do not match root:root 0555 policy",
+    );
+  }
 
   await Promise.all([
     accessFile(nodeExecutable, constants.X_OK),
@@ -98,6 +138,14 @@ export async function runHostedRunnerStartupProbe(
     status: "ready",
     service: "counterlab-hosted-runner",
     probe: "non-root-startup",
-    checks: ["entrypoint", "codex", "python", "setpriv", "writable-roots"],
+    checks: [
+      "entrypoint",
+      "non-root-user",
+      "immutable-paths",
+      "codex",
+      "python",
+      "setpriv",
+      "writable-roots",
+    ],
   };
 }

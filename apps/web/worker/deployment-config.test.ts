@@ -169,6 +169,21 @@ describe("Cloudflare static asset routing", () => {
     expect(dockerfile).not.toContain('CMD ["node", "/app/runner.mjs"]');
   });
 
+  it("keeps immutable application files readable by the declared non-root user", () => {
+    const dockerfile = readFileSync(
+      resolve(process.cwd(), "../../Dockerfile.runner"),
+      "utf8",
+    );
+
+    expect(dockerfile).toContain("chown -R root:root /app");
+    expect(dockerfile).toContain("chmod -R a=rX /app");
+    expect(dockerfile).toContain("chmod 555 /app/runner.mjs");
+    expect(dockerfile).not.toContain(
+      "chown -R counterlab-codex:counterlab-codex /app",
+    );
+    expect(dockerfile).toContain("USER 10001:10001");
+  });
+
   it("executes the real image entrypoint as its declared user before qualification", () => {
     const verifier = readFileSync(
       resolve(process.cwd(), "../../scripts/verify-scientific-engines.sh"),

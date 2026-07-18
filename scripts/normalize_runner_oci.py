@@ -22,7 +22,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO, Mapping, Sequence
 
 
-POLICY_VERSION = "counterlab-runner-nonroot-v1"
+POLICY_VERSION = "counterlab-runner-nonroot-v2"
 RUNNER_UID = 10001
 RUNNER_GID = 10001
 
@@ -102,13 +102,13 @@ def _normalized_identity(
 
     if _under(path, "app"):
         return (
-            RUNNER_UID,
-            RUNNER_GID,
-            _mode_for(member, directory=0o500, regular=0o400)
+            0,
+            0,
+            _mode_for(member, directory=0o555, regular=0o444)
             if path != "app/runner.mjs"
-            else 0o500,
-            "counterlab-codex",
-            "counterlab-codex",
+            else 0o555,
+            "root",
+            "root",
         )
 
     if _under(path, "work/jobs") or _under(path, "run/counterlab-codex"):
