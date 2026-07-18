@@ -1,10 +1,44 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 BASE_URL="${1:-${COUNTERLAB_PRODUCTION_URL:-}}"
-REPORT_PATH="${COUNTERLAB_SMOKE_REPORT_PATH:-${ROOT_DIR}/data/production-smoke-report.json}"
 REPORT_HELPER="${ROOT_DIR}/scripts/production_smoke_report.py"
+
+repo_path() {
+  local requested="$1"
+  local candidate
+  local resolved
+  if [[ "${requested}" == /* ]]; then
+    candidate="${requested}"
+  else
+    candidate="${ROOT_DIR}/${requested#./}"
+  fi
+  case "${candidate}" in
+    "${ROOT_DIR}"|"${ROOT_DIR}"/*) ;;
+    *)
+      echo "Smoke-test paths must remain inside ${ROOT_DIR}: ${requested}" >&2
+      return 2
+      ;;
+  esac
+  case "/${candidate#${ROOT_DIR}/}/" in
+    *"/../"*)
+      echo "Smoke-test paths must not traverse parent directories: ${requested}" >&2
+      return 2
+      ;;
+  esac
+  resolved="$(realpath -m -- "${candidate}")"
+  case "${resolved}" in
+    "${ROOT_DIR}"|"${ROOT_DIR}"/*) printf '%s\n' "${resolved}" ;;
+    *)
+      echo "Smoke-test path resolves outside ${ROOT_DIR}: ${requested}" >&2
+      return 2
+      ;;
+  esac
+}
+
+REPORT_PATH="$(repo_path "${COUNTERLAB_SMOKE_REPORT_PATH:-data/production-smoke-report.json}")"
+SMOKE_WORK_ROOT="$(repo_path "${COUNTERLAB_SMOKE_WORK_ROOT:-node_modules/.cache/counterlab-v6.1/production-smoke-work}")"
 
 if [[ -z "${BASE_URL}" ]]; then
   echo "Usage: ./scripts/production-smoke.sh https://counterlab.example" >&2
@@ -190,7 +224,10 @@ PY
   printf 'Production stage | %-22s | %-13s | %s\n' "${stage_id}" "${mode}" "${status}"
 }
 
-TMP_DIR="$(mktemp -d)"
+SMOKE_RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+WORK_DIR="${SMOKE_WORK_ROOT}/${SMOKE_RUN_ID}"
+mkdir -p "${SMOKE_WORK_ROOT}" "$(dirname "${REPORT_PATH}")"
+mkdir "${WORK_DIR}"
 REPORT_INITIALIZED=0
 SMOKE_STATUS="FAILED"
 cleanup() {
@@ -198,7 +235,7 @@ cleanup() {
     python3 "${REPORT_HELPER}" finish "${REPORT_PATH}" \
       --status FAILED --completed-at "$(timestamp)" >/dev/null 2>&1 || true
   fi
-  rm -rf "${TMP_DIR}"
+  printf 'Retained production-smoke workspace: %s\n' "${WORK_DIR}"
 }
 trap cleanup EXIT
 
@@ -220,8 +257,8 @@ stage_started="$(timestamp)"
 curl --fail --silent --show-error \
   --max-time 30 \
   "${BASE_URL}/ready" \
-  >"${TMP_DIR}/ready.json"
-python3 - "${TMP_DIR}/ready.json" <<'PY'
+  >"${WORK_DIR}/ready.json"
+python3 - "${WORK_DIR}/ready.json" <<'PY'
 import json
 import pathlib
 import sys
@@ -234,14 +271,14 @@ if not isinstance(checks, dict) or not checks or not all(checks.values()):
 PY
 record_stage \
   "public-readiness" "control_plane" "PASSED" "${stage_started}" "$(timestamp)" "" \
-  "{\"responseSha256\":\"$(sha256_file "${TMP_DIR}/ready.json")\"}"
+  "{\"responseSha256\":\"$(sha256_file "${WORK_DIR}/ready.json")\"}"
 
 stage_started="$(timestamp)"
 curl --fail --silent --show-error \
   --max-time 30 \
   "${BASE_URL}/api/health" \
-  >"${TMP_DIR}/health.json"
-python3 - "${TMP_DIR}/health.json" <<'PY'
+  >"${WORK_DIR}/health.json"
+python3 - "${WORK_DIR}/health.json" <<'PY'
 import json
 import pathlib
 import sys
@@ -267,10 +304,10 @@ for key, expected in required.items():
 PY
 record_stage \
   "capability-health" "control_plane" "PASSED" "${stage_started}" "$(timestamp)" "" \
-  "{\"responseSha256\":\"$(sha256_file "${TMP_DIR}/health.json")\"}"
+  "{\"responseSha256\":\"$(sha256_file "${WORK_DIR}/health.json")\"}"
 
 stage_started="$(timestamp)"
-python3 - "${BASE_URL}" "${TMP_DIR}" <<'PY'
+python3 - "${BASE_URL}" "${WORK_DIR}" <<'PY'
 import pathlib
 import re
 import sys
@@ -314,7 +351,7 @@ print(f"Public asset secret scan: PASS ({len(public)} response bodies)")
 PY
 record_stage \
   "public-secret-scan" "control_plane" "PASSED" "${stage_started}" "$(timestamp)" "" \
-  "{\"documentSha256\":\"$(sha256_file "${TMP_DIR}/index.html")\"}"
+  "{\"documentSha256\":\"$(sha256_file "${WORK_DIR}/index.html")\"}"
 
 cd "${ROOT_DIR}"
 
@@ -342,11 +379,11 @@ record_stage "verified-replay" "replay" "PASSED" "${stage_started}" "$(timestamp
 stage_started="$(timestamp)"
 COUNTERLAB_E2E_BASE_URL="${BASE_URL}" \
 COUNTERLAB_E2E_LIVE=1 \
-COUNTERLAB_E2E_EVIDENCE_PATH="${TMP_DIR}/live-leakage.json" \
+COUNTERLAB_E2E_EVIDENCE_PATH="${WORK_DIR}/live-leakage.json" \
   pnpm --filter @counterlab/web exec playwright test \
   --config playwright.config.ts \
   --grep "configured hosted runner completes an untouched leakage notebook"
-leakage_evidence="$(live_evidence "${TMP_DIR}/live-leakage.json" "entity_leakage")"
+leakage_evidence="$(live_evidence "${WORK_DIR}/live-leakage.json" "entity_leakage")"
 record_stage \
   "live-leakage" "live_notebook" "PASSED" "${stage_started}" "$(timestamp)" \
   "entity_leakage" "${leakage_evidence}"
@@ -357,13 +394,13 @@ record_stage \
 stage_started="$(timestamp)"
 COUNTERLAB_E2E_BASE_URL="${BASE_URL}" \
 COUNTERLAB_E2E_LIVE=1 \
-COUNTERLAB_E2E_EVIDENCE_PATH="${TMP_DIR}/live-imbalance.json" \
+COUNTERLAB_E2E_EVIDENCE_PATH="${WORK_DIR}/live-imbalance.json" \
   pnpm --filter @counterlab/web exec playwright test \
   --config playwright.config.ts \
   --grep "configured hosted runner completes an untouched class-imbalance notebook"
 record_stage \
   "live-imbalance" "live_notebook" "PASSED" "${stage_started}" "$(timestamp)" \
-  "class_imbalance" "$(live_evidence "${TMP_DIR}/live-imbalance.json" "class_imbalance")"
+  "class_imbalance" "$(live_evidence "${WORK_DIR}/live-imbalance.json" "class_imbalance")"
 
 python3 "${REPORT_HELPER}" finish "${REPORT_PATH}" \
   --status PASSED --completed-at "$(timestamp)"

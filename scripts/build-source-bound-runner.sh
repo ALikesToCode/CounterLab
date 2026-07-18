@@ -1,24 +1,80 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "${ROOT_DIR}"
 
-if ! git diff --quiet --ignore-submodules -- || ! git diff --cached --quiet --ignore-submodules --; then
-  echo "Source-bound runner builds require a clean tracked worktree." >&2
-  exit 2
-fi
+repo_path() {
+  local requested="$1"
+  local candidate
+  local resolved
+  if [[ "${requested}" == /* ]]; then
+    candidate="${requested}"
+  else
+    candidate="${ROOT_DIR}/${requested#./}"
+  fi
+  case "${candidate}" in
+    "${ROOT_DIR}"|"${ROOT_DIR}"/*) ;;
+    *)
+      echo "Release paths must remain inside ${ROOT_DIR}: ${requested}" >&2
+      return 2
+      ;;
+  esac
+  case "/${candidate#${ROOT_DIR}/}/" in
+    *"/../"*)
+      echo "Release paths must not traverse parent directories: ${requested}" >&2
+      return 2
+      ;;
+  esac
+  resolved="$(realpath -m -- "${candidate}")"
+  case "${resolved}" in
+    "${ROOT_DIR}"|"${ROOT_DIR}"/*) printf '%s\n' "${resolved}" ;;
+    *)
+      echo "Release path resolves outside ${ROOT_DIR}: ${requested}" >&2
+      return 2
+      ;;
+  esac
+}
+
+mapfile -t DIRTY_PATHS < <(
+  {
+    git diff --name-only --diff-filter=ACMRT --
+    git diff --cached --name-only --diff-filter=ACMRT --
+  } | sort -u
+)
+for path in "${DIRTY_PATHS[@]}"; do
+  case "${path}" in
+    docs/sbom/*.json | \
+    scientific-engines/evidence-catalog.json | \
+    scientific-engines/fixtures/health/*.json | \
+    scientific-engines/fixtures/integrity/*.json | \
+    scientific-engines/licenses/manifest.json | \
+    scientific-engines/notices/current-ml-engines.NOTICE.md | \
+    scientific-engines/registry.json | \
+    scientific-engines/runtime-manifest.json | \
+    scientific-engines/snapshot-hash.json | \
+    scientific-engines/snapshot.json | \
+    scientific-engines/vex/*.json) ;;
+    *)
+      echo "Source-bound runner builds reject non-evidence tracked changes: ${path}" >&2
+      exit 2
+      ;;
+  esac
+done
 
 SOURCE_COMMIT="$(git rev-parse --verify HEAD)"
 SOURCE_TREE_SHA256="$(git ls-tree -r --full-tree "${SOURCE_COMMIT}" | sha256sum | cut -d ' ' -f 1)"
 LOCAL_IMAGE_TAG="counterlab-runner:git-${SOURCE_COMMIT}"
-OUTPUT="${1:-${ROOT_DIR}/data/releases/runner-build-${SOURCE_COMMIT}.json}"
+OUTPUT="$(repo_path "${1:-data/releases/runner-build-${SOURCE_COMMIT}.json}")"
 
-TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/counterlab-runner-build.XXXXXX")"
-trap 'rm -rf "${TEMP_DIR}"' EXIT
-ARCHIVE_PATH="${TEMP_DIR}/source.tar"
-ARCHIVE_ROOT="${TEMP_DIR}/source"
-mkdir -p "${ARCHIVE_ROOT}" "$(dirname "${OUTPUT}")"
+WORK_ROOT="$(repo_path "node_modules/.cache/counterlab-v6.1/runner-build-work")"
+BUILD_ID="${SOURCE_COMMIT}-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+BUILD_DIR="${WORK_ROOT}/${BUILD_ID}"
+ARCHIVE_PATH="${BUILD_DIR}/source.tar"
+ARCHIVE_ROOT="${BUILD_DIR}/source"
+mkdir -p "${WORK_ROOT}" "$(dirname "${OUTPUT}")"
+mkdir "${BUILD_DIR}"
+mkdir "${ARCHIVE_ROOT}"
 
 git archive --format=tar --output "${ARCHIVE_PATH}" "${SOURCE_COMMIT}"
 SOURCE_ARCHIVE_SHA256="$(sha256sum "${ARCHIVE_PATH}" | cut -d ' ' -f 1)"
@@ -76,3 +132,4 @@ node -e '
 
 echo "Source-bound runner built: ${LOCAL_IMAGE_TAG} (${LOCAL_IMAGE_DIGEST})"
 echo "Build receipt: ${OUTPUT}"
+echo "Retained build workspace: ${BUILD_DIR}"

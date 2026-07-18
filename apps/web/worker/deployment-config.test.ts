@@ -93,6 +93,20 @@ describe("Cloudflare static asset routing", () => {
     expect(script).toContain("COUNTERLAB_SOURCE_TREE_SHA256");
     expect(script).toContain('"${ARCHIVE_ROOT}"');
     expect(script).not.toMatch(/docker build[\s\S]*"\$\{ROOT_DIR\}"/);
+    expect(script).toContain("node_modules/.cache/counterlab-v6.1");
+    expect(script).not.toContain("mktemp");
+    expect(script).not.toMatch(/\brm\s+-/);
+  });
+
+  it("retains exact-image verification containers for safety review", () => {
+    const script = readFileSync(
+      resolve(process.cwd(), "../../scripts/verify-scientific-engines.sh"),
+      "utf8",
+    );
+
+    expect(script).toContain('docker run --name "${STARTUP_CONTAINER}"');
+    expect(script).toContain('docker run --name "${RUNTIME_CONTAINER}"');
+    expect(script).not.toContain("docker run --rm");
   });
 
   it("copies the complete hosted-runner workspace dependency closure", () => {

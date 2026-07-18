@@ -77,7 +77,7 @@ def _scanner_source() -> str:
     script = pathlib.Path(__file__).with_name("production-smoke.sh").read_text(
         encoding="utf-8"
     )
-    marker = 'python3 - "${BASE_URL}" "${TMP_DIR}" <<\'PY\'\n'
+    marker = 'python3 - "${BASE_URL}" "${WORK_DIR}" <<\'PY\'\n'
     start = script.index(marker) + len(marker)
     return script[start : script.index("\nPY\n", start)]
 
@@ -89,6 +89,16 @@ def _live_evidence_source() -> str:
     marker = 'python3 - "$1" "$2" <<\'PY\'\n'
     start = script.index(marker) + len(marker)
     return script[start : script.index("\nPY\n", start)]
+
+
+def test_smoke_workspaces_are_repo_contained_and_never_recursively_deleted() -> None:
+    script = pathlib.Path(__file__).with_name("production-smoke.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert "node_modules/.cache/counterlab-v6.1/production-smoke-work" in script
+    assert "mktemp" not in script
+    assert "rm -rf" not in script
 
 
 def _valid_live_evidence(

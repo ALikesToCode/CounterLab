@@ -103,13 +103,18 @@ if [[ "${IMAGE_USER}" != "10001:10001" ]]; then
   exit 1
 fi
 
-STARTUP_PROBE_OUTPUT="$(docker run --rm \
+RUN_ID="${SOURCE_COMMIT:0:12}-$$"
+STARTUP_CONTAINER="counterlab-startup-${RUN_ID}"
+RUNTIME_CONTAINER="counterlab-runtime-${RUN_ID}"
+
+STARTUP_PROBE_OUTPUT="$(docker run --name "${STARTUP_CONTAINER}" \
   --network none \
   --read-only \
-  --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+  --tmpfs /counterlab-runtime:rw,noexec,nosuid,size=64m \
+  -e TMPDIR=/counterlab-runtime \
   -e COUNTERLAB_RUNNER_STARTUP_PROBE=1 \
-  -e COUNTERLAB_RUNNER_WORK_ROOT=/tmp/counterlab-jobs \
-  -e COUNTERLAB_CODEX_HOME_ROOT=/tmp/counterlab-codex \
+  -e COUNTERLAB_RUNNER_WORK_ROOT=/counterlab-runtime/jobs \
+  -e COUNTERLAB_CODEX_HOME_ROOT=/counterlab-runtime/codex \
   "${IMAGE}")"
 node -e '
   const value = JSON.parse(process.argv[1]);
@@ -127,11 +132,12 @@ node -e '
 # The preceding probe executes the real OCI entrypoint as Config.User. This
 # second run adopts the host identity only so the exact-image verifier can read
 # the repository evidence mounted read-only.
-docker run --rm \
+docker run --name "${RUNTIME_CONTAINER}" \
   --user "$(id -u):$(id -g)" \
   --network none \
   --read-only \
-  --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+  --tmpfs /counterlab-runtime:rw,noexec,nosuid,size=64m \
+  -e TMPDIR=/counterlab-runtime \
   -v "${ROOT_DIR}:/repo:ro" \
   --entrypoint python \
   "${IMAGE}" \
@@ -141,3 +147,4 @@ docker run --rm \
   --source-commit "${SOURCE_COMMIT}"
 
 echo "Scientific engine gate passed for ${IMAGE} (${IMAGE_DIGEST})."
+echo "Retained verification containers: ${STARTUP_CONTAINER}, ${RUNTIME_CONTAINER}"
