@@ -1,61 +1,72 @@
 .composer {
   width: min(820px, 100%);
-  padding: clamp(24px, 5vw, 48px);
-  border: 1px solid #d8dee6;
-  border-radius: 18px;
-  color: #07152a;
-  background: #fff;
-  box-shadow: 0 18px 44px rgb(7 21 42 / 8%);
+  color: #f5f8fc;
   font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
 }
 
-.intro > span {
-  color: #245eea;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.intentSwitch {
+  width: fit-content;
+  margin-inline: auto;
+  padding: 3px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(112px, 1fr));
+  border: 1px solid #29292e;
+  border-radius: 999px;
+  background: #111113;
 }
 
-.intro h1 {
-  max-width: 700px;
-  margin: 12px 0 0;
-  font-family: "Newsreader Variable", "Iowan Old Style", Georgia, serif;
-  font-size: clamp(38px, 6vw, 60px);
-  font-weight: 520;
-  letter-spacing: -0.035em;
-  line-height: 1.02;
-}
-
-.intro p {
-  max-width: 650px;
-  margin: 18px 0 0;
-  color: #4c5d73;
+.intentSwitch button {
+  position: relative;
+  min-height: 44px;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 999px;
+  color: #9eacc0;
+  background: transparent;
+  font: inherit;
   font-size: 15px;
-  line-height: 1.6;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.intentSwitch button:hover:not(:disabled) {
+  color: #f5f8fc;
+  background: #1a1a1e;
+}
+
+.intentSwitch .intentActive {
+  color: #fff;
+  background: #252529;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 32%);
 }
 
 .form {
-  margin-top: 28px;
-  padding: 10px;
-  border: 2px solid #c9d3e0;
-  border-radius: 14px;
-  background: #fff;
+  margin-top: 18px;
+  overflow: hidden;
+  border: 1px solid #2a3d59;
+  border-radius: 16px;
+  background: #0a1627;
+  box-shadow:
+    0 24px 58px rgb(0 5 15 / 38%),
+    inset 0 1px 0 rgb(255 255 255 / 5%);
 }
 
 .form:focus-within {
-  border-color: #245eea;
-  box-shadow: 0 0 0 3px rgb(36 94 234 / 14%);
+  border-color: #7ea6ff;
+  box-shadow:
+    0 0 0 3px rgb(126 166 255 / 22%),
+    0 24px 58px rgb(0 5 15 / 38%);
 }
 
 .form textarea {
   display: block;
   width: 100%;
-  min-height: 120px;
+  min-height: 150px;
   resize: vertical;
-  padding: 12px;
+  padding: 22px;
   border: 0;
-  color: #07152a;
+  outline: 0;
+  color: #f8fbff;
   background: transparent;
   font: inherit;
   font-size: 17px;
@@ -63,11 +74,8 @@
 }
 
 .form textarea::placeholder {
-  color: #69798d;
-}
-
-.form textarea:focus {
-  outline: 0;
+  color: #9ba9bd;
+  opacity: 1;
 }
 
 .composerActions {
@@ -75,8 +83,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding-top: 10px;
-  border-top: 1px solid #e1e6ec;
+  padding: 12px;
+  border-top: 1px solid rgb(166 184 211 / 18%);
 }
 
 .attach {
@@ -86,18 +94,27 @@
   align-items: center;
   padding: 10px 12px;
   border-radius: 10px;
-  color: #245eea;
+  color: #aac4ff;
   font-size: 15px;
   font-weight: 750;
   cursor: pointer;
 }
 
 .attach:hover {
-  background: #edf3ff;
+  color: #fff;
+  background: rgb(126 166 255 / 12%);
+}
+
+.attach.controlDisabled,
+.attach.controlDisabled:hover {
+  color: #aac4ff;
+  background: transparent;
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .attach:focus-within {
-  outline: 3px solid #1d4ed8;
+  outline: 3px solid #9cbaff;
   outline-offset: 2px;
 }
 
@@ -120,31 +137,32 @@
   align-items: center;
   justify-content: center;
   padding: 11px 18px;
-  border: 0;
+  border: 1px solid #90b0ff;
   border-radius: 10px;
-  color: #fff;
-  background: #245eea;
+  color: #071326;
+  background: #8eafff;
   font: inherit;
   font-size: 15px;
-  font-weight: 780;
+  font-weight: 800;
   cursor: pointer;
 }
 
 .submit:hover:not(:disabled) {
-  background: #143d9d;
+  border-color: #bad0ff;
+  background: #adc6ff;
 }
 
+.intentSwitch button:disabled,
 .submit:disabled,
-.secondaryPaths button:disabled,
 .promptGroup button:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
+.intentSwitch button:focus-visible,
 .submit:focus-visible,
-.promptGroup button:focus-visible,
-.secondaryPaths button:focus-visible {
-  outline: 3px solid #1d4ed8;
+.promptGroup button:focus-visible {
+  outline: 3px solid #9cbaff;
   outline-offset: 3px;
 }
 
@@ -154,64 +172,51 @@
 
 .promptGroup > span {
   display: block;
-  margin-bottom: 8px;
-  color: #4c5d73;
+  margin-bottom: 4px;
+  color: #8f9db1;
   font-size: 13px;
   font-weight: 700;
 }
 
-.promptGroup > div,
-.secondaryPaths {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.promptGroup > div {
+  display: grid;
+  justify-items: start;
+  gap: 0;
 }
 
-.promptGroup button,
-.secondaryPaths button {
+.promptGroup button {
   min-height: 44px;
-  padding: 9px 12px;
-  border: 1px solid #c9d3e0;
-  border-radius: 10px;
-  color: #24374d;
-  background: #f7f8fa;
+  padding: 9px 0;
+  border: 0;
+  color: #abc4ff;
+  background: transparent;
   font: inherit;
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: 15px;
+  line-height: 1.45;
+  text-align: left;
   cursor: pointer;
 }
 
-.promptGroup button:hover:not(:disabled),
-.secondaryPaths button:hover:not(:disabled) {
-  border-color: #245eea;
-  color: #143d9d;
-  background: #edf3ff;
+.promptGroup button::before {
+  margin-right: 8px;
+  color: #7189b4;
+  content: "↗";
 }
 
-.secondaryPaths {
-  margin-top: 18px;
-}
-
-.secondaryPaths button {
-  color: #245eea;
-  background: transparent;
-}
-
-.trustLine {
-  margin: 18px 0 0;
-  color: #4c5d73;
-  font-size: 13px;
-  line-height: 1.5;
+.promptGroup button:hover:not(:disabled) {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
 @media (max-width: 620px) {
-  .composer {
-    padding: 22px 16px;
-    border-radius: 14px;
+  .intentSwitch {
+    width: 100%;
   }
 
-  .intro h1 {
-    font-size: 40px;
+  .form textarea {
+    min-height: 136px;
+    padding: 18px;
   }
 
   .composerActions {
@@ -225,9 +230,16 @@
     justify-content: center;
   }
 
-  .promptGroup button,
-  .secondaryPaths button {
+  .promptGroup button {
     width: 100%;
-    font-size: 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer *,
+  .composer *::before,
+  .composer *::after {
+    scroll-behavior: auto;
+    transition: none;
   }
 }

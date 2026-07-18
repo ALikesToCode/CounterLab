@@ -576,8 +576,21 @@ describe("CounterLab judged flow", () => {
     );
     expect(screen.getByText(/no account needed/i)).toBeInTheDocument();
     expect(
-      screen.getByText(/read for evidence and never run/i),
+      screen.getByText(/read the evidence and never run the cells/i),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", {
+        name: /start a counterlab investigation/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Question" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Notebook" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
     expect(
       screen.getByRole("button", { name: /test this claim/i }),
     ).toBeDisabled();

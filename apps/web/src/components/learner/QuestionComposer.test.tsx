@@ -10,11 +10,13 @@ function ControlledComposer({
   onSubmit = vi.fn(),
   onStartSample = vi.fn(),
   onOpenReplay = vi.fn(),
+  busy = false,
 }: {
   onAttachNotebook?: (file: File) => void;
   onSubmit?: () => void;
   onStartSample?: () => void;
   onOpenReplay?: () => void;
+  busy?: boolean;
 }) {
   const [value, setValue] = useState("");
   return (
@@ -25,25 +27,22 @@ function ControlledComposer({
       onSubmit={onSubmit}
       onStartSample={onStartSample}
       onOpenReplay={onOpenReplay}
+      busy={busy}
     />
   );
 }
 
 describe("QuestionComposer", () => {
-  it("starts with the Question and lets prompt chips populate text only", async () => {
+  it("keeps the landing heading outside the composer and shows sparse prompt actions", async () => {
     const user = userEvent.setup();
     const startSample = vi.fn();
     render(<ControlledComposer onStartSample={startSample} />);
 
-    expect(
-      screen.getByRole("heading", {
-        name: "What result are you trying to understand?",
-      }),
-    ).toBeInTheDocument();
+    expect(screen.queryByRole("heading")).not.toBeInTheDocument();
     const input = screen.getByPlaceholderText(
-      "State a claim or attach a notebook…",
+      "State a claim you want to test…",
     );
-    expect(input).toHaveValue("");
+    expect(input).toHaveAccessibleName("Your question or claim");
 
     await user.click(
       screen.getByRole("button", {
@@ -54,10 +53,58 @@ describe("QuestionComposer", () => {
       "Why did my model score highly but fail on new customers?",
     );
     expect(startSample).not.toHaveBeenCalled();
-    expect(document.body).not.toHaveTextContent(/98\.5|59\.4/);
+    expect(
+      screen.queryByRole("button", { name: "Try verified sample" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Watch verified replay" }),
+    ).not.toBeInTheDocument();
   });
 
-  it("passes an attached notebook to the parent without running it", async () => {
+  it("switches local intent by keyboard without invoking any parent action", async () => {
+    const user = userEvent.setup();
+    const change = vi.fn();
+    const attach = vi.fn();
+    const submit = vi.fn();
+    const sample = vi.fn();
+    const replay = vi.fn();
+    render(
+      <QuestionComposer
+        value=""
+        onChange={change}
+        onAttachNotebook={attach}
+        onSubmit={submit}
+        onStartSample={sample}
+        onOpenReplay={replay}
+      />,
+    );
+
+    const question = screen.getByRole("button", { name: "Question" });
+    const notebook = screen.getByRole("button", { name: "Notebook" });
+    expect(question).toHaveAttribute("aria-pressed", "true");
+    expect(notebook).toHaveAttribute("aria-pressed", "false");
+
+    notebook.focus();
+    await user.keyboard("{Enter}");
+    expect(notebook).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByPlaceholderText("What claim should this notebook help test?"),
+    ).toBeInTheDocument();
+    expect(change).not.toHaveBeenCalled();
+    expect(attach).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
+    expect(sample).not.toHaveBeenCalled();
+    expect(replay).not.toHaveBeenCalled();
+
+    question.focus();
+    await user.keyboard(" ");
+    expect(question).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByPlaceholderText("State a claim you want to test…"),
+    ).toBeInTheDocument();
+  });
+
+  it("passes an attached notebook to the parent without changing submit semantics", async () => {
     const user = userEvent.setup();
     const attach = vi.fn();
     render(<ControlledComposer onAttachNotebook={attach} />);
@@ -65,11 +112,13 @@ describe("QuestionComposer", () => {
       type: "application/json",
     });
 
-    await user.upload(screen.getByLabelText("Attach notebook"), notebook);
+    const fileInput = screen.getByLabelText("Attach notebook");
+    expect(fileInput).toHaveAttribute(
+      "accept",
+      ".ipynb,application/x-ipynb+json,application/json",
+    );
+    await user.upload(fileInput, notebook);
     expect(attach).toHaveBeenCalledWith(notebook);
-    expect(
-      screen.getByText(/notebook cells are read for evidence and never run/i),
-    ).toBeInTheDocument();
   });
 
   it("submits a typed claim from the dominant action by keyboard", async () => {
@@ -82,7 +131,7 @@ describe("QuestionComposer", () => {
     });
     expect(submitButton).toBeDisabled();
     await user.type(
-      screen.getByPlaceholderText("State a claim or attach a notebook…"),
+      screen.getByPlaceholderText("State a claim you want to test…"),
       "Does this score hold for unseen customers?",
     );
     expect(submitButton).toBeEnabled();
@@ -91,19 +140,22 @@ describe("QuestionComposer", () => {
     expect(submit).toHaveBeenCalledOnce();
   });
 
-  it("keeps verified sample and replay as explicit secondary callbacks", async () => {
-    const user = userEvent.setup();
-    const sample = vi.fn();
-    const replay = vi.fn();
-    render(<ControlledComposer onStartSample={sample} onOpenReplay={replay} />);
+  it("disables every local action while a test is being prepared", () => {
+    render(<ControlledComposer busy />);
 
-    await user.click(
-      screen.getByRole("button", { name: "Try verified sample" }),
-    );
-    await user.click(
-      screen.getByRole("button", { name: "Watch verified replay" }),
-    );
-    expect(sample).toHaveBeenCalledOnce();
-    expect(replay).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Question" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Notebook" })).toBeDisabled();
+    expect(screen.getByLabelText("Your question or claim")).toBeDisabled();
+    const fileInput = screen.getByLabelText("Attach notebook");
+    expect(fileInput).toBeDisabled();
+    expect(fileInput.closest("label")).toHaveAttribute("aria-disabled", "true");
+    expect(
+      screen.getByRole("button", { name: "Preparing test…" }),
+    ).toBeDisabled();
+    for (const starter of screen.getAllByRole("button", {
+      name: /fail on new customers|rare cases are being caught/u,
+    })) {
+      expect(starter).toBeDisabled();
+    }
   });
 });

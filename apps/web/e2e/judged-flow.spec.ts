@@ -273,6 +273,11 @@ async function reset(page: Page) {
   await page.reload();
 }
 
+async function revealLandingNavigation(page: Page) {
+  const toggle = page.getByRole("button", { name: "Explore" });
+  if (await toggle.isVisible()) await toggle.click();
+}
+
 async function expectNoHorizontalOverflow(page: Page) {
   await expect
     .poll(() =>
@@ -303,6 +308,7 @@ async function openLiveSetup(page: Page, question = claim) {
 
 async function startInstant(page: Page) {
   await reset(page);
+  await revealLandingNavigation(page);
   await page.getByRole("button", { name: /Try verified sample/i }).click();
   await expect(
     page.getByRole("heading", { name: /What do you think the score means/i }),
@@ -554,7 +560,7 @@ test("the first visit explains the lesson before asking for technical knowledge"
     }),
   ).toBeVisible();
   await expect(
-    page.getByText(/State the claim first.*before anything runs/i),
+    page.getByText(/State the claim.*never run the cells/i),
   ).toBeVisible();
   await expect(page.getByLabel("Your question or claim")).toBeInViewport();
   await expect(page.getByLabel("Attach notebook")).toBeVisible();
@@ -591,6 +597,7 @@ for (const viewport of [
   }) => {
     await page.setViewportSize(viewport);
     await reset(page);
+    await revealLandingNavigation(page);
 
     const question = page.getByLabel("Your question or claim");
     await expect(question).toHaveAccessibleName("Your question or claim");
@@ -1152,6 +1159,11 @@ test("the judged path is keyboard operable with reduced motion", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await reset(page);
+
+  const explore = page.getByRole("button", { name: "Explore" });
+  await explore.focus();
+  await page.keyboard.press("Enter");
+  await expect(explore).toHaveAttribute("aria-expanded", "true");
 
   const tryInstant = page.getByRole("button", {
     name: /Try verified sample/i,

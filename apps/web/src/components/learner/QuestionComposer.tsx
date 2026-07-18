@@ -1,4 +1,4 @@
-import { useId, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 
 import styles from "./QuestionComposer.module.css";
 
@@ -7,16 +7,9 @@ export const defaultSamplePrompts = [
   "Does high accuracy mean the rare cases are being caught?",
 ] as const;
 
-export function QuestionComposer({
-  value,
-  onChange,
-  onAttachNotebook,
-  onSubmit,
-  onStartSample,
-  onOpenReplay,
-  samplePrompts = defaultSamplePrompts,
-  busy = false,
-}: {
+type ComposerIntent = "question" | "notebook";
+
+export type QuestionComposerProps = {
   value: string;
   onChange: (value: string) => void;
   onAttachNotebook: (file: File) => void;
@@ -25,8 +18,18 @@ export function QuestionComposer({
   onOpenReplay: () => void;
   samplePrompts?: readonly string[];
   busy?: boolean;
-}) {
+};
+
+export function QuestionComposer({
+  value,
+  onChange,
+  onAttachNotebook,
+  onSubmit,
+  samplePrompts = defaultSamplePrompts,
+  busy = false,
+}: QuestionComposerProps) {
   const inputId = useId();
+  const [intent, setIntent] = useState<ComposerIntent>("question");
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -34,34 +37,56 @@ export function QuestionComposer({
     onSubmit();
   };
 
+  const placeholder =
+    intent === "question"
+      ? "State a claim you want to test…"
+      : "What claim should this notebook help test?";
+
   return (
-    <section className={styles.composer} aria-labelledby="landing-title">
-      <div className={styles.intro}>
-        <span>Ask like chat. Prove it like science.</span>
-        <h1 id="landing-title" tabIndex={-1}>
-          What result are you trying to understand?
-        </h1>
-        <p>
-          State the claim first. CounterLab will show what evidence it can test
-          before anything runs.
-        </p>
+    <section className={styles.composer} aria-label="Question composer">
+      <div
+        className={styles.intentSwitch}
+        role="group"
+        aria-label="Choose input type"
+      >
+        <button
+          type="button"
+          className={intent === "question" ? styles.intentActive : undefined}
+          aria-pressed={intent === "question"}
+          disabled={busy}
+          onClick={() => setIntent("question")}
+        >
+          Question
+        </button>
+        <button
+          type="button"
+          className={intent === "notebook" ? styles.intentActive : undefined}
+          aria-pressed={intent === "notebook"}
+          disabled={busy}
+          onClick={() => setIntent("notebook")}
+        >
+          Notebook
+        </button>
       </div>
 
-      <form className={styles.form} onSubmit={submit}>
+      <form className={styles.form} onSubmit={submit} aria-label="Test a claim">
         <label className={styles.srOnly} htmlFor={inputId}>
           Your question or claim
         </label>
         <textarea
           id={inputId}
           value={value}
-          rows={4}
+          rows={5}
           disabled={busy}
-          placeholder="State a claim or attach a notebook…"
+          placeholder={placeholder}
           onChange={(event) => onChange(event.target.value)}
         />
 
         <div className={styles.composerActions}>
-          <label className={styles.attach}>
+          <label
+            className={`${styles.attach} ${busy ? styles.controlDisabled : ""}`}
+            aria-disabled={busy}
+          >
             <input
               type="file"
               accept=".ipynb,application/x-ipynb+json,application/json"
@@ -84,8 +109,8 @@ export function QuestionComposer({
         </div>
       </form>
 
-      <div className={styles.promptGroup} aria-label="Sample prompts">
-        <span>Try a supported question</span>
+      <div className={styles.promptGroup} aria-label="Prompt starters">
+        <span>Prompt starters</span>
         <div>
           {samplePrompts.map((prompt) => (
             <button
@@ -99,20 +124,6 @@ export function QuestionComposer({
           ))}
         </div>
       </div>
-
-      <div className={styles.secondaryPaths}>
-        <button type="button" disabled={busy} onClick={onStartSample}>
-          Try verified sample
-        </button>
-        <button type="button" disabled={busy} onClick={onOpenReplay}>
-          Watch verified replay
-        </button>
-      </div>
-
-      <p className={styles.trustLine}>
-        No account needed. Notebook cells are read for evidence and never run
-        during intake.
-      </p>
     </section>
   );
 }

@@ -653,13 +653,13 @@ function Header({
   restart,
 }: {
   mode: Mode | null;
-  stage: Stage;
+  stage: Exclude<Stage, "landing">;
   session: SessionView | null;
   review: (step: ReviewStep) => void;
   restart: () => void;
 }) {
   return (
-    <header className={`topbar ${stage === "landing" ? "topbar-landing" : ""}`}>
+    <header className="topbar">
       <button
         className="wordmark"
         type="button"
@@ -672,42 +672,30 @@ function Header({
           <small>Learn from a fair test</small>
         </span>
       </button>
-      {stage === "landing" ? (
-        <a className="judge-mode-control" href="/judge">
-          Judge Mode
-        </a>
-      ) : (
-        <>
-          <div
-            className="learner-progress-slot"
-            id="learner-progress"
-            tabIndex={-1}
-          >
-            <LearnerProgress
-              stage={stage}
-              {...(session === null ? {} : { sessionState: session.state })}
-              onReviewStage={review}
-            />
-          </div>
-          <div className="topbar-context">
-            <span className="mode-light" />
-            <span>
-              {mode === "replay"
-                ? "Replay mode"
-                : mode === "live"
-                  ? "Live generation"
-                  : "Instant sample"}
-            </span>
-          </div>
-          <button
-            className="start-over-control"
-            type="button"
-            onClick={restart}
-          >
-            Start over
-          </button>
-        </>
-      )}
+      <div
+        className="learner-progress-slot"
+        id="learner-progress"
+        tabIndex={-1}
+      >
+        <LearnerProgress
+          stage={stage}
+          {...(session === null ? {} : { sessionState: session.state })}
+          onReviewStage={review}
+        />
+      </div>
+      <div className="topbar-context">
+        <span className="mode-light" />
+        <span>
+          {mode === "replay"
+            ? "Replay mode"
+            : mode === "live"
+              ? "Live generation"
+              : "Instant sample"}
+        </span>
+      </div>
+      <button className="start-over-control" type="button" onClick={restart}>
+        Start over
+      </button>
     </header>
   );
 }
@@ -728,36 +716,113 @@ function Landing({
   busy: boolean;
 }) {
   const hint = subjectPackHint(undefined, "question");
+  const [railOpen, setRailOpen] = useState(false);
+  const startSample = () => {
+    setRailOpen(false);
+    updateClaim("");
+    chooseMode("instant");
+  };
+  const openReplay = () => {
+    setRailOpen(false);
+    updateClaim("");
+    chooseMode("replay");
+  };
+
   return (
     <main className="landing landing-question-first">
-      <div className="question-first-layout shell">
-        <QuestionComposer
-          value={claim}
-          onChange={updateClaim}
-          onAttachNotebook={attachNotebook}
-          onSubmit={testClaim}
-          onStartSample={() => {
-            updateClaim("");
-            chooseMode("instant");
-          }}
-          onOpenReplay={() => {
-            updateClaim("");
-            chooseMode("replay");
-          }}
-          busy={busy}
-        />
-        <p className="plain-support-note" id="landing-support-note">
-          Released support: entity leakage and class imbalance in documented
-          Python/scikit-learn Jupyter notebooks. Unsupported files are refused,
-          not guessed.
-        </p>
-        <NeedAHint
-          hintId={hint.id}
-          hint={hint.copy}
-          evidenceHref="#landing-support-note"
-          evidenceLabel="Review the supported evidence boundary"
-        />
-      </div>
+      <aside className="landing-rail" aria-label="CounterLab entry paths">
+        <div className="landing-rail-header">
+          <div className="landing-rail-brand" aria-label="CounterLab">
+            <span aria-hidden="true">C</span>
+            <strong>CounterLab</strong>
+          </div>
+          <button
+            className="landing-menu-toggle"
+            type="button"
+            aria-controls="landing-rail-navigation"
+            aria-expanded={railOpen}
+            onClick={() => setRailOpen((open) => !open)}
+          >
+            Explore
+          </button>
+        </div>
+
+        <nav
+          className={`landing-rail-navigation ${railOpen ? "is-open" : ""}`}
+          id="landing-rail-navigation"
+          aria-label="Start a CounterLab investigation"
+        >
+          <button
+            className="landing-new-question"
+            type="button"
+            onClick={() => {
+              setRailOpen(false);
+              updateClaim("");
+            }}
+          >
+            <span aria-hidden="true">+</span>
+            New question
+          </button>
+
+          <div className="landing-rail-group">
+            <span>Start with evidence</span>
+            <button type="button" disabled={busy} onClick={startSample}>
+              Try verified sample
+            </button>
+            <button type="button" disabled={busy} onClick={openReplay}>
+              Watch verified replay
+            </button>
+          </div>
+
+          <div className="landing-rail-group landing-rail-secondary">
+            <a href="/judge">Judge Mode</a>
+            <a href="#landing-support-note" onClick={() => setRailOpen(false)}>
+              How proof works
+            </a>
+          </div>
+        </nav>
+
+        <p className="landing-rail-trust">No account needed</p>
+      </aside>
+
+      <section className="landing-canvas" aria-labelledby="landing-title">
+        <div className="question-first-layout">
+          <div className="landing-intro">
+            <p>Ask like chat. Prove it like science.</p>
+            <h1 id="landing-title" tabIndex={-1}>
+              What result are you trying to understand?
+            </h1>
+            <span>
+              State the claim. If you have a notebook, attach it—we read the
+              evidence and never run the cells.
+            </span>
+          </div>
+
+          <QuestionComposer
+            value={claim}
+            onChange={updateClaim}
+            onAttachNotebook={attachNotebook}
+            onSubmit={testClaim}
+            onStartSample={startSample}
+            onOpenReplay={openReplay}
+            busy={busy}
+          />
+
+          <div className="landing-proof-note" id="landing-support-note">
+            <p>
+              <strong>Supported today:</strong> documented Python/scikit-learn
+              Jupyter notebooks for entity leakage and class imbalance.
+              Unsupported evidence is refused, not guessed.
+            </p>
+            <NeedAHint
+              hintId={hint.id}
+              hint={hint.copy}
+              evidenceHref="#landing-support-note"
+              evidenceLabel="Review the supported evidence boundary"
+            />
+          </div>
+        </div>
+      </section>
     </main>
   );
 }
@@ -4180,13 +4245,15 @@ export function App() {
       {replay && activeReplay !== null && (
         <ReplayBanner replay={activeReplay} />
       )}
-      <Header
-        mode={mode}
-        stage={stage}
-        session={session}
-        review={review}
-        restart={restart}
-      />
+      {stage !== "landing" && (
+        <Header
+          mode={mode}
+          stage={stage}
+          session={session}
+          review={review}
+          restart={restart}
+        />
+      )}
       {error !== null && (
         <div className="api-error" role="alert">
           {error}
@@ -4450,13 +4517,15 @@ export function App() {
           )}
         </CounterLabStudio>
       )}
-      <footer className="footer shell">
-        <span>
-          <strong>CounterLab</strong> · learn from a fair test
-        </span>
-        <span>Chatbots explain. CounterLab lets reality answer.</span>
-        <span>Education demo · Jupyter notebooks</span>
-      </footer>
+      {stage !== "landing" && (
+        <footer className="footer shell">
+          <span>
+            <strong>CounterLab</strong> · learn from a fair test
+          </span>
+          <span>Chatbots explain. CounterLab lets reality answer.</span>
+          <span>Education demo · Jupyter notebooks</span>
+        </footer>
+      )}
     </div>
   );
 }
