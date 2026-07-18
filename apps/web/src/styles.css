@@ -26,6 +26,9 @@
   --gold-soft: #fff1ca;
   --red: #b5363a;
   --red-soft: #fbe8e7;
+  --sans:
+    "Instrument Sans Variable", "Avenir Next", ui-sans-serif, system-ui,
+    sans-serif;
   --display: "Newsreader Variable", "Iowan Old Style", Georgia, serif;
   --mono:
     "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
@@ -6320,6 +6323,7 @@ body {
 }
 
 .landing-question-first {
+  color-scheme: dark;
   min-height: 100svh;
   padding: 0;
   display: grid;
@@ -6538,18 +6542,23 @@ body {
 }
 
 .landing-proof-note > p {
-  margin: 0;
+  margin: 0 0 8px;
 }
 
 .landing-proof-note strong {
   color: #b8b8c0;
 }
 
-.landing-proof-note details {
+.landing-proof-note > aside[aria-label="Contextual help"] {
   width: fit-content;
   margin: 8px auto 0;
   border: 0;
+  color: inherit;
   background: transparent;
+}
+
+.landing-proof-note details {
+  margin: 0;
 }
 
 .landing-proof-note details summary {
@@ -6617,7 +6626,7 @@ body {
   .landing-rail {
     position: sticky;
     height: auto;
-    min-height: 66px;
+    min-height: 86px;
     padding: 10px 14px;
     border-right: 0;
     border-bottom: 1px solid #252529;
@@ -6651,11 +6660,12 @@ body {
   }
 
   .landing-rail-trust {
-    display: none;
+    display: block;
+    margin: 2px 8px 0;
   }
 
   .landing-canvas {
-    min-height: calc(100svh - 66px);
+    min-height: calc(100svh - 86px);
     padding: clamp(40px, 7vh, 68px) 20px 54px;
   }
 }

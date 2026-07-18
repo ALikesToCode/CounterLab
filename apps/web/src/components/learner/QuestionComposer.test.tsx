@@ -90,6 +90,8 @@ describe("QuestionComposer", () => {
     expect(
       screen.getByPlaceholderText("What claim should this notebook help test?"),
     ).toBeInTheDocument();
+    expect(screen.getByText(/attach a supported .ipynb/i)).toBeInTheDocument();
+    expect(screen.getByText("+ Attach supported .ipynb")).toBeInTheDocument();
     expect(change).not.toHaveBeenCalled();
     expect(attach).not.toHaveBeenCalled();
     expect(submit).not.toHaveBeenCalled();

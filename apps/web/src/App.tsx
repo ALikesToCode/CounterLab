@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import {
   ApiClientError,
@@ -717,6 +717,20 @@ function Landing({
 }) {
   const hint = subjectPackHint(undefined, "question");
   const [railOpen, setRailOpen] = useState(false);
+  const railToggleRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!railOpen) return;
+
+    const closeRail = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setRailOpen(false);
+      railToggleRef.current?.focus();
+    };
+
+    window.addEventListener("keydown", closeRail);
+    return () => window.removeEventListener("keydown", closeRail);
+  }, [railOpen]);
   const startSample = () => {
     setRailOpen(false);
     updateClaim("");
@@ -737,6 +751,7 @@ function Landing({
             <strong>CounterLab</strong>
           </div>
           <button
+            ref={railToggleRef}
             className="landing-menu-toggle"
             type="button"
             aria-controls="landing-rail-navigation"
@@ -776,7 +791,13 @@ function Landing({
 
           <div className="landing-rail-group landing-rail-secondary">
             <a href="/judge">Judge Mode</a>
-            <a href="#landing-support-note" onClick={() => setRailOpen(false)}>
+            <a
+              href="#landing-support-note"
+              onClick={() => {
+                setRailOpen(false);
+                document.getElementById("landing-support-note")?.focus();
+              }}
+            >
               How proof works
             </a>
           </div>
@@ -808,8 +829,17 @@ function Landing({
             busy={busy}
           />
 
-          <div className="landing-proof-note" id="landing-support-note">
+          <div
+            className="landing-proof-note"
+            id="landing-support-note"
+            tabIndex={-1}
+          >
             <p>
+              <strong>How proof works:</strong> fixed kernels calculate the
+              result, then frozen checks verify the evidence binding before it
+              appears.
+            </p>
+            <p id="landing-supported-evidence">
               <strong>Supported today:</strong> documented Python/scikit-learn
               Jupyter notebooks for entity leakage and class imbalance.
               Unsupported evidence is refused, not guessed.
@@ -817,7 +847,7 @@ function Landing({
             <NeedAHint
               hintId={hint.id}
               hint={hint.copy}
-              evidenceHref="#landing-support-note"
+              evidenceHref="#landing-supported-evidence"
               evidenceLabel="Review the supported evidence boundary"
             />
           </div>

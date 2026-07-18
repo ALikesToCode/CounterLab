@@ -40,14 +40,22 @@
   box-shadow: 0 1px 2px rgb(0 0 0 / 32%);
 }
 
+.intentNote {
+  margin: 10px auto -6px;
+  color: #9a9aa3;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
 .form {
   margin-top: 18px;
   overflow: hidden;
-  border: 1px solid #2a3d59;
+  border: 1px solid #34343a;
   border-radius: 16px;
-  background: #0a1627;
+  background: #202023;
   box-shadow:
-    0 24px 58px rgb(0 5 15 / 38%),
+    0 24px 58px rgb(0 0 0 / 34%),
     inset 0 1px 0 rgb(255 255 255 / 5%);
 }
 
@@ -55,7 +63,7 @@
   border-color: #7ea6ff;
   box-shadow:
     0 0 0 3px rgb(126 166 255 / 22%),
-    0 24px 58px rgb(0 5 15 / 38%);
+    0 24px 58px rgb(0 0 0 / 34%);
 }
 
 .form textarea {
@@ -84,7 +92,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 12px;
-  border-top: 1px solid rgb(166 184 211 / 18%);
+  border-top: 1px solid #34343a;
 }
 
 .attach {

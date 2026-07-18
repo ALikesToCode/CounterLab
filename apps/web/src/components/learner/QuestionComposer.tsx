@@ -69,6 +69,13 @@ export function QuestionComposer({
         </button>
       </div>
 
+      {intent === "notebook" ? (
+        <p className={styles.intentNote}>
+          Attach a supported .ipynb. CounterLab reads its evidence and never
+          executes cells.
+        </p>
+      ) : null}
+
       <form className={styles.form} onSubmit={submit} aria-label="Test a claim">
         <label className={styles.srOnly} htmlFor={inputId}>
           Your question or claim
@@ -97,7 +104,11 @@ export function QuestionComposer({
                 if (file !== undefined) onAttachNotebook(file);
               }}
             />
-            <span>+ Attach notebook</span>
+            <span>
+              {intent === "notebook"
+                ? "+ Attach supported .ipynb"
+                : "+ Attach notebook"}
+            </span>
           </label>
           <button
             className={styles.submit}

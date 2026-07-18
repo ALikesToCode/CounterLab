@@ -608,6 +608,7 @@ for (const viewport of [
       page.getByRole("button", { name: /Try verified sample/i }),
     );
     await expectMinimumTarget(page.getByRole("link", { name: /Judge Mode/i }));
+    await expect(page.getByText("No account needed")).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
     await page.getByRole("button", { name: /Try verified sample/i }).click();
@@ -1162,6 +1163,11 @@ test("the judged path is keyboard operable with reduced motion", async ({
 
   const explore = page.getByRole("button", { name: "Explore" });
   await explore.focus();
+  await page.keyboard.press("Enter");
+  await expect(explore).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Escape");
+  await expect(explore).toHaveAttribute("aria-expanded", "false");
+  await expect(explore).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(explore).toHaveAttribute("aria-expanded", "true");
 

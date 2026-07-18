@@ -576,6 +576,9 @@ describe("CounterLab judged flow", () => {
     );
     expect(screen.getByText(/no account needed/i)).toBeInTheDocument();
     expect(
+      screen.getByText(/fixed kernels calculate the result/i),
+    ).toBeInTheDocument();
+    expect(
       screen.getByText(/read the evidence and never run the cells/i),
     ).toBeInTheDocument();
     expect(
@@ -609,6 +612,20 @@ describe("CounterLab judged flow", () => {
     expect(document.body).not.toHaveTextContent(
       /teaches two machine-learning mistakes/i,
     );
+  });
+
+  it("closes the compact entry menu with Escape and restores focus", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const toggle = screen.getByRole("button", { name: "Explore" });
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+    await user.keyboard("{Escape}");
+
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveFocus();
   });
 
   it("does not end live notebook analysis at a local boundary when the hosted runner is configured", async () => {
