@@ -661,3 +661,16 @@ can pass.
   resolution, not patch authority.
 - Retain held-out workspaces when the release audit requests it, so repository
   testing does not depend on recursive deletion.
+
+## 2026-07-19 — Use one black-first visual system across browser surfaces
+
+- Use a true-black canvas, near-black surfaces, neutral hairlines, and white
+  primary actions across landing, studio, learner, proof, replay, and Judge Mode.
+- Reserve blue for the visible focus ring. Keep aqua for verified evidence, gold
+  for sealed Prediction, purple for replay authority, and red for rejection.
+- Use Instrument Sans for display and interface copy. Keep monospace limited to
+  proof, hashes, units, labels, and verifier state.
+- Declare hardcoded hexadecimal colors only in the global token block. Scoped
+  component themes alias those tokens instead of defining a second palette.
+- Preserve historical design plans as history; `DESIGN.md` and
+  `docs/FRONTEND_MAP.md` describe the current browser contract.
