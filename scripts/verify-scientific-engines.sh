@@ -103,6 +103,30 @@ if [[ "${IMAGE_USER}" != "10001:10001" ]]; then
   exit 1
 fi
 
+STARTUP_PROBE_OUTPUT="$(docker run --rm \
+  --network none \
+  --read-only \
+  --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+  -e COUNTERLAB_RUNNER_STARTUP_PROBE=1 \
+  -e COUNTERLAB_RUNNER_WORK_ROOT=/tmp/counterlab-jobs \
+  -e COUNTERLAB_CODEX_HOME_ROOT=/tmp/counterlab-codex \
+  "${IMAGE}")"
+node -e '
+  const value = JSON.parse(process.argv[1]);
+  if (
+    value.status !== "ready" ||
+    value.service !== "counterlab-hosted-runner" ||
+    value.probe !== "non-root-startup" ||
+    JSON.stringify(value.checks) !==
+      JSON.stringify(["entrypoint", "codex", "python", "setpriv", "writable-roots"])
+  ) {
+    throw new Error("Runner non-root startup probe returned an invalid sentinel");
+  }
+' "${STARTUP_PROBE_OUTPUT}"
+
+# The preceding probe executes the real OCI entrypoint as Config.User. This
+# second run adopts the host identity only so the exact-image verifier can read
+# the repository evidence mounted read-only.
 docker run --rm \
   --user "$(id -u):$(id -g)" \
   --network none \

@@ -16,6 +16,7 @@ import { HostedRunnerJobProcessor } from "./job-processor.js";
 import { ContainerCodexLaunchBoundary } from "./launch-boundary.js";
 import { PythonFixedKernelExecutor } from "./fixed-kernel.js";
 import { PythonFixedPatchExecutor } from "./fixed-patch.js";
+import { runHostedRunnerStartupProbe } from "./startup-probe.js";
 
 const MAX_REQUEST_BYTES = 16_384;
 export const CODEX_ATTEMPT_TIMEOUT_MS = 120_000;
@@ -208,6 +209,11 @@ export function createHostedRunnerServer(options: HostedRunnerServerOptions) {
 }
 
 async function startProductionServer(): Promise<void> {
+  if (process.env.COUNTERLAB_RUNNER_STARTUP_PROBE === "1") {
+    delete process.env.COUNTERLAB_RUNNER_STARTUP_PROBE;
+    console.log(JSON.stringify(await runHostedRunnerStartupProbe()));
+    return;
+  }
   const authJson = process.env.CODEX_AUTH_JSON;
   const runnerVerifyingPublicKey =
     process.env.COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY;

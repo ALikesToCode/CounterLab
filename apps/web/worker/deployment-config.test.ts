@@ -169,6 +169,22 @@ describe("Cloudflare static asset routing", () => {
     expect(dockerfile).not.toContain('CMD ["node", "/app/runner.mjs"]');
   });
 
+  it("executes the real image entrypoint as its declared user before qualification", () => {
+    const verifier = readFileSync(
+      resolve(process.cwd(), "../../scripts/verify-scientific-engines.sh"),
+      "utf8",
+    );
+    const probeStart = verifier.indexOf('STARTUP_PROBE_OUTPUT="$(docker run');
+    const probeEnd = verifier.indexOf("# The preceding probe", probeStart);
+    const probe = verifier.slice(probeStart, probeEnd);
+
+    expect(probeStart).toBeGreaterThan(-1);
+    expect(probe).toContain("COUNTERLAB_RUNNER_STARTUP_PROBE=1");
+    expect(probe).not.toContain("--user");
+    expect(probe).not.toContain("--entrypoint");
+    expect(probe).toContain('"${IMAGE}"');
+  });
+
   it("generates a deploy config from a source-bound qualified image receipt", () => {
     const sourceCommit = "a".repeat(40);
     const evidenceCommit = "2".repeat(40);
