@@ -1,0 +1,184 @@
+.progress {
+  color: #07152a;
+  font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
+}
+
+.desktop {
+  display: block;
+  padding: 8px;
+  border: 1px solid #d8dee6;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.stageList {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.stageList li {
+  min-width: 0;
+}
+
+.stageButton,
+.stageLabel {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 10px;
+  color: #4c5d73;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.stageButton {
+  color: #245eea;
+  cursor: pointer;
+}
+
+.stageButton:hover {
+  background: #edf3ff;
+}
+
+.stageButton:focus-visible,
+.mobileSummary:focus-visible {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 3px;
+}
+
+.marker {
+  display: grid;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid #b8c3d0;
+  border-radius: 50%;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.completed .marker {
+  color: #007a78;
+  border-color: #8dd8d0;
+  background: #dff6f2;
+}
+
+.current .stageLabel {
+  color: #143d9d;
+  background: #edf3ff;
+}
+
+.current .marker {
+  color: #fff;
+  border-color: #245eea;
+  background: #245eea;
+}
+
+.future .stageLabel {
+  color: #77869a;
+}
+
+.mobile {
+  display: none;
+}
+
+.mobileSummary {
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 14px;
+  border: 1px solid #d8dee6;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  list-style: none;
+}
+
+.mobileSummary::-webkit-details-marker {
+  display: none;
+}
+
+.mobileSummary span {
+  color: #4c5d73;
+  font-size: 13px;
+}
+
+.mobileSummary strong {
+  font-size: 15px;
+}
+
+.mobilePanel {
+  padding: 18px;
+  border: 1px solid #d8dee6;
+  border-radius: 18px 18px 0 0;
+  background: #fff;
+  box-shadow: 0 -12px 34px rgb(7 21 42 / 18%);
+}
+
+.mobilePanelHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.mobilePanelHeading span {
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.mobilePanelHeading strong {
+  color: #4c5d73;
+  font-size: 13px;
+}
+
+@media (max-width: 700px) {
+  .desktop {
+    display: none;
+  }
+
+  .mobile {
+    display: block;
+  }
+
+  .mobileSummary {
+    display: flex;
+  }
+
+  .mobile[open] .mobilePanel {
+    position: fixed;
+    z-index: 30;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    max-height: min(70vh, 560px);
+    overflow-y: auto;
+  }
+
+  .stageList {
+    grid-template-columns: 1fr;
+  }
+
+  .stageButton,
+  .stageLabel {
+    justify-content: flex-start;
+    padding-inline: 12px;
+    font-size: 15px;
+  }
+}

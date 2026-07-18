@@ -13,7 +13,6 @@ import type {
 export type StudioActions = {
   newAnalysis: () => void;
   showEvidence: () => void;
-  navigateStage: (stage: "claim" | "belief" | "build" | "reality") => void;
   lockPrediction?: () => void;
   runFairTest?: () => void;
   reviewPatch?: () => void;
@@ -136,7 +135,6 @@ export function CounterLabStudio({
         recentProjects={recentProjects}
         onNewAnalysis={actions.newAnalysis}
         onShowEvidence={actions.showEvidence}
-        onNavigateStage={actions.navigateStage}
         onOpenRecent={actions.openRecent}
         onOpenCommands={() => setPaletteOpen(true)}
       />

@@ -27,6 +27,10 @@ import {
 } from "./hooks/runnerCheckpoint";
 import { CounterLabStudio } from "./app/CounterLabStudio";
 import { parseStudioLocation, studioPath } from "./app/AppRouter";
+import { LearnerCoach } from "./components/learner/LearnerCoach";
+import { LearnerProgress } from "./components/learner/LearnerProgress";
+import { QuestionComposer } from "./components/learner/QuestionComposer";
+import type { LearnerStageId } from "./components/learner/learnerStages";
 import { InteractiveImbalanceLab } from "./components/lesson/InteractiveImbalanceLab";
 import { ImbalancePatchReview } from "./components/lesson/ImbalancePatchReview";
 import { ImbalanceTransferLesson } from "./components/lesson/ImbalanceTransferLesson";
@@ -36,7 +40,7 @@ import type { RecentProject, StudioStage } from "./components/studio/types";
 import { BoundaryStage } from "./features/boundary/BoundaryStage";
 import { JudgeModeView } from "./features/judge/JudgeModeView";
 
-import { getRun, sampleArtifact, sampleResult, verifiedReplay } from "./sample";
+import { getRun, sampleArtifact, verifiedReplay } from "./sample";
 
 type Mode = "instant" | "live" | "replay";
 type Stage =
@@ -50,7 +54,7 @@ type Stage =
 type PredictionChoice = "stays-high" | "falls" | "unsure";
 type TransferState =
   "locked" | "ready" | "failed" | "passed" | "patching" | "patched";
-type ReviewStep = "claim" | "belief" | "build" | "reality";
+type ReviewStep = LearnerStageId;
 
 function sessionProofReady(session: SessionView | null): boolean {
   return (
@@ -280,40 +284,16 @@ function ReplayBanner({ replay }: { replay: VerifiedReplay }) {
 function Header({
   mode,
   stage,
-  reviewStep,
+  session,
   review,
-  returnToCurrent,
   restart,
 }: {
   mode: Mode | null;
   stage: Stage;
-  reviewStep: ReviewStep | null;
+  session: SessionView | null;
   review: (step: ReviewStep) => void;
-  returnToCurrent: () => void;
   restart: () => void;
 }) {
-  const proofStages = [
-    {
-      label: "Question",
-      reviewStep: "claim",
-      stages: ["claim", "live-setup"],
-    },
-    { label: "Your guess", reviewStep: "belief", stages: ["belief"] },
-    {
-      label: "Fair test",
-      reviewStep: "build",
-      stages: ["build", "live-compile"],
-    },
-    { label: "Learn & apply", reviewStep: "reality", stages: ["reality"] },
-  ] as const;
-  const progressIndex = proofStages.findIndex((item) =>
-    item.stages.some((candidate) => candidate === stage),
-  );
-  const viewedIndex =
-    reviewStep === null
-      ? progressIndex
-      : proofStages.findIndex((item) => item.reviewStep === reviewStep);
-
   return (
     <header className={`topbar ${stage === "landing" ? "topbar-landing" : ""}`}>
       <button
@@ -328,28 +308,23 @@ function Header({
           <small>Learn from a fair test</small>
         </span>
       </button>
-      {stage !== "landing" && (
+      {stage === "landing" ? (
+        <a className="judge-mode-control" href="/judge">
+          Judge Mode
+        </a>
+      ) : (
         <>
-          <nav className="proof-rail" aria-label="CounterLab proof stages">
-            {proofStages.map((item, index) => (
-              <button
-                type="button"
-                aria-label={item.label}
-                className={`${index === viewedIndex ? "active" : ""} ${index < progressIndex ? "complete" : ""}`}
-                aria-current={index === viewedIndex ? "step" : undefined}
-                disabled={index > progressIndex}
-                onClick={() =>
-                  index === progressIndex
-                    ? returnToCurrent()
-                    : review(item.reviewStep)
-                }
-                key={item.label}
-              >
-                <i>{index < progressIndex ? "✓" : index + 1}</i>
-                <b>{item.label}</b>
-              </button>
-            ))}
-          </nav>
+          <div
+            className="learner-progress-slot"
+            id="learner-progress"
+            tabIndex={-1}
+          >
+            <LearnerProgress
+              stage={stage}
+              {...(session === null ? {} : { sessionState: session.state })}
+              onReviewStage={review}
+            />
+          </div>
           <div className="topbar-context">
             <span className="mode-light" />
             <span>
@@ -373,182 +348,45 @@ function Header({
   );
 }
 
-function LearningGuide({
-  step,
-  title,
-  known,
-  unknown,
-  next,
-  tone = "blue",
+function Landing({
+  claim,
+  updateClaim,
+  attachNotebook,
+  testClaim,
+  chooseMode,
+  busy,
 }: {
-  step: string;
-  title: string;
-  known: string;
-  unknown: string;
-  next: string;
-  tone?: "blue" | "purple" | "aqua" | "gold";
+  claim: string;
+  updateClaim: (claim: string) => void;
+  attachNotebook: (file: File) => void;
+  testClaim: () => void;
+  chooseMode: (mode: Mode) => void;
+  busy: boolean;
 }) {
   return (
-    <aside className={`learning-guide ${tone}`} aria-label={`${step} guide`}>
-      <div className="guide-title">
-        <span>{step}</span>
-        <strong>{title}</strong>
-      </div>
-      <div className="guide-action">
-        <span>Your next move</span>
-        <strong>{next}</strong>
-      </div>
-      <details className="guide-context">
-        <summary>Why this step?</summary>
-        <p>
-          <strong>What we know:</strong> {known}
-        </p>
-        <p>
-          <strong>The open question:</strong> {unknown}
-        </p>
-      </details>
-    </aside>
-  );
-}
-
-function Landing({ chooseMode }: { chooseMode: (mode: Mode) => void }) {
-  const random = getRun("random_row_split");
-  const grouped = getRun("customer_group_split");
-
-  return (
-    <main className="landing">
-      <section className="learning-hero shell">
-        <div className="learning-hero-copy">
-          <h1 className="sr-only">CounterLab</h1>
-          <p className="lesson-kicker">
-            <span>CounterLab Studio</span> · mental-model debugger for ML
-            notebooks
-          </p>
-          <h2 id="landing-title" tabIndex={-1}>
-            Your notebook made a claim. Will it survive a fair test?
-          </h2>
-          <p className="learning-promise">
-            Bring a notebook result. Lock what you expect, run a verified test,
-            apply the lesson once, then unlock a repair.
-          </p>
-          <div className="learning-actions">
-            <button
-              className="button lesson-primary"
-              type="button"
-              aria-label="Analyze a notebook — Generate live"
-              onClick={() => chooseMode("live")}
-            >
-              Analyze a notebook <Mark name="arrow" />
-            </button>
-            <button
-              className="button lesson-secondary"
-              type="button"
-              aria-label="Try the 3-minute sample — Try instantly"
-              onClick={() => chooseMode("instant")}
-            >
-              Try the 3-minute sample
-            </button>
-            <a className="button lesson-secondary" href="/judge">
-              Open Judge Mode
-            </a>
-          </div>
-          <div className="lesson-trust" aria-label="Lesson details">
-            <span>
-              <Mark name="check" /> No account needed
-            </span>
-            <span>
-              <Mark name="check" /> Uploaded cells are read, never run
-            </span>
-          </div>
-        </div>
-
-        <aside className="lesson-preview" aria-label="Sample lesson preview">
-          <div className="lesson-preview-head">
-            <span>Example: customer churn</span>
-            <span className="lesson-badge">Real computed result</span>
-          </div>
-          <p className="preview-question">
-            Does a high test score mean the model works for new customers?
-          </p>
-          <div className="score-story">
-            <div className="score-card score-before">
-              <span>The notebook says</span>
-              <strong>{percent.format(random.metrics.accuracy)}</strong>
-              <small>rows mixed at random</small>
-            </div>
-            <div className="score-arrow" aria-hidden="true">
-              <Mark name="arrow" />
-            </div>
-            <div className="score-card score-after">
-              <span>New customers</span>
-              <strong>{percent.format(grouped.metrics.accuracy)}</strong>
-              <small>no customer overlap</small>
-            </div>
-          </div>
-          <p className="preview-lesson">
-            <Mark name="spark" /> Same model. A test that matches the real
-            question.
-          </p>
-        </aside>
-      </section>
-
-      <section className="lesson-steps shell" aria-label="How CounterLab works">
-        {[
-          ["1", "Question the claim", "Link exact notebook evidence."],
-          ["2", "Let reality answer", "Predict, then test fairly."],
-          ["3", "Transfer, then repair", "Apply the rule before repair."],
-        ].map(([index, title, copy]) => (
-          <article key={index}>
-            <span>{index}</span>
-            <div>
-              <strong>{title}</strong>
-              <p>{copy}</p>
-            </div>
-          </article>
-        ))}
-      </section>
-
-      <section className="more-paths shell" id="judge-paths">
-        <div className="more-paths-heading">
-          <span>See it before uploading</span>
-          <p>Try the sample or inspect a verified run.</p>
-        </div>
-        <div className="simple-mode-grid">
-          <button
-            className="simple-mode-card"
-            type="button"
-            aria-label="Try the 3-minute sample lesson"
-            onClick={() => chooseMode("instant")}
-          >
-            <span className="path-icon">A</span>
-            <strong>Try the sample lesson</strong>
-            <small>No upload, account, or secret needed</small>
-            <span>
-              Start sample <Mark name="arrow" />
-            </span>
-          </button>
-
-          <button
-            className="simple-mode-card"
-            type="button"
-            aria-label="Watch a verified replay — Replay verified session"
-            onClick={() => chooseMode("replay")}
-          >
-            <span className="path-icon">B</span>
-            <strong>Watch a verified replay</strong>
-            <small>See a recorded run from start to finish</small>
-            <span>
-              Watch replay <Mark name="arrow" />
-            </span>
-          </button>
-        </div>
-
+    <main className="landing landing-question-first">
+      <div className="question-first-layout shell">
+        <QuestionComposer
+          value={claim}
+          onChange={updateClaim}
+          onAttachNotebook={attachNotebook}
+          onSubmit={testClaim}
+          onStartSample={() => {
+            updateClaim("");
+            chooseMode("instant");
+          }}
+          onOpenReplay={() => {
+            updateClaim("");
+            chooseMode("replay");
+          }}
+          busy={busy}
+        />
         <p className="plain-support-note">
           Released support: entity leakage and class imbalance in documented
           Python/scikit-learn Jupyter notebooks. Unsupported files are refused,
           not guessed.
         </p>
-      </section>
+      </div>
     </main>
   );
 }
@@ -589,17 +427,14 @@ function ClaimScreen({
   return (
     <main className="workspace shell">
       <div className="screen-intro">
-        <p className="eyebrow">Step 1 of 4 · Your idea</p>
+        <p className="eyebrow">Question · Your idea</p>
         <h1>What do you think the score means?</h1>
         <p>Write one sentence about who you think this model will work for.</p>
       </div>
 
-      <LearningGuide
-        step="Start here"
-        title="A high score is a result—not yet a conclusion."
-        known="The notebook reports a high score on held-out rows."
-        unknown="Whether it also works for completely new customers."
-        next="Say what you believe the score tells us."
+      <LearnerCoach
+        next="say what you believe the score tells us."
+        why="A high score is a result, but the notebook evidence does not yet show whether it generalizes to completely new customers."
       />
 
       <div className="claim-layout">
@@ -923,7 +758,7 @@ function BeliefScreen({
   return (
     <main className="workspace shell">
       <div className="screen-intro compact">
-        <p className="eyebrow">Step 2 of 4 · Your prediction</p>
+        <p className="eyebrow">Prediction · Your explanation</p>
         <h1>Which explanation fits?</h1>
         <p>
           Both ideas could explain the high score. A fair test will separate
@@ -931,13 +766,9 @@ function BeliefScreen({
         </p>
       </div>
 
-      <LearningGuide
-        step="Belief Test"
-        title="Choose before you see the answer."
-        known="Both explanations fit the score we have."
-        unknown="What happens when the test uses only new customers."
-        next="Check the two ideas, then lock your prediction."
-        tone="purple"
+      <LearnerCoach
+        next="check the two ideas, then lock your prediction."
+        why="Both explanations fit the score you have. Sealing an expectation before the fair test makes the later comparison honest."
       />
 
       <section className="claim-quote" aria-label="Learner claim">
@@ -1144,37 +975,38 @@ function BeliefScreen({
 }
 
 const compilerSteps = [
-  ["Test planned", "Only the customer boundary will change"],
-  ["Files checked", "Generated work stayed inside its limits"],
-  ["Result repeated", "The same input produced the same answer"],
-  ["Safety checks passed", "Invalid alternatives were rejected"],
+  ["Question matched", "The observable can separate the two explanations"],
+  ["One change selected", "Only the customer boundary will change"],
+  ["Controls held fixed", "The model, target, metric, and seed stay the same"],
+  ["Plan verified", "Invalid or unresolved alternatives were rejected"],
 ] as const;
 
 function BuildScreen({
   mode,
+  resultReady,
   openResult,
 }: {
   mode: Mode;
+  resultReady: boolean;
   openResult: () => void;
 }) {
   return (
     <main className="workspace shell">
       <div className="screen-intro compact">
-        <p className="eyebrow">Step 3 of 4 · What happened</p>
-        <h1>The result is ready.</h1>
+        <p className="eyebrow">Test · What happened</p>
+        <h1>
+          {resultReady ? "The result is ready." : "The fair test is ready."}
+        </h1>
         <p>
-          Your answer was locked first. CounterLab has now run and checked the
-          fairer test.
+          {resultReady
+            ? "Your answer was locked first. CounterLab has now run and checked the fairer test."
+            : "Your answer is locked. CounterLab verified the plan, but it has not released a result yet."}
         </p>
       </div>
 
-      <LearningGuide
-        step="Before the reveal"
-        title="The answer comes from the test, not from the tutor."
-        known="Your prediction cannot be changed."
-        unknown="Whether the score stays high for new customers."
-        next="Review the completed checks, then reveal the result."
-        tone="aqua"
+      <LearnerCoach
+        next="review the completed checks, then reveal the result."
+        why="Your prediction is sealed, and the result comes from the verified fixed-kernel test rather than the tutor."
       />
 
       <div className="lock-notice">
@@ -1188,10 +1020,12 @@ function BuildScreen({
           <div className="panel-title">
             <div>
               <p className="eyebrow">Compiler trace</p>
-              <h2 id="pipeline-title">Four checks completed</h2>
+              <h2 id="pipeline-title">
+                {resultReady ? "Four checks completed" : "Test plan checked"}
+              </h2>
             </div>
             <span className="verified-chip">
-              <Mark name="check" /> Verified
+              <Mark name="check" /> {resultReady ? "Verified" : "Plan verified"}
             </span>
           </div>
           <ol className="stepper">
@@ -1213,12 +1047,16 @@ function BuildScreen({
             <strong>
               {mode === "replay"
                 ? "A failed run showed no result; a later valid run passed"
-                : "This result is ready for the lesson"}
+                : resultReady
+                  ? "This result is ready for the lesson"
+                  : "The fixed kernel will run only after you choose to continue"}
             </strong>
             <p>
               {mode === "replay"
                 ? "The recording preserves both the rejected attempt and the later passing run."
-                : "No customer appears on both sides of the fairer test, and the result repeats."}
+                : resultReady
+                  ? "No customer appears on both sides of the fairer test, and the result repeats."
+                  : "The plan changes only the evaluation boundary and keeps the model, target, metric, and seed fixed."}
             </p>
           </div>
         </section>
@@ -1313,7 +1151,8 @@ function BuildScreen({
           type="button"
           onClick={openResult}
         >
-          Show me what happened <Mark name="arrow" />
+          {resultReady ? "Show me what happened" : "Run the fair test"}{" "}
+          <Mark name="arrow" />
         </button>
       </div>
     </main>
@@ -1443,10 +1282,12 @@ function ImbalanceReviewScreen({
     throw new Error("Verified imbalance result is missing required runs");
   }
   const titles: Record<ReviewStep, string> = {
-    claim: "Review your original question",
-    belief: "Review your prediction",
-    build: "Review the rare-event test",
-    reality: "Review what you learned",
+    question: "Review your original question",
+    prediction: "Review your prediction",
+    test: "Review the rare-event test",
+    boundary: "Review the verified boundary",
+    apply: "Review how you applied the lesson",
+    repair: "Review the verified repair",
   };
   return (
     <main className="workspace shell lesson-review">
@@ -1463,7 +1304,7 @@ function ImbalanceReviewScreen({
         </div>
       </aside>
       <section className="review-card panel">
-        {step === "claim" && (
+        {step === "question" && (
           <>
             <p className="eyebrow">The result you questioned</p>
             <div className="review-score-row">
@@ -1476,7 +1317,7 @@ function ImbalanceReviewScreen({
             <blockquote>{claim}</blockquote>
           </>
         )}
-        {step === "belief" && (
+        {step === "prediction" && (
           <>
             <p className="eyebrow purple">Your committed guess</p>
             <h2>{session?.prediction?.choice ?? "Prediction not committed"}</h2>
@@ -1486,7 +1327,7 @@ function ImbalanceReviewScreen({
             </p>
           </>
         )}
-        {step === "build" && (
+        {step === "test" && (
           <>
             <p className="eyebrow aqua">Verified Lab</p>
             <h2>
@@ -1505,7 +1346,7 @@ function ImbalanceReviewScreen({
             </ul>
           </>
         )}
-        {step === "reality" && (
+        {step === "boundary" && (
           <>
             <p className="eyebrow gold">Verified lesson</p>
             <div className="review-result-change">
@@ -1520,8 +1361,27 @@ function ImbalanceReviewScreen({
               </span>
             </div>
             <blockquote>
+              Accuracy alone does not show whether rare cases are detected.
+            </blockquote>
+          </>
+        )}
+        {step === "apply" && (
+          <>
+            <p className="eyebrow gold">Saved transfer</p>
+            <h2>Apply the metric that matches the cost of misses.</h2>
+            <blockquote>
               {session?.revision ?? "Write a reusable evaluation rule."}
             </blockquote>
+          </>
+        )}
+        {step === "repair" && (
+          <>
+            <p className="eyebrow aqua">Verified repair</p>
+            <h2>
+              {session?.patchResult === undefined
+                ? "Repair remains locked until transfer passes."
+                : "The repaired copy reports rare-class evidence beside accuracy."}
+            </h2>
           </>
         )}
       </section>
@@ -1544,6 +1404,7 @@ function ImbalanceReviewScreen({
 function ReviewScreen({
   step,
   claim,
+  artifact,
   session,
   result,
   returnToCurrent,
@@ -1551,13 +1412,14 @@ function ReviewScreen({
 }: {
   step: ReviewStep;
   claim: string;
+  artifact: ArtifactView | null;
   session: SessionView | null;
-  result: VerifiedResultSet;
+  result?: VerifiedResultSet;
   returnToCurrent: () => void;
   restart: () => void;
 }) {
   const belief = sessionBeliefPresentation(session);
-  if (result.concept === "class_imbalance") {
+  if (result?.concept === "class_imbalance") {
     return (
       <ImbalanceReviewScreen
         step={step}
@@ -1569,21 +1431,37 @@ function ReviewScreen({
       />
     );
   }
-  const leakageResult = result as LeakageVerifiedResultSet;
-  const random = resultRun(leakageResult, "random_row_split");
-  const group = resultRun(leakageResult, "customer_group_split");
+  const leakageResult =
+    result?.concept === "entity_leakage"
+      ? (result as LeakageVerifiedResultSet)
+      : undefined;
+  const random =
+    leakageResult === undefined
+      ? undefined
+      : resultRun(leakageResult, "random_row_split");
+  const group =
+    leakageResult === undefined
+      ? undefined
+      : resultRun(leakageResult, "customer_group_split");
+  const artifactMetric = artifact?.cells
+    .flatMap((cell) => cell.metricCandidates)
+    .at(0);
   const titles: Record<ReviewStep, string> = {
-    claim: "Review your original question",
-    belief: "Review your prediction",
-    build: "Review the fair test",
-    reality: "Review what you learned",
+    question: "Review your original question",
+    prediction: "Review your prediction",
+    test: "Review the fair test",
+    boundary: "Review the verified boundary",
+    apply: "Review how you applied the lesson",
+    repair: "Review the verified repair",
   };
 
   return (
     <main className="workspace shell lesson-review">
       <div className="screen-intro compact">
         <p className="eyebrow">Lesson map · Saved step</p>
-        <h1>{titles[step]}</h1>
+        <h1 id="review-title" tabIndex={-1}>
+          {titles[step]}
+        </h1>
         <p>
           This is the evidence saved at that point in your lesson. Inspect it
           without losing your current place.
@@ -1598,21 +1476,28 @@ function ReviewScreen({
         </div>
       </aside>
 
-      {step === "claim" && (
+      {step === "question" && (
         <section className="review-card panel">
           <p className="eyebrow">The result you questioned</p>
           <div className="review-score-row">
-            <strong>{percent.format(random.metrics.accuracy)}</strong>
+            <strong>
+              {random !== undefined
+                ? percent.format(random.metrics.accuracy)
+                : (artifactMetric?.value.toLocaleString() ?? "Evidence saved")}
+            </strong>
             <div>
-              <span>Notebook score</span>
-              <p>Rows from the same customers appeared on both sides.</p>
+              <span>{artifactMetric?.name ?? "Notebook evidence"}</span>
+              <p>
+                This is the artifact evidence attached to the question, not a
+                newly computed result.
+              </p>
             </div>
           </div>
           <blockquote>{claim}</blockquote>
         </section>
       )}
 
-      {step === "belief" && (
+      {step === "prediction" && (
         <section className="review-card panel">
           <p className="eyebrow purple">Your committed guess</p>
           <h2>
@@ -1642,7 +1527,7 @@ function ReviewScreen({
         </section>
       )}
 
-      {step === "build" && (
+      {step === "test" && (
         <section className="review-card panel">
           <p className="eyebrow aqua">Verified Lab</p>
           <h2>CounterLab changed the customer boundary—not the answer.</h2>
@@ -1663,24 +1548,50 @@ function ReviewScreen({
         </section>
       )}
 
-      {step === "reality" && (
+      {step === "boundary" && (
         <section className="review-card panel">
           <p className="eyebrow gold">Verified lesson</p>
-          <div className="review-result-change">
-            <span>
-              Familiar rows{" "}
-              <strong>{percent.format(random.metrics.accuracy)}</strong>
-            </span>
-            <Mark name="arrow" />
-            <span>
-              New customers{" "}
-              <strong>{percent.format(group.metrics.accuracy)}</strong>
-            </span>
-          </div>
+          {random !== undefined && group !== undefined ? (
+            <div className="review-result-change">
+              <span>
+                Familiar rows{" "}
+                <strong>{percent.format(random.metrics.accuracy)}</strong>
+              </span>
+              <Mark name="arrow" />
+              <span>
+                New customers{" "}
+                <strong>{percent.format(group.metrics.accuracy)}</strong>
+              </span>
+            </div>
+          ) : (
+            <p>No verified result was released for this session.</p>
+          )}
+          <blockquote>
+            A score on familiar rows does not establish performance for new
+            entities.
+          </blockquote>
+        </section>
+      )}
+
+      {step === "apply" && (
+        <section className="review-card panel">
+          <p className="eyebrow gold">Saved transfer</p>
+          <h2>Apply the same boundary to a surface-different case.</h2>
           <blockquote>
             {session?.revision ??
               "Write a reusable rule to complete this lesson."}
           </blockquote>
+        </section>
+      )}
+
+      {step === "repair" && (
+        <section className="review-card panel">
+          <p className="eyebrow aqua">Verified repair</p>
+          <h2>
+            {session?.patchResult === undefined
+              ? "Repair remains locked until transfer passes."
+              : "The repaired copy uses a whole-entity holdout."}
+          </h2>
         </section>
       )}
 
@@ -2672,7 +2583,7 @@ function LeakageRealityScreen({
   return (
     <main className="workspace shell reality">
       <div className="screen-intro compact">
-        <p className="eyebrow aqua">Step 4 of 4 · The lesson</p>
+        <p className="eyebrow aqua">Boundary · The lesson</p>
         <h1 id="lesson-phase-title" tabIndex={-1}>
           Here’s what changed.
         </h1>
@@ -2682,13 +2593,9 @@ function LeakageRealityScreen({
         </p>
       </div>
 
-      <LearningGuide
-        step="What you learned"
-        title="The test must match the people the model will meet."
-        known={`New customers scored ${accuracyGapPoints.toFixed(1)} points lower.`}
-        unknown="Whether you can spot the same mistake in a different problem."
-        next="Write the rule in your words, then try one new case."
-        tone="gold"
+      <LearnerCoach
+        next="write the rule in your words, then try one new case."
+        why={`The verified test found a ${accuracyGapPoints.toFixed(1)}-point gap for new customers. Transfer checks whether you can spot the same boundary in another problem.`}
       />
 
       <section className="finding-banner" aria-label="Verified finding summary">
@@ -2903,13 +2810,9 @@ function ImbalanceRealityScreen({
           baseline, class-specific metrics, and two bounded operating scenarios.
         </p>
       </div>
-      <LearningGuide
-        step="Reality answered"
-        title="Ask what happens to the class you cannot afford to miss."
-        known={`The majority baseline is ${percent.format(majority.metrics.accuracy)} accurate with ${percent.format(majority.metrics.recall)} rare-class recall.`}
-        unknown="Which threshold and metric match the real cost of missed positives."
-        next="Compare recall, precision, and prevalence—not accuracy alone."
-        tone="gold"
+      <LearnerCoach
+        next="compare recall, precision, and prevalence—not accuracy alone."
+        why={`The majority baseline is ${percent.format(majority.metrics.accuracy)} accurate with ${percent.format(majority.metrics.recall)} rare-class recall. The relevant boundary depends on the cost of missed positives.`}
       />
       <section
         className="finding-banner"
@@ -3508,6 +3411,9 @@ export function App() {
   const replay = mode === "replay";
   const hostedReplay =
     activeReplay?.schemaVersion === "2" ? activeReplay : null;
+  const legacyReplayResult =
+    activeReplay?.schemaVersion === "1" ? activeReplay.result : undefined;
+  const verifiedResult = session?.verifiedResult ?? legacyReplayResult;
   const belief = sessionBeliefPresentation(session);
   const effectiveClaim =
     claim ||
@@ -3895,11 +3801,13 @@ export function App() {
     resetViewport(
       judgeMode
         ? "judge-title"
-        : stage === "landing"
-          ? "landing-title"
-          : undefined,
+        : reviewStep !== null
+          ? "review-title"
+          : stage === "landing"
+            ? "landing-title"
+            : undefined,
     );
-  }, [judgeMode, stage]);
+  }, [judgeMode, reviewStep, stage]);
 
   useEffect(() => {
     if (!routeHydrated || judgeMode) return;
@@ -3982,7 +3890,7 @@ export function App() {
 
   const returnToCurrent = () => {
     setReviewStep(null);
-    resetViewport();
+    window.requestAnimationFrame(() => resetViewport("learner-progress"));
   };
 
   const openRecentProject = (project: RecentProject) => {
@@ -4033,7 +3941,6 @@ export function App() {
     void withRequest(async () => {
       setArtifact(null);
       setSession(null);
-      setClaim("");
       setConfirmed(false);
       setPrediction(null);
       setConfidence(72);
@@ -4165,6 +4072,12 @@ export function App() {
 
   const openResult = () => {
     if (session === null) {
+      if (legacyReplayResult === undefined) {
+        setError(
+          "This replay did not release a verified result. No sample result was substituted.",
+        );
+        return;
+      }
       window.localStorage.setItem(storageKeys.replayStage, "reality");
       setStage("reality");
       return;
@@ -4175,6 +4088,14 @@ export function App() {
     }
     void withRequest(async () => {
       const completed = await counterLabApi.runLab(session.sessionId);
+      if (completed.verifiedResult === undefined) {
+        throw new ApiClientError({
+          code: "RESULT_NOT_AUTHORIZED",
+          message:
+            "The fixed kernel did not release a verified result for this session.",
+          status: 409,
+        });
+      }
       setSession(completed);
       setStage("reality");
     });
@@ -4229,9 +4150,8 @@ export function App() {
       <Header
         mode={mode}
         stage={stage}
-        reviewStep={reviewStep}
+        session={session}
         review={review}
-        returnToCurrent={returnToCurrent}
         restart={restart}
       />
       {error !== null && (
@@ -4244,7 +4164,24 @@ export function App() {
           Recording evidence…
         </div>
       )}
-      {stage === "landing" && <Landing chooseMode={chooseMode} />}
+      {stage === "landing" && (
+        <Landing
+          claim={claim}
+          updateClaim={updateClaim}
+          attachNotebook={(file) => {
+            setMode("live");
+            setStage("claim");
+            window.localStorage.setItem(storageKeys.mode, "live");
+            uploadNotebook(file);
+          }}
+          testClaim={() => {
+            window.localStorage.setItem(storageKeys.claim, claim);
+            chooseMode("live");
+          }}
+          chooseMode={chooseMode}
+          busy={busy}
+        />
+      )}
       {stage !== "landing" && mode !== null && (
         <CounterLabStudio
           context={{
@@ -4255,9 +4192,11 @@ export function App() {
             events: runner.events,
           }}
           actions={{
-            newAnalysis: () => chooseMode("live"),
-            showEvidence: () => review("claim"),
-            navigateStage: (target) => review(target),
+            newAnalysis: () => {
+              setClaim("");
+              chooseMode("live");
+            },
+            showEvidence: () => review("question"),
             ...(stage === "belief" && confirmed && prediction !== null
               ? { lockPrediction: commitPrediction }
               : {}),
@@ -4279,8 +4218,11 @@ export function App() {
             <ReviewScreen
               step={reviewStep}
               claim={effectiveClaim}
+              artifact={artifact}
               session={session}
-              result={session?.verifiedResult ?? sampleResult}
+              {...(verifiedResult === undefined
+                ? {}
+                : { result: verifiedResult })}
               returnToCurrent={returnToCurrent}
               restart={restart}
             />
@@ -4389,18 +4331,38 @@ export function App() {
                 </button>
               </main>
             ) : (
-              <BuildScreen mode={mode} openResult={openResult} />
+              <BuildScreen
+                mode={mode}
+                resultReady={verifiedResult !== undefined}
+                openResult={openResult}
+              />
             ))}
-          {reviewStep === null && stage === "reality" && (
-            <RealityScreen
-              claim={effectiveClaim}
-              prediction={prediction ?? "stays-high"}
-              result={session?.verifiedResult ?? sampleResult}
-              session={session}
-              artifact={artifact}
-              updateSession={setSession}
-            />
-          )}
+          {reviewStep === null &&
+            stage === "reality" &&
+            verifiedResult !== undefined && (
+              <RealityScreen
+                claim={effectiveClaim}
+                prediction={prediction ?? "stays-high"}
+                result={verifiedResult}
+                session={session}
+                artifact={artifact}
+                updateSession={setSession}
+              />
+            )}
+          {reviewStep === null &&
+            stage === "reality" &&
+            verifiedResult === undefined && (
+              <main className="workspace shell narrow" role="alert">
+                <div className="screen-intro compact">
+                  <p className="eyebrow">Result withheld</p>
+                  <h1>No verified result was released.</h1>
+                  <p>
+                    CounterLab will not substitute bundled sample evidence for
+                    this session. Return to the test and try again.
+                  </p>
+                </div>
+              </main>
+            )}
           {reviewStep === null && stage === "live-setup" && (
             <LiveSetup
               health={liveHealth}

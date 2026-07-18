@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -459,6 +459,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+async function openLiveSetup(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(
+    screen.getByRole("textbox", { name: /your question or claim/i }),
+    "Does this result hold in deployment?",
+  );
+  await user.click(screen.getByRole("button", { name: /test this claim/i }));
+}
+
 describe("CounterLab judged flow", () => {
   it("keeps Judge Mode on its own refresh-safe route", async () => {
     window.localStorage.setItem("counterlab.mode", "live");
@@ -478,36 +486,42 @@ describe("CounterLab judged flow", () => {
     ).toHaveAttribute("href", "/replay/leakage-01");
   });
 
-  it("explains the product in plain language and offers three honest paths", () => {
+  it("starts with a question and keeps every honest path available", async () => {
+    const user = userEvent.setup();
     render(<App />);
 
     expect(
-      screen.getByRole("heading", { name: "CounterLab" }),
-    ).toBeInTheDocument();
-    expect(
       screen.getByRole("heading", {
-        name: "Your notebook made a claim. Will it survive a fair test?",
+        name: "What result are you trying to understand?",
       }),
     ).toBeInTheDocument();
+    expect(screen.getByLabelText(/attach notebook/i)).toBeEnabled();
     expect(
-      screen.getByText(
-        /lock what you expect.*verified test.*apply the lesson once.*unlock a repair/i,
-      ),
+      screen.getByRole("button", { name: /try verified sample/i }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /watch verified replay/i }),
+    ).toBeEnabled();
+    expect(screen.getByRole("link", { name: /judge mode/i })).toHaveAttribute(
+      "href",
+      "/judge",
+    );
+    expect(screen.getByText(/no account needed/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/read for evidence and never run/i),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /analyze a notebook/i }),
-    ).toBeEnabled();
+      screen.getByRole("button", { name: /test this claim/i }),
+    ).toBeDisabled();
+    await user.click(
+      screen.getByRole("button", {
+        name: /why did my model score highly but fail/i,
+      }),
+    );
     expect(
-      screen
-        .getAllByRole("button", { name: /try the 3-minute sample/i })
-        .every((button) => !button.hasAttribute("disabled")),
-    ).toBe(true);
-    expect(
-      screen.getByRole("button", { name: /watch a verified replay/i }),
+      screen.getByRole("button", { name: /test this claim/i }),
     ).toBeEnabled();
-    expect(screen.getByText("Question the claim")).toBeInTheDocument();
-    expect(screen.getByText("Let reality answer")).toBeInTheDocument();
-    expect(screen.getByText("Transfer, then repair")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/98\.5|59\.4/);
     expect(document.body).not.toHaveTextContent(
       /formalize|discriminating|canonical|mutation/i,
     );
@@ -521,7 +535,7 @@ describe("CounterLab judged flow", () => {
     installApi({ liveGpt: "configured", runner: "configured" });
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: /generate live/i }));
+    await openLiveSetup(user);
 
     expect(
       await screen.findByText(/hosted notebook runner is ready/i),
@@ -529,12 +543,40 @@ describe("CounterLab judged flow", () => {
     expect(document.body).not.toHaveTextContent(/local runner required/i);
   });
 
+  it("accepts a notebook from the question-first landing without running it", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi();
+    render(<App />);
+
+    await user.upload(
+      screen.getByLabelText(/attach notebook/i),
+      new File(["{}"], uploadedArtifact.fileName, {
+        type: "application/json",
+      }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /what do you think the score means/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      fetcher.mock.calls.some(
+        ([path, init]) =>
+          String(path) === "/api/artifacts" && init?.method === "POST",
+      ),
+    ).toBe(true);
+    expect(
+      fetcher.mock.calls.some(([path]) => String(path).endsWith("/lab/run")),
+    ).toBe(false);
+  });
+
   it("shows an honest unavailable state when live reasoning is not configured", async () => {
     const user = userEvent.setup();
     installApi({ liveGpt: "server-key-required" });
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: /generate live/i }));
+    await openLiveSetup(user);
 
     expect(
       await screen.findByRole("heading", { name: "Test my notebook" }),
@@ -551,7 +593,7 @@ describe("CounterLab judged flow", () => {
     const fetcher = installApi({ liveGpt: "configured", runner: "configured" });
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: /generate live/i }));
+    await openLiveSetup(user);
     expect(
       await screen.findByText(/notebook lesson tools are ready to try/i),
     ).toBeInTheDocument();
@@ -576,8 +618,10 @@ describe("CounterLab judged flow", () => {
     expect(
       (await screen.findAllByText(uploadedArtifact.fileName)).length,
     ).toBeGreaterThan(0);
+    const liveClaim = screen.getByLabelText(/your claim/i);
+    await user.clear(liveClaim);
     await user.type(
-      screen.getByLabelText(/your claim/i),
+      liveClaim,
       "The notebook accuracy proves generalization to new customers.",
     );
     await user.click(
@@ -658,12 +702,40 @@ describe("CounterLab judged flow", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("reviews a completed stage and restores focus to canonical progress", async () => {
+    const user = userEvent.setup();
+    installApi({
+      restoredSessionState: "EXPERIMENT_COMPLETED",
+      restoredSessionExtra: { verifiedResult: liveResult },
+    });
+    window.history.replaceState({}, "", "/session/session_ui");
+    render(<App />);
+
+    const desktopProgress = within(
+      await screen.findByTestId("learner-progress-desktop"),
+    );
+    await user.click(
+      desktopProgress.getByRole("button", { name: /review prediction/i }),
+    );
+    const reviewTitle = await screen.findByRole("heading", {
+      name: /review your prediction/i,
+    });
+    expect(reviewTitle).toHaveFocus();
+
+    await user.click(
+      screen.getByRole("button", { name: /return to current step/i }),
+    );
+    await vi.waitFor(() =>
+      expect(document.getElementById("learner-progress")).toHaveFocus(),
+    );
+  });
+
   it("keeps the first failed live request provider-neutral and on the claim screen", async () => {
     const user = userEvent.setup();
     installApi({ liveGpt: "configured", rejectLiveBelief: true });
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: /generate live/i }));
+    await openLiveSetup(user);
     await user.click(
       await screen.findByRole("button", { name: /continue with my notebook/i }),
     );
@@ -673,8 +745,10 @@ describe("CounterLab judged flow", () => {
         type: "application/json",
       }),
     );
+    const rejectedClaim = await screen.findByLabelText(/your claim/i);
+    await user.clear(rejectedClaim);
     await user.type(
-      await screen.findByLabelText(/your claim/i),
+      rejectedClaim,
       "The notebook accuracy proves generalization to new customers.",
     );
     await user.click(
@@ -906,7 +980,7 @@ describe("CounterLab judged flow", () => {
     });
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: /generate live/i }));
+    await openLiveSetup(user);
     await user.click(
       await screen.findByRole("button", { name: /continue with my notebook/i }),
     );
@@ -916,10 +990,9 @@ describe("CounterLab judged flow", () => {
         type: "application/json",
       }),
     );
-    await user.type(
-      await screen.findByLabelText(/your claim/i),
-      imbalanceBeliefTest.learnerClaim,
-    );
+    const imbalanceClaim = await screen.findByLabelText(/your claim/i);
+    await user.clear(imbalanceClaim);
+    await user.type(imbalanceClaim, imbalanceBeliefTest.learnerClaim);
     await user.click(
       screen.getByRole("button", { name: /compare two explanations/i }),
     );
@@ -942,7 +1015,9 @@ describe("CounterLab judged flow", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: /try instantly/i }));
+    await user.click(
+      screen.getByRole("button", { name: /try verified sample/i }),
+    );
     expect(
       await screen.findByRole("heading", {
         name: /what do you think the score means/i,
@@ -978,11 +1053,15 @@ describe("CounterLab judged flow", () => {
     await user.click(screen.getByRole("button", { name: /lock my answer/i }));
 
     expect(
-      await screen.findByText(/your answer is locked/i),
+      await screen.findByText("Your answer is locked", { selector: "strong" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: /the result is ready/i }),
+      screen.getByRole("heading", { name: /the fair test is ready/i }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /run the fair test/i }),
+    ).toBeEnabled();
+    expect(screen.queryByText(/new customers 59\.4%/i)).not.toBeInTheDocument();
   });
 
   it("keeps the replay label persistent across the judged flow", async () => {
@@ -990,7 +1069,7 @@ describe("CounterLab judged flow", () => {
     render(<App />);
 
     await user.click(
-      screen.getByRole("button", { name: /replay verified session/i }),
+      screen.getByRole("button", { name: /watch verified replay/i }),
     );
     expect(
       (await screen.findAllByText(/verified replay/i)).length,
@@ -1081,7 +1160,7 @@ describe("CounterLab judged flow", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: /your notebook made a claim/i,
+        name: /what result are you trying to understand/i,
       }),
     ).toBeInTheDocument();
     expect(
@@ -1106,7 +1185,7 @@ describe("CounterLab judged flow", () => {
     });
 
     const landingTitle = await screen.findByRole("heading", {
-      name: /your notebook made a claim/i,
+      name: /what result are you trying to understand/i,
     });
     expect(landingTitle).toHaveFocus();
     expect(screen.queryByLabelText("Replay status")).not.toBeInTheDocument();
@@ -1160,12 +1239,12 @@ describe("CounterLab judged flow", () => {
     expect(window.location.pathname).toBe("/");
     expect(
       screen.getByRole("heading", {
-        name: /your notebook made a claim/i,
+        name: /what result are you trying to understand/i,
       }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", {
-        name: /your notebook made a claim/i,
+        name: /what result are you trying to understand/i,
       }),
     ).toHaveFocus();
   });

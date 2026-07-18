@@ -1,45 +1,10 @@
 import type { RecentProject, StudioContext } from "./types";
 
-const stages = [
-  { id: "question", route: "claim", label: "Question" },
-  { id: "prediction", route: "belief", label: "Prediction" },
-  { id: "test", route: "build", label: "Test" },
-  { id: "boundary", route: "reality", label: "Boundary" },
-  { id: "apply", route: "reality", label: "Apply" },
-  { id: "repair", route: "reality", label: "Repair" },
-] as const;
-
-function stagePosition(context: StudioContext): number {
-  if (context.stage === "live-setup" || context.stage === "claim") return 0;
-  if (context.stage === "belief") return 1;
-  if (context.stage === "build" || context.stage === "live-compile") return 2;
-  const state = context.session?.state;
-  if (
-    state === "PATCH_COMPILING" ||
-    state === "PATCH_REJECTED" ||
-    state === "PATCH_VERIFIED" ||
-    state === "REASONING_DIFF_ISSUED" ||
-    state === "PROOF_CAPSULE_ISSUED" ||
-    state === "TRANSFER_PASSED"
-  ) {
-    return 5;
-  }
-  if (
-    state === "REVISION_RECORDED" ||
-    state === "TRANSFER_IN_PROGRESS" ||
-    state === "TRANSFER_FAILED"
-  ) {
-    return 4;
-  }
-  return 3;
-}
-
 export function ProjectSidebar({
   context,
   recentProjects,
   onNewAnalysis,
   onShowEvidence,
-  onNavigateStage,
   onOpenRecent,
   onOpenCommands,
 }: {
@@ -47,11 +12,9 @@ export function ProjectSidebar({
   recentProjects: readonly RecentProject[];
   onNewAnalysis: () => void;
   onShowEvidence: () => void;
-  onNavigateStage: (stage: (typeof stages)[number]["route"]) => void;
   onOpenRecent: (project: RecentProject) => void;
   onOpenCommands: () => void;
 }) {
-  const currentPosition = stagePosition(context);
   const evidenceCells =
     context.artifact?.cells
       .filter(
@@ -95,31 +58,6 @@ export function ProjectSidebar({
           </span>
         </button>
       </section>
-
-      <nav className="studio-stage-nav" aria-label="Session stages">
-        <p>Learning path</p>
-        <ol>
-          {stages.map(({ id, route, label }, index) => (
-            <li
-              className={`${index === currentPosition ? "current" : ""} ${index < currentPosition ? "complete" : ""}`}
-              key={id}
-            >
-              <span>{index < currentPosition ? "✓" : index + 1}</span>
-              {index < currentPosition ? (
-                <button
-                  type="button"
-                  aria-label={`Review ${label}`}
-                  onClick={() => onNavigateStage(route)}
-                >
-                  {label}
-                </button>
-              ) : (
-                <strong>{label}</strong>
-              )}
-            </li>
-          ))}
-        </ol>
-      </nav>
 
       {evidenceCells.length > 0 && (
         <section className="studio-side-section evidence-nav">

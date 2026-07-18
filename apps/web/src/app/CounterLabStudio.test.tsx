@@ -19,7 +19,6 @@ describe("CounterLabStudio", () => {
         actions={{
           newAnalysis: vi.fn(),
           showEvidence: vi.fn(),
-          navigateStage: vi.fn(),
           startOver: vi.fn(),
           openRecent: vi.fn(),
         }}
@@ -38,16 +37,9 @@ describe("CounterLabStudio", () => {
     expect(
       screen.getByRole("button", { name: /evidence & proof/i }),
     ).toHaveAttribute("aria-expanded", "true");
-    for (const stage of [
-      "Question",
-      "Prediction",
-      "Test",
-      "Boundary",
-      "Apply",
-      "Repair",
-    ]) {
-      expect(screen.getByText(stage)).toBeInTheDocument();
-    }
+    expect(
+      screen.queryByRole("navigation", { name: /session stages/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("opens the keyboard command palette without hiding visible controls", () => {
@@ -58,7 +50,6 @@ describe("CounterLabStudio", () => {
         actions={{
           newAnalysis: analyze,
           showEvidence: vi.fn(),
-          navigateStage: vi.fn(),
           startOver: vi.fn(),
           openRecent: vi.fn(),
         }}
@@ -78,31 +69,6 @@ describe("CounterLabStudio", () => {
     ).toBeInTheDocument();
   });
 
-  it("lets a learner revisit completed stages without resetting the session", () => {
-    const navigateStage = vi.fn();
-    render(
-      <CounterLabStudio
-        context={{ ...context, stage: "reality" }}
-        actions={{
-          newAnalysis: vi.fn(),
-          showEvidence: vi.fn(),
-          navigateStage,
-          startOver: vi.fn(),
-          openRecent: vi.fn(),
-        }}
-      >
-        <main>Reality</main>
-      </CounterLabStudio>,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: /prediction/i }));
-    expect(navigateStage).toHaveBeenCalledWith("belief");
-    expect(screen.getByRole("button", { name: /test/i })).toBeEnabled();
-    expect(screen.getByText("Boundary").closest("li")).toHaveClass(
-      "current",
-    );
-  });
-
   it("supports arrow-key navigation across Evidence & proof tabs", () => {
     render(
       <CounterLabStudio
@@ -110,7 +76,6 @@ describe("CounterLabStudio", () => {
         actions={{
           newAnalysis: vi.fn(),
           showEvidence: vi.fn(),
-          navigateStage: vi.fn(),
           startOver: vi.fn(),
           openRecent: vi.fn(),
         }}
