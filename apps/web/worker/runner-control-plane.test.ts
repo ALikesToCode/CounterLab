@@ -165,7 +165,10 @@ describe("HttpRunnerDispatcher", () => {
         instanceGetTimeoutMS: 10_000,
         portReadyTimeoutMS: 30_000,
       },
-      startOptions: { envVars: environment },
+      startOptions: {
+        envVars: environment,
+        entrypoint: ["/usr/local/bin/node", "/app/runner.mjs"],
+      },
     });
     expect(startAndWaitForPorts.mock.invocationCallOrder[0]).toBeLessThan(
       fetch.mock.invocationCallOrder[0] ?? 0,

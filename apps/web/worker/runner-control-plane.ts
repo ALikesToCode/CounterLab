@@ -25,7 +25,10 @@ type RunnerInstance = {
       instanceGetTimeoutMS: number;
       portReadyTimeoutMS: number;
     };
-    startOptions: { envVars: Record<string, string> };
+    startOptions: {
+      envVars: Record<string, string>;
+      entrypoint?: string[];
+    };
   }): Promise<void>;
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 };
@@ -165,7 +168,10 @@ export class CloudflareContainerRunnerDispatcher implements RunnerDispatcher {
             instanceGetTimeoutMS: 10_000,
             portReadyTimeoutMS: 30_000,
           },
-          startOptions: { envVars: this.containerEnvironment },
+          startOptions: {
+            envVars: this.containerEnvironment,
+            entrypoint: ["/usr/local/bin/node", "/app/runner.mjs"],
+          },
         });
       } catch (error) {
         lastFailure = error;
