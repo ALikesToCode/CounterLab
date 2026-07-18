@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1",
-  "generatedAt": "2026-07-18T13:33:26Z",
+  "generatedAt": "2026-07-18T15:50:00Z",
   "environmentId": "counterlab-runner-linux-amd64-v2",
   "environmentKind": "local_candidate",
-  "sourceCommit": "ab766d3cee315d201c9446d7bd24ed8c18b8058b",
-  "imageDigest": "sha256:3a18d64a35c2586f84b94f2f63a53c3c6080d12c6e2ac909d4aeca12d6b61c48",
-  "registryHash": "cda87ac3c763466e0eb5494b69a7a5f18460e35f02521e32e86444dd98135589",
-  "bindingsHash": "09dcf634da37dfe3984a28d8ef78753d6bbc9e70168cc40c678f9f1e60ca7d0b",
+  "sourceCommit": "714e5e7b42d39da6dea3b7d4fa181e0984f93568",
+  "imageDigest": "sha256:452351f4e9167e8a2cd30fc82c389d87d103d348b62a1ade097cf130a0f96ac5",
+  "registryHash": "b61bdb976e6622187b7d4b6d67d895beed64619e30b6666e379b231665b039ec",
+  "bindingsHash": "72fcab0d67b5729717e98c28ea8c8c7ed91930a54a294eb3ce64e91faf48d7c2",
   "documents": [
     {
       "id": "node-sbom",
@@ -39,8 +39,8 @@
       "format": "CycloneDX",
       "specVersion": "1.6",
       "componentCount": 2839,
-      "sha256": "c855b07dc5bced4307159c7ce2f1bee876cc6f02702308bf3529a5b68e1d0001",
-      "generator": "syft 1.44.0 counterlab-runner:git-ab766d3cee315d201c9446d7bd24ed8c18b8058b -o cyclonedx-json",
+      "sha256": "926f1cf05e917463acd5d65cbdb3b5a6f0eab7e3ed66959a8558efa40c87d319",
+      "generator": "syft 1.44.0 counterlab-runner:git-714e5e7b42d39da6dea3b7d4fa181e0984f93568 -o cyclonedx-json",
       "toolLockPath": "docs/sbom/tool-lock.json",
       "toolLockSha256": "a80b273e8da8691c1c8695c7ccd351612ffcf69c9abb80a7768973dd210cef75"
     }

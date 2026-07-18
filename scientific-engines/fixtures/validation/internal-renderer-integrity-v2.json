@@ -3,7 +3,7 @@
   "evidenceId": "internal-renderer-integrity-v2",
   "kind": "integrity",
   "files": {
-    "apps/web/src/App.tsx": "b1b22453f55baf54de929e72463b26280a121b9f83127ccd36c755dd3a61df8f",
+    "apps/web/src/App.tsx": "c6398bc3e6a8214641a2c7be35d014d0aa513cb4ac0b494faa2174fb3db4831d",
     "apps/web/src/components/generative-ui/BoundaryMapBlock.tsx": "b754c1153aac9b2ce12fc069364fd7f240a27035f757dfc1106a979b79a09a77",
     "apps/web/src/components/lesson/InteractiveImbalanceLab.tsx": "9867c97567fae859070bb8cecc812e674fc2fba27e2e243f72b88c816525b948",
     "apps/web/src/components/proof/ProofCapsuleView.tsx": "6a3d9554199f39f3772f7e20aad6cb0cb76202ab6352f10d38f2ff26e2ccacd9",
