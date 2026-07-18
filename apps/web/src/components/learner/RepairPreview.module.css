@@ -1,0 +1,93 @@
+.preview {
+  padding: clamp(20px, 4vw, 30px);
+  border: 1px solid #d8dee6;
+  border-radius: 16px;
+  color: #07152a;
+  background: #fffdf8;
+  font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
+}
+
+.preview header > span {
+  color: #007a78;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.preview header h2 {
+  margin: 7px 0 0;
+  font-family: "Newsreader Variable", "Iowan Old Style", Georgia, serif;
+  font-size: clamp(28px, 5vw, 38px);
+  font-weight: 520;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+.preview header p {
+  max-width: 700px;
+  margin: 10px 0 0;
+  color: #4c5d73;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.columns section {
+  padding: 18px;
+  border: 1px solid #d8dee6;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.columns section:last-child {
+  border-color: #b8dcd7;
+  background: #f3fbf9;
+}
+
+.columns h3 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+.columns ul {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 13px 0 0;
+  list-style: none;
+}
+
+.columns li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 7px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.columns li span {
+  color: #007a78;
+  font-weight: 900;
+}
+
+@media (max-width: 680px) {
+  .columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview *,
+  .preview *::before,
+  .preview *::after {
+    scroll-behavior: auto;
+  }
+}

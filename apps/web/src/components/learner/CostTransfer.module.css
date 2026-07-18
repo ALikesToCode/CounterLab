@@ -1,0 +1,226 @@
+.transfer {
+  padding: clamp(20px, 4vw, 32px);
+  border: 1px solid #d8dee6;
+  border-radius: 16px;
+  color: #07152a;
+  background: #fffdf8;
+  font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
+}
+
+.transfer header > span {
+  color: #007a78;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.transfer header h2 {
+  margin: 7px 0 0;
+  font-family: "Newsreader Variable", "Iowan Old Style", Georgia, serif;
+  font-size: clamp(28px, 5vw, 40px);
+  font-weight: 520;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+.transfer header p {
+  max-width: 760px;
+  margin: 10px 0 0;
+  color: #4c5d73;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.evidenceStory {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.6fr);
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.evidenceStory table {
+  width: 100%;
+  table-layout: fixed;
+  overflow: hidden;
+  border: 1px solid #cbd8e8;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.evidenceStory caption {
+  padding: 12px 14px;
+  color: #17345c;
+  background: #f4f7fc;
+  font-size: 15px;
+  font-weight: 750;
+  text-align: left;
+}
+
+.evidenceStory th,
+.evidenceStory td {
+  padding: 12px;
+  border-top: 1px solid #d8dee6;
+  border-left: 1px solid #d8dee6;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.evidenceStory tr > :first-child {
+  border-left: 0;
+}
+
+.evidenceStory thead th,
+.evidenceStory tbody th {
+  color: #17345c;
+  background: #f4f7fc;
+  font-weight: 750;
+}
+
+.evidenceStory .costly {
+  color: #6b5100;
+  background: #fff4cf;
+  font-weight: 800;
+}
+
+.evidenceStory dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.evidenceStory dl > div {
+  display: grid;
+  align-content: center;
+  min-height: 96px;
+  padding: 14px;
+  border: 1px solid #d8dee6;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.evidenceStory dt {
+  color: #4c5d73;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.evidenceStory dd {
+  margin: 7px 0 0;
+  font-family: "Newsreader Variable", serif;
+  font-size: 21px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.questions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.questions fieldset {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #d8dee6;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.questions .evidenceChoices {
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.questions legend {
+  padding: 0 4px;
+  font-size: 15px;
+  font-weight: 750;
+  line-height: 1.4;
+}
+
+.questions label {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  min-height: 56px;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 1px solid #d8dee6;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.questions label:has(input:checked) {
+  border-color: #245eea;
+  background: #f2f6ff;
+}
+
+.questions label:has(input:focus-visible) {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 2px;
+}
+
+.questions input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: #245eea;
+}
+
+.questions label span {
+  display: grid;
+  gap: 3px;
+}
+
+.questions label strong {
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.questions label small {
+  color: #4c5d73;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.questions :disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+@media (max-width: 760px) {
+  .evidenceStory,
+  .questions,
+  .questions .evidenceChoices {
+    grid-template-columns: 1fr;
+  }
+
+  .questions .evidenceChoices {
+    grid-column: auto;
+  }
+
+  .evidenceStory th,
+  .evidenceStory td {
+    padding: 9px 7px;
+    font-size: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .transfer *,
+  .transfer *::before,
+  .transfer *::after {
+    scroll-behavior: auto;
+  }
+}

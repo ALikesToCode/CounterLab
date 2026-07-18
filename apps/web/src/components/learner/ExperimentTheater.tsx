@@ -145,6 +145,7 @@ export function ExperimentTheater({
       ) : (
         <div className={styles.verifiedContent}>
           <section
+            id="experiment-theater-comparison"
             className={styles.comparison}
             role="img"
             aria-label={verifiedPayload.comparison.accessibleSummary}

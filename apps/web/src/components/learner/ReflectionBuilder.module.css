@@ -1,0 +1,203 @@
+.builder {
+  padding: clamp(20px, 4vw, 32px);
+  border: 1px solid #d8dee6;
+  border-radius: 16px;
+  color: #07152a;
+  background: #fffdf8;
+  font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
+}
+
+.builder header > span {
+  color: #007a78;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.builder header h2 {
+  margin: 7px 0 0;
+  font-family: "Newsreader Variable", "Iowan Old Style", Georgia, serif;
+  font-size: clamp(28px, 5vw, 40px);
+  font-weight: 520;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+.builder header p {
+  max-width: 720px;
+  margin: 10px 0 0;
+  color: #4c5d73;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  margin: 22px 0 0;
+  border: 0;
+}
+
+.mode legend {
+  width: 100%;
+  margin-bottom: 6px;
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.mode label {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 12px;
+  border: 1px solid #cdd6e2;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.mode input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: #245eea;
+}
+
+.mode label:has(input:checked) {
+  border-color: #245eea;
+  background: #f2f6ff;
+}
+
+.mode label:has(input:focus-visible),
+.clause select:focus-visible,
+.editor textarea:focus-visible,
+.evidence a:focus-visible {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 2px;
+}
+
+.clauses {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.clause {
+  display: grid;
+  align-content: start;
+  padding: 16px;
+  border: 1px solid #d8dee6;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.clause > label {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.clause > label span {
+  color: #245eea;
+  font-family: "Newsreader Variable", serif;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.clause select {
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 34px 9px 10px;
+  margin-top: 10px;
+  border: 1px solid #aeb9c8;
+  border-radius: 9px;
+  color: #07152a;
+  background: #fff;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.evidence {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.evidence a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  color: #245eea;
+  text-underline-offset: 3px;
+}
+
+.freeNote {
+  padding: 14px 16px;
+  margin: 18px 0 0;
+  border-left: 4px solid #b8dcd7;
+  color: #4c5d73;
+  background: #f3fbf9;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.editor {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.editor > span {
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.editor textarea {
+  width: 100%;
+  min-height: 132px;
+  resize: vertical;
+  padding: 14px;
+  border: 1px solid #aeb9c8;
+  border-radius: 10px;
+  color: #07152a;
+  background: #fff;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.builder :disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+@media (max-width: 760px) {
+  .clauses {
+    grid-template-columns: 1fr;
+  }
+
+  .mode {
+    display: grid;
+  }
+
+  .mode label {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .builder *,
+  .builder *::before,
+  .builder *::after {
+    scroll-behavior: auto;
+  }
+}

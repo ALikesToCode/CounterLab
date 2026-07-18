@@ -6,9 +6,115 @@ import {
   type SessionState,
   type SessionView,
 } from "../../api";
+import {
+  CostTransfer,
+  type CostMatrixCopy,
+  type CostTransferChoice,
+} from "../learner/CostTransfer";
+import { ReflectionBuilder } from "../learner/ReflectionBuilder";
 
 type StrategyChoice = "" | "highest_accuracy" | "cost_aware_threshold";
 type RiskChoice = "" | "overall_error_rate" | "minority_false_negative_cost";
+type EvidenceChoice =
+  "confusion_matrix_exposes_misses" | "prevalence_shift_changes_precision";
+
+const defaultImbalanceReflection =
+  "When one class is rare,\nI should inspect class-specific errors and deployment costs,\nbecause high overall accuracy can hide missed rare events.";
+
+const reflectionWhen = [
+  {
+    id: "rare-class",
+    text: "one class is rare",
+    evidenceHref: "#experiment-theater-comparison",
+    evidenceLabel: "verified headline and rare-class comparison",
+  },
+  {
+    id: "prevalence-shifts",
+    text: "deployment prevalence changes",
+    evidenceHref: "#experiment-theater-comparison",
+    evidenceLabel: "verified prevalence scenario",
+  },
+] as const;
+
+const reflectionActions = [
+  {
+    id: "class-errors",
+    text: "inspect class-specific errors and deployment costs",
+    evidenceHref: "#experiment-theater-comparison",
+    evidenceLabel: "verified confusion evidence",
+  },
+  {
+    id: "baseline",
+    text: "compare against the majority baseline",
+    evidenceHref: "#experiment-theater-comparison",
+    evidenceLabel: "verified majority baseline",
+  },
+] as const;
+
+const reflectionReasons = [
+  {
+    id: "accuracy-hides",
+    text: "high overall accuracy can hide missed rare events",
+    evidenceHref: "#experiment-theater-comparison",
+    evidenceLabel: "verified rare-class recall",
+  },
+  {
+    id: "metrics-shift",
+    text: "threshold and prevalence change the useful metric",
+    evidenceHref: "#experiment-theater-comparison",
+    evidenceLabel: "verified threshold and prevalence runs",
+  },
+] as const;
+
+const strategyOptions = [
+  {
+    value: "highest_accuracy",
+    label: "Keep the threshold with the highest overall accuracy",
+    description: "Optimize the overall correct count.",
+  },
+  {
+    value: "cost_aware_threshold",
+    label: "Lower threshold based on missed-defect cost",
+    description: "Include the deployment cost of missing a defect.",
+  },
+] as const satisfies readonly CostTransferChoice<StrategyChoice>[];
+
+const riskOptions = [
+  {
+    value: "overall_error_rate",
+    label: "Only the total error rate matters",
+    description: "Treat both error types as interchangeable.",
+  },
+  {
+    value: "minority_false_negative_cost",
+    label: "Missing a defect is the costly error",
+    description: "Give missed defects their supplied deployment weight.",
+  },
+] as const satisfies readonly CostTransferChoice<RiskChoice>[];
+
+const evidenceOptions = [
+  {
+    value: "confusion_matrix_exposes_misses",
+    label: "Confusion matrix shows misses",
+    description: "Separates missed defects from false alarms.",
+  },
+  {
+    value: "prevalence_shift_changes_precision",
+    label: "Prevalence changes precision",
+    description: "Uses the fixed lower-prevalence deployment scenario.",
+  },
+] as const satisfies readonly CostTransferChoice<EvidenceChoice>[];
+
+const defectMatrix = {
+  alertLabel: "Alert",
+  noAlertLabel: "No alert",
+  actualPositiveLabel: "Actual defect",
+  actualNegativeLabel: "Actual clear",
+  caughtLabel: "caught",
+  falseAlarmLabel: "false alarm",
+  missedLabel: "missed",
+  correctClearLabel: "correct clear",
+} as const satisfies CostMatrixCopy;
 
 export function ImbalanceTransferLesson({
   sessionId,
@@ -23,10 +129,12 @@ export function ImbalanceTransferLesson({
   transferOutcome?: "PASSED" | "FAILED";
   updateSession: (session: SessionView) => void;
 }) {
-  const [revisionDraft, setRevisionDraft] = useState(revision ?? "");
+  const [revisionDraft, setRevisionDraft] = useState(
+    revision ?? defaultImbalanceReflection,
+  );
   const [strategyChoice, setStrategyChoice] = useState<StrategyChoice>("");
   const [riskChoice, setRiskChoice] = useState<RiskChoice>("");
-  const [evidenceChoices, setEvidenceChoices] = useState<string[]>([]);
+  const [evidenceChoices, setEvidenceChoices] = useState<EvidenceChoice[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,14 +156,6 @@ export function ImbalanceTransferLesson({
     } finally {
       setBusy(false);
     }
-  };
-
-  const toggleEvidence = (value: string, checked: boolean) => {
-    setEvidenceChoices((current) =>
-      checked
-        ? [...new Set([...current, value])]
-        : current.filter((item) => item !== value),
-    );
   };
 
   const submitTransfer = async () => {
@@ -98,21 +198,20 @@ export function ImbalanceTransferLesson({
   if (revision === undefined) {
     return (
       <section className="revision panel imbalance-revision">
-        <div>
-          <p className="eyebrow">In your words</p>
-          <h2>Write the rule you would reuse on the next rare event.</h2>
-          <p>
-            Avoid these exact numbers. Name the baseline, error, or deployment
-            condition you would check.
-          </p>
-        </div>
-        <label htmlFor="imbalance-revision">Your revised mental model</label>
-        <textarea
-          id="imbalance-revision"
-          rows={4}
+        <ReflectionBuilder
           value={revisionDraft}
-          onChange={(event) => setRevisionDraft(event.target.value)}
+          onRevisionChange={setRevisionDraft}
+          whenOptions={reflectionWhen}
+          actionOptions={reflectionActions}
+          becauseOptions={reflectionReasons}
+          initialSelection={{
+            whenId: "rare-class",
+            actionId: "class-errors",
+            becauseId: "accuracy-hides",
+          }}
+          editorLabel="Your revised mental model"
           placeholder="When one class is rare, I should…"
+          disabled={busy}
         />
         <button
           className="button button-primary"
@@ -136,89 +235,23 @@ export function ImbalanceTransferLesson({
         </div>
         <span className="patch-lock">Patch locked until this passes</span>
       </div>
-      <p className="transfer-scenario">
-        Defects are rarer next month, and shipping one missed defect costs far
-        more than manually inspecting a false alarm. The model score
-        distribution is otherwise unchanged.
-      </p>
-
-      <fieldset className="transfer-question">
-        <legend>Which evaluation decision matches deployment?</legend>
-        <label>
-          <input
-            type="radio"
-            name="imbalance-transfer-strategy"
-            checked={strategyChoice === "highest_accuracy"}
-            onChange={() => setStrategyChoice("highest_accuracy")}
-          />
-          <span>Keep the threshold with the highest overall accuracy</span>
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="imbalance-transfer-strategy"
-            checked={strategyChoice === "cost_aware_threshold"}
-            onChange={() => setStrategyChoice("cost_aware_threshold")}
-          />
-          <span>Lower threshold based on missed-defect cost</span>
-        </label>
-      </fieldset>
-
-      <fieldset className="transfer-question">
-        <legend>Which error needs explicit weight?</legend>
-        <label>
-          <input
-            type="radio"
-            name="imbalance-transfer-risk"
-            checked={riskChoice === "overall_error_rate"}
-            onChange={() => setRiskChoice("overall_error_rate")}
-          />
-          <span>Only the total error rate matters</span>
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="imbalance-transfer-risk"
-            checked={riskChoice === "minority_false_negative_cost"}
-            onChange={() => setRiskChoice("minority_false_negative_cost")}
-          />
-          <span>Missing a defect is the costly error</span>
-        </label>
-      </fieldset>
-
-      <fieldset className="transfer-question transfer-evidence">
-        <legend>Select the evidence that supports the decision</legend>
-        <label>
-          <input
-            type="checkbox"
-            checked={evidenceChoices.includes(
-              "confusion_matrix_exposes_misses",
-            )}
-            onChange={(event) =>
-              toggleEvidence(
-                "confusion_matrix_exposes_misses",
-                event.target.checked,
-              )
-            }
-          />
-          <span>Confusion matrix shows misses</span>
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={evidenceChoices.includes(
-              "prevalence_shift_changes_precision",
-            )}
-            onChange={(event) =>
-              toggleEvidence(
-                "prevalence_shift_changes_precision",
-                event.target.checked,
-              )
-            }
-          />
-          <span>Prevalence changes precision</span>
-        </label>
-      </fieldset>
+      <CostTransfer
+        heading="Which mistakes matter at deployment?"
+        scenario="Defects are rarer next month, and shipping one missed defect costs far more than manually inspecting a false alarm. The model score distribution is otherwise unchanged."
+        matrix={defectMatrix}
+        missedCost="Far higher than manual inspection"
+        deploymentPrevalence="Rarer next month (fixed scenario)"
+        strategyValue={strategyChoice}
+        strategyOptions={strategyOptions}
+        onStrategyChange={setStrategyChoice}
+        riskValue={riskChoice}
+        riskOptions={riskOptions}
+        onRiskChange={setRiskChoice}
+        evidenceValues={evidenceChoices}
+        evidenceOptions={evidenceOptions}
+        onEvidenceChange={setEvidenceChoices}
+        disabled={busy}
+      />
 
       {transferOutcome === "FAILED" || state === "TRANSFER_FAILED" ? (
         <p className="transfer-feedback fail" role="status">

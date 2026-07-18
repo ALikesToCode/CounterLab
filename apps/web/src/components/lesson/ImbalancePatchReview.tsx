@@ -9,10 +9,24 @@ import {
   type SessionView,
 } from "../../api";
 import { useRunnerEvents } from "../../hooks/useRunnerEvents";
+import { RepairPreview } from "../learner/RepairPreview";
 import { ReasoningDiffView } from "../proof/ReasoningDiffView";
 
 const activeJobIdKey = "counterlab.activeRunnerJobId";
 const activeJobKindKey = "counterlab.activeRunnerJobKind";
+
+const imbalanceRepairChanges = [
+  "class-preserving holdout",
+  "majority baseline beside the model",
+  "confusion counts and rare-class metrics",
+] as const;
+
+const imbalanceRepairPreserves = [
+  "target",
+  "model family",
+  "unrelated cells",
+  "original notebook",
+] as const;
 
 function eventTitle(kind: string): string {
   const titles: Record<string, string> = {
@@ -157,16 +171,22 @@ export function ImbalancePatchReview({
       session.proofCapsule !== undefined
     ) {
       return (
-        <ReasoningDiffView
-          diff={session.reasoningDiffV2}
-          capsule={session.proofCapsule}
-          patch={patch}
-          patchDownloadUrl={counterLabApi.patchDownloadUrl(session.sessionId)}
-          proofCapsuleDownloadUrl={counterLabApi.proofCapsuleDownloadUrl(
-            session.sessionId,
-          )}
-          publishReplay={() => counterLabApi.publishReplay(session.sessionId)}
-        />
+        <>
+          <RepairPreview
+            changed={imbalanceRepairChanges}
+            preserved={imbalanceRepairPreserves}
+          />
+          <ReasoningDiffView
+            diff={session.reasoningDiffV2}
+            capsule={session.proofCapsule}
+            patch={patch}
+            patchDownloadUrl={counterLabApi.patchDownloadUrl(session.sessionId)}
+            proofCapsuleDownloadUrl={counterLabApi.proofCapsuleDownloadUrl(
+              session.sessionId,
+            )}
+            publishReplay={() => counterLabApi.publishReplay(session.sessionId)}
+          />
+        </>
       );
     }
     return (
@@ -196,6 +216,10 @@ export function ImbalancePatchReview({
             <strong>{patch.patchedArtifactHash.slice(0, 12)}…</strong>
           </div>
         </div>
+        <RepairPreview
+          changed={imbalanceRepairChanges}
+          preserved={imbalanceRepairPreserves}
+        />
         <pre className="diff" aria-label="Verified imbalance notebook diff">
           <code>{patch.diff}</code>
         </pre>
@@ -241,6 +265,10 @@ export function ImbalancePatchReview({
         <li>Compute the majority-class baseline</li>
         <li>Add confusion counts, precision, recall, F1, and PR-AUC</li>
       </ol>
+      <RepairPreview
+        changed={imbalanceRepairChanges}
+        preserved={imbalanceRepairPreserves}
+      />
       {busy && (
         <div className="patch-live-trace" role="status">
           <strong>

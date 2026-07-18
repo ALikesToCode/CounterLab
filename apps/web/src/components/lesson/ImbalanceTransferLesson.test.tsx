@@ -70,4 +70,24 @@ describe("ImbalanceTransferLesson", () => {
       expect.objectContaining({ state: "TRANSFER_PASSED" }),
     );
   });
+
+  it("keeps repair locked after the fixed evaluator rejects the transfer", () => {
+    render(
+      <ImbalanceTransferLesson
+        sessionId="session_1"
+        state="TRANSFER_FAILED"
+        revision="For rare events, inspect class-specific errors before trusting accuracy."
+        transferOutcome="FAILED"
+        updateSession={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/patch locked until this passes/i)).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /no patch was generated/i,
+    );
+    expect(
+      screen.queryByRole("button", { name: /verify notebook repair/i }),
+    ).not.toBeInTheDocument();
+  });
 });

@@ -29,6 +29,13 @@ import { CounterLabStudio } from "./app/CounterLabStudio";
 import { parseStudioLocation, studioPath } from "./app/AppRouter";
 import { LearnerCoach } from "./components/learner/LearnerCoach";
 import { LearnerProgress } from "./components/learner/LearnerProgress";
+import { ReflectionBuilder } from "./components/learner/ReflectionBuilder";
+import { RepairPreview } from "./components/learner/RepairPreview";
+import {
+  TimelineTransfer,
+  type TimelineFeatureOption,
+  type TimelineSplitOption,
+} from "./components/learner/TimelineTransfer";
 import {
   ExperimentTheater,
   type ExperimentTheaterVerifiedPayload,
@@ -72,9 +79,102 @@ type Stage =
   | "live-setup"
   | "live-compile";
 type PredictionChoice = "stays-high" | "falls" | "unsure";
+type LeakageTransferSplit = "" | "random" | "time";
+type LeakageTransferRisk = "" | "price" | "future";
 type TransferState =
   "locked" | "ready" | "failed" | "passed" | "patching" | "patched";
 type ReviewStep = LearnerStageId;
+
+const defaultLeakageReflection =
+  "When rows repeat the same entity,\nI should hold out whole entities,\nbecause random rows can share identity across train and test.";
+
+const leakageReflectionWhen = [
+  {
+    id: "repeated-entity",
+    text: "rows repeat the same entity",
+    evidenceHref: "#experiment-theater-comparison",
+    evidenceLabel: "verified familiar-row and new-customer comparison",
+  },
+  {
+    id: "future-observations",
+    text: "later observations must represent deployment",
+    evidenceHref: "#experiment-theater-comparison",
+    evidenceLabel: "verified controlled comparison",
+  },
+] as const;
+
+const leakageReflectionActions = [
+  {
+    id: "whole-entities",
+    text: "hold out whole entities",
+    evidenceHref: "#experiment-theater-comparison",
+    evidenceLabel: "zero-overlap whole-customer run",
+  },
+  {
+    id: "deployment-boundary",
+    text: "place the test boundary where deployment places it",
+    evidenceHref: "#experiment-theater-comparison",
+    evidenceLabel: "held-fixed variables and verified finding",
+  },
+] as const;
+
+const leakageReflectionReasons = [
+  {
+    id: "identity-overlap",
+    text: "random rows can share identity across train and test",
+    evidenceHref: "#experiment-theater-comparison",
+    evidenceLabel: "verified entity-overlap evidence",
+  },
+  {
+    id: "claim-match",
+    text: "the evaluation must match the population named in the claim",
+    evidenceHref: "#experiment-theater-comparison",
+    evidenceLabel: "verified new-customer comparison",
+  },
+] as const;
+
+const leakageTimelineSplits = [
+  {
+    value: "random",
+    label: "Random daily rows",
+    description: "Mix observations from all dates.",
+    visual: "mixed",
+  },
+  {
+    value: "time",
+    label: "Time-ordered holdout",
+    description: "Train on earlier dates and test on later dates.",
+    visual: "ordered",
+  },
+] as const satisfies readonly TimelineSplitOption<LeakageTransferSplit>[];
+
+const leakageTimelineFeatures = [
+  {
+    value: "price",
+    label: "Known item price",
+    description: "Known when the prediction is made.",
+    crossesNow: false,
+  },
+  {
+    value: "future",
+    label: "Centered rolling target",
+    description: "Reads outcomes from later days.",
+    crossesNow: true,
+  },
+] as const satisfies readonly TimelineFeatureOption<LeakageTransferRisk>[];
+
+const leakageRepairChanges = [
+  "random rows → whole-customer holdout",
+  "identity removed from model input",
+  "overlap reported beside accuracy",
+] as const;
+
+const leakageRepairPreserves = [
+  "target",
+  "model family",
+  "unrelated cells",
+  "original notebook",
+] as const;
 
 function sessionProofReady(session: SessionView | null): boolean {
   return (
@@ -1885,7 +1985,7 @@ function LeakageRealityScreen({
   const [revision, setRevision] = useState(
     session?.revision ??
       window.localStorage.getItem(storageKeys.replayRevision) ??
-      "",
+      defaultLeakageReflection,
   );
   const initialTransferState: TransferState = session?.patchResult
     ? "patched"
@@ -1898,8 +1998,8 @@ function LeakageRealityScreen({
           : "locked";
   const [transferState, setTransferState] =
     useState<TransferState>(initialTransferState);
-  const [splitChoice, setSplitChoice] = useState("");
-  const [riskChoice, setRiskChoice] = useState("");
+  const [splitChoice, setSplitChoice] = useState<LeakageTransferSplit>("");
+  const [riskChoice, setRiskChoice] = useState<LeakageTransferRisk>("");
   const [patch, setPatch] = useState<PatchResult | null>(
     session?.patchResult ?? null,
   );
@@ -2231,16 +2331,26 @@ function LeakageRealityScreen({
         session.reasoningDiffV2 !== undefined &&
         session.proofCapsule !== undefined &&
         patch !== null ? (
-          <ReasoningDiffView
-            diff={session.reasoningDiffV2}
-            capsule={session.proofCapsule}
-            patch={patch}
-            patchDownloadUrl={counterLabApi.patchDownloadUrl(session.sessionId)}
-            proofCapsuleDownloadUrl={counterLabApi.proofCapsuleDownloadUrl(
-              session.sessionId,
-            )}
-            publishReplay={() => counterLabApi.publishReplay(session.sessionId)}
-          />
+          <>
+            <RepairPreview
+              changed={leakageRepairChanges}
+              preserved={leakageRepairPreserves}
+            />
+            <ReasoningDiffView
+              diff={session.reasoningDiffV2}
+              capsule={session.proofCapsule}
+              patch={patch}
+              patchDownloadUrl={counterLabApi.patchDownloadUrl(
+                session.sessionId,
+              )}
+              proofCapsuleDownloadUrl={counterLabApi.proofCapsuleDownloadUrl(
+                session.sessionId,
+              )}
+              publishReplay={() =>
+                counterLabApi.publishReplay(session.sessionId)
+              }
+            />
+          </>
         ) : (
           <section className="reasoning-diff panel">
             <div className="panel-title final-title">
@@ -2310,6 +2420,10 @@ function LeakageRealityScreen({
                 <span>Time-aware forecasting choice passed</span>
               </div>
             </div>
+            <RepairPreview
+              changed={leakageRepairChanges}
+              preserved={leakageRepairPreserves}
+            />
             <details className="verified-patch-details">
               <summary>See the verified notebook change</summary>
               <p>
@@ -2354,6 +2468,10 @@ function LeakageRealityScreen({
           </p>
         </div>
 
+        <RepairPreview
+          changed={leakageRepairChanges}
+          preserved={leakageRepairPreserves}
+        />
         <section className="transfer-win panel">
           <div className="transfer-win-seal">
             <Mark name="check" />
@@ -2449,82 +2567,19 @@ function LeakageRealityScreen({
               prediction is made.
             </p>
           </div>
-          <div
-            className="forecast-window"
-            aria-label="Forecast information timeline"
-          >
-            <div className="forecast-labels">
-              <span>Available history</span>
-              <strong>Prediction time</strong>
-              <span>Unavailable future</span>
-            </div>
-            <div className="forecast-track">
-              {[-3, -2, -1, 0, 1, 2, 3].map((day) => (
-                <span
-                  className={day === 0 ? "now" : day > 0 ? "future" : "past"}
-                  key={day}
-                >
-                  {day === 0 ? "NOW" : day > 0 ? `+${day}` : day}
-                </span>
-              ))}
-            </div>
-          </div>
-          <div className="transfer-questions">
-            <fieldset>
-              <legend>Which evaluation design matches deployment?</legend>
-              <label className="choice">
-                <input
-                  type="radio"
-                  name="transfer-split"
-                  checked={splitChoice === "random"}
-                  onChange={() => setSplitChoice("random")}
-                />
-                <span>
-                  <strong>Random daily rows</strong>
-                  <small>Mix observations from all dates.</small>
-                </span>
-              </label>
-              <label className="choice">
-                <input
-                  type="radio"
-                  name="transfer-split"
-                  checked={splitChoice === "time"}
-                  onChange={() => setSplitChoice("time")}
-                />
-                <span>
-                  <strong>Time-ordered holdout</strong>
-                  <small>Train on earlier dates and test on later dates.</small>
-                </span>
-              </label>
-            </fieldset>
-            <fieldset>
-              <legend>Which feature leaks future information?</legend>
-              <label className="choice">
-                <input
-                  type="radio"
-                  name="transfer-risk"
-                  checked={riskChoice === "price"}
-                  onChange={() => setRiskChoice("price")}
-                />
-                <span>
-                  <strong>Known item price</strong>
-                  <small>Known when the prediction is made.</small>
-                </span>
-              </label>
-              <label className="choice">
-                <input
-                  type="radio"
-                  name="transfer-risk"
-                  checked={riskChoice === "future"}
-                  onChange={() => setRiskChoice("future")}
-                />
-                <span>
-                  <strong>Centered rolling target</strong>
-                  <small>Reads outcomes from later days.</small>
-                </span>
-              </label>
-            </fieldset>
-          </div>
+          <TimelineTransfer
+            heading="What information exists at prediction time?"
+            scenario="A demand forecast learns from nearby days. Choose the split and feature that match what is available when a real prediction is made."
+            trainingRange="Jan — Mar"
+            testRange="Apr — Jun"
+            splitValue={splitChoice}
+            splitOptions={leakageTimelineSplits}
+            onSplitChange={setSplitChoice}
+            featureValue={riskChoice}
+            featureOptions={leakageTimelineFeatures}
+            onFeatureChange={setRiskChoice}
+            disabled={actionBusy}
+          />
           <button
             className="button button-primary"
             type="button"
@@ -2582,7 +2637,7 @@ function LeakageRealityScreen({
         available: true,
         completed: true,
         content: (
-          <details className="exact-results">
+          <details id="leakage-verified-evidence" className="exact-results">
             <summary>Show exact values and run details</summary>
             <ResultTable result={result} />
             <code>result {result.resultHash.slice(0, 12)}…</code>
@@ -2630,20 +2685,19 @@ function LeakageRealityScreen({
         completed: session?.revision !== undefined,
         content: (
           <section className="revision panel">
-            <div>
-              <p className="eyebrow">In your words</p>
-              <h4>Write the rule you’ll use next time</h4>
-              <p>
-                Focus on how you would split the data—not these exact scores.
-              </p>
-            </div>
-            <label htmlFor="revision">Your revised mental model</label>
-            <textarea
-              id="revision"
-              rows={4}
+            <ReflectionBuilder
               value={revision}
-              onChange={(event) => setRevision(event.target.value)}
-              placeholder="When rows repeat an entity, I should…"
+              onRevisionChange={setRevision}
+              whenOptions={leakageReflectionWhen}
+              actionOptions={leakageReflectionActions}
+              becauseOptions={leakageReflectionReasons}
+              initialSelection={{
+                whenId: "repeated-entity",
+                actionId: "whole-entities",
+                becauseId: "identity-overlap",
+              }}
+              editorLabel="Your revised mental model"
+              disabled={actionBusy}
             />
             <button
               className="button button-primary"
