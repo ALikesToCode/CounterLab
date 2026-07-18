@@ -1,21 +1,63 @@
 # Progress
 
-Updated: 2026-07-16
+Updated: 2026-07-18
 
 ## Current status
 
-CounterLab Studio now has three contract-separated modes: sample lesson, live
-notebook analysis, and verified replay. Both released concept packs—entity
+### Learner UX v6.1 local checkpoint
+
+Branch `feat/learner-ux-v6.1` now implements the question-first six-stage
+learner presentation locally: one progress model; Notebook Evidence Story and
+privacy summary; Model Duel and Prediction Seal; Fair Test Builder and
+Experiment Theater; Boundary Hunt; Reflection Builder; TimelineTransfer and
+CostTransfer; RepairPreview; capability-first completion; deterministic hints;
+and privacy-safe interaction evidence. Milestone commits run from `273e2b8`
+through `755f698`; the recovery checkpoint is `b4e23ca`.
+
+This UX pass did not change notebook intake, mode provenance, Belief Spec or
+Prediction semantics, Experiment IR, candidate scoring, fixed kernels, metric
+formulas, Boundary computation, transfer evaluation, patch authority, Reasoning
+Diff, Proof Capsule, or deployment configuration. The interaction components
+consume existing signed or integrity-bound data and do not calculate
+authoritative metrics in the browser.
+
+Milestone 4, the interactive Verified Sample Playground, was intentionally
+omitted. No independently admitted fixed-kernel fixture authority existed for
+the proposed matrix; hashing a fixture alongside the output produced by the
+same generator would be self-authentication. The sample therefore remains
+fixed, live exploration remains runner-backed, and replay remains read-only.
+
+Final Milestone 8 local evidence: web Vitest passed 45 files and 254 tests;
+repository, web, and Worker TypeScript checks passed; the Vite/Worker build
+passed; and the secret scan passed across 597 files. The Cloak-only Playwright
+suite collected 22 tests from one spec file. No browser tests were executed:
+`CLOAK_CDP_ENDPOINT` was absent, the harness exited 1, and it refused to launch
+stock Chromium. Consequently there are no current-branch screenshots,
+screen-reader sessions, rendered viewport/accessibility results, or Web Vitals.
+An earlier full root Vitest attempt had 33 files/439 tests pass and 7 files/29
+tests fail across sandbox isolation, loopback `EPERM`, runtime/mode assumptions,
+Codex child-process requirements, and release-source drift; it is not a green
+release gate. The final Milestone 9 documentation-state secret scan passed
+across 598 files.
+
+The complete local evidence, performance sizes, and remaining manual checks are
+recorded in
+[`docs/LEARNER_UX_V6_1_EVIDENCE.md`](LEARNER_UX_V6_1_EVIDENCE.md).
+
+CounterLab Studio has three contract-separated modes: sample lesson, live
+notebook analysis, and verified replay. Both released ML Subject Packs—entity
 leakage and class imbalance/metric choice—have fixed kernels, independent
-Plan/result verification, interactive controls, deterministic transfer tasks,
-source-free Patch Plans, verified copied-notebook patches, Reasoning Diffs, and
-Proof Bundles.
+contract/result verification, interactive controls, deterministic transfer,
+source-free Patch Plans, and verified copied-notebook patches. Native local
+paths produce Reasoning Diff v2 and Proof Capsule v2; historical sample/replay
+paths retain their labelled Proof Bundles.
 
 The hosted architecture is implemented as a Vite/React Cloudflare control plane
 with D1/R2 plus a Container-backed Durable Object runner. Runtime Codex writes
-only typed JSON Plans and display-only rationale. The public critical path never
-executes model-authored Python. The existing adapter-code compiler remains a
-separately labelled advanced local proof and replay.
+only bounded typed scientific artifacts and display-only scene/rationale; its
+separate repair turn writes only a Patch Plan and rationale. The public critical
+path never executes model-authored Python. The existing adapter-code compiler
+remains a separately labelled advanced local proof and replay.
 
 The v5 scientific-method packages are implemented and independently tested:
 `BeliefSpecV2`, Experiment IR v5 with a v2 projection adapter, the deterministic
@@ -114,9 +156,10 @@ evidence; those identities are not interchangeable with the new candidate.
 - **In progress:** Cloudflare registry push, qualified Container/Worker
   promotion, and exact-version production smoke for the schema-fixed v5.1
   candidate.
-- **Pending:** current-source desktop and 390 px browser journeys, chat-first
-  learner simplification, clean-clone, secret, accessibility, performance, and
-  final release gates.
+- **Pending:** current-source 1440 × 900, 1280 × 720, and 390 × 844
+  CloakBrowser journeys; rendered accessibility and Web Vitals evidence;
+  clean-clone; and final release gates. Chat-first learner simplification and
+  the current-tree secret scan are complete locally.
 - **Blocked by phase order:** verified physics/free-fall and learner-impact
   expansion. Physics does not begin until both ML concepts pass the new public
   production authority gate.
@@ -139,7 +182,7 @@ evidence; those identities are not interchangeable with the new candidate.
 | Canonical JSON authority | done locally | Commits `47f49a7` and `b4a68ff` preserve dangerous own keys, write sorted object text directly, use UTF-16 key order in both runtimes, reject lone surrogates, preserve Unicode normalization, and pass shared hash vectors without changing normal historical evidence. Proof Capsule v2 records `counterlab-canonical-json-v1`. | Rerun final release vectors after the last lock/source change. |
 | Reasoning Diff v2 and Proof Capsule v2 | done locally | Commits through `7e82a5d` add native session authority, deterministic canonical archives, semantic verification, immutable content-addressed storage, safe public receipts, HMAC/integrity policy, exact-byte download, duplicate-callback recovery, tamper rejection, validate/inspect/replay CLI support, a six-dimension learner Reasoning Diff, direct `.counterlab` download for both ML packs, and persistently labelled hosted Capsule replay. No v5 object is cast into legacy proof. | Qualify the exact image and prove both live concepts plus replay in the new production smoke. |
 | Boundary Map authority and learner rendering | done locally | Commits through `5b89084`, `77e1cba`, `9c4fc23`, and `f50bab1` bind the exact pack sweep into compile authority, execute only registered grids, freeze and independently reverify lineage and values, issue an integrity/HMAC receipt, reject without result release, expose immutable authority-checked retrieval, gate revision, and render only a verified map with a semantic table and keyboard cell inspection. Both concepts and rejection/reconnect paths are covered. | Requalify both concepts in the final image and run the current desktop/390 px browser journey. |
-| Simplified Theater and Judge Mode | done locally; browser pending | `DESIGN.md`, the focused-theater work, hosted Capsule replay commits, and `ef066fa` remove the permanent agent cockpit, consolidate technical evidence into a collapsed Evidence & proof drawer, enforce Question → Prediction → Test → Boundary → Apply → Repair, and add evidence-first Judge routes with labelled authority. | Run updated desktop/390 px CloakBrowser journeys against the promoted source, then complete the chat-first clarity pass without exposing results before Prediction. |
+| Simplified Theater and Judge Mode | done locally; browser pending | `DESIGN.md`, the focused-theater work, hosted Capsule replay commits, `ef066fa`, and v6.1 commits `e4ecf9c` through `755f698` remove the permanent agent cockpit, add the question-first flow and learner components, consolidate technical evidence into a collapsed Evidence & proof drawer, and preserve labelled Judge routes. | Run the 22 current CloakBrowser journeys at 1440 × 900, 1280 × 720, and 390 × 844; capture accessibility/performance evidence; then qualify the exact source. |
 | Physics/free-fall | blocked by phase order | No verified public support is claimed. | Start only after both live ML concepts pass the new production authority gate. |
 | Final release | in progress | Exact source-bound runner `bcd5df1…` built as local OCI `588b0963…`; scientific gate passes as authority `9cd4478e…`. Previous production v2 smoke remains valid only for that deployment. | Evidence-only commit, registry push, qualification, deploy, exact-version smoke, current browser journeys, and remaining release checks. |
 
@@ -198,9 +241,10 @@ Latest local v5.1 verification checkpoint (2026-07-16):
 - Production D1 migrations `0004_boundary_request_purpose.sql` and
   `0005_proof_capsule_replays.sql` are applied; all 137 existing runner-job
   purpose values were preserved across migration 0004.
-- Next active slice: commit the exact evidence, push and qualify the matching
-  Cloudflare image, deploy the Worker/Container, and run the full production
-  smoke before beginning the chat-first learner-clarity pass.
+- Next active release slice: qualify the exact source, execute the current
+  CloakBrowser journeys, push and qualify the matching Cloudflare image, deploy
+  the Worker/Container, and run the full production smoke. The learner-clarity
+  implementation itself is complete locally.
 
 ## Acceptance matrix
 
@@ -227,12 +271,12 @@ Latest local v5.1 verification checkpoint (2026-07-16):
 | Held-out intake/routing                      | pass    | `counterlab-held-out-v2`: 10/10 cases pass; four leakage, four imbalance, two unsupported.                                                                                                                                                |
 | Held-out fixed full-loop completion          | partial | 7/8 supported notebooks complete Plan verification → fixed result → transfer → verified patch without source edits. Random Forest reaches result/transfer then receives `PATCH_ESTIMATOR_OUTSIDE_CONTRACT`. Human review remains pending. |
 | Learner pilot                                | partial | Paired-crossover protocol, consent/privacy note, randomization, schema, and analysis script exist. No participants or learner outcomes are claimed.                                                                                       |
-| TypeScript/Web/Python suites                 | pass    | `COUNTERLAB_E2E_BASE_URL=https://counterlab.cserules.workers.dev ./scripts/test-all.sh` passed 303 root TypeScript tests, 110 web/Worker tests, 157 Python tests, strict TypeScript checks, and the production-backed browser slice.              |
-| New-version browser E2E                      | partial | Historical production v2 has 13 passing CloakBrowser journeys and a full live smoke. Current v5.1 desktop/390 px, reconnect, replay, and live browser journeys remain to be executed after promotion. |
+| TypeScript/Web/Python suites                 | partial | Current repository/web/Worker TypeScript and web Vitest (45 files/254 tests) pass. An earlier current full root Vitest attempt passed 33 files/439 tests and failed 7 files/29 tests; Python was not rerun for this docs-only milestone. The historical production-backed suite remains evidence only for its recorded source. |
+| New-version browser E2E                      | partial | Historical production v2 has 13 passing CloakBrowser journeys and a full live smoke. The v6.1 suite statically collects 22 current tests, but zero ran because no `CLOAK_CDP_ENDPOINT` was available; desktop, 1280 px, mobile, reconnect, replay, live-mocked, accessibility, and download journeys remain unqualified. |
 | Container image build and production deploy | partial | The schema-fixed image is source-bound to `bcd5df1…`, local OCI `588b0963…`, and passes the local engine gate. Public Worker `89db95bc…` still runs the preceding v5.1 image until replacement qualification/deploy completes. |
 | Production live runner smoke                | fail    | Worker `89db95bc…` passed readiness, health, secret scan, Judge Mode, Sample, and replay; untouched leakage failed before state advancement on the now-fixed v2 schema. No result leaked. Both concepts must pass after redeploy. |
 | One-command local demo                      | pass    | `./scripts/clean-demo.sh` regenerated both fixtures, passed 5 focused tests, confirmed current local D1 migrations, and served healthy kernel and Worker endpoints before its exact processes were stopped.                               |
-| Clean-clone/release check/secret scan       | partial | The pre-hardening Studio tree passed a fresh-clone release check and 334-file scan. The current v5.1 tree has not yet rerun the final clean-clone, SBOM, dependency, and secret gates. |
+| Clean-clone/release check/secret scan       | partial | The final v6.1 repository secret scan passed across 598 files. The pre-hardening Studio tree passed a fresh-clone release check, but the current tree has not rerun the final clean-clone, SBOM, dependency, or full release gates. |
 
 ## Latest verified commands
 

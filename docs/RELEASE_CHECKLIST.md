@@ -134,10 +134,12 @@ Report SHA-256:
 
 ## Current-tree release commands
 
-- [ ] `./scripts/test-all.sh` after the latest production-recovery commit.
+- [ ] `./scripts/test-all.sh` on the v6.1 branch. An earlier root Vitest attempt
+      passed 33 files/439 tests and failed 7 files/29 tests; do not call the
+      complete gate green.
 - [ ] `pnpm run held-out:run` after the v5.1 contract migrations.
-- [ ] `pnpm run format:check` after all v5.1 changes.
-- [ ] `python3 scripts/secret-scan.py` after all v5.1 changes.
+- [ ] `pnpm run format:check` after all v6.1 changes.
+- [x] Repository secret scan after Milestone 9: passed across 598 files.
 - [ ] `./scripts/clean-demo.sh` after all v5.1 changes.
 - [ ] `./scripts/reproduce-session.sh leakage-01` after all v5.1 changes.
 - [ ] `./scripts/replay-patch.sh leakage-01` after all v5.1 changes.
@@ -157,8 +159,8 @@ Report SHA-256:
 - [x] Updated focused Theater desktop and 390 px production screenshots using
       CloakBrowser after deployment.
 
-The checked browser items describe the released Studio journey. The following
-v5.1 product gates remain pending and must not be inferred from them:
+The checked browser items describe the historical released Studio journey. The
+following current-source product gates must not be inferred from them:
 
 - [x] Belief Spec v2 and Experiment IR v5 with replay-safe adapters;
 - [x] fixed experiment scorer and epistemic tri-state verdict;
@@ -170,11 +172,14 @@ v5.1 product gates remain pending and must not be inferred from them:
 - [x] six-stage Question, Prediction, Test, Boundary, Apply, Repair Studio
       navigation with a collapsed Evidence & proof drawer and Activity tab;
 - [ ] final chat-first/Judge browser journey at desktop and 390 px;
-- [ ] verified physics free-fall pack or an explicit omission;
+- [x] physics/free-fall explicitly omitted from the learner UX v6.1 pass; no new
+      Subject Pack is claimed;
 - [x] Proof Capsule v2 archive, Worker issuance/download, and local labelled
       replay authority;
 - [x] native Reasoning Diff/Proof Capsule review and direct download UI;
-- [ ] hosted Proof Capsule replay projection and final `/judge` integration;
+- [x] hosted Proof Capsule replay projection and `/judge` integration pass local
+      React/API tests; current browser and production qualification remain
+      pending;
 - [ ] current mobile, keyboard, screen-reader, reduced-motion, and Web Vitals
       execution against the final UI;
 - [ ] learner pilot rows, or an explicit `EVALUATION PENDING` release label.
@@ -182,3 +187,43 @@ v5.1 product gates remain pending and must not be inferred from them:
 Production release identifiers and the residual held-out limitation are recorded
 in `docs/PROGRESS.md`; no learner-study outcome or formal sandbox proof is
 claimed.
+
+## Learner UX v6.1 local gate — 2026-07-18
+
+The boxes below apply only to branch `feat/learner-ux-v6.1`. Historical browser
+or production evidence above does not qualify this source.
+
+- [x] Question-first landing and one reviewable Question → Prediction → Test →
+      Boundary → Apply → Repair progress model are implemented.
+- [x] Evidence Story, privacy summary, Model Duel, Prediction Seal, Fair Test
+      Builder, Experiment Theater, Boundary Hunt, Reflection Builder, visual
+      transfers, RepairPreview, completion, and fixed contextual hints have
+      component/integration coverage.
+- [x] Strict privacy-safe learner interaction schema, append-only D1 migration,
+      API, and client recording pass tests and remain outside scientific
+      evidence authority.
+- [x] Web Vitest passed 45 files and 254 tests.
+- [x] Repository, web, and Worker TypeScript checks passed.
+- [x] Vite/Worker production build passed with a unique repository-local output
+      directory and `--emptyOutDir=false`.
+- [x] Repository secret scan passed across 598 files after the final
+      documentation update (the Milestone 8 code-state scan covered 597).
+- [x] Cloak-only Playwright configuration statically collected 22 tests from one
+      spec file and refuses credentialed/non-loopback target URLs.
+- [x] Missing `CLOAK_CDP_ENDPOINT` failed closed with status 1; no stock Chromium
+      fallback was launched.
+- [x] Verified Sample Playground was explicitly omitted because no independently
+      admitted fixture authority existed; no browser metric computation or mode
+      fallback was introduced.
+- [ ] Execute 1440 × 900, 1280 × 720, and 390 × 844 CloakBrowser journeys.
+- [ ] Execute keyboard-only completion and real screen-reader-name inspection.
+- [ ] Verify rendered focus, typography floors, 44 px targets, reduced motion,
+      async announcements, exact tables, and no horizontal overflow.
+- [ ] Capture current-source screenshots and measure Web Vitals.
+- [ ] Make the full root Vitest/release gate green or approve narrowly documented
+      environment-specific exclusions.
+- [ ] Run a clean-clone release check, exact-image qualification, deployment,
+      and exact-version production smoke.
+
+Detailed evidence and limitations are in
+[`LEARNER_UX_V6_1_EVIDENCE.md`](LEARNER_UX_V6_1_EVIDENCE.md).

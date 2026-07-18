@@ -2,19 +2,20 @@
 
 ## Components and authority
 
-| Component                  | Runtime                        | Responsibility                                                             |
-| -------------------------- | ------------------------------ | -------------------------------------------------------------------------- |
-| `apps/web`                 | Cloudflare Vite Worker + React | UI, typed routes, D1 state, R2 private objects, optional GPT analyst       |
-| `packages/contracts`       | TypeScript                     | Zod contracts, JSON Schema, shared result/state types                      |
-| `packages/notebook-parser` | TypeScript                     | Non-executing intake and Artifact Manifest                                 |
-| `packages/belief-analyst`  | TypeScript/server              | Responses API structured Belief Test and deterministic approved fallback   |
-| `packages/session-core`    | TypeScript                     | Legal transitions, immutable prediction, event chain                       |
-| `packages/codex-client`    | Container/local Node           | App Server stdio, hosted Plan compiler, replay/disabled clients, sanitizer |
-| `services/hosted-runner`   | Cloudflare Container           | Scoped jobs, Plan files, repairs, fixed-kernel/patch process bridge        |
-| `services/runner`          | Advanced local Python + Docker | Legacy adapter workspace/AST policy and candidate execution                |
-| `services/kernel`          | Container/local Python         | Both concept fixtures, fixed Plans, transfer, patch, canonical truth       |
-| `packages/plan-verifier`   | Worker                         | Independent Plan/result/Patch Plan invariants                              |
-| `packages/proof-bundle`    | TypeScript                     | Hash chain verification, Reasoning Diff, Proof Bundle                      |
+| Component                  | Runtime                        | Responsibility                                                                           |
+| -------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------- |
+| `apps/web`                 | Cloudflare Vite Worker + React | UI, typed routes, D1 state, R2 private objects, optional GPT analyst                     |
+| `packages/contracts`       | TypeScript                     | Zod contracts, JSON Schema, shared result/state types                                    |
+| `packages/notebook-parser` | TypeScript                     | Non-executing intake and Artifact Manifest                                               |
+| `packages/belief-analyst`  | TypeScript/server              | Responses API structured Belief Spec and deterministic approved fallback                 |
+| `packages/session-core`    | TypeScript                     | Legal transitions, immutable prediction, event chain                                     |
+| `packages/codex-client`    | Container/local Node           | App Server stdio, bounded scientific compiler, replay/disabled clients, sanitizer        |
+| `services/hosted-runner`   | Cloudflare Container           | Scoped jobs, bounded artifacts, repairs, fixed-kernel/patch process bridge               |
+| `services/runner`          | Advanced local Python + Docker | Legacy adapter workspace/AST policy and candidate execution                              |
+| `services/kernel`          | Container/local Python         | Both Subject Pack fixtures, fixed operations, Boundary, transfer, patch, canonical truth |
+| `packages/plan-verifier`   | Worker                         | Fixed candidate scorer and independent contract/IR/result/patch invariants               |
+| `packages/proof-bundle`    | TypeScript                     | Hash chain verification, Reasoning Diff, Proof Bundle                                    |
+| `packages/proof-capsule`   | TypeScript                     | Native Proof Capsule v2 archive and semantic authority                                   |
 
 The React shell keeps learner actions in fixed components. `json-render` may
 compose a read-only proof summary from already-sanitized public events using a
@@ -25,14 +26,15 @@ no transition, verifier, kernel, or patch authority.
 
 ```text
 Notebook -> parser -> Artifact Manifest -> D1/R2
-Claim + manifest -> GPT/approved analyst -> Belief Test
-Learner confirmation -> immutable Prediction Contract
-Belief Test -> Codex compiler -> source-free Experiment Plan
-Plan -> independent verifier -> fixed concept interpreter
-Verified result -> independent result verifier
-Verified result -> revision -> fixed forecasting transfer
+Question + manifest -> GPT/approved analyst -> Belief Spec
+Learner confirmation -> immutable Prediction
+Belief Spec -> Codex -> Discrimination Contract + Experiment IR + scene/rationale
+bounded candidates -> fixed scorer -> selected Experiment IR
+selected IR -> independent verification -> fixed Subject Pack kernel
+fixed result -> epistemic verifier -> SUPPORTS | INCONCLUSIVE | REJECTED
+verified result -> fixed Boundary Map -> learner revision -> fixed transfer
 TRANSFER_PASSED -> source-free Patch Plan -> copied-notebook fixed patch -> verifier
-Evidence chain -> Reasoning Diff + Proof Bundle
+native evidence chain -> Reasoning Diff v2 + Proof Capsule v2
 ```
 
 No chart is rendered until the session has a schema-valid
@@ -57,10 +59,12 @@ and expiration. The Worker retains the private key; the Container receives only
 the public verification key. Sanitized public events are append-only and
 reconnect from a persisted browser cursor.
 
-The Container starts Codex App Server over stable stdio JSONL. Codex can write
-only `experiment-plan.json`, `patch-plan.json`, and `public-rationale.md`. The
-JSON Plans contain registered operation IDs and lineage—never executable code or
-commands. The fixed kernel and patch engine run outside Codex's decision
+The Container starts Codex App Server over stable stdio JSONL. The scientific
+compile may write only `discrimination-contract.json`, `experiment-ir.json`,
+`lab-scene.json`, and `public-rationale.md`; the separate repair turn may write
+only `patch-plan.json` and `public-rationale.md`. Typed artifacts contain
+registered operation IDs and lineage—never executable code or commands. The
+fixed scorer, kernel, verifier, and patch engine run outside Codex's decision
 authority. Container disk is ephemeral; authoritative inputs and outputs are
 hash-bound in R2/D1.
 
@@ -85,10 +89,13 @@ mutations outside the candidate container.
 
 ## Persistence and replay
 
-Every mutation appends a canonical Evidence Event with sequence, hashes,
-previous hash, actor, timing/model/commit fields where available, and concise
-payload. Proof Bundles are integrity-hashed; they are called signed only when
-`COUNTERLAB_SIGNING_KEY` produces an HMAC.
+Every scientific-state mutation appends a canonical Evidence Event with
+sequence, hashes, previous hash, actor, timing/model/commit fields where
+available, and concise payload. Native sessions produce Proof Capsule v2;
+historical sample and replay may retain Proof Bundle contracts. Either is called
+signed only when the configured key actually produces a signature. Privacy-safe
+learner interaction records use a separate append-only store and do not enter
+evidence authority.
 
 The checked-in replay keeps raw evidence files, a compact browser summary, real
 model/Codex versions, result/adapter hashes, and a visible limitation: host
@@ -104,12 +111,13 @@ shape. Hosted source-free compilation instead stages credentials for App Server
 initialization, revokes them before `thread/start`, and never exposes signing or
 model credentials to generated child commands.
 
-## v5.1 migration boundary
+## v5.1 production boundary
 
-The deployed architecture above currently uses Belief Test, Experiment Plan,
-binary Plan verification, and Proof Bundle contracts. Belief Spec v2,
-Experiment IR v5, the fixed discrimination scorer, epistemic tri-state verdict,
-Boundary Map, scientific-engine registry, and Proof Capsule v2 are additive
-versioned migrations. Existing signed artifacts remain readable through
-adapters; documentation must not imply those pending contracts already own
-production authority.
+Belief Spec v2, Experiment IR v5, the fixed discrimination scorer, epistemic
+tri-state verdict, Boundary Map, scientific-engine registry, Reasoning Diff v2,
+and Proof Capsule v2 are implemented and locally integration-tested. They have
+not completed the exact-source production qualification described in
+`docs/PROGRESS.md`. Existing deployed and replayed Belief Test, Experiment Plan,
+binary-verifier, and Proof Bundle artifacts remain readable through adapters and
+retain their historical hashes. Local implementation evidence must not be
+described as current public deployment authority.

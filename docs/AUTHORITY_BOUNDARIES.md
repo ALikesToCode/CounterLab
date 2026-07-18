@@ -4,17 +4,18 @@ CounterLab separates proposal, computation, verification, and learner judgment. 
 
 ## Responsibility matrix
 
-| Authority                 | Owns                                                                                           | May produce                                                                                               | Must not decide or access                                                                                                        |
-| ------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Learner                   | Claim, Belief Test confirmation or rejection, immutable prediction, revision, transfer attempt | Text claim, confirmation, prediction confidence, reusable rule, fixed transfer choices                    | Experimental metrics before prediction, verifier outcome, hidden answers                                                         |
-| GPT-5.6 reasoning analyst | Evidence-linked hypothesis formalization                                                       | Schema-valid Belief Test, alternatives, uncertainty, smallest discriminating intervention                 | Cell execution, experimental results, generated-code validity, mastery, patch unlock                                             |
-| Runtime Codex compiler    | Bounded compilation of an approved contract                                                    | Hosted Experiment/Patch Plans and display-only rationale; advanced local adapter/public tests             | Metric formulas, executable hosted code, transfer scoring, final validity, hidden verifier, held-out data, secrets, upload bytes |
-| Fixed Python kernel       | Numeric truth for the documented concept                                                       | Splits, preprocessing, model training, metrics, overlap, fingerprints, chart-ready data, transfer scoring | Learner-model diagnosis, compiler validity, prose grading                                                                        |
-| Local candidate runner    | Static and OS execution policy                                                                 | Workspace-policy result, bounded execution evidence, command duration and exit status                     | Numeric truth, verifier verdict, credentials, network access                                                                     |
-| Frozen host verifier      | Named falsifiable validity checks                                                              | Current `VERIFIED` or `REJECTED`, invariant failures, observed/expected values, minimal counterexamples   | Repair implementation, learner judgment, model reasoning                                                                         |
-| Cloudflare Worker         | Intake, API validation, D1/R2 control plane, sample/replay, analyst, job dispatch              | Typed responses, scoped runner jobs/tokens, validated callbacks, reconnectable public events              | Child processes, direct filesystem access, accepting runner self-attestation, pretending replay is live                          |
-| Container runner          | Process-capable hosted workflow                                                                | Codex stdio relay, source-free Plan files, fixed interpreter/patch process evidence                       | D1/R2 credentials, unrelated objects, browser secrets, weakening verifier contracts                                              |
-| Advanced local runner     | Adapter-code proof                                                                             | AST/workspace policy, no-network candidate evidence, host verification                                    | Weakening contracts during a session, accepting a rejected candidate                                                             |
+| Authority                 | Owns                                                                                                       | May produce                                                                                                   | Must not decide or access                                                                                                        |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Learner                   | Question, Belief Spec confirmation or rejection, immutable Prediction, revision, transfer, repair approval | Claim, confirmation, confidence, reusable rule, fixed transfer choices, patch approval                        | Experimental metrics before Prediction, verifier outcome, hidden answers                                                         |
+| GPT-5.6 reasoning analyst | Evidence-linked hypothesis formalization                                                                   | Schema-valid Belief Spec, alternatives, uncertainty, candidate interventions                                  | Cell execution, experimental results, experiment selection, validity, mastery, patch unlock                                      |
+| Runtime Codex compiler    | Bounded compilation of an approved contract                                                                | Discrimination Contract, Experiment IR, scene/rationale, or separate Patch Plan; advanced local adapter/tests | Metric formulas, executable hosted code, transfer scoring, final validity, hidden verifier, held-out data, secrets, upload bytes |
+| Fixed Subject Pack scorer | Candidate eligibility, fixed score, deterministic selection                                                | Selected registered experiment and score breakdown                                                            | Hidden outcomes, model confidence as numeric truth, result verification                                                          |
+| Fixed Python kernel       | Numeric and canonical truth for the documented Subject Pack                                                | Splits, models, metrics, overlap, Boundary cells, chart data, transfer result                                 | Learner-model diagnosis, compiler validity, prose grading                                                                        |
+| Local candidate runner    | Static and OS execution policy                                                                             | Workspace-policy result, bounded execution evidence, command duration and exit status                         | Numeric truth, verifier verdict, credentials, network access                                                                     |
+| Frozen verifier           | Technical and epistemic validity, result/UI binding, reproducibility, patch scope                          | `SUPPORTS`, `INCONCLUSIVE`, or `REJECTED`; invariant failures and bounded counterexamples                     | Repair implementation, learner judgment, model reasoning                                                                         |
+| Cloudflare Worker         | Intake, API validation, D1/R2 control plane, sample/replay, analyst, job dispatch                          | Typed responses, scoped runner jobs/tokens, validated callbacks, reconnectable public events                  | Child processes, direct filesystem access, accepting runner self-attestation, pretending replay is live                          |
+| Container runner          | Process-capable hosted workflow                                                                            | Codex stdio relay, bounded artifacts, fixed kernel/patch process evidence                                     | D1/R2 credentials, unrelated objects, browser secrets, weakening verifier contracts                                              |
+| Advanced local runner     | Adapter-code proof                                                                                         | AST/workspace policy, no-network candidate evidence, host verification                                        | Weakening contracts during a session, accepting a rejected candidate                                                             |
 
 ## Evidence flow
 
@@ -23,26 +24,27 @@ untrusted notebook
   -> safe parser (no execution)
   -> Artifact Manifest + learner claim
   -> GPT-5.6 proposal
-  -> learner-confirmed Belief Test
-  -> immutable Prediction Contract
-  -> Runtime Codex source-free Plan proposal
-  -> structural + concept Plan verification
-  -> fixed allow-listed Plan interpreter and kernel
-  -> frozen host verifier
-  -> verified result or structured rejection
+  -> learner-confirmed Belief Spec
+  -> immutable Prediction
+  -> Runtime Codex bounded Discrimination Contract + Experiment IR proposal
+  -> fixed eligibility/scoring/selection + structural/epistemic verification
+  -> fixed allow-listed interpreter and kernel
+  -> frozen result verifier -> SUPPORTS | INCONCLUSIVE | REJECTED
+  -> fixed verified Boundary Map
   -> learner revision and fixed transfer evaluator
   -> separate patch compiler only after transfer passes
   -> patch verifier
-  -> Reasoning Diff + Proof Bundle
+  -> Reasoning Diff v2 + Proof Capsule v2
 ```
 
 Each arrow narrows authority. Downstream evidence may reject an upstream proposal; upstream actors cannot override a downstream verifier.
 
 The advanced local adapter proof follows a separate path through AST/workspace
 policy and no-network candidate execution. Hosted Studio never silently falls
-back to that code-authored path. The v5.1 epistemic tri-state
-`SUPPORTS | INCONCLUSIVE | REJECTED` is a pending contract migration; this
-document does not relabel the current binary verifier as already tri-state.
+back to that code-authored path. Native v5 implements the epistemic tri-state
+`SUPPORTS | INCONCLUSIVE | REJECTED` locally; historical binary-verifier sample
+and replay artifacts retain their recorded contracts and hashes. Production
+qualification for the native chain remains pending.
 
 ## GPT-5.6 boundary
 
@@ -60,7 +62,10 @@ they are not part of prompts, provenance, event payloads, health responses, or
 product branding. The same schema, evidence resolution, refusal handling, and
 state-transition checks apply regardless of endpoint configuration.
 
-Its output is locally validated against the Belief Test schema and every evidence reference must resolve to the Artifact Manifest. `INSUFFICIENT_EVIDENCE` is a valid outcome. A model response cannot advance session state until the learner confirms it.
+Its output is locally validated against the Belief Spec schema and every
+evidence reference must resolve to the Artifact Manifest.
+`INSUFFICIENT_EVIDENCE` is a valid outcome. A model response cannot advance
+session state until the learner confirms it.
 
 GPT may explain verified evidence. It may not fabricate results, execute uploaded code, decide whether Codex output passes, or infer global mastery from learner prose.
 
@@ -79,16 +84,19 @@ schema/documentation, redacted fixture structure, resource limits, and permitted
 outputs. Its complete generated file set is:
 
 ```text
-experiment-plan.json
+discrimination-contract.json
+experiment-ir.json
+lab-scene.json
 public-rationale.md
 ```
 
 The hosted patch turn separately creates `patch-plan.json` and
-`public-rationale.md`. Rationale never determines validity. A Plan cannot contain
-source, commands, formulas, SQL, imports, paths, or literal results. The compiler
-cannot mark its own output verified; the Worker verifies structure, lineage,
-evidence, registered operations, and concept invariants before the Container's
-fixed interpreter can release a result.
+`public-rationale.md`. Scene and rationale never determine validity. Typed
+artifacts cannot contain source, commands, formulas, SQL, imports, arbitrary
+paths, or literal verified results. The compiler cannot mark its own output
+verified; the fixed scorer and Worker verifier check structure, lineage,
+evidence, registered operations, and Subject Pack invariants before the
+Container's fixed interpreter can release a result.
 
 The advanced local proof keeps `artifact-adapter.py` and `public_tests.py`
 behind its exact-file, AST, and Docker policy. It is never an implicit hosted

@@ -6,11 +6,11 @@ scoring, or final verification.
 
 ## Product modes
 
-| Mode            | Model calls                 | Meaning                                                                  |
-| --------------- | --------------------------- | ------------------------------------------------------------------------ |
-| Sample lesson   | None                        | Bundled approved evidence and fixed results; always labelled sample.     |
-| Live notebook   | New analyst and Codex calls | Artifact-specific Belief Test, Plans, fixed execution, patch, and proof. |
-| Verified replay | None                        | Reconstructs stored public events/results; persistent replay label.      |
+| Mode            | Model calls                 | Meaning                                                                                         |
+| --------------- | --------------------------- | ----------------------------------------------------------------------------------------------- |
+| Sample lesson   | None                        | Bundled approved evidence and fixed results; always labelled sample.                            |
+| Live notebook   | New analyst and Codex calls | Artifact-specific Belief Spec, bounded scientific artifacts, fixed execution, patch, and proof. |
+| Verified replay | None                        | Read-only reconstruction of stored public events/results with a persistent replay label.        |
 
 No mode silently falls into another. Missing runner credentials or capability
 returns a typed setup error.
@@ -20,9 +20,10 @@ returns a typed setup error.
 The process-capable runner starts `codex app-server` and uses stable stdio JSONL:
 
 1. `initialize`, then `initialized`;
-2. one fresh thread and turn for the Experiment Plan;
+2. one fresh thread and turn for the bounded scientific compile artifacts;
 3. runtime validation and browser-safe event sanitization;
-4. independent Plan verification outside Codex context;
+4. independent contract/IR verification and fixed candidate scoring outside
+   Codex context;
 5. at most two repairs using only structured counterexamples; and
 6. a separate fresh thread for a Patch Plan after deterministic transfer passes.
 
@@ -32,8 +33,8 @@ compatible default.
 
 ### Inputs
 
-Codex receives only the approved Belief Test, sanitized Artifact Manifest,
-resolved evidence, selected concept-pack capabilities/schema, resource limits,
+Codex receives only the approved Belief Spec, sanitized Artifact Manifest,
+resolved evidence, selected Subject Pack capabilities/schema, resource limits,
 and permitted outputs. It does not receive notebook bytes, raw rows, secrets,
 hidden verifier source, mutation implementations, held-out fixtures, R2/D1
 credentials, or unrelated files.
@@ -41,19 +42,23 @@ credentials, or unrelated files.
 ### Outputs
 
 ```text
-experiment-plan.json
-patch-plan.json
+discrimination-contract.json
+experiment-ir.json
+lab-scene.json
 public-rationale.md
 ```
 
-Experiment and Patch Plans are source-free. Schemas reject executable source,
-shell, SQL, arbitrary formulas, imports, raw paths, network actions, and literal
-result values. `public-rationale.md` is display-only and cannot affect pass/fail.
+The separate patch turn is limited to `patch-plan.json` and
+`public-rationale.md`. Schemas reject executable source, shell, SQL, arbitrary
+formulas, imports, raw paths, network actions, and literal verified result
+values. `lab-scene.json` and `public-rationale.md` describe presentation only
+and cannot affect pass/fail.
 
-The independent verifier resolves every evidence reference, checks lineage and
+The fixed scorer filters and selects only registered eligible experiments. The
+independent verifier resolves every evidence reference, checks lineage and
 registered operations, enforces controlled comparisons and resource limits, and
 returns only invariant, observed, expected, and a minimal counterexample. A
-rejected final Plan releases no result.
+rejected final candidate releases no result.
 
 ## Browser-safe event boundary
 
@@ -124,6 +129,8 @@ PYTHONPATH=services/kernel/src .venv/bin/python -m pytest \
   services/kernel/tests/test_hosted_patch.py
 ```
 
-The runner binding/image are implemented and integration-tested in the
+The native scientific compile, fixed scorer, tri-state verdict, Boundary
+authority, and Proof Capsule v2 are implemented and integration-tested in the
 repository. A fresh public deployment and production live-artifact smoke remain
-required before claiming hosted availability at the public URL.
+required before attributing those contracts to the public URL; historical
+sample/replay artifacts retain their original labels and hashes.

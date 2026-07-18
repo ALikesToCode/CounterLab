@@ -616,3 +616,35 @@ can pass.
   completed in approximately 36 seconds at `medium`; a separate `xhigh` call
   reached the 180-second transport timeout and is recorded as a failed latency
   observation, not a successful run.
+
+## 2026-07-18 — Keep the sample fixed without independent playground authority
+
+- Omit the interactive Verified Sample Playground from v6.1 because the
+  repository has no independently admitted fixed-kernel fixture matrix for the
+  proposed controls.
+- Do not treat a configuration hash, result hash, and integrity hash produced by
+  the same generator as independent verification.
+- Keep the bundled sample fixed, live exploration runner-backed, and replay
+  read-only. The browser computes no authoritative metric and no mode borrows
+  another mode's authority.
+
+## 2026-07-18 — Keep learner interactions outside scientific evidence
+
+- Record only a strict categorical interaction union: stage timing, Prediction
+  choice/confidence, fixed hint ID, Boundary classification, revision authoring
+  mode, transfer outcome, and download actions.
+- Exclude names, raw claims, raw revisions, notebook content, paths, credentials,
+  and other free text by schema rather than log filtering.
+- Store interactions append-only in their own repository. They do not advance
+  session state, alter event-chain integrity, or enter Reasoning Diff or Proof
+  Capsule authority.
+
+## 2026-07-18 — Fail browser QA closed without CloakBrowser
+
+- Require a credential-free `CLOAK_CDP_ENDPOINT` and attach with Playwright's
+  CDP transport. Never launch or silently fall back to stock Chromium.
+- Keep every browser output, profile, cache, report, trace, video, and temporary
+  runtime path inside the verified repository root.
+- When the endpoint is absent, allow static test collection but report zero
+  executed journeys, screenshots, screen-reader sessions, and Web Vitals. Do
+  not substitute historical browser evidence for the current source.

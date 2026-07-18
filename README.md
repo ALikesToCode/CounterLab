@@ -7,42 +7,59 @@ test, refuses invalid evidence, verifies transfer, and only then unlocks repair.
 > Chatbots explain. CounterLab lets reality answer.
 
 CounterLab is a narrow Education-track product for machine-learning evaluation
-misconceptions in supported Jupyter notebooks. Its released concept packs cover
+misconceptions in supported Jupyter notebooks. Its released Subject Packs cover
 entity leakage and class imbalance/metric choice; it is not a generic notebook
 copilot or an unrestricted code runner.
 
 **Live judge surface:** <https://counterlab.cserules.workers.dev>
 
-## The 30-second judged path
+The v6.1 learner UX is implemented locally on
+`feat/learner-ux-v6.1`; it has not been pushed, deployed, or browser-qualified.
+The public URL represents its separately recorded deployment and must not be
+treated as running this branch.
 
-1. Choose **Try instantly**.
-2. Inspect the notebook's computed 98.5% random-row accuracy and exact cell
-   evidence.
-3. Claim that it generalizes to unseen customers.
-4. Confirm the evidence-linked Belief Test and immutably predict the group-split
-   outcome.
-5. Open the Verified Lab: random rows score 98.5%, whole-customer holdout scores
-   59.4%, identity ablation scores 67.4%, and group overlap is zero.
-6. Write a reusable evaluation rule and pass the fixed forecasting transfer.
-7. Verify the unlocked notebook-copy patch, inspect the Reasoning Diff, and
-   export the Proof Bundle.
+## Learner journey
 
-The **Replay verified session** path adds a persistent replay banner and shows a
-real authenticated Codex App Server trace: one run rejected after two capped
-repairs and a separate later run that passed 18 invariants and 12/12 mutations.
-The UI explicitly says the later run is not “repair attempt 3.”
+CounterLab presents one six-stage path while preserving the existing scientific
+state machine and authority gates:
+
+1. **Question** — state a claim or attach a supported notebook. Sample prompts
+   are optional, and Judge Mode remains a secondary route.
+2. **Prediction** — review exact notebook evidence and the sanitized packet,
+   confirm that the two-model comparison captures the learner's view, then seal
+   an immutable categorical prediction and confidence.
+3. **Test** — see why the selected intervention is fair, what changes, and what
+   remains controlled while the bounded compiler, scorer, runner, and verifier
+   do their separate jobs.
+4. **Boundary** — inspect one verified comparison, try a bounded Boundary Hunt,
+   and reveal the full accessible Boundary Map without asking a model or
+   calculating authoritative metrics in the browser.
+5. **Apply** — write or assemble a reusable rule and complete the deterministic
+   timeline or cost transfer.
+6. **Repair** — preview the exact correction and preserved scope, download the
+   verified notebook copy, review the Reasoning Diff, and export the Proof
+   Capsule.
+
+Desktop shows compact reviewable progress. Mobile shows `Step n of 6` with an
+accessible progress dialog. Technical contracts, hashes, event detail, and raw
+proof remain available on demand in **Evidence & proof**. The implementation and
+local verification record is in
+[the v6.1 learner UX evidence](docs/LEARNER_UX_V6_1_EVIDENCE.md).
 
 ## Judge Mode
 
-| Path                    | Meaning                                                                                                                               | Secrets required                           |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| Try instantly           | New D1-backed learner session using stored approved artifacts and real fixed-kernel payloads                                          | No                                         |
-| Generate live           | Artifact-specific GPT analyst plus the authenticated Container runner, typed Plans, fixed kernel, verifier, and copied-notebook patch | Server-side model and runner configuration |
-| Replay verified session | Reconstructs checked-in evidence from actual prior runs; always visibly labelled                                                      | No                                         |
+| Path            | Mode            | Meaning                                                                                                                                                         | Secrets required                           |
+| --------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Verified sample | `sample`        | Bundled approved leakage lesson evidence; clearly labelled, credential-free, and separate from live authority                                                   | No                                         |
+| Live notebook   | `live_notebook` | Artifact-specific GPT analyst plus the authenticated Container runner, typed bounded artifacts, fixed scorer/kernel, frozen verifier, and copied-notebook patch | Server-side model and runner configuration |
+| Verified replay | `replay`        | Read-only reconstruction of stored events and payloads; persistently labelled and unable to make a new model call                                               | No                                         |
 
-Replay does not make a new model call. The rejected compiler run authorized no
-result. The displayed result is tied to the separately verified candidate and
-fixed kernel hash.
+Sample is not live and cannot enter a live session. Replay does not make a new
+model call or borrow sample authority. The rejected compiler run authorized no
+result; the replayed result is tied to the separately verified candidate and
+fixed kernel hash. The v6.1 pass did not add an interactive sample configuration
+matrix because no independently admitted fixture set was available; the browser
+never computes a substitute result.
 
 ## Supported notebook contract
 
@@ -58,10 +75,11 @@ produce typed reasons. Unsupported uploads cannot advance. See
 
 ## Who generates and who decides
 
-### GPT-5.6 generates
+### GPT-5.6 proposes
 
 The official OpenAI JavaScript SDK and Responses API produce a structured
-Belief Test from sanitized evidence, the learner's claim, and concept rules.
+Belief Spec from sanitized evidence, the learner's claim, and Subject Pack
+rules.
 The server defaults to `OPENAI_MODEL=gpt-5.6` and
 `OPENAI_REASONING_EFFORT=medium`, uses `store: false`, hashes the session into a
 safety identifier, and resolves every evidence reference locally. Invalid,
@@ -79,41 +97,54 @@ confirmation. Editing the claim or artifact invalidates the approval.
 
 ### Runtime Codex generates
 
-For the hosted Studio, Codex App Server over stdio JSONL generates only:
+For the hosted scientific compile, Codex App Server over stdio JSONL generates
+only:
 
 ```text
-experiment-plan.json
-patch-plan.json
+discrimination-contract.json
+experiment-ir.json
+lab-scene.json
 public-rationale.md
 ```
 
-Only the JSON Plans are authoritative; the rationale is display-only. Plans can
-compose registered fixed operations but cannot contain source code, commands,
-SQL, formulas, imports, paths, or literal results. Codex may receive structured
-verifier counterexamples and gets at most two repair attempts. Browser events
-contain sanitized plans, files, diffs, command summaries, durations, exit
-codes, and verifier counterexamples—never private reasoning.
+The separate hosted repair turn may generate only `patch-plan.json` and
+`public-rationale.md`. Typed JSON can compose registered fixed operations but
+cannot contain source code, commands, SQL, formulas, imports, arbitrary paths,
+or literal verified results. `lab-scene.json` and `public-rationale.md` are
+display-only. Codex may receive structured verifier counterexamples and gets at
+most two repair attempts. Browser events contain sanitized plans, files, diffs,
+command summaries, durations, exit codes, and verifier counterexamples—never
+private reasoning.
 
 The separate advanced local proof retains the older three-file adapter path
 (`experiment-plan.json`, `artifact-adapter.py`, and `public_tests.py`) behind AST
 policy and a no-network container. It is never used silently by hosted Studio.
 
-### Fixed code computes
+### Fixed code selects and computes
 
-The Python kernel owns fixture generation, random/group/stratified splits,
-preprocessing, model training, entity overlap, majority baselines, confusion
-counts, accuracy, precision, recall, F1, PR-AUC, contextual ROC-AUC, threshold
-and prevalence scenarios, transfer scoring, canonical serialization, and
-chart-ready results.
+The Subject Pack scorer alone applies eligibility gates, scores candidates, and
+selects the final experiment. Fixed kernels own fixture generation,
+random/group/stratified splits, preprocessing, model training, entity overlap,
+majority baselines, confusion counts, accuracy, precision, recall, F1, PR-AUC,
+contextual ROC-AUC, threshold and prevalence scenarios, Boundary Map cells,
+transfer scoring, canonical serialization, and chart-ready results.
 
-### The external verifier proves
+### The frozen verifier releases
 
 For the documented concept contracts, the verifier establishes named properties
 such as zero group overlap, identity removal, controlled variables, majority
 baseline computation, confusion-matrix consistency, threshold/prevalence
 response, label responsiveness, deterministic hashes, honest chart payloads,
-runner controls, and changed-cell scope. It does not prove global mastery,
-causality, or formal sandbox security.
+runner controls, result-to-UI binding, and changed-cell scope. Only verified
+payloads may drive result-bearing learner visuals. It does not prove global
+mastery, causality, or formal sandbox security.
+
+### The learner decides
+
+The learner owns the Question, confirms whether the Belief Spec captures their
+meaning, seals the Prediction, authors the revision, takes the transfer action,
+and approves repair. CounterLab never reduces that role to accepting a model's
+answer and never grades learner prose as experimental authority.
 
 The complete authority matrix is in
 [docs/AUTHORITY_BOUNDARIES.md](docs/AUTHORITY_BOUNDARIES.md).
@@ -124,12 +155,12 @@ The complete authority matrix is in
 Vite React Studio
     │ typed requests + reconnectable public events
 Cloudflare Worker ── D1 sessions/jobs/event chain
-    │              └─ R2 private inputs/Plans/results/patches/proofs
+    │              └─ R2 private inputs/artifacts/results/patches/proofs
     ├─ Responses API (optional live analyst)
     ├─ stored sample/replay path
     └─ Container-backed Durable Object
           ├─ Codex App Server over stdio JSONL
-          ├─ source-free Plan compiler + two-repair cap
+          ├─ bounded scientific compiler + two-repair cap
           ├─ fixed pandas/scikit-learn interpreter
           ├─ independent verifier
           └─ fixed copy-patch engine
@@ -152,7 +183,7 @@ visible React controls.
 
 ## Setup
 
-Required for local reproduction: Node 22+, pnpm 11.12.0, Python 3.12+, and the
+Required for local reproduction: Node 22+, pnpm 11.13.0, Python 3.12+, and the
 locked dependencies. A Docker-compatible engine is required for local
 Cloudflare Container development and for the advanced local adapter proof.
 
@@ -246,21 +277,24 @@ These are software/evidence measurements, not learner-study outcomes.
 
 ## Achieved, failed, and unsupported
 
-Achieved: deterministic kernel and parser, D1 state machine, R2-private upload
-path, immutable prediction, resumable lesson navigation, read-only completed-step
-review, verified-only charts, fixed transfer, patch lock, minimal verified sample
-patch, event hash chain, Proof Bundle, authenticated Codex traces, Playwright
-judge flow, and artifact-specific hosted leakage and imbalance through the
-Cloudflare Vite/Worker/Container deployment.
+Achieved locally: deterministic kernels and parser, D1 state machine, R2-private
+upload path, native Belief Spec/Experiment IR authority, immutable Prediction,
+fixed scoring and tri-state verification, verified-only charts and Boundary
+Map, fixed transfer, patch lock, copied-notebook repair, Reasoning Diff v2,
+Proof Capsule v2, resumable six-stage learner navigation, and privacy-safe
+interaction evidence. Historical production evidence separately covers the
+legacy sample/replay and hosted leakage/imbalance paths identified above. The
+v6.1 CloakBrowser journey is specified but has not been executed.
 
 Failed honestly: the first live Codex run used an unsupported SDK argument; two
 repairs then left an unexpected `__pycache__`, so that run remained rejected and
 released no result.
 
 Unsupported: arbitrary datasets/packages, generic Python files, active notebook
-content, non-Python kernels, source shapes or estimators outside a concept
-pack's fixed patch contract, accounts, LMS features, and claims of global
-mastery.
+content, non-Python kernels, source shapes or estimators outside a Subject
+Pack's fixed patch contract, an interactive verified sample matrix,
+physics/free-fall in this release, accounts, LMS features, prose grading, and
+claims of global mastery.
 
 ## Privacy and security limits
 
