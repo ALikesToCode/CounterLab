@@ -29,6 +29,15 @@ import { CounterLabStudio } from "./app/CounterLabStudio";
 import { parseStudioLocation, studioPath } from "./app/AppRouter";
 import { LearnerCoach } from "./components/learner/LearnerCoach";
 import { LearnerProgress } from "./components/learner/LearnerProgress";
+import {
+  ExperimentTheater,
+  type ExperimentTheaterVerifiedPayload,
+} from "./components/learner/ExperimentTheater";
+import {
+  FairTestBuilder,
+  type FairTestRepairStory,
+  type PublicTechnicalDetail,
+} from "./components/learner/FairTestBuilder";
 import { ModelDuel, type DuelModel } from "./components/learner/ModelDuel";
 import {
   NotebookEvidenceStory,
@@ -376,6 +385,118 @@ function interventionExpectation(
         ? "Expected minority-performance result"
         : "Expected whole-customer result",
     value: selected?.label ?? "Choose an expectation",
+  };
+}
+
+type FairTestExplanation = Readonly<{
+  whyThisTest: string;
+  deploymentMatch: string;
+  changedVariable: string;
+  heldFixed: readonly string[];
+}>;
+
+function fairTestExplanationFor(
+  concept: BeliefTest["concept"] | undefined,
+): FairTestExplanation {
+  if (concept === "class_imbalance") {
+    return {
+      whyThisTest:
+        "Compare headline accuracy with a majority baseline and rare-class errors.",
+      deploymentMatch:
+        "Rare events must be judged with evidence tied to missed positives at deployment prevalence.",
+      changedVariable:
+        "Observable: headline accuracy → rare-class precision, recall, and PR-AUC",
+      heldFixed: [
+        "Fixed fixture",
+        "Stratified holdout",
+        "Model scores",
+        "Random seed",
+      ],
+    };
+  }
+  return {
+    whyThisTest:
+      "Hold out whole customers while keeping the model and scoring setup the same.",
+    deploymentMatch:
+      "A new-customer claim must be evaluated on customers that were absent from training.",
+    changedVariable: "Evaluation unit: random rows → whole customers",
+    heldFixed: ["Model family", "Target", "Metric", "Preprocessing", "Seed"],
+  };
+}
+
+function technicalDetailForEvent(
+  event: PublicCompilerEvent,
+): PublicTechnicalDetail {
+  const label = `Event ${event.cursor} · ${event.kind}`;
+  switch (event.kind) {
+    case "job.started":
+      return { label, value: `${event.eventId} · ${event.at}` };
+    case "plan.summary":
+      return {
+        label,
+        value: `${event.title} · ${event.steps.join(" · ")}`,
+      };
+    case "artifact.read":
+      return {
+        label,
+        value: event.evidenceRefs
+          .map((reference) =>
+            reference.cellIndex === undefined
+              ? reference.kind
+              : `Cell ${reference.cellIndex} · ${reference.kind}`,
+          )
+          .join(" · "),
+      };
+    case "file.created":
+      return { label, value: `${event.path} · SHA-256 ${event.sha256}` };
+    case "diff.updated":
+      return { label, value: `${event.path}\n${event.unifiedDiff}` };
+    case "command.completed":
+      return {
+        label,
+        value: `${event.label} · exit ${event.exitCode} · ${event.durationMs} ms\n${event.excerpt}`,
+      };
+    case "verifier.rejected":
+      return {
+        label,
+        value: `${event.invariant}\n${event.counterexample}\nObserved: ${JSON.stringify(event.observed)}\nExpected: ${JSON.stringify(event.expected)}`,
+      };
+    case "repair.started":
+      return { label, value: `Bounded repair attempt ${event.attempt}` };
+    case "verifier.verified":
+      return {
+        label,
+        value: `${event.invariantCount} invariants · ${event.mutationCount} mutations`,
+      };
+    case "result.ready":
+      return { label, value: `Result SHA-256 ${event.resultHash}` };
+    case "job.failed":
+      return { label, value: `${event.code} · ${event.message}` };
+  }
+}
+
+function fairTestRepairStory(
+  events: readonly PublicCompilerEvent[],
+): FairTestRepairStory | undefined {
+  const rejection = events.find(
+    (
+      event,
+    ): event is Extract<PublicCompilerEvent, { kind: "verifier.rejected" }> =>
+      event.kind === "verifier.rejected",
+  );
+  if (rejection === undefined) return undefined;
+  const publicFinding = `${rejection.invariant} ${rejection.counterexample} ${JSON.stringify(rejection.observed)}`;
+  if (
+    !/evaluation[-_ ]unit/iu.test(publicFinding) ||
+    !/model/iu.test(publicFinding)
+  ) {
+    return undefined;
+  }
+  return {
+    firstPlanChanged:
+      "The first plan changed both the evaluation unit and the model.",
+    whyThatWasFlawed: "That would not tell us which change mattered.",
+    repairedBy: "Codex repaired it by changing only the evaluation unit.",
   };
 }
 
@@ -936,13 +1057,6 @@ function BeliefScreen({
   );
 }
 
-const compilerSteps = [
-  ["Question matched", "The observable can separate the two explanations"],
-  ["One change selected", "Only the customer boundary will change"],
-  ["Controls held fixed", "The model, target, metric, and seed stay the same"],
-  ["Plan verified", "Invalid or unresolved alternatives were rejected"],
-] as const;
-
 function BuildScreen({
   mode,
   resultReady,
@@ -962,6 +1076,7 @@ function BuildScreen({
   confidence: number;
   openResult: () => void;
 }) {
+  const fairTest = fairTestExplanationFor(concept);
   return (
     <main className="workspace shell">
       <div className="screen-intro compact">
@@ -1004,134 +1119,29 @@ function BuildScreen({
         />
       )}
 
-      <div className="build-layout">
-        <section className="pipeline panel" aria-labelledby="pipeline-title">
-          <div className="panel-title">
-            <div>
-              <p className="eyebrow">Compiler trace</p>
-              <h2 id="pipeline-title">
-                {resultReady ? "Four checks completed" : "Test plan checked"}
-              </h2>
-            </div>
-            <span className="verified-chip">
-              <Mark name="check" /> {resultReady ? "Verified" : "Plan verified"}
-            </span>
-          </div>
-          <ol className="stepper">
-            {compilerSteps.map(([title, detail], index) => (
-              <li key={title}>
-                <span className="step-index">
-                  {String(index + 1).padStart(2, "0")}
-                </span>
-                <span>
-                  <strong>{title}</strong>
-                  <small>{detail}</small>
-                </span>
-                <Mark name="check" />
-              </li>
-            ))}
-          </ol>
-          <div className="verifier-callout">
-            <p className="eyebrow aqua">Independent checks</p>
-            <strong>
-              {mode === "replay"
-                ? "A failed run showed no result; a later valid run passed"
-                : resultReady
-                  ? "This result is ready for the lesson"
-                  : "The fixed kernel will run only after you choose to continue"}
-            </strong>
-            <p>
-              {mode === "replay"
-                ? "The recording preserves both the rejected attempt and the later passing run."
-                : resultReady
-                  ? "No customer appears on both sides of the fairer test, and the result repeats."
-                  : "The plan changes only the evaluation boundary and keeps the model, target, metric, and seed fixed."}
-            </p>
-          </div>
-        </section>
-
-        <details className="trace panel technical-trace">
-          <summary id="trace-title">Show technical run details</summary>
-          <p className="eyebrow">Recorded event log</p>
-          <ul className="event-list">
-            {mode === "replay" ? (
-              <>
-                <li>
-                  <time>02:21</time>
-                  <span>rejected</span>
-                  <p>Unsupported SDK argument · constrained tests exit 20</p>
-                </li>
-                <li>
-                  <time>03:30</time>
-                  <span>repair 1</span>
-                  <p>SDK fixed; exact-file policy found __pycache__</p>
-                </li>
-                <li>
-                  <time>04:40</time>
-                  <span>repair 2</span>
-                  <p>Repair cap reached · rejected run produced no result</p>
-                </li>
-                <li>
-                  <time>01:19</time>
-                  <span>later run</span>
-                  <p>Separate live candidate verified · not called repair 3</p>
-                </li>
-              </>
-            ) : (
-              <>
-                <li>
-                  <time>00:00.0</time>
-                  <span>plan</span>
-                  <p>Loaded approved entity-leakage contract</p>
-                </li>
-                <li>
-                  <time>00:00.2</time>
-                  <span>file</span>
-                  <p>experiment-plan.json</p>
-                </li>
-                <li>
-                  <time>00:00.4</time>
-                  <span>command</span>
-                  <p>public test summary · exit 0</p>
-                </li>
-                <li>
-                  <time>00:01.3</time>
-                  <span>verifier</span>
-                  <p>18 invariants accepted · 12/12 mutations detected</p>
-                </li>
-              </>
-            )}
-          </ul>
-          <dl className="trace-meta">
-            <div>
-              <dt>Mode</dt>
-              <dd>
-                {mode === "replay"
-                  ? "Stored replay"
-                  : "Stored approved artifacts"}
-              </dd>
-            </div>
-            <div>
-              <dt>Result authority</dt>
-              <dd>Fixed kernel</dd>
-            </div>
-            <div>
-              <dt>Network</dt>
-              <dd>
-                {mode === "replay"
-                  ? "Denied in candidate runner"
-                  : "Not required"}
-              </dd>
-            </div>
-            {mode === "replay" && (
-              <div>
-                <dt>Generation isolation</dt>
-                <dd>Partial · host-global skill files were readable</dd>
-              </div>
-            )}
-          </dl>
-        </details>
-      </div>
+      <FairTestBuilder
+        {...fairTest}
+        events={[]}
+        verificationState="verified"
+        sanitizedTechnicalDetails={[
+          {
+            label: "Mode",
+            value:
+              mode === "replay"
+                ? "Verified replay"
+                : mode === "live"
+                  ? "Live notebook"
+                  : "Verified sample",
+          },
+          { label: "Result authority", value: "Fixed kernel" },
+          {
+            label: "Release state",
+            value: resultReady
+              ? "Verified result stored"
+              : "Verified plan; result not released",
+          },
+        ]}
+      />
 
       <div className="continue-row">
         <p>Ready? Compare your prediction with what the test found.</p>
@@ -1167,34 +1177,6 @@ function resultRun(
   if (run === undefined)
     throw new Error(`Verified result is missing semantic run ${id}`);
   return run;
-}
-
-function ResultBars({ result }: { result: LeakageVerifiedResultSet }) {
-  const runs = [
-    { run: resultRun(result, "random_row_split"), label: "Random rows" },
-    {
-      run: resultRun(result, "customer_group_split"),
-      label: "New customers",
-    },
-    { run: resultRun(result, "identity_ablation"), label: "No identity" },
-  ];
-  return (
-    <div
-      className="result-visual"
-      role="img"
-      aria-label={`Accuracy comparison: ${runs.map(({ label, run }) => `${label} ${percent.format(run.metrics.accuracy)}`).join(", ")}`}
-    >
-      {runs.map(({ run, label }) => (
-        <div className="bar-row" key={run.id}>
-          <span>{label}</span>
-          <div className="bar-track">
-            <span style={{ width: percent.format(run.metrics.accuracy) }} />
-          </div>
-          <strong>{percent.format(run.metrics.accuracy)}</strong>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function ResultTable({ result }: { result: LeakageVerifiedResultSet }) {
@@ -1900,7 +1882,6 @@ function LeakageRealityScreen({
 }) {
   const random = resultRun(result, "random_row_split");
   const group = resultRun(result, "customer_group_split");
-  const ablation = resultRun(result, "identity_ablation");
   const [revision, setRevision] = useState(
     session?.revision ??
       window.localStorage.getItem(storageKeys.replayRevision) ??
@@ -1931,7 +1912,6 @@ function LeakageRealityScreen({
   const patchRunner = useRunnerEvents();
   const accuracyGapPoints =
     (random.metrics.accuracy - group.metrics.accuracy) * 100;
-  const predictionWasSupported = prediction === "falls";
 
   useLayoutEffect(() => {
     resetViewport("lesson-phase-title");
@@ -2569,10 +2549,120 @@ function LeakageRealityScreen({
     );
   }
 
+  const predictionSummary =
+    session?.prediction?.choice ??
+    (prediction === "stays-high"
+      ? "Accuracy remains near 98% on unseen customers."
+      : prediction === "falls"
+        ? "Accuracy falls materially on unseen customers."
+        : "The unseen-customer result is uncertain.");
+  const applyAvailable =
+    session?.mode.kind !== "live_notebook" ||
+    session.boundaryMapAuthority !== undefined;
+  const theaterPayload: ExperimentTheaterVerifiedPayload = {
+    comparison: {
+      title: "Familiar rows versus new customers",
+      accessibleSummary: `Verified accuracy comparison: familiar rows ${percent.format(random.metrics.accuracy)}; new customers ${percent.format(group.metrics.accuracy)}.`,
+      first: {
+        label: "Familiar rows",
+        value: percent.format(random.metrics.accuracy),
+        detail: `${random.entityOverlap.count} shared customers`,
+      },
+      second: {
+        label: "New customers",
+        value: percent.format(group.metrics.accuracy),
+        detail: `${group.entityOverlap.count} shared customers`,
+      },
+    },
+    finding: `${percent.format(random.metrics.accuracy)} became ${percent.format(group.metrics.accuracy)} when the test contained only new customers.`,
+    controlledVariables: "model, target, metric, preprocessing, and seed",
+    views: {
+      observe: {
+        heading: "Inspect the verified runs",
+        available: true,
+        completed: true,
+        content: (
+          <details className="exact-results">
+            <summary>Show exact values and run details</summary>
+            <ResultTable result={result} />
+            <code>result {result.resultHash.slice(0, 12)}…</code>
+          </details>
+        ),
+      },
+      explore: {
+        heading: "Explore bounded test choices",
+        available: true,
+        completed: false,
+        content: (
+          <InteractiveLeakageLab
+            session={session}
+            artifact={artifact}
+            authoritativeResult={result}
+          />
+        ),
+      },
+      boundary: {
+        heading: "Find where the conclusion changes",
+        available: true,
+        completed: session?.boundaryMapAuthority !== undefined,
+        content:
+          session?.mode.kind === "live_notebook" ? (
+            <BoundaryStage
+              session={session}
+              prediction={predictionSummary}
+              updateSession={updateSession}
+            />
+          ) : (
+            <section className="revision panel">
+              <p className="eyebrow aqua">Verified sample boundary</p>
+              <h4>The conclusion changes at the entity boundary.</h4>
+              <p>
+                The verified whole-customer run has {group.entityOverlap.count}{" "}
+                shared customers; the random-row run has{" "}
+                {random.entityOverlap.count}.
+              </p>
+            </section>
+          ),
+      },
+      apply: {
+        heading: "State the rule you will apply",
+        available: applyAvailable,
+        completed: session?.revision !== undefined,
+        content: (
+          <section className="revision panel">
+            <div>
+              <p className="eyebrow">In your words</p>
+              <h4>Write the rule you’ll use next time</h4>
+              <p>
+                Focus on how you would split the data—not these exact scores.
+              </p>
+            </div>
+            <label htmlFor="revision">Your revised mental model</label>
+            <textarea
+              id="revision"
+              rows={4}
+              value={revision}
+              onChange={(event) => setRevision(event.target.value)}
+              placeholder="When rows repeat an entity, I should…"
+            />
+            <button
+              className="button button-primary"
+              type="button"
+              disabled={revision.trim().length < 20 || actionBusy}
+              onClick={recordRevision}
+            >
+              Try the rule on a new problem <Mark name="arrow" />
+            </button>
+          </section>
+        ),
+      },
+    },
+  };
+
   return (
     <main className="workspace shell reality">
       <div className="screen-intro compact">
-        <p className="eyebrow aqua">Boundary · The lesson</p>
+        <p className="eyebrow aqua">Boundary · Verified result</p>
         <h1 id="lesson-phase-title" tabIndex={-1}>
           Here’s what changed.
         </h1>
@@ -2581,178 +2671,15 @@ function LeakageRealityScreen({
           customers it had never seen.
         </p>
       </div>
-
       <LearnerCoach
-        next="write the rule in your words, then try one new case."
-        why={`The verified test found a ${accuracyGapPoints.toFixed(1)}-point gap for new customers. Transfer checks whether you can spot the same boundary in another problem.`}
+        next="observe the result, explore it, then find and apply its boundary."
+        why={`The verified test found a ${accuracyGapPoints.toFixed(1)}-point gap for new customers. The four views change presentation only; fixed evidence remains the authority.`}
       />
-
-      <section className="finding-banner" aria-label="Verified finding summary">
-        <div>
-          <span
-            className={predictionWasSupported ? "supported" : "contradicted"}
-          >
-            {predictionWasSupported
-              ? "Prediction supported"
-              : "Prediction contradicted"}
-          </span>
-          <h2>
-            {percent.format(random.metrics.accuracy)} became{" "}
-            {percent.format(group.metrics.accuracy)} on new customers.
-          </h2>
-          <p>
-            The first test put {random.entityOverlap.count} of the same
-            customers on both sides. The fairer test shared{" "}
-            {group.entityOverlap.count}.
-          </p>
-        </div>
-        <dl>
-          <div>
-            <dt>We changed</dt>
-            <dd>Which customers appear in the test</dd>
-          </div>
-          <div>
-            <dt>We kept</dt>
-            <dd>The model, target, and random seed</dd>
-          </div>
-          <div>
-            <dt>We checked</dt>
-            <dd>Zero overlap and a repeatable result</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section className="metric-grid" aria-label="Verified metric cards">
-        <article>
-          <p>Familiar customers mixed in</p>
-          <strong>{percent.format(random.metrics.accuracy)}</strong>
-          <small>
-            n={random.sampleSizes.test} · overlap {random.entityOverlap.count} ·
-            seed {random.seed}
-          </small>
-        </article>
-        <article className="metric-decisive">
-          <p>Only new customers</p>
-          <strong>{percent.format(group.metrics.accuracy)}</strong>
-          <small>
-            n={group.sampleSizes.test} · overlap {group.entityOverlap.count} ·
-            seed {group.seed}
-          </small>
-        </article>
-        <article>
-          <p>Customer ID removed</p>
-          <strong>{percent.format(ablation.metrics.accuracy)}</strong>
-          <small>
-            n={ablation.sampleSizes.test} · customer_id removed · seed{" "}
-            {ablation.seed}
-          </small>
-        </article>
-      </section>
-
-      <section className="results-panel panel">
-        <div className="panel-title">
-          <div>
-            <p className="eyebrow">Accuracy · higher is better</p>
-            <h2>Why the score changed</h2>
-          </div>
-        </div>
-        <div className="overlap-story" aria-label="Entity overlap comparison">
-          <div>
-            <span>Random rows</span>
-            <div className="entity-dots shared" aria-hidden="true">
-              {Array.from({ length: 12 }, (_, index) => (
-                <i key={index} />
-              ))}
-            </div>
-            <strong>{random.entityOverlap.count} shared customers</strong>
-          </div>
-          <Mark name="arrow" />
-          <div>
-            <span>Customer groups</span>
-            <div className="entity-dots isolated" aria-hidden="true">
-              {Array.from({ length: 12 }, (_, index) => (
-                <i key={index} />
-              ))}
-            </div>
-            <strong>{group.entityOverlap.count} shared customers</strong>
-          </div>
-        </div>
-        <ResultBars result={result} />
-        <details className="exact-results">
-          <summary>Show exact values and run details</summary>
-          <ResultTable result={result} />
-          <code>result {result.resultHash.slice(0, 12)}…</code>
-        </details>
-      </section>
-
-      <InteractiveLeakageLab
-        session={session}
-        artifact={artifact}
-        authoritativeResult={result}
+      <ExperimentTheater
+        key={session?.sessionId ?? result.resultHash}
+        prediction={predictionSummary}
+        verifiedPayload={theaterPayload}
       />
-
-      <section className="prediction-observed">
-        <div>
-          <p className="eyebrow gold">Prediction</p>
-          <h2>
-            {prediction === "stays-high"
-              ? "Accuracy remains near 98%"
-              : prediction === "falls"
-                ? "Accuracy falls materially"
-                : "Uncertain outcome"}
-          </h2>
-        </div>
-        <div className="reasoning-arrow">
-          <Mark name="arrow" />
-        </div>
-        <div>
-          <p className="eyebrow aqua">Observed</p>
-          <h2>{percent.format(group.metrics.accuracy)} on new customers</h2>
-          <p>Zero customer overlap</p>
-        </div>
-      </section>
-
-      {session?.mode.kind === "live_notebook" && (
-        <BoundaryStage
-          session={session}
-          prediction={
-            prediction === "stays-high"
-              ? "Accuracy remains near 98% on unseen customers."
-              : prediction === "falls"
-                ? "Accuracy falls materially on unseen customers."
-                : "The unseen-customer result is uncertain."
-          }
-          updateSession={updateSession}
-        />
-      )}
-
-      {(session?.mode.kind !== "live_notebook" ||
-        session.boundaryMapAuthority !== undefined) && (
-        <section className="revision panel">
-          <div>
-            <p className="eyebrow">In your words</p>
-            <h2>Write the rule you’ll use next time</h2>
-            <p>Focus on how you would split the data—not these exact scores.</p>
-          </div>
-          <label htmlFor="revision">Your revised mental model</label>
-          <textarea
-            id="revision"
-            rows={4}
-            value={revision}
-            onChange={(event) => setRevision(event.target.value)}
-            placeholder="When rows repeat an entity, I should…"
-          />
-          <button
-            className="button button-primary"
-            type="button"
-            disabled={revision.trim().length < 20 || actionBusy}
-            onClick={recordRevision}
-          >
-            Try the rule on a new problem <Mark name="arrow" />
-          </button>
-        </section>
-      )}
-
       {actionErrorNotice}
     </main>
   );
@@ -2760,11 +2687,13 @@ function LeakageRealityScreen({
 
 function ImbalanceRealityScreen({
   claim,
+  prediction,
   result,
   session,
   updateSession,
 }: {
   claim: string;
+  prediction: PredictionChoice;
   result: ImbalanceVerifiedResultSet;
   session: SessionView | null;
   updateSession: (session: SessionView) => void;
@@ -2789,10 +2718,164 @@ function ImbalanceRealityScreen({
   ) {
     throw new Error("Verified imbalance result is missing required fixed runs");
   }
+  const predictionSummary =
+    session?.prediction?.choice ??
+    (prediction === "stays-high"
+      ? "The high score is supported by strong rare-class performance."
+      : prediction === "falls"
+        ? "Rare-class evidence exposes a serious problem."
+        : "The rare-class outcome is uncertain.");
+  const applyAvailable =
+    session !== null &&
+    session.mode.kind !== "verified_replay" &&
+    (session.mode.kind !== "live_notebook" ||
+      session.boundaryMapAuthority !== undefined);
+  const theaterPayload: ExperimentTheaterVerifiedPayload = {
+    comparison: {
+      title: "Headline accuracy versus rare-class recall",
+      accessibleSummary: `Verified comparison: majority baseline accuracy ${percent.format(majority.metrics.accuracy)}; model rare-class recall ${percent.format(stratified.metrics.recall)}.`,
+      first: {
+        label: "Majority baseline accuracy",
+        value: percent.format(majority.metrics.accuracy),
+        detail: `${majority.confusionMatrix.fn} rare positives missed`,
+      },
+      second: {
+        label: "Model rare-class recall",
+        value: percent.format(stratified.metrics.recall),
+        detail: `${percent.format(stratified.metrics.precision)} precision`,
+      },
+    },
+    finding: `${percent.format(majority.metrics.accuracy)} headline accuracy coincided with only ${majority.confusionMatrix.tp} rare positives caught by the majority baseline.`,
+    controlledVariables:
+      "fixed fixture, stratified holdout, model scores, and seed",
+    views: {
+      observe: {
+        heading: "Inspect the verified rare-event runs",
+        available: true,
+        completed: true,
+        content: (
+          <>
+            <blockquote>{claim}</blockquote>
+            <details className="exact-results">
+              <summary>Show exact values and run details</summary>
+              <div className="table-wrap">
+                <table>
+                  <caption>
+                    All values come from the canonical result payload.
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Run</th>
+                      <th scope="col">Threshold</th>
+                      <th scope="col">Prevalence</th>
+                      <th scope="col">Precision</th>
+                      <th scope="col">Recall</th>
+                      <th scope="col">F1</th>
+                      <th scope="col">PR-AUC</th>
+                      <th scope="col">Test n</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.runs.map((run) => (
+                      <tr key={run.id}>
+                        <th scope="row">{run.id.replaceAll("_", " ")}</th>
+                        <td>{run.threshold.toFixed(2)}</td>
+                        <td>{percent.format(run.prevalence)}</td>
+                        <td>{percent.format(run.metrics.precision)}</td>
+                        <td>{percent.format(run.metrics.recall)}</td>
+                        <td>{percent.format(run.metrics.f1)}</td>
+                        <td>{run.metrics.prAuc.toFixed(3)}</td>
+                        <td>{run.sampleSizes.test}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <code>
+                result {result.resultHash.slice(0, 12)}… · seed {result.seed}
+              </code>
+            </details>
+          </>
+        ),
+      },
+      explore: {
+        heading: "Explore threshold and prevalence choices",
+        available: true,
+        completed: false,
+        content: (
+          <InteractiveImbalanceLab
+            isLive={session?.mode.kind === "live_notebook"}
+            sessionId={session?.sessionId ?? null}
+            authoritativeResultHash={result.resultHash}
+          />
+        ),
+      },
+      boundary: {
+        heading: "Find where the metric conclusion changes",
+        available: true,
+        completed: session?.boundaryMapAuthority !== undefined,
+        content:
+          session?.mode.kind === "live_notebook" ? (
+            <BoundaryStage
+              session={session}
+              prediction={predictionSummary}
+              updateSession={updateSession}
+            />
+          ) : (
+            <section className="revision panel">
+              <p className="eyebrow aqua">Verified sample boundary</p>
+              <h4>Threshold and prevalence change what the metrics reveal.</h4>
+              <p>
+                At threshold {threshold.threshold}, recall is{" "}
+                {percent.format(threshold.metrics.recall)}. In the{" "}
+                {prevalence.prevalenceScenario.replaceAll("_", " ")} scenario,
+                precision is {percent.format(prevalence.metrics.precision)}.
+              </p>
+            </section>
+          ),
+      },
+      apply: {
+        heading: "Apply the cost-aware rule",
+        available: applyAvailable,
+        completed:
+          session?.revision !== undefined ||
+          session?.transferResult?.outcome === "PASSED",
+        content:
+          session === null ? null : (
+            <>
+              <ImbalanceTransferLesson
+                sessionId={session.sessionId}
+                state={session.state}
+                {...(session.revision === undefined
+                  ? {}
+                  : { revision: session.revision })}
+                {...(session.transferResult === undefined
+                  ? {}
+                  : { transferOutcome: session.transferResult.outcome })}
+                updateSession={updateSession}
+              />
+              {session.transferResult?.outcome === "PASSED" && (
+                <ImbalancePatchReview
+                  session={session}
+                  updateSession={updateSession}
+                />
+              )}
+              {session.revision !== undefined && (
+                <section className="revision panel">
+                  <p className="eyebrow">Saved revision</p>
+                  <h4>{session.revision}</h4>
+                </section>
+              )}
+            </>
+          ),
+      },
+    },
+  };
+
   return (
     <main className="workspace shell reality imbalance-reality">
-      <div className="screen-intro">
-        <p className="eyebrow aqua">Verified Lab · rare-event evaluation</p>
+      <div className="screen-intro compact">
+        <p className="eyebrow aqua">Boundary · Verified result</p>
         <h1>A high accuracy can still miss every rare event.</h1>
         <p>
           CounterLab compared the notebook claim with a computed majority
@@ -2800,193 +2883,14 @@ function ImbalanceRealityScreen({
         </p>
       </div>
       <LearnerCoach
-        next="compare recall, precision, and prevalence—not accuracy alone."
-        why={`The majority baseline is ${percent.format(majority.metrics.accuracy)} accurate with ${percent.format(majority.metrics.recall)} rare-class recall. The relevant boundary depends on the cost of missed positives.`}
+        next="observe the result, explore it, then find and apply its boundary."
+        why={`The majority baseline is ${percent.format(majority.metrics.accuracy)} accurate with ${percent.format(majority.metrics.recall)} rare-class recall. The four views change presentation only; fixed evidence remains the authority.`}
       />
-      <section
-        className="finding-banner"
-        aria-label="Verified imbalance finding"
-      >
-        <div>
-          <span className="contradicted">Headline contradicted</span>
-          <h2>
-            {percent.format(majority.metrics.accuracy)} accuracy, zero rare
-            cases caught.
-          </h2>
-          <p>{claim}</p>
-        </div>
-        <dl>
-          <div>
-            <dt>We changed</dt>
-            <dd>Metric, threshold, and prevalence scenario</dd>
-          </div>
-          <div>
-            <dt>We kept</dt>
-            <dd>Fixture, stratified holdout, model score, and seed</dd>
-          </div>
-          <div>
-            <dt>We checked</dt>
-            <dd>
-              Confusion totals, deterministic hash, and response to controls
-            </dd>
-          </div>
-        </dl>
-      </section>
-      <section
-        className="metric-grid imbalance-metric-grid"
-        aria-label="Rare-event metrics"
-      >
-        <article>
-          <p>Majority baseline accuracy</p>
-          <strong>{percent.format(majority.metrics.accuracy)}</strong>
-          <small>
-            recall {percent.format(majority.metrics.recall)} · n=
-            {majority.sampleSizes.test}
-          </small>
-        </article>
-        <article className="metric-decisive">
-          <p>Model rare-class recall</p>
-          <strong>{percent.format(stratified.metrics.recall)}</strong>
-          <small>
-            precision {percent.format(stratified.metrics.precision)} · threshold{" "}
-            {stratified.threshold}
-          </small>
-        </article>
-        <article>
-          <p>PR-AUC vs prevalence</p>
-          <strong>{stratified.metrics.prAuc.toFixed(3)}</strong>
-          <small>
-            base rate {percent.format(stratified.prevalence)} · ROC-AUC{" "}
-            {stratified.metrics.rocAuc.toFixed(3)}
-          </small>
-        </article>
-      </section>
-      <section className="results-panel panel">
-        <div className="panel-title">
-          <div>
-            <p className="eyebrow">Fixed-kernel comparison</p>
-            <h2>What each operating choice reveals</h2>
-          </div>
-          <span className="verified-chip">
-            <Mark name="check" /> Verified
-          </span>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <caption>
-              All values come from the canonical result payload.
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col">Run</th>
-                <th scope="col">Threshold</th>
-                <th scope="col">Prevalence</th>
-                <th scope="col">Precision</th>
-                <th scope="col">Recall</th>
-                <th scope="col">F1</th>
-                <th scope="col">PR-AUC</th>
-                <th scope="col">Test n</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.runs.map((run) => (
-                <tr key={run.id}>
-                  <th scope="row">{run.id.replaceAll("_", " ")}</th>
-                  <td>{run.threshold.toFixed(2)}</td>
-                  <td>{percent.format(run.prevalence)}</td>
-                  <td>{percent.format(run.metrics.precision)}</td>
-                  <td>{percent.format(run.metrics.recall)}</td>
-                  <td>{percent.format(run.metrics.f1)}</td>
-                  <td>{run.metrics.prAuc.toFixed(3)}</td>
-                  <td>{run.sampleSizes.test}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div
-          className="imbalance-control-story"
-          aria-label="Verified control response"
-        >
-          <article>
-            <span>Threshold {stratified.threshold}</span>
-            <strong>{percent.format(stratified.metrics.recall)} recall</strong>
-          </article>
-          <Mark name="arrow" />
-          <article>
-            <span>Threshold {threshold.threshold}</span>
-            <strong>{percent.format(threshold.metrics.recall)} recall</strong>
-          </article>
-          <Mark name="arrow" />
-          <article>
-            <span>{prevalence.prevalenceScenario.replaceAll("_", " ")}</span>
-            <strong>
-              {percent.format(prevalence.metrics.precision)} precision
-            </strong>
-          </article>
-        </div>
-        <code>
-          result {result.resultHash.slice(0, 12)}… · seed {result.seed}
-        </code>
-      </section>
-      <section className="prediction-observed">
-        <div>
-          <p className="eyebrow gold">Claim</p>
-          <h2>{claim}</h2>
-        </div>
-        <div className="reasoning-arrow">
-          <Mark name="arrow" />
-        </div>
-        <div>
-          <p className="eyebrow aqua">Observed</p>
-          <h2>{majority.confusionMatrix.fn} rare positives missed</h2>
-          <p>{majority.confusionMatrix.tp} true positives</p>
-        </div>
-      </section>
-      <InteractiveImbalanceLab
-        isLive={session?.mode.kind === "live_notebook"}
-        sessionId={session?.sessionId ?? null}
-        authoritativeResultHash={result.resultHash}
+      <ExperimentTheater
+        key={session?.sessionId ?? result.resultHash}
+        prediction={predictionSummary}
+        verifiedPayload={theaterPayload}
       />
-      {session?.mode.kind === "live_notebook" && (
-        <BoundaryStage
-          session={session}
-          {...(session.prediction === undefined
-            ? {}
-            : { prediction: session.prediction.choice })}
-          updateSession={updateSession}
-        />
-      )}
-      {session !== null &&
-        session.mode.kind !== "verified_replay" &&
-        (session.mode.kind !== "live_notebook" ||
-          session.boundaryMapAuthority !== undefined) && (
-          <>
-            <ImbalanceTransferLesson
-              sessionId={session.sessionId}
-              state={session.state}
-              {...(session.revision === undefined
-                ? {}
-                : { revision: session.revision })}
-              {...(session.transferResult === undefined
-                ? {}
-                : { transferOutcome: session.transferResult.outcome })}
-              updateSession={updateSession}
-            />
-            {session.transferResult?.outcome === "PASSED" && (
-              <ImbalancePatchReview
-                session={session}
-                updateSession={updateSession}
-              />
-            )}
-          </>
-        )}
-      {session?.revision !== undefined && (
-        <section className="revision panel">
-          <p className="eyebrow">Saved revision</p>
-          <h2>{session.revision}</h2>
-        </section>
-      )}
     </main>
   );
 }
@@ -3003,6 +2907,7 @@ function RealityScreen(props: {
     return (
       <ImbalanceRealityScreen
         claim={props.claim}
+        prediction={props.prediction}
         result={props.result as ImbalanceVerifiedResultSet}
         session={props.session}
         updateSession={props.updateSession}
@@ -3221,6 +3126,7 @@ function compilerEventCopy(event: PublicCompilerEvent): {
 }
 
 function LiveCompileScreen({
+  concept,
   events,
   job,
   failed,
@@ -3230,6 +3136,7 @@ function LiveCompileScreen({
   onRetry,
   onCancel,
 }: {
+  concept: BeliefTest["concept"] | undefined;
   events: readonly PublicCompilerEvent[];
   job: RunnerJob | null;
   failed: boolean;
@@ -3239,11 +3146,11 @@ function LiveCompileScreen({
   onRetry: () => void;
   onCancel: () => void;
 }) {
-  const repaired = events.some((event) => event.kind === "repair.started");
   const verified = events.some(
     (event) =>
       event.kind === "verifier.verified" || event.kind === "result.ready",
   );
+  const repairStory = fairTestRepairStory(events);
   return (
     <main className="workspace shell live-compiler">
       <div className="screen-intro compact">
@@ -3302,67 +3209,21 @@ function LiveCompileScreen({
           </button>
         </section>
       )}
-      <section className="live-compiler-grid">
-        <div className="pipeline panel">
-          <div className="panel-title">
-            <div>
-              <p className="eyebrow">Public compiler trace</p>
-              <h2>Plan → verify → repair → compute</h2>
-            </div>
-            <span
-              className={`runner-state ${verified ? "verified" : "active"}`}
-            >
-              <span className="status-dot configured" />
-              {job?.status.replaceAll("_", " ") ?? "STARTING"}
-            </span>
-          </div>
-          <ol className="live-event-list" aria-live="polite">
-            {events.length === 0 && (
-              <li className="active">
-                <span className="event-mark" />
-                <div>
-                  <strong>Dispatching protected job</strong>
-                  <p>Waiting for the first sanitized runner event.</p>
-                </div>
-              </li>
-            )}
-            {events.map((event) => {
-              const copy = compilerEventCopy(event);
-              return (
-                <li className={copy.tone} key={event.eventId}>
-                  <span className="event-mark" />
-                  <div>
-                    <strong>{copy.label}</strong>
-                    <p>{copy.detail}</p>
-                    <time>{new Date(event.at).toLocaleTimeString()}</time>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-        </div>
-        <aside className="compiler-authority panel">
-          <p className="eyebrow aqua">Who decides what</p>
-          <div>
-            <span>Codex</span>
-            <strong>Proposes the experiment plan</strong>
-          </div>
-          <div>
-            <span>Verifier</span>
-            <strong>Rejects invalid or irrelevant plans</strong>
-          </div>
-          <div>
-            <span>Fixed kernel</span>
-            <strong>Computes every displayed number</strong>
-          </div>
-          {repaired && (
-            <div className="repair-note">
-              <span>Repair is evidence</span>
-              <strong>The rejected attempt released no result.</strong>
-            </div>
-          )}
-        </aside>
-      </section>
+      <FairTestBuilder
+        {...fairTestExplanationFor(concept)}
+        events={events}
+        verificationState={
+          failed ? "stopped" : verified ? "verified" : "verifying"
+        }
+        {...(repairStory === undefined ? {} : { repairStory })}
+        sanitizedTechnicalDetails={[
+          {
+            label: "Runner state",
+            value: job?.status.replaceAll("_", " ") ?? "STARTING",
+          },
+          ...events.map(technicalDetailForEvent),
+        ]}
+      />
     </main>
   );
 }
@@ -4373,6 +4234,7 @@ export function App() {
           )}
           {reviewStep === null && stage === "live-compile" && (
             <LiveCompileScreen
+              concept={belief?.concept}
               events={runner.events}
               job={runnerJob}
               failed={error !== null}

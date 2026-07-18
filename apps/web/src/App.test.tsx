@@ -811,6 +811,7 @@ describe("CounterLab judged flow", () => {
   });
 
   it("requires verified Boundary authority before a live learner can revise", async () => {
+    const user = userEvent.setup();
     installApi({
       liveGpt: "configured",
       runner: "configured",
@@ -823,6 +824,11 @@ describe("CounterLab judged flow", () => {
 
     render(<App />);
 
+    expect(
+      await screen.findByRole("heading", { name: /here.s what changed/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /apply/i })).toBeDisabled();
+    await user.click(screen.getByRole("tab", { name: /boundary/i }));
     expect(
       await screen.findByRole("button", { name: /map the boundary/i }),
     ).toBeInTheDocument();
@@ -1282,6 +1288,61 @@ describe("CounterLab judged flow", () => {
       screen.getByRole("button", { name: /run the fair test/i }),
     ).toBeEnabled();
     expect(screen.queryByText(/new customers 59\.4%/i)).not.toBeInTheDocument();
+  });
+
+  it("explains the fair test before revealing one verified Theater view", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await openSampleModelDuel(user);
+    await user.click(
+      screen.getByRole("button", { name: /yes, this captures my view/i }),
+    );
+    await user.click(screen.getByRole("radio", { name: /remain near 98/i }));
+    await user.click(
+      screen.getByRole("button", { name: /seal my prediction/i }),
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: /the fair test is ready/i }),
+    ).toBeInTheDocument();
+    const builder = screen.getByRole("region", {
+      name: /building one fair test/i,
+    });
+    expect(within(builder).getByText(/why this test/i)).toBeInTheDocument();
+    expect(
+      within(builder).getByText(/random rows → whole customers/i),
+    ).toBeInTheDocument();
+    expect(within(builder).getByText(/held fixed/i)).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/new customers 59\.4%/i);
+
+    await user.click(
+      screen.getByRole("button", { name: /run the fair test/i }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /let the verified test answer/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Verified result")).toBeInTheDocument();
+    const tabs = screen.getByRole("tablist", { name: /experiment views/i });
+    expect(within(tabs).getByRole("tab", { name: /observe/i })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
+
+    await user.click(within(tabs).getByRole("tab", { name: /explore/i }));
+    expect(
+      screen.getByRole("heading", { name: /explore bounded test choices/i }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
+
+    await user.click(within(tabs).getByRole("tab", { name: /boundary/i }));
+    expect(
+      screen.getByText(/conclusion changes at the entity boundary/i),
+    ).toBeInTheDocument();
   });
 
   it("keeps the replay label persistent across the judged flow", async () => {

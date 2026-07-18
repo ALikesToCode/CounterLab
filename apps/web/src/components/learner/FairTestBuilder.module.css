@@ -1,0 +1,288 @@
+.builder {
+  color: #07152a;
+  font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.header > div > span,
+.why span,
+.controls article > span,
+.repairStory > span {
+  color: #4c5d73;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.header h2 {
+  margin: 7px 0 0;
+  font-family: "Newsreader Variable", "Iowan Old Style", Georgia, serif;
+  font-size: clamp(32px, 5vw, 46px);
+  font-weight: 520;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+
+.status {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid #b8dcd7;
+  border-radius: 999px;
+  color: #007a78;
+  background: #f3fbf9;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.status i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.why {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(240px, 0.8fr);
+  gap: 22px;
+  align-items: start;
+  padding: 22px;
+  margin-top: 22px;
+  border: 1px solid #cdd9eb;
+  border-radius: 14px;
+  background: #f4f7fc;
+}
+
+.why h3 {
+  margin: 7px 0 0;
+  font-size: 20px;
+  line-height: 1.4;
+}
+
+.why p {
+  margin: 0;
+  color: #4c5d73;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.controls article {
+  padding: 18px;
+  border: 1px solid #d8dee6;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.controls article > strong {
+  display: block;
+  margin-top: 7px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.controls ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 0;
+  margin: 7px 0 0;
+  list-style: none;
+}
+
+.controls li {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.controls li::before {
+  content: "✓ ";
+  color: #007a78;
+  font-weight: 800;
+}
+
+.progress {
+  margin-top: 22px;
+}
+
+.progress h3 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.progress ol {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 12px 0 0;
+  list-style: none;
+}
+
+.progress li {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 13px 15px;
+  border: 1px solid #d8dee6;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.progress li > i {
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+.progress li.working {
+  color: #245eea;
+}
+
+.progress li.verified {
+  color: #007a78;
+}
+
+.progress li.rejected {
+  color: #b5363a;
+}
+
+.progress li strong {
+  color: #07152a;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.progress li p {
+  margin: 3px 0 0;
+  color: #4c5d73;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.repairStory {
+  padding: 20px;
+  margin-top: 18px;
+  border: 1px solid #e2b1ad;
+  border-radius: 12px;
+  color: #07152a;
+  background: #fbe8e7;
+}
+
+.repairStory h3 {
+  margin: 7px 0 0;
+  font-size: 20px;
+}
+
+.repairStory div,
+.repairStory > p {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0 0;
+}
+
+.repairStory p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.technical {
+  margin-top: 14px;
+}
+
+.technical summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  width: fit-content;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: #245eea;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+  list-style: none;
+}
+
+.technical summary::-webkit-details-marker {
+  display: none;
+}
+
+.technical summary:focus-visible {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 2px;
+}
+
+.technical dl,
+.technical > p {
+  padding: 16px;
+  margin: 4px 0 0;
+  border: 1px solid #d8dee6;
+  border-radius: 10px;
+  background: #f7f8fa;
+}
+
+.technical dl {
+  display: grid;
+  gap: 10px;
+}
+
+.technical dl > div {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.3fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.technical dt {
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.technical dd,
+.technical > p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #4c5d73;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+@media (max-width: 700px) {
+  .header,
+  .why,
+  .controls {
+    grid-template-columns: 1fr;
+  }
+
+  .header {
+    display: grid;
+  }
+
+  .status {
+    width: fit-content;
+  }
+
+  .technical dl > div {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+}
