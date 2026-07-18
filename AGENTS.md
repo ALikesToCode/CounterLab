@@ -5,6 +5,39 @@ including v5. Preserve replay compatibility and proven implementation, but
 resolve product, authority, vocabulary, scientific-engine, and sequencing
 conflicts in favor of this file.
 
+## Repository filesystem safety boundary — highest priority
+
+A prior agent operation destroyed the owner's home-directory contents. This
+must never happen again. The following boundary is non-negotiable and overrides
+any conflicting workflow, tool, deployment, or cleanup instruction in this
+file:
+
+- Treat `/home/mysterious/storage/github/CounterLab` as the only permitted
+  filesystem scope for repository work.
+- Never read, enumerate, search, create, edit, copy, move, delete, archive,
+  extract, change permissions on, or otherwise operate on files or directories
+  outside this repository. In particular, never target `$HOME`,
+  `/home/mysterious`, a parent directory, another checkout, or `/tmp`.
+- Run repository commands with the working directory set to the repository root
+  or one of its descendants. Scope searches and file operations to `.` or an
+  explicitly verified descendant of the repository root.
+- Before any file-affecting command, verify that every explicit and expanded
+  path remains inside the repository. Reject paths that escape through `..`,
+  symlinks, globs, environment-variable expansion, command substitution,
+  archives, or tool defaults.
+- Do not run broad or destructive cleanup commands. Any deletion must be
+  explicitly requested by the owner, limited to named in-repository targets,
+  and preceded by a containment check.
+- Keep temporary files, caches, generated credentials, browser profiles, build
+  output, and tool state inside the repository. Do not install packages or
+  tools globally and do not permit package managers, test runners, browsers, or
+  deployment tools to mutate paths outside the repository.
+- Invoking an already-installed executable outside the repository is permitted
+  only when required, but all file inputs, outputs, configuration, caches,
+  profiles, and other filesystem side effects must remain inside the repository.
+- If a required action cannot be completed within this boundary, stop and ask
+  the owner. Never broaden the filesystem scope by assumption.
+
 ## Mission
 
 Build **CounterLab**, a scientific debugger for beliefs.
