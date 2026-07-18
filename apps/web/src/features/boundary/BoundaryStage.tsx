@@ -13,6 +13,11 @@ import {
   writeActiveRunnerCheckpoint,
 } from "../../hooks/runnerCheckpoint";
 import { useRunnerEvents } from "../../hooks/useRunnerEvents";
+import {
+  BoundaryHunt,
+  type BoundaryHuntHint,
+  type VerifiedBoundaryHuntData,
+} from "./BoundaryHunt";
 import styles from "./BoundaryStage.module.css";
 
 function storage(): Storage | undefined {
@@ -37,6 +42,113 @@ function publicEventLabel(kind: string): string {
   return labels[kind] ?? kind.replaceAll(".", " ");
 }
 
+function huntStorageKey(resultHash: string): string {
+  return `counterlab.boundary-hunt.${resultHash}`;
+}
+
+function huntWasRevealed(resultHash: string): boolean {
+  try {
+    return storage()?.getItem(huntStorageKey(resultHash)) === "revealed";
+  } catch {
+    return false;
+  }
+}
+
+function rememberRevealedHunt(resultHash: string): void {
+  try {
+    storage()?.setItem(huntStorageKey(resultHash), "revealed");
+  } catch {
+    // Presentation persistence must never block the verified map.
+  }
+}
+
+function huntHintFor(
+  concept: BoundaryResponse["result"]["concept"],
+): BoundaryHuntHint {
+  return concept === "entity_leakage"
+    ? {
+        text: "Compare conditions with fewer and more repeated observations per customer. The verified classification tells you whether the evaluation gap changed.",
+        evidenceLabel: "Review the verified sweep binding",
+      }
+    : {
+        text: "Compare a different threshold or prevalence with the reference condition. The verified F1 classification—not headline accuracy—marks the change.",
+        evidenceLabel: "Review the verified sweep binding",
+      };
+}
+
+function huntDataFor(boundary: BoundaryResponse): VerifiedBoundaryHuntData {
+  const { result } = boundary;
+  const reference = result.cells[0];
+  if (reference === undefined) {
+    throw new TypeError("Verified Boundary Map has no hunt reference cell");
+  }
+  const sameClassification = result.cells.find(
+    (cell) =>
+      cell.cellId !== reference.cellId &&
+      cell.classificationId === reference.classificationId,
+  );
+  const changedClassification = result.cells.find(
+    (cell) => cell.classificationId !== reference.classificationId,
+  );
+  const selectedCells = [
+    reference,
+    sameClassification,
+    changedClassification,
+    result.cells.at(-1),
+    ...result.cells,
+  ].reduce<(typeof result.cells)[number][]>((selected, cell) => {
+    if (
+      cell !== undefined &&
+      selected.length < 4 &&
+      !selected.some((candidate) => candidate.cellId === cell.cellId)
+    ) {
+      selected.push(cell);
+    }
+    return selected;
+  }, []);
+  const [firstAxis, secondAxis] = result.axes;
+
+  return {
+    resultHash: result.resultHash,
+    referenceCellId: reference.cellId,
+    axes: [
+      {
+        id: firstAxis.id,
+        label: firstAxis.label,
+        values: firstAxis.points.map((point) => ({
+          id: point.id,
+          label: point.label,
+        })),
+      },
+      {
+        id: secondAxis.id,
+        label: secondAxis.label,
+        values: secondAxis.points.map((point) => ({
+          id: point.id,
+          label: point.label,
+        })),
+      },
+    ],
+    cells: selectedCells.map((cell) => ({
+      cellId: cell.cellId,
+      coordinates: [
+        {
+          axisId: cell.coordinates[0].axisId,
+          valueId: cell.coordinates[0].pointId,
+        },
+        {
+          axisId: cell.coordinates[1].axisId,
+          valueId: cell.coordinates[1].pointId,
+        },
+      ],
+      expectedClassification:
+        cell.classificationId === reference.classificationId
+          ? "CONCLUSION_DOES_NOT_CHANGE"
+          : "CONCLUSION_CHANGES",
+    })),
+  };
+}
+
 export function BoundaryStage({
   session,
   prediction,
@@ -51,16 +163,25 @@ export function BoundaryStage({
   const [jobId, setJobId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [revealedBoundaryHash, setRevealedBoundaryHash] = useState<
+    string | null
+  >(null);
   const activeJobId = useRef<string | null>(null);
   const loadedReceiptHash = useRef<string | null>(null);
 
   const loadBoundary = useCallback(async () => {
     const response = await counterLabApi.getBoundary(session.sessionId);
     setBoundary(response);
+    const alreadyRevealed = huntWasRevealed(response.result.resultHash);
+    setRevealedBoundaryHash(
+      alreadyRevealed ? response.result.resultHash : null,
+    );
     loadedReceiptHash.current = response.receipt.receiptHash;
-    window.requestAnimationFrame(() => {
-      document.getElementById("boundary-map-title")?.focus();
-    });
+    if (alreadyRevealed) {
+      window.requestAnimationFrame(() => {
+        document.getElementById("boundary-map-title")?.focus();
+      });
+    }
     return response;
   }, [session.sessionId]);
 
@@ -91,11 +212,7 @@ export function BoundaryStage({
         await loadBoundary();
         const localStorage = storage();
         if (localStorage !== undefined) {
-          clearActiveRunnerCheckpoint(
-            session.sessionId,
-            jobId,
-            localStorage,
-          );
+          clearActiveRunnerCheckpoint(session.sessionId, jobId, localStorage);
         }
       } catch (caught) {
         setError(
@@ -174,9 +291,35 @@ export function BoundaryStage({
       setJobId(checkpoint.jobId);
       void finishJob(checkpoint.jobId);
     }
-  }, [finishJob, loadBoundary, session.boundaryMapAuthority, session.sessionId, session.state]);
+  }, [
+    finishJob,
+    loadBoundary,
+    session.boundaryMapAuthority,
+    session.sessionId,
+    session.state,
+  ]);
 
   if (boundary !== null) {
+    if (
+      boundary.report.status === "VERIFIED" &&
+      revealedBoundaryHash !== boundary.result.resultHash
+    ) {
+      const revealMap = () => {
+        rememberRevealedHunt(boundary.result.resultHash);
+        setRevealedBoundaryHash(boundary.result.resultHash);
+        window.requestAnimationFrame(() => {
+          document.getElementById("boundary-map-title")?.focus();
+        });
+      };
+      return (
+        <BoundaryHunt
+          boundary={huntDataFor(boundary)}
+          hint={huntHintFor(boundary.result.concept)}
+          onRevealMap={revealMap}
+          onSkip={revealMap}
+        />
+      );
+    }
     return (
       <BoundaryMapBlock
         boundary={boundary}

@@ -79,7 +79,41 @@ const experimentCompleted = {
 } satisfies SessionView;
 
 const boundaryResponse = {
-  result: { resultHash: authority.resultHash },
+  result: {
+    resultHash: authority.resultHash,
+    concept: "entity_leakage",
+    axes: [
+      {
+        id: "test_fraction",
+        label: "Test fraction",
+        points: [
+          { id: "test-20", label: "20%" },
+          { id: "test-30", label: "30%" },
+        ],
+      },
+      {
+        id: "observations_per_entity",
+        label: "Observations per customer",
+        points: [
+          { id: "observations-2", label: "2 observations" },
+          { id: "observations-4", label: "4 observations" },
+        ],
+      },
+    ],
+    cells: [
+      ["cell-reference", "test-20", "observations-2", "little"],
+      ["cell-stable", "test-30", "observations-2", "little"],
+      ["cell-change", "test-20", "observations-4", "material"],
+      ["cell-change-2", "test-30", "observations-4", "material"],
+    ].map(([cellId, firstPoint, secondPoint, classificationId]) => ({
+      cellId,
+      classificationId,
+      coordinates: [
+        { axisId: "test_fraction", pointId: firstPoint },
+        { axisId: "observations_per_entity", pointId: secondPoint },
+      ],
+    })),
+  },
   report: { status: "VERIFIED" },
   receipt: authority.receipt,
   authority,
@@ -119,9 +153,7 @@ describe("BoundaryStage", () => {
         updateSession={updateSession}
       />,
     );
-    fireEvent.click(
-      screen.getByRole("button", { name: /map the boundary/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /map the boundary/i }));
 
     await waitFor(() =>
       expect(runner.waitForJob).toHaveBeenCalledWith(
@@ -131,6 +163,20 @@ describe("BoundaryStage", () => {
           terminalStates: ["BOUNDARY_VERIFIED", "LAB_REJECTED"],
         }),
       ),
+    );
+    expect(
+      await screen.findByRole("heading", {
+        name: /can you find a condition where the conclusion changes/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("boundary-map")).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("radio", {
+        name: /test fraction 20%.*observations per customer 4 observations/i,
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /check this condition/i }),
     );
     expect(await screen.findByTestId("boundary-map")).toHaveTextContent(
       authority.resultHash,
@@ -153,8 +199,41 @@ describe("BoundaryStage", () => {
       />,
     );
 
+    expect(
+      await screen.findByRole("heading", {
+        name: /can you find a condition where the conclusion changes/i,
+      }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /skip the hunt/i }));
     expect(await screen.findByTestId("boundary-map")).toBeInTheDocument();
     expect(api.runBoundary).not.toHaveBeenCalled();
+  });
+
+  it("keeps a revealed hunt complete when the learner reviews the stage", async () => {
+    const verifiedSession = {
+      ...experimentCompleted,
+      state: "REVISION_RECORDED" as const,
+      boundaryMapAuthority: authority,
+    };
+    const firstView = render(
+      <BoundaryStage session={verifiedSession} updateSession={vi.fn()} />,
+    );
+
+    await screen.findByRole("heading", {
+      name: /can you find a condition where the conclusion changes/i,
+    });
+    fireEvent.click(screen.getByRole("button", { name: /reveal the map/i }));
+    expect(await screen.findByTestId("boundary-map")).toBeInTheDocument();
+
+    firstView.unmount();
+    render(<BoundaryStage session={verifiedSession} updateSession={vi.fn()} />);
+
+    expect(await screen.findByTestId("boundary-map")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", {
+        name: /can you find a condition where the conclusion changes/i,
+      }),
+    ).not.toBeInTheDocument();
   });
 
   it("releases no map when the boundary job is rejected", async () => {
@@ -175,9 +254,7 @@ describe("BoundaryStage", () => {
     render(
       <BoundaryStage session={experimentCompleted} updateSession={vi.fn()} />,
     );
-    fireEvent.click(
-      screen.getByRole("button", { name: /map the boundary/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /map the boundary/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /no boundary values were released/i,
