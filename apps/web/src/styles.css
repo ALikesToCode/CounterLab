@@ -97,7 +97,7 @@
   margin-bottom: 10px;
   color: var(--gold);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   content: "0" counter(patch-scope);
 }
 
@@ -170,7 +170,7 @@
   border-radius: 999px;
   color: var(--aqua);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12px;
   text-transform: lowercase;
 }
 
@@ -445,7 +445,7 @@ pre,
 .kicker,
 .eyebrow {
   color: var(--blue-deep);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -514,9 +514,9 @@ pre,
   justify-content: space-between;
   align-items: flex-start;
   transition:
-    transform 150ms ease,
-    border-color 150ms ease,
-    box-shadow 150ms ease;
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .mode-card:hover {
@@ -542,7 +542,7 @@ pre,
 
 .mode-index {
   color: var(--blue);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .mode-copy {
@@ -635,7 +635,7 @@ pre,
   align-items: center;
   gap: 5px;
   width: fit-content;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
   border-radius: 999px;
   padding: 7px 9px;
@@ -735,7 +735,7 @@ pre,
   margin-bottom: 6px;
   color: var(--red);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -748,7 +748,7 @@ pre,
 .unsupported-guide p {
   margin: 6px 0 0;
   color: var(--ink-soft);
-  font-size: 10px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -813,7 +813,7 @@ pre,
 
 .evidence-ref {
   color: var(--blue-deep);
-  font-size: 10px;
+  font-size: 12px;
   text-transform: uppercase;
 }
 
@@ -965,7 +965,7 @@ textarea {
 .guide-title span {
   color: var(--blue-deep);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.11em;
   text-transform: uppercase;
 }
@@ -1007,7 +1007,7 @@ textarea {
   margin-bottom: 6px;
   color: #758398;
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
@@ -1015,7 +1015,7 @@ textarea {
 .learning-guide dd {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: 15px;
   line-height: 1.45;
 }
 
@@ -1033,7 +1033,7 @@ textarea::placeholder {
 
 .form-footer > span {
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .button {
@@ -1089,7 +1089,7 @@ textarea::placeholder {
 
 .claim-quote > span {
   color: var(--blue-deep);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -1131,7 +1131,7 @@ blockquote {
   color: var(--purple);
   font-family:
     "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
-  font-size: 10px;
+  font-size: 12px;
   text-transform: uppercase;
 }
 
@@ -1150,7 +1150,7 @@ blockquote {
 .prediction-line span {
   display: block;
   color: var(--ink);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -1180,7 +1180,7 @@ blockquote {
   border-radius: 999px;
   background: #f8f4ec;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .evidence-chip strong {
@@ -1340,7 +1340,7 @@ legend {
   color: var(--blue);
   font-family:
     "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .stepper li > span:nth-child(2) {
@@ -1382,7 +1382,7 @@ legend {
   grid-template-columns: 52px 72px 1fr;
   gap: 8px;
   align-items: baseline;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .event-list time {
@@ -1391,7 +1391,7 @@ legend {
 
 .event-list > li > span {
   color: var(--blue-deep);
-  font-size: 9px;
+  font-size: 12px;
   text-transform: uppercase;
 }
 
@@ -1497,7 +1497,7 @@ table {
   width: 100%;
   border-collapse: collapse;
   min-width: 780px;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 caption {
@@ -1517,7 +1517,7 @@ thead th {
   color: var(--ink-soft);
   font-family:
     "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
-  font-size: 9px;
+  font-size: 12px;
   text-transform: uppercase;
 }
 
@@ -1625,7 +1625,7 @@ thead th {
   background: #0d192b;
   color: #dfe8f5;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.8;
 }
 
@@ -1687,7 +1687,7 @@ thead th {
   padding: 18px;
   overflow-x: auto;
   background: var(--paper-deep);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .setup-card {
@@ -1713,7 +1713,7 @@ thead th {
   display: block;
   padding: 12px;
   background: var(--paper-deep);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .footer {
@@ -1723,7 +1723,7 @@ thead th {
   gap: 20px;
   border-top: 1px solid var(--line);
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 @media (max-width: 950px) {
@@ -1917,7 +1917,7 @@ thead th {
 .wordmark-copy small {
   color: var(--ink-soft);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.11em;
   text-transform: uppercase;
@@ -1947,7 +1947,7 @@ thead th {
   gap: 7px;
   min-width: 108px;
   color: #8390a1;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .proof-rail > span:not(:last-child)::after {
@@ -1968,7 +1968,7 @@ thead th {
   border-radius: 50%;
   background: #fff;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 12px;
   font-style: normal;
 }
 
@@ -2010,7 +2010,7 @@ thead th {
   flex: 0 0 auto;
   color: var(--ink-soft);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -2047,14 +2047,13 @@ thead th {
 .hero-copy {
   position: relative;
   z-index: 1;
-  animation: rise-in 650ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .landing .kicker {
   margin-bottom: 28px;
   color: var(--aqua-bright);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.15em;
 }
 
@@ -2133,7 +2132,7 @@ thead th {
   gap: 18px;
   color: #8292a7;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -2161,7 +2160,6 @@ thead th {
   box-shadow:
     0 46px 100px rgba(0, 0, 0, 0.42),
     inset 0 1px rgba(255, 255, 255, 0.04);
-  animation: console-in 760ms 120ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .proof-console::before {
@@ -2183,7 +2181,7 @@ thead th {
   align-items: center;
   color: #7f92aa;
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.09em;
 }
 
@@ -2238,7 +2236,7 @@ thead th {
 .console-label {
   color: #7890aa;
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.14em;
 }
 
@@ -2265,7 +2263,7 @@ thead th {
   gap: 6px;
   color: #d8ae5d;
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -2299,7 +2297,7 @@ thead th {
   z-index: 2;
   display: block;
   color: #9aabc0;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .console-metric strong {
@@ -2344,7 +2342,7 @@ thead th {
   writing-mode: vertical-rl;
   color: #51657d;
   font-family: var(--mono);
-  font-size: 7px;
+  font-size: 12px;
   letter-spacing: 0.1em;
 }
 
@@ -2399,7 +2397,7 @@ thead th {
 }
 
 .verifier-seal small {
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .console-footer {
@@ -2455,7 +2453,7 @@ thead th {
   background: var(--night);
   color: var(--aqua-bright);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .proof-spine strong {
@@ -2466,7 +2464,7 @@ thead th {
 .proof-spine p {
   margin: 7px 0 0;
   color: #708198;
-  font-size: 10px;
+  font-size: 13px;
   line-height: 1.55;
 }
 
@@ -2560,7 +2558,7 @@ thead th {
 }
 
 .landing .mode-index {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.12em;
 }
 
@@ -2611,7 +2609,7 @@ thead th {
   align-items: center;
   gap: 6px;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -2730,18 +2728,18 @@ thead th {
   background: var(--blue);
   color: white;
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 12px;
   font-style: normal;
 }
 
 .claim-scaffold b {
   color: var(--ink);
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .claim-scaffold small {
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 13px;
 }
 
 .notebook-card h2,
@@ -2876,7 +2874,7 @@ blockquote {
   height: 44px;
   border: 5px solid #edf0f3;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .evidence-chip {
@@ -2891,7 +2889,7 @@ blockquote {
   width: 100%;
   margin-top: 4px;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -3027,7 +3025,7 @@ blockquote {
   padding: 6px 9px;
   border-radius: 6px;
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -3072,7 +3070,7 @@ blockquote {
 .finding-banner dt {
   color: #71849b;
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -3080,7 +3078,7 @@ blockquote {
 .finding-banner dd {
   margin: 3px 0 0;
   color: #e3ebf4;
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .metric-grid article {
@@ -3136,7 +3134,7 @@ blockquote {
 .overlap-story > div > span {
   color: var(--ink-soft);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -3258,7 +3256,7 @@ thead {
   align-items: center;
   color: var(--ink-soft);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -3300,7 +3298,7 @@ thead {
   background: white;
   color: var(--ink-soft);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .forecast-track .past {
@@ -3324,7 +3322,7 @@ thead {
 .forecast-window > p {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: 15px;
   text-align: center;
 }
 
@@ -3339,7 +3337,7 @@ thead {
   align-items: center;
   color: #64748a;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.03em;
 }
 
@@ -3360,28 +3358,6 @@ thead {
 
 .stage-landing .footer span:nth-child(2) {
   color: #9aacbf;
-}
-
-@keyframes rise-in {
-  from {
-    opacity: 0;
-    transform: translateY(24px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes console-in {
-  from {
-    opacity: 0;
-    transform: translateY(30px) rotate(1.5deg) scale(0.97);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) rotate(0) scale(1);
-  }
 }
 
 @media (max-width: 1100px) {
@@ -3560,7 +3536,7 @@ thead {
   .console-topline {
     grid-template-columns: 54px 1fr auto;
     padding-inline: 12px;
-    font-size: 6px;
+    font-size: 12px;
   }
 
   .console-body {
@@ -3640,7 +3616,7 @@ thead {
   }
 
   .screen-intro p:last-child {
-    font-size: 14px;
+    font-size: 15px;
   }
 
   .panel,
@@ -3787,7 +3763,7 @@ thead {
   grid-column: 1 / -1;
   margin-bottom: 9px;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 750;
   letter-spacing: 0.02em;
 }
@@ -3814,9 +3790,9 @@ thead {
   font-size: 12px;
   font-weight: 760;
   transition:
-    border-color 150ms ease,
-    background 150ms ease,
-    color 150ms ease;
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease;
 }
 
 .segmented-control input:checked + span {
@@ -3876,7 +3852,7 @@ thead {
 
 .lab-toggle-control small {
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -3916,14 +3892,14 @@ thead {
 .interactive-result-score > span {
   color: var(--aqua-deep);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 780;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .interactive-run-summary strong {
-  font-size: 11px;
+  font-size: 15px;
   line-height: 1.45;
 }
 
@@ -3948,12 +3924,12 @@ thead {
 }
 
 .interactive-progress strong {
-  font-size: 12px;
+  font-size: 15px;
 }
 
 .interactive-progress span:not(.status-dot) {
   color: var(--ink-soft);
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .interactive-result {
@@ -3981,7 +3957,7 @@ thead {
 
 .interactive-result-score small {
   color: var(--ink-soft);
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .interactive-result dl {
@@ -3999,7 +3975,7 @@ thead {
 
 .interactive-result dt {
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -4008,7 +3984,7 @@ thead {
   margin: 4px 0 0;
   overflow: hidden;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
   text-overflow: ellipsis;
 }
@@ -4017,7 +3993,7 @@ thead {
   grid-column: 1 / -1;
   margin: 0;
   color: var(--ink-soft);
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .imbalance-control-grid {
@@ -4027,7 +4003,7 @@ thead {
 .lab-range-control small {
   margin-top: 7px;
   color: var(--ink-soft);
-  font-size: 10px;
+  font-size: 13px;
   line-height: 1.4;
 }
 
@@ -4046,7 +4022,7 @@ thead {
   margin: 14px 0 0;
   color: var(--ink-soft);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
 }
@@ -4061,7 +4037,7 @@ thead {
 
 .imbalance-interactive-result > div:first-child > small {
   color: var(--ink-soft);
-  font-size: 10px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -4073,7 +4049,7 @@ thead {
   grid-column: 1 / -1;
   overflow: hidden;
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4206,7 +4182,7 @@ thead {
   color: var(--ink-soft);
   background: rgb(255 255 255 / 82%);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
 }
@@ -4288,7 +4264,7 @@ thead {
   margin-top: 5px;
   color: #7a8798;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 13px;
 }
 
 .compiler-authority {
@@ -4318,7 +4294,7 @@ thead {
 .compiler-authority > div > span {
   color: #8ba0ba;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -4326,7 +4302,7 @@ thead {
 
 .compiler-authority > div > strong {
   color: #f5f9ff;
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.45;
 }
 
@@ -4441,7 +4417,6 @@ thead {
 
 .learning-hero-copy {
   max-width: 610px;
-  animation: rise-in 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .lesson-kicker {
@@ -4542,7 +4517,6 @@ thead {
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.88);
   box-shadow: 0 35px 90px rgba(7, 21, 42, 0.13);
-  animation: console-in 620ms 80ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .lesson-preview::before {
@@ -4573,7 +4547,7 @@ thead {
   border-radius: 999px;
   background: var(--aqua-soft);
   color: #006a67;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .preview-question {
@@ -4608,7 +4582,7 @@ thead {
 .score-card span,
 .score-card small {
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .score-card strong {
@@ -4765,7 +4739,7 @@ thead {
   border-radius: 9px;
   background: #edf2ff;
   color: var(--blue-deep);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
 }
 
@@ -4775,7 +4749,7 @@ thead {
 
 .simple-mode-card > small {
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.4;
 }
 
@@ -4785,7 +4759,7 @@ thead {
   align-items: center;
   gap: 5px;
   color: var(--blue-deep);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -4854,7 +4828,7 @@ thead {
 }
 
 .learning-guide dd {
-  font-size: 11px;
+  font-size: 15px;
   line-height: 1.45;
 }
 
@@ -4901,7 +4875,7 @@ thead {
   background: #eef3ff;
   color: var(--blue-deep);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
   transition:
     border-color 160ms ease,
@@ -4953,7 +4927,7 @@ thead {
   border-radius: 999px;
   color: #087479;
   background: #e9ffff;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -4968,7 +4942,7 @@ thead {
   border-radius: 12px;
   background: #111827;
   color: #d9f9f4;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -5083,14 +5057,14 @@ thead {
 .analyst-wording summary,
 .exact-results summary {
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
 }
 
 .analyst-wording p {
   margin: 10px 0 0;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: 15px;
   line-height: 1.45;
 }
 
@@ -5102,7 +5076,7 @@ thead {
   display: inline-block;
   margin-top: 12px;
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .revision {
@@ -5308,7 +5282,7 @@ thead {
 .guide-action span {
   color: var(--ink-soft);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.13em;
   text-transform: uppercase;
@@ -5332,13 +5306,13 @@ thead {
   align-items: center;
   color: var(--blue-deep);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
 }
 
 .guide-context p {
   margin: 8px 0 0;
-  font-size: 11px;
+  font-size: 15px;
   line-height: 1.55;
 }
 
@@ -5386,7 +5360,7 @@ thead {
 .transfer-win-grid span {
   color: var(--ink-soft);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -5403,7 +5377,7 @@ thead {
 
 .recap-score small {
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .recap-rule p {
@@ -5531,7 +5505,7 @@ thead {
   border-radius: 999px;
   background: var(--aqua-soft);
   color: var(--aqua-deep);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
 }
 
@@ -5615,7 +5589,7 @@ thead {
 
 .patch-unlock-row small {
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .completion-phase {
@@ -5868,7 +5842,7 @@ body {
   color: #8390a1;
   cursor: pointer;
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   text-align: left;
 }
 
@@ -5920,7 +5894,7 @@ body {
   color: var(--ink-soft);
   cursor: pointer;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 650;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -5960,11 +5934,11 @@ body {
 
 .review-notice strong {
   color: var(--ink);
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .review-notice span {
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -6040,7 +6014,7 @@ body {
 .review-confidence {
   margin: 14px 0 0;
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .review-hypotheses {
@@ -6068,7 +6042,7 @@ body {
 
 .review-hypotheses strong {
   color: var(--ink);
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.48;
 }
 
@@ -6091,7 +6065,7 @@ body {
   border-radius: 10px;
   background: var(--aqua-soft);
   color: var(--aqua-deep);
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 700;
 }
 
@@ -6116,7 +6090,7 @@ body {
   border-radius: 12px;
   background: #f7f8fa;
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: 15px;
 }
 
 .review-result-change > span > strong {
@@ -6184,7 +6158,7 @@ body {
 
   .proof-rail > button {
     min-width: 0;
-    min-height: 34px;
+    min-height: 44px;
     flex: 1 1 0;
     justify-content: center;
     gap: 3px;
@@ -6192,7 +6166,7 @@ body {
 
   .proof-rail b {
     display: block;
-    font-size: 8px;
+    font-size: 12px;
   }
 
   .proof-rail > button:not(:last-child)::after {
@@ -6209,7 +6183,7 @@ body {
 
   .start-over-control::before {
     content: "Reset";
-    font-size: 9px;
+    font-size: 12px;
   }
 
   .review-hypotheses,
@@ -6258,7 +6232,7 @@ body {
   .completion-phase .diff-row:not(.diff-head) > span::before {
     color: var(--purple);
     font-family: var(--mono);
-    font-size: 8px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;

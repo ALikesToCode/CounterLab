@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { useRecentProjects } from "../hooks/useRecentProjects";
 import { CommandPalette } from "../components/studio/CommandPalette";
@@ -32,8 +32,10 @@ export function CounterLabStudio({
   children: ReactNode;
 }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [projectToolsOpen, setProjectToolsOpen] = useState(false);
   const [proofOpen, setProofOpen] = useState(context.stage === "live-compile");
   const [proofTab, setProofTab] = useState<ProofTab>("Activity");
+  const projectToolsTrigger = useRef<HTMLButtonElement>(null);
   const recentProjects = useRecentProjects(
     context.session,
     context.artifact,
@@ -48,12 +50,60 @@ export function CounterLabStudio({
     const openPalette = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
+        setProjectToolsOpen(false);
         setPaletteOpen(true);
       }
     };
     window.addEventListener("keydown", openPalette);
     return () => window.removeEventListener("keydown", openPalette);
   }, []);
+
+  useEffect(() => {
+    if (!projectToolsOpen) return;
+    const containProjectToolsFocus = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setProjectToolsOpen(false);
+        projectToolsTrigger.current?.focus();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const dialog = document.getElementById("studio-project-tools");
+      if (dialog === null) return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      const first = focusable.at(0);
+      const last = focusable.at(-1);
+      if (first === undefined || last === undefined) return;
+      const active = document.activeElement;
+      if (!dialog.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", containProjectToolsFocus);
+    return () =>
+      window.removeEventListener("keydown", containProjectToolsFocus);
+  }, [projectToolsOpen]);
+
+  const closeProjectTools = () => {
+    setProjectToolsOpen(false);
+    projectToolsTrigger.current?.focus();
+  };
+
+  const runFromProjectTools = (action: () => void) => {
+    closeProjectTools();
+    action();
+  };
 
   const showProof = (tab: ProofTab) => {
     setProofTab(tab);
@@ -129,16 +179,47 @@ export function CounterLabStudio({
   );
 
   return (
-    <div className={`studio-frame proof-${proofOpen ? "open" : "closed"}`}>
-      <ProjectSidebar
-        context={context}
-        recentProjects={recentProjects}
-        onNewAnalysis={actions.newAnalysis}
-        onShowEvidence={actions.showEvidence}
-        onOpenRecent={actions.openRecent}
-        onOpenCommands={() => setPaletteOpen(true)}
-      />
-      <div className="studio-canvas">{children}</div>
+    <div
+      className={`studio-frame proof-${proofOpen ? "open" : "closed"} tools-${projectToolsOpen ? "open" : "closed"}`}
+    >
+      {projectToolsOpen ? (
+        <>
+          <button
+            className="studio-sidebar-scrim"
+            type="button"
+            aria-hidden="true"
+            tabIndex={-1}
+            onClick={closeProjectTools}
+          />
+          <ProjectSidebar
+            context={context}
+            recentProjects={recentProjects}
+            onNewAnalysis={() => runFromProjectTools(actions.newAnalysis)}
+            onShowEvidence={() => runFromProjectTools(actions.showEvidence)}
+            onOpenRecent={(project) =>
+              runFromProjectTools(() => actions.openRecent(project))
+            }
+            onOpenCommands={() =>
+              runFromProjectTools(() => setPaletteOpen(true))
+            }
+            onClose={closeProjectTools}
+          />
+        </>
+      ) : null}
+      <div className="studio-canvas">
+        <div className="studio-utility-bar">
+          <button
+            ref={projectToolsTrigger}
+            type="button"
+            aria-expanded={projectToolsOpen}
+            aria-controls="studio-project-tools"
+            onClick={() => setProjectToolsOpen(true)}
+          >
+            Project &amp; evidence
+          </button>
+        </div>
+        {children}
+      </div>
       <button
         className="studio-mobile-command"
         type="button"

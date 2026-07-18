@@ -1,4 +1,10 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import {
+  ensureRuntimeParent,
+  expect,
+  test,
+  type Locator,
+  type Page,
+} from "./cloak-test";
 import {
   ProofBundleSchema,
   ProofCapsuleReplayReceiptV2Schema,
@@ -39,6 +45,7 @@ async function writeLiveSmokeEvidence(
 ): Promise<void> {
   const destination = process.env.COUNTERLAB_E2E_EVIDENCE_PATH;
   if (destination === undefined || destination.length === 0) return;
+  const containedDestination = await ensureRuntimeParent(destination);
 
   const sessionId = await page.evaluate(() =>
     window.localStorage.getItem("counterlab.sessionId"),
@@ -83,13 +90,10 @@ async function writeLiveSmokeEvidence(
     const url = new URL(response.url());
     return (
       response.request().method() === "POST" &&
-      url.pathname ===
-        `/api/sessions/${encodeURIComponent(sessionId)}/replays`
+      url.pathname === `/api/sessions/${encodeURIComponent(sessionId)}/replays`
     );
   });
-  await page
-    .getByRole("button", { name: /Publish read-only replay/i })
-    .click();
+  await page.getByRole("button", { name: /Publish read-only replay/i }).click();
   const publicationResponse = await publicationResponsePromise;
   expect([200, 201]).toContain(publicationResponse.status());
   const publicationPayload = (await publicationResponse.json()) as {
@@ -100,10 +104,7 @@ async function writeLiveSmokeEvidence(
   );
   await expect(
     page.getByRole("link", { name: /Open verified replay/i }),
-  ).toHaveAttribute(
-    "href",
-    `/replay/${encodeURIComponent(receipt.replayId)}`,
-  );
+  ).toHaveAttribute("href", `/replay/${encodeURIComponent(receipt.replayId)}`);
 
   const duplicatePublicationResponse = await page.request.post(
     `/api/sessions/${encodeURIComponent(sessionId)}/replays`,
@@ -145,7 +146,9 @@ async function writeLiveSmokeEvidence(
   );
   const replayPatch = Buffer.from(await replayPatchResponse.body());
   const patchedNotebook = await readFile(patchedNotebookPath);
-  const parsedPatchedNotebook = JSON.parse(patchedNotebook.toString("utf8")) as {
+  const parsedPatchedNotebook = JSON.parse(
+    patchedNotebook.toString("utf8"),
+  ) as {
     nbformat?: unknown;
     cells?: unknown;
   };
@@ -169,7 +172,7 @@ async function writeLiveSmokeEvidence(
   ).toBeVisible();
 
   await writeFile(
-    destination,
+    containedDestination,
     `${JSON.stringify(
       {
         schemaVersion: "2",
@@ -178,18 +181,13 @@ async function writeLiveSmokeEvidence(
         publishedReplayId: receipt.replayId,
         sourceArtifactHash: replay.artifactManifest.fileSha256,
         experimentIrHash: replay.reasoningDiff.authority.experimentIrHash,
-        experimentSelectionHash:
-          replay.reasoningDiff.authority.selectionHash,
+        experimentSelectionHash: replay.reasoningDiff.authority.selectionHash,
         resultHash: replay.verifiedResult.resultHash,
-        evidenceVerdictHash:
-          replay.reasoningDiff.authority.evidenceVerdictHash,
-        epistemicReportHash:
-          replay.reasoningDiff.authority.epistemicReportHash,
+        evidenceVerdictHash: replay.reasoningDiff.authority.evidenceVerdictHash,
+        epistemicReportHash: replay.reasoningDiff.authority.epistemicReportHash,
         boundaryMapHash: replay.boundary.result.resultHash,
-        boundaryReceiptHash:
-          replay.reasoningDiff.authority.boundaryReceiptHash,
-        transferResultHash:
-          replay.reasoningDiff.authority.transferResultHash,
+        boundaryReceiptHash: replay.reasoningDiff.authority.boundaryReceiptHash,
+        transferResultHash: replay.reasoningDiff.authority.transferResultHash,
         patchPlanHash: replay.reasoningDiff.authority.patchPlanHash,
         patchResultHash: replay.patchResult.resultHash,
         patchedArtifactHash: replay.patchResult.patchedArtifactHash,
@@ -275,27 +273,60 @@ async function reset(page: Page) {
   await page.reload();
 }
 
+async function expectNoHorizontalOverflow(page: Page) {
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <= window.innerWidth &&
+          document.body.scrollWidth <= window.innerWidth,
+      ),
+    )
+    .toBe(true);
+}
+
+async function expectMinimumTarget(locator: Locator, minimum = 44) {
+  const box = await locator.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.height).toBeGreaterThanOrEqual(minimum);
+  expect(box!.width).toBeGreaterThanOrEqual(minimum);
+}
+
+async function openLiveSetup(page: Page, question = claim) {
+  await reset(page);
+  await page.getByLabel("Your question or claim").fill(question);
+  await page.getByRole("button", { name: /Test this claim/i }).click();
+  await expect(
+    page.getByRole("heading", { name: "Test my notebook" }),
+  ).toBeVisible();
+}
+
 async function startInstant(page: Page) {
   await reset(page);
-  await page
-    .getByRole("button", { name: /Try the 3-minute sample — Try instantly/i })
-    .click();
+  await page.getByRole("button", { name: /Try verified sample/i }).click();
   await expect(
     page.getByRole("heading", { name: /What do you think the score means/i }),
   ).toBeVisible();
   await page.getByLabel("Your claim").fill(claim);
   await page.getByRole("button", { name: /Compare two explanations/i }).click();
   await expect(
-    page.getByRole("heading", { name: "Which explanation fits?" }),
+    page.getByRole("heading", {
+      name: /Does your current explanation capture what you mean/i,
+    }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: /These two ideas make sense/i })
+    .getByRole("button", { name: /Yes, this captures my view/i })
     .click();
+  await expect(
+    page.getByRole("heading", {
+      name: /Seal what you expect before the result appears/i,
+    }),
+  ).toBeVisible();
 }
 
 async function commitAndOpenResult(page: Page) {
   await page.getByLabel(/Remain near 98%/i).check();
-  await page.getByRole("button", { name: /Lock my answer/i }).click();
+  await page.getByRole("button", { name: /Seal my prediction/i }).click();
   await expect(
     page.getByRole("heading", { name: /The result is ready/i }),
   ).toBeVisible();
@@ -303,9 +334,23 @@ async function commitAndOpenResult(page: Page) {
   await expect(
     page.getByRole("heading", { name: /Here.s what changed/i }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: /Let the verified test answer/i }),
+  ).toBeVisible();
+}
+
+async function openTheaterView(
+  page: Page,
+  name: "Observe" | "Explore" | "Boundary" | "Apply",
+) {
+  const tab = page.getByRole("tab", { name: new RegExp(name, "i") });
+  await tab.click();
+  await expect(tab).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tabpanel")).toBeVisible();
 }
 
 async function recordRevision(page: Page) {
+  await openTheaterView(page, "Apply");
   await page.getByLabel("Your revised mental model").fill(revision);
   await page
     .getByRole("button", { name: /Try the rule on a new problem/i })
@@ -317,7 +362,7 @@ async function recordRevision(page: Page) {
 
 async function waitForSamplePatch(page: Page) {
   await expect(
-    page.getByRole("heading", { name: /You found the hidden shortcut/i }),
+    page.getByRole("heading", { name: /You can now distinguish/i }),
   ).toBeVisible({ timeout: 30_000 });
   await expect(
     page.getByRole("heading", { name: /Your learning, before and after/i }),
@@ -379,6 +424,9 @@ async function revealVerifiedBoundary(page: Page) {
   const verified = page.getByRole("heading", {
     name: /Where does the result change/i,
   });
+  const hunt = page.getByRole("heading", {
+    name: /Can you find a condition where the conclusion changes/i,
+  });
   const retry = page.getByRole("button", {
     name: /Retry Boundary verification/i,
   });
@@ -387,15 +435,35 @@ async function revealVerifiedBoundary(page: Page) {
     await page
       .getByRole("button", {
         name:
-          attempt === 0
-            ? /Map the boundary/i
-            : /Retry Boundary verification/i,
+          attempt === 0 ? /Map the boundary/i : /Retry Boundary verification/i,
       })
       .click();
-    await expect(verified.or(retry)).toBeVisible({ timeout: 180_000 });
+    await expect(verified.or(hunt).or(retry)).toBeVisible({ timeout: 180_000 });
+    if (await hunt.isVisible()) {
+      const huntRegion = hunt.locator("xpath=ancestor::section[1]");
+      const verifiedResultHash = await huntRegion.getAttribute(
+        "data-boundary-result-hash",
+      );
+      expect(verifiedResultHash).toMatch(/^[a-f0-9]{64}$/);
+      const choices = huntRegion.getByRole("radio");
+      expect(await choices.count()).toBeGreaterThanOrEqual(3);
+      await choices.nth(2).check();
+      await huntRegion
+        .getByRole("button", { name: /Check this condition/i })
+        .click();
+      await expect(verified).toBeVisible({ timeout: 30_000 });
+    }
     if (await verified.isVisible()) {
+      const table = page.getByRole("table", {
+        name: /Verified Boundary Map values/i,
+      });
+      await expect(table).toBeVisible();
+      const cells = table.getByRole("button");
+      await cells.first().focus();
+      await page.keyboard.press("ArrowRight");
+      await expect(cells.nth(1)).toBeFocused();
       await expect(
-        page.getByRole("table", { name: /Verified Boundary Map values/i }),
+        page.getByText(/SHA-256 content integrity|Signing key ID/i),
       ).toBeVisible();
       return;
     }
@@ -429,16 +497,19 @@ test("Judge Mode distinguishes every authority path", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByText("Sample lesson")).toBeVisible();
   await expect(page.getByText("Live notebook analysis")).toBeVisible();
-  await expect(page.getByText("Verified replay", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Verified replay", { exact: true }),
+  ).toBeVisible();
   if (liveReady) {
-    await expect(
-      page.getByRole("link", { name: /run live/i }),
-    ).toHaveAttribute("href", "/new");
+    await expect(page.getByRole("link", { name: /run live/i })).toHaveAttribute(
+      "href",
+      "/new",
+    );
   } else {
-    await expect(page.getByText(/live authority is unavailable/i)).toBeVisible();
     await expect(
-      page.getByRole("link", { name: /run live/i }),
-    ).toHaveCount(0);
+      page.getByText(/live authority is unavailable/i),
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: /run live/i })).toHaveCount(0);
   }
   await expect(
     page.getByRole("link", { name: /watch replay/i }),
@@ -479,34 +550,90 @@ test("the first visit explains the lesson before asking for technical knowledge"
   await reset(page);
   await expect(
     page.getByRole("heading", {
-      name: "Your notebook made a claim. Will it survive a fair test?",
+      name: "What result are you trying to understand?",
     }),
   ).toBeVisible();
   await expect(
-    page.getByText(
-      /Lock what you expect.*verified test.*apply the lesson.*repair/i,
-    ),
+    page.getByText(/State the claim first.*before anything runs/i),
+  ).toBeVisible();
+  await expect(page.getByLabel("Your question or claim")).toBeInViewport();
+  await expect(page.getByLabel("Attach notebook")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Test this claim/i }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: /Try verified sample/i }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", {
-      name: /Try the 3-minute sample — Try instantly/i,
-    }),
-  ).toBeInViewport();
-  await expect(
-    page.getByRole("button", { name: /Analyze a notebook — Generate live/i }),
+    page.getByRole("button", { name: /Watch verified replay/i }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /Watch a verified replay/i }),
-  ).toBeVisible();
+  await expect(page.getByRole("link", { name: /Judge Mode/i })).toHaveAttribute(
+    "href",
+    "/judge",
+  );
 
   const visibleWords = (await page.locator("body").innerText())
     .trim()
     .split(/\s+/).length;
-  expect(visibleWords).toBeLessThan(210);
+  expect(visibleWords).toBeLessThan(190);
   await expect(page.locator("body")).not.toContainText(
     /formalize|discriminating|canonical|mutation/i,
   );
 });
+
+for (const viewport of [
+  { name: "wide desktop", width: 1440, height: 900 },
+  { name: "compact desktop", width: 1280, height: 720 },
+  { name: "mobile", width: 390, height: 844 },
+] as const) {
+  test(`${viewport.name} keeps the question and canonical progress accessible`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await reset(page);
+
+    const question = page.getByLabel("Your question or claim");
+    await expect(question).toHaveAccessibleName("Your question or claim");
+    await expect(
+      page.getByRole("button", { name: /Try verified sample/i }),
+    ).toBeVisible();
+    await expectMinimumTarget(
+      page.getByRole("button", { name: /Try verified sample/i }),
+    );
+    await expectMinimumTarget(page.getByRole("link", { name: /Judge Mode/i }));
+    await expectNoHorizontalOverflow(page);
+
+    await page.getByRole("button", { name: /Try verified sample/i }).click();
+    await expect(
+      page.getByRole("heading", { name: /What do you think the score means/i }),
+    ).toBeVisible();
+    if (viewport.width <= 700) {
+      const progress = page.getByTestId("learner-progress-mobile");
+      await expect(progress).toBeVisible();
+      await expect(progress).toContainText("Step 1 of 6");
+      await expectMinimumTarget(progress.locator("summary"));
+    } else {
+      const progress = page.getByRole("navigation", {
+        name: "Learner progress",
+      });
+      await expect(progress).toBeVisible();
+      await expect(progress).toContainText("Question");
+      await expect(progress).toContainText("Repair");
+    }
+    await expectNoHorizontalOverflow(page);
+
+    const typography = await page.evaluate(() => ({
+      body: Number.parseFloat(getComputedStyle(document.body).fontSize),
+      secondary: Number.parseFloat(
+        getComputedStyle(
+          document.querySelector(".screen-intro p:last-child") ?? document.body,
+        ).fontSize,
+      ),
+    }));
+    expect(typography.body).toBeGreaterThanOrEqual(15);
+    expect(typography.secondary).toBeGreaterThanOrEqual(13);
+  });
+}
 
 test("Try Instantly persists the verified learning loop and exports a valid proof", async ({
   page,
@@ -528,6 +655,7 @@ test("Try Instantly persists the verified learning loop and exports a valid proo
 
   await commitAndOpenResult(page);
   await expect(page.getByText("59.4%").first()).toBeVisible();
+  await openTheaterView(page, "Explore");
   await expect(
     page.getByRole("heading", {
       name: /Change the test, then let the kernel recompute it/i,
@@ -544,8 +672,18 @@ test("Try Instantly persists the verified learning loop and exports a valid proo
   await page.getByRole("button", { name: /Verify notebook patch/i }).click();
   await waitForSamplePatch(page);
 
+  const patchDownloadPromise = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Download repaired notebook", exact: true })
+    .click();
+  const patchDownload = await patchDownloadPromise;
+  expect(patchDownload.suggestedFilename()).toMatch(/\.ipynb$/i);
+  expect(await patchDownload.path()).not.toBeNull();
+
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Download proof/i }).click();
+  await page
+    .getByRole("button", { name: "Download proof record", exact: true })
+    .click();
   const download = await downloadPromise;
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
@@ -578,6 +716,7 @@ test("the lesson keeps one learner decision in focus at a time", async ({
     page.getByText(/Which evaluation design matches deployment/i),
   ).toHaveCount(0);
 
+  await openTheaterView(page, "Apply");
   await page.getByLabel("Your revised mental model").fill(revision);
   await page
     .getByRole("button", { name: /Try the rule on a new problem/i })
@@ -608,7 +747,7 @@ test("the lesson keeps one learner decision in focus at a time", async ({
   expect(await page.evaluate(() => window.scrollY)).toBeLessThan(24);
   await expect(page.locator("pre.diff")).not.toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Download proof/i }),
+    page.getByRole("button", { name: "Download proof record", exact: true }),
   ).toBeVisible();
 });
 
@@ -628,7 +767,7 @@ test("prediction is immutable and results do not exist before commitment", async
   await page.getByLabel(/Fall materially/i).check();
   await page.getByLabel(/Confidence/i).fill("88");
   await expect(page.getByText("88%", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: /Lock my answer/i }).click();
+  await page.getByRole("button", { name: /Seal my prediction/i }).click();
   await expect(
     page.getByRole("heading", { name: /The result is ready/i }),
   ).toBeVisible();
@@ -648,9 +787,7 @@ test("prediction is immutable and results do not exist before commitment", async
 
 test("a learner can use a claim starter and return home", async ({ page }) => {
   await reset(page);
-  await page
-    .getByRole("button", { name: /Try the 3-minute sample — Try instantly/i })
-    .click();
+  await page.getByRole("button", { name: /Try verified sample/i }).click();
 
   await page.getByRole("button", { name: /Use a starter claim/i }).click();
   await expect(page.getByLabel("Your claim")).toHaveValue(/new customers/i);
@@ -661,7 +798,7 @@ test("a learner can use a claim starter and return home", async ({ page }) => {
   await page.getByRole("button", { name: /Start over/i }).click();
   await expect(
     page.getByRole("heading", {
-      name: "Your notebook made a claim. Will it survive a fair test?",
+      name: "What result are you trying to understand?",
     }),
   ).toBeVisible();
   expect(
@@ -671,13 +808,52 @@ test("a learner can use a claim starter and return home", async ({ page }) => {
   ).toBeNull();
 });
 
+test("refresh restores the question and confirmed Prediction phases", async ({
+  page,
+}) => {
+  await reset(page);
+  await page.getByRole("button", { name: /Try verified sample/i }).click();
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: /What do you think the score means/i }),
+  ).toBeVisible();
+
+  await page.getByLabel("Your claim").fill(claim);
+  await page.getByRole("button", { name: /Compare two explanations/i }).click();
+  await page.reload();
+  await expect(
+    page.getByRole("heading", {
+      name: /Does your current explanation capture what you mean/i,
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: /Yes, this captures my view/i })
+    .click();
+  await page.reload();
+  await expect(
+    page.getByRole("heading", {
+      name: /Seal what you expect before the result appears/i,
+    }),
+  ).toBeVisible();
+});
+
 test("refresh restores the current lesson and the committed prediction", async ({
   page,
 }) => {
   await startInstant(page);
+  await page.reload();
+  await expect(
+    page.getByRole("heading", {
+      name: /Seal what you expect before the result appears/i,
+    }),
+  ).toBeVisible();
   await page.getByLabel(/Fall materially/i).check();
   await page.getByLabel(/Confidence/i).fill("88");
-  await page.getByRole("button", { name: /Lock my answer/i }).click();
+  await page.getByRole("button", { name: /Seal my prediction/i }).click();
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: /The result is ready/i }),
+  ).toBeVisible();
   await page.getByRole("button", { name: /Show me what happened/i }).click();
   await expect(
     page.getByRole("heading", { name: /Here.s what changed/i }),
@@ -688,16 +864,124 @@ test("refresh restores the current lesson and the committed prediction", async (
   await expect(
     page.getByRole("heading", { name: /Here.s what changed/i }),
   ).toBeVisible();
+  await expect(page.getByLabel("Pinned prediction")).toContainText(
+    /Accuracy falls materially/i,
+  );
   await expect(
-    page.getByRole("heading", { name: /Accuracy falls materially/i }),
+    page.getByRole("region", { name: /Let the verified test answer/i }),
   ).toBeVisible();
+
+  await recordRevision(page);
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: /Try your rule on forecasting/i }),
+  ).toBeVisible();
+  await page.getByLabel(/Time-ordered holdout/i).check();
+  await page.getByLabel(/Centered rolling target/i).check();
+  await page.getByRole("button", { name: /Check transfer/i }).click();
+  await expect(
+    page.locator(".eyebrow", { hasText: "Transfer passed" }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: /You applied the rule correctly/i }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /Verify notebook patch/i }).click();
+  await waitForSamplePatch(page);
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: /You can now distinguish/i }),
+  ).toBeVisible();
+});
+
+test("a rejected test releases no result and remains recoverable after refresh", async ({
+  page,
+}) => {
+  await page.route("**/api/sessions/*/lab/compile", async (route) => {
+    await route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: false,
+        error: {
+          code: "TEST_REJECTED",
+          message:
+            "The frozen verifier rejected the proposed test. No result was released.",
+          status: 409,
+          retryable: true,
+        },
+        requestId: "e2e-rejected-test",
+      }),
+    });
+  });
+
+  await startInstant(page);
+  await page.getByLabel(/Fall materially/i).check();
+  await page.getByRole("button", { name: /Seal my prediction/i }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    /No result was released/i,
+  );
+  await expect(
+    page.getByRole("heading", { name: /Here.s what changed/i }),
+  ).toHaveCount(0);
+
+  const sessionId = await page.evaluate(() =>
+    window.localStorage.getItem("counterlab.sessionId"),
+  );
+  const stored = await page.request.get(`/api/sessions/${sessionId}`);
+  expect(stored.ok()).toBe(true);
+  expect((await stored.json()).data.verifiedResult).toBeUndefined();
+
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: /The fair test is ready/i }),
+  ).toBeVisible();
+  await expect(page.getByText(/has not released a result yet/i)).toBeVisible();
+});
+
+test("local hints and Theater views never request a model or new result", async ({
+  page,
+}) => {
+  await startInstant(page);
+  await commitAndOpenResult(page);
+
+  const authorityRequests: string[] = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (
+      path.includes("/belief-test") ||
+      path.endsWith("/lab/compile") ||
+      path.endsWith("/lab/run")
+    ) {
+      authorityRequests.push(path);
+    }
+  });
+
+  for (const view of ["Explore", "Boundary", "Apply", "Observe"] as const) {
+    await openTheaterView(page, view);
+    await expect(page.getByRole("tabpanel")).toHaveCount(1);
+  }
+  await expect(page.getByRole("tab", { name: /Observe/i })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(
+    page.getByRole("img", {
+      name: /Verified accuracy comparison.*familiar rows.*new customers/i,
+    }),
+  ).toBeVisible();
+
+  const hint = page.getByLabel("Contextual help");
+  await hint.getByText("Need a hint?").click();
+  await expect(hint.getByRole("link")).toBeVisible();
+  expect(authorityRequests).toEqual([]);
 });
 
 test("completed lesson steps open as read-only pages", async ({ page }) => {
   await startInstant(page);
   await commitAndOpenResult(page);
 
-  await page.getByRole("button", { name: "Your guess" }).click();
+  await page.getByRole("button", { name: "Review Prediction" }).click();
   await expect(
     page.getByRole("heading", { name: /Review your prediction/i }),
   ).toBeVisible();
@@ -708,6 +992,7 @@ test("completed lesson steps open as read-only pages", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: /Here.s what changed/i }),
   ).toBeVisible();
+  await expect(page.locator("#learner-progress")).toBeFocused();
 });
 
 test("failed transfer keeps the patch locked and a corrected answer unlocks it", async ({
@@ -740,11 +1025,7 @@ test("Replay remains visibly labelled for the full reconstructed path", async ({
   page,
 }) => {
   await reset(page);
-  await page
-    .getByRole("button", {
-      name: /Watch a verified replay — Replay verified session/i,
-    })
-    .click();
+  await page.getByRole("button", { name: /Watch verified replay/i }).click();
   const replayBanner = page.getByLabel("Replay status");
   await expect(replayBanner).toContainText("Verified replay");
   await page.getByRole("button", { name: /Continue replay/i }).click();
@@ -784,13 +1065,7 @@ test("missing live capabilities are stated without claiming a model call", async
       }),
     });
   });
-  await reset(page);
-  await page
-    .getByRole("button", { name: /Analyze a notebook — Generate live/i })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "Test my notebook" }),
-  ).toBeVisible();
+  await openLiveSetup(page);
   await expect(
     page.getByText(/Live notebook lessons are not set up/i),
   ).toBeVisible();
@@ -822,10 +1097,7 @@ test("configured live reasoning remains unproven until its first request", async
       }),
     });
   });
-  await reset(page);
-  await page
-    .getByRole("button", { name: /Analyze a notebook — Generate live/i })
-    .click();
+  await openLiveSetup(page);
 
   await expect(
     page.getByText(/Notebook lesson tools are ready to try/i),
@@ -843,9 +1115,7 @@ test("unsupported notebooks are parsed without execution and cannot advance", as
   page,
 }) => {
   await reset(page);
-  await page
-    .getByRole("button", { name: /Try the 3-minute sample — Try instantly/i })
-    .click();
+  await page.getByRole("button", { name: /Try verified sample/i }).click();
   await expect(
     page.getByRole("heading", { name: /What do you think the score means/i }),
   ).toBeVisible();
@@ -884,12 +1154,29 @@ test("the judged path is keyboard operable with reduced motion", async ({
   await reset(page);
 
   const tryInstant = page.getByRole("button", {
-    name: /Try the 3-minute sample — Try instantly/i,
+    name: /Try verified sample/i,
   });
   await tryInstant.focus();
   await page.keyboard.press("Enter");
   await expect(
     page.getByRole("heading", { name: /What do you think the score means/i }),
+  ).toBeVisible();
+
+  const mobileProgress = page.getByTestId("learner-progress-mobile");
+  await expect(mobileProgress).toContainText("Step 1 of 6");
+  const progressSummary = mobileProgress.locator("summary");
+  await progressSummary.focus();
+  await page.keyboard.press("Space");
+  await expect(
+    page.getByRole("navigation", { name: "All learner stages" }),
+  ).toBeVisible();
+  await page.keyboard.press("Space");
+
+  const hint = page.getByLabel("Contextual help").getByText("Need a hint?");
+  await hint.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByLabel("Contextual help").getByRole("link"),
   ).toBeVisible();
 
   const claimInput = page.getByLabel("Your claim");
@@ -898,19 +1185,37 @@ test("the judged path is keyboard operable with reduced motion", async ({
   await page.getByRole("button", { name: /Compare two explanations/i }).focus();
   await page.keyboard.press("Enter");
   await page
-    .getByRole("button", { name: /These two ideas make sense/i })
+    .getByRole("button", { name: /Yes, this captures my view/i })
     .focus();
   await page.keyboard.press("Enter");
 
   await page.getByLabel(/Fall materially/i).focus();
   await page.keyboard.press("Space");
-  await page.getByRole("button", { name: /Lock my answer/i }).focus();
+  await page.getByRole("button", { name: /Seal my prediction/i }).focus();
   await page.keyboard.press("Enter");
   await expect(
     page.getByRole("heading", { name: /The result is ready/i }),
   ).toBeVisible();
   await page.getByRole("button", { name: /Show me what happened/i }).focus();
   await page.keyboard.press("Enter");
+
+  const comparison = page.getByRole("img", {
+    name: /Verified accuracy comparison.*familiar rows.*new customers/i,
+  });
+  await expect(comparison).toBeVisible();
+  const observeTab = page.getByRole("tab", { name: /Observe/i });
+  await observeTab.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("tab", { name: /Explore/i })).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("tab", { name: /Boundary/i })).toBeFocused();
+  await expect(page.getByRole("tabpanel")).toContainText(
+    /Verified sample boundary/i,
+  );
+  await page.keyboard.press("End");
+  await expect(page.getByRole("tab", { name: /Apply/i })).toBeFocused();
+  await expect(page.getByRole("tabpanel")).toBeVisible();
+  await expect(page.getByRole("tabpanel")).toHaveCount(1);
 
   const revisionInput = page.getByLabel("Your revised mental model");
   await revisionInput.focus();
@@ -932,6 +1237,16 @@ test("the judged path is keyboard operable with reduced motion", async ({
   await page.getByRole("button", { name: /Verify notebook patch/i }).focus();
   await page.keyboard.press("Enter");
   await waitForSamplePatch(page);
+  const motionDurations = await page
+    .locator('[data-motion="reduced-safe"]')
+    .evaluateAll((elements) =>
+      elements.map((element) => getComputedStyle(element).animationDuration),
+    );
+  expect(
+    motionDurations.every((duration) =>
+      duration.split(",").every((value) => Number.parseFloat(value) <= 0.01),
+    ),
+  ).toBe(true);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -957,10 +1272,7 @@ test("a configured hosted runner completes an untouched leakage notebook", async
     sandbox: "configured",
   });
 
-  await reset(page);
-  await page
-    .getByRole("button", { name: /Analyze a notebook — Generate live/i })
-    .click();
+  await openLiveSetup(page);
   await expect(
     page.getByText(/Hosted notebook runner is ready/i),
   ).toBeVisible();
@@ -987,19 +1299,25 @@ test("a configured hosted runner completes an untouched leakage notebook", async
   await page.getByRole("button", { name: /Send this evidence/i }).click();
 
   await expect(
-    page.getByRole("heading", { name: /Which explanation fits/i }),
+    page.getByRole("heading", {
+      name: /Does your current explanation capture what you mean/i,
+    }),
   ).toBeVisible({ timeout: 210_000 });
-  const hypotheses = page.getByRole("region", {
-    name: "Competing hypotheses",
-  });
-  await expect(hypotheses.getByRole("heading")).toHaveCount(2);
-  await expect(hypotheses.getByText(/Idea B · Customer memory/i)).toBeVisible();
+  const hypotheses = page.getByRole("region", { name: "Model duel" });
+  await expect(
+    hypotheses.getByRole("article", { name: "Your current explanation" }),
+  ).toBeVisible();
+  await expect(
+    hypotheses.getByRole("article", {
+      name: "Alternative CounterLab will test",
+    }),
+  ).toBeVisible();
   await page
-    .getByRole("button", { name: /These two ideas make sense/i })
+    .getByRole("button", { name: /Yes, this captures my view/i })
     .click();
   await page.getByLabel(/Remain near 98%/i).check();
-  await page.getByLabel(/Confidence/i).fill("84");
-  await page.getByRole("button", { name: /Lock my answer/i }).click();
+  await page.getByLabel(/Prediction confidence/i).fill("84");
+  await page.getByRole("button", { name: /Seal my prediction/i }).click();
 
   await expect
     .poll(async () => (await browserRunnerCheckpoint(page))?.cursor ?? 0, {
@@ -1142,9 +1460,7 @@ test("a configured hosted runner completes an untouched leakage notebook", async
   await expect(page).toHaveURL(/\/proof\//);
 
   const patchDownload = page.waitForEvent("download");
-  await page
-    .getByRole("link", { name: /Download repaired notebook/i })
-    .click();
+  await page.getByRole("link", { name: /Download repaired notebook/i }).click();
   const patch = await patchDownload;
   expect(patch.suggestedFilename()).toMatch(/\.counterlab-patched\.ipynb$/i);
   const patchedNotebookPath = await patch.path();
@@ -1188,10 +1504,10 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
     sandbox: "configured",
   });
 
-  await reset(page);
-  await page
-    .getByRole("button", { name: /Analyze a notebook — Generate live/i })
-    .click();
+  await openLiveSetup(
+    page,
+    "The 99 percent accuracy proves this fraud classifier catches the rare cases that matter.",
+  );
   await expect(
     page.getByText(/Hosted notebook runner is ready/i),
   ).toBeVisible();
@@ -1218,15 +1534,21 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
   await page.getByRole("button", { name: /Send this evidence/i }).click();
 
   await expect(
-    page.getByRole("heading", { name: /Which explanation fits/i }),
+    page.getByRole("heading", {
+      name: /Does your current explanation capture what you mean/i,
+    }),
   ).toBeVisible({ timeout: 210_000 });
-  await expect(page.getByText(/Rarity hides failure/i).first()).toBeVisible();
+  await expect(
+    page.getByRole("article", {
+      name: "Alternative CounterLab will test",
+    }),
+  ).toBeVisible();
   await page
-    .getByRole("button", { name: /These two ideas make sense/i })
+    .getByRole("button", { name: /Yes, this captures my view/i })
     .click();
   await page.getByLabel(/Expose a serious minority-class problem/i).check();
-  await page.getByLabel(/Confidence/i).fill("86");
-  await page.getByRole("button", { name: /Lock my answer/i }).click();
+  await page.getByLabel(/Prediction confidence/i).fill("86");
+  await page.getByRole("button", { name: /Seal my prediction/i }).click();
 
   await waitForVerifiedLiveCompile(page);
   await page.getByRole("button", { name: /Show me what happened/i }).click();
@@ -1274,9 +1596,7 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
   await expect(page).toHaveURL(/\/proof\//);
 
   const patchDownload = page.waitForEvent("download");
-  await page
-    .getByRole("link", { name: /Download repaired notebook/i })
-    .click();
+  await page.getByRole("link", { name: /Download repaired notebook/i }).click();
   const patch = await patchDownload;
   expect(patch.suggestedFilename()).toMatch(/\.counterlab-patched\.ipynb$/i);
   const patchedNotebookPath = await patch.path();

@@ -7,6 +7,7 @@ export function ProjectSidebar({
   onShowEvidence,
   onOpenRecent,
   onOpenCommands,
+  onClose,
 }: {
   context: StudioContext;
   recentProjects: readonly RecentProject[];
@@ -14,6 +15,7 @@ export function ProjectSidebar({
   onShowEvidence: () => void;
   onOpenRecent: (project: RecentProject) => void;
   onOpenCommands: () => void;
+  onClose: () => void;
 }) {
   const evidenceCells =
     context.artifact?.cells
@@ -26,7 +28,21 @@ export function ProjectSidebar({
       .slice(0, 5) ?? [];
 
   return (
-    <aside className="studio-sidebar" aria-label="Project and evidence">
+    <aside
+      className="studio-sidebar"
+      id="studio-project-tools"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Project and evidence tools"
+    >
+      <button
+        className="studio-sidebar-close"
+        type="button"
+        autoFocus
+        onClick={onClose}
+      >
+        Close project tools
+      </button>
       <div className="studio-side-brand">
         <span>C</span>
         <div>

@@ -66,7 +66,7 @@ import {
 import { InteractiveImbalanceLab } from "./components/lesson/InteractiveImbalanceLab";
 import { ImbalancePatchReview } from "./components/lesson/ImbalancePatchReview";
 import { ImbalanceTransferLesson } from "./components/lesson/ImbalanceTransferLesson";
-import { ReasoningDiffView } from "./components/proof/ReasoningDiffView";
+import { DeferredReasoningDiffView } from "./components/proof/DeferredReasoningDiffView";
 import { ProofCapsuleReplayView } from "./components/replay/ProofCapsuleReplayView";
 import type { RecentProject, StudioStage } from "./components/studio/types";
 import { BoundaryStage } from "./features/boundary/BoundaryStage";
@@ -2408,7 +2408,7 @@ function LeakageRealityScreen({
                 </p>
               </>
             ) : (
-              <ReasoningDiffView
+              <DeferredReasoningDiffView
                 presentation="completion-evidence"
                 diff={liveCompletionProof.diff}
                 capsule={liveCompletionProof.capsule}

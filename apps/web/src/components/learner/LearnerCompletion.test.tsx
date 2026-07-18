@@ -92,6 +92,9 @@ describe("LearnerCompletion", () => {
     const proofSummary = screen.getByText("Evidence & proof");
     const proofDetails = proofSummary.closest("details");
     expect(proofDetails).not.toHaveAttribute("open");
+    expect(
+      screen.queryByText("Integrity-hashed proof capsule abc123."),
+    ).not.toBeInTheDocument();
     await user.click(proofSummary);
     expect(proofDetails).toHaveAttribute("open");
     expect(

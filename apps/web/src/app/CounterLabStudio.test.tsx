@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { CounterLabStudio } from "./CounterLabStudio";
@@ -12,7 +12,7 @@ const context = {
 };
 
 describe("CounterLabStudio", () => {
-  it("keeps project and proof navigation visible without a permanent agent cockpit", () => {
+  it("keeps project tools collapsed while preserving on-demand access", () => {
     render(
       <CounterLabStudio
         context={context}
@@ -28,9 +28,25 @@ describe("CounterLabStudio", () => {
     );
 
     expect(screen.getByText("Current learner action")).toBeInTheDocument();
+    const tools = screen.getByRole("button", { name: /project & evidence/i });
+    expect(tools).toHaveAttribute("aria-expanded", "false");
     expect(
-      screen.getByRole("complementary", { name: /project and evidence/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole("dialog", { name: /project and evidence tools/i }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(tools);
+    const dialog = screen.getByRole("dialog", {
+      name: /project and evidence tools/i,
+    });
+    expect(dialog).toBeInTheDocument();
+    const close = within(dialog).getByRole("button", {
+      name: /close project tools/i,
+    });
+    const commands = within(dialog).getByRole("button", { name: /commands/i });
+    commands.focus();
+    fireEvent.keyDown(window, { key: "Tab" });
+    expect(close).toHaveFocus();
+    fireEvent.keyDown(window, { key: "Tab", shiftKey: true });
+    expect(commands).toHaveFocus();
     expect(
       screen.queryByRole("complementary", { name: /counterlab agents/i }),
     ).not.toBeInTheDocument();
@@ -40,6 +56,8 @@ describe("CounterLabStudio", () => {
     expect(
       screen.queryByRole("navigation", { name: /session stages/i }),
     ).not.toBeInTheDocument();
+    fireEvent.click(close);
+    expect(tools).toHaveFocus();
   });
 
   it("opens the keyboard command palette without hiding visible controls", () => {
@@ -65,7 +83,7 @@ describe("CounterLabStudio", () => {
     fireEvent.click(screen.getByRole("button", { name: /analyze notebook/i }));
     expect(analyze).toHaveBeenCalledOnce();
     expect(
-      screen.getByRole("button", { name: /new analysis/i }),
+      screen.getByRole("button", { name: /project & evidence/i }),
     ).toBeInTheDocument();
   });
 

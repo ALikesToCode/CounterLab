@@ -15,6 +15,36 @@
   gap: 18px;
 }
 
+.deferred {
+  min-height: clamp(360px, 52vh, 560px);
+  padding: 18px;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  border: 1px solid #d8dee6;
+  border-radius: 10px;
+  color: #4c5d73;
+  background: #fff;
+  font-size: 15px;
+}
+
+.deferred p {
+  margin: 0;
+}
+
+.deferred button {
+  width: fit-content;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 10px 14px;
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  background: #245eea;
+  font: inherit;
+  font-weight: 750;
+}
+
 .completionEvidence > section > h3 {
   margin: 0;
   font-size: 18px;

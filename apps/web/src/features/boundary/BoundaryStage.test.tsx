@@ -33,6 +33,14 @@ vi.mock("../../components/generative-ui/BoundaryMapBlock", () => ({
 
 const digest = (character: string) => character.repeat(64);
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((complete) => {
+    resolve = complete;
+  });
+  return { promise, resolve };
+}
+
 function memoryStorage(): Storage {
   const values = new Map<string, string>();
   return {
@@ -131,6 +139,53 @@ describe("BoundaryStage", () => {
     });
     vi.clearAllMocks();
     api.getBoundary.mockResolvedValue(boundaryResponse);
+  });
+
+  it("keeps the pre-verification pending state static and accessible", async () => {
+    const pendingJob = deferred<SessionView>();
+    api.runBoundary.mockResolvedValue({
+      ...experimentCompleted,
+      runnerJob: {
+        jobId: "job_boundary_1",
+        kind: "LAB_RUN",
+        status: "STARTING",
+      },
+    });
+    runner.waitForJob.mockReturnValue(pendingJob.promise);
+
+    render(
+      <BoundaryStage session={experimentCompleted} updateSession={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /map the boundary/i }));
+
+    const heading = await screen.findByRole("heading", {
+      name: /mapping where the evidence changes/i,
+    });
+    const pendingRegion = heading.closest("section");
+    expect(pendingRegion).toHaveAttribute("aria-live", "polite");
+    const statusMark = pendingRegion?.querySelector<HTMLElement>(
+      '[aria-hidden="true"]',
+    );
+    expect(statusMark).not.toBeNull();
+    expect(statusMark?.className).not.toMatch(/spin|animat|motion/i);
+    expect(statusMark).not.toHaveAttribute("data-animated");
+    expect(statusMark).not.toHaveAttribute("data-motion");
+    expect(window.getComputedStyle(statusMark!).animationName).toMatch(
+      /^(|none)$/,
+    );
+    expect(screen.queryByTestId("boundary-map")).not.toBeInTheDocument();
+
+    pendingJob.resolve({
+      ...experimentCompleted,
+      state: "BOUNDARY_VERIFIED",
+      version: 11,
+      boundaryMapAuthority: authority,
+    });
+    expect(
+      await screen.findByRole("heading", {
+        name: /can you find a condition where the conclusion changes/i,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("runs the fixed sweep, waits for verification, then releases the map", async () => {

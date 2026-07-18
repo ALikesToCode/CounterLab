@@ -12,7 +12,7 @@ import { useRunnerEvents } from "../../hooks/useRunnerEvents";
 import { recordLearnerInteraction } from "../../features/learner/interactionEvidence";
 import { LearnerCompletion } from "../learner/LearnerCompletion";
 import { RepairPreview } from "../learner/RepairPreview";
-import { ReasoningDiffView } from "../proof/ReasoningDiffView";
+import { DeferredReasoningDiffView } from "../proof/DeferredReasoningDiffView";
 
 const activeJobIdKey = "counterlab.activeRunnerJobId";
 const activeJobKindKey = "counterlab.activeRunnerJobKind";
@@ -260,7 +260,7 @@ export function ImbalancePatchReview({
               </p>
             </>
           ) : (
-            <ReasoningDiffView
+            <DeferredReasoningDiffView
               presentation="completion-evidence"
               diff={liveCompletionProof.diff}
               capsule={liveCompletionProof.capsule}

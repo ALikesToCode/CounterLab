@@ -193,7 +193,7 @@ describe("ImbalancePatchReview", () => {
     expect(api.publishReplay).not.toHaveBeenCalled();
     await user.click(screen.getByText("Evidence & proof"));
     await user.click(
-      screen.getByRole("button", { name: /publish read-only replay/i }),
+      await screen.findByRole("button", { name: /publish read-only replay/i }),
     );
     expect(api.publishReplay).toHaveBeenCalledTimes(1);
     expect(api.publishReplay).toHaveBeenCalledWith(replay.sourceSessionId);

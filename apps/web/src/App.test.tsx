@@ -2,11 +2,20 @@ import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { migrateBeliefTestV1ToV2 } from "@counterlab/contracts";
+import {
+  migrateBeliefTestV1ToV2,
+  VerifiedResultSetSchema,
+} from "@counterlab/contracts";
+
+import imbalanceResultText from "../../../fixtures/held-out/imbalance_epistemic_competing_v2.json?raw";
 
 import { App } from "./App";
 import { replayFixture } from "./components/replay/ProofCapsuleReplayView.fixture";
 import { sampleArtifact, sampleResult } from "./sample";
+
+const verifiedImbalanceResult = VerifiedResultSetSchema.parse(
+  JSON.parse(imbalanceResultText),
+);
 
 const artifact = {
   artifactId: "artifact_sample",
@@ -915,6 +924,31 @@ describe("CounterLab judged flow", () => {
     await vi.waitFor(() =>
       expect(document.getElementById("learner-progress")).toHaveFocus(),
     );
+  });
+
+  it("restores focus when reviewing a completed imbalance stage", async () => {
+    const user = userEvent.setup();
+    const replay = replayFixture("class_imbalance");
+    installApi({
+      restoredSessionState: "EXPERIMENT_COMPLETED",
+      restoredSessionExtra: {
+        beliefSpec: replay.beliefSpec,
+        prediction: replay.prediction,
+        verifiedResult: verifiedImbalanceResult,
+      },
+    });
+    window.history.replaceState({}, "", "/session/session_ui");
+    render(<App />);
+
+    const desktopProgress = within(
+      await screen.findByTestId("learner-progress-desktop"),
+    );
+    await user.click(
+      desktopProgress.getByRole("button", { name: /review prediction/i }),
+    );
+    expect(
+      await screen.findByRole("heading", { name: /review your prediction/i }),
+    ).toHaveFocus();
   });
 
   it("keeps the two models equal and lets the learner edit their meaning", async () => {

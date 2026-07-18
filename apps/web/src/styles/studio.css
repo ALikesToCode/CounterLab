@@ -1,7 +1,7 @@
 .studio-frame {
-  --studio-left: 280px;
+  --studio-left: 0px;
   display: grid;
-  grid-template-columns: var(--studio-left) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   min-height: calc(100vh - 82px);
   background: #f3f1eb;
 }
@@ -16,17 +16,54 @@
     linear-gradient(rgb(7 21 42 / 2.2%) 1px, transparent 1px),
     linear-gradient(90deg, rgb(7 21 42 / 2.2%) 1px, transparent 1px), #f3f1eb;
   background-size: 32px 32px;
-  transition: padding-bottom 180ms ease;
 }
 
 .studio-canvas > .workspace.shell {
   width: min(1160px, calc(100% - 64px));
 }
 
+.studio-utility-bar {
+  display: flex;
+  width: min(1160px, calc(100% - 64px));
+  justify-content: flex-start;
+  margin: 0 auto;
+  padding-top: 14px;
+}
+
+.studio-utility-bar > button,
+.studio-sidebar-close {
+  min-height: 44px;
+  padding: 9px 13px;
+  color: #24364d;
+  border: 1px solid #c8d0da;
+  border-radius: 9px;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.studio-utility-bar > button:focus-visible,
+.studio-sidebar-close:focus-visible {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 3px;
+}
+
+.studio-sidebar-scrim {
+  position: fixed;
+  z-index: 29;
+  inset: 82px 0 0;
+  border: 0;
+  background: rgb(7 21 42 / 38%);
+}
+
 .studio-sidebar {
-  position: sticky;
+  position: fixed;
   top: 82px;
-  z-index: 8;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  width: min(360px, calc(100vw - 24px));
   height: calc(100vh - 82px);
   overflow: auto;
   scrollbar-width: thin;
@@ -35,6 +72,10 @@
 .replay-banner ~ .topbar + .studio-frame .studio-sidebar {
   top: 124px;
   height: calc(100vh - 124px);
+}
+
+.replay-banner ~ .topbar + .studio-frame .studio-sidebar-scrim {
+  inset-block-start: 124px;
 }
 
 .studio-sidebar {
@@ -46,6 +87,13 @@
   background:
     linear-gradient(180deg, rgb(79 225 209 / 6%), transparent 260px), #061326;
   box-shadow: 18px 0 48px rgb(7 21 42 / 8%);
+}
+
+.studio-sidebar-close {
+  align-self: flex-end;
+  color: #f4f8fb;
+  border-color: #52667e;
+  background: #0d2038;
 }
 
 .studio-side-brand {
@@ -751,10 +799,6 @@ kbd {
     background: #edf0f3;
   }
 
-  .studio-sidebar {
-    display: none;
-  }
-
   .studio-mobile-command {
     position: fixed;
     z-index: 18;
@@ -780,6 +824,10 @@ kbd {
   }
 
   .studio-canvas > .workspace.shell {
+    width: min(100% - 28px, 1120px);
+  }
+
+  .studio-utility-bar {
     width: min(100% - 28px, 1120px);
   }
 
@@ -809,11 +857,5 @@ kbd {
 
   .command-palette footer span {
     display: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .studio-canvas {
-    transition: none;
   }
 }

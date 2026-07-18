@@ -1,5 +1,5 @@
-import { useId } from "react";
-import type { ReactNode } from "react";
+import { useId, useState } from "react";
+import type { ReactNode, SyntheticEvent } from "react";
 
 import styles from "./LearnerCompletion.module.css";
 
@@ -68,6 +68,11 @@ export function LearnerCompletion({
   const instanceId = useId();
   const resolvedTitleId = titleId ?? `${instanceId}-title`;
   const Heading = headingLevel;
+  const [evidenceRevealed, setEvidenceRevealed] = useState(false);
+
+  const revealEvidence = (event: SyntheticEvent<HTMLDetailsElement>) => {
+    if (event.currentTarget.open) setEvidenceRevealed(true);
+  };
 
   return (
     <section
@@ -130,9 +135,11 @@ export function LearnerCompletion({
         ) : null}
       </div>
 
-      <details className={styles.evidence}>
+      <details className={styles.evidence} onToggle={revealEvidence}>
         <summary>Evidence &amp; proof</summary>
-        <div className={styles.evidenceBody}>{evidenceAndProof}</div>
+        {evidenceRevealed ? (
+          <div className={styles.evidenceBody}>{evidenceAndProof}</div>
+        ) : null}
       </details>
     </section>
   );
