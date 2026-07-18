@@ -50,6 +50,7 @@ export function ReflectionBuilder({
   editorLabel,
   placeholder = "When rows repeat the same entity, I should…",
   disabled = false,
+  onAuthoringModeChange,
 }: {
   value: string;
   onRevisionChange: (revision: string) => void;
@@ -60,9 +61,10 @@ export function ReflectionBuilder({
   editorLabel?: string;
   placeholder?: string;
   disabled?: boolean;
+  onAuthoringModeChange?: (mode: "clauses" | "free_text") => void;
 }) {
   const instanceId = useId();
-  const [mode, setMode] = useState<"clauses" | "free">("clauses");
+  const [mode, setMode] = useState<"clauses" | "free_text">("clauses");
   const [selection, setSelection] = useState<ReflectionClauseSelection>(() => ({
     whenId: initialSelection?.whenId ?? whenOptions[0]?.id ?? "",
     actionId: initialSelection?.actionId ?? actionOptions[0]?.id ?? "",
@@ -126,7 +128,10 @@ export function ReflectionBuilder({
             type="radio"
             name={`${instanceId}-reflection-mode`}
             checked={mode === "clauses"}
-            onChange={() => setMode("clauses")}
+            onChange={() => {
+              setMode("clauses");
+              onAuthoringModeChange?.("clauses");
+            }}
           />
           <span>Build with evidence-linked clauses</span>
         </label>
@@ -134,8 +139,11 @@ export function ReflectionBuilder({
           <input
             type="radio"
             name={`${instanceId}-reflection-mode`}
-            checked={mode === "free"}
-            onChange={() => setMode("free")}
+            checked={mode === "free_text"}
+            onChange={() => {
+              setMode("free_text");
+              onAuthoringModeChange?.("free_text");
+            }}
           />
           <span>Write freely</span>
         </label>

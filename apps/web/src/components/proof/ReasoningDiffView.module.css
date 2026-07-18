@@ -6,9 +6,29 @@
   border: 1px solid #cfd8df;
   border-radius: 22px;
   background:
-    linear-gradient(90deg, rgb(198 145 37 / 7%), transparent 28%),
-    #fffefa;
+    linear-gradient(90deg, rgb(198 145 37 / 7%), transparent 28%), #fffefa;
   box-shadow: 0 24px 70px rgb(17 35 55 / 10%);
+}
+
+.completionEvidence {
+  display: grid;
+  gap: 18px;
+}
+
+.completionEvidence > section > h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.completionEvidence > section > p {
+  margin: 7px 0 0;
+  color: #4c5d73;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.completionEvidence .ledger {
+  margin-top: 16px;
 }
 
 .header {
@@ -246,15 +266,14 @@
 
 .capsule {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 22px;
   align-items: center;
   padding: 20px;
   border: 1px solid rgb(28 142 133 / 28%);
   border-radius: 16px;
   background:
-    linear-gradient(135deg, rgb(39 171 159 / 11%), transparent 55%),
-    white;
+    linear-gradient(135deg, rgb(39 171 159 / 11%), transparent 55%), white;
 }
 
 .capsule span {

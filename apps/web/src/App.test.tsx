@@ -256,7 +256,9 @@ function installApi(
       | "BELIEF_TEST_CONFIRMED"
       | "LAB_COMPILING"
       | "LAB_VERIFIED"
-      | "EXPERIMENT_COMPLETED";
+      | "EXPERIMENT_COMPLETED"
+      | "REASONING_DIFF_ISSUED"
+      | "PROOF_CAPSULE_ISSUED";
     restoredSessionExtra?: Record<string, unknown>;
     replay?: ReturnType<typeof replayFixture>;
   } = {},
@@ -393,6 +395,20 @@ function installApi(
             artifactId: activeArtifactId,
             mode: activeMode,
           }),
+          201,
+        );
+      }
+      if (path.endsWith("/interactions")) {
+        const interaction = JSON.parse(String(init?.body)) as {
+          eventId: string;
+        };
+        return response(
+          {
+            schemaVersion: "1",
+            eventId: interaction.eventId,
+            accepted: true,
+            duplicate: false,
+          },
           201,
         );
       }
@@ -633,6 +649,42 @@ describe("CounterLab judged flow", () => {
     expect(story.getByText(/score shown in the notebook/i)).toBeInTheDocument();
     await user.click(story.getByText(/full evidence and integrity/i));
     expect(story.getByText(/sha-256/i)).toBeInTheDocument();
+  });
+
+  it("opens one deterministic stage hint and records only its fixed identity", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi();
+    render(<App />);
+
+    await user.click(
+      screen.getByRole("button", { name: /try verified sample/i }),
+    );
+    await user.click(await screen.findByText("Need a hint?"));
+
+    expect(
+      screen.getByText(/name the result, who or what it should apply to/i),
+    ).toBeInTheDocument();
+    await vi.waitFor(() => {
+      const request = fetcher.mock.calls.find(
+        ([path, init]) =>
+          String(path).endsWith("/interactions") &&
+          String(init?.body).includes('"kind":"hint.opened"'),
+      );
+      expect(request).toBeDefined();
+      const body = JSON.parse(String(request?.[1]?.body)) as Record<
+        string,
+        unknown
+      >;
+      expect(body).toMatchObject({
+        schemaVersion: "1",
+        kind: "hint.opened",
+        stage: "question",
+        hintId: "shared.question",
+      });
+      expect(Object.keys(body).sort()).toEqual(
+        ["eventId", "hintId", "kind", "schemaVersion", "stage"].sort(),
+      );
+    });
   });
 
   it("shows an honest unavailable state when live reasoning is not configured", async () => {
@@ -1103,6 +1155,28 @@ describe("CounterLab judged flow", () => {
     expect(window.location.pathname).toBe("/session/session_ui");
   });
 
+  it("does not mark a live Reasoning Diff complete before its Capsule exists", async () => {
+    installApi({
+      restoredSessionState: "REASONING_DIFF_ISSUED",
+      restoredSessionExtra: {
+        beliefSpec: liveBeliefSpec,
+        prediction: committedPrediction,
+        verifiedResult: liveResult,
+      },
+    });
+    window.history.replaceState({}, "", "/proof/session_ui");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: /here.s what changed/i });
+    await vi.waitFor(() =>
+      expect(window.location.pathname).toBe("/session/session_ui"),
+    );
+    expect(
+      screen.queryByRole("button", { name: /export proof/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders the exact Belief Spec v2 after a live session refresh", async () => {
     installApi({
       restoredSessionState: "BELIEF_TEST_PROPOSED",
@@ -1187,6 +1261,18 @@ describe("CounterLab judged flow", () => {
       expect(String(predictionRequest?.[1]?.body)).not.toContain(
         "Accuracy falls materially",
       );
+      const interactionRequest = fetcher.mock.calls.find(
+        ([path, init]) =>
+          String(path).endsWith("/interactions") &&
+          String(init?.body).includes('"kind":"prediction.recorded"'),
+      );
+      expect(interactionRequest).toBeDefined();
+      expect(JSON.parse(String(interactionRequest?.[1]?.body))).toMatchObject({
+        kind: "prediction.recorded",
+        stage: "prediction",
+        choice: "alternative_explanation",
+        confidence: 72,
+      });
     });
   });
 

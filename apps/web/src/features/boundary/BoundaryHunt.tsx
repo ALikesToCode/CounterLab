@@ -37,16 +37,13 @@ export type VerifiedBoundaryHuntData = {
   readonly cells: readonly VerifiedBoundaryHuntCell[];
 };
 
-export type BoundaryHuntHint = {
-  readonly text: string;
-  readonly evidenceLabel: string;
-};
-
 export type BoundaryHuntProps = {
   readonly boundary: VerifiedBoundaryHuntData;
-  readonly hint: BoundaryHuntHint;
   readonly onRevealMap: () => void;
   readonly onSkip: () => void;
+  readonly onClassify?: (
+    classification: "CONCLUSION_CHANGES" | "CONCLUSION_STABLE",
+  ) => void;
 };
 
 type AttemptOutcome = "SUCCESS" | "TRY_AGAIN" | "MAP_READY";
@@ -69,14 +66,13 @@ function coordinateLabel(
 
 export function BoundaryHunt({
   boundary,
-  hint,
   onRevealMap,
   onSkip,
+  onClassify,
 }: BoundaryHuntProps) {
   const groupName = useId();
   const titleId = useId();
   const instructionsId = useId();
-  const evidenceId = useId();
   const titleRef = useRef<HTMLHeadingElement>(null);
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
   const [lastAttemptedCellId, setLastAttemptedCellId] = useState<string | null>(
@@ -105,6 +101,8 @@ export function BoundaryHunt({
     const nextAttemptCount = attemptCount + 1;
     const successful =
       selectedCell.expectedClassification === "CONCLUSION_CHANGES";
+
+    onClassify?.(successful ? "CONCLUSION_CHANGES" : "CONCLUSION_STABLE");
 
     setAttemptCount(nextAttemptCount);
     setLastAttemptedCellId(selectedCell.cellId);
@@ -140,7 +138,7 @@ export function BoundaryHunt({
           whose verified classification you think changes from that reference.
           CounterLab will not run a model or calculate a new result.
         </p>
-        <p className={styles.evidenceLinkTarget} id={evidenceId}>
+        <p className={styles.evidenceLinkTarget}>
           These choices are bound to verified Boundary Map result{" "}
           {boundary.resultHash.slice(0, 12)}…
         </p>
@@ -246,12 +244,6 @@ export function BoundaryHunt({
           )}
         </div>
       )}
-
-      <details className={styles.hint}>
-        <summary>Need a hint?</summary>
-        <p>{hint.text}</p>
-        <a href={`#${evidenceId}`}>{hint.evidenceLabel}</a>
-      </details>
     </section>
   );
 }

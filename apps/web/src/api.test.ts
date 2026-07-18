@@ -968,6 +968,55 @@ describe("CounterLabApiClient", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it("posts only the strict learner interaction contract", async () => {
+    const receipt = {
+      schemaVersion: "1" as const,
+      eventId: "interaction_00000000000000000000000000000001",
+      accepted: true as const,
+      duplicate: false,
+    };
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({ ok: true, data: receipt }, 201),
+    );
+    const client = new CounterLabApiClient({ fetch: fetcher });
+
+    await expect(
+      client.recordLearnerInteraction("session/1", {
+        schemaVersion: "1",
+        eventId: "interaction_00000000000000000000000000000001",
+        stage: "prediction",
+        kind: "prediction.recorded",
+        choice: "alternative_explanation",
+        confidence: 72,
+      }),
+    ).resolves.toEqual(receipt);
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/sessions/session%2F1/interactions",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          schemaVersion: "1",
+          eventId: "interaction_00000000000000000000000000000001",
+          stage: "prediction",
+          kind: "prediction.recorded",
+          choice: "alternative_explanation",
+          confidence: 72,
+        }),
+      }),
+    );
+
+    expect(() =>
+      client.recordLearnerInteraction("session_1", {
+        schemaVersion: "1",
+        eventId: "interaction_00000000000000000000000000000002",
+        stage: "apply",
+        kind: "revision.recorded",
+        authoringMode: "free_text",
+        revision: "raw prose",
+      } as never),
+    ).toThrow();
+  });
+
   it("rejects an unbounded interactive configuration before making a request", async () => {
     const fetcher = vi.fn<typeof fetch>();
     const client = new CounterLabApiClient({ fetch: fetcher });

@@ -7,10 +7,14 @@ const api = vi.hoisted(() => ({
   recordRevision: vi.fn(),
   submitTransfer: vi.fn(),
 }));
+const recordLearnerInteraction = vi.hoisted(() => vi.fn());
 
 vi.mock("../../api", () => ({
   ApiClientError: class ApiClientError extends Error {},
   counterLabApi: api,
+}));
+vi.mock("../../features/learner/interactionEvidence", () => ({
+  recordLearnerInteraction,
 }));
 
 describe("ImbalanceTransferLesson", () => {
@@ -68,6 +72,19 @@ describe("ImbalanceTransferLesson", () => {
     );
     expect(updateSession).toHaveBeenLastCalledWith(
       expect.objectContaining({ state: "TRANSFER_PASSED" }),
+    );
+    expect(recordLearnerInteraction).toHaveBeenCalledWith("session_1", {
+      kind: "revision.recorded",
+      stage: "apply",
+      authoringMode: "clauses",
+    });
+    expect(recordLearnerInteraction).toHaveBeenCalledWith("session_1", {
+      kind: "transfer.evaluated",
+      stage: "apply",
+      outcome: "PASSED",
+    });
+    expect(JSON.stringify(recordLearnerInteraction.mock.calls)).not.toContain(
+      "For rare events",
     );
   });
 

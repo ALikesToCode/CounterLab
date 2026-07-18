@@ -12,6 +12,7 @@ import {
   type CostTransferChoice,
 } from "../learner/CostTransfer";
 import { ReflectionBuilder } from "../learner/ReflectionBuilder";
+import { recordLearnerInteraction } from "../../features/learner/interactionEvidence";
 
 type StrategyChoice = "" | "highest_accuracy" | "cost_aware_threshold";
 type RiskChoice = "" | "overall_error_rate" | "minority_false_negative_cost";
@@ -132,6 +133,9 @@ export function ImbalanceTransferLesson({
   const [revisionDraft, setRevisionDraft] = useState(
     revision ?? defaultImbalanceReflection,
   );
+  const [revisionMode, setRevisionMode] = useState<"clauses" | "free_text">(
+    "clauses",
+  );
   const [strategyChoice, setStrategyChoice] = useState<StrategyChoice>("");
   const [riskChoice, setRiskChoice] = useState<RiskChoice>("");
   const [evidenceChoices, setEvidenceChoices] = useState<EvidenceChoice[]>([]);
@@ -142,11 +146,15 @@ export function ImbalanceTransferLesson({
     setBusy(true);
     setError(null);
     try {
-      updateSession(
-        await counterLabApi.recordRevision(sessionId, {
-          revision: revisionDraft,
-        }),
-      );
+      const updated = await counterLabApi.recordRevision(sessionId, {
+        revision: revisionDraft,
+      });
+      updateSession(updated);
+      void recordLearnerInteraction(sessionId, {
+        kind: "revision.recorded",
+        stage: "apply",
+        authoringMode: revisionMode,
+      });
     } catch (caught) {
       setError(
         caught instanceof ApiClientError || caught instanceof Error
@@ -163,13 +171,19 @@ export function ImbalanceTransferLesson({
     setBusy(true);
     setError(null);
     try {
-      updateSession(
-        await counterLabApi.submitTransfer(sessionId, {
-          strategyChoice,
-          riskChoice,
-          evidenceChoices,
-        }),
-      );
+      const updated = await counterLabApi.submitTransfer(sessionId, {
+        strategyChoice,
+        riskChoice,
+        evidenceChoices,
+      });
+      updateSession(updated);
+      if (updated.transferResult !== undefined) {
+        void recordLearnerInteraction(sessionId, {
+          kind: "transfer.evaluated",
+          stage: "apply",
+          outcome: updated.transferResult.outcome,
+        });
+      }
     } catch (caught) {
       setError(
         caught instanceof ApiClientError || caught instanceof Error
@@ -212,6 +226,7 @@ export function ImbalanceTransferLesson({
           editorLabel="Your revised mental model"
           placeholder="When one class is rare, I should…"
           disabled={busy}
+          onAuthoringModeChange={setRevisionMode}
         />
         <button
           className="button button-primary"
@@ -227,7 +242,10 @@ export function ImbalanceTransferLesson({
   }
 
   return (
-    <section className="transfer panel imbalance-transfer">
+    <section
+      className="transfer panel imbalance-transfer"
+      id="learner-apply-evidence"
+    >
       <div className="transfer-head">
         <div>
           <p className="eyebrow gold">Fixed transfer · no model hints</p>

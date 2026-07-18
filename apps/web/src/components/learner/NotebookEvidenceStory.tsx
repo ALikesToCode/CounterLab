@@ -29,6 +29,7 @@ export function NotebookEvidenceStory({
 
   return (
     <section
+      id="notebook-evidence-story"
       className={styles.story}
       aria-label="Notebook evidence story"
       aria-describedby={titleId}

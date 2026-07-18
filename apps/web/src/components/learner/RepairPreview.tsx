@@ -12,6 +12,7 @@ export function RepairPreview({
   const instanceId = useId();
   return (
     <section
+      id="repair-preview"
       className={styles.preview}
       aria-labelledby={`${instanceId}-title`}
       data-motion="reduced-safe"

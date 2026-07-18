@@ -10,9 +10,7 @@ const api = vi.hoisted(() => ({
   compilePatch: vi.fn(),
   getProofBundle: vi.fn(),
   patchDownloadUrl: vi.fn(() => "/api/sessions/session_1/patch/download"),
-  proofCapsuleDownloadUrl: vi.fn(
-    () => "/api/sessions/session_1/proof-capsule",
-  ),
+  proofCapsuleDownloadUrl: vi.fn(() => "/api/sessions/session_1/proof-capsule"),
   publishReplay: vi.fn(),
 }));
 const runner = vi.hoisted(() => ({
@@ -20,6 +18,7 @@ const runner = vi.hoisted(() => ({
   events: [],
   waitForJob: vi.fn(),
 }));
+const recordLearnerInteraction = vi.hoisted(() => vi.fn());
 
 vi.mock("../../api", () => ({
   ApiClientError: class ApiClientError extends Error {},
@@ -27,6 +26,9 @@ vi.mock("../../api", () => ({
 }));
 vi.mock("../../hooks/useRunnerEvents", () => ({
   useRunnerEvents: () => runner,
+}));
+vi.mock("../../features/learner/interactionEvidence", () => ({
+  recordLearnerInteraction,
 }));
 
 describe("ImbalancePatchReview", () => {
@@ -112,12 +114,29 @@ describe("ImbalancePatchReview", () => {
         name: /your notebook copy passed the repair checks/i,
       }),
     ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: /you can now distinguish/i }),
+      ).toHaveFocus(),
+    );
     expect(
       screen.getByText(/confusion matrix and PR-AUC/i),
     ).toBeInTheDocument();
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => undefined);
+    fireEvent.click(
+      screen.getByRole("button", { name: /download repaired notebook/i }),
+    );
+    expect(anchorClick).toHaveBeenCalledOnce();
     expect(
-      screen.getByRole("link", { name: /download patched copy/i }),
-    ).toHaveAttribute("href", "/api/sessions/session_1/patch/download");
+      (anchorClick.mock.contexts[0] as HTMLAnchorElement | undefined)?.href,
+    ).toContain("/api/sessions/session_1/patch/download");
+    expect(recordLearnerInteraction).toHaveBeenCalledWith("session_1", {
+      kind: "patch.downloaded",
+      stage: "repair",
+    });
+    anchorClick.mockRestore();
   });
 
   it("offers explicit replay publication for a completed live Proof Capsule", async () => {
@@ -147,7 +166,32 @@ describe("ImbalancePatchReview", () => {
       />,
     );
 
+    expect(
+      screen.getAllByRole("button", { name: /download repaired notebook/i }),
+    ).toHaveLength(1);
+    expect(
+      screen.queryByRole("link", { name: /download repaired notebook/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText("Evidence & proof")).toHaveLength(1);
+
+    const capsuleAnchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => undefined);
+    await user.click(
+      screen.getByRole("button", { name: /export proof capsule/i }),
+    );
+    expect(capsuleAnchorClick).toHaveBeenCalledOnce();
+    expect(recordLearnerInteraction).toHaveBeenCalledWith(
+      replay.sourceSessionId,
+      {
+        kind: "proof_capsule.downloaded",
+        stage: "repair",
+      },
+    );
+    capsuleAnchorClick.mockRestore();
+
     expect(api.publishReplay).not.toHaveBeenCalled();
+    await user.click(screen.getByText("Evidence & proof"));
     await user.click(
       screen.getByRole("button", { name: /publish read-only replay/i }),
     );

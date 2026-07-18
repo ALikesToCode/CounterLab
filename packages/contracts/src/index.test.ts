@@ -20,6 +20,8 @@ import {
   HostedLabLineageSchema,
   InteractiveImbalanceRunRequestSchema,
   InteractiveLeakageRunRequestSchema,
+  LearnerInteractionInputSchema,
+  LearnerInteractionRecordSchema,
   PatchResultSchema,
   PatchPlanV1Schema,
   PredictionContractSchema,
@@ -45,6 +47,103 @@ import {
   assertRunnerJobTransition,
   migrateBeliefTestV1ToV2,
 } from "./index.js";
+
+describe("privacy-safe learner interaction contracts", () => {
+  it("accepts only fixed categorical interaction shapes", () => {
+    const input = LearnerInteractionInputSchema.parse({
+      schemaVersion: "1",
+      eventId: "interaction_00000000000000000000000000000001",
+      stage: "prediction",
+      kind: "prediction.recorded",
+      choice: "alternative_explanation",
+      confidence: 72,
+    });
+    expect(input).toEqual({
+      schemaVersion: "1",
+      eventId: "interaction_00000000000000000000000000000001",
+      stage: "prediction",
+      kind: "prediction.recorded",
+      choice: "alternative_explanation",
+      confidence: 72,
+    });
+
+    expect(() =>
+      LearnerInteractionInputSchema.parse({
+        ...input,
+        learnerName: "Ada",
+      }),
+    ).toThrow();
+    expect(() =>
+      LearnerInteractionInputSchema.parse({
+        schemaVersion: "1",
+        eventId: "interaction_00000000000000000000000000000002",
+        stage: "apply",
+        kind: "revision.recorded",
+        authoringMode: "free_text",
+        revision: "raw learner prose must not be accepted",
+      }),
+    ).toThrow();
+  });
+
+  it("binds server-derived context without accepting notebook or free-text data", () => {
+    const interaction = LearnerInteractionInputSchema.parse({
+      schemaVersion: "1",
+      eventId: "interaction_00000000000000000000000000000003",
+      stage: "repair",
+      kind: "proof_capsule.downloaded",
+    });
+    const record = LearnerInteractionRecordSchema.parse({
+      schemaVersion: "1",
+      eventId: interaction.eventId,
+      sessionId: "session_1",
+      actor: "learner",
+      mode: "live_notebook",
+      concept: "entity_leakage",
+      timestamp: "2026-07-18T08:00:00.000Z",
+      interaction,
+    });
+    expect(record.interaction.kind).toBe("proof_capsule.downloaded");
+    expect(JSON.stringify(record.interaction)).not.toMatch(
+      /learnerName|revisionText|notebookContent|fileName|localPath/u,
+    );
+    expect(() =>
+      LearnerInteractionRecordSchema.parse({
+        ...record,
+        eventId: "different_event",
+      }),
+    ).toThrow();
+    expect(() =>
+      LearnerInteractionInputSchema.parse({
+        schemaVersion: "1",
+        eventId: "interaction_claim_the_score_is_good",
+        stage: "question",
+        kind: "stage.entered",
+      }),
+    ).toThrow();
+    expect(() =>
+      LearnerInteractionInputSchema.parse({
+        schemaVersion: "1",
+        eventId: "interaction_00000000000000000000000000000004",
+        stage: "question",
+        kind: "hint.opened",
+        hintId: "shared.repair",
+      }),
+    ).toThrow();
+    expect(() =>
+      LearnerInteractionRecordSchema.parse({
+        ...record,
+        eventId: "interaction_00000000000000000000000000000004",
+        interaction: {
+          schemaVersion: "1",
+          eventId: "interaction_00000000000000000000000000000004",
+          stage: "question",
+          kind: "hint.opened",
+          hintId: "class_imbalance.question",
+        },
+      }),
+    ).toThrow();
+  });
+});
 
 describe("epistemic evidence contracts", () => {
   const observation = {

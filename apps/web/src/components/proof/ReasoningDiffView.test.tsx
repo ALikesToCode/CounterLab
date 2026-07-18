@@ -165,7 +165,9 @@ describe("ReasoningDiffView", () => {
       expect(screen.getByText(dimension.after)).toBeInTheDocument();
     }
     expect(screen.getByText(/cells 3, 5 changed/i)).toBeInTheDocument();
-    expect(screen.getByText(/3 unrelated cells proven unchanged/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/3 unrelated cells proven unchanged/i),
+    ).toBeInTheDocument();
   });
 
   it("offers the repaired copy and safe Proof Capsule without an internal object key", () => {
@@ -196,6 +198,32 @@ describe("ReasoningDiffView", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("embeds technical evidence without duplicating completion downloads or disclosures", () => {
+    render(
+      <ReasoningDiffView
+        presentation="completion-evidence"
+        diff={diff}
+        capsule={capsule}
+        patch={patch}
+        patchDownloadUrl="/patch.ipynb"
+        proofCapsuleDownloadUrl="/proof.counterlab"
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Detailed Reasoning Diff" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Authority hashes")).toBeInTheDocument();
+    expect(screen.getByText(capsule.rootHash)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /download repaired notebook/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /export proof capsule/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Evidence & proof")).not.toBeInTheDocument();
+  });
+
   it("publishes a live Capsule only after the learner explicitly asks", async () => {
     const user = userEvent.setup();
     const writeText = vi.spyOn(navigator.clipboard, "writeText");
@@ -215,9 +243,7 @@ describe("ReasoningDiffView", () => {
     );
 
     expect(publishReplay).not.toHaveBeenCalled();
-    expect(
-      screen.getByText(/raw notebook stays private/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/raw notebook stays private/i)).toBeInTheDocument();
 
     await user.click(
       screen.getByRole("button", { name: /publish read-only replay/i }),
@@ -227,10 +253,10 @@ describe("ReasoningDiffView", () => {
     expect(
       await screen.findByRole("link", { name: /open verified replay/i }),
     ).toHaveAttribute("href", "/replay/replay%3Alive.session_1");
-    expect(screen.getByText(/published from this proof capsule/i)).toBeInTheDocument();
-    await user.click(
-      screen.getByRole("button", { name: /copy replay link/i }),
-    );
+    expect(
+      screen.getByText(/published from this proof capsule/i),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /copy replay link/i }));
     expect(writeText).toHaveBeenCalledWith(
       `${window.location.origin}/replay/replay%3Alive.session_1`,
     );

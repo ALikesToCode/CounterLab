@@ -13,6 +13,7 @@ const runner = vi.hoisted(() => ({
   events: [],
   waitForJob: vi.fn(),
 }));
+const recordLearnerInteraction = vi.hoisted(() => vi.fn());
 
 vi.mock("../../api", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../api")>();
@@ -20,6 +21,9 @@ vi.mock("../../api", async (importOriginal) => {
 });
 vi.mock("../../hooks/useRunnerEvents", () => ({
   useRunnerEvents: () => runner,
+}));
+vi.mock("../learner/interactionEvidence", () => ({
+  recordLearnerInteraction,
 }));
 vi.mock("../../components/generative-ui/BoundaryMapBlock", () => ({
   BoundaryMapBlock: ({ boundary }: { boundary: BoundaryResponse }) => (
@@ -184,6 +188,14 @@ describe("BoundaryStage", () => {
     expect(api.getBoundary).toHaveBeenCalledWith("session_1");
     expect(updateSession).toHaveBeenCalledWith(
       expect.objectContaining({ state: "BOUNDARY_VERIFIED" }),
+    );
+    expect(recordLearnerInteraction).toHaveBeenCalledWith("session_1", {
+      kind: "boundary_hunt.classified",
+      stage: "boundary",
+      classification: "CONCLUSION_CHANGES",
+    });
+    expect(JSON.stringify(recordLearnerInteraction.mock.calls)).not.toContain(
+      "cell-change",
     );
   });
 

@@ -56,11 +56,6 @@ function boundaryFixture(): VerifiedBoundaryHuntData {
   };
 }
 
-const hint = {
-  text: "Look for the condition with more repeated entities.",
-  evidenceLabel: "Review the verified overlap evidence",
-} as const;
-
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -70,19 +65,23 @@ function renderHunt(
   callbacks: {
     onRevealMap?: () => void;
     onSkip?: () => void;
+    onClassify?: (
+      classification: "CONCLUSION_CHANGES" | "CONCLUSION_STABLE",
+    ) => void;
   } = {},
 ) {
   const onRevealMap = callbacks.onRevealMap ?? vi.fn();
   const onSkip = callbacks.onSkip ?? vi.fn();
+  const onClassify = callbacks.onClassify ?? vi.fn();
   render(
     <BoundaryHunt
       boundary={boundary}
-      hint={hint}
       onRevealMap={onRevealMap}
       onSkip={onSkip}
+      onClassify={onClassify}
     />,
   );
-  return { onRevealMap, onSkip };
+  return { onRevealMap, onSkip, onClassify };
 }
 
 describe("BoundaryHunt", () => {
@@ -90,7 +89,7 @@ describe("BoundaryHunt", () => {
     const user = userEvent.setup();
     const fetcher = vi.fn();
     vi.stubGlobal("fetch", fetcher);
-    const { onRevealMap } = renderHunt();
+    const { onRevealMap, onClassify } = renderHunt();
 
     const changingCondition = screen.getByRole("radio", {
       name: /test fraction 30%.*repeated entities high/i,
@@ -101,6 +100,7 @@ describe("BoundaryHunt", () => {
     );
 
     expect(onRevealMap).toHaveBeenCalledOnce();
+    expect(onClassify).toHaveBeenCalledWith("CONCLUSION_CHANGES");
     expect(screen.getByRole("status")).toHaveTextContent(
       /you found a changing condition/i,
     );
@@ -113,7 +113,7 @@ describe("BoundaryHunt", () => {
 
   it("reveals the map after two non-changing attempts", async () => {
     const user = userEvent.setup();
-    const { onRevealMap } = renderHunt();
+    const { onRevealMap, onClassify } = renderHunt();
 
     await user.click(
       screen.getByRole("radio", {
@@ -135,6 +135,8 @@ describe("BoundaryHunt", () => {
     );
 
     expect(onRevealMap).toHaveBeenCalledOnce();
+    expect(onClassify).toHaveBeenNthCalledWith(1, "CONCLUSION_STABLE");
+    expect(onClassify).toHaveBeenNthCalledWith(2, "CONCLUSION_STABLE");
     expect(screen.getByRole("status")).toHaveTextContent(
       /two conditions are enough/i,
     );
@@ -164,7 +166,7 @@ describe("BoundaryHunt", () => {
     expect(onRevealMap).not.toHaveBeenCalled();
   });
 
-  it("supports keyboard selection, submission, and the evidence-linked hint", async () => {
+  it("supports keyboard selection, submission, and verified-result binding", async () => {
     const user = userEvent.setup();
     const { onRevealMap } = renderHunt();
     const changingCondition = screen.getByRole("radio", {
@@ -181,15 +183,9 @@ describe("BoundaryHunt", () => {
     await user.keyboard("[Enter]");
     expect(onRevealMap).toHaveBeenCalledOnce();
 
-    await user.click(screen.getByText("Need a hint?"));
-    const hintDisclosure = screen.getByText("Need a hint?").closest("details");
-    expect(hintDisclosure).toHaveAttribute("open");
-    const evidence = screen.getByText(/bound to verified boundary map result/i);
     expect(
-      within(hintDisclosure!).getByRole("link", {
-        name: "Review the verified overlap evidence",
-      }),
-    ).toHaveAttribute("href", `#${evidence.id}`);
+      screen.getByText(/bound to verified boundary map result/i),
+    ).toHaveTextContent(boundaryFixture().resultHash.slice(0, 12));
   });
 
   it("identifies the reference condition and focuses the hunt question", () => {

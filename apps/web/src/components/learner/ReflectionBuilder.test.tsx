@@ -56,9 +56,11 @@ const becauseOptions = [
 function ControlledReflection({
   initialValue = "",
   onRevision = vi.fn(),
+  onAuthoringModeChange,
 }: {
   initialValue?: string;
   onRevision?: (revision: string) => void;
+  onAuthoringModeChange?: (mode: "clauses" | "free_text") => void;
 }) {
   const [value, setValue] = useState(initialValue);
   return (
@@ -71,6 +73,9 @@ function ControlledReflection({
         onRevision(revision);
         setValue(revision);
       }}
+      {...(onAuthoringModeChange === undefined
+        ? {}
+        : { onAuthoringModeChange })}
     />
   );
 }
@@ -116,10 +121,15 @@ describe("ReflectionBuilder", () => {
   it("preserves edits while switching between clause and full free-text modes", async () => {
     const user = userEvent.setup();
     const onRevision = vi.fn();
+    const onAuthoringModeChange = vi.fn();
     const initial =
       "When entities repeat, I will test on new entities before trusting the score.";
     render(
-      <ControlledReflection initialValue={initial} onRevision={onRevision} />,
+      <ControlledReflection
+        initialValue={initial}
+        onRevision={onRevision}
+        onAuthoringModeChange={onAuthoringModeChange}
+      />,
     );
 
     await user.click(screen.getByRole("radio", { name: "Write freely" }));
@@ -153,5 +163,9 @@ describe("ReflectionBuilder", () => {
         })
         .closest("section"),
     ).toHaveAttribute("data-motion", "reduced-safe");
+    expect(onAuthoringModeChange.mock.calls).toEqual([
+      ["free_text"],
+      ["clauses"],
+    ]);
   });
 });

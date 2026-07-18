@@ -8,6 +8,9 @@ import {
   HostedVerifiedResultSetV2Schema,
   InteractiveImbalanceRunRequestSchema,
   InteractiveLeakageRunRequestSchema,
+  LearnerInteractionInputSchema,
+  LearnerInteractionReceiptSchema,
+  LearnerInteractionRecordSchema,
   PatchPlanV1Schema,
   PatchResultSchema,
   ProofCapsuleRefV2Schema,
@@ -123,6 +126,11 @@ import {
   type StoredArtifact,
 } from "./artifact-store";
 import {
+  D1LearnerInteractionRepository,
+  LearnerInteractionConflictError,
+  type LearnerInteractionRepository,
+} from "./learner-interaction-repository";
+import {
   ConcurrentD1SessionUpdateError,
   D1SessionRepository,
 } from "./d1-session-repository";
@@ -199,6 +207,7 @@ export interface ApiOptions {
   runnerJobRepository?: RunnerJobRepository;
   runnerObjectStore?: RunnerObjectStore;
   replayRepository?: ProofCapsuleReplayRepository;
+  learnerInteractionRepository?: LearnerInteractionRepository;
   runnerDispatcher?: RunnerDispatcher;
   runnerSigningPrivateKey?: string;
   adminDiagnosticSecret?: string;
@@ -470,6 +479,27 @@ function proofCapsuleReplays(
   return (
     options.replayRepository ??
     new D1ProofCapsuleReplayRepository(requiredDatabase(context))
+  );
+}
+
+function learnerInteractions(
+  context: Context<AppBindings>,
+  options: ApiOptions,
+): LearnerInteractionRepository {
+  return (
+    options.learnerInteractionRepository ??
+    new D1LearnerInteractionRepository(requiredDatabase(context))
+  );
+}
+
+function interactionConcept(
+  session: CounterLabSession,
+): "entity_leakage" | "class_imbalance" | "unresolved" {
+  return (
+    session.beliefSpec?.concept ??
+    session.beliefTest?.concept ??
+    session.verifiedResult?.concept ??
+    "unresolved"
   );
 }
 
@@ -6385,6 +6415,33 @@ export function createApi(options: ApiOptions = {}) {
     return context.json(jsonSuccess({ events }));
   });
 
+  app.post("/api/sessions/:sessionId/interactions", async (context) => {
+    const session = await sessionService(context, options).getSession(
+      context.req.param("sessionId"),
+    );
+    const interaction = LearnerInteractionInputSchema.parse(
+      await readJson(context, 4_096),
+    );
+    const record = LearnerInteractionRecordSchema.parse({
+      schemaVersion: "1",
+      eventId: interaction.eventId,
+      sessionId: session.id,
+      actor: "learner",
+      mode: session.mode.kind,
+      concept: interactionConcept(session),
+      timestamp: (options.now?.() ?? new Date()).toISOString(),
+      interaction,
+    });
+    const stored = await learnerInteractions(context, options).append(record);
+    const receipt = LearnerInteractionReceiptSchema.parse({
+      schemaVersion: "1",
+      eventId: record.eventId,
+      accepted: true,
+      duplicate: stored.duplicate,
+    });
+    return context.json(jsonSuccess(receipt), stored.duplicate ? 200 : 201);
+  });
+
   app.post("/api/sessions/:sessionId/lab/run", async (context) => {
     const service = sessionService(context, options);
     const sessionId = context.req.param("sessionId");
@@ -8620,6 +8677,12 @@ export function createApi(options: ApiOptions = {}) {
       return context.json(
         jsonError("SESSION_NOT_FOUND", error.message, 404),
         404,
+      );
+    }
+    if (error instanceof LearnerInteractionConflictError) {
+      return context.json(
+        jsonError("INTERACTION_CONFLICT", error.message, 409),
+        409,
       );
     }
     if (

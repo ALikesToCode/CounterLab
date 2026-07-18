@@ -6392,6 +6392,10 @@ body {
   text-align: center;
 }
 
+.learner-stage-hint {
+  padding-top: 16px;
+}
+
 @media (max-width: 1040px) {
   .topbar-context {
     display: none;

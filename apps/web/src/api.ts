@@ -10,6 +10,8 @@ import {
   EvidenceEventSchema,
   InteractiveImbalanceRunRequestSchema,
   InteractiveLeakageRunRequestSchema,
+  LearnerInteractionInputSchema,
+  LearnerInteractionReceiptSchema,
   PatchResultSchema,
   PredictionContractSchema,
   ProofBundleSchema,
@@ -37,6 +39,9 @@ import {
   type EvidenceEvent,
   type InteractiveImbalanceRunRequest,
   type InteractiveLeakageRunRequest,
+  type LearnerHintId,
+  type LearnerInteractionInput,
+  type LearnerInteractionReceipt,
   type LeakageVerifiedResultSet,
   type ImbalanceVerifiedResultSet,
   type PatchResult,
@@ -765,6 +770,22 @@ export class CounterLabApiClient {
     );
   }
 
+  recordLearnerInteraction(
+    sessionId: string,
+    input: LearnerInteractionInput,
+  ): Promise<LearnerInteractionReceipt> {
+    return this.request(
+      `/api/sessions/${encodedId(sessionId)}/interactions`,
+      LearnerInteractionReceiptSchema,
+      {
+        method: "POST",
+        body: JSON.stringify(
+          validatedInput(LearnerInteractionInputSchema, input),
+        ),
+      },
+    );
+  }
+
   compilePatch(sessionId: string): Promise<PatchCompileResponse> {
     return this.postRunnerActionWithoutInput(
       `/api/sessions/${encodedId(sessionId)}/patch/compile`,
@@ -963,4 +984,7 @@ export type {
   VerifiedResultSet,
   LeakageVerifiedResultSet,
   ImbalanceVerifiedResultSet,
+  LearnerHintId,
+  LearnerInteractionInput,
+  LearnerInteractionReceipt,
 };

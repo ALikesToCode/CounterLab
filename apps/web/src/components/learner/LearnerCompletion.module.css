@@ -1,0 +1,207 @@
+.completion {
+  display: grid;
+  gap: 20px;
+  padding: clamp(22px, 4vw, 36px);
+  border: 1px solid #d8dee6;
+  border-radius: 18px;
+  color: #07152a;
+  background: #fffdf8;
+  font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
+}
+
+.capability h1,
+.capability h2 {
+  max-width: 760px;
+  margin: 0;
+  font-family: "Newsreader Variable", "Iowan Old Style", Georgia, serif;
+  font-size: clamp(30px, 5vw, 48px);
+  font-weight: 520;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+
+.comparison {
+  display: grid;
+  gap: 5px;
+  max-width: 720px;
+  margin: 16px 0 0;
+  font-size: clamp(18px, 3vw, 25px);
+  line-height: 1.35;
+}
+
+.comparison q {
+  font-weight: 760;
+}
+
+.comparison span {
+  color: #4c5d73;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.reasoning,
+.transfer {
+  padding: 18px;
+  border: 1px solid #d8dee6;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.reasoning h3,
+.transfer h3 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.reasoning dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0 0;
+}
+
+.reasoning dl > div {
+  min-width: 0;
+  padding: 14px;
+  border-radius: 10px;
+  background: #f7f8fa;
+}
+
+.reasoning dl > div:last-child {
+  background: #f3fbf9;
+}
+
+.reasoning dt {
+  color: #4c5d73;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.reasoning dd {
+  margin: 7px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.transfer {
+  border-color: #b8dcd7;
+  background: #f3fbf9;
+}
+
+.transfer p {
+  margin: 7px 0 0;
+  color: #4c5d73;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.transfer .transferLabel {
+  color: #075e5c;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.actions button {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 760;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.actions button:focus-visible,
+.evidence summary:focus-visible {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 3px;
+}
+
+.actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.primaryAction {
+  color: #fff;
+  background: #245eea;
+}
+
+.secondaryAction {
+  border-color: #245eea !important;
+  color: #245eea;
+  background: #fff;
+}
+
+.tertiaryAction {
+  border-color: #c8d0da !important;
+  color: #24364d;
+  background: #f7f8fa;
+}
+
+.evidence {
+  border-top: 1px solid #d8dee6;
+}
+
+.evidence summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  width: fit-content;
+  padding: 8px 2px;
+  color: #245eea;
+  font-size: 15px;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.evidenceBody {
+  padding: 15px;
+  border: 1px solid #d8dee6;
+  border-radius: 10px;
+  color: #24364d;
+  background: #fff;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.evidenceBody > :first-child {
+  margin-top: 0;
+}
+
+.evidenceBody > :last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 680px) {
+  .reasoning dl {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .actions button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .completion *,
+  .completion *::before,
+  .completion *::after {
+    scroll-behavior: auto;
+  }
+}

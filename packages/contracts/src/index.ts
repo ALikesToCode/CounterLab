@@ -2449,6 +2449,215 @@ export const EvidenceEventSchema = EvidenceEventUnsignedSchema.extend({
 
 export type EvidenceEvent = z.infer<typeof EvidenceEventSchema>;
 
+export const LearnerStageSchema = z.enum([
+  "question",
+  "prediction",
+  "test",
+  "boundary",
+  "apply",
+  "repair",
+]);
+
+export type LearnerStage = z.infer<typeof LearnerStageSchema>;
+
+export const LearnerHintIdSchema = z.enum([
+  "shared.question",
+  "shared.prediction",
+  "shared.test",
+  "shared.boundary",
+  "shared.apply",
+  "shared.repair",
+  "entity_leakage.question",
+  "entity_leakage.prediction",
+  "entity_leakage.test",
+  "entity_leakage.boundary",
+  "entity_leakage.apply",
+  "entity_leakage.repair",
+  "class_imbalance.question",
+  "class_imbalance.prediction",
+  "class_imbalance.test",
+  "class_imbalance.boundary",
+  "class_imbalance.apply",
+  "class_imbalance.repair",
+]);
+
+export type LearnerHintId = z.infer<typeof LearnerHintIdSchema>;
+
+export const LearnerInteractionEventIdSchema = z
+  .string()
+  .regex(
+    /^interaction_(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/u,
+    "expected an opaque learner interaction ID",
+  );
+
+const LearnerInteractionInputBase = {
+  schemaVersion: z.literal("1"),
+  eventId: LearnerInteractionEventIdSchema,
+  stage: LearnerStageSchema,
+};
+
+export const LearnerInteractionInputSchema = z
+  .discriminatedUnion("kind", [
+    z
+      .object({
+        ...LearnerInteractionInputBase,
+        kind: z.literal("stage.entered"),
+      })
+      .strict(),
+    z
+      .object({
+        ...LearnerInteractionInputBase,
+        kind: z.literal("stage.completed"),
+        elapsedMs: z.number().int().nonnegative().max(604_800_000),
+      })
+      .strict(),
+    z
+      .object({
+        ...LearnerInteractionInputBase,
+        kind: z.literal("prediction.recorded"),
+        choice: z.enum([
+          "current_explanation",
+          "alternative_explanation",
+          "unsure",
+        ]),
+        confidence: z.number().int().min(0).max(100),
+      })
+      .strict(),
+    z
+      .object({
+        ...LearnerInteractionInputBase,
+        kind: z.literal("hint.opened"),
+        hintId: LearnerHintIdSchema,
+      })
+      .strict(),
+    z
+      .object({
+        ...LearnerInteractionInputBase,
+        kind: z.literal("boundary_hunt.classified"),
+        classification: z.enum(["CONCLUSION_CHANGES", "CONCLUSION_STABLE"]),
+      })
+      .strict(),
+    z
+      .object({
+        ...LearnerInteractionInputBase,
+        kind: z.literal("revision.recorded"),
+        authoringMode: z.enum(["clauses", "free_text"]),
+      })
+      .strict(),
+    z
+      .object({
+        ...LearnerInteractionInputBase,
+        kind: z.literal("transfer.evaluated"),
+        outcome: z.enum(["PASSED", "FAILED"]),
+      })
+      .strict(),
+    z
+      .object({
+        ...LearnerInteractionInputBase,
+        kind: z.literal("patch.downloaded"),
+      })
+      .strict(),
+    z
+      .object({
+        ...LearnerInteractionInputBase,
+        kind: z.literal("proof_capsule.downloaded"),
+      })
+      .strict(),
+  ])
+  .superRefine((interaction, context) => {
+    const fixedStage = {
+      "prediction.recorded": "prediction",
+      "boundary_hunt.classified": "boundary",
+      "revision.recorded": "apply",
+      "transfer.evaluated": "apply",
+      "patch.downloaded": "repair",
+      "proof_capsule.downloaded": "repair",
+    } as const;
+    if (
+      interaction.kind !== "stage.entered" &&
+      interaction.kind !== "stage.completed" &&
+      interaction.kind !== "hint.opened" &&
+      interaction.stage !== fixedStage[interaction.kind]
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["stage"],
+        message: `${interaction.kind} must use the ${fixedStage[interaction.kind]} stage`,
+      });
+    }
+    if (
+      interaction.kind === "hint.opened" &&
+      !interaction.hintId.endsWith(`.${interaction.stage}`)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["hintId"],
+        message: "hint ID must match the recorded learner stage",
+      });
+    }
+  });
+
+export type LearnerInteractionInput = z.infer<
+  typeof LearnerInteractionInputSchema
+>;
+
+export const LearnerInteractionRecordSchema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    eventId: LearnerInteractionEventIdSchema,
+    sessionId: NonEmptyString,
+    actor: z.literal("learner"),
+    mode: z.enum([
+      "sample_lesson",
+      "live_notebook",
+      "verified_replay",
+      "guided_lab",
+      "challenge",
+    ]),
+    concept: z.union([ConceptIdSchema, z.literal("unresolved")]),
+    timestamp: z.iso.datetime({ offset: true }),
+    interaction: LearnerInteractionInputSchema,
+  })
+  .strict()
+  .superRefine((record, context) => {
+    if (record.eventId !== record.interaction.eventId) {
+      context.addIssue({
+        code: "custom",
+        message: "interaction record IDs must match",
+        path: ["interaction", "eventId"],
+      });
+    }
+    if (
+      record.interaction.kind === "hint.opened" &&
+      record.concept !== "unresolved" &&
+      !record.interaction.hintId.startsWith("shared.") &&
+      !record.interaction.hintId.startsWith(`${record.concept}.`)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "hint ID must match the server-derived Subject Pack",
+        path: ["interaction", "hintId"],
+      });
+    }
+  });
+
+export type LearnerInteractionRecord = z.infer<
+  typeof LearnerInteractionRecordSchema
+>;
+
+export const LearnerInteractionReceiptSchema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    eventId: LearnerInteractionEventIdSchema,
+    accepted: z.literal(true),
+    duplicate: z.boolean(),
+  })
+  .strict();
+
+export type LearnerInteractionReceipt = z.infer<
+  typeof LearnerInteractionReceiptSchema
+>;
+
 const VerifiedRunSchema = z
   .object({
     id: NonEmptyString,

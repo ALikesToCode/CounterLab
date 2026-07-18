@@ -10,6 +10,7 @@ import {
   type ExperimentPlanV2,
   type HostedVerifiedResultSetV2,
   HostedVerifiedResultSetV2Schema,
+  type LearnerInteractionRecord,
   type PublicCompilerEvent,
   type RunnerCallback,
   type RunnerJob,
@@ -58,6 +59,7 @@ import scientificEngineSnapshotValue from "../../../scientific-engines/snapshot-
 import { api, createApi } from "./api";
 import type { ArtifactStore, StoredArtifact } from "./artifact-store";
 import { ConcurrentD1SessionUpdateError } from "./d1-session-repository";
+import type { LearnerInteractionRepository } from "./learner-interaction-repository";
 import type { ProofCapsuleReplayRecordV2 } from "./replay-repository";
 import { sampleResult } from "./sample-evidence";
 import { createSamplePatchResult } from "./sample-learning-loop";
@@ -170,6 +172,26 @@ class MemoryProofCapsuleReplayRepository {
   ): Promise<ProofCapsuleReplayRecordV2 | undefined> {
     const record = this.records.get(replayId);
     return record === undefined ? undefined : structuredClone(record);
+  }
+}
+
+class MemoryLearnerInteractionRepository implements LearnerInteractionRepository {
+  readonly records = new Map<string, LearnerInteractionRecord>();
+
+  append(record: LearnerInteractionRecord): Promise<{ duplicate: boolean }> {
+    const existing = this.records.get(record.eventId);
+    if (existing !== undefined) {
+      if (
+        existing.sessionId !== record.sessionId ||
+        JSON.stringify(existing.interaction) !==
+          JSON.stringify(record.interaction)
+      ) {
+        throw new Error("interaction ID conflict");
+      }
+      return Promise.resolve({ duplicate: true });
+    }
+    this.records.set(record.eventId, structuredClone(record));
+    return Promise.resolve({ duplicate: false });
   }
 }
 
@@ -2379,6 +2401,120 @@ describe("Cloudflare Worker API", () => {
         mode: { kind: "verified_replay", replayId: "leakage-01" },
       },
     });
+  });
+
+  it("stores strict learner interactions outside session and evidence authority", async () => {
+    const harness = await sessionHarness("sample");
+    const interactions = new MemoryLearnerInteractionRepository();
+    let interactionNow = new Date("2026-07-18T08:00:00.000Z");
+    const app = createApi({
+      sessionRepository: harness.sessionRepository,
+      artifactStore: harness.artifactStore,
+      learnerInteractionRepository: interactions,
+      now: () => interactionNow,
+    });
+    const beforeSession = await harness.sessionRepository.find(
+      harness.sessionId,
+    );
+    const beforeEvents = await harness.sessionRepository.listEvents(
+      harness.sessionId,
+    );
+
+    const response = await postJson(
+      app,
+      `/api/sessions/${harness.sessionId}/interactions`,
+      {
+        schemaVersion: "1",
+        eventId: "interaction_00000000000000000000000000000001",
+        stage: "prediction",
+        kind: "prediction.recorded",
+        choice: "alternative_explanation",
+        confidence: 72,
+      },
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      data: {
+        schemaVersion: "1",
+        eventId: "interaction_00000000000000000000000000000001",
+        accepted: true,
+        duplicate: false,
+      },
+    });
+    expect(
+      interactions.records.get("interaction_00000000000000000000000000000001"),
+    ).toEqual({
+      schemaVersion: "1",
+      eventId: "interaction_00000000000000000000000000000001",
+      sessionId: harness.sessionId,
+      actor: "learner",
+      mode: "sample_lesson",
+      concept: "unresolved",
+      timestamp: "2026-07-18T08:00:00.000Z",
+      interaction: {
+        schemaVersion: "1",
+        eventId: "interaction_00000000000000000000000000000001",
+        stage: "prediction",
+        kind: "prediction.recorded",
+        choice: "alternative_explanation",
+        confidence: 72,
+      },
+    });
+    expect(await harness.sessionRepository.find(harness.sessionId)).toEqual(
+      beforeSession,
+    );
+    expect(
+      await harness.sessionRepository.listEvents(harness.sessionId),
+    ).toEqual(beforeEvents);
+
+    interactionNow = new Date("2026-07-18T08:01:00.000Z");
+    const duplicate = await postJson(
+      app,
+      `/api/sessions/${harness.sessionId}/interactions`,
+      {
+        schemaVersion: "1",
+        eventId: "interaction_00000000000000000000000000000001",
+        stage: "prediction",
+        kind: "prediction.recorded",
+        choice: "alternative_explanation",
+        confidence: 72,
+      },
+    );
+    expect(duplicate.status).toBe(200);
+    await expect(duplicate.json()).resolves.toEqual({
+      ok: true,
+      data: {
+        schemaVersion: "1",
+        eventId: "interaction_00000000000000000000000000000001",
+        accepted: true,
+        duplicate: true,
+      },
+    });
+    expect(interactions.records.size).toBe(1);
+    expect(
+      interactions.records.get("interaction_00000000000000000000000000000001")
+        ?.timestamp,
+    ).toBe("2026-07-18T08:00:00.000Z");
+
+    const rejected = await postJson(
+      app,
+      `/api/sessions/${harness.sessionId}/interactions`,
+      {
+        schemaVersion: "1",
+        eventId: "interaction_00000000000000000000000000000002",
+        stage: "apply",
+        kind: "revision.recorded",
+        authoringMode: "free_text",
+        revision: "raw learner prose",
+        notebook: "raw notebook content",
+      },
+    );
+    expect(rejected.status).toBe(400);
+    expect(
+      interactions.records.has("interaction_00000000000000000000000000000002"),
+    ).toBe(false);
   });
 
   it("dispatches the class-imbalance fixture for a verified live imbalance plan", async () => {

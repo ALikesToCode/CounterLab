@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   ApiClientError,
@@ -9,6 +9,8 @@ import {
   type SessionView,
 } from "../../api";
 import { useRunnerEvents } from "../../hooks/useRunnerEvents";
+import { recordLearnerInteraction } from "../../features/learner/interactionEvidence";
+import { LearnerCompletion } from "../learner/LearnerCompletion";
 import { RepairPreview } from "../learner/RepairPreview";
 import { ReasoningDiffView } from "../proof/ReasoningDiffView";
 
@@ -62,6 +64,17 @@ export function ImbalancePatchReview({
   const [job, setJob] = useState<RunnerJob | null>(null);
   const [busy, setBusy] = useState(session.state === "PATCH_COMPILING");
   const [error, setError] = useState<string | null>(null);
+  const completionFocused = useRef(false);
+
+  useEffect(() => {
+    if (patch === null) {
+      completionFocused.current = false;
+      return;
+    }
+    if (completionFocused.current) return;
+    completionFocused.current = true;
+    document.getElementById("imbalance-completion-title")?.focus();
+  }, [patch]);
 
   const finishJob = async (jobId: string) => {
     const completed = await runner.waitForJob({
@@ -163,89 +176,165 @@ export function ImbalancePatchReview({
     URL.revokeObjectURL(url);
   };
 
+  const downloadPatch = () => {
+    if (patch === null) return;
+    const anchor = document.createElement("a");
+    anchor.href = counterLabApi.patchDownloadUrl(session.sessionId);
+    anchor.download = "";
+    anchor.click();
+    void recordLearnerInteraction(session.sessionId, {
+      kind: "patch.downloaded",
+      stage: "repair",
+    });
+  };
+
+  const exportCompletionProof = () => {
+    if (session.proofCapsule !== undefined) {
+      const anchor = document.createElement("a");
+      anchor.href = counterLabApi.proofCapsuleDownloadUrl(session.sessionId);
+      anchor.download = "";
+      anchor.click();
+      void recordLearnerInteraction(session.sessionId, {
+        kind: "proof_capsule.downloaded",
+        stage: "repair",
+      });
+      return;
+    }
+    exportProof();
+  };
+
   if (patch !== null) {
-    if (
+    const liveCompletionProof =
       session.mode.kind === "live_notebook" &&
       session.state === "PROOF_CAPSULE_ISSUED" &&
       session.reasoningDiffV2 !== undefined &&
       session.proofCapsule !== undefined
-    ) {
+        ? {
+            diff: session.reasoningDiffV2,
+            capsule: session.proofCapsule,
+          }
+        : null;
+    const completion = (
+      <LearnerCompletion
+        titleId="imbalance-completion-title"
+        capability={{
+          intro: "You can now distinguish:",
+          first: "high overall accuracy",
+          connector: "from",
+          second: "useful rare-event detection",
+        }}
+        beforeReasoning={
+          session.beliefSpec?.claim ??
+          session.beliefTest?.learnerClaim ??
+          "A high overall score proves the model catches rare events."
+        }
+        afterReasoning={
+          session.revision ??
+          "Inspect class-specific errors, deployment prevalence, and asymmetric costs."
+        }
+        transferStatus={{
+          label: "Passed",
+          detail:
+            "You carried the rare-event rule into the fixed manufacturing-defect scenario.",
+        }}
+        repairedNotebookAction={{
+          label: "Download repaired notebook",
+          onActivate: downloadPatch,
+        }}
+        proofCapsuleAction={{
+          label:
+            session.proofCapsule === undefined
+              ? "Download proof record"
+              : "Export Proof Capsule",
+          onActivate: exportCompletionProof,
+          disabled: session.proofCapsule === undefined && proof === null,
+        }}
+        evidenceAndProof={
+          liveCompletionProof === null ? (
+            <>
+              <p>Patched artifact {patch.patchedArtifactHash}</p>
+              <p>
+                The verified conclusion is bounded to the supported notebook,
+                fixed rare-event fixture, registered metrics, and transfer
+                scenario. It does not establish global model quality.
+              </p>
+            </>
+          ) : (
+            <ReasoningDiffView
+              presentation="completion-evidence"
+              diff={liveCompletionProof.diff}
+              capsule={liveCompletionProof.capsule}
+              patch={patch}
+              patchDownloadUrl={counterLabApi.patchDownloadUrl(
+                session.sessionId,
+              )}
+              proofCapsuleDownloadUrl={counterLabApi.proofCapsuleDownloadUrl(
+                session.sessionId,
+              )}
+              publishReplay={() =>
+                counterLabApi.publishReplay(session.sessionId)
+              }
+            />
+          )
+        }
+      />
+    );
+    if (liveCompletionProof !== null) {
       return (
         <>
+          {completion}
           <RepairPreview
             changed={imbalanceRepairChanges}
             preserved={imbalanceRepairPreserves}
-          />
-          <ReasoningDiffView
-            diff={session.reasoningDiffV2}
-            capsule={session.proofCapsule}
-            patch={patch}
-            patchDownloadUrl={counterLabApi.patchDownloadUrl(session.sessionId)}
-            proofCapsuleDownloadUrl={counterLabApi.proofCapsuleDownloadUrl(
-              session.sessionId,
-            )}
-            publishReplay={() => counterLabApi.publishReplay(session.sessionId)}
           />
         </>
       );
     }
     return (
-      <section className="panel imbalance-patch-review" aria-live="polite">
-        <div className="panel-title">
-          <div>
-            <p className="eyebrow aqua">Verified repair · original untouched</p>
-            <h2>Your notebook copy passed the repair checks.</h2>
-            <p>
-              The evaluation now compares a computed majority baseline and
-              reports class-specific errors at an explicit threshold.
-            </p>
+      <>
+        {completion}
+        <section className="panel imbalance-patch-review" aria-live="polite">
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow aqua">
+                Verified repair · original untouched
+              </p>
+              <h2>Your notebook copy passed the repair checks.</h2>
+              <p>
+                The evaluation now compares a computed majority baseline and
+                reports class-specific errors at an explicit threshold.
+              </p>
+            </div>
+            <span className="verified-chip">Verified</span>
           </div>
-          <span className="verified-chip">Verified</span>
-        </div>
-        <div className="patch-integrity-grid">
-          <div>
-            <span>Changed cells</span>
-            <strong>{patch.modifiedCells.join(", ")}</strong>
+          <div className="patch-integrity-grid">
+            <div>
+              <span>Changed cells</span>
+              <strong>{patch.modifiedCells.join(", ")}</strong>
+            </div>
+            <div>
+              <span>Unchanged cells proven</span>
+              <strong>{patch.verification.unchangedCellHashes.length}</strong>
+            </div>
+            <div>
+              <span>Patched hash</span>
+              <strong>{patch.patchedArtifactHash.slice(0, 12)}…</strong>
+            </div>
           </div>
-          <div>
-            <span>Unchanged cells proven</span>
-            <strong>{patch.verification.unchangedCellHashes.length}</strong>
-          </div>
-          <div>
-            <span>Patched hash</span>
-            <strong>{patch.patchedArtifactHash.slice(0, 12)}…</strong>
-          </div>
-        </div>
-        <RepairPreview
-          changed={imbalanceRepairChanges}
-          preserved={imbalanceRepairPreserves}
-        />
-        <pre className="diff" aria-label="Verified imbalance notebook diff">
-          <code>{patch.diff}</code>
-        </pre>
-        <ul className="patch-invariants" aria-label="Patch verifier checks">
-          {patch.verification.invariants.map((invariant) => (
-            <li key={invariant}>{invariant.replaceAll("_", " ")}</li>
-          ))}
-        </ul>
-        <div className="patch-actions">
-          <a
-            className="button button-gold"
-            href={counterLabApi.patchDownloadUrl(session.sessionId)}
-            download
-          >
-            Download patched copy
-          </a>
-          <button
-            className="button button-quiet"
-            type="button"
-            disabled={proof === null}
-            onClick={exportProof}
-          >
-            {proof === null ? "Preparing proof…" : "Export Proof Bundle"}
-          </button>
-        </div>
-      </section>
+          <RepairPreview
+            changed={imbalanceRepairChanges}
+            preserved={imbalanceRepairPreserves}
+          />
+          <pre className="diff" aria-label="Verified imbalance notebook diff">
+            <code>{patch.diff}</code>
+          </pre>
+          <ul className="patch-invariants" aria-label="Patch verifier checks">
+            {patch.verification.invariants.map((invariant) => (
+              <li key={invariant}>{invariant.replaceAll("_", " ")}</li>
+            ))}
+          </ul>
+        </section>
+      </>
     );
   }
 

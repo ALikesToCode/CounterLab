@@ -13,11 +13,8 @@ import {
   writeActiveRunnerCheckpoint,
 } from "../../hooks/runnerCheckpoint";
 import { useRunnerEvents } from "../../hooks/useRunnerEvents";
-import {
-  BoundaryHunt,
-  type BoundaryHuntHint,
-  type VerifiedBoundaryHuntData,
-} from "./BoundaryHunt";
+import { BoundaryHunt, type VerifiedBoundaryHuntData } from "./BoundaryHunt";
+import { recordLearnerInteraction } from "../learner/interactionEvidence";
 import styles from "./BoundaryStage.module.css";
 
 function storage(): Storage | undefined {
@@ -60,20 +57,6 @@ function rememberRevealedHunt(resultHash: string): void {
   } catch {
     // Presentation persistence must never block the verified map.
   }
-}
-
-function huntHintFor(
-  concept: BoundaryResponse["result"]["concept"],
-): BoundaryHuntHint {
-  return concept === "entity_leakage"
-    ? {
-        text: "Compare conditions with fewer and more repeated observations per customer. The verified classification tells you whether the evaluation gap changed.",
-        evidenceLabel: "Review the verified sweep binding",
-      }
-    : {
-        text: "Compare a different threshold or prevalence with the reference condition. The verified F1 classification—not headline accuracy—marks the change.",
-        evidenceLabel: "Review the verified sweep binding",
-      };
 }
 
 function huntDataFor(boundary: BoundaryResponse): VerifiedBoundaryHuntData {
@@ -314,9 +297,15 @@ export function BoundaryStage({
       return (
         <BoundaryHunt
           boundary={huntDataFor(boundary)}
-          hint={huntHintFor(boundary.result.concept)}
           onRevealMap={revealMap}
           onSkip={revealMap}
+          onClassify={(classification) => {
+            void recordLearnerInteraction(session.sessionId, {
+              kind: "boundary_hunt.classified",
+              stage: "boundary",
+              classification,
+            });
+          }}
         />
       );
     }

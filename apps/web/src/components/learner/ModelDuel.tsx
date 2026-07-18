@@ -68,6 +68,7 @@ export function ModelDuel({
 
   return (
     <section
+      id="model-duel"
       className={styles.duel}
       aria-label="Model duel"
       aria-describedby={titleId}

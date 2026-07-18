@@ -1,0 +1,63 @@
+.hint {
+  border: 1px solid #d8dee6;
+  border-radius: 10px;
+  color: #07152a;
+  background: #fff;
+  font-family: "Instrument Sans Variable", "Avenir Next", sans-serif;
+}
+
+.hint summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  width: fit-content;
+  padding: 8px 14px;
+  color: #245eea;
+  font-size: 15px;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.hint summary:focus-visible,
+.hint a:focus-visible {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 3px;
+}
+
+.hintBody {
+  padding: 0 14px 14px;
+}
+
+.hintBody p {
+  max-width: 680px;
+  margin: 0;
+  color: #24364d;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.hintBody a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  margin-top: 4px;
+  color: #245eea;
+  font-size: 13px;
+  font-weight: 760;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 560px) {
+  .hint summary,
+  .hintBody a {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hint *,
+  .hint *::before,
+  .hint *::after {
+    scroll-behavior: auto;
+  }
+}

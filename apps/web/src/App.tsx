@@ -27,7 +27,9 @@ import {
 } from "./hooks/runnerCheckpoint";
 import { CounterLabStudio } from "./app/CounterLabStudio";
 import { parseStudioLocation, studioPath } from "./app/AppRouter";
+import { LearnerCompletion } from "./components/learner/LearnerCompletion";
 import { LearnerCoach } from "./components/learner/LearnerCoach";
+import { NeedAHint } from "./components/learner/NeedAHint";
 import { LearnerProgress } from "./components/learner/LearnerProgress";
 import { ReflectionBuilder } from "./components/learner/ReflectionBuilder";
 import { RepairPreview } from "./components/learner/RepairPreview";
@@ -57,7 +59,10 @@ import {
 } from "./components/learner/PredictionSeal";
 import { PrivacyPacketSummary } from "./components/learner/PrivacyPacketSummary";
 import { QuestionComposer } from "./components/learner/QuestionComposer";
-import type { LearnerStageId } from "./components/learner/learnerStages";
+import {
+  currentLearnerStage,
+  type LearnerStageId,
+} from "./components/learner/learnerStages";
 import { InteractiveImbalanceLab } from "./components/lesson/InteractiveImbalanceLab";
 import { ImbalancePatchReview } from "./components/lesson/ImbalancePatchReview";
 import { ImbalanceTransferLesson } from "./components/lesson/ImbalanceTransferLesson";
@@ -66,6 +71,9 @@ import { ProofCapsuleReplayView } from "./components/replay/ProofCapsuleReplayVi
 import type { RecentProject, StudioStage } from "./components/studio/types";
 import { BoundaryStage } from "./features/boundary/BoundaryStage";
 import { JudgeModeView } from "./features/judge/JudgeModeView";
+import { recordLearnerInteraction } from "./features/learner/interactionEvidence";
+import { subjectPackHint } from "./features/learner/subjectPackHints";
+import { useLearnerStageTiming } from "./hooks/useLearnerStageTiming";
 
 import { getRun, sampleArtifact, verifiedReplay } from "./sample";
 
@@ -177,9 +185,15 @@ const leakageRepairPreserves = [
 ] as const;
 
 function sessionProofReady(session: SessionView | null): boolean {
+  if (session === null) return false;
+  if (session.mode.kind === "live_notebook") {
+    return (
+      session.state === "PROOF_CAPSULE_ISSUED" &&
+      session.proofCapsule !== undefined
+    );
+  }
   return (
-    session?.state === "PROOF_CAPSULE_ISSUED" ||
-    session?.state === "REASONING_DIFF_ISSUED"
+    session.mode.kind === "sample_lesson" && session.proofBundle !== undefined
   );
 }
 
@@ -713,6 +727,7 @@ function Landing({
   chooseMode: (mode: Mode) => void;
   busy: boolean;
 }) {
+  const hint = subjectPackHint(undefined, "question");
   return (
     <main className="landing landing-question-first">
       <div className="question-first-layout shell">
@@ -731,11 +746,17 @@ function Landing({
           }}
           busy={busy}
         />
-        <p className="plain-support-note">
+        <p className="plain-support-note" id="landing-support-note">
           Released support: entity leakage and class imbalance in documented
           Python/scikit-learn Jupyter notebooks. Unsupported files are refused,
           not guessed.
         </p>
+        <NeedAHint
+          hintId={hint.id}
+          hint={hint.copy}
+          evidenceHref="#landing-support-note"
+          evidenceLabel="Review the supported evidence boundary"
+        />
       </div>
     </main>
   );
@@ -1364,7 +1385,9 @@ function ImbalanceReviewScreen({
     <main className="workspace shell lesson-review">
       <div className="screen-intro compact">
         <p className="eyebrow">Lesson map · Saved step</p>
-        <h1>{titles[step]}</h1>
+        <h1 id="review-title" tabIndex={-1}>
+          {titles[step]}
+        </h1>
         <p>Saved evidence stays read-only while you inspect this step.</p>
       </div>
       <aside className="review-notice" role="note">
@@ -1987,6 +2010,9 @@ function LeakageRealityScreen({
       window.localStorage.getItem(storageKeys.replayRevision) ??
       defaultLeakageReflection,
   );
+  const [revisionMode, setRevisionMode] = useState<"clauses" | "free_text">(
+    "clauses",
+  );
   const initialTransferState: TransferState = session?.patchResult
     ? "patched"
     : session?.transferResult?.outcome === "PASSED"
@@ -2099,6 +2125,11 @@ function LeakageRealityScreen({
       });
       updateSession(updated);
       setTransferState("ready");
+      void recordLearnerInteraction(session.sessionId, {
+        kind: "revision.recorded",
+        stage: "apply",
+        authoringMode: revisionMode,
+      });
     });
   };
 
@@ -2123,9 +2154,14 @@ function LeakageRealityScreen({
             : ["chosen_evidence_does_not_establish_time_boundary"],
       });
       updateSession(updated);
-      setTransferState(
-        updated.transferResult?.outcome === "PASSED" ? "passed" : "failed",
-      );
+      const outcome =
+        updated.transferResult?.outcome === "PASSED" ? "PASSED" : "FAILED";
+      setTransferState(outcome === "PASSED" ? "passed" : "failed");
+      void recordLearnerInteraction(session.sessionId, {
+        kind: "transfer.evaluated",
+        stage: "apply",
+        outcome,
+      });
     });
   };
 
@@ -2179,6 +2215,33 @@ function LeakageRealityScreen({
     URL.revokeObjectURL(url);
   };
 
+  const downloadCompletionPatch = () => {
+    if (session === null || patch === null) return;
+    const anchor = document.createElement("a");
+    anchor.href = counterLabApi.patchDownloadUrl(session.sessionId);
+    anchor.download = "";
+    anchor.click();
+    void recordLearnerInteraction(session.sessionId, {
+      kind: "patch.downloaded",
+      stage: "repair",
+    });
+  };
+
+  const exportCompletionProof = () => {
+    if (session?.proofCapsule !== undefined) {
+      const anchor = document.createElement("a");
+      anchor.href = counterLabApi.proofCapsuleDownloadUrl(session.sessionId);
+      anchor.download = "";
+      anchor.click();
+      void recordLearnerInteraction(session.sessionId, {
+        kind: "proof_capsule.downloaded",
+        stage: "repair",
+      });
+      return;
+    }
+    exportProof();
+  };
+
   const actionErrorNotice =
     actionError === null ? null : (
       <div className="transfer-result rejected" role="alert">
@@ -2201,6 +2264,10 @@ function LeakageRealityScreen({
             because the evaluation design changed.
           </p>
         </div>
+        <RepairPreview
+          changed={leakageRepairChanges}
+          preserved={leakageRepairPreserves}
+        />
         <section className="live-compiler-grid">
           <div className="pipeline panel">
             <div className="panel-title">
@@ -2283,75 +2350,89 @@ function LeakageRealityScreen({
   }
 
   if (transferState === "patched") {
+    const liveCompletionProof =
+      session?.mode.kind === "live_notebook" &&
+      session.state === "PROOF_CAPSULE_ISSUED" &&
+      session.reasoningDiffV2 !== undefined &&
+      session.proofCapsule !== undefined &&
+      patch !== null
+        ? {
+            sessionId: session.sessionId,
+            diff: session.reasoningDiffV2,
+            capsule: session.proofCapsule,
+            patch,
+          }
+        : null;
     return (
       <main className="workspace shell reality lesson-phase completion-phase">
-        <div className="screen-intro compact">
-          <p className="eyebrow purple">
-            Lesson complete · Transfer passed · Verified correction
-          </p>
-          <h1 id="lesson-phase-title" tabIndex={-1}>
-            You found the hidden shortcut.
-          </h1>
-          <p>
-            You challenged the score, used the rule on a different problem, and
-            unlocked a correction that passed the same checks.
-          </p>
-        </div>
+        <LearnerCompletion
+          titleId="lesson-phase-title"
+          headingLevel="h1"
+          capability={{
+            intro: "You can now distinguish:",
+            first: "good on familiar rows",
+            connector: "from",
+            second: "generalizes to new entities",
+          }}
+          beforeReasoning={claim}
+          afterReasoning={revision}
+          transferStatus={{
+            label: "Passed",
+            detail:
+              "You carried the deployment-boundary rule from customers to time-ordered forecasting.",
+          }}
+          repairedNotebookAction={{
+            label: "Download repaired notebook",
+            onActivate: downloadCompletionPatch,
+            disabled: session === null || patch === null,
+          }}
+          proofCapsuleAction={{
+            label:
+              session?.proofCapsule === undefined
+                ? "Download proof record"
+                : "Export Proof Capsule",
+            onActivate: exportCompletionProof,
+            disabled:
+              session?.proofCapsule === undefined && proofBundle === null,
+          }}
+          evidenceAndProof={
+            liveCompletionProof === null ? (
+              <>
+                <p>
+                  Result {result.resultHash} · seed {result.seed}
+                </p>
+                <p>
+                  The verified conclusion is bounded to the supported notebook,
+                  fixed fixture, registered evaluation changes, and transfer
+                  scenario. It does not establish global model quality.
+                </p>
+              </>
+            ) : (
+              <ReasoningDiffView
+                presentation="completion-evidence"
+                diff={liveCompletionProof.diff}
+                capsule={liveCompletionProof.capsule}
+                patch={liveCompletionProof.patch}
+                patchDownloadUrl={counterLabApi.patchDownloadUrl(
+                  liveCompletionProof.sessionId,
+                )}
+                proofCapsuleDownloadUrl={counterLabApi.proofCapsuleDownloadUrl(
+                  liveCompletionProof.sessionId,
+                )}
+                publishReplay={() =>
+                  counterLabApi.publishReplay(liveCompletionProof.sessionId)
+                }
+              />
+            )
+          }
+        />
 
-        <section className="completion-hero" aria-label="Lesson completion">
-          <div className="completion-mark">
-            <Mark name="check" />
-          </div>
-          <div>
-            <span>Reusable rule</span>
-            <h2>The test must match what the model will face in real life.</h2>
-            <p>
-              Hold out whole customers for new-customer claims. Hold out later
-              time periods for forecasting claims.
-            </p>
-          </div>
-          <dl>
-            <div>
-              <dt>Customer test</dt>
-              <dd>0 shared customers</dd>
-            </div>
-            <div>
-              <dt>Forecasting transfer</dt>
-              <dd>Passed</dd>
-            </div>
-            <div>
-              <dt>Notebook correction</dt>
-              <dd>Verified copy</dd>
-            </div>
-          </dl>
-        </section>
+        <RepairPreview
+          changed={leakageRepairChanges}
+          preserved={leakageRepairPreserves}
+        />
 
-        {session?.mode.kind === "live_notebook" &&
-        session.state === "PROOF_CAPSULE_ISSUED" &&
-        session.reasoningDiffV2 !== undefined &&
-        session.proofCapsule !== undefined &&
-        patch !== null ? (
-          <>
-            <RepairPreview
-              changed={leakageRepairChanges}
-              preserved={leakageRepairPreserves}
-            />
-            <ReasoningDiffView
-              diff={session.reasoningDiffV2}
-              capsule={session.proofCapsule}
-              patch={patch}
-              patchDownloadUrl={counterLabApi.patchDownloadUrl(
-                session.sessionId,
-              )}
-              proofCapsuleDownloadUrl={counterLabApi.proofCapsuleDownloadUrl(
-                session.sessionId,
-              )}
-              publishReplay={() =>
-                counterLabApi.publishReplay(session.sessionId)
-              }
-            />
-          </>
-        ) : (
+        {liveCompletionProof === null && (
           <section className="reasoning-diff panel">
             <div className="panel-title final-title">
               <div>
@@ -2367,6 +2448,12 @@ function LeakageRealityScreen({
                     className="button button-gold patch-download"
                     href={counterLabApi.patchDownloadUrl(session.sessionId)}
                     download
+                    onClick={() => {
+                      void recordLearnerInteraction(session.sessionId, {
+                        kind: "patch.downloaded",
+                        stage: "repair",
+                      });
+                    }}
                   >
                     Download verified notebook copy <Mark name="arrow" />
                   </a>
@@ -2420,10 +2507,6 @@ function LeakageRealityScreen({
                 <span>Time-aware forecasting choice passed</span>
               </div>
             </div>
-            <RepairPreview
-              changed={leakageRepairChanges}
-              preserved={leakageRepairPreserves}
-            />
             <details className="verified-patch-details">
               <summary>See the verified notebook change</summary>
               <p>
@@ -2528,7 +2611,11 @@ function LeakageRealityScreen({
           </p>
         </div>
 
-        <section className="lesson-recap" aria-label="Rule carried forward">
+        <section
+          className="lesson-recap"
+          id="learner-apply-evidence"
+          aria-label="Rule carried forward"
+        >
           <div className="recap-score">
             <span>Customer lesson</span>
             <strong>
@@ -2698,6 +2785,7 @@ function LeakageRealityScreen({
               }}
               editorLabel="Your revised mental model"
               disabled={actionBusy}
+              onAuthoringModeChange={setRevisionMode}
             />
             <button
               className="button button-primary"
@@ -2784,6 +2872,16 @@ function ImbalanceRealityScreen({
     session.mode.kind !== "verified_replay" &&
     (session.mode.kind !== "live_notebook" ||
       session.boundaryMapAuthority !== undefined);
+  const restoreApplyView =
+    session?.state === "REVISION_RECORDED" ||
+    session?.state === "TRANSFER_IN_PROGRESS" ||
+    session?.state === "TRANSFER_FAILED" ||
+    session?.state === "TRANSFER_PASSED" ||
+    session?.state === "PATCH_COMPILING" ||
+    session?.state === "PATCH_REJECTED" ||
+    session?.state === "PATCH_VERIFIED" ||
+    session?.state === "REASONING_DIFF_ISSUED" ||
+    session?.state === "PROOF_CAPSULE_ISSUED";
   const theaterPayload: ExperimentTheaterVerifiedPayload = {
     comparison: {
       title: "Headline accuracy versus rare-class recall",
@@ -2944,6 +3042,7 @@ function ImbalanceRealityScreen({
         key={session?.sessionId ?? result.resultHash}
         prediction={predictionSummary}
         verifiedPayload={theaterPayload}
+        initialView={restoreApplyView ? "apply" : "observe"}
       />
     </main>
   );
@@ -3324,6 +3423,17 @@ export function App() {
     hostedReplay?.beliefSpec.claim ||
     belief?.claim ||
     "The notebook accuracy proves generalization to new customers.";
+  const activeLearnerStage =
+    stage === "landing"
+      ? "question"
+      : currentLearnerStage(stage as StudioStage, session?.state);
+  const activeHint = subjectPackHint(belief?.concept, activeLearnerStage);
+
+  useLearnerStageTiming({
+    sessionId: session?.sessionId ?? null,
+    stage: activeLearnerStage,
+    journeyComplete: sessionProofReady(session),
+  });
 
   const reportError = (caught: unknown) => {
     if (caught instanceof Error && caught.name === "AbortError") return;
@@ -3814,6 +3924,10 @@ export function App() {
     anchor.href = counterLabApi.patchDownloadUrl(session.sessionId);
     anchor.download = "";
     anchor.click();
+    void recordLearnerInteraction(session.sessionId, {
+      kind: "patch.downloaded",
+      stage: "repair",
+    });
   };
 
   const exportCurrentProof = () => {
@@ -3823,6 +3937,10 @@ export function App() {
       anchor.href = counterLabApi.proofCapsuleDownloadUrl(session.sessionId);
       anchor.download = "";
       anchor.click();
+      void recordLearnerInteraction(session.sessionId, {
+        kind: "proof_capsule.downloaded",
+        stage: "repair",
+      });
       return;
     }
     void withRequest(async () => {
@@ -3964,6 +4082,17 @@ export function App() {
         },
       );
       setSession(committed);
+      void recordLearnerInteraction(session.sessionId, {
+        kind: "prediction.recorded",
+        stage: "prediction",
+        choice:
+          prediction === "stays-high"
+            ? "current_explanation"
+            : prediction === "falls"
+              ? "alternative_explanation"
+              : "unsure",
+        confidence,
+      });
       if (mode === "live") {
         await advanceLiveLab(committed);
         return;
@@ -4130,6 +4259,23 @@ export function App() {
               returnToCurrent={returnToCurrent}
               restart={restart}
             />
+          )}
+          {reviewStep === null && session !== null && (
+            <div className="shell learner-stage-hint">
+              <NeedAHint
+                hintId={activeHint.id}
+                hint={activeHint.copy}
+                evidenceHref={activeHint.evidenceHref}
+                evidenceLabel={activeHint.evidenceLabel}
+                onOpen={(hintId) => {
+                  void recordLearnerInteraction(session.sessionId, {
+                    kind: "hint.opened",
+                    stage: activeLearnerStage,
+                    hintId,
+                  });
+                }}
+              />
+            </div>
           )}
           {reviewStep === null && stage === "claim" && (
             <ClaimScreen
