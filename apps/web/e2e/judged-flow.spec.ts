@@ -578,11 +578,18 @@ function observeBrowserFailures(page: Page): BrowserFailureLog {
 async function resetWithBrowserFailureObservation(
   page: Page,
 ): Promise<BrowserFailureLog> {
+  const failures = observeBrowserFailures(page);
   await reset(page);
   await page.waitForLoadState("networkidle");
-  const failures = observeBrowserFailures(page);
-  await page.reload({ waitUntil: "networkidle" });
   return failures;
+}
+
+function expectWithinComprehensionBudget(
+  startedAt: number,
+  maximumMs: number,
+  label: string,
+) {
+  expect(Date.now() - startedAt, label).toBeLessThanOrEqual(maximumMs);
 }
 
 function expectNoBrowserFailures(failures: BrowserFailureLog) {
@@ -1057,6 +1064,7 @@ for (const viewport of beliefBreakViewports) {
   test(`${viewport.name} Landing shows the verified fixed-sample belief break in the first viewport`, async ({
     page,
   }) => {
+    const navigationStartedAt = Date.now();
     await page.setViewportSize(viewport);
     const failures = await resetWithBrowserFailureObservation(page);
 
@@ -1081,6 +1089,11 @@ for (const viewport of beliefBreakViewports) {
       preview,
       /Completed fixed sample preview.*not your current result/i,
     );
+    expectWithinComprehensionBudget(
+      navigationStartedAt,
+      10_000,
+      "Landing fixed-sample belief break must become inspectable within ten seconds",
+    );
     await expectNoHorizontalOverflow(page);
     await captureBeliefBreakScreenshot(
       page,
@@ -1093,6 +1106,7 @@ for (const viewport of beliefBreakViewports) {
   test(`${viewport.name} Judge Mode shows the honest fixed-sample belief break in the first viewport`, async ({
     page,
   }) => {
+    const navigationStartedAt = Date.now();
     const failures = observeBrowserFailures(page);
     await page.setViewportSize(viewport);
     await page.goto("/judge", { waitUntil: "networkidle" });
@@ -1111,6 +1125,11 @@ for (const viewport of beliefBreakViewports) {
         /Approved fixed sample framing.*No GPT-5\.6, Codex, or runner call occurs/i,
       ),
     ).toBeVisible();
+    expectWithinComprehensionBudget(
+      navigationStartedAt,
+      10_000,
+      "Judge fixed-sample belief break must become inspectable within ten seconds",
+    );
     await expectNoHorizontalOverflow(page);
     await captureBeliefBreakScreenshot(
       page,

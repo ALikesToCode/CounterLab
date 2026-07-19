@@ -212,6 +212,33 @@ describe("VerifiedBeliefBreakTheater", () => {
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
+  it("hides previously verified values immediately when the expected result binding changes", async () => {
+    const { rerender } = render(
+      <VerifiedBeliefBreakMechanism
+        presentation="preview"
+        expectedResultHash={sampleResult.resultHash}
+      />,
+    );
+
+    expect(await screen.findByText("98.5%")).toBeVisible();
+    verifier.mockReturnValueOnce(new Promise(() => undefined));
+
+    rerender(
+      <VerifiedBeliefBreakMechanism
+        presentation="preview"
+        expectedResultHash={"0".repeat(64)}
+      />,
+    );
+
+    expect(screen.queryByText("98.5%")).not.toBeInTheDocument();
+    expect(screen.queryByText("59.4%")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("status", {
+        name: /checking verified belief-break evidence/i,
+      }),
+    ).toHaveTextContent(/values stay hidden/i);
+  });
+
   it("fails closed when the checked-in result bytes do not match the fixture", async () => {
     verifier.mockResolvedValue({
       source: {

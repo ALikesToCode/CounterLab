@@ -6664,7 +6664,7 @@ body {
   padding: clamp(20px, 2.5vw, 30px);
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 22px;
+  border-radius: 18px;
   background: var(--night-raised);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
 }
@@ -7072,7 +7072,7 @@ body {
   }
 
   .landing-belief-break > header > p {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .landing-belief-break > header > h2 {

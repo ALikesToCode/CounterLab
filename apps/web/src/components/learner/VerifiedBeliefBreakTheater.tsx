@@ -20,10 +20,11 @@ type VerifiedBeliefBreakEvidence = Readonly<{
 }>;
 
 type IntegrityState =
-  | Readonly<{ status: "checking" }>
-  | Readonly<{ status: "rejected" }>
+  | Readonly<{ status: "checking"; resultBinding: string | null }>
+  | Readonly<{ status: "rejected"; resultBinding: string | null }>
   | Readonly<{
       status: "verified";
+      resultBinding: string | null;
       evidence: VerifiedBeliefBreakEvidence;
     }>;
 
@@ -459,23 +460,33 @@ function IntegrityBoundMechanism({
   expectedResultHash?: string;
   revealFinding: boolean;
 }) {
+  const resultBinding = expectedResultHash ?? null;
   const [integrity, setIntegrity] = useState<IntegrityState>({
     status: "checking",
+    resultBinding,
   });
 
   useEffect(() => {
     let active = true;
+    setIntegrity({ status: "checking", resultBinding });
     void verifyBundledEvidence(expectedResultHash)
       .then((evidence) => {
-        if (active) setIntegrity({ status: "verified", evidence });
+        if (active) {
+          setIntegrity({ status: "verified", resultBinding, evidence });
+        }
       })
       .catch(() => {
-        if (active) setIntegrity({ status: "rejected" });
+        if (active) setIntegrity({ status: "rejected", resultBinding });
       });
     return () => {
       active = false;
     };
-  }, [expectedResultHash]);
+  }, [expectedResultHash, resultBinding]);
+
+  const currentIntegrity: IntegrityState =
+    integrity.resultBinding === resultBinding
+      ? integrity
+      : { status: "checking", resultBinding };
 
   return (
     <div
@@ -488,7 +499,7 @@ function IntegrityBoundMechanism({
         </span>
       ) : null}
 
-      {integrity.status === "checking" ? (
+      {currentIntegrity.status === "checking" ? (
         <div
           className={styles.integrityState}
           role="status"
@@ -500,7 +511,7 @@ function IntegrityBoundMechanism({
         </div>
       ) : null}
 
-      {integrity.status === "rejected" ? (
+      {currentIntegrity.status === "rejected" ? (
         <div
           className={styles.integrityState}
           role="alert"
@@ -514,9 +525,9 @@ function IntegrityBoundMechanism({
         </div>
       ) : null}
 
-      {integrity.status === "verified" ? (
+      {currentIntegrity.status === "verified" ? (
         <VerifiedEvidence
-          evidence={integrity.evidence}
+          evidence={currentIntegrity.evidence}
           presentation={presentation}
           revealFinding={revealFinding}
         />
