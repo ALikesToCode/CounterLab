@@ -15,6 +15,7 @@ import {
   SubjectPackEngineBindingsSchema,
   VexApplicationReportV1Schema,
   VulnerabilityReportV2Schema,
+  assertGrypeOciArchiveBinding,
   canonicalizeScientificEngineSnapshot,
   hashScientificEngineRegistry,
   hashScientificEngineSnapshot,
@@ -31,6 +32,7 @@ const BuildReceiptSchema = z
     sourceTreeSha256: Sha256Schema,
     localImageTag: z.string().regex(/^counterlab-runner:git-[a-f0-9]{40}$/),
     localImageDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    localManifestDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
     localOciArchive: z.string().min(1),
     localOciArchiveSha256: Sha256Schema,
   })
@@ -273,13 +275,21 @@ const scanPaths = [
 ] as const;
 const scanInputs = await Promise.all(scanPaths.map((path) => json(path)));
 const scans = scanInputs.map((input) => GrypeJsonReportSchema.parse(input));
+const expectedScanInput = `<COUNTERLAB_REPO_ROOT>/${receipt.localOciArchive}`;
 const dbIdentity = (scan: (typeof scans)[number]): string =>
   JSON.stringify(scan.descriptor.db.status);
 for (const [index, scan] of scans.entries()) {
+  assertGrypeOciArchiveBinding(scan, {
+    normalizedUserInput: expectedScanInput,
+    imageDigest: receipt.localImageDigest,
+    manifestDigest: receipt.localManifestDigest,
+    sourceCommit: receipt.sourceCommit,
+    sourceTreeSha256: receipt.sourceTreeSha256,
+    sourceUrl: "https://github.com/ALikesToCode/CounterLab",
+    platform: { architecture: "amd64", os: "linux" },
+  });
   const scanPath = scanPaths[index]!;
   const scanInput = object(scanInputs[index], scanPath);
-  const scanSource = object(scanInput.source, `${scanPath}.source`);
-  const scanTarget = object(scanSource.target, `${scanPath}.source.target`);
   const scanDescriptor = object(scanInput.descriptor, `${scanPath}.descriptor`);
   const scanConfiguration = object(
     scanDescriptor.configuration,
@@ -305,20 +315,9 @@ for (const [index, scan] of scans.entries()) {
     scanConfiguration["vex-documents"],
     `${scanPath}.descriptor.configuration.vex-documents`,
   );
-  const scanLabels = object(
-    scanTarget.labels,
-    `${scanPath}.source.target.labels`,
-  );
-  const scanTags = array(scanTarget.tags, `${scanPath}.source.target.tags`);
   if (
-    !scan.source.target.repoDigests.some((value) =>
-      value.endsWith(`@${receipt.localImageDigest}`),
-    ) ||
     scan.descriptor.version !== "0.112.0" ||
     scan.descriptor.db.status.valid !== true ||
-    scanTarget.userInput !== receipt.localImageTag ||
-    scanTarget.imageID !== receipt.localImageDigest ||
-    !scanTags.includes(receipt.localImageTag) ||
     JSON.stringify(scanConfiguration.output) !== JSON.stringify(["json"]) ||
     typeof scanConfiguration.file !== "string" ||
     !scanConfiguration.file.endsWith(`/${STAGED[scanPath]}`) ||
@@ -343,9 +342,6 @@ for (const [index, scan] of scans.entries()) {
     scanDatabase["require-update-check"] !== false ||
     configuredVex.length !== (index === 0 ? 0 : 1) ||
     scan.ignoredMatches.length !== (index === 1 ? 1 : 0) ||
-    scanLabels["org.opencontainers.image.revision"] !== receipt.sourceCommit ||
-    scanLabels["io.counterlab.source-tree-sha256"] !==
-      receipt.sourceTreeSha256 ||
     dbIdentity(scan) !== dbIdentity(scans[0]!)
   ) {
     throw new Error(
@@ -374,6 +370,14 @@ for (const [label, digest] of [
 ] as const) {
   if (digest !== receipt.localImageDigest) {
     throw new Error(`${label} does not bind the build receipt image`);
+  }
+}
+for (const [label, digest] of [
+  ["vulnerability report", vulnerability.manifestDigest],
+  ["VEX application", vexApplication.manifestDigest],
+] as const) {
+  if (digest !== receipt.localManifestDigest) {
+    throw new Error(`${label} does not bind the build receipt OCI manifest`);
   }
 }
 if (

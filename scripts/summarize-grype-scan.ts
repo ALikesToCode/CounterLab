@@ -1,18 +1,24 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { readFile, realpath, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 
 import {
   GrypeJsonReportSchema,
   ReachabilityReportV2Schema,
   summarizeGrypeScan,
 } from "../packages/scientific-engine-registry/src/index.js";
+import {
+  containedInputFile,
+  containedNewOutputFile,
+  parseStrictNameValueArgs,
+} from "./repository-cli-paths.js";
 
 type Args = {
   raw: string;
   reachability: string;
   output: string;
   imageDigest: string;
+  manifestDigest: string;
   environmentId: string;
   environmentKind: "local_candidate" | "cloudflare_production";
   rawEvidenceId: string;
@@ -23,19 +29,31 @@ type Args = {
 
 function usage(): never {
   throw new Error(
-    "Usage: tsx scripts/summarize-grype-scan.ts --raw <grype.json> --reachability <report.json> --output <report.json> --image-digest sha256:<digest> --environment-id <id> --environment-kind <local_candidate|cloudflare_production> --raw-evidence-id <id> --scanner-binary-sha256 <sha256> --vex-evidence-id <id> --reachability-evidence-id <id>",
+    "Usage: tsx scripts/summarize-grype-scan.ts --raw <grype.json> --reachability <report.json> --output <report.json> --image-digest sha256:<digest> --manifest-digest sha256:<digest> --environment-id <id> --environment-kind <local_candidate|cloudflare_production> --raw-evidence-id <id> --scanner-binary-sha256 <sha256> --vex-evidence-id <id> --reachability-evidence-id <id>",
   );
 }
 
 function parseArgs(argv: string[]): Args {
-  const values = new Map<string, string>();
-  for (let index = 0; index < argv.length; index += 2) {
-    const key = argv[index];
-    const value = argv[index + 1];
-    if (!key?.startsWith("--") || !value || value.startsWith("--")) usage();
-    values.set(key.slice(2), value);
+  const allowed = new Set([
+    "--raw",
+    "--reachability",
+    "--output",
+    "--image-digest",
+    "--manifest-digest",
+    "--environment-id",
+    "--environment-kind",
+    "--raw-evidence-id",
+    "--scanner-binary-sha256",
+    "--vex-evidence-id",
+    "--reachability-evidence-id",
+  ]);
+  let values: Map<string, string>;
+  try {
+    values = parseStrictNameValueArgs(argv, allowed);
+  } catch {
+    usage();
   }
-  const required = (key: string): string => values.get(key) ?? usage();
+  const required = (key: string): string => values.get(`--${key}`) ?? usage();
   const environmentKind = required("environment-kind");
   if (
     environmentKind !== "local_candidate" &&
@@ -48,6 +66,7 @@ function parseArgs(argv: string[]): Args {
     reachability: required("reachability"),
     output: required("output"),
     imageDigest: required("image-digest"),
+    manifestDigest: required("manifest-digest"),
     environmentId: required("environment-id"),
     environmentKind,
     rawEvidenceId: required("raw-evidence-id"),
@@ -59,9 +78,19 @@ function parseArgs(argv: string[]): Args {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  const root = await realpath(resolve(import.meta.dirname, ".."));
+  const [rawPath, reachabilityPath, output] = await Promise.all([
+    containedInputFile(root, args.raw, "Grype summary raw input"),
+    containedInputFile(
+      root,
+      args.reachability,
+      "Grype summary reachability input",
+    ),
+    containedNewOutputFile(root, args.output, "Grype summary output"),
+  ]);
   const [rawBytes, reachabilityBytes] = await Promise.all([
-    readFile(resolve(args.raw)),
-    readFile(resolve(args.reachability), "utf8"),
+    readFile(rawPath),
+    readFile(reachabilityPath, "utf8"),
   ]);
   const raw = GrypeJsonReportSchema.parse(
     JSON.parse(rawBytes.toString("utf8")),
@@ -94,6 +123,7 @@ async function main(): Promise<void> {
     environmentId: args.environmentId,
     environmentKind: args.environmentKind,
     imageDigest: args.imageDigest,
+    manifestDigest: args.manifestDigest,
     rawScan: {
       evidenceId: args.rawEvidenceId,
       sha256: createHash("sha256").update(rawBytes).digest("hex"),
@@ -119,9 +149,11 @@ async function main(): Promise<void> {
       "The reviewed High exception is limited to the exact image digest and bounded fixed hosted entrypoints named by the linked reachability report.",
     ],
   });
-  const output = resolve(args.output);
-  await mkdir(dirname(output), { recursive: true });
-  await writeFile(output, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  await writeFile(output, `${JSON.stringify(report, null, 2)}\n`, {
+    encoding: "utf8",
+    flag: "wx",
+    mode: 0o600,
+  });
   process.stdout.write(
     `${report.policy.status}\t${report.policy.fixableCriticalCount} fixable Critical\t${report.policy.fixableHighCount} fixable High\n`,
   );

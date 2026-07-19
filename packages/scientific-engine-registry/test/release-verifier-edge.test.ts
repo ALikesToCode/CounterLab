@@ -1,9 +1,8 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
   loadScientificEngineSnapshot,
@@ -14,19 +13,22 @@ import {
 } from "../../../scripts/verify-scientific-engines.js";
 
 const repositoryRoot = resolve(import.meta.dirname, "../../..");
-const temporaryRoots: string[] = [];
+const fixtureRoot = resolve(
+  repositoryRoot,
+  "node_modules/.cache/counterlab-v6.1/release-verifier-edge",
+);
+const fixtureNonce = `${Date.now()}-${process.pid}`;
+let fixtureSequence = 0;
 
 async function createTemporaryRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "counterlab-engine-verifier-"));
-  temporaryRoots.push(root);
+  fixtureSequence += 1;
+  const root = resolve(
+    fixtureRoot,
+    `counterlab-engine-verifier-${fixtureNonce}-${fixtureSequence}`,
+  );
+  await mkdir(root, { recursive: true });
   return root;
 }
-
-afterEach(async () => {
-  await Promise.all(
-    temporaryRoots.splice(0).map((root) => rm(root, { recursive: true })),
-  );
-});
 
 describe("scientific engine release verifier edge cases", () => {
   it("rejects evidence paths that escape the repository root", async () => {

@@ -112,6 +112,7 @@ if (
   !sha.test(value.sourceTreeSha256 ?? "") ||
   value.localImageTag !== `counterlab-runner:git-${value.sourceCommit}` ||
   !/^sha256:[a-f0-9]{64}$/.test(value.localImageDigest ?? "") ||
+  !/^sha256:[a-f0-9]{64}$/.test(value.localManifestDigest ?? "") ||
   !sha.test(value.localOciArchiveSha256 ?? "") ||
   typeof value.localOciArchive !== "string"
 ) throw new Error("Build receipt identity is invalid");
@@ -120,12 +121,13 @@ for (const entry of [
   value.sourceTreeSha256,
   value.localImageTag,
   value.localImageDigest,
+  value.localManifestDigest,
   value.localOciArchive,
   value.localOciArchiveSha256,
 ]) process.stdout.write(`${entry}\n`);
 NODE
 )
-[[ "${#BUILD_IDENTITY[@]}" -eq 6 ]] || {
+[[ "${#BUILD_IDENTITY[@]}" -eq 7 ]] || {
   echo "Build receipt did not expose one exact image identity." >&2
   exit 2
 }
@@ -133,8 +135,9 @@ SOURCE_COMMIT="${BUILD_IDENTITY[0]}"
 SOURCE_TREE_SHA256="${BUILD_IDENTITY[1]}"
 IMAGE="${BUILD_IDENTITY[2]}"
 IMAGE_DIGEST="${BUILD_IDENTITY[3]}"
-OCI_ARCHIVE="$(repo_path "${BUILD_IDENTITY[4]}")"
-OCI_ARCHIVE_SHA256="${BUILD_IDENTITY[5]}"
+MANIFEST_DIGEST="${BUILD_IDENTITY[4]}"
+OCI_ARCHIVE="$(repo_path "${BUILD_IDENTITY[5]}")"
+OCI_ARCHIVE_SHA256="${BUILD_IDENTITY[6]}"
 
 [[ "$(git rev-parse HEAD)" == "${SOURCE_COMMIT}" ]] || {
   echo "Evidence refresh requires HEAD to equal the runner source commit." >&2
@@ -402,6 +405,7 @@ node --import tsx scripts/summarize-grype-scan.ts \
   --reachability "${WORK}/reachability.json" \
   --output "${WORK}/vulnerability-report.json" \
   --image-digest "${IMAGE_DIGEST}" \
+  --manifest-digest "${MANIFEST_DIGEST}" \
   --environment-id counterlab-runner-linux-amd64-v2 \
   --environment-kind local_candidate \
   --raw-evidence-id grype-raw-scan-v2 \
@@ -431,6 +435,7 @@ node --import tsx scripts/summarize-vex-application.ts \
   --vulnerability-report "${WORK}/vulnerability-report.json" \
   --output "${WORK}/vex-application-report.json" \
   --image-digest "${IMAGE_DIGEST}" \
+  --manifest-digest "${MANIFEST_DIGEST}" \
   --scanner-binary-sha256 d515f53bd5ee4930e144c6ea14a2659084763c336a1833b723db0b05080fcaf5 \
   --baseline-evidence-id grype-raw-scan-v2 \
   --applied-evidence-id grype-vex-applied-v1 \

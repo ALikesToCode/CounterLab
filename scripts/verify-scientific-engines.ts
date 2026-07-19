@@ -1096,6 +1096,16 @@ export async function verifyVulnerabilityReport(
       return findings;
     }
     const reportV2 = parsedReport.data;
+    const reportManifestDigest = reportV2.manifestDigest;
+    if (!reportManifestDigest) {
+      findings.push(
+        finding(
+          "VULNERABILITY_MANIFEST_BINDING_MISSING",
+          record.path,
+          "Current vulnerability evidence must retain the exact OCI manifest digest.",
+        ),
+      );
+    }
     const rawRecord = snapshot.evidenceCatalog.records.find(
       (candidate) => candidate.id === reportV2.rawScan.evidenceId,
     );
@@ -1111,12 +1121,13 @@ export async function verifyVulnerabilityReport(
           "The summarized report must bind the preserved raw scanner output.",
         ),
       );
-    } else {
+    } else if (reportManifestDigest) {
       const rawValue = await json(resolve(root, rawRecord.path));
       const recomputed = summarizeGrypeScan(rawValue, {
         environmentId: reportV2.environmentId,
         environmentKind: reportV2.environmentKind,
         imageDigest: reportV2.imageDigest,
+        manifestDigest: reportManifestDigest,
         rawScan: reportV2.rawScan,
         scannerBinarySha256: reportV2.scanner.binarySha256,
         reviewedHighExceptions: reportV2.reviewedExceptions.map(
@@ -1252,6 +1263,7 @@ export async function verifyVulnerabilityReport(
     }
 
     const application = parsedVexApplication.data;
+    const applicationManifestDigest = application.manifestDigest;
     const applicationInputRecords = [
       application.inputs.baseline,
       application.inputs.applied,
@@ -1281,42 +1293,60 @@ export async function verifyVulnerabilityReport(
       );
       return findings;
     }
+    const exactManifestBinding =
+      applicationManifestDigest !== undefined &&
+      reportManifestDigest !== undefined &&
+      applicationManifestDigest === reportManifestDigest;
+    if (!exactManifestBinding) {
+      findings.push(
+        finding(
+          "VEX_MANIFEST_BINDING_MISSING",
+          vexApplicationRecord.path,
+          "Current VEX application evidence must retain the vulnerability report's exact OCI manifest digest.",
+        ),
+      );
+    }
     const [baselineInput, appliedInput, negativeInput] = await Promise.all(
       applicationInputRecords.map(({ record: inputRecord }) =>
         json(resolve(root, inputRecord!.path)),
       ),
     );
-    const recomputedApplication = summarizeVexApplication(
-      baselineInput,
-      appliedInput,
-      negativeInput,
-      {
-        imageDigest: application.imageDigest,
-        scannerBinarySha256: application.scanner.binarySha256,
-        vexSha256: application.vexSha256,
-        inputs: application.inputs,
-        expectedFinding: {
-          id: application.suppressedFinding.id,
-          namespace: application.suppressedFinding.namespace,
-          package: application.suppressedFinding.package,
-          version: application.suppressedFinding.version,
-          artifactType: application.suppressedFinding.artifactType,
-          purl: application.suppressedFinding.purl,
-          fingerprint: application.suppressedFinding.fingerprint,
+    if (exactManifestBinding) {
+      const recomputedApplication = summarizeVexApplication(
+        baselineInput,
+        appliedInput,
+        negativeInput,
+        {
+          imageDigest: application.imageDigest,
+          manifestDigest: applicationManifestDigest,
+          scannerBinarySha256: application.scanner.binarySha256,
+          vexSha256: application.vexSha256,
+          inputs: application.inputs,
+          expectedFinding: {
+            id: application.suppressedFinding.id,
+            namespace: application.suppressedFinding.namespace,
+            package: application.suppressedFinding.package,
+            version: application.suppressedFinding.version,
+            artifactType: application.suppressedFinding.artifactType,
+            purl: application.suppressedFinding.purl,
+            fingerprint: application.suppressedFinding.fingerprint,
+          },
+          negativeSubcomponent: application.negativeControl.subcomponent,
+          limitations: application.limitations,
         },
-        negativeSubcomponent: application.negativeControl.subcomponent,
-        limitations: application.limitations,
-      },
-    );
-    if (JSON.stringify(recomputedApplication) !== JSON.stringify(application)) {
-      findings.push(
-        finding(
-          "VEX_APPLICATION_SUMMARY_MISMATCH",
-          vexApplicationRecord.path,
-          "VEX suppression counts and match multisets must derive from the preserved scanner outputs.",
-        ),
       );
-      return findings;
+      if (
+        JSON.stringify(recomputedApplication) !== JSON.stringify(application)
+      ) {
+        findings.push(
+          finding(
+            "VEX_APPLICATION_SUMMARY_MISMATCH",
+            vexApplicationRecord.path,
+            "VEX suppression counts and match multisets must derive from the preserved scanner outputs.",
+          ),
+        );
+        return findings;
+      }
     }
 
     const python = manifest.runtimes.find(

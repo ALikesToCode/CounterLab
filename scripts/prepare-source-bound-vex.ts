@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import { lstat, readFile, realpath, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 
@@ -7,6 +8,7 @@ import { z } from "zod";
 import {
   GrypeJsonReportSchema,
   OpenVexDocumentSchema,
+  assertGrypeOciArchiveBinding,
 } from "../packages/scientific-engine-registry/src/index.js";
 
 const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
@@ -14,14 +16,16 @@ const BuildReceiptSchema = z.strictObject({
   schemaVersion: z.literal("3"),
   status: z.literal("BUILT"),
   sourceCommit: z.string().regex(/^[a-f0-9]{40}$/),
+  sourceTreeSha256: Sha256Schema,
   localImageTag: z.string().regex(/^counterlab-runner:git-[a-f0-9]{40}$/),
   localImageDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+  localManifestDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
   localOciArchive: z.string().min(1),
   localOciArchiveSha256: Sha256Schema,
 });
 const KevCatalogSchema = z
   .object({
-    title: z.literal("CISA Known Exploited Vulnerabilities Catalog"),
+    title: z.literal("CISA Catalog of Known Exploited Vulnerabilities"),
     catalogVersion: z.string().trim().min(1),
     dateReleased: z.string().trim().min(1),
     count: z.number().int().min(1_000),
@@ -191,13 +195,38 @@ if (receipt.localImageTag !== `counterlab-runner:git-${receipt.sourceCommit}`) {
   throw new Error("Build receipt image tag is not source-bound");
 }
 const raw = GrypeJsonReportSchema.parse(JSON.parse(rawBytes.toString("utf8")));
-if (
-  !raw.source.target.repoDigests.some((value) =>
-    value.endsWith(`@${receipt.localImageDigest}`),
-  )
-) {
-  throw new Error("Grype source does not bind the build receipt image digest");
+const archive = resolve(root, receipt.localOciArchive);
+if (!isContained(archive)) {
+  throw new Error("Build receipt OCI archive escaped the repository");
 }
+const requestedArchiveMetadata = await lstat(archive);
+const physicalArchive = await realpath(archive);
+const archiveMetadata = await lstat(physicalArchive);
+if (
+  requestedArchiveMetadata.isSymbolicLink() ||
+  archiveMetadata.isSymbolicLink() ||
+  !archiveMetadata.isFile() ||
+  !isContained(physicalArchive)
+) {
+  throw new Error("Build receipt OCI archive is not a contained regular file");
+}
+const archiveHash = createHash("sha256");
+for await (const chunk of createReadStream(physicalArchive)) {
+  archiveHash.update(chunk);
+}
+if (archiveHash.digest("hex") !== receipt.localOciArchiveSha256) {
+  throw new Error("Build receipt OCI archive hash does not match its bytes");
+}
+const expectedUserInput = `<COUNTERLAB_REPO_ROOT>/${relative(root, archive)}`;
+assertGrypeOciArchiveBinding(raw, {
+  normalizedUserInput: expectedUserInput,
+  imageDigest: receipt.localImageDigest,
+  manifestDigest: receipt.localManifestDigest,
+  sourceCommit: receipt.sourceCommit,
+  sourceTreeSha256: receipt.sourceTreeSha256,
+  sourceUrl: "https://github.com/ALikesToCode/CounterLab",
+  platform: { architecture: "amd64", os: "linux" },
+});
 const high = raw.matches.filter(
   (match) =>
     match.vulnerability.id === "CVE-2026-15308" &&

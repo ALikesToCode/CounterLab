@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { z } from "zod";
 
 import {
@@ -9,6 +11,12 @@ import {
 
 const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
 const ImageDigestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
+const RepoDigestSchema = z.string().regex(/^[^@\s]+@sha256:[a-f0-9]{64}$/);
+const Base64JsonSchema = z
+  .string()
+  .min(4)
+  .max(4 * 1024 * 1024)
+  .regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/);
 const StableIdSchema = z
   .string()
   .min(1)
@@ -70,8 +78,42 @@ export const GrypeJsonReportSchema = z.object({
   source: z.object({
     type: z.literal("image"),
     target: z.object({
-      repoDigests: z.array(z.string().trim().min(1)).min(1),
+      userInput: z.string().trim().min(1),
+      imageID: ImageDigestSchema,
+      manifestDigest: ImageDigestSchema,
+      mediaType: z.string().trim().min(1),
+      tags: z.array(z.string().trim().min(1)),
+      repoDigests: z.array(RepoDigestSchema),
+      architecture: z.string(),
+      os: z.string(),
+      labels: z.record(z.string(), z.string()),
+      manifest: Base64JsonSchema,
+      config: Base64JsonSchema,
     }),
+  }),
+});
+
+export const GrypeImageBindingSchema = z.strictObject({
+  imageDigest: ImageDigestSchema,
+  manifestDigest: ImageDigestSchema.optional(),
+});
+
+export const GrypeOciArchiveBindingSchema = z.strictObject({
+  normalizedUserInput: z
+    .string()
+    .regex(/^<COUNTERLAB_REPO_ROOT>\/[A-Za-z0-9._/-]+$/)
+    .refine(
+      (value) => !value.split("/").includes(".."),
+      "normalized OCI input must not traverse a parent",
+    ),
+  imageDigest: ImageDigestSchema,
+  manifestDigest: ImageDigestSchema,
+  sourceCommit: z.string().regex(/^[a-f0-9]{40}$/),
+  sourceTreeSha256: Sha256Schema,
+  sourceUrl: z.literal("https://github.com/ALikesToCode/CounterLab"),
+  platform: z.strictObject({
+    architecture: z.literal("amd64"),
+    os: z.literal("linux"),
   }),
 });
 
@@ -84,6 +126,7 @@ export const GrypeSummaryOptionsSchema = z.strictObject({
   environmentId: StableIdSchema,
   environmentKind: z.enum(["local_candidate", "cloudflare_production"]),
   imageDigest: ImageDigestSchema,
+  manifestDigest: ImageDigestSchema,
   rawScan: z.strictObject({
     evidenceId: StableIdSchema,
     sha256: Sha256Schema,
@@ -94,6 +137,10 @@ export const GrypeSummaryOptionsSchema = z.strictObject({
 });
 
 export type GrypeJsonReport = z.infer<typeof GrypeJsonReportSchema>;
+export type GrypeImageBinding = z.infer<typeof GrypeImageBindingSchema>;
+export type GrypeOciArchiveBinding = z.infer<
+  typeof GrypeOciArchiveBindingSchema
+>;
 export type GrypeSummaryOptions = z.infer<typeof GrypeSummaryOptionsSchema>;
 
 const ScanEvidenceSchema = z.strictObject({
@@ -103,6 +150,7 @@ const ScanEvidenceSchema = z.strictObject({
 
 export const VexApplicationOptionsSchema = z.strictObject({
   imageDigest: ImageDigestSchema,
+  manifestDigest: ImageDigestSchema,
   scannerBinarySha256: Sha256Schema,
   vexSha256: Sha256Schema,
   inputs: z.strictObject({
@@ -127,6 +175,9 @@ export const VexApplicationReportV1Schema = z.strictObject({
   schemaVersion: z.literal("1"),
   evidenceKind: z.literal("vex-application-report"),
   imageDigest: ImageDigestSchema,
+  // Historical v1 evidence remains parseable, while current release
+  // verification requires and recomputes this exact OCI manifest identity.
+  manifestDigest: ImageDigestSchema.optional(),
   scanner: z.strictObject({
     id: z.literal("grype"),
     exactVersion: z.string().trim().min(1),
@@ -178,6 +229,32 @@ export type VexApplicationReportV1 = z.infer<
   typeof VexApplicationReportV1Schema
 >;
 
+const CurrentGrypeReleaseBindingSchema = z.strictObject({
+  imageDigest: ImageDigestSchema,
+  manifestDigest: ImageDigestSchema,
+});
+
+export function assertCurrentGrypeReleaseEvidenceBinding(
+  vulnerabilityInput: unknown,
+  vexApplicationInput: unknown,
+  expectedInput: unknown,
+): void {
+  const vulnerability = VulnerabilityReportV2Schema.parse(vulnerabilityInput);
+  const vexApplication =
+    VexApplicationReportV1Schema.parse(vexApplicationInput);
+  const expected = CurrentGrypeReleaseBindingSchema.parse(expectedInput);
+  if (
+    vulnerability.imageDigest !== expected.imageDigest ||
+    vulnerability.manifestDigest !== expected.manifestDigest ||
+    vexApplication.imageDigest !== expected.imageDigest ||
+    vexApplication.manifestDigest !== expected.manifestDigest
+  ) {
+    throw new Error(
+      "Current vulnerability and VEX evidence must bind the exact built OCI config and manifest digests.",
+    );
+  }
+}
+
 function emptySeverityCounts(): Record<(typeof severities)[number], number> {
   return {
     Critical: 0,
@@ -204,14 +281,156 @@ function normalizeTimestamp(value: string): string {
 const compareCodeUnits = (left: string, right: string): number =>
   left < right ? -1 : left > right ? 1 : 0;
 
-function assertImageBinding(raw: GrypeJsonReport, imageDigest: string): void {
+const EmbeddedManifestSchema = z.object({
+  schemaVersion: z.literal(2),
+  mediaType: z.string().trim().min(1),
+  config: z.object({
+    mediaType: z.string().trim().min(1),
+    digest: ImageDigestSchema,
+    size: z.number().int().nonnegative(),
+  }),
+  layers: z.array(
+    z.object({
+      mediaType: z.string().trim().min(1),
+      digest: ImageDigestSchema,
+      size: z.number().int().nonnegative(),
+    }),
+  ),
+});
+
+const EmbeddedConfigSchema = z.object({
+  architecture: z.string().trim().min(1),
+  os: z.string().trim().min(1),
+  config: z.object({
+    Labels: z.record(z.string(), z.string()),
+  }),
+});
+
+function decodeEmbeddedJson(
+  value: string,
+  label: string,
+): { bytes: Buffer; value: unknown } {
+  const bytes = Buffer.from(value, "base64");
+  if (bytes.toString("base64") !== value) {
+    throw new Error(`Raw Grype embedded ${label} is not canonical base64.`);
+  }
+  try {
+    return { bytes, value: JSON.parse(bytes.toString("utf8")) };
+  } catch {
+    throw new Error(`Raw Grype embedded ${label} is not valid JSON.`);
+  }
+}
+
+function sha256Digest(value: Uint8Array): string {
+  return `sha256:${createHash("sha256").update(value).digest("hex")}`;
+}
+
+function equalStringRecords(
+  left: Record<string, string>,
+  right: Record<string, string>,
+): boolean {
+  const leftEntries = Object.entries(left).sort(([a], [b]) =>
+    compareCodeUnits(a, b),
+  );
+  const rightEntries = Object.entries(right).sort(([a], [b]) =>
+    compareCodeUnits(a, b),
+  );
+  return JSON.stringify(leftEntries) === JSON.stringify(rightEntries);
+}
+
+function assertEmbeddedImageIdentity(raw: GrypeJsonReport): {
+  manifest: z.infer<typeof EmbeddedManifestSchema>;
+  config: z.infer<typeof EmbeddedConfigSchema>;
+} {
+  const { target } = raw.source;
+  const embeddedManifest = decodeEmbeddedJson(target.manifest, "manifest");
+  const embeddedConfig = decodeEmbeddedJson(target.config, "config");
+  const manifest = EmbeddedManifestSchema.parse(embeddedManifest.value);
+  const config = EmbeddedConfigSchema.parse(embeddedConfig.value);
   if (
-    !raw.source.target.repoDigests.some((value) =>
-      value.endsWith(`@${imageDigest}`),
-    )
+    sha256Digest(embeddedManifest.bytes) !== target.manifestDigest ||
+    sha256Digest(embeddedConfig.bytes) !== target.imageID ||
+    manifest.mediaType !== target.mediaType ||
+    manifest.config.digest !== target.imageID ||
+    manifest.config.size !== embeddedConfig.bytes.byteLength ||
+    !equalStringRecords(config.config.Labels, target.labels) ||
+    (target.architecture !== "" &&
+      target.architecture !== config.architecture) ||
+    (target.os !== "" && target.os !== config.os)
   ) {
     throw new Error(
-      "Raw Grype source repoDigests do not bind the requested OCI image digest.",
+      "Raw Grype embedded manifest or config contradicts the reported image identity.",
+    );
+  }
+  return { manifest, config };
+}
+
+export function assertGrypeImageBinding(
+  rawInput: unknown,
+  bindingInput: GrypeImageBinding,
+): void {
+  const raw = GrypeJsonReportSchema.parse(rawInput);
+  const binding = GrypeImageBindingSchema.parse(bindingInput);
+  const { target } = raw.source;
+  if (target.imageID !== binding.imageDigest) {
+    throw new Error(
+      "Raw Grype source imageID does not bind the requested OCI image digest.",
+    );
+  }
+  if (
+    binding.manifestDigest !== undefined &&
+    target.manifestDigest !== binding.manifestDigest
+  ) {
+    throw new Error(
+      "Raw Grype source manifestDigest does not bind the requested OCI manifest digest.",
+    );
+  }
+  assertEmbeddedImageIdentity(raw);
+  if (
+    target.repoDigests.length > 0 &&
+    !target.repoDigests.every((value) => {
+      const digest = value.slice(value.lastIndexOf("@") + 1);
+      return digest === target.imageID || digest === target.manifestDigest;
+    })
+  ) {
+    throw new Error(
+      "Raw Grype source repoDigests contradict the reported image and manifest digests.",
+    );
+  }
+}
+
+export function assertGrypeOciArchiveBinding(
+  rawInput: unknown,
+  bindingInput: GrypeOciArchiveBinding,
+): void {
+  const raw = GrypeJsonReportSchema.parse(rawInput);
+  const binding = GrypeOciArchiveBindingSchema.parse(bindingInput);
+  assertGrypeImageBinding(raw, {
+    imageDigest: binding.imageDigest,
+    manifestDigest: binding.manifestDigest,
+  });
+  const { manifest, config } = assertEmbeddedImageIdentity(raw);
+  const { target } = raw.source;
+  const expectedLabels = {
+    "io.counterlab.source-tree-sha256": binding.sourceTreeSha256,
+    "org.opencontainers.image.licenses": "MIT",
+    "org.opencontainers.image.revision": binding.sourceCommit,
+    "org.opencontainers.image.source": binding.sourceUrl,
+  };
+  if (
+    target.userInput !== binding.normalizedUserInput ||
+    target.mediaType !== "application/vnd.oci.image.manifest.v1+json" ||
+    manifest.config.mediaType !== "application/vnd.oci.image.config.v1+json" ||
+    target.tags.length !== 0 ||
+    target.repoDigests.length !== 0 ||
+    target.architecture !== "" ||
+    target.os !== "" ||
+    config.architecture !== binding.platform.architecture ||
+    config.os !== binding.platform.os ||
+    !equalStringRecords(target.labels, expectedLabels)
+  ) {
+    throw new Error(
+      "Raw Grype source does not bind the exact untagged source-bound OCI archive.",
     );
   }
 }
@@ -263,7 +482,10 @@ export function summarizeGrypeScan(
       "Raw vulnerability authority input must be an unsuppressed Grype scan.",
     );
   }
-  assertImageBinding(raw, options.imageDigest);
+  assertGrypeImageBinding(raw, {
+    imageDigest: options.imageDigest,
+    manifestDigest: options.manifestDigest,
+  });
   const allFindingsBySeverity = emptySeverityCounts();
   const fixableByFingerprint = new Map<
     string,
@@ -382,6 +604,7 @@ export function summarizeGrypeScan(
     environmentId: options.environmentId,
     environmentKind: options.environmentKind,
     imageDigest: options.imageDigest,
+    manifestDigest: options.manifestDigest,
     rawScan: options.rawScan,
     scanner: {
       id: "grype",
@@ -426,7 +649,20 @@ export function summarizeVexApplication(
   ];
   const options = VexApplicationOptionsSchema.parse(optionsInput);
   for (const scan of [baseline, applied, negative]) {
-    assertImageBinding(scan, options.imageDigest);
+    assertGrypeImageBinding(scan, {
+      imageDigest: options.imageDigest,
+      manifestDigest: options.manifestDigest,
+    });
+  }
+  const sourceIdentity = (scan: GrypeJsonReport): string =>
+    JSON.stringify(scan.source.target);
+  if (
+    sourceIdentity(baseline) !== sourceIdentity(applied) ||
+    sourceIdentity(baseline) !== sourceIdentity(negative)
+  ) {
+    throw new Error(
+      "VEX application scans must bind one exact image source identity.",
+    );
   }
   const scannerIdentity = (scan: GrypeJsonReport): string =>
     JSON.stringify({
@@ -503,6 +739,7 @@ export function summarizeVexApplication(
     schemaVersion: "1",
     evidenceKind: "vex-application-report",
     imageDigest: options.imageDigest,
+    manifestDigest: options.manifestDigest,
     scanner: {
       id: "grype",
       exactVersion: baseline.descriptor.version,

@@ -34,20 +34,51 @@ const rawFixture = JSON.parse(readFileSync(trackedRawPath, "utf8")) as {
   source: {
     target: {
       imageID: string;
+      manifestDigest: string;
       labels: Record<string, string>;
     };
   };
 };
 const sourceCommit =
   rawFixture.source.target.labels["org.opencontainers.image.revision"];
-const imageDigest = rawFixture.source.target.imageID;
+const sourceTreeSha256 =
+  rawFixture.source.target.labels["io.counterlab.source-tree-sha256"];
 const generatedAt = "2026-07-19T12:00:00.000Z";
 const runNonce = `${Date.now()}${process.pid}`;
 let fixtureSequence = 0;
 
-if (sourceCommit === undefined) {
-  throw new Error("Tracked scanner fixture lacks a source revision label");
+if (sourceCommit === undefined || sourceTreeSha256 === undefined) {
+  throw new Error("Tracked scanner fixture lacks source binding labels");
 }
+
+const sourceLabels = {
+  "io.counterlab.source-tree-sha256": sourceTreeSha256,
+  "org.opencontainers.image.licenses": "MIT",
+  "org.opencontainers.image.revision": sourceCommit,
+  "org.opencontainers.image.source":
+    "https://github.com/ALikesToCode/CounterLab",
+};
+const embeddedConfig = Buffer.from(
+  JSON.stringify({
+    architecture: "amd64",
+    os: "linux",
+    config: { Labels: sourceLabels },
+  }),
+);
+const imageDigest = `sha256:${sha256(embeddedConfig)}`;
+const embeddedManifest = Buffer.from(
+  JSON.stringify({
+    schemaVersion: 2,
+    mediaType: "application/vnd.oci.image.manifest.v1+json",
+    config: {
+      mediaType: "application/vnd.oci.image.config.v1+json",
+      digest: imageDigest,
+      size: embeddedConfig.byteLength,
+    },
+    layers: [],
+  }),
+);
+const manifestDigest = `sha256:${sha256(embeddedManifest)}`;
 
 function repositoryRelative(path: string): string {
   return relative(root, path);
@@ -100,7 +131,46 @@ function createPrepareFixture(options: PrepareFixtureOptions = {}) {
   }
 
   copyFileSync(trackedRunnerSbomPath, containerSbom);
-  copyFileSync(trackedRawPath, raw);
+  const ociArchive = resolve(stage, "runner.oci");
+  const ociArchiveBytes = Buffer.from("counterlab-test-oci-archive\n", "utf8");
+  writeFileSync(ociArchive, ociArchiveBytes, { mode: 0o600 });
+  const sourceBoundRaw = structuredClone(rawFixture) as typeof rawFixture & {
+    source: {
+      type: "image";
+      target: {
+        userInput: string;
+        imageID: string;
+        manifestDigest: string;
+        mediaType: string;
+        tags: string[];
+        repoDigests: string[];
+        architecture: string;
+        os: string;
+        labels: Record<string, string>;
+        manifest: string;
+        config: string;
+      };
+    };
+  };
+  sourceBoundRaw.source.type = "image";
+  sourceBoundRaw.source.target = {
+    ...sourceBoundRaw.source.target,
+    userInput: `<COUNTERLAB_REPO_ROOT>/${repositoryRelative(ociArchive)}`,
+    imageID: imageDigest,
+    manifestDigest,
+    mediaType: "application/vnd.oci.image.manifest.v1+json",
+    tags: [],
+    repoDigests: [],
+    architecture: "",
+    os: "",
+    labels: sourceLabels,
+    manifest: embeddedManifest.toString("base64"),
+    config: embeddedConfig.toString("base64"),
+  };
+  writeFileSync(raw, `${JSON.stringify(sourceBoundRaw, null, 2)}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
   writeFileSync(
     receipt,
     `${JSON.stringify(
@@ -108,10 +178,12 @@ function createPrepareFixture(options: PrepareFixtureOptions = {}) {
         schemaVersion: "3",
         status: "BUILT",
         sourceCommit,
+        sourceTreeSha256,
         localImageTag: `counterlab-runner:git-${sourceCommit}`,
         localImageDigest: imageDigest,
-        localOciArchive: repositoryRelative(resolve(stage, "runner.oci")),
-        localOciArchiveSha256: "a".repeat(64),
+        localManifestDigest: manifestDigest,
+        localOciArchive: repositoryRelative(ociArchive),
+        localOciArchiveSha256: sha256(ociArchiveBytes),
       },
       null,
       2,
@@ -122,7 +194,7 @@ function createPrepareFixture(options: PrepareFixtureOptions = {}) {
     kev,
     `${JSON.stringify(
       {
-        title: "CISA Known Exploited Vulnerabilities Catalog",
+        title: "CISA Catalog of Known Exploited Vulnerabilities",
         catalogVersion: "2026.07.19",
         dateReleased: options.dateReleased ?? "2026-07-19T00:00:00.000Z",
         count: vulnerabilities.length,
@@ -158,6 +230,8 @@ function createPrepareFixture(options: PrepareFixtureOptions = {}) {
     containerSbom,
     kev,
     negativeVexOutput,
+    ociArchive,
+    raw,
     receipt,
     reviewOutput,
     stage,
@@ -291,6 +365,84 @@ describe("source-bound release evidence helpers", () => {
     ]);
   });
 
+  it("rejects source-bound OCI identity drift before creating outputs", () => {
+    const assertRejected = (
+      fixture: ReturnType<typeof createPrepareFixture>,
+      message: RegExp,
+    ) => {
+      const result = runTypeScript(prepareScript, fixture.args);
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toMatch(message);
+      expect(existsSync(fixture.reviewOutput)).toBe(false);
+      expect(existsSync(fixture.vexOutput)).toBe(false);
+      expect(existsSync(fixture.negativeVexOutput)).toBe(false);
+    };
+    const readRaw = (fixture: ReturnType<typeof createPrepareFixture>) =>
+      JSON.parse(readFileSync(fixture.raw, "utf8")) as {
+        source: {
+          target: {
+            userInput: string;
+            manifestDigest: string;
+            tags: string[];
+            labels: Record<string, string>;
+          };
+        };
+      };
+    const writeRaw = (
+      fixture: ReturnType<typeof createPrepareFixture>,
+      value: ReturnType<typeof readRaw>,
+    ) =>
+      writeFileSync(fixture.raw, `${JSON.stringify(value, null, 2)}\n`, {
+        encoding: "utf8",
+        mode: 0o600,
+      });
+
+    const wrongInput = createPrepareFixture();
+    const wrongInputRaw = readRaw(wrongInput);
+    wrongInputRaw.source.target.userInput =
+      "<COUNTERLAB_REPO_ROOT>/wrong/runner.oci";
+    writeRaw(wrongInput, wrongInputRaw);
+    assertRejected(wrongInput, /exact untagged source-bound OCI archive/u);
+
+    const tagged = createPrepareFixture();
+    const taggedRaw = readRaw(tagged);
+    taggedRaw.source.target.tags = ["counterlab-runner:unexpected"];
+    writeRaw(tagged, taggedRaw);
+    assertRejected(tagged, /exact untagged source-bound OCI archive/u);
+
+    const wrongManifest = createPrepareFixture();
+    const wrongManifestRaw = readRaw(wrongManifest);
+    wrongManifestRaw.source.target.manifestDigest = `sha256:${"9".repeat(64)}`;
+    writeRaw(wrongManifest, wrongManifestRaw);
+    assertRejected(wrongManifest, /manifestDigest does not bind/u);
+
+    const wrongSource = createPrepareFixture();
+    const wrongSourceRaw = readRaw(wrongSource);
+    wrongSourceRaw.source.target.labels["org.opencontainers.image.source"] =
+      "https://example.invalid/not-counterlab";
+    writeRaw(wrongSource, wrongSourceRaw);
+    assertRejected(wrongSource, /embedded manifest or config contradicts/u);
+
+    const changedArchive = createPrepareFixture();
+    writeFileSync(changedArchive.ociArchive, "changed archive bytes\n", {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+    assertRejected(changedArchive, /archive hash does not match/u);
+
+    const missingManifest = createPrepareFixture();
+    const receipt = JSON.parse(
+      readFileSync(missingManifest.receipt, "utf8"),
+    ) as Record<string, unknown>;
+    delete receipt.localManifestDigest;
+    writeFileSync(
+      missingManifest.receipt,
+      `${JSON.stringify(receipt, null, 2)}\n`,
+      { encoding: "utf8", mode: 0o600 },
+    );
+    assertRejected(missingManifest, /localManifestDigest/u);
+  });
+
   it("rejects an invalid KEV timestamp and a newly listed vulnerability", () => {
     const malformed = createPrepareFixture({ dateReleased: "not-a-date" });
     const malformedResult = runTypeScript(prepareScript, malformed.args);
@@ -393,6 +545,9 @@ describe("source-bound release evidence helpers", () => {
     expect(refresh).toContain(
       '--runtime-report "${WORK}/runtime-verification.json"',
     );
+    expect(
+      refresh.match(/--manifest-digest "\$\{MANIFEST_DIGEST\}"/gu),
+    ).toHaveLength(2);
     expect(refresh).not.toContain("/dev/null");
     expect(checkMode).toBeGreaterThan(0);
     expect(writeMode).toBeGreaterThan(checkMode);

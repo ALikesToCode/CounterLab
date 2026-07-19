@@ -13,10 +13,13 @@ import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { z } from "zod";
 
 import {
+  ContainedRuntimeAttestationSchema,
+  assertCurrentGrypeReleaseEvidenceBinding,
+} from "../packages/scientific-engine-registry/src/index.js";
+import {
   collectRunnerReleaseEvidence,
   createQualifiedRunnerRelease,
 } from "./prepare-qualified-deploy.js";
-import { ContainedRuntimeAttestationSchema } from "../packages/scientific-engine-registry/src/index.js";
 
 const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
 const BuildReceiptSchema = z.strictObject({
@@ -109,6 +112,7 @@ async function existingRepositoryFile(
   if (!isRepositoryPath(root, candidate)) {
     throw new Error(`qualification input escapes the repository: ${requested}`);
   }
+  await assertContainedWritePath(root, candidate);
   const resolved = await realpath(candidate);
   if (!isRepositoryPath(root, resolved) || !(await stat(resolved)).isFile()) {
     throw new Error(
@@ -128,6 +132,7 @@ async function repositoryOutputPath(
       `qualification output escapes the repository: ${requested}`,
     );
   }
+  await assertContainedWritePath(root, output);
   const parent = await realpath(dirname(output));
   if (!isRepositoryPath(root, parent)) {
     throw new Error(
@@ -445,6 +450,26 @@ async function main(): Promise<void> {
   ) {
     throw new Error("build receipt image provenance is inconsistent");
   }
+  const [vulnerabilityReportPath, vexApplicationReportPath] = await Promise.all(
+    [
+      existingRepositoryFile(root, "docs/sbom/vulnerability-report.json"),
+      existingRepositoryFile(root, "docs/sbom/vex-application-report.json"),
+    ],
+  );
+  const [vulnerabilityReport, vexApplicationReport] = (
+    await Promise.all([
+      readFile(vulnerabilityReportPath, "utf8"),
+      readFile(vexApplicationReportPath, "utf8"),
+    ])
+  ).map((value) => JSON.parse(value) as unknown);
+  assertCurrentGrypeReleaseEvidenceBinding(
+    vulnerabilityReport,
+    vexApplicationReport,
+    {
+      imageDigest: buildReceipt.localImageDigest,
+      manifestDigest: buildReceipt.localManifestDigest,
+    },
+  );
   assertCleanWorktree(root);
   const runtimeAdapter = await repositoryExecutable(
     root,
