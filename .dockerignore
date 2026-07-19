@@ -11,6 +11,10 @@ generated
 evals/held-out
 replays
 services/kernel/tests
-services/runner
+services/runner/*
+!services/runner/Dockerfile
+!services/runner/image
+services/runner/image/*
+!services/runner/image/harness.py
 **/__pycache__
 **/*.pyc

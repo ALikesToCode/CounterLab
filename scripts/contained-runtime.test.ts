@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { beforeAll, describe, expect, it } from "vitest";
@@ -120,6 +120,14 @@ describe("contained runtime command policy", () => {
     expect(validate(...startupCommand()).status).toBe(0);
     expect(validate(...scientificRuntimeCommand()).status).toBe(0);
     expect(validate(...boundedAdapterCommand()).status).toBe(0);
+  });
+
+  it("keeps the bounded adapter inputs in the source-bound build context", () => {
+    const dockerIgnore = readFileSync(resolve(root, ".dockerignore"), "utf8");
+
+    expect(dockerIgnore).toContain("!services/runner/Dockerfile");
+    expect(dockerIgnore).toContain("!services/runner/image");
+    expect(dockerIgnore).toContain("!services/runner/image/harness.py");
   });
 
   it("allows bounded image inspection and repository OCI input", () => {
