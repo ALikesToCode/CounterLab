@@ -135,7 +135,7 @@ Report SHA-256:
 
 ## Current-tree release commands
 
-- [ ] Review and commit the containment/read-only repair separately from stale
+- [x] Review and commit the containment/read-only repair separately from stale
       generated scientific-engine and SBOM evidence.
 - [ ] `./scripts/test-all.sh` on the v6.1 branch. Current root Vitest passes
       499/502; the three remaining exact-source evidence tests run after the

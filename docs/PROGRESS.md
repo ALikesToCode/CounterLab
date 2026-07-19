@@ -12,20 +12,20 @@ pass is never presented as a browser or production pass.
 ### Current checkpoint
 
 - **Branch:** `feat/learner-ux-v6.1`
-- **Source-bound evidence tooling checkpoint:**
-  `c6575a85133a246d0b3a72c2c7f134c203a65440`. The final containment/read-only
-  release repair is still under review and uncommitted; its exact source hash
-  will be recorded only after the reviewed commit exists.
+- **Containment implementation checkpoint:**
+  `863a2a8257aae604b238f8e44d3db1bc0cdf1fcd`. The next source-bound build
+  receipt records the exact clean documentation checkpoint containing this
+  ledger; it is not guessed in advance.
 - **Continuation starting commit:**
   `dd451c77606ec270cfba030784df50cb3aa19969`
 - **Repository boundary:** physical root
   `/home/mysterious/storage/github/CounterLab`; root marker present; all active
   build, scan, and browser state is required to remain inside the repository.
-- **Working tree:** intentionally dirty. The containment/read-only source,
-  tests, scripts, and documentation repair remains uncommitted alongside
-  separately stale scientific-engine and SBOM outputs. Generated evidence must
-  not enter the source commit and must not be committed until regenerated
-  against the exact source commit and exact runner image.
+- **Post-source-review working tree:** source, tests, scripts, and release
+  documentation are committed. Exactly 25 scientific-engine and SBOM paths
+  remain intentionally dirty as stale generated evidence. They must not be
+  committed until regenerated against the exact source commit and exact runner
+  image.
 - **Integration rule:** commit source tooling first, build and qualify that
   exact commit, commit its generated evidence separately, deploy only the
   qualified image, then fast-forward this branch into `main` after every
@@ -45,7 +45,7 @@ pass is never presented as a browser or production pass.
 | Source-bound runner build inputs | PASS | Local commit `e0559ff` includes the bounded adapter inputs required by the exact-image build. |
 | Pinned local Syft and Grype tools | PASS | Syft 1.44.0 and Grype 0.112.0 archives and binaries were independently hash-checked in repository-contained tool storage. |
 | Exact-image evidence generator implementation | PASS | Local commit `c6575a8` contains normalization, VEX preparation, source/image binding, 31 tracked output hashes, pinned scanner configs, 14-day KEV freshness, bounded verification, and persisted/hash-bound runtime evidence. Exact-image execution still follows the final source commit. |
-| Repository-contained release execution | IN PROGRESS | The uncommitted working-tree candidate removes host `/dev/null` sinks from the formal release/deploy/smoke chain, uses physical roots and marker checks, symlink-checks ignored write roots and Git config, adds read-only held-out/achieved gates, gives each production Cloak stage a separate contained runtime, and moves public UI extraction into Cloak-backed Playwright. Shell syntax passed; graph-targeted Vitest passed 3 files/37 tests; release/production Pytest passed 26/26; TypeScript and achieved-metrics checks passed. It is not yet exact-image qualified. |
+| Repository-contained release execution | PASS | Local commit `863a2a8` removes host `/dev/null` sinks from the formal release/deploy/smoke chain, uses physical roots and marker checks, symlink-checks ignored write roots and Git config, adds read-only held-out/achieved gates, gives each production Cloak stage a separate contained runtime, and moves public UI extraction into Cloak-backed Playwright. Shell syntax passed; graph-targeted Vitest passed 3 files/37 tests; release/production Pytest passed 26/26; setup smoke, TypeScript, and achieved-metrics checks passed. Exact-image qualification remains a separate pending gate. |
 | Code-review graph and parallel review | PASS | A full repository-contained graph rebuild parsed 419 files into 3,888 nodes and 63,020 edges. After the final incremental refresh, the queryable graph has 3,874 nodes, 62,632 edges, 414 files, 24 communities, and 190 flows. The dirty-slice risk fell from 0.80 to 0.65 after review repairs; 12 conservative orchestration/test-link gaps remain covered by static or integration gates where the graph cannot infer shell/top-level relationships. The ignored graph database remains local and unpublished; the untracked environment helper and `package.json` were reviewed manually because the graph did not index them. |
 | Focused scientific/release tests | PASS | Earlier combined release Vitest passed 4 files/35 tests; focused Python reachability/scientific/held-out gates passed 12 tests. The latest graph-targeted Vitest passed 2 root files/22 tests plus 1 Worker file/15 tests, release/production Pytest passed 26/26, and the read-only held-out execution matched tracked evidence at 10/10 intake and 7/8 legacy fixed-loop completion. |
 | CloakBrowser harness and static collection | BLOCKED | Playwright 1.61.1 statically collected 23 tests in one spec, including the new production asset/security journey. A missing `CLOAK_CDP_ENDPOINT` exits 1 before browser state is created; 0 rendered journeys ran and no stock browser was launched. |
@@ -58,11 +58,11 @@ The lead owns integration, shared architecture, release scripts, deployment,
 documentation, commits, and the final merge. Independent read-only reviews and
 test inventory may run in parallel, but no two workers edit the same file.
 
-1. **Final source containment review and source commit — IN PROGRESS**
+1. **Final source containment review and source commit — PASS**
    - Source-bound evidence tooling was committed at `c6575a8` after independent
      review and focused repair tests.
-   - The containment/read-only repair is tested but remains uncommitted. It
-     retains formal release diagnostics inside repository state, validates
+   - Local commit `863a2a8` contains the reviewed containment/read-only repair.
+     It retains formal release diagnostics inside repository state, validates
      contained Git configuration, uses read-only held-out/achieved evidence
      checks in the formal clean-tree gate, and moves UI transport inspection
      behind CloakBrowser.
