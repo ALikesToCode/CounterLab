@@ -287,6 +287,19 @@ describe("contained runtime command policy", () => {
     );
     expect(runtimeSetupMkdir).not.toContain('"${GIT_CONFIG_GLOBAL}"');
 
+    const runtimeLauncher = readFileSync(
+      resolve(root, "scripts/start-contained-runtime.sh"),
+      "utf8",
+    );
+    expect(runtimeLauncher).toContain(
+      "[plugins.'io.containerd.transfer.v1.local']",
+    );
+    expect(runtimeLauncher).toContain(
+      "[[plugins.'io.containerd.transfer.v1.local'.unpack_config]]",
+    );
+    expect(runtimeLauncher).toContain('platform = "linux/amd64"');
+    expect(runtimeLauncher).toContain('snapshotter = "native"');
+
     const secretScan = readFileSync(
       resolve(root, "scripts/secret-scan.py"),
       "utf8",
@@ -300,7 +313,15 @@ describe("contained runtime command policy", () => {
       validate("image", "inspect", image, "--format", "{{.Config.User}}")
         .status,
     ).toBe(0);
-    expect(validate("load", "--input", "package.json").status).toBe(0);
+    expect(
+      validate("load", "--platform", "linux/amd64", "--input", "package.json")
+        .status,
+    ).toBe(0);
+    expect(validate("load", "--input", "package.json").status).not.toBe(0);
+    expect(
+      validate("load", "--platform", "linux/arm64", "--input", "package.json")
+        .status,
+    ).not.toBe(0);
   });
 
   it("rejects a shell command appended to the bounded adapter profile", () => {
@@ -363,7 +384,13 @@ describe("contained runtime command policy", () => {
     expect(
       validate("image", "inspect", "counterlab-runner:latest").status,
     ).not.toBe(0);
-    const escaped = validate("load", "--input", "../outside.oci");
+    const escaped = validate(
+      "load",
+      "--platform",
+      "linux/amd64",
+      "--input",
+      "../outside.oci",
+    );
     expect(escaped.status).not.toBe(0);
     expect(escaped.stderr).toMatch(/escaped the repository/u);
   });

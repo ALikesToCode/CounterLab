@@ -20,9 +20,11 @@ pass is never presented as a browser or production pass.
   `cf6108e306e43fb4dd270dfdcc1317f2e508aeda` followed after preserving the
   concurrent screenshot set. That build is now also superseded as the release
   candidate because a further concurrent visual/generative-UI audit document
-  appeared before evidence refresh. The audit is preserved with an explicit
-  non-qualification note; the final source build must use the next clean
-  checkpoint.
+  appeared before evidence refresh. After that audit was fully preserved,
+  source `fcd69a8bffff0f8f8c90f0e16b6fb4cebd6e39dc` produced a third exact
+  image. Its first evidence refresh exposed a fail-closed containerd transfer
+  configuration defect; the image remains retained but is superseded by the
+  reviewed runtime-import repair now awaiting its source commit and rebuild.
 - **Continuation starting commit:**
   `dd451c77606ec270cfba030784df50cb3aa19969`
 - **Repository boundary:** physical root
@@ -31,9 +33,11 @@ pass is never presented as a browser or production pass.
 - **Post-audit-preservation working tree:** the concurrent screenshot set and
   the complete visual/generative-UI audit addendum are preserved in reviewed
   documentation commits. Exactly 25 scientific-engine and SBOM paths remain
-  intentionally dirty as stale generated evidence. Those paths must be
-  regenerated against the next exact source commit and image; no audit file or
-  ignored stock-browser capture may be folded silently into qualified evidence.
+  intentionally dirty as stale generated evidence, alongside the reviewed
+  contained-runtime import repair and this ledger update. Those evidence paths
+  must be regenerated against the next exact source commit and image; no audit
+  file or ignored stock-browser capture may be folded silently into qualified
+  evidence.
 - **Integration rule:** commit source tooling first, build and qualify that
   exact commit, commit its generated evidence separately, deploy only the
   qualified image, then fast-forward this branch into `main` after every
@@ -56,6 +60,7 @@ pass is never presented as a browser or production pass.
 | Repository-contained release execution | PASS | Local commit `863a2a8` removes host `/dev/null` sinks from the formal release/deploy/smoke chain, uses physical roots and marker checks, symlink-checks ignored write roots and Git config, adds read-only held-out/achieved gates, gives each production Cloak stage a separate contained runtime, and moves public UI extraction into Cloak-backed Playwright. Shell syntax passed; graph-targeted Vitest passed 3 files/37 tests; release/production Pytest passed 26/26; setup smoke, TypeScript, and achieved-metrics checks passed. Exact-image qualification remains a separate pending gate. |
 | First exact source-bound runner build | PASS | The contained `rt-v61-0719j` runtime built source `184b43796b382094de32a8d2f733d9fd232dab32`. Receipt: `node_modules/.cache/counterlab-v6.1/releases/runner-build-184b43796b382094de32a8d2f733d9fd232dab32.json`; normalized runner digest `sha256:c76bc97f22caf25f26abc7d48bbcaf4dd96331aafe036d4651f595832d95f428`; adapter image digest `sha256:e9f2237e326a462eb0c2823ae13810c38714e54ef0559ae1eca489d99d08a979`; normalized OCI manifest `sha256:f78a0743306f251ed661eca023607f811f4a65c7dc7bb530495def366c74b743`. The image is retained but not yet qualified or deployed. Any preservation commit for the concurrent visual evidence will require a new exact-source build. |
 | Second exact source-bound runner build | PASS | After preserving the screenshots, the contained `rt-v61-0719m` runtime built source `cf6108e306e43fb4dd270dfdcc1317f2e508aeda`. Receipt: `node_modules/.cache/counterlab-v6.1/releases/runner-build-cf6108e306e43fb4dd270dfdcc1317f2e508aeda.json`; runner config digest `sha256:9ad43785334e70dbaa738e08ece1efd48c51b55a578730d8620ec47f849f14b7`; normalized OCI manifest `sha256:d2cfc4a1455ebd426ab977733b6598221cebc2a78e965716aed48887ae600a7e`; adapter digest `sha256:32444ee794ab3abb35ac4e670ca62beb901faa5afc3d9709af472d588cf8c9e7`. A later concurrent audit document again advanced the preservation checkpoint, so this image is retained but will not be qualified or deployed. |
+| Third exact build and contained import repair | PASS build; PASS diagnosis; rebuild pending | The contained `rt-v61-0719m` runtime built preserved source `fcd69a8bffff0f8f8c90f0e16b6fb4cebd6e39dc`: runner config digest `sha256:83f8d0dbb84f32c0fc0d202a27618f769293873024b03def0f75dc3209ac9c47`, adapter digest `sha256:8996ec6ae45b515e096d47654df95a2c9387396f9bda0b3e8e29fb5b57ab4216`, and normalized OCI manifest `sha256:bb3ac7fd1ec28363cb899d8f7d0aeb03f807851416945b062e7db92472ca965c`. Evidence refresh then failed before tracked writes with containerd `no unpack platforms defined`. Context7 and pinned `nerdctl 2.3.1` help confirmed platform-aware load semantics; the runtime lacked a transfer-service unpack mapping. The repair pins both the load request and containerd transfer configuration to `linux/amd64` plus the native snapshotter. Focused tests pass 2 files/22 tests; a fresh `rt-v61-0719n` attestation is `VERIFIED`; the same OCI imported in 160.5 seconds and its loaded image ID exactly matched `sha256:83f8d0…9ac9c47`. Because release tooling changed, this image is retained but will not be qualified or deployed. |
 | Concurrent visual-audit evidence triage | PASS as preservation; NOT QUALIFIED as release evidence | Sixteen valid, byte-stable PNGs at the intended 1440x900 and 390x844 viewports plus one `.keep` file appeared under the audit evidence tree. All 16 were visually inspected; no ancillary PNG metadata, secret, personal content, or local path was found. A later local ignored sidecar established the public URL, timestamps, source checkpoint, and stock-Chromium capture method. The README therefore marks them unqualified: they do not satisfy the current CloakBrowser-only policy and no browser/a11y pass is inferred from them. |
 | Visual/generative-UI audit addendum | PASS as preservation; NOT QUALIFIED as browser evidence | The concurrent audit correctly identifies a high-leverage visual gap and the dormant bounded Lab Scene opportunity. Its capture script used stock Chromium, however, so the addendum now carries a prominent CloakBrowser-policy disclaimer. The verified Belief Break visual and trusted scene-renderer recommendation enter the prize queue; the broader agentic Learning Director remains authority-gated and must not delay P0 production truth. |
 | Current-source P1 reconciliation | PASS as source audit; production proof pending | A read-only reconciliation found CL-003 (claim-only chooser), CL-004 (read-only replay), CL-005 (fixed-evidence sample Boundary plus learner-authored reflection), and CL-010 (current vocabulary/metadata) fixed in current source. CL-007 admission/cost controls are implemented but need deployed proof; CL-008 remains honestly `PARTIAL`; CL-009 is narrowly mitigated; CL-023 remains partial because no verified Lab Scene reaches the browser; CL-006 and CL-024 remain open. Old Worker 82 observations are not misrepresented as current feature-branch behavior. |

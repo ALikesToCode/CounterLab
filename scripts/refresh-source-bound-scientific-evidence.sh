@@ -310,7 +310,7 @@ export GRYPE_CHECK_FOR_APP_UPDATE=false
 export GRYPE_EXTERNAL_SOURCES_ENABLE=false
 export SYFT_CHECK_FOR_APP_UPDATE=false
 
-"${RUNTIME_ADAPTER}" load --input "${OCI_ARCHIVE}"
+"${RUNTIME_ADAPTER}" load --platform linux/amd64 --input "${OCI_ARCHIVE}"
 [[ "$("${RUNTIME_ADAPTER}" image inspect "${IMAGE}" --format '{{.Id}}')" == "${IMAGE_DIGEST}" ]] || {
   echo "Loaded image digest does not match the build receipt." >&2
   exit 2

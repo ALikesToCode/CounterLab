@@ -116,7 +116,16 @@ trap terminate_failed_launch EXIT
 node - "${CONTAINERD_CONFIG}" "${BUILDKIT_CONFIG}" <<'NODE'
 const { writeFileSync } = require("node:fs");
 const [containerdConfig, buildkitConfig] = process.argv.slice(2);
-writeFileSync(containerdConfig, "version = 3\n", {
+const containerdConfiguration = [
+  "version = 3",
+  "",
+  "[plugins.'io.containerd.transfer.v1.local']",
+  "  [[plugins.'io.containerd.transfer.v1.local'.unpack_config]]",
+  '    platform = "linux/amd64"',
+  '    snapshotter = "native"',
+  "",
+].join("\n");
+writeFileSync(containerdConfig, containerdConfiguration, {
   encoding: "utf8",
   flag: "wx",
   mode: 0o600,

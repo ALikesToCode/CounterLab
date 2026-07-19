@@ -388,6 +388,9 @@ describe("source-bound release evidence helpers", () => {
     );
     expect(refresh).toContain('--config "${SYFT_CONFIG}"');
     expect(refresh).toContain(
+      'load --platform linux/amd64 --input "${OCI_ARCHIVE}"',
+    );
+    expect(refresh).toContain(
       '--runtime-report "${WORK}/runtime-verification.json"',
     );
     expect(refresh).not.toContain("/dev/null");

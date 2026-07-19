@@ -413,8 +413,8 @@ function validateRun(runArgs) {
     );
     const hostReviewPath =
       reviewMatch?.[1] === image.slice("counterlab-runner:git-".length)
-      ? resolve(root, reviewPath.slice("/repo/".length))
-      : "";
+        ? resolve(root, reviewPath.slice("/repo/".length))
+        : "";
     if (
       entrypoint !== "python" ||
       !sameValues(flags, [
@@ -576,9 +576,14 @@ switch (args[0]) {
     break;
   }
   case "load": {
-    if (args.length !== 3 || args[1] !== "--input")
+    if (
+      args.length !== 5 ||
+      args[1] !== "--platform" ||
+      args[2] !== "linux/amd64" ||
+      args[3] !== "--input"
+    )
       fail("load arguments are invalid");
-    repositoryFile(args[2], "OCI archive", "file");
+    repositoryFile(args[4], "OCI archive", "file");
     break;
   }
   case "login": {
