@@ -55,7 +55,7 @@ describe("VerifiedBeliefBreakTheater", () => {
     render(<VerifiedBeliefBreakTheater presentation="preview" />);
 
     const theater = screen.getByRole("region", {
-      name: /watch one fair test change the conclusion/i,
+      name: /one fair test changed what the score means/i,
     });
     expect(theater).toHaveAttribute("data-presentation", "preview");
     expect(theater.className).toContain("preview");
@@ -63,6 +63,57 @@ describe("VerifiedBeliefBreakTheater", () => {
       theater.querySelector('[data-layout="stable-preview"]'),
     ).toBeInTheDocument();
     expect(theater.className).not.toContain("compact");
+  });
+
+  it("gives the preview one dominant fixed-evidence comparison", async () => {
+    render(<VerifiedBeliefBreakTheater presentation="preview" />);
+
+    const theater = screen.getByRole("region", {
+      name: /one fair test changed what the score means/i,
+    });
+    const comparison = await within(theater).findByRole("group", {
+      name: /customer overlap falls from 389 to 0/i,
+    });
+    const splitMechanism = within(theater).getByRole("group", {
+      name: /why random rows and whole-customer holdout answer different questions/i,
+    });
+
+    expect(theater.querySelectorAll("figure")).toHaveLength(1);
+    expect(comparison).toHaveAccessibleName(/98.5% to 59.4%/i);
+    expect(within(theater).getByText("Fixed-kernel evidence")).toBeVisible();
+    expect(
+      within(theater).getByText("Only the evaluation unit changed"),
+    ).toBeVisible();
+    expect(within(theater).getByText("Random-row test")).toBeVisible();
+    expect(within(theater).getByText("New-customer test")).toBeVisible();
+    expect(
+      within(theater).getByText(
+        "Model, features, preprocessing, sample sizes, and seed stayed fixed.",
+      ),
+    ).toBeVisible();
+    expect(
+      within(theater).getByText(/did not mean the model generalized/i),
+    ).toBeVisible();
+    expect(
+      within(splitMechanism).getByRole("article", {
+        name: /customer a appears in both training and test/i,
+      }),
+    ).toBeVisible();
+    expect(
+      within(splitMechanism).getByRole("article", {
+        name: /training contains customers a, b, and c while test contains d and e/i,
+      }),
+    ).toBeVisible();
+    expect(
+      within(splitMechanism).getByText("Customer A appears on both sides"),
+    ).toBeVisible();
+    expect(
+      within(splitMechanism).getByText(
+        "Train and test identities are disjoint",
+      ),
+    ).toBeVisible();
+    expect(splitMechanism).toHaveTextContent("↔");
+    expect(splitMechanism).toHaveTextContent("∅");
   });
 
   it("reveals the bounded mechanism, exact values, and hash evidence after verification", async () => {

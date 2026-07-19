@@ -181,6 +181,124 @@ function MechanismDiagram({
   );
 }
 
+function PreviewComparison({
+  randomRows,
+  wholeCustomers,
+}: {
+  randomRows: VerifiedRun;
+  wholeCustomers: VerifiedRun;
+}) {
+  return (
+    <figure className={styles.previewComparison}>
+      <figcaption>
+        <span>Fixed-kernel evidence</span>
+        <strong>Only the evaluation unit changed</strong>
+      </figcaption>
+
+      <div
+        className={styles.previewSplits}
+        role="group"
+        aria-label="Why random rows and whole-customer holdout answer different questions. Lettered tokens illustrate customer identities; they are not notebook rows or real customer identifiers."
+      >
+        <article
+          className={styles.previewSplitState}
+          aria-label="Random-row split. Customer A appears in both training and test, so a repeated identity crosses the evaluation boundary."
+        >
+          <header>
+            <strong>Random rows</strong>
+            <span>Identities repeat</span>
+          </header>
+          <div className={styles.previewSplitTrack} aria-hidden="true">
+            <div>
+              <small>Training</small>
+              <div className={styles.previewTokens}>
+                <EntityToken>A</EntityToken>
+                <EntityToken>B</EntityToken>
+                <EntityToken>C</EntityToken>
+              </div>
+            </div>
+            <span className={styles.previewSplitMark}>↔</span>
+            <div>
+              <small>Test</small>
+              <div className={styles.previewTokens}>
+                <EntityToken>A</EntityToken>
+                <EntityToken>D</EntityToken>
+              </div>
+            </div>
+          </div>
+          <p>
+            <span aria-hidden="true">↔</span> Customer A appears on both sides
+          </p>
+        </article>
+
+        <article
+          className={styles.previewSplitState}
+          aria-label="Whole-customer holdout. Training contains customers A, B, and C while test contains D and E, so no identity crosses the evaluation boundary."
+        >
+          <header>
+            <strong>Whole customers</strong>
+            <span>Identities stay apart</span>
+          </header>
+          <div className={styles.previewSplitTrack} aria-hidden="true">
+            <div>
+              <small>Training</small>
+              <div className={styles.previewTokens}>
+                <EntityToken>A</EntityToken>
+                <EntityToken>B</EntityToken>
+                <EntityToken>C</EntityToken>
+              </div>
+            </div>
+            <span className={styles.previewSplitMark}>→</span>
+            <div>
+              <small>Test</small>
+              <div className={styles.previewTokens}>
+                <EntityToken>D</EntityToken>
+                <EntityToken>E</EntityToken>
+              </div>
+            </div>
+          </div>
+          <p>
+            <span aria-hidden="true">∅</span> Train and test identities are
+            disjoint
+          </p>
+        </article>
+      </div>
+
+      <div
+        className={styles.previewScoreShift}
+        role="group"
+        aria-label={`Customer overlap falls from ${randomRows.entityOverlap.count} to ${wholeCustomers.entityOverlap.count}; accuracy falls from ${asPercent(randomRows.metrics.accuracy)} to ${asPercent(wholeCustomers.metrics.accuracy)}.`}
+      >
+        <div className={styles.previewScoreState}>
+          <span>Random-row test</span>
+          <strong>{asPercent(randomRows.metrics.accuracy)}</strong>
+          <small>
+            <b>{randomRows.entityOverlap.count}</b> customers overlap
+          </small>
+        </div>
+
+        <div className={styles.previewTransition} aria-hidden="true">
+          <span>→</span>
+          <small>same model</small>
+        </div>
+
+        <div className={styles.previewScoreState}>
+          <span>New-customer test</span>
+          <strong>{asPercent(wholeCustomers.metrics.accuracy)}</strong>
+          <small>
+            <b>{wholeCustomers.entityOverlap.count}</b> customers overlap
+          </small>
+        </div>
+      </div>
+
+      <p className={styles.previewControlNote}>
+        <span aria-hidden="true">✓</span>
+        Model, features, preprocessing, sample sizes, and seed stayed fixed.
+      </p>
+    </figure>
+  );
+}
+
 function VerifiedEvidence({
   evidence,
   presentation,
@@ -196,36 +314,45 @@ function VerifiedEvidence({
       className={`${styles.verifiedEvidence} ${isPreview ? styles.previewEvidence : ""}`}
       data-motion="verified-only"
     >
-      <MechanismDiagram presentation={presentation} />
+      {isPreview ? (
+        <PreviewComparison
+          randomRows={randomRows}
+          wholeCustomers={wholeCustomers}
+        />
+      ) : (
+        <MechanismDiagram presentation={presentation} />
+      )}
 
-      <div
-        className={`${styles.resultPair} ${isPreview ? styles.previewResultPair : ""}`}
-        role="group"
-        aria-label={`Customer overlap falls from ${randomRows.entityOverlap.count} to ${wholeCustomers.entityOverlap.count}; accuracy falls from ${asPercent(randomRows.metrics.accuracy)} to ${asPercent(wholeCustomers.metrics.accuracy)}.`}
-      >
-        <article aria-label="Customer overlap comparison">
-          <span>Overlapping customers</span>
-          <div>
-            <strong>{randomRows.entityOverlap.count}</strong>
-            <span aria-hidden="true">→</span>
-            <strong>{wholeCustomers.entityOverlap.count}</strong>
-          </div>
-          <small>familiar identities → unseen identities</small>
-        </article>
-        <article aria-label="Accuracy comparison">
-          <span>Accuracy</span>
-          <div>
-            <strong>{asPercent(randomRows.metrics.accuracy)}</strong>
-            <span aria-hidden="true">→</span>
-            <strong>{asPercent(wholeCustomers.metrics.accuracy)}</strong>
-          </div>
-          <small>random rows → whole-customer holdout</small>
-        </article>
-      </div>
+      {isPreview ? null : (
+        <div
+          className={styles.resultPair}
+          role="group"
+          aria-label={`Customer overlap falls from ${randomRows.entityOverlap.count} to ${wholeCustomers.entityOverlap.count}; accuracy falls from ${asPercent(randomRows.metrics.accuracy)} to ${asPercent(wholeCustomers.metrics.accuracy)}.`}
+        >
+          <article aria-label="Customer overlap comparison">
+            <span>Overlapping customers</span>
+            <div>
+              <strong>{randomRows.entityOverlap.count}</strong>
+              <span aria-hidden="true">→</span>
+              <strong>{wholeCustomers.entityOverlap.count}</strong>
+            </div>
+            <small>familiar identities → unseen identities</small>
+          </article>
+          <article aria-label="Accuracy comparison">
+            <span>Accuracy</span>
+            <div>
+              <strong>{asPercent(randomRows.metrics.accuracy)}</strong>
+              <span aria-hidden="true">→</span>
+              <strong>{asPercent(wholeCustomers.metrics.accuracy)}</strong>
+            </div>
+            <small>random rows → whole-customer holdout</small>
+          </article>
+        </div>
+      )}
 
       <p className={styles.finding}>
         {isPreview
-          ? "The score falls when the test contains only unseen customers."
+          ? "A high score on familiar customers did not mean the model generalized to new ones."
           : "When familiar customers disappear from the test set, the score falls. The original score did not demonstrate generalization to new customers."}
       </p>
 
@@ -391,10 +518,11 @@ export function VerifiedBeliefBreakTheater({
   presentation?: VerifiedBeliefBreakPresentation;
 }) {
   const headingId = useId();
+  const isPreview = presentation === "preview";
 
   return (
     <section
-      className={`${styles.theater} ${presentation === "preview" ? styles.preview : ""}`}
+      className={`${styles.theater} ${isPreview ? styles.preview : ""}`}
       aria-labelledby={headingId}
       data-presentation={presentation}
     >
@@ -403,9 +531,17 @@ export function VerifiedBeliefBreakTheater({
           <span className={styles.modeLabel}>
             <span aria-hidden="true">✓</span> {MODE_LABEL}
           </span>
-          <h2 id={headingId}>Watch one fair test change the conclusion.</h2>
+          <h2 id={headingId}>
+            {isPreview
+              ? "One fair test changed what the score means."
+              : "Watch one fair test change the conclusion."}
+          </h2>
         </div>
-        <p>Same model. Same metric. Only the evaluation unit changes.</p>
+        <p>
+          {isPreview
+            ? "Same model and sample sizes. Only who counts as new changes."
+            : "Same model. Same metric. Only the evaluation unit changes."}
+        </p>
       </header>
 
       <IntegrityBoundMechanism
