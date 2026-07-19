@@ -121,7 +121,9 @@ describe("ImbalancePatchReview", () => {
     ).toBeInTheDocument();
     await waitFor(() =>
       expect(
-        screen.getByRole("heading", { name: /you can now distinguish/i }),
+        screen.getByRole("heading", {
+          name: /completed one verified rare-event loop/i,
+        }),
       ).toHaveFocus(),
     );
     expect(

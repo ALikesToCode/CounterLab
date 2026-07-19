@@ -77,6 +77,8 @@ function manifest(overrides: Partial<ArtifactManifest> = {}): ArtifactManifest {
 }
 
 const claim = "This proves the model generalizes to new customers.";
+const sampleClaim =
+  "Does the notebook's random-row accuracy generalize to completely new customers?";
 
 function parsedBeliefTest(artifact = manifest()): BeliefTest {
   const wire = liveModelOutput(artifact);
@@ -1130,11 +1132,11 @@ describe("custom Responses endpoint", () => {
 });
 
 describe("sample and disabled analysts", () => {
-  it("produces a deterministic, visibly approved sample for the exact fixture", async () => {
+  it("produces deterministic v2 provenance with resolved evidence for the exact fixture", async () => {
     const analyst = new ApprovedSampleBeliefAnalyst();
     const input = {
       sessionId: "session_sample",
-      learnerClaim: claim,
+      learnerClaim: sampleClaim,
       manifest: manifest(),
       concept: "entity_leakage" as const,
     };
@@ -1143,11 +1145,58 @@ describe("sample and disabled analysts", () => {
     const second = await analyst.propose(input);
 
     expect(first).toEqual(second);
-    expect(first.provenance).toMatchObject({ mode: "approved-sample" });
+    expect(first.provenance).toEqual({
+      mode: "approved-sample",
+      approvalId: "leakage-customer-churn-belief-v2",
+    });
+    expect(second.provenance).toEqual(first.provenance);
     expect(first.beliefTest.evidenceRefs.length).toBeGreaterThan(0);
     expect(() =>
-      resolveBeliefTestEvidence(first.beliefTest, input.manifest, claim),
+      resolveBeliefTestEvidence(first.beliefTest, input.manifest, sampleClaim),
     ).not.toThrow();
+  });
+
+  it("keeps approved-sample pre-seal framing neutral without weakening the registered intervention", async () => {
+    const analyst = new ApprovedSampleBeliefAnalyst();
+    const input = {
+      sessionId: "session_sample_neutral",
+      learnerClaim: sampleClaim,
+      manifest: manifest(),
+      concept: "entity_leakage" as const,
+    };
+
+    const result = await analyst.propose(input);
+    const preSealUserFacingCopy = [
+      ...result.beliefTest.evidenceRefs.map((evidence) => evidence.relevance),
+      result.beliefTest.currentHypothesis.predictedOutcome,
+      result.beliefTest.competingHypothesis.predictedOutcome,
+    ].join("\n");
+
+    expect(preSealUserFacingCopy).not.toMatch(
+      /deceptive|headline under test|leakage verdict|customer-group split|identity[- ]ablation|remove customer id|keep each customer/i,
+    );
+    expect(
+      result.beliefTest.evidenceRefs.map((evidence) => evidence.relevance),
+    ).toEqual([
+      "The notebook source records a row-wise random split.",
+      "The notebook reports this metric for its recorded evaluation.",
+      "The notebook schema names the customer field used in the recorded evaluation.",
+    ]);
+    expect(result.beliefTest.currentHypothesis.predictedOutcome).toBe(
+      "The score should remain similar when the evaluation contains customers the model has not seen.",
+    );
+    expect(result.beliefTest.competingHypothesis.predictedOutcome).toBe(
+      "The score should change when the evaluation contains customers the model has not seen.",
+    );
+    expect(result.beliefTest.decisiveIntervention).toEqual({
+      id: "group-split-and-identity-ablation",
+      description:
+        "Compare the fixed model under random-row, customer-group, and identity-ablated evaluation.",
+      controlledVariables: ["fixture", "model", "seed", "metric"],
+      changedVariables: ["split boundary", "customer identity feature"],
+      discriminatesBecause:
+        "The learner's hypothesis predicts stable performance, while leakage predicts a large out-of-customer drop.",
+    });
   });
 
   it("refuses to apply the approved sample to another artifact", async () => {
@@ -1156,7 +1205,7 @@ describe("sample and disabled analysts", () => {
     await expect(
       analyst.propose({
         sessionId: "session_other",
-        learnerClaim: claim,
+        learnerClaim: sampleClaim,
         manifest: manifest({ fileSha256: digest("9") }),
         concept: "entity_leakage",
       }),

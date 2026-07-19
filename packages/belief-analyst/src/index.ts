@@ -1139,7 +1139,7 @@ export class LiveBeliefAnalyst implements BeliefAnalyst, BeliefSpecAnalyst {
   }
 }
 
-const APPROVED_SAMPLE_ID = "leakage-customer-churn-belief-v1";
+const APPROVED_SAMPLE_ID = "leakage-customer-churn-belief-v2";
 
 function approvedSampleBeliefTest(input: BeliefAnalystInput): BeliefTest {
   const codeCell = input.manifest.cells.find(
@@ -1163,7 +1163,7 @@ function approvedSampleBeliefTest(input: BeliefAnalystInput): BeliefTest {
         Math.max(0, sanitizedExcerpt.indexOf("train_test_split")),
         Math.max(0, sanitizedExcerpt.indexOf("train_test_split")) + 180,
       ),
-      relevance: "The notebook evaluates a row-wise random split.",
+      relevance: "The notebook source records a row-wise random split.",
     });
   }
   if (
@@ -1184,14 +1184,16 @@ function approvedSampleBeliefTest(input: BeliefAnalystInput): BeliefTest {
       kind: "metric",
       hash: metricOutputHash,
       excerpt: `${metric.name}: ${metric.value}`,
-      relevance: "This is the deceptive random-split headline under test.",
+      relevance:
+        "The notebook reports this metric for its recorded evaluation.",
     });
   }
   evidenceRefs.push({
     kind: "schema",
     hash: schemaSummaryHash(input.manifest.schemaSummary),
     excerpt: `Entity candidates: ${input.manifest.schemaSummary.entityCandidates.join(", ")}`,
-    relevance: "The schema identifies the customer entity boundary.",
+    relevance:
+      "The notebook schema names the customer field used in the recorded evaluation.",
   });
 
   const id = `belief_${hashJson({
@@ -1208,13 +1210,13 @@ function approvedSampleBeliefTest(input: BeliefAnalystInput): BeliefTest {
       statement:
         "The notebook's random-row test accuracy demonstrates generalization to new customers.",
       predictedOutcome:
-        "Accuracy should remain close to the notebook result when complete customers are held out.",
+        "The score should remain similar when the evaluation contains customers the model has not seen.",
     },
     competingHypothesis: {
       statement:
         "Customer identity crosses the random split, so the model recognizes customers instead of generalizing to unseen ones.",
       predictedOutcome:
-        "Accuracy should fall materially under a customer-group split and after identity ablation.",
+        "The score should change when the evaluation contains customers the model has not seen.",
     },
     evidenceRefs: evidenceRefs.slice(0, 3),
     alternatives: [

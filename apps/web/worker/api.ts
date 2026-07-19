@@ -41,6 +41,8 @@ import {
   type VerifiedResultSet,
   canonicalJsonV1,
 } from "@counterlab/contracts";
+
+import { SAMPLE_LEAKAGE_QUESTION } from "../shared/sample-authority";
 import {
   ExperimentIRV5Schema,
   RunnerBoundaryMapBundleV5Schema,
@@ -180,6 +182,7 @@ import {
   evaluateLeakageTransfer,
 } from "./sample-learning-loop";
 import {
+  assertSampleProofClaimScope,
   createSampleReasoningProof,
   sampleLabEvidenceHashes,
   sampleLabVerification,
@@ -4488,7 +4491,7 @@ export function createApi(options: ApiOptions = {}) {
     const analyst = new ApprovedSampleBeliefAnalyst();
     const result = await analyst.propose({
       sessionId: session.id,
-      learnerClaim,
+      learnerClaim: SAMPLE_LEAKAGE_QUESTION,
       manifest: artifact.manifest,
       concept: routing.concept,
     });
@@ -9192,6 +9195,15 @@ export function createApi(options: ApiOptions = {}) {
       );
     }
     requireApprovedSampleArtifact(sourceArtifact, "ARTIFACT_PATCH_MISMATCH");
+    try {
+      assertSampleProofClaimScope(current);
+    } catch {
+      throw new ApiInputError(
+        "SAMPLE_SCOPE_RESTART_REQUIRED",
+        "This historical sample used custom claim framing. Start a new fixed sample before creating a repair or proof record.",
+        409,
+      );
+    }
     await service.startPatchCompilation(sessionId);
     const patchResult = await createSamplePatchResult(
       sessionId,

@@ -98,7 +98,7 @@ describe("ImbalanceTransferLesson", () => {
     );
   });
 
-  it("accepts a completed clause combination without grading the learner's prose", () => {
+  it("requires a direct learner edit after clause drafting without grading prose", () => {
     render(
       <ImbalanceTransferLesson
         sessionId="session_1"
@@ -123,8 +123,44 @@ describe("ImbalanceTransferLesson", () => {
     );
     expect(
       screen.getByRole("button", { name: /try it on defects/i }),
+    ).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/revised mental model/i), {
+      target: {
+        value:
+          "When deployment prevalence changes, I should compare against the majority baseline because accuracy can hide missed rare events. I will check the confusion counts.",
+      },
+    });
+
+    expect(
+      screen.getByRole("button", { name: /try it on defects/i }),
     ).toBeEnabled();
+
+    fireEvent.change(screen.getByLabelText(/choose the action/i), {
+      target: { value: "class-errors" },
+    });
+    expect(
+      screen.getByRole("button", { name: /try it on defects/i }),
+    ).toBeDisabled();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("carries a learner-authored result interpretation into the revision step", () => {
+    render(
+      <ImbalanceTransferLesson
+        sessionId="session_1"
+        state="EXPERIMENT_COMPLETED"
+        initialInterpretation="I notice that overall accuracy and rare-event recall tell different stories."
+        updateSession={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText(/revised mental model/i)).toHaveValue(
+      "I notice that overall accuracy and rare-event recall tell different stories.",
+    );
+    expect(
+      screen.getByRole("button", { name: /try it on defects/i }),
+    ).toBeEnabled();
   });
 
   it("keeps repair locked after the fixed evaluator rejects the transfer", () => {

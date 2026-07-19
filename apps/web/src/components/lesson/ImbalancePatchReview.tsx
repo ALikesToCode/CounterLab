@@ -231,10 +231,10 @@ export function ImbalancePatchReview({
       <LearnerCompletion
         titleId="imbalance-completion-title"
         capability={{
-          intro: "You can now distinguish:",
+          intro: "You completed one verified rare-event loop.",
           first: "high overall accuracy",
-          connector: "from",
-          second: "useful rare-event detection",
+          connector: "was compared with",
+          second: "rare-event performance in this fixed task",
         }}
         beforeReasoning={
           session.beliefSpec?.claim ??
@@ -246,9 +246,9 @@ export function ImbalancePatchReview({
           "Inspect class-specific errors, deployment prevalence, and asymmetric costs."
         }
         transferStatus={{
-          label: "Passed",
+          label: "Fixed transfer task passed",
           detail:
-            "You carried the rare-event rule into the fixed manufacturing-defect scenario.",
+            "Your submitted choices matched the fixed manufacturing-defect evaluator. This records one task outcome; it does not establish mastery.",
         }}
         repairedNotebookAction={{
           label: "Download repaired notebook",

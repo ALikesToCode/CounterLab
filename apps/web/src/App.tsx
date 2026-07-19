@@ -98,6 +98,7 @@ import { subjectPackHint } from "./features/learner/subjectPackHints";
 import { useLearnerStageTiming } from "./hooks/useLearnerStageTiming";
 
 import { getRun, sampleArtifact, verifiedReplay } from "./sample";
+import { SAMPLE_LEAKAGE_QUESTION } from "../shared/sample-authority";
 
 const LazySampleBoundaryPanel = lazy(async () => {
   const module = await import("./features/boundary/SampleBoundaryPanel");
@@ -1092,6 +1093,7 @@ function Landing({
 
 function ClaimScreen({
   artifact,
+  fixedSample,
   claim,
   updateClaim,
   analysisPreview,
@@ -1105,6 +1107,7 @@ function ClaimScreen({
   busy,
 }: {
   artifact: ArtifactView;
+  fixedSample: boolean;
   claim: string;
   updateClaim: (claim: string) => void;
   analysisPreview: BeliefAnalysisPreview | null;
@@ -1117,7 +1120,7 @@ function ClaimScreen({
   startFreshSession: () => void;
   busy: boolean;
 }) {
-  const isSample = artifact.fileSha256 === sampleArtifact.fileSha256;
+  const isSample = fixedSample;
   const supported = artifact.support.status === "SUPPORTED";
   const evidenceReferences = notebookEvidenceReferences(artifact);
   const headlineMetric = notebookScoreDisplay(artifact);
@@ -1235,30 +1238,64 @@ function ClaimScreen({
 
         <section className="claim-form panel" aria-labelledby="claim-prompt">
           <div>
-            <p className="eyebrow">In your words</p>
-            <h2 id="claim-prompt">Finish this thought</h2>
-            <p>“Because the notebook scored highly, I think the model…”</p>
+            <p className="eyebrow">
+              {isSample ? "Fixed practice question" : "In your words"}
+            </p>
+            <h2 id="claim-prompt">
+              {isSample ? "Test one bounded question" : "Finish this thought"}
+            </h2>
+            <p>
+              {isSample
+                ? SAMPLE_LEAKAGE_QUESTION
+                : "“Because the notebook scored highly, I think the model…”"}
+            </p>
           </div>
-          <label htmlFor="learner-claim">Your claim</label>
-          <button
-            className="claim-starter"
-            type="button"
-            onClick={() =>
-              updateClaim(
-                "I think the high score means the model will work for completely new customers.",
-              )
-            }
-          >
-            <Mark name="spark" /> Use a starter claim
-          </button>
-          <textarea
-            id="learner-claim"
-            value={claim}
-            onChange={(event) => updateClaim(event.target.value)}
-            placeholder="I think this score means the model will work for…"
-            rows={7}
-          />
-          {analysisPreview === null ? (
+          {isSample ? (
+            <div className="lock-notice" role="note">
+              <Mark name="lock" />
+              <strong>Approved sample framing</strong>
+              <span>
+                This bundled lesson does not analyze or sign a custom claim. Its
+                pre-authored question and explanations are the only framing that
+                enters the proof record.
+              </span>
+            </div>
+          ) : (
+            <>
+              <label htmlFor="learner-claim">Your claim</label>
+              <button
+                className="claim-starter"
+                type="button"
+                onClick={() =>
+                  updateClaim(
+                    "I think the high score means the model will work for completely new customers.",
+                  )
+                }
+              >
+                <Mark name="spark" /> Use a starter claim
+              </button>
+              <textarea
+                id="learner-claim"
+                value={claim}
+                onChange={(event) => updateClaim(event.target.value)}
+                placeholder="I think this score means the model will work for…"
+                rows={7}
+              />
+            </>
+          )}
+          {isSample ? (
+            <div className="form-footer">
+              <span>Verified sample · fixed framing</span>
+              <button
+                className="button button-primary"
+                type="button"
+                disabled={!supported || requiresFreshSession || busy}
+                onClick={continueToBelief}
+              >
+                Compare two explanations <Mark name="arrow" />
+              </button>
+            </div>
+          ) : analysisPreview === null ? (
             <div className="form-footer">
               <span>{claim.trim().length} characters</span>
               <button
@@ -1342,6 +1379,7 @@ function ClaimScreen({
 function BeliefScreen({
   claim,
   belief,
+  fixedSampleFraming,
   notebookScore,
   confirmed,
   confirm,
@@ -1355,6 +1393,7 @@ function BeliefScreen({
 }: {
   claim: string;
   belief?: BeliefPresentation | undefined;
+  fixedSampleFraming: boolean;
   notebookScore: PredictionDisplay;
   confirmed: boolean;
   confirm: () => void;
@@ -1378,10 +1417,10 @@ function BeliefScreen({
         competingPrediction:
           "A majority baseline will look similar while recall and PR-AUC expose the misses.",
         fairTest:
-          "Compare the majority baseline, confusion matrix, and rare-class metrics.",
+          "Compare the same predictions with overall and class-specific measures.",
         intervention:
-          "We keep the data and scoring model fixed. We expose class-specific errors, then test a bounded threshold change.",
-        help: "If accuracy reflects useful rare-event detection, recall should stay strong and beat the majority baseline. If rarity hides failure, class-specific evidence will reveal the gap.",
+          "The proposed comparison keeps the data and model fixed while changing only what is measured. Exact operations appear after your Prediction is sealed.",
+        help: "If accuracy reflects useful rare-event detection, recall should stay strong and beat the majority baseline. If overall accuracy obscures rare-case behavior, class-specific measures will differ.",
       }
     : {
         currentHypothesis:
@@ -1390,11 +1429,10 @@ function BeliefScreen({
         competingHypothesis:
           "The model partly remembers customers it already saw.",
         competingPrediction:
-          "The score drops for new customers and without customer ID.",
-        fairTest:
-          "Keep each customer's rows together, then remove customer ID.",
+          "The score changes when the test contains only new customers.",
+        fairTest: "Compare the same model across two evaluation boundaries.",
         intervention:
-          "We keep the model the same. We change who appears in the test, then check what happens without customer ID.",
+          "The proposed comparison keeps the model fixed while changing only who appears in the test. Exact operations appear after your Prediction is sealed.",
         help: "If the model learned a reusable pattern, the score should stay high. If it remembers customers, the score should fall. The two ideas now predict different outcomes.",
       };
   const currentModel: DuelModel = {
@@ -1410,7 +1448,7 @@ function BeliefScreen({
     prediction: belief?.competing.predictedOutcome ?? copy.competingPrediction,
     conditions: belief?.competing.conditions ?? [],
     nonClaims: belief?.competing.nonClaims ?? [
-      "This explanation does not claim every model feature is leakage.",
+      "This explanation is limited to the supplied notebook pattern.",
     ],
   };
   const predictionOptions = predictionOptionsFor(belief?.concept);
@@ -1431,10 +1469,24 @@ function BeliefScreen({
         why="Both explanations fit the score you have. Sealing an expectation before the fair test makes the later comparison honest."
       />
 
-      <section className="claim-quote" aria-label="Learner claim">
-        <span>Your claim</span>
+      <section className="claim-quote" aria-label="Investigation question">
+        <span>
+          {fixedSampleFraming ? "Fixed sample question" : "Your claim"}
+        </span>
         <blockquote>{claim}</blockquote>
       </section>
+
+      {fixedSampleFraming && (
+        <section className="lock-notice" role="note">
+          <Mark name="lock" />
+          <strong>Approved sample framing</strong>
+          <span>
+            These explanations are pre-authored for this fixed sample. No model
+            analyzed your draft, and only the question above enters the proof
+            record.
+          </span>
+        </section>
+      )}
 
       <ModelDuel
         current={currentModel}
@@ -1472,7 +1524,15 @@ function BeliefScreen({
                           ? " · source"
                           : ` · output ${evidence.outputIndex}`
                       }`}{" "}
-                  <strong>{evidence.relevance}</strong>
+                  <strong>
+                    {evidence.kind === "metric"
+                      ? "Notebook-reported metric selected as evidence."
+                      : evidence.kind === "code"
+                        ? "Notebook evaluation source selected as evidence."
+                        : evidence.kind === "schema"
+                          ? "Notebook schema selected as evidence."
+                          : "Resolved notebook evidence selected for this comparison."}
+                  </strong>
                   <small>{evidence.excerpt}</small>
                 </span>
               ))
@@ -1481,7 +1541,7 @@ function BeliefScreen({
 
           <section className="intervention panel">
             <div>
-              <p className="eyebrow">The fairer test</p>
+              <p className="eyebrow">Proposed comparison</p>
               <h2>{copy.fairTest}</h2>
               <p>{copy.intervention}</p>
             </div>
@@ -1489,7 +1549,7 @@ function BeliefScreen({
               <summary>Alternatives, limitations, and uncertainty</summary>
               <p>
                 {belief === undefined
-                  ? "Class imbalance and temporal drift remain alternatives. The available notebook evidence is sufficient to test entity leakage, but this experiment does not establish production performance or causality."
+                  ? "Class balance and temporal drift remain alternatives. The available notebook evidence supports this bounded comparison, but it does not establish production performance or causality."
                   : `${belief.alternatives
                       .map(
                         (alternative) =>
@@ -2354,6 +2414,46 @@ function InteractiveLeakageLab({
   );
 }
 
+function ResultInterpretationPrompt({
+  id,
+  value,
+  onChange,
+  disabled = false,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const ready = value.trim().length >= 20;
+  const descriptionId = `${id}-description`;
+  return (
+    <section
+      className="revision panel"
+      aria-label="Learner result interpretation"
+    >
+      <p className="eyebrow">Your interpretation</p>
+      <label id={`${id}-label`} htmlFor={id}>
+        What do you notice in this comparison?
+      </label>
+      <textarea
+        id={id}
+        value={value}
+        rows={3}
+        disabled={disabled}
+        aria-describedby={descriptionId}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="I notice…"
+      />
+      <small id={descriptionId} aria-live="polite">
+        {ready
+          ? "Interpretation recorded locally. Explore and Boundary are now available."
+          : "Write at least 20 characters before CounterLab reveals its reading or opens the next view."}
+      </small>
+    </section>
+  );
+}
+
 function LeakageRealityScreen({
   claim,
   prediction,
@@ -2372,13 +2472,18 @@ function LeakageRealityScreen({
   const random = resultRun(result, "random_row_split");
   const group = resultRun(result, "customer_group_split");
   const [revision, setRevision] = useState(
-    session?.revision ??
-      window.localStorage.getItem(storageKeys.replayRevision) ??
-      "",
+    session === null
+      ? (window.localStorage.getItem(storageKeys.replayRevision) ?? "")
+      : (session.revision ?? ""),
   );
   const [revisionAuthored, setRevisionAuthored] = useState(
     revision.trim().length >= 20,
   );
+  const interpretationComplete =
+    session === null ||
+    session.mode.kind === "verified_replay" ||
+    session?.revision !== undefined ||
+    (revisionAuthored && revision.trim().length >= 20);
   const [revisionMode, setRevisionMode] = useState<"clauses" | "free_text">(
     "clauses",
   );
@@ -2767,17 +2872,17 @@ function LeakageRealityScreen({
           titleId="lesson-phase-title"
           headingLevel="h1"
           capability={{
-            intro: "You can now distinguish:",
+            intro: "You completed one verified entity-leakage loop.",
             first: "good on familiar rows",
-            connector: "from",
-            second: "generalizes to new entities",
+            connector: "was compared with",
+            second: "performance on new entities in this fixed task",
           }}
           beforeReasoning={claim}
           afterReasoning={revision}
           transferStatus={{
-            label: "Passed",
+            label: "Fixed transfer task passed",
             detail:
-              "You carried the deployment-boundary rule from customers to time-ordered forecasting.",
+              "Your submitted choices matched the fixed forecasting evaluator. This records one task outcome; it does not establish mastery.",
           }}
           repairedNotebookAction={{
             label: "Download repaired notebook",
@@ -2954,11 +3059,12 @@ function LeakageRealityScreen({
         <div className="screen-intro compact">
           <p className="eyebrow aqua">Transfer passed · Patch unlocked</p>
           <h1 id="lesson-phase-title" tabIndex={-1}>
-            You applied the rule correctly.
+            This fixed forecasting transfer passed.
           </h1>
           <p>
-            You recognized the same evaluation mistake in forecasting, where
-            future information had leaked into the test.
+            Your submitted choices matched the fixed evaluator for the
+            forecasting scenario. This records one task outcome; it does not
+            establish mastery.
           </p>
         </div>
 
@@ -3133,24 +3239,41 @@ function LeakageRealityScreen({
         detail: `${group.entityOverlap.count} shared customers`,
       },
     },
-    finding: `${percent.format(random.metrics.accuracy)} became ${percent.format(group.metrics.accuracy)} when the test contained only new customers.`,
+    finding: interpretationComplete
+      ? `${percent.format(random.metrics.accuracy)} became ${percent.format(group.metrics.accuracy)} when the test contained only new customers.`
+      : "What do you notice in the verified comparison? Record your interpretation before CounterLab reveals its bounded reading.",
     controlledVariables: "model, target, metric, preprocessing, and seed",
     views: {
       observe: {
         heading: "Inspect the verified runs",
         available: true,
-        completed: true,
+        completed: interpretationComplete,
         content: (
-          <details id="leakage-verified-evidence" className="exact-results">
-            <summary>Show exact values and run details</summary>
-            <ResultTable result={result} />
-            <code>result {result.resultHash.slice(0, 12)}…</code>
-          </details>
+          <>
+            <details id="leakage-verified-evidence" className="exact-results">
+              <summary>Show exact values and run details</summary>
+              <ResultTable result={result} />
+              <code>result {result.resultHash.slice(0, 12)}…</code>
+            </details>
+            {session !== null &&
+            session.mode.kind !== "verified_replay" &&
+            session.revision === undefined ? (
+              <ResultInterpretationPrompt
+                id="leakage-result-interpretation"
+                value={revision}
+                onChange={(nextRevision) => {
+                  setRevision(nextRevision);
+                  setRevisionAuthored(nextRevision.trim().length >= 20);
+                }}
+                disabled={actionBusy}
+              />
+            ) : null}
+          </>
         ),
       },
       explore: {
         heading: "Explore bounded test choices",
-        available: true,
+        available: interpretationComplete,
         completed: false,
         content: (
           <InteractiveLeakageLab
@@ -3162,7 +3285,7 @@ function LeakageRealityScreen({
       },
       boundary: {
         heading: "Find where the conclusion changes",
-        available: true,
+        available: interpretationComplete,
         completed:
           session?.mode.kind === "sample_lesson"
             ? sampleBoundaryComplete
@@ -3219,10 +3342,11 @@ function LeakageRealityScreen({
           <section className="revision panel">
             <ReflectionBuilder
               value={revision}
-              onRevisionChange={(nextRevision) => {
-                setRevision(nextRevision);
-                setRevisionAuthored(nextRevision.trim().length >= 20);
-              }}
+              onRevisionChange={setRevision}
+              onLearnerEdit={(nextRevision) =>
+                setRevisionAuthored(nextRevision.trim().length >= 20)
+              }
+              onGeneratedRevision={() => setRevisionAuthored(false)}
               whenOptions={leakageReflectionWhen}
               actionOptions={leakageReflectionActions}
               becauseOptions={leakageReflectionReasons}
@@ -3255,16 +3379,20 @@ function LeakageRealityScreen({
       <div className="screen-intro compact">
         <p className="eyebrow aqua">Boundary · Verified result</p>
         <h1 id="lesson-phase-title" tabIndex={-1}>
-          Here’s what changed.
+          Compare the verified result.
         </h1>
         <p>
-          The model looked excellent on familiar customers. It struggled on
-          customers it had never seen.
+          The fixed values are visible now. Write what you notice before
+          CounterLab reveals its bounded interpretation.
         </p>
       </div>
       <LearnerCoach
         next="observe the result, explore it, then find and apply its boundary."
-        why={`The verified test found a ${accuracyGapPoints.toFixed(1)}-point gap for new customers. The four views change presentation only; fixed evidence remains the authority.`}
+        why={
+          !interpretationComplete
+            ? "The verified values are available for your interpretation. The four views change presentation only; fixed evidence remains the authority."
+            : `The verified test found a ${accuracyGapPoints.toFixed(1)}-point gap for new customers. The four views change presentation only; fixed evidence remains the authority.`
+        }
       />
       <ExperimentTheater
         key={session?.sessionId ?? result.resultHash}
@@ -3289,6 +3417,14 @@ function ImbalanceRealityScreen({
   session: SessionView | null;
   updateSession: (session: SessionView) => void;
 }) {
+  const [resultInterpretation, setResultInterpretation] = useState(
+    session?.revision ?? "",
+  );
+  const interpretationComplete =
+    session === null ||
+    session.mode.kind === "verified_replay" ||
+    session?.revision !== undefined ||
+    resultInterpretation.trim().length >= 20;
   const majority = result.runs.find(
     (run) => run.operation === "imbalance.majority_baseline",
   );
@@ -3319,6 +3455,7 @@ function ImbalanceRealityScreen({
   const applyAvailable =
     session !== null &&
     session.mode.kind !== "verified_replay" &&
+    interpretationComplete &&
     (session.mode.kind !== "live_notebook" ||
       session.boundaryMapAuthority !== undefined);
   const restoreApplyView =
@@ -3346,14 +3483,16 @@ function ImbalanceRealityScreen({
         detail: `${percent.format(stratified.metrics.precision)} precision`,
       },
     },
-    finding: `${percent.format(majority.metrics.accuracy)} headline accuracy coincided with only ${majority.confusionMatrix.tp} rare positives caught by the majority baseline.`,
+    finding: interpretationComplete
+      ? `${percent.format(majority.metrics.accuracy)} headline accuracy coincided with only ${majority.confusionMatrix.tp} rare positives caught by the majority baseline.`
+      : "What do you notice in the verified comparison? Record your interpretation before CounterLab reveals its bounded reading.",
     controlledVariables:
       "fixed fixture, stratified holdout, model scores, and seed",
     views: {
       observe: {
         heading: "Inspect the verified rare-event runs",
         available: true,
-        completed: true,
+        completed: interpretationComplete,
         content: (
           <>
             <blockquote>{claim}</blockquote>
@@ -3396,12 +3535,21 @@ function ImbalanceRealityScreen({
                 result {result.resultHash.slice(0, 12)}… · seed {result.seed}
               </code>
             </details>
+            {session !== null &&
+            session.mode.kind !== "verified_replay" &&
+            session.revision === undefined ? (
+              <ResultInterpretationPrompt
+                id="imbalance-result-interpretation"
+                value={resultInterpretation}
+                onChange={setResultInterpretation}
+              />
+            ) : null}
           </>
         ),
       },
       explore: {
         heading: "Explore threshold and prevalence choices",
-        available: true,
+        available: interpretationComplete,
         completed: false,
         content: (
           <Suspense
@@ -3417,7 +3565,7 @@ function ImbalanceRealityScreen({
       },
       boundary: {
         heading: "Find where the metric conclusion changes",
-        available: true,
+        available: interpretationComplete,
         completed: session?.boundaryMapAuthority !== undefined,
         content:
           session?.mode.kind === "live_notebook" ? (
@@ -3457,6 +3605,10 @@ function ImbalanceRealityScreen({
                   {...(session.revision === undefined
                     ? {}
                     : { revision: session.revision })}
+                  {...(session.revision === undefined &&
+                  resultInterpretation.trim().length >= 20
+                    ? { initialInterpretation: resultInterpretation }
+                    : {})}
                   {...(session.transferResult === undefined
                     ? {}
                     : { transferOutcome: session.transferResult.outcome })}
@@ -3495,15 +3647,19 @@ function ImbalanceRealityScreen({
     >
       <div className="screen-intro compact">
         <p className="eyebrow aqua">Boundary · Verified result</p>
-        <h1>A high accuracy can still miss every rare event.</h1>
+        <h1>Compare the verified rare-event result.</h1>
         <p>
-          CounterLab compared the notebook claim with a computed majority
-          baseline, class-specific metrics, and two bounded operating scenarios.
+          The fixed values are visible now. Write what you notice before
+          CounterLab reveals its bounded interpretation.
         </p>
       </div>
       <LearnerCoach
         next="observe the result, explore it, then find and apply its boundary."
-        why={`The majority baseline is ${percent.format(majority.metrics.accuracy)} accurate with ${percent.format(majority.metrics.recall)} rare-class recall. The four views change presentation only; fixed evidence remains the authority.`}
+        why={
+          !interpretationComplete
+            ? "The verified values are available for your interpretation. The four views change presentation only; fixed evidence remains the authority."
+            : `The majority baseline is ${percent.format(majority.metrics.accuracy)} accurate with ${percent.format(majority.metrics.recall)} rare-class recall. The four views change presentation only; fixed evidence remains the authority.`
+        }
       />
       <ExperimentTheater
         key={session?.sessionId ?? result.resultHash}
@@ -3944,9 +4100,9 @@ export function App() {
   const verifiedResult = session?.verifiedResult ?? legacyReplayResult;
   const belief = sessionBeliefPresentation(session);
   const effectiveClaim =
-    claim ||
-    hostedReplay?.question.claim ||
     belief?.claim ||
+    hostedReplay?.question.claim ||
+    claim ||
     "The notebook accuracy proves generalization to new customers.";
   const activeLearnerStage =
     stage === "landing"
@@ -4495,7 +4651,7 @@ export function App() {
         }
         if (!active) return;
         const restoredBelief = sessionBeliefPresentation(restored);
-        setClaim(storedClaim ?? restoredBelief?.claim ?? "");
+        setClaim(restoredBelief?.claim ?? storedClaim ?? "");
         setArtifact(restoredArtifact);
         setSession(restored);
         setMode(presentationMode(restored.mode));
@@ -4636,6 +4792,10 @@ export function App() {
     setAnalysisPreview(null);
     setSensitiveContentApproved(false);
     window.localStorage.setItem(storageKeys.mode, nextMode);
+    if (nextMode === "instant") {
+      setClaim(SAMPLE_LEAKAGE_QUESTION);
+      window.localStorage.setItem(storageKeys.claim, SAMPLE_LEAKAGE_QUESTION);
+    }
     if (nextMode === "live") {
       setStage("live-setup");
       void checkLiveCapabilities();
@@ -4667,13 +4827,11 @@ export function App() {
       setArtifact(sample);
       setSession(created);
       window.localStorage.setItem(storageKeys.sessionId, created.sessionId);
-      if (claim.trim().length > 0) {
-        window.localStorage.setItem(storageKeys.claim, claim);
-        window.localStorage.setItem(
-          storageKeys.claimSessionId,
-          created.sessionId,
-        );
-      }
+      window.localStorage.setItem(storageKeys.claim, SAMPLE_LEAKAGE_QUESTION);
+      window.localStorage.setItem(
+        storageKeys.claimSessionId,
+        created.sessionId,
+      );
       setStage("claim");
     });
   };
@@ -4811,7 +4969,9 @@ export function App() {
 
   const proposeBeliefTest = () => {
     if (session === null || beliefResponseClosed(session)) return;
-    window.localStorage.setItem(storageKeys.claim, claim);
+    const submittedClaim =
+      session.mode.kind === "sample_lesson" ? SAMPLE_LEAKAGE_QUESTION : claim;
+    window.localStorage.setItem(storageKeys.claim, submittedClaim);
     window.localStorage.setItem(storageKeys.claimSessionId, session.sessionId);
     void withRequest(async () => {
       if (mode === "live" && analysisPreview === null) {
@@ -4824,7 +4984,7 @@ export function App() {
         return;
       }
       const updated = await counterLabApi.proposeBeliefTest(session.sessionId, {
-        learnerClaim: claim,
+        learnerClaim: submittedClaim,
         ...(analysisPreview === null
           ? {}
           : {
@@ -4836,6 +4996,10 @@ export function App() {
             }),
       });
       setSession(updated);
+      const authoritativeClaim =
+        sessionBeliefPresentation(updated)?.claim ?? submittedClaim;
+      setClaim(authoritativeClaim);
+      window.localStorage.setItem(storageKeys.claim, authoritativeClaim);
       setAnalysisPreview(null);
       setSensitiveContentApproved(false);
       setStage("belief");
@@ -5231,6 +5395,7 @@ export function App() {
             {reviewStep === null && stage === "claim" && artifact !== null && (
               <ClaimScreen
                 artifact={artifact}
+                fixedSample={session?.mode.kind === "sample_lesson"}
                 claim={claim}
                 updateClaim={updateClaim}
                 analysisPreview={analysisPreview}
@@ -5275,6 +5440,7 @@ export function App() {
               <BeliefScreen
                 claim={effectiveClaim}
                 belief={belief}
+                fixedSampleFraming={mode === "instant"}
                 notebookScore={notebookScoreDisplay(artifact)}
                 confirmed={confirmed}
                 confirm={confirmBeliefTest}

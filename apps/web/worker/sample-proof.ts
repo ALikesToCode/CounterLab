@@ -8,6 +8,8 @@ import {
 import { createProofBundle } from "@counterlab/proof-bundle";
 import type { CounterLabSession } from "@counterlab/session-core";
 
+import { SAMPLE_LEAKAGE_QUESTION } from "../shared/sample-authority";
+
 import experimentPlanValue from "../../../replays/leakage-01/experiment-plan.json";
 import externalVerifierValue from "../../../replays/leakage-01/external-verifier-report.json";
 import labVerificationValue from "../../../replays/leakage-01/lab-verification.json";
@@ -56,6 +58,16 @@ function requiredSessionEvidence(session: CounterLabSession) {
   };
 }
 
+export function assertSampleProofClaimScope(
+  session: Pick<CounterLabSession, "beliefTest">,
+): void {
+  if (session.beliefTest?.learnerClaim !== SAMPLE_LEAKAGE_QUESTION) {
+    throw new Error(
+      "The stored sample claim is outside the fixed sample proof scope",
+    );
+  }
+}
+
 export function createSampleReasoningProof(input: {
   session: CounterLabSession;
   manifest: ArtifactManifest;
@@ -63,6 +75,7 @@ export function createSampleReasoningProof(input: {
   issuedAt: string;
   signingKey?: string;
 }): { reasoningDiff: ReasoningDiff; proofBundle: ProofBundle } {
+  assertSampleProofClaimScope(input.session);
   const evidence = requiredSessionEvidence(input.session);
   const event = (kind: string) => {
     const found = input.events.find((candidate) => candidate.kind === kind);
@@ -171,6 +184,7 @@ export function createSampleReasoningProof(input: {
         template: requiredGitObject(labVerificationValue.commitHash),
       },
       limitations: [
+        "This fixed sample answered only its pre-authored customer-generalization question; it did not analyze a custom learner claim.",
         "Verification covers the documented public entity-leakage experiment and supported notebook path.",
         "Docker enforcement is evidence for this local run, not a formal sandbox proof.",
         "Passing transfer verifies fixed choices for this task; it does not prove global learner mastery.",

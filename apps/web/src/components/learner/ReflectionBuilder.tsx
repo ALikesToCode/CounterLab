@@ -43,6 +43,8 @@ function sentenceFromSelection(
 export function ReflectionBuilder({
   value,
   onRevisionChange,
+  onLearnerEdit,
+  onGeneratedRevision,
   whenOptions,
   actionOptions,
   becauseOptions,
@@ -54,6 +56,8 @@ export function ReflectionBuilder({
 }: {
   value: string;
   onRevisionChange: (revision: string) => void;
+  onLearnerEdit?: (revision: string) => void;
+  onGeneratedRevision?: (revision: string) => void;
   whenOptions: readonly EvidenceLinkedClauseOption[];
   actionOptions: readonly EvidenceLinkedClauseOption[];
   becauseOptions: readonly EvidenceLinkedClauseOption[];
@@ -80,7 +84,10 @@ export function ReflectionBuilder({
       actionOptions,
       becauseOptions,
     );
-    if (nextSentence !== null) onRevisionChange(nextSentence);
+    if (nextSentence !== null) {
+      onRevisionChange(nextSentence);
+      onGeneratedRevision?.(nextSentence);
+    }
   };
 
   const groups = [
@@ -216,7 +223,11 @@ export function ReflectionBuilder({
           value={value}
           disabled={disabled}
           placeholder={placeholder}
-          onChange={(event) => onRevisionChange(event.target.value)}
+          onChange={(event) => {
+            const nextRevision = event.target.value;
+            onRevisionChange(nextRevision);
+            onLearnerEdit?.(nextRevision);
+          }}
         />
       </label>
     </section>

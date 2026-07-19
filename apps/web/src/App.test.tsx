@@ -8,6 +8,7 @@ import {
 } from "@counterlab/contracts";
 
 import imbalanceResultText from "../../../fixtures/held-out/imbalance_epistemic_competing_v2.json?raw";
+import { SAMPLE_LEAKAGE_QUESTION } from "../shared/sample-authority";
 
 import { App } from "./App";
 import {
@@ -655,10 +656,6 @@ async function openSampleModelDuel(user: ReturnType<typeof userEvent.setup>) {
   await screen.findByRole("heading", {
     name: /what do you think the score means/i,
   });
-  await user.type(
-    screen.getByLabelText(/your claim/i),
-    "The high score means the model will work for new customers.",
-  );
   await user.click(
     screen.getByRole("button", { name: /compare two explanations/i }),
   );
@@ -796,7 +793,24 @@ describe("CounterLab judged flow", () => {
         name: /what do you think the score means/i,
       }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText(/your claim/i)).toHaveValue(question);
+    expect(screen.queryByLabelText(/your claim/i)).not.toBeInTheDocument();
+    expect(screen.getByText(SAMPLE_LEAKAGE_QUESTION)).toBeInTheDocument();
+    expect(
+      screen.getByText(/does not analyze or sign a custom claim/i),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /compare two explanations/i }),
+    );
+    expect(
+      await screen.findByText(
+        "Does the notebook's random-row accuracy generalize to completely new customers?",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/pre-authored for this fixed sample/i),
+    ).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(question);
   });
 
   it("restores a saved question on the refresh-safe new investigation route", async () => {
@@ -1217,8 +1231,11 @@ describe("CounterLab judged flow", () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/live competing hypothesis/i)).toBeInTheDocument();
     expect(
-      screen.getByText(/the claim targets unseen customers/i),
+      screen.getByText(/notebook schema selected as evidence/i),
     ).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(
+      /the claim targets unseen customers/i,
+    );
     expect(
       screen.getByText(/customer_id identifies the evaluation boundary/i),
     ).toBeInTheDocument();
@@ -1266,10 +1283,19 @@ describe("CounterLab judged flow", () => {
     render(<App />);
 
     expect(
-      await screen.findByRole("heading", { name: /here.s what changed/i }),
+      await screen.findByRole("heading", {
+        name: /compare the verified result/i,
+      }),
     ).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /apply/i })).toBeDisabled();
-    await user.click(screen.getByRole("tab", { name: /boundary/i }));
+    const boundaryTab = screen.getByRole("tab", { name: /boundary/i });
+    expect(boundaryTab).toBeDisabled();
+    await user.type(
+      screen.getByRole("textbox", { name: /what do you notice/i }),
+      "The evaluation result changes across the deployment boundary.",
+    );
+    expect(boundaryTab).toBeEnabled();
+    await user.click(boundaryTab);
     expect(
       await screen.findByRole("button", { name: /map the boundary/i }),
     ).toBeInTheDocument();
@@ -1363,9 +1389,8 @@ describe("CounterLab judged flow", () => {
         name: /what do you think the score means/i,
       }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText(/your claim/i)).toHaveValue(
-      "The high score means the model will work for new customers.",
-    );
+    expect(screen.queryByLabelText(/your claim/i)).not.toBeInTheDocument();
+    expect(screen.getByText(SAMPLE_LEAKAGE_QUESTION)).toBeInTheDocument();
   });
 
   it("records not-enough-evidence without sealing a prediction", async () => {
@@ -1418,9 +1443,8 @@ describe("CounterLab judged flow", () => {
           name: /revise in a new investigation/i,
         }),
       ).toBeEnabled();
-      expect(screen.getByLabelText(/your claim/i)).toHaveValue(
-        "The high score means the model will work for new customers.",
-      );
+      expect(screen.queryByLabelText(/your claim/i)).not.toBeInTheDocument();
+      expect(screen.getByText(SAMPLE_LEAKAGE_QUESTION)).toBeInTheDocument();
       expect(document.body).not.toHaveTextContent(
         /INSUFFICIENT_EVIDENCE|REJECTED_BY_LEARNER/,
       );
@@ -1474,7 +1498,7 @@ describe("CounterLab judged flow", () => {
       }),
     ).toBeEnabled();
     expect(screen.getByLabelText(/your claim/i)).toHaveValue(
-      "The high score means the model will work for new customers.",
+      liveBeliefSpec.claim,
     );
     expect(document.body).not.toHaveTextContent(
       /INSUFFICIENT_EVIDENCE|REJECTED_BY_LEARNER/,
@@ -1522,10 +1546,9 @@ describe("CounterLab judged flow", () => {
       ).not.toBeInTheDocument(),
     );
     await vi.waitFor(() =>
-      expect(screen.getByLabelText(/your claim/i)).toHaveValue(
-        "The high score means the model will work for new customers.",
-      ),
+      expect(screen.queryByLabelText(/your claim/i)).not.toBeInTheDocument(),
     );
+    expect(screen.getByText(SAMPLE_LEAKAGE_QUESTION)).toBeInTheDocument();
     expect(
       screen.getAllByText(uploadedArtifact.fileName).length,
     ).toBeGreaterThan(0);
@@ -1866,8 +1889,11 @@ describe("CounterLab judged flow", () => {
       screen.getByText(liveBeliefSpec.hypotheses[1].statement),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(liveBeliefSpec.evidenceRefs[0]!.relevance),
+      screen.getByText(/notebook schema selected as evidence/i),
     ).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(
+      liveBeliefSpec.evidenceRefs[0]!.relevance,
+    );
     expect(screen.getByText(liveBeliefSpec.claim)).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(
       /customer_id encoded|98\.5% accuracy/i,
@@ -1974,10 +2000,14 @@ describe("CounterLab judged flow", () => {
     );
 
     expect(
-      (await screen.findAllByText(/rarity hides failure/i)).length,
+      (
+        await screen.findAllByText(
+          /overall accuracy obscures rare-case behavior/i,
+        )
+      ).length,
     ).toBeGreaterThan(0);
     expect(
-      screen.getByText(/majority baseline, confusion matrix/i),
+      screen.getByText(/same predictions with overall and class-specific/i),
     ).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(
       /hold out entire customers|customer memory/i,
@@ -2007,11 +2037,7 @@ describe("CounterLab judged flow", () => {
     const continueButton = screen.getByRole("button", {
       name: /compare two explanations/i,
     });
-    expect(continueButton).toBeDisabled();
-    await user.type(
-      screen.getByLabelText(/your claim/i),
-      "The 98.5% test accuracy proves the model generalizes to new customers.",
-    );
+    expect(continueButton).toBeEnabled();
     await user.click(continueButton);
 
     expect(
@@ -2023,6 +2049,9 @@ describe("CounterLab judged flow", () => {
     expect(
       screen.queryByRole("heading", { name: /here.s what changed/i }),
     ).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(
+      /deceptive|fairer test|keep each customer's rows together|remove customer id|evidence verdict|supported hypothesis|59\.4%/i,
+    );
 
     await user.click(
       screen.getByRole("button", { name: /yes, this captures my view/i }),
@@ -2046,6 +2075,10 @@ describe("CounterLab judged flow", () => {
 
   it("explains the fair test before revealing one verified Theater view", async () => {
     const user = userEvent.setup();
+    window.localStorage.setItem(
+      "counterlab.replayRevision",
+      "A stale replay interpretation must never authorize this new sample.",
+    );
     render(<App />);
 
     await openSampleModelDuel(user);
@@ -2082,20 +2115,36 @@ describe("CounterLab judged flow", () => {
     expect(screen.getByText("Verified result")).toBeInTheDocument();
     const tabs = screen.getByRole("tablist", { name: /experiment views/i });
     const applyTab = within(tabs).getByRole("tab", { name: /apply/i });
+    const exploreTab = within(tabs).getByRole("tab", { name: /explore/i });
+    const boundaryTab = within(tabs).getByRole("tab", { name: /boundary/i });
     expect(applyTab).toBeDisabled();
+    expect(exploreTab).toBeDisabled();
+    expect(boundaryTab).toBeDisabled();
     expect(within(tabs).getByRole("tab", { name: /observe/i })).toHaveAttribute(
       "aria-selected",
       "true",
     );
     expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
+    expect(
+      screen.getByRole("textbox", { name: /what do you notice/i }),
+    ).toHaveValue("");
+    expect(document.body).not.toHaveTextContent(/98\.5% became 59\.4%/i);
 
-    await user.click(within(tabs).getByRole("tab", { name: /explore/i }));
+    await user.type(
+      screen.getByRole("textbox", { name: /what do you notice/i }),
+      "The result changes when the evaluation boundary changes.",
+    );
+    expect(exploreTab).toBeEnabled();
+    expect(boundaryTab).toBeEnabled();
+    expect(document.body).toHaveTextContent(/98\.5% became 59\.4%/i);
+
+    await user.click(exploreTab);
     expect(
       screen.getByRole("heading", { name: /explore bounded test choices/i }),
     ).toBeInTheDocument();
     expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
 
-    await user.click(within(tabs).getByRole("tab", { name: /boundary/i }));
+    await user.click(boundaryTab);
     expect(
       await screen.findByRole("heading", {
         name: /can you find a condition where the conclusion changes/i,
@@ -2117,6 +2166,14 @@ describe("CounterLab judged flow", () => {
     expect(
       window.localStorage.getItem("counterlab.sampleBoundarySessionId"),
     ).toBe("session_ui");
+
+    await user.click(applyTab);
+    expect(screen.getByLabelText(/your revised mental model/i)).toHaveValue(
+      "The result changes when the evaluation boundary changes.",
+    );
+    expect(
+      screen.getByRole("button", { name: /try the rule on a new problem/i }),
+    ).toBeEnabled();
   });
 
   it("keeps legacy replay strictly read-only across the judged flow", async () => {

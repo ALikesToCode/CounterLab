@@ -118,18 +118,22 @@ export function ImbalanceTransferLesson({
   sessionId,
   state,
   revision,
+  initialInterpretation,
   transferOutcome,
   updateSession,
 }: {
   sessionId: string;
   state: SessionState;
   revision?: string;
+  initialInterpretation?: string;
   transferOutcome?: "PASSED" | "FAILED";
   updateSession: (session: SessionView) => void;
 }) {
-  const [revisionDraft, setRevisionDraft] = useState(revision ?? "");
+  const [revisionDraft, setRevisionDraft] = useState(
+    revision ?? initialInterpretation ?? "",
+  );
   const [revisionAuthored, setRevisionAuthored] = useState(
-    revision !== undefined && revision.trim().length >= 20,
+    (revision ?? initialInterpretation ?? "").trim().length >= 20,
   );
   const [revisionMode, setRevisionMode] = useState<"clauses" | "free_text">(
     "clauses",
@@ -197,11 +201,11 @@ export function ImbalanceTransferLesson({
     return (
       <section className="transfer-pass panel imbalance-transfer-pass">
         <p className="eyebrow aqua">Transfer passed</p>
-        <h2>You moved the rule—not the answer.</h2>
+        <h2>This fixed manufacturing transfer passed.</h2>
         <p>
-          You recognized the same evaluation problem in manufacturing defects:
-          rare-class cost and deployment prevalence decide which metric and
-          threshold are useful. The patch gate is now unlocked.
+          Your submitted choices matched the fixed evaluator for rare-class cost
+          and deployment prevalence. This records one task outcome; it does not
+          establish mastery. The patch gate is now unlocked.
         </p>
       </section>
     );
@@ -212,10 +216,11 @@ export function ImbalanceTransferLesson({
       <section className="revision panel imbalance-revision">
         <ReflectionBuilder
           value={revisionDraft}
-          onRevisionChange={(nextRevision) => {
-            setRevisionDraft(nextRevision);
-            setRevisionAuthored(nextRevision.trim().length >= 20);
-          }}
+          onRevisionChange={setRevisionDraft}
+          onLearnerEdit={(nextRevision) =>
+            setRevisionAuthored(nextRevision.trim().length >= 20)
+          }
+          onGeneratedRevision={() => setRevisionAuthored(false)}
           whenOptions={reflectionWhen}
           actionOptions={reflectionActions}
           becauseOptions={reflectionReasons}

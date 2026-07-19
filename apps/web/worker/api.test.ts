@@ -89,6 +89,7 @@ import {
   verifyRunnerJobToken,
 } from "./runner-token";
 import { summarizeOperationalRows } from "./operational-diagnostics";
+import { SAMPLE_LEAKAGE_QUESTION } from "../shared/sample-authority";
 
 const {
   privateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
@@ -9642,9 +9643,32 @@ describe("Cloudflare Worker API", () => {
     expect(events[1]).toMatchObject({
       actor: "system",
       kind: "belief_test.proposed",
-      modelId: "leakage-customer-churn-belief-v1",
+      modelId: "leakage-customer-churn-belief-v2",
     });
     expect(events[1]).not.toHaveProperty("promptHash");
+  });
+
+  it("keeps unrelated learner prose outside the fixed sample claim authority", async () => {
+    const { app, sessionId } = await sessionHarness("sample");
+    const unrelatedThought =
+      "Purple bananas taste better on Tuesdays, so this score is meaningless.";
+
+    const response = await postJson(
+      app,
+      `/api/sessions/${sessionId}/belief-test`,
+      { learnerClaim: unrelatedThought },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        beliefTest: {
+          learnerClaim:
+            "Does the notebook's random-row accuracy generalize to completely new customers?",
+        },
+      },
+    });
   });
 
   it("returns LIVE_UNAVAILABLE without advancing a live session when the key is missing", async () => {
@@ -10181,17 +10205,27 @@ describe("Cloudflare Worker API", () => {
 
     const proof = await app.request(`${route}/proof-bundle`);
     expect(proof.status).toBe(200);
-    await expect(proof.json()).resolves.toMatchObject({
+    const proofBody = (await proof.json()) as {
+      data: { limitations: string[] };
+    };
+    expect(proofBody).toMatchObject({
       ok: true,
       data: {
         sessionId,
         replayId: "leakage-01",
+        beliefTest: { learnerClaim: SAMPLE_LEAKAGE_QUESTION },
         integrity: {
           mode: "integrity-hashed",
           eventChainHead: events[11]?.eventHash,
         },
       },
     });
+    expect(proofBody.data.limitations).toContain(
+      "This fixed sample answered only its pre-authored customer-generalization question; it did not analyze a custom learner claim.",
+    );
+    expect(JSON.stringify(proofBody)).not.toContain(
+      "The 98.5% test accuracy proves generalization to new customers.",
+    );
   });
 
   it("maps a lost D1 optimistic update to a typed conflict", async () => {

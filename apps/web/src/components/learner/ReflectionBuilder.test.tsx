@@ -56,10 +56,14 @@ const becauseOptions = [
 function ControlledReflection({
   initialValue = "",
   onRevision = vi.fn(),
+  onLearnerEdit,
+  onGeneratedRevision,
   onAuthoringModeChange,
 }: {
   initialValue?: string;
   onRevision?: (revision: string) => void;
+  onLearnerEdit?: (revision: string) => void;
+  onGeneratedRevision?: (revision: string) => void;
   onAuthoringModeChange?: (mode: "clauses" | "free_text") => void;
 }) {
   const [value, setValue] = useState(initialValue);
@@ -73,6 +77,8 @@ function ControlledReflection({
         onRevision(revision);
         setValue(revision);
       }}
+      {...(onLearnerEdit === undefined ? {} : { onLearnerEdit })}
+      {...(onGeneratedRevision === undefined ? {} : { onGeneratedRevision })}
       {...(onAuthoringModeChange === undefined
         ? {}
         : { onAuthoringModeChange })}
@@ -95,7 +101,13 @@ describe("ReflectionBuilder", () => {
   it("builds one editable revision string from evidence-linked clauses", async () => {
     const user = userEvent.setup();
     const onRevision = vi.fn();
-    render(<ControlledReflection onRevision={onRevision} />);
+    const onLearnerEdit = vi.fn();
+    render(
+      <ControlledReflection
+        onRevision={onRevision}
+        onLearnerEdit={onLearnerEdit}
+      />,
+    );
 
     await user.selectOptions(
       screen.getByLabelText(/choose the condition/i),
@@ -119,6 +131,7 @@ describe("ReflectionBuilder", () => {
     expect(
       onRevision.mock.calls.every(([value]) => typeof value === "string"),
     ).toBe(true);
+    expect(onLearnerEdit).not.toHaveBeenCalled();
     expect(
       screen.getByRole("link", { name: /verified overlap cells/i }),
     ).toHaveAttribute("href", "#entity-overlap");
@@ -127,6 +140,74 @@ describe("ReflectionBuilder", () => {
         name: /verified identity-overlap result/i,
       }),
     ).toHaveAttribute("href", "#overlap-result");
+  });
+
+  it("reports only direct textarea input as a learner edit", async () => {
+    const user = userEvent.setup();
+    const onRevision = vi.fn();
+    const onLearnerEdit = vi.fn();
+    render(
+      <ControlledReflection
+        onRevision={onRevision}
+        onLearnerEdit={onLearnerEdit}
+      />,
+    );
+
+    const editor = screen.getByLabelText("Editable final sentence");
+    await user.type(editor, "I would test complete entities.");
+
+    expect(onRevision).toHaveBeenLastCalledWith(
+      "I would test complete entities.",
+    );
+    expect(onLearnerEdit).toHaveBeenLastCalledWith(
+      "I would test complete entities.",
+    );
+  });
+
+  it("marks a later clause-generated replacement as generated", async () => {
+    const user = userEvent.setup();
+    const onLearnerEdit = vi.fn();
+    const onGeneratedRevision = vi.fn();
+    render(
+      <ControlledReflection
+        onLearnerEdit={onLearnerEdit}
+        onGeneratedRevision={onGeneratedRevision}
+      />,
+    );
+
+    await user.type(
+      screen.getByLabelText("Editable final sentence"),
+      "I directly interpreted the comparison.",
+    );
+    expect(onLearnerEdit).toHaveBeenCalled();
+
+    await user.selectOptions(
+      screen.getByLabelText(/choose the condition/i),
+      "rows-repeat-entity",
+    );
+    await user.selectOptions(
+      screen.getByLabelText(/choose the action/i),
+      "whole-entities",
+    );
+    await user.selectOptions(
+      screen.getByLabelText(/choose the evidence-based reason/i),
+      "identity-overlap",
+    );
+
+    expect(onGeneratedRevision).toHaveBeenCalledWith(
+      "When rows repeat the same entity,\nI should hold out whole entities,\nbecause random rows can share identity across train and test.",
+    );
+  });
+
+  it("keeps the free-text editor empty until the learner types", async () => {
+    const user = userEvent.setup();
+    const onLearnerEdit = vi.fn();
+    render(<ControlledReflection onLearnerEdit={onLearnerEdit} />);
+
+    await user.click(screen.getByRole("radio", { name: "Write freely" }));
+
+    expect(screen.getByLabelText("Your rule")).toHaveValue("");
+    expect(onLearnerEdit).not.toHaveBeenCalled();
   });
 
   it("preserves edits while switching between clause and full free-text modes", async () => {
