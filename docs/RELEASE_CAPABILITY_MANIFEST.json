@@ -1,0 +1,102 @@
+{
+  "schemaVersion": "1",
+  "releaseScope": "CounterLab v6.1 learner experience",
+  "releasedSubjectPackCount": 2,
+  "releasedSubjectPacks": [
+    {
+      "id": "entity_leakage",
+      "version": "2.1.0",
+      "releaseStatus": "released",
+      "title": "Entity leakage",
+      "fixedFixture": {
+        "id": "public-leakage-v1",
+        "version": "leakage-fixture-v1",
+        "contentSha256": "5c482f39e4e948a92dab61bf9c9f5c6577fbe9fc688fd597c9fefd785ee1be70"
+      },
+      "authoritativeKernelVersion": "0.1.0",
+      "allowedOperations": [
+        "leakage.random_row_split",
+        "leakage.group_holdout",
+        "leakage.identity_ablation",
+        "leakage.entity_overlap",
+        "leakage.controlled_comparison"
+      ],
+      "allowedMetrics": [
+        "accuracy",
+        "roc_auc",
+        "entity_overlap_rate"
+      ],
+      "approvedClaims": [
+        "This verified run measures the documented public fixture under the selected entity boundary.",
+        "Zero entity overlap was verified for the group holdout run."
+      ],
+      "forbiddenClaims": [
+        "This proves performance for every future customer.",
+        "This proves the learner has mastered leakage."
+      ],
+      "nonClaims": [
+        "This bounded synthetic sweep does not show that group holdout is always more accurate.",
+        "This map does not establish performance for unrelated datasets or deployment settings.",
+        "This transfer does not certify global mastery."
+      ]
+    },
+    {
+      "id": "class_imbalance",
+      "version": "1.1.0",
+      "releaseStatus": "released",
+      "title": "Class imbalance and metric choice",
+      "fixedFixture": {
+        "id": "public-imbalance-v1",
+        "version": "imbalance-fixture-v1",
+        "contentSha256": "7974fe5744c4f9f2e8a31817791dac09ba9efb17cc88a4aa3383ae333e92ad7f"
+      },
+      "authoritativeKernelVersion": "0.1.0",
+      "allowedOperations": [
+        "imbalance.majority_baseline",
+        "imbalance.stratified_holdout",
+        "imbalance.confusion_matrix",
+        "imbalance.threshold_sweep",
+        "imbalance.prevalence_sweep"
+      ],
+      "allowedMetrics": [
+        "accuracy",
+        "precision",
+        "recall",
+        "f1",
+        "pr_auc",
+        "roc_auc",
+        "confusion_matrix",
+        "prevalence"
+      ],
+      "approvedClaims": [
+        "This verified run reports class-specific performance for the documented fixture, split, threshold, and prevalence.",
+        "The fixed majority baseline and confusion-matrix totals were verified for this run."
+      ],
+      "forbiddenClaims": [
+        "High accuracy alone proves the rare class is detected well.",
+        "This threshold is optimal for every deployment prevalence or cost tradeoff.",
+        "This proves the learner has mastered class imbalance."
+      ],
+      "nonClaims": [
+        "The map does not select a production threshold or encode deployment costs.",
+        "This bounded fixture does not establish utility for unrelated rare-event systems.",
+        "This transfer does not certify global mastery."
+      ]
+    }
+  ],
+  "authorityRoles": {
+    "reasoningAnalyst": "proposal_and_explanation_only",
+    "experimentSelection": "fixed_subject_pack_scorer",
+    "numericalTruth": "fixed_kernel",
+    "verification": "frozen_verifier",
+    "learner": "question_prediction_revision_transfer_and_patch_approval"
+  },
+  "scientificEngineRegistry": "scientific-engines/registry.json",
+  "globalNonClaims": [
+    "Only entity leakage and class imbalance are released Subject Packs.",
+    "CounterLab does not support arbitrary notebooks, arbitrary subject generation, or all STEM.",
+    "A verified result applies only to its documented fixture, experiment, and Boundary Map.",
+    "A Proof Capsule does not certify global mastery.",
+    "Sample and replay evidence are not live notebook authority."
+  ]
+}

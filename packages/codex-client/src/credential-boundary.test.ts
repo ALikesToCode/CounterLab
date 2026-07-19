@@ -22,6 +22,7 @@ import {
   probeBubblewrapCredentialIsolation,
   stageSecureCodexAuth,
 } from "./index.js";
+import { assertSecureCodexAuthMetadata } from "./credential-boundary.js";
 
 function createAuthFixture(mode = 0o600): {
   root: string;
@@ -71,19 +72,21 @@ describe("Codex credential boundary", () => {
     }
   });
 
-  it("rejects an auth file readable by the group or other users", async () => {
-    const fixture = createAuthFixture(0o644);
-    try {
-      await expect(
-        loadSecureCodexAccessToken(fixture.authFile),
-      ).rejects.toMatchObject({
+  it("rejects auth metadata readable by the group or other users", () => {
+    expect(() =>
+      assertSecureCodexAuthMetadata({
+        isFile: () => true,
+        mode: 0o100644,
+        size: 128,
+        uid: process.getuid?.() ?? 1000,
+      }),
+    ).toThrowError(
+      expect.objectContaining({
         name: "CompilerSetupError",
         code: "CODEX_ISOLATION_UNAVAILABLE",
         message: expect.stringMatching(/permissions/i),
-      });
-    } finally {
-      rmSync(fixture.root, { recursive: true, force: true });
-    }
+      }),
+    );
   });
 
   it("rejects a symlinked auth file", async () => {
@@ -116,8 +119,12 @@ describe("Codex credential boundary", () => {
       await staged.revoke();
       expect(existsSync(staged.guestAuthSource)).toBe(false);
       expect(existsSync(staged.directory)).toBe(true);
-      expect(statSync(staged.directory).mode & 0o777).toBe(0);
-      expect(() => readdirSync(staged.directory)).toThrowError(/EACCES/);
+      expect(statSync(staged.directory).mode & 0o077).toBe(0);
+      try {
+        expect(readdirSync(staged.directory)).toEqual([]);
+      } catch (error) {
+        expect(error).toMatchObject({ code: "EACCES" });
+      }
       await staged.dispose();
       expect(existsSync(staged.directory)).toBe(false);
     } finally {

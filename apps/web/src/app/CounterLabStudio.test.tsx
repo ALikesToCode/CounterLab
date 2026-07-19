@@ -12,6 +12,78 @@ const context = {
 };
 
 describe("CounterLabStudio", () => {
+  it("closes proof after compile when it was opened automatically", () => {
+    const actions = {
+      newAnalysis: vi.fn(),
+      showEvidence: vi.fn(),
+      startOver: vi.fn(),
+      openRecent: vi.fn(),
+    };
+    const { rerender } = render(
+      <CounterLabStudio context={context} actions={actions}>
+        <main>Compile</main>
+      </CounterLabStudio>,
+    );
+
+    expect(
+      screen.getByRole("button", { name: /evidence & proof/i }),
+    ).toHaveAttribute("aria-expanded", "true");
+
+    rerender(
+      <CounterLabStudio
+        context={{ ...context, stage: "reality" }}
+        actions={actions}
+      >
+        <main>Result</main>
+      </CounterLabStudio>,
+    );
+
+    expect(
+      screen.getByRole("button", { name: /evidence & proof/i }),
+    ).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("keeps proof open across stages when the learner opened it", () => {
+    const actions = {
+      newAnalysis: vi.fn(),
+      showEvidence: vi.fn(),
+      startOver: vi.fn(),
+      openRecent: vi.fn(),
+    };
+    const { rerender } = render(
+      <CounterLabStudio
+        context={{ ...context, stage: "claim" }}
+        actions={actions}
+      >
+        <main>Claim</main>
+      </CounterLabStudio>,
+    );
+    const proofToggle = screen.getByRole("button", {
+      name: /evidence & proof/i,
+    });
+
+    fireEvent.click(proofToggle);
+    expect(proofToggle).toHaveAttribute("aria-expanded", "true");
+
+    rerender(
+      <CounterLabStudio context={context} actions={actions}>
+        <main>Compile</main>
+      </CounterLabStudio>,
+    );
+    rerender(
+      <CounterLabStudio
+        context={{ ...context, stage: "reality" }}
+        actions={actions}
+      >
+        <main>Result</main>
+      </CounterLabStudio>,
+    );
+
+    expect(
+      screen.getByRole("button", { name: /evidence & proof/i }),
+    ).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("keeps project tools collapsed while preserving on-demand access", () => {
     render(
       <CounterLabStudio
@@ -110,5 +182,36 @@ describe("CounterLabStudio", () => {
       "aria-selected",
       "true",
     );
+  });
+
+  it("exposes private-session revocation only on demand in provenance", () => {
+    const revokeSessionAccess = vi.fn();
+    render(
+      <CounterLabStudio
+        context={context}
+        actions={{
+          newAnalysis: vi.fn(),
+          showEvidence: vi.fn(),
+          revokeSessionAccess,
+          startOver: vi.fn(),
+          openRecent: vi.fn(),
+        }}
+      >
+        <main>Compile</main>
+      </CounterLabStudio>,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /revoke private session access/i }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Provenance" }));
+    const revoke = screen.getByRole("button", {
+      name: /revoke private session access/i,
+    });
+    expect(
+      screen.getByText(/separate owner key held by this browser/i),
+    ).toBeInTheDocument();
+    fireEvent.click(revoke);
+    expect(revokeSessionAccess).toHaveBeenCalledOnce();
   });
 });

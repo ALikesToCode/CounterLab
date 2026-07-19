@@ -10,7 +10,11 @@ import {
 import imbalanceResultText from "../../../fixtures/held-out/imbalance_epistemic_competing_v2.json?raw";
 
 import { App } from "./App";
-import { replayFixture } from "./components/replay/ProofCapsuleReplayView.fixture";
+import {
+  publicReplayFixture,
+  replayFixture,
+} from "./components/replay/ProofCapsuleReplayView.fixture";
+import { activeRunnerRegistryKey } from "./features/learner/activeRunnerRegistry";
 import { sampleArtifact, sampleResult } from "./sample";
 
 const verifiedImbalanceResult = VerifiedResultSetSchema.parse(
@@ -255,6 +259,7 @@ function installApi(
     liveGpt?: "configured" | "server-key-required";
     runner?: "configured" | "local-runner-required";
     rejectLiveBelief?: boolean;
+    cancelOffline?: boolean;
     beliefTest?: typeof liveBeliefTest | typeof imbalanceBeliefTest;
     stallRunner?: boolean;
     failRunnerResume?: boolean;
@@ -269,7 +274,7 @@ function installApi(
       | "REASONING_DIFF_ISSUED"
       | "PROOF_CAPSULE_ISSUED";
     restoredSessionExtra?: Record<string, unknown>;
-    replay?: ReturnType<typeof replayFixture>;
+    replay?: ReturnType<typeof publicReplayFixture>;
   } = {},
 ) {
   let activeMode:
@@ -290,7 +295,23 @@ function installApi(
           liveGpt: options.liveGpt ?? "server-key-required",
           liveCodex: options.runner ?? "local-runner-required",
           liveKernel: options.runner ?? "local-runner-required",
-          sandbox: options.runner ?? "local-runner-required",
+          sandbox:
+            options.runner === "configured"
+              ? "credential-and-privilege-boundary"
+              : "local-runner-required",
+          generationFilesystemReadIsolation: "PARTIAL",
+          ...(options.runner === "configured"
+            ? {
+                release: {
+                  status: "bound",
+                  workerVersionId: "11111111-2222-3333-4444-555555555555",
+                  workerVersionTag: `git-${"a".repeat(40)}`,
+                  workerEvidenceCommit: "a".repeat(40),
+                  runnerSourceCommit: "b".repeat(40),
+                  runnerImageDigest: `sha256:${"c".repeat(64)}`,
+                },
+              }
+            : {}),
           requestId: "request_ui",
         });
       }
@@ -315,7 +336,7 @@ function installApi(
           201,
         );
       }
-      if (path === `/api/artifacts/${uploadedArtifact.artifactId}`) {
+      if (path === "/api/sessions/session_ui/artifact") {
         return response(uploadedArtifact);
       }
       if (path === "/api/sessions/session_ui") {
@@ -349,6 +370,7 @@ function installApi(
         });
       }
       if (path.endsWith("/jobs/runner_job_ui/cancel")) {
+        if (options.cancelOffline) throw new TypeError("network unavailable");
         return response({
           ...session("LAB_REJECTED", 6, {
             artifactId: uploadedArtifact.artifactId,
@@ -497,12 +519,33 @@ const testStorage: Storage = {
   },
 };
 
+const sessionStorageValues = new Map<string, string>();
+const testSessionStorage: Storage = {
+  get length() {
+    return sessionStorageValues.size;
+  },
+  clear: () => sessionStorageValues.clear(),
+  getItem: (key) => sessionStorageValues.get(key) ?? null,
+  key: (index) => [...sessionStorageValues.keys()][index] ?? null,
+  removeItem: (key) => {
+    sessionStorageValues.delete(key);
+  },
+  setItem: (key, value) => {
+    sessionStorageValues.set(key, value);
+  },
+};
+
 beforeEach(() => {
   Object.defineProperty(window, "localStorage", {
     configurable: true,
     value: testStorage,
   });
+  Object.defineProperty(window, "sessionStorage", {
+    configurable: true,
+    value: testSessionStorage,
+  });
   window.localStorage.clear();
+  window.sessionStorage.clear();
   window.history.replaceState({}, "", "/");
   installApi();
 });
@@ -517,6 +560,9 @@ async function openLiveSetup(user: ReturnType<typeof userEvent.setup>) {
     "Does this result hold in deployment?",
   );
   await user.click(screen.getByRole("button", { name: /test this claim/i }));
+  await user.click(
+    screen.getByRole("button", { name: /check live notebook tools/i }),
+  );
 }
 
 async function openSampleModelDuel(user: ReturnType<typeof userEvent.setup>) {
@@ -563,9 +609,19 @@ describe("CounterLab judged flow", () => {
         name: "What result are you trying to understand?",
       }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /skip to main content/i }),
+    ).toHaveAttribute("href", "#main-content");
+    await user.tab();
+    expect(
+      screen.getByRole("textbox", { name: /your question or claim/i }),
+    ).toHaveFocus();
     expect(screen.getByLabelText(/attach notebook/i)).toBeEnabled();
     expect(
       screen.getByRole("button", { name: /try verified sample/i }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /start verified sample lesson/i }),
     ).toBeEnabled();
     expect(
       screen.getByRole("button", { name: /watch verified replay/i }),
@@ -623,11 +679,64 @@ describe("CounterLab judged flow", () => {
     );
   });
 
+  it("preserves a plain question and offers an honest evidence choice before notebook setup", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi();
+    render(<App />);
+
+    const question = "Will this score hold for new customers?";
+    await user.type(
+      screen.getByRole("textbox", { name: /your question or claim/i }),
+      question,
+    );
+    await user.click(screen.getByRole("button", { name: /test this claim/i }));
+
+    expect(
+      screen.getByRole("heading", {
+        name: /start with evidence that matches your question/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(question)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /continue with verified sample/i }),
+    ).toBeEnabled();
+    expect(screen.getByLabelText(/attach a supported notebook/i)).toBeEnabled();
+    expect(
+      fetcher.mock.calls.some(([path]) => String(path) === "/api/health"),
+    ).toBe(false);
+
+    await user.click(
+      screen.getByRole("button", { name: /continue with verified sample/i }),
+    );
+    expect(
+      await screen.findByRole("heading", {
+        name: /what do you think the score means/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/your claim/i)).toHaveValue(question);
+  });
+
+  it("restores a saved question on the refresh-safe new investigation route", async () => {
+    const question = "Does this result generalize beyond familiar rows?";
+    window.localStorage.setItem("counterlab.claim", question);
+    window.history.replaceState({}, "", "/new");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /start with evidence that matches your question/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(question)).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/new");
+  });
+
   it("closes the compact entry menu with Escape and restores focus", async () => {
     const user = userEvent.setup();
     render(<App />);
 
-    const toggle = screen.getByRole("button", { name: "Explore" });
+    const toggle = screen.getByRole("button", { name: "Modes" });
     await user.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "true");
 
@@ -788,11 +897,11 @@ describe("CounterLab judged flow", () => {
     });
     expect(sendButton).toBeDisabled();
     expect(
-      screen.getByText(/redacted sensitive-looking excerpt/i),
+      screen.getByText(/automated redaction can miss identifiers/i),
     ).toBeInTheDocument();
     await user.click(
       screen.getByRole("checkbox", {
-        name: /reviewed the redacted sensitive-looking excerpt/i,
+        name: /reviewed the exact redacted packet/i,
       }),
     );
     expect(sendButton).toBeEnabled();
@@ -851,7 +960,7 @@ describe("CounterLab judged flow", () => {
       within(packetSummary).getByText(/short notebook excerpts/i),
     ).toBeInTheDocument();
     expect(
-      within(packetSummary).getByText(/schema names/i),
+      within(packetSummary).getByText(/non-sensitive schema names and roles/i),
     ).toBeInTheDocument();
     expect(within(packetSummary).getByText(/no raw rows/i)).toBeInTheDocument();
     expect(
@@ -1054,7 +1163,11 @@ describe("CounterLab judged flow", () => {
 
   it("keeps the first failed live request provider-neutral and on the claim screen", async () => {
     const user = userEvent.setup();
-    installApi({ liveGpt: "configured", rejectLiveBelief: true });
+    installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      rejectLiveBelief: true,
+    });
     render(<App />);
 
     await openLiveSetup(user);
@@ -1130,6 +1243,97 @@ describe("CounterLab judged flow", () => {
           init?.method === "POST",
       ),
     ).toBe(true);
+  });
+
+  it("confirms Start over, cancels every registered live job, and then returns home", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      stallRunner: true,
+    });
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem("counterlab.mode", "live");
+    window.history.replaceState({}, "", "/session/session_ui");
+    window.localStorage.setItem(
+      "counterlab.activeRunnerJob.session_ui",
+      JSON.stringify({
+        schemaVersion: "1",
+        sessionId: "session_ui",
+        jobId: liveRunnerJob.jobId,
+        kind: liveRunnerJob.kind,
+      }),
+    );
+
+    render(<App />);
+    await screen.findByRole("button", { name: /cancel this test/i });
+    await user.click(screen.getByRole("button", { name: /^start over$/i }));
+
+    expect(
+      screen.getByRole("heading", { name: /stop live work and start over/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(liveRunnerJob.jobId)).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: /stop jobs and start over/i }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /what result are you trying to understand/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      fetcher.mock.calls.filter(
+        ([path, init]) =>
+          String(path).endsWith("/jobs/runner_job_ui/cancel") &&
+          init?.method === "POST",
+      ),
+    ).toHaveLength(1);
+    expect(
+      window.sessionStorage.getItem(activeRunnerRegistryKey("session_ui")),
+    ).toBeNull();
+    expect(window.location.pathname).toBe("/");
+  });
+
+  it("keeps an unreachable live job registered when Start over detaches offline", async () => {
+    const user = userEvent.setup();
+    installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      stallRunner: true,
+      cancelOffline: true,
+    });
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem("counterlab.mode", "live");
+    window.history.replaceState({}, "", "/session/session_ui");
+    window.localStorage.setItem(
+      "counterlab.activeRunnerJob.session_ui",
+      JSON.stringify({
+        schemaVersion: "1",
+        sessionId: "session_ui",
+        jobId: liveRunnerJob.jobId,
+        kind: liveRunnerJob.kind,
+      }),
+    );
+
+    render(<App />);
+    await screen.findByRole("button", { name: /cancel this test/i });
+    await user.click(screen.getByRole("button", { name: /^start over$/i }));
+    await user.click(
+      screen.getByRole("button", { name: /stop jobs and start over/i }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /what result are you trying to understand/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /could not confirm cancellation for 1 live job/i,
+    );
+    expect(
+      window.sessionStorage.getItem(activeRunnerRegistryKey("session_ui")),
+    ).not.toBeNull();
   });
 
   it("reacquires an idempotent compile job when refresh lost the local job checkpoint", async () => {
@@ -1209,7 +1413,7 @@ describe("CounterLab judged flow", () => {
         name: /what do you think the score means/i,
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/live generation/i)).toBeInTheDocument();
+    expect(screen.getByText(/live notebook analysis/i)).toBeInTheDocument();
   });
 
   it("keeps URL synchronization active when a restored runner resume fails", async () => {
@@ -1218,7 +1422,7 @@ describe("CounterLab judged flow", () => {
       stallRunner: true,
       failRunnerResume: true,
     });
-    window.history.replaceState({}, "", "/proof/session_ui");
+    window.history.replaceState({}, "", "/session/session_ui");
 
     render(<App />);
 
@@ -1229,7 +1433,8 @@ describe("CounterLab judged flow", () => {
   });
 
   it("does not mark a live Reasoning Diff complete before its Capsule exists", async () => {
-    installApi({
+    const user = userEvent.setup();
+    const fetcher = installApi({
       restoredSessionState: "REASONING_DIFF_ISSUED",
       restoredSessionExtra: {
         beliefSpec: liveBeliefSpec,
@@ -1241,13 +1446,31 @@ describe("CounterLab judged flow", () => {
 
     render(<App />);
 
-    await screen.findByRole("heading", { name: /here.s what changed/i });
-    await vi.waitFor(() =>
-      expect(window.location.pathname).toBe("/session/session_ui"),
-    );
+    const recoveryHeading = await screen.findByRole("heading", {
+      name: /this proof is not ready yet/i,
+    });
+    expect(recoveryHeading).toHaveFocus();
+    expect(window.location.pathname).toBe("/proof/session_ui");
     expect(
       screen.queryByRole("button", { name: /export proof/i }),
     ).not.toBeInTheDocument();
+    expect(
+      fetcher.mock.calls.some(
+        ([path, init]) =>
+          String(path).endsWith("/lab/compile") && init?.method === "POST",
+      ),
+    ).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: /check again/i }));
+    await screen.findByRole("heading", {
+      name: /this proof is not ready yet/i,
+    });
+    expect(
+      fetcher.mock.calls.some(
+        ([path, init]) =>
+          String(path).endsWith("/lab/compile") && init?.method === "POST",
+      ),
+    ).toBe(false);
   });
 
   it("renders the exact Belief Spec v2 after a live session refresh", async () => {
@@ -1486,6 +1709,8 @@ describe("CounterLab judged flow", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Verified result")).toBeInTheDocument();
     const tabs = screen.getByRole("tablist", { name: /experiment views/i });
+    const applyTab = within(tabs).getByRole("tab", { name: /apply/i });
+    expect(applyTab).toBeDisabled();
     expect(within(tabs).getByRole("tab", { name: /observe/i })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -1500,12 +1725,31 @@ describe("CounterLab judged flow", () => {
 
     await user.click(within(tabs).getByRole("tab", { name: /boundary/i }));
     expect(
-      screen.getByText(/conclusion changes at the entity boundary/i),
+      await screen.findByRole("heading", {
+        name: /can you find a condition where the conclusion changes/i,
+      }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText(/verified sample exploration/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /reveal the map/i }));
+    expect(
+      await screen.findByRole("table", {
+        name: /verified boundary map values/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/integrity-hashed/i)).toBeInTheDocument();
+    expect(applyTab).toBeEnabled();
+    expect(
+      window.localStorage.getItem("counterlab.sampleBoundarySessionId"),
+    ).toBe("session_ui");
   });
 
-  it("keeps the replay label persistent across the judged flow", async () => {
+  it("keeps legacy replay strictly read-only across the judged flow", async () => {
     const user = userEvent.setup();
+    const fetcher = installApi();
     render(<App />);
 
     await user.click(
@@ -1516,7 +1760,26 @@ describe("CounterLab judged flow", () => {
     ).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: /continue replay/i }));
-    expect(screen.getAllByText(/verified replay/i).length).toBeGreaterThan(0);
+    expect(
+      await screen.findByRole("heading", {
+        name: /inspect the result without changing its history/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/verified replay · read-only stored evidence/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /try the rule on a new problem/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /check my answer/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      fetcher.mock.calls.every(([, init]) =>
+        [undefined, "GET"].includes(init?.method),
+      ),
+    ).toBe(true);
   });
 
   it("restores the exact replay URL instead of substituting the bundled replay", async () => {
@@ -1610,6 +1873,44 @@ describe("CounterLab judged flow", () => {
     ).toBe(false);
   });
 
+  it("offers recent work on the normal landing and resumes it explicitly", async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem(
+      "counterlab.recentWork.v1",
+      JSON.stringify({
+        schemaVersion: "1",
+        records: [
+          {
+            id: "session_ui",
+            mode: "live",
+            status: "INGESTED",
+            updatedAt: "2026-07-19T01:00:00.000Z",
+          },
+        ],
+      }),
+    );
+    const fetcher = installApi({ restoredSessionState: "INGESTED" });
+
+    render(<App />);
+
+    await user.click(screen.getByText("Recent work from this browser"));
+    await user.click(
+      screen.getByRole("button", { name: /live notebook session.*ingested/i }),
+    );
+
+    expect(window.location.pathname).toBe("/session/session_ui");
+    expect(
+      await screen.findByRole("heading", {
+        name: /what do you think the score means/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      fetcher.mock.calls.some(
+        ([path]) => String(path) === "/api/sessions/session_ui",
+      ),
+    ).toBe(true);
+  });
+
   it("reconstructs the landing page when browser history emits popstate", async () => {
     window.history.replaceState({}, "", "/replay/leakage-01");
     installApi();
@@ -1636,7 +1937,7 @@ describe("CounterLab judged flow", () => {
 
   it("renders a hosted Capsule replay as read-only artifact-specific evidence", async () => {
     const user = userEvent.setup();
-    const replay = replayFixture("class_imbalance");
+    const replay = publicReplayFixture("class_imbalance");
     window.history.replaceState(
       {},
       "",
@@ -1651,10 +1952,9 @@ describe("CounterLab judged flow", () => {
         name: /live notebook claim, replayed from verified evidence/i,
       }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(replay.artifactManifest.fileName),
-    ).toBeInTheDocument();
-    expect(screen.getByText(replay.beliefSpec.claim)).toBeInTheDocument();
+    expect(screen.getByText("Private notebook withheld")).toBeInTheDocument();
+    expect(screen.getByText(replay.question.claim)).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/merchant_risk_audit_live/);
     expect(document.body).not.toHaveTextContent(sampleArtifact.fileName);
     expect(screen.queryByText(/run fair test/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/lock my answer/i)).not.toBeInTheDocument();
@@ -1662,11 +1962,11 @@ describe("CounterLab judged flow", () => {
       screen.queryByText(/verify notebook patch/i),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /download proof capsule/i }),
-    ).toHaveAttribute(
-      "href",
-      `/api/replays/${encodeURIComponent(replay.replayId)}/proof-capsule`,
-    );
+      screen.queryByRole("link", { name: /download proof capsule/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /download repaired notebook/i }),
+    ).not.toBeInTheDocument();
     expect(
       fetcher.mock.calls.every(([, init]) =>
         [undefined, "GET"].includes(init?.method),

@@ -114,16 +114,18 @@ The harness exited with status 1 and refused to launch stock Chromium. No
 current-branch screenshot, screen-reader session, rendered accessibility audit,
 or Web Vitals result is claimed.
 
-Milestone 8 local checks passed web Vitest (45 files, 254 tests), repository,
-web, and Worker TypeScript, the Vite/Worker build, and a 597-file secret scan.
-An earlier full root Vitest attempt passed 33 files/439 tests and failed 7
-files/29 tests; the complete root gate is not green.
+Current source-candidate checks passed web Vitest (58 files, 360 tests),
+repository, web, and Worker TypeScript, the 231-test Python kernel/runner gate,
+the Vite/Worker build, and a 741-file secret scan that excludes generated
+browser-profile state. Root Vitest passes 486/488; the only two pending tests
+are the source/image-bound internal integrity and lock evidence checks that run
+after the immutable image build.
 
-The successful build reported a 1,620.27 kB Worker bundle (313.05 kB gzip),
-183.23 kB client CSS (34.45 kB gzip), a lazy 7.99 kB Reasoning Diff JavaScript
-chunk (2.67 kB gzip) plus 1.98 kB CSS (0.79 kB gzip), and a 610.83 kB main
-client chunk (170.71 kB gzip). The main chunk still triggers the over-500 kB
-warning. Runtime performance was not measured.
+The successful build reported a 1,695.34 kB Worker bundle (328.63 kB gzip),
+177.70 kB main client CSS (31.21 kB gzip), a lazy 14.58 kB Reasoning Diff
+JavaScript chunk (4.47 kB gzip) plus 4.63 kB CSS (1.38 kB gzip), and a 398.22
+kB main client chunk (115.88 kB gzip). The main chunk no longer triggers the
+over-500 kB warning. Runtime performance was not measured.
 
 Full evidence and remaining browser checks are in
 [`LEARNER_UX_V6_1_EVIDENCE.md`](LEARNER_UX_V6_1_EVIDENCE.md).

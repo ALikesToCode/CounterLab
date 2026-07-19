@@ -2,10 +2,15 @@ import type {
   PatchResult,
   PublishReplayResponse,
   PublicProofCapsuleRefV2,
+  ReplayPublicationStatus,
   ReasoningDiffV2,
+  RevokeReplayResponse,
 } from "../../api";
 import { ProofCapsuleView } from "./ProofCapsuleView";
-import { ReplayPublicationPanel } from "./ReplayPublicationPanel";
+import {
+  ReplayPublicationPanel,
+  type PublicReplayTextPreview,
+} from "./ReplayPublicationPanel";
 import styles from "./ReasoningDiffView.module.css";
 
 const dimensionOrder = [
@@ -150,6 +155,9 @@ export function ReasoningDiffView({
   patchDownloadUrl,
   proofCapsuleDownloadUrl,
   publishReplay,
+  revokeReplay,
+  loadReplayStatus,
+  publicTextPreview,
   onPatchDownload,
   onProofCapsuleDownload,
   presentation = "standalone",
@@ -160,6 +168,9 @@ export function ReasoningDiffView({
   patchDownloadUrl: string;
   proofCapsuleDownloadUrl: string;
   publishReplay?: () => Promise<PublishReplayResponse>;
+  revokeReplay?: () => Promise<RevokeReplayResponse>;
+  loadReplayStatus?: () => Promise<ReplayPublicationStatus>;
+  publicTextPreview: PublicReplayTextPreview;
   onPatchDownload?: () => void;
   onProofCapsuleDownload?: () => void;
   presentation?: "standalone" | "completion-evidence";
@@ -177,7 +188,12 @@ export function ReasoningDiffView({
         </section>
         <PatchEvidence patch={patch} />
         {publishReplay !== undefined && (
-          <ReplayPublicationPanel publishReplay={publishReplay} />
+          <ReplayPublicationPanel
+            publishReplay={publishReplay}
+            {...(revokeReplay === undefined ? {} : { revokeReplay })}
+            {...(loadReplayStatus === undefined ? {} : { loadReplayStatus })}
+            publicTextPreview={publicTextPreview}
+          />
         )}
         <ReasoningProofBody diff={diff} capsule={capsule} />
       </div>
@@ -236,7 +252,12 @@ export function ReasoningDiffView({
       />
 
       {publishReplay !== undefined && (
-        <ReplayPublicationPanel publishReplay={publishReplay} />
+        <ReplayPublicationPanel
+          publishReplay={publishReplay}
+          {...(revokeReplay === undefined ? {} : { revokeReplay })}
+          {...(loadReplayStatus === undefined ? {} : { loadReplayStatus })}
+          publicTextPreview={publicTextPreview}
+        />
       )}
 
       <details className={styles.proof}>

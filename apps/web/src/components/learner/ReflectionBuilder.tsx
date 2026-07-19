@@ -66,9 +66,9 @@ export function ReflectionBuilder({
   const instanceId = useId();
   const [mode, setMode] = useState<"clauses" | "free_text">("clauses");
   const [selection, setSelection] = useState<ReflectionClauseSelection>(() => ({
-    whenId: initialSelection?.whenId ?? whenOptions[0]?.id ?? "",
-    actionId: initialSelection?.actionId ?? actionOptions[0]?.id ?? "",
-    becauseId: initialSelection?.becauseId ?? becauseOptions[0]?.id ?? "",
+    whenId: initialSelection?.whenId ?? "",
+    actionId: initialSelection?.actionId ?? "",
+    becauseId: initialSelection?.becauseId ?? "",
   }));
 
   const updateClause = (key: ClauseKey, optionId: string) => {
@@ -88,18 +88,21 @@ export function ReflectionBuilder({
       key: "whenId" as const,
       lead: "When",
       label: "Choose the condition",
+      placeholder: "Select a condition…",
       options: whenOptions,
     },
     {
       key: "actionId" as const,
       lead: "I should",
       label: "Choose the action",
+      placeholder: "Select an action…",
       options: actionOptions,
     },
     {
       key: "becauseId" as const,
       lead: "because",
       label: "Choose the evidence-based reason",
+      placeholder: "Select a reason…",
       options: becauseOptions,
     },
   ];
@@ -172,6 +175,9 @@ export function ReflectionBuilder({
                     updateClause(group.key, event.target.value)
                   }
                 >
+                  <option value="" disabled>
+                    {group.placeholder}
+                  </option>
                   {group.options.map((option) => (
                     <option value={option.id} key={option.id}>
                       {option.text}

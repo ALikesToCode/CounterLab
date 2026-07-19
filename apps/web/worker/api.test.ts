@@ -12,9 +12,11 @@ import {
   HostedVerifiedResultSetV2Schema,
   type LearnerInteractionRecord,
   type PublicCompilerEvent,
+  PublicReplayProjectionV1Schema,
   type RunnerCallback,
   type RunnerJob,
   type RunnerJobKind,
+  RunnerJobSchema,
   RunnerLabRunBundleSchema,
   RunnerPatchCompileBundleSchema,
 } from "@counterlab/contracts";
@@ -29,6 +31,7 @@ import type {
 import { createEvidenceEvent, hashCanonical } from "@counterlab/session-core";
 import { validateProofBundle } from "@counterlab/proof-bundle";
 import {
+  validatePublicReplayProjectionV1,
   validateProofCapsulePayloadAuthorityV2,
   validateProofCapsuleV2,
 } from "@counterlab/proof-capsule";
@@ -57,10 +60,23 @@ import patchedNotebookText from "../../../replays/leakage-01/patch/customer_chur
 import scientificEngineSnapshotValue from "../../../scientific-engines/snapshot-hash.json";
 
 import { api, createApi } from "./api";
+import type {
+  AdmissionControl,
+  AdmissionDecision,
+  AdmissionRelease,
+  AdmissionRequest,
+} from "./admission-control";
+import {
+  type OwnerCapabilityRecord,
+  type OwnerCapabilityRepository,
+} from "./access-control";
 import type { ArtifactStore, StoredArtifact } from "./artifact-store";
 import { ConcurrentD1SessionUpdateError } from "./d1-session-repository";
 import type { LearnerInteractionRepository } from "./learner-interaction-repository";
-import type { ProofCapsuleReplayRecordV2 } from "./replay-repository";
+import {
+  ReplayPublicationRevokedError,
+  type ProofCapsuleReplayRecordV2,
+} from "./replay-repository";
 import { sampleResult } from "./sample-evidence";
 import { createSamplePatchResult } from "./sample-learning-loop";
 import type {
@@ -80,6 +96,17 @@ const {
 } = await generateRunnerJobTokenKeyPair();
 const LIVE_LEAKAGE_PACK_VERSION = getConceptPack("entity_leakage").version;
 const LIVE_IMBALANCE_PACK_VERSION = getConceptPack("class_imbalance").version;
+
+function recursiveObjectKeys(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => recursiveObjectKeys(item));
+  }
+  if (value === null || typeof value !== "object") return [];
+  return Object.entries(value).flatMap(([key, nested]) => [
+    key,
+    ...recursiveObjectKeys(nested),
+  ]);
+}
 
 class MemorySessionRepository implements SessionRepository {
   private readonly sessions = new Map<string, CounterLabSession>();
@@ -147,6 +174,7 @@ class MemoryArtifactStore implements ArtifactStore {
 
 class MemoryProofCapsuleReplayRepository {
   private readonly records = new Map<string, ProofCapsuleReplayRecordV2>();
+  private readonly revoked = new Set<string>();
 
   async createOrReuse(
     record: ProofCapsuleReplayRecordV2,
@@ -155,6 +183,9 @@ class MemoryProofCapsuleReplayRepository {
       (candidate) => candidate.sourceSessionId === record.sourceSessionId,
     );
     if (existing !== undefined) {
+      if (this.revoked.has(existing.replayId)) {
+        throw new ReplayPublicationRevokedError(record.sourceSessionId);
+      }
       if (
         existing.capsuleId !== record.capsuleId ||
         existing.objectKey !== record.objectKey
@@ -171,7 +202,41 @@ class MemoryProofCapsuleReplayRepository {
     replayId: string,
   ): Promise<ProofCapsuleReplayRecordV2 | undefined> {
     const record = this.records.get(replayId);
-    return record === undefined ? undefined : structuredClone(record);
+    return record === undefined || this.revoked.has(replayId)
+      ? undefined
+      : structuredClone(record);
+  }
+
+  async statusBySourceSession(sourceSessionId: string): Promise<
+    | {
+        record: ProofCapsuleReplayRecordV2;
+        status: "active" | "revoked";
+      }
+    | undefined
+  > {
+    const record = [...this.records.values()].find(
+      (candidate) => candidate.sourceSessionId === sourceSessionId,
+    );
+    return record === undefined
+      ? undefined
+      : {
+          record: structuredClone(record),
+          status: this.revoked.has(record.replayId) ? "revoked" : "active",
+        };
+  }
+
+  async revokeBySourceSession(
+    sourceSessionId: string,
+    _eventId: string,
+    _revokedAt: string,
+  ): Promise<{ replayId: string; revoked: boolean } | undefined> {
+    const record = [...this.records.values()].find(
+      (candidate) => candidate.sourceSessionId === sourceSessionId,
+    );
+    if (record === undefined) return undefined;
+    const revoked = !this.revoked.has(record.replayId);
+    this.revoked.add(record.replayId);
+    return { replayId: record.replayId, revoked };
   }
 }
 
@@ -192,6 +257,42 @@ class MemoryLearnerInteractionRepository implements LearnerInteractionRepository
     }
     this.records.set(record.eventId, structuredClone(record));
     return Promise.resolve({ duplicate: false });
+  }
+}
+
+class MemoryOwnerCapabilityRepository implements OwnerCapabilityRepository {
+  private readonly artifacts = new Map<string, OwnerCapabilityRecord>();
+  private readonly sessions = new Map<string, OwnerCapabilityRecord>();
+
+  async createArtifact(record: OwnerCapabilityRecord): Promise<void> {
+    this.artifacts.set(
+      `${record.resourceId}:${record.tokenHash}`,
+      structuredClone(record),
+    );
+  }
+
+  findArtifact(
+    artifactId: string,
+    tokenHash: string,
+  ): Promise<OwnerCapabilityRecord | undefined> {
+    return Promise.resolve(
+      structuredClone(this.artifacts.get(`${artifactId}:${tokenHash}`)),
+    );
+  }
+
+  async createSession(record: OwnerCapabilityRecord): Promise<void> {
+    this.sessions.set(record.resourceId, structuredClone(record));
+  }
+
+  findSession(sessionId: string): Promise<OwnerCapabilityRecord | undefined> {
+    return Promise.resolve(structuredClone(this.sessions.get(sessionId)));
+  }
+
+  async revokeSession(sessionId: string, revokedAt: string): Promise<boolean> {
+    const current = this.sessions.get(sessionId);
+    if (current === undefined || current.revokedAt !== undefined) return false;
+    this.sessions.set(sessionId, { ...current, revokedAt });
+    return true;
   }
 }
 
@@ -256,6 +357,22 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
         ),
     );
     return job === undefined ? undefined : structuredClone(job);
+  }
+
+  async findActiveForSession(sessionId: string): Promise<RunnerJob[]> {
+    return structuredClone(
+      [...this.jobs.values()].filter(
+        (job) =>
+          job.sessionId === sessionId &&
+          [
+            "QUEUED",
+            "STARTING",
+            "RUNNING",
+            "AWAITING_APPROVAL",
+            "REPAIRING",
+          ].includes(job.status),
+      ),
+    );
   }
 
   async findForState(input: {
@@ -380,6 +497,30 @@ class CapturingRunnerDispatcher implements RunnerDispatcher {
 
   cancel(request: RunnerDispatchRequest): Promise<void> {
     this.cancelled.push(structuredClone(request));
+    return Promise.resolve();
+  }
+}
+
+class CapturingAdmissionControl implements AdmissionControl {
+  readonly admitted: AdmissionRequest[] = [];
+  readonly released: AdmissionRelease[] = [];
+
+  constructor(
+    private readonly decision: AdmissionDecision = {
+      admitted: true,
+      reused: false,
+      leaseStatus: "acquired",
+      leaseExpiresAt: Date.parse("2026-07-14T10:15:00.000Z"),
+    },
+  ) {}
+
+  admit(input: AdmissionRequest): Promise<AdmissionDecision> {
+    this.admitted.push(structuredClone(input));
+    return Promise.resolve(structuredClone(this.decision));
+  }
+
+  release(input: AdmissionRelease): Promise<void> {
+    this.released.push(structuredClone(input));
     return Promise.resolve();
   }
 }
@@ -529,6 +670,7 @@ async function sha256Text(value: string): Promise<string> {
 async function preparedHostedRunner(
   sessionId: string,
   dispatcher = new CapturingRunnerDispatcher(),
+  admissionControl?: CapturingAdmissionControl,
 ) {
   const harness = await sessionHarness("sample");
   const sampleRoute = `/api/sessions/${harness.sessionId}`;
@@ -581,6 +723,14 @@ async function preparedHostedRunner(
     runnerObjectStore: runnerObjects,
     runnerDispatcher: dispatcher,
     runnerSigningPrivateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
+    ...(admissionControl === undefined
+      ? {}
+      : {
+          admissionControl,
+          admissionHmacKey:
+            "contained-api-admission-test-key-with-at-least-32-characters",
+          admissionCaller: () => "203.0.113.8",
+        }),
     now: () => new Date("2026-07-14T10:00:00.000Z"),
     id: (prefix) => `${prefix}_${sessionId}_${++runnerIdSequence}`,
   });
@@ -2359,6 +2509,572 @@ async function preparedImbalanceInteractiveSession() {
 }
 
 describe("Cloudflare Worker API", () => {
+  describe("bounded notebook intake", () => {
+    const uploadEnv = (maxBytes: number, put = vi.fn()) =>
+      ({
+        COUNTERLAB_MAX_NOTEBOOK_BYTES: String(maxBytes),
+        ARTIFACTS: { put },
+      }) as unknown as Env;
+
+    function notebookForm(
+      body = sourceNotebookText,
+      name = "customer-model.ipynb",
+      type = "application/x-ipynb+json",
+    ) {
+      const form = new FormData();
+      form.set("file", new Blob([body], { type }), name);
+      return form;
+    }
+
+    it("rejects an upload budget before reading or storing its body", async () => {
+      const admissionControl = new CapturingAdmissionControl({
+        admitted: false,
+        reason: "CALLER_BUDGET",
+        retryAfterSeconds: 37,
+      });
+      const app = createApi({
+        artifactStore: new MemoryArtifactStore(),
+        admissionControl,
+        admissionHmacKey:
+          "contained-api-admission-test-key-with-at-least-32-characters",
+        admissionCaller: () => "203.0.113.8",
+      });
+      const request = new Request("https://counterlab.test/api/artifacts", {
+        method: "POST",
+        headers: {
+          "content-type": "multipart/form-data; boundary=counterlab-test",
+          "idempotency-key": "upload_operation_0001",
+        },
+        body: "--counterlab-test--",
+      });
+      if (request.body === null) throw new Error("test body is unavailable");
+      const getReader = vi.spyOn(request.body, "getReader");
+
+      const response = await app.fetch(request, uploadEnv(1_024));
+
+      expect(response.status).toBe(429);
+      expect(response.headers.get("retry-after")).toBe("37");
+      expect(getReader).not.toHaveBeenCalled();
+      await expect(response.json()).resolves.toMatchObject({
+        error: {
+          code: "CALLER_BUDGET",
+          retryable: true,
+          status: 429,
+        },
+      });
+      expect(admissionControl.admitted).toHaveLength(1);
+      expect(admissionControl.admitted[0]).toMatchObject({
+        kind: "upload",
+        callerKey: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        operationKey: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      });
+      expect(JSON.stringify(admissionControl.admitted[0])).not.toContain(
+        "203.0.113.8",
+      );
+    });
+
+    it("rejects a reused upload operation before reading or storing another body", async () => {
+      const admissionControl = new CapturingAdmissionControl({
+        admitted: true,
+        reused: true,
+        leaseStatus: "none",
+      });
+      const put = vi.fn();
+      const app = createApi({
+        artifactStore: new MemoryArtifactStore(),
+        admissionControl,
+        admissionHmacKey:
+          "contained-api-admission-test-key-with-at-least-32-characters",
+        admissionCaller: () => "203.0.113.8",
+      });
+      const request = new Request("https://counterlab.test/api/artifacts", {
+        method: "POST",
+        headers: {
+          "content-type": "multipart/form-data; boundary=counterlab-test",
+          "idempotency-key": "upload_operation_0001",
+        },
+        body: "--counterlab-test--",
+      });
+      if (request.body === null) throw new Error("test body is unavailable");
+      const getReader = vi.spyOn(request.body, "getReader");
+
+      const response = await app.fetch(request, uploadEnv(1_024, put));
+
+      expect(response.status).toBe(409);
+      expect(getReader).not.toHaveBeenCalled();
+      expect(put).not.toHaveBeenCalled();
+      await expect(response.json()).resolves.toMatchObject({
+        error: {
+          code: "UPLOAD_OPERATION_ALREADY_USED",
+          status: 409,
+        },
+      });
+    });
+
+    it("does not consume costly-operation admission for public replay reads", async () => {
+      const admissionControl = new CapturingAdmissionControl();
+      const app = createApi({
+        admissionControl,
+        admissionHmacKey:
+          "contained-api-admission-test-key-with-at-least-32-characters",
+        admissionCaller: () => "203.0.113.8",
+      });
+
+      const response = await app.request("/api/replays/leakage-01");
+
+      expect(response.status).toBe(200);
+      expect(admissionControl.admitted).toHaveLength(0);
+      expect(admissionControl.released).toHaveLength(0);
+    });
+
+    it("accepts a valid notebook exactly at the configured file maximum", async () => {
+      const bytes = new TextEncoder().encode(sourceNotebookText).byteLength;
+      const put = vi.fn().mockResolvedValue(undefined);
+      const app = createApi({
+        artifactStore: new MemoryArtifactStore(),
+        ownerCapabilityRepository: new MemoryOwnerCapabilityRepository(),
+      });
+
+      const response = await app.request(
+        "/api/artifacts",
+        { method: "POST", body: notebookForm() },
+        uploadEnv(bytes, put),
+      );
+
+      expect(response.status).toBe(201);
+      expect(put).toHaveBeenCalledTimes(1);
+      await expect(response.json()).resolves.toMatchObject({
+        ok: true,
+        data: {
+          fileName: "customer-model.ipynb",
+          support: { status: "SUPPORTED" },
+        },
+      });
+    });
+
+    it("rejects a file one byte over the configured maximum", async () => {
+      const bytes = new TextEncoder().encode(sourceNotebookText).byteLength;
+      const put = vi.fn().mockResolvedValue(undefined);
+      const app = createApi({ artifactStore: new MemoryArtifactStore() });
+
+      const response = await app.request(
+        "/api/artifacts",
+        { method: "POST", body: notebookForm() },
+        uploadEnv(bytes - 1, put),
+      );
+
+      expect(response.status).toBe(413);
+      expect(put).not.toHaveBeenCalled();
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "MAXIMUM_SIZE_EXCEEDED", status: 413 },
+      });
+    });
+
+    it("rejects a declared oversized envelope before multipart materialization", async () => {
+      const formDataSpy = vi.spyOn(Response.prototype, "formData");
+      const app = createApi({ artifactStore: new MemoryArtifactStore() });
+
+      const response = await app.request(
+        "/api/artifacts",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "multipart/form-data; boundary=counterlab-test",
+            "content-length": "65554",
+          },
+          body: "x",
+        },
+        uploadEnv(16),
+      );
+
+      expect(response.status).toBe(413);
+      expect(formDataSpy).not.toHaveBeenCalled();
+      formDataSpy.mockRestore();
+    });
+
+    it("stops and cancels an absent-length stream at the envelope cap", async () => {
+      let cancelled = false;
+      let pullCount = 0;
+      const stream = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          pullCount += 1;
+          controller.enqueue(new Uint8Array(40_000));
+        },
+        cancel() {
+          cancelled = true;
+        },
+      });
+      const request = new Request("https://counterlab.test/api/artifacts", {
+        method: "POST",
+        headers: {
+          "content-type": "multipart/form-data; boundary=counterlab-test",
+        },
+        body: stream,
+        duplex: "half",
+      } as RequestInit & { duplex: "half" });
+      const app = createApi({ artifactStore: new MemoryArtifactStore() });
+
+      const response = await app.fetch(request, uploadEnv(16));
+
+      expect(response.status).toBe(413);
+      expect(pullCount).toBeLessThanOrEqual(3);
+      expect(cancelled).toBe(true);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "MAXIMUM_SIZE_EXCEEDED" },
+      });
+    });
+
+    it("fails closed on an interrupted body stream", async () => {
+      let pullCount = 0;
+      const stream = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          pullCount += 1;
+          if (pullCount === 1) {
+            controller.enqueue(new TextEncoder().encode("--counterlab\r\n"));
+            return;
+          }
+          controller.error(new Error("synthetic disconnect"));
+        },
+      });
+      const request = new Request("https://counterlab.test/api/artifacts", {
+        method: "POST",
+        headers: {
+          "content-type": "multipart/form-data; boundary=counterlab",
+        },
+        body: stream,
+        duplex: "half",
+      } as RequestInit & { duplex: "half" });
+      const app = createApi({ artifactStore: new MemoryArtifactStore() });
+
+      const response = await app.fetch(request, uploadEnv(1_024));
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "REQUEST_BODY_INTERRUPTED" },
+      });
+    });
+
+    it("rejects ambiguous, malformed, and over-broad multipart envelopes", async () => {
+      const app = createApi({ artifactStore: new MemoryArtifactStore() });
+      const cases = [
+        {
+          headers: {
+            "content-type": "multipart/form-data; boundary=counterlab",
+            "content-length": "1, 2",
+          },
+          body: "x",
+          code: "INVALID_CONTENT_LENGTH",
+        },
+        {
+          headers: {
+            "content-type": "multipart/form-data; boundary=counterlab",
+            "content-length": "1",
+            "transfer-encoding": "chunked",
+          },
+          body: "x",
+          code: "AMBIGUOUS_BODY_LENGTH",
+        },
+        {
+          headers: { "content-type": "multipart/form-data" },
+          body: "x",
+          code: "INVALID_MULTIPART_BOUNDARY",
+        },
+      ];
+
+      for (const testCase of cases) {
+        const response = await app.request(
+          "/api/artifacts",
+          { method: "POST", headers: testCase.headers, body: testCase.body },
+          uploadEnv(1_024),
+        );
+        expect(response.status).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({
+          error: { code: testCase.code },
+        });
+      }
+
+      const multiple = notebookForm();
+      multiple.set("claim", "not allowed");
+      const multipleResponse = await app.request(
+        "/api/artifacts",
+        { method: "POST", body: multiple },
+        uploadEnv(new TextEncoder().encode(sourceNotebookText).byteLength + 1),
+      );
+      expect(multipleResponse.status).toBe(400);
+      await expect(multipleResponse.json()).resolves.toMatchObject({
+        error: { code: "INVALID_UPLOAD_FIELDS" },
+      });
+    });
+  });
+
+  describe("private owner capabilities", () => {
+    function protectedApi() {
+      const sessionRepository = new MemorySessionRepository();
+      const artifactStore = new MemoryArtifactStore();
+      const ownerCapabilityRepository = new MemoryOwnerCapabilityRepository();
+      const replayRepository = new MemoryProofCapsuleReplayRepository();
+      const runnerJobs = new MemoryRunnerJobRepository();
+      let sequence = 0;
+      const app = createApi({
+        sessionRepository,
+        artifactStore,
+        ownerCapabilityRepository,
+        replayRepository,
+        runnerJobRepository: runnerJobs,
+        now: () => new Date("2026-07-18T10:00:00.000Z"),
+        id: (prefix) => `${prefix}_protected_${++sequence}`,
+      });
+      return {
+        app,
+        artifactStore,
+        ownerCapabilityRepository,
+        runnerJobs,
+        sessionRepository,
+      };
+    }
+
+    it("treats a session ID as a locator and requires its separate owner key", async () => {
+      const { app } = protectedApi();
+      const createdResponse = await postJson(app, "/api/sample/sessions", {
+        sampleId: "leakage-01",
+      });
+      expect(createdResponse.status).toBe(201);
+      const created = (await createdResponse.json()) as {
+        data: { sessionId: string; ownerCapability: string };
+      };
+      expect(created.data.ownerCapability).toMatch(
+        /^cl_owner_[A-Za-z0-9_-]{43}$/u,
+      );
+      expect(createdResponse.headers.get("set-cookie")).toContain(
+        "HttpOnly; Secure; SameSite=Strict",
+      );
+
+      const unowned = await app.request(
+        `/api/sessions/${created.data.sessionId}`,
+      );
+      const wrong = await app.request(
+        `/api/sessions/${created.data.sessionId}`,
+        { headers: { authorization: `Bearer cl_owner_${"x".repeat(43)}` } },
+      );
+      for (const denied of [unowned, wrong]) {
+        expect(denied.status).toBe(404);
+        await expect(denied.json()).resolves.toMatchObject({
+          error: { code: "SESSION_ACCESS_DENIED" },
+        });
+      }
+
+      const authorization = `Bearer ${created.data.ownerCapability}`;
+      const owned = await app.request(
+        `/api/sessions/${created.data.sessionId}`,
+        { headers: { authorization } },
+      );
+      expect(owned.status).toBe(200);
+      await expect(owned.json()).resolves.toMatchObject({
+        data: { sessionId: created.data.sessionId },
+      });
+
+      const cookie = createdResponse.headers
+        .get("set-cookie")
+        ?.split(";", 1)[0];
+      expect(cookie).toBeDefined();
+      const cookieOwned = await app.request(
+        `/api/sessions/${created.data.sessionId}/artifact`,
+        { headers: { cookie: cookie! } },
+      );
+      expect(cookieOwned.status).toBe(200);
+
+      for (const headers of [
+        { "content-type": "application/json" },
+        {
+          "content-type": "application/json",
+          authorization: `Bearer cl_owner_${"x".repeat(43)}`,
+        },
+      ]) {
+        const deniedRevocation = await app.request(
+          `/api/sessions/${created.data.sessionId}/replays/revoke`,
+          { method: "POST", headers, body: "{}" },
+        );
+        expect(deniedRevocation.status).toBe(404);
+        await expect(deniedRevocation.json()).resolves.toMatchObject({
+          error: { code: "SESSION_ACCESS_DENIED" },
+        });
+      }
+      const ownedMissingReplay = await app.request(
+        `/api/sessions/${created.data.sessionId}/replays/revoke`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization,
+          },
+          body: "{}",
+        },
+      );
+      expect(ownedMissingReplay.status).toBe(404);
+      await expect(ownedMissingReplay.json()).resolves.toMatchObject({
+        error: { code: "REPLAY_NOT_FOUND" },
+      });
+
+      const revoked = await postJson(
+        app,
+        `/api/sessions/${created.data.sessionId}/access/revoke`,
+        {},
+        { authorization },
+      );
+      expect(revoked.status).toBe(200);
+      expect(revoked.headers.get("set-cookie")).toContain("Max-Age=0");
+      await expect(revoked.json()).resolves.toMatchObject({
+        data: { revoked: true },
+      });
+
+      const repeatedRevocation = await postJson(
+        app,
+        `/api/sessions/${created.data.sessionId}/access/revoke`,
+        {},
+        { authorization },
+      );
+      expect(repeatedRevocation.status).toBe(200);
+      expect(repeatedRevocation.headers.get("set-cookie")).toContain(
+        "Max-Age=0",
+      );
+      await expect(repeatedRevocation.json()).resolves.toMatchObject({
+        data: { revoked: false },
+      });
+
+      const afterRevocation = await app.request(
+        `/api/sessions/${created.data.sessionId}`,
+        { headers: { authorization } },
+      );
+      expect(afterRevocation.status).toBe(404);
+    });
+
+    it("blocks session revocation while an authoritative runner job is active", async () => {
+      const { app, runnerJobs, sessionRepository } = protectedApi();
+      const createdResponse = await postJson(app, "/api/sample/sessions", {
+        sampleId: "leakage-01",
+      });
+      const created = (await createdResponse.json()) as {
+        data: { sessionId: string; ownerCapability: string };
+      };
+      const storedSession = await sessionRepository.find(
+        created.data.sessionId,
+      );
+      if (storedSession === undefined)
+        throw new Error("Session was not stored");
+      await runnerJobs.create(
+        RunnerJobSchema.parse({
+          schemaVersion: "1",
+          jobId: "job_revocation_guard",
+          kind: "LAB_RUN",
+          status: "QUEUED",
+          sessionId: storedSession.id,
+          artifactId: storedSession.artifactId,
+          artifactManifestHash: "a".repeat(64),
+          conceptPack: {
+            id: "entity_leakage",
+            version: LIVE_LEAKAGE_PACK_VERSION,
+          },
+          inputHashes: ["b".repeat(64)],
+          stateVersion: storedSession.version,
+          jobVersion: 1,
+          createdAt: "2026-07-18T10:00:00.000Z",
+          updatedAt: "2026-07-18T10:00:00.000Z",
+          attempt: 0,
+          maxAttempts: 2,
+          runnerIdentity: null,
+          timeoutSeconds: 180,
+          outputHashes: [],
+          eventCursor: 0,
+        }),
+      );
+
+      const response = await postJson(
+        app,
+        `/api/sessions/${created.data.sessionId}/access/revoke`,
+        {},
+        { authorization: `Bearer ${created.data.ownerCapability}` },
+      );
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "SESSION_ACCESS_REVOCATION_BLOCKED" },
+      });
+
+      const stillAccessible = await app.request(
+        `/api/sessions/${created.data.sessionId}`,
+        {
+          headers: {
+            authorization: `Bearer ${created.data.ownerCapability}`,
+          },
+        },
+      );
+      expect(stillAccessible.status).toBe(200);
+    });
+
+    it("requires the upload owner key before creating a private live session", async () => {
+      const { app } = protectedApi();
+      const form = new FormData();
+      form.set(
+        "file",
+        new Blob([imbalanceNotebookText], {
+          type: "application/x-ipynb+json",
+        }),
+        "rare-events.ipynb",
+      );
+      const upload = await app.request(
+        "/api/artifacts",
+        { method: "POST", body: form },
+        {
+          COUNTERLAB_MAX_NOTEBOOK_BYTES: String(
+            new TextEncoder().encode(imbalanceNotebookText).byteLength,
+          ),
+          ARTIFACTS: { put: vi.fn().mockResolvedValue(undefined) },
+        } as unknown as Env,
+      );
+      expect(upload.status).toBe(201);
+      const uploaded = (await upload.json()) as {
+        data: {
+          artifactId: string;
+          ownerCapability: string;
+        };
+      };
+
+      for (const artifactCapability of [
+        undefined,
+        `cl_owner_${"y".repeat(43)}`,
+      ]) {
+        const denied = await postJson(app, "/api/live/sessions", {
+          artifactId: uploaded.data.artifactId,
+          ...(artifactCapability === undefined ? {} : { artifactCapability }),
+        });
+        expect(denied.status).toBe(404);
+        await expect(denied.json()).resolves.toMatchObject({
+          error: { code: "ARTIFACT_ACCESS_DENIED" },
+        });
+      }
+
+      const created = await postJson(app, "/api/live/sessions", {
+        artifactId: uploaded.data.artifactId,
+        artifactCapability: uploaded.data.ownerCapability,
+      });
+      expect(created.status).toBe(201);
+      await expect(created.json()).resolves.toMatchObject({
+        data: {
+          artifactId: uploaded.data.artifactId,
+          mode: { kind: "live_notebook" },
+          ownerCapability: expect.stringMatching(/^cl_owner_/u),
+        },
+      });
+
+      const publicArtifact = await app.request(
+        `/api/artifacts/${uploaded.data.artifactId}`,
+      );
+      expect(publicArtifact.status).toBe(404);
+      await expect(publicArtifact.json()).resolves.toMatchObject({
+        error: { code: "PRIVATE_ARTIFACT_ROUTE_DISABLED" },
+      });
+    });
+  });
+
   it("creates sample, live, and replay sessions only through mode-specific routes", async () => {
     const harness = await sessionHarness("sample");
     const uploaded = await saveUploadedArtifact(
@@ -3464,24 +4180,29 @@ describe("Cloudflare Worker API", () => {
       `/api/replays/${replayPublicationPayload.data.replay.replayId}`,
     );
     expect(hostedReplay.status).toBe(200);
-    await expect(hostedReplay.json()).resolves.toMatchObject({
-      data: {
-        schemaVersion: "2",
-        replay: true,
-        concept: "class_imbalance",
-        artifactManifest: { artifactId: harness.artifactId },
-        beliefSpec: { concept: "class_imbalance" },
-        verifiedResult: {
+    const hostedReplayBody = (await hostedReplay.json()) as { data: unknown };
+    const publicReplay = PublicReplayProjectionV1Schema.parse(
+      hostedReplayBody.data,
+    );
+    expect(publicReplay).toMatchObject({
+      schemaVersion: "1",
+      projectionKind: "public_replay",
+      replay: true,
+      concept: "class_imbalance",
+      artifact: { kind: "notebook" },
+      test: {
+        result: {
           concept: "class_imbalance",
           resultHash: result.resultHash,
         },
-        patchResult: { resultHash: patchResult.resultHash },
-        provenance: {
-          conceptPackVersion: result.conceptPackVersion,
-          kernelVersion: result.kernelVersion,
-        },
+      },
+      repair: { resultHash: patchResult.resultHash },
+      provenance: {
+        conceptPackVersion: result.conceptPackVersion,
+        kernelVersion: result.kernelVersion,
       },
     });
+    expect(JSON.stringify(publicReplay)).not.toContain(harness.artifactId);
   });
 
   it("rejects cross-mode fields and retires generic mode selection", async () => {
@@ -6341,6 +7062,9 @@ describe("Cloudflare Worker API", () => {
       },
     });
     expect(validatedCapsule.reference).toEqual(storedProofCapsule);
+    expect(validatedCapsule.manifest.limitations).toContain(
+      "The hosted Codex launch has a credential-and-privilege boundary; filesystem generation read isolation is PARTIAL, not a formal sandbox proof.",
+    );
     await expect(
       validateProofCapsulePayloadAuthorityV2(validatedCapsule),
     ).resolves.toMatchObject({
@@ -6367,8 +7091,6 @@ describe("Cloudflare Worker API", () => {
         reused: boolean;
         replay: {
           replayId: string;
-          sourceSessionId: string;
-          capsuleId: string;
         };
       };
     };
@@ -6376,19 +7098,40 @@ describe("Cloudflare Worker API", () => {
       data: {
         reused: false,
         replay: {
-          schemaVersion: "2",
+          schemaVersion: "1",
           replay: true,
           label: "Verified replay",
-          playbackMode: "verified_capsule_replay",
-          sourceMode: "live_notebook",
-          sourceSessionId: bundle.sessionId,
-          capsuleId: storedProofCapsule.capsuleId,
-          rootHash: storedProofCapsule.rootHash,
-          bytesHash: storedProofCapsule.bytesHash,
+          concept: "entity_leakage",
+          recordedAt: storedProofCapsule.createdAt,
+          retention: {
+            policy: "available_until_revoked",
+            revocable: true,
+          },
         },
       },
     });
-    expect(JSON.stringify(publishedReplayPayload)).not.toContain("objectKey");
+    const serializedPublication = JSON.stringify(publishedReplayPayload);
+    for (const forbidden of [
+      "objectKey",
+      "sourceSessionId",
+      "capsuleId",
+      "rootHash",
+      "bytesHash",
+    ]) {
+      expect(serializedPublication).not.toContain(forbidden);
+    }
+    const activePublicationStatus = await harness.app.request(
+      `/api/sessions/${bundle.sessionId}/replays/status`,
+      undefined,
+      capsuleSigningEnv,
+    );
+    expect(activePublicationStatus.status).toBe(200);
+    await expect(activePublicationStatus.json()).resolves.toMatchObject({
+      data: {
+        status: "active",
+        replay: { replayId: publishedReplayPayload.data.replay.replayId },
+      },
+    });
 
     const duplicatePublication = await harness.app.request(
       `/api/sessions/${bundle.sessionId}/replays`,
@@ -6416,89 +7159,223 @@ describe("Cloudflare Worker API", () => {
     const hostedReplayPayload = (await hostedReplay.json()) as {
       data: Record<string, unknown>;
     };
-    expect(hostedReplayPayload).toMatchObject({
-      data: {
-        schemaVersion: "2",
-        replayId: publishedReplayPayload.data.replay.replayId,
-        replay: true,
-        label: "Verified replay",
-        playbackMode: "verified_capsule_replay",
-        sourceMode: "live_notebook",
-        sourceSessionId: bundle.sessionId,
-        capsuleId: storedProofCapsule.capsuleId,
-        rootHash: storedProofCapsule.rootHash,
-        bytesHash: storedProofCapsule.bytesHash,
-        artifactManifest: {
-          artifactId: bundle.artifactManifest.artifactId,
-          fileSha256: bundle.artifactManifest.fileSha256,
+    const publicReplay = PublicReplayProjectionV1Schema.parse(
+      hostedReplayPayload.data,
+    );
+    expect(publicReplay).toMatchObject({
+      schemaVersion: "1",
+      projectionKind: "public_replay",
+      replayId: publishedReplayPayload.data.replay.replayId,
+      replay: true,
+      label: "Verified replay",
+      playbackMode: "verified_capsule_replay",
+      sourceMode: "live_notebook",
+      concept: "entity_leakage",
+      authority: {
+        sourceCapsuleRootHash: storedProofCapsule.rootHash,
+        sourceCapsuleBytesHash: storedProofCapsule.bytesHash,
+        resultHash: result.resultHash,
+        patchResultHash: patchResult.resultHash,
+        projectionIntegrity: {
+          mode: "hmac-signed",
+          keyId: "capsule-test-key-v2",
         },
-        beliefSpec: { id: bundle.approvedBeliefSpec.id },
-        prediction: { id: bundle.prediction.id },
-        verifiedResult: { resultHash: result.resultHash },
+      },
+      artifact: {
+        kind: "notebook",
+        nbformat: 4,
+        supportStatus: "SUPPORTED",
+      },
+      question: {
+        claim: bundle.approvedBeliefSpec.claim,
+      },
+      test: {
+        result: { resultHash: result.resultHash },
         evidenceVerdict: { kind: "SUPPORTS", resultHash: result.resultHash },
-        boundary: {
-          result: { concept: "entity_leakage" },
-          report: { status: "VERIFIED" },
-          receipt: { resultHash: expect.any(String) },
-        },
+      },
+      boundary: {
+        result: { concept: "entity_leakage" },
+        verification: { status: "VERIFIED" },
+      },
+      apply: {
         revision: {
           statement:
             "Deployment units must determine the evaluation split before I trust generalization.",
         },
-        transferResult: { outcome: "PASSED" },
-        patchResult: { resultHash: patchResult.resultHash },
-        reasoningDiff: {
-          schemaVersion: "2",
-          authority: { patchResultHash: patchResult.resultHash },
-        },
-        compilerEvents: expect.any(Array),
-        timeline: expect.any(Array),
-        provenance: {
-          conceptPackVersion: result.conceptPackVersion,
-          kernelVersion: result.kernelVersion,
-          verifierVersion: expect.any(String),
-          boundaryVerifierVersion: "boundary-map-verifier-v1",
-          scientificVerifierVersion: expect.any(String),
-          scorerVersion: expect.any(String),
-          modelIds: expect.any(Array),
-          promptHashes: expect.any(Array),
-          commitHashes: expect.any(Array),
-        },
-        limitations: expect.arrayContaining([
-          expect.stringMatching(/bounded experiment/iu),
-        ]),
+        transfer: { outcome: "PASSED" },
       },
+      repair: { resultHash: patchResult.resultHash },
+      privacy: { profile: "share-safe-v1" },
     });
+    expect(
+      validatePublicReplayProjectionV1(publicReplay, {
+        expectedIntegrityMode: "hmac-signed",
+        signingKeys: { "capsule-test-key-v2": capsuleSigningKey },
+      }),
+    ).toEqual(publicReplay);
     const serializedHostedReplay = JSON.stringify(hostedReplayPayload);
-    expect(serializedHostedReplay).not.toContain("objectKey");
-    expect(serializedHostedReplay).not.toContain("patched-notebook.ipynb");
-    expect(serializedHostedReplay).not.toContain("private reasoning");
+    const hostedReplayKeys = recursiveObjectKeys(hostedReplayPayload.data);
+    for (const forbiddenKey of [
+      "objectKey",
+      "sourceSessionId",
+      "capsuleId",
+      "artifactId",
+      "fileSha256",
+      "fileName",
+      "filename",
+      "sourceExcerpt",
+      "fields",
+      "patchResult",
+      "jobId",
+    ]) {
+      expect(hostedReplayKeys).not.toContain(forbiddenKey);
+    }
+    for (const forbiddenValue of [
+      "patch diff",
+      "patched-notebook.ipynb",
+      "private reasoning",
+      bundle.sessionId,
+      bundle.artifactManifest.artifactId,
+    ]) {
+      expect(serializedHostedReplay).not.toContain(forbiddenValue);
+    }
+
+    const frozenPrivateCapsule = harness.runnerObjects.objects.get(
+      storedProofCapsule.objectKey,
+    );
+    if (frozenPrivateCapsule === undefined) {
+      throw new Error("private Capsule bytes are missing");
+    }
+    harness.runnerObjects.objects.set(storedProofCapsule.objectKey, {
+      ...frozenPrivateCapsule,
+      body: "poisoned private Capsule",
+    });
+    const replayWithoutPrivateCapsule = await harness.app.request(
+      `/api/replays/${publishedReplayPayload.data.replay.replayId}`,
+      undefined,
+      capsuleSigningEnv,
+    );
+    expect(replayWithoutPrivateCapsule.status).toBe(200);
+    await expect(replayWithoutPrivateCapsule.json()).resolves.toEqual(
+      hostedReplayPayload,
+    );
+    harness.runnerObjects.objects.set(
+      storedProofCapsule.objectKey,
+      frozenPrivateCapsule,
+    );
+
+    const projectionObjectKey = [...harness.runnerObjects.objects.keys()].find(
+      (key) =>
+        key.startsWith(
+          `public-replays/${publishedReplayPayload.data.replay.replayId}/`,
+        ),
+    );
+    if (projectionObjectKey === undefined) {
+      throw new Error("frozen public replay projection is missing");
+    }
+    const frozenProjection =
+      harness.runnerObjects.objects.get(projectionObjectKey);
+    if (frozenProjection === undefined) {
+      throw new Error("frozen public replay bytes are missing");
+    }
+    harness.runnerObjects.objects.set(projectionObjectKey, {
+      ...frozenProjection,
+      body: `${frozenProjection.body} `,
+    });
+    const poisonedPublicProjection = await harness.app.request(
+      `/api/replays/${publishedReplayPayload.data.replay.replayId}`,
+      undefined,
+      capsuleSigningEnv,
+    );
+    expect(poisonedPublicProjection.status).toBe(409);
+    await expect(poisonedPublicProjection.json()).resolves.toMatchObject({
+      error: { code: "REPLAY_AUTHORITY_MISMATCH" },
+    });
+    harness.runnerObjects.objects.set(projectionObjectKey, frozenProjection);
 
     const replayCapsuleDownload = await harness.app.request(
       `/api/replays/${publishedReplayPayload.data.replay.replayId}/proof-capsule`,
       undefined,
       capsuleSigningEnv,
     );
-    expect(replayCapsuleDownload.status).toBe(200);
-    expect(replayCapsuleDownload.headers.get("content-type")).toContain(
-      "application/vnd.counterlab.capsule+json",
-    );
-    expect(new Uint8Array(await replayCapsuleDownload.arrayBuffer())).toEqual(
-      capsuleBytes,
-    );
+    expect(replayCapsuleDownload.status).toBe(404);
+    await expect(replayCapsuleDownload.json()).resolves.toMatchObject({
+      error: { code: "REPLAY_PRIVATE_ARTIFACT_UNAVAILABLE" },
+    });
 
     const replayPatchedNotebookDownload = await harness.app.request(
       `/api/replays/${publishedReplayPayload.data.replay.replayId}/patched-notebook`,
       undefined,
       capsuleSigningEnv,
     );
-    expect(replayPatchedNotebookDownload.status).toBe(200);
-    expect(replayPatchedNotebookDownload.headers.get("content-type")).toContain(
-      "application/x-ipynb+json",
+    expect(replayPatchedNotebookDownload.status).toBe(404);
+    await expect(replayPatchedNotebookDownload.json()).resolves.toMatchObject({
+      error: { code: "REPLAY_PRIVATE_ARTIFACT_UNAVAILABLE" },
+    });
+
+    const revokeReplay = await harness.app.request(
+      `/api/sessions/${bundle.sessionId}/replays/revoke`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      },
+      capsuleSigningEnv,
     );
-    await expect(replayPatchedNotebookDownload.text()).resolves.toBe(
-      patchedNotebookText,
+    expect(revokeReplay.status).toBe(200);
+    await expect(revokeReplay.json()).resolves.toMatchObject({
+      data: {
+        replayId: publishedReplayPayload.data.replay.replayId,
+        revoked: true,
+        alreadyRevoked: false,
+      },
+    });
+    const revokedHostedReplay = await harness.app.request(
+      `/api/replays/${publishedReplayPayload.data.replay.replayId}`,
+      undefined,
+      capsuleSigningEnv,
     );
+    expect(revokedHostedReplay.status).toBe(404);
+    const revokedPublicationStatus = await harness.app.request(
+      `/api/sessions/${bundle.sessionId}/replays/status`,
+      undefined,
+      capsuleSigningEnv,
+    );
+    expect(revokedPublicationStatus.status).toBe(200);
+    await expect(revokedPublicationStatus.json()).resolves.toMatchObject({
+      data: {
+        status: "revoked",
+        replay: { replayId: publishedReplayPayload.data.replay.replayId },
+      },
+    });
+
+    const duplicateRevocation = await harness.app.request(
+      `/api/sessions/${bundle.sessionId}/replays/revoke`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      },
+      capsuleSigningEnv,
+    );
+    expect(duplicateRevocation.status).toBe(200);
+    await expect(duplicateRevocation.json()).resolves.toMatchObject({
+      data: { revoked: true, alreadyRevoked: true },
+    });
+
+    const republishRevokedReplay = await harness.app.request(
+      `/api/sessions/${bundle.sessionId}/replays`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      },
+      capsuleSigningEnv,
+    );
+    expect(republishRevokedReplay.status).toBe(409);
+    await expect(republishRevokedReplay.json()).resolves.toMatchObject({
+      error: { code: "ILLEGAL_TRANSITION" },
+    });
     const wrongCapsuleKey = await harness.app.request(
       `/api/sessions/${bundle.sessionId}/proof-capsule`,
       undefined,
@@ -8092,6 +8969,7 @@ describe("Cloudflare Worker API", () => {
         replay: "available",
         liveCodex: "local-runner-required",
         liveKernel: "local-runner-required",
+        maintenance: false,
       },
     });
   });
@@ -8122,12 +9000,94 @@ describe("Cloudflare Worker API", () => {
       status: "ready",
       service: "counterlab-control-plane",
       checks: {
+        admission: true,
         analyst: true,
+        maintenance: true,
         persistence: true,
         privateStorage: true,
+        releaseIdentity: true,
         runner: true,
         signing: true,
       },
+      maintenance: false,
+      release: { status: "unbound" },
+    });
+  });
+
+  it("freezes API mutation during the bounded migration window", async () => {
+    const maintenanceApi = createApi({
+      artifactStore: new MemoryArtifactStore(),
+    });
+    const response = await maintenanceApi.request(
+      "/api/artifacts",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sample: true }),
+      },
+      { COUNTERLAB_MAINTENANCE_MODE: "true" } as unknown as Env,
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "RELEASE_MAINTENANCE", retryable: true },
+    });
+    const health = await maintenanceApi.request("/api/health", undefined, {
+      COUNTERLAB_MAINTENANCE_MODE: "true",
+    } as unknown as Env);
+    expect(health.status).toBe(200);
+    await expect(health.json()).resolves.toMatchObject({
+      data: { maintenance: true },
+    });
+    const readiness = await maintenanceApi.request("/ready", undefined, {
+      COUNTERLAB_MAINTENANCE_MODE: "true",
+    } as unknown as Env);
+    expect(readiness.status).toBe(503);
+    await expect(readiness.json()).resolves.toMatchObject({
+      maintenance: true,
+      checks: { maintenance: false },
+    });
+  });
+
+  it("reports only validated release identities", async () => {
+    const workerVersionId = "11111111-2222-3333-4444-555555555555";
+    const workerEvidenceCommit = "a".repeat(40);
+    const response = await api.request("/api/health", undefined, {
+      COUNTERLAB_WORKER_EVIDENCE_COMMIT: workerEvidenceCommit,
+      COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
+      COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+      CF_VERSION_METADATA: {
+        id: workerVersionId,
+        tag: `git-${workerEvidenceCommit}`,
+        timestamp: "2026-07-19T00:00:00.000Z",
+      },
+    } as unknown as Env);
+
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        release: {
+          status: "bound",
+          workerVersionId,
+          workerVersionTag: `git-${workerEvidenceCommit}`,
+          workerEvidenceCommit,
+          runnerSourceCommit: "b".repeat(40),
+          runnerImageDigest: `sha256:${"c".repeat(64)}`,
+        },
+      },
+    });
+
+    const mismatchedTag = await api.request("/api/health", undefined, {
+      COUNTERLAB_WORKER_EVIDENCE_COMMIT: workerEvidenceCommit,
+      COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
+      COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+      CF_VERSION_METADATA: {
+        id: workerVersionId,
+        tag: `git-${"d".repeat(40)}`,
+        timestamp: "2026-07-19T00:00:00.000Z",
+      },
+    } as unknown as Env);
+    await expect(mismatchedTag.json()).resolves.toMatchObject({
+      data: { release: { status: "unbound" } },
     });
   });
 
@@ -8164,9 +9124,73 @@ describe("Cloudflare Worker API", () => {
       data: { runnerJob: { status: "CANCELLED" }, reused: true },
     });
     expect(harness.dispatcher.cancelled).toHaveLength(1);
+
+    const lateCallback = await postJson(
+      harness.app,
+      `/api/runner/jobs/${firstBody.data.runnerJob.jobId}/callback`,
+      {
+        schemaVersion: "1",
+        callbackId: "callback_after_start_over",
+        idempotencyKey: "callback-after-start-over",
+        jobId: firstBody.data.runnerJob.jobId,
+        stateVersion: harness.dispatch.job.stateVersion,
+        status: "FAILED",
+        outputHashes: [],
+        finalEventCursor: 0,
+        occurredAt: "2026-07-14T10:00:01.000Z",
+        error: {
+          code: "LATE_RUNNER_CALLBACK",
+          message: "Late completion after browser reset",
+          retryable: false,
+        },
+      },
+      { authorization: `Bearer ${harness.dispatch.token}` },
+    );
+    expect(lateCallback.status).toBe(409);
+    await expect(lateCallback.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "RUNNER_CALLBACK_STATE" },
+    });
+    const afterLateCallback = await harness.runnerJobs.find(
+      firstBody.data.runnerJob.jobId,
+    );
+    expect(afterLateCallback).toMatchObject({ status: "CANCELLED" });
   });
 
-  it("preserves a failed dispatch and retries the compile on a fresh isolated job", async () => {
+  it("acquires one opaque runner lease and releases it on cancellation", async () => {
+    const admissionControl = new CapturingAdmissionControl();
+    const dispatcher = new CapturingRunnerDispatcher();
+    const harness = await preparedHostedRunner(
+      "session_admission_release",
+      dispatcher,
+      admissionControl,
+    );
+    const queued = (await harness.queued.json()) as {
+      data: { runnerJob: RunnerJob };
+    };
+
+    expect(admissionControl.admitted).toHaveLength(1);
+    expect(admissionControl.admitted[0]).toMatchObject({
+      kind: "runner",
+      callerKey: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      sessionKey: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      operationKey: expect.stringMatching(/^[a-f0-9]{64}$/u),
+    });
+    const cancelled = await postJson(
+      harness.app,
+      `/api/sessions/${queued.data.runnerJob.sessionId}/jobs/${queued.data.runnerJob.jobId}/cancel`,
+    );
+    expect(cancelled.status).toBe(200);
+    expect(admissionControl.released).toEqual([
+      {
+        policyVersion: "counterlab-admission-v1",
+        kind: "runner",
+        operationKey: admissionControl.admitted[0]?.operationKey,
+      },
+    ]);
+  });
+
+  it("preserves a failed dispatch and retries the compile on a fresh separate job", async () => {
     const dispatcher = new CapturingRunnerDispatcher(1);
     const harness = await preparedHostedRunner(
       "session_dispatch_recovery",
@@ -8357,7 +9381,8 @@ describe("Cloudflare Worker API", () => {
       data: {
         liveCodex: "configured",
         liveKernel: "configured",
-        sandbox: "configured",
+        sandbox: "credential-and-privilege-boundary",
+        generationFilesystemReadIsolation: "PARTIAL",
       },
     });
 
@@ -8506,6 +9531,62 @@ describe("Cloudflare Worker API", () => {
       version: 1,
     });
     expect(await sessionRepository.listEvents(sessionId)).toHaveLength(1);
+  });
+
+  it("does not make a duplicate live analyst call while the same packet is active", async () => {
+    const { app, sessionId, sessionRepository, artifactStore } =
+      await sessionHarness("live");
+    const learnerClaim =
+      "The notebook accuracy proves generalization to new customers.";
+    const beliefInput = await liveBeliefInput(app, sessionId, learnerClaim);
+    const admissionControl = new CapturingAdmissionControl({
+      admitted: true,
+      reused: true,
+      leaseStatus: "already-active",
+      leaseExpiresAt: Date.parse("2026-07-14T10:02:00.000Z"),
+    });
+    const admissionApp = createApi({
+      sessionRepository,
+      artifactStore,
+      admissionControl,
+      admissionHmacKey:
+        "contained-api-admission-test-key-with-at-least-32-characters",
+      admissionCaller: () => "203.0.113.8",
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+    });
+    const upstream = vi.spyOn(globalThis, "fetch");
+
+    try {
+      const response = await admissionApp.request(
+        `/api/sessions/${sessionId}/belief-test`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(beliefInput),
+        },
+        {
+          OPENAI_API_KEY: "server-only-key",
+          OPENAI_MODEL: "configured-model",
+        } as unknown as Env & Record<string, string>,
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.headers.get("retry-after")).toBe("120");
+      await expect(response.json()).resolves.toMatchObject({
+        error: {
+          code: "ANALYST_IN_PROGRESS",
+          retryable: true,
+          status: 409,
+        },
+      });
+      expect(upstream).not.toHaveBeenCalled();
+      expect(admissionControl.released).toHaveLength(0);
+      await expect(sessionRepository.find(sessionId)).resolves.toMatchObject({
+        state: "INGESTED",
+      });
+    } finally {
+      upstream.mockRestore();
+    }
   });
 
   it("persists native v2 belief authority for a successful live notebook analysis", async () => {

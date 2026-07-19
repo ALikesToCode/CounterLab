@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 IMAGE=""
 REGISTRY_ONLY=0
 REQUIRE_PRODUCTION=0
@@ -82,11 +82,14 @@ if [[ -z "${IMAGE}" ]]; then
   exit 2
 fi
 
-DOCKER_BIN="$(command -v docker || true)"
+DOCKER_BIN="${COUNTERLAB_DOCKER_BIN:-$(command -v docker || true)}"
 [[ -n "${DOCKER_BIN}" ]] || {
   echo "A repository-contained Docker-compatible exact-image adapter is required." >&2
   exit 2
 }
+if [[ "${DOCKER_BIN}" != /* ]]; then
+  DOCKER_BIN="${ROOT_DIR}/${DOCKER_BIN#./}"
+fi
 DOCKER_BIN="$(realpath -e -- "${DOCKER_BIN}")"
 case "${DOCKER_BIN}" in
   "${ROOT_DIR}"/*) ;;

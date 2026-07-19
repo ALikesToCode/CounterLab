@@ -163,9 +163,7 @@ export async function verifyEvidenceFiles(
       }
 
       if (record.kind === "integrity") {
-        const evidence = object(
-          JSON.parse(bytes.toString("utf8")) as unknown,
-        );
+        const evidence = object(JSON.parse(bytes.toString("utf8")) as unknown);
         const declaredFiles = object(evidence?.files);
         for (const [nestedPath, expectedHash] of Object.entries(
           declaredFiles ?? {},

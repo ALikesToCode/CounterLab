@@ -79,32 +79,32 @@ The UX components translate or disclose these roles; they do not change them.
 
 ## Local verification evidence
 
-The post-Milestone 9 release audit produced these exact results:
+The current source-candidate audit produced these exact results:
 
-- Web Vitest: 45 files and 254 tests passed.
+- Web Vitest: 58 files and 360 tests passed.
 - Repository, web, and Worker TypeScript checks passed.
-- Scientific-engine release verifier: 8/8 passed after refreshing the seven
-  learner-surface integrity bindings and canonical snapshot.
-- Python kernel: 179/179 passed after the held-out lineage repair.
+- Combined fixed-kernel and hosted-runner Python gate: 231/231 passed.
 - Leakage mutations: 13/13 detected; imbalance mutations: 19/19 detected.
 - Held-out intake/routing: 10/10; fixed full-loop completion: 7/8. The remaining
   RandomForest case is the intended `PATCH_ESTIMATOR_OUTSIDE_CONTRACT` refusal.
 - Held-out Vitest configuration: 2 files and 6 tests passed.
-- Local D1 migration application: all six migrations passed, including
-  `0006_learner_interactions.sql`.
+- Local D1 migration application: all eight migrations passed, including owner
+  capability retirement and replay revocation; a second pass found none
+  pending.
 - Vite/Worker production build passed using a unique repository-local output
   directory and `--emptyOutDir=false`.
-- Repository secret scan passed across 598 files; changed-file formatting and
-  `git diff --check` passed.
+- Repository secret scan passed across 741 files while excluding generated
+  browser-profile state.
 - The Cloak-only Playwright suite statically collected 22 tests from one spec
   file.
 
-The complete root Vitest suite now passes 38/40 files and 465/468 tests. Its
-three remaining failures are permission-mode assertions: this managed
-filesystem reports requested `000`, `0555`, `0711`, or `0777` modes as `0700`.
-The combined Python kernel/runner suite similarly passes 228/231; its three
-remaining failures assert the same unavailable mode semantics. Neither result
-is represented as a fully green release gate.
+The complete root Vitest suite passes 42/43 files and 486/488 tests. Its only
+two pending tests reject the intentionally stale internal-integrity and
+pnpm-lock evidence. The source candidate must be committed and built before
+those image/source-bound hashes can be refreshed honestly. Permission-boundary
+tests now verify both the requested modes and the effective no-broad-write
+contract without assuming this managed filesystem exposes every requested mode
+bit.
 
 The full repository Prettier gate still reports ten pre-existing warnings in
 files not changed by this UX branch. The branch-owned baseline document was
@@ -171,20 +171,20 @@ recording failure does not advance or invalidate scientific state.
 
 ## Build and performance observations
 
-The successful final Milestone 8 build reported:
+The current source-candidate build reported:
 
 | Artifact                       |         Raw |      Gzip |
 | ------------------------------ | ----------: | --------: |
-| Worker bundle                  | 1,620.27 kB | 313.05 kB |
-| Client CSS                     |   183.23 kB |  34.45 kB |
-| Lazy Reasoning Diff JavaScript |     7.99 kB |   2.67 kB |
-| Lazy Reasoning Diff CSS        |     1.98 kB |   0.79 kB |
-| Main client JavaScript         |   610.83 kB | 170.71 kB |
+| Worker bundle                  | 1,695.34 kB | 328.63 kB |
+| Main client CSS                |   177.70 kB |  31.21 kB |
+| Lazy Reasoning Diff JavaScript |    14.58 kB |   4.47 kB |
+| Lazy Reasoning Diff CSS        |     4.63 kB |   1.38 kB |
+| Main client JavaScript         |   398.22 kB | 115.88 kB |
 
-The Reasoning Diff is now a lazy chunk, and the main client decreased from the
-previous 615.07 kB observation to 610.83 kB. The build still emits the warning
-for a JavaScript chunk above 500 kB. Runtime performance and Core Web Vitals
-were not measured.
+The Reasoning Diff, Judge Mode, replay, Studio, transfer, and imbalance views
+are split into lazy chunks. The main client decreased from the previous 610.83
+kB observation to 398.22 kB and no longer emits the 500 kB chunk warning.
+Runtime performance and Core Web Vitals were not measured.
 
 ## Remaining qualification work
 
@@ -192,9 +192,8 @@ were not measured.
   three viewports, including keyboard, reduced motion, refresh, screen-reader
   names, downloads, and no-overflow assertions.
 - Capture the planned screenshots only from the exact qualified source.
-- Re-run the six permission-mode assertions on a filesystem that preserves
-  POSIX modes; keep them as release blockers here rather than weakening the
-  credential and runner boundaries.
+- Build the immutable runner/adapter images, regenerate the exact Node SBOM and
+  internal authority bindings, and make the remaining two root tests green.
 - Provide a repository-contained Cloudflare authentication session or
   `CLOUDFLARE_API_TOKEN`, plus a current source-bound qualified runner image and
   receipt.

@@ -1,27 +1,36 @@
 import { render, screen, within } from "@testing-library/react";
-import { ProofCapsuleReplayV2Schema } from "@counterlab/contracts";
+import {
+  ProofCapsuleReplayV2Schema,
+  PublicReplayProjectionV1Schema,
+} from "@counterlab/contracts";
+import {
+  createPublicReplayProjectionV1,
+  validatePublicReplayProjectionV1,
+} from "@counterlab/proof-capsule";
 import { describe, expect, it } from "vitest";
 
 import { ProofCapsuleReplayView } from "./ProofCapsuleReplayView";
-import { replayFixture } from "./ProofCapsuleReplayView.fixture";
+import {
+  publicReplayFixture,
+  replayFixture,
+} from "./ProofCapsuleReplayView.fixture";
 
 describe("ProofCapsuleReplayView", () => {
   it.each(["entity_leakage", "class_imbalance"] as const)(
-    "keeps the %s replay fixture valid against the public Capsule schema",
+    "keeps the %s replay fixture valid against private and public schemas",
     (concept) => {
       expect(() =>
         ProofCapsuleReplayV2Schema.parse(replayFixture(concept)),
+      ).not.toThrow();
+      expect(() =>
+        PublicReplayProjectionV1Schema.parse(publicReplayFixture(concept)),
       ).not.toThrow();
     },
   );
 
   it("exposes the six replay stages as keyboard-accessible in-page links", () => {
     render(
-      <ProofCapsuleReplayView
-        replay={replayFixture("entity_leakage")}
-        proofCapsuleDownloadUrl="/api/replays/replay_retention_913/proof-capsule"
-        patchedNotebookDownloadUrl="/api/replays/replay_retention_913/patched-notebook"
-      />,
+      <ProofCapsuleReplayView replay={publicReplayFixture("entity_leakage")} />,
     );
 
     const stages = screen.getByRole("navigation", {
@@ -47,14 +56,8 @@ describe("ProofCapsuleReplayView", () => {
   });
 
   it("renders a dynamic live-artifact replay without mutable lesson controls", () => {
-    const replay = replayFixture("class_imbalance");
-    render(
-      <ProofCapsuleReplayView
-        replay={replay}
-        proofCapsuleDownloadUrl="/api/replays/replay_merchant_402/proof-capsule"
-        patchedNotebookDownloadUrl="/api/replays/replay_merchant_402/patched-notebook"
-      />,
-    );
+    const replay = publicReplayFixture("class_imbalance");
+    render(<ProofCapsuleReplayView replay={replay} />);
 
     expect(
       screen.getByRole("complementary", { name: "Verified replay mode" }),
@@ -64,15 +67,11 @@ describe("ProofCapsuleReplayView", () => {
     expect(
       screen.getByText("Completed live notebook analysis"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("merchant_risk_audit_live.ipynb"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Private notebook withheld")).toBeInTheDocument();
     expect(
       screen.getByText(/our merchant detector is production-ready/i),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("merchant holdout accuracy: 0.987"),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/metric evidence · hash/i)).toBeInTheDocument();
     expect(screen.getAllByText("98.7%").length).toBeGreaterThan(0);
     expect(screen.getAllByText("17.0%").length).toBeGreaterThan(0);
     expect(screen.getAllByText("0.412").length).toBeGreaterThan(0);
@@ -83,7 +82,7 @@ describe("ProofCapsuleReplayView", () => {
       screen.getByText(/for rare events, i will compare/i),
     ).toBeInTheDocument();
     expect(screen.getByText(/prioritize minority recall/i)).toBeInTheDocument();
-    expect(screen.getByText(/classification_report/)).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/classification_report/);
 
     for (const sectionId of [
       "replay-question",
@@ -106,19 +105,11 @@ describe("ProofCapsuleReplayView", () => {
     expect(screen.queryByText(/run fair test/i)).not.toBeInTheDocument();
   });
 
-  it("renders leakage authority and exposes only the two replay-scoped downloads", () => {
-    const replay = replayFixture("entity_leakage");
-    render(
-      <ProofCapsuleReplayView
-        replay={replay}
-        proofCapsuleDownloadUrl="/api/replays/replay_retention_913/proof-capsule"
-        patchedNotebookDownloadUrl="/api/replays/replay_retention_913/patched-notebook"
-      />,
-    );
+  it("renders leakage authority without exposing private downloads or identifiers", () => {
+    const replay = publicReplayFixture("entity_leakage");
+    render(<ProofCapsuleReplayView replay={replay} />);
 
-    expect(
-      screen.getByText("account_retention_live.ipynb"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Private notebook withheld")).toBeInTheDocument();
     expect(
       screen.getByText(/this account-retention model will generalize/i),
     ).toBeInTheDocument();
@@ -127,35 +118,96 @@ describe("ProofCapsuleReplayView", () => {
     expect(screen.getAllByText(/0 shared entities/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Material gap")).toHaveLength(2);
 
-    const capsule = screen.getByRole("link", {
-      name: "Download Proof Capsule",
-    });
-    const notebook = screen.getByRole("link", {
-      name: "Download repaired notebook copy",
-    });
-    expect(capsule).toHaveAttribute(
-      "href",
-      "/api/replays/replay_retention_913/proof-capsule",
-    );
-    expect(notebook).toHaveAttribute(
-      "href",
-      "/api/replays/replay_retention_913/patched-notebook",
-    );
-    expect(capsule).toHaveAttribute("download");
-    expect(notebook).toHaveAttribute("download");
     expect(
       screen
         .getAllByRole("link")
         .filter((link) => link.hasAttribute("download")),
-    ).toEqual([notebook, capsule]);
+    ).toEqual([]);
 
     const proof = document.getElementById("replay-proof");
     expect(proof).not.toBeNull();
     expect(within(proof!).getByText("Integrity-hashed")).toBeInTheDocument();
     expect(screen.getByText("replay_retention_913")).toBeInTheDocument();
-    expect(screen.getByText("session_live_retention_913")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("session_live_retention_913");
+    expect(document.body).not.toHaveTextContent("account_retention_live.ipynb");
+    expect(document.body).not.toHaveTextContent("account retention accuracy");
+    expect(document.body).not.toHaveTextContent(/train_test_split/);
     expect(screen.getByText("external-verifier-v3")).toBeInTheDocument();
     expect(screen.getByText(/gpt-5\.6-sol/)).toBeInTheDocument();
-    expect(screen.getByText(/not model quality outside/i)).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/does not establish global model quality/i).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("produces a deterministic, tamper-evident projection with forbidden fields absent", () => {
+    const source = replayFixture("entity_leakage");
+    const first = createPublicReplayProjectionV1(source, {
+      signing: { keyId: "replay-test-key", signingKey: "test-signing-key" },
+    });
+    const second = createPublicReplayProjectionV1(source, {
+      signing: { keyId: "replay-test-key", signingKey: "test-signing-key" },
+    });
+
+    expect(first).toEqual(second);
+    expect(() =>
+      validatePublicReplayProjectionV1(first, {
+        expectedIntegrityMode: "hmac-signed",
+        signingKeys: { "replay-test-key": "test-signing-key" },
+      }),
+    ).not.toThrow();
+
+    const serialized = JSON.stringify(first);
+    const keys = new Set<string>();
+    const collectKeys = (value: unknown): void => {
+      if (Array.isArray(value)) {
+        value.forEach(collectKeys);
+        return;
+      }
+      if (value === null || typeof value !== "object") return;
+      for (const [key, child] of Object.entries(value)) {
+        keys.add(key);
+        collectKeys(child);
+      }
+    };
+    collectKeys(first);
+    for (const forbiddenKey of [
+      "sourceSessionId",
+      "sessionId",
+      "artifactId",
+      "fileName",
+      "sourceExcerpt",
+      "diff",
+      "unifiedDiff",
+      "objectKey",
+      "jobId",
+      "eventId",
+      "reasoning",
+      "identifiedRisks",
+      "generatedAt",
+      "timestamp",
+      "fixtureViewHash",
+      "randomPipelineFingerprint",
+      "groupPipelineFingerprint",
+      "scoreFingerprint",
+      "pipelineFingerprint",
+    ]) {
+      expect(keys).not.toContain(forbiddenKey);
+    }
+    for (const forbiddenValue of [
+      "account_retention_live.ipynb",
+      "train_test_split",
+      "classification_report",
+      "session_live_retention_913",
+    ]) {
+      expect(serialized).not.toContain(forbiddenValue);
+    }
+
+    const tampered = structuredClone(first);
+    tampered.test.result.runs[0]!.seed += 1;
+    expect(() =>
+      validatePublicReplayProjectionV1(tampered, {
+        signingKeys: { "replay-test-key": "test-signing-key" },
+      }),
+    ).toThrow(/projection hash/i);
   });
 });

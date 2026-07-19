@@ -64,6 +64,7 @@ export function InteractiveImbalanceLab({
       await runner.waitForStandaloneJob({
         sessionId,
         jobId: queued.runnerJob.jobId,
+        jobKind: queued.runnerJob.kind,
       });
       const verified = await counterLabApi.getInteractiveResult(
         sessionId,

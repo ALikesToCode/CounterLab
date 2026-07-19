@@ -1825,7 +1825,7 @@ export type BeliefTest = z.infer<typeof BeliefTestSchema>;
 export const PrimaryHypothesisSchema = z
   .object({
     id: z.enum(["current", "competing"]),
-    statement: NonEmptyString,
+    statement: NonEmptyString.max(1_000),
     conditions: z.array(NonEmptyString).min(1),
     nonClaims: z
       .array(NonEmptyString)
@@ -2082,7 +2082,7 @@ export const PredictionContractSchema = z
     id: NonEmptyString,
     sessionId: NonEmptyString,
     beliefTestId: NonEmptyString,
-    choice: NonEmptyString,
+    choice: NonEmptyString.max(240),
     numericRange: z
       .object({
         min: z.number().finite(),
@@ -2953,6 +2953,60 @@ export type HostedVerifiedResultSetV2 = z.infer<
   typeof HostedVerifiedResultSetV2Schema
 >;
 
+const PublicReplayLeakageRunV1Schema = HostedLeakageVerifiedRunSchema.pick({
+  id: true,
+  operation: true,
+  splitStrategy: true,
+  seed: true,
+  metrics: true,
+  sampleSizes: true,
+  entityOverlap: true,
+});
+
+const PublicReplayImbalanceRunV1Schema = HostedImbalanceVerifiedRunSchema.pick({
+  id: true,
+  operation: true,
+  seed: true,
+  threshold: true,
+  prevalenceScenario: true,
+  metrics: true,
+  confusionMatrix: true,
+  sampleSizes: true,
+  classCounts: true,
+  prevalence: true,
+  predictedPositiveRate: true,
+});
+
+export const PublicReplayVerifiedResultV1Schema = z.discriminatedUnion(
+  "concept",
+  [
+    z
+      .object({
+        concept: z.literal("entity_leakage"),
+        conceptPackVersion: NonEmptyString,
+        kernelVersion: NonEmptyString,
+        seed: z.number().int().nonnegative(),
+        runs: z.array(PublicReplayLeakageRunV1Schema).min(1).max(8),
+        resultHash: Sha256Schema,
+      })
+      .strict(),
+    z
+      .object({
+        concept: z.literal("class_imbalance"),
+        conceptPackVersion: NonEmptyString,
+        kernelVersion: NonEmptyString,
+        seed: z.number().int().nonnegative(),
+        runs: z.array(PublicReplayImbalanceRunV1Schema).min(1).max(8),
+        resultHash: Sha256Schema,
+      })
+      .strict(),
+  ],
+);
+
+export type PublicReplayVerifiedResultV1 = z.infer<
+  typeof PublicReplayVerifiedResultV1Schema
+>;
+
 export const VerifiedResultSetSchema = z.union([
   VerifiedResultSetV1Schema,
   HostedVerifiedResultSetV2Schema,
@@ -2970,13 +3024,13 @@ export const TransferResultSchema = z
     sessionId: NonEmptyString,
     taskId: NonEmptyString,
     outcome: z.enum(["PASSED", "FAILED"]),
-    selectedStrategy: NonEmptyString,
+    selectedStrategy: NonEmptyString.max(240),
     identifiedRisks: z.array(NonEmptyString),
     evidenceChoices: z.array(NonEmptyString),
     checks: z.array(
       z
         .object({
-          invariant: NonEmptyString,
+          invariant: NonEmptyString.max(160),
           passed: z.boolean(),
           evidence: NonEmptyString,
         })
@@ -3319,6 +3373,520 @@ export const ProofCapsuleReplayV2Schema =
   });
 
 export type ProofCapsuleReplayV2 = z.infer<typeof ProofCapsuleReplayV2Schema>;
+
+const PublicReplayEvidenceLocatorV1Schema = z
+  .object({
+    kind: z.enum(["code", "metric", "schema", "output", "learner_claim"]),
+    hash: Sha256Schema,
+    cellIndex: z.number().int().nonnegative().optional(),
+    outputIndex: z.number().int().nonnegative().optional(),
+  })
+  .strict()
+  .superRefine((evidence, context) => {
+    if (
+      (evidence.kind === "code" ||
+        evidence.kind === "metric" ||
+        evidence.kind === "output") &&
+      evidence.cellIndex === undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: `${evidence.kind} evidence requires a cellIndex`,
+        path: ["cellIndex"],
+      });
+    }
+    if (
+      (evidence.kind === "metric" || evidence.kind === "output") &&
+      evidence.outputIndex === undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: `${evidence.kind} evidence requires an outputIndex`,
+        path: ["outputIndex"],
+      });
+    }
+  });
+
+const PublicReplayHypothesisV1Schema = z
+  .object({
+    id: z.enum(["current", "competing"]),
+    statement: NonEmptyString,
+  })
+  .strict();
+
+const PublicReplayEvidenceVerdictV1Schema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("SUPPORTS"),
+      hypothesisId: z.enum(["current", "competing"]),
+      resultHash: Sha256Schema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("INCONCLUSIVE"),
+      reasonCode: EpistemicReasonCodeSchema,
+      resultHash: Sha256Schema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("REJECTED"),
+      findingIds: z.array(EpistemicTokenIdSchema).min(1).max(20),
+      resultReleased: z.literal(false),
+    })
+    .strict(),
+]);
+
+const PublicReplayPredictionV1Schema = z
+  .object({
+    choice: NonEmptyString,
+    numericRange: z
+      .object({
+        min: z.number().finite(),
+        max: z.number().finite(),
+      })
+      .strict()
+      .optional(),
+    confidence: z.number().finite().min(0).max(100),
+    committedAt: z.iso.datetime({ offset: true }),
+    immutableHash: Sha256Schema,
+  })
+  .strict()
+  .superRefine((prediction, context) => {
+    if (
+      prediction.numericRange !== undefined &&
+      prediction.numericRange.min > prediction.numericRange.max
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "numeric range minimum cannot exceed maximum",
+        path: ["numericRange"],
+      });
+    }
+  });
+
+const PublicReplayBoundaryResultV1Schema = z
+  .object({
+    schemaVersion: BoundaryMapResultV1Schema.shape.schemaVersion,
+    canonicalProfile: BoundaryMapResultV1Schema.shape.canonicalProfile,
+    concept: BoundaryMapResultV1Schema.shape.concept,
+    conceptPackVersion: BoundaryMapResultV1Schema.shape.conceptPackVersion,
+    sweepId: BoundaryMapResultV1Schema.shape.sweepId,
+    gridPresetId: BoundaryMapResultV1Schema.shape.gridPresetId,
+    seed: BoundaryMapResultV1Schema.shape.seed,
+    kernelVersion: BoundaryMapResultV1Schema.shape.kernelVersion,
+    axes: BoundaryMapResultV1Schema.shape.axes,
+    cells: z
+      .array(
+        z.discriminatedUnion("concept", [
+          LeakageBoundaryMapCellV1Schema.omit({
+            fixtureViewHash: true,
+            randomPipelineFingerprint: true,
+            groupPipelineFingerprint: true,
+          }),
+          ImbalanceBoundaryMapCellV1Schema.omit({
+            scoreFingerprint: true,
+            pipelineFingerprint: true,
+          }),
+        ]),
+      )
+      .min(4)
+      .max(2_500),
+    classifications: BoundaryMapResultV1Schema.shape.classifications,
+    units: BoundaryMapResultV1Schema.shape.units,
+    assumptions: BoundaryMapResultV1Schema.shape.assumptions,
+    nonClaims: BoundaryMapResultV1Schema.shape.nonClaims,
+    resultHash: BoundaryMapResultV1Schema.shape.resultHash,
+  })
+  .strict()
+  .superRefine((result, context) => {
+    if (result.axes[0].id === result.axes[1].id) {
+      context.addIssue({
+        code: "custom",
+        message: "public Boundary Map axes must be unique",
+        path: ["axes", 1, "id"],
+      });
+    }
+    if (
+      result.cells.length !==
+      result.axes[0].points.length * result.axes[1].points.length
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "public Boundary Map grid is incomplete",
+        path: ["cells"],
+      });
+    }
+  });
+
+const PublicReplayBoundaryVerificationV1Schema = z
+  .object({
+    status: BoundaryMapVerificationReportV1Schema.shape.status,
+    verifierVersion:
+      BoundaryMapVerificationReportV1Schema.shape.verifierVersion,
+    resultHash: BoundaryMapVerificationReportV1Schema.shape.resultHash,
+    invariantCount: BoundaryMapVerificationReportV1Schema.shape.invariantCount,
+    reportHash: BoundaryMapVerificationReportV1Schema.shape.reportHash,
+  })
+  .strict();
+
+const PublicReplayBoundaryReceiptV1Schema = BoundaryMapReceiptV1Schema.pick({
+  resultHash: true,
+  verificationReportHash: true,
+  issuedAt: true,
+  integrity: true,
+  receiptHash: true,
+});
+
+const PublicReplayTransferV1Schema = z
+  .object({
+    outcome: z.enum(["PASSED", "FAILED"]),
+    selectedStrategy: NonEmptyString,
+    checks: z.array(
+      z
+        .object({
+          invariant: NonEmptyString,
+          passed: z.boolean(),
+        })
+        .strict(),
+    ),
+    evaluatorVersion: NonEmptyString,
+    resultHash: Sha256Schema,
+  })
+  .strict()
+  .superRefine((result, context) => {
+    const allPassed =
+      result.checks.length > 0 && result.checks.every((check) => check.passed);
+    if ((result.outcome === "PASSED") !== allPassed) {
+      context.addIssue({
+        code: "custom",
+        message: "transfer outcome must agree with deterministic checks",
+        path: ["outcome"],
+      });
+    }
+  });
+
+const PublicReplayRepairV1Schema = z
+  .object({
+    status: z.enum(["VERIFIED", "REJECTED", "UNVERIFIED"]),
+    modifiedCells: z.array(z.number().int().nonnegative()),
+    invariantNames: z.array(NonEmptyString.max(160)).max(32),
+    invariantCount: z.number().int().nonnegative(),
+    unchangedCellCount: z.number().int().nonnegative(),
+    patchedArtifactHash: Sha256Schema,
+    patchHash: Sha256Schema,
+    resultHash: Sha256Schema,
+  })
+  .strict()
+  .superRefine((repair, context) => {
+    if (repair.invariantCount !== repair.invariantNames.length) {
+      context.addIssue({
+        code: "custom",
+        message: "repair invariantCount must match invariantNames",
+        path: ["invariantCount"],
+      });
+    }
+  });
+
+export const PublicReplayActivityKindV1Schema = z.enum([
+  "session.created",
+  "belief_test.proposed",
+  "belief_spec.proposed",
+  "belief_test.edited",
+  "belief_spec.edited",
+  "belief_spec.alternative_selected",
+  "prediction.committed",
+  "lab.compilation_started",
+  "lab.rejected",
+  "lab.verified",
+  "experiment.completed",
+  "experiment.evidence_verified",
+  "experiment.evidence_rejected",
+  "boundary_map.verified",
+  "revision.recorded",
+  "transfer.started",
+  "transfer.passed",
+  "transfer.failed",
+  "patch.compilation_started",
+  "patch.rejected",
+  "patch.verified",
+  "reasoning_diff_v2.issued",
+  "proof_capsule.issued",
+]);
+
+export type PublicReplayActivityKindV1 = z.infer<
+  typeof PublicReplayActivityKindV1Schema
+>;
+
+const PublicReplayActivityV1Schema = z
+  .object({
+    sequence: z.number().int().positive(),
+    actor: z.enum([
+      "learner",
+      "gpt-5.6",
+      "codex",
+      "verifier",
+      "kernel",
+      "system",
+    ]),
+    kind: PublicReplayActivityKindV1Schema,
+  })
+  .strict();
+
+const PublicReplayProjectionIntegrityV1Schema = z.discriminatedUnion("mode", [
+  z
+    .object({
+      mode: z.literal("integrity-hashed"),
+      algorithm: z.literal("sha256"),
+      contentHash: Sha256Schema,
+    })
+    .strict(),
+  z
+    .object({
+      mode: z.literal("hmac-signed"),
+      algorithm: z.literal("hmac-sha256"),
+      contentHash: Sha256Schema,
+      keyId: EpistemicTokenIdSchema,
+      signature: Sha256Schema,
+    })
+    .strict(),
+]);
+
+const PublicReplayProjectionAuthorityV1Schema = z
+  .object({
+    sourceCapsuleRootHash: Sha256Schema,
+    sourceCapsuleBytesHash: Sha256Schema,
+    eventChainHead: Sha256Schema,
+    artifactManifestHash: Sha256Schema,
+    beliefSpecHash: Sha256Schema,
+    predictionHash: Sha256Schema,
+    resultHash: Sha256Schema,
+    evidenceVerdictHash: Sha256Schema,
+    boundaryMapHash: Sha256Schema,
+    boundaryReceiptHash: Sha256Schema,
+    transferResultHash: Sha256Schema,
+    patchResultHash: Sha256Schema,
+    reasoningDiffHash: Sha256Schema,
+    projectionHash: Sha256Schema,
+    projectionIntegrity: PublicReplayProjectionIntegrityV1Schema,
+  })
+  .strict()
+  .superRefine((authority, context) => {
+    if (
+      authority.projectionHash !== authority.projectionIntegrity.contentHash
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "public replay projection integrity must bind its hash",
+        path: ["projectionIntegrity", "contentHash"],
+      });
+    }
+  });
+
+export const PublicReplayProjectionV1Schema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    projectionKind: z.literal("public_replay"),
+    replayId: z
+      .string()
+      .regex(
+        /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u,
+        "expected a bounded replay token",
+      ),
+    replay: z.literal(true),
+    label: z.literal("Verified replay"),
+    playbackMode: z.literal("verified_capsule_replay"),
+    sourceMode: z.literal("live_notebook"),
+    concept: ConceptIdSchema,
+    recordedAt: z.iso.datetime({ offset: true }),
+    authority: PublicReplayProjectionAuthorityV1Schema,
+    artifact: z
+      .object({
+        kind: z.literal("notebook"),
+        nbformat: z.number().int().positive(),
+        supportStatus: z.enum(["SUPPORTED", "PARTIAL", "UNSUPPORTED"]),
+        evidenceLocators: z.array(PublicReplayEvidenceLocatorV1Schema).max(6),
+      })
+      .strict(),
+    question: z
+      .object({
+        claim: NonEmptyString.max(2_000),
+        hypotheses: z.tuple([
+          PublicReplayHypothesisV1Schema,
+          PublicReplayHypothesisV1Schema,
+        ]),
+      })
+      .strict(),
+    prediction: PublicReplayPredictionV1Schema,
+    test: z
+      .object({
+        result: PublicReplayVerifiedResultV1Schema,
+        evidenceVerdict: PublicReplayEvidenceVerdictV1Schema,
+      })
+      .strict(),
+    boundary: z
+      .object({
+        result: PublicReplayBoundaryResultV1Schema,
+        verification: PublicReplayBoundaryVerificationV1Schema,
+        receipt: PublicReplayBoundaryReceiptV1Schema,
+      })
+      .strict(),
+    apply: z
+      .object({
+        revision: z
+          .object({
+            statement: NonEmptyString,
+            recordedAt: z.iso.datetime({ offset: true }),
+          })
+          .strict(),
+        transfer: PublicReplayTransferV1Schema,
+      })
+      .strict(),
+    repair: PublicReplayRepairV1Schema,
+    activity: z.array(PublicReplayActivityV1Schema).min(1).max(512),
+    provenance: z
+      .object({
+        conceptPackVersion: NonEmptyString,
+        kernelVersion: NonEmptyString,
+        verifierVersion: NonEmptyString,
+        boundaryVerifierVersion: NonEmptyString,
+        scientificVerifierVersion: NonEmptyString,
+        scorerVersion: NonEmptyString,
+        modelIds: z.array(NonEmptyString).max(16),
+        promptHashes: z.array(Sha256Schema).max(32),
+        commitHashes: z.array(GitObjectIdSchema).max(16),
+      })
+      .strict(),
+    limitations: z.array(NonEmptyString).min(1).max(32),
+    privacy: z
+      .object({
+        profile: z.literal("share-safe-v1"),
+        excluded: z.tuple([
+          z.literal("raw_rows"),
+          z.literal("notebook_bytes"),
+          z.literal("local_paths"),
+          z.literal("source_session_identifiers"),
+          z.literal("artifact_record_ids"),
+          z.literal("source_excerpts"),
+          z.literal("field_names"),
+          z.literal("patch_diff"),
+          z.literal("private_capsule"),
+          z.literal("reasoning_diff_text"),
+          z.literal("transfer_evidence_text"),
+          z.literal("event_timestamps"),
+          z.literal("boundary_internal_fingerprints"),
+        ]),
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((projection, context) => {
+    if (
+      projection.question.hypotheses[0].id !== "current" ||
+      projection.question.hypotheses[1].id !== "competing"
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "public replay hypotheses must retain their declared order",
+        path: ["question", "hypotheses"],
+      });
+    }
+    if (
+      projection.test.result.concept !== projection.concept ||
+      projection.boundary.result.concept !== projection.concept
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "public replay projection mixes scientific authority",
+        path: ["concept"],
+      });
+    }
+    if (
+      projection.authority.resultHash !== projection.test.result.resultHash ||
+      projection.authority.boundaryMapHash !==
+        projection.boundary.result.resultHash ||
+      projection.authority.boundaryReceiptHash !==
+        projection.boundary.receipt.receiptHash ||
+      projection.authority.transferResultHash !==
+        projection.apply.transfer.resultHash ||
+      projection.authority.patchResultHash !== projection.repair.resultHash
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "public replay authority hashes do not match the projection",
+        path: ["authority"],
+      });
+    }
+    if (
+      projection.boundary.verification.resultHash !==
+        projection.boundary.result.resultHash ||
+      projection.boundary.receipt.resultHash !==
+        projection.boundary.result.resultHash ||
+      projection.boundary.receipt.verificationReportHash !==
+        projection.boundary.verification.reportHash
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "public replay Boundary authority does not resolve",
+        path: ["boundary"],
+      });
+    }
+    if (
+      projection.test.evidenceVerdict.kind === "SUPPORTS" &&
+      projection.test.evidenceVerdict.resultHash !==
+        projection.test.result.resultHash
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "public replay Evidence Verdict does not bind its result",
+        path: ["test", "evidenceVerdict"],
+      });
+    }
+    if (
+      projection.test.evidenceVerdict.kind === "REJECTED" ||
+      projection.boundary.verification.status !== "VERIFIED" ||
+      projection.apply.transfer.outcome !== "PASSED" ||
+      projection.repair.status !== "VERIFIED"
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "public verified replay cannot expose rejected or incomplete authority",
+        path: ["test"],
+      });
+    }
+  });
+
+export type PublicReplayProjectionV1 = z.infer<
+  typeof PublicReplayProjectionV1Schema
+>;
+
+export const PublicReplayPublicationReceiptV1Schema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    replayId: z
+      .string()
+      .regex(
+        /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u,
+        "expected a bounded replay token",
+      ),
+    replay: z.literal(true),
+    label: z.literal("Verified replay"),
+    concept: ConceptIdSchema,
+    recordedAt: z.iso.datetime({ offset: true }),
+    retention: z
+      .object({
+        policy: z.literal("available_until_revoked"),
+        revocable: z.literal(true),
+      })
+      .strict(),
+  })
+  .strict();
+
+export type PublicReplayPublicationReceiptV1 = z.infer<
+  typeof PublicReplayPublicationReceiptV1Schema
+>;
 
 export const ProofCapsuleRefV2Schema = ProofCapsuleRefV2BaseSchema.superRefine(
   (reference, context) => {

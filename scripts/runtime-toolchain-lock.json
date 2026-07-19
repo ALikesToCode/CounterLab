@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "1",
+  "distribution": "nerdctl-full",
+  "version": "2.3.1",
+  "platform": "linux-amd64",
+  "archiveUrl": "https://github.com/containerd/nerdctl/releases/download/v2.3.1/nerdctl-full-2.3.1-linux-amd64.tar.gz",
+  "checksumUrl": "https://github.com/containerd/nerdctl/releases/download/v2.3.1/SHA256SUMS",
+  "archiveSha256": "7a0d8efcf55b10b57d831541266adb9c6ec3d55b44ec041c95f6eb994d1faab9",
+  "licenses": ["Apache-2.0"],
+  "components": {
+    "buildctl": {
+      "version": "0.30.0",
+      "sha256": "f822a2f052043e6e5226debc597f8332a96ed9518e7c7a16d786cd8d2b4c9e71"
+    },
+    "buildkitd": {
+      "version": "0.30.0",
+      "sha256": "3f9fe0c125127bf473f7480be3438cf33cf83becaaa94466e32eb980abea025d"
+    },
+    "containerd": {
+      "version": "2.3.1",
+      "sha256": "1419e955fe919dcbc9c0bc813852d0e75b61a04d3a60da02c145214fbf96c281"
+    },
+    "containerd-shim-runc-v2": {
+      "version": "2.3.1",
+      "sha256": "3d07a9da185c493f87dc72f88f8a90b71a2fdb7707588c060cc10cbe5a3bae89"
+    },
+    "nerdctl": {
+      "version": "2.3.1",
+      "sha256": "d55cafc6b8a682530a02bc882653535f6e119cadc7623ec058a1154d5b1c5980"
+    },
+    "rootlesskit": {
+      "version": "3.0.0",
+      "sha256": "89b98af09b0502c582f794e1bacda90d9d841ca5135fc7659074577997aec3ff"
+    },
+    "runc": {
+      "version": "1.4.2",
+      "sha256": "cba78a8e7bda733fc4161db95fdb28da6b7114bdde7c677ac927ec26af8991d8"
+    }
+  }
+}

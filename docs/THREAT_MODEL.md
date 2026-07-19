@@ -72,6 +72,14 @@ This proves the mount shape, not authenticated end-to-end generation: stable
 Codex authentication is file-backed and would be readable to model-invoked
 commands if mounted into that namespace.
 
+The current hosted Container launch is a separate credential-and-privilege
+boundary. It runs Codex at a fixed non-root UID with
+`setpriv --no-new-privs`, stages and revokes authentication, and constrains
+writes. It does not provide a mount namespace or filesystem read allowlist, so
+hosted filesystem generation read isolation is also `PARTIAL`. This is a claim
+limitation, not evidence that generated output gained scoring, kernel, or
+verifier authority.
+
 Hosted source-free Plans remove arbitrary model-authored Python from the public
 critical path, but the Container runtime, Codex CLI, configured model endpoint,
 and Cloudflare control plane remain operational dependencies. Short-lived runner

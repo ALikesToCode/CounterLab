@@ -73,11 +73,15 @@ GPT may explain verified evidence. It may not fabricate results, execute uploade
 
 The live implementation is `AppServerCodexCompiler` in `packages/codex-client`. It uses the installed Codex App Server over stdio JSONL, performs initialize/initialized, starts a thread and turn, and omits the model field unless `CODEX_MODEL` is configured. The experimental WebSocket transport is outside the critical path.
 
-Launching additionally requires a trusted `AppServerLaunchBoundary` that maps
-the host generation directory to a guest-only protocol path. Without one, the
-compiler fails with `CODEX_ISOLATION_UNAVAILABLE`; unisolated direct spawn is
-available only to fake unit-test processes. The included Bubblewrap probe
-proves the target mount shape but is not an authenticated launcher.
+Launching additionally requires a trusted `AppServerLaunchBoundary`. Without
+one, the compiler fails with `CODEX_ISOLATION_UNAVAILABLE`; direct spawn is
+available only to fake unit-test processes. The hosted Container boundary
+stages and revokes credentials, uses a fixed non-root UID plus
+`setpriv --no-new-privs`, and constrains writes, but
+does not provide a mount namespace or filesystem read allowlist. Filesystem
+generation read isolation is therefore `PARTIAL`. The included Bubblewrap
+probe proves a stronger target mount shape but is not the authenticated hosted
+launcher.
 
 The hosted lab turn is limited to approved belief evidence, public
 schema/documentation, redacted fixture structure, resource limits, and permitted

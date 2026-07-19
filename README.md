@@ -57,9 +57,10 @@ local verification record is in
 Sample is not live and cannot enter a live session. Replay does not make a new
 model call or borrow sample authority. The rejected compiler run authorized no
 result; the replayed result is tied to the separately verified candidate and
-fixed kernel hash. The v6.1 pass did not add an interactive sample configuration
-matrix because no independently admitted fixture set was available; the browser
-never computes a substitute result.
+fixed kernel hash. The v6.1 pass adds one interactive leakage Boundary Hunt
+backed by a versioned, precomputed fixed-kernel fixture. It does not add an
+arbitrary sample configuration matrix, and the browser never computes a
+substitute authoritative result.
 
 ## Supported notebook contract
 
@@ -185,7 +186,7 @@ visible React controls.
 
 ## Setup
 
-Required for local reproduction: Node 22+, pnpm 11.13.0, Python 3.12+, and the
+Required for local reproduction: Node 22+, pnpm 11.13.1, Python 3.12+, and the
 locked dependencies. A Docker-compatible engine is required for local
 Cloudflare Container development and for the advanced local adapter proof.
 
@@ -203,7 +204,8 @@ The deployed surface is <https://counterlab.cserules.workers.dev>. Exact-version
 production smoke passed sample, replay, and untouched live leakage/imbalance on
 Worker `7c67c0f4-a4cb-4503-80b0-5a5bd491f3ab` with Cloudflare Container image
 digest `sha256:bdd65feebad10d4b0f232e945eb1bd1195b803d13fddf8eee558b2efdd5dc8c6`.
-Both live Proof Bundles bind scientific-engine authority `d7677c79…`. The
+Both historical live proof artifacts (legacy Proof Bundle v1) bind
+scientific-engine authority `d7677c79…`. The
 secret-free evidence is committed in
 [docs/PRODUCTION_SMOKE.json](docs/PRODUCTION_SMOKE.json).
 
@@ -294,7 +296,7 @@ released no result.
 
 Unsupported: arbitrary datasets/packages, generic Python files, active notebook
 content, non-Python kernels, source shapes or estimators outside a Subject
-Pack's fixed patch contract, an interactive verified sample matrix,
+Pack's fixed patch contract, an arbitrary verified sample configuration matrix,
 physics/free-fall in this release, accounts, LMS features, prose grading, and
 claims of global mastery.
 
@@ -309,8 +311,11 @@ outside its generation directory, so that replay remains labelled `PARTIAL`.
 The hosted source-free Plan path is separate: credentials are staged only for
 App Server initialization and revoked before the generated turn; generated
 child commands receive neither model credentials nor signing authority. The
-Container still needs outbound access for live model compilation, and formal
-sandbox proof is not claimed; see [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
+Container launch uses a fixed non-root UID, `setpriv --no-new-privs`, and write
+constraints, but it has no
+mount namespace or filesystem read allowlist. Hosted filesystem generation
+read isolation is explicitly `PARTIAL`; formal sandbox proof is not claimed.
+See [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
 
 ## How Codex accelerated the build
 

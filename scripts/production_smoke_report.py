@@ -5,6 +5,7 @@ import json
 import os
 import pathlib
 import re
+import secrets
 import urllib.parse
 from datetime import datetime
 from typing import Any
@@ -26,6 +27,11 @@ _REQUIRED_PASSED_STAGE_MATRIX = {
     "live-imbalance": ("live_notebook", "class_imbalance"),
 }
 _SAFE_IDENTIFIER = re.compile(r"^[A-Za-z0-9_.:-]{1,256}$")
+_WORKER_VERSION = re.compile(
+    r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+)
+_COMMIT = re.compile(r"^[a-f0-9]{40}$")
+_SHA256 = re.compile(r"^[a-f0-9]{64}$")
 _IMAGE_DIGEST = re.compile(r"^sha256:[a-f0-9]{64}$")
 _FORBIDDEN_VALUE_PATTERNS = (
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
@@ -36,15 +42,20 @@ _FORBIDDEN_VALUE_PATTERNS = (
 )
 _FORBIDDEN_EVIDENCE_KEYS = {
     "authorization",
-    "apiKey",
+    "apikey",
     "api_key",
     "credential",
     "credentials",
-    "notebookBytes",
-    "privateReasoning",
-    "rawNotebook",
+    "notebookbytes",
+    "privatereasoning",
+    "rawnotebook",
     "secret",
     "token",
+    "password",
+    "cookie",
+    "setcookie",
+    "codexauthjson",
+    "openaiapikey",
 }
 
 
@@ -58,6 +69,11 @@ def _timestamp(value: str, field: str) -> str:
     if parsed.tzinfo is None:
         raise ValueError(f"{field} must include a timezone")
     return value
+
+
+def _parsed_timestamp(value: str, field: str) -> datetime:
+    _timestamp(value, field)
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
 def _base_url(value: str) -> str:
@@ -77,12 +93,38 @@ def _base_url(value: str) -> str:
 
 
 def _assert_secret_free(value: Any, *, evidence: bool = False) -> None:
-    if evidence and isinstance(value, dict):
-        forbidden = _FORBIDDEN_EVIDENCE_KEYS.intersection(value)
-        if forbidden:
-            raise ValueError(
-                f"smoke evidence contains forbidden secret field {sorted(forbidden)[0]}"
-            )
+    def inspect(current: Any) -> None:
+        if isinstance(current, dict):
+            if evidence:
+                forbidden = {
+                    re.sub(r"[^a-z0-9]", "", str(key).lower())
+                    for key in current
+                    if re.sub(r"[^a-z0-9]", "", str(key).lower())
+                    in _FORBIDDEN_EVIDENCE_KEYS
+                }
+                if forbidden:
+                    raise ValueError(
+                        "smoke evidence contains forbidden secret field "
+                        f"{sorted(forbidden)[0]}"
+                    )
+            if str(current.get("nbformat")) == "4" and isinstance(
+                current.get("cells"), list
+            ):
+                raise ValueError("smoke report contains raw notebook content")
+            for child in current.values():
+                inspect(child)
+        elif isinstance(current, list):
+            for child in current:
+                inspect(child)
+        elif isinstance(current, str) and current.lstrip().startswith(("{", "[")):
+            try:
+                decoded = json.loads(current)
+            except json.JSONDecodeError:
+                return
+            if isinstance(decoded, (dict, list)):
+                inspect(decoded)
+
+    inspect(value)
     serialized = json.dumps(value, sort_keys=True, separators=(",", ":"))
     if any(pattern.search(serialized) for pattern in _FORBIDDEN_VALUE_PATTERNS):
         raise ValueError("smoke report contains secret or raw private content")
@@ -90,9 +132,23 @@ def _assert_secret_free(value: Any, *, evidence: bool = False) -> None:
 
 def _atomic_write(path: pathlib.Path, report: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     body = json.dumps(report, indent=2, sort_keys=True) + "\n"
-    with temporary.open("w", encoding="utf-8") as handle:
+    for _attempt in range(10):
+        temporary = path.with_name(
+            f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
+        )
+        try:
+            descriptor = os.open(
+                temporary,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                0o600,
+            )
+            break
+        except FileExistsError:
+            continue
+    else:
+        raise RuntimeError("could not allocate an exclusive smoke report file")
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
         handle.write(body)
         handle.flush()
         os.fsync(handle.fileno())
@@ -111,24 +167,37 @@ def validate_report(report: dict[str, Any]) -> dict[str, Any]:
         "privacy",
     }:
         raise ValueError("smoke report has unknown or missing fields")
-    if report["schemaVersion"] != "1" or report["status"] not in _REPORT_STATUSES:
+    if report["schemaVersion"] != "2" or report["status"] not in _REPORT_STATUSES:
         raise ValueError("smoke report schema or status is invalid")
     report["baseUrl"] = _base_url(report["baseUrl"])
-    _timestamp(report["startedAt"], "startedAt")
+    report_started = _parsed_timestamp(report["startedAt"], "startedAt")
+    report_completed = None
     if report["completedAt"] is not None:
-        _timestamp(report["completedAt"], "completedAt")
+        report_completed = _parsed_timestamp(report["completedAt"], "completedAt")
+        if report_completed < report_started:
+            raise ValueError("smoke report completedAt precedes startedAt")
     deployment = report["deployment"]
     if not isinstance(deployment, dict) or set(deployment) != {
         "workerVersion",
+        "workerEvidenceCommit",
+        "runnerSourceCommit",
         "containerImageDigest",
+        "deploymentReceiptSha256",
     }:
         raise ValueError("smoke deployment metadata is invalid")
     worker_version = deployment["workerVersion"]
-    if worker_version is not None and not _SAFE_IDENTIFIER.fullmatch(worker_version):
+    if worker_version is not None and not _WORKER_VERSION.fullmatch(worker_version):
         raise ValueError("worker deployment ID is invalid")
     image_digest = deployment["containerImageDigest"]
     if image_digest is not None and not _IMAGE_DIGEST.fullmatch(image_digest):
         raise ValueError("container image digest is invalid")
+    for field in ("workerEvidenceCommit", "runnerSourceCommit"):
+        commit = deployment[field]
+        if commit is not None and not _COMMIT.fullmatch(commit):
+            raise ValueError(f"{field} is invalid")
+    receipt_hash = deployment["deploymentReceiptSha256"]
+    if receipt_hash is not None and not _SHA256.fullmatch(receipt_hash):
+        raise ValueError("deployment receipt hash is invalid")
     if report["privacy"] != {
         "containsSecrets": False,
         "containsRawNotebookBytes": False,
@@ -138,6 +207,8 @@ def validate_report(report: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(report["stages"], list):
         raise ValueError("smoke stages must be a list")
     observed: set[str] = set()
+    previous_started: datetime | None = None
+    previous_completed: datetime | None = None
     for stage in report["stages"]:
         if not isinstance(stage, dict):
             raise ValueError("smoke stage must be an object")
@@ -162,8 +233,20 @@ def validate_report(report: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("smoke stage mode or status is invalid")
         if "concept" in stage and stage["concept"] not in _CONCEPTS:
             raise ValueError("smoke stage concept is invalid")
-        _timestamp(stage["startedAt"], "stage.startedAt")
-        _timestamp(stage["completedAt"], "stage.completedAt")
+        stage_started = _parsed_timestamp(stage["startedAt"], "stage.startedAt")
+        stage_completed = _parsed_timestamp(
+            stage["completedAt"], "stage.completedAt"
+        )
+        if stage_started < report_started or stage_completed < stage_started:
+            raise ValueError("smoke stage chronology is invalid")
+        if previous_started is not None and stage_started < previous_started:
+            raise ValueError("smoke stages must be recorded chronologically")
+        if previous_completed is not None and stage_completed < previous_completed:
+            raise ValueError("smoke stage completions must be chronological")
+        if report_completed is not None and stage_completed > report_completed:
+            raise ValueError("smoke stage completes after the report")
+        previous_started = stage_started
+        previous_completed = stage_completed
         if not isinstance(stage["evidence"], dict):
             raise ValueError("smoke stage evidence must be an object")
         _assert_secret_free(stage["evidence"], evidence=True)
@@ -184,18 +267,24 @@ def initialize_report(
     base_url: str,
     started_at: str,
     deployment_id: str | None = None,
+    worker_evidence_commit: str | None = None,
+    runner_source_commit: str | None = None,
     container_image_digest: str | None = None,
+    deployment_receipt_sha256: str | None = None,
 ) -> dict[str, Any]:
     report = validate_report(
         {
-            "schemaVersion": "1",
+            "schemaVersion": "2",
             "status": "RUNNING",
             "baseUrl": _base_url(base_url),
             "startedAt": _timestamp(started_at, "startedAt"),
             "completedAt": None,
             "deployment": {
                 "workerVersion": deployment_id,
+                "workerEvidenceCommit": worker_evidence_commit,
+                "runnerSourceCommit": runner_source_commit,
                 "containerImageDigest": container_image_digest,
+                "deploymentReceiptSha256": deployment_receipt_sha256,
             },
             "stages": [],
             "privacy": {
@@ -235,12 +324,9 @@ def finish_report(
         raise ValueError("final smoke status must be PASSED or FAILED")
     report = load_report(path)
     if status == "PASSED":
-        if (
-            report["deployment"]["workerVersion"] is None
-            or report["deployment"]["containerImageDigest"] is None
-        ):
+        if any(value is None for value in report["deployment"].values()):
             raise ValueError(
-                "a passing smoke report requires deployment identity and image digest"
+                "a passing smoke report requires the complete deployment identity"
             )
         observed = {
             stage["id"]: (
@@ -273,7 +359,10 @@ def _parser() -> argparse.ArgumentParser:
     initialize.add_argument("--base-url", required=True)
     initialize.add_argument("--started-at", required=True)
     initialize.add_argument("--deployment-id")
+    initialize.add_argument("--worker-evidence-commit")
+    initialize.add_argument("--runner-source-commit")
     initialize.add_argument("--container-image-digest")
+    initialize.add_argument("--deployment-receipt-sha256")
     stage = subparsers.add_parser("stage")
     stage.add_argument("path", type=pathlib.Path)
     stage.add_argument("--stage-json", required=True)
@@ -292,7 +381,10 @@ def main() -> int:
             base_url=arguments.base_url,
             started_at=arguments.started_at,
             deployment_id=arguments.deployment_id,
+            worker_evidence_commit=arguments.worker_evidence_commit,
+            runner_source_commit=arguments.runner_source_commit,
             container_image_digest=arguments.container_image_digest,
+            deployment_receipt_sha256=arguments.deployment_receipt_sha256,
         )
     elif arguments.command == "stage":
         stage = json.loads(arguments.stage_json)

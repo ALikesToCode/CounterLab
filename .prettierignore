@@ -5,14 +5,20 @@ findings.md
 progress.md
 task_plan.md
 
+# Browser profiles and state are opaque runtime artifacts, never source input.
+docs/a/**
+docs/audits/**/browser-state/**
+
 # Replay and verified-result bytes participate in integrity checks.
 replays/**
 fixtures/public/*_verified_result.json
+fixtures/public/leakage_sample_boundary_v1.json
 
 # Generated JSON Schemas are emitted by the contract generator.
 concept-packs/*/public/*.schema.json
 packages/contracts/schemas/**
 packages/experiment-ir/schemas/**
+packages/generative-ui-contracts/schemas/**
 services/kernel/src/counterlab_kernel/schemas/**
 
 # Benchmark and achieved-metric artifacts are emitted by evaluation scripts.
@@ -20,6 +26,7 @@ data/**
 docs/ACHIEVED_METRICS.json
 docs/HELD_OUT_MATRIX.md
 docs/HELD_OUT_RESULTS.json
+docs/RELEASE_CAPABILITY_MANIFEST.json
 
 # Scientific-engine evidence, SBOMs, VEX, licenses, and registry snapshots are
 # canonical hash-bound inputs. Reformatting them invalidates their authority.

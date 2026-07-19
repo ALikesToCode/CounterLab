@@ -18,6 +18,8 @@ export type StudioActions = {
   reviewPatch?: () => void;
   downloadPatch?: () => void;
   exportProof?: () => void;
+  revokeSessionAccess?: () => void;
+  revokeSessionAccessDisabled?: boolean;
   startOver: () => void;
   openRecent: (project: RecentProject) => void;
 };
@@ -35,6 +37,10 @@ export function CounterLabStudio({
   const [projectToolsOpen, setProjectToolsOpen] = useState(false);
   const [proofOpen, setProofOpen] = useState(context.stage === "live-compile");
   const [proofTab, setProofTab] = useState<ProofTab>("Activity");
+  const proofOpenOrigin = useRef<"automatic" | "manual" | null>(
+    context.stage === "live-compile" ? "automatic" : null,
+  );
+  const previousStage = useRef(context.stage);
   const projectToolsTrigger = useRef<HTMLButtonElement>(null);
   const recentProjects = useRecentProjects(
     context.session,
@@ -43,7 +49,24 @@ export function CounterLabStudio({
   );
 
   useEffect(() => {
-    if (context.stage === "live-compile") setProofOpen(true);
+    const wasCompiling = previousStage.current === "live-compile";
+    const isCompiling = context.stage === "live-compile";
+
+    if (!wasCompiling && isCompiling) {
+      setProofOpen((current) => {
+        if (!current) proofOpenOrigin.current = "automatic";
+        return true;
+      });
+    } else if (
+      wasCompiling &&
+      !isCompiling &&
+      proofOpenOrigin.current === "automatic"
+    ) {
+      proofOpenOrigin.current = null;
+      setProofOpen(false);
+    }
+
+    previousStage.current = context.stage;
   }, [context.stage]);
 
   useEffect(() => {
@@ -107,7 +130,15 @@ export function CounterLabStudio({
 
   const showProof = (tab: ProofTab) => {
     setProofTab(tab);
+    proofOpenOrigin.current = "manual";
     setProofOpen(true);
+  };
+
+  const toggleProof = () => {
+    setProofOpen((current) => {
+      proofOpenOrigin.current = current ? null : "manual";
+      return !current;
+    });
   };
 
   const commands = useMemo<StudioCommand[]>(
@@ -232,8 +263,15 @@ export function CounterLabStudio({
         context={context}
         open={proofOpen}
         activeTab={proofTab}
-        onToggle={() => setProofOpen((current) => !current)}
+        onToggle={toggleProof}
         onTab={setProofTab}
+        {...(actions.revokeSessionAccess === undefined
+          ? {}
+          : {
+              onRevokeSessionAccess: actions.revokeSessionAccess,
+              revokeSessionAccessDisabled:
+                actions.revokeSessionAccessDisabled ?? false,
+            })}
       />
       <CommandPalette
         open={paletteOpen}

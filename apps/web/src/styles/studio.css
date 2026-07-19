@@ -3,20 +3,17 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-height: calc(100vh - 82px);
-  background: var(--gold-soft);
+  background: var(--night);
 }
 
 .studio-frame.proof-open .studio-canvas {
-  padding-bottom: 342px;
+  padding-bottom: calc(342px + env(safe-area-inset-bottom));
 }
 
 .studio-canvas {
   min-width: 0;
-  background:
-    linear-gradient(rgba(250, 250, 250, 0.022) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(250, 250, 250, 0.022) 1px, transparent 1px),
-    var(--gold-soft);
-  background-size: 32px 32px;
+  padding-bottom: calc(52px + env(safe-area-inset-bottom));
+  background: var(--night);
 }
 
 .studio-canvas > .workspace.shell {
@@ -429,6 +426,7 @@ kbd {
   background: rgba(10, 10, 10, 0.96);
   box-shadow: 0 -14px 36px rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(18px) saturate(130%);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .proof-console-handle {
@@ -517,7 +515,7 @@ kbd {
   border-radius: 1rem;
   background:
     linear-gradient(135deg, rgba(46, 196, 160, 0.08), transparent 48%),
-    rgba(250, 250, 250, 0.58);
+    var(--night-raised);
 }
 
 .generated-proof-label {
@@ -805,7 +803,7 @@ kbd {
     position: fixed;
     z-index: 18;
     right: 14px;
-    bottom: 51px;
+    bottom: calc(64px + env(safe-area-inset-bottom));
     display: grid;
     min-width: 44px;
     height: 44px;
@@ -817,6 +815,10 @@ kbd {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
     font-family: var(--mono);
     font-size: 12px;
+  }
+
+  .studio-frame.proof-open .studio-mobile-command {
+    display: none;
   }
 }
 
@@ -838,7 +840,7 @@ kbd {
   }
 
   .studio-frame.proof-open .studio-canvas {
-    padding-bottom: 342px;
+    padding-bottom: calc(342px + env(safe-area-inset-bottom));
   }
 
   .console-events li {

@@ -98,6 +98,24 @@ export class D1RunnerJobRepository implements RunnerJobRepository {
       : RunnerJobSchema.parse(JSON.parse(row.job_json));
   }
 
+  async findActiveForSession(sessionId: string): Promise<RunnerJob[]> {
+    const rows = await this.database
+      .prepare(
+        `SELECT job_json FROM runner_jobs
+         WHERE session_id = ?
+           AND status IN (
+             'QUEUED', 'STARTING', 'RUNNING', 'AWAITING_APPROVAL',
+             'REPAIRING'
+           )
+         ORDER BY created_at ASC`,
+      )
+      .bind(sessionId)
+      .all<{ job_json: string }>();
+    return rows.results.map((row) =>
+      RunnerJobSchema.parse(JSON.parse(row.job_json)),
+    );
+  }
+
   async find(jobId: string): Promise<RunnerJob | undefined> {
     const row = await this.database
       .prepare("SELECT job_json FROM runner_jobs WHERE id = ?")

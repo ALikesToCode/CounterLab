@@ -23,7 +23,7 @@ PATTERNS = (
         re.compile(
             r"(?:OPENAI_API_KEY|OPENAI_BASE_URL|CODEX_AUTH_JSON|CLOUDFLARE_API_TOKEN|"
             r"COUNTERLAB_SIGNING_KEY|COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY|"
-            r"COUNTERLAB_ADMIN_DIAGNOSTIC_SECRET)"
+            r"COUNTERLAB_ADMIN_DIAGNOSTIC_SECRET|COUNTERLAB_ADMISSION_KEY)"
             + r"\s*(?<![=!<>])=(?!=)\s*[^\s#]+"
         ),
     ),
@@ -37,7 +37,19 @@ def repository_files() -> list[Path]:
         check=True,
         capture_output=True,
     )
-    return [ROOT / name.decode() for name in result.stdout.split(b"\0") if name]
+    paths: list[Path] = []
+    for name in result.stdout.split(b"\0"):
+        if not name:
+            continue
+        relative = Path(name.decode())
+        if (
+            len(relative.parts) >= 3
+            and relative.parts[:2] == ("docs", "audits")
+            and "browser-state" in relative.parts
+        ):
+            continue
+        paths.append(ROOT / relative)
+    return paths
 
 
 def main() -> int:

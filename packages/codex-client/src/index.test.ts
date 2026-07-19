@@ -896,7 +896,7 @@ describe("fallback compiler implementations", () => {
 });
 
 describe("AppServerCodexCompiler stdio transport", () => {
-  it("fails closed when no generation read-isolation boundary is configured", async () => {
+  it("fails closed when no trusted launch boundary is configured", async () => {
     const fakeServer = fileURLToPath(
       new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
     );
@@ -911,12 +911,16 @@ describe("AppServerCodexCompiler stdio transport", () => {
     ).rejects.toMatchObject({
       name: "CompilerSetupError",
       code: "CODEX_ISOLATION_UNAVAILABLE",
-      message: expect.stringMatching(/read-isolation boundary/i),
+      message: expect.stringMatching(
+        /credential-and-privilege launch boundary/i,
+      ),
     });
     expect(await compiler.health()).toMatchObject({
       mode: "live",
       available: false,
-      reason: expect.stringMatching(/read-isolation boundary/i),
+      reason: expect.stringMatching(
+        /credential-and-privilege launch boundary/i,
+      ),
     });
   });
 

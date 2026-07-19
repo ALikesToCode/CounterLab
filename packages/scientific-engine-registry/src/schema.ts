@@ -392,6 +392,60 @@ export const ScientificEngineSnapshotSchema = z.strictObject({
   evidenceCatalog: ScientificEngineEvidenceCatalogSchema,
 });
 
+export const ContainedRuntimeAttestationSchema = z
+  .strictObject({
+    schemaVersion: z.literal("1"),
+    status: z.literal("VERIFIED"),
+    sessionId: z.string().regex(/^rt-[a-z0-9][a-z0-9-]{7,13}$/),
+    namespace: z.literal("counterlab-v6.1"),
+    runtimeToolchainSha256: Sha256Schema,
+    toolchainLockSha256: Sha256Schema,
+    adapterSha256: Sha256Schema,
+    componentSha256: z.strictObject({
+      buildctl: Sha256Schema,
+      buildkitd: Sha256Schema,
+      containerd: Sha256Schema,
+      "containerd-shim-runc-v2": Sha256Schema,
+      nerdctl: Sha256Schema,
+      rootlesskit: Sha256Schema,
+      runc: Sha256Schema,
+    }),
+    fileSha256: z.strictObject({
+      containerdConfig: Sha256Schema,
+      buildkitConfig: Sha256Schema,
+    }),
+    containerdRootlesskitApiSocket: z
+      .string()
+      .regex(/^\.rt\/rt-[a-z0-9-]+\/run\/containerd-rootless\/api\.sock$/),
+    containerdSocket: z
+      .string()
+      .regex(/^\.rt\/rt-[a-z0-9-]+\/run\/containerd\.sock$/),
+    runtimeCommandSocket: z
+      .string()
+      .regex(/^\.rt\/rt-[a-z0-9-]+\/run\/runtime-command\.sock$/),
+    buildkitSocket: z
+      .string()
+      .regex(/^\.rt\/rt-[a-z0-9-]+\/run\/buildkitd\.sock$/),
+  })
+  .superRefine((attestation, context) => {
+    const prefix = `.rt/${attestation.sessionId}/run`;
+    const expected = {
+      containerdRootlesskitApiSocket: `${prefix}/containerd-rootless/api.sock`,
+      containerdSocket: `${prefix}/containerd.sock`,
+      runtimeCommandSocket: `${prefix}/runtime-command.sock`,
+      buildkitSocket: `${prefix}/buildkitd.sock`,
+    } as const;
+    for (const [field, path] of Object.entries(expected)) {
+      if (attestation[field as keyof typeof expected] !== path) {
+        context.addIssue({
+          code: "custom",
+          path: [field],
+          message: "runtime socket path must bind the attested session",
+        });
+      }
+    }
+  });
+
 export const QualifiedRunnerReleaseV1Schema = z
   .strictObject({
     schemaVersion: z.literal("1"),
@@ -436,7 +490,7 @@ export const QualifiedRunnerReleaseV1Schema = z
     }
   });
 
-export const QualifiedRunnerReleaseSchema = z
+export const QualifiedRunnerReleaseV2Schema = z
   .strictObject({
     schemaVersion: z.literal("2"),
     status: z.literal("VERIFIED"),
@@ -500,6 +554,272 @@ export const QualifiedRunnerReleaseSchema = z
         code: "custom",
         path: ["registryResolvedAt"],
         message: "the registry digest must be resolved before qualification",
+      });
+    }
+  });
+
+export const QualifiedRunnerReleaseSchema = z
+  .strictObject({
+    schemaVersion: z.literal("3"),
+    status: z.literal("VERIFIED"),
+    sourceCommit: GitCommitSchema,
+    sourceArchiveSha256: Sha256Schema,
+    sourceTreeSha256: Sha256Schema,
+    dockerfileSha256: Sha256Schema,
+    localImageTag: z.string().regex(/^counterlab-runner:git-[a-f0-9]{40}$/),
+    localImageDigest: OciDigestSchema,
+    ociRevision: GitCommitSchema,
+    ociSourceTreeSha256: Sha256Schema,
+    engineAuthorityHash: Sha256Schema,
+    runtimeManifestHash: Sha256Schema,
+    runtimeToolchainSha256: Sha256Schema,
+    toolchainLockSha256: Sha256Schema,
+    runtimeAdapterSha256: Sha256Schema,
+    buildctlSha256: Sha256Schema,
+    buildkitdSha256: Sha256Schema,
+    buildkitConfigSha256: Sha256Schema,
+    adapterDockerfileSha256: Sha256Schema,
+    adapterImageTag: z.string().regex(/^counterlab-adapter:git-[a-f0-9]{40}$/),
+    adapterImageDigest: OciDigestSchema,
+    adapterManifestDigest: OciDigestSchema,
+    adapterOciArchiveSha256: Sha256Schema,
+    adapterOciRevision: GitCommitSchema,
+    adapterOciSourceTreeSha256: Sha256Schema,
+    evidenceCommit: GitCommitSchema,
+    registryImage: z
+      .string()
+      .regex(
+        /^registry\.cloudflare\.com\/[A-Za-z0-9_-]{3,64}\/counterlab-runner:git-[a-f0-9]{40}$/,
+      ),
+    registryDigest: OciDigestSchema,
+    registryResolvedAt: z.iso.datetime({ offset: true }),
+    qualifiedAt: z.iso.datetime({ offset: true }),
+    verifierVersion: StableIdSchema,
+  })
+  .superRefine((release, context) => {
+    if (release.ociRevision !== release.sourceCommit) {
+      context.addIssue({
+        code: "custom",
+        path: ["ociRevision"],
+        message: "the OCI revision must equal the qualified source commit",
+      });
+    }
+    if (release.ociSourceTreeSha256 !== release.sourceTreeSha256) {
+      context.addIssue({
+        code: "custom",
+        path: ["ociSourceTreeSha256"],
+        message: "the OCI source-tree label must equal the qualified tree hash",
+      });
+    }
+    if (
+      release.localImageTag !== `counterlab-runner:git-${release.sourceCommit}`
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["localImageTag"],
+        message: "the local image tag must be immutable and source-bound",
+      });
+    }
+    if (
+      release.adapterImageTag !==
+      `counterlab-adapter:git-${release.sourceCommit}`
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["adapterImageTag"],
+        message: "the adapter image tag must be immutable and source-bound",
+      });
+    }
+    if (release.adapterOciRevision !== release.sourceCommit) {
+      context.addIssue({
+        code: "custom",
+        path: ["adapterOciRevision"],
+        message:
+          "the adapter OCI revision must equal the qualified source commit",
+      });
+    }
+    if (release.adapterOciSourceTreeSha256 !== release.sourceTreeSha256) {
+      context.addIssue({
+        code: "custom",
+        path: ["adapterOciSourceTreeSha256"],
+        message:
+          "the adapter OCI source-tree label must equal the qualified tree hash",
+      });
+    }
+    if (!release.registryImage.endsWith(`:git-${release.sourceCommit}`)) {
+      context.addIssue({
+        code: "custom",
+        path: ["registryImage"],
+        message:
+          "the registry image tag must equal the qualified source commit",
+      });
+    }
+    if (
+      Date.parse(release.registryResolvedAt) > Date.parse(release.qualifiedAt)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["registryResolvedAt"],
+        message: "the registry digest must be resolved before qualification",
+      });
+    }
+  });
+
+export const RELEASE_CHECK_IDS = [
+  "test-all",
+  "leakage-mutations",
+  "imbalance-mutations",
+  "held-out",
+  "adapter-sandbox-smoke",
+  "scientific-engines",
+  "web-build",
+  "achieved-metrics",
+  "reproduce-leakage",
+  "replay-patch",
+  "secret-scan",
+] as const;
+
+export const ReleaseCheckReceiptSchema = z
+  .strictObject({
+    schemaVersion: z.literal("1"),
+    status: z.literal("PASSED"),
+    evidenceCommit: GitCommitSchema,
+    sourceCommit: GitCommitSchema,
+    qualifiedRunnerReceiptSha256: Sha256Schema,
+    qualifiedAt: z.iso.datetime({ offset: true }),
+    runnerImageTag: z.string().regex(/^counterlab-runner:git-[a-f0-9]{40}$/),
+    runnerImageDigest: OciDigestSchema,
+    adapterImageTag: z.string().regex(/^counterlab-adapter:git-[a-f0-9]{40}$/),
+    adapterImageDigest: OciDigestSchema,
+    registryDigest: OciDigestSchema,
+    runtimeToolchainSha256: Sha256Schema,
+    runtimeAdapterSha256: Sha256Schema,
+    checks: z
+      .array(
+        z.strictObject({
+          id: z.enum(RELEASE_CHECK_IDS),
+          status: z.literal("PASSED"),
+        }),
+      )
+      .length(RELEASE_CHECK_IDS.length),
+    checkedAt: z.iso.datetime({ offset: true }),
+    verifierVersion: z.literal("counterlab-release-check-v1"),
+  })
+  .superRefine((receipt, context) => {
+    if (
+      receipt.runnerImageTag !== `counterlab-runner:git-${receipt.sourceCommit}`
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["runnerImageTag"],
+        message: "runner image tag must bind the checked source commit",
+      });
+    }
+    if (
+      receipt.adapterImageTag !==
+      `counterlab-adapter:git-${receipt.sourceCommit}`
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["adapterImageTag"],
+        message: "adapter image tag must bind the checked source commit",
+      });
+    }
+    if (
+      JSON.stringify(receipt.checks.map((check) => check.id)) !==
+      JSON.stringify(RELEASE_CHECK_IDS)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["checks"],
+        message: "release checks must be complete, unique, and ordered",
+      });
+    }
+    if (Date.parse(receipt.qualifiedAt) > Date.parse(receipt.checkedAt)) {
+      context.addIssue({
+        code: "custom",
+        path: ["qualifiedAt"],
+        message: "runner qualification must precede the release check",
+      });
+    }
+  });
+
+export const DeploymentReceiptSchema = z
+  .strictObject({
+    schemaVersion: z.literal("3"),
+    status: z.literal("DEPLOYED"),
+    workerName: z.literal("counterlab"),
+    productionOrigin: z.literal("https://counterlab.cserules.workers.dev"),
+    generationFilesystemReadIsolation: z.literal("PARTIAL"),
+    workerEvidenceCommit: GitCommitSchema,
+    runnerSourceCommit: GitCommitSchema,
+    qualifiedRunnerReceiptSha256: Sha256Schema,
+    releaseCheckReceiptSha256: Sha256Schema,
+    releaseCheckCheckedAt: z.iso.datetime({ offset: true }),
+    runtimeToolchainSha256: Sha256Schema,
+    runtimeAdapterSha256: Sha256Schema,
+    adapterImageDigest: OciDigestSchema,
+    workerVersionId: z
+      .string()
+      .regex(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/),
+    workerTag: z.string().regex(/^git-[a-f0-9]{40}$/),
+    workerMessage: z.string().min(1).max(256),
+    containerApplicationId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
+    containerApplicationVersion: z.string().regex(/^[1-9][0-9]*$/),
+    containerImage: z
+      .string()
+      .regex(
+        /^registry\.cloudflare\.com\/[A-Za-z0-9_-]{3,64}\/counterlab-runner@sha256:[a-f0-9]{64}$/,
+      ),
+    containerState: z.enum(["active", "ready"]),
+    containerImageDigest: OciDigestSchema,
+    deployConfigSha256: Sha256Schema,
+    workerBundleSha256: Sha256Schema,
+    clientAssetsSha256: Sha256Schema,
+    clientAssetCount: z.number().int().positive(),
+    dryRunSha256: Sha256Schema,
+    dryRunFileCount: z.number().int().positive(),
+    deploymentStatusSha256: Sha256Schema,
+    workerVersionSha256: Sha256Schema,
+    containerStatusSha256: Sha256Schema,
+    deployedAt: z.iso.datetime({ offset: true }),
+    verifierVersion: z.literal("counterlab-deployment-v3"),
+  })
+  .superRefine((receipt, context) => {
+    if (receipt.workerTag !== `git-${receipt.workerEvidenceCommit}`) {
+      context.addIssue({
+        code: "custom",
+        path: ["workerTag"],
+        message: "Worker tag must bind the deployed evidence commit",
+      });
+    }
+    if (
+      receipt.workerMessage !==
+      `CounterLab Worker ${receipt.workerEvidenceCommit}; runner ${receipt.runnerSourceCommit}`
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["workerMessage"],
+        message: "Worker message must bind both release commits",
+      });
+    }
+    if (
+      receipt.containerImage !==
+      `registry.cloudflare.com/${receipt.containerImage.split("/")[1]}/counterlab-runner@${receipt.containerImageDigest}`
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["containerImage"],
+        message: "Container image must bind the exact qualified digest",
+      });
+    }
+    if (
+      Date.parse(receipt.releaseCheckCheckedAt) > Date.parse(receipt.deployedAt)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["releaseCheckCheckedAt"],
+        message: "release checks must precede deployment",
       });
     }
   });

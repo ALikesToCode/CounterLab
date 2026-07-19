@@ -13,6 +13,8 @@ import {
   PatchPlanV1Schema,
   PatchResultSchema,
   PredictionContractSchema,
+  PublicReplayActivityKindV1Schema,
+  PublicReplayProjectionV1Schema,
   ProofCapsuleReplayReceiptV2Schema,
   ProofCapsuleReplayV2Schema,
   PublicCompilerEventSchema,
@@ -20,6 +22,8 @@ import {
   TransferResultSchema,
   canonicalJsonV1,
   type EvidenceEvent,
+  type PublicReplayActivityKindV1,
+  type PublicReplayProjectionV1,
   type ProofCapsuleReplayReceiptV2,
   type ProofCapsuleReplayV2,
 } from "@counterlab/contracts";
@@ -39,6 +43,8 @@ import { z } from "zod";
 import type { ValidatedProofCapsuleV2 } from "./index.js";
 
 const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);
+const PUBLIC_REPLAY_PROJECTION_SIGNATURE_DOMAIN =
+  "counterlab-public-replay-projection-v1\0";
 const JsonObjectSchema = z
   .record(z.string(), z.unknown())
   .refine((value) => Object.keys(value).length > 0, "expected a JSON object");
@@ -858,4 +864,380 @@ export async function projectProofCapsuleReplayV2(
     },
     limitations: capsule.manifest.limitations,
   });
+}
+
+const PUBLIC_REPLAY_ACTIVITY_KINDS = new Set<PublicReplayActivityKindV1>(
+  PublicReplayActivityKindV1Schema.options,
+);
+
+export type CreatePublicReplayProjectionV1Options = {
+  signing?: {
+    keyId: string;
+    signingKey: string;
+  };
+};
+
+export type ValidatePublicReplayProjectionV1Options = {
+  expectedIntegrityMode?: "integrity-hashed" | "hmac-signed";
+  signingKeys?: Readonly<Record<string, string>>;
+};
+
+function publicReplayResult(replay: ProofCapsuleReplayV2) {
+  const result = replay.verifiedResult;
+  if (result.concept === "entity_leakage") {
+    return {
+      concept: result.concept,
+      conceptPackVersion: result.conceptPackVersion,
+      kernelVersion: result.kernelVersion,
+      seed: result.seed,
+      runs: result.runs.map((run) => ({
+        id: run.id,
+        operation: run.operation,
+        splitStrategy: run.splitStrategy,
+        seed: run.seed,
+        metrics: run.metrics,
+        sampleSizes: run.sampleSizes,
+        entityOverlap: run.entityOverlap,
+      })),
+      resultHash: result.resultHash,
+    };
+  }
+  return {
+    concept: result.concept,
+    conceptPackVersion: result.conceptPackVersion,
+    kernelVersion: result.kernelVersion,
+    seed: result.seed,
+    runs: result.runs.map((run) => ({
+      id: run.id,
+      operation: run.operation,
+      seed: run.seed,
+      threshold: run.threshold,
+      prevalenceScenario: run.prevalenceScenario,
+      metrics: run.metrics,
+      confusionMatrix: run.confusionMatrix,
+      sampleSizes: run.sampleSizes,
+      classCounts: run.classCounts,
+      prevalence: run.prevalence,
+      predictedPositiveRate: run.predictedPositiveRate,
+    })),
+    resultHash: result.resultHash,
+  };
+}
+
+function publicReplayProjectionSignature(
+  projectionHash: string,
+  signingKey: string,
+): string {
+  return createHmac("sha256", signingKey)
+    .update(
+      `${PUBLIC_REPLAY_PROJECTION_SIGNATURE_DOMAIN}${projectionHash}`,
+      "utf8",
+    )
+    .digest("hex");
+}
+
+function publicReplaySignaturesMatch(
+  actual: string,
+  expected: string,
+): boolean {
+  const actualBytes = Buffer.from(actual, "hex");
+  const expectedBytes = Buffer.from(expected, "hex");
+  return (
+    actualBytes.length === expectedBytes.length &&
+    timingSafeEqual(actualBytes, expectedBytes)
+  );
+}
+
+function unsignedPublicReplayProjection(
+  projection: PublicReplayProjectionV1,
+): unknown {
+  const {
+    projectionHash: _projectionHash,
+    projectionIntegrity: _projectionIntegrity,
+    ...sourceAuthority
+  } = projection.authority;
+  return { ...projection, authority: sourceAuthority };
+}
+
+export function createPublicReplayProjectionV1(
+  replayInput: ProofCapsuleReplayV2,
+  options: CreatePublicReplayProjectionV1Options = {},
+): PublicReplayProjectionV1 {
+  const replay = ProofCapsuleReplayV2Schema.parse(replayInput);
+  const boundary = replay.boundary.result;
+  const verification = replay.boundary.report;
+  const receipt = replay.boundary.receipt;
+  const reasoningAuthority = replay.reasoningDiff.authority;
+  const sourceAuthority = {
+    sourceCapsuleRootHash: replay.rootHash,
+    sourceCapsuleBytesHash: replay.bytesHash,
+    eventChainHead: replay.eventChainHead,
+    artifactManifestHash: reasoningAuthority.artifactManifestHash,
+    beliefSpecHash: reasoningAuthority.beliefSpecHash,
+    predictionHash: reasoningAuthority.predictionHash,
+    resultHash: replay.verifiedResult.resultHash,
+    evidenceVerdictHash: reasoningAuthority.evidenceVerdictHash,
+    boundaryMapHash: replay.boundary.result.resultHash,
+    boundaryReceiptHash: replay.boundary.receipt.receiptHash,
+    transferResultHash: replay.transferResult.resultHash,
+    patchResultHash: replay.patchResult.resultHash,
+    reasoningDiffHash: replay.proofCapsule.reasoningDiffHash,
+  };
+  const activity = replay.timeline
+    .filter((event) =>
+      PUBLIC_REPLAY_ACTIVITY_KINDS.has(
+        event.kind as PublicReplayActivityKindV1,
+      ),
+    )
+    .map((event, index) => ({
+      sequence: index + 1,
+      actor: event.actor,
+      kind: event.kind as PublicReplayActivityKindV1,
+    }));
+  const boundaryCells = boundary.cells.map((cell) => {
+    if (cell.concept === "entity_leakage") {
+      const {
+        fixtureViewHash: _fixtureViewHash,
+        randomPipelineFingerprint: _randomPipelineFingerprint,
+        groupPipelineFingerprint: _groupPipelineFingerprint,
+        ...publicCell
+      } = cell;
+      return publicCell;
+    }
+    const {
+      scoreFingerprint: _scoreFingerprint,
+      pipelineFingerprint: _pipelineFingerprint,
+      ...publicCell
+    } = cell;
+    return publicCell;
+  });
+  const evidenceVerdict =
+    replay.evidenceVerdict.kind === "SUPPORTS"
+      ? {
+          kind: replay.evidenceVerdict.kind,
+          hypothesisId: replay.evidenceVerdict.hypothesisId,
+          resultHash: replay.evidenceVerdict.resultHash,
+        }
+      : replay.evidenceVerdict.kind === "INCONCLUSIVE"
+        ? {
+            kind: replay.evidenceVerdict.kind,
+            reasonCode: replay.evidenceVerdict.reasonCode,
+            resultHash: replay.evidenceVerdict.resultHash,
+          }
+        : {
+            kind: replay.evidenceVerdict.kind,
+            findingIds: replay.evidenceVerdict.findingIds,
+            resultReleased: replay.evidenceVerdict.resultReleased,
+          };
+  const baseProjection = {
+    schemaVersion: "1" as const,
+    projectionKind: "public_replay" as const,
+    replayId: replay.replayId,
+    replay: true as const,
+    label: "Verified replay" as const,
+    playbackMode: "verified_capsule_replay" as const,
+    sourceMode: "live_notebook" as const,
+    concept: replay.concept,
+    recordedAt: replay.recordedAt,
+    artifact: {
+      kind: "notebook" as const,
+      nbformat: replay.artifactManifest.nbformat,
+      supportStatus: replay.artifactManifest.support.status,
+      evidenceLocators: replay.beliefSpec.evidenceRefs.map((evidence) => ({
+        kind: evidence.kind,
+        hash: evidence.hash,
+        ...(evidence.cellIndex === undefined
+          ? {}
+          : { cellIndex: evidence.cellIndex }),
+        ...(evidence.outputIndex === undefined
+          ? {}
+          : { outputIndex: evidence.outputIndex }),
+      })),
+    },
+    question: {
+      claim: replay.beliefSpec.claim,
+      hypotheses: replay.beliefSpec.hypotheses.map((hypothesis) => ({
+        id: hypothesis.id,
+        statement: hypothesis.statement,
+      })) as [
+        {
+          id: "current";
+          statement: string;
+        },
+        {
+          id: "competing";
+          statement: string;
+        },
+      ],
+    },
+    prediction: {
+      choice: replay.prediction.choice,
+      ...(replay.prediction.numericRange === undefined
+        ? {}
+        : { numericRange: replay.prediction.numericRange }),
+      confidence: replay.prediction.confidence,
+      committedAt: replay.prediction.committedAt,
+      immutableHash: replay.prediction.immutableHash,
+    },
+    test: {
+      result: publicReplayResult(replay),
+      evidenceVerdict,
+    },
+    boundary: {
+      result: {
+        schemaVersion: boundary.schemaVersion,
+        canonicalProfile: boundary.canonicalProfile,
+        concept: boundary.concept,
+        conceptPackVersion: boundary.conceptPackVersion,
+        sweepId: boundary.sweepId,
+        gridPresetId: boundary.gridPresetId,
+        seed: boundary.seed,
+        kernelVersion: boundary.kernelVersion,
+        axes: boundary.axes,
+        cells: boundaryCells,
+        classifications: boundary.classifications,
+        units: boundary.units,
+        assumptions: boundary.assumptions,
+        nonClaims: boundary.nonClaims,
+        resultHash: boundary.resultHash,
+      },
+      verification: {
+        status: verification.status,
+        verifierVersion: verification.verifierVersion,
+        resultHash: verification.resultHash,
+        invariantCount: verification.invariantCount,
+        reportHash: verification.reportHash,
+      },
+      receipt: {
+        resultHash: receipt.resultHash,
+        verificationReportHash: receipt.verificationReportHash,
+        issuedAt: receipt.issuedAt,
+        integrity: receipt.integrity,
+        receiptHash: receipt.receiptHash,
+      },
+    },
+    apply: {
+      revision: replay.revision,
+      transfer: {
+        outcome: replay.transferResult.outcome,
+        selectedStrategy: replay.transferResult.selectedStrategy,
+        checks: replay.transferResult.checks.map((check) => ({
+          invariant: check.invariant,
+          passed: check.passed,
+        })),
+        evaluatorVersion: replay.transferResult.evaluatorVersion,
+        resultHash: replay.transferResult.resultHash,
+      },
+    },
+    repair: {
+      status: replay.patchResult.status,
+      modifiedCells: replay.patchResult.modifiedCells,
+      invariantNames: replay.patchResult.verification.invariants,
+      invariantCount: replay.patchResult.verification.invariants.length,
+      unchangedCellCount:
+        replay.patchResult.verification.unchangedCellHashes.length,
+      patchedArtifactHash: replay.patchResult.patchedArtifactHash,
+      patchHash: replay.patchResult.patchHash,
+      resultHash: replay.patchResult.resultHash,
+    },
+    activity,
+    provenance: replay.provenance,
+    limitations:
+      replay.concept === "entity_leakage"
+        ? [
+            "This replay supports only the recorded entity-leakage experiment and transfer scope.",
+            "It does not establish global model quality or learner mastery.",
+            "The hosted Codex launch has a credential-and-privilege boundary; filesystem generation read isolation is PARTIAL, not a formal sandbox proof.",
+          ]
+        : [
+            "This replay supports only the recorded class-imbalance experiment and transfer scope.",
+            "It does not establish global model quality or learner mastery.",
+            "The hosted Codex launch has a credential-and-privilege boundary; filesystem generation read isolation is PARTIAL, not a formal sandbox proof.",
+          ],
+    privacy: {
+      profile: "share-safe-v1" as const,
+      excluded: [
+        "raw_rows",
+        "notebook_bytes",
+        "local_paths",
+        "source_session_identifiers",
+        "artifact_record_ids",
+        "source_excerpts",
+        "field_names",
+        "patch_diff",
+        "private_capsule",
+        "reasoning_diff_text",
+        "transfer_evidence_text",
+        "event_timestamps",
+        "boundary_internal_fingerprints",
+      ] as const,
+    },
+  };
+  const projectionHash = hashCanonical({
+    ...baseProjection,
+    authority: sourceAuthority,
+  });
+  const projectionIntegrity =
+    options.signing === undefined
+      ? {
+          mode: "integrity-hashed" as const,
+          algorithm: "sha256" as const,
+          contentHash: projectionHash,
+        }
+      : {
+          mode: "hmac-signed" as const,
+          algorithm: "hmac-sha256" as const,
+          contentHash: projectionHash,
+          keyId: options.signing.keyId,
+          signature: publicReplayProjectionSignature(
+            projectionHash,
+            options.signing.signingKey,
+          ),
+        };
+  return PublicReplayProjectionV1Schema.parse({
+    ...baseProjection,
+    authority: {
+      ...sourceAuthority,
+      projectionHash,
+      projectionIntegrity,
+    },
+  });
+}
+
+export function validatePublicReplayProjectionV1(
+  input: unknown,
+  options: ValidatePublicReplayProjectionV1Options = {},
+): PublicReplayProjectionV1 {
+  const projection = PublicReplayProjectionV1Schema.parse(input);
+  const expectedHash = hashCanonical(
+    unsignedPublicReplayProjection(projection),
+  );
+  if (projection.authority.projectionHash !== expectedHash) {
+    throw new Error("Public replay projection hash does not match its content");
+  }
+  const integrity = projection.authority.projectionIntegrity;
+  if (
+    options.expectedIntegrityMode !== undefined &&
+    options.expectedIntegrityMode !== integrity.mode
+  ) {
+    throw new Error(
+      "Public replay projection integrity does not match the expected policy",
+    );
+  }
+  if (integrity.mode === "hmac-signed") {
+    const signingKey = options.signingKeys?.[integrity.keyId];
+    if (signingKey === undefined || signingKey.length === 0) {
+      throw new Error(
+        "A signing key is required to validate this public replay projection",
+      );
+    }
+    const expectedSignature = publicReplayProjectionSignature(
+      expectedHash,
+      signingKey,
+    );
+    if (!publicReplaySignaturesMatch(integrity.signature, expectedSignature)) {
+      throw new Error("Public replay projection signature is invalid");
+    }
+  }
+  return projection;
 }

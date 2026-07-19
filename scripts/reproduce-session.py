@@ -83,7 +83,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         outcome = HostCompileVerifyPipeline(
             generated_root=generated,
             fixture_path=ROOT / "fixtures/public/customer_churn.csv",
-            executor=DockerAdapterExecutor(image=arguments.image),
+            executor=DockerAdapterExecutor(
+                image=arguments.image,
+                docker_bin=os.environ.get("COUNTERLAB_DOCKER_BIN", "docker"),
+            ),
             run_root=temporary_root / "runs",
         )(workspace)
     if outcome.status != "VERIFIED" or outcome.result is None:

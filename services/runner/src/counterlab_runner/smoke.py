@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -34,7 +35,10 @@ def run_smoke(root: Path, image: str) -> dict[str, object]:
         outcome = HostCompileVerifyPipeline(
             generated_root=generated_root,
             fixture_path=fixture,
-            executor=DockerAdapterExecutor(image=image),
+            executor=DockerAdapterExecutor(
+                image=image,
+                docker_bin=os.environ.get("COUNTERLAB_DOCKER_BIN", "docker"),
+            ),
             run_root=temporary_root / "runs",
         )(workspace)
         return {

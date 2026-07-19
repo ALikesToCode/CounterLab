@@ -20,11 +20,18 @@
     },
     "concept": {
       "type": "string",
-      "enum": ["entity_leakage", "class_imbalance"]
+      "enum": [
+        "entity_leakage",
+        "class_imbalance"
+      ]
     },
     "supportLabel": {
       "type": "string",
-      "enum": ["VERIFIED_TEST", "GUIDED_VISUAL", "EXPLANATION_ONLY"]
+      "enum": [
+        "VERIFIED_TEST",
+        "GUIDED_VISUAL",
+        "EXPLANATION_ONLY"
+      ]
     },
     "title": {
       "type": "string",
@@ -61,7 +68,12 @@
                 "maxLength": 1000
               }
             },
-            "required": ["id", "type", "current", "competing"],
+            "required": [
+              "id",
+              "type",
+              "current",
+              "competing"
+            ],
             "additionalProperties": false
           },
           {
@@ -89,7 +101,12 @@
                 "pattern": "^\\/[A-Za-z0-9_-][A-Za-z0-9_/-]*$"
               }
             },
-            "required": ["id", "type", "prompt", "immutableBinding"],
+            "required": [
+              "id",
+              "type",
+              "prompt",
+              "immutableBinding"
+            ],
             "additionalProperties": false
           },
           {
@@ -111,7 +128,11 @@
                 "maxLength": 1000
               }
             },
-            "required": ["id", "type", "text"],
+            "required": [
+              "id",
+              "type",
+              "text"
+            ],
             "additionalProperties": false
           },
           {
@@ -255,7 +276,10 @@
                       "maxLength": 1000
                     }
                   },
-                  "required": ["value", "label"],
+                  "required": [
+                    "value",
+                    "label"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -304,7 +328,13 @@
                 "minLength": 1
               }
             },
-            "required": ["id", "label", "resultBinding", "type", "unit"],
+            "required": [
+              "id",
+              "label",
+              "resultBinding",
+              "type",
+              "unit"
+            ],
             "additionalProperties": false
           },
           {
@@ -602,7 +632,12 @@
                 "pattern": "^\\/[A-Za-z0-9_-][A-Za-z0-9_/-]*$"
               }
             },
-            "required": ["id", "type", "label", "evidenceBinding"],
+            "required": [
+              "id",
+              "type",
+              "label",
+              "evidenceBinding"
+            ],
             "additionalProperties": false
           },
           {
@@ -630,7 +665,12 @@
                 "pattern": "^\\/[A-Za-z0-9_-][A-Za-z0-9_/-]*$"
               }
             },
-            "required": ["id", "type", "label", "diffBinding"],
+            "required": [
+              "id",
+              "type",
+              "label",
+              "diffBinding"
+            ],
             "additionalProperties": false
           },
           {
@@ -656,7 +696,12 @@
                 "minLength": 1
               }
             },
-            "required": ["id", "type", "prompt", "evaluatorId"],
+            "required": [
+              "id",
+              "type",
+              "prompt",
+              "evaluatorId"
+            ],
             "additionalProperties": false
           },
           {
@@ -679,7 +724,11 @@
                 "pattern": "^\\/[A-Za-z0-9_-][A-Za-z0-9_/-]*$"
               }
             },
-            "required": ["id", "type", "resultBinding"],
+            "required": [
+              "id",
+              "type",
+              "resultBinding"
+            ],
             "additionalProperties": false
           },
           {
@@ -707,7 +756,12 @@
                 "pattern": "^\\/[A-Za-z0-9_-][A-Za-z0-9_/-]*$"
               }
             },
-            "required": ["id", "type", "label", "proofBinding"],
+            "required": [
+              "id",
+              "type",
+              "label",
+              "proofBinding"
+            ],
             "additionalProperties": false
           },
           {
@@ -729,7 +783,11 @@
                 "maxLength": 1000
               }
             },
-            "required": ["id", "type", "text"],
+            "required": [
+              "id",
+              "type",
+              "text"
+            ],
             "additionalProperties": false
           }
         ]
@@ -767,7 +825,10 @@
           "pattern": "^[a-f0-9]{64}$"
         }
       },
-      "required": ["experimentIrHash", "discriminationContractHash"],
+      "required": [
+        "experimentIrHash",
+        "discriminationContractHash"
+      ],
       "additionalProperties": false
     }
   },

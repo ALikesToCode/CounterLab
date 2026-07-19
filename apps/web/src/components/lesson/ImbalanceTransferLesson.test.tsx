@@ -33,6 +33,16 @@ describe("ImbalanceTransferLesson", () => {
       />,
     );
 
+    expect(screen.getByLabelText(/revised mental model/i)).toHaveValue("");
+    expect(
+      screen.getByRole("button", { name: /try it on defects/i }),
+    ).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/revised mental model/i), {
+      target: { value: "Too short" },
+    });
+    expect(
+      screen.getByRole("button", { name: /try it on defects/i }),
+    ).toBeDisabled();
     fireEvent.change(screen.getByLabelText(/revised mental model/i), {
       target: {
         value:
@@ -86,6 +96,35 @@ describe("ImbalanceTransferLesson", () => {
     expect(JSON.stringify(recordLearnerInteraction.mock.calls)).not.toContain(
       "For rare events",
     );
+  });
+
+  it("accepts a completed clause combination without grading the learner's prose", () => {
+    render(
+      <ImbalanceTransferLesson
+        sessionId="session_1"
+        state="EXPERIMENT_COMPLETED"
+        updateSession={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText(/choose the condition/i), {
+      target: { value: "prevalence-shifts" },
+    });
+    fireEvent.change(screen.getByLabelText(/choose the action/i), {
+      target: { value: "baseline" },
+    });
+    fireEvent.change(
+      screen.getByLabelText(/choose the evidence-based reason/i),
+      { target: { value: "accuracy-hides" } },
+    );
+
+    expect(screen.getByLabelText(/revised mental model/i)).toHaveValue(
+      "When deployment prevalence changes,\nI should compare against the majority baseline,\nbecause high overall accuracy can hide missed rare events.",
+    );
+    expect(
+      screen.getByRole("button", { name: /try it on defects/i }),
+    ).toBeEnabled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("keeps repair locked after the fixed evaluator rejects the transfer", () => {

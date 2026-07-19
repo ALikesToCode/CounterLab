@@ -1,0 +1,251 @@
+.screen {
+  min-height: 100%;
+  color: var(--ink);
+  background: var(--night);
+}
+
+.status {
+  position: sticky;
+  z-index: 20;
+  top: 0;
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px clamp(18px, 5vw, 64px);
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--night) 94%, transparent);
+  backdrop-filter: blur(14px);
+  font-size: 14px;
+}
+
+.statusMark {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border: 2px solid var(--gold);
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px var(--gold-soft);
+}
+
+.content {
+  display: grid;
+  width: min(980px, calc(100% - 40px));
+  gap: 20px;
+  margin: 0 auto;
+  padding: clamp(48px, 8vw, 96px) 0 88px;
+}
+
+.hero {
+  max-width: 760px;
+  padding-bottom: clamp(12px, 3vw, 28px);
+}
+
+.eyebrow,
+.sectionHeading > p,
+.limitations > p:first-child {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  max-width: 760px;
+  margin: 14px 0 18px;
+  font-size: clamp(2.35rem, 6vw, 4.75rem);
+  font-weight: 520;
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+  text-wrap: balance;
+}
+
+.hero > p:last-child,
+.limitations > p:last-child {
+  max-width: 680px;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+.provenance,
+.result,
+.limitations {
+  padding: clamp(20px, 4vw, 32px);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--paper-raised);
+}
+
+.sectionHeading h2,
+.limitations h2 {
+  margin: 7px 0 20px;
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-weight: 560;
+  letter-spacing: -0.025em;
+}
+
+.provenance dl,
+.integrity {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--line);
+}
+
+.provenance dl > div,
+.integrity > div {
+  min-width: 0;
+  padding: 15px;
+  background: var(--paper);
+}
+
+.provenance dt,
+.integrity dt {
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.provenance dd,
+.integrity dd {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.provenance dd,
+.integrity code {
+  font-family: var(--mono);
+}
+
+.tableWrap {
+  overflow-x: auto;
+  margin-inline: calc(clamp(20px, 4vw, 32px) * -1);
+  padding-inline: clamp(20px, 4vw, 32px);
+}
+
+.tableWrap table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+}
+
+.tableWrap caption {
+  padding: 0 0 14px;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.tableWrap th,
+.tableWrap td {
+  padding: 13px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tableWrap thead th {
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.tableWrap tbody th {
+  color: var(--ink);
+  font-weight: 680;
+}
+
+.tableWrap td {
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.integrity {
+  margin-top: 20px;
+}
+
+.limitations {
+  border-color: color-mix(in srgb, var(--gold) 34%, var(--line));
+  background: var(--gold-soft);
+}
+
+.limitations h2 {
+  margin-bottom: 10px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.actions button {
+  min-height: 48px;
+  padding: 11px 18px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.primaryAction {
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
+.secondaryAction {
+  color: var(--ink);
+  border-color: var(--line-strong) !important;
+  background: transparent;
+}
+
+.actions button:hover {
+  filter: brightness(1.08);
+}
+
+.actions button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+@media (max-width: 720px) {
+  .content {
+    width: min(100% - 28px, 560px);
+    padding: 42px 0 64px;
+  }
+
+  .provenance dl,
+  .integrity {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .actions {
+    display: grid;
+  }
+
+  .actions button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .actions button {
+    transition: none;
+  }
+}

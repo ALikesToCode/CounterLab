@@ -1,0 +1,68 @@
+.experience {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+.authority {
+  position: sticky;
+  z-index: 12;
+  top: 8px;
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 14px;
+  color: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--aqua) 42%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--night) 94%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.authorityMark {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border: 2px solid var(--aqua);
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px var(--aqua-soft);
+}
+
+.authority > div {
+  display: grid;
+  gap: 1px;
+}
+
+.authority strong {
+  color: var(--aqua-bright);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.authority span:last-child {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.presentation {
+  min-width: 0;
+}
+
+@media (max-width: 620px) {
+  .authority {
+    align-items: flex-start;
+    padding: 11px 12px;
+  }
+
+  .authorityMark {
+    margin-top: 4px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .authority {
+    backdrop-filter: none;
+  }
+}

@@ -1,4 +1,12 @@
-import { useId, type FormEvent, type RefObject } from "react";
+import {
+  useCallback,
+  useId,
+  useLayoutEffect,
+  useRef,
+  type FormEvent,
+  type KeyboardEvent,
+  type RefObject,
+} from "react";
 
 import styles from "./QuestionComposer.module.css";
 
@@ -27,11 +35,46 @@ export function QuestionComposer({
   busy = false,
 }: QuestionComposerProps) {
   const inputId = useId();
+  const inputHintId = `${inputId}-keyboard-hint`;
+  const localInputRef = useRef<HTMLTextAreaElement>(null);
+
+  const setInputNode = useCallback(
+    (node: HTMLTextAreaElement | null) => {
+      localInputRef.current = node;
+      if (inputRef !== undefined) inputRef.current = node;
+    },
+    [inputRef],
+  );
+
+  const resizeInput = useCallback((input: HTMLTextAreaElement) => {
+    const maximumHeight = 192;
+    input.style.height = "auto";
+    const nextHeight = Math.min(input.scrollHeight, maximumHeight);
+    input.style.height = `${nextHeight}px`;
+    input.style.overflowY =
+      input.scrollHeight > maximumHeight ? "auto" : "hidden";
+  }, []);
+
+  useLayoutEffect(() => {
+    if (localInputRef.current !== null) resizeInput(localInputRef.current);
+  }, [resizeInput, value]);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (busy || value.trim().length === 0) return;
     onSubmit();
+  };
+
+  const submitFromKeyboard = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (
+      event.key !== "Enter" ||
+      event.shiftKey ||
+      event.nativeEvent.isComposing
+    ) {
+      return;
+    }
+    event.preventDefault();
+    if (!busy && value.trim().length > 0) onSubmit();
   };
 
   return (
@@ -41,14 +84,22 @@ export function QuestionComposer({
           Your question or claim
         </label>
         <textarea
-          ref={inputRef}
+          ref={setInputNode}
           id={inputId}
           value={value}
-          rows={2}
+          rows={1}
           disabled={busy}
+          aria-describedby={inputHintId}
           placeholder="State a claim or attach a notebook…"
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) => {
+            onChange(event.target.value);
+            resizeInput(event.target);
+          }}
+          onKeyDown={submitFromKeyboard}
         />
+        <span className={styles.srOnly} id={inputHintId}>
+          Press Enter to continue. Press Shift and Enter for a new line.
+        </span>
 
         <div className={styles.composerActions}>
           <label
@@ -65,14 +116,20 @@ export function QuestionComposer({
                 if (file !== undefined) onAttachNotebook(file);
               }}
             />
-            <span>+ Attach notebook</span>
+            <span className={styles.attachSymbol} aria-hidden="true">
+              +
+            </span>
+            <span className={styles.attachText}>Attach notebook</span>
           </label>
           <button
             className={styles.submit}
             type="submit"
             disabled={busy || value.trim().length === 0}
           >
-            {busy ? "Preparing test…" : "Test this claim →"}
+            <span className={styles.submitText}>
+              {busy ? "Preparing test…" : "Test this claim"}
+            </span>
+            <span aria-hidden="true">→</span>
           </button>
         </div>
       </form>
@@ -85,7 +142,10 @@ export function QuestionComposer({
               type="button"
               disabled={busy}
               key={prompt}
-              onClick={() => onChange(prompt)}
+              onClick={() => {
+                onChange(prompt);
+                localInputRef.current?.focus();
+              }}
             >
               {prompt}
             </button>

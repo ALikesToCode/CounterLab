@@ -13,6 +13,8 @@ import {
   LearnerInteractionRecordSchema,
   PatchPlanV1Schema,
   PatchResultSchema,
+  PublicReplayProjectionV1Schema,
+  PublicReplayPublicationReceiptV1Schema,
   ProofCapsuleRefV2Schema,
   ProofCapsuleReplayReceiptV2Schema,
   PublicCompilerEventSchema,
@@ -37,6 +39,7 @@ import {
   type RunnerJob,
   type RunnerRequestIdentityV1,
   type VerifiedResultSet,
+  canonicalJsonV1,
 } from "@counterlab/contracts";
 import {
   ExperimentIRV5Schema,
@@ -103,7 +106,9 @@ import {
   type SessionRepository,
 } from "@counterlab/session-core";
 import {
+  createPublicReplayProjectionV1,
   projectProofCapsuleReplayV2,
+  validatePublicReplayProjectionV1,
   validateProofCapsulePayloadAuthorityV2,
   validateProofCapsuleV2,
 } from "@counterlab/proof-capsule";
@@ -125,6 +130,24 @@ import {
   type ArtifactStore,
   type StoredArtifact,
 } from "./artifact-store";
+import {
+  D1OwnerCapabilityRepository,
+  createOwnerCapability,
+  hashOwnerCapability,
+  ownerCapabilityMatches,
+  ownerCapabilityIdentifies,
+  type OwnerCapabilityRepository,
+} from "./access-control";
+import {
+  ADMISSION_POLICY_VERSION,
+  DurableObjectAdmissionControl,
+  hmacAdmissionKey,
+  trustedAdmissionCaller,
+  type AdmissionControl,
+  type AdmissionDecision,
+  type AdmissionKind,
+  type AdmissionNamespace,
+} from "./admission-control";
 import {
   D1LearnerInteractionRepository,
   LearnerInteractionConflictError,
@@ -174,10 +197,11 @@ import {
 import {
   D1ProofCapsuleReplayRepository,
   ReplayPublicationConflictError,
+  ReplayPublicationRevokedError,
   type ProofCapsuleReplayRepository,
 } from "./replay-repository";
 
-type WorkerBindings = Env & {
+type WorkerBindings = Omit<Env, "COUNTERLAB_MAINTENANCE_MODE"> & {
   CODEX_AUTH_JSON?: string;
   OPENAI_API_KEY?: string;
   OPENAI_BASE_URL?: string;
@@ -191,6 +215,17 @@ type WorkerBindings = Env & {
   COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY?: string;
   COUNTERLAB_RUNNER_BASE_URL?: string;
   COUNTERLAB_ADMIN_DIAGNOSTIC_SECRET?: string;
+  COUNTERLAB_ADMISSION_KEY?: string;
+  COUNTERLAB_MAINTENANCE_MODE?: string;
+  COUNTERLAB_WORKER_EVIDENCE_COMMIT?: string;
+  COUNTERLAB_RUNNER_SOURCE_COMMIT?: string;
+  COUNTERLAB_RUNNER_IMAGE_DIGEST?: string;
+  CF_VERSION_METADATA?: {
+    id: string;
+    tag: string;
+    timestamp: string;
+  };
+  ADMISSION?: AdmissionNamespace;
   RUNNER?: unknown;
 };
 
@@ -204,6 +239,10 @@ type AppBindings = {
 export interface ApiOptions {
   sessionRepository?: SessionRepository;
   artifactStore?: ArtifactStore;
+  ownerCapabilityRepository?: OwnerCapabilityRepository;
+  admissionControl?: AdmissionControl;
+  admissionHmacKey?: string;
+  admissionCaller?: (request: Request) => string;
   runnerJobRepository?: RunnerJobRepository;
   runnerObjectStore?: RunnerObjectStore;
   replayRepository?: ProofCapsuleReplayRepository;
@@ -239,7 +278,13 @@ const CreateSampleSessionSchema = z
   .object({ sampleId: z.literal("leakage-01") })
   .strict();
 const CreateLiveSessionSchema = z
-  .object({ artifactId: z.string().trim().min(1) })
+  .object({
+    artifactId: z.string().trim().min(1),
+    artifactCapability: z
+      .string()
+      .regex(/^cl_owner_[A-Za-z0-9_-]{43}$/u)
+      .optional(),
+  })
   .strict();
 const CreateReplaySessionSchema = z
   .object({ replayId: z.literal("leakage-01") })
@@ -307,6 +352,9 @@ const LegacyRunnerCandidateSchema = z
   .strict();
 
 const DEFAULT_MAX_NOTEBOOK_BYTES = 10_485_760;
+const MAX_MULTIPART_OVERHEAD_BYTES = 65_536;
+const MAX_MULTIPART_BOUNDARY_CHARACTERS = 200;
+const MAX_UPLOAD_FILE_NAME_CHARACTERS = 255;
 const ACCEPTED_NOTEBOOK_TYPES = new Set([
   "application/json",
   "application/x-ipynb+json",
@@ -342,30 +390,115 @@ function constantTimeEqual(left: string, right: string): boolean {
 function contentLength(context: Context<AppBindings>): number | undefined {
   const raw = context.req.header("content-length");
   if (raw === undefined) return undefined;
+  if (!/^(?:0|[1-9]\d*)$/u.test(raw)) {
+    throw new ApiInputError(
+      "INVALID_CONTENT_LENGTH",
+      "Content-Length must be one non-negative decimal integer",
+      400,
+    );
+  }
   const value = Number(raw);
-  return Number.isFinite(value) && value >= 0 ? value : undefined;
+  if (!Number.isSafeInteger(value)) {
+    throw new ApiInputError(
+      "INVALID_CONTENT_LENGTH",
+      "Content-Length is outside the supported range",
+      400,
+    );
+  }
+  return value;
+}
+
+async function readBoundedBody(
+  context: Context<AppBindings>,
+  maxBytes: number,
+): Promise<Uint8Array> {
+  const declared = contentLength(context);
+  if (
+    declared !== undefined &&
+    context.req.header("transfer-encoding") !== undefined
+  ) {
+    throw new ApiInputError(
+      "AMBIGUOUS_BODY_LENGTH",
+      "A request cannot declare both Content-Length and Transfer-Encoding",
+      400,
+    );
+  }
+  if (declared !== undefined && declared > maxBytes) {
+    throw new ApiInputError(
+      "REQUEST_TOO_LARGE",
+      `Request exceeds ${maxBytes} bytes`,
+      413,
+    );
+  }
+  const body = context.req.raw.body;
+  if (body === null) {
+    if (declared !== undefined && declared !== 0) {
+      throw new ApiInputError(
+        "BODY_LENGTH_MISMATCH",
+        "The request body does not match Content-Length",
+        400,
+      );
+    }
+    return new Uint8Array();
+  }
+
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  try {
+    while (true) {
+      const next = await reader.read();
+      if (next.done) break;
+      const chunk = next.value;
+      if (received + chunk.byteLength > maxBytes) {
+        await reader.cancel("CounterLab request body limit exceeded");
+        throw new ApiInputError(
+          "REQUEST_TOO_LARGE",
+          `Request exceeds ${maxBytes} bytes`,
+          413,
+        );
+      }
+      chunks.push(chunk);
+      received += chunk.byteLength;
+    }
+  } catch (error) {
+    if (error instanceof ApiInputError) throw error;
+    try {
+      await reader.cancel("CounterLab request body read failed");
+    } catch {
+      // The underlying stream may already be errored or closed.
+    }
+    throw new ApiInputError(
+      "REQUEST_BODY_INTERRUPTED",
+      "The request body ended before it could be validated",
+      400,
+    );
+  } finally {
+    reader.releaseLock();
+  }
+  if (declared !== undefined && declared !== received) {
+    throw new ApiInputError(
+      "BODY_LENGTH_MISMATCH",
+      "The request body does not match Content-Length",
+      400,
+    );
+  }
+  const bytes = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }
 
 async function readJson(
   context: Context<AppBindings>,
   maxBytes = 64 * 1024,
 ): Promise<unknown> {
-  const declared = contentLength(context);
-  if (declared !== undefined && declared > maxBytes) {
-    throw new ApiInputError(
-      "REQUEST_TOO_LARGE",
-      `JSON request exceeds ${maxBytes} bytes`,
-      413,
-    );
-  }
-  const text = await context.req.text();
-  if (new TextEncoder().encode(text).byteLength > maxBytes) {
-    throw new ApiInputError(
-      "REQUEST_TOO_LARGE",
-      `JSON request exceeds ${maxBytes} bytes`,
-      413,
-    );
-  }
+  const text = new TextDecoder().decode(
+    await readBoundedBody(context, maxBytes),
+  );
   try {
     return JSON.parse(text);
   } catch {
@@ -381,23 +514,7 @@ async function readBoundedText(
   context: Context<AppBindings>,
   maxBytes: number,
 ): Promise<string> {
-  const declared = contentLength(context);
-  if (declared !== undefined && declared > maxBytes) {
-    throw new ApiInputError(
-      "REQUEST_TOO_LARGE",
-      `Request exceeds ${maxBytes} bytes`,
-      413,
-    );
-  }
-  const text = await context.req.text();
-  if (new TextEncoder().encode(text).byteLength > maxBytes) {
-    throw new ApiInputError(
-      "REQUEST_TOO_LARGE",
-      `Request exceeds ${maxBytes} bytes`,
-      413,
-    );
-  }
-  return text;
+  return new TextDecoder().decode(await readBoundedBody(context, maxBytes));
 }
 
 class ApiInputError extends Error {
@@ -406,6 +523,7 @@ class ApiInputError extends Error {
     message: string,
     readonly status: number,
     readonly retryable = false,
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = "ApiInputError";
@@ -443,6 +561,161 @@ function artifacts(
   return (
     options.artifactStore ?? new D1ArtifactStore(requiredDatabase(context))
   );
+}
+
+function ownerCapabilitiesEnabled(options: ApiOptions): boolean {
+  return (
+    options.ownerCapabilityRepository !== undefined ||
+    options.sessionRepository === undefined
+  );
+}
+
+function ownerCapabilities(
+  context: Context<AppBindings>,
+  options: ApiOptions,
+): OwnerCapabilityRepository {
+  return (
+    options.ownerCapabilityRepository ??
+    new D1OwnerCapabilityRepository(requiredDatabase(context))
+  );
+}
+
+function bearerOwnerCapability(
+  context: Context<AppBindings>,
+): string | undefined {
+  const authorization = context.req.header("authorization") ?? "";
+  return authorization.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length)
+    : undefined;
+}
+
+function sessionOwnerCookieName(sessionId: string): string {
+  return `counterlab_owner_${sessionId.replace(/[^A-Za-z0-9_-]/gu, "_")}`;
+}
+
+function sessionOwnerCookie(
+  context: Context<AppBindings>,
+  sessionId: string,
+): string | undefined {
+  const expected = `${sessionOwnerCookieName(sessionId)}=`;
+  for (const part of (context.req.header("cookie") ?? "").split(";")) {
+    const candidate = part.trim();
+    if (candidate.startsWith(expected)) {
+      return candidate.slice(expected.length);
+    }
+  }
+  return undefined;
+}
+
+function setSessionOwnerCookie(
+  context: Context<AppBindings>,
+  sessionId: string,
+  token: string,
+): void {
+  context.header(
+    "set-cookie",
+    `${sessionOwnerCookieName(sessionId)}=${token}; Path=/api/sessions/${encodeURIComponent(sessionId)}; HttpOnly; Secure; SameSite=Strict`,
+  );
+}
+
+function clearSessionOwnerCookie(
+  context: Context<AppBindings>,
+  sessionId: string,
+): void {
+  context.header(
+    "set-cookie",
+    `${sessionOwnerCookieName(sessionId)}=; Path=/api/sessions/${encodeURIComponent(sessionId)}; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
+  );
+}
+
+async function issueArtifactOwnerCapability(
+  context: Context<AppBindings>,
+  options: ApiOptions,
+  artifactId: string,
+  createdAt: string,
+): Promise<string | undefined> {
+  if (!ownerCapabilitiesEnabled(options)) return undefined;
+  const token = createOwnerCapability();
+  await ownerCapabilities(context, options).createArtifact({
+    resourceId: artifactId,
+    tokenHash: await hashOwnerCapability(token),
+    createdAt,
+  });
+  return token;
+}
+
+async function requireArtifactOwnerCapability(
+  context: Context<AppBindings>,
+  options: ApiOptions,
+  artifactId: string,
+  token: string | undefined,
+): Promise<void> {
+  if (!ownerCapabilitiesEnabled(options)) return;
+  const tokenHash =
+    token === undefined ? undefined : await hashOwnerCapability(token);
+  const record =
+    tokenHash === undefined
+      ? undefined
+      : await ownerCapabilities(context, options).findArtifact(
+          artifactId,
+          tokenHash,
+        );
+  if (token === undefined || !(await ownerCapabilityMatches(record, token))) {
+    throw new ApiInputError(
+      "ARTIFACT_ACCESS_DENIED",
+      "The requested private artifact is unavailable",
+      404,
+    );
+  }
+}
+
+async function issueSessionOwnerCapability(
+  context: Context<AppBindings>,
+  options: ApiOptions,
+  sessionId: string,
+  createdAt: string,
+): Promise<string | undefined> {
+  if (!ownerCapabilitiesEnabled(options)) return undefined;
+  const token = createOwnerCapability();
+  await ownerCapabilities(context, options).createSession({
+    resourceId: sessionId,
+    tokenHash: await hashOwnerCapability(token),
+    createdAt,
+  });
+  return token;
+}
+
+async function requireSessionOwnerCapability(
+  context: Context<AppBindings>,
+  options: ApiOptions,
+): Promise<void> {
+  if (!ownerCapabilitiesEnabled(options)) return;
+  const sessionId = context.req.param("sessionId");
+  if (sessionId === undefined) {
+    throw new ApiInputError(
+      "SESSION_ACCESS_DENIED",
+      "The requested private session is unavailable",
+      404,
+    );
+  }
+  const token =
+    bearerOwnerCapability(context) ?? sessionOwnerCookie(context, sessionId);
+  const record = await ownerCapabilities(context, options).findSession(
+    sessionId,
+  );
+  const activeCapability = await ownerCapabilityMatches(record, token);
+  const revocationRetry =
+    new URL(context.req.url).pathname.endsWith("/access/revoke") &&
+    record?.revokedAt !== undefined &&
+    (await ownerCapabilityIdentifies(record, token));
+  if (token === undefined || (!activeCapability && !revocationRetry)) {
+    throw new ApiInputError(
+      "SESSION_ACCESS_DENIED",
+      "The requested private session is unavailable",
+      404,
+    );
+  }
+  if (activeCapability) setSessionOwnerCookie(context, sessionId, token);
 }
 
 function runnerJobService(
@@ -503,7 +776,7 @@ function interactionConcept(
   );
 }
 
-async function loadHostedProofCapsuleReplay(
+async function loadHostedPublicReplayProjection(
   context: Context<AppBindings>,
   options: ApiOptions,
   replayId: string,
@@ -523,28 +796,48 @@ async function loadHostedProofCapsuleReplay(
       404,
     );
   }
-  const expectedReference = ProofCapsuleRefV2Schema.parse({
-    ...record.metadata.proofCapsule,
-    objectKey: record.objectKey,
-  });
   const persisted = await requireFrozenAuthorityObject(
     runnerObjectStore(context, options),
-    record.objectKey,
-    "Proof Capsule replay",
+    record.projectionObjectKey,
+    "public replay projection",
   );
-  const validated = await validatePersistedNativeProofCapsule({
-    ...persisted,
-    expectedReference,
-    ...(context.env?.COUNTERLAB_SIGNING_KEY === undefined
-      ? {}
-      : { signingKey: context.env.COUNTERLAB_SIGNING_KEY }),
-    ...(context.env?.COUNTERLAB_SIGNING_KEY_ID === undefined
-      ? {}
-      : { signingKeyId: context.env.COUNTERLAB_SIGNING_KEY_ID }),
-  });
   if (
-    validated.manifest.concept !== record.metadata.concept ||
-    validated.manifest.sessionId !== record.sourceSessionId
+    persisted.contentType !== "application/vnd.counterlab.public-replay+json" ||
+    (await sha256Text(persisted.body)) !== record.projectionBytesHash
+  ) {
+    throw new ApiInputError(
+      "REPLAY_AUTHORITY_MISMATCH",
+      "The frozen public replay bytes do not match their publication record",
+      409,
+    );
+  }
+  const parsed = PublicReplayProjectionV1Schema.parse(
+    parseFrozenAuthorityJson(persisted, "public replay projection"),
+  );
+  let replay;
+  try {
+    const integrity = parsed.authority.projectionIntegrity;
+    replay = validatePublicReplayProjectionV1(parsed, {
+      ...(integrity.mode === "hmac-signed" &&
+      context.env?.COUNTERLAB_SIGNING_KEY_ID === integrity.keyId &&
+      context.env.COUNTERLAB_SIGNING_KEY !== undefined
+        ? {
+            signingKeys: {
+              [integrity.keyId]: context.env.COUNTERLAB_SIGNING_KEY,
+            },
+          }
+        : {}),
+    });
+  } catch {
+    throw new ApiInputError(
+      "REPLAY_AUTHORITY_MISMATCH",
+      "The frozen public replay failed integrity validation",
+      409,
+    );
+  }
+  if (
+    replay.replayId !== record.replayId ||
+    replay.authority.projectionHash !== record.projectionHash
   ) {
     throw new ApiInputError(
       "REPLAY_AUTHORITY_MISMATCH",
@@ -552,7 +845,7 @@ async function loadHostedProofCapsuleReplay(
       409,
     );
   }
-  return { record, persisted, validated };
+  return { record, replay };
 }
 
 function runnerDispatcher(
@@ -616,8 +909,226 @@ function requestNow(options: ApiOptions): Date {
   return options.now?.() ?? new Date();
 }
 
+function releaseIdentity(context: Context<AppBindings>):
+  | {
+      status: "bound";
+      workerVersionId: string;
+      workerVersionTag: string;
+      workerEvidenceCommit: string;
+      runnerSourceCommit: string;
+      runnerImageDigest: string;
+    }
+  | { status: "unbound" } {
+  const workerEvidenceCommit =
+    context.env?.COUNTERLAB_WORKER_EVIDENCE_COMMIT ?? "";
+  const runnerSourceCommit = context.env?.COUNTERLAB_RUNNER_SOURCE_COMMIT ?? "";
+  const runnerImageDigest = context.env?.COUNTERLAB_RUNNER_IMAGE_DIGEST ?? "";
+  const workerVersionId = context.env?.CF_VERSION_METADATA?.id ?? "";
+  const workerVersionTag = context.env?.CF_VERSION_METADATA?.tag ?? "";
+  if (
+    !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u.test(
+      workerVersionId,
+    ) ||
+    !/^[a-f0-9]{40}$/u.test(workerEvidenceCommit) ||
+    !/^[a-f0-9]{40}$/u.test(runnerSourceCommit) ||
+    !/^sha256:[a-f0-9]{64}$/u.test(runnerImageDigest) ||
+    workerVersionTag !== `git-${workerEvidenceCommit}`
+  ) {
+    return { status: "unbound" };
+  }
+  return {
+    status: "bound",
+    workerVersionId,
+    workerVersionTag,
+    workerEvidenceCommit,
+    runnerSourceCommit,
+    runnerImageDigest,
+  };
+}
+
+function maintenanceEnabled(context: Context<AppBindings>): boolean {
+  return context.env?.COUNTERLAB_MAINTENANCE_MODE === "true";
+}
+
 function requestId(options: ApiOptions, prefix: string): string {
   return options.id?.(prefix) ?? `${prefix}_${crypto.randomUUID()}`;
+}
+
+type AdmissionGrant = Extract<AdmissionDecision, { admitted: true }>;
+
+function admissionEnabled(options: ApiOptions): boolean {
+  return (
+    options.admissionControl !== undefined ||
+    (options.sessionRepository === undefined &&
+      options.artifactStore === undefined &&
+      options.runnerJobRepository === undefined &&
+      options.runnerObjectStore === undefined)
+  );
+}
+
+function admissionConfigured(
+  context: Context<AppBindings>,
+  options: ApiOptions,
+): boolean {
+  if (!admissionEnabled(options)) return true;
+  const key =
+    options.admissionHmacKey ?? context.env?.COUNTERLAB_ADMISSION_KEY ?? "";
+  return (
+    key.trim().length >= 32 &&
+    (options.admissionControl !== undefined ||
+      context.env?.ADMISSION !== undefined)
+  );
+}
+
+function admissionHmacSecret(
+  context: Context<AppBindings>,
+  options: ApiOptions,
+): string {
+  const secret =
+    options.admissionHmacKey ?? context.env?.COUNTERLAB_ADMISSION_KEY ?? "";
+  if (secret.trim().length < 32) {
+    throw new ApiInputError(
+      "ADMISSION_UNAVAILABLE",
+      "CounterLab cost admission is not configured for this runtime",
+      503,
+      true,
+    );
+  }
+  return secret;
+}
+
+function admissionCoordinator(
+  context: Context<AppBindings>,
+  options: ApiOptions,
+): AdmissionControl {
+  if (options.admissionControl !== undefined) return options.admissionControl;
+  if (context.env?.ADMISSION === undefined) {
+    throw new ApiInputError(
+      "ADMISSION_UNAVAILABLE",
+      "CounterLab cost admission is not configured for this runtime",
+      503,
+      true,
+    );
+  }
+  return new DurableObjectAdmissionControl(context.env.ADMISSION);
+}
+
+function admissionDenialMessage(reason: string): string {
+  if (reason === "CALLER_BUDGET") {
+    return "This browser has started too many costly operations in the current recovery window";
+  }
+  if (reason === "SESSION_BUDGET") {
+    return "This learning session has reached its costly-operation recovery limit";
+  }
+  if (reason === "GLOBAL_BUSY") {
+    return "CounterLab is at its verified live-work capacity; retry after the recovery window";
+  }
+  if (reason === "GLOBAL_BUDGET") {
+    return "CounterLab has reached its global live-work safety budget; retry after the recovery window";
+  }
+  return "The admission operation identity conflicts with an existing request";
+}
+
+async function admitOperation(
+  context: Context<AppBindings>,
+  options: ApiOptions,
+  input: {
+    kind: AdmissionKind;
+    operationKey: string;
+    sessionId?: string;
+  },
+): Promise<AdmissionGrant> {
+  if (!admissionEnabled(options)) {
+    return { admitted: true, reused: false, leaseStatus: "none" };
+  }
+  const secret = admissionHmacSecret(context, options);
+  const caller =
+    options.admissionCaller?.(context.req.raw) ??
+    trustedAdmissionCaller(context.req.raw);
+  const [callerKey, sessionKey, operationKey] = await Promise.all([
+    hmacAdmissionKey(secret, "caller", caller),
+    input.sessionId === undefined
+      ? Promise.resolve(undefined)
+      : hmacAdmissionKey(secret, "session", input.sessionId),
+    hmacAdmissionKey(
+      secret,
+      "operation",
+      `${input.kind}\u0000${input.operationKey}`,
+    ),
+  ]);
+  const decision = await admissionCoordinator(context, options).admit({
+    policyVersion: ADMISSION_POLICY_VERSION,
+    kind: input.kind,
+    operationKey,
+    callerKey,
+    ...(sessionKey === undefined ? {} : { sessionKey }),
+  });
+  if (!decision.admitted) {
+    const collision = decision.reason === "OPERATION_COLLISION";
+    throw new ApiInputError(
+      collision ? "ADMISSION_OPERATION_CONFLICT" : decision.reason,
+      admissionDenialMessage(decision.reason),
+      collision ? 409 : 429,
+      !collision,
+      collision ? undefined : decision.retryAfterSeconds,
+    );
+  }
+  return decision;
+}
+
+async function releaseAdmissionBestEffort(
+  context: Context<AppBindings>,
+  options: ApiOptions,
+  kind: AdmissionKind,
+  rawOperationKey: string | undefined,
+): Promise<void> {
+  if (!admissionEnabled(options) || rawOperationKey === undefined) return;
+  try {
+    const operationKey = await hmacAdmissionKey(
+      admissionHmacSecret(context, options),
+      "operation",
+      `${kind}\u0000${rawOperationKey}`,
+    );
+    await admissionCoordinator(context, options).release({
+      policyVersion: ADMISSION_POLICY_VERSION,
+      kind,
+      operationKey,
+    });
+  } catch (error) {
+    console.warn("CounterLab could not release an expiring admission lease", {
+      requestId: context.get("requestId"),
+      kind,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+    });
+  }
+}
+
+function runnerAdmissionOperationKey(job: RunnerJob): string {
+  if (job.requestFingerprint === undefined) {
+    throw new ApiInputError(
+      "RUNNER_IDEMPOTENCY_REQUIRED",
+      "Live runner work requires a semantic request fingerprint",
+      409,
+    );
+  }
+  return job.requestFingerprint;
+}
+
+function requestIdempotencyKey(
+  context: Context<AppBindings>,
+  options: ApiOptions,
+  prefix: string,
+): string {
+  const provided = context.req.header("idempotency-key");
+  if (provided === undefined) return requestId(options, prefix);
+  if (!/^[A-Za-z0-9._:-]{16,128}$/u.test(provided)) {
+    throw new ApiInputError(
+      "INVALID_IDEMPOTENCY_KEY",
+      "Idempotency-Key must contain 16 to 128 safe ASCII characters",
+      400,
+    );
+  }
+  return provided;
 }
 
 function liveRunnerRequestIdentity(
@@ -686,6 +1197,13 @@ async function dispatchRecoverableRunnerJob(input: {
     },
     runnerSigningPrivateKey(input.context, input.options),
   );
+  const admissionOperationKey = runnerAdmissionOperationKey(dispatchJob);
+  const admission = await admitOperation(input.context, input.options, {
+    kind: "runner",
+    sessionId: dispatchJob.sessionId,
+    operationKey: admissionOperationKey,
+  });
+  if (admission.leaseStatus === "already-active") return dispatchJob;
   try {
     await input.dispatcher.dispatch({
       job: dispatchJob,
@@ -702,10 +1220,16 @@ async function dispatchRecoverableRunnerJob(input: {
       return input.jobs.getJob(dispatchJob.jobId);
     }
   } catch (dispatchError) {
+    await releaseAdmissionBestEffort(
+      input.context,
+      input.options,
+      "runner",
+      admissionOperationKey,
+    );
     const failure = {
       code: "RUNNER_DISPATCH_FAILED",
       message:
-        "The process runner did not acknowledge this job; retrying will create a fresh isolated job",
+        "The process runner did not acknowledge this job; retrying will create a fresh separate job",
       retryable: true,
     } as const;
     try {
@@ -3204,10 +3728,14 @@ export function createApi(options: ApiOptions = {}) {
         privateStorage = false;
       }
     }
+    const release = releaseIdentity(context);
     const checks = {
+      admission: admissionConfigured(context, options),
       analyst: (context.env?.OPENAI_API_KEY?.trim().length ?? 0) > 0,
+      maintenance: !maintenanceEnabled(context),
       persistence,
       privateStorage,
+      releaseIdentity: release.status === "bound" || !admissionEnabled(options),
       runner: dispatcher === undefined ? false : await dispatcher.ready(),
       signing,
     };
@@ -3219,6 +3747,8 @@ export function createApi(options: ApiOptions = {}) {
         status: ready ? ("ready" as const) : ("not-ready" as const),
         service: "counterlab-control-plane" as const,
         checks,
+        maintenance: maintenanceEnabled(context),
+        release,
       },
       ready ? 200 : 503,
     );
@@ -3235,11 +3765,36 @@ export function createApi(options: ApiOptions = {}) {
     context.header("referrer-policy", "no-referrer");
     context.header("x-content-type-options", "nosniff");
     context.header("x-frame-options", "DENY");
+    if (
+      maintenanceEnabled(context) &&
+      new URL(context.req.url).pathname !== "/api/health"
+    ) {
+      return context.json(
+        jsonError(
+          "RELEASE_MAINTENANCE",
+          "CounterLab is applying a bounded release migration. Retry shortly.",
+          503,
+          true,
+        ),
+        503,
+      );
+    }
+    await next();
+  });
+
+  app.use("/api/sessions/:sessionId", async (context, next) => {
+    await requireSessionOwnerCapability(context, options);
+    await next();
+  });
+
+  app.use("/api/sessions/:sessionId/*", async (context, next) => {
+    await requireSessionOwnerCapability(context, options);
     await next();
   });
 
   app.get("/api/health", (context) => {
     const runner = runnerCapability(context, options);
+    const release = releaseIdentity(context);
     return context.json(
       jsonSuccess({
         platform: "cloudflare-workers" as const,
@@ -3250,7 +3805,13 @@ export function createApi(options: ApiOptions = {}) {
           : ("server-key-required" as const),
         liveCodex: runner,
         liveKernel: runner,
-        sandbox: runner,
+        maintenance: maintenanceEnabled(context),
+        release,
+        sandbox:
+          runner === "configured"
+            ? ("credential-and-privilege-boundary" as const)
+            : ("local-runner-required" as const),
+        generationFilesystemReadIsolation: "PARTIAL" as const,
         requestId: context.get("requestId"),
       }),
     );
@@ -3294,7 +3855,8 @@ export function createApi(options: ApiOptions = {}) {
   });
 
   app.post("/api/artifacts", async (context) => {
-    const type = (context.req.header("content-type") ?? "").split(";", 1)[0];
+    const rawContentType = context.req.header("content-type") ?? "";
+    const type = rawContentType.split(";", 1)[0];
     if (type === "application/json") {
       CreateArtifactSchema.parse(await readJson(context));
       const stored = await artifacts(context, options).save(sampleManifest);
@@ -3307,16 +3869,77 @@ export function createApi(options: ApiOptions = {}) {
         415,
       );
     }
-    const declared = contentLength(context);
     const maxBytes = maxNotebookBytes(context);
-    if (declared !== undefined && declared > maxBytes + 65_536) {
+    const boundaryMatch = /(?:^|;)\s*boundary=(?:"([^"]+)"|([^;\s]+))/iu.exec(
+      rawContentType,
+    );
+    const boundary = boundaryMatch?.[1] ?? boundaryMatch?.[2];
+    if (
+      boundary === undefined ||
+      boundary.length === 0 ||
+      boundary.length > MAX_MULTIPART_BOUNDARY_CHARACTERS ||
+      /[^\x20-\x7e]/u.test(boundary)
+    ) {
       throw new ApiInputError(
-        "MAXIMUM_SIZE_EXCEEDED",
-        `Notebook upload exceeds ${maxBytes} bytes`,
-        413,
+        "INVALID_MULTIPART_BOUNDARY",
+        "Multipart uploads require one bounded ASCII boundary",
+        400,
       );
     }
-    const form = await context.req.formData();
+    const uploadAdmission = await admitOperation(context, options, {
+      kind: "upload",
+      operationKey: requestIdempotencyKey(context, options, "artifact_upload"),
+    });
+    if (uploadAdmission.reused) {
+      throw new ApiInputError(
+        "UPLOAD_OPERATION_ALREADY_USED",
+        "This notebook upload key was already used. Start a fresh upload with a new operation key.",
+        409,
+      );
+    }
+    let bodyBytes: Uint8Array;
+    try {
+      bodyBytes = await readBoundedBody(
+        context,
+        maxBytes + MAX_MULTIPART_OVERHEAD_BYTES,
+      );
+    } catch (error) {
+      if (
+        error instanceof ApiInputError &&
+        error.code === "REQUEST_TOO_LARGE"
+      ) {
+        throw new ApiInputError(
+          "MAXIMUM_SIZE_EXCEEDED",
+          `Notebook upload exceeds ${maxBytes} bytes plus the permitted multipart envelope`,
+          413,
+        );
+      }
+      throw error;
+    }
+    let form: FormData;
+    try {
+      form = await new Response(bodyBytes, {
+        headers: { "content-type": rawContentType },
+      }).formData();
+    } catch {
+      throw new ApiInputError(
+        "INVALID_MULTIPART_BODY",
+        "The multipart notebook upload could not be parsed",
+        400,
+      );
+    }
+    const entries = [...form.entries()];
+    if (
+      entries.length !== 1 ||
+      entries[0]?.[0] !== "file" ||
+      !isFile(entries[0]?.[1] ?? null)
+    ) {
+      throw new ApiInputError(
+        "INVALID_UPLOAD_FIELDS",
+        "A notebook upload must contain exactly one file field",
+        400,
+      );
+    }
     const file = form.get("file");
     if (!isFile(file)) {
       throw new ApiInputError(
@@ -3330,6 +3953,13 @@ export function createApi(options: ApiOptions = {}) {
         "INVALID_EXTENSION",
         "Only .ipynb notebook files are accepted",
         415,
+      );
+    }
+    if (file.name.length > MAX_UPLOAD_FILE_NAME_CHARACTERS) {
+      throw new ApiInputError(
+        "FILE_NAME_TOO_LONG",
+        `Notebook file names may contain at most ${MAX_UPLOAD_FILE_NAME_CHARACTERS} characters`,
+        400,
       );
     }
     if (file.type.length > 0 && !ACCEPTED_NOTEBOOK_TYPES.has(file.type)) {
@@ -3366,10 +3996,29 @@ export function createApi(options: ApiOptions = {}) {
       customMetadata: { artifactId: manifest.artifactId },
     });
     await artifacts(context, options).save(manifest, objectKey);
-    return context.json(jsonSuccess(manifest), 201);
+    const ownerCapability = await issueArtifactOwnerCapability(
+      context,
+      options,
+      manifest.artifactId,
+      manifest.createdAt,
+    );
+    return context.json(
+      jsonSuccess({
+        ...manifest,
+        ...(ownerCapability === undefined ? {} : { ownerCapability }),
+      }),
+      201,
+    );
   });
 
   app.get("/api/artifacts/:artifactId", async (context) => {
+    if (ownerCapabilitiesEnabled(options)) {
+      throw new ApiInputError(
+        "PRIVATE_ARTIFACT_ROUTE_DISABLED",
+        "Private artifact evidence is available only through its owner session",
+        404,
+      );
+    }
     const artifact = await artifacts(context, options).find(
       context.req.param("artifactId"),
     );
@@ -3390,11 +4039,32 @@ export function createApi(options: ApiOptions = {}) {
       artifactId: artifact.manifest.artifactId,
       mode: { kind: "sample_lesson", sampleId: input.sampleId },
     });
-    return context.json(jsonSuccess(statePayload(session)), 201);
+    const ownerCapability = await issueSessionOwnerCapability(
+      context,
+      options,
+      session.id,
+      session.createdAt,
+    );
+    if (ownerCapability !== undefined) {
+      setSessionOwnerCookie(context, session.id, ownerCapability);
+    }
+    return context.json(
+      jsonSuccess({
+        ...statePayload(session),
+        ...(ownerCapability === undefined ? {} : { ownerCapability }),
+      }),
+      201,
+    );
   });
 
   app.post("/api/live/sessions", async (context) => {
     const input = CreateLiveSessionSchema.parse(await readJson(context));
+    await requireArtifactOwnerCapability(
+      context,
+      options,
+      input.artifactId,
+      input.artifactCapability,
+    );
     const artifact = await artifacts(context, options).find(input.artifactId);
     if (artifact === undefined) {
       throw new ApiInputError(
@@ -3414,7 +4084,22 @@ export function createApi(options: ApiOptions = {}) {
       artifactId: input.artifactId,
       mode: { kind: "live_notebook" },
     });
-    return context.json(jsonSuccess(statePayload(session)), 201);
+    const ownerCapability = await issueSessionOwnerCapability(
+      context,
+      options,
+      session.id,
+      session.createdAt,
+    );
+    if (ownerCapability !== undefined) {
+      setSessionOwnerCookie(context, session.id, ownerCapability);
+    }
+    return context.json(
+      jsonSuccess({
+        ...statePayload(session),
+        ...(ownerCapability === undefined ? {} : { ownerCapability }),
+      }),
+      201,
+    );
   });
 
   app.post("/api/replay/sessions", async (context) => {
@@ -3424,7 +4109,22 @@ export function createApi(options: ApiOptions = {}) {
       artifactId: artifact.manifest.artifactId,
       mode: { kind: "verified_replay", replayId: input.replayId },
     });
-    return context.json(jsonSuccess(statePayload(session)), 201);
+    const ownerCapability = await issueSessionOwnerCapability(
+      context,
+      options,
+      session.id,
+      session.createdAt,
+    );
+    if (ownerCapability !== undefined) {
+      setSessionOwnerCookie(context, session.id, ownerCapability);
+    }
+    return context.json(
+      jsonSuccess({
+        ...statePayload(session),
+        ...(ownerCapability === undefined ? {} : { ownerCapability }),
+      }),
+      201,
+    );
   });
 
   app.get("/api/sessions/:sessionId", async (context) => {
@@ -3432,6 +4132,65 @@ export function createApi(options: ApiOptions = {}) {
       context.req.param("sessionId"),
     );
     return context.json(jsonSuccess(statePayload(session)));
+  });
+
+  app.get("/api/sessions/:sessionId/artifact", async (context) => {
+    const session = await sessionService(context, options).getSession(
+      context.req.param("sessionId"),
+    );
+    const artifact = await artifacts(context, options).find(session.artifactId);
+    if (artifact === undefined) {
+      throw new ApiInputError(
+        "ARTIFACT_NOT_FOUND",
+        "The session artifact was not found",
+        404,
+      );
+    }
+    return context.json(jsonSuccess(artifact.manifest));
+  });
+
+  app.post("/api/sessions/:sessionId/access/revoke", async (context) => {
+    const sessionId = context.req.param("sessionId");
+    await sessionService(context, options).getSession(sessionId);
+    if (!ownerCapabilitiesEnabled(options)) {
+      return context.json(jsonSuccess({ revoked: false as const }));
+    }
+    const currentCapability = await ownerCapabilities(
+      context,
+      options,
+    ).findSession(sessionId);
+    if (currentCapability?.revokedAt === undefined) {
+      const activeJobs = await runnerJobService(
+        context,
+        options,
+      ).listActiveForSession(sessionId);
+      if (activeJobs.length > 0) {
+        throw new ApiInputError(
+          "SESSION_ACCESS_REVOCATION_BLOCKED",
+          "Cancel the active test before revoking private session access",
+          409,
+        );
+      }
+    }
+    const revoked = await ownerCapabilities(context, options).revokeSession(
+      sessionId,
+      requestNow(options).toISOString(),
+    );
+    if (!revoked) {
+      const latestCapability = await ownerCapabilities(
+        context,
+        options,
+      ).findSession(sessionId);
+      if (latestCapability?.revokedAt === undefined) {
+        throw new ApiInputError(
+          "SESSION_ACCESS_REVOCATION_BLOCKED",
+          "Private access changed while an active test was starting; cancel it and retry",
+          409,
+        );
+      }
+    }
+    clearSessionOwnerCookie(context, sessionId);
+    return context.json(jsonSuccess({ revoked }));
   });
 
   app.post("/api/sessions/:sessionId/belief-test/preview", async (context) => {
@@ -3486,7 +4245,6 @@ export function createApi(options: ApiOptions = {}) {
       manifest: artifact.manifest,
       concept: routing.concept,
     });
-    const serialized = JSON.stringify(sanitizedContent);
     return context.json(
       jsonSuccess({
         schemaVersion: "1" as const,
@@ -3494,8 +4252,7 @@ export function createApi(options: ApiOptions = {}) {
         conceptTitle: getConceptPack(routing.concept).title,
         previewHash: await hashCanonical(sanitizedContent),
         requiresSensitiveApproval:
-          serialized.includes("[REDACTED_SECRET]") ||
-          serialized.includes("[REDACTED_PATH]"),
+          sanitizedContent.privacy.redactions.length > 0,
         sanitizedContent,
       }),
     );
@@ -3595,10 +4352,8 @@ export function createApi(options: ApiOptions = {}) {
           409,
         );
       }
-      const serialized = JSON.stringify(sanitizedContent);
       const containsSensitiveRedaction =
-        serialized.includes("[REDACTED_SECRET]") ||
-        serialized.includes("[REDACTED_PATH]");
+        sanitizedContent.privacy.redactions.length > 0;
       if (
         containsSensitiveRedaction &&
         input.sensitiveContentApproved !== true
@@ -3610,29 +4365,62 @@ export function createApi(options: ApiOptions = {}) {
         );
       }
 
-      const analyst = createLiveBeliefAnalystFromEnv({
-        OPENAI_API_KEY: context.env?.OPENAI_API_KEY,
-        OPENAI_BASE_URL: context.env?.OPENAI_BASE_URL,
-        OPENAI_MODEL: context.env?.OPENAI_MODEL,
-        OPENAI_REASONING_EFFORT: context.env?.OPENAI_REASONING_EFFORT,
-        OPENAI_TIMEOUT_MS: context.env?.OPENAI_TIMEOUT_MS,
-      });
-      const result = await analyst.proposeBeliefSpec({
+      const analystOperationKey = `${session.id}:${expectedPreviewHash}`;
+      const analystAdmission = await admitOperation(context, options, {
+        kind: "analyst",
         sessionId: session.id,
-        learnerClaim,
-        manifest: artifact.manifest,
-        concept: routing.concept,
+        operationKey: analystOperationKey,
       });
-      const proposed = await service.proposeBeliefSpecV2(
-        session.id,
-        result.beliefSpec,
-        {
-          actor: "gpt-5.6",
-          modelId: result.provenance.modelId,
-          promptHash: result.provenance.promptHash,
-        },
-      );
-      return context.json(jsonSuccess(statePayload(proposed)));
+      if (analystAdmission.leaseStatus === "already-active") {
+        const retryAfterSeconds = Math.max(
+          1,
+          Math.ceil(
+            ((analystAdmission.leaseExpiresAt ??
+              requestNow(options).getTime() + 1_000) -
+              requestNow(options).getTime()) /
+              1_000,
+          ),
+        );
+        throw new ApiInputError(
+          "ANALYST_IN_PROGRESS",
+          "The same sanitized analyst request is already in progress",
+          409,
+          true,
+          retryAfterSeconds,
+        );
+      }
+      try {
+        const analyst = createLiveBeliefAnalystFromEnv({
+          OPENAI_API_KEY: context.env?.OPENAI_API_KEY,
+          OPENAI_BASE_URL: context.env?.OPENAI_BASE_URL,
+          OPENAI_MODEL: context.env?.OPENAI_MODEL,
+          OPENAI_REASONING_EFFORT: context.env?.OPENAI_REASONING_EFFORT,
+          OPENAI_TIMEOUT_MS: context.env?.OPENAI_TIMEOUT_MS,
+        });
+        const result = await analyst.proposeBeliefSpec({
+          sessionId: session.id,
+          learnerClaim,
+          manifest: artifact.manifest,
+          concept: routing.concept,
+        });
+        const proposed = await service.proposeBeliefSpecV2(
+          session.id,
+          result.beliefSpec,
+          {
+            actor: "gpt-5.6",
+            modelId: result.provenance.modelId,
+            promptHash: result.provenance.promptHash,
+          },
+        );
+        return context.json(jsonSuccess(statePayload(proposed)));
+      } finally {
+        await releaseAdmissionBestEffort(
+          context,
+          options,
+          "analyst",
+          analystOperationKey,
+        );
+      }
     }
 
     const analyst = new ApprovedSampleBeliefAnalyst();
@@ -4994,6 +5782,12 @@ export function createApi(options: ApiOptions = {}) {
     }
     const job = await jobs.expireIfTimedOut(jobId);
     if (job.status === "TIMED_OUT") {
+      await releaseAdmissionBestEffort(
+        context,
+        options,
+        "runner",
+        job.requestFingerprint,
+      );
       const service = sessionService(context, options);
       const current = await service.getSession(sessionId);
       if (job.kind === "LAB_COMPILE" && current.state === "LAB_COMPILING") {
@@ -5077,6 +5871,12 @@ export function createApi(options: ApiOptions = {}) {
       return latest;
     };
     if (job.status === "CANCELLED") {
+      await releaseAdmissionBestEffort(
+        context,
+        options,
+        "runner",
+        job.requestFingerprint,
+      );
       const projectedSession = await projectCancellation();
       return context.json(
         jsonSuccess({
@@ -5088,6 +5888,12 @@ export function createApi(options: ApiOptions = {}) {
       );
     }
     if (["VERIFIED", "REJECTED", "FAILED", "TIMED_OUT"].includes(job.status)) {
+      await releaseAdmissionBestEffort(
+        context,
+        options,
+        "runner",
+        job.requestFingerprint,
+      );
       throw new ApiInputError(
         "RUNNER_JOB_NOT_ACTIVE",
         `Runner job is already terminal with status ${job.status}`,
@@ -5124,6 +5930,12 @@ export function createApi(options: ApiOptions = {}) {
       runnerSigningPrivateKey(context, options),
     );
     const cancelled = await jobs.cancelJob(jobId);
+    await releaseAdmissionBestEffort(
+      context,
+      options,
+      "runner",
+      cancelled.requestFingerprint,
+    );
     const updatedSession = await projectCancellation();
     let runnerAcknowledged = true;
     try {
@@ -6024,6 +6836,12 @@ export function createApi(options: ApiOptions = {}) {
 
     const completed = await runnerJobService(context, options).recordCallback(
       terminalCallback,
+    );
+    await releaseAdmissionBestEffort(
+      context,
+      options,
+      "runner",
+      completed.job.requestFingerprint,
     );
     let updatedSession = await service.getSession(job.sessionId);
     if (
@@ -8480,7 +9298,7 @@ export function createApi(options: ApiOptions = {}) {
         : { signingKeyId: context.env.COUNTERLAB_SIGNING_KEY_ID }),
     });
     const { objectKey, ...publicCapsule } = session.proofCapsule;
-    const replayId = requestId(options, "replay");
+    const replayId = `replay-${session.proofCapsule.rootHash.slice(0, 40)}`;
     const receipt = ProofCapsuleReplayReceiptV2Schema.parse({
       schemaVersion: "2",
       replayId,
@@ -8497,6 +9315,39 @@ export function createApi(options: ApiOptions = {}) {
       eventChainHead: session.proofCapsule.eventChainHead,
       proofCapsule: publicCapsule,
     });
+    const exactReplay = await projectProofCapsuleReplayV2(validated, receipt, {
+      ...(validated.manifest.authority.boundary.receipt.integrity.mode ===
+        "hmac-signed" && context.env?.COUNTERLAB_SIGNING_KEY !== undefined
+        ? {
+            boundarySigningKeys: {
+              [validated.manifest.authority.boundary.receipt.integrity.keyId]:
+                context.env.COUNTERLAB_SIGNING_KEY,
+            },
+          }
+        : {}),
+    });
+    const publicReplay = createPublicReplayProjectionV1(exactReplay, {
+      ...(context.env?.COUNTERLAB_SIGNING_KEY === undefined ||
+      context.env?.COUNTERLAB_SIGNING_KEY_ID === undefined
+        ? {}
+        : {
+            signing: {
+              keyId: context.env.COUNTERLAB_SIGNING_KEY_ID,
+              signingKey: context.env.COUNTERLAB_SIGNING_KEY,
+            },
+          }),
+    });
+    const projectionBody = canonicalJsonV1(publicReplay);
+    const projectionBytesHash = await sha256Text(projectionBody);
+    const projectionObjectKey =
+      `public-replays/${publicReplay.replayId}/` +
+      `${projectionBytesHash}.json`;
+    await persistRunnerAuthorityBytes({
+      store: runnerObjectStore(context, options),
+      key: projectionObjectKey,
+      body: projectionBody,
+      contentType: "application/vnd.counterlab.public-replay+json",
+    });
     const publication = await proofCapsuleReplays(
       context,
       options,
@@ -8506,15 +9357,79 @@ export function createApi(options: ApiOptions = {}) {
       sourceSessionId: session.id,
       capsuleId: session.proofCapsule.capsuleId,
       objectKey,
+      projectionObjectKey,
+      projectionHash: publicReplay.authority.projectionHash,
+      projectionBytesHash,
       recordedAt: session.proofCapsule.createdAt,
       metadata: receipt,
+    });
+    const publicReceipt = PublicReplayPublicationReceiptV1Schema.parse({
+      schemaVersion: "1",
+      replayId: publicReplay.replayId,
+      replay: true,
+      label: "Verified replay",
+      concept: publicReplay.concept,
+      recordedAt: publicReplay.recordedAt,
+      retention: {
+        policy: "available_until_revoked",
+        revocable: true,
+      },
     });
     return context.json(
       jsonSuccess({
         reused: publication.reused,
-        replay: publication.record.metadata,
+        replay: publicReceipt,
       }),
       publication.reused ? 200 : 201,
+    );
+  });
+
+  app.get("/api/sessions/:sessionId/replays/status", async (context) => {
+    const publication = await proofCapsuleReplays(
+      context,
+      options,
+    ).statusBySourceSession(context.req.param("sessionId"));
+    if (publication === undefined) {
+      return context.json(jsonSuccess({ status: "never_published" as const }));
+    }
+    const replay = PublicReplayPublicationReceiptV1Schema.parse({
+      schemaVersion: "1",
+      replayId: publication.record.replayId,
+      replay: true,
+      label: "Verified replay",
+      concept: publication.record.metadata.concept,
+      recordedAt: publication.record.recordedAt,
+      retention: {
+        policy: "available_until_revoked",
+        revocable: true,
+      },
+    });
+    return context.json(jsonSuccess({ status: publication.status, replay }));
+  });
+
+  app.post("/api/sessions/:sessionId/replays/revoke", async (context) => {
+    PublishReplaySchema.parse(await readJson(context));
+    const revoked = await proofCapsuleReplays(
+      context,
+      options,
+    ).revokeBySourceSession(
+      context.req.param("sessionId"),
+      requestId(options, "replay-revocation"),
+      requestNow(options).toISOString(),
+    );
+    if (revoked === undefined) {
+      throw new ApiInputError(
+        "REPLAY_NOT_FOUND",
+        "No public replay exists for this private session",
+        404,
+      );
+    }
+    return context.json(
+      jsonSuccess({
+        replayId: revoked.replayId,
+        revoked: true,
+        alreadyRevoked: !revoked.revoked,
+      }),
     );
   });
 
@@ -8574,75 +9489,29 @@ export function createApi(options: ApiOptions = {}) {
         }),
       );
     }
-    const { record, validated } = await loadHostedProofCapsuleReplay(
+    const { replay } = await loadHostedPublicReplayProjection(
       context,
       options,
       replayId,
-    );
-    const boundaryIntegrity =
-      validated.manifest.authority.boundary.receipt.integrity;
-    const replay = await projectProofCapsuleReplayV2(
-      validated,
-      record.metadata,
-      {
-        ...(boundaryIntegrity.mode === "hmac-signed" &&
-        context.env?.COUNTERLAB_SIGNING_KEY !== undefined
-          ? {
-              boundarySigningKeys: {
-                [boundaryIntegrity.keyId]: context.env.COUNTERLAB_SIGNING_KEY,
-              },
-            }
-          : {}),
-      },
     );
     context.header("cache-control", "private, no-store");
     return context.json(jsonSuccess(replay));
   });
 
   app.get("/api/replays/:replayId/proof-capsule", async (context) => {
-    const replayId = context.req.param("replayId");
-    const { persisted } = await loadHostedProofCapsuleReplay(
-      context,
-      options,
-      replayId,
+    throw new ApiInputError(
+      "REPLAY_PRIVATE_ARTIFACT_UNAVAILABLE",
+      "Private replay artifacts are available only from the owner session",
+      404,
     );
-    const safeReplayId = replayId.replace(/[^A-Za-z0-9._-]+/gu, "-");
-    return new Response(persisted.body, {
-      headers: {
-        "content-type": PROOF_CAPSULE_MEDIA_TYPE,
-        "content-disposition": `attachment; filename="counterlab-${safeReplayId}.counterlab"`,
-        "cache-control": "private, no-store",
-        "x-content-type-options": "nosniff",
-      },
-    });
   });
 
   app.get("/api/replays/:replayId/patched-notebook", async (context) => {
-    const replayId = context.req.param("replayId");
-    const { validated } = await loadHostedProofCapsuleReplay(
-      context,
-      options,
-      replayId,
+    throw new ApiInputError(
+      "REPLAY_PRIVATE_ARTIFACT_UNAVAILABLE",
+      "Private replay artifacts are available only from the owner session",
+      404,
     );
-    const patchedNotebook = validated.envelope.entries.find(
-      (entry) => entry.path === "artifacts/patched-notebook.ipynb",
-    );
-    if (patchedNotebook === undefined) {
-      throw new ApiInputError(
-        "REPLAY_PATCH_NOT_AVAILABLE",
-        "This verified replay does not contain a patched notebook",
-        409,
-      );
-    }
-    const safeReplayId = replayId.replace(/[^A-Za-z0-9._-]+/gu, "-");
-    return new Response(patchedNotebook.content, {
-      headers: {
-        "content-type": "application/x-ipynb+json; charset=utf-8",
-        "content-disposition": `attachment; filename="counterlab-${safeReplayId}-patched.ipynb"`,
-        "cache-control": "private, no-store",
-        "x-content-type-options": "nosniff",
-      },
-    });
   });
 
   app.notFound((context) =>
@@ -8658,6 +9527,9 @@ export function createApi(options: ApiOptions = {}) {
 
   app.onError((error, context) => {
     if (error instanceof ApiInputError) {
+      if (error.retryAfterSeconds !== undefined) {
+        context.header("retry-after", String(error.retryAfterSeconds));
+      }
       return context.json(
         jsonError(error.code, error.message, error.status, error.retryable),
         { status: error.status as 400 },
@@ -8685,14 +9557,20 @@ export function createApi(options: ApiOptions = {}) {
         409,
       );
     }
+    if (error instanceof RunnerCallbackStateError) {
+      return context.json(
+        jsonError("RUNNER_CALLBACK_STATE", error.message, 409),
+        409,
+      );
+    }
     if (
       error instanceof InvalidSessionTransitionError ||
       error instanceof PredictionAlreadyCommittedError ||
       error instanceof ConcurrentD1SessionUpdateError ||
       error instanceof ConcurrentRunnerJobUpdateError ||
       error instanceof ReplayPublicationConflictError ||
+      error instanceof ReplayPublicationRevokedError ||
       error instanceof RunnerCallbackConflictError ||
-      error instanceof RunnerCallbackStateError ||
       error instanceof RunnerEventCursorError
     ) {
       return context.json(

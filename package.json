@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@11.13.0+sha512.88d94724d8f2e6c186744a5584c6e59ecac869ec7ba15e9cb4cd628e8dc7066820b2481d8ee3b51ea8da323a7378068aa58c556a3720d32b7c20a051d088363a",
+  "packageManager": "pnpm@11.13.1+sha512.b2fc7683b8a6525414e7d13e1ba28caaddde96bf66ec540bfaeb7e702b81f3e0be4d1f295edf7f9fe0396740a8dce4509c582ddf79891f4543fea32d37645f25",
   "engines": {
     "node": ">=22"
   },
@@ -13,14 +13,18 @@
     "test:python": "PYTHONPATH=services/kernel/src .venv/bin/python -m pytest services/kernel/tests",
     "typecheck": "tsc --noEmit && pnpm --filter @counterlab/web run typecheck",
     "format:check": "prettier --check .",
-    "contracts:generate": "tsx scripts/generate-contract-schemas.ts",
-    "engines:snapshot": "tsx scripts/generate-scientific-engine-snapshot.ts",
-    "sbom:normalize": "tsx scripts/normalize-cyclonedx.ts",
-    "vulnerability:summarize": "tsx scripts/summarize-grype-scan.ts",
-    "vex:summarize": "tsx scripts/summarize-vex-application.ts",
-    "codex:live": "tsx scripts/run-live-codex.ts",
-    "belief:live:verify": "tsx scripts/verify-live-belief.ts",
-    "held-out:run": "tsx scripts/run-held-out.ts"
+    "contracts:generate": "node --import tsx scripts/generate-contract-schemas.ts",
+    "sample-boundary:generate": "node --import tsx scripts/generate-sample-boundary-fixture.ts",
+    "claims:generate": "node --import tsx scripts/generate-release-capability-manifest.ts",
+    "engines:check-bindings": "node --import tsx scripts/refresh-scientific-engine-bindings.ts --check",
+    "engines:refresh-bindings": "node --import tsx scripts/refresh-scientific-engine-bindings.ts --write",
+    "engines:snapshot": "node --import tsx scripts/generate-scientific-engine-snapshot.ts",
+    "sbom:normalize": "node --import tsx scripts/normalize-cyclonedx.ts",
+    "vulnerability:summarize": "node --import tsx scripts/summarize-grype-scan.ts",
+    "vex:summarize": "node --import tsx scripts/summarize-vex-application.ts",
+    "codex:live": "node --import tsx scripts/run-live-codex.ts",
+    "belief:live:verify": "node --import tsx scripts/verify-live-belief.ts",
+    "held-out:run": "node --import tsx scripts/run-held-out.ts"
   },
   "dependencies": {
     "openai": "6.46.0",
@@ -28,6 +32,7 @@
   },
   "devDependencies": {
     "@types/node": "26.1.1",
+    "pnpm": "11.13.1",
     "prettier": "3.9.5",
     "tsx": "4.23.1",
     "typescript": "7.0.2",

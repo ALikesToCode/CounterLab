@@ -63,7 +63,9 @@ describe("scientific engine release verifier edge cases", () => {
       candidate.id.startsWith("internal-oracle-integrity-"),
     );
     if (authorityRecord === undefined) {
-      throw new Error("scientific engine evidence is missing internal oracle authority");
+      throw new Error(
+        "scientific engine evidence is missing internal oracle authority",
+      );
     }
 
     const root = await createTemporaryRoot();
@@ -97,7 +99,9 @@ describe("scientific engine release verifier edge cases", () => {
       (candidate) => candidate.id === authorityRecord.id,
     );
     if (record === undefined) {
-      throw new Error("scientific engine evidence lost internal oracle authority");
+      throw new Error(
+        "scientific engine evidence lost internal oracle authority",
+      );
     }
     record.path = relative(root, evidencePath);
     record.sha256 = createHash("sha256").update(evidence).digest("hex");

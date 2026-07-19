@@ -7,6 +7,7 @@ import {
   mkdtemp,
   realpath,
   rm,
+  stat,
   writeFile,
 } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
@@ -117,7 +118,23 @@ export class ContainerCodexLaunchBoundary implements AppServerLaunchBoundary {
         chmod(this.options.workspaceRoot, 0o711),
         chmod(this.options.codexHomeRoot, 0o711),
       ]);
+      const rootModes = await Promise.all([
+        stat(this.options.workspaceRoot),
+        stat(this.options.codexHomeRoot),
+      ]);
+      for (const metadata of rootModes) {
+        const mode = metadata.mode & 0o777;
+        const ownerIsPrivate = (mode & 0o700) === 0o700 && (mode & 0o066) === 0;
+        const alternateUidCanTraverse =
+          !this.requiresPrivilegeDrop || (mode & 0o011) === 0o011;
+        if (!ownerIsPrivate || !alternateUidCanTraverse) {
+          throw isolationError(
+            "Container Codex private roots did not retain the required traverse-only permissions.",
+          );
+        }
+      }
     } catch (error) {
+      if (error instanceof CompilerSetupError) throw error;
       throw isolationError(
         "Container Codex private roots cannot grant traverse-only access.",
         error,

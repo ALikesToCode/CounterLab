@@ -6,13 +6,21 @@ turn, rejects interactive approval requests, and emits only sanitized compiler
 events. A turn explicitly uses `workspaceWrite` with only the prepared guest
 workspace writable, network disabled, and both `/tmp` write exceptions removed.
 
-## Generation read isolation
+## Launch boundary and generation read isolation
 
 Live generation fails closed unless the host provides an
 `AppServerLaunchBoundary`. A boundary receives the host generation directory
 and must return a launch command plus the guest workspace path used in App
 Server protocol messages. Direct process spawning is available only to fake
 App Server unit tests under `NODE_ENV=test`.
+
+The hosted Container implementation stages and revokes credentials, uses a
+fixed non-root UID plus `setpriv --no-new-privs`, clears the generated command
+environment, and constrains writes.
+It does not create a mount namespace or filesystem read allowlist. Its
+filesystem generation read-isolation status is therefore `PARTIAL`. Providing
+an `AppServerLaunchBoundary` proves that a trusted launch adapter is present;
+the interface alone does not prove hidden host paths are unreadable.
 
 The included Bubblewrap probe creates a new mount namespace without binding
 `/`, the repository, held-out fixtures, or the verifier. It binds only `/usr`
@@ -29,7 +37,7 @@ pnpm exec vitest run \
   packages/codex-client/src/index.test.ts
 ```
 
-## Why the live Bubblewrap launcher remains unavailable
+## Why the full Bubblewrap launcher remains unavailable
 
 The installed stable App Server auth flows load credentials from Codex-managed
 storage, and API-key login stores the credential. Mounting even a minimal
@@ -39,7 +47,9 @@ does not provide a read allowlist. The alternative host-owned ChatGPT token
 flow is currently an experimental App Server capability, while CounterLab
 intentionally initializes with `experimentalApi: false`. CounterLab therefore
 returns `CODEX_ISOLATION_UNAVAILABLE` instead of exposing a credential or
-claiming live success.
+claiming OS-enforced filesystem read isolation. Hosted live authority instead
+relies on source-free typed plans plus fixed scoring, execution, and independent
+verification, with the partial read-isolation limitation disclosed.
 
 The smallest safe next design is a host credential-injecting proxy:
 

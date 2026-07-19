@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 import {
+  ContainedRuntimeAttestationSchema,
+  DeploymentReceiptSchema,
   ScientificEngineDescriptorSchema,
   ScientificEngineEvidenceCatalogSchema,
   ScientificEngineEvidenceKindSchema,
@@ -11,10 +13,17 @@ import {
   ScientificEngineSnapshotSchema,
   QualifiedRunnerReleaseSchema,
   QualifiedRunnerReleaseV1Schema,
+  QualifiedRunnerReleaseV2Schema,
+  ReleaseCheckReceiptSchema,
   SubjectPackAuthorityBindingSchema,
   SubjectPackEngineBindingSchema,
   SubjectPackEngineBindingsSchema,
 } from "./schema.js";
+
+export type ContainedRuntimeAttestation = z.infer<
+  typeof ContainedRuntimeAttestationSchema
+>;
+export type DeploymentReceipt = z.infer<typeof DeploymentReceiptSchema>;
 
 export type ScientificEngineRole = z.infer<typeof ScientificEngineRoleSchema>;
 export type ScientificEngineDescriptor = z.infer<
@@ -53,3 +62,7 @@ export type QualifiedRunnerRelease = z.infer<
 export type QualifiedRunnerReleaseV1 = z.infer<
   typeof QualifiedRunnerReleaseV1Schema
 >;
+export type QualifiedRunnerReleaseV2 = z.infer<
+  typeof QualifiedRunnerReleaseV2Schema
+>;
+export type ReleaseCheckReceipt = z.infer<typeof ReleaseCheckReceiptSchema>;

@@ -1,7 +1,9 @@
 import {
   ProofCapsuleReplayV2Schema,
+  type PublicReplayProjectionV1,
   type ProofCapsuleReplayV2,
 } from "@counterlab/contracts";
+import { createPublicReplayProjectionV1 } from "@counterlab/proof-capsule";
 
 const digest = (character: string) => character.repeat(64);
 const recordedAt = "2026-07-16T13:00:00.000Z";
@@ -665,14 +667,14 @@ export function replayFixture(
         sequence: 1,
         timestamp: "2026-07-16T12:40:00.000Z",
         actor: "learner",
-        kind: "QUESTION_FRAMED",
+        kind: "session.created",
         eventHash: digest("1"),
       },
       {
         sequence: 2,
         timestamp: "2026-07-16T12:49:00.000Z",
         actor: "verifier",
-        kind: "SUPPORTS",
+        kind: "experiment.evidence_verified",
         eventHash: digest("2"),
       },
     ],
@@ -691,4 +693,10 @@ export function replayFixture(
       "This replay proves the recorded artifact-specific workflow, not model quality outside its documented scope.",
     ],
   });
+}
+
+export function publicReplayFixture(
+  concept: "entity_leakage" | "class_imbalance",
+): PublicReplayProjectionV1 {
+  return createPublicReplayProjectionV1(replayFixture(concept));
 }

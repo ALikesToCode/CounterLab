@@ -10,6 +10,7 @@ import type {
 import {
   ConcurrentRunnerJobUpdateError,
   RunnerCallbackConflictError,
+  RunnerCallbackStateError,
   RunnerJobService,
   type CreateRunnerJobInput,
   type RunnerJobRepository,
@@ -58,6 +59,22 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
         ),
     );
     return job === undefined ? undefined : structuredClone(job);
+  }
+
+  async findActiveForSession(sessionId: string): Promise<RunnerJob[]> {
+    return structuredClone(
+      [...this.jobs.values()].filter(
+        (job) =>
+          job.sessionId === sessionId &&
+          [
+            "QUEUED",
+            "STARTING",
+            "RUNNING",
+            "AWAITING_APPROVAL",
+            "REPAIRING",
+          ].includes(job.status),
+      ),
+    );
   }
 
   async findForState(input: {
@@ -452,6 +469,55 @@ describe("RunnerJobService", () => {
         "RUNNING",
       ),
     ).rejects.toThrow(/terminal/i);
+  });
+
+  it("rejects a callback after cancellation without changing the terminal job", async () => {
+    const harness = service();
+    const queued = await harness.service.createJob(jobInput());
+    const starting = await harness.service.transition(
+      queued.jobId,
+      queued.jobVersion,
+      "STARTING",
+      { runnerIdentity: "runner-container-test" },
+    );
+    const running = await harness.service.transition(
+      starting.jobId,
+      starting.jobVersion,
+      "RUNNING",
+    );
+    const cancelled = await harness.service.transition(
+      running.jobId,
+      running.jobVersion,
+      "CANCELLED",
+      {
+        error: {
+          code: "RUNNER_JOB_CANCELLED",
+          message: "The learner started over",
+          retryable: false,
+        },
+      },
+    );
+
+    await expect(
+      harness.service.recordCallback({
+        schemaVersion: "1",
+        callbackId: "callback_after_cancel",
+        idempotencyKey: "job_live_1:verified:after-cancel",
+        jobId: cancelled.jobId,
+        stateVersion: cancelled.stateVersion,
+        status: "VERIFIED",
+        outputHashes: [HASH_C],
+        finalEventCursor: cancelled.eventCursor,
+        occurredAt: "2026-07-15T00:00:05.000Z",
+      }),
+    ).rejects.toBeInstanceOf(RunnerCallbackStateError);
+
+    await expect(
+      harness.service.getJob(cancelled.jobId),
+    ).resolves.toMatchObject({
+      status: "CANCELLED",
+      outputHashes: [],
+    });
   });
 
   it("can terminalize a job after the control plane closes runner writes", async () => {

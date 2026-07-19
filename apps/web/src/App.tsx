@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   ApiClientError,
@@ -25,14 +33,20 @@ import {
   readActiveRunnerCheckpoint,
   writeActiveRunnerCheckpoint,
 } from "./hooks/runnerCheckpoint";
-import { CounterLabStudio } from "./app/CounterLabStudio";
 import { parseStudioLocation, studioPath } from "./app/AppRouter";
+import { ClaimPathChooser } from "./components/learner/ClaimPathChooser";
 import { LearnerCompletion } from "./components/learner/LearnerCompletion";
 import { LearnerCoach } from "./components/learner/LearnerCoach";
 import { NeedAHint } from "./components/learner/NeedAHint";
 import { LearnerProgress } from "./components/learner/LearnerProgress";
 import { ReflectionBuilder } from "./components/learner/ReflectionBuilder";
 import { RepairPreview } from "./components/learner/RepairPreview";
+import {
+  RouteRecovery,
+  type RouteRecoveryReason,
+  type RouteRecoveryRecentSession,
+} from "./components/learner/RouteRecovery";
+import { StartOverDialog } from "./components/learner/StartOverDialog";
 import {
   TimelineTransfer,
   type TimelineFeatureOption,
@@ -63,23 +77,93 @@ import {
   currentLearnerStage,
   type LearnerStageId,
 } from "./components/learner/learnerStages";
-import { InteractiveImbalanceLab } from "./components/lesson/InteractiveImbalanceLab";
-import { ImbalancePatchReview } from "./components/lesson/ImbalancePatchReview";
-import { ImbalanceTransferLesson } from "./components/lesson/ImbalanceTransferLesson";
 import { DeferredReasoningDiffView } from "./components/proof/DeferredReasoningDiffView";
-import { ProofCapsuleReplayView } from "./components/replay/ProofCapsuleReplayView";
+import { LegacyReplayResult } from "./components/replay/LegacyReplayResult";
 import type { RecentProject, StudioStage } from "./components/studio/types";
 import { BoundaryStage } from "./features/boundary/BoundaryStage";
-import { JudgeModeView } from "./features/judge/JudgeModeView";
 import { recordLearnerInteraction } from "./features/learner/interactionEvidence";
+import {
+  listActiveRunnerJobs,
+  markActiveRunnerJobTerminal,
+  registerActiveRunnerJob,
+  type ActiveRunnerRecord,
+} from "./features/learner/activeRunnerRegistry";
+import {
+  listRecentWork,
+  recentWorkPath,
+  removeRecentWork,
+  upsertRecentWork,
+} from "./features/learner/recentWorkRegistry";
 import { subjectPackHint } from "./features/learner/subjectPackHints";
 import { useLearnerStageTiming } from "./hooks/useLearnerStageTiming";
 
 import { getRun, sampleArtifact, verifiedReplay } from "./sample";
 
+const LazySampleBoundaryPanel = lazy(async () => {
+  const module = await import("./features/boundary/SampleBoundaryPanel");
+  return { default: module.SampleBoundaryPanel };
+});
+
+const LazyCounterLabStudio = lazy(async () => {
+  const module = await import("./app/CounterLabStudio");
+  return { default: module.CounterLabStudio };
+});
+
+const LazyJudgeModeView = lazy(async () => {
+  const module = await import("./features/judge/JudgeModeView");
+  return { default: module.JudgeModeView };
+});
+
+const LazyProofCapsuleReplayView = lazy(async () => {
+  const module = await import("./components/replay/ProofCapsuleReplayView");
+  return { default: module.ProofCapsuleReplayView };
+});
+
+const LazyInteractiveImbalanceLab = lazy(async () => {
+  const module = await import("./components/lesson/InteractiveImbalanceLab");
+  return { default: module.InteractiveImbalanceLab };
+});
+
+const LazyImbalanceTransferLesson = lazy(async () => {
+  const module = await import("./components/lesson/ImbalanceTransferLesson");
+  return { default: module.ImbalanceTransferLesson };
+});
+
+const LazyImbalancePatchReview = lazy(async () => {
+  const module = await import("./components/lesson/ImbalancePatchReview");
+  return { default: module.ImbalancePatchReview };
+});
+
+function DeferredSurfaceFallback({ label }: { label: string }) {
+  return (
+    <main
+      className="workspace shell narrow deferred-surface-fallback"
+      id="main-content"
+      tabIndex={-1}
+      role="status"
+      aria-live="polite"
+    >
+      <p>{label}</p>
+    </main>
+  );
+}
+
+function DeferredPanelFallback({ label }: { label: string }) {
+  return (
+    <section
+      className="panel deferred-panel-fallback"
+      role="status"
+      aria-live="polite"
+    >
+      <p>{label}</p>
+    </section>
+  );
+}
+
 type Mode = "instant" | "live" | "replay";
 type Stage =
   | "landing"
+  | "question-path"
   | "claim"
   | "belief"
   | "build"
@@ -92,9 +176,6 @@ type LeakageTransferRisk = "" | "price" | "future";
 type TransferState =
   "locked" | "ready" | "failed" | "passed" | "patching" | "patched";
 type ReviewStep = LearnerStageId;
-
-const defaultLeakageReflection =
-  "When rows repeat the same entity,\nI should hold out whole entities,\nbecause random rows can share identity across train and test.";
 
 const leakageReflectionWhen = [
   {
@@ -290,9 +371,18 @@ const storageKeys = {
   replayIntro: "counterlab.replayIntro",
   replayTransferState: "counterlab.replayTransferState",
   replayRevision: "counterlab.replayRevision",
+  sampleBoundarySessionId: "counterlab.sampleBoundarySessionId",
   activeRunnerJobId: "counterlab.activeRunnerJobId",
   activeRunnerJobKind: "counterlab.activeRunnerJobKind",
 } as const;
+
+function SkipLink() {
+  return (
+    <a className="skip-link" href="#main-content">
+      Skip to main content
+    </a>
+  );
+}
 
 function legacyRunnerKind(value: string | null): RunnerJob["kind"] | null {
   return value === "BELIEF_ANALYSIS" ||
@@ -345,6 +435,29 @@ function forgetRunnerCheckpoint(sessionId: string, jobId?: string) {
   clearActiveRunnerCheckpoint(sessionId, jobId, window.localStorage);
   window.localStorage.removeItem(storageKeys.activeRunnerJobId);
   window.localStorage.removeItem(storageKeys.activeRunnerJobKind);
+}
+
+function knownActiveRunnerJobs(sessionId: string): ActiveRunnerRecord[] {
+  let jobs: ActiveRunnerRecord[] = [];
+  try {
+    jobs = listActiveRunnerJobs(sessionId, window.sessionStorage);
+  } catch {
+    // The legacy reconnect checkpoint below remains available if session
+    // storage is blocked by the browser.
+  }
+  const checkpoint = storedRunnerCheckpoint(sessionId);
+  if (
+    checkpoint !== null &&
+    !jobs.some((job) => job.jobId === checkpoint.jobId)
+  ) {
+    jobs.push({
+      sessionId,
+      jobId: checkpoint.jobId,
+      kind: checkpoint.kind,
+      registeredAt: new Date().toISOString(),
+    });
+  }
+  return jobs;
 }
 
 function storedReplayTransferState(): TransferState {
@@ -632,11 +745,50 @@ function Mark({ name }: { name: "arrow" | "check" | "lock" | "spark" }) {
   );
 }
 
+function EntryIcon({
+  name,
+}: {
+  name: "new" | "sample" | "replay" | "judge" | "proof";
+}) {
+  const paths = {
+    new: <path d="M12 5v14M5 12h14" />,
+    sample: (
+      <>
+        <path d="M9 4h6M10 4v5l-4.5 7.8A2 2 0 0 0 7.2 20h9.6a2 2 0 0 0 1.7-3.2L14 9V4" />
+        <path d="M8 15h8" />
+      </>
+    ),
+    replay: (
+      <>
+        <path d="M5 8V4m0 0h4M5 4a9 9 0 1 1-1.7 10.7" />
+        <path d="M12 8v5l3 2" />
+      </>
+    ),
+    judge: (
+      <>
+        <path d="M12 4v16M7 6h10M5 9l-3 5h6L5 9Zm14 0-3 5h6l-3-5Z" />
+        <path d="M8 20h8" />
+      </>
+    ),
+    proof: (
+      <>
+        <path d="M12 3 5 6v5c0 4.5 2.8 7.8 7 10 4.2-2.2 7-5.5 7-10V6l-7-3Z" />
+        <path d="m9 12 2 2 4-5" />
+      </>
+    ),
+  };
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      {paths[name]}
+    </svg>
+  );
+}
+
 function ReplayBanner({ replay }: { replay: VerifiedReplay }) {
   return (
     <aside className="replay-banner" aria-label="Replay status">
       <span className="status-dot" />
-      <strong>Verified replay</strong>
+      <strong>Verified replay · read-only stored evidence</strong>
       <span>{replay.replayId}</span>
       <span className="replay-meta">
         Recorded {new Date(replay.recordedAt).toLocaleDateString()}
@@ -687,10 +839,10 @@ function Header({
         <span className="mode-light" />
         <span>
           {mode === "replay"
-            ? "Replay mode"
+            ? "Verified replay · read-only"
             : mode === "live"
-              ? "Live generation"
-              : "Instant sample"}
+              ? "Live notebook analysis"
+              : "Verified sample lesson"}
         </span>
       </div>
       <button className="start-over-control" type="button" onClick={restart}>
@@ -707,6 +859,7 @@ function Landing({
   testClaim,
   chooseMode,
   busy,
+  recentSessions,
 }: {
   claim: string;
   updateClaim: (claim: string) => void;
@@ -714,6 +867,7 @@ function Landing({
   testClaim: () => void;
   chooseMode: (mode: Mode) => void;
   busy: boolean;
+  recentSessions: readonly RouteRecoveryRecentSession[];
 }) {
   const hint = subjectPackHint(undefined, "question");
   const [railOpen, setRailOpen] = useState(false);
@@ -745,99 +899,11 @@ function Landing({
   };
 
   return (
-    <main className="landing landing-question-first">
-      <aside className="landing-rail" aria-label="CounterLab entry paths">
-        <div className="landing-rail-header">
-          <div className="landing-rail-brand" aria-label="CounterLab">
-            <span aria-hidden="true">C</span>
-            <strong>CounterLab</strong>
-          </div>
-          <button
-            ref={railToggleRef}
-            className="landing-menu-toggle"
-            type="button"
-            aria-controls="landing-rail-navigation"
-            aria-expanded={railOpen}
-            onClick={() => setRailOpen((open) => !open)}
-          >
-            Explore
-          </button>
-        </div>
-
-        <nav
-          className={`landing-rail-navigation ${railOpen ? "is-open" : ""}`}
-          id="landing-rail-navigation"
-          aria-label="Start a CounterLab investigation"
-        >
-          <button
-            className="landing-new-question"
-            type="button"
-            aria-label="New question"
-            onClick={() => {
-              setRailOpen(false);
-              updateClaim("");
-              composerInputRef.current?.focus();
-            }}
-          >
-            <span className="landing-rail-icon" aria-hidden="true">
-              +
-            </span>
-            <span className="landing-rail-label">New question</span>
-          </button>
-
-          <div className="landing-rail-group">
-            <span>Start with evidence</span>
-            <button
-              type="button"
-              disabled={busy}
-              aria-label="Try verified sample"
-              onClick={startSample}
-            >
-              <span className="landing-rail-icon" aria-hidden="true">
-                S
-              </span>
-              <span className="landing-rail-label">Verified sample</span>
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              aria-label="Watch verified replay"
-              onClick={openReplay}
-            >
-              <span className="landing-rail-icon" aria-hidden="true">
-                R
-              </span>
-              <span className="landing-rail-label">Verified replay</span>
-            </button>
-          </div>
-
-          <div className="landing-rail-group landing-rail-secondary">
-            <a href="/judge" aria-label="Judge Mode">
-              <span className="landing-rail-icon" aria-hidden="true">
-                J
-              </span>
-              <span className="landing-rail-label">Judge Mode</span>
-            </a>
-            <a
-              href="#landing-support-note"
-              aria-label="How proof works"
-              onClick={() => {
-                setRailOpen(false);
-                if (proofDetailsRef.current !== null) {
-                  proofDetailsRef.current.open = true;
-                  proofDetailsRef.current.querySelector("summary")?.focus();
-                }
-              }}
-            >
-              <span className="landing-rail-icon" aria-hidden="true">
-                ?
-              </span>
-              <span className="landing-rail-label">How proof works</span>
-            </a>
-          </div>
-        </nav>
-      </aside>
-
+    <main
+      className="landing landing-question-first"
+      id="main-content"
+      tabIndex={-1}
+    >
       <section className="landing-canvas" aria-labelledby="landing-title">
         <div className="question-first-layout">
           <div className="landing-intro">
@@ -854,6 +920,15 @@ function Landing({
             inputRef={composerInputRef}
             busy={busy}
           />
+
+          <button
+            className="landing-mobile-sample"
+            type="button"
+            disabled={busy}
+            onClick={startSample}
+          >
+            Start verified sample lesson <span aria-hidden="true">→</span>
+          </button>
 
           <div
             className="landing-proof-note"
@@ -889,8 +964,120 @@ function Landing({
               evidenceLabel="Review the supported evidence boundary"
             />
           </div>
+
+          {recentSessions.length > 0 ? (
+            <details className="landing-recent-work">
+              <summary>Recent work from this browser</summary>
+              <ul>
+                {recentSessions.map((session) => (
+                  <li key={session.id}>
+                    <button
+                      type="button"
+                      disabled={session.disabled}
+                      onClick={session.onOpen}
+                    >
+                      <strong>{session.title}</strong>
+                      <span>{session.status.replaceAll("_", " ")}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
         </div>
       </section>
+
+      <aside className="landing-rail" aria-label="CounterLab entry paths">
+        <div className="landing-rail-header">
+          <div className="landing-rail-brand" aria-label="CounterLab">
+            <span aria-hidden="true">C</span>
+            <strong>CounterLab</strong>
+          </div>
+          <button
+            ref={railToggleRef}
+            className="landing-menu-toggle"
+            type="button"
+            aria-controls="landing-rail-navigation"
+            aria-expanded={railOpen}
+            onClick={() => setRailOpen((open) => !open)}
+          >
+            Modes
+          </button>
+        </div>
+
+        <nav
+          className={`landing-rail-navigation ${railOpen ? "is-open" : ""}`}
+          id="landing-rail-navigation"
+          aria-label="Start a CounterLab investigation"
+        >
+          <button
+            className="landing-new-question"
+            type="button"
+            aria-label="New question"
+            onClick={() => {
+              setRailOpen(false);
+              updateClaim("");
+              composerInputRef.current?.focus();
+            }}
+          >
+            <span className="landing-rail-icon" aria-hidden="true">
+              <EntryIcon name="new" />
+            </span>
+            <span className="landing-rail-label">New question</span>
+          </button>
+
+          <div className="landing-rail-group">
+            <span>Start with evidence</span>
+            <button
+              type="button"
+              disabled={busy}
+              aria-label="Try verified sample"
+              onClick={startSample}
+            >
+              <span className="landing-rail-icon" aria-hidden="true">
+                <EntryIcon name="sample" />
+              </span>
+              <span className="landing-rail-label">Verified sample</span>
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              aria-label="Watch verified replay"
+              onClick={openReplay}
+            >
+              <span className="landing-rail-icon" aria-hidden="true">
+                <EntryIcon name="replay" />
+              </span>
+              <span className="landing-rail-label">Verified replay</span>
+            </button>
+          </div>
+
+          <div className="landing-rail-group landing-rail-secondary">
+            <a href="/judge" aria-label="Judge Mode">
+              <span className="landing-rail-icon" aria-hidden="true">
+                <EntryIcon name="judge" />
+              </span>
+              <span className="landing-rail-label">Judge Mode</span>
+            </a>
+            <a
+              href="#landing-support-note"
+              aria-label="How proof works"
+              onClick={() => {
+                setRailOpen(false);
+                if (proofDetailsRef.current !== null) {
+                  proofDetailsRef.current.open = true;
+                  proofDetailsRef.current.querySelector("summary")?.focus();
+                }
+              }}
+            >
+              <span className="landing-rail-icon" aria-hidden="true">
+                <EntryIcon name="proof" />
+              </span>
+              <span className="landing-rail-label">How proof works</span>
+            </a>
+          </div>
+        </nav>
+      </aside>
     </main>
   );
 }
@@ -923,7 +1110,7 @@ function ClaimScreen({
   const evidenceReferences = notebookEvidenceReferences(artifact);
   const headlineMetric = notebookScoreDisplay(artifact);
   return (
-    <main className="workspace shell">
+    <main className="workspace shell" id="main-content" tabIndex={-1}>
       <div className="screen-intro">
         <p className="eyebrow">Question · Your idea</p>
         <h1>What do you think the score means?</h1>
@@ -1085,8 +1272,8 @@ function ClaimScreen({
                     }
                   />
                   <span>
-                    I reviewed the redacted sensitive-looking excerpt and want
-                    to continue.
+                    I reviewed the exact redacted packet and understand that
+                    automated redaction can miss identifiers.
                   </span>
                 </label>
               )}
@@ -1197,7 +1384,7 @@ function BeliefScreen({
   const predictionOptions = predictionOptionsFor(belief?.concept);
 
   return (
-    <main className="workspace shell">
+    <main className="workspace shell" id="main-content" tabIndex={-1}>
       <div className="screen-intro compact">
         <p className="eyebrow">Prediction · Your explanation</p>
         <h1>Check your explanation before the test.</h1>
@@ -1332,7 +1519,7 @@ function BuildScreen({
 }) {
   const fairTest = fairTestExplanationFor(concept);
   return (
-    <main className="workspace shell">
+    <main className="workspace shell" id="main-content" tabIndex={-1}>
       <div className="screen-intro compact">
         <p className="eyebrow">Test · What happened</p>
         <h1>
@@ -1515,7 +1702,11 @@ function ImbalanceReviewScreen({
     repair: "Review the verified repair",
   };
   return (
-    <main className="workspace shell lesson-review">
+    <main
+      className="workspace shell lesson-review"
+      id="main-content"
+      tabIndex={-1}
+    >
       <div className="screen-intro compact">
         <p className="eyebrow">Lesson map · Saved step</p>
         <h1 id="review-title" tabIndex={-1}>
@@ -1683,7 +1874,11 @@ function ReviewScreen({
   };
 
   return (
-    <main className="workspace shell lesson-review">
+    <main
+      className="workspace shell lesson-review"
+      id="main-content"
+      tabIndex={-1}
+    >
       <div className="screen-intro compact">
         <p className="eyebrow">Lesson map · Saved step</p>
         <h1 id="review-title" tabIndex={-1}>
@@ -1902,6 +2097,7 @@ function InteractiveLeakageLab({
       await runner.waitForStandaloneJob({
         sessionId: session.sessionId,
         jobId: queued.runnerJob.jobId,
+        jobKind: queued.runnerJob.kind,
       });
       const verified = await counterLabApi.getInteractiveResult(
         session.sessionId,
@@ -2141,7 +2337,10 @@ function LeakageRealityScreen({
   const [revision, setRevision] = useState(
     session?.revision ??
       window.localStorage.getItem(storageKeys.replayRevision) ??
-      defaultLeakageReflection,
+      "",
+  );
+  const [revisionAuthored, setRevisionAuthored] = useState(
+    revision.trim().length >= 20,
   );
   const [revisionMode, setRevisionMode] = useState<"clauses" | "free_text">(
     "clauses",
@@ -2167,6 +2366,14 @@ function LeakageRealityScreen({
   );
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const sampleSessionId =
+    session?.mode.kind === "sample_lesson" ? session.sessionId : null;
+  const [sampleBoundaryComplete, setSampleBoundaryComplete] = useState(
+    sampleSessionId === null ||
+      session?.revision !== undefined ||
+      window.localStorage.getItem(storageKeys.sampleBoundarySessionId) ===
+        sampleSessionId,
+  );
   const [patchJob, setPatchJob] = useState<RunnerJob | null>(null);
   const patchRunner = useRunnerEvents();
   const accuracyGapPoints =
@@ -2203,6 +2410,7 @@ function LeakageRealityScreen({
     const completed = await patchRunner.waitForJob({
       sessionId: session.sessionId,
       jobId,
+      jobKind: "PATCH_COMPILE",
       terminalStates: ["PROOF_CAPSULE_ISSUED", "PATCH_REJECTED"],
       onSession: updateSession,
     });
@@ -2385,7 +2593,11 @@ function LeakageRealityScreen({
 
   if (transferState === "patching") {
     return (
-      <main className="workspace shell reality lesson-phase live-compiler">
+      <main
+        className="workspace shell reality lesson-phase live-compiler"
+        id="main-content"
+        tabIndex={-1}
+      >
         <div className="screen-intro compact">
           <p className="eyebrow gold">Patch unlocked · Verifying a copy</p>
           <h1 id="lesson-phase-title" tabIndex={-1}>
@@ -2418,7 +2630,7 @@ function LeakageRealityScreen({
                 <li className="active">
                   <span className="event-mark" />
                   <div>
-                    <strong>Preparing isolated patch job</strong>
+                    <strong>Preparing separate patch job</strong>
                     <p>The uploaded notebook remains read-only.</p>
                   </div>
                 </li>
@@ -2461,7 +2673,7 @@ function LeakageRealityScreen({
           >
             <div>
               <p className="eyebrow gold">Safe stop · Source untouched</p>
-              <h2 id="patch-retry-title">Retry the isolated patch turn.</h2>
+              <h2 id="patch-retry-title">Retry the bounded patch turn.</h2>
               <p>
                 CounterLab will start a fresh Patch Plan job. The failed job
                 remains in the proof history and no notebook copy is released
@@ -2488,16 +2700,32 @@ function LeakageRealityScreen({
       session.state === "PROOF_CAPSULE_ISSUED" &&
       session.reasoningDiffV2 !== undefined &&
       session.proofCapsule !== undefined &&
+      session.beliefSpec !== undefined &&
+      session.prediction !== undefined &&
+      session.revision !== undefined &&
       patch !== null
         ? {
             sessionId: session.sessionId,
             diff: session.reasoningDiffV2,
             capsule: session.proofCapsule,
             patch,
+            publicTextPreview: {
+              claim: session.beliefSpec.claim,
+              hypotheses: [
+                session.beliefSpec.hypotheses[0].statement,
+                session.beliefSpec.hypotheses[1].statement,
+              ] as const,
+              prediction: session.prediction.choice,
+              revision: session.revision,
+            },
           }
         : null;
     return (
-      <main className="workspace shell reality lesson-phase completion-phase">
+      <main
+        className="workspace shell reality lesson-phase completion-phase"
+        id="main-content"
+        tabIndex={-1}
+      >
         <LearnerCompletion
           titleId="lesson-phase-title"
           headingLevel="h1"
@@ -2555,6 +2783,15 @@ function LeakageRealityScreen({
                 publishReplay={() =>
                   counterLabApi.publishReplay(liveCompletionProof.sessionId)
                 }
+                revokeReplay={() =>
+                  counterLabApi.revokeReplay(liveCompletionProof.sessionId)
+                }
+                loadReplayStatus={() =>
+                  counterLabApi.getReplayPublicationStatus(
+                    liveCompletionProof.sessionId,
+                  )
+                }
+                publicTextPreview={liveCompletionProof.publicTextPreview}
               />
             )
           }
@@ -2672,7 +2909,11 @@ function LeakageRealityScreen({
 
   if (transferState === "passed") {
     return (
-      <main className="workspace shell reality lesson-phase transfer-passed-phase">
+      <main
+        className="workspace shell reality lesson-phase transfer-passed-phase"
+        id="main-content"
+        tabIndex={-1}
+      >
         <div className="screen-intro compact">
           <p className="eyebrow aqua">Transfer passed · Patch unlocked</p>
           <h1 id="lesson-phase-title" tabIndex={-1}>
@@ -2732,7 +2973,11 @@ function LeakageRealityScreen({
 
   if (transferState === "ready" || transferState === "failed") {
     return (
-      <main className="workspace shell reality lesson-phase transfer-phase">
+      <main
+        className="workspace shell reality lesson-phase transfer-phase"
+        id="main-content"
+        tabIndex={-1}
+      >
         <div className="screen-intro compact">
           <p className="eyebrow purple">New problem · No notebook hints</p>
           <h1 id="lesson-phase-title" tabIndex={-1}>
@@ -2832,8 +3077,10 @@ function LeakageRealityScreen({
         ? "Accuracy falls materially on unseen customers."
         : "The unseen-customer result is uncertain.");
   const applyAvailable =
-    session?.mode.kind !== "live_notebook" ||
-    session.boundaryMapAuthority !== undefined;
+    session?.mode.kind === "sample_lesson"
+      ? sampleBoundaryComplete
+      : session?.mode.kind !== "live_notebook" ||
+        session.boundaryMapAuthority !== undefined;
   const theaterPayload: ExperimentTheaterVerifiedPayload = {
     comparison: {
       title: "Familiar rows versus new customers",
@@ -2879,7 +3126,10 @@ function LeakageRealityScreen({
       boundary: {
         heading: "Find where the conclusion changes",
         available: true,
-        completed: session?.boundaryMapAuthority !== undefined,
+        completed:
+          session?.mode.kind === "sample_lesson"
+            ? sampleBoundaryComplete
+            : session?.boundaryMapAuthority !== undefined,
         content:
           session?.mode.kind === "live_notebook" ? (
             <BoundaryStage
@@ -2887,6 +3137,31 @@ function LeakageRealityScreen({
               prediction={predictionSummary}
               updateSession={updateSession}
             />
+          ) : session?.mode.kind === "sample_lesson" ? (
+            <Suspense
+              fallback={
+                <section className="revision panel" role="status">
+                  <p className="eyebrow aqua">Verified sample exploration</p>
+                  <h4>Opening the fixed Boundary Map…</h4>
+                  <p>
+                    CounterLab is loading preverified cells. No model call or
+                    browser metric calculation is running.
+                  </p>
+                </section>
+              }
+            >
+              <LazySampleBoundaryPanel
+                sessionId={session.sessionId}
+                prediction={predictionSummary}
+                onComplete={() => {
+                  window.localStorage.setItem(
+                    storageKeys.sampleBoundarySessionId,
+                    session.sessionId,
+                  );
+                  setSampleBoundaryComplete(true);
+                }}
+              />
+            </Suspense>
           ) : (
             <section className="revision panel">
               <p className="eyebrow aqua">Verified sample boundary</p>
@@ -2907,23 +3182,27 @@ function LeakageRealityScreen({
           <section className="revision panel">
             <ReflectionBuilder
               value={revision}
-              onRevisionChange={setRevision}
+              onRevisionChange={(nextRevision) => {
+                setRevision(nextRevision);
+                setRevisionAuthored(nextRevision.trim().length >= 20);
+              }}
               whenOptions={leakageReflectionWhen}
               actionOptions={leakageReflectionActions}
               becauseOptions={leakageReflectionReasons}
-              initialSelection={{
-                whenId: "repeated-entity",
-                actionId: "whole-entities",
-                becauseId: "identity-overlap",
-              }}
               editorLabel="Your revised mental model"
               disabled={actionBusy}
               onAuthoringModeChange={setRevisionMode}
             />
+            <p>
+              Complete all three clauses or write a full rule in your own words.
+              CounterLab records the revision without grading the prose.
+            </p>
             <button
               className="button button-primary"
               type="button"
-              disabled={revision.trim().length < 20 || actionBusy}
+              disabled={
+                !revisionAuthored || revision.trim().length < 20 || actionBusy
+              }
               onClick={recordRevision}
             >
               Try the rule on a new problem <Mark name="arrow" />
@@ -2935,7 +3214,7 @@ function LeakageRealityScreen({
   };
 
   return (
-    <main className="workspace shell reality">
+    <main className="workspace shell reality" id="main-content" tabIndex={-1}>
       <div className="screen-intro compact">
         <p className="eyebrow aqua">Boundary · Verified result</p>
         <h1 id="lesson-phase-title" tabIndex={-1}>
@@ -3088,11 +3367,15 @@ function ImbalanceRealityScreen({
         available: true,
         completed: false,
         content: (
-          <InteractiveImbalanceLab
-            isLive={session?.mode.kind === "live_notebook"}
-            sessionId={session?.sessionId ?? null}
-            authoritativeResultHash={result.resultHash}
-          />
+          <Suspense
+            fallback={<DeferredPanelFallback label="Loading exploration…" />}
+          >
+            <LazyInteractiveImbalanceLab
+              isLive={session?.mode.kind === "live_notebook"}
+              sessionId={session?.sessionId ?? null}
+              authoritativeResultHash={result.resultHash}
+            />
+          </Suspense>
         ),
       },
       boundary: {
@@ -3128,22 +3411,32 @@ function ImbalanceRealityScreen({
         content:
           session === null ? null : (
             <>
-              <ImbalanceTransferLesson
-                sessionId={session.sessionId}
-                state={session.state}
-                {...(session.revision === undefined
-                  ? {}
-                  : { revision: session.revision })}
-                {...(session.transferResult === undefined
-                  ? {}
-                  : { transferOutcome: session.transferResult.outcome })}
-                updateSession={updateSession}
-              />
-              {session.transferResult?.outcome === "PASSED" && (
-                <ImbalancePatchReview
-                  session={session}
+              <Suspense
+                fallback={<DeferredPanelFallback label="Loading transfer…" />}
+              >
+                <LazyImbalanceTransferLesson
+                  sessionId={session.sessionId}
+                  state={session.state}
+                  {...(session.revision === undefined
+                    ? {}
+                    : { revision: session.revision })}
+                  {...(session.transferResult === undefined
+                    ? {}
+                    : { transferOutcome: session.transferResult.outcome })}
                   updateSession={updateSession}
                 />
+              </Suspense>
+              {session.transferResult?.outcome === "PASSED" && (
+                <Suspense
+                  fallback={
+                    <DeferredPanelFallback label="Loading repair review…" />
+                  }
+                >
+                  <LazyImbalancePatchReview
+                    session={session}
+                    updateSession={updateSession}
+                  />
+                </Suspense>
               )}
               {session.revision !== undefined && (
                 <section className="revision panel">
@@ -3158,7 +3451,11 @@ function ImbalanceRealityScreen({
   };
 
   return (
-    <main className="workspace shell reality imbalance-reality">
+    <main
+      className="workspace shell reality imbalance-reality"
+      id="main-content"
+      tabIndex={-1}
+    >
       <div className="screen-intro compact">
         <p className="eyebrow aqua">Boundary · Verified result</p>
         <h1>A high accuracy can still miss every rare event.</h1>
@@ -3229,9 +3526,11 @@ function LiveSetup({
   const runnerConfigured =
     health?.liveCodex === "configured" &&
     health.liveKernel === "configured" &&
-    health.sandbox === "configured";
+    health.sandbox === "credential-and-privilege-boundary" &&
+    health.generationFilesystemReadIsolation === "PARTIAL" &&
+    health.release?.status === "bound";
   return (
-    <main className="workspace shell narrow">
+    <main className="workspace shell narrow" id="main-content" tabIndex={-1}>
       <div className="screen-intro">
         <p className="eyebrow">Use your notebook</p>
         <h1>Test my notebook</h1>
@@ -3283,8 +3582,8 @@ function LiveSetup({
               <div>
                 <strong>
                   {runnerConfigured
-                    ? "Hosted notebook runner is ready"
-                    : "A local runner is needed for the final lab"}
+                    ? "Source-bound hosted notebook runner is ready"
+                    : "A qualified hosted runner is needed for the final lab"}
                 </strong>
                 <p>
                   {runnerConfigured
@@ -3297,7 +3596,7 @@ function LiveSetup({
         )}
       </section>
       <div className="action-cluster">
-        {configured && !checking && checkError === null && (
+        {configured && runnerConfigured && !checking && checkError === null && (
           <button
             className="button button-primary"
             type="button"
@@ -3438,7 +3737,11 @@ function LiveCompileScreen({
   );
   const repairStory = fairTestRepairStory(events);
   return (
-    <main className="workspace shell live-compiler">
+    <main
+      className="workspace shell live-compiler"
+      id="main-content"
+      tabIndex={-1}
+    >
       <div className="screen-intro compact">
         <p className="eyebrow">03 · Build and verify</p>
         <h1>
@@ -3481,7 +3784,7 @@ function LiveCompileScreen({
             <p className="eyebrow gold">Safe stop · Evidence preserved</p>
             <h2 id="retry-title">Try a fresh bounded compiler turn.</h2>
             <p>
-              CounterLab will create a new isolated job. The failed job stays in
+              CounterLab will create a new separate job. The failed job stays in
               the proof history and still cannot release a result.
             </p>
           </div>
@@ -3530,6 +3833,11 @@ export function App() {
   const [activeReplay, setActiveReplay] = useState<VerifiedReplay | null>(null);
   const [locationRevision, setLocationRevision] = useState(0);
   const [routeHydrated, setRouteHydrated] = useState(false);
+  const [routeRecovery, setRouteRecovery] = useState<{
+    reason: RouteRecoveryReason;
+    attemptedPath: string;
+  } | null>(null);
+  const routeRecoveryHeadingRef = useRef<HTMLHeadingElement>(null);
   const [artifact, setArtifact] = useState<ArtifactView | null>(null);
   const [session, setSession] = useState<SessionView | null>(null);
   const [busy, setBusy] = useState(false);
@@ -3538,6 +3846,11 @@ export function App() {
   const [liveHealthError, setLiveHealthError] = useState<string | null>(null);
   const [checkingLiveHealth, setCheckingLiveHealth] = useState(false);
   const [cancellingRunner, setCancellingRunner] = useState(false);
+  const [restartRequest, setRestartRequest] = useState<{
+    sessionId: string;
+    jobs: ActiveRunnerRecord[];
+  } | null>(null);
+  const [restartBusy, setRestartBusy] = useState(false);
   const [analysisPreview, setAnalysisPreview] =
     useState<BeliefAnalysisPreview | null>(null);
   const [sensitiveContentApproved, setSensitiveContentApproved] =
@@ -3546,14 +3859,19 @@ export function App() {
   const runner = useRunnerEvents();
   const replay = mode === "replay";
   const hostedReplay =
-    activeReplay?.schemaVersion === "2" ? activeReplay : null;
-  const legacyReplayResult =
-    activeReplay?.schemaVersion === "1" ? activeReplay.result : undefined;
+    activeReplay !== null && "projectionKind" in activeReplay
+      ? activeReplay
+      : null;
+  const legacyReplay =
+    activeReplay !== null && !("projectionKind" in activeReplay)
+      ? activeReplay
+      : null;
+  const legacyReplayResult = legacyReplay?.result;
   const verifiedResult = session?.verifiedResult ?? legacyReplayResult;
   const belief = sessionBeliefPresentation(session);
   const effectiveClaim =
     claim ||
-    hostedReplay?.beliefSpec.claim ||
+    hostedReplay?.question.claim ||
     belief?.claim ||
     "The notebook accuracy proves generalization to new customers.";
   const activeLearnerStage =
@@ -3601,10 +3919,31 @@ export function App() {
   const rememberRunnerJob = (job: RunnerJob) => {
     setRunnerJob(job);
     rememberRunnerCheckpoint(job.sessionId, job);
+    try {
+      registerActiveRunnerJob(
+        {
+          sessionId: job.sessionId,
+          jobId: job.jobId,
+          kind: job.kind,
+          registeredAt: new Date().toISOString(),
+        },
+        window.sessionStorage,
+      );
+    } catch {
+      // The local reconnect checkpoint remains available when session storage
+      // is blocked by the browser.
+    }
   };
 
   const forgetRunnerJob = (sessionId: string, jobId?: string) => {
     forgetRunnerCheckpoint(sessionId, jobId);
+    if (jobId !== undefined) {
+      try {
+        markActiveRunnerJobTerminal(sessionId, jobId, window.sessionStorage);
+      } catch {
+        // Storage is only a recovery aid; the server remains authoritative.
+      }
+    }
   };
 
   const advanceLiveLab = async (startingSession: SessionView) => {
@@ -3650,6 +3989,7 @@ export function App() {
       current = await runner.waitForJob({
         sessionId,
         jobId,
+        jobKind: "LAB_COMPILE",
         terminalStates: ["LAB_VERIFIED", "LAB_REJECTED"],
         onSession: setSession,
       });
@@ -3692,6 +4032,7 @@ export function App() {
       current = await runner.waitForJob({
         sessionId,
         jobId,
+        jobKind: "LAB_RUN",
         terminalStates: ["EXPERIMENT_COMPLETED", "LAB_REJECTED"],
         onSession: setSession,
       });
@@ -3743,7 +4084,7 @@ export function App() {
       .finally(() => setCancellingRunner(false));
   };
 
-  const restart = () => {
+  const resetJourney = (notice?: string) => {
     Object.values(storageKeys).forEach((key) =>
       window.localStorage.removeItem(key),
     );
@@ -3762,13 +4103,108 @@ export function App() {
     setActiveReplay(null);
     setArtifact(null);
     setSession(null);
-    setError(null);
+    setError(notice ?? null);
     setBusy(false);
     setAnalysisPreview(null);
     setSensitiveContentApproved(false);
     setRunnerJob(null);
+    setRouteRecovery(null);
+    setRestartRequest(null);
+    setRestartBusy(false);
     setRouteHydrated(true);
     runner.clear();
+  };
+
+  const restart = () => {
+    if (restartBusy) return;
+    const sessionId =
+      session?.sessionId ?? window.localStorage.getItem(storageKeys.sessionId);
+    if (sessionId !== null) {
+      const jobs = knownActiveRunnerJobs(sessionId);
+      if (jobs.length > 0) {
+        setRestartRequest({ sessionId, jobs });
+        return;
+      }
+    }
+    resetJourney();
+  };
+
+  const revokeCurrentSessionAccess = () => {
+    if (session === null || busy) return;
+    if (knownActiveRunnerJobs(session.sessionId).length > 0) {
+      setError(
+        "Cancel the active test before revoking this browser's private session access.",
+      );
+      return;
+    }
+    const sessionId = session.sessionId;
+    const sessionMode = presentationMode(session.mode);
+    void withRequest(async () => {
+      await counterLabApi.revokeSessionAccess(sessionId);
+      removeRecentWork(sessionId, sessionMode, window.localStorage);
+      resetJourney(
+        "Private session access was revoked. Stored immutable evidence was not deleted.",
+      );
+    });
+  };
+
+  const dismissRestart = useCallback(() => {
+    if (!restartBusy) setRestartRequest(null);
+  }, [restartBusy]);
+
+  const confirmRestart = async () => {
+    if (restartRequest === null || restartBusy) return;
+    setRestartBusy(true);
+    runner.cancel();
+    const confirmedTerminal = await Promise.all(
+      restartRequest.jobs.map(async (job) => {
+        const controller = new AbortController();
+        const timeout = window.setTimeout(
+          () =>
+            controller.abort(
+              new DOMException("Cancellation timed out", "TimeoutError"),
+            ),
+          8_000,
+        );
+        try {
+          await counterLabApi.cancelRunnerJob(
+            restartRequest.sessionId,
+            job.jobId,
+            controller.signal,
+          );
+          return true;
+        } catch (caught) {
+          return (
+            caught instanceof ApiClientError &&
+            caught.code === "RUNNER_JOB_NOT_ACTIVE"
+          );
+        } finally {
+          window.clearTimeout(timeout);
+        }
+      }),
+    );
+    let unresolved = 0;
+    for (const [index, job] of restartRequest.jobs.entries()) {
+      if (confirmedTerminal[index] === true) {
+        try {
+          markActiveRunnerJobTerminal(
+            restartRequest.sessionId,
+            job.jobId,
+            window.sessionStorage,
+          );
+        } catch {
+          // A blocked storage surface does not change the server's terminal
+          // cancellation authority.
+        }
+      } else {
+        unresolved += 1;
+      }
+    }
+    resetJourney(
+      unresolved === 0
+        ? undefined
+        : `CounterLab returned home, but could not confirm cancellation for ${unresolved} live ${unresolved === 1 ? "job" : "jobs"}. The ${unresolved === 1 ? "job remains" : "jobs remain"} registered for recovery; no result was authorized by leaving the page.`,
+    );
   };
 
   useEffect(() => {
@@ -3781,8 +4217,57 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (routeRecovery !== null) routeRecoveryHeadingRef.current?.focus();
+  }, [routeRecovery]);
+
+  useEffect(() => {
+    if (session !== null) {
+      upsertRecentWork(
+        {
+          id: session.sessionId,
+          mode: presentationMode(session.mode),
+          status: session.state,
+          updatedAt: new Date().toISOString(),
+        },
+        window.localStorage,
+      );
+      return;
+    }
+    if (activeReplayId !== null && activeReplay !== null) {
+      upsertRecentWork(
+        {
+          id: activeReplayId,
+          mode: "replay",
+          status: "STORED_EVIDENCE",
+          updatedAt: new Date().toISOString(),
+        },
+        window.localStorage,
+      );
+    }
+  }, [activeReplay, activeReplayId, session]);
+
+  useEffect(() => {
     let active = true;
-    const route = parseStudioLocation(window.location.pathname);
+    const attemptedPath = window.location.pathname;
+    const route = parseStudioLocation(attemptedPath);
+
+    if (route.kind === "not-found") {
+      runner.clear();
+      setJudgeMode(false);
+      setMode(null);
+      setStage("landing");
+      setActiveReplayId(null);
+      setActiveReplay(null);
+      setSession(null);
+      setArtifact(null);
+      setBusy(false);
+      setError(null);
+      setRouteHydrated(false);
+      setRouteRecovery({ reason: "unknown-route", attemptedPath });
+      return;
+    }
+
+    setRouteRecovery(null);
 
     if (route.kind === "judge") {
       runner.clear();
@@ -3832,13 +4317,20 @@ export function App() {
         .then((loaded) => {
           if (!active) return;
           setActiveReplay(loaded);
-          if (loaded.schemaVersion === "2") {
+          if ("projectionKind" in loaded) {
             setReplayIntro(false);
             setStage("reality");
           }
         })
         .catch((caught: unknown) => {
-          if (active) reportError(caught);
+          if (active) {
+            if (caught instanceof ApiClientError && caught.status === 404) {
+              removeRecentWork(replayId, "replay", window.localStorage);
+            }
+            setError(null);
+            setRouteHydrated(false);
+            setRouteRecovery({ reason: "missing-replay", attemptedPath });
+          }
         })
         .finally(() => {
           if (active) setBusy(false);
@@ -3854,14 +4346,17 @@ export function App() {
 
     if (route.kind === "new") {
       runner.clear();
+      const storedClaim =
+        window.localStorage.getItem(storageKeys.claim)?.trim() ?? "";
       setMode("live");
-      setStage("live-setup");
+      setClaim(storedClaim);
+      setStage(storedClaim.length > 0 ? "question-path" : "live-setup");
       setSession(null);
       setArtifact(null);
       setError(null);
       window.localStorage.setItem(storageKeys.mode, "live");
       setRouteHydrated(true);
-      void checkLiveCapabilities();
+      if (storedClaim.length === 0) void checkLiveCapabilities();
       return;
     }
 
@@ -3875,10 +4370,43 @@ export function App() {
     setError(null);
     void (async () => {
       try {
-        const restored = await counterLabApi.getSession(sessionId);
-        const restoredArtifact = await counterLabApi.getArtifact(
-          restored.artifactId,
-        );
+        let restored: SessionView;
+        try {
+          restored = await counterLabApi.getSession(sessionId);
+        } catch (caught) {
+          if (active) {
+            if (caught instanceof ApiClientError && caught.status === 404) {
+              removeRecentWork(sessionId, "live", window.localStorage);
+              removeRecentWork(sessionId, "instant", window.localStorage);
+            }
+            setRouteHydrated(false);
+            setRouteRecovery({
+              reason:
+                route.kind === "proof" ? "missing-proof" : "missing-session",
+              attemptedPath,
+            });
+          }
+          return;
+        }
+        let restoredArtifact: ArtifactView;
+        try {
+          restoredArtifact = await counterLabApi.getSessionArtifact(
+            restored.sessionId,
+          );
+        } catch (caught) {
+          if (active) {
+            if (caught instanceof ApiClientError && caught.status === 404) {
+              removeRecentWork(
+                restored.sessionId,
+                presentationMode(restored.mode),
+                window.localStorage,
+              );
+            }
+            setRouteHydrated(false);
+            setRouteRecovery({ reason: "missing-artifact", attemptedPath });
+          }
+          return;
+        }
         if (!active) return;
         setArtifact(restoredArtifact);
         setSession(restored);
@@ -3903,6 +4431,16 @@ export function App() {
           restored.state !== "INGESTED" &&
             restored.state !== "BELIEF_TEST_PROPOSED",
         );
+        if (route.kind === "proof") {
+          if (!sessionProofReady(restored)) {
+            setRouteHydrated(false);
+            setRouteRecovery({ reason: "proof-not-ready", attemptedPath });
+            return;
+          }
+          setStage("reality");
+          setRouteHydrated(true);
+          return;
+        }
         // The route is safe to synchronize as soon as the persisted session
         // and artifact have been restored. A resumed runner may still fail;
         // keeping hydration disabled until that network job succeeds would
@@ -3952,12 +4490,14 @@ export function App() {
           ? "review-title"
           : stage === "landing"
             ? "landing-title"
-            : undefined,
+            : stage === "question-path"
+              ? "claim-path-title"
+              : undefined,
     );
   }, [judgeMode, reviewStep, stage]);
 
   useEffect(() => {
-    if (!routeHydrated || judgeMode) return;
+    if (!routeHydrated || judgeMode || routeRecovery !== null) return;
     const path = studioPath({
       stage,
       mode,
@@ -3968,7 +4508,15 @@ export function App() {
     if (window.location.pathname !== path) {
       window.history.pushState({}, "", path);
     }
-  }, [activeReplayId, judgeMode, mode, routeHydrated, session, stage]);
+  }, [
+    activeReplayId,
+    judgeMode,
+    mode,
+    routeHydrated,
+    routeRecovery,
+    session,
+    stage,
+  ]);
 
   const checkLiveCapabilities = async () => {
     setCheckingLiveHealth(true);
@@ -4270,33 +4818,94 @@ export function App() {
   const continueReplay = () => {
     window.localStorage.setItem(storageKeys.replayIntro, "false");
     setReplayIntro(false);
+    setStage("reality");
   };
+
+  const retryRouteRecovery = () => {
+    setRouteRecovery(null);
+    setRouteHydrated(false);
+    setBusy(false);
+    setLocationRevision((current) => current + 1);
+  };
+
+  const recentWorkSessions = listRecentWork(window.localStorage).map(
+    (recent): RouteRecoveryRecentSession => ({
+      id: `${recent.mode}:${recent.id}`,
+      title:
+        recent.mode === "instant"
+          ? "Verified sample session"
+          : recent.mode === "replay"
+            ? "Verified replay"
+            : "Live notebook session",
+      mode: recent.mode,
+      status: recent.status,
+      onOpen: () => {
+        window.history.pushState({}, "", recentWorkPath(recent));
+        setRouteRecovery(null);
+        setRouteHydrated(false);
+        setLocationRevision((current) => current + 1);
+      },
+    }),
+  );
+  const routeRecoveryRecentSessions =
+    routeRecovery === null ? [] : recentWorkSessions;
+  const restartDialog =
+    restartRequest === null ? null : (
+      <StartOverDialog
+        jobs={restartRequest.jobs}
+        busy={restartBusy}
+        onKeepWorking={dismissRestart}
+        onConfirm={() => void confirmRestart()}
+      />
+    );
+
+  if (routeRecovery !== null) {
+    return (
+      <div className="app-frame stage-landing">
+        <SkipLink />
+        {restartDialog}
+        <RouteRecovery
+          ref={routeRecoveryHeadingRef}
+          reason={routeRecovery.reason}
+          attemptedPath={routeRecovery.attemptedPath}
+          onRetry={retryRouteRecovery}
+          onHome={restart}
+          recentSessions={routeRecoveryRecentSessions}
+        />
+      </div>
+    );
+  }
 
   if (judgeMode) {
     return (
-      <JudgeModeView
-        health={liveHealth}
-        healthPending={checkingLiveHealth}
-        healthError={liveHealthError}
-        onRetryHealth={() => void checkLiveCapabilities()}
-        onStartSample={() => chooseMode("instant")}
-      />
+      <Suspense
+        fallback={<DeferredSurfaceFallback label="Loading Judge Mode…" />}
+      >
+        <LazyJudgeModeView
+          health={liveHealth}
+          healthPending={checkingLiveHealth}
+          healthError={liveHealthError}
+          onRetryHealth={() => void checkLiveCapabilities()}
+          onStartSample={() => chooseMode("instant")}
+        />
+      </Suspense>
     );
   }
 
   if (hostedReplay !== null) {
     return (
       <div className="app-frame stage-reality hosted-replay-frame">
-        <ProofCapsuleReplayView
-          replay={hostedReplay}
-          proofCapsuleDownloadUrl={counterLabApi.replayProofCapsuleDownloadUrl(
-            hostedReplay.replayId,
-          )}
-          patchedNotebookDownloadUrl={counterLabApi.replayPatchedNotebookDownloadUrl(
-            hostedReplay.replayId,
-          )}
-          onStartOver={restart}
-        />
+        <SkipLink />
+        <Suspense
+          fallback={
+            <DeferredSurfaceFallback label="Loading verified replay…" />
+          }
+        >
+          <LazyProofCapsuleReplayView
+            replay={hostedReplay}
+            onStartOver={restart}
+          />
+        </Suspense>
         <footer className="footer shell">
           <span>
             <strong>CounterLab</strong> · verified replay
@@ -4308,12 +4917,37 @@ export function App() {
     );
   }
 
+  if (legacyReplay !== null && !replayIntro) {
+    return (
+      <div className="app-frame stage-reality hosted-replay-frame">
+        <SkipLink />
+        <LegacyReplayResult
+          replay={legacyReplay}
+          onStartSample={() => {
+            restart();
+            chooseMode("instant");
+          }}
+          onStartOver={restart}
+        />
+        <footer className="footer shell">
+          <span>
+            <strong>CounterLab</strong> · verified replay
+          </span>
+          <span>Chatbots explain. CounterLab lets reality answer.</span>
+          <span>Read-only legacy evidence</span>
+        </footer>
+      </div>
+    );
+  }
+
   return (
     <div className={`app-frame stage-${stage}`}>
+      <SkipLink />
+      {restartDialog}
       {replay && activeReplay !== null && (
         <ReplayBanner replay={activeReplay} />
       )}
-      {stage !== "landing" && (
+      {stage !== "landing" && stage !== "question-path" && (
         <Header
           mode={mode}
           stage={stage}
@@ -4344,248 +4978,308 @@ export function App() {
           }}
           testClaim={() => {
             window.localStorage.setItem(storageKeys.claim, claim);
-            chooseMode("live");
+            setJudgeMode(false);
+            setMode("live");
+            setReviewStep(null);
+            setError(null);
+            setAnalysisPreview(null);
+            setSensitiveContentApproved(false);
+            window.localStorage.setItem(storageKeys.mode, "live");
+            setStage("question-path");
           }}
           chooseMode={chooseMode}
           busy={busy}
+          recentSessions={recentWorkSessions}
         />
       )}
-      {stage !== "landing" && mode !== null && (
-        <CounterLabStudio
-          context={{
-            mode,
-            stage: stage as StudioStage,
-            artifact,
-            session,
-            events: runner.events,
+      {stage === "question-path" && mode === "live" && (
+        <ClaimPathChooser
+          claim={claim}
+          busy={busy}
+          onStartSample={() => chooseMode("instant")}
+          onAttachNotebook={(file) => {
+            setMode("live");
+            setStage("claim");
+            window.localStorage.setItem(storageKeys.mode, "live");
+            uploadNotebook(file);
           }}
-          actions={{
-            newAnalysis: () => {
-              setClaim("");
-              chooseMode("live");
-            },
-            showEvidence: () => review("question"),
-            ...(stage === "belief" && confirmed && prediction !== null
-              ? { lockPrediction: commitPrediction }
-              : {}),
-            ...(stage === "build" ? { runFairTest: openResult } : {}),
-            ...(session?.patchResult === undefined
-              ? {}
-              : {
-                  reviewPatch: () => setStage("reality"),
-                  downloadPatch: downloadCurrentPatch,
-                }),
-            ...(sessionProofReady(session)
-              ? { exportProof: exportCurrentProof }
-              : {}),
-            startOver: restart,
-            openRecent: openRecentProject,
+          onCheckLiveTools={() => chooseMode("live")}
+          onBack={() => {
+            window.history.replaceState({}, "", "/");
+            window.localStorage.removeItem(storageKeys.mode);
+            setMode(null);
+            setStage("landing");
+            setError(null);
+            setAnalysisPreview(null);
+            setSensitiveContentApproved(false);
+            setRouteHydrated(true);
           }}
-        >
-          {reviewStep !== null && (
-            <ReviewScreen
-              step={reviewStep}
-              claim={effectiveClaim}
-              artifact={artifact}
-              session={session}
-              {...(verifiedResult === undefined
-                ? {}
-                : { result: verifiedResult })}
-              returnToCurrent={returnToCurrent}
-              restart={restart}
-            />
-          )}
-          {reviewStep === null && session !== null && (
-            <div className="shell learner-stage-hint">
-              <NeedAHint
-                hintId={activeHint.id}
-                hint={activeHint.copy}
-                evidenceHref={activeHint.evidenceHref}
-                evidenceLabel={activeHint.evidenceLabel}
-                onOpen={(hintId) => {
-                  void recordLearnerInteraction(session.sessionId, {
-                    kind: "hint.opened",
-                    stage: activeLearnerStage,
-                    hintId,
-                  });
-                }}
-              />
-            </div>
-          )}
-          {reviewStep === null && stage === "claim" && (
-            <ClaimScreen
-              artifact={artifact}
-              claim={claim}
-              updateClaim={updateClaim}
-              analysisPreview={analysisPreview}
-              sensitiveContentApproved={sensitiveContentApproved}
-              setSensitiveContentApproved={setSensitiveContentApproved}
-              cancelPreview={() => {
-                setAnalysisPreview(null);
-                setSensitiveContentApproved(false);
-              }}
-              continueToBelief={proposeBeliefTest}
-              uploadNotebook={uploadNotebook}
-              busy={busy}
-            />
-          )}
-          {reviewStep === null && stage === "belief" && (
-            <BeliefScreen
-              claim={effectiveClaim}
-              belief={belief}
-              notebookScore={notebookScoreDisplay(artifact)}
-              confirmed={confirmed}
-              confirm={confirmBeliefTest}
-              prediction={prediction}
-              setPrediction={setPrediction}
-              confidence={confidence}
-              setConfidence={setConfidence}
-              commitPrediction={commitPrediction}
-              editClaim={() => setStage("claim")}
-              stop={stopBeliefTest}
-            />
-          )}
-          {reviewStep === null &&
-            stage === "build" &&
-            mode !== null &&
-            (replay && activeReplay === null ? (
-              <main className="workspace shell narrow" aria-live="polite">
-                <div className="screen-intro">
-                  <p className="eyebrow">Checking stored evidence</p>
-                  <h1>Opening this replay…</h1>
-                  <p>
-                    CounterLab will label it verified only after the stored
-                    payload passes its strict replay contract.
-                  </p>
-                </div>
-              </main>
-            ) : replayIntro && activeReplay !== null ? (
-              <main className="workspace shell narrow">
-                <div className="screen-intro">
-                  <p className="eyebrow">Stored evidence chain</p>
-                  <h1>Replay verified session</h1>
-                  <p>
-                    This path reconstructs recorded events and computed
-                    payloads. It is not a live model run.
-                  </p>
-                </div>
-                <section className="setup-card panel">
-                  <dl className="provenance-list">
-                    <div>
-                      <dt>Replay</dt>
-                      <dd>{activeReplay.replayId}</dd>
-                    </div>
-                    {activeReplay.schemaVersion === "1" ? (
-                      <>
-                        <div>
-                          <dt>Model</dt>
-                          <dd>{activeReplay.modelId}</dd>
-                        </div>
-                        <div>
-                          <dt>Verifier</dt>
-                          <dd>{activeReplay.verifierVersion}</dd>
-                        </div>
-                        <div>
-                          <dt>Commit</dt>
-                          <dd>{activeReplay.templateCommit}</dd>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div>
-                          <dt>Subject Pack</dt>
-                          <dd>{activeReplay.concept.replaceAll("_", " ")}</dd>
-                        </div>
-                        <div>
-                          <dt>Capsule</dt>
-                          <dd>{activeReplay.capsuleId}</dd>
-                        </div>
-                        <div>
-                          <dt>Root hash</dt>
-                          <dd>{activeReplay.rootHash}</dd>
-                        </div>
-                      </>
-                    )}
-                  </dl>
-                </section>
-                <button
-                  className="button button-primary"
-                  type="button"
-                  onClick={continueReplay}
-                >
-                  Continue replay <Mark name="arrow" />
-                </button>
-              </main>
-            ) : (
-              <BuildScreen
-                mode={mode}
-                resultReady={verifiedResult !== undefined}
-                notebookScore={notebookScoreDisplay(artifact)}
-                concept={belief?.concept}
-                predictionChoice={prediction}
-                sealedCategoricalChoice={
-                  session?.prediction?.choice ?? prediction
-                }
-                confidence={session?.prediction?.confidence ?? confidence}
-                openResult={openResult}
-              />
-            ))}
-          {reviewStep === null &&
-            stage === "reality" &&
-            verifiedResult !== undefined && (
-              <RealityScreen
-                claim={effectiveClaim}
-                prediction={prediction ?? "stays-high"}
-                result={verifiedResult}
-                session={session}
-                artifact={artifact}
-                updateSession={setSession}
-              />
-            )}
-          {reviewStep === null &&
-            stage === "reality" &&
-            verifiedResult === undefined && (
-              <main className="workspace shell narrow" role="alert">
-                <div className="screen-intro compact">
-                  <p className="eyebrow">Result withheld</p>
-                  <h1>No verified result was released.</h1>
-                  <p>
-                    CounterLab will not substitute bundled sample evidence for
-                    this session. Return to the test and try again.
-                  </p>
-                </div>
-              </main>
-            )}
-          {reviewStep === null && stage === "live-setup" && (
-            <LiveSetup
-              health={liveHealth}
-              checking={checkingLiveHealth}
-              checkError={liveHealthError}
-              startLive={startLiveSession}
-              retry={() => void checkLiveCapabilities()}
-              fallBack={chooseMode}
-              busy={busy}
-            />
-          )}
-          {reviewStep === null && stage === "live-compile" && (
-            <LiveCompileScreen
-              concept={belief?.concept}
-              events={runner.events}
-              job={runnerJob}
-              failed={error !== null}
-              canCancel={
-                session?.mode.kind === "live_notebook" &&
-                (runnerJob !== null || session.state === "LAB_COMPILING")
-              }
-              retrying={busy}
-              cancelling={cancellingRunner}
-              onRetry={retryLiveLab}
-              onCancel={cancelLiveLab}
-            />
-          )}
-        </CounterLabStudio>
+        />
       )}
-      {stage !== "landing" && (
+      {stage !== "landing" && stage !== "question-path" && mode !== null && (
+        <Suspense
+          fallback={
+            <DeferredSurfaceFallback label="Loading the scientific instrument…" />
+          }
+        >
+          <LazyCounterLabStudio
+            context={{
+              mode,
+              stage: stage as StudioStage,
+              artifact,
+              session,
+              events: runner.events,
+            }}
+            actions={{
+              newAnalysis: () => {
+                setClaim("");
+                chooseMode("live");
+              },
+              showEvidence: () => review("question"),
+              ...(stage === "belief" && confirmed && prediction !== null
+                ? { lockPrediction: commitPrediction }
+                : {}),
+              ...(stage === "build" ? { runFairTest: openResult } : {}),
+              ...(session?.patchResult === undefined
+                ? {}
+                : {
+                    reviewPatch: () => setStage("reality"),
+                    downloadPatch: downloadCurrentPatch,
+                  }),
+              ...(sessionProofReady(session)
+                ? { exportProof: exportCurrentProof }
+                : {}),
+              ...(session !== null
+                ? {
+                    revokeSessionAccess: revokeCurrentSessionAccess,
+                    revokeSessionAccessDisabled: busy,
+                  }
+                : {}),
+              startOver: restart,
+              openRecent: openRecentProject,
+            }}
+          >
+            {reviewStep !== null && (
+              <ReviewScreen
+                step={reviewStep}
+                claim={effectiveClaim}
+                artifact={artifact}
+                session={session}
+                {...(verifiedResult === undefined
+                  ? {}
+                  : { result: verifiedResult })}
+                returnToCurrent={returnToCurrent}
+                restart={restart}
+              />
+            )}
+            {reviewStep === null && session !== null && (
+              <div className="shell learner-stage-hint">
+                <NeedAHint
+                  hintId={activeHint.id}
+                  hint={activeHint.copy}
+                  evidenceHref={activeHint.evidenceHref}
+                  evidenceLabel={activeHint.evidenceLabel}
+                  onOpen={(hintId) => {
+                    void recordLearnerInteraction(session.sessionId, {
+                      kind: "hint.opened",
+                      stage: activeLearnerStage,
+                      hintId,
+                    });
+                  }}
+                />
+              </div>
+            )}
+            {reviewStep === null && stage === "claim" && (
+              <ClaimScreen
+                artifact={artifact}
+                claim={claim}
+                updateClaim={updateClaim}
+                analysisPreview={analysisPreview}
+                sensitiveContentApproved={sensitiveContentApproved}
+                setSensitiveContentApproved={setSensitiveContentApproved}
+                cancelPreview={() => {
+                  setAnalysisPreview(null);
+                  setSensitiveContentApproved(false);
+                }}
+                continueToBelief={proposeBeliefTest}
+                uploadNotebook={uploadNotebook}
+                busy={busy}
+              />
+            )}
+            {reviewStep === null && stage === "belief" && (
+              <BeliefScreen
+                claim={effectiveClaim}
+                belief={belief}
+                notebookScore={notebookScoreDisplay(artifact)}
+                confirmed={confirmed}
+                confirm={confirmBeliefTest}
+                prediction={prediction}
+                setPrediction={setPrediction}
+                confidence={confidence}
+                setConfidence={setConfidence}
+                commitPrediction={commitPrediction}
+                editClaim={() => setStage("claim")}
+                stop={stopBeliefTest}
+              />
+            )}
+            {reviewStep === null &&
+              stage === "build" &&
+              mode !== null &&
+              (replay && activeReplay === null ? (
+                <main
+                  className="workspace shell narrow"
+                  id="main-content"
+                  tabIndex={-1}
+                  aria-live="polite"
+                >
+                  <div className="screen-intro">
+                    <p className="eyebrow">Checking stored evidence</p>
+                    <h1>Opening this replay…</h1>
+                    <p>
+                      CounterLab will label it verified only after the stored
+                      payload passes its strict replay contract.
+                    </p>
+                  </div>
+                </main>
+              ) : replayIntro && activeReplay !== null ? (
+                <main
+                  className="workspace shell narrow"
+                  id="main-content"
+                  tabIndex={-1}
+                >
+                  <div className="screen-intro">
+                    <p className="eyebrow">Stored evidence chain</p>
+                    <h1>Replay verified session</h1>
+                    <p>
+                      This path reconstructs recorded events and computed
+                      payloads. It is not a live model run.
+                    </p>
+                  </div>
+                  <section className="setup-card panel">
+                    <dl className="provenance-list">
+                      <div>
+                        <dt>Replay</dt>
+                        <dd>{activeReplay.replayId}</dd>
+                      </div>
+                      {!("projectionKind" in activeReplay) ? (
+                        <>
+                          <div>
+                            <dt>Model</dt>
+                            <dd>{activeReplay.modelId}</dd>
+                          </div>
+                          <div>
+                            <dt>Verifier</dt>
+                            <dd>{activeReplay.verifierVersion}</dd>
+                          </div>
+                          <div>
+                            <dt>Commit</dt>
+                            <dd>{activeReplay.templateCommit}</dd>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div>
+                            <dt>Subject Pack</dt>
+                            <dd>{activeReplay.concept.replaceAll("_", " ")}</dd>
+                          </div>
+                          <div>
+                            <dt>Privacy</dt>
+                            <dd>{activeReplay.privacy.profile}</dd>
+                          </div>
+                          <div>
+                            <dt>Root hash</dt>
+                            <dd>
+                              {activeReplay.authority.sourceCapsuleRootHash}
+                            </dd>
+                          </div>
+                        </>
+                      )}
+                    </dl>
+                  </section>
+                  <button
+                    className="button button-primary"
+                    type="button"
+                    onClick={continueReplay}
+                  >
+                    Continue replay <Mark name="arrow" />
+                  </button>
+                </main>
+              ) : (
+                <BuildScreen
+                  mode={mode}
+                  resultReady={verifiedResult !== undefined}
+                  notebookScore={notebookScoreDisplay(artifact)}
+                  concept={belief?.concept}
+                  predictionChoice={prediction}
+                  sealedCategoricalChoice={
+                    session?.prediction?.choice ?? prediction
+                  }
+                  confidence={session?.prediction?.confidence ?? confidence}
+                  openResult={openResult}
+                />
+              ))}
+            {reviewStep === null &&
+              stage === "reality" &&
+              verifiedResult !== undefined && (
+                <RealityScreen
+                  claim={effectiveClaim}
+                  prediction={prediction ?? "stays-high"}
+                  result={verifiedResult}
+                  session={session}
+                  artifact={artifact}
+                  updateSession={setSession}
+                />
+              )}
+            {reviewStep === null &&
+              stage === "reality" &&
+              verifiedResult === undefined && (
+                <main
+                  className="workspace shell narrow"
+                  id="main-content"
+                  tabIndex={-1}
+                  role="alert"
+                >
+                  <div className="screen-intro compact">
+                    <p className="eyebrow">Result withheld</p>
+                    <h1>No verified result was released.</h1>
+                    <p>
+                      CounterLab will not substitute bundled sample evidence for
+                      this session. Return to the test and try again.
+                    </p>
+                  </div>
+                </main>
+              )}
+            {reviewStep === null && stage === "live-setup" && (
+              <LiveSetup
+                health={liveHealth}
+                checking={checkingLiveHealth}
+                checkError={liveHealthError}
+                startLive={startLiveSession}
+                retry={() => void checkLiveCapabilities()}
+                fallBack={chooseMode}
+                busy={busy}
+              />
+            )}
+            {reviewStep === null && stage === "live-compile" && (
+              <LiveCompileScreen
+                concept={belief?.concept}
+                events={runner.events}
+                job={runnerJob}
+                failed={error !== null}
+                canCancel={
+                  session?.mode.kind === "live_notebook" &&
+                  (runnerJob !== null || session.state === "LAB_COMPILING")
+                }
+                retrying={busy}
+                cancelling={cancellingRunner}
+                onRetry={retryLiveLab}
+                onCancel={cancelLiveLab}
+              />
+            )}
+          </LazyCounterLabStudio>
+        </Suspense>
+      )}
+      {stage !== "landing" && stage !== "question-path" && (
         <footer className="footer shell">
           <span>
             <strong>CounterLab</strong> · learn from a fair test

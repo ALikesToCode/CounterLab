@@ -97,7 +97,9 @@ function boundaryFixture(
     ],
     units: { optimism_gap: "accuracy proportion" },
     assumptions: ["Estimator, preprocessing, fixture, and seed remain fixed."],
-    nonClaims: ["The map does not claim group splitting always improves accuracy."],
+    nonClaims: [
+      "The map does not claim group splitting always improves accuracy.",
+    ],
     resultHash: digest("7"),
   });
   const report = BoundaryMapVerificationReportV1Schema.parse({
@@ -113,7 +115,9 @@ function boundaryFixture(
         observed: status === "VERIFIED" ? "resolved" : "swapped",
         expected: "resolved",
         ...(status === "REJECTED"
-          ? { counterexample: "Axis order does not match the registered sweep." }
+          ? {
+              counterexample: "Axis order does not match the registered sweep.",
+            }
           : {}),
       },
     ],
@@ -208,7 +212,11 @@ describe("BoundaryMapBlock", () => {
   });
 
   it("withholds all computed cells when verification was rejected", () => {
-    render(<BoundaryMapBlock boundary={boundaryFixture("integrity-hashed", "REJECTED")} />);
+    render(
+      <BoundaryMapBlock
+        boundary={boundaryFixture("integrity-hashed", "REJECTED")}
+      />,
+    );
     expect(screen.getByRole("alert")).toHaveTextContent(/evidence withheld/i);
     expect(
       screen.queryByRole("table", { name: /verified boundary map values/i }),

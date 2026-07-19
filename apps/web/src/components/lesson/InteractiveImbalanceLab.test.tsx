@@ -25,7 +25,7 @@ vi.mock("../../hooks/useRunnerEvents", () => ({
 describe("InteractiveImbalanceLab", () => {
   it("runs bounded threshold and prevalence controls before revealing a verified metric", async () => {
     api.runInteractiveImbalance.mockResolvedValue({
-      runnerJob: { jobId: "job_interactive_1" },
+      runnerJob: { jobId: "job_interactive_1", kind: "LAB_RUN" },
     });
     runner.waitForStandaloneJob.mockResolvedValue(3);
     api.getInteractiveResult.mockResolvedValue({
@@ -89,6 +89,7 @@ describe("InteractiveImbalanceLab", () => {
     expect(runner.waitForStandaloneJob).toHaveBeenCalledWith({
       sessionId: "session_1",
       jobId: "job_interactive_1",
+      jobKind: "LAB_RUN",
     });
     expect(
       await screen.findByText(/verified exploratory result/i),

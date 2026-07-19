@@ -1,6 +1,7 @@
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import type { PublicCompilerEvent } from "../../api";
+import { CapabilityLinkDisclosure } from "../learner/CapabilityLinkDisclosure";
 import { GeneratedProofView } from "./GeneratedProofView";
 import type { StudioContext } from "./types";
 
@@ -71,12 +72,16 @@ export function ProofConsole({
   activeTab,
   onToggle,
   onTab,
+  onRevokeSessionAccess,
+  revokeSessionAccessDisabled = false,
 }: {
   context: StudioContext;
   open: boolean;
   activeTab: ProofTab;
   onToggle: () => void;
   onTab: (tab: ProofTab) => void;
+  onRevokeSessionAccess?: () => void;
+  revokeSessionAccessDisabled?: boolean;
 }) {
   const filteredEvents = eventsForTab(context.events, activeTab);
   const moveTab = (
@@ -141,37 +146,48 @@ export function ProofConsole({
             tabIndex={0}
           >
             {activeTab === "Provenance" ? (
-              <dl className="console-provenance">
-                <div>
-                  <dt>Artifact</dt>
-                  <dd>{context.artifact?.fileSha256 ?? "Not available yet"}</dd>
-                </div>
-                <div>
-                  <dt>Session</dt>
-                  <dd>{context.session?.sessionId ?? "Not created yet"}</dd>
-                </div>
-                <div>
-                  <dt>Result</dt>
-                  <dd>
-                    {context.session?.verifiedResult?.resultHash ??
-                      "Locked until verification"}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Boundary</dt>
-                  <dd>
-                    {context.session?.boundaryMapAuthority?.resultHash ??
-                      "Locked until verification"}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Capsule</dt>
-                  <dd>
-                    {context.session?.proofCapsule?.rootHash ??
-                      "Issued after verified repair"}
-                  </dd>
-                </div>
-              </dl>
+              <>
+                <dl className="console-provenance">
+                  <div>
+                    <dt>Artifact</dt>
+                    <dd>
+                      {context.artifact?.fileSha256 ?? "Not available yet"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Session</dt>
+                    <dd>{context.session?.sessionId ?? "Not created yet"}</dd>
+                  </div>
+                  <div>
+                    <dt>Result</dt>
+                    <dd>
+                      {context.session?.verifiedResult?.resultHash ??
+                        "Locked until verification"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Boundary</dt>
+                    <dd>
+                      {context.session?.boundaryMapAuthority?.resultHash ??
+                        "Locked until verification"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Capsule</dt>
+                    <dd>
+                      {context.session?.proofCapsule?.rootHash ??
+                        "Issued after verified repair"}
+                    </dd>
+                  </div>
+                </dl>
+                {onRevokeSessionAccess === undefined ? null : (
+                  <CapabilityLinkDisclosure
+                    variant="private-session"
+                    onRevoke={onRevokeSessionAccess}
+                    revokeDisabled={revokeSessionAccessDisabled}
+                  />
+                )}
+              </>
             ) : filteredEvents.length === 0 ? (
               <div className="console-empty">
                 <strong>No {activeTab.toLowerCase()} evidence yet.</strong>

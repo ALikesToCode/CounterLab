@@ -4,7 +4,8 @@ export type StudioLocation =
   | { kind: "new" }
   | { kind: "session"; id: string }
   | { kind: "replay"; id: string }
-  | { kind: "proof"; id: string };
+  | { kind: "proof"; id: string }
+  | { kind: "not-found" };
 
 export function parseStudioLocation(pathname: string): StudioLocation {
   const parts = pathname.split("/").filter(Boolean);
@@ -19,10 +20,10 @@ export function parseStudioLocation(pathname: string): StudioLocation {
       const id = decodeURIComponent(parts[1] ?? "");
       if (id.length > 0) return { kind: parts[0], id };
     } catch {
-      return { kind: "landing" };
+      return { kind: "not-found" };
     }
   }
-  return { kind: "landing" };
+  return { kind: "not-found" };
 }
 
 export function studioPath(input: {

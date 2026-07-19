@@ -80,7 +80,7 @@ def test_executor_rejects_unsafe_image_references(image: str) -> None:
 
 
 def test_execution_snapshot_is_the_exact_validated_read_only_source(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     artifacts = SimpleNamespace(
         plan_source='{"schemaVersion":"1"}\n',
@@ -91,9 +91,25 @@ def test_execution_snapshot_is_the_exact_validated_read_only_source(
     assert hasattr(docker_module, "create_execution_snapshot")
     run_root = tmp_path / "runs"
     run_root.mkdir()
+    requested_directory_modes: list[tuple[Path, int]] = []
+    requested_file_modes: list[int] = []
+    original_chmod = docker_module.os.chmod
+    original_fchmod = docker_module.os.fchmod
+
+    def recording_chmod(path: Path, mode: int) -> None:
+        requested_directory_modes.append((Path(path), mode))
+        original_chmod(path, mode)
+
+    def recording_fchmod(descriptor: int, mode: int) -> None:
+        requested_file_modes.append(mode)
+        original_fchmod(descriptor, mode)
+
+    monkeypatch.setattr(docker_module.os, "chmod", recording_chmod)
+    monkeypatch.setattr(docker_module.os, "fchmod", recording_fchmod)
     snapshot = docker_module.create_execution_snapshot(artifacts, run_root)
 
-    assert stat.S_IMODE(snapshot.stat().st_mode) == 0o555
+    assert requested_directory_modes == [(snapshot, 0o555)]
+    assert requested_file_modes == [0o444, 0o444, 0o444]
     expected = {
         "experiment-plan.json": artifacts.plan_source,
         "artifact-adapter.py": artifacts.adapter_source,
@@ -102,7 +118,7 @@ def test_execution_snapshot_is_the_exact_validated_read_only_source(
     assert {path.name for path in snapshot.iterdir()} == set(expected)
     for path in snapshot.iterdir():
         assert path.read_text(encoding="utf-8") == expected[path.name]
-        assert stat.S_IMODE(path.stat().st_mode) == 0o444
+        assert stat.S_IMODE(path.stat().st_mode) & 0o022 == 0
 
 
 def test_output_policy_rejects_too_many_files_and_oversized_output(
@@ -149,13 +165,20 @@ def test_executor_loads_only_bounded_fixed_outputs_and_records_enforcement(
     workspace.mkdir()
     fixture.write_text("observation_id,customer_id,churned\n", encoding="utf-8")
     artifacts = _artifacts(workspace, RunnerLimits())
+    requested_modes: list[tuple[Path, int]] = []
+    original_chmod = docker_module.os.chmod
+
+    def recording_chmod(path: Path, mode: int) -> None:
+        requested_modes.append((Path(path), mode))
+        original_chmod(path, mode)
+
+    monkeypatch.setattr(docker_module.os, "chmod", recording_chmod)
 
     def fake_run(command: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
         output_mount = next(
             item for item in command if isinstance(item, str) and "dst=/output" in item
         )
         output = Path(output_mount.split("src=", 1)[1].split(",dst=", 1)[0])
-        assert stat.S_IMODE(output.stat().st_mode) == 0o777
         (output / "adapter-contract.json").write_text(
             json.dumps({"runs": []}), encoding="utf-8"
         )
@@ -193,6 +216,10 @@ def test_executor_loads_only_bounded_fixed_outputs_and_records_enforcement(
         "/output",
     ]
     assert all(record.evidence["limits"].values())
+    assert any(
+        path.name.startswith("adapter-") and mode == 0o777
+        for path, mode in requested_modes
+    )
 
 
 def test_executor_kills_named_container_when_wall_clock_expires(

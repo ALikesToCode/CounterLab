@@ -53,7 +53,8 @@ export function BoundaryMapBlock({
     [result.classifications],
   );
   const classificationIndex = useMemo(
-    () => new Map(result.classifications.map((item, index) => [item.id, index])),
+    () =>
+      new Map(result.classifications.map((item, index) => [item.id, index])),
     [result.classifications],
   );
   const [columnAxis, rowAxis] = result.axes;
@@ -133,7 +134,9 @@ export function BoundaryMapBlock({
   const selectedObservable =
     selectedCell === undefined ? undefined : cellObservable(selectedCell);
   const selectedCoordinates = selectedCell?.coordinates.map((coordinate) => {
-    const axis = result.axes.find((candidate) => candidate.id === coordinate.axisId);
+    const axis = result.axes.find(
+      (candidate) => candidate.id === coordinate.axisId,
+    );
     const point = axis?.points.find(
       (candidate) => candidate.id === coordinate.pointId,
     );
@@ -145,7 +148,10 @@ export function BoundaryMapBlock({
       : "Integrity-hashed";
 
   return (
-    <section className={styles.boundaryMap} aria-labelledby="boundary-map-title">
+    <section
+      className={styles.boundaryMap}
+      aria-labelledby="boundary-map-title"
+    >
       <header className={styles.header}>
         <div>
           <span>Boundary · Verified Test</span>
@@ -201,18 +207,21 @@ export function BoundaryMapBlock({
                     const cell = cellByCoordinate.get(
                       `${columnPoint.id}:${rowPoint.id}`,
                     );
-                    if (cell === undefined) return <td key={columnPoint.id}>—</td>;
+                    if (cell === undefined)
+                      return <td key={columnPoint.id}>—</td>;
                     const classification = classificationById.get(
                       cell.classificationId,
                     );
-                    const index = classificationIndex.get(cell.classificationId) ?? 0;
+                    const index =
+                      classificationIndex.get(cell.classificationId) ?? 0;
                     const observable = cellObservable(cell);
                     const selected = cell.cellId === selectedCell?.cellId;
                     return (
                       <td key={columnPoint.id}>
                         <button
                           ref={(node) => {
-                            if (node === null) buttons.current.delete(cell.cellId);
+                            if (node === null)
+                              buttons.current.delete(cell.cellId);
                             else buttons.current.set(cell.cellId, node);
                           }}
                           className={styles[`tone${Math.min(index, 2)}`]}
@@ -225,7 +234,9 @@ export function BoundaryMapBlock({
                             moveSelection(event, rowIndex, columnIndex)
                           }
                         >
-                          <span aria-hidden="true">{classificationSymbol(index)}</span>
+                          <span aria-hidden="true">
+                            {classificationSymbol(index)}
+                          </span>
                           <small>{observable.value}</small>
                         </button>
                       </td>
@@ -243,7 +254,9 @@ export function BoundaryMapBlock({
             <p>No verified cell is available.</p>
           ) : (
             <>
-              <h3>{selectedClassification?.label ?? selectedCell.classificationId}</h3>
+              <h3>
+                {selectedClassification?.label ?? selectedCell.classificationId}
+              </h3>
               <dl>
                 {selectedCoordinates?.map(({ axis, point }) => (
                   <div key={axis?.id ?? point?.id}>
@@ -294,8 +307,8 @@ export function BoundaryMapBlock({
           <section>
             <h3>Provenance</h3>
             <p>
-              Kernel {result.kernelVersion} · seed {result.seed} · {result.cells.length}{" "}
-              cells
+              Kernel {result.kernelVersion} · seed {result.seed} ·{" "}
+              {result.cells.length} cells
             </p>
             {receipt.integrity.mode === "hmac-signed" ? (
               <p>Signing key ID {receipt.integrity.keyId}</p>

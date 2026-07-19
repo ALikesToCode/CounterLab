@@ -1202,6 +1202,48 @@ export function releasedConceptPacks(): ConceptPackDefinition[] {
   );
 }
 
+export function releasedPackClaimManifest() {
+  const packs = releasedConceptPacks().map((pack) => ({
+    id: pack.id,
+    version: pack.version,
+    releaseStatus: pack.releaseStatus,
+    title: pack.title,
+    fixedFixture: { ...pack.fixedFixture },
+    authoritativeKernelVersion: pack.fixedResultAuthority.kernelVersion,
+    allowedOperations: [...pack.allowedOperations],
+    allowedMetrics: [...pack.allowedMetrics],
+    approvedClaims: [...pack.approvedClaims],
+    forbiddenClaims: [...pack.forbiddenClaims],
+    nonClaims: [
+      ...new Set([
+        ...pack.scientificMethod.boundaryMap.nonClaims,
+        ...pack.transferTask.experimentIrContract.nonClaims,
+      ]),
+    ],
+  }));
+  return deepFreeze({
+    schemaVersion: "1" as const,
+    releaseScope: "CounterLab v6.1 learner experience",
+    releasedSubjectPackCount: packs.length,
+    releasedSubjectPacks: packs,
+    authorityRoles: {
+      reasoningAnalyst: "proposal_and_explanation_only",
+      experimentSelection: "fixed_subject_pack_scorer",
+      numericalTruth: "fixed_kernel",
+      verification: "frozen_verifier",
+      learner: "question_prediction_revision_transfer_and_patch_approval",
+    },
+    scientificEngineRegistry: "scientific-engines/registry.json",
+    globalNonClaims: [
+      "Only entity leakage and class imbalance are released Subject Packs.",
+      "CounterLab does not support arbitrary notebooks, arbitrary subject generation, or all STEM.",
+      "A verified result applies only to its documented fixture, experiment, and Boundary Map.",
+      "A Proof Capsule does not certify global mastery.",
+      "Sample and replay evidence are not live notebook authority.",
+    ],
+  });
+}
+
 export function routeArtifactConcept(
   manifest: ArtifactManifest,
 ): ConceptRoutingDecision {

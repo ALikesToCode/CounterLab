@@ -47,6 +47,7 @@ export interface RunnerJobRepository {
   findReusableRequest(
     requestFingerprint: string,
   ): Promise<RunnerJob | undefined>;
+  findActiveForSession(sessionId: string): Promise<RunnerJob[]>;
   save(job: RunnerJob, expectedVersion: number): Promise<void>;
   appendEvent(
     job: RunnerJob,
@@ -117,6 +118,13 @@ const TERMINAL_JOB_STATUSES = new Set<RunnerJobStatus>([
   "FAILED",
   "CANCELLED",
   "TIMED_OUT",
+]);
+const ACTIVE_JOB_STATUSES = new Set<RunnerJobStatus>([
+  "QUEUED",
+  "STARTING",
+  "RUNNING",
+  "AWAITING_APPROVAL",
+  "REPAIRING",
 ]);
 const REUSABLE_STARTED_JOB_STATUSES = new Set<RunnerJobStatus>([
   "RUNNING",
@@ -218,6 +226,18 @@ export class RunnerJobService {
       );
     }
     return structuredClone(job);
+  }
+
+  async listActiveForSession(sessionId: string): Promise<RunnerJob[]> {
+    const jobs = await this.repository.findActiveForSession(sessionId);
+    for (const job of jobs) {
+      if (job.sessionId !== sessionId || !ACTIVE_JOB_STATUSES.has(job.status)) {
+        throw new RunnerCallbackStateError(
+          "Runner repository returned a job outside the active session query",
+        );
+      }
+    }
+    return structuredClone(jobs);
   }
 
   async cancelJob(jobId: string): Promise<RunnerJob> {
@@ -437,7 +457,15 @@ export class RunnerJobService {
         parsed.finalEventCursor,
       );
     }
-    assertRunnerJobTransition(current.status, parsed.status);
+    try {
+      assertRunnerJobTransition(current.status, parsed.status);
+    } catch (error) {
+      throw new RunnerCallbackStateError(
+        error instanceof Error
+          ? error.message
+          : `Runner callback cannot transition job ${current.jobId} from ${current.status}`,
+      );
+    }
     const next = RunnerJobSchema.parse({
       ...current,
       status: parsed.status,

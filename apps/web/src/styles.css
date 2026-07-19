@@ -17,7 +17,7 @@
   --control: #202020;
   --ink: #fafafa;
   --ink-soft: #a1a1a1;
-  --ink-faint: #666666;
+  --ink-faint: #858585;
   --line: #262626;
   --line-strong: #3d3d3d;
   --line-focus: #737373;
@@ -319,6 +319,30 @@ pre,
 
 .app-frame {
   min-height: 100vh;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 1000;
+  top: 12px;
+  left: 12px;
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  padding: 0 16px;
+  color: var(--accent-ink);
+  border: 3px solid var(--focus-ring);
+  border-radius: 10px;
+  outline: none;
+  background: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(calc(-100% - 24px));
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
 }
 
 .sr-only {
@@ -6381,11 +6405,13 @@ body {
   padding: 0;
   display: grid;
   grid-template-columns: 64px minmax(0, 1fr);
+  grid-template-areas: "rail canvas";
   background: var(--night);
   color: var(--ink);
 }
 
 .landing-rail {
+  grid-area: rail;
   position: sticky;
   z-index: 20;
   top: 0;
@@ -6526,15 +6552,16 @@ body {
   display: inline-grid;
   place-items: center;
   color: var(--ink);
-  font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 700;
 }
 
-.landing-new-question .landing-rail-icon {
-  font-family: var(--sans);
-  font-size: 20px;
-  font-weight: 450;
+.landing-rail-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.65;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .landing-rail-label {
@@ -6581,6 +6608,7 @@ body {
 }
 
 .landing-canvas {
+  grid-area: canvas;
   min-width: 0;
   min-height: 100svh;
   padding: clamp(48px, 7vh, 84px) clamp(24px, 5vw, 72px);
@@ -6623,6 +6651,33 @@ body {
   font-size: 13px;
   line-height: 1.55;
   text-align: center;
+}
+
+.landing-mobile-sample {
+  min-height: 44px;
+  padding: 10px 16px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.landing-mobile-sample:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.landing-mobile-sample:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .landing-trust-line {
@@ -6680,6 +6735,83 @@ body {
   color: var(--focus-ring);
 }
 
+.landing-recent-work {
+  width: min(620px, 100%);
+  color: var(--ink-soft);
+}
+
+.landing-recent-work > summary {
+  width: fit-content;
+  min-height: 44px;
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.landing-recent-work ul {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  list-style: none;
+}
+
+.landing-recent-work button {
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--ink);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.landing-recent-work button:hover {
+  border-color: var(--line-strong);
+  background: var(--paper-raised);
+}
+
+.landing-recent-work button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.landing-recent-work button span {
+  color: var(--ink-soft);
+  font-size: 12px;
+  text-transform: lowercase;
+}
+
+.deferred-surface-fallback {
+  min-height: 55svh;
+  display: grid;
+  place-items: center;
+}
+
+.deferred-panel-fallback {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+}
+
+.deferred-surface-fallback p,
+.deferred-panel-fallback p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
 .learner-stage-hint {
   padding-top: 16px;
 }
@@ -6718,6 +6850,9 @@ body {
 @media (max-width: 900px) {
   .landing-question-first {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "canvas"
+      "rail";
   }
 
   .landing-rail {
@@ -6756,14 +6891,14 @@ body {
 
   .landing-rail-navigation {
     position: absolute;
-    inset: 100% 0 auto;
+    inset: auto 0 100%;
     margin: 0;
     padding: 12px 14px 18px;
     display: none;
     width: auto;
-    border-bottom: 1px solid var(--line-strong);
+    border-top: 1px solid var(--line-strong);
     background: var(--night);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.63);
+    box-shadow: 0 -20px 40px rgba(0, 0, 0, 0.63);
   }
 
   .landing-rail-navigation.is-open {
@@ -6813,6 +6948,10 @@ body {
   .landing-canvas {
     min-height: calc(100svh - 86px);
     padding: clamp(40px, 7vh, 68px) 20px 54px;
+  }
+
+  .landing-mobile-sample {
+    display: inline-flex;
   }
 }
 

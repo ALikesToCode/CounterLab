@@ -276,6 +276,15 @@ type SanitizedAnalystContext = {
     symbols: string[];
     metricCandidates: ArtifactManifest["cells"][number]["metricCandidates"];
   }>;
+  privacy: {
+    policyVersion: "outbound-privacy-v2";
+    suppressedFieldCount: number;
+    redactions: Array<{
+      category: "secret" | "path" | "identifier" | "sensitive_field";
+      count: number;
+    }>;
+    limitation: string;
+  };
 };
 
 function canonicalize(value: unknown): unknown {
@@ -316,6 +325,7 @@ export function deriveSafetyIdentifier(sessionId: string): string {
 
 function sanitizeText(value: string, maximum = MAX_EXCERPT_CHARACTERS): string {
   const redacted = value
+    .normalize("NFKC")
     .replace(/\bsk-[A-Za-z0-9_-]{10,}\b/g, "[REDACTED_SECRET]")
     .replace(
       /\b((?:api[_-]?key|token|secret|password)\s*=\s*)(["'])[^"'\n]+\2/gi,
@@ -328,8 +338,52 @@ function sanitizeText(value: string, maximum = MAX_EXCERPT_CHARACTERS): string {
     .replace(
       /[A-Za-z]:\\(?:Users|Temp|Windows)\\[^\s'"\n]+/g,
       "[REDACTED_PATH]",
+    )
+    .replace(
+      /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,63}\b/giu,
+      "[REDACTED_IDENTIFIER]",
+    )
+    .replace(
+      /(?<![\p{L}\p{N}])(?:\+?\d{1,3}[ .-]?)?(?:\(?\d{2,4}\)?[ .-]?){2,4}\d{2,4}(?![\p{L}\p{N}])/gu,
+      (candidate) =>
+        candidate.replace(/\D/gu, "").length >= 7
+          ? "[REDACTED_IDENTIFIER]"
+          : candidate,
+    )
+    .replace(
+      /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/giu,
+      "[REDACTED_IDENTIFIER]",
+    )
+    .replace(/\b\d{3}-\d{2}-\d{4}\b/gu, "[REDACTED_IDENTIFIER]")
+    .replace(
+      /\b((?:account|customer|employee|patient|student|user)[_-]?id\s*[:=]\s*)(["'])[^"'\n]+\2/giu,
+      "$1[REDACTED_IDENTIFIER]",
     );
   return redacted.slice(0, maximum);
+}
+
+const OUTBOUND_PUBLIC_PRIVACY_CLASSES = new Set(["feature", "target"]);
+
+function canExposeSchemaField(privacyClass: string): boolean {
+  return OUTBOUND_PUBLIC_PRIVACY_CLASSES.has(privacyClass.trim().toLowerCase());
+}
+
+function sanitizeArtifactText(
+  value: string,
+  manifest: ArtifactManifest,
+  maximum = MAX_EXCERPT_CHARACTERS,
+): string {
+  let safe = sanitizeText(value, maximum);
+  let sensitiveFieldIndex = 0;
+  for (const field of manifest.schemaSummary.fields) {
+    if (!canExposeSchemaField(field.privacyClass)) {
+      sensitiveFieldIndex += 1;
+      safe = safe
+        .split(field.name)
+        .join(`[REDACTED_SENSITIVE_FIELD_${sensitiveFieldIndex}]`);
+    }
+  }
+  return safe;
 }
 
 function validateAnalystInput(input: BeliefAnalystInput): ArtifactManifest {
@@ -371,6 +425,41 @@ export function buildSanitizedAnalystContext(
 ): SanitizedAnalystContext {
   const manifest = validateAnalystInput(input);
   const conceptPack = getConceptPack(input.concept);
+  const schemaFieldAliases = new Map<string, string>();
+  const sensitiveFieldAliases = new Map<string, string>();
+  let sensitiveFieldIndex = 0;
+  const schemaFields = manifest.schemaSummary.fields
+    .slice(0, 64)
+    .map((field) => {
+      if (canExposeSchemaField(field.privacyClass)) {
+        const safeName = sanitizeText(field.name, 120);
+        schemaFieldAliases.set(field.name, safeName);
+        return {
+          name: safeName,
+          inferredType: sanitizeText(field.inferredType, 120),
+          privacyClass: field.privacyClass.trim().toLowerCase(),
+        };
+      }
+      sensitiveFieldIndex += 1;
+      const alias = `[REDACTED_SENSITIVE_FIELD_${sensitiveFieldIndex}]`;
+      schemaFieldAliases.set(field.name, alias);
+      sensitiveFieldAliases.set(field.name, alias);
+      return {
+        name: alias,
+        inferredType: sanitizeText(field.inferredType, 120),
+        privacyClass: "sensitive_identifier",
+      };
+    });
+  const sanitizeOutboundText = (
+    value: string,
+    maximum = MAX_EXCERPT_CHARACTERS,
+  ): string => {
+    let safe = sanitizeText(value, maximum);
+    for (const [fieldName, alias] of sensitiveFieldAliases) {
+      safe = safe.split(fieldName).join(alias);
+    }
+    return safe;
+  };
   const evidenceCells = manifest.cells
     .filter(
       (cell) =>
@@ -383,17 +472,20 @@ export function buildSanitizedAnalystContext(
       cellIndex: cell.index,
       kind: cell.type,
       sourceHash: cell.sourceSha256,
-      sourceExcerpt: sanitizeText(cell.sourceExcerpt),
+      sourceExcerpt: sanitizeOutboundText(cell.sourceExcerpt),
       outputHashes: [...cell.outputHashes],
-      symbols: cell.symbols.map((symbol) => sanitizeText(symbol, 120)),
+      symbols: cell.symbols.map((symbol) => sanitizeOutboundText(symbol, 120)),
       metricCandidates: cell.metricCandidates.map((candidate) => ({
         ...candidate,
-        name: sanitizeText(candidate.name, 120),
+        name: sanitizeOutboundText(candidate.name, 120),
       })),
     }));
 
-  return {
-    learnerClaim: sanitizeText(input.learnerClaim, MAX_CLAIM_CHARACTERS),
+  const projected = {
+    learnerClaim: sanitizeOutboundText(
+      input.learnerClaim,
+      MAX_CLAIM_CHARACTERS,
+    ),
     concept: input.concept,
     conceptPack: {
       id: conceptPack.id,
@@ -406,31 +498,60 @@ export function buildSanitizedAnalystContext(
     support: {
       status: manifest.support.status,
       reasons: manifest.support.reasons.slice(0, 8).map((reason) => ({
-        code: reason.code,
-        message: sanitizeText(reason.message, 300),
+        code: sanitizeOutboundText(reason.code, 120),
+        message: sanitizeOutboundText(reason.message, 300),
         ...(reason.cellIndex === undefined
           ? {}
           : { cellIndex: reason.cellIndex }),
       })),
     },
     schemaSummary: {
-      fields: manifest.schemaSummary.fields.slice(0, 64).map((field) => ({
-        name: sanitizeText(field.name, 120),
-        inferredType: sanitizeText(field.inferredType, 120),
-        privacyClass: sanitizeText(field.privacyClass, 120),
-      })),
+      fields: schemaFields,
       ...(manifest.schemaSummary.rowCount === undefined
         ? {}
         : { rowCount: manifest.schemaSummary.rowCount }),
       entityCandidates: manifest.schemaSummary.entityCandidates.map(
-        (candidate) => sanitizeText(candidate, 120),
+        (candidate, index) =>
+          schemaFieldAliases.get(candidate) ??
+          `[REDACTED_ENTITY_FIELD_${index + 1}]`,
       ),
       targetCandidates: manifest.schemaSummary.targetCandidates.map(
-        (candidate) => sanitizeText(candidate, 120),
+        (candidate, index) =>
+          schemaFieldAliases.get(candidate) ??
+          `[REDACTED_TARGET_FIELD_${index + 1}]`,
       ),
       hash: schemaSummaryHash(manifest.schemaSummary),
     },
     evidence: evidenceCells,
+  };
+  const serialized = JSON.stringify(projected);
+  const markerCounts = (
+    marker: string,
+    category: "secret" | "path" | "identifier" | "sensitive_field",
+  ) => ({
+    category,
+    count: serialized.split(marker).length - 1,
+  });
+  return {
+    ...projected,
+    privacy: {
+      policyVersion: "outbound-privacy-v2",
+      suppressedFieldCount: sensitiveFieldAliases.size,
+      redactions: [
+        markerCounts("[REDACTED_SECRET]", "secret"),
+        markerCounts("[REDACTED_PATH]", "path"),
+        markerCounts("[REDACTED_IDENTIFIER]", "identifier"),
+        {
+          category: "sensitive_field" as const,
+          count: Array.from(sensitiveFieldAliases.values()).reduce(
+            (count, marker) => count + serialized.split(marker).length - 1,
+            0,
+          ),
+        },
+      ].filter(({ count }) => count > 0),
+      limitation:
+        "Declared identifiers and common sensitive patterns are removed, but automated redaction cannot guarantee complete de-identification.",
+    },
   };
 }
 
@@ -492,9 +613,11 @@ function resolveEvidenceRefs(
       }
       if (
         evidence.excerpt.length > 0 &&
-        !sanitizeText(learnerClaim, MAX_CLAIM_CHARACTERS).includes(
-          evidence.excerpt,
-        )
+        !sanitizeArtifactText(
+          learnerClaim,
+          manifest,
+          MAX_CLAIM_CHARACTERS,
+        ).includes(evidence.excerpt)
       ) {
         evidenceError(index, "learner claim excerpt is not present");
       }
@@ -517,7 +640,9 @@ function resolveEvidenceRefs(
       }
       if (
         evidence.excerpt.length > 0 &&
-        !sanitizeText(cell.sourceExcerpt).includes(evidence.excerpt)
+        !sanitizeArtifactText(cell.sourceExcerpt, manifest).includes(
+          evidence.excerpt,
+        )
       ) {
         evidenceError(index, "code excerpt is not present");
       }

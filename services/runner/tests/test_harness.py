@@ -7,6 +7,8 @@ import stat
 import sys
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[3]
 PUBLIC = ROOT / "concept-packs/leakage/public"
@@ -26,7 +28,7 @@ def _load_harness():
 
 
 def test_fixed_harness_runs_public_tests_then_writes_contract_and_evidence(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     workspace = tmp_path / "workspace"
     output = tmp_path / "output"
@@ -35,6 +37,14 @@ def test_fixed_harness_runs_public_tests_then_writes_contract_and_evidence(
     shutil.copy2(PUBLIC / "artifact-adapter.template.py", workspace / "artifact-adapter.py")
     shutil.copy2(PUBLIC / "public_tests.template.py", workspace / "public_tests.py")
     harness = _load_harness()
+    requested_modes: list[int] = []
+    original_fchmod = harness.os.fchmod
+
+    def recording_fchmod(descriptor: int, mode: int) -> None:
+        requested_modes.append(mode)
+        original_fchmod(descriptor, mode)
+
+    monkeypatch.setattr(harness.os, "fchmod", recording_fchmod)
 
     exit_code = harness.run_harness(
         workspace=workspace,
@@ -55,8 +65,11 @@ def test_fixed_harness_runs_public_tests_then_writes_contract_and_evidence(
         "public-tests.stdout",
         "public-tests.stderr",
     }
+    assert requested_modes == [0o644, 0o644, 0o644, 0o644]
     assert all(
-        stat.S_IMODE(path.stat().st_mode) == 0o644
+        path.is_file()
+        and not path.is_symlink()
+        and stat.S_IMODE(path.stat().st_mode) & 0o022 == 0
         for path in output.iterdir()
     )
 

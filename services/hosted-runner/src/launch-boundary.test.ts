@@ -51,8 +51,13 @@ describe("ContainerCodexLaunchBoundary", () => {
       hostCwd: workspace,
     });
 
-    expect((await stat(workspaceRoot)).mode & 0o777).toBe(0o711);
-    expect((await stat(codexHomeRoot)).mode & 0o777).toBe(0o711);
+    for (const rootMode of [
+      (await stat(workspaceRoot)).mode & 0o777,
+      (await stat(codexHomeRoot)).mode & 0o777,
+    ]) {
+      expect(rootMode & 0o700).toBe(0o700);
+      expect(rootMode & 0o066).toBe(0);
+    }
     expect((await stat(workspace)).mode & 0o777).toBe(0o700);
 
     expect(prepared.command).toBe("/usr/bin/setpriv");

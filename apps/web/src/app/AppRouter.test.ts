@@ -18,7 +18,13 @@ describe("Studio URL routing", () => {
       id: "session_1",
     });
     expect(parseStudioLocation("/session/%E0%A4%A")).toEqual({
-      kind: "landing",
+      kind: "not-found",
+    });
+    expect(parseStudioLocation("/not-a-counterlab-route")).toEqual({
+      kind: "not-found",
+    });
+    expect(parseStudioLocation("/session/session_1/extra")).toEqual({
+      kind: "not-found",
     });
   });
 

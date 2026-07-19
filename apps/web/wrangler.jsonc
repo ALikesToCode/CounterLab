@@ -5,10 +5,21 @@
   "main": "worker/index.ts",
   "compatibility_date": "2026-07-14",
   "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "OPENAI_MODEL": "gpt-5.6",
+    "OPENAI_REASONING_EFFORT": "medium",
+    "OPENAI_TIMEOUT_MS": "180000",
+    "COUNTERLAB_MAX_NOTEBOOK_BYTES": "10485760",
+    "COUNTERLAB_SIGNING_KEY_ID": "counterlab-boundary-v1",
+    "COUNTERLAB_MAINTENANCE_MODE": "false"
+  },
   "assets": {
     "directory": "./dist/client",
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*", "/ready"]
+  },
+  "version_metadata": {
+    "binding": "CF_VERSION_METADATA"
   },
   "d1_databases": [
     {
@@ -40,6 +51,10 @@
       {
         "name": "RUNNER",
         "class_name": "CounterLabRunner"
+      },
+      {
+        "name": "ADMISSION",
+        "class_name": "CounterLabAdmission"
       }
     ]
   },
@@ -47,6 +62,10 @@
     {
       "tag": "v1",
       "new_sqlite_classes": ["CounterLabRunner"]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["CounterLabAdmission"]
     }
   ],
   "observability": {

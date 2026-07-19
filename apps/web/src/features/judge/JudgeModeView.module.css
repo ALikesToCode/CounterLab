@@ -556,6 +556,43 @@
   line-height: 1.05;
 }
 
+.releaseIdentity {
+  margin-top: 26px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(250, 250, 250, 0.22);
+}
+
+.releaseIdentity h4 {
+  margin: 0 0 14px;
+  font-size: 14px;
+}
+
+.releaseIdentity dl {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.releaseIdentity dl > div {
+  display: grid;
+  gap: 4px;
+}
+
+.releaseIdentity dt {
+  color: var(--judge-muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.releaseIdentity dd {
+  margin: 0;
+}
+
+.releaseIdentity code {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
 .reproduceSection {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -12,7 +12,16 @@ const configuredHealth: CapabilityHealth = {
   liveGpt: "configured",
   liveCodex: "configured",
   liveKernel: "configured",
-  sandbox: "configured",
+  sandbox: "credential-and-privilege-boundary",
+  generationFilesystemReadIsolation: "PARTIAL",
+  release: {
+    status: "bound",
+    workerVersionId: "11111111-2222-3333-4444-555555555555",
+    workerVersionTag: `git-${"a".repeat(40)}`,
+    workerEvidenceCommit: "a".repeat(40),
+    runnerSourceCommit: "b".repeat(40),
+    runnerImageDigest: `sha256:${"c".repeat(64)}`,
+  },
   requestId: "request_judge_1",
 };
 
@@ -52,6 +61,13 @@ describe("JudgeModeView", () => {
     expect(screen.getByText("Runtime Codex")).toBeInTheDocument();
     expect(screen.getByText("Fixed kernel")).toBeInTheDocument();
     expect(screen.getByText("Frozen verifier")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Exact public build" }),
+    ).toBeInTheDocument();
+    expect(document.body).toHaveTextContent("a".repeat(40));
+    expect(document.body).toHaveTextContent(
+      "11111111-2222-3333-4444-555555555555",
+    );
   });
 
   it("starts the sample only after an explicit action", async () => {
@@ -90,8 +106,31 @@ describe("JudgeModeView", () => {
     expect(
       screen.queryByRole("link", { name: /run live/i }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText(/live authority is unavailable/i)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /check live status/i }));
+    expect(
+      screen.getByText(/live authority is unavailable/i),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: /check live status/i }),
+    );
     expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not offer live authority when the public release identity is unbound", () => {
+    render(
+      <JudgeModeView
+        health={{ ...configuredHealth, release: { status: "unbound" } }}
+        healthPending={false}
+        healthError={null}
+        onRetryHealth={vi.fn()}
+        onStartSample={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("link", { name: /run live/i }),
+    ).not.toBeInTheDocument();
+    expect(document.body).toHaveTextContent(
+      /release identity is unbound.*live qualification as unproven/i,
+    );
   });
 });

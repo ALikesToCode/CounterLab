@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PublicCompilerEventSchema } from "@counterlab/contracts";
+import {
+  PublicCompilerEventSchema,
+  type RunnerJobKind,
+} from "@counterlab/contracts";
 import { z } from "zod";
 
 import {
@@ -9,6 +12,10 @@ import {
   type SessionState,
   type SessionView,
 } from "../api";
+import {
+  markActiveRunnerJobTerminal,
+  registerActiveRunnerJob,
+} from "../features/learner/activeRunnerRegistry";
 
 type RunnerEventsApi = Pick<
   typeof counterLabApi,
@@ -151,6 +158,7 @@ export type MonitorRunnerJobInput = {
   api?: RunnerEventsApi;
   onEvents?: (events: readonly PublicCompilerEvent[], cursor: number) => void;
   onSession?: (session: SessionView) => void;
+  onTerminal?: () => void;
 };
 
 export type MonitorStandaloneRunnerJobInput = Omit<
@@ -187,6 +195,7 @@ export async function monitorRunnerJob({
   api = counterLabApi,
   onEvents,
   onSession,
+  onTerminal,
 }: MonitorRunnerJobInput): Promise<SessionView> {
   let cursor = after;
   let verifiedTerminalPolls = 0;
@@ -213,6 +222,7 @@ export async function monitorRunnerJob({
       ? [...page.events].reverse().find((event) => event.kind === "job.failed")
       : undefined;
     if (page.terminal) {
+      onTerminal?.();
       if (page.jobError !== undefined) {
         throw new ApiClientError({
           code: page.jobError.code,
@@ -272,6 +282,7 @@ export async function monitorStandaloneRunnerJob({
   maxPolls = 320,
   api = counterLabApi,
   onEvents,
+  onTerminal,
 }: MonitorStandaloneRunnerJobInput): Promise<number> {
   let cursor = after;
   for (let poll = 0; poll < maxPolls; poll += 1) {
@@ -291,6 +302,7 @@ export async function monitorStandaloneRunnerJob({
       onEvents?.(page.events, cursor);
     }
     if (page.terminal) {
+      onTerminal?.();
       const failure = [...page.events]
         .reverse()
         .find((event) => event.kind === "job.failed");
@@ -336,6 +348,40 @@ export function useRunnerEvents() {
   const activeJob = useRef<{ sessionId: string; jobId: string } | null>(null);
   const eventsRef = useRef<PublicCompilerEvent[]>([]);
   const cursorRef = useRef(0);
+
+  const registryStorage = useCallback((): Storage | undefined => {
+    try {
+      return window.sessionStorage ?? undefined;
+    } catch {
+      return undefined;
+    }
+  }, []);
+
+  const registerJob = useCallback(
+    (sessionId: string, jobId: string, kind: RunnerJobKind | undefined) => {
+      const storage = registryStorage();
+      if (storage === undefined || kind === undefined) return;
+      registerActiveRunnerJob(
+        {
+          sessionId,
+          jobId,
+          kind,
+          registeredAt: new Date().toISOString(),
+        },
+        storage,
+      );
+    },
+    [registryStorage],
+  );
+
+  const markTerminal = useCallback(
+    (sessionId: string, jobId: string) => {
+      const storage = registryStorage();
+      if (storage === undefined) return;
+      markActiveRunnerJobTerminal(sessionId, jobId, storage);
+    },
+    [registryStorage],
+  );
 
   const cancel = useCallback(() => {
     controller.current?.abort();
@@ -406,17 +452,23 @@ export function useRunnerEvents() {
 
   const waitForJob = useCallback(
     async (
-      input: Omit<MonitorRunnerJobInput, "after" | "signal" | "onEvents">,
+      input: Omit<
+        MonitorRunnerJobInput,
+        "after" | "signal" | "onEvents" | "onTerminal"
+      > & { jobKind?: RunnerJobKind },
     ) => {
       cancel();
       const nextController = new AbortController();
       controller.current = nextController;
       const after = prepareReconnect(input.sessionId, input.jobId);
+      registerJob(input.sessionId, input.jobId, input.jobKind);
       try {
-        return await monitorRunnerJob({
-          ...input,
+        const { jobKind: _jobKind, ...monitorInput } = input;
+        const completed = await monitorRunnerJob({
+          ...monitorInput,
           after,
           signal: nextController.signal,
+          onTerminal: () => markTerminal(input.sessionId, input.jobId),
           onEvents: (nextEvents, nextCursor) => {
             rememberEvents(
               input.sessionId,
@@ -426,29 +478,34 @@ export function useRunnerEvents() {
             );
           },
         });
+        markTerminal(input.sessionId, input.jobId);
+        return completed;
       } finally {
         if (controller.current === nextController) controller.current = null;
       }
     },
-    [cancel, prepareReconnect, rememberEvents],
+    [cancel, markTerminal, prepareReconnect, registerJob, rememberEvents],
   );
 
   const waitForStandaloneJob = useCallback(
     async (
       input: Omit<
         MonitorStandaloneRunnerJobInput,
-        "after" | "signal" | "onEvents"
-      >,
+        "after" | "signal" | "onEvents" | "onTerminal"
+      > & { jobKind?: RunnerJobKind },
     ) => {
       cancel();
       const nextController = new AbortController();
       controller.current = nextController;
       const after = prepareReconnect(input.sessionId, input.jobId);
+      registerJob(input.sessionId, input.jobId, input.jobKind);
       try {
-        return await monitorStandaloneRunnerJob({
-          ...input,
+        const { jobKind: _jobKind, ...monitorInput } = input;
+        const completed = await monitorStandaloneRunnerJob({
+          ...monitorInput,
           after,
           signal: nextController.signal,
+          onTerminal: () => markTerminal(input.sessionId, input.jobId),
           onEvents: (nextEvents, nextCursor) => {
             rememberEvents(
               input.sessionId,
@@ -458,11 +515,13 @@ export function useRunnerEvents() {
             );
           },
         });
+        markTerminal(input.sessionId, input.jobId);
+        return completed;
       } finally {
         if (controller.current === nextController) controller.current = null;
       }
     },
-    [cancel, prepareReconnect, rememberEvents],
+    [cancel, markTerminal, prepareReconnect, registerJob, rememberEvents],
   );
 
   return {

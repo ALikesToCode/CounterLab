@@ -2,7 +2,13 @@ import type { ArtifactView, PublicCompilerEvent, SessionView } from "../../api";
 
 export type StudioMode = "instant" | "live" | "replay";
 export type StudioStage =
-  "claim" | "belief" | "build" | "reality" | "live-setup" | "live-compile";
+  | "question-path"
+  | "claim"
+  | "belief"
+  | "build"
+  | "reality"
+  | "live-setup"
+  | "live-compile";
 
 export type RecentProject = {
   sessionId: string;

@@ -8,6 +8,7 @@ import {
 } from "@counterlab/contracts";
 
 import { ApiClientError, CounterLabApiClient, SessionViewSchema } from "./api";
+import { publicReplayFixture } from "./components/replay/ProofCapsuleReplayView.fixture";
 
 const digest = (character: string) => character.repeat(64);
 
@@ -462,7 +463,17 @@ describe("CounterLabApiClient", () => {
       liveGpt: "configured",
       liveCodex: "local-runner-required",
       liveKernel: "local-runner-required",
+      maintenance: false,
+      release: {
+        status: "bound",
+        workerVersionId: "11111111-2222-3333-4444-555555555555",
+        workerVersionTag: `git-${"a".repeat(40)}`,
+        workerEvidenceCommit: "a".repeat(40),
+        runnerSourceCommit: "b".repeat(40),
+        runnerImageDigest: `sha256:${"c".repeat(64)}`,
+      },
       sandbox: "local-runner-required",
+      generationFilesystemReadIsolation: "PARTIAL",
       requestId: "request_1",
     };
     const fetcher = vi.fn<typeof fetch>(async () =>
@@ -489,6 +500,7 @@ describe("CounterLabApiClient", () => {
           liveCodex: "local-runner-required",
           liveKernel: "local-runner-required",
           sandbox: "local-runner-required",
+          generationFilesystemReadIsolation: "PARTIAL",
           requestId: "request_1",
         },
       }),
@@ -533,7 +545,33 @@ describe("CounterLabApiClient", () => {
     await expect(client.uploadArtifact(file)).resolves.toEqual(artifact);
     const request = fetcher.mock.calls[0]?.[1];
     expect(request?.body).toBeInstanceOf(FormData);
-    expect(new Headers(request?.headers).has("content-type")).toBe(false);
+    const headers = new Headers(request?.headers);
+    expect(headers.has("content-type")).toBe(false);
+    expect(headers.get("idempotency-key")).toMatch(/^upload_[0-9a-f-]{36}$/u);
+  });
+
+  it("reuses the upload idempotency key after a recoverable network failure", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new TypeError("network unavailable"))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, data: artifact }, 201));
+    const client = new CounterLabApiClient({ fetch: fetcher });
+    const file = new File(["{}"], "sample.ipynb", {
+      type: "application/json",
+    });
+
+    await expect(client.uploadArtifact(file)).rejects.toMatchObject({
+      code: "NETWORK_ERROR",
+    });
+    await expect(client.uploadArtifact(file)).resolves.toEqual(artifact);
+    const first = new Headers(fetcher.mock.calls[0]?.[1]?.headers).get(
+      "idempotency-key",
+    );
+    const second = new Headers(fetcher.mock.calls[1]?.[1]?.headers).get(
+      "idempotency-key",
+    );
+    expect(first).toMatch(/^upload_[0-9a-f-]{36}$/u);
+    expect(second).toBe(first);
   });
 
   it("creates mode-specific typed session views and retrieves a session", async () => {
@@ -656,6 +694,32 @@ describe("CounterLabApiClient", () => {
     await expect(client.getReplay("replay_1")).rejects.toMatchObject({
       code: "INVALID_API_RESPONSE",
       status: 200,
+    });
+  });
+
+  it("recomputes the public replay content hash before returning evidence", async () => {
+    const verified = publicReplayFixture("entity_leakage");
+    const validFetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({ ok: true, data: verified }),
+    );
+    await expect(
+      new CounterLabApiClient({ fetch: validFetcher }).getReplay(
+        verified.replayId,
+      ),
+    ).resolves.toEqual(verified);
+
+    const tampered = structuredClone(verified);
+    tampered.test.result.runs[0]!.seed += 1;
+    const tamperedFetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({ ok: true, data: tampered }),
+    );
+    await expect(
+      new CounterLabApiClient({ fetch: tamperedFetcher }).getReplay(
+        tampered.replayId,
+      ),
+    ).rejects.toMatchObject({
+      code: "REPLAY_INTEGRITY_INVALID",
+      status: 0,
     });
   });
 
@@ -946,6 +1010,16 @@ describe("CounterLabApiClient", () => {
         expectedMethod: "POST",
         invoke: () => client.publishReplay(sessionId),
       },
+      {
+        expectedPath: `/api/sessions/${encoded}/replays/revoke`,
+        expectedMethod: "POST",
+        invoke: () => client.revokeReplay(sessionId),
+      },
+      {
+        expectedPath: `/api/sessions/${encoded}/replays/status`,
+        expectedMethod: "GET",
+        invoke: () => client.getReplayPublicationStatus(sessionId),
+      },
     ];
 
     for (const call of calls) {
@@ -1053,7 +1127,7 @@ describe("CounterLabApiClient", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it("builds a contained encoded patch download URL", () => {
+  it("builds only contained encoded private-session download URLs", () => {
     const client = new CounterLabApiClient({ baseUrl: "https://studio.test/" });
 
     expect(client.patchDownloadUrl("session/with space")).toBe(
@@ -1062,12 +1136,174 @@ describe("CounterLabApiClient", () => {
     expect(client.proofCapsuleDownloadUrl("session/with space")).toBe(
       "https://studio.test/api/sessions/session%2Fwith%20space/proof-capsule",
     );
-    expect(client.replayProofCapsuleDownloadUrl("replay/with space")).toBe(
-      "https://studio.test/api/replays/replay%2Fwith%20space/proof-capsule",
+  });
+
+  it("keeps owner capabilities out of URLs and attaches them only to private requests", async () => {
+    const sessionId = "session_capability_test";
+    const sessionCapability = `cl_owner_${"a".repeat(43)}`;
+    const artifactCapability = `cl_owner_${"b".repeat(43)}`;
+    const privateSession = {
+      ...session,
+      sessionId,
+      mode: { kind: "live_notebook" as const },
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const path = String(input);
+      if (path === "/api/sample/sessions") {
+        return jsonResponse({
+          ok: true,
+          data: {
+            ...privateSession,
+            ownerCapability: sessionCapability,
+          },
+        });
+      }
+      if (path === "/api/artifacts") {
+        return jsonResponse({
+          ok: true,
+          data: { ...artifact, ownerCapability: artifactCapability },
+        });
+      }
+      if (path === "/api/live/sessions") {
+        expect(JSON.parse(String(init?.body))).toEqual({
+          artifactId: artifact.artifactId,
+          artifactCapability,
+        });
+        return jsonResponse({
+          ok: true,
+          data: {
+            ...privateSession,
+            ownerCapability: sessionCapability,
+          },
+        });
+      }
+      if (path === `/api/sessions/${sessionId}/replays/revoke`) {
+        return jsonResponse({
+          ok: true,
+          data: {
+            replayId: "replay_capability_test",
+            revoked: true,
+            alreadyRevoked: false,
+          },
+        });
+      }
+      if (path === `/api/sessions/${sessionId}/replays/status`) {
+        return jsonResponse({
+          ok: true,
+          data: { status: "never_published" },
+        });
+      }
+      if (path === `/api/sessions/${sessionId}/access/revoke`) {
+        return jsonResponse({ ok: true, data: { revoked: true } });
+      }
+      return jsonResponse({ ok: true, data: privateSession });
+    });
+    const storedCapabilities = new Map<string, string>();
+    const client = new CounterLabApiClient({
+      fetch: fetcher,
+      capabilityStorage: {
+        getItem: (key) => storedCapabilities.get(key) ?? null,
+        setItem: (key, value) => storedCapabilities.set(key, value),
+        removeItem: (key) => void storedCapabilities.delete(key),
+      },
+    });
+
+    await client.createSampleSession({ sampleId: "leakage-01" });
+    await client.getSession(sessionId);
+    const privateRequest = fetcher.mock.calls.find(
+      ([path]) => String(path) === `/api/sessions/${sessionId}`,
     );
-    expect(client.replayPatchedNotebookDownloadUrl("replay/with space")).toBe(
-      "https://studio.test/api/replays/replay%2Fwith%20space/patched-notebook",
+    expect(new Headers(privateRequest?.[1]?.headers).get("authorization")).toBe(
+      `Bearer ${sessionCapability}`,
     );
+    expect(String(privateRequest?.[0])).not.toContain(sessionCapability);
+    expect(
+      storedCapabilities.get(`counterlab.ownerCapability.${sessionId}`),
+    ).toBe(sessionCapability);
+
+    await expect(client.revokeReplay(sessionId)).resolves.toEqual({
+      replayId: "replay_capability_test",
+      revoked: true,
+      alreadyRevoked: false,
+    });
+    const revokeRequest = fetcher.mock.calls.find(
+      ([path]) => String(path) === `/api/sessions/${sessionId}/replays/revoke`,
+    );
+    expect(new Headers(revokeRequest?.[1]?.headers).get("authorization")).toBe(
+      `Bearer ${sessionCapability}`,
+    );
+    await expect(client.getReplayPublicationStatus(sessionId)).resolves.toEqual(
+      { status: "never_published" },
+    );
+    const replayStatusRequest = fetcher.mock.calls.find(
+      ([path]) => String(path) === `/api/sessions/${sessionId}/replays/status`,
+    );
+    expect(
+      new Headers(replayStatusRequest?.[1]?.headers).get("authorization"),
+    ).toBe(`Bearer ${sessionCapability}`);
+
+    await expect(client.revokeSessionAccess(sessionId)).resolves.toEqual({
+      revoked: true,
+    });
+    const accessRevocation = fetcher.mock.calls.find(
+      ([path]) => String(path) === `/api/sessions/${sessionId}/access/revoke`,
+    );
+    expect(
+      new Headers(accessRevocation?.[1]?.headers).get("authorization"),
+    ).toBe(`Bearer ${sessionCapability}`);
+    expect(client.hasSessionAccess(sessionId)).toBe(false);
+    expect(
+      storedCapabilities.has(`counterlab.ownerCapability.${sessionId}`),
+    ).toBe(false);
+
+    await client.uploadArtifact(
+      new File(["{}"], "private.ipynb", { type: "application/json" }),
+    );
+    await client.createLiveSession({ artifactId: artifact.artifactId });
+    expect(
+      fetcher.mock.calls.some(([path]) => String(path).includes("cl_owner_")),
+    ).toBe(false);
+  });
+
+  it("clears a stale owner key after an idempotent revocation retry succeeds", async () => {
+    const sessionId = "session_lost_revocation_response";
+    const ownerCapability = `cl_owner_${"c".repeat(43)}`;
+    let revocationAttempts = 0;
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const path = String(input);
+      if (path === "/api/sample/sessions") {
+        return jsonResponse({
+          ok: true,
+          data: { ...session, sessionId, ownerCapability },
+        });
+      }
+      if (path === `/api/sessions/${sessionId}/access/revoke`) {
+        revocationAttempts += 1;
+        if (revocationAttempts === 1) throw new TypeError("response lost");
+        return jsonResponse({ ok: true, data: { revoked: false } });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const storedCapabilities = new Map<string, string>();
+    const client = new CounterLabApiClient({
+      fetch: fetcher,
+      capabilityStorage: {
+        getItem: (key) => storedCapabilities.get(key) ?? null,
+        setItem: (key, value) => storedCapabilities.set(key, value),
+        removeItem: (key) => void storedCapabilities.delete(key),
+      },
+    });
+    await client.createSampleSession({ sampleId: "leakage-01" });
+
+    await expect(client.revokeSessionAccess(sessionId)).rejects.toMatchObject({
+      code: "NETWORK_ERROR",
+    });
+    expect(client.hasSessionAccess(sessionId)).toBe(true);
+
+    await expect(client.revokeSessionAccess(sessionId)).resolves.toEqual({
+      revoked: false,
+    });
+    expect(client.hasSessionAccess(sessionId)).toBe(false);
   });
 
   it("turns transport failures into typed retryable errors", async () => {

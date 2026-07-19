@@ -1,0 +1,204 @@
+.recovery {
+  display: grid;
+  gap: 18px;
+  width: min(760px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: clamp(48px, 9vw, 96px) 0;
+  color: var(--ink);
+  font-family: var(--sans);
+}
+
+.notice {
+  padding: clamp(22px, 4vw, 34px);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--paper-raised);
+}
+
+.unavailable .notice {
+  border-color: color-mix(in srgb, var(--gold) 40%, var(--line));
+}
+
+.pending .notice {
+  border-color: color-mix(in srgb, var(--aqua) 42%, var(--line));
+  background: color-mix(in srgb, var(--aqua-soft) 36%, var(--paper-raised));
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--gold-bright);
+  font-size: 13px;
+  font-weight: 780;
+  line-height: 1.4;
+}
+
+.pending .eyebrow {
+  color: var(--aqua-bright);
+}
+
+.notice h1 {
+  max-width: 680px;
+  margin: 10px 0 0;
+  font-family: var(--display);
+  font-size: clamp(30px, 6vw, 48px);
+  font-weight: 540;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+
+.notice h1:focus {
+  border-radius: 4px;
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 5px;
+}
+
+.body {
+  max-width: 650px;
+  margin: 16px 0 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.path {
+  display: grid;
+  gap: 5px;
+  margin: 20px 0 0;
+  padding-top: 15px;
+  border-top: 1px solid var(--line);
+}
+
+.path span {
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.path code {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.actions button,
+.recent button {
+  min-height: 44px;
+  border-radius: 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.actions button {
+  padding: 10px 17px;
+  font-size: 15px;
+  font-weight: 740;
+  line-height: 1.4;
+}
+
+.retryAction {
+  border: 1px solid var(--accent);
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
+.homeAction {
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  background: var(--control);
+}
+
+.actions button:hover:not(:disabled),
+.recent button:hover:not(:disabled) {
+  border-color: var(--line-focus);
+}
+
+.actions button:focus-visible,
+.recent button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.actions button:disabled,
+.recent button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.recent {
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+}
+
+.recentHeading h2,
+.recentHeading p {
+  margin: 0;
+}
+
+.recentHeading h2 {
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.recentHeading p {
+  margin-top: 4px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.recent ul {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 16px 0 0;
+  list-style: none;
+}
+
+.recent button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--paper-raised);
+  text-align: left;
+}
+
+.recent strong {
+  overflow-wrap: anywhere;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.recent button span {
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+@media (max-width: 560px) {
+  .recovery {
+    width: min(100% - 28px, 760px);
+    padding: 36px 0 64px;
+  }
+
+  .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .actions button {
+    width: 100%;
+  }
+}

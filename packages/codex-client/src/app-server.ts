@@ -1481,7 +1481,7 @@ export class AppServerCodexCompiler implements CodexCompiler {
     return {
       available: false,
       reason:
-        "Live Codex requires an OS-enforced generation read-isolation boundary; none is configured.",
+        "Live Codex requires a trusted credential-and-privilege launch boundary; none is configured.",
     };
   }
 
@@ -1504,7 +1504,7 @@ export class AppServerCodexCompiler implements CodexCompiler {
     if (!this.allowUnisolatedTestProcess) {
       throw new CompilerSetupError(
         "CODEX_ISOLATION_UNAVAILABLE",
-        "Live Codex requires an OS-enforced generation read-isolation boundary; none is configured.",
+        "Live Codex requires a trusted credential-and-privilege launch boundary; none is configured.",
       );
     }
     return {

@@ -1,0 +1,100 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(4 12 24 / 72%);
+}
+
+.dialog {
+  width: min(560px, 100%);
+  max-height: min(720px, calc(100dvh - 48px));
+  overflow: auto;
+  padding: clamp(24px, 4vw, 40px);
+  border: 1px solid var(--line-strong);
+  border-radius: 20px;
+  background: var(--paper, #fffdf8);
+  box-shadow: 0 24px 70px rgb(4 12 24 / 28%);
+  color: var(--ink, #101c2c);
+}
+
+.dialog h2 {
+  margin: 6px 0 12px;
+  font-size: clamp(1.55rem, 4vw, 2rem);
+  line-height: 1.12;
+}
+
+.dialog p {
+  max-width: 62ch;
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.eyebrow {
+  color: var(--blue, #245da8);
+  font-size: 0.8rem !important;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.jobs {
+  display: grid;
+  gap: 8px;
+  margin: 20px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.jobs li {
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid var(--line, #d7dce3);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.jobs span {
+  overflow-wrap: anywhere;
+  color: var(--muted, #5c6674);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.actions button {
+  min-height: 44px;
+}
+
+@media (max-width: 520px) {
+  .backdrop {
+    align-items: end;
+    padding: 12px;
+  }
+
+  .dialog {
+    max-height: calc(100dvh - 24px);
+    border-radius: 18px;
+  }
+
+  .actions,
+  .actions button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .dialog {
+    animation: none;
+  }
+}

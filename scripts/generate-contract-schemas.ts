@@ -16,11 +16,15 @@ import {
   PatchPlanV1Schema,
 } from "../packages/contracts/src/index.js";
 import {
+  ContainedRuntimeAttestationSchema,
+  DeploymentReceiptSchema,
+  QualifiedRunnerReleaseSchema,
+  QualifiedRunnerReleaseV2Schema,
+  ReleaseCheckReceiptSchema,
   ScientificEngineEvidenceCatalogSchema,
   ScientificEngineRegistrySchema,
   ScientificEngineRuntimeManifestSchema,
   ScientificEngineSnapshotSchema,
-  QualifiedRunnerReleaseSchema,
   SubjectPackEngineBindingsSchema,
 } from "../packages/scientific-engine-registry/src/index.js";
 import { ExperimentIRV5Schema } from "../packages/experiment-ir/src/index.js";
@@ -204,11 +208,59 @@ const schemas = [
     fileName: "qualified-runner-release-v2.schema.json",
     id: "https://counterlab.dev/schemas/qualified-runner-release-v2.schema.json",
     title: "CounterLab qualified runner release v2",
-    schema: QualifiedRunnerReleaseSchema,
+    schema: QualifiedRunnerReleaseV2Schema,
     destinations: [
       resolve(
         root,
         "scientific-engines/schemas/qualified-runner-release-v2.schema.json",
+      ),
+    ],
+  },
+  {
+    fileName: "qualified-runner-release-v3.schema.json",
+    id: "https://counterlab.dev/schemas/qualified-runner-release-v3.schema.json",
+    title: "CounterLab qualified runner release v3",
+    schema: QualifiedRunnerReleaseSchema,
+    destinations: [
+      resolve(
+        root,
+        "scientific-engines/schemas/qualified-runner-release-v3.schema.json",
+      ),
+    ],
+  },
+  {
+    fileName: "contained-runtime-attestation-v1.schema.json",
+    id: "https://counterlab.dev/schemas/contained-runtime-attestation-v1.schema.json",
+    title: "CounterLab contained runtime attestation v1",
+    schema: ContainedRuntimeAttestationSchema,
+    destinations: [
+      resolve(
+        root,
+        "scientific-engines/schemas/contained-runtime-attestation-v1.schema.json",
+      ),
+    ],
+  },
+  {
+    fileName: "release-check-receipt-v1.schema.json",
+    id: "https://counterlab.dev/schemas/release-check-receipt-v1.schema.json",
+    title: "CounterLab release-check receipt v1",
+    schema: ReleaseCheckReceiptSchema,
+    destinations: [
+      resolve(
+        root,
+        "scientific-engines/schemas/release-check-receipt-v1.schema.json",
+      ),
+    ],
+  },
+  {
+    fileName: "deployment-receipt-v3.schema.json",
+    id: "https://counterlab.dev/schemas/deployment-receipt-v3.schema.json",
+    title: "CounterLab deployment receipt v3",
+    schema: DeploymentReceiptSchema,
+    destinations: [
+      resolve(
+        root,
+        "scientific-engines/schemas/deployment-receipt-v3.schema.json",
       ),
     ],
   },

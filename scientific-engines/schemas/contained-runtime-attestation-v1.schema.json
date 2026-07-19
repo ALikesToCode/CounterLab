@@ -1,0 +1,129 @@
+{
+  "$id": "https://counterlab.dev/schemas/contained-runtime-attestation-v1.schema.json",
+  "title": "CounterLab contained runtime attestation v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1"
+    },
+    "status": {
+      "type": "string",
+      "const": "VERIFIED"
+    },
+    "sessionId": {
+      "type": "string",
+      "pattern": "^rt-[a-z0-9][a-z0-9-]{7,13}$"
+    },
+    "namespace": {
+      "type": "string",
+      "const": "counterlab-v6.1"
+    },
+    "runtimeToolchainSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "toolchainLockSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "adapterSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "componentSha256": {
+      "type": "object",
+      "properties": {
+        "buildctl": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "buildkitd": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "containerd": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "containerd-shim-runc-v2": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "nerdctl": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "rootlesskit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "runc": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "buildctl",
+        "buildkitd",
+        "containerd",
+        "containerd-shim-runc-v2",
+        "nerdctl",
+        "rootlesskit",
+        "runc"
+      ],
+      "additionalProperties": false
+    },
+    "fileSha256": {
+      "type": "object",
+      "properties": {
+        "containerdConfig": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "buildkitConfig": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "containerdConfig",
+        "buildkitConfig"
+      ],
+      "additionalProperties": false
+    },
+    "containerdRootlesskitApiSocket": {
+      "type": "string",
+      "pattern": "^\\.rt\\/rt-[a-z0-9-]+\\/run\\/containerd-rootless\\/api\\.sock$"
+    },
+    "containerdSocket": {
+      "type": "string",
+      "pattern": "^\\.rt\\/rt-[a-z0-9-]+\\/run\\/containerd\\.sock$"
+    },
+    "runtimeCommandSocket": {
+      "type": "string",
+      "pattern": "^\\.rt\\/rt-[a-z0-9-]+\\/run\\/runtime-command\\.sock$"
+    },
+    "buildkitSocket": {
+      "type": "string",
+      "pattern": "^\\.rt\\/rt-[a-z0-9-]+\\/run\\/buildkitd\\.sock$"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "status",
+    "sessionId",
+    "namespace",
+    "runtimeToolchainSha256",
+    "toolchainLockSha256",
+    "adapterSha256",
+    "componentSha256",
+    "fileSha256",
+    "containerdRootlesskitApiSocket",
+    "containerdSocket",
+    "runtimeCommandSocket",
+    "buildkitSocket"
+  ],
+  "additionalProperties": false
+}

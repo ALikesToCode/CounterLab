@@ -60,19 +60,33 @@ const port = Number(process.env.COUNTERLAB_E2E_PORT ?? "5173");
 if (!Number.isInteger(port) || port < 1024 || port > 65_535) {
   throw new Error("COUNTERLAB_E2E_PORT must be an unprivileged TCP port");
 }
-const remoteBaseURL = process.env.COUNTERLAB_E2E_BASE_URL?.replace(/\/$/, "");
-if (remoteBaseURL !== undefined) {
-  const remote = new URL(remoteBaseURL);
-  if (
-    !["http:", "https:"].includes(remote.protocol) ||
-    !["127.0.0.1", "localhost", "[::1]"].includes(remote.hostname) ||
-    remote.username !== "" ||
-    remote.password !== ""
-  ) {
+const configuredBaseURL = process.env.COUNTERLAB_E2E_BASE_URL;
+if (configuredBaseURL !== undefined && configuredBaseURL.trim() === "") {
+  throw new Error("COUNTERLAB_E2E_BASE_URL must not be empty when supplied");
+}
+let remoteBaseURL: string | undefined;
+if (configuredBaseURL !== undefined) {
+  let remote: URL;
+  try {
+    remote = new URL(configuredBaseURL);
+  } catch {
+    throw new Error("COUNTERLAB_E2E_BASE_URL must be an absolute URL");
+  }
+  const loopbackHosts = new Set(["127.0.0.1", "localhost", "[::1]"]);
+  const isLoopback = loopbackHosts.has(remote.hostname);
+  const isCredentialFree = remote.username === "" && remote.password === "";
+  const isRootOrigin =
+    (remote.pathname === "" || remote.pathname === "/") &&
+    remote.search === "" &&
+    remote.hash === "";
+  const isAllowedTransport =
+    remote.protocol === "https:" || (remote.protocol === "http:" && isLoopback);
+  if (!isCredentialFree || !isRootOrigin || !isAllowedTransport) {
     throw new Error(
-      "COUNTERLAB_E2E_BASE_URL must be a credential-free loopback URL",
+      "COUNTERLAB_E2E_BASE_URL must be a credential-free HTTPS origin or an HTTP loopback origin",
     );
   }
+  remoteBaseURL = remote.origin;
 }
 const baseURL = remoteBaseURL ?? `http://127.0.0.1:${port}`;
 
@@ -100,14 +114,15 @@ export default defineConfig({
     trace: "retain-on-failure",
     video: "retain-on-failure",
   },
-  webServer:
-    remoteBaseURL === undefined
-      ? {
+  ...(remoteBaseURL === undefined
+    ? {
+        webServer: {
           command: `./node_modules/.bin/vite --host 127.0.0.1 --port ${port}`,
           cwd: import.meta.dirname,
           url: baseURL,
           reuseExistingServer: false,
           timeout: 120_000,
-        }
-      : undefined,
+        },
+      }
+    : {}),
 });

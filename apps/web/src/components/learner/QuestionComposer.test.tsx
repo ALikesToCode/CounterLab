@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -45,6 +45,7 @@ describe("QuestionComposer", () => {
     expect(input).toHaveValue(
       "Why did my model score highly but fail on new customers?",
     );
+    expect(input).toHaveFocus();
     expect(
       screen.queryByRole("button", { name: "Try verified sample" }),
     ).not.toBeInTheDocument();
@@ -69,7 +70,7 @@ describe("QuestionComposer", () => {
     expect(
       screen.getByPlaceholderText("State a claim or attach a notebook…"),
     ).toBeInTheDocument();
-    expect(screen.getByText("+ Attach notebook")).toBeInTheDocument();
+    expect(screen.getByText("Attach notebook")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Question" }),
     ).not.toBeInTheDocument();
@@ -104,7 +105,7 @@ describe("QuestionComposer", () => {
     render(<ControlledComposer onSubmit={submit} />);
 
     const submitButton = screen.getByRole("button", {
-      name: "Test this claim →",
+      name: "Test this claim",
     });
     expect(submitButton).toBeDisabled();
     await user.type(
@@ -115,6 +116,39 @@ describe("QuestionComposer", () => {
     submitButton.focus();
     await user.keyboard("{Enter}");
     expect(submit).toHaveBeenCalledOnce();
+  });
+
+  it("submits with Enter, preserves Shift+Enter, and ignores composing Enter", async () => {
+    const user = userEvent.setup();
+    const submit = vi.fn();
+    render(<ControlledComposer onSubmit={submit} />);
+    const input = screen.getByRole("textbox", {
+      name: /your question or claim/i,
+    });
+
+    await user.type(input, "Does this result generalize?");
+    fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+    expect(submit).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(submit).toHaveBeenCalledOnce();
+  });
+
+  it("grows the compact composer with its content up to the bounded height", async () => {
+    const user = userEvent.setup();
+    render(<ControlledComposer />);
+    const input = screen.getByRole("textbox", {
+      name: /your question or claim/i,
+    });
+    Object.defineProperty(input, "scrollHeight", {
+      configurable: true,
+      value: 128,
+    });
+
+    await user.type(input, "A longer question");
+
+    expect(input).toHaveStyle({ height: "128px", overflowY: "hidden" });
   });
 
   it("disables every local action while a test is being prepared", () => {

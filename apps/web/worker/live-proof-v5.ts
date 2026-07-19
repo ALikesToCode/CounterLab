@@ -261,6 +261,7 @@ export async function createNativeReasoningDiffV2(input: {
       "This verifies one bounded experiment and transfer task, not global mastery.",
       "The result applies only to the released Subject Pack operations and this artifact evidence.",
       "The uploaded source notebook is excluded from the Proof Capsule by default.",
+      "The hosted Codex launch has a credential-and-privilege boundary; filesystem generation read isolation is PARTIAL, not a formal sandbox proof.",
     ],
     issuedAt: patchEvent.timestamp,
   });

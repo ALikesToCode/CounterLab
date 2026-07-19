@@ -1,8 +1,4 @@
-import type {
-  BoundaryMapCellV1,
-  ProofCapsuleReplayV2,
-  PublicCompilerEvent,
-} from "@counterlab/contracts";
+import type { PublicReplayProjectionV1 } from "@counterlab/contracts";
 
 import styles from "./ProofCapsuleReplayView.module.css";
 
@@ -17,15 +13,6 @@ const dateTime = new Intl.DateTimeFormat("en", {
   timeStyle: "short",
 });
 
-const reasoningDimensions = [
-  ["belief", "Belief"],
-  ["prediction", "Prediction"],
-  ["evidence", "Evidence"],
-  ["boundary", "Boundary"],
-  ["behavior", "Apply"],
-  ["code", "Repair"],
-] as const;
-
 const replayStages = [
   { id: "replay-question", label: "Question" },
   { id: "replay-prediction", label: "Prediction" },
@@ -34,6 +21,9 @@ const replayStages = [
   { id: "replay-apply", label: "Apply" },
   { id: "replay-repair", label: "Repair" },
 ] as const;
+
+type PublicBoundaryCell =
+  PublicReplayProjectionV1["boundary"]["result"]["cells"][number];
 
 function humanize(value: string): string {
   return value
@@ -46,8 +36,8 @@ function recordedDate(value: string): string {
   return dateTime.format(new Date(value));
 }
 
-function ResultTable({ replay }: { replay: ProofCapsuleReplayV2 }) {
-  const result = replay.verifiedResult;
+function ResultTable({ replay }: { replay: PublicReplayProjectionV1 }) {
+  const result = replay.test.result;
 
   if (result.concept === "entity_leakage") {
     return (
@@ -125,12 +115,12 @@ function ResultTable({ replay }: { replay: ProofCapsuleReplayV2 }) {
   );
 }
 
-function resultHeadline(replay: ProofCapsuleReplayV2): {
+function resultHeadline(replay: PublicReplayProjectionV1): {
   eyebrow: string;
   value: string;
   context: string;
 } {
-  const result = replay.verifiedResult;
+  const result = replay.test.result;
   if (result.concept === "entity_leakage") {
     const random = result.runs.find(
       (run) => run.operation === "leakage.random_row_split",
@@ -170,27 +160,28 @@ function resultHeadline(replay: ProofCapsuleReplayV2): {
   };
 }
 
-function verdictPresentation(replay: ProofCapsuleReplayV2): {
+function verdictPresentation(replay: PublicReplayProjectionV1): {
   label: string;
   title: string;
   detail: string;
 } {
-  const verdict = replay.evidenceVerdict;
+  const verdict = replay.test.evidenceVerdict;
   if (verdict.kind === "SUPPORTS") {
-    const hypothesis = replay.beliefSpec.hypotheses.find(
+    const hypothesis = replay.question.hypotheses.find(
       (candidate) => candidate.id === verdict.hypothesisId,
     );
     return {
       label: "SUPPORTS",
       title: hypothesis?.statement ?? `Hypothesis: ${verdict.hypothesisId}`,
-      detail: verdict.scope,
+      detail:
+        "The signed result matched the recorded decisive pattern for this bounded test.",
     };
   }
   if (verdict.kind === "INCONCLUSIVE") {
     return {
       label: "INCONCLUSIVE",
       title: "The test was valid, but it did not separate the hypotheses.",
-      detail: verdict.scope,
+      detail: `The recorded reason was ${humanize(verdict.reasonCode)}.`,
     };
   }
   return {
@@ -201,8 +192,8 @@ function verdictPresentation(replay: ProofCapsuleReplayV2): {
 }
 
 function coordinateLabel(
-  replay: ProofCapsuleReplayV2,
-  cell: BoundaryMapCellV1,
+  replay: PublicReplayProjectionV1,
+  cell: PublicBoundaryCell,
   coordinateIndex: number,
 ): string {
   const coordinate = cell.coordinates[coordinateIndex];
@@ -213,15 +204,15 @@ function coordinateLabel(
   return point?.label ?? String(coordinate?.value ?? "—");
 }
 
-function boundaryObservable(cell: BoundaryMapCellV1): string {
+function boundaryObservable(cell: PublicBoundaryCell): string {
   if (cell.concept === "entity_leakage") {
     return `${(cell.optimismGap * 100).toFixed(1)} percentage-point optimism gap; ${cell.groupEntityOverlap.count} shared entities`;
   }
   return `${percentage.format(cell.metrics.recall)} recall; ${cell.metrics.prAuc.toFixed(3)} PR-AUC`;
 }
 
-function BoundaryEvidence({ replay }: { replay: ProofCapsuleReplayV2 }) {
-  const { result, report, receipt } = replay.boundary;
+function BoundaryEvidence({ replay }: { replay: PublicReplayProjectionV1 }) {
+  const { result, verification, receipt } = replay.boundary;
   const classifications = new Map(
     result.classifications.map((classification) => [
       classification.id,
@@ -234,8 +225,8 @@ function BoundaryEvidence({ replay }: { replay: ProofCapsuleReplayV2 }) {
       : "Integrity-hashed";
 
   if (
-    replay.evidenceVerdict.kind === "REJECTED" ||
-    report.status !== "VERIFIED"
+    replay.test.evidenceVerdict.kind === "REJECTED" ||
+    verification.status !== "VERIFIED"
   ) {
     return (
       <section
@@ -274,7 +265,7 @@ function BoundaryEvidence({ replay }: { replay: ProofCapsuleReplayV2 }) {
           </p>
         </div>
         <div className={styles.verificationStamp}>
-          <strong>{report.status}</strong>
+          <strong>{verification.status}</strong>
           <span>{integrity}</span>
         </div>
       </header>
@@ -335,37 +326,10 @@ function BoundaryEvidence({ replay }: { replay: ProofCapsuleReplayV2 }) {
   );
 }
 
-function compilerEventLabel(event: PublicCompilerEvent): string {
-  switch (event.kind) {
-    case "job.started":
-      return "Compiler job started";
-    case "plan.summary":
-      return event.title;
-    case "artifact.read":
-      return `${event.evidenceRefs.length} artifact evidence reference${event.evidenceRefs.length === 1 ? "" : "s"} read`;
-    case "file.created":
-      return `${event.path} created`;
-    case "diff.updated":
-      return `${event.path} updated`;
-    case "command.completed":
-      return `${event.label} completed with exit ${event.exitCode}`;
-    case "verifier.rejected":
-      return `Verifier rejected ${humanize(event.invariant)}`;
-    case "repair.started":
-      return `Repair attempt ${event.attempt} started`;
-    case "verifier.verified":
-      return `Verifier accepted ${event.invariantCount} invariants`;
-    case "result.ready":
-      return `Verified result ${event.resultHash.slice(0, 12)}… ready`;
-    case "job.failed":
-      return `${event.code}: ${event.message}`;
-  }
-}
-
-function ResultEvidence({ replay }: { replay: ProofCapsuleReplayV2 }) {
+function ResultEvidence({ replay }: { replay: PublicReplayProjectionV1 }) {
   const headline = resultHeadline(replay);
   const verdict = verdictPresentation(replay);
-  if (replay.evidenceVerdict.kind === "REJECTED") {
+  if (replay.test.evidenceVerdict.kind === "REJECTED") {
     return (
       <section
         id="replay-test"
@@ -405,13 +369,13 @@ function ResultEvidence({ replay }: { replay: ProofCapsuleReplayV2 }) {
           <span>03 · Test</span>
           <h2 id="replay-test-title">Reality answered with fixed code</h2>
           <p>
-            These values were computed for {replay.artifactManifest.fileName}{" "}
-            and released only after technical and epistemic verification.
+            These share-safe values came from the recorded fixed-kernel result
+            and were released only after technical and epistemic verification.
           </p>
         </div>
         <div className={styles.verificationStamp}>
           <strong>VERIFIED TEST</strong>
-          <span>{replay.verifiedResult.kernelVersion}</span>
+          <span>{replay.test.result.kernelVersion}</span>
         </div>
       </header>
 
@@ -433,8 +397,8 @@ function ResultEvidence({ replay }: { replay: ProofCapsuleReplayV2 }) {
       </aside>
 
       <p className={styles.hashLine}>
-        Result {replay.verifiedResult.resultHash.slice(0, 16)}… · seed{" "}
-        {replay.verifiedResult.seed}
+        Result {replay.test.result.resultHash.slice(0, 16)}… · seed{" "}
+        {replay.test.result.seed}
       </p>
     </section>
   );
@@ -442,22 +406,23 @@ function ResultEvidence({ replay }: { replay: ProofCapsuleReplayV2 }) {
 
 export function ProofCapsuleReplayView({
   replay,
-  proofCapsuleDownloadUrl,
-  patchedNotebookDownloadUrl,
   onStartOver,
 }: {
-  replay: ProofCapsuleReplayV2;
-  proofCapsuleDownloadUrl: string;
-  patchedNotebookDownloadUrl: string;
+  replay: PublicReplayProjectionV1;
   onStartOver?: () => void;
 }) {
   const integrityLabel =
-    replay.proofCapsule.integrity.mode === "hmac-signed"
+    replay.authority.projectionIntegrity.mode === "hmac-signed"
       ? "HMAC-signed"
       : "Integrity-hashed";
 
   return (
-    <main className={styles.replay} data-replay-id={replay.replayId}>
+    <main
+      className={styles.replay}
+      id="main-content"
+      tabIndex={-1}
+      data-replay-id={replay.replayId}
+    >
       <aside className={styles.replayBanner} aria-label="Verified replay mode">
         <span className={styles.replayPulse} aria-hidden="true" />
         <div>
@@ -497,13 +462,12 @@ export function ProofCapsuleReplayView({
             </p>
           </div>
           <aside className={styles.artifactCard} aria-label="Source artifact">
-            <span>Original artifact</span>
-            <strong>{replay.artifactManifest.fileName}</strong>
+            <span>Share-safe artifact summary</span>
+            <strong>Private notebook withheld</strong>
             <p>
-              {humanize(replay.concept)} · nbformat{" "}
-              {replay.artifactManifest.nbformat}
+              {humanize(replay.concept)} · nbformat {replay.artifact.nbformat}
             </p>
-            <code>{replay.artifactManifest.fileSha256.slice(0, 18)}…</code>
+            <code>{replay.artifact.supportStatus}</code>
           </aside>
         </header>
 
@@ -535,10 +499,10 @@ export function ProofCapsuleReplayView({
             <strong className={styles.readOnlyBadge}>Read only</strong>
           </header>
           <blockquote className={styles.claim}>
-            {replay.beliefSpec.claim}
+            {replay.question.claim}
           </blockquote>
           <div className={styles.hypothesisGrid}>
-            {replay.beliefSpec.hypotheses.map((hypothesis) => (
+            {replay.question.hypotheses.map((hypothesis) => (
               <article key={hypothesis.id}>
                 <span>
                   {hypothesis.id === "current"
@@ -546,12 +510,11 @@ export function ProofCapsuleReplayView({
                     : "Competing model"}
                 </span>
                 <h3>{hypothesis.statement}</h3>
-                <p>{hypothesis.conditions.join(" · ")}</p>
               </article>
             ))}
           </div>
           <div className={styles.evidenceList} aria-label="Artifact evidence">
-            {replay.beliefSpec.evidenceRefs.map((evidence) => (
+            {replay.artifact.evidenceLocators.map((evidence) => (
               <article
                 key={`${evidence.hash}:${evidence.cellIndex ?? "claim"}`}
               >
@@ -560,8 +523,14 @@ export function ProofCapsuleReplayView({
                     ? "Learner claim"
                     : `Cell ${evidence.cellIndex}${evidence.outputIndex === undefined ? "" : ` · output ${evidence.outputIndex}`}`}
                 </span>
-                <p>{evidence.excerpt}</p>
-                <small>{evidence.relevance}</small>
+                <p>
+                  {humanize(evidence.kind)} evidence · hash{" "}
+                  {evidence.hash.slice(0, 16)}…
+                </p>
+                <small>
+                  Source text, field names, and notebook identifiers are not
+                  included in this public replay.
+                </small>
               </article>
             ))}
           </div>
@@ -627,35 +596,31 @@ export function ProofCapsuleReplayView({
               </p>
             </div>
             <div className={styles.verificationStamp}>
-              <strong>{replay.transferResult.outcome}</strong>
-              <span>{replay.transferResult.evaluatorVersion}</span>
+              <strong>{replay.apply.transfer.outcome}</strong>
+              <span>{replay.apply.transfer.evaluatorVersion}</span>
             </div>
           </header>
           <div className={styles.transferLayout}>
             <div>
               <span>Stored learner revision</span>
-              <blockquote>{replay.revision.statement}</blockquote>
-              <small>Recorded {recordedDate(replay.revision.recordedAt)}</small>
+              <blockquote>{replay.apply.revision.statement}</blockquote>
+              <small>
+                Recorded {recordedDate(replay.apply.revision.recordedAt)}
+              </small>
             </div>
             <div>
               <span>Applied strategy</span>
-              <h3>{replay.transferResult.selectedStrategy}</h3>
-              <ul>
-                {replay.transferResult.identifiedRisks.map((risk) => (
-                  <li key={risk}>{risk}</li>
-                ))}
-              </ul>
+              <h3>{replay.apply.transfer.selectedStrategy}</h3>
             </div>
           </div>
           <ul
             className={styles.checkList}
             aria-label="Deterministic transfer checks"
           >
-            {replay.transferResult.checks.map((check) => (
+            {replay.apply.transfer.checks.map((check) => (
               <li key={check.invariant}>
                 <strong>{check.passed ? "Passed" : "Failed"}</strong>
                 <span>{humanize(check.invariant)}</span>
-                <p>{check.evidence}</p>
               </li>
             ))}
           </ul>
@@ -673,15 +638,16 @@ export function ProofCapsuleReplayView({
                 A minimal notebook copy passed verification
               </h2>
               <p>
-                The source notebook remained untouched. Only the recorded
-                artifact copy is downloadable.
+                The source notebook remained untouched. The public replay
+                exposes the verified repair summary, never notebook bytes or the
+                source-level diff.
               </p>
             </div>
             <div className={styles.verificationStamp}>
-              <strong>{replay.patchResult.status}</strong>
+              <strong>{replay.repair.status}</strong>
               <span>
-                {replay.patchResult.modifiedCells.length} changed cell
-                {replay.patchResult.modifiedCells.length === 1 ? "" : "s"}
+                {replay.repair.modifiedCells.length} changed cell
+                {replay.repair.modifiedCells.length === 1 ? "" : "s"}
               </span>
             </div>
           </header>
@@ -689,38 +655,30 @@ export function ProofCapsuleReplayView({
             <dl>
               <div>
                 <dt>Changed cells</dt>
-                <dd>{replay.patchResult.modifiedCells.join(", ")}</dd>
+                <dd>{replay.repair.modifiedCells.join(", ")}</dd>
               </div>
               <div>
                 <dt>Unchanged cells proven</dt>
-                <dd>
-                  {replay.patchResult.verification.unchangedCellHashes.length}
-                </dd>
+                <dd>{replay.repair.unchangedCellCount}</dd>
               </div>
               <div>
-                <dt>Source hash</dt>
-                <dd>{replay.patchResult.sourceArtifactHash.slice(0, 16)}…</dd>
+                <dt>Patch result</dt>
+                <dd>{replay.repair.resultHash.slice(0, 16)}…</dd>
               </div>
               <div>
                 <dt>Patched hash</dt>
-                <dd>{replay.patchResult.patchedArtifactHash.slice(0, 16)}…</dd>
+                <dd>{replay.repair.patchedArtifactHash.slice(0, 16)}…</dd>
               </div>
             </dl>
-            <a
-              className={styles.secondaryDownload}
-              href={patchedNotebookDownloadUrl}
-              download
-            >
-              Download repaired notebook copy
-            </a>
+            <p>
+              The owner can download the verified notebook copy only from the
+              private, capability-gated session.
+            </p>
           </div>
           <details className={styles.disclosure}>
-            <summary>Review verified notebook-cell diff</summary>
-            <pre aria-label="Verified notebook-cell diff">
-              <code>{replay.patchResult.diff}</code>
-            </pre>
+            <summary>Review public repair verification</summary>
             <ul>
-              {replay.patchResult.verification.invariants.map((invariant) => (
+              {replay.repair.invariantNames.map((invariant) => (
                 <li key={invariant}>{humanize(invariant)}</li>
               ))}
             </ul>
@@ -733,36 +691,19 @@ export function ProofCapsuleReplayView({
         >
           <header className={styles.sectionHeader}>
             <div>
-              <span>Reasoning Diff · Learner-facing</span>
+              <span>Reasoning Diff · Private text withheld</span>
               <h2 id="replay-reasoning-title">
-                What changed was the rule, not only the score.
+                The public replay proves the change without republishing private
+                notebook-derived prose.
               </h2>
+              <p>
+                Claim, prediction, and revision remain visible in their stages.
+                The exact six-part Reasoning Diff stays in the owner-only Proof
+                Capsule and is bound by its hash.
+              </p>
             </div>
-            <strong className={styles.readOnlyBadge}>6 linked changes</strong>
+            <strong className={styles.readOnlyBadge}>Hash-bound</strong>
           </header>
-          <div className={styles.tableWrap}>
-            <table>
-              <caption>
-                Before-and-after reasoning bound to this Proof Capsule.
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col">Dimension</th>
-                  <th scope="col">Before</th>
-                  <th scope="col">After</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reasoningDimensions.map(([key, label]) => (
-                  <tr key={key}>
-                    <th scope="row">{label}</th>
-                    <td>{replay.reasoningDiff.dimensions[key].before}</td>
-                    <td>{replay.reasoningDiff.dimensions[key].after}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         </section>
 
         <section
@@ -772,11 +713,13 @@ export function ProofCapsuleReplayView({
         >
           <div>
             <span>Machine-facing evidence</span>
-            <h2 id="replay-capsule-title">Take the complete proof with you.</h2>
+            <h2 id="replay-capsule-title">
+              Verify the public evidence binding.
+            </h2>
             <p>
-              The Capsule binds the live source mode, artifact, prediction,
-              computed result, verifier reports, transfer, patch, and event
-              chain.
+              This share-safe projection binds to the private source Capsule
+              without publishing its notebook, patch diff, session identifiers,
+              or Capsule bytes.
             </p>
           </div>
           <dl>
@@ -786,20 +729,17 @@ export function ProofCapsuleReplayView({
             </div>
             <div>
               <dt>Root hash</dt>
-              <dd>{replay.rootHash.slice(0, 16)}…</dd>
+              <dd>{replay.authority.sourceCapsuleRootHash.slice(0, 16)}…</dd>
             </div>
             <div>
-              <dt>Exact bytes</dt>
-              <dd>{replay.proofCapsule.byteLength.toLocaleString()} bytes</dd>
+              <dt>Projection hash</dt>
+              <dd>{replay.authority.projectionHash.slice(0, 16)}…</dd>
             </div>
           </dl>
-          <a
-            className={styles.primaryDownload}
-            href={proofCapsuleDownloadUrl}
-            download
-          >
-            Download Proof Capsule
-          </a>
+          <p>
+            Full Proof Capsule export remains available only to the private
+            session owner.
+          </p>
         </section>
 
         <details className={styles.provenance}>
@@ -819,16 +759,16 @@ export function ProofCapsuleReplayView({
                   <dd>live_notebook</dd>
                 </div>
                 <div>
-                  <dt>Source session</dt>
-                  <dd>{replay.sourceSessionId}</dd>
+                  <dt>Privacy profile</dt>
+                  <dd>{replay.privacy.profile}</dd>
                 </div>
                 <div>
-                  <dt>Capsule ID</dt>
-                  <dd>{replay.capsuleId}</dd>
+                  <dt>Source Capsule root</dt>
+                  <dd>{replay.authority.sourceCapsuleRootHash}</dd>
                 </div>
                 <div>
                   <dt>Event chain head</dt>
-                  <dd>{replay.eventChainHead}</dd>
+                  <dd>{replay.authority.eventChainHead}</dd>
                 </div>
               </dl>
             </section>
@@ -884,30 +824,25 @@ export function ProofCapsuleReplayView({
               </dl>
             </section>
             <section>
-              <h2>Sanitized compiler record</h2>
+              <h2>Allowlisted activity</h2>
               <ol>
-                {replay.compilerEvents.map((event, index) => (
-                  <li key={`${event.kind}:${event.at}:${index}`}>
-                    <time dateTime={event.at}>{recordedDate(event.at)}</time>
-                    <span>{compilerEventLabel(event)}</span>
-                  </li>
-                ))}
-              </ol>
-            </section>
-            <section>
-              <h2>Append-only timeline</h2>
-              <ol>
-                {replay.timeline.map((event) => (
-                  <li key={event.eventHash}>
-                    <time dateTime={event.timestamp}>
-                      {recordedDate(event.timestamp)}
-                    </time>
+                {replay.activity.map((event, index) => (
+                  <li key={`${event.kind}:${event.sequence}:${index}`}>
+                    <span>Step {event.sequence}</span>
                     <span>
                       {event.actor} · {humanize(event.kind)}
                     </span>
                   </li>
                 ))}
               </ol>
+            </section>
+            <section>
+              <h2>Excluded from the public replay</h2>
+              <ul>
+                {replay.privacy.excluded.map((item) => (
+                  <li key={item}>{humanize(item)}</li>
+                ))}
+              </ul>
             </section>
             <section>
               <h2>Limitations</h2>

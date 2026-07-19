@@ -30,29 +30,30 @@ the proposed matrix; hashing a fixture alongside the output produced by the
 same generator would be self-authentication. The sample therefore remains
 fixed, live exploration remains runner-backed, and replay remains read-only.
 
-Post-Milestone 9 local evidence: web Vitest passed 45 files and 254 tests;
-repository, web, and Worker TypeScript checks passed; the scientific-engine
-release verifier passed 8/8; the Python kernel passed 179/179; leakage and
-imbalance mutation gates detected 13/13 and 19/19; held-out intake passed 10/10
-with the intended 7/8 fixed completions; the held-out Vitest configuration
-passed 2 files/6 tests; and all six D1 migrations applied to a fresh local
-repository-contained database. The Vite/Worker build and 598-file secret scan
-passed.
+Current source-candidate evidence: web Vitest passed 58 files and 360 tests;
+repository, web, and Worker TypeScript checks passed; and the combined fixed
+kernel/runner Python gate passed 231/231. All eight D1 migrations applied to a
+fresh repository-contained database, and a second pass reported no migrations
+to apply. The production-smoke harness passed 19/19 tests. The Vite/Worker build
+passed with a 398.22 kB (115.88 kB gzip) main client chunk, below the 500 kB
+warning threshold, and the repository secret scan passed across 741 files while
+excluding generated browser-profile state.
 
-The complete root Vitest gate now passes 465/468 tests, and the combined Python
-kernel/runner gate passes 228/231. The remaining three tests in each gate are
-POSIX permission-mode assertions that this managed filesystem reports as
-`0700`; the security assertions were not weakened. The Cloak-only Playwright
-suite collected 22 tests, but no browser tests executed: the endpoint was absent
-and the constitution-mandated CloakBrowser executable was not installed. There
-are therefore no current-branch screenshots, screen-reader sessions, rendered
-viewport/accessibility results, or Web Vitals.
+The complete root Vitest gate currently passes 486/488 tests. The only two
+failures are the deliberately stale internal-authority and pnpm-lock evidence
+checks; those hashes cannot be refreshed truthfully until this source candidate
+is committed and its exact runner/adapter images are built. A new check/write
+tool now reports and propagates only the fixed internal, catalog, Subject Pack,
+runtime, Node SBOM, and snapshot bindings. The Cloak-only Playwright suite
+statically collects 22 tests, but no browser test executed because
+`CLOAK_CDP_ENDPOINT` is absent. No current-branch screenshot, screen-reader
+session, rendered viewport/accessibility result, or Web Vitals measurement is
+claimed.
 
-Wrangler 4.110.0 reports the repository-contained session is unauthenticated.
-No Cloudflare API token, current qualified runner image, or qualification
-receipt was available, and this host cannot create the Docker bridge needed by
-the Container-backed local dev/build path. No remote migration, deployment, or
-production smoke is claimed.
+Wrangler 4.110.0 reports the repository-contained session is unauthenticated,
+and no repository-visible Cloudflare API token is present. Exact-image
+qualification, remote migration, deployment, and production smoke remain
+pending and are not claimed.
 
 The complete local evidence, performance sizes, and remaining manual checks are
 recorded in
@@ -286,16 +287,18 @@ Latest local v5.1 verification checkpoint (2026-07-16):
 | Held-out intake/routing                      | pass    | `counterlab-held-out-v2`: 10/10 cases pass; four leakage, four imbalance, two unsupported.                                                                                                                                                |
 | Held-out fixed full-loop completion          | partial | 7/8 supported notebooks complete Plan verification → fixed result → transfer → verified patch without source edits. Random Forest reaches result/transfer then receives `PATCH_ESTIMATOR_OUTSIDE_CONTRACT`. Human review remains pending. |
 | Learner pilot                                | partial | Paired-crossover protocol, consent/privacy note, randomization, schema, and analysis script exist. No participants or learner outcomes are claimed.                                                                                       |
-| TypeScript/Web/Python suites                 | partial | Current web Vitest passes 45 files/261 tests, including release-script safety checks. Root, web, and Worker TypeScript passed before the final documentation-only checkpoint; the final evidence-bound full rerun remains pending. An earlier current full root Vitest attempt passed 33 files/439 tests and failed 7 files/29 tests. The historical production-backed suite remains evidence only for its recorded source. |
+| TypeScript/Web/Python suites                 | partial | Web Vitest passes 58 files/360 tests; repository, web, and Worker TypeScript pass; fixed-kernel/runner Python passes 231/231. Root Vitest passes 486/488, with only the deliberately deferred exact-source integrity and lock evidence checks pending. |
 | New-version browser E2E                      | partial | Historical production v2 has 13 passing CloakBrowser journeys and a full live smoke. The current redesign browser suite did not run because no `CLOAK_CDP_ENDPOINT` was available. Desktop, 1280 px, mobile, reconnect, replay, live-mocked, accessibility, and download journeys remain unqualified for this source; no stock browser was substituted. |
 | Container image build and production deploy | partial | The schema-fixed image is source-bound to `bcd5df1…`, local OCI `588b0963…`, and passes the local engine gate. Public Worker `89db95bc…` still runs the preceding v5.1 image until replacement qualification/deploy completes. |
 | Production live runner smoke                | fail    | Worker `89db95bc…` passed readiness, health, secret scan, Judge Mode, Sample, and replay; untouched leakage failed before state advancement on the now-fixed v2 schema. No result leaked. Both concepts must pass after redeploy. |
 | One-command local demo                      | pass    | `./scripts/clean-demo.sh` regenerated both fixtures, passed 5 focused tests, confirmed current local D1 migrations, and served healthy kernel and Worker endpoints before its exact processes were stopped.                               |
-| Clean-clone/release check/secret scan       | partial | The final v6.1 repository secret scan passed across 598 files. The pre-hardening Studio tree passed a fresh-clone release check, but the current tree has not rerun the final clean-clone, SBOM, dependency, or full release gates. |
+| Clean-clone/release check/secret scan       | partial | The source-candidate secret scan passed across 741 files while excluding generated browser-profile state. Exact Node SBOM, image evidence, clean release, and deployment gates remain pending. |
 
 ## Latest verified commands
 
-- Web Vitest — 45 files/261 tests passed, including the question-first landing, dark-theme contrast, focus, and release-script safety regressions.
+- Web Vitest — 58 files/360 tests passed, including the question-first landing, dark-theme contrast, focus, and release-script safety regressions.
+- Fixed-kernel/runner Python — 231/231 tests passed.
+- Root Vitest — 486/488 passed; the two pending tests are exact-source evidence checks scheduled after the immutable image build.
 - Frontend CSS token audit — 24 files, 60 variables, 1,574 variable uses, zero undefined variables, and zero self-referential variables.
 - CloakBrowser render attempt — not run because `CLOAK_CDP_ENDPOINT` was unavailable. No stock browser was substituted.
 - `pnpm exec wrangler deploy --config dist/counterlab/wrangler.json --containers-rollout=none` — deployed focused Theater assets as Worker `67b6b2ad-a77b-4f62-b8f6-4bbd02300869` at 100%; Container version 13 and digest `bdd65fee…` remained unchanged. `/ready` returned all five checks true, and CloakBrowser completed the sample at desktop and 390 px with no browser errors or page overflow.

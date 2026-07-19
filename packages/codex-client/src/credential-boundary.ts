@@ -138,6 +138,33 @@ function isolationError(message: string, cause?: unknown): CompilerSetupError {
   });
 }
 
+export function assertSecureCodexAuthMetadata(
+  metadata: {
+    isFile(): boolean;
+    mode: number;
+    size: number;
+    uid: number;
+  },
+  expectedUid = typeof getuid === "function" ? getuid() : undefined,
+): void {
+  if (!metadata.isFile()) {
+    throw isolationError("The Codex auth source must be a regular file.");
+  }
+  if ((metadata.mode & 0o077) !== 0) {
+    throw isolationError(
+      "The Codex auth file permissions must deny group and other access.",
+    );
+  }
+  if (expectedUid !== undefined && metadata.uid !== expectedUid) {
+    throw isolationError(
+      "The Codex auth file must be owned by the CounterLab process user.",
+    );
+  }
+  if (metadata.size <= 0 || metadata.size > MAX_AUTH_FILE_BYTES) {
+    throw isolationError("The Codex auth file size is outside the safe limit.");
+  }
+}
+
 function requireAbsolute(label: string, value: string): void {
   if (!isAbsolute(value) || value.includes("\0")) {
     throw isolationError(`${label} must be an absolute path.`);
@@ -159,24 +186,7 @@ async function readSecureCodexAuth(
       constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
     );
     const metadata = await handle.stat();
-    if (!metadata.isFile()) {
-      throw isolationError("The Codex auth source must be a regular file.");
-    }
-    if ((metadata.mode & 0o077) !== 0) {
-      throw isolationError(
-        "The Codex auth file permissions must deny group and other access.",
-      );
-    }
-    if (typeof getuid === "function" && metadata.uid !== getuid()) {
-      throw isolationError(
-        "The Codex auth file must be owned by the CounterLab process user.",
-      );
-    }
-    if (metadata.size <= 0 || metadata.size > MAX_AUTH_FILE_BYTES) {
-      throw isolationError(
-        "The Codex auth file size is outside the safe limit.",
-      );
-    }
+    assertSecureCodexAuthMetadata(metadata);
     const raw = await handle.readFile({ encoding: "utf8" });
     const parsed = CodexAuthSchema.safeParse(JSON.parse(raw) as unknown);
     if (!parsed.success) {

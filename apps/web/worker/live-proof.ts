@@ -187,7 +187,7 @@ export function createLiveReasoningProof(input: {
       },
       limitations: [
         conceptLimitation,
-        "The process boundary and allowlists are engineering controls, not a formal sandbox proof.",
+        "The hosted Codex launch has a credential-and-privilege boundary; filesystem generation read isolation is PARTIAL, not a formal sandbox proof.",
         "Passing this fixed transfer verifies one task outcome; it does not establish global mastery.",
       ],
       reproductionCommands: ["./scripts/test-all.sh", mutationCommand],

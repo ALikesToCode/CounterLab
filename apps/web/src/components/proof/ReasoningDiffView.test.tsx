@@ -9,7 +9,7 @@ import {
   ReasoningDiffV2Schema,
 } from "@counterlab/contracts";
 
-import type { PublishReplayResponse } from "../../api";
+import type { PublishReplayResponse, RevokeReplayResponse } from "../../api";
 import { ReasoningDiffView } from "./ReasoningDiffView";
 
 const digest = (character: string) => character.repeat(64);
@@ -120,23 +120,29 @@ function replayPublication(
   return {
     reused,
     replay: {
-      schemaVersion: "2",
+      schemaVersion: "1",
       replayId,
       replay: true,
       label: "Verified replay",
-      playbackMode: "verified_capsule_replay",
-      sourceMode: "live_notebook",
-      sourceSessionId: "session_1",
-      capsuleId: capsule.capsuleId,
       concept: "entity_leakage",
       recordedAt: capsule.createdAt,
-      rootHash: capsule.rootHash,
-      bytesHash: capsule.bytesHash,
-      eventChainHead: capsule.eventChainHead,
-      proofCapsule: capsule,
+      retention: {
+        policy: "available_until_revoked",
+        revocable: true,
+      },
     },
   };
 }
+
+const publicTextPreview = {
+  claim: diff.dimensions.belief.before,
+  hypotheses: [
+    "Random-row accuracy proves new-customer generalization.",
+    "Entity holdout will reveal identity leakage.",
+  ],
+  prediction: "group_score_remains_high",
+  revision: diff.dimensions.belief.after,
+} as const;
 
 describe("ReasoningDiffView", () => {
   it("renders all six authoritative dimensions and artifact-specific patch scope", () => {
@@ -147,6 +153,7 @@ describe("ReasoningDiffView", () => {
         patch={patch}
         patchDownloadUrl="/api/sessions/session_1/patch/download"
         proofCapsuleDownloadUrl="/api/sessions/session_1/proof-capsule"
+        publicTextPreview={publicTextPreview}
       />,
     );
 
@@ -178,6 +185,7 @@ describe("ReasoningDiffView", () => {
         patch={patch}
         patchDownloadUrl="/patch.ipynb"
         proofCapsuleDownloadUrl="/proof.counterlab"
+        publicTextPreview={publicTextPreview}
       />,
     );
 
@@ -207,6 +215,7 @@ describe("ReasoningDiffView", () => {
         patch={patch}
         patchDownloadUrl="/patch.ipynb"
         proofCapsuleDownloadUrl="/proof.counterlab"
+        publicTextPreview={publicTextPreview}
       />,
     );
 
@@ -239,15 +248,29 @@ describe("ReasoningDiffView", () => {
         patchDownloadUrl="/patch.ipynb"
         proofCapsuleDownloadUrl="/proof.counterlab"
         publishReplay={publishReplay}
+        publicTextPreview={publicTextPreview}
       />,
     );
 
     expect(publishReplay).not.toHaveBeenCalled();
-    expect(screen.getByText(/raw notebook stays private/i)).toBeInTheDocument();
-
+    expect(screen.getByText(/share-safe projection/i)).toBeInTheDocument();
+    expect(
+      screen.getAllByText(publicTextPreview.hypotheses[0]).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getByText(publicTextPreview.hypotheses[1]),
+    ).toBeInTheDocument();
+    const publishButton = screen.getByRole("button", {
+      name: /confirm and publish read-only replay/i,
+    });
+    expect(publishButton).toBeDisabled();
     await user.click(
-      screen.getByRole("button", { name: /publish read-only replay/i }),
+      screen.getByRole("checkbox", {
+        name: /listed evidence and learner-authored text become public/i,
+      }),
     );
+
+    await user.click(publishButton);
 
     expect(publishReplay).toHaveBeenCalledTimes(1);
     expect(
@@ -262,7 +285,121 @@ describe("ReasoningDiffView", () => {
     );
     expect(screen.getByText(/replay link copied/i)).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /publish read-only replay/i }),
+      screen.queryByRole("button", {
+        name: /confirm and publish read-only replay/i,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("revokes public playback without removing private completion evidence", async () => {
+    const user = userEvent.setup();
+    const publishReplay = vi
+      .fn()
+      .mockResolvedValue(replayPublication("replay_revocable_1"));
+    const revokeReplay = vi
+      .fn<() => Promise<RevokeReplayResponse>>()
+      .mockResolvedValue({
+        replayId: "replay_revocable_1",
+        revoked: true,
+        alreadyRevoked: false,
+      });
+
+    render(
+      <ReasoningDiffView
+        diff={diff}
+        capsule={capsule}
+        patch={patch}
+        patchDownloadUrl="/patch.ipynb"
+        proofCapsuleDownloadUrl="/proof.counterlab"
+        publishReplay={publishReplay}
+        revokeReplay={revokeReplay}
+        publicTextPreview={publicTextPreview}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: /listed evidence and learner-authored text become public/i,
+      }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: /confirm and publish read-only replay/i,
+      }),
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /revoke public replay/i }),
+    );
+
+    expect(revokeReplay).toHaveBeenCalledTimes(1);
+    expect(
+      await screen.findByRole("heading", {
+        name: /this public replay is revoked/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /open verified replay/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /download repaired notebook/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /export proof capsule/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("restores an active public replay after refresh without republishing", async () => {
+    const publishReplay = vi.fn<() => Promise<PublishReplayResponse>>();
+    const restored = replayPublication("replay_restored_1", true);
+
+    render(
+      <ReasoningDiffView
+        diff={diff}
+        capsule={capsule}
+        patch={patch}
+        patchDownloadUrl="/patch.ipynb"
+        proofCapsuleDownloadUrl="/proof.counterlab"
+        publishReplay={publishReplay}
+        loadReplayStatus={() =>
+          Promise.resolve({ status: "active", replay: restored.replay })
+        }
+        publicTextPreview={publicTextPreview}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("link", { name: /open verified replay/i }),
+    ).toHaveAttribute("href", "/replay/replay_restored_1");
+    expect(publishReplay).not.toHaveBeenCalled();
+  });
+
+  it("restores permanent revocation after refresh", async () => {
+    const restored = replayPublication("replay_revoked_1", true);
+
+    render(
+      <ReasoningDiffView
+        diff={diff}
+        capsule={capsule}
+        patch={patch}
+        patchDownloadUrl="/patch.ipynb"
+        proofCapsuleDownloadUrl="/proof.counterlab"
+        publishReplay={() => Promise.resolve(restored)}
+        loadReplayStatus={() =>
+          Promise.resolve({ status: "revoked", replay: restored.replay })
+        }
+        publicTextPreview={publicTextPreview}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /this public replay is revoked/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: /confirm and publish read-only replay/i,
+      }),
     ).not.toBeInTheDocument();
   });
 
@@ -281,11 +418,20 @@ describe("ReasoningDiffView", () => {
         patchDownloadUrl="/patch.ipynb"
         proofCapsuleDownloadUrl="/proof.counterlab"
         publishReplay={publishReplay}
+        publicTextPreview={publicTextPreview}
       />,
     );
 
     await user.click(
-      screen.getByRole("button", { name: /publish read-only replay/i }),
+      screen.getByRole("checkbox", {
+        name: /listed evidence and learner-authored text become public/i,
+      }),
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /confirm and publish read-only replay/i,
+      }),
     );
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Replay storage is unavailable.",
@@ -319,11 +465,18 @@ describe("ReasoningDiffView", () => {
         patchDownloadUrl="/patch.ipynb"
         proofCapsuleDownloadUrl="/proof.counterlab"
         publishReplay={publishReplay}
+        publicTextPreview={publicTextPreview}
       />,
     );
 
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: /listed evidence and learner-authored text become public/i,
+      }),
+    );
+
     const publishButton = screen.getByRole("button", {
-      name: /publish read-only replay/i,
+      name: /confirm and publish read-only replay/i,
     });
     await user.click(publishButton);
     expect(

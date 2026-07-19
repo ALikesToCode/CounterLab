@@ -15,8 +15,8 @@ import {
   PatchResultSchema,
   PredictionContractSchema,
   ProofBundleSchema,
-  ProofCapsuleReplayReceiptV2Schema,
-  ProofCapsuleReplayV2Schema,
+  PublicReplayProjectionV1Schema,
+  PublicReplayPublicationReceiptV1Schema,
   PublicProofCapsuleRefV2Schema,
   PublicCompilerEventSchema,
   ReasoningDiffSchema,
@@ -29,6 +29,7 @@ import {
   TransferResultSchema,
   VerifiedResultSetSchema,
   apiSuccessSchema,
+  canonicalJsonV1,
   type ArtifactManifest,
   type BeliefSpecV2,
   type BeliefTest,
@@ -47,8 +48,8 @@ import {
   type PatchResult,
   type PredictionContract,
   type ProofBundle,
-  type ProofCapsuleReplayReceiptV2,
-  type ProofCapsuleReplayV2,
+  type PublicReplayProjectionV1,
+  type PublicReplayPublicationReceiptV1,
   type PublicProofCapsuleRefV2,
   type ReasoningDiff,
   type ReasoningDiffV2,
@@ -65,6 +66,24 @@ const Sha256Digest = z
   .string()
   .regex(/^[a-f0-9]{64}$/, "expected a lowercase SHA-256 digest");
 
+const ReleaseIdentitySchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("unbound") }).strict(),
+  z
+    .object({
+      status: z.literal("bound"),
+      workerVersionId: z
+        .string()
+        .regex(
+          /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/,
+        ),
+      workerVersionTag: z.string().regex(/^git-[a-f0-9]{40}$/),
+      workerEvidenceCommit: z.string().regex(/^[a-f0-9]{40}$/),
+      runnerSourceCommit: z.string().regex(/^[a-f0-9]{40}$/),
+      runnerImageDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    })
+    .strict(),
+]);
+
 export const CapabilityHealthSchema = z
   .object({
     platform: z.literal("cloudflare-workers"),
@@ -73,7 +92,13 @@ export const CapabilityHealthSchema = z
     liveGpt: z.enum(["configured", "server-key-required"]),
     liveCodex: z.enum(["configured", "local-runner-required"]),
     liveKernel: z.enum(["configured", "local-runner-required"]),
-    sandbox: z.enum(["configured", "local-runner-required"]),
+    maintenance: z.boolean().optional(),
+    release: ReleaseIdentitySchema.optional(),
+    sandbox: z.enum([
+      "credential-and-privilege-boundary",
+      "local-runner-required",
+    ]),
+    generationFilesystemReadIsolation: z.literal("PARTIAL"),
     requestId: NonEmptyString,
   })
   .strict();
@@ -164,6 +189,17 @@ export const SessionViewSchema = z
   .strict()
   .superRefine(requireExclusiveBeliefAuthority);
 export type SessionView = z.infer<typeof SessionViewSchema>;
+const OwnerCapabilitySchema = z.string().regex(/^cl_owner_[A-Za-z0-9_-]{43}$/u);
+const SessionCreationViewSchema = z
+  .object({
+    ...sessionViewShape,
+    ownerCapability: OwnerCapabilitySchema.optional(),
+  })
+  .strict()
+  .superRefine(requireExclusiveBeliefAuthority);
+const ArtifactUploadViewSchema = ArtifactManifestSchema.extend({
+  ownerCapability: OwnerCapabilitySchema.optional(),
+}).strict();
 export type ArtifactView = ArtifactManifest;
 
 export type SessionBeliefAuthority =
@@ -258,7 +294,13 @@ const BoundaryResponseSchema = z
     if (
       response.result.resultHash !== response.receipt.resultHash ||
       response.report.reportHash !== response.receipt.verificationReportHash ||
-      response.authority.resultHash !== response.result.resultHash
+      response.authority.resultHash !== response.result.resultHash ||
+      response.authority.verificationReportHash !==
+        response.report.reportHash ||
+      response.authority.sweepId !== response.result.sweepId ||
+      response.authority.cellCount !== response.result.cells.length ||
+      canonicalJsonV1(response.authority.receipt) !==
+        canonicalJsonV1(response.receipt)
     ) {
       context.addIssue({
         code: "custom",
@@ -331,22 +373,49 @@ const LegacyReplaySchema = z
   })
   .strict();
 
-const ReplaySchema = z.union([LegacyReplaySchema, ProofCapsuleReplayV2Schema]);
+const ReplaySchema = z.union([
+  LegacyReplaySchema,
+  PublicReplayProjectionV1Schema,
+]);
 
 export type VerifiedReplay =
-  z.infer<typeof LegacyReplaySchema> | ProofCapsuleReplayV2;
+  z.infer<typeof LegacyReplaySchema> | PublicReplayProjectionV1;
 
 const PublishReplayResponseSchema = z
   .object({
     reused: z.boolean(),
-    replay: ProofCapsuleReplayReceiptV2Schema,
+    replay: PublicReplayPublicationReceiptV1Schema,
   })
   .strict();
 
 export type PublishReplayResponse = {
   reused: boolean;
-  replay: ProofCapsuleReplayReceiptV2;
+  replay: PublicReplayPublicationReceiptV1;
 };
+
+const RevokeReplayResponseSchema = z
+  .object({
+    replayId: NonEmptyString,
+    revoked: z.literal(true),
+    alreadyRevoked: z.boolean(),
+  })
+  .strict();
+
+export type RevokeReplayResponse = z.infer<typeof RevokeReplayResponseSchema>;
+
+const ReplayPublicationStatusSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("never_published") }).strict(),
+  z
+    .object({
+      status: z.enum(["active", "revoked"]),
+      replay: PublicReplayPublicationReceiptV1Schema,
+    })
+    .strict(),
+]);
+
+export type ReplayPublicationStatus = z.infer<
+  typeof ReplayPublicationStatusSchema
+>;
 
 const CreateSampleSessionInputSchema = z
   .object({ sampleId: z.literal("leakage-01") })
@@ -478,6 +547,7 @@ export class ApiClientError extends Error {
 export type CounterLabApiClientOptions = {
   baseUrl?: string;
   fetch?: typeof fetch;
+  capabilityStorage?: Pick<Storage, "getItem" | "setItem" | "removeItem">;
 };
 
 function encodedId(value: string): string {
@@ -507,13 +577,61 @@ function validatedInput<T extends z.ZodType>(
   return parsed.data;
 }
 
+async function validatePublicReplayContent(
+  replay: PublicReplayProjectionV1,
+): Promise<void> {
+  const {
+    projectionHash: _projectionHash,
+    projectionIntegrity: _projectionIntegrity,
+    ...sourceAuthority
+  } = replay.authority;
+  const canonical = canonicalJsonV1({
+    ...replay,
+    authority: sourceAuthority,
+  });
+  if (globalThis.crypto?.subtle === undefined) {
+    throw new ApiClientError({
+      code: "REPLAY_INTEGRITY_UNAVAILABLE",
+      message: "This browser cannot verify the public replay hash",
+      status: 0,
+    });
+  }
+  const digest = await globalThis.crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(canonical),
+  );
+  const expected = [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  if (
+    replay.authority.projectionHash !== expected ||
+    replay.authority.projectionIntegrity.contentHash !== expected
+  ) {
+    throw new ApiClientError({
+      code: "REPLAY_INTEGRITY_INVALID",
+      message: "The public replay content does not match its authority hash",
+      status: 0,
+    });
+  }
+}
+
 export class CounterLabApiClient {
   private readonly baseUrl: string;
   private readonly fetcher: typeof fetch | undefined;
+  private readonly capabilityStorage:
+    Pick<Storage, "getItem" | "setItem" | "removeItem"> | undefined;
+  private readonly ownerCapabilities = new Map<string, string>();
+  private readonly artifactCapabilities = new Map<string, string>();
+  private readonly uploadIdempotencyKeys = new WeakMap<File, string>();
 
   constructor(options: CounterLabApiClientOptions = {}) {
     this.baseUrl = (options.baseUrl ?? "").replace(/\/+$/, "");
     this.fetcher = options.fetch;
+    this.capabilityStorage = options.capabilityStorage;
+  }
+
+  hasSessionAccess(sessionId: string): boolean {
+    return this.sessionOwnerCapability(sessionId) !== undefined;
   }
 
   getHealth(): Promise<CapabilityHealth> {
@@ -530,9 +648,19 @@ export class CounterLabApiClient {
   uploadArtifact(file: File): Promise<ArtifactManifest> {
     const form = new FormData();
     form.set("file", file, file.name);
-    return this.request("/api/artifacts", ArtifactManifestSchema, {
+    const idempotencyKey =
+      this.uploadIdempotencyKeys.get(file) ?? `upload_${crypto.randomUUID()}`;
+    this.uploadIdempotencyKeys.set(file, idempotencyKey);
+    return this.request("/api/artifacts", ArtifactUploadViewSchema, {
       method: "POST",
+      headers: { "idempotency-key": idempotencyKey },
       body: form,
+    }).then(({ ownerCapability, ...artifact }) => {
+      this.uploadIdempotencyKeys.delete(file);
+      if (ownerCapability !== undefined) {
+        this.artifactCapabilities.set(artifact.artifactId, ownerCapability);
+      }
+      return artifact;
     });
   }
 
@@ -543,29 +671,43 @@ export class CounterLabApiClient {
     );
   }
 
+  getSessionArtifact(sessionId: string): Promise<ArtifactManifest> {
+    return this.request(
+      `/api/sessions/${encodedId(sessionId)}/artifact`,
+      ArtifactManifestSchema,
+    );
+  }
+
   createSampleSession(input: CreateSampleSessionInput): Promise<SessionView> {
-    return this.request("/api/sample/sessions", SessionViewSchema, {
+    return this.request("/api/sample/sessions", SessionCreationViewSchema, {
       method: "POST",
       body: JSON.stringify(
         validatedInput(CreateSampleSessionInputSchema, input),
       ),
-    });
+    }).then((created) => this.rememberCreatedSession(created));
   }
 
   createLiveSession(input: CreateLiveSessionInput): Promise<SessionView> {
-    return this.request("/api/live/sessions", SessionViewSchema, {
+    const artifactCapability = this.artifactCapabilities.get(input.artifactId);
+    return this.request("/api/live/sessions", SessionCreationViewSchema, {
       method: "POST",
-      body: JSON.stringify(validatedInput(CreateLiveSessionInputSchema, input)),
+      body: JSON.stringify({
+        ...validatedInput(CreateLiveSessionInputSchema, input),
+        ...(artifactCapability === undefined ? {} : { artifactCapability }),
+      }),
+    }).then((created) => {
+      this.artifactCapabilities.delete(input.artifactId);
+      return this.rememberCreatedSession(created);
     });
   }
 
   createReplaySession(input: CreateReplaySessionInput): Promise<SessionView> {
-    return this.request("/api/replay/sessions", SessionViewSchema, {
+    return this.request("/api/replay/sessions", SessionCreationViewSchema, {
       method: "POST",
       body: JSON.stringify(
         validatedInput(CreateReplaySessionInputSchema, input),
       ),
-    });
+    }).then((created) => this.rememberCreatedSession(created));
   }
 
   getSession(sessionId: string): Promise<SessionView> {
@@ -672,10 +814,16 @@ export class CounterLabApiClient {
   cancelRunnerJob(
     sessionId: string,
     jobId: string,
+    signal?: AbortSignal,
   ): Promise<RunnerCancelResponse> {
-    return this.postWithoutInput(
+    return this.request(
       `/api/sessions/${encodedId(sessionId)}/jobs/${encodedId(jobId)}/cancel`,
       RunnerCancelResponseSchema,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+        ...(signal === undefined ? {} : { signal }),
+      },
     );
   }
 
@@ -801,14 +949,6 @@ export class CounterLabApiClient {
     return `${this.baseUrl}/api/sessions/${encodedId(sessionId)}/proof-capsule`;
   }
 
-  replayProofCapsuleDownloadUrl(replayId: string): string {
-    return `${this.baseUrl}/api/replays/${encodedId(replayId)}/proof-capsule`;
-  }
-
-  replayPatchedNotebookDownloadUrl(replayId: string): string {
-    return `${this.baseUrl}/api/replays/${encodedId(replayId)}/patched-notebook`;
-  }
-
   getEvents(sessionId: string): Promise<EvidenceEvent[]> {
     return this.request(
       `/api/sessions/${encodedId(sessionId)}/events`,
@@ -830,8 +970,13 @@ export class CounterLabApiClient {
     );
   }
 
-  getReplay(replayId: string): Promise<VerifiedReplay> {
-    return this.request(`/api/replays/${encodedId(replayId)}`, ReplaySchema);
+  async getReplay(replayId: string): Promise<VerifiedReplay> {
+    const replay = await this.request(
+      `/api/replays/${encodedId(replayId)}`,
+      ReplaySchema,
+    );
+    if ("projectionKind" in replay) await validatePublicReplayContent(replay);
+    return replay;
   }
 
   publishReplay(sessionId: string): Promise<PublishReplayResponse> {
@@ -839,6 +984,86 @@ export class CounterLabApiClient {
       `/api/sessions/${encodedId(sessionId)}/replays`,
       PublishReplayResponseSchema,
     );
+  }
+
+  revokeReplay(sessionId: string): Promise<RevokeReplayResponse> {
+    return this.postWithoutInput(
+      `/api/sessions/${encodedId(sessionId)}/replays/revoke`,
+      RevokeReplayResponseSchema,
+    );
+  }
+
+  getReplayPublicationStatus(
+    sessionId: string,
+  ): Promise<ReplayPublicationStatus> {
+    return this.request(
+      `/api/sessions/${encodedId(sessionId)}/replays/status`,
+      ReplayPublicationStatusSchema,
+    );
+  }
+
+  revokeSessionAccess(sessionId: string): Promise<{ revoked: boolean }> {
+    return this.postWithoutInput(
+      `/api/sessions/${encodedId(sessionId)}/access/revoke`,
+      z.object({ revoked: z.boolean() }).strict(),
+    ).then((result) => {
+      this.ownerCapabilities.delete(sessionId);
+      try {
+        this.browserStorage()?.removeItem(this.ownerCapabilityKey(sessionId));
+      } catch {
+        // Access can remain memory-only when storage is unavailable.
+      }
+      return result;
+    });
+  }
+
+  private rememberCreatedSession(
+    created: z.infer<typeof SessionCreationViewSchema>,
+  ): SessionView {
+    const { ownerCapability, ...session } = created;
+    if (ownerCapability !== undefined) {
+      this.ownerCapabilities.set(session.sessionId, ownerCapability);
+      try {
+        this.browserStorage()?.setItem(
+          this.ownerCapabilityKey(session.sessionId),
+          ownerCapability,
+        );
+      } catch {
+        // The in-memory capability still protects this browser tab.
+      }
+    }
+    return session;
+  }
+
+  private ownerCapabilityKey(sessionId: string): string {
+    return `counterlab.ownerCapability.${encodeURIComponent(sessionId)}`;
+  }
+
+  private browserStorage():
+    Pick<Storage, "getItem" | "setItem" | "removeItem"> | undefined {
+    if (this.capabilityStorage !== undefined) return this.capabilityStorage;
+    if (typeof window !== "undefined" && window.localStorage !== undefined) {
+      return window.localStorage;
+    }
+    return undefined;
+  }
+
+  private sessionOwnerCapability(sessionId: string): string | undefined {
+    const current = this.ownerCapabilities.get(sessionId);
+    if (current !== undefined) return current;
+    try {
+      const stored = this.browserStorage()?.getItem(
+        this.ownerCapabilityKey(sessionId),
+      );
+      const parsed = OwnerCapabilitySchema.safeParse(stored);
+      if (parsed.success) {
+        this.ownerCapabilities.set(sessionId, parsed.data);
+        return parsed.data;
+      }
+    } catch {
+      // A missing or blocked storage surface is equivalent to no capability.
+    }
+    return undefined;
   }
 
   private postWithoutInput<T>(path: string, schema: z.ZodType<T>): Promise<T> {
@@ -891,6 +1116,26 @@ export class CounterLabApiClient {
     }
     for (const [name, value] of new Headers(init.headers).entries()) {
       headers[name] = value;
+    }
+    const sessionRoute = /^\/api\/sessions\/([^/?]+)/u.exec(path);
+    if (
+      sessionRoute?.[1] !== undefined &&
+      headers.authorization === undefined
+    ) {
+      let sessionId: string;
+      try {
+        sessionId = decodeURIComponent(sessionRoute[1]);
+      } catch {
+        throw new ApiClientError({
+          code: "INVALID_REQUEST",
+          message: "session route identifier is malformed",
+          status: 0,
+        });
+      }
+      const capability = this.sessionOwnerCapability(sessionId);
+      if (capability !== undefined) {
+        headers.authorization = `Bearer ${capability}`;
+      }
     }
 
     let response: Response;

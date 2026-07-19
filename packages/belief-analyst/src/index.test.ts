@@ -420,6 +420,72 @@ describe("privacy-preserving analyst input", () => {
     expect(serialized).not.toContain("C:\\\\Users");
     expect(serialized).not.toContain("plain-metadata-secret");
   });
+
+  it("suppresses declared and unknown identifier fields everywhere in the outbound packet", () => {
+    const artifact = manifest();
+    artifact.schemaSummary.fields.push({
+      name: "student_number",
+      inferredType: "string",
+      privacyClass: "unreviewed_school_identifier",
+    });
+    artifact.schemaSummary.entityCandidates.push("student_number");
+    artifact.cells[0]!.sourceExcerpt =
+      "customer_id = row.customer_id\nstudent_number = row.student_number";
+    artifact.cells[0]!.symbols.push("student_number");
+
+    const context = buildSanitizedAnalystContext({
+      sessionId: "session_1",
+      learnerClaim: "Does customer_id let the model memorize each learner?",
+      manifest: artifact,
+      concept: "entity_leakage",
+    });
+    const serialized = JSON.stringify(context);
+
+    expect(serialized).not.toContain("customer_id");
+    expect(serialized).not.toContain("student_number");
+    expect(serialized).toContain("[REDACTED_SENSITIVE_FIELD_1]");
+    expect(serialized).toContain("[REDACTED_SENSITIVE_FIELD_2]");
+    expect(context.privacy).toMatchObject({
+      policyVersion: "outbound-privacy-v2",
+      suppressedFieldCount: 2,
+    });
+    expect(context.privacy.redactions).toContainEqual(
+      expect.objectContaining({ category: "sensitive_field" }),
+    );
+  });
+
+  it("redacts common identifiers, including normalized Unicode variants, without hiding scientific values", () => {
+    const artifact = manifest();
+    artifact.cells[0]!.sourceExcerpt = [
+      "email = 'learner@example.edu'",
+      "phone = '+1 (415) 555-0182'",
+      "student_id = 'STUDENT-0042'",
+      "request_id = '550e8400-e29b-41d4-a716-446655440000'",
+      "unicode_phone = '＋１ ４１５ ５５５ ０１８２'",
+      "accuracy = 0.9847",
+      "run_date = '2026/07/18'",
+      "operation = 'group_holdout_v1'",
+    ].join("\n");
+
+    const context = buildSanitizedAnalystContext({
+      sessionId: "session_1",
+      learnerClaim: claim,
+      manifest: artifact,
+      concept: "entity_leakage",
+    });
+    const excerpt = context.evidence[0]!.sourceExcerpt;
+
+    expect(excerpt).not.toContain("learner@example.edu");
+    expect(excerpt).not.toContain("415) 555-0182");
+    expect(excerpt).not.toContain("STUDENT-0042");
+    expect(excerpt).not.toContain("550e8400-e29b-41d4-a716-446655440000");
+    expect(excerpt).not.toContain("４１５");
+    expect(excerpt).toContain("0.9847");
+    expect(excerpt).toContain("group_holdout_v1");
+    expect(context.privacy.redactions).toContainEqual(
+      expect.objectContaining({ category: "identifier" }),
+    );
+  });
 });
 
 describe("evidence resolution", () => {

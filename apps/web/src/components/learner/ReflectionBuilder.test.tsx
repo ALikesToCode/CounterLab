@@ -81,6 +81,17 @@ function ControlledReflection({
 }
 
 describe("ReflectionBuilder", () => {
+  it("starts unanswered and requires an explicit learner choice", () => {
+    render(<ControlledReflection />);
+
+    expect(screen.getByLabelText(/choose the condition/i)).toHaveValue("");
+    expect(screen.getByLabelText(/choose the action/i)).toHaveValue("");
+    expect(
+      screen.getByLabelText(/choose the evidence-based reason/i),
+    ).toHaveValue("");
+    expect(screen.getByLabelText("Editable final sentence")).toHaveValue("");
+  });
+
   it("builds one editable revision string from evidence-linked clauses", async () => {
     const user = userEvent.setup();
     const onRevision = vi.fn();

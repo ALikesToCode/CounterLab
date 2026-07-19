@@ -80,6 +80,7 @@ export function ImbalancePatchReview({
     const completed = await runner.waitForJob({
       sessionId: session.sessionId,
       jobId,
+      jobKind: "PATCH_COMPILE",
       terminalStates: ["PROOF_CAPSULE_ISSUED", "PATCH_REJECTED"],
       onSession: updateSession,
     });
@@ -208,10 +209,22 @@ export function ImbalancePatchReview({
       session.mode.kind === "live_notebook" &&
       session.state === "PROOF_CAPSULE_ISSUED" &&
       session.reasoningDiffV2 !== undefined &&
-      session.proofCapsule !== undefined
+      session.proofCapsule !== undefined &&
+      session.beliefSpec !== undefined &&
+      session.prediction !== undefined &&
+      session.revision !== undefined
         ? {
             diff: session.reasoningDiffV2,
             capsule: session.proofCapsule,
+            publicTextPreview: {
+              claim: session.beliefSpec.claim,
+              hypotheses: [
+                session.beliefSpec.hypotheses[0].statement,
+                session.beliefSpec.hypotheses[1].statement,
+              ] as const,
+              prediction: session.prediction.choice,
+              revision: session.revision,
+            },
           }
         : null;
     const completion = (
@@ -274,6 +287,11 @@ export function ImbalancePatchReview({
               publishReplay={() =>
                 counterLabApi.publishReplay(session.sessionId)
               }
+              revokeReplay={() => counterLabApi.revokeReplay(session.sessionId)}
+              loadReplayStatus={() =>
+                counterLabApi.getReplayPublicationStatus(session.sessionId)
+              }
+              publicTextPreview={liveCompletionProof.publicTextPreview}
             />
           )
         }

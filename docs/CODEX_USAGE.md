@@ -35,9 +35,11 @@ compatible default.
 
 Codex receives only the approved Belief Spec, sanitized Artifact Manifest,
 resolved evidence, selected Subject Pack capabilities/schema, resource limits,
-and permitted outputs. It does not receive notebook bytes, raw rows, secrets,
-hidden verifier source, mutation implementations, held-out fixtures, R2/D1
-credentials, or unrelated files.
+and permitted outputs in its request packet. That packet excludes notebook
+bytes, raw rows, secrets, hidden verifier source, mutation implementations,
+held-out fixtures, R2/D1 credentials, and unrelated files. This input-minimizing
+contract does not claim the hosted process is OS-unable to read every runtime
+file; hosted filesystem generation read isolation is `PARTIAL`.
 
 ### Outputs
 
@@ -89,6 +91,12 @@ The hosted runner executes only fixed Python operations. It does not execute
 model-authored Python, and it does not require nested Docker. Missing binding,
 credential, timeout, or process capability is a typed failure—not replay or
 sample success.
+
+The hosted Codex launcher stages and revokes credentials, uses a fixed non-root
+UID plus `setpriv --no-new-privs`, and constrains writes. It does not provide a
+mount namespace or filesystem read allowlist, so hosted filesystem generation
+read isolation is `PARTIAL`.
+Source-free plans still have no numerical or verification authority.
 
 ## Advanced local adapter proof
 

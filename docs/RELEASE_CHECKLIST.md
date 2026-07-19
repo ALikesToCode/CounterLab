@@ -134,12 +134,13 @@ Report SHA-256:
 
 ## Current-tree release commands
 
-- [ ] `./scripts/test-all.sh` on the v6.1 branch. An earlier root Vitest attempt
-      passed 33 files/439 tests and failed 7 files/29 tests; do not call the
-      complete gate green.
+- [ ] `./scripts/test-all.sh` on the v6.1 branch. Current root Vitest passes
+      486/488; the remaining exact-source evidence tests run after the image
+      build.
 - [ ] `pnpm run held-out:run` after the v5.1 contract migrations.
 - [ ] `pnpm run format:check` after all v6.1 changes.
-- [x] Repository secret scan after Milestone 9: passed across 598 files.
+- [x] Repository secret scan: passed across 741 files while excluding generated
+      browser-profile state.
 - [ ] `./scripts/clean-demo.sh` after all v5.1 changes.
 - [ ] `./scripts/reproduce-session.sh leakage-01` after all v5.1 changes.
 - [ ] `./scripts/replay-patch.sh leakage-01` after all v5.1 changes.
@@ -202,23 +203,24 @@ or production evidence above does not qualify this source.
 - [x] Strict privacy-safe learner interaction schema, append-only D1 migration,
       API, and client recording pass tests and remain outside scientific
       evidence authority.
-- [x] Web Vitest passed 45 files and 254 tests.
+- [x] Web Vitest passed 58 files and 360 tests.
 - [x] Repository, web, and Worker TypeScript checks passed.
 - [x] Vite/Worker production build passed with a unique repository-local output
       directory and `--emptyOutDir=false`.
-- [x] Repository secret scan passed across 598 files after the final
-      documentation update (the Milestone 8 code-state scan covered 597).
+- [x] Repository secret scan passed across 741 files while excluding generated
+      browser-profile state.
 - [x] Cloak-only Playwright configuration statically collected 22 tests from one
       spec file and refuses credentialed/non-loopback target URLs.
 - [x] Missing `CLOAK_CDP_ENDPOINT` failed closed with status 1; no stock Chromium
       fallback was launched.
-- [x] Post-audit scientific-engine verifier passed 8/8; Python kernel passed
-      179/179; leakage mutations detected 13/13; imbalance mutations detected
-      19/19.
+- [x] Combined fixed-kernel and hosted-runner Python gate passed 231/231.
+- [ ] Refresh the exact source/image-bound scientific-engine and Node SBOM
+      evidence, then rerun the scientific-engine verifier.
 - [x] Held-out intake/routing passed 10/10 and fixed completion passed 7/8; the
       unsupported RandomForest patch remains an intentional refusal.
-- [x] All six D1 migrations, including `0006_learner_interactions.sql`, applied
-      successfully to a fresh repository-contained local database.
+- [x] All eight D1 migrations, including owner-capability retirement and replay
+      revocation, applied successfully to a fresh repository-contained local
+      database; a second pass reported none pending.
 - [x] Verified Sample Playground was explicitly omitted because no independently
       admitted fixture authority existed; no browser metric computation or mode
       fallback was introduced.
@@ -227,8 +229,8 @@ or production evidence above does not qualify this source.
 - [ ] Verify rendered focus, typography floors, 44 px targets, reduced motion,
       async announcements, exact tables, and no horizontal overflow.
 - [ ] Capture current-source screenshots and measure Web Vitals.
-- [ ] Make the full root Vitest/release gate green or approve narrowly documented
-      environment-specific exclusions.
+- [ ] Refresh source-bound evidence so the remaining 2 scientific release tests
+      join the 486 passing root tests.
 - [ ] Supply a repository-contained Cloudflare authentication session or API
       token and a current exact-source qualified runner image/receipt. The
       contained Wrangler session is currently unauthenticated.

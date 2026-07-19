@@ -45,7 +45,11 @@ export function currentLearnerStage(
   studioStage: StudioStage,
   sessionState?: SessionState,
 ): LearnerStageId {
-  if (studioStage === "live-setup" || studioStage === "claim") {
+  if (
+    studioStage === "question-path" ||
+    studioStage === "live-setup" ||
+    studioStage === "claim"
+  ) {
     return "question";
   }
   if (studioStage === "belief") return "prediction";

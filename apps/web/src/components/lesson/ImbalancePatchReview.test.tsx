@@ -12,6 +12,8 @@ const api = vi.hoisted(() => ({
   patchDownloadUrl: vi.fn(() => "/api/sessions/session_1/patch/download"),
   proofCapsuleDownloadUrl: vi.fn(() => "/api/sessions/session_1/proof-capsule"),
   publishReplay: vi.fn(),
+  revokeReplay: vi.fn(),
+  getReplayPublicationStatus: vi.fn(),
 }));
 const runner = vi.hoisted(() => ({
   clear: vi.fn(),
@@ -34,6 +36,9 @@ vi.mock("../../features/learner/interactionEvidence", () => ({
 describe("ImbalancePatchReview", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    api.getReplayPublicationStatus.mockResolvedValue({
+      status: "never_published",
+    });
   });
 
   it("compiles after transfer and presents the verified artifact-specific diff", async () => {
@@ -157,6 +162,9 @@ describe("ImbalancePatchReview", () => {
       patchResult: replay.patchResult,
       reasoningDiffV2: replay.reasoningDiff,
       proofCapsule: replay.proofCapsule,
+      beliefSpec: replay.beliefSpec,
+      prediction: replay.prediction,
+      revision: replay.revision.statement,
     } as SessionView;
 
     render(
@@ -192,9 +200,17 @@ describe("ImbalancePatchReview", () => {
 
     expect(api.publishReplay).not.toHaveBeenCalled();
     await user.click(screen.getByText("Evidence & proof"));
-    await user.click(
-      await screen.findByRole("button", { name: /publish read-only replay/i }),
-    );
+    const publicationConsent = await screen.findByRole("checkbox", {
+      name: /I understand that the listed evidence and learner-authored text become public/i,
+    });
+    const publishButton = await screen.findByRole("button", {
+      name: /Confirm and publish read-only replay/i,
+    });
+    expect(publicationConsent).not.toBeChecked();
+    expect(publishButton).toBeDisabled();
+    await user.click(publicationConsent);
+    expect(publishButton).toBeEnabled();
+    await user.click(publishButton);
     expect(api.publishReplay).toHaveBeenCalledTimes(1);
     expect(api.publishReplay).toHaveBeenCalledWith(replay.sourceSessionId);
     expect(

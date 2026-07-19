@@ -10,9 +10,9 @@ if [[ ! -x "${PYTHON_BIN}" ]]; then
 fi
 
 cd "${ROOT_DIR}"
-pnpm exec vitest run
-pnpm --filter @counterlab/web test
+./scripts/run-contained-pnpm.sh exec vitest run
+./scripts/run-contained-pnpm.sh --filter @counterlab/web test
 PYTHONPATH=services/kernel/src:services/runner/src "${PYTHON_BIN}" -m pytest \
   services/kernel/tests services/runner/tests
-pnpm run typecheck
+./scripts/run-contained-pnpm.sh run typecheck
 bash scripts/test-e2e.sh

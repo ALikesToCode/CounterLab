@@ -6,9 +6,12 @@ import {
   type Page,
 } from "./cloak-test";
 import {
+  ArtifactManifestSchema,
   ProofBundleSchema,
-  ProofCapsuleReplayReceiptV2Schema,
-  ProofCapsuleReplayV2Schema,
+  PublicProofCapsuleRefV2Schema,
+  PublicReplayProjectionV1Schema,
+  PublicReplayPublicationReceiptV1Schema,
+  ReasoningDiffV2Schema,
 } from "@counterlab/contracts";
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
@@ -30,6 +33,32 @@ function sha256(value: Uint8Array | string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function recursiveObjectKeys(value: unknown, keys = new Set<string>()) {
+  if (Array.isArray(value)) {
+    value.forEach((entry) => recursiveObjectKeys(entry, keys));
+    return keys;
+  }
+  if (value === null || typeof value !== "object") return keys;
+  for (const [key, child] of Object.entries(value)) {
+    keys.add(key);
+    recursiveObjectKeys(child, keys);
+  }
+  return keys;
+}
+
+async function approveExactPacketWhenRequired(page: Page): Promise<void> {
+  const approval = page.getByRole("checkbox", {
+    name: /reviewed the exact redacted packet/i,
+  });
+  if ((await approval.count()) > 0) {
+    await expect(approval).toBeVisible();
+    await approval.check();
+  }
+  await expect(
+    page.getByRole("button", { name: /Send this evidence/i }),
+  ).toBeEnabled();
+}
+
 async function writeLiveSmokeEvidence(
   concept: "entity_leakage" | "class_imbalance",
   page: Page,
@@ -44,8 +73,10 @@ async function writeLiveSmokeEvidence(
   },
 ): Promise<void> {
   const destination = process.env.COUNTERLAB_E2E_EVIDENCE_PATH;
-  if (destination === undefined || destination.length === 0) return;
-  const containedDestination = await ensureRuntimeParent(destination);
+  const containedDestination =
+    destination === undefined || destination.length === 0
+      ? null
+      : await ensureRuntimeParent(destination);
 
   const sessionId = await page.evaluate(() =>
     window.localStorage.getItem("counterlab.sessionId"),
@@ -66,8 +97,15 @@ async function writeLiveSmokeEvidence(
     };
   };
   expect(completedSessionPayload.data?.state).toBe("PROOF_CAPSULE_ISSUED");
-  expect(completedSessionPayload.data?.reasoningDiffV2).toBeDefined();
-  expect(completedSessionPayload.data?.proofCapsule).toBeDefined();
+  const reasoningDiff = ReasoningDiffV2Schema.parse(
+    completedSessionPayload.data?.reasoningDiffV2,
+  );
+  const proofCapsuleReference = PublicProofCapsuleRefV2Schema.parse(
+    completedSessionPayload.data?.proofCapsule,
+  );
+  expect(reasoningDiff.sessionId).toBe(sessionId);
+  expect(reasoningDiff.concept).toBe(concept);
+  expect(proofCapsuleReference.sessionId).toBe(sessionId);
 
   const proofCapsule = await readFile(proofCapsulePath);
   const capsuleEnvelope = JSON.parse(proofCapsule.toString("utf8")) as {
@@ -85,6 +123,48 @@ async function writeLiveSmokeEvidence(
       "Live smoke evidence requires a hashed scientific-engine snapshot entry",
     );
   }
+  const artifactManifestEntry = capsuleEnvelope.entries?.find(
+    (entry) => entry.path === "artifact-manifest.json",
+  );
+  if (
+    typeof artifactManifestEntry?.sha256 !== "string" ||
+    typeof artifactManifestEntry.content !== "string" ||
+    sha256(artifactManifestEntry.content) !== artifactManifestEntry.sha256
+  ) {
+    throw new Error(
+      "Live smoke evidence requires a hashed artifact manifest entry",
+    );
+  }
+  const artifactManifest = ArtifactManifestSchema.parse(
+    JSON.parse(artifactManifestEntry.content),
+  );
+
+  const patchedNotebook = await readFile(patchedNotebookPath);
+  const parsedPatchedNotebook = JSON.parse(
+    patchedNotebook.toString("utf8"),
+  ) as {
+    nbformat?: unknown;
+    cells?: unknown;
+  };
+  expect(parsedPatchedNotebook.nbformat).toBe(4);
+  expect(Array.isArray(parsedPatchedNotebook.cells)).toBe(true);
+
+  const capsuleSha256 = sha256(proofCapsule);
+  const patchSha256 = sha256(patchedNotebook);
+  expect(capsuleSha256).toBe(proofCapsuleReference.bytesHash);
+  expect(proofCapsule.byteLength).toBe(proofCapsuleReference.byteLength);
+
+  const publicationConsent = page.getByRole("checkbox", {
+    name: /I understand that the listed evidence and learner-authored text become public/i,
+  });
+  const publishButton = page.getByRole("button", {
+    name: /Confirm and publish read-only replay/i,
+  });
+  await expect(publicationConsent).toBeVisible();
+  await expect(publicationConsent).not.toBeChecked();
+  await expect(publishButton).toBeDisabled();
+  await publicationConsent.check();
+  await expect(publishButton).toBeEnabled();
 
   const publicationResponsePromise = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -93,15 +173,28 @@ async function writeLiveSmokeEvidence(
       url.pathname === `/api/sessions/${encodeURIComponent(sessionId)}/replays`
     );
   });
-  await page.getByRole("button", { name: /Publish read-only replay/i }).click();
+  await publishButton.click();
   const publicationResponse = await publicationResponsePromise;
   expect([200, 201]).toContain(publicationResponse.status());
   const publicationPayload = (await publicationResponse.json()) as {
     data?: { replay?: unknown };
   };
-  const receipt = ProofCapsuleReplayReceiptV2Schema.parse(
+  const receipt = PublicReplayPublicationReceiptV1Schema.parse(
     publicationPayload.data?.replay,
   );
+  expect(receipt.concept).toBe(concept);
+  for (const privatePublicationKey of [
+    "objectKey",
+    "sourceSessionId",
+    "sessionId",
+    "capsuleId",
+    "rootHash",
+    "bytesHash",
+  ]) {
+    expect(recursiveObjectKeys(publicationPayload)).not.toContain(
+      privatePublicationKey,
+    );
+  }
   await expect(
     page.getByRole("link", { name: /Open verified replay/i }),
   ).toHaveAttribute("href", `/replay/${encodeURIComponent(receipt.replayId)}`);
@@ -115,110 +208,264 @@ async function writeLiveSmokeEvidence(
     (await duplicatePublicationResponse.json()) as {
       data?: { reused?: unknown; replay?: unknown };
     };
-  const duplicateReceipt = ProofCapsuleReplayReceiptV2Schema.parse(
+  const duplicateReceipt = PublicReplayPublicationReceiptV1Schema.parse(
     duplicatePublicationPayload.data?.replay,
   );
   expect(duplicatePublicationPayload.data?.reused).toBe(true);
   expect(duplicateReceipt.replayId).toBe(receipt.replayId);
+
+  const activeStatusResponse = await page.request.get(
+    `/api/sessions/${encodeURIComponent(sessionId)}/replays/status`,
+  );
+  expect(activeStatusResponse.ok()).toBe(true);
+  const activeStatusPayload = (await activeStatusResponse.json()) as {
+    data?: { status?: unknown; replay?: unknown };
+  };
+  expect(activeStatusPayload.data?.status).toBe("active");
+  expect(
+    PublicReplayPublicationReceiptV1Schema.parse(
+      activeStatusPayload.data?.replay,
+    ).replayId,
+  ).toBe(receipt.replayId);
 
   const replayResponse = await page.request.get(
     `/api/replays/${encodeURIComponent(receipt.replayId)}`,
   );
   expect(replayResponse.ok()).toBe(true);
   const replayPayload = (await replayResponse.json()) as { data?: unknown };
-  const replay = ProofCapsuleReplayV2Schema.parse(replayPayload.data);
+  const replay = PublicReplayProjectionV1Schema.parse(replayPayload.data);
+  expect(replay.replayId).toBe(receipt.replayId);
+  expect(replay.concept).toBe(concept);
+  expect(replay.authority).toMatchObject({
+    sourceCapsuleRootHash: proofCapsuleReference.rootHash,
+    sourceCapsuleBytesHash: proofCapsuleReference.bytesHash,
+    eventChainHead: proofCapsuleReference.eventChainHead,
+    artifactManifestHash: reasoningDiff.authority.artifactManifestHash,
+    beliefSpecHash: reasoningDiff.authority.beliefSpecHash,
+    predictionHash: reasoningDiff.authority.predictionHash,
+    resultHash: reasoningDiff.authority.authoritativeResultHash,
+    evidenceVerdictHash: reasoningDiff.authority.evidenceVerdictHash,
+    boundaryMapHash: reasoningDiff.authority.boundaryMapHash,
+    boundaryReceiptHash: reasoningDiff.authority.boundaryReceiptHash,
+    transferResultHash: reasoningDiff.authority.transferResultHash,
+    patchResultHash: reasoningDiff.authority.patchResultHash,
+    reasoningDiffHash: proofCapsuleReference.reasoningDiffHash,
+  });
+  expect(replay.privacy).toEqual({
+    profile: "share-safe-v1",
+    excluded: [
+      "raw_rows",
+      "notebook_bytes",
+      "local_paths",
+      "source_session_identifiers",
+      "artifact_record_ids",
+      "source_excerpts",
+      "field_names",
+      "patch_diff",
+      "private_capsule",
+      "reasoning_diff_text",
+      "transfer_evidence_text",
+      "event_timestamps",
+      "boundary_internal_fingerprints",
+    ],
+  });
+
+  const serializedReplay = JSON.stringify(replayPayload);
+  const replayKeys = recursiveObjectKeys(replayPayload.data);
+  for (const privateReplayKey of [
+    "objectKey",
+    "sourceSessionId",
+    "sessionId",
+    "capsuleId",
+    "artifactId",
+    "fileSha256",
+    "fileName",
+    "filename",
+    "sourceExcerpt",
+    "fields",
+    "diff",
+    "unifiedDiff",
+    "patchResult",
+    "jobId",
+    "eventId",
+    "reasoning",
+    "identifiedRisks",
+    "generatedAt",
+    "timestamp",
+    "fixtureViewHash",
+    "randomPipelineFingerprint",
+    "groupPipelineFingerprint",
+    "scoreFingerprint",
+    "pipelineFingerprint",
+  ]) {
+    expect(replayKeys).not.toContain(privateReplayKey);
+  }
+  for (const privateReplayValue of [
+    sessionId,
+    artifactManifest.artifactId,
+    artifactManifest.fileName,
+  ]) {
+    expect(serializedReplay).not.toContain(privateReplayValue);
+  }
 
   const replayCapsuleResponse = await page.request.get(
     `/api/replays/${encodeURIComponent(receipt.replayId)}/proof-capsule`,
   );
-  expect(replayCapsuleResponse.ok()).toBe(true);
-  expect(replayCapsuleResponse.headers()["content-type"]).toContain(
-    "application/vnd.counterlab.capsule+json",
-  );
-  const replayCapsule = Buffer.from(await replayCapsuleResponse.body());
+  expect(replayCapsuleResponse.status()).toBe(404);
+  await expect(replayCapsuleResponse.json()).resolves.toMatchObject({
+    error: { code: "REPLAY_PRIVATE_ARTIFACT_UNAVAILABLE" },
+  });
 
   const replayPatchResponse = await page.request.get(
     `/api/replays/${encodeURIComponent(receipt.replayId)}/patched-notebook`,
   );
-  expect(replayPatchResponse.ok()).toBe(true);
-  expect(replayPatchResponse.headers()["content-type"]).toContain(
-    "application/x-ipynb+json",
-  );
-  const replayPatch = Buffer.from(await replayPatchResponse.body());
-  const patchedNotebook = await readFile(patchedNotebookPath);
-  const parsedPatchedNotebook = JSON.parse(
-    patchedNotebook.toString("utf8"),
-  ) as {
-    nbformat?: unknown;
-    cells?: unknown;
-  };
-  expect(parsedPatchedNotebook.nbformat).toBe(4);
-  expect(Array.isArray(parsedPatchedNotebook.cells)).toBe(true);
+  expect(replayPatchResponse.status()).toBe(404);
+  await expect(replayPatchResponse.json()).resolves.toMatchObject({
+    error: { code: "REPLAY_PRIVATE_ARTIFACT_UNAVAILABLE" },
+  });
 
-  const capsuleSha256 = sha256(proofCapsule);
-  const patchSha256 = sha256(patchedNotebook);
-  expect(capsuleSha256).toBe(receipt.bytesHash);
-  expect(proofCapsule.byteLength).toBe(receipt.proofCapsule.byteLength);
-  expect(sha256(replayCapsule)).toBe(capsuleSha256);
-  expect(sha256(replayPatch)).toBe(patchSha256);
-
+  const ownerProofUrl = page.url();
   await page.goto(`/replay/${encodeURIComponent(receipt.replayId)}`);
   await expect(
     page.getByRole("complementary", { name: "Verified replay mode" }),
   ).toBeVisible();
+  await expect(page.getByText("Private notebook withheld")).toBeVisible();
+  await expect(
+    page.getByText(/Full Proof Capsule export remains available only/i),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /Export Proof Capsule/i }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: /Download repaired notebook/i }),
+  ).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText(sessionId);
+  await expect(page.locator("body")).not.toContainText(
+    artifactManifest.fileName,
+  );
   await page.reload();
   await expect(
     page.getByRole("complementary", { name: "Verified replay mode" }),
   ).toBeVisible();
 
-  await writeFile(
-    containedDestination,
-    `${JSON.stringify(
-      {
-        schemaVersion: "2",
-        concept,
-        sessionId,
-        publishedReplayId: receipt.replayId,
-        sourceArtifactHash: replay.artifactManifest.fileSha256,
-        experimentIrHash: replay.reasoningDiff.authority.experimentIrHash,
-        experimentSelectionHash: replay.reasoningDiff.authority.selectionHash,
-        resultHash: replay.verifiedResult.resultHash,
-        evidenceVerdictHash: replay.reasoningDiff.authority.evidenceVerdictHash,
-        epistemicReportHash: replay.reasoningDiff.authority.epistemicReportHash,
-        boundaryMapHash: replay.boundary.result.resultHash,
-        boundaryReceiptHash: replay.reasoningDiff.authority.boundaryReceiptHash,
-        transferResultHash: replay.reasoningDiff.authority.transferResultHash,
-        patchPlanHash: replay.reasoningDiff.authority.patchPlanHash,
-        patchResultHash: replay.patchResult.resultHash,
-        patchedArtifactHash: replay.patchResult.patchedArtifactHash,
-        patchedNotebookSha256: patchSha256,
-        proofCapsuleSha256: capsuleSha256,
-        proofCapsuleRootHash: receipt.rootHash,
-        proofCapsuleBytesHash: receipt.bytesHash,
-        proofCapsuleMediaType: receipt.proofCapsule.mediaType,
-        proofCapsuleIntegrityMode: receipt.proofCapsule.integrity.mode,
-        proofCapsuleByteLength: receipt.proofCapsule.byteLength,
-        reasoningDiffHash: receipt.proofCapsule.reasoningDiffHash,
-        eventChainHead: receipt.eventChainHead,
-        scientificEngineSnapshotHash: engineSnapshotEntry.sha256,
-        replayProjectionHash: sha256(JSON.stringify(replay)),
-        replayProofCapsuleSha256: sha256(replayCapsule),
-        replayPatchedNotebookSha256: sha256(replayPatch),
-        replayPlaybackMode: replay.playbackMode,
-        replaySourceMode: replay.sourceMode,
-        replayPersistedAfterRefresh: true,
-        replayDownloadsMatch:
-          sha256(replayCapsule) === capsuleSha256 &&
-          sha256(replayPatch) === patchSha256,
-        duplicateReplayPublicationReused:
-          duplicatePublicationPayload.data?.reused === true,
-        ...authorityChecks,
-      },
-      null,
-      2,
-    )}\n`,
-    { encoding: "utf8", mode: 0o600 },
+  if (containedDestination !== null) {
+    await writeFile(
+      containedDestination,
+      `${JSON.stringify(
+        {
+          schemaVersion: "3",
+          concept,
+          sessionId,
+          publishedReplayId: receipt.replayId,
+          sourceArtifactHash: artifactManifest.fileSha256,
+          experimentIrHash: reasoningDiff.authority.experimentIrHash,
+          experimentSelectionHash: reasoningDiff.authority.selectionHash,
+          resultHash: replay.test.result.resultHash,
+          evidenceVerdictHash: reasoningDiff.authority.evidenceVerdictHash,
+          epistemicReportHash: reasoningDiff.authority.epistemicReportHash,
+          boundaryMapHash: replay.boundary.result.resultHash,
+          boundaryReceiptHash: reasoningDiff.authority.boundaryReceiptHash,
+          transferResultHash: reasoningDiff.authority.transferResultHash,
+          patchPlanHash: reasoningDiff.authority.patchPlanHash,
+          patchResultHash: replay.repair.resultHash,
+          patchedArtifactHash: replay.repair.patchedArtifactHash,
+          patchedNotebookSha256: patchSha256,
+          proofCapsuleSha256: capsuleSha256,
+          proofCapsuleRootHash: proofCapsuleReference.rootHash,
+          proofCapsuleBytesHash: proofCapsuleReference.bytesHash,
+          proofCapsuleMediaType: proofCapsuleReference.mediaType,
+          proofCapsuleIntegrityMode: proofCapsuleReference.integrity.mode,
+          proofCapsuleByteLength: proofCapsuleReference.byteLength,
+          reasoningDiffHash: proofCapsuleReference.reasoningDiffHash,
+          eventChainHead: proofCapsuleReference.eventChainHead,
+          scientificEngineSnapshotHash: engineSnapshotEntry.sha256,
+          replayProjectionHash: replay.authority.projectionHash,
+          ownerProofCapsuleSha256: capsuleSha256,
+          ownerPatchedNotebookSha256: patchSha256,
+          replayPlaybackMode: replay.playbackMode,
+          replaySourceMode: replay.sourceMode,
+          replayPersistedAfterRefresh: true,
+          publicReplayAuthorityMatches:
+            replay.authority.sourceCapsuleBytesHash === capsuleSha256 &&
+            replay.repair.patchedArtifactHash ===
+              reasoningDiff.authority.patchedArtifactHash,
+          publicReplayPrivateArtifactsUnavailable: true,
+          duplicateReplayPublicationReused:
+            duplicatePublicationPayload.data?.reused === true,
+          ...authorityChecks,
+        },
+        null,
+        2,
+      )}\n`,
+      { encoding: "utf8", mode: 0o600 },
+    );
+  }
+
+  // Keep one evidence-bound public replay available for judge review while the
+  // second live Subject Pack proves revocation and idempotent cleanup.
+  if (concept === "entity_leakage") return;
+
+  await page.goto(ownerProofUrl);
+  const revokeButton = page.getByRole("button", {
+    name: /Revoke public replay/i,
+  });
+  await expect(revokeButton).toBeVisible();
+  const revocationResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "POST" &&
+      url.pathname ===
+        `/api/sessions/${encodeURIComponent(sessionId)}/replays/revoke`
+    );
+  });
+  await revokeButton.click();
+  const revocationResponse = await revocationResponsePromise;
+  expect(revocationResponse.status()).toBe(200);
+  await expect(revocationResponse.json()).resolves.toMatchObject({
+    data: {
+      replayId: receipt.replayId,
+      revoked: true,
+      alreadyRevoked: false,
+    },
+  });
+  await expect(
+    page.getByRole("heading", { name: /This public replay is revoked/i }),
+  ).toBeVisible();
+  await expect(page.getByText(/Public playback is disabled/i)).toBeVisible();
+
+  const revokedReplayResponse = await page.request.get(
+    `/api/replays/${encodeURIComponent(receipt.replayId)}`,
   );
+  expect(revokedReplayResponse.status()).toBe(404);
+
+  const revokedStatusResponse = await page.request.get(
+    `/api/sessions/${encodeURIComponent(sessionId)}/replays/status`,
+  );
+  expect(revokedStatusResponse.ok()).toBe(true);
+  await expect(revokedStatusResponse.json()).resolves.toMatchObject({
+    data: {
+      status: "revoked",
+      replay: { replayId: receipt.replayId },
+    },
+  });
+
+  const duplicateRevocationResponse = await page.request.post(
+    `/api/sessions/${encodeURIComponent(sessionId)}/replays/revoke`,
+    { data: {} },
+  );
+  expect(duplicateRevocationResponse.status()).toBe(200);
+  await expect(duplicateRevocationResponse.json()).resolves.toMatchObject({
+    data: { replayId: receipt.replayId, revoked: true, alreadyRevoked: true },
+  });
+
+  const republishRevokedResponse = await page.request.post(
+    `/api/sessions/${encodeURIComponent(sessionId)}/replays`,
+    { data: {} },
+  );
+  expect(republishRevokedResponse.status()).toBe(409);
+  await expect(republishRevokedResponse.json()).resolves.toMatchObject({
+    error: { code: "ILLEGAL_TRANSITION" },
+  });
 }
 
 type BrowserRunnerCheckpoint = {
@@ -274,7 +521,7 @@ async function reset(page: Page) {
 }
 
 async function revealLandingNavigation(page: Page) {
-  const toggle = page.getByRole("button", { name: "Explore" });
+  const toggle = page.getByRole("button", { name: "Modes" });
   if (await toggle.isVisible()) await toggle.click();
 }
 
@@ -301,6 +548,14 @@ async function openLiveSetup(page: Page, question = claim) {
   await reset(page);
   await page.getByLabel("Your question or claim").fill(question);
   await page.getByRole("button", { name: /Test this claim/i }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: /Start with evidence that matches your question/i,
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: /Check live notebook tools/i })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Test my notebook" }),
   ).toBeVisible();
@@ -355,7 +610,19 @@ async function openTheaterView(
   await expect(page.getByRole("tabpanel")).toBeVisible();
 }
 
+async function completeSampleBoundary(page: Page) {
+  const applyTab = page.getByRole("tab", { name: /Apply/i });
+  if (!(await applyTab.isDisabled())) return;
+  await openTheaterView(page, "Boundary");
+  await page.getByRole("button", { name: /Reveal the map/i }).click();
+  await expect(
+    page.getByRole("table", { name: /Verified Boundary Map values/i }),
+  ).toBeVisible();
+  await expect(applyTab).toBeEnabled();
+}
+
 async function recordRevision(page: Page) {
+  await completeSampleBoundary(page);
   await openTheaterView(page, "Apply");
   await page.getByLabel("Your revised mental model").fill(revision);
   await page
@@ -487,13 +754,17 @@ test("Judge Mode distinguishes every authority path", async ({ page }) => {
       liveCodex?: unknown;
       liveKernel?: unknown;
       sandbox?: unknown;
+      generationFilesystemReadIsolation?: unknown;
+      release?: { status?: unknown };
     };
   };
   const liveReady =
     health.data?.liveGpt === "configured" &&
     health.data.liveCodex === "configured" &&
     health.data.liveKernel === "configured" &&
-    health.data.sandbox === "configured";
+    health.data.sandbox === "credential-and-privilege-boundary" &&
+    health.data.generationFilesystemReadIsolation === "PARTIAL" &&
+    health.data.release?.status === "bound";
   await page.goto("/judge");
   await expect(page).toHaveURL(/\/judge$/);
   await expect(
@@ -560,7 +831,7 @@ test("the first visit explains the lesson before asking for technical knowledge"
     }),
   ).toBeVisible();
   await expect(
-    page.getByText(/State the claim.*never run the cells/i),
+    page.getByText(/No account needed.*never run the cells/i),
   ).toBeVisible();
   await expect(page.getByLabel("Your question or claim")).toBeInViewport();
   await expect(page.getByLabel("Attach notebook")).toBeVisible();
@@ -577,6 +848,11 @@ test("the first visit explains the lesson before asking for technical knowledge"
     "href",
     "/judge",
   );
+  const skipLink = page.getByRole("link", { name: /Skip to main content/i });
+  await expect(skipLink).toHaveAttribute("href", "#main-content");
+  await skipLink.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#main-content")).toBeFocused();
 
   const visibleWords = (await page.locator("body").innerText())
     .trim()
@@ -724,6 +1000,7 @@ test("the lesson keeps one learner decision in focus at a time", async ({
     page.getByText(/Which evaluation design matches deployment/i),
   ).toHaveCount(0);
 
+  await completeSampleBoundary(page);
   await openTheaterView(page, "Apply");
   await page.getByLabel("Your revised mental model").fill(revision);
   await page
@@ -965,10 +1242,13 @@ test("local hints and Theater views never request a model or new result", async 
     }
   });
 
-  for (const view of ["Explore", "Boundary", "Apply", "Observe"] as const) {
+  for (const view of ["Explore", "Observe"] as const) {
     await openTheaterView(page, view);
     await expect(page.getByRole("tabpanel")).toHaveCount(1);
   }
+  await completeSampleBoundary(page);
+  await openTheaterView(page, "Apply");
+  await openTheaterView(page, "Observe");
   await expect(page.getByRole("tab", { name: /Observe/i })).toHaveAttribute(
     "aria-selected",
     "true",
@@ -1029,25 +1309,38 @@ test("failed transfer keeps the patch locked and a corrected answer unlocks it",
   ).toBeEnabled();
 });
 
-test("Replay remains visibly labelled for the full reconstructed path", async ({
+test("Replay remains visibly labelled and read-only after refresh", async ({
   page,
 }) => {
   await reset(page);
   await page.getByRole("button", { name: /Watch verified replay/i }).click();
-  const replayBanner = page.getByLabel("Replay status");
-  await expect(replayBanner).toContainText("Verified replay");
-  await page.getByRole("button", { name: /Continue replay/i }).click();
-  await expect(replayBanner).toContainText("Verified replay");
-  await page.getByRole("button", { name: /Show me what happened/i }).click();
-  await expect(replayBanner).toContainText("Verified replay");
+  const replayBanner = page.getByLabel("Legacy replay status");
+  await expect(replayBanner).toContainText(
+    "Verified replay · read-only stored evidence",
+  );
   await expect(
-    page.getByRole("heading", { name: /Here.s what changed/i }),
+    page.getByRole("heading", {
+      name: /Inspect the result without changing its history/i,
+    }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("table", { name: /Stored fixed-kernel comparison/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Continue replay/i }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /Show me what happened/i }),
+  ).toHaveCount(0);
 
   await page.reload();
-  await expect(replayBanner).toContainText("Verified replay");
+  await expect(page.getByLabel("Legacy replay status")).toContainText(
+    "Verified replay · read-only stored evidence",
+  );
   await expect(
-    page.getByRole("heading", { name: /Here.s what changed/i }),
+    page.getByRole("heading", {
+      name: /Inspect the result without changing its history/i,
+    }),
   ).toBeVisible();
 });
 
@@ -1068,6 +1361,7 @@ test("missing live capabilities are stated without claiming a model call", async
           liveCodex: "local-runner-required",
           liveKernel: "local-runner-required",
           sandbox: "local-runner-required",
+          generationFilesystemReadIsolation: "PARTIAL",
           requestId: "e2e-health-missing",
         },
       }),
@@ -1083,7 +1377,7 @@ test("missing live capabilities are stated without claiming a model call", async
   );
 });
 
-test("configured live reasoning remains unproven until its first request", async ({
+test("configured reasoning cannot start without a qualified hosted runner", async ({
   page,
 }) => {
   await page.route("**/api/health", async (route) => {
@@ -1100,6 +1394,7 @@ test("configured live reasoning remains unproven until its first request", async
           liveCodex: "local-runner-required",
           liveKernel: "local-runner-required",
           sandbox: "local-runner-required",
+          generationFilesystemReadIsolation: "PARTIAL",
           requestId: "e2e-health",
         },
       }),
@@ -1110,10 +1405,12 @@ test("configured live reasoning remains unproven until its first request", async
   await expect(
     page.getByText(/Notebook lesson tools are ready to try/i),
   ).toBeVisible();
-  await expect(page.getByText(/local runner is needed/i)).toBeVisible();
+  await expect(
+    page.getByText(/qualified hosted runner is needed/i),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Continue with my notebook/i }),
-  ).toBeEnabled();
+  ).not.toBeVisible();
   await expect(page.locator("body")).not.toContainText(
     /OPENAI|GPT-|https?:\/\//i,
   );
@@ -1161,15 +1458,15 @@ test("the judged path is keyboard operable with reduced motion", async ({
   await page.emulateMedia({ reducedMotion: "reduce" });
   await reset(page);
 
-  const explore = page.getByRole("button", { name: "Explore" });
-  await explore.focus();
+  const modes = page.getByRole("button", { name: "Modes" });
+  await modes.focus();
   await page.keyboard.press("Enter");
-  await expect(explore).toHaveAttribute("aria-expanded", "true");
+  await expect(modes).toHaveAttribute("aria-expanded", "true");
   await page.keyboard.press("Escape");
-  await expect(explore).toHaveAttribute("aria-expanded", "false");
-  await expect(explore).toBeFocused();
+  await expect(modes).toHaveAttribute("aria-expanded", "false");
+  await expect(modes).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(explore).toHaveAttribute("aria-expanded", "true");
+  await expect(modes).toHaveAttribute("aria-expanded", "true");
 
   const tryInstant = page.getByRole("button", {
     name: /Try verified sample/i,
@@ -1230,6 +1527,11 @@ test("the judged path is keyboard operable with reduced motion", async ({
   await expect(page.getByRole("tabpanel")).toContainText(
     /Verified sample boundary/i,
   );
+  await page.getByRole("button", { name: /Reveal the map/i }).click();
+  await expect(
+    page.getByRole("table", { name: /Verified Boundary Map values/i }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: /Boundary/i }).focus();
   await page.keyboard.press("End");
   await expect(page.getByRole("tab", { name: /Apply/i })).toBeFocused();
   await expect(page.getByRole("tabpanel")).toBeVisible();
@@ -1287,7 +1589,9 @@ test("a configured hosted runner completes an untouched leakage notebook", async
     liveGpt: "configured",
     liveCodex: "configured",
     liveKernel: "configured",
-    sandbox: "configured",
+    sandbox: "credential-and-privilege-boundary",
+    generationFilesystemReadIsolation: "PARTIAL",
+    release: { status: "bound" },
   });
 
   await openLiveSetup(page);
@@ -1310,10 +1614,7 @@ test("a configured hosted runner completes an untouched leakage notebook", async
     }),
   ).toBeVisible();
   await expect(page.getByText(/Entity leakage/i).first()).toBeVisible();
-  const sensitiveApproval = page.getByRole("checkbox", {
-    name: /I reviewed the sensitive-looking excerpts/i,
-  });
-  if ((await sensitiveApproval.count()) > 0) await sensitiveApproval.check();
+  await approveExactPacketWhenRequired(page);
   await page.getByRole("button", { name: /Send this evidence/i }).click();
 
   await expect(
@@ -1519,7 +1820,9 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
     liveGpt: "configured",
     liveCodex: "configured",
     liveKernel: "configured",
-    sandbox: "configured",
+    sandbox: "credential-and-privilege-boundary",
+    generationFilesystemReadIsolation: "PARTIAL",
+    release: { status: "bound" },
   });
 
   await openLiveSetup(
@@ -1549,6 +1852,7 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
     }),
   ).toBeVisible();
   await expect(page.getByText(/Class imbalance/i).first()).toBeVisible();
+  await approveExactPacketWhenRequired(page);
   await page.getByRole("button", { name: /Send this evidence/i }).click();
 
   await expect(

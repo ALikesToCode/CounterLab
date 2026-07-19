@@ -1,9 +1,13 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import type { ArtifactManifest } from "@counterlab/contracts";
 
 import {
   getConceptPack,
+  releasedPackClaimManifest,
   releasedConceptPacks,
   routeArtifactConcept,
 } from "./index.js";
@@ -544,5 +548,34 @@ describe("concept-pack registry", () => {
         ).push("Untrusted widened claim");
       }).toThrow();
     }
+  });
+
+  it("publishes an exact two-pack capability and claim manifest", () => {
+    const manifest = releasedPackClaimManifest();
+    const published = JSON.parse(
+      readFileSync(
+        fileURLToPath(
+          new URL(
+            "../../../docs/RELEASE_CAPABILITY_MANIFEST.json",
+            import.meta.url,
+          ),
+        ),
+        "utf8",
+      ),
+    ) as unknown;
+
+    expect(published).toEqual(manifest);
+    expect(manifest.releasedSubjectPackCount).toBe(2);
+    expect(
+      manifest.releasedSubjectPacks.map((pack) => [pack.id, pack.version]),
+    ).toEqual([
+      ["entity_leakage", "2.1.0"],
+      ["class_imbalance", "1.1.0"],
+    ]);
+    expect(manifest.globalNonClaims).toContain(
+      "CounterLab does not support arbitrary notebooks, arbitrary subject generation, or all STEM.",
+    );
+    expect(Object.isFrozen(manifest)).toBe(true);
+    expect(Object.isFrozen(manifest.releasedSubjectPacks)).toBe(true);
   });
 });

@@ -21,7 +21,9 @@ function liveAuthorityReady(health: CapabilityHealth | null): boolean {
     health?.liveGpt === "configured" &&
     health.liveCodex === "configured" &&
     health.liveKernel === "configured" &&
-    health.sandbox === "configured"
+    health.sandbox === "credential-and-privilege-boundary" &&
+    health.generationFilesystemReadIsolation === "PARTIAL" &&
+    health.release?.status === "bound"
   );
 }
 
@@ -41,9 +43,13 @@ export function JudgeModeView({
   const random = getRun("random_row_split");
   const grouped = getRun("customer_group_split");
   const liveReady = liveAuthorityReady(health);
+  const release = health?.release?.status === "bound" ? health.release : null;
 
   return (
-    <main className={styles.page} id="main-content">
+    <main className={styles.page} id="main-content" tabIndex={-1}>
+      <a className="skip-link" href="#judge-title">
+        Skip to main content
+      </a>
       <header className={styles.masthead}>
         <a className={styles.wordmark} href="/" aria-label="CounterLab home">
           <span aria-hidden="true">C/L</span>
@@ -61,7 +67,9 @@ export function JudgeModeView({
       <section className={styles.hero} aria-labelledby="judge-title">
         <div className={styles.heroCopy}>
           <p className={styles.kicker}>Ask like chat. Prove it like science.</p>
-          <h1 id="judge-title">See a belief break in twenty seconds.</h1>
+          <h1 id="judge-title" tabIndex={-1}>
+            See a belief break in twenty seconds.
+          </h1>
           <p className={styles.lede}>
             CounterLab turns a notebook claim into two competing models, locks
             the learner&apos;s prediction, and lets fixed computation—not fluent
@@ -79,14 +87,16 @@ export function JudgeModeView({
           </p>
         </div>
 
-        <aside className={styles.twentySecondProof} aria-label="Twenty second proof">
+        <aside
+          className={styles.twentySecondProof}
+          aria-label="Twenty second proof"
+        >
           <header>
-            <span>Untouched churn notebook</span>
+            <span>Verified sample notebook evidence</span>
             <b>Fixed-kernel evidence</b>
           </header>
           <blockquote>
-            “This score proves the model works for customers it has never
-            seen.”
+            “This score proves the model works for customers it has never seen.”
           </blockquote>
           <div className={styles.scoreComparison}>
             <div>
@@ -108,7 +118,10 @@ export function JudgeModeView({
         </aside>
       </section>
 
-      <section className={styles.authoritySection} aria-labelledby="authority-title">
+      <section
+        className={styles.authoritySection}
+        aria-labelledby="authority-title"
+      >
         <header>
           <p>Generated vs. computed vs. verified</p>
           <h2 id="authority-title">Four authorities. No blurred hand-offs.</h2>
@@ -171,9 +184,11 @@ export function JudgeModeView({
             </button>
           </article>
 
-          <article className={liveReady ? styles.liveReady : styles.liveUnavailable}>
+          <article
+            className={liveReady ? styles.liveReady : styles.liveUnavailable}
+          >
             <span className={styles.modeTag}>Live notebook analysis</span>
-            <h3>Test an untouched supported notebook.</h3>
+            <h3>Test a supported notebook without running its cells.</h3>
             <p>
               Artifact-specific Belief Spec, Codex plan, fixed kernel,
               independent verification, transfer, and repair to a copy.
@@ -209,16 +224,17 @@ export function JudgeModeView({
             <span className={styles.modeTag}>Verified replay</span>
             <h3>Inspect a genuine reject–repair trace.</h3>
             <p>
-              Read-only stored events. No new model call, no new experiment,
-              and a persistent replay banner on every screen.
+              Read-only stored events. No new model call, no new experiment, and
+              a persistent replay banner on every screen.
             </p>
             <a href="/replay/leakage-01">
               Watch replay <span aria-hidden="true">→</span>
             </a>
             <small>
-              Recorded {new Date(verifiedReplay.recordedAt).toLocaleDateString()}.
-              This legacy v1 replay is genuine but does not offer a Proof
-              Capsule download.
+              Recorded{" "}
+              {new Date(verifiedReplay.recordedAt).toLocaleDateString()}. This
+              legacy v1 replay is genuine but does not offer a Proof Capsule
+              download.
             </small>
           </article>
         </div>
@@ -252,9 +268,15 @@ export function JudgeModeView({
           <p>What the evidence can claim</p>
           <h2 id="proof-title">Bounded proof, visible limitations.</h2>
           <ul>
-            <li>Exact notebook cells and hashes bind the learner&apos;s claim.</li>
-            <li>A verified result cannot appear before Prediction is locked.</li>
-            <li>Transfer is fixed-code scored; no model grades free-form prose.</li>
+            <li>
+              Exact notebook cells and hashes bind the learner&apos;s claim.
+            </li>
+            <li>
+              A verified result cannot appear before Prediction is locked.
+            </li>
+            <li>
+              Transfer is fixed-code scored; no model grades free-form prose.
+            </li>
             <li>The original notebook is never overwritten.</li>
           </ul>
         </div>
@@ -265,12 +287,56 @@ export function JudgeModeView({
             It supports two reviewed ML Subject Packs and refuses unknown
             packages, arbitrary code execution, unsupported patch shapes, and
             insufficient evidence. A Proof Capsule proves integrity and scoped
-            verification—not global mastery or formal sandbox security.
+            verification—not global mastery or formal sandbox security. The
+            hosted Codex launch has a credential-and-privilege boundary;
+            filesystem generation read isolation is explicitly PARTIAL.
           </p>
+          <section
+            className={styles.releaseIdentity}
+            aria-labelledby="judge-release-title"
+          >
+            <h4 id="judge-release-title">Exact public build</h4>
+            {release === null ? (
+              <p>
+                Release identity is unbound. Treat live qualification as
+                unproven.
+              </p>
+            ) : (
+              <dl>
+                <div>
+                  <dt>Worker commit</dt>
+                  <dd>
+                    <code>{release.workerEvidenceCommit}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Worker version</dt>
+                  <dd>
+                    <code>{release.workerVersionId}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Runner commit</dt>
+                  <dd>
+                    <code>{release.runnerSourceCommit}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Container digest</dt>
+                  <dd>
+                    <code>{release.runnerImageDigest}</code>
+                  </dd>
+                </div>
+              </dl>
+            )}
+          </section>
         </aside>
       </section>
 
-      <section className={styles.reproduceSection} aria-labelledby="reproduce-title">
+      <section
+        className={styles.reproduceSection}
+        aria-labelledby="reproduce-title"
+      >
         <div>
           <p>Reproduce locally</p>
           <h2 id="reproduce-title">The demo has commands, not hand-waving.</h2>

@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { PublicCompilerEvent, SessionView } from "../api";
+import { listActiveRunnerJobs } from "../features/learner/activeRunnerRegistry";
 import {
   monitorRunnerJob,
   monitorStandaloneRunnerJob,
@@ -334,9 +335,14 @@ describe("runner event reconnect snapshots", () => {
 
   it("hydrates public events and makes the first refreshed request from the persisted cursor", async () => {
     const storage = memoryStorage();
+    const activeStorage = memoryStorage();
     Object.defineProperty(window, "localStorage", {
       configurable: true,
       value: storage,
+    });
+    Object.defineProperty(window, "sessionStorage", {
+      configurable: true,
+      value: activeStorage,
     });
     writeRunnerEventSnapshot(
       liveSession.sessionId,
@@ -372,6 +378,7 @@ describe("runner event reconnect snapshots", () => {
       await result.current.waitForJob({
         sessionId: liveSession.sessionId,
         jobId: "job_1",
+        jobKind: "LAB_COMPILE",
         terminalStates: ["LAB_VERIFIED"],
         pollIntervalMs: 0,
         api,
@@ -388,7 +395,48 @@ describe("runner event reconnect snapshots", () => {
     expect(
       readRunnerEventSnapshot(liveSession.sessionId, "job_1", storage),
     ).toMatchObject({ cursor: 2, events: [started, completed] });
+    expect(listActiveRunnerJobs(liveSession.sessionId, activeStorage)).toEqual(
+      [],
+    );
     storage.clear();
+  });
+
+  it("keeps a registered job after a network interruption for later cancellation", async () => {
+    const activeStorage = memoryStorage();
+    Object.defineProperty(window, "sessionStorage", {
+      configurable: true,
+      value: activeStorage,
+    });
+    const api = {
+      listRunnerEvents: vi
+        .fn()
+        .mockRejectedValue(new TypeError("network unavailable")),
+      getSession: vi.fn(),
+    };
+    const { result } = renderHook(() => useRunnerEvents());
+
+    await expect(
+      act(async () =>
+        result.current.waitForJob({
+          sessionId: liveSession.sessionId,
+          jobId: "job_network_interrupted",
+          jobKind: "LAB_RUN",
+          terminalStates: ["EXPERIMENT_COMPLETED"],
+          pollIntervalMs: 0,
+          api,
+        }),
+      ),
+    ).rejects.toThrow("network unavailable");
+    expect(listActiveRunnerJobs(liveSession.sessionId, activeStorage)).toEqual([
+      expect.objectContaining({
+        jobId: "job_network_interrupted",
+        kind: "LAB_RUN",
+      }),
+    ]);
+    result.current.clear();
+    expect(
+      listActiveRunnerJobs(liveSession.sessionId, activeStorage),
+    ).toHaveLength(1);
   });
 });
 

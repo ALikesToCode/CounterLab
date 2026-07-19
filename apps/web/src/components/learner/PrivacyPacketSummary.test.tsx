@@ -19,7 +19,7 @@ describe("PrivacyPacketSummary", () => {
             excerpt: "train_test_split(X, y)",
           },
         ],
-        schemaNames: ["customer_id", "churned"],
+        schemaNames: ["[REDACTED_SENSITIVE_FIELD_1]", "churned"],
       },
       rawRows: [{ customer_id: "secret-customer" }],
       localPath: "/home/owner/private/notebook.ipynb",
@@ -36,10 +36,11 @@ describe("PrivacyPacketSummary", () => {
     for (const item of [
       "✓ your claim",
       "✓ short notebook excerpts",
-      "✓ schema names",
+      "✓ non-sensitive schema names and roles",
       "✕ no raw rows",
       "✕ no notebook file",
       "✕ no local paths",
+      "✕ no declared identifier names",
     ]) {
       expect(screen.getByText(item)).toBeInTheDocument();
     }
@@ -50,11 +51,15 @@ describe("PrivacyPacketSummary", () => {
       "This score should hold for unseen customers.",
     );
     expect(exactPacket).toHaveTextContent("Cell 3 · source");
-    expect(exactPacket).toHaveTextContent("customer_id");
+    expect(exactPacket).toHaveTextContent("REDACTED_SENSITIVE_FIELD_1");
+    expect(exactPacket).not.toHaveTextContent("customer_id");
     expect(exactPacket).not.toHaveTextContent("secret-customer");
     expect(exactPacket).not.toHaveTextContent(
       "/home/owner/private/notebook.ipynb",
     );
     expect(exactPacket).not.toHaveTextContent(/rawRows|localPath/);
+    expect(
+      screen.getByText(/cannot guarantee complete de-identification/i),
+    ).toBeInTheDocument();
   });
 });

@@ -297,6 +297,34 @@ read allowlist, the product will not mount that credential merely to turn the
 status green. A host credential-injecting proxy is required before the live gate
 can pass.
 
+## 2026-07-19 — Report hosted filesystem read isolation as partial
+
+The hosted Container `AppServerLaunchBoundary` is a credential-and-privilege
+boundary: it stages and revokes authentication, uses a fixed non-root UID plus
+`setpriv --no-new-privs`, clears the generated command environment, and
+constrains writes. It does not establish a
+mount namespace, chroot, or filesystem read allowlist. Public health, Judge
+copy, deployment receipts, and Proof Capsule limitations therefore report
+filesystem generation read isolation as `PARTIAL`. Fixed scoring, execution,
+and verification remain separate authority, so this claim correction does not
+grant generated output any result authority.
+
+## 2026-07-19 — Retire private sessions that predate owner capabilities
+
+Migration `0007_owner_capabilities.sql` cannot reconstruct a secret owner key
+for an existing private session. Preserving session-ID-only access would keep
+the exact bearer-link weakness the migration is intended to remove. The
+migration therefore records every pre-existing private session in an immutable
+retirement table and forbids minting a retroactive owner capability. Those
+private session and proof locators fail closed with the same 404 used for an
+unknown or unauthorized resource. Public replay projections remain independent
+and are not retired. Because an older private Capsule cannot be exposed as a
+share-safe public projection, migration `0008_replay_revocations.sql` fails
+closed before changing replay visibility when any legacy D1 replay exists. A
+legacy deployment must first run a separately reviewed projection migration;
+it may not silently hide, republish, or make an owner-unrevocable public link.
+New sessions receive a separate 256-bit owner key.
+
 ## 2026-07-15 — Use source-free Plans for hosted execution
 
 - Hosted runtime Codex may create only `experiment-plan.json`,

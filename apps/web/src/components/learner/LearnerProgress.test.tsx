@@ -17,6 +17,7 @@ describe("learnerStages", () => {
       "Apply",
       "Repair",
     ]);
+    expect(currentLearnerStage("question-path")).toBe("question");
     expect(currentLearnerStage("claim", "PROOF_CAPSULE_ISSUED")).toBe(
       "question",
     );
@@ -66,7 +67,7 @@ describe("LearnerProgress", () => {
     expect(review).toHaveBeenCalledTimes(1);
   });
 
-  it("offers the same stages in the mobile Step n of 6 disclosure", async () => {
+  it("offers completed stages in an accessible mobile progress dialog", async () => {
     const user = userEvent.setup();
     const review = vi.fn();
     render(
@@ -79,13 +80,20 @@ describe("LearnerProgress", () => {
 
     const mobileElement = screen.getByTestId("learner-progress-mobile");
     const mobile = within(mobileElement);
-    const summary = mobile.getAllByText("Step 5 of 6")[0]?.closest("summary");
-    expect(summary).not.toBeNull();
-    await user.click(summary!);
-    expect(mobileElement).toHaveAttribute("open");
+    const trigger = mobile.getByRole("button", {
+      name: /step 5 of 6: apply/i,
+    });
+    await user.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+
+    const dialog = screen.getByRole("dialog", { name: "Your progress" });
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(
+      within(dialog).getByRole("button", { name: "Close progress" }),
+    ).toHaveFocus();
 
     const stageNav = within(
-      mobile.getByRole("navigation", { name: "All learner stages" }),
+      within(dialog).getByRole("navigation", { name: "All learner stages" }),
     );
     expect(
       stageNav.getByText("Apply").closest('[aria-current="step"]'),
@@ -95,5 +103,52 @@ describe("LearnerProgress", () => {
     ).not.toBeInTheDocument();
     await user.click(stageNav.getByRole("button", { name: "Review Boundary" }));
     expect(review).toHaveBeenCalledWith("boundary");
+    expect(
+      screen.queryByRole("dialog", { name: "Your progress" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("contains focus and restores it after Escape, close, and backdrop dismissal", async () => {
+    const user = userEvent.setup();
+    render(
+      <LearnerProgress
+        stage="reality"
+        sessionState="TRANSFER_IN_PROGRESS"
+        onReviewStage={vi.fn()}
+      />,
+    );
+
+    const trigger = within(
+      screen.getByTestId("learner-progress-mobile"),
+    ).getByRole("button", { name: /step 5 of 6: apply/i });
+    await user.click(trigger);
+    let dialog = screen.getByRole("dialog", { name: "Your progress" });
+    const close = within(dialog).getByRole("button", {
+      name: "Close progress",
+    });
+    const lastReview = within(dialog).getByRole("button", {
+      name: "Review Boundary",
+    });
+
+    close.focus();
+    await user.tab({ shift: true });
+    expect(lastReview).toHaveFocus();
+    await user.tab();
+    expect(close).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(dialog).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+
+    await user.click(trigger);
+    dialog = screen.getByRole("dialog", { name: "Your progress" });
+    await user.click(
+      within(dialog).getByRole("button", { name: "Close progress" }),
+    );
+    expect(trigger).toHaveFocus();
+
+    await user.click(trigger);
+    fireEvent.click(screen.getByTestId("learner-progress-backdrop"));
+    expect(trigger).toHaveFocus();
   });
 });

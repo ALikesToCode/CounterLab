@@ -1,22 +1,81 @@
-import { useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 
-import type { PublishReplayResponse } from "../../api";
+import type {
+  PublishReplayResponse,
+  ReplayPublicationStatus,
+  RevokeReplayResponse,
+} from "../../api";
+import { CapabilityLinkDisclosure } from "../learner/CapabilityLinkDisclosure";
 import styles from "./ReplayPublicationPanel.module.css";
+
+export type PublicReplayTextPreview = Readonly<{
+  claim: string;
+  hypotheses: readonly [string, string];
+  prediction: string;
+  revision: string;
+}>;
 
 export function ReplayPublicationPanel({
   publishReplay,
+  revokeReplay,
+  loadReplayStatus,
+  publicTextPreview,
 }: {
   publishReplay: () => Promise<PublishReplayResponse>;
+  revokeReplay?: () => Promise<RevokeReplayResponse>;
+  loadReplayStatus?: () => Promise<ReplayPublicationStatus>;
+  publicTextPreview: PublicReplayTextPreview;
 }) {
   const titleId = useId();
-  const [publication, setPublication] =
-    useState<PublishReplayResponse | null>(null);
+  const consentId = useId();
+  const [publication, setPublication] = useState<PublishReplayResponse | null>(
+    null,
+  );
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const [publicationConfirmed, setPublicationConfirmed] = useState(false);
+  const [revoking, setRevoking] = useState(false);
+  const [revoked, setRevoked] = useState(false);
+  const [statusLoading, setStatusLoading] = useState(
+    loadReplayStatus !== undefined,
+  );
+  const [statusChecked, setStatusChecked] = useState(
+    loadReplayStatus === undefined,
+  );
+
+  const refreshReplayStatus = useCallback(async () => {
+    if (loadReplayStatus === undefined) return;
+    setStatusLoading(true);
+    setError(null);
+    try {
+      const status = await loadReplayStatus();
+      if (status.status === "never_published") {
+        setPublication(null);
+        setRevoked(false);
+      } else {
+        setPublication({ reused: true, replay: status.replay });
+        setRevoked(status.status === "revoked");
+      }
+      setStatusChecked(true);
+    } catch (caught) {
+      setStatusChecked(false);
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "CounterLab could not check replay publication status.",
+      );
+    } finally {
+      setStatusLoading(false);
+    }
+  }, [loadReplayStatus]);
+
+  useEffect(() => {
+    void refreshReplayStatus();
+  }, [refreshReplayStatus]);
 
   const publish = async () => {
-    if (publishing || publication !== null) return;
+    if (publishing || publication !== null || !statusChecked) return;
     setPublishing(true);
     setError(null);
     try {
@@ -33,9 +92,28 @@ export function ReplayPublicationPanel({
   };
 
   const replayPath =
-    publication === null
+    publication === null || revoked
       ? null
       : `/replay/${encodeURIComponent(publication.replay.replayId)}`;
+
+  const revoke = async () => {
+    if (publication === null || revokeReplay === undefined || revoking) return;
+    setRevoking(true);
+    setError(null);
+    try {
+      await revokeReplay();
+      setRevoked(true);
+      setCopyStatus(null);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "CounterLab could not revoke this replay.",
+      );
+    } finally {
+      setRevoking(false);
+    }
+  };
 
   const copyReplayLink = async () => {
     if (replayPath === null) return;
@@ -59,13 +137,20 @@ export function ReplayPublicationPanel({
         <h3 id={titleId}>
           {publication === null
             ? "Publish a read-only verified replay"
-            : "Your verified replay is ready"}
+            : revoked
+              ? "This public replay is revoked"
+              : "Your verified replay is ready"}
         </h3>
         {publication === null ? (
           <p>
-            The raw notebook stays private. CounterLab publishes only the
-            sanitized Proof Capsule view, with its original hashes and no new
-            model call.
+            CounterLab publishes a separate share-safe projection bound to the
+            private Proof Capsule. Notebook bytes, source excerpts, patch diff,
+            and private identifiers stay out of the public response.
+          </p>
+        ) : revoked ? (
+          <p role="status">
+            Public playback is disabled. Your private session and immutable
+            evidence remain unchanged.
           </p>
         ) : (
           <p aria-live="polite">
@@ -81,24 +166,78 @@ export function ReplayPublicationPanel({
         )}
       </div>
 
-      {replayPath === null ? (
+      {publication === null ? (
+        <div>
+          <CapabilityLinkDisclosure variant="publish-public-replay" />
+          <details>
+            <summary>Preview learner-authored text that becomes public</summary>
+            <dl>
+              <div>
+                <dt>Claim</dt>
+                <dd>{publicTextPreview.claim}</dd>
+              </div>
+              <div>
+                <dt>Current hypothesis</dt>
+                <dd>{publicTextPreview.hypotheses[0]}</dd>
+              </div>
+              <div>
+                <dt>Competing hypothesis</dt>
+                <dd>{publicTextPreview.hypotheses[1]}</dd>
+              </div>
+              <div>
+                <dt>Prediction</dt>
+                <dd>{publicTextPreview.prediction}</dd>
+              </div>
+              <div>
+                <dt>Revision</dt>
+                <dd>{publicTextPreview.revision}</dd>
+              </div>
+            </dl>
+          </details>
+          <label htmlFor={consentId}>
+            <input
+              id={consentId}
+              type="checkbox"
+              checked={publicationConfirmed}
+              onChange={(event) =>
+                setPublicationConfirmed(event.currentTarget.checked)
+              }
+            />
+            I understand that the listed evidence and learner-authored text
+            become public to anyone with the replay link.
+          </label>
+        </div>
+      ) : null}
+
+      {publication === null ? (
         <button
           className={styles.publishAction}
           type="button"
-          disabled={publishing}
-          onClick={() => void publish()}
+          disabled={
+            statusLoading ||
+            (statusChecked && (publishing || !publicationConfirmed))
+          }
+          onClick={() =>
+            void (statusChecked ? publish() : refreshReplayStatus())
+          }
         >
-          {publishing
-            ? "Publishing replay…"
-            : error === null
-              ? "Publish read-only replay"
-              : "Retry replay publication"}
+          {statusLoading
+            ? "Checking replay status…"
+            : !statusChecked
+              ? "Retry replay status check"
+              : publishing
+                ? "Publishing replay…"
+                : error === null
+                  ? "Confirm and publish read-only replay"
+                  : "Retry replay publication"}
         </button>
-      ) : (
+      ) : revoked ? null : (
         <div className={styles.actions}>
-          <a className={styles.replayAction} href={replayPath}>
-            Open verified replay
-          </a>
+          {replayPath === null ? null : (
+            <a className={styles.replayAction} href={replayPath}>
+              Open verified replay
+            </a>
+          )}
           <button
             className={styles.copyAction}
             type="button"
@@ -106,6 +245,16 @@ export function ReplayPublicationPanel({
           >
             Copy replay link
           </button>
+          {revokeReplay === undefined ? null : (
+            <button
+              className={styles.copyAction}
+              type="button"
+              disabled={revoking}
+              onClick={() => void revoke()}
+            >
+              {revoking ? "Revoking replay…" : "Revoke public replay"}
+            </button>
+          )}
           {copyStatus !== null && (
             <span className={styles.copyStatus} aria-live="polite">
               {copyStatus}

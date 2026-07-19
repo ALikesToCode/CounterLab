@@ -101,15 +101,20 @@ The checked-in replay keeps raw evidence files, a compact browser summary, real
 model/Codex versions, result/adapter hashes, and a visible limitation: host
 generation isolation was partial. Replay never invokes a model.
 
-That limitation belongs to the advanced local adapter proof and its recorded
-replay. Hosted Studio uses source-free Plans in the dedicated runner plane; it
-does not silently route through the adapter workspace.
+That historical limitation belongs to the advanced local adapter proof and its
+recorded replay. Hosted Studio uses source-free Plans in the dedicated runner
+plane and does not silently route through the adapter workspace. Its current
+Container launch boundary uses a fixed non-root UID, `setpriv --no-new-privs`,
+credential staging/revocation, and write constraints, but no mount namespace or
+filesystem read allowlist. Hosted filesystem generation read isolation is also
+explicitly `PARTIAL`.
 
 New advanced-local App Server launches require an injected OS boundary and fail
 closed without one. The Bubblewrap probe verifies the intended filesystem
 shape. Hosted source-free compilation instead stages credentials for App Server
 initialization, revokes them before `thread/start`, and never exposes signing or
-model credentials to generated child commands.
+model credentials to generated child commands. Those controls do not prove
+hidden runtime files are OS-unreadable.
 
 ## v5.1 production boundary
 

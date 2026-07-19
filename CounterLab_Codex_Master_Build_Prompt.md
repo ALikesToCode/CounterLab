@@ -1,5 +1,9 @@
 # CounterLab — Codex master build prompt
 
+> Historical build prompt. The current product constitution is `AGENTS.md`,
+> and current submission copy is `docs/DEVPOST_COPY.md`. Do not use the legacy
+> vocabulary or product thesis below as current release or submission evidence.
+
 Paste this prompt into Codex from the repository root **after saving the companion file as `AGENTS.md`**.
 
 ---

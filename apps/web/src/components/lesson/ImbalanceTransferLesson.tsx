@@ -19,9 +19,6 @@ type RiskChoice = "" | "overall_error_rate" | "minority_false_negative_cost";
 type EvidenceChoice =
   "confusion_matrix_exposes_misses" | "prevalence_shift_changes_precision";
 
-const defaultImbalanceReflection =
-  "When one class is rare,\nI should inspect class-specific errors and deployment costs,\nbecause high overall accuracy can hide missed rare events.";
-
 const reflectionWhen = [
   {
     id: "rare-class",
@@ -130,8 +127,9 @@ export function ImbalanceTransferLesson({
   transferOutcome?: "PASSED" | "FAILED";
   updateSession: (session: SessionView) => void;
 }) {
-  const [revisionDraft, setRevisionDraft] = useState(
-    revision ?? defaultImbalanceReflection,
+  const [revisionDraft, setRevisionDraft] = useState(revision ?? "");
+  const [revisionAuthored, setRevisionAuthored] = useState(
+    revision !== undefined && revision.trim().length >= 20,
   );
   const [revisionMode, setRevisionMode] = useState<"clauses" | "free_text">(
     "clauses",
@@ -214,24 +212,28 @@ export function ImbalanceTransferLesson({
       <section className="revision panel imbalance-revision">
         <ReflectionBuilder
           value={revisionDraft}
-          onRevisionChange={setRevisionDraft}
+          onRevisionChange={(nextRevision) => {
+            setRevisionDraft(nextRevision);
+            setRevisionAuthored(nextRevision.trim().length >= 20);
+          }}
           whenOptions={reflectionWhen}
           actionOptions={reflectionActions}
           becauseOptions={reflectionReasons}
-          initialSelection={{
-            whenId: "rare-class",
-            actionId: "class-errors",
-            becauseId: "accuracy-hides",
-          }}
           editorLabel="Your revised mental model"
           placeholder="When one class is rare, I should…"
           disabled={busy}
           onAuthoringModeChange={setRevisionMode}
         />
+        <p>
+          Complete all three clauses or write a full rule in your own words.
+          CounterLab records the revision without grading the prose.
+        </p>
         <button
           className="button button-primary"
           type="button"
-          disabled={revisionDraft.trim().length < 20 || busy}
+          disabled={
+            !revisionAuthored || revisionDraft.trim().length < 20 || busy
+          }
           onClick={() => void recordRevision()}
         >
           {busy ? "Saving rule…" : "Try it on defects"}
