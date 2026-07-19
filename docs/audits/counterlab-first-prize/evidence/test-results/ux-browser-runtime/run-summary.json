@@ -1,0 +1,17 @@
+{
+  "startedAt": "2026-07-18T19:15:05.916Z",
+  "finishedAt": "2026-07-18T19:16:53.170Z",
+  "browser": "Chromium 150.0.7871.128 via Playwright 1.61.1",
+  "cloakBrowser": false,
+  "fallbackReason": "CloakBrowser CDP was unavailable; user explicitly authorized Chromium fallback.",
+  "publicBaseUrl": "https://counterlab.cserules.workers.dev",
+  "readOnly": true,
+  "viewportResultCount": 15,
+  "performanceResultCount": 8,
+  "blockedWriteCount": 0,
+  "consoleEventCount": 0,
+  "pageErrorCount": 0,
+  "requestFailureCount": 0,
+  "responseEventCount": 198,
+  "fatalError": null
+}

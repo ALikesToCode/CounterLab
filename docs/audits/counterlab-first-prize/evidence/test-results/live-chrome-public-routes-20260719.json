@@ -1,0 +1,1535 @@
+{
+  "schemaVersion": "1",
+  "label": "Chromium fallback explicitly authorized after CloakBrowser failure",
+  "startedAt": "2026-07-18T19:15:59.417Z",
+  "finishedAt": "2026-07-18T19:16:26.662Z",
+  "baseUrl": "https://counterlab.cserules.workers.dev",
+  "browserVersion": "150.0.7871.128",
+  "executablePath": "/usr/bin/chromium",
+  "playwrightVersion": "1.61.1",
+  "profile": "/home/mysterious/storage/github/CounterLab/docs/audits/counterlab-first-prize/evidence/browser-state/live-chrome-profile-20260719-001",
+  "writePolicy": "Public origin requests restricted to GET, HEAD, and OPTIONS",
+  "blockedWrites": [],
+  "routeResults": [
+    {
+      "id": "landing-desktop",
+      "requestedPath": "/",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "documentStatus": 200,
+      "navigationWallMs": 3676,
+      "screenshot": "docs/audits/counterlab-first-prize/evidence/screenshots/live-chrome-landing-1440x900.png",
+      "url": "https://counterlab.cserules.workers.dev/",
+      "title": "CounterLab — CI for understanding",
+      "headingOrder": [
+        {
+          "level": "h1",
+          "text": "What result are you trying to understand?"
+        }
+      ],
+      "visibleControls": [
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "+ New question",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Try verified sample",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Watch verified replay",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "Judge Mode",
+          "href": "/judge",
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "How proof works",
+          "href": "#landing-support-note",
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Question",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Notebook",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "textarea",
+          "role": null,
+          "type": null,
+          "name": "State a claim you want to test…",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "input",
+          "role": null,
+          "type": "file",
+          "name": "Attach notebook",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "submit",
+          "name": "Test this claim →",
+          "href": null,
+          "disabled": true
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Why did my model score highly but fail on new customers?",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Does high accuracy mean the rare cases are being caught?",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "summary",
+          "role": null,
+          "type": null,
+          "name": "Need a hint?",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "",
+          "href": "#landing-supported-evidence",
+          "disabled": false
+        }
+      ],
+      "bodyText": "C\nCounterLab\n+\nNew question\nStart with evidence\nTry verified sample\nWatch verified replay\nJudge Mode\nHow proof works\n\nNo account needed\n\nAsk like chat. Prove it like science.\n\nWhat result are you trying to understand?\nState the claim. If you have a notebook, attach it—we read the evidence and never run the cells.\nQuestion\nNotebook\nYour question or claim\n+ Attach notebook\nTest this claim →\nPrompt starters\nWhy did my model score highly but fail on new customers?\nDoes high accuracy mean the rare cases are being caught?\n\nHow proof works: fixed kernels calculate the result, then frozen checks verify the evidence binding before it appears.\n\nSupported today: documented Python/scikit-learn Jupyter notebooks for entity leakage and class imbalance. Unsupported evidence is refused, not guessed.\n\nNeed a hint?",
+      "dimensions": {
+        "innerWidth": 1440,
+        "innerHeight": 900,
+        "documentScrollWidth": 1440,
+        "documentScrollHeight": 970,
+        "bodyScrollWidth": 1440
+      },
+      "typography": {
+        "body": "\"Instrument Sans Variable\", \"Avenir Next\", ui-sans-serif, system-ui, sans-serif",
+        "h1": "\"Instrument Sans Variable\", \"Avenir Next\", ui-sans-serif, system-ui, sans-serif",
+        "code": null
+      },
+      "navigationTiming": {
+        "type": "navigate",
+        "responseStart": 534.7999999970198,
+        "domContentLoadedEventEnd": 1245,
+        "loadEventEnd": 1871.2000000029802,
+        "duration": 1871.2000000029802,
+        "transferSize": 721
+      },
+      "vitals": {
+        "cls": 0,
+        "lcp": 1776,
+        "longTasks": [
+          {
+            "startTime": 1162.2000000029802,
+            "duration": 82
+          },
+          {
+            "startTime": 1261.7000000029802,
+            "duration": 247
+          }
+        ]
+      },
+      "localStorageKeys": []
+    },
+    {
+      "id": "landing-mobile-closed",
+      "requestedPath": "/",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "documentStatus": 200,
+      "navigationWallMs": 2431,
+      "screenshot": "docs/audits/counterlab-first-prize/evidence/screenshots/live-chrome-landing-390x844.png",
+      "url": "https://counterlab.cserules.workers.dev/",
+      "title": "CounterLab — CI for understanding",
+      "headingOrder": [
+        {
+          "level": "h1",
+          "text": "What result are you trying to understand?"
+        }
+      ],
+      "visibleControls": [
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Explore",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Question",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Notebook",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "textarea",
+          "role": null,
+          "type": null,
+          "name": "State a claim you want to test…",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "input",
+          "role": null,
+          "type": "file",
+          "name": "Attach notebook",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "submit",
+          "name": "Test this claim →",
+          "href": null,
+          "disabled": true
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Why did my model score highly but fail on new customers?",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Does high accuracy mean the rare cases are being caught?",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "summary",
+          "role": null,
+          "type": null,
+          "name": "Need a hint?",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "",
+          "href": "#landing-supported-evidence",
+          "disabled": false
+        }
+      ],
+      "bodyText": "C\nCounterLab\nExplore\n\nNo account needed\n\nAsk like chat. Prove it like science.\n\nWhat result are you trying to understand?\nState the claim. If you have a notebook, attach it—we read the evidence and never run the cells.\nQuestion\nNotebook\nYour question or claim\n+ Attach notebook\nTest this claim →\nPrompt starters\nWhy did my model score highly but fail on new customers?\nDoes high accuracy mean the rare cases are being caught?\n\nHow proof works: fixed kernels calculate the result, then frozen checks verify the evidence binding before it appears.\n\nSupported today: documented Python/scikit-learn Jupyter notebooks for entity leakage and class imbalance. Unsupported evidence is refused, not guessed.\n\nNeed a hint?",
+      "dimensions": {
+        "innerWidth": 390,
+        "innerHeight": 844,
+        "documentScrollWidth": 390,
+        "documentScrollHeight": 1114,
+        "bodyScrollWidth": 390
+      },
+      "typography": {
+        "body": "\"Instrument Sans Variable\", \"Avenir Next\", ui-sans-serif, system-ui, sans-serif",
+        "h1": "\"Instrument Sans Variable\", \"Avenir Next\", ui-sans-serif, system-ui, sans-serif",
+        "code": null
+      },
+      "navigationTiming": {
+        "type": "navigate",
+        "responseStart": 152.79999999701977,
+        "domContentLoadedEventEnd": 630.6000000089407,
+        "loadEventEnd": 630.6000000089407,
+        "duration": 630.6000000089407,
+        "transferSize": 721
+      },
+      "vitals": {
+        "cls": 0.0014500888355624744,
+        "lcp": 660,
+        "longTasks": []
+      },
+      "localStorageKeys": []
+    },
+    {
+      "id": "landing-mobile-open-menu",
+      "requestedPath": "/",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "documentStatus": 200,
+      "navigationWallMs": 2254,
+      "screenshot": "docs/audits/counterlab-first-prize/evidence/screenshots/live-chrome-landing-menu-390x844.png",
+      "url": "https://counterlab.cserules.workers.dev/",
+      "title": "CounterLab — CI for understanding",
+      "headingOrder": [
+        {
+          "level": "h1",
+          "text": "What result are you trying to understand?"
+        }
+      ],
+      "visibleControls": [
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Explore",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "+ New question",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Try verified sample",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Watch verified replay",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "Judge Mode",
+          "href": "/judge",
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "How proof works",
+          "href": "#landing-support-note",
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Question",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Notebook",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "textarea",
+          "role": null,
+          "type": null,
+          "name": "State a claim you want to test…",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "input",
+          "role": null,
+          "type": "file",
+          "name": "Attach notebook",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "submit",
+          "name": "Test this claim →",
+          "href": null,
+          "disabled": true
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Why did my model score highly but fail on new customers?",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Does high accuracy mean the rare cases are being caught?",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "summary",
+          "role": null,
+          "type": null,
+          "name": "Need a hint?",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "",
+          "href": "#landing-supported-evidence",
+          "disabled": false
+        }
+      ],
+      "bodyText": "C\nCounterLab\nExplore\n+\nNew question\nStart with evidence\nTry verified sample\nWatch verified replay\nJudge Mode\nHow proof works\n\nNo account needed\n\nAsk like chat. Prove it like science.\n\nWhat result are you trying to understand?\nState the claim. If you have a notebook, attach it—we read the evidence and never run the cells.\nQuestion\nNotebook\nYour question or claim\n+ Attach notebook\nTest this claim →\nPrompt starters\nWhy did my model score highly but fail on new customers?\nDoes high accuracy mean the rare cases are being caught?\n\nHow proof works: fixed kernels calculate the result, then frozen checks verify the evidence binding before it appears.\n\nSupported today: documented Python/scikit-learn Jupyter notebooks for entity leakage and class imbalance. Unsupported evidence is refused, not guessed.\n\nNeed a hint?",
+      "dimensions": {
+        "innerWidth": 390,
+        "innerHeight": 844,
+        "documentScrollWidth": 390,
+        "documentScrollHeight": 1114,
+        "bodyScrollWidth": 390
+      },
+      "typography": {
+        "body": "\"Instrument Sans Variable\", \"Avenir Next\", ui-sans-serif, system-ui, sans-serif",
+        "h1": "\"Instrument Sans Variable\", \"Avenir Next\", ui-sans-serif, system-ui, sans-serif",
+        "code": null
+      },
+      "navigationTiming": {
+        "type": "navigate",
+        "responseStart": 143.3999999910593,
+        "domContentLoadedEventEnd": 442.79999999701977,
+        "loadEventEnd": 442.8999999910593,
+        "duration": 442.8999999910593,
+        "transferSize": 721
+      },
+      "vitals": {
+        "cls": 0.0014500888355624744,
+        "lcp": 472,
+        "longTasks": []
+      },
+      "localStorageKeys": []
+    },
+    {
+      "id": "judge-desktop",
+      "requestedPath": "/judge",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "documentStatus": 200,
+      "navigationWallMs": 3105,
+      "screenshot": "docs/audits/counterlab-first-prize/evidence/screenshots/live-chrome-judge-1440x900.png",
+      "url": "https://counterlab.cserules.workers.dev/judge",
+      "title": "CounterLab — CI for understanding",
+      "headingOrder": [
+        {
+          "level": "h1",
+          "text": "See a belief break in twenty seconds."
+        },
+        {
+          "level": "h2",
+          "text": "Four authorities. No blurred hand-offs."
+        },
+        {
+          "level": "h3",
+          "text": "GPT-5.6"
+        },
+        {
+          "level": "h3",
+          "text": "Runtime Codex"
+        },
+        {
+          "level": "h3",
+          "text": "Fixed kernel"
+        },
+        {
+          "level": "h3",
+          "text": "Frozen verifier"
+        },
+        {
+          "level": "h2",
+          "text": "Three paths. Three explicit meanings."
+        },
+        {
+          "level": "h3",
+          "text": "Try the complete learning loop."
+        },
+        {
+          "level": "h3",
+          "text": "Test an untouched supported notebook."
+        },
+        {
+          "level": "h3",
+          "text": "Inspect a genuine reject–repair trace."
+        },
+        {
+          "level": "h2",
+          "text": "A learning loop with a release gate."
+        },
+        {
+          "level": "h2",
+          "text": "Bounded proof, visible limitations."
+        },
+        {
+          "level": "h3",
+          "text": "CounterLab does not claim universal notebook support."
+        },
+        {
+          "level": "h2",
+          "text": "The demo has commands, not hand-waving."
+        }
+      ],
+      "visibleControls": [
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "CounterLab home",
+          "href": "/",
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "Learner view ↗",
+          "href": "/",
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Start sample →",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "Watch verified replay",
+          "href": "/replay/leakage-01",
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Start sample →",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "Run live →",
+          "href": "/new",
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "Watch replay →",
+          "href": "/replay/leakage-01",
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "Open learner view",
+          "href": "/",
+          "disabled": false
+        }
+      ],
+      "bodyText": "C/L\nCounterLab\nPUBLIC EVIDENCE DOSSIER\nJUDGE MODE\nLearner view\n↗\n\nASK LIKE CHAT. PROVE IT LIKE SCIENCE.\n\nSee a belief break in twenty seconds.\n\nCounterLab turns a notebook claim into two competing models, locks the learner's prediction, and lets fixed computation—not fluent prose—decide what the evidence supports.\n\nStart sample\n→\nWatch verified replay\n\nReleased notebook support: entity leakage and class imbalance in documented Python/scikit-learn Jupyter patterns.\n\nUNTOUCHED CHURN NOTEBOOK\nFIXED-KERNEL EVIDENCE\n“This score proves the model works for customers it has never seen.”\nRandom rows\n98.5%\n389 shared customers\n≠\nWhole customers\n59.4%\n0 shared customers\n\nSame estimator and preprocessing. The evaluation unit changed to match the deployment claim.\n\nGENERATED VS. COMPUTED VS. VERIFIED\n\nFour authorities. No blurred hand-offs.\nA\nGPT-5.6\nFrames the belief\n\nReads only approved, sanitized evidence and proposes competing hypotheses. It cannot execute the notebook or invent results.\n\nB\nRUNTIME CODEX\nCompiles the test plan\n\nProduces bounded operation IDs and repairs structured plans. It cannot author formulas, metrics, or unrestricted code.\n\nC\nFIXED KERNEL\nComputes every number\n\nRuns registered split, metric, Boundary Map, and transfer operations deterministically from versioned inputs.\n\nD\nFROZEN VERIFIER\nDecides what may ship\n\nRejects confounded plans, unresolved bindings, sample leakage, broad patches, and claims that exceed the signed evidence.\n\nCHOOSE THE EVIDENCE MODE\n\nThree paths. Three explicit meanings.\nSAMPLE LESSON\nTry the complete learning loop.\n\nBundled approved evidence. Fast, deterministic, no account or model credential. Always labelled as a sample.\n\nStart sample\n→\nLIVE NOTEBOOK ANALYSIS\nTest an untouched supported notebook.\n\nArtifact-specific Belief Spec, Codex plan, fixed kernel, independent verification, transfer, and repair to a copy.\n\nDeployed live authority is configured\nRun live\n→\nVERIFIED REPLAY\nInspect a genuine reject–repair trace.\n\nRead-only stored events. No new model call, no new experiment, and a persistent replay banner on every screen.\n\nWatch replay\n→\nRecorded 7/14/2026. This legacy v1 replay is genuine but does not offer a Proof Capsule download.\n\nNOT ANOTHER ANSWER BOX\n\nA learning loop with a release gate.\n\nRepair stays locked until the learner applies the rule in a changed context. The result is a Reasoning Diff for people and a Proof Capsule for machines.\n\n01\nQuestion\n\nName the claim and bind it to exact evidence.\n\n02\nPrediction\n\nCommit an expectation before results exist.\n\n03\nTest\n\nSelect and verify one discriminating intervention.\n\n04\nBoundary\n\nMap where the result changes or stops applying.\n\n05\nApply\n\nUse the rule on a surface-different case.\n\n06\nRepair\n\nUnlock the smallest verified notebook correction.\n\nWHAT THE EVIDENCE CAN CLAIM\n\nBounded proof, visible limitations.\nExact notebook cells and hashes bind the learner's claim.\nA verified result cannot appear before Prediction is locked.\nTransfer is fixed-code scored; no model grades free-form prose.\nThe original notebook is never overwritten.\nKNOWN BOUNDARY\nCounterLab does not claim universal notebook support.\n\nIt supports two reviewed ML Subject Packs and refuses unknown packages, arbitrary code execution, unsupported patch shapes, and insufficient evidence. A Proof Capsule proves integrity and scoped verification—not global mastery or formal sandbox security.\n\nREPRODUCE LOCALLY\n\nThe demo has commands, not hand-waving.\n./scripts/test-all.sh\n./scripts/run-mutations.sh leakage\n./scripts/reproduce-session.sh leakage-01\n./scripts/replay-patch.sh leakage-01\nChatbots explain.\nCounterLab lets reality answer.\nOpen learner view",
+      "dimensions": {
+        "innerWidth": 1440,
+        "innerHeight": 900,
+        "documentScrollWidth": 1440,
+        "documentScrollHeight": 4622,
+        "bodyScrollWidth": 1440
+      },
+      "typography": {
+        "body": "\"Instrument Sans Variable\", \"Avenir Next\", ui-sans-serif, system-ui, sans-serif",
+        "h1": "\"Newsreader Variable\", serif",
+        "code": "SFMono-Regular, Consolas, \"Liberation Mono\", ui-monospace, monospace"
+      },
+      "navigationTiming": {
+        "type": "navigate",
+        "responseStart": 141.79999999701977,
+        "domContentLoadedEventEnd": 414,
+        "loadEventEnd": 734.7000000029802,
+        "duration": 734.7000000029802,
+        "transferSize": 721
+      },
+      "vitals": {
+        "cls": 0.03627736160006216,
+        "lcp": 592,
+        "longTasks": [
+          {
+            "startTime": 423,
+            "duration": 143
+          }
+        ]
+      },
+      "localStorageKeys": []
+    },
+    {
+      "id": "judge-mobile",
+      "requestedPath": "/judge",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "documentStatus": 200,
+      "navigationWallMs": 2306,
+      "screenshot": "docs/audits/counterlab-first-prize/evidence/screenshots/live-chrome-judge-390x844.png",
+      "url": "https://counterlab.cserules.workers.dev/judge",
+      "title": "CounterLab — CI for understanding",
+      "headingOrder": [
+        {
+          "level": "h1",
+          "text": "See a belief break in twenty seconds."
+        },
+        {
+          "level": "h2",
+          "text": "Four authorities. No blurred hand-offs."
+        },
+        {
+          "level": "h3",
+          "text": "GPT-5.6"
+        },
+        {
+          "level": "h3",
+          "text": "Runtime Codex"
+        },
+        {
+          "level": "h3",
+          "text": "Fixed kernel"
+        },
+        {
+          "level": "h3",
+          "text": "Frozen verifier"
+        },
+        {
+          "level": "h2",
+          "text": "Three paths. Three explicit meanings."
+        },
+        {
+          "level": "h3",
+          "text": "Try the complete learning loop."
+        },
+        {
+          "level": "h3",
+          "text": "Test an untouched supported notebook."
+        },
+        {
+          "level": "h3",
+          "text": "Inspect a genuine reject–repair trace."
+        },
+        {
+          "level": "h2",
+          "text": "A learning loop with a release gate."
+        },
+        {
+          "level": "h2",
+          "text": "Bounded proof, visible limitations."
+        },
+        {
+          "level": "h3",
+          "text": "CounterLab does not claim universal notebook support."
+        },
+        {
+          "level": "h2",
+          "text": "The demo has commands, not hand-waving."
+        }
+      ],
+      "visibleControls": [
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "CounterLab home",
+          "href": "/",
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "Learner view ↗",
+          "href": "/",
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Start sample →",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "Watch verified replay",
+          "href": "/replay/leakage-01",
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Start sample →",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "Run live →",
+          "href": "/new",
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "Watch replay →",
+          "href": "/replay/leakage-01",
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "Open learner view",
+          "href": "/",
+          "disabled": false
+        }
+      ],
+      "bodyText": "C/L\nCounterLab\nLearner view\n↗\n\nASK LIKE CHAT. PROVE IT LIKE SCIENCE.\n\nSee a belief break in twenty seconds.\n\nCounterLab turns a notebook claim into two competing models, locks the learner's prediction, and lets fixed computation—not fluent prose—decide what the evidence supports.\n\nStart sample\n→\nWatch verified replay\n\nReleased notebook support: entity leakage and class imbalance in documented Python/scikit-learn Jupyter patterns.\n\nUNTOUCHED CHURN NOTEBOOK\nFIXED-KERNEL EVIDENCE\n“This score proves the model works for customers it has never seen.”\nRandom rows\n98.5%\n389 shared customers\nWhole customers\n59.4%\n0 shared customers\n\nSame estimator and preprocessing. The evaluation unit changed to match the deployment claim.\n\nGENERATED VS. COMPUTED VS. VERIFIED\n\nFour authorities. No blurred hand-offs.\nA\nGPT-5.6\nFrames the belief\n\nReads only approved, sanitized evidence and proposes competing hypotheses. It cannot execute the notebook or invent results.\n\nB\nRUNTIME CODEX\nCompiles the test plan\n\nProduces bounded operation IDs and repairs structured plans. It cannot author formulas, metrics, or unrestricted code.\n\nC\nFIXED KERNEL\nComputes every number\n\nRuns registered split, metric, Boundary Map, and transfer operations deterministically from versioned inputs.\n\nD\nFROZEN VERIFIER\nDecides what may ship\n\nRejects confounded plans, unresolved bindings, sample leakage, broad patches, and claims that exceed the signed evidence.\n\nCHOOSE THE EVIDENCE MODE\n\nThree paths. Three explicit meanings.\nSAMPLE LESSON\nTry the complete learning loop.\n\nBundled approved evidence. Fast, deterministic, no account or model credential. Always labelled as a sample.\n\nStart sample\n→\nLIVE NOTEBOOK ANALYSIS\nTest an untouched supported notebook.\n\nArtifact-specific Belief Spec, Codex plan, fixed kernel, independent verification, transfer, and repair to a copy.\n\nDeployed live authority is configured\nRun live\n→\nVERIFIED REPLAY\nInspect a genuine reject–repair trace.\n\nRead-only stored events. No new model call, no new experiment, and a persistent replay banner on every screen.\n\nWatch replay\n→\nRecorded 7/14/2026. This legacy v1 replay is genuine but does not offer a Proof Capsule download.\n\nNOT ANOTHER ANSWER BOX\n\nA learning loop with a release gate.\n\nRepair stays locked until the learner applies the rule in a changed context. The result is a Reasoning Diff for people and a Proof Capsule for machines.\n\n01\nQuestion\n\nName the claim and bind it to exact evidence.\n\n02\nPrediction\n\nCommit an expectation before results exist.\n\n03\nTest\n\nSelect and verify one discriminating intervention.\n\n04\nBoundary\n\nMap where the result changes or stops applying.\n\n05\nApply\n\nUse the rule on a surface-different case.\n\n06\nRepair\n\nUnlock the smallest verified notebook correction.\n\nWHAT THE EVIDENCE CAN CLAIM\n\nBounded proof, visible limitations.\nExact notebook cells and hashes bind the learner's claim.\nA verified result cannot appear before Prediction is locked.\nTransfer is fixed-code scored; no model grades free-form prose.\nThe original notebook is never overwritten.\nKNOWN BOUNDARY\nCounterLab does not claim universal notebook support.\n\nIt supports two reviewed ML Subject Packs and refuses unknown packages, arbitrary code execution, unsupported patch shapes, and insufficient evidence. A Proof Capsule proves integrity and scoped verification—not global mastery or formal sandbox security.\n\nREPRODUCE LOCALLY\n\nThe demo has commands, not hand-waving.\n./scripts/test-all.sh\n./scripts/run-mutations.sh leakage\n./scripts/reproduce-session.sh leakage-01\n./scripts/replay-patch.sh leakage-01\nChatbots explain.\nCounterLab lets reality answer.\nOpen learner view",
+      "dimensions": {
+        "innerWidth": 390,
+        "innerHeight": 844,
+        "documentScrollWidth": 390,
+        "documentScrollHeight": 7091,
+        "bodyScrollWidth": 390
+      },
+      "typography": {
+        "body": "\"Instrument Sans Variable\", \"Avenir Next\", ui-sans-serif, system-ui, sans-serif",
+        "h1": "\"Newsreader Variable\", serif",
+        "code": "SFMono-Regular, Consolas, \"Liberation Mono\", ui-monospace, monospace"
+      },
+      "navigationTiming": {
+        "type": "navigate",
+        "responseStart": 140.29999999701977,
+        "domContentLoadedEventEnd": 398.90000000596046,
+        "loadEventEnd": 399,
+        "duration": 399,
+        "transferSize": 721
+      },
+      "vitals": {
+        "cls": 0.0027940466296803752,
+        "lcp": 436,
+        "longTasks": []
+      },
+      "localStorageKeys": []
+    },
+    {
+      "id": "live-setup",
+      "requestedPath": "/new",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "documentStatus": 200,
+      "navigationWallMs": 2244,
+      "screenshot": "docs/audits/counterlab-first-prize/evidence/screenshots/live-chrome-new-1440x900.png",
+      "url": "https://counterlab.cserules.workers.dev/new",
+      "title": "CounterLab — CI for understanding",
+      "headingOrder": [
+        {
+          "level": "h1",
+          "text": "Test my notebook"
+        }
+      ],
+      "visibleControls": [
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "CounterLab home",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "START OVER",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Project & evidence",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Continue with my notebook",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Use the sample lesson",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Watch the verified replay",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Evidence & proof 0 events Open",
+          "href": null,
+          "disabled": false
+        }
+      ],
+      "bodyText": "C\nCounterLab\nLEARN FROM A FAIR TEST\n1\nQuestion\n2\nPrediction\n3\nTest\n4\nBoundary\n5\nApply\n6\nRepair\nLIVE GENERATION\nSTART OVER\nProject & evidence\n\nUSE YOUR NOTEBOOK\n\nTest my notebook\n\nFirst, CounterLab checks whether this device has the tools needed to create and verify a live lesson.\n\nNotebook lesson tools are ready to try\n\nThe first lesson request confirms that the connection works.\n\nHosted notebook runner is ready\n\nPlans, verification, and fixed-kernel results can complete in this hosted session.\n\nContinue with my notebook\nUse the sample lesson\nWatch the verified replay\nEvidence & proof\n0 events\nOpen\nCounterLab · learn from a fair test\nChatbots explain. CounterLab lets reality answer.\nEducation demo · Jupyter notebooks",
+      "dimensions": {
+        "innerWidth": 1440,
+        "innerHeight": 900,
+        "documentScrollWidth": 1440,
+        "documentScrollHeight": 981,
+        "bodyScrollWidth": 1440
+      },
+      "typography": {
+        "body": "\"Instrument Sans Variable\", \"Avenir Next\", ui-sans-serif, system-ui, sans-serif",
+        "h1": "\"Newsreader Variable\", \"Iowan Old Style\", Georgia, serif",
+        "code": null
+      },
+      "navigationTiming": {
+        "type": "navigate",
+        "responseStart": 147.3999999910593,
+        "domContentLoadedEventEnd": 416,
+        "loadEventEnd": 596.3999999910593,
+        "duration": 596.3999999910593,
+        "transferSize": 721
+      },
+      "vitals": {
+        "cls": 0.025604784218535664,
+        "lcp": 540,
+        "longTasks": [
+          {
+            "startTime": 434.5,
+            "duration": 63
+          }
+        ]
+      },
+      "localStorageKeys": [
+        "counterlab.mode"
+      ]
+    },
+    {
+      "id": "legacy-replay-intro",
+      "requestedPath": "/replay/leakage-01",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "documentStatus": 200,
+      "navigationWallMs": 2228,
+      "screenshot": "docs/audits/counterlab-first-prize/evidence/screenshots/live-chrome-replay-intro-1440x900.png",
+      "url": "https://counterlab.cserules.workers.dev/replay/leakage-01",
+      "title": "CounterLab — CI for understanding",
+      "headingOrder": [
+        {
+          "level": "h1",
+          "text": "Replay verified session"
+        }
+      ],
+      "visibleControls": [
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "CounterLab home",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Review Question",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Review Prediction",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "START OVER",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Project & evidence",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Continue replay",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Evidence & proof 0 events Open",
+          "href": null,
+          "disabled": false
+        }
+      ],
+      "bodyText": "Verified replay\nleakage-01\nRecorded 7/14/2026\nC\nCounterLab\nLEARN FROM A FAIR TEST\n✓\nQuestion\n✓\nPrediction\n3\nTest\n4\nBoundary\n5\nApply\n6\nRepair\nREPLAY MODE\nSTART OVER\nProject & evidence\n\nSTORED EVIDENCE CHAIN\n\nReplay verified session\n\nThis path reconstructs recorded events and computed payloads. It is not a live model run.\n\nReplay\nleakage-01\nModel\ngpt-5.6-sol\nVerifier\nleakage-verifier-v1\nCommit\n4f2f647228304d63ac8b9cba8cdca1dc7a07e192\nContinue replay\nEvidence & proof\n0 events\nOpen\nCounterLab · learn from a fair test\nChatbots explain. CounterLab lets reality answer.\nEducation demo · Jupyter notebooks",
+      "dimensions": {
+        "innerWidth": 1440,
+        "innerHeight": 900,
+        "documentScrollWidth": 1440,
+        "documentScrollHeight": 1023,
+        "bodyScrollWidth": 1440
+      },
+      "typography": {
+        "body": "\"Instrument Sans Variable\", \"Avenir Next\", ui-sans-serif, system-ui, sans-serif",
+        "h1": "\"Newsreader Variable\", \"Iowan Old Style\", Georgia, serif",
+        "code": null
+      },
+      "navigationTiming": {
+        "type": "navigate",
+        "responseStart": 144.09999999403954,
+        "domContentLoadedEventEnd": 416.8999999910593,
+        "loadEventEnd": 597.5999999940395,
+        "duration": 597.5999999940395,
+        "transferSize": 721
+      },
+      "vitals": {
+        "cls": 0.02670556412894376,
+        "lcp": 484,
+        "longTasks": []
+      },
+      "localStorageKeys": [
+        "counterlab.mode",
+        "counterlab.replayId"
+      ]
+    },
+    {
+      "id": "legacy-replay-local-completion",
+      "requestedPath": "/replay/leakage-01",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "screenshot": "docs/audits/counterlab-first-prize/evidence/screenshots/live-chrome-replay-local-completion-1440x900.png",
+      "requestsDuringInteraction": [],
+      "url": "https://counterlab.cserules.workers.dev/replay/leakage-01",
+      "bodyText": "Verified replay\nleakage-01\nRecorded 7/14/2026\nC\nCounterLab\nLEARN FROM A FAIR TEST\n✓\nQuestion\n✓\nPrediction\n✓\nTest\n4\nBoundary\n5\nApply\n6\nRepair\nREPLAY MODE\nSTART OVER\nProject & evidence\nYou can now distinguish:\n\ngood on familiar rows\nfrom\ngeneralizes to new entities\n\nBefore and after reasoning\nBefore\nThe notebook accuracy proves generalization to new customers.\nAfter\nWhen rows repeat the same entity, I should hold out whole entities, because random rows can share identity across train and test.\nTransfer status\n\nPassed\n\nYou carried the deployment-boundary rule from customers to time-ordered forecasting.\n\nDownload repaired notebook\nDownload proof record\nEvidence & proof\nREPAIR PREVIEW\nReview the scope before the raw diff.\n\nThis summary describes the bounded repair scope. The preview does not change the transfer result or patch payload.\n\nThis repair changes:\n✓\nrandom rows → whole-customer holdout\n✓\nidentity removed from model input\n✓\noverlap reported beside accuracy\nThis repair preserves:\n✓\ntarget\n✓\nmodel family\n✓\nunrelated cells\n✓\noriginal notebook\n\nREASONING DIFF\n\nYour learning, before and after\n\nOne view of what changed in your idea, evidence, and code.\n\nPreparing proof\nDIMENSION\nBEFORE\nAFTER\nBelief\nThe notebook accuracy proves generalization to new customers.\nWhen rows repeat the same entity, I should hold out whole entities, because random rows can share identity across train and test.\nPrediction\nNear 98%\n59.4% on new customers\nCode\nRandom rows + customer identity\nWhole-customer holdout + identity removed\nTransfer\nRule not yet tested\nTime-aware forecasting choice passed\nSee the verified notebook change\nTechnical proof and reproduction\nEvidence & proof\n0 events\nOpen\nCounterLab · learn from a fair test\nChatbots explain. CounterLab lets reality answer.\nEducation demo · Jupyter notebooks",
+      "localStorage": {
+        "counterlab.mode": "replay",
+        "counterlab.replayId": "leakage-01",
+        "counterlab.replayIntro": "false",
+        "counterlab.replayRevision": "When rows repeat the same entity, I should hold out whole entities, because random rows can share identity across train and test.",
+        "counterlab.replayStage": "reality",
+        "counterlab.replayTransferState": "patched"
+      }
+    },
+    {
+      "id": "unknown-route-fallback",
+      "requestedPath": "/audit-route-does-not-exist",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "documentStatus": 200,
+      "navigationWallMs": 2207,
+      "screenshot": "docs/audits/counterlab-first-prize/evidence/screenshots/live-chrome-unknown-route-1366x768.png",
+      "url": "https://counterlab.cserules.workers.dev/",
+      "title": "CounterLab — CI for understanding",
+      "headingOrder": [
+        {
+          "level": "h1",
+          "text": "What result are you trying to understand?"
+        }
+      ],
+      "visibleControls": [
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "+ New question",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Try verified sample",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Watch verified replay",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "Judge Mode",
+          "href": "/judge",
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "How proof works",
+          "href": "#landing-support-note",
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Question",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Notebook",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "textarea",
+          "role": null,
+          "type": null,
+          "name": "State a claim you want to test…",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "input",
+          "role": null,
+          "type": "file",
+          "name": "Attach notebook",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "submit",
+          "name": "Test this claim →",
+          "href": null,
+          "disabled": true
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Why did my model score highly but fail on new customers?",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Does high accuracy mean the rare cases are being caught?",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "summary",
+          "role": null,
+          "type": null,
+          "name": "Need a hint?",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "",
+          "href": "#landing-supported-evidence",
+          "disabled": false
+        }
+      ],
+      "bodyText": "C\nCounterLab\n+\nNew question\nStart with evidence\nTry verified sample\nWatch verified replay\nJudge Mode\nHow proof works\n\nNo account needed\n\nAsk like chat. Prove it like science.\n\nWhat result are you trying to understand?\nState the claim. If you have a notebook, attach it—we read the evidence and never run the cells.\nQuestion\nNotebook\nYour question or claim\n+ Attach notebook\nTest this claim →\nPrompt starters\nWhy did my model score highly but fail on new customers?\nDoes high accuracy mean the rare cases are being caught?\n\nHow proof works: fixed kernels calculate the result, then frozen checks verify the evidence binding before it appears.\n\nSupported today: documented Python/scikit-learn Jupyter notebooks for entity leakage and class imbalance. Unsupported evidence is refused, not guessed.\n\nNeed a hint?",
+      "dimensions": {
+        "innerWidth": 1366,
+        "innerHeight": 768,
+        "documentScrollWidth": 1366,
+        "documentScrollHeight": 949,
+        "bodyScrollWidth": 1366
+      },
+      "typography": {
+        "body": "\"Instrument Sans Variable\", \"Avenir Next\", ui-sans-serif, system-ui, sans-serif",
+        "h1": "\"Instrument Sans Variable\", \"Avenir Next\", ui-sans-serif, system-ui, sans-serif",
+        "code": null
+      },
+      "navigationTiming": {
+        "type": "navigate",
+        "responseStart": 146.90000000596046,
+        "domContentLoadedEventEnd": 440.20000000298023,
+        "loadEventEnd": 621,
+        "duration": 621,
+        "transferSize": 721
+      },
+      "vitals": {
+        "cls": 0.00959580030066804,
+        "lcp": 472,
+        "longTasks": []
+      },
+      "localStorageKeys": []
+    },
+    {
+      "id": "missing-session-deep-link",
+      "requestedPath": "/session/audit-nonexistent-read-only",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "documentStatus": 200,
+      "navigationWallMs": 2731,
+      "screenshot": "docs/audits/counterlab-first-prize/evidence/screenshots/live-chrome-missing-session-1366x768.png",
+      "url": "https://counterlab.cserules.workers.dev/session/audit-nonexistent-read-only",
+      "title": "CounterLab — CI for understanding",
+      "headingOrder": [
+        {
+          "level": "h1",
+          "text": "What result are you trying to understand?"
+        }
+      ],
+      "visibleControls": [
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "+ New question",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Try verified sample",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Watch verified replay",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "Judge Mode",
+          "href": "/judge",
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "How proof works",
+          "href": "#landing-support-note",
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Question",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Notebook",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "textarea",
+          "role": null,
+          "type": null,
+          "name": "State a claim you want to test…",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "input",
+          "role": null,
+          "type": "file",
+          "name": "Attach notebook",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "submit",
+          "name": "Test this claim →",
+          "href": null,
+          "disabled": true
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Why did my model score highly but fail on new customers?",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Does high accuracy mean the rare cases are being caught?",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "summary",
+          "role": null,
+          "type": null,
+          "name": "Need a hint?",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "",
+          "href": "#landing-supported-evidence",
+          "disabled": false
+        }
+      ],
+      "bodyText": "Session not found: audit-nonexistent-read-only\nC\nCounterLab\n+\nNew question\nStart with evidence\nTry verified sample\nWatch verified replay\nJudge Mode\nHow proof works\n\nNo account needed\n\nAsk like chat. Prove it like science.\n\nWhat result are you trying to understand?\nState the claim. If you have a notebook, attach it—we read the evidence and never run the cells.\nQuestion\nNotebook\nYour question or claim\n+ Attach notebook\nTest this claim →\nPrompt starters\nWhy did my model score highly but fail on new customers?\nDoes high accuracy mean the rare cases are being caught?\n\nHow proof works: fixed kernels calculate the result, then frozen checks verify the evidence binding before it appears.\n\nSupported today: documented Python/scikit-learn Jupyter notebooks for entity leakage and class imbalance. Unsupported evidence is refused, not guessed.\n\nNeed a hint?",
+      "dimensions": {
+        "innerWidth": 1366,
+        "innerHeight": 768,
+        "documentScrollWidth": 1366,
+        "documentScrollHeight": 949,
+        "bodyScrollWidth": 1366
+      },
+      "typography": {
+        "body": "\"Instrument Sans Variable\", \"Avenir Next\", ui-sans-serif, system-ui, sans-serif",
+        "h1": "\"Instrument Sans Variable\", \"Avenir Next\", ui-sans-serif, system-ui, sans-serif",
+        "code": null
+      },
+      "navigationTiming": {
+        "type": "navigate",
+        "responseStart": 142.8999999910593,
+        "domContentLoadedEventEnd": 398.5,
+        "loadEventEnd": 575.7000000029802,
+        "duration": 575.7000000029802,
+        "transferSize": 721
+      },
+      "vitals": {
+        "cls": 0.010143616894497826,
+        "lcp": 428,
+        "longTasks": []
+      },
+      "localStorageKeys": []
+    },
+    {
+      "id": "missing-proof-deep-link",
+      "requestedPath": "/proof/audit-nonexistent-read-only",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "documentStatus": 200,
+      "navigationWallMs": 2464,
+      "screenshot": "docs/audits/counterlab-first-prize/evidence/screenshots/live-chrome-missing-proof-1366x768.png",
+      "url": "https://counterlab.cserules.workers.dev/proof/audit-nonexistent-read-only",
+      "title": "CounterLab — CI for understanding",
+      "headingOrder": [
+        {
+          "level": "h1",
+          "text": "What result are you trying to understand?"
+        }
+      ],
+      "visibleControls": [
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "+ New question",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Try verified sample",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Watch verified replay",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "Judge Mode",
+          "href": "/judge",
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "How proof works",
+          "href": "#landing-support-note",
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Question",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Notebook",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "textarea",
+          "role": null,
+          "type": null,
+          "name": "State a claim you want to test…",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "input",
+          "role": null,
+          "type": "file",
+          "name": "Attach notebook",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "submit",
+          "name": "Test this claim →",
+          "href": null,
+          "disabled": true
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Why did my model score highly but fail on new customers?",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "type": "button",
+          "name": "Does high accuracy mean the rare cases are being caught?",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "summary",
+          "role": null,
+          "type": null,
+          "name": "Need a hint?",
+          "href": null,
+          "disabled": false
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "type": null,
+          "name": "",
+          "href": "#landing-supported-evidence",
+          "disabled": false
+        }
+      ],
+      "bodyText": "Session not found: audit-nonexistent-read-only\nC\nCounterLab\n+\nNew question\nStart with evidence\nTry verified sample\nWatch verified replay\nJudge Mode\nHow proof works\n\nNo account needed\n\nAsk like chat. Prove it like science.\n\nWhat result are you trying to understand?\nState the claim. If you have a notebook, attach it—we read the evidence and never run the cells.\nQuestion\nNotebook\nYour question or claim\n+ Attach notebook\nTest this claim →\nPrompt starters\nWhy did my model score highly but fail on new customers?\nDoes high accuracy mean the rare cases are being caught?\n\nHow proof works: fixed kernels calculate the result, then frozen checks verify the evidence binding before it appears.\n\nSupported today: documented Python/scikit-learn Jupyter notebooks for entity leakage and class imbalance. Unsupported evidence is refused, not guessed.\n\nNeed a hint?",
+      "dimensions": {
+        "innerWidth": 1366,
+        "innerHeight": 768,
+        "documentScrollWidth": 1366,
+        "documentScrollHeight": 949,
+        "bodyScrollWidth": 1366
+      },
+      "typography": {
+        "body": "\"Instrument Sans Variable\", \"Avenir Next\", ui-sans-serif, system-ui, sans-serif",
+        "h1": "\"Instrument Sans Variable\", \"Avenir Next\", ui-sans-serif, system-ui, sans-serif",
+        "code": null
+      },
+      "navigationTiming": {
+        "type": "navigate",
+        "responseStart": 152,
+        "domContentLoadedEventEnd": 473.5,
+        "loadEventEnd": 654.5999999940395,
+        "duration": 654.5999999940395,
+        "transferSize": 721
+      },
+      "vitals": {
+        "cls": 0.010143616894497826,
+        "lcp": 508,
+        "longTasks": []
+      },
+      "localStorageKeys": []
+    }
+  ],
+  "pageErrors": [],
+  "consoleErrorCount": 2,
+  "failedRequestCount": 0,
+  "httpErrorCount": 2
+}

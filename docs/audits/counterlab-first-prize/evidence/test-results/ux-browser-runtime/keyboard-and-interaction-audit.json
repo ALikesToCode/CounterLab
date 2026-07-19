@@ -1,0 +1,1412 @@
+{
+  "landing": {
+    "focusOrder": [
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [
+          "_intentActive_16ajt_37"
+        ],
+        "text": "Question",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(156, 186, 255)",
+        "boxShadow": "rgba(0, 0, 0, 0.32) 0px 1px 2px 0px",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Notebook",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(156, 186, 255)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "textarea",
+        "id": "_r_0_",
+        "classes": [],
+        "text": "State a claim you want to test…",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgba(36, 89, 211, 0.32)",
+        "boxShadow": "rgba(36, 94, 234, 0.1) 0px 0px 0px 4px, rgba(7, 21, 42, 0.04) 0px 1px 3px 0px inset",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "input",
+        "id": null,
+        "classes": [],
+        "text": "Attach notebook",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgba(36, 89, 211, 0.32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Why did my model score highly but fail on new customers?",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(156, 186, 255)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Does high accuracy mean the rare cases are being caught?",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(156, 186, 255)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "summary",
+        "id": null,
+        "classes": [],
+        "text": "Need a hint?",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(29, 78, 216)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "body",
+        "id": null,
+        "classes": [],
+        "text": "CCounterLabExplore+New questionStart with evidenceTry verified sampleWatch verified replayJudge ModeHow proof worksNo account neededAsk like chat. Prove it like science.What result",
+        "outlineStyle": "none",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(23, 36, 58)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [
+          "landing-new-question"
+        ],
+        "text": "+New question",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(120, 167, 255)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Try verified sample",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(120, 167, 255)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Watch verified replay",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(120, 167, 255)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [],
+        "text": "Judge Mode",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(120, 167, 255)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [],
+        "text": "How proof works",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(120, 167, 255)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [
+          "_intentActive_16ajt_37"
+        ],
+        "text": "Question",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(156, 186, 255)",
+        "boxShadow": "rgba(0, 0, 0, 0.32) 0px 1px 2px 0px",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Notebook",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(156, 186, 255)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "textarea",
+        "id": "_r_0_",
+        "classes": [],
+        "text": "State a claim you want to test…",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgba(36, 89, 211, 0.32)",
+        "boxShadow": "rgba(36, 94, 234, 0.1) 0px 0px 0px 4px, rgba(7, 21, 42, 0.04) 0px 1px 3px 0px inset",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "input",
+        "id": null,
+        "classes": [],
+        "text": "Attach notebook",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgba(36, 89, 211, 0.32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Why did my model score highly but fail on new customers?",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(156, 186, 255)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Does high accuracy mean the rare cases are being caught?",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(156, 186, 255)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "summary",
+        "id": null,
+        "classes": [],
+        "text": "Need a hint?",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(29, 78, 216)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "body",
+        "id": null,
+        "classes": [],
+        "text": "CCounterLabExplore+New questionStart with evidenceTry verified sampleWatch verified replayJudge ModeHow proof worksNo account neededAsk like chat. Prove it like science.What result",
+        "outlineStyle": "none",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(23, 36, 58)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [
+          "landing-new-question"
+        ],
+        "text": "+New question",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(120, 167, 255)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Try verified sample",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(120, 167, 255)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Watch verified replay",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(120, 167, 255)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [],
+        "text": "Judge Mode",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(120, 167, 255)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [],
+        "text": "How proof works",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(120, 167, 255)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [
+          "_intentActive_16ajt_37"
+        ],
+        "text": "Question",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(156, 186, 255)",
+        "boxShadow": "rgba(0, 0, 0, 0.32) 0px 1px 2px 0px",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Notebook",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(156, 186, 255)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      }
+    ]
+  },
+  "judge": {
+    "focusOrder": [
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [
+          "_wordmark_fwi1s_46"
+        ],
+        "text": "C/LCounterLab",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [
+          "_homeLink_fwi1s_89"
+        ],
+        "text": "Learner view ↗",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Start sample →",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [],
+        "text": "Watch verified replay",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Start sample →",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": false,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [],
+        "text": "Run live →",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": false,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [],
+        "text": "Watch replay →",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": false,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [],
+        "text": "Open learner view",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": false,
+        "insideDialog": false
+      },
+      {
+        "tag": "body",
+        "id": null,
+        "classes": [],
+        "text": "C/LCounterLabPublic evidence dossierJudge ModeLearner view ↗Ask like chat. Prove it like science.See a belief break in twenty seconds.CounterLab turns a notebook claim into two com",
+        "outlineStyle": "none",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(23, 36, 58)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [
+          "_wordmark_fwi1s_46"
+        ],
+        "text": "C/LCounterLab",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [
+          "_homeLink_fwi1s_89"
+        ],
+        "text": "Learner view ↗",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Start sample →",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [],
+        "text": "Watch verified replay",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Start sample →",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": false,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [],
+        "text": "Run live →",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": false,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [],
+        "text": "Watch replay →",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": false,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [],
+        "text": "Open learner view",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": false,
+        "insideDialog": false
+      },
+      {
+        "tag": "body",
+        "id": null,
+        "classes": [],
+        "text": "C/LCounterLabPublic evidence dossierJudge ModeLearner view ↗Ask like chat. Prove it like science.See a belief break in twenty seconds.CounterLab turns a notebook claim into two com",
+        "outlineStyle": "none",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(23, 36, 58)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [
+          "_wordmark_fwi1s_46"
+        ],
+        "text": "C/LCounterLab",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [
+          "_homeLink_fwi1s_89"
+        ],
+        "text": "Learner view ↗",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Start sample →",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [],
+        "text": "Watch verified replay",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Start sample →",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": false,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [],
+        "text": "Run live →",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": false,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [],
+        "text": "Watch replay →",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": false,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [],
+        "text": "Open learner view",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": false,
+        "insideDialog": false
+      },
+      {
+        "tag": "body",
+        "id": null,
+        "classes": [],
+        "text": "C/LCounterLabPublic evidence dossierJudge ModeLearner view ↗Ask like chat. Prove it like science.See a belief break in twenty seconds.CounterLab turns a notebook claim into two com",
+        "outlineStyle": "none",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(23, 36, 58)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "a",
+        "id": null,
+        "classes": [
+          "_wordmark_fwi1s_46"
+        ],
+        "text": "C/LCounterLab",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(11, 24, 32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      }
+    ]
+  },
+  "commandPalette": {
+    "paletteOpen": true,
+    "beforePalette": {
+      "tag": "button",
+      "id": null,
+      "classes": [
+        "wordmark"
+      ],
+      "text": "CCounterLabLearn from a fair test",
+      "outlineStyle": "solid",
+      "outlineWidth": "3px",
+      "outlineColor": "rgba(36, 89, 211, 0.32)",
+      "boxShadow": "none",
+      "inViewport": true,
+      "insideDialog": false
+    },
+    "paletteFocus": [
+      {
+        "tag": "input",
+        "id": null,
+        "classes": [],
+        "text": "Search commands",
+        "outlineStyle": "none",
+        "outlineWidth": "0px",
+        "outlineColor": "rgb(7, 21, 42)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": true
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Analyze notebookStart a new live notebook session.N",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgba(36, 89, 211, 0.32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": true
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Show evidenceOpen the artifact and exact notebook cell references.E",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgba(36, 89, 211, 0.32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": true
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Run fair testReveal only an independently verified result.",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgba(36, 89, 211, 0.32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": true
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Show verifierInspect accepted invariants and concrete rejections.V",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgba(36, 89, 211, 0.32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": true
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Start overReturn home and clear this browser's active session.",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgba(36, 89, 211, 0.32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": true
+      },
+      {
+        "tag": "body",
+        "id": null,
+        "classes": [],
+        "text": "Verified replayleakage-01Recorded 7/14/2026CCounterLabLearn from a fair test✓Question✓Prediction3Test4Boundary5Apply6RepairStep 3 of 6TestYour progressStep 3 of 6✓Question✓Predicti",
+        "outlineStyle": "none",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(23, 36, 58)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [
+          "wordmark"
+        ],
+        "text": "CCounterLabLearn from a fair test",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgba(36, 89, 211, 0.32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [
+          "_stageButton_852rr_27"
+        ],
+        "text": "✓Question",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(29, 78, 216)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [
+          "_stageButton_852rr_27"
+        ],
+        "text": "✓Prediction",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(29, 78, 216)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [
+          "start-over-control"
+        ],
+        "text": "Start over",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgba(36, 94, 234, 0.24)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Project & evidence",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(29, 78, 216)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [
+          "button",
+          "button-primary"
+        ],
+        "text": "Continue replay",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgba(36, 89, 211, 0.32)",
+        "boxShadow": "rgba(36, 94, 234, 0.2) 0px 9px 22px 0px",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [
+          "proof-console-handle"
+        ],
+        "text": "Evidence & proof0 eventsOpen",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgba(36, 89, 211, 0.32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": false
+      },
+      {
+        "tag": "input",
+        "id": null,
+        "classes": [],
+        "text": "Search commands",
+        "outlineStyle": "none",
+        "outlineWidth": "0px",
+        "outlineColor": "rgb(7, 21, 42)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": true
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Analyze notebookStart a new live notebook session.N",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgba(36, 89, 211, 0.32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": true
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Show evidenceOpen the artifact and exact notebook cell references.E",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgba(36, 89, 211, 0.32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": true
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Run fair testReveal only an independently verified result.",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgba(36, 89, 211, 0.32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": true
+      },
+      {
+        "tag": "button",
+        "id": null,
+        "classes": [],
+        "text": "Show verifierInspect accepted invariants and concrete rejections.V",
+        "outlineStyle": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgba(36, 89, 211, 0.32)",
+        "boxShadow": "none",
+        "inViewport": true,
+        "insideDialog": true
+      }
+    ],
+    "focusAfterEscape": {
+      "tag": "body",
+      "id": null,
+      "classes": [],
+      "text": "Verified replayleakage-01Recorded 7/14/2026CCounterLabLearn from a fair test✓Question✓Prediction3Test4Boundary5Apply6RepairStep 3 of 6TestYour progressStep 3 of 6✓Question✓Predicti",
+      "outlineStyle": "none",
+      "outlineWidth": "3px",
+      "outlineColor": "rgb(23, 36, 58)",
+      "boxShadow": "none",
+      "inViewport": true,
+      "insideDialog": false
+    }
+  },
+  "plainQuestionCta": {
+    "beforeSubmit": {
+      "url": "https://counterlab.cserules.workers.dev/",
+      "title": "CounterLab — CI for understanding",
+      "lang": "en",
+      "viewport": {
+        "width": 1440,
+        "height": 900,
+        "devicePixelRatio": 1
+      },
+      "documentSize": {
+        "clientWidth": 1440,
+        "scrollWidth": 1440,
+        "scrollHeight": 970
+      },
+      "hasHorizontalDocumentOverflow": false,
+      "headings": [
+        {
+          "level": 1,
+          "text": "What result are you trying to understand?"
+        }
+      ],
+      "headingSkips": [],
+      "landmarks": {
+        "main": 1,
+        "nav": 1,
+        "header": 0,
+        "footer": 0
+      },
+      "skipLinks": [],
+      "controls": [
+        {
+          "selector": "button.landing-new-question",
+          "tag": "button",
+          "name": "+New question",
+          "disabled": false
+        },
+        {
+          "selector": "button",
+          "tag": "button",
+          "name": "Try verified sample",
+          "disabled": false
+        },
+        {
+          "selector": "button",
+          "tag": "button",
+          "name": "Watch verified replay",
+          "disabled": false
+        },
+        {
+          "selector": "a",
+          "tag": "a",
+          "name": "Judge Mode",
+          "disabled": false
+        },
+        {
+          "selector": "a",
+          "tag": "a",
+          "name": "How proof works",
+          "disabled": false
+        },
+        {
+          "selector": "button._intentActive_16ajt_37",
+          "tag": "button",
+          "name": "Question",
+          "disabled": false
+        },
+        {
+          "selector": "button",
+          "tag": "button",
+          "name": "Notebook",
+          "disabled": false
+        },
+        {
+          "selector": "#_r_0_",
+          "tag": "textarea",
+          "name": "Your question or claim",
+          "disabled": false
+        },
+        {
+          "selector": "input",
+          "tag": "input",
+          "name": "Attach notebook",
+          "disabled": false
+        },
+        {
+          "selector": "button._submit_16ajt_142",
+          "tag": "button",
+          "name": "Test this claim →",
+          "disabled": false
+        },
+        {
+          "selector": "button",
+          "tag": "button",
+          "name": "Why did my model score highly but fail on new customers?",
+          "disabled": false
+        },
+        {
+          "selector": "button",
+          "tag": "button",
+          "name": "Does high accuracy mean the rare cases are being caught?",
+          "disabled": false
+        },
+        {
+          "selector": "a",
+          "tag": "a",
+          "name": "Review the supported evidence boundary",
+          "disabled": false
+        }
+      ],
+      "unnamedControls": [],
+      "smallTargets": [
+        {
+          "selector": "input",
+          "name": "Attach notebook",
+          "width": 1,
+          "height": 1
+        }
+      ],
+      "imagesWithoutAlt": [],
+      "duplicateIds": [],
+      "contrastFailures": [
+        {
+          "selector": "label._srOnly_16ajt_130",
+          "text": "Your question or claim",
+          "color": "rgb(7, 21, 42)",
+          "background": "rgb(32, 32, 35)",
+          "ratio": 1.12,
+          "required": 4.5,
+          "fontSize": 13,
+          "fontWeight": 700
+        }
+      ],
+      "overflowElements": [],
+      "liveRegions": [],
+      "tables": [],
+      "dialogs": [],
+      "firstFoldText": [
+        "C",
+        "CounterLab",
+        "+New question",
+        "+",
+        "Start with evidence",
+        "Try verified sample",
+        "Watch verified replay",
+        "Judge Mode",
+        "How proof works",
+        "No account needed",
+        "Ask like chat. Prove it like science.",
+        "What result are you trying to understand?",
+        "State the claim. If you have a notebook, attach it—we read the evidence and never run the cells.",
+        "Question",
+        "Notebook",
+        "Your question or claim",
+        "High validation accuracy means this model will generalise to unseen customers even when several records belong to each customer. High validation accuracy means this model will generalise to unseen customers even when several records belong to each customer. High validation accuracy means this model will generalise to unseen customers even when several records belong to each customer. High validation accuracy means this model will generalise to unseen customers even when several records belong to each customer. High validation accuracy means this model will generalise to unseen customers even when several records belong to each customer. High validation accuracy means this model will generalise to unseen customers even when several records belong to each customer.",
+        "+ Attach notebook",
+        "Test this claim →",
+        "Prompt starters",
+        "Why did my model score highly but fail on new customers?",
+        "Does high accuracy mean the rare cases are being caught?",
+        "How proof works: fixed kernels calculate the result, then frozen checks verify the evidence binding before it appears.",
+        "How proof works:",
+        "Supported today: documented Python/scikit-learn Jupyter notebooks for entity leakage and class imbalance. Unsupported evidence is refused, not guessed.",
+        "Supported today:",
+        "Need a hint?",
+        "Name the result, who or what it should apply to, and the evidence the notebook actually measured."
+      ]
+    },
+    "submitError": null,
+    "resultingUrl": "https://counterlab.cserules.workers.dev/new",
+    "resultingDom": {
+      "url": "https://counterlab.cserules.workers.dev/new",
+      "title": "CounterLab — CI for understanding",
+      "lang": "en",
+      "viewport": {
+        "width": 1440,
+        "height": 900,
+        "devicePixelRatio": 1
+      },
+      "documentSize": {
+        "clientWidth": 1440,
+        "scrollWidth": 1440,
+        "scrollHeight": 981
+      },
+      "hasHorizontalDocumentOverflow": false,
+      "headings": [
+        {
+          "level": 1,
+          "text": "Test my notebook"
+        }
+      ],
+      "headingSkips": [],
+      "landmarks": {
+        "main": 1,
+        "nav": 2,
+        "header": 1,
+        "footer": 1
+      },
+      "skipLinks": [],
+      "controls": [
+        {
+          "selector": "button.wordmark",
+          "tag": "button",
+          "name": "CounterLab home",
+          "disabled": false
+        },
+        {
+          "selector": "button.start-over-control",
+          "tag": "button",
+          "name": "Start over",
+          "disabled": false
+        },
+        {
+          "selector": "button",
+          "tag": "button",
+          "name": "Project & evidence",
+          "disabled": false
+        },
+        {
+          "selector": "button.button.button-primary",
+          "tag": "button",
+          "name": "Continue with my notebook",
+          "disabled": false
+        },
+        {
+          "selector": "button.button.button-quiet",
+          "tag": "button",
+          "name": "Use the sample lesson",
+          "disabled": false
+        },
+        {
+          "selector": "button.button.button-quiet",
+          "tag": "button",
+          "name": "Watch the verified replay",
+          "disabled": false
+        },
+        {
+          "selector": "button.proof-console-handle",
+          "tag": "button",
+          "name": "Evidence & proof0 eventsOpen",
+          "disabled": false
+        }
+      ],
+      "unnamedControls": [],
+      "smallTargets": [],
+      "imagesWithoutAlt": [],
+      "duplicateIds": [],
+      "contrastFailures": [
+        {
+          "selector": "span._marker_852rr_62",
+          "text": "2",
+          "color": "rgb(119, 134, 154)",
+          "background": "rgb(255, 255, 255)",
+          "ratio": 3.71,
+          "required": 4.5,
+          "fontSize": 12,
+          "fontWeight": 700
+        },
+        {
+          "selector": "span",
+          "text": "Prediction",
+          "color": "rgb(119, 134, 154)",
+          "background": "rgb(255, 255, 255)",
+          "ratio": 3.71,
+          "required": 4.5,
+          "fontSize": 13,
+          "fontWeight": 700
+        },
+        {
+          "selector": "span._marker_852rr_62",
+          "text": "3",
+          "color": "rgb(119, 134, 154)",
+          "background": "rgb(255, 255, 255)",
+          "ratio": 3.71,
+          "required": 4.5,
+          "fontSize": 12,
+          "fontWeight": 700
+        },
+        {
+          "selector": "span",
+          "text": "Test",
+          "color": "rgb(119, 134, 154)",
+          "background": "rgb(255, 255, 255)",
+          "ratio": 3.71,
+          "required": 4.5,
+          "fontSize": 13,
+          "fontWeight": 700
+        },
+        {
+          "selector": "span._marker_852rr_62",
+          "text": "4",
+          "color": "rgb(119, 134, 154)",
+          "background": "rgb(255, 255, 255)",
+          "ratio": 3.71,
+          "required": 4.5,
+          "fontSize": 12,
+          "fontWeight": 700
+        },
+        {
+          "selector": "span",
+          "text": "Boundary",
+          "color": "rgb(119, 134, 154)",
+          "background": "rgb(255, 255, 255)",
+          "ratio": 3.71,
+          "required": 4.5,
+          "fontSize": 13,
+          "fontWeight": 700
+        },
+        {
+          "selector": "span._marker_852rr_62",
+          "text": "5",
+          "color": "rgb(119, 134, 154)",
+          "background": "rgb(255, 255, 255)",
+          "ratio": 3.71,
+          "required": 4.5,
+          "fontSize": 12,
+          "fontWeight": 700
+        },
+        {
+          "selector": "span",
+          "text": "Apply",
+          "color": "rgb(119, 134, 154)",
+          "background": "rgb(255, 255, 255)",
+          "ratio": 3.71,
+          "required": 4.5,
+          "fontSize": 13,
+          "fontWeight": 700
+        },
+        {
+          "selector": "span._marker_852rr_62",
+          "text": "6",
+          "color": "rgb(119, 134, 154)",
+          "background": "rgb(255, 255, 255)",
+          "ratio": 3.71,
+          "required": 4.5,
+          "fontSize": 12,
+          "fontWeight": 700
+        },
+        {
+          "selector": "span",
+          "text": "Repair",
+          "color": "rgb(119, 134, 154)",
+          "background": "rgb(255, 255, 255)",
+          "ratio": 3.71,
+          "required": 4.5,
+          "fontSize": 13,
+          "fontWeight": 700
+        },
+        {
+          "selector": "strong",
+          "text": "0 event s",
+          "color": "rgb(119, 133, 152)",
+          "background": "rgb(248, 250, 252)",
+          "ratio": 3.59,
+          "required": 4.5,
+          "fontSize": 12,
+          "fontWeight": 600
+        },
+        {
+          "selector": "kbd",
+          "text": "Open",
+          "color": "rgb(105, 119, 138)",
+          "background": "rgb(247, 249, 251)",
+          "ratio": 4.32,
+          "required": 4.5,
+          "fontSize": 12,
+          "fontWeight": 400
+        },
+        {
+          "selector": "span",
+          "text": "· learn from a fair test",
+          "color": "rgb(100, 116, 138)",
+          "background": "rgb(237, 240, 243)",
+          "ratio": 4.17,
+          "required": 4.5,
+          "fontSize": 13,
+          "fontWeight": 400
+        },
+        {
+          "selector": "span",
+          "text": "Chatbots explain. CounterLab lets reality answer.",
+          "color": "rgb(100, 116, 138)",
+          "background": "rgb(237, 240, 243)",
+          "ratio": 4.17,
+          "required": 4.5,
+          "fontSize": 13,
+          "fontWeight": 400
+        },
+        {
+          "selector": "span",
+          "text": "Education demo · Jupyter notebooks",
+          "color": "rgb(100, 116, 138)",
+          "background": "rgb(237, 240, 243)",
+          "ratio": 4.17,
+          "required": 4.5,
+          "fontSize": 13,
+          "fontWeight": 400
+        }
+      ],
+      "overflowElements": [],
+      "liveRegions": [],
+      "tables": [],
+      "dialogs": [],
+      "firstFoldText": [
+        "C",
+        "CounterLab",
+        "Learn from a fair test",
+        "1",
+        "Question",
+        "2",
+        "Prediction",
+        "3",
+        "Test",
+        "4",
+        "Boundary",
+        "5",
+        "Apply",
+        "6",
+        "Repair",
+        "Live generation",
+        "Start over",
+        "Use your notebook",
+        "Test my notebook",
+        "First, CounterLab checks whether this device has the tools needed to create and verify a live lesson.",
+        "Notebook lesson tools are ready to try",
+        "The first lesson request confirms that the connection works.",
+        "Hosted notebook runner is ready",
+        "Plans, verification, and fixed-kernel results can complete in this hosted session.",
+        "Continue with my notebook",
+        "Use the sample lesson",
+        "Watch the verified replay"
+      ]
+    }
+  }
+}

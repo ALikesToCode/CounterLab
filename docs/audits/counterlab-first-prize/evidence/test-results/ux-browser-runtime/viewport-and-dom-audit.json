@@ -1,0 +1,2781 @@
+[
+  {
+    "url": "https://counterlab.cserules.workers.dev/",
+    "title": "CounterLab — CI for understanding",
+    "lang": "en",
+    "viewport": {
+      "width": 375,
+      "height": 812,
+      "devicePixelRatio": 1
+    },
+    "documentSize": {
+      "clientWidth": 375,
+      "scrollWidth": 375,
+      "scrollHeight": 1133
+    },
+    "hasHorizontalDocumentOverflow": false,
+    "headings": [
+      {
+        "level": 1,
+        "text": "What result are you trying to understand?"
+      }
+    ],
+    "headingSkips": [],
+    "landmarks": {
+      "main": 1,
+      "nav": 1,
+      "header": 0,
+      "footer": 0
+    },
+    "skipLinks": [],
+    "controls": [
+      {
+        "selector": "button.landing-menu-toggle",
+        "tag": "button",
+        "name": "Explore",
+        "disabled": false
+      },
+      {
+        "selector": "button._intentActive_16ajt_37",
+        "tag": "button",
+        "name": "Question",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Notebook",
+        "disabled": false
+      },
+      {
+        "selector": "#_r_0_",
+        "tag": "textarea",
+        "name": "Your question or claim",
+        "disabled": false
+      },
+      {
+        "selector": "input",
+        "tag": "input",
+        "name": "Attach notebook",
+        "disabled": false
+      },
+      {
+        "selector": "button._submit_16ajt_142",
+        "tag": "button",
+        "name": "Test this claim →",
+        "disabled": true
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Why did my model score highly but fail on new customers?",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Does high accuracy mean the rare cases are being caught?",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Review the supported evidence boundary",
+        "disabled": false
+      }
+    ],
+    "unnamedControls": [],
+    "smallTargets": [
+      {
+        "selector": "input",
+        "name": "Attach notebook",
+        "width": 1,
+        "height": 1
+      }
+    ],
+    "imagesWithoutAlt": [],
+    "duplicateIds": [],
+    "contrastFailures": [
+      {
+        "selector": "label._srOnly_16ajt_130",
+        "text": "Your question or claim",
+        "color": "rgb(7, 21, 42)",
+        "background": "rgb(32, 32, 35)",
+        "ratio": 1.12,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 700
+      }
+    ],
+    "overflowElements": [],
+    "liveRegions": [],
+    "tables": [],
+    "dialogs": [],
+    "firstFoldText": [
+      "C",
+      "CounterLab",
+      "Explore",
+      "No account needed",
+      "Ask like chat. Prove it like science.",
+      "What result are you trying to understand?",
+      "State the claim. If you have a notebook, attach it—we read the evidence and never run the cells.",
+      "Question",
+      "Notebook",
+      "Your question or claim",
+      "+ Attach notebook",
+      "Test this claim →",
+      "Prompt starters",
+      "Why did my model score highly but fail on new customers?",
+      "Does high accuracy mean the rare cases are being caught?"
+    ],
+    "routeName": "landing",
+    "httpStatus": 200,
+    "responseHeaders": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "cf-cache-status": "HIT",
+      "cf-ray": "a1d3d02e7a06f5c5-MRS",
+      "content-encoding": "zstd",
+      "content-type": "text/html",
+      "date": "Sat, 18 Jul 2026 19:15:06 GMT",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=Rshd6aEqV1PVXn4zm7AV%2FBCgPkBv51V0L6aUuOGZR%2BSVeA%2BLmMsLqNs0db4KGp4JONgyAt1%2FTKYZ9p4ldBugAGmAghnq%2FDZn7aheOa1LSuJrotgFL5dcCQz0OWfri6badeowretYYsD9wX9oHu8yVlQG\"}]}",
+      "server": "cloudflare"
+    }
+  },
+  {
+    "url": "https://counterlab.cserules.workers.dev/judge",
+    "title": "CounterLab — CI for understanding",
+    "lang": "en",
+    "viewport": {
+      "width": 375,
+      "height": 812,
+      "devicePixelRatio": 1
+    },
+    "documentSize": {
+      "clientWidth": 375,
+      "scrollWidth": 375,
+      "scrollHeight": 7174
+    },
+    "hasHorizontalDocumentOverflow": false,
+    "headings": [
+      {
+        "level": 1,
+        "text": "See a belief break in twenty seconds."
+      },
+      {
+        "level": 2,
+        "text": "Four authorities. No blurred hand-offs."
+      },
+      {
+        "level": 3,
+        "text": "GPT-5.6"
+      },
+      {
+        "level": 3,
+        "text": "Runtime Codex"
+      },
+      {
+        "level": 3,
+        "text": "Fixed kernel"
+      },
+      {
+        "level": 3,
+        "text": "Frozen verifier"
+      },
+      {
+        "level": 2,
+        "text": "Three paths. Three explicit meanings."
+      },
+      {
+        "level": 3,
+        "text": "Try the complete learning loop."
+      },
+      {
+        "level": 3,
+        "text": "Test an untouched supported notebook."
+      },
+      {
+        "level": 3,
+        "text": "Inspect a genuine reject–repair trace."
+      },
+      {
+        "level": 2,
+        "text": "A learning loop with a release gate."
+      },
+      {
+        "level": 2,
+        "text": "Bounded proof, visible limitations."
+      },
+      {
+        "level": 3,
+        "text": "CounterLab does not claim universal notebook support."
+      },
+      {
+        "level": 2,
+        "text": "The demo has commands, not hand-waving."
+      }
+    ],
+    "headingSkips": [],
+    "landmarks": {
+      "main": 1,
+      "nav": 0,
+      "header": 4,
+      "footer": 1
+    },
+    "skipLinks": [],
+    "controls": [
+      {
+        "selector": "a._wordmark_fwi1s_46",
+        "tag": "a",
+        "name": "CounterLab home",
+        "disabled": false
+      },
+      {
+        "selector": "a._homeLink_fwi1s_89",
+        "tag": "a",
+        "name": "Learner view ↗",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Start sample →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Watch verified replay",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Start sample →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Run live →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Watch replay →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Open learner view",
+        "disabled": false
+      }
+    ],
+    "unnamedControls": [],
+    "smallTargets": [],
+    "imagesWithoutAlt": [],
+    "duplicateIds": [],
+    "contrastFailures": [],
+    "overflowElements": [],
+    "liveRegions": [
+      {
+        "selector": "div._liveStatus_fwi1s_416",
+        "role": "status",
+        "ariaLive": "polite",
+        "text": "Deployed live authority is configured"
+      }
+    ],
+    "tables": [],
+    "dialogs": [],
+    "firstFoldText": [
+      "C/L",
+      "CounterLab",
+      "Learner view ↗",
+      "↗",
+      "Ask like chat. Prove it like science.",
+      "See a belief break in twenty seconds.",
+      "CounterLab turns a notebook claim into two competing models, locks the learner's prediction, and lets fixed computation—not fluent prose—decide what the evidence supports.",
+      "Start sample →",
+      "→",
+      "Watch verified replay",
+      "Released notebook support: entity leakage and class imbalance in documented Python/scikit-learn Jupyter patterns.",
+      "Untouched churn notebook",
+      "Fixed-kernel evidence"
+    ],
+    "routeName": "judge",
+    "httpStatus": 200,
+    "responseHeaders": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "cf-cache-status": "HIT",
+      "cf-ray": "a1d3d03f2a14e1d0-MRS",
+      "content-encoding": "zstd",
+      "content-type": "text/html",
+      "date": "Sat, 18 Jul 2026 19:15:09 GMT",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "priority": "u=0,i",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=drnPjZBlk0t53h7RQSsHnkarjB1dSwMB0IdqIteMy0tWKvYYO0EoMsDEGNYCjsgyCza6G8GLHtjCNjrBoD87Wf8GvZtc6z9YSCU1P42sT9GUI4NLiFL%2BgVYIYpstRxCJcOI72xxdcaTY8xxfM3ja6pjv\"}]}",
+      "server": "cloudflare",
+      "server-timing": "cfExtPri"
+    }
+  },
+  {
+    "url": "https://counterlab.cserules.workers.dev/",
+    "title": "CounterLab — CI for understanding",
+    "lang": "en",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "devicePixelRatio": 1
+    },
+    "documentSize": {
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "scrollHeight": 1114
+    },
+    "hasHorizontalDocumentOverflow": false,
+    "headings": [
+      {
+        "level": 1,
+        "text": "What result are you trying to understand?"
+      }
+    ],
+    "headingSkips": [],
+    "landmarks": {
+      "main": 1,
+      "nav": 1,
+      "header": 0,
+      "footer": 0
+    },
+    "skipLinks": [],
+    "controls": [
+      {
+        "selector": "button.landing-menu-toggle",
+        "tag": "button",
+        "name": "Explore",
+        "disabled": false
+      },
+      {
+        "selector": "button._intentActive_16ajt_37",
+        "tag": "button",
+        "name": "Question",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Notebook",
+        "disabled": false
+      },
+      {
+        "selector": "#_r_0_",
+        "tag": "textarea",
+        "name": "Your question or claim",
+        "disabled": false
+      },
+      {
+        "selector": "input",
+        "tag": "input",
+        "name": "Attach notebook",
+        "disabled": false
+      },
+      {
+        "selector": "button._submit_16ajt_142",
+        "tag": "button",
+        "name": "Test this claim →",
+        "disabled": true
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Why did my model score highly but fail on new customers?",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Does high accuracy mean the rare cases are being caught?",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Review the supported evidence boundary",
+        "disabled": false
+      }
+    ],
+    "unnamedControls": [],
+    "smallTargets": [
+      {
+        "selector": "input",
+        "name": "Attach notebook",
+        "width": 1,
+        "height": 1
+      }
+    ],
+    "imagesWithoutAlt": [],
+    "duplicateIds": [],
+    "contrastFailures": [
+      {
+        "selector": "label._srOnly_16ajt_130",
+        "text": "Your question or claim",
+        "color": "rgb(7, 21, 42)",
+        "background": "rgb(32, 32, 35)",
+        "ratio": 1.12,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 700
+      }
+    ],
+    "overflowElements": [],
+    "liveRegions": [],
+    "tables": [],
+    "dialogs": [],
+    "firstFoldText": [
+      "C",
+      "CounterLab",
+      "Explore",
+      "No account needed",
+      "Ask like chat. Prove it like science.",
+      "What result are you trying to understand?",
+      "State the claim. If you have a notebook, attach it—we read the evidence and never run the cells.",
+      "Question",
+      "Notebook",
+      "Your question or claim",
+      "+ Attach notebook",
+      "Test this claim →",
+      "Prompt starters",
+      "Why did my model score highly but fail on new customers?",
+      "Does high accuracy mean the rare cases are being caught?"
+    ],
+    "routeName": "landing",
+    "httpStatus": 200,
+    "responseHeaders": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "cf-cache-status": "HIT",
+      "cf-ray": "a1d3d050aef5e15a-MRS",
+      "content-encoding": "zstd",
+      "content-type": "text/html",
+      "date": "Sat, 18 Jul 2026 19:15:12 GMT",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=%2F%2F6z2PLyTqgvl%2BFJGzLE7vGd5tFQJHwliTXjLbQYfuiNpoi8vXBUKvkxwVP0ZI6glESQsUIg0%2FfT8mTOsgwRTxopYgeC%2FV8QoECV8BVlYKrTNZ6Hlv2B00P0wb6Z6%2Bb5brNc86OFuC8%2BKeT87dWEJbvk\"}]}",
+      "server": "cloudflare"
+    }
+  },
+  {
+    "url": "https://counterlab.cserules.workers.dev/judge",
+    "title": "CounterLab — CI for understanding",
+    "lang": "en",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "devicePixelRatio": 1
+    },
+    "documentSize": {
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "scrollHeight": 7091
+    },
+    "hasHorizontalDocumentOverflow": false,
+    "headings": [
+      {
+        "level": 1,
+        "text": "See a belief break in twenty seconds."
+      },
+      {
+        "level": 2,
+        "text": "Four authorities. No blurred hand-offs."
+      },
+      {
+        "level": 3,
+        "text": "GPT-5.6"
+      },
+      {
+        "level": 3,
+        "text": "Runtime Codex"
+      },
+      {
+        "level": 3,
+        "text": "Fixed kernel"
+      },
+      {
+        "level": 3,
+        "text": "Frozen verifier"
+      },
+      {
+        "level": 2,
+        "text": "Three paths. Three explicit meanings."
+      },
+      {
+        "level": 3,
+        "text": "Try the complete learning loop."
+      },
+      {
+        "level": 3,
+        "text": "Test an untouched supported notebook."
+      },
+      {
+        "level": 3,
+        "text": "Inspect a genuine reject–repair trace."
+      },
+      {
+        "level": 2,
+        "text": "A learning loop with a release gate."
+      },
+      {
+        "level": 2,
+        "text": "Bounded proof, visible limitations."
+      },
+      {
+        "level": 3,
+        "text": "CounterLab does not claim universal notebook support."
+      },
+      {
+        "level": 2,
+        "text": "The demo has commands, not hand-waving."
+      }
+    ],
+    "headingSkips": [],
+    "landmarks": {
+      "main": 1,
+      "nav": 0,
+      "header": 4,
+      "footer": 1
+    },
+    "skipLinks": [],
+    "controls": [
+      {
+        "selector": "a._wordmark_fwi1s_46",
+        "tag": "a",
+        "name": "CounterLab home",
+        "disabled": false
+      },
+      {
+        "selector": "a._homeLink_fwi1s_89",
+        "tag": "a",
+        "name": "Learner view ↗",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Start sample →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Watch verified replay",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Start sample →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Run live →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Watch replay →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Open learner view",
+        "disabled": false
+      }
+    ],
+    "unnamedControls": [],
+    "smallTargets": [],
+    "imagesWithoutAlt": [],
+    "duplicateIds": [],
+    "contrastFailures": [],
+    "overflowElements": [],
+    "liveRegions": [
+      {
+        "selector": "div._liveStatus_fwi1s_416",
+        "role": "status",
+        "ariaLive": "polite",
+        "text": "Deployed live authority is configured"
+      }
+    ],
+    "tables": [],
+    "dialogs": [],
+    "firstFoldText": [
+      "C/L",
+      "CounterLab",
+      "Learner view ↗",
+      "↗",
+      "Ask like chat. Prove it like science.",
+      "See a belief break in twenty seconds.",
+      "CounterLab turns a notebook claim into two competing models, locks the learner's prediction, and lets fixed computation—not fluent prose—decide what the evidence supports.",
+      "Start sample →",
+      "→",
+      "Watch verified replay",
+      "Released notebook support: entity leakage and class imbalance in documented Python/scikit-learn Jupyter patterns.",
+      "Untouched churn notebook",
+      "Fixed-kernel evidence"
+    ],
+    "routeName": "judge",
+    "httpStatus": 200,
+    "responseHeaders": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "cf-cache-status": "HIT",
+      "cf-ray": "a1d3d062ccb0eff1-MRS",
+      "content-encoding": "zstd",
+      "content-type": "text/html",
+      "date": "Sat, 18 Jul 2026 19:15:15 GMT",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "priority": "u=0,i",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=h2eLB8TlS5DwkuWBBmgWjTP8ee57QdOGZnvUpTGlX6aRDHtOQx%2F1TwyDzs8nxuYMbNCygfBTIty70h2Ihec8lbPncq%2FiJDteBhYn5VtkwIl3c7HIFwkNGSGADa8yAVLA1FHaUEGH0SaQqEk8LGYegTNm\"}]}",
+      "server": "cloudflare",
+      "server-timing": "cfExtPri"
+    }
+  },
+  {
+    "url": "https://counterlab.cserules.workers.dev/",
+    "title": "CounterLab — CI for understanding",
+    "lang": "en",
+    "viewport": {
+      "width": 768,
+      "height": 1024,
+      "devicePixelRatio": 1
+    },
+    "documentSize": {
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "scrollHeight": 1027
+    },
+    "hasHorizontalDocumentOverflow": false,
+    "headings": [
+      {
+        "level": 1,
+        "text": "What result are you trying to understand?"
+      }
+    ],
+    "headingSkips": [],
+    "landmarks": {
+      "main": 1,
+      "nav": 1,
+      "header": 0,
+      "footer": 0
+    },
+    "skipLinks": [],
+    "controls": [
+      {
+        "selector": "button.landing-menu-toggle",
+        "tag": "button",
+        "name": "Explore",
+        "disabled": false
+      },
+      {
+        "selector": "button._intentActive_16ajt_37",
+        "tag": "button",
+        "name": "Question",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Notebook",
+        "disabled": false
+      },
+      {
+        "selector": "#_r_0_",
+        "tag": "textarea",
+        "name": "Your question or claim",
+        "disabled": false
+      },
+      {
+        "selector": "input",
+        "tag": "input",
+        "name": "Attach notebook",
+        "disabled": false
+      },
+      {
+        "selector": "button._submit_16ajt_142",
+        "tag": "button",
+        "name": "Test this claim →",
+        "disabled": true
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Why did my model score highly but fail on new customers?",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Does high accuracy mean the rare cases are being caught?",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Review the supported evidence boundary",
+        "disabled": false
+      }
+    ],
+    "unnamedControls": [],
+    "smallTargets": [
+      {
+        "selector": "input",
+        "name": "Attach notebook",
+        "width": 1,
+        "height": 1
+      }
+    ],
+    "imagesWithoutAlt": [],
+    "duplicateIds": [],
+    "contrastFailures": [
+      {
+        "selector": "label._srOnly_16ajt_130",
+        "text": "Your question or claim",
+        "color": "rgb(7, 21, 42)",
+        "background": "rgb(32, 32, 35)",
+        "ratio": 1.12,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 700
+      }
+    ],
+    "overflowElements": [],
+    "liveRegions": [],
+    "tables": [],
+    "dialogs": [],
+    "firstFoldText": [
+      "C",
+      "CounterLab",
+      "Explore",
+      "No account needed",
+      "Ask like chat. Prove it like science.",
+      "What result are you trying to understand?",
+      "State the claim. If you have a notebook, attach it—we read the evidence and never run the cells.",
+      "Question",
+      "Notebook",
+      "Your question or claim",
+      "+ Attach notebook",
+      "Test this claim →",
+      "Prompt starters",
+      "Why did my model score highly but fail on new customers?",
+      "Does high accuracy mean the rare cases are being caught?",
+      "How proof works: fixed kernels calculate the result, then frozen checks verify the evidence binding before it appears.",
+      "How proof works:",
+      "Supported today: documented Python/scikit-learn Jupyter notebooks for entity leakage and class imbalance. Unsupported evidence is refused, not guessed.",
+      "Supported today:",
+      "Need a hint?",
+      "Name the result, who or what it should apply to, and the evidence the notebook actually measured."
+    ],
+    "routeName": "landing",
+    "httpStatus": 200,
+    "responseHeaders": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "cf-cache-status": "HIT",
+      "cf-ray": "a1d3d0736f1bace6-MRS",
+      "content-encoding": "zstd",
+      "content-type": "text/html",
+      "date": "Sat, 18 Jul 2026 19:15:17 GMT",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=NuQJ7ZBeR%2FS3UUn%2BLG%2BBqKWS%2FuVCycxbN1vmVVNzgtjEGG4UXS704er9tLFJe0lqJBOM0dxEKKSNUJKozpjFSF3xOhNwthIpyW1GRGbPEQu0ghsLaziiNnMlRjXp5AUTwTuG9LoGIezvGPndiDTDcbFI\"}]}",
+      "server": "cloudflare"
+    }
+  },
+  {
+    "url": "https://counterlab.cserules.workers.dev/judge",
+    "title": "CounterLab — CI for understanding",
+    "lang": "en",
+    "viewport": {
+      "width": 768,
+      "height": 1024,
+      "devicePixelRatio": 1
+    },
+    "documentSize": {
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "scrollHeight": 6067
+    },
+    "hasHorizontalDocumentOverflow": false,
+    "headings": [
+      {
+        "level": 1,
+        "text": "See a belief break in twenty seconds."
+      },
+      {
+        "level": 2,
+        "text": "Four authorities. No blurred hand-offs."
+      },
+      {
+        "level": 3,
+        "text": "GPT-5.6"
+      },
+      {
+        "level": 3,
+        "text": "Runtime Codex"
+      },
+      {
+        "level": 3,
+        "text": "Fixed kernel"
+      },
+      {
+        "level": 3,
+        "text": "Frozen verifier"
+      },
+      {
+        "level": 2,
+        "text": "Three paths. Three explicit meanings."
+      },
+      {
+        "level": 3,
+        "text": "Try the complete learning loop."
+      },
+      {
+        "level": 3,
+        "text": "Test an untouched supported notebook."
+      },
+      {
+        "level": 3,
+        "text": "Inspect a genuine reject–repair trace."
+      },
+      {
+        "level": 2,
+        "text": "A learning loop with a release gate."
+      },
+      {
+        "level": 2,
+        "text": "Bounded proof, visible limitations."
+      },
+      {
+        "level": 3,
+        "text": "CounterLab does not claim universal notebook support."
+      },
+      {
+        "level": 2,
+        "text": "The demo has commands, not hand-waving."
+      }
+    ],
+    "headingSkips": [],
+    "landmarks": {
+      "main": 1,
+      "nav": 0,
+      "header": 4,
+      "footer": 1
+    },
+    "skipLinks": [],
+    "controls": [
+      {
+        "selector": "a._wordmark_fwi1s_46",
+        "tag": "a",
+        "name": "CounterLab home",
+        "disabled": false
+      },
+      {
+        "selector": "a._homeLink_fwi1s_89",
+        "tag": "a",
+        "name": "Learner view ↗",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Start sample →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Watch verified replay",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Start sample →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Run live →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Watch replay →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Open learner view",
+        "disabled": false
+      }
+    ],
+    "unnamedControls": [],
+    "smallTargets": [],
+    "imagesWithoutAlt": [],
+    "duplicateIds": [],
+    "contrastFailures": [],
+    "overflowElements": [],
+    "liveRegions": [
+      {
+        "selector": "div._liveStatus_fwi1s_416",
+        "role": "status",
+        "ariaLive": "polite",
+        "text": "Deployed live authority is configured"
+      }
+    ],
+    "tables": [],
+    "dialogs": [],
+    "firstFoldText": [
+      "C/L",
+      "CounterLab",
+      "Public evidence dossier",
+      "Judge Mode",
+      "Learner view ↗",
+      "↗",
+      "Ask like chat. Prove it like science.",
+      "See a belief break in twenty seconds.",
+      "CounterLab turns a notebook claim into two competing models, locks the learner's prediction, and lets fixed computation—not fluent prose—decide what the evidence supports.",
+      "Start sample →",
+      "→",
+      "Watch verified replay",
+      "Released notebook support: entity leakage and class imbalance in documented Python/scikit-learn Jupyter patterns.",
+      "Untouched churn notebook",
+      "Fixed-kernel evidence",
+      "“This score proves the model works for customers it has never seen.”",
+      "Random rows",
+      "98.5%",
+      "389 shared customers",
+      "≠",
+      "Whole customers",
+      "59.4%",
+      "0 shared customers",
+      "Same estimator and preprocessing. The evaluation unit changed to match the deployment claim."
+    ],
+    "routeName": "judge",
+    "httpStatus": 200,
+    "responseHeaders": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "cf-cache-status": "HIT",
+      "cf-ray": "a1d3d0830938658b-MRS",
+      "content-encoding": "zstd",
+      "content-type": "text/html",
+      "date": "Sat, 18 Jul 2026 19:15:20 GMT",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "priority": "u=0,i",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=kxvMjH6lLkHYbor1vTSfJue5%2BJW0%2FcNOScuqODKPMLD9vLxQVb6fIWRKAZnJAo61AEo7dkuVzwuwbvuQgSUtfZQo2Y18jP8D1DQPTMxfS3%2FbmTLpADxw8kPFN%2Fz7EWWOwRR4RZj9ezXuU7Nn7ufnmdpn\"}]}",
+      "server": "cloudflare",
+      "server-timing": "cfExtPri"
+    }
+  },
+  {
+    "url": "https://counterlab.cserules.workers.dev/",
+    "title": "CounterLab — CI for understanding",
+    "lang": "en",
+    "viewport": {
+      "width": 1366,
+      "height": 768,
+      "devicePixelRatio": 1
+    },
+    "documentSize": {
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "scrollHeight": 949
+    },
+    "hasHorizontalDocumentOverflow": false,
+    "headings": [
+      {
+        "level": 1,
+        "text": "What result are you trying to understand?"
+      }
+    ],
+    "headingSkips": [],
+    "landmarks": {
+      "main": 1,
+      "nav": 1,
+      "header": 0,
+      "footer": 0
+    },
+    "skipLinks": [],
+    "controls": [
+      {
+        "selector": "button.landing-new-question",
+        "tag": "button",
+        "name": "+New question",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Try verified sample",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Watch verified replay",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Judge Mode",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "How proof works",
+        "disabled": false
+      },
+      {
+        "selector": "button._intentActive_16ajt_37",
+        "tag": "button",
+        "name": "Question",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Notebook",
+        "disabled": false
+      },
+      {
+        "selector": "#_r_0_",
+        "tag": "textarea",
+        "name": "Your question or claim",
+        "disabled": false
+      },
+      {
+        "selector": "input",
+        "tag": "input",
+        "name": "Attach notebook",
+        "disabled": false
+      },
+      {
+        "selector": "button._submit_16ajt_142",
+        "tag": "button",
+        "name": "Test this claim →",
+        "disabled": true
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Why did my model score highly but fail on new customers?",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Does high accuracy mean the rare cases are being caught?",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Review the supported evidence boundary",
+        "disabled": false
+      }
+    ],
+    "unnamedControls": [],
+    "smallTargets": [
+      {
+        "selector": "input",
+        "name": "Attach notebook",
+        "width": 1,
+        "height": 1
+      }
+    ],
+    "imagesWithoutAlt": [],
+    "duplicateIds": [],
+    "contrastFailures": [
+      {
+        "selector": "label._srOnly_16ajt_130",
+        "text": "Your question or claim",
+        "color": "rgb(7, 21, 42)",
+        "background": "rgb(32, 32, 35)",
+        "ratio": 1.12,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 700
+      }
+    ],
+    "overflowElements": [],
+    "liveRegions": [],
+    "tables": [],
+    "dialogs": [],
+    "firstFoldText": [
+      "C",
+      "CounterLab",
+      "+New question",
+      "+",
+      "Start with evidence",
+      "Try verified sample",
+      "Watch verified replay",
+      "Judge Mode",
+      "How proof works",
+      "No account needed",
+      "Ask like chat. Prove it like science.",
+      "What result are you trying to understand?",
+      "State the claim. If you have a notebook, attach it—we read the evidence and never run the cells.",
+      "Question",
+      "Notebook",
+      "Your question or claim",
+      "+ Attach notebook",
+      "Test this claim →",
+      "Prompt starters",
+      "Why did my model score highly but fail on new customers?",
+      "Does high accuracy mean the rare cases are being caught?",
+      "How proof works: fixed kernels calculate the result, then frozen checks verify the evidence binding before it appears.",
+      "How proof works:"
+    ],
+    "routeName": "landing",
+    "httpStatus": 200,
+    "responseHeaders": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "cf-cache-status": "HIT",
+      "cf-ray": "a1d3d0950d4ecc66-MRS",
+      "content-encoding": "zstd",
+      "content-type": "text/html",
+      "date": "Sat, 18 Jul 2026 19:15:23 GMT",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=C7Jv3UNaNCqFxryNxNl%2BgvUT02ixGn58tD73V87V5lcI9NbqnMmbUaS5%2FlMr7oKA8FI2IXSfn6CkM8nLaQclKv9nGfKl9GE4%2B9SVoHFU1YWa214XkGdwAxYb3vCe66hopAMYe0PKvqoT4QATVUGVEDPn\"}]}",
+      "server": "cloudflare"
+    }
+  },
+  {
+    "url": "https://counterlab.cserules.workers.dev/judge",
+    "title": "CounterLab — CI for understanding",
+    "lang": "en",
+    "viewport": {
+      "width": 1366,
+      "height": 768,
+      "devicePixelRatio": 1
+    },
+    "documentSize": {
+      "clientWidth": 1366,
+      "scrollWidth": 1366,
+      "scrollHeight": 4609
+    },
+    "hasHorizontalDocumentOverflow": false,
+    "headings": [
+      {
+        "level": 1,
+        "text": "See a belief break in twenty seconds."
+      },
+      {
+        "level": 2,
+        "text": "Four authorities. No blurred hand-offs."
+      },
+      {
+        "level": 3,
+        "text": "GPT-5.6"
+      },
+      {
+        "level": 3,
+        "text": "Runtime Codex"
+      },
+      {
+        "level": 3,
+        "text": "Fixed kernel"
+      },
+      {
+        "level": 3,
+        "text": "Frozen verifier"
+      },
+      {
+        "level": 2,
+        "text": "Three paths. Three explicit meanings."
+      },
+      {
+        "level": 3,
+        "text": "Try the complete learning loop."
+      },
+      {
+        "level": 3,
+        "text": "Test an untouched supported notebook."
+      },
+      {
+        "level": 3,
+        "text": "Inspect a genuine reject–repair trace."
+      },
+      {
+        "level": 2,
+        "text": "A learning loop with a release gate."
+      },
+      {
+        "level": 2,
+        "text": "Bounded proof, visible limitations."
+      },
+      {
+        "level": 3,
+        "text": "CounterLab does not claim universal notebook support."
+      },
+      {
+        "level": 2,
+        "text": "The demo has commands, not hand-waving."
+      }
+    ],
+    "headingSkips": [],
+    "landmarks": {
+      "main": 1,
+      "nav": 0,
+      "header": 4,
+      "footer": 1
+    },
+    "skipLinks": [],
+    "controls": [
+      {
+        "selector": "a._wordmark_fwi1s_46",
+        "tag": "a",
+        "name": "CounterLab home",
+        "disabled": false
+      },
+      {
+        "selector": "a._homeLink_fwi1s_89",
+        "tag": "a",
+        "name": "Learner view ↗",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Start sample →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Watch verified replay",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Start sample →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Run live →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Watch replay →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Open learner view",
+        "disabled": false
+      }
+    ],
+    "unnamedControls": [],
+    "smallTargets": [],
+    "imagesWithoutAlt": [],
+    "duplicateIds": [],
+    "contrastFailures": [],
+    "overflowElements": [],
+    "liveRegions": [
+      {
+        "selector": "div._liveStatus_fwi1s_416",
+        "role": "status",
+        "ariaLive": "polite",
+        "text": "Deployed live authority is configured"
+      }
+    ],
+    "tables": [],
+    "dialogs": [],
+    "firstFoldText": [
+      "C/L",
+      "CounterLab",
+      "Public evidence dossier",
+      "Judge Mode",
+      "Learner view ↗",
+      "↗",
+      "Ask like chat. Prove it like science.",
+      "See a belief break in twenty seconds.",
+      "CounterLab turns a notebook claim into two competing models, locks the learner's prediction, and lets fixed computation—not fluent prose—decide what the evidence supports.",
+      "Start sample →",
+      "→",
+      "Watch verified replay",
+      "Untouched churn notebook",
+      "Fixed-kernel evidence",
+      "“This score proves the model works for customers it has never seen.”",
+      "Random rows",
+      "98.5%",
+      "389 shared customers",
+      "≠",
+      "Whole customers",
+      "59.4%",
+      "0 shared customers",
+      "Same estimator and preprocessing. The evaluation unit changed to match the deployment claim."
+    ],
+    "routeName": "judge",
+    "httpStatus": 200,
+    "responseHeaders": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "cf-cache-status": "HIT",
+      "cf-ray": "a1d3d0a44d40d82a-MRS",
+      "content-encoding": "zstd",
+      "content-type": "text/html",
+      "date": "Sat, 18 Jul 2026 19:15:25 GMT",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "priority": "u=0,i",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=A0%2BVtyiwUG0%2FPmvRVFAkp9BW25F2%2BceBgsp4E83hlk1KL%2BqNB1KKAuIaNiqQs0rn%2BsFf5XOV367rn4MphCxFrQwj5uMNQr5m%2FXwliG0dDmxuKHfC5KXyZ%2FPLy6ymTUcyrHj384TLZsxrhy4Udzfc3efV\"}]}",
+      "server": "cloudflare",
+      "server-timing": "cfExtPri"
+    }
+  },
+  {
+    "url": "https://counterlab.cserules.workers.dev/",
+    "title": "CounterLab — CI for understanding",
+    "lang": "en",
+    "viewport": {
+      "width": 1440,
+      "height": 900,
+      "devicePixelRatio": 1
+    },
+    "documentSize": {
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "scrollHeight": 970
+    },
+    "hasHorizontalDocumentOverflow": false,
+    "headings": [
+      {
+        "level": 1,
+        "text": "What result are you trying to understand?"
+      }
+    ],
+    "headingSkips": [],
+    "landmarks": {
+      "main": 1,
+      "nav": 1,
+      "header": 0,
+      "footer": 0
+    },
+    "skipLinks": [],
+    "controls": [
+      {
+        "selector": "button.landing-new-question",
+        "tag": "button",
+        "name": "+New question",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Try verified sample",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Watch verified replay",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Judge Mode",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "How proof works",
+        "disabled": false
+      },
+      {
+        "selector": "button._intentActive_16ajt_37",
+        "tag": "button",
+        "name": "Question",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Notebook",
+        "disabled": false
+      },
+      {
+        "selector": "#_r_0_",
+        "tag": "textarea",
+        "name": "Your question or claim",
+        "disabled": false
+      },
+      {
+        "selector": "input",
+        "tag": "input",
+        "name": "Attach notebook",
+        "disabled": false
+      },
+      {
+        "selector": "button._submit_16ajt_142",
+        "tag": "button",
+        "name": "Test this claim →",
+        "disabled": true
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Why did my model score highly but fail on new customers?",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Does high accuracy mean the rare cases are being caught?",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Review the supported evidence boundary",
+        "disabled": false
+      }
+    ],
+    "unnamedControls": [],
+    "smallTargets": [
+      {
+        "selector": "input",
+        "name": "Attach notebook",
+        "width": 1,
+        "height": 1
+      }
+    ],
+    "imagesWithoutAlt": [],
+    "duplicateIds": [],
+    "contrastFailures": [
+      {
+        "selector": "label._srOnly_16ajt_130",
+        "text": "Your question or claim",
+        "color": "rgb(7, 21, 42)",
+        "background": "rgb(32, 32, 35)",
+        "ratio": 1.12,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 700
+      }
+    ],
+    "overflowElements": [],
+    "liveRegions": [],
+    "tables": [],
+    "dialogs": [],
+    "firstFoldText": [
+      "C",
+      "CounterLab",
+      "+New question",
+      "+",
+      "Start with evidence",
+      "Try verified sample",
+      "Watch verified replay",
+      "Judge Mode",
+      "How proof works",
+      "No account needed",
+      "Ask like chat. Prove it like science.",
+      "What result are you trying to understand?",
+      "State the claim. If you have a notebook, attach it—we read the evidence and never run the cells.",
+      "Question",
+      "Notebook",
+      "Your question or claim",
+      "+ Attach notebook",
+      "Test this claim →",
+      "Prompt starters",
+      "Why did my model score highly but fail on new customers?",
+      "Does high accuracy mean the rare cases are being caught?",
+      "How proof works: fixed kernels calculate the result, then frozen checks verify the evidence binding before it appears.",
+      "How proof works:",
+      "Supported today: documented Python/scikit-learn Jupyter notebooks for entity leakage and class imbalance. Unsupported evidence is refused, not guessed.",
+      "Supported today:",
+      "Need a hint?",
+      "Name the result, who or what it should apply to, and the evidence the notebook actually measured."
+    ],
+    "routeName": "landing",
+    "httpStatus": 200,
+    "responseHeaders": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "cf-cache-status": "HIT",
+      "cf-ray": "a1d3d0b6fc81a60e-MRS",
+      "content-encoding": "zstd",
+      "content-type": "text/html",
+      "date": "Sat, 18 Jul 2026 19:15:28 GMT",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=I1qgZMsnyV7Y4WSrDEkkqG%2F0t1JiVgchrH9%2B576wLBS%2BeAVBf%2FATWhY4h6Lh0MNBznMcqZAzSGqbTI0OeHEq%2FUKRjd0AdudKl432HhfcP39fgWszR4QGyTZzoHnp0p59ZX14Rj%2FZ7a8KKeSYITU94f2c\"}]}",
+      "server": "cloudflare"
+    }
+  },
+  {
+    "url": "https://counterlab.cserules.workers.dev/judge",
+    "title": "CounterLab — CI for understanding",
+    "lang": "en",
+    "viewport": {
+      "width": 1440,
+      "height": 900,
+      "devicePixelRatio": 1
+    },
+    "documentSize": {
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "scrollHeight": 4622
+    },
+    "hasHorizontalDocumentOverflow": false,
+    "headings": [
+      {
+        "level": 1,
+        "text": "See a belief break in twenty seconds."
+      },
+      {
+        "level": 2,
+        "text": "Four authorities. No blurred hand-offs."
+      },
+      {
+        "level": 3,
+        "text": "GPT-5.6"
+      },
+      {
+        "level": 3,
+        "text": "Runtime Codex"
+      },
+      {
+        "level": 3,
+        "text": "Fixed kernel"
+      },
+      {
+        "level": 3,
+        "text": "Frozen verifier"
+      },
+      {
+        "level": 2,
+        "text": "Three paths. Three explicit meanings."
+      },
+      {
+        "level": 3,
+        "text": "Try the complete learning loop."
+      },
+      {
+        "level": 3,
+        "text": "Test an untouched supported notebook."
+      },
+      {
+        "level": 3,
+        "text": "Inspect a genuine reject–repair trace."
+      },
+      {
+        "level": 2,
+        "text": "A learning loop with a release gate."
+      },
+      {
+        "level": 2,
+        "text": "Bounded proof, visible limitations."
+      },
+      {
+        "level": 3,
+        "text": "CounterLab does not claim universal notebook support."
+      },
+      {
+        "level": 2,
+        "text": "The demo has commands, not hand-waving."
+      }
+    ],
+    "headingSkips": [],
+    "landmarks": {
+      "main": 1,
+      "nav": 0,
+      "header": 4,
+      "footer": 1
+    },
+    "skipLinks": [],
+    "controls": [
+      {
+        "selector": "a._wordmark_fwi1s_46",
+        "tag": "a",
+        "name": "CounterLab home",
+        "disabled": false
+      },
+      {
+        "selector": "a._homeLink_fwi1s_89",
+        "tag": "a",
+        "name": "Learner view ↗",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Start sample →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Watch verified replay",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Start sample →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Run live →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Watch replay →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Open learner view",
+        "disabled": false
+      }
+    ],
+    "unnamedControls": [],
+    "smallTargets": [],
+    "imagesWithoutAlt": [],
+    "duplicateIds": [],
+    "contrastFailures": [],
+    "overflowElements": [],
+    "liveRegions": [
+      {
+        "selector": "div._liveStatus_fwi1s_416",
+        "role": "status",
+        "ariaLive": "polite",
+        "text": "Deployed live authority is configured"
+      }
+    ],
+    "tables": [],
+    "dialogs": [],
+    "firstFoldText": [
+      "C/L",
+      "CounterLab",
+      "Public evidence dossier",
+      "Judge Mode",
+      "Learner view ↗",
+      "↗",
+      "Ask like chat. Prove it like science.",
+      "See a belief break in twenty seconds.",
+      "CounterLab turns a notebook claim into two competing models, locks the learner's prediction, and lets fixed computation—not fluent prose—decide what the evidence supports.",
+      "Start sample →",
+      "→",
+      "Watch verified replay",
+      "Released notebook support: entity leakage and class imbalance in documented Python/scikit-learn Jupyter patterns.",
+      "Untouched churn notebook",
+      "Fixed-kernel evidence",
+      "“This score proves the model works for customers it has never seen.”",
+      "Random rows",
+      "98.5%",
+      "389 shared customers",
+      "≠",
+      "Whole customers",
+      "59.4%",
+      "0 shared customers",
+      "Same estimator and preprocessing. The evaluation unit changed to match the deployment claim."
+    ],
+    "routeName": "judge",
+    "httpStatus": 200,
+    "responseHeaders": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "cf-cache-status": "HIT",
+      "cf-ray": "a1d3d0c688a3890f-MRS",
+      "content-encoding": "zstd",
+      "content-type": "text/html",
+      "date": "Sat, 18 Jul 2026 19:15:30 GMT",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "priority": "u=0,i",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=7bzeqwwyfJzeGDwRtbsWgagFf1WkriJKxVILqQQzhBl1sDWfq79M%2FjymOY6Px3p1bBqRPb9c9%2FPQWSgrx8FnnErkQnKrOWifv8O9pDXdOvQ1HhzAbDOjIg2e01Yd1j%2BrD4vhGlO5Ya4IEoTwB2RQkumF\"}]}",
+      "server": "cloudflare",
+      "server-timing": "cfExtPri"
+    }
+  },
+  {
+    "url": "https://counterlab.cserules.workers.dev/",
+    "title": "CounterLab — CI for understanding",
+    "lang": "en",
+    "viewport": {
+      "width": 1920,
+      "height": 1080,
+      "devicePixelRatio": 1
+    },
+    "documentSize": {
+      "clientWidth": 1920,
+      "scrollWidth": 1920,
+      "scrollHeight": 1080
+    },
+    "hasHorizontalDocumentOverflow": false,
+    "headings": [
+      {
+        "level": 1,
+        "text": "What result are you trying to understand?"
+      }
+    ],
+    "headingSkips": [],
+    "landmarks": {
+      "main": 1,
+      "nav": 1,
+      "header": 0,
+      "footer": 0
+    },
+    "skipLinks": [],
+    "controls": [
+      {
+        "selector": "button.landing-new-question",
+        "tag": "button",
+        "name": "+New question",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Try verified sample",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Watch verified replay",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Judge Mode",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "How proof works",
+        "disabled": false
+      },
+      {
+        "selector": "button._intentActive_16ajt_37",
+        "tag": "button",
+        "name": "Question",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Notebook",
+        "disabled": false
+      },
+      {
+        "selector": "#_r_0_",
+        "tag": "textarea",
+        "name": "Your question or claim",
+        "disabled": false
+      },
+      {
+        "selector": "input",
+        "tag": "input",
+        "name": "Attach notebook",
+        "disabled": false
+      },
+      {
+        "selector": "button._submit_16ajt_142",
+        "tag": "button",
+        "name": "Test this claim →",
+        "disabled": true
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Why did my model score highly but fail on new customers?",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Does high accuracy mean the rare cases are being caught?",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Review the supported evidence boundary",
+        "disabled": false
+      }
+    ],
+    "unnamedControls": [],
+    "smallTargets": [
+      {
+        "selector": "input",
+        "name": "Attach notebook",
+        "width": 1,
+        "height": 1
+      }
+    ],
+    "imagesWithoutAlt": [],
+    "duplicateIds": [],
+    "contrastFailures": [
+      {
+        "selector": "label._srOnly_16ajt_130",
+        "text": "Your question or claim",
+        "color": "rgb(7, 21, 42)",
+        "background": "rgb(32, 32, 35)",
+        "ratio": 1.12,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 700
+      }
+    ],
+    "overflowElements": [],
+    "liveRegions": [],
+    "tables": [],
+    "dialogs": [],
+    "firstFoldText": [
+      "C",
+      "CounterLab",
+      "+New question",
+      "+",
+      "Start with evidence",
+      "Try verified sample",
+      "Watch verified replay",
+      "Judge Mode",
+      "How proof works",
+      "No account needed",
+      "Ask like chat. Prove it like science.",
+      "What result are you trying to understand?",
+      "State the claim. If you have a notebook, attach it—we read the evidence and never run the cells.",
+      "Question",
+      "Notebook",
+      "Your question or claim",
+      "+ Attach notebook",
+      "Test this claim →",
+      "Prompt starters",
+      "Why did my model score highly but fail on new customers?",
+      "Does high accuracy mean the rare cases are being caught?",
+      "How proof works: fixed kernels calculate the result, then frozen checks verify the evidence binding before it appears.",
+      "How proof works:",
+      "Supported today: documented Python/scikit-learn Jupyter notebooks for entity leakage and class imbalance. Unsupported evidence is refused, not guessed.",
+      "Supported today:",
+      "Need a hint?",
+      "Name the result, who or what it should apply to, and the evidence the notebook actually measured."
+    ],
+    "routeName": "landing",
+    "httpStatus": 200,
+    "responseHeaders": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "cf-cache-status": "HIT",
+      "cf-ray": "a1d3d0d98ba05fd0-MRS",
+      "content-encoding": "zstd",
+      "content-type": "text/html",
+      "date": "Sat, 18 Jul 2026 19:15:34 GMT",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=GwGvpdwf%2FojahIVhJF5hm0TmlvxmF0c10ZGhMwTStG2jMfAY8HFwstZ7xf6uWzPo48ss2DAXNauoUkC8li%2F%2FdcMvkmBDa%2BYeE4CW7uTRIZqE6kYtnBQ9iFeZNqYFeCpRysnV%2BlaTCjPR9W1P0KxvEn82\"}]}",
+      "server": "cloudflare"
+    }
+  },
+  {
+    "url": "https://counterlab.cserules.workers.dev/judge",
+    "title": "CounterLab — CI for understanding",
+    "lang": "en",
+    "viewport": {
+      "width": 1920,
+      "height": 1080,
+      "devicePixelRatio": 1
+    },
+    "documentSize": {
+      "clientWidth": 1920,
+      "scrollWidth": 1920,
+      "scrollHeight": 4622
+    },
+    "hasHorizontalDocumentOverflow": false,
+    "headings": [
+      {
+        "level": 1,
+        "text": "See a belief break in twenty seconds."
+      },
+      {
+        "level": 2,
+        "text": "Four authorities. No blurred hand-offs."
+      },
+      {
+        "level": 3,
+        "text": "GPT-5.6"
+      },
+      {
+        "level": 3,
+        "text": "Runtime Codex"
+      },
+      {
+        "level": 3,
+        "text": "Fixed kernel"
+      },
+      {
+        "level": 3,
+        "text": "Frozen verifier"
+      },
+      {
+        "level": 2,
+        "text": "Three paths. Three explicit meanings."
+      },
+      {
+        "level": 3,
+        "text": "Try the complete learning loop."
+      },
+      {
+        "level": 3,
+        "text": "Test an untouched supported notebook."
+      },
+      {
+        "level": 3,
+        "text": "Inspect a genuine reject–repair trace."
+      },
+      {
+        "level": 2,
+        "text": "A learning loop with a release gate."
+      },
+      {
+        "level": 2,
+        "text": "Bounded proof, visible limitations."
+      },
+      {
+        "level": 3,
+        "text": "CounterLab does not claim universal notebook support."
+      },
+      {
+        "level": 2,
+        "text": "The demo has commands, not hand-waving."
+      }
+    ],
+    "headingSkips": [],
+    "landmarks": {
+      "main": 1,
+      "nav": 0,
+      "header": 4,
+      "footer": 1
+    },
+    "skipLinks": [],
+    "controls": [
+      {
+        "selector": "a._wordmark_fwi1s_46",
+        "tag": "a",
+        "name": "CounterLab home",
+        "disabled": false
+      },
+      {
+        "selector": "a._homeLink_fwi1s_89",
+        "tag": "a",
+        "name": "Learner view ↗",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Start sample →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Watch verified replay",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Start sample →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Run live →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Watch replay →",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Open learner view",
+        "disabled": false
+      }
+    ],
+    "unnamedControls": [],
+    "smallTargets": [],
+    "imagesWithoutAlt": [],
+    "duplicateIds": [],
+    "contrastFailures": [],
+    "overflowElements": [],
+    "liveRegions": [
+      {
+        "selector": "div._liveStatus_fwi1s_416",
+        "role": "status",
+        "ariaLive": "polite",
+        "text": "Deployed live authority is configured"
+      }
+    ],
+    "tables": [],
+    "dialogs": [],
+    "firstFoldText": [
+      "C/L",
+      "CounterLab",
+      "Public evidence dossier",
+      "Judge Mode",
+      "Learner view ↗",
+      "↗",
+      "Ask like chat. Prove it like science.",
+      "See a belief break in twenty seconds.",
+      "CounterLab turns a notebook claim into two competing models, locks the learner's prediction, and lets fixed computation—not fluent prose—decide what the evidence supports.",
+      "Start sample →",
+      "→",
+      "Watch verified replay",
+      "Released notebook support: entity leakage and class imbalance in documented Python/scikit-learn Jupyter patterns.",
+      "Untouched churn notebook",
+      "Fixed-kernel evidence",
+      "“This score proves the model works for customers it has never seen.”",
+      "Random rows",
+      "98.5%",
+      "389 shared customers",
+      "≠",
+      "Whole customers",
+      "59.4%",
+      "0 shared customers",
+      "Same estimator and preprocessing. The evaluation unit changed to match the deployment claim.",
+      "Four authorities. No blurred hand-offs."
+    ],
+    "routeName": "judge",
+    "httpStatus": 200,
+    "responseHeaders": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "cf-cache-status": "HIT",
+      "cf-ray": "a1d3d0e8dc54e278-MRS",
+      "content-encoding": "zstd",
+      "content-type": "text/html",
+      "date": "Sat, 18 Jul 2026 19:15:36 GMT",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "priority": "u=0,i",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=rqIV7uLjFcqO6esIyQinSGO7AizJKpHj9kZ1esE0ryWWnSYM6QNHZqiV7gcE70lpRa2y3VirQk08zznQvWxE7twCWgL9bdNbyqbIOdgB5wRC0Eytiuy6FNly1HZhbmA55f3MxCo%2FjrmxIl5eIs0jgQjp\"}]}",
+      "server": "cloudflare",
+      "server-timing": "cfExtPri"
+    }
+  },
+  {
+    "url": "https://counterlab.cserules.workers.dev/replay/leakage-01",
+    "title": "CounterLab — CI for understanding",
+    "lang": "en",
+    "viewport": {
+      "width": 375,
+      "height": 812,
+      "devicePixelRatio": 1
+    },
+    "documentSize": {
+      "clientWidth": 375,
+      "scrollWidth": 375,
+      "scrollHeight": 1031
+    },
+    "hasHorizontalDocumentOverflow": false,
+    "headings": [
+      {
+        "level": 1,
+        "text": "Replay verified session"
+      }
+    ],
+    "headingSkips": [],
+    "landmarks": {
+      "main": 1,
+      "nav": 2,
+      "header": 1,
+      "footer": 1
+    },
+    "skipLinks": [],
+    "controls": [
+      {
+        "selector": "button.wordmark",
+        "tag": "button",
+        "name": "CounterLab home",
+        "disabled": false
+      },
+      {
+        "selector": "button._stageButton_852rr_27",
+        "tag": "button",
+        "name": "Review Question",
+        "disabled": false
+      },
+      {
+        "selector": "button._stageButton_852rr_27",
+        "tag": "button",
+        "name": "Review Prediction",
+        "disabled": false
+      },
+      {
+        "selector": "button.start-over-control",
+        "tag": "button",
+        "name": "Start over",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Project & evidence",
+        "disabled": false
+      },
+      {
+        "selector": "button.button.button-primary",
+        "tag": "button",
+        "name": "Continue replay",
+        "disabled": false
+      },
+      {
+        "selector": "button.studio-mobile-command",
+        "tag": "button",
+        "name": "Open commands",
+        "disabled": false
+      },
+      {
+        "selector": "button.proof-console-handle",
+        "tag": "button",
+        "name": "Evidence & proof0 eventsOpen",
+        "disabled": false
+      }
+    ],
+    "unnamedControls": [],
+    "smallTargets": [],
+    "imagesWithoutAlt": [],
+    "duplicateIds": [],
+    "contrastFailures": [
+      {
+        "selector": "span._marker_852rr_62",
+        "text": "4",
+        "color": "rgb(119, 134, 154)",
+        "background": "rgb(255, 255, 255)",
+        "ratio": 3.71,
+        "required": 4.5,
+        "fontSize": 12,
+        "fontWeight": 700
+      },
+      {
+        "selector": "span",
+        "text": "Boundary",
+        "color": "rgb(119, 134, 154)",
+        "background": "rgb(255, 255, 255)",
+        "ratio": 3.71,
+        "required": 4.5,
+        "fontSize": 15,
+        "fontWeight": 700
+      },
+      {
+        "selector": "span._marker_852rr_62",
+        "text": "5",
+        "color": "rgb(119, 134, 154)",
+        "background": "rgb(255, 255, 255)",
+        "ratio": 3.71,
+        "required": 4.5,
+        "fontSize": 12,
+        "fontWeight": 700
+      },
+      {
+        "selector": "span",
+        "text": "Apply",
+        "color": "rgb(119, 134, 154)",
+        "background": "rgb(255, 255, 255)",
+        "ratio": 3.71,
+        "required": 4.5,
+        "fontSize": 15,
+        "fontWeight": 700
+      },
+      {
+        "selector": "span._marker_852rr_62",
+        "text": "6",
+        "color": "rgb(119, 134, 154)",
+        "background": "rgb(255, 255, 255)",
+        "ratio": 3.71,
+        "required": 4.5,
+        "fontSize": 12,
+        "fontWeight": 700
+      },
+      {
+        "selector": "span",
+        "text": "Repair",
+        "color": "rgb(119, 134, 154)",
+        "background": "rgb(255, 255, 255)",
+        "ratio": 3.71,
+        "required": 4.5,
+        "fontSize": 15,
+        "fontWeight": 700
+      },
+      {
+        "selector": "strong",
+        "text": "0 event s",
+        "color": "rgb(119, 133, 152)",
+        "background": "rgb(248, 250, 252)",
+        "ratio": 3.59,
+        "required": 4.5,
+        "fontSize": 12,
+        "fontWeight": 600
+      },
+      {
+        "selector": "kbd",
+        "text": "Open",
+        "color": "rgb(105, 119, 138)",
+        "background": "rgb(247, 249, 251)",
+        "ratio": 4.32,
+        "required": 4.5,
+        "fontSize": 12,
+        "fontWeight": 400
+      },
+      {
+        "selector": "span",
+        "text": "· learn from a fair test",
+        "color": "rgb(100, 116, 138)",
+        "background": "rgb(237, 240, 243)",
+        "ratio": 4.17,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 400
+      },
+      {
+        "selector": "span",
+        "text": "Chatbots explain. CounterLab lets reality answer.",
+        "color": "rgb(100, 116, 138)",
+        "background": "rgb(237, 240, 243)",
+        "ratio": 4.17,
+        "required": 4.5,
+        "fontSize": 15,
+        "fontWeight": 400
+      },
+      {
+        "selector": "span",
+        "text": "Education demo · Jupyter notebooks",
+        "color": "rgb(100, 116, 138)",
+        "background": "rgb(237, 240, 243)",
+        "ratio": 4.17,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 400
+      }
+    ],
+    "overflowElements": [],
+    "liveRegions": [],
+    "tables": [],
+    "dialogs": [],
+    "firstFoldText": [
+      "C",
+      "Step 3 of 6",
+      "Test",
+      "Your progress",
+      "✓",
+      "Question",
+      "Prediction",
+      "3",
+      "4",
+      "Boundary",
+      "5",
+      "Apply",
+      "6",
+      "Repair",
+      "Start over",
+      "Stored evidence chain",
+      "Replay verified session",
+      "This path reconstructs recorded events and computed payloads. It is not a live model run.",
+      "Replay",
+      "leakage-01",
+      "Model",
+      "gpt-5.6-sol",
+      "Verifier",
+      "leakage-verifier-v1",
+      "Commit",
+      "4f2f647228304d63ac8b9cba8cdca1dc7a07e192",
+      "Continue replay"
+    ],
+    "routeName": "legacy-replay",
+    "httpStatus": 200
+  },
+  {
+    "url": "https://counterlab.cserules.workers.dev/replay/leakage-01",
+    "title": "CounterLab — CI for understanding",
+    "lang": "en",
+    "viewport": {
+      "width": 768,
+      "height": 1024,
+      "devicePixelRatio": 1
+    },
+    "documentSize": {
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "scrollHeight": 1152
+    },
+    "hasHorizontalDocumentOverflow": false,
+    "headings": [
+      {
+        "level": 1,
+        "text": "Replay verified session"
+      }
+    ],
+    "headingSkips": [],
+    "landmarks": {
+      "main": 1,
+      "nav": 2,
+      "header": 1,
+      "footer": 1
+    },
+    "skipLinks": [],
+    "controls": [
+      {
+        "selector": "button.wordmark",
+        "tag": "button",
+        "name": "CounterLab home",
+        "disabled": false
+      },
+      {
+        "selector": "button._stageButton_852rr_27",
+        "tag": "button",
+        "name": "Review Question",
+        "disabled": false
+      },
+      {
+        "selector": "button._stageButton_852rr_27",
+        "tag": "button",
+        "name": "Review Prediction",
+        "disabled": false
+      },
+      {
+        "selector": "button.start-over-control",
+        "tag": "button",
+        "name": "Start over",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Project & evidence",
+        "disabled": false
+      },
+      {
+        "selector": "button.button.button-primary",
+        "tag": "button",
+        "name": "Continue replay",
+        "disabled": false
+      },
+      {
+        "selector": "button.studio-mobile-command",
+        "tag": "button",
+        "name": "Open commands",
+        "disabled": false
+      },
+      {
+        "selector": "button.proof-console-handle",
+        "tag": "button",
+        "name": "Evidence & proof0 eventsOpen",
+        "disabled": false
+      }
+    ],
+    "unnamedControls": [],
+    "smallTargets": [],
+    "imagesWithoutAlt": [],
+    "duplicateIds": [],
+    "contrastFailures": [
+      {
+        "selector": "span._marker_852rr_62",
+        "text": "4",
+        "color": "rgb(119, 134, 154)",
+        "background": "rgb(255, 255, 255)",
+        "ratio": 3.71,
+        "required": 4.5,
+        "fontSize": 12,
+        "fontWeight": 700
+      },
+      {
+        "selector": "span",
+        "text": "Boundary",
+        "color": "rgb(119, 134, 154)",
+        "background": "rgb(255, 255, 255)",
+        "ratio": 3.71,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 700
+      },
+      {
+        "selector": "span._marker_852rr_62",
+        "text": "5",
+        "color": "rgb(119, 134, 154)",
+        "background": "rgb(255, 255, 255)",
+        "ratio": 3.71,
+        "required": 4.5,
+        "fontSize": 12,
+        "fontWeight": 700
+      },
+      {
+        "selector": "span",
+        "text": "Apply",
+        "color": "rgb(119, 134, 154)",
+        "background": "rgb(255, 255, 255)",
+        "ratio": 3.71,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 700
+      },
+      {
+        "selector": "span._marker_852rr_62",
+        "text": "6",
+        "color": "rgb(119, 134, 154)",
+        "background": "rgb(255, 255, 255)",
+        "ratio": 3.71,
+        "required": 4.5,
+        "fontSize": 12,
+        "fontWeight": 700
+      },
+      {
+        "selector": "span",
+        "text": "Repair",
+        "color": "rgb(119, 134, 154)",
+        "background": "rgb(255, 255, 255)",
+        "ratio": 3.71,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 700
+      },
+      {
+        "selector": "strong",
+        "text": "0 event s",
+        "color": "rgb(119, 133, 152)",
+        "background": "rgb(248, 250, 252)",
+        "ratio": 3.59,
+        "required": 4.5,
+        "fontSize": 12,
+        "fontWeight": 600
+      },
+      {
+        "selector": "kbd",
+        "text": "Open",
+        "color": "rgb(105, 119, 138)",
+        "background": "rgb(247, 249, 251)",
+        "ratio": 4.32,
+        "required": 4.5,
+        "fontSize": 12,
+        "fontWeight": 400
+      },
+      {
+        "selector": "span",
+        "text": "· learn from a fair test",
+        "color": "rgb(100, 116, 138)",
+        "background": "rgb(237, 240, 243)",
+        "ratio": 4.17,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 400
+      },
+      {
+        "selector": "span",
+        "text": "Chatbots explain. CounterLab lets reality answer.",
+        "color": "rgb(100, 116, 138)",
+        "background": "rgb(237, 240, 243)",
+        "ratio": 4.17,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 400
+      },
+      {
+        "selector": "span",
+        "text": "Education demo · Jupyter notebooks",
+        "color": "rgb(100, 116, 138)",
+        "background": "rgb(237, 240, 243)",
+        "ratio": 4.17,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 400
+      }
+    ],
+    "overflowElements": [],
+    "liveRegions": [],
+    "tables": [],
+    "dialogs": [],
+    "firstFoldText": [
+      "C",
+      "CounterLab",
+      "✓",
+      "Question",
+      "Prediction",
+      "3",
+      "Test",
+      "4",
+      "Boundary",
+      "5",
+      "Apply",
+      "6",
+      "Repair",
+      "Start over",
+      "Stored evidence chain",
+      "Replay verified session",
+      "This path reconstructs recorded events and computed payloads. It is not a live model run.",
+      "Replay",
+      "leakage-01",
+      "Model",
+      "gpt-5.6-sol",
+      "Verifier",
+      "leakage-verifier-v1",
+      "Commit",
+      "4f2f647228304d63ac8b9cba8cdca1dc7a07e192",
+      "Continue replay"
+    ],
+    "routeName": "legacy-replay",
+    "httpStatus": 200
+  },
+  {
+    "url": "https://counterlab.cserules.workers.dev/replay/leakage-01",
+    "title": "CounterLab — CI for understanding",
+    "lang": "en",
+    "viewport": {
+      "width": 1440,
+      "height": 900,
+      "devicePixelRatio": 1
+    },
+    "documentSize": {
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "scrollHeight": 1023
+    },
+    "hasHorizontalDocumentOverflow": false,
+    "headings": [
+      {
+        "level": 1,
+        "text": "Replay verified session"
+      }
+    ],
+    "headingSkips": [],
+    "landmarks": {
+      "main": 1,
+      "nav": 2,
+      "header": 1,
+      "footer": 1
+    },
+    "skipLinks": [],
+    "controls": [
+      {
+        "selector": "button.wordmark",
+        "tag": "button",
+        "name": "CounterLab home",
+        "disabled": false
+      },
+      {
+        "selector": "button._stageButton_852rr_27",
+        "tag": "button",
+        "name": "Review Question",
+        "disabled": false
+      },
+      {
+        "selector": "button._stageButton_852rr_27",
+        "tag": "button",
+        "name": "Review Prediction",
+        "disabled": false
+      },
+      {
+        "selector": "button.start-over-control",
+        "tag": "button",
+        "name": "Start over",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Project & evidence",
+        "disabled": false
+      },
+      {
+        "selector": "button.button.button-primary",
+        "tag": "button",
+        "name": "Continue replay",
+        "disabled": false
+      },
+      {
+        "selector": "button.proof-console-handle",
+        "tag": "button",
+        "name": "Evidence & proof0 eventsOpen",
+        "disabled": false
+      }
+    ],
+    "unnamedControls": [],
+    "smallTargets": [],
+    "imagesWithoutAlt": [],
+    "duplicateIds": [],
+    "contrastFailures": [
+      {
+        "selector": "span._marker_852rr_62",
+        "text": "4",
+        "color": "rgb(119, 134, 154)",
+        "background": "rgb(255, 255, 255)",
+        "ratio": 3.71,
+        "required": 4.5,
+        "fontSize": 12,
+        "fontWeight": 700
+      },
+      {
+        "selector": "span",
+        "text": "Boundary",
+        "color": "rgb(119, 134, 154)",
+        "background": "rgb(255, 255, 255)",
+        "ratio": 3.71,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 700
+      },
+      {
+        "selector": "span._marker_852rr_62",
+        "text": "5",
+        "color": "rgb(119, 134, 154)",
+        "background": "rgb(255, 255, 255)",
+        "ratio": 3.71,
+        "required": 4.5,
+        "fontSize": 12,
+        "fontWeight": 700
+      },
+      {
+        "selector": "span",
+        "text": "Apply",
+        "color": "rgb(119, 134, 154)",
+        "background": "rgb(255, 255, 255)",
+        "ratio": 3.71,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 700
+      },
+      {
+        "selector": "span._marker_852rr_62",
+        "text": "6",
+        "color": "rgb(119, 134, 154)",
+        "background": "rgb(255, 255, 255)",
+        "ratio": 3.71,
+        "required": 4.5,
+        "fontSize": 12,
+        "fontWeight": 700
+      },
+      {
+        "selector": "span",
+        "text": "Repair",
+        "color": "rgb(119, 134, 154)",
+        "background": "rgb(255, 255, 255)",
+        "ratio": 3.71,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 700
+      },
+      {
+        "selector": "strong",
+        "text": "0 event s",
+        "color": "rgb(119, 133, 152)",
+        "background": "rgb(248, 250, 252)",
+        "ratio": 3.59,
+        "required": 4.5,
+        "fontSize": 12,
+        "fontWeight": 600
+      },
+      {
+        "selector": "kbd",
+        "text": "Open",
+        "color": "rgb(105, 119, 138)",
+        "background": "rgb(247, 249, 251)",
+        "ratio": 4.32,
+        "required": 4.5,
+        "fontSize": 12,
+        "fontWeight": 400
+      },
+      {
+        "selector": "span",
+        "text": "· learn from a fair test",
+        "color": "rgb(100, 116, 138)",
+        "background": "rgb(237, 240, 243)",
+        "ratio": 4.17,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 400
+      },
+      {
+        "selector": "span",
+        "text": "Chatbots explain. CounterLab lets reality answer.",
+        "color": "rgb(100, 116, 138)",
+        "background": "rgb(237, 240, 243)",
+        "ratio": 4.17,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 400
+      },
+      {
+        "selector": "span",
+        "text": "Education demo · Jupyter notebooks",
+        "color": "rgb(100, 116, 138)",
+        "background": "rgb(237, 240, 243)",
+        "ratio": 4.17,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 400
+      }
+    ],
+    "overflowElements": [],
+    "liveRegions": [],
+    "tables": [],
+    "dialogs": [],
+    "firstFoldText": [
+      "C",
+      "CounterLab",
+      "Learn from a fair test",
+      "✓",
+      "Question",
+      "Prediction",
+      "3",
+      "Test",
+      "4",
+      "Boundary",
+      "5",
+      "Apply",
+      "6",
+      "Repair",
+      "Replay mode",
+      "Start over",
+      "Stored evidence chain",
+      "Replay verified session",
+      "This path reconstructs recorded events and computed payloads. It is not a live model run.",
+      "Replay",
+      "leakage-01",
+      "Model",
+      "gpt-5.6-sol",
+      "Verifier",
+      "leakage-verifier-v1",
+      "Commit",
+      "4f2f647228304d63ac8b9cba8cdca1dc7a07e192",
+      "Continue replay"
+    ],
+    "routeName": "legacy-replay",
+    "httpStatus": 200
+  }
+]

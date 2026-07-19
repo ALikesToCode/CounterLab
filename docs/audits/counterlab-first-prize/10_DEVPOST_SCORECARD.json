@@ -1,0 +1,87 @@
+{
+  "schema_version": "counterlab-devpost-scorecard-v1",
+  "generated_at": "2026-07-18T19:39:42Z",
+  "deadline": "2026-07-22T00:00:00Z",
+  "tie_break_order": [
+    "Technological Implementation",
+    "Design",
+    "Potential Impact",
+    "Quality of the Idea"
+  ],
+  "states": [
+    {
+      "id": "current_public_submission",
+      "official": true,
+      "scores": {
+        "Technological Implementation": 0,
+        "Design": 0,
+        "Potential Impact": 0,
+        "Quality of the Idea": 0,
+        "total": 0
+      },
+      "confidence_interval": [0, 0],
+      "most_likely_objection": "There is no submitted, judgeable entry.",
+      "largest_score_action": "Submit every mandatory field while freezing and qualifying the exact public release."
+    },
+    {
+      "id": "current_shadow_package",
+      "official": false,
+      "scores": {
+        "Technological Implementation": 17,
+        "Design": 15,
+        "Potential Impact": 7,
+        "Quality of the Idea": 18,
+        "total": 57
+      },
+      "criterion_intervals": {
+        "Technological Implementation": [14, 20],
+        "Design": [12, 18],
+        "Potential Impact": [4, 10],
+        "Quality of the Idea": [16, 21]
+      },
+      "confidence_interval": [48, 69],
+      "most_likely_objection": "The exact public authority journey is unproven and learner data is absent.",
+      "largest_score_action": "Record one source-bound live authority chain and submit it."
+    },
+    {
+      "id": "after_confirmed_p0_p1_corrections",
+      "official": false,
+      "scores": {
+        "Technological Implementation": 22,
+        "Design": 21,
+        "Potential Impact": 16,
+        "Quality of the Idea": 22,
+        "total": 81
+      },
+      "criterion_intervals": {
+        "Technological Implementation": [20, 24],
+        "Design": [19, 23],
+        "Potential Impact": [13, 19],
+        "Quality of the Idea": [20, 24]
+      },
+      "confidence_interval": [74, 88],
+      "most_likely_objection": "Impact evidence and cross-domain generality trail the technical ambition.",
+      "largest_score_action": "Keep exact-current production proof visible and reproducible."
+    },
+    {
+      "id": "realistic_prize_one_ceiling",
+      "official": false,
+      "scores": {
+        "Technological Implementation": 23,
+        "Design": 23,
+        "Potential Impact": 20,
+        "Quality of the Idea": 23,
+        "total": 89
+      },
+      "criterion_intervals": {
+        "Technological Implementation": [22, 25],
+        "Design": [21, 24],
+        "Potential Impact": [17, 22],
+        "Quality of the Idea": [21, 24]
+      },
+      "confidence_interval": [82, 93],
+      "most_likely_objection": "Measured durable impact and reusable breadth remain early.",
+      "largest_score_action": "Protect the first tie-break with exact, visible, source-bound technical proof."
+    }
+  ]
+}

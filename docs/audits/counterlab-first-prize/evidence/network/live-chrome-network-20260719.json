@@ -1,0 +1,862 @@
+{
+  "startedAt": "2026-07-18T19:15:59.417Z",
+  "finishedAt": "2026-07-18T19:16:26.662Z",
+  "blockedWrites": [],
+  "networkEvents": [
+    {
+      "at": "2026-07-18T19:16:00.481Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/",
+      "resourceType": "document",
+      "status": 200,
+      "durationMs": 482,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/html",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d17e2955e160-MRS",
+        "etag": null
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:00.683Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/index-BrAukaYy.css",
+      "resourceType": "stylesheet",
+      "status": 200,
+      "durationMs": 176,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/css",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d17f7bf0e160-MRS",
+        "etag": "W/\"f17a94344b70153f047e4c26c9fe3ff7\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:01.078Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/index-Bf0xU---.js",
+      "resourceType": "script",
+      "status": 200,
+      "durationMs": 573,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/javascript",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d17f7bece160-MRS",
+        "etag": "W/\"213fa9469358a78568541a508fab4618\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:01.426Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/instrument-sans-latin-wght-normal-BbzFLZTg.woff2",
+      "resourceType": "font",
+      "status": 200,
+      "durationMs": 552,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "font/woff2",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d181ccf6a5c9-MRS",
+        "etag": "\"3a9cf4c230a5df848eddebc760bd7da5\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:01.787Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/newsreader-latin-wght-normal-CCVVNp6i.woff2",
+      "resourceType": "font",
+      "status": 200,
+      "durationMs": 362,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "font/woff2",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1853d46a5c9-MRS",
+        "etag": "\"0cf31c6546fc4a675a01eecce2f8b6a1\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:01.972Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/favicon.svg",
+      "resourceType": "other",
+      "status": 200,
+      "durationMs": 178,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "image/svg+xml",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1878d61a5c9-MRS",
+        "etag": "W/\"9c894deda92ee306dec6b7014c73fcba\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:03.766Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/",
+      "resourceType": "document",
+      "status": 200,
+      "durationMs": 162,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/html",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d192ddf1a5c9-MRS",
+        "etag": null
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:03.929Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/index-BrAukaYy.css",
+      "resourceType": "stylesheet",
+      "status": 200,
+      "durationMs": 155,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/css",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d193ee0aa5c9-MRS",
+        "etag": "W/\"f17a94344b70153f047e4c26c9fe3ff7\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:04.204Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/index-Bf0xU---.js",
+      "resourceType": "script",
+      "status": 200,
+      "durationMs": 431,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/javascript",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d193ee09a5c9-MRS",
+        "etag": "W/\"213fa9469358a78568541a508fab4618\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:04.419Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/instrument-sans-latin-wght-normal-BbzFLZTg.woff2",
+      "resourceType": "font",
+      "status": 200,
+      "durationMs": 171,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "font/woff2",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d196de58a5c9-MRS",
+        "etag": "\"3a9cf4c230a5df848eddebc760bd7da5\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:04.426Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/newsreader-latin-wght-normal-CCVVNp6i.woff2",
+      "resourceType": "font",
+      "status": 200,
+      "durationMs": 179,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "font/woff2",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d196de57a5c9-MRS",
+        "etag": "\"0cf31c6546fc4a675a01eecce2f8b6a1\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:06.190Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/",
+      "resourceType": "document",
+      "status": 200,
+      "durationMs": 151,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/html",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1a20edfa5c9-MRS",
+        "etag": null
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:06.380Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/index-BrAukaYy.css",
+      "resourceType": "stylesheet",
+      "status": 200,
+      "durationMs": 173,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/css",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1a33ee9a5c9-MRS",
+        "etag": "W/\"f17a94344b70153f047e4c26c9fe3ff7\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:06.457Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/index-Bf0xU---.js",
+      "resourceType": "script",
+      "status": 200,
+      "durationMs": 251,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/javascript",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1a33eeaa5c9-MRS",
+        "etag": "W/\"213fa9469358a78568541a508fab4618\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:06.670Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/newsreader-latin-wght-normal-CCVVNp6i.woff2",
+      "resourceType": "font",
+      "status": 200,
+      "durationMs": 173,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "font/woff2",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1a4ef00a5c9-MRS",
+        "etag": "\"0cf31c6546fc4a675a01eecce2f8b6a1\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:06.674Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/instrument-sans-latin-wght-normal-BbzFLZTg.woff2",
+      "resourceType": "font",
+      "status": 200,
+      "durationMs": 176,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "font/woff2",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1a4eeffa5c9-MRS",
+        "etag": "\"3a9cf4c230a5df848eddebc760bd7da5\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:08.451Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/judge",
+      "resourceType": "document",
+      "status": 200,
+      "durationMs": 152,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/html",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1b02f77a5c9-MRS",
+        "etag": null
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:08.614Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/index-BrAukaYy.css",
+      "resourceType": "stylesheet",
+      "status": 200,
+      "durationMs": 156,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/css",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1b12f85a5c9-MRS",
+        "etag": "W/\"f17a94344b70153f047e4c26c9fe3ff7\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:08.685Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/index-Bf0xU---.js",
+      "resourceType": "script",
+      "status": 200,
+      "durationMs": 228,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/javascript",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1b12f84a5c9-MRS",
+        "etag": "W/\"213fa9469358a78568541a508fab4618\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:08.866Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/instrument-sans-latin-wght-normal-BbzFLZTg.woff2",
+      "resourceType": "font",
+      "status": 200,
+      "durationMs": 233,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "font/woff2",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1b24f92a5c9-MRS",
+        "etag": "\"3a9cf4c230a5df848eddebc760bd7da5\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:09.033Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/newsreader-latin-wght-normal-CCVVNp6i.woff2",
+      "resourceType": "font",
+      "status": 200,
+      "durationMs": 168,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "font/woff2",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1b3bf9ea5c9-MRS",
+        "etag": "\"0cf31c6546fc4a675a01eecce2f8b6a1\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:09.364Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/api/health",
+      "resourceType": "fetch",
+      "status": 200,
+      "durationMs": 487,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "no-store",
+        "cf-ray": "a1d3d1b3cfa3a5c9-MRS",
+        "etag": null
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:11.579Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/judge",
+      "resourceType": "document",
+      "status": 200,
+      "durationMs": 150,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/html",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1c3b834a5c9-MRS",
+        "etag": null
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:11.740Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/index-BrAukaYy.css",
+      "resourceType": "stylesheet",
+      "status": 200,
+      "durationMs": 153,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/css",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1c4b83ea5c9-MRS",
+        "etag": "W/\"f17a94344b70153f047e4c26c9fe3ff7\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:11.806Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/index-Bf0xU---.js",
+      "resourceType": "script",
+      "status": 200,
+      "durationMs": 221,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/javascript",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1c4b83da5c9-MRS",
+        "etag": "W/\"213fa9469358a78568541a508fab4618\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:12.001Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/api/health",
+      "resourceType": "fetch",
+      "status": 200,
+      "durationMs": 148,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "no-store",
+        "cf-ray": "a1d3d1c66852a5c9-MRS",
+        "etag": null
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:12.024Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/instrument-sans-latin-wght-normal-BbzFLZTg.woff2",
+      "resourceType": "font",
+      "status": 200,
+      "durationMs": 174,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "font/woff2",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1c66850a5c9-MRS",
+        "etag": "\"3a9cf4c230a5df848eddebc760bd7da5\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:12.032Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/newsreader-latin-wght-normal-CCVVNp6i.woff2",
+      "resourceType": "font",
+      "status": 200,
+      "durationMs": 182,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "font/woff2",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1c66851a5c9-MRS",
+        "etag": "\"0cf31c6546fc4a675a01eecce2f8b6a1\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:13.906Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/new",
+      "resourceType": "document",
+      "status": 200,
+      "durationMs": 157,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/html",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1d238c9a5c9-MRS",
+        "etag": null
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:14.070Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/index-BrAukaYy.css",
+      "resourceType": "stylesheet",
+      "status": 200,
+      "durationMs": 159,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/css",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1d338cea5c9-MRS",
+        "etag": "W/\"f17a94344b70153f047e4c26c9fe3ff7\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:14.136Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/index-Bf0xU---.js",
+      "resourceType": "script",
+      "status": 200,
+      "durationMs": 225,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/javascript",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1d338cfa5c9-MRS",
+        "etag": "W/\"213fa9469358a78568541a508fab4618\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:14.247Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/instrument-sans-latin-wght-normal-BbzFLZTg.woff2",
+      "resourceType": "font",
+      "status": 200,
+      "durationMs": 156,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "font/woff2",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1d468d5a5c9-MRS",
+        "etag": "\"3a9cf4c230a5df848eddebc760bd7da5\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:14.342Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/api/health",
+      "resourceType": "fetch",
+      "status": 200,
+      "durationMs": 159,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "no-store",
+        "cf-ray": "a1d3d1d4f8d9a5c9-MRS",
+        "etag": null
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:14.345Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/newsreader-latin-wght-normal-CCVVNp6i.woff2",
+      "resourceType": "font",
+      "status": 200,
+      "durationMs": 166,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "font/woff2",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1d4e8d8a5c9-MRS",
+        "etag": "\"0cf31c6546fc4a675a01eecce2f8b6a1\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:16.147Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/replay/leakage-01",
+      "resourceType": "document",
+      "status": 200,
+      "durationMs": 153,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/html",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1e04962a5c9-MRS",
+        "etag": null
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:16.325Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/index-BrAukaYy.css",
+      "resourceType": "stylesheet",
+      "status": 200,
+      "durationMs": 170,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/css",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1e15967a5c9-MRS",
+        "etag": "W/\"f17a94344b70153f047e4c26c9fe3ff7\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:16.389Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/index-Bf0xU---.js",
+      "resourceType": "script",
+      "status": 200,
+      "durationMs": 235,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/javascript",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1e16968a5c9-MRS",
+        "etag": "W/\"213fa9469358a78568541a508fab4618\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:16.492Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/instrument-sans-latin-wght-normal-BbzFLZTg.woff2",
+      "resourceType": "font",
+      "status": 200,
+      "durationMs": 153,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "font/woff2",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1e26970a5c9-MRS",
+        "etag": "\"3a9cf4c230a5df848eddebc760bd7da5\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:16.576Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/api/replays/leakage-01",
+      "resourceType": "fetch",
+      "status": 200,
+      "durationMs": 148,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "no-store",
+        "cf-ray": "a1d3d1e2f97aa5c9-MRS",
+        "etag": null
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:16.591Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/newsreader-latin-wght-normal-CCVVNp6i.woff2",
+      "resourceType": "font",
+      "status": 200,
+      "durationMs": 166,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "font/woff2",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1e2f979a5c9-MRS",
+        "etag": "\"0cf31c6546fc4a675a01eecce2f8b6a1\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:19.280Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/audit-route-does-not-exist",
+      "resourceType": "document",
+      "status": 200,
+      "durationMs": 154,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/html",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1f3da24a5c9-MRS",
+        "etag": null
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:19.488Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/index-BrAukaYy.css",
+      "resourceType": "stylesheet",
+      "status": 200,
+      "durationMs": 200,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/css",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1f51a3ba5c9-MRS",
+        "etag": "W/\"f17a94344b70153f047e4c26c9fe3ff7\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:19.552Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/index-Bf0xU---.js",
+      "resourceType": "script",
+      "status": 200,
+      "durationMs": 266,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/javascript",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1f51a3ca5c9-MRS",
+        "etag": "W/\"213fa9469358a78568541a508fab4618\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:19.662Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/instrument-sans-latin-wght-normal-BbzFLZTg.woff2",
+      "resourceType": "font",
+      "status": 200,
+      "durationMs": 160,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "font/woff2",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1f63a46a5c9-MRS",
+        "etag": "\"3a9cf4c230a5df848eddebc760bd7da5\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:19.746Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/newsreader-latin-wght-normal-CCVVNp6i.woff2",
+      "resourceType": "font",
+      "status": 200,
+      "durationMs": 164,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "font/woff2",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d1f6ba4ca5c9-MRS",
+        "etag": "\"0cf31c6546fc4a675a01eecce2f8b6a1\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:21.489Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/session/audit-nonexistent-read-only",
+      "resourceType": "document",
+      "status": 200,
+      "durationMs": 151,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/html",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d201aabca5c9-MRS",
+        "etag": null
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:21.653Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/index-BrAukaYy.css",
+      "resourceType": "stylesheet",
+      "status": 200,
+      "durationMs": 158,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/css",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d202aad9a5c9-MRS",
+        "etag": "W/\"f17a94344b70153f047e4c26c9fe3ff7\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:21.711Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/index-Bf0xU---.js",
+      "resourceType": "script",
+      "status": 200,
+      "durationMs": 218,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/javascript",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d202aadaa5c9-MRS",
+        "etag": "W/\"213fa9469358a78568541a508fab4618\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:21.825Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/instrument-sans-latin-wght-normal-BbzFLZTg.woff2",
+      "resourceType": "font",
+      "status": 200,
+      "durationMs": 161,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "font/woff2",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d203bae4a5c9-MRS",
+        "etag": "\"3a9cf4c230a5df848eddebc760bd7da5\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:21.912Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/newsreader-latin-wght-normal-CCVVNp6i.woff2",
+      "resourceType": "font",
+      "status": 200,
+      "durationMs": 163,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "font/woff2",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d2043ae7a5c9-MRS",
+        "etag": "\"0cf31c6546fc4a675a01eecce2f8b6a1\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:22.465Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/api/sessions/audit-nonexistent-read-only",
+      "resourceType": "fetch",
+      "status": 404,
+      "durationMs": 715,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "no-store",
+        "cf-ray": "a1d3d2043ae8a5c9-MRS",
+        "etag": null
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:24.236Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/proof/audit-nonexistent-read-only",
+      "resourceType": "document",
+      "status": 200,
+      "durationMs": 161,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/html",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d212cbb7a5c9-MRS",
+        "etag": null
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:24.461Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/index-BrAukaYy.css",
+      "resourceType": "stylesheet",
+      "status": 200,
+      "durationMs": 219,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/css",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d2143bbea5c9-MRS",
+        "etag": "W/\"f17a94344b70153f047e4c26c9fe3ff7\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:24.525Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/index-Bf0xU---.js",
+      "resourceType": "script",
+      "status": 200,
+      "durationMs": 283,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "text/javascript",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d2143bbfa5c9-MRS",
+        "etag": "W/\"213fa9469358a78568541a508fab4618\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:24.629Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/instrument-sans-latin-wght-normal-BbzFLZTg.woff2",
+      "resourceType": "font",
+      "status": 200,
+      "durationMs": 155,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "font/woff2",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d2154bc9a5c9-MRS",
+        "etag": "\"3a9cf4c230a5df848eddebc760bd7da5\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:24.726Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/assets/newsreader-latin-wght-normal-CCVVNp6i.woff2",
+      "resourceType": "font",
+      "status": 200,
+      "durationMs": 167,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "font/woff2",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-ray": "a1d3d215dbd1a5c9-MRS",
+        "etag": "\"0cf31c6546fc4a675a01eecce2f8b6a1\""
+      }
+    },
+    {
+      "at": "2026-07-18T19:16:24.942Z",
+      "method": "GET",
+      "url": "https://counterlab.cserules.workers.dev/api/sessions/audit-nonexistent-read-only",
+      "resourceType": "fetch",
+      "status": 404,
+      "durationMs": 380,
+      "fromServiceWorker": false,
+      "headers": {
+        "content-type": "application/json",
+        "cache-control": "no-store",
+        "cf-ray": "a1d3d215dbd2a5c9-MRS",
+        "etag": null
+      }
+    }
+  ]
+}

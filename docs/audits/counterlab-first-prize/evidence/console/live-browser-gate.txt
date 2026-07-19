@@ -1,0 +1,18 @@
+CounterLab first-prize audit — approved browser gate
+Recorded UTC: 2026-07-18T18:54:21Z
+Workspace: /home/mysterious/storage/github/CounterLab
+Target: https://counterlab.cserules.workers.dev/
+
+Attempt 1
+CLOAK_CDP_ENDPOINT: absent
+Command: playwright-cli --help
+Exit: 1
+Output: playwright-cli: ERROR: CloakBrowser is available only inside codex-safe; launch 'codex-safe' from the target repository
+
+Attempt 2
+HOME, XDG cache/config/data/state, and TMPDIR were redirected to repository-contained audit paths.
+Command: playwright-cli --help
+Exit: 1
+Output: playwright-cli: ERROR: CloakBrowser is available only inside codex-safe; launch 'codex-safe' from the target repository
+
+No stock Chromium, curl-based page extraction, alternate browser, or unauthorised browser surface was used. Consequently no live page console was available to capture.

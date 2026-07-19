@@ -1,0 +1,17 @@
+CounterLab live-route/source-contract audit tests
+Recorded UTC: 2026-07-18T18:54:21Z
+Workspace HEAD: 6f5513674e6db3a6222580121f4b5c11b2f53dda
+Branch: feat/learner-ux-v6.1
+
+Command (executed from apps/web with HOME, XDG paths, and TMPDIR redirected inside the repository audit directory):
+./node_modules/.bin/vitest run --config vitest.config.ts src/app/AppRouter.test.ts src/App.test.tsx src/features/judge/JudgeModeView.test.tsx src/components/replay/ProofCapsuleReplayView.test.tsx src/components/learner/ExperimentTheater.test.tsx
+
+Result:
+Test Files  5 passed (5)
+Tests       49 passed (49)
+Duration    5.24s
+Exit        0
+
+Scope warning: these are jsdom/source-contract tests. They do not render or validate the public deployment and do not substitute for the blocked CloakBrowser journeys.
+
+An earlier pnpm-based invocation was abandoned after the repository-contained empty package-manager home caused pnpm to request registry metadata; network access failed. The direct repository-local Vitest executable above was then used successfully without installation.

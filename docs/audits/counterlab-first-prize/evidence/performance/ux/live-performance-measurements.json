@@ -1,0 +1,1074 @@
+[
+  {
+    "name": "landing-normal-cold-1",
+    "route": "/",
+    "profile": "unthrottled",
+    "cache": "disabled cold context",
+    "httpStatus": 200,
+    "measuredAt": "2026-07-18T19:16:16.305Z",
+    "navigation": {
+      "type": "navigate",
+      "duration": 1482.2999999970198,
+      "redirect": 0,
+      "dns": 0,
+      "connect": 264.59999999403954,
+      "tls": 134.8999999910593,
+      "ttfb": 143.69999998807907,
+      "response": 10.5,
+      "domInteractive": 429.79999999701977,
+      "domContentLoaded": 1482.2000000029802,
+      "loadEvent": 1482.2999999970198,
+      "transferSize": 721,
+      "encodedBodySize": 421,
+      "decodedBodySize": 686
+    },
+    "paints": {
+      "first-paint": 1296,
+      "first-contentful-paint": 1588
+    },
+    "lcp": {
+      "startTime": 1588,
+      "size": 26100,
+      "element": "h1#landing-title"
+    },
+    "cls": 0.0014500888355624744,
+    "longTasks": [
+      {
+        "startTime": 1424.2000000029802,
+        "duration": 58
+      },
+      {
+        "startTime": 1483,
+        "duration": 64
+      }
+    ],
+    "eventDurations": [],
+    "resourceTotals": {
+      "count": 5,
+      "transferSize": 303706,
+      "encodedBodySize": 302206,
+      "decodedBodySize": 889298,
+      "scriptCount": 1,
+      "scriptTransferSize": 173724,
+      "scriptDecodedBodySize": 613324,
+      "cssCount": 3,
+      "cssTransferSize": 129427,
+      "cssDecodedBodySize": 275617
+    },
+    "slowestResources": [
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/index-Bf0xU---.js",
+        "initiatorType": "script",
+        "duration": 989.5,
+        "transferSize": 173724,
+        "decodedBodySize": 613324
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/index-BrAukaYy.css",
+        "initiatorType": "link",
+        "duration": 861.2999999970198,
+        "transferSize": 40651,
+        "decodedBodySize": 187441
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/instrument-sans-latin-wght-normal-BbzFLZTg.woff2",
+        "initiatorType": "css",
+        "duration": 501.59999999403954,
+        "transferSize": 30392,
+        "decodedBodySize": 30092
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/newsreader-latin-wght-normal-CCVVNp6i.woff2",
+        "initiatorType": "css",
+        "duration": 268.79999999701977,
+        "transferSize": 58384,
+        "decodedBodySize": 58084
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/favicon.svg",
+        "initiatorType": "other",
+        "duration": 164.59999999403954,
+        "transferSize": 555,
+        "decodedBodySize": 357
+      }
+    ],
+    "browserMetrics": {
+      "Timestamp": 82680.824824,
+      "AudioHandlers": 0,
+      "AudioWorkletProcessors": 0,
+      "Documents": 5,
+      "Frames": 2,
+      "JSEventListeners": 165,
+      "LayoutObjects": 89,
+      "MediaKeySessions": 0,
+      "MediaKeys": 0,
+      "Nodes": 154,
+      "Resources": 8,
+      "ContextLifecycleStateObservers": 20,
+      "V8PerContextDatas": 4,
+      "WorkerGlobalScopes": 0,
+      "UACSSResources": 0,
+      "RTCPeerConnections": 0,
+      "ResourceFetchers": 5,
+      "AdSubframes": 0,
+      "DetachedScriptStates": 2,
+      "ArrayBufferContents": 0,
+      "LayoutCount": 4,
+      "RecalcStyleCount": 6,
+      "LayoutDuration": 0.058626,
+      "RecalcStyleDuration": 0.003698,
+      "DevToolsCommandDuration": 0.00005,
+      "ScriptDuration": 0.068153,
+      "V8CompileDuration": 0,
+      "TaskDuration": 0.14797,
+      "TaskOtherDuration": 0.017443,
+      "ThreadTime": 0.096056,
+      "ProcessTime": 0.19,
+      "JSHeapUsedSize": 9900796,
+      "JSHeapTotalSize": 17301504,
+      "FirstMeaningfulPaint": 82676.810972,
+      "DomContentLoaded": 82676.707449,
+      "NavigationStart": 82675.225309
+    }
+  },
+  {
+    "name": "landing-normal-warm",
+    "route": "/",
+    "profile": "unthrottled",
+    "cache": "same-context reload, cache enabled",
+    "httpStatus": null,
+    "measuredAt": "2026-07-18T19:16:20.857Z",
+    "navigation": {
+      "type": "reload",
+      "duration": 646.2999999970198,
+      "redirect": 0,
+      "dns": 0,
+      "connect": 0,
+      "tls": 0,
+      "ttfb": 134.1000000089407,
+      "response": 16.599999994039536,
+      "domInteractive": 160.29999999701977,
+      "domContentLoaded": 646.2000000029802,
+      "loadEvent": 646.2999999970198,
+      "transferSize": 721,
+      "encodedBodySize": 421,
+      "decodedBodySize": 686
+    },
+    "paints": {
+      "first-paint": 360,
+      "first-contentful-paint": 656
+    },
+    "lcp": {
+      "startTime": 656,
+      "size": 26100,
+      "element": "h1#landing-title"
+    },
+    "cls": 0.0014500888355624744,
+    "longTasks": [],
+    "eventDurations": [],
+    "resourceTotals": {
+      "count": 5,
+      "transferSize": 303529,
+      "encodedBodySize": 302029,
+      "decodedBodySize": 889298,
+      "scriptCount": 1,
+      "scriptTransferSize": 173582,
+      "scriptDecodedBodySize": 613324,
+      "cssCount": 3,
+      "cssTransferSize": 129392,
+      "cssDecodedBodySize": 275617
+    },
+    "slowestResources": [
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/index-Bf0xU---.js",
+        "initiatorType": "script",
+        "duration": 451.59999999403954,
+        "transferSize": 173582,
+        "decodedBodySize": 613324
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/instrument-sans-latin-wght-normal-BbzFLZTg.woff2",
+        "initiatorType": "css",
+        "duration": 289.29999999701977,
+        "transferSize": 30392,
+        "decodedBodySize": 30092
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/newsreader-latin-wght-normal-CCVVNp6i.woff2",
+        "initiatorType": "css",
+        "duration": 275.3999999910593,
+        "transferSize": 58384,
+        "decodedBodySize": 58084
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/index-BrAukaYy.css",
+        "initiatorType": "link",
+        "duration": 186.6000000089407,
+        "transferSize": 40616,
+        "decodedBodySize": 187441
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/favicon.svg",
+        "initiatorType": "other",
+        "duration": 164,
+        "transferSize": 555,
+        "decodedBodySize": 357
+      }
+    ],
+    "browserMetrics": {
+      "Timestamp": 82685.379564,
+      "AudioHandlers": 0,
+      "AudioWorkletProcessors": 0,
+      "Documents": 8,
+      "Frames": 3,
+      "JSEventListeners": 330,
+      "LayoutObjects": 174,
+      "MediaKeySessions": 0,
+      "MediaKeys": 0,
+      "Nodes": 300,
+      "Resources": 16,
+      "ContextLifecycleStateObservers": 32,
+      "V8PerContextDatas": 6,
+      "WorkerGlobalScopes": 0,
+      "UACSSResources": 0,
+      "RTCPeerConnections": 0,
+      "ResourceFetchers": 8,
+      "AdSubframes": 0,
+      "DetachedScriptStates": 4,
+      "ArrayBufferContents": 0,
+      "LayoutCount": 8,
+      "RecalcStyleCount": 12,
+      "LayoutDuration": 0.063018,
+      "RecalcStyleDuration": 0.006476,
+      "DevToolsCommandDuration": 0.001921,
+      "ScriptDuration": 0.097152,
+      "V8CompileDuration": 0,
+      "TaskDuration": 0.201615,
+      "TaskOtherDuration": 0.033048,
+      "ThreadTime": 0.149574,
+      "ProcessTime": 0.28,
+      "JSHeapUsedSize": 17000060,
+      "JSHeapTotalSize": 32243712,
+      "FirstMeaningfulPaint": 82681.486069,
+      "DomContentLoaded": 82681.47945,
+      "NavigationStart": 82680.833317
+    }
+  },
+  {
+    "name": "landing-normal-cold-2",
+    "route": "/",
+    "profile": "unthrottled",
+    "cache": "disabled cold context",
+    "httpStatus": 200,
+    "measuredAt": "2026-07-18T19:16:25.756Z",
+    "navigation": {
+      "type": "navigate",
+      "duration": 967,
+      "redirect": 0,
+      "dns": 3.2999999970197678,
+      "connect": 244.1000000089407,
+      "tls": 124.20000000298023,
+      "ttfb": 133.8999999910593,
+      "response": 10.700000002980232,
+      "domInteractive": 400.09999999403954,
+      "domContentLoaded": 966.8999999910593,
+      "loadEvent": 967,
+      "transferSize": 721,
+      "encodedBodySize": 421,
+      "decodedBodySize": 686
+    },
+    "paints": {
+      "first-paint": 564,
+      "first-contentful-paint": 1080
+    },
+    "lcp": {
+      "startTime": 1080,
+      "size": 26100,
+      "element": "h1#landing-title"
+    },
+    "cls": 0.0014500888355624744,
+    "longTasks": [
+      {
+        "startTime": 910.2999999970198,
+        "duration": 56
+      },
+      {
+        "startTime": 967.5999999940395,
+        "duration": 75
+      }
+    ],
+    "eventDurations": [],
+    "resourceTotals": {
+      "count": 5,
+      "transferSize": 303625,
+      "encodedBodySize": 302125,
+      "decodedBodySize": 889298,
+      "scriptCount": 1,
+      "scriptTransferSize": 173678,
+      "scriptDecodedBodySize": 613324,
+      "cssCount": 3,
+      "cssTransferSize": 129392,
+      "cssDecodedBodySize": 275617
+    },
+    "slowestResources": [
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/index-Bf0xU---.js",
+        "initiatorType": "script",
+        "duration": 507.40000000596046,
+        "transferSize": 173678,
+        "decodedBodySize": 613324
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/newsreader-latin-wght-normal-CCVVNp6i.woff2",
+        "initiatorType": "css",
+        "duration": 254.09999999403954,
+        "transferSize": 58384,
+        "decodedBodySize": 58084
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/instrument-sans-latin-wght-normal-BbzFLZTg.woff2",
+        "initiatorType": "css",
+        "duration": 246.20000000298023,
+        "transferSize": 30392,
+        "decodedBodySize": 30092
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/favicon.svg",
+        "initiatorType": "other",
+        "duration": 165.20000000298023,
+        "transferSize": 555,
+        "decodedBodySize": 357
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/index-BrAukaYy.css",
+        "initiatorType": "link",
+        "duration": 161.5,
+        "transferSize": 40616,
+        "decodedBodySize": 187441
+      }
+    ],
+    "browserMetrics": {
+      "Timestamp": 82690.275878,
+      "AudioHandlers": 0,
+      "AudioWorkletProcessors": 0,
+      "Documents": 5,
+      "Frames": 2,
+      "JSEventListeners": 165,
+      "LayoutObjects": 89,
+      "MediaKeySessions": 0,
+      "MediaKeys": 0,
+      "Nodes": 154,
+      "Resources": 8,
+      "ContextLifecycleStateObservers": 20,
+      "V8PerContextDatas": 4,
+      "WorkerGlobalScopes": 0,
+      "UACSSResources": 0,
+      "RTCPeerConnections": 0,
+      "ResourceFetchers": 5,
+      "AdSubframes": 0,
+      "DetachedScriptStates": 2,
+      "ArrayBufferContents": 0,
+      "LayoutCount": 4,
+      "RecalcStyleCount": 6,
+      "LayoutDuration": 0.070031,
+      "RecalcStyleDuration": 0.003618,
+      "DevToolsCommandDuration": 0.000042,
+      "ScriptDuration": 0.066651,
+      "V8CompileDuration": 0,
+      "TaskDuration": 0.157415,
+      "TaskOtherDuration": 0.017073,
+      "ThreadTime": 0.098759,
+      "ProcessTime": 0.18,
+      "JSHeapUsedSize": 9901396,
+      "JSHeapTotalSize": 17039360,
+      "FirstMeaningfulPaint": 82686.519282,
+      "DomContentLoaded": 82686.407274,
+      "NavigationStart": 82685.440423
+    }
+  },
+  {
+    "name": "landing-normal-cold-3",
+    "route": "/",
+    "profile": "unthrottled",
+    "cache": "disabled cold context",
+    "httpStatus": 200,
+    "measuredAt": "2026-07-18T19:16:31.077Z",
+    "navigation": {
+      "type": "navigate",
+      "duration": 913.5,
+      "redirect": 0,
+      "dns": 4.0999999940395355,
+      "connect": 244.40000000596046,
+      "tls": 126.20000000298023,
+      "ttfb": 134.8999999910593,
+      "response": 9.900000005960464,
+      "domInteractive": 401.70000000298023,
+      "domContentLoaded": 913.3999999910593,
+      "loadEvent": 913.5,
+      "transferSize": 721,
+      "encodedBodySize": 421,
+      "decodedBodySize": 686
+    },
+    "paints": {
+      "first-paint": 568,
+      "first-contentful-paint": 1036
+    },
+    "lcp": {
+      "startTime": 1036,
+      "size": 26100,
+      "element": "h1#landing-title"
+    },
+    "cls": 0.0014500888355624744,
+    "longTasks": [
+      {
+        "startTime": 851.5,
+        "duration": 62
+      },
+      {
+        "startTime": 914,
+        "duration": 76
+      }
+    ],
+    "eventDurations": [],
+    "resourceTotals": {
+      "count": 5,
+      "transferSize": 303671,
+      "encodedBodySize": 302171,
+      "decodedBodySize": 889298,
+      "scriptCount": 1,
+      "scriptTransferSize": 173724,
+      "scriptDecodedBodySize": 613324,
+      "cssCount": 3,
+      "cssTransferSize": 129392,
+      "cssDecodedBodySize": 275617
+    },
+    "slowestResources": [
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/newsreader-latin-wght-normal-CCVVNp6i.woff2",
+        "initiatorType": "css",
+        "duration": 725,
+        "transferSize": 58384,
+        "decodedBodySize": 58084
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/instrument-sans-latin-wght-normal-BbzFLZTg.woff2",
+        "initiatorType": "css",
+        "duration": 605,
+        "transferSize": 30392,
+        "decodedBodySize": 30092
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/index-Bf0xU---.js",
+        "initiatorType": "script",
+        "duration": 448.20000000298023,
+        "transferSize": 173724,
+        "decodedBodySize": 613324
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/favicon.svg",
+        "initiatorType": "other",
+        "duration": 163.20000000298023,
+        "transferSize": 555,
+        "decodedBodySize": 357
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/index-BrAukaYy.css",
+        "initiatorType": "link",
+        "duration": 161,
+        "transferSize": 40616,
+        "decodedBodySize": 187441
+      }
+    ],
+    "browserMetrics": {
+      "Timestamp": 82695.59872,
+      "AudioHandlers": 0,
+      "AudioWorkletProcessors": 0,
+      "Documents": 5,
+      "Frames": 2,
+      "JSEventListeners": 165,
+      "LayoutObjects": 89,
+      "MediaKeySessions": 0,
+      "MediaKeys": 0,
+      "Nodes": 154,
+      "Resources": 8,
+      "ContextLifecycleStateObservers": 20,
+      "V8PerContextDatas": 4,
+      "WorkerGlobalScopes": 0,
+      "UACSSResources": 0,
+      "RTCPeerConnections": 0,
+      "ResourceFetchers": 5,
+      "AdSubframes": 0,
+      "DetachedScriptStates": 2,
+      "ArrayBufferContents": 0,
+      "LayoutCount": 4,
+      "RecalcStyleCount": 6,
+      "LayoutDuration": 0.070082,
+      "RecalcStyleDuration": 0.003826,
+      "DevToolsCommandDuration": 0.000061,
+      "ScriptDuration": 0.071898,
+      "V8CompileDuration": 0,
+      "TaskDuration": 0.165011,
+      "TaskOtherDuration": 0.019144,
+      "ThreadTime": 0.103648,
+      "ProcessTime": 0.19,
+      "JSHeapUsedSize": 9776164,
+      "JSHeapTotalSize": 16777216,
+      "FirstMeaningfulPaint": 82691.377456,
+      "DomContentLoaded": 82691.257969,
+      "NavigationStart": 82690.344745
+    }
+  },
+  {
+    "name": "judge-normal-cold",
+    "route": "/judge",
+    "profile": "unthrottled",
+    "cache": "disabled cold context",
+    "httpStatus": 200,
+    "measuredAt": "2026-07-18T19:16:36.044Z",
+    "navigation": {
+      "type": "navigate",
+      "duration": 980.2000000029802,
+      "redirect": 0,
+      "dns": 3.2999999970197678,
+      "connect": 241.29999999701977,
+      "tls": 122.79999999701977,
+      "ttfb": 145,
+      "response": 9.899999991059303,
+      "domInteractive": 408.20000000298023,
+      "domContentLoaded": 980.2000000029802,
+      "loadEvent": 980.2000000029802,
+      "transferSize": 721,
+      "encodedBodySize": 421,
+      "decodedBodySize": 686
+    },
+    "paints": {
+      "first-paint": 572,
+      "first-contentful-paint": 1064
+    },
+    "lcp": {
+      "startTime": 1064,
+      "size": 61152,
+      "element": "h1#judge-title"
+    },
+    "cls": 0.0027940466296803752,
+    "longTasks": [
+      {
+        "startTime": 923.5,
+        "duration": 56
+      },
+      {
+        "startTime": 980.7999999970198,
+        "duration": 61
+      }
+    ],
+    "eventDurations": [],
+    "resourceTotals": {
+      "count": 6,
+      "transferSize": 304071,
+      "encodedBodySize": 302271,
+      "decodedBodySize": 889520,
+      "scriptCount": 1,
+      "scriptTransferSize": 173678,
+      "scriptDecodedBodySize": 613324,
+      "cssCount": 3,
+      "cssTransferSize": 129392,
+      "cssDecodedBodySize": 275617
+    },
+    "slowestResources": [
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/index-Bf0xU---.js",
+        "initiatorType": "script",
+        "duration": 513.7999999970198,
+        "transferSize": 173678,
+        "decodedBodySize": 613324
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/newsreader-latin-wght-normal-CCVVNp6i.woff2",
+        "initiatorType": "css",
+        "duration": 302.90000000596046,
+        "transferSize": 58384,
+        "decodedBodySize": 58084
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/instrument-sans-latin-wght-normal-BbzFLZTg.woff2",
+        "initiatorType": "css",
+        "duration": 276.6000000089407,
+        "transferSize": 30392,
+        "decodedBodySize": 30092
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/favicon.svg",
+        "initiatorType": "other",
+        "duration": 168.40000000596046,
+        "transferSize": 555,
+        "decodedBodySize": 357
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/index-BrAukaYy.css",
+        "initiatorType": "link",
+        "duration": 160.8999999910593,
+        "transferSize": 40616,
+        "decodedBodySize": 187441
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/api/health",
+        "initiatorType": "fetch",
+        "duration": 140.90000000596046,
+        "transferSize": 446,
+        "decodedBodySize": 222
+      }
+    ],
+    "browserMetrics": {
+      "Timestamp": 82700.563948,
+      "AudioHandlers": 0,
+      "AudioWorkletProcessors": 0,
+      "Documents": 5,
+      "Frames": 2,
+      "JSEventListeners": 152,
+      "LayoutObjects": 285,
+      "MediaKeySessions": 0,
+      "MediaKeys": 0,
+      "Nodes": 310,
+      "Resources": 9,
+      "ContextLifecycleStateObservers": 18,
+      "V8PerContextDatas": 4,
+      "WorkerGlobalScopes": 0,
+      "UACSSResources": 0,
+      "RTCPeerConnections": 0,
+      "ResourceFetchers": 5,
+      "AdSubframes": 0,
+      "DetachedScriptStates": 2,
+      "ArrayBufferContents": 0,
+      "LayoutCount": 6,
+      "RecalcStyleCount": 7,
+      "LayoutDuration": 0.06287,
+      "RecalcStyleDuration": 0.004604,
+      "DevToolsCommandDuration": 0.000059,
+      "ScriptDuration": 0.067456,
+      "V8CompileDuration": 0,
+      "TaskDuration": 0.169816,
+      "TaskOtherDuration": 0.034827,
+      "ThreadTime": 0.109783,
+      "ProcessTime": 0.39,
+      "JSHeapUsedSize": 10039452,
+      "JSHeapTotalSize": 17563648,
+      "FirstMeaningfulPaint": 82696.726755,
+      "DomContentLoaded": 82696.646556,
+      "NavigationStart": 82695.666557
+    }
+  },
+  {
+    "name": "replay-normal-cold",
+    "route": "/replay/leakage-01",
+    "profile": "unthrottled",
+    "cache": "disabled cold context",
+    "httpStatus": 200,
+    "measuredAt": "2026-07-18T19:16:40.965Z",
+    "navigation": {
+      "type": "navigate",
+      "duration": 962.0999999940395,
+      "redirect": 0,
+      "dns": 2.5,
+      "connect": 241.80000001192093,
+      "tls": 123,
+      "ttfb": 133.40000000596046,
+      "response": 11.399999991059303,
+      "domInteractive": 397.69999998807907,
+      "domContentLoaded": 961.8999999910593,
+      "loadEvent": 962.0999999940395,
+      "transferSize": 721,
+      "encodedBodySize": 421,
+      "decodedBodySize": 686
+    },
+    "paints": {
+      "first-paint": 568,
+      "first-contentful-paint": 1072
+    },
+    "lcp": {
+      "startTime": 1144,
+      "size": 20678,
+      "element": "h1"
+    },
+    "cls": 0.044187315234124606,
+    "longTasks": [
+      {
+        "startTime": 903.3999999910593,
+        "duration": 58
+      },
+      {
+        "startTime": 962.6999999880791,
+        "duration": 61
+      },
+      {
+        "startTime": 1028.8999999910593,
+        "duration": 74
+      }
+    ],
+    "eventDurations": [],
+    "resourceTotals": {
+      "count": 6,
+      "transferSize": 307167,
+      "encodedBodySize": 305367,
+      "decodedBodySize": 898115,
+      "scriptCount": 1,
+      "scriptTransferSize": 173678,
+      "scriptDecodedBodySize": 613324,
+      "cssCount": 3,
+      "cssTransferSize": 129378,
+      "cssDecodedBodySize": 275617
+    },
+    "slowestResources": [
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/index-Bf0xU---.js",
+        "initiatorType": "script",
+        "duration": 503.70000000298023,
+        "transferSize": 173678,
+        "decodedBodySize": 613324
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/newsreader-latin-wght-normal-CCVVNp6i.woff2",
+        "initiatorType": "css",
+        "duration": 286.6000000089407,
+        "transferSize": 58384,
+        "decodedBodySize": 58084
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/instrument-sans-latin-wght-normal-BbzFLZTg.woff2",
+        "initiatorType": "css",
+        "duration": 251.09999999403954,
+        "transferSize": 30392,
+        "decodedBodySize": 30092
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/index-BrAukaYy.css",
+        "initiatorType": "link",
+        "duration": 165.6000000089407,
+        "transferSize": 40602,
+        "decodedBodySize": 187441
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/favicon.svg",
+        "initiatorType": "other",
+        "duration": 165.1000000089407,
+        "transferSize": 555,
+        "decodedBodySize": 357
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/api/replays/leakage-01",
+        "initiatorType": "fetch",
+        "duration": 134.8999999910593,
+        "transferSize": 3556,
+        "decodedBodySize": 8817
+      }
+    ],
+    "browserMetrics": {
+      "Timestamp": 82705.485158,
+      "AudioHandlers": 0,
+      "AudioWorkletProcessors": 0,
+      "Documents": 5,
+      "Frames": 2,
+      "JSEventListeners": 177,
+      "LayoutObjects": 189,
+      "MediaKeySessions": 0,
+      "MediaKeys": 0,
+      "Nodes": 348,
+      "Resources": 9,
+      "ContextLifecycleStateObservers": 22,
+      "V8PerContextDatas": 4,
+      "WorkerGlobalScopes": 0,
+      "UACSSResources": 0,
+      "RTCPeerConnections": 0,
+      "ResourceFetchers": 5,
+      "AdSubframes": 0,
+      "DetachedScriptStates": 2,
+      "ArrayBufferContents": 0,
+      "LayoutCount": 6,
+      "RecalcStyleCount": 10,
+      "LayoutDuration": 0.134369,
+      "RecalcStyleDuration": 0.006012,
+      "DevToolsCommandDuration": 0.000035,
+      "ScriptDuration": 0.073769,
+      "V8CompileDuration": 0,
+      "TaskDuration": 0.237992,
+      "TaskOtherDuration": 0.023807,
+      "ThreadTime": 0.117307,
+      "ProcessTime": 0.24,
+      "JSHeapUsedSize": 10430244,
+      "JSHeapTotalSize": 17039360,
+      "FirstMeaningfulPaint": 82701.693431,
+      "DomContentLoaded": 82701.583805,
+      "NavigationStart": 82700.62189
+    }
+  },
+  {
+    "name": "landing-fast3g-cold",
+    "route": "/",
+    "profile": "150 ms latency, 1.6 Mbit/s down, 0.75 Mbit/s up",
+    "cache": "disabled cold context",
+    "httpStatus": 200,
+    "measuredAt": "2026-07-18T19:16:47.084Z",
+    "navigation": {
+      "type": "navigate",
+      "duration": 1743.6000000089407,
+      "redirect": 0,
+      "dns": 3.2000000029802322,
+      "connect": 260.59999999403954,
+      "tls": 133.3999999910593,
+      "ttfb": 141.5,
+      "response": 25.299999997019768,
+      "domInteractive": 439,
+      "domContentLoaded": 1743.5,
+      "loadEvent": 1743.6000000089407,
+      "transferSize": 721,
+      "encodedBodySize": 421,
+      "decodedBodySize": 686
+    },
+    "paints": {
+      "first-paint": 1000,
+      "first-contentful-paint": 1856
+    },
+    "lcp": {
+      "startTime": 1856,
+      "size": 26100,
+      "element": "h1#landing-title"
+    },
+    "cls": 0.0014500888355624744,
+    "longTasks": [
+      {
+        "startTime": 1682.4000000059605,
+        "duration": 61
+      },
+      {
+        "startTime": 1744.4000000059605,
+        "duration": 73
+      }
+    ],
+    "eventDurations": [],
+    "resourceTotals": {
+      "count": 5,
+      "transferSize": 303625,
+      "encodedBodySize": 302125,
+      "decodedBodySize": 889298,
+      "scriptCount": 1,
+      "scriptTransferSize": 173678,
+      "scriptDecodedBodySize": 613324,
+      "cssCount": 3,
+      "cssTransferSize": 129392,
+      "cssDecodedBodySize": 275617
+    },
+    "slowestResources": [
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/index-Bf0xU---.js",
+        "initiatorType": "script",
+        "duration": 1241.5,
+        "transferSize": 173678,
+        "decodedBodySize": 613324
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/newsreader-latin-wght-normal-CCVVNp6i.woff2",
+        "initiatorType": "css",
+        "duration": 681.5999999940395,
+        "transferSize": 58384,
+        "decodedBodySize": 58084
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/instrument-sans-latin-wght-normal-BbzFLZTg.woff2",
+        "initiatorType": "css",
+        "duration": 659.4000000059605,
+        "transferSize": 30392,
+        "decodedBodySize": 30092
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/index-BrAukaYy.css",
+        "initiatorType": "link",
+        "duration": 558.7999999970198,
+        "transferSize": 40616,
+        "decodedBodySize": 187441
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/favicon.svg",
+        "initiatorType": "other",
+        "duration": 175.90000000596046,
+        "transferSize": 555,
+        "decodedBodySize": 357
+      }
+    ],
+    "browserMetrics": {
+      "Timestamp": 82711.605246,
+      "AudioHandlers": 0,
+      "AudioWorkletProcessors": 0,
+      "Documents": 5,
+      "Frames": 2,
+      "JSEventListeners": 165,
+      "LayoutObjects": 89,
+      "MediaKeySessions": 0,
+      "MediaKeys": 0,
+      "Nodes": 154,
+      "Resources": 8,
+      "ContextLifecycleStateObservers": 20,
+      "V8PerContextDatas": 4,
+      "WorkerGlobalScopes": 0,
+      "UACSSResources": 0,
+      "RTCPeerConnections": 0,
+      "ResourceFetchers": 5,
+      "AdSubframes": 0,
+      "DetachedScriptStates": 2,
+      "ArrayBufferContents": 0,
+      "LayoutCount": 4,
+      "RecalcStyleCount": 6,
+      "LayoutDuration": 0.067379,
+      "RecalcStyleDuration": 0.003847,
+      "DevToolsCommandDuration": 0.009933,
+      "ScriptDuration": 0.071025,
+      "V8CompileDuration": 0,
+      "TaskDuration": 0.172766,
+      "TaskOtherDuration": 0.020582,
+      "ThreadTime": 0.103998,
+      "ProcessTime": 0.2,
+      "JSHeapUsedSize": 9901532,
+      "JSHeapTotalSize": 16777216,
+      "FirstMeaningfulPaint": 82707.418281,
+      "DomContentLoaded": 82707.30877,
+      "NavigationStart": 82705.565321
+    }
+  },
+  {
+    "name": "judge-fast3g-cold",
+    "route": "/judge",
+    "profile": "150 ms latency, 1.6 Mbit/s down, 0.75 Mbit/s up",
+    "cache": "disabled cold context",
+    "httpStatus": 200,
+    "measuredAt": "2026-07-18T19:16:53.161Z",
+    "navigation": {
+      "type": "navigate",
+      "duration": 1729.300000011921,
+      "redirect": 0,
+      "dns": 3.7999999970197678,
+      "connect": 249.70000000298023,
+      "tls": 129.20000000298023,
+      "ttfb": 143.5,
+      "response": 26.600000008940697,
+      "domInteractive": 431.30000001192093,
+      "domContentLoaded": 1729.1000000089407,
+      "loadEvent": 1729.300000011921,
+      "transferSize": 721,
+      "encodedBodySize": 421,
+      "decodedBodySize": 686
+    },
+    "paints": {
+      "first-paint": 1012,
+      "first-contentful-paint": 1804
+    },
+    "lcp": {
+      "startTime": 1804,
+      "size": 61152,
+      "element": "h1#judge-title"
+    },
+    "cls": 0.0027940466296803752,
+    "longTasks": [
+      {
+        "startTime": 1671.6000000089407,
+        "duration": 57
+      },
+      {
+        "startTime": 1729.9000000059605,
+        "duration": 55
+      }
+    ],
+    "eventDurations": [],
+    "resourceTotals": {
+      "count": 6,
+      "transferSize": 304075,
+      "encodedBodySize": 302275,
+      "decodedBodySize": 889520,
+      "scriptCount": 1,
+      "scriptTransferSize": 173680,
+      "scriptDecodedBodySize": 613324,
+      "cssCount": 3,
+      "cssTransferSize": 129392,
+      "cssDecodedBodySize": 275617
+    },
+    "slowestResources": [
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/index-Bf0xU---.js",
+        "initiatorType": "script",
+        "duration": 1237.800000011921,
+        "transferSize": 173680,
+        "decodedBodySize": 613324
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/newsreader-latin-wght-normal-CCVVNp6i.woff2",
+        "initiatorType": "css",
+        "duration": 669.3000000119209,
+        "transferSize": 58384,
+        "decodedBodySize": 58084
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/index-BrAukaYy.css",
+        "initiatorType": "link",
+        "duration": 562.2000000029802,
+        "transferSize": 40616,
+        "decodedBodySize": 187441
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/assets/instrument-sans-latin-wght-normal-BbzFLZTg.woff2",
+        "initiatorType": "css",
+        "duration": 519.0999999940395,
+        "transferSize": 30392,
+        "decodedBodySize": 30092
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/favicon.svg",
+        "initiatorType": "other",
+        "duration": 189.70000000298023,
+        "transferSize": 555,
+        "decodedBodySize": 357
+      },
+      {
+        "name": "https://counterlab.cserules.workers.dev/api/health",
+        "initiatorType": "fetch",
+        "duration": 179.1000000089407,
+        "transferSize": 448,
+        "decodedBodySize": 222
+      }
+    ],
+    "browserMetrics": {
+      "Timestamp": 82717.681924,
+      "AudioHandlers": 0,
+      "AudioWorkletProcessors": 0,
+      "Documents": 5,
+      "Frames": 2,
+      "JSEventListeners": 152,
+      "LayoutObjects": 285,
+      "MediaKeySessions": 0,
+      "MediaKeys": 0,
+      "Nodes": 310,
+      "Resources": 9,
+      "ContextLifecycleStateObservers": 18,
+      "V8PerContextDatas": 4,
+      "WorkerGlobalScopes": 0,
+      "UACSSResources": 0,
+      "RTCPeerConnections": 0,
+      "ResourceFetchers": 5,
+      "AdSubframes": 0,
+      "DetachedScriptStates": 2,
+      "ArrayBufferContents": 0,
+      "LayoutCount": 6,
+      "RecalcStyleCount": 7,
+      "LayoutDuration": 0.05481,
+      "RecalcStyleDuration": 0.004662,
+      "DevToolsCommandDuration": 0.000041,
+      "ScriptDuration": 0.067994,
+      "V8CompileDuration": 0,
+      "TaskDuration": 0.166494,
+      "TaskOtherDuration": 0.038987,
+      "ThreadTime": 0.113674,
+      "ProcessTime": 0.37,
+      "JSHeapUsedSize": 10098732,
+      "JSHeapTotalSize": 16777216,
+      "FirstMeaningfulPaint": 82713.467754,
+      "DomContentLoaded": 82713.395708,
+      "NavigationStart": 82711.666527
+    }
+  }
+]

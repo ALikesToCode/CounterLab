@@ -1,0 +1,313 @@
+{
+  "reducedMotion": {
+    "mediaMatches": true,
+    "animatedElements": []
+  },
+  "textResize200": {
+    "url": "https://counterlab.cserules.workers.dev/",
+    "title": "CounterLab — CI for understanding",
+    "lang": "en",
+    "viewport": {
+      "width": 640,
+      "height": 720,
+      "devicePixelRatio": 1
+    },
+    "documentSize": {
+      "clientWidth": 640,
+      "scrollWidth": 640,
+      "scrollHeight": 982
+    },
+    "hasHorizontalDocumentOverflow": false,
+    "headings": [
+      {
+        "level": 1,
+        "text": "What result are you trying to understand?"
+      }
+    ],
+    "headingSkips": [],
+    "landmarks": {
+      "main": 1,
+      "nav": 1,
+      "header": 0,
+      "footer": 0
+    },
+    "skipLinks": [],
+    "controls": [
+      {
+        "selector": "button.landing-menu-toggle",
+        "tag": "button",
+        "name": "Explore",
+        "disabled": false
+      },
+      {
+        "selector": "button._intentActive_16ajt_37",
+        "tag": "button",
+        "name": "Question",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Notebook",
+        "disabled": false
+      },
+      {
+        "selector": "#_r_0_",
+        "tag": "textarea",
+        "name": "Your question or claim",
+        "disabled": false
+      },
+      {
+        "selector": "input",
+        "tag": "input",
+        "name": "Attach notebook",
+        "disabled": false
+      },
+      {
+        "selector": "button._submit_16ajt_142",
+        "tag": "button",
+        "name": "Test this claim →",
+        "disabled": true
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Why did my model score highly but fail on new customers?",
+        "disabled": false
+      },
+      {
+        "selector": "button",
+        "tag": "button",
+        "name": "Does high accuracy mean the rare cases are being caught?",
+        "disabled": false
+      },
+      {
+        "selector": "a",
+        "tag": "a",
+        "name": "Review the supported evidence boundary",
+        "disabled": false
+      }
+    ],
+    "unnamedControls": [],
+    "smallTargets": [
+      {
+        "selector": "input",
+        "name": "Attach notebook",
+        "width": 1,
+        "height": 1
+      }
+    ],
+    "imagesWithoutAlt": [],
+    "duplicateIds": [],
+    "contrastFailures": [
+      {
+        "selector": "label._srOnly_16ajt_130",
+        "text": "Your question or claim",
+        "color": "rgb(7, 21, 42)",
+        "background": "rgb(32, 32, 35)",
+        "ratio": 1.12,
+        "required": 4.5,
+        "fontSize": 13,
+        "fontWeight": 700
+      }
+    ],
+    "overflowElements": [],
+    "liveRegions": [],
+    "tables": [],
+    "dialogs": [],
+    "firstFoldText": [
+      "C",
+      "CounterLab",
+      "Explore",
+      "No account needed",
+      "Ask like chat. Prove it like science.",
+      "What result are you trying to understand?",
+      "State the claim. If you have a notebook, attach it—we read the evidence and never run the cells.",
+      "Question",
+      "Notebook",
+      "Your question or claim",
+      "+ Attach notebook",
+      "Test this claim →",
+      "Prompt starters",
+      "Why did my model score highly but fail on new customers?",
+      "Does high accuracy mean the rare cases are being caught?"
+    ]
+  },
+  "pageScale200": {
+    "note": "Chromium CDP page-scale emulation; this is a zoom proxy, not a manual desktop browser zoom control.",
+    "dom": {
+      "url": "https://counterlab.cserules.workers.dev/judge",
+      "title": "CounterLab — CI for understanding",
+      "lang": "en",
+      "viewport": {
+        "width": 1280,
+        "height": 720,
+        "devicePixelRatio": 1
+      },
+      "documentSize": {
+        "clientWidth": 1280,
+        "scrollWidth": 1280,
+        "scrollHeight": 4461
+      },
+      "hasHorizontalDocumentOverflow": false,
+      "headings": [
+        {
+          "level": 1,
+          "text": "See a belief break in twenty seconds."
+        },
+        {
+          "level": 2,
+          "text": "Four authorities. No blurred hand-offs."
+        },
+        {
+          "level": 3,
+          "text": "GPT-5.6"
+        },
+        {
+          "level": 3,
+          "text": "Runtime Codex"
+        },
+        {
+          "level": 3,
+          "text": "Fixed kernel"
+        },
+        {
+          "level": 3,
+          "text": "Frozen verifier"
+        },
+        {
+          "level": 2,
+          "text": "Three paths. Three explicit meanings."
+        },
+        {
+          "level": 3,
+          "text": "Try the complete learning loop."
+        },
+        {
+          "level": 3,
+          "text": "Test an untouched supported notebook."
+        },
+        {
+          "level": 3,
+          "text": "Inspect a genuine reject–repair trace."
+        },
+        {
+          "level": 2,
+          "text": "A learning loop with a release gate."
+        },
+        {
+          "level": 2,
+          "text": "Bounded proof, visible limitations."
+        },
+        {
+          "level": 3,
+          "text": "CounterLab does not claim universal notebook support."
+        },
+        {
+          "level": 2,
+          "text": "The demo has commands, not hand-waving."
+        }
+      ],
+      "headingSkips": [],
+      "landmarks": {
+        "main": 1,
+        "nav": 0,
+        "header": 4,
+        "footer": 1
+      },
+      "skipLinks": [],
+      "controls": [
+        {
+          "selector": "a._wordmark_fwi1s_46",
+          "tag": "a",
+          "name": "CounterLab home",
+          "disabled": false
+        },
+        {
+          "selector": "a._homeLink_fwi1s_89",
+          "tag": "a",
+          "name": "Learner view ↗",
+          "disabled": false
+        },
+        {
+          "selector": "button",
+          "tag": "button",
+          "name": "Start sample →",
+          "disabled": false
+        },
+        {
+          "selector": "a",
+          "tag": "a",
+          "name": "Watch verified replay",
+          "disabled": false
+        },
+        {
+          "selector": "button",
+          "tag": "button",
+          "name": "Start sample →",
+          "disabled": false
+        },
+        {
+          "selector": "a",
+          "tag": "a",
+          "name": "Run live →",
+          "disabled": false
+        },
+        {
+          "selector": "a",
+          "tag": "a",
+          "name": "Watch replay →",
+          "disabled": false
+        },
+        {
+          "selector": "a",
+          "tag": "a",
+          "name": "Open learner view",
+          "disabled": false
+        }
+      ],
+      "unnamedControls": [],
+      "smallTargets": [],
+      "imagesWithoutAlt": [],
+      "duplicateIds": [],
+      "contrastFailures": [],
+      "overflowElements": [],
+      "liveRegions": [
+        {
+          "selector": "div._liveStatus_fwi1s_416",
+          "role": "status",
+          "ariaLive": "polite",
+          "text": "Deployed live authority is configured"
+        }
+      ],
+      "tables": [],
+      "dialogs": [],
+      "firstFoldText": [
+        "C/L",
+        "CounterLab",
+        "Public evidence dossier",
+        "Judge Mode",
+        "Learner view ↗",
+        "↗",
+        "Ask like chat. Prove it like science.",
+        "See a belief break in twenty seconds.",
+        "CounterLab turns a notebook claim into two competing models, locks the learner's prediction, and lets fixed computation—not fluent prose—decide what the evidence supports.",
+        "Start sample →",
+        "→",
+        "Watch verified replay",
+        "Released notebook support: entity leakage and class imbalance in documented Python/scikit-learn Jupyter patterns.",
+        "Untouched churn notebook",
+        "Fixed-kernel evidence",
+        "“This score proves the model works for customers it has never seen.”",
+        "Random rows",
+        "98.5%",
+        "389 shared customers",
+        "≠",
+        "Whole customers",
+        "59.4%",
+        "0 shared customers",
+        "Same estimator and preprocessing. The evaluation unit changed to match the deployment claim."
+      ]
+    }
+  }
+}

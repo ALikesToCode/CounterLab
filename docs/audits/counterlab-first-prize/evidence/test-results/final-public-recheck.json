@@ -1,0 +1,67 @@
+{
+  "checkedAt": "2026-07-18T20:04:20.161Z",
+  "browser": "150.0.7871.128",
+  "routes": [
+    {
+      "route": "/",
+      "status": 200,
+      "finalUrl": "https://counterlab.cserules.workers.dev/",
+      "elapsedMs": 1958,
+      "title": "CounterLab — CI for understanding",
+      "h1": [
+        "What result are you trying to understand?"
+      ],
+      "scriptSources": [
+        "/assets/index-Bf0xU---.js"
+      ]
+    },
+    {
+      "route": "/judge",
+      "status": 200,
+      "finalUrl": "https://counterlab.cserules.workers.dev/judge",
+      "elapsedMs": 1460,
+      "title": "CounterLab — CI for understanding",
+      "h1": [
+        "See a belief break in twenty seconds."
+      ],
+      "scriptSources": [
+        "/assets/index-Bf0xU---.js"
+      ]
+    }
+  ],
+  "api": {
+    "/ready": {
+      "status": 200,
+      "body": {
+        "status": "ready",
+        "service": "counterlab-control-plane",
+        "checks": {
+          "analyst": true,
+          "persistence": true,
+          "privateStorage": true,
+          "runner": true,
+          "signing": true
+        }
+      }
+    },
+    "/api/health": {
+      "status": 200,
+      "body": {
+        "ok": true,
+        "data": {
+          "platform": "cloudflare-workers",
+          "sample": "available",
+          "replay": "available",
+          "liveGpt": "configured",
+          "liveCodex": "configured",
+          "liveKernel": "configured",
+          "sandbox": "configured",
+          "requestId": "a1d418496a6dc6a5"
+        }
+      }
+    }
+  },
+  "consoleEvents": [],
+  "failedRequests": [],
+  "errorResponses": []
+}

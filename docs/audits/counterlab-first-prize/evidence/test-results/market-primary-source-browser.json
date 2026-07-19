@@ -1,0 +1,546 @@
+{
+  "schemaVersion": "1",
+  "capturedAt": "2026-07-18T19:23:24.301Z",
+  "browser": "authorized local Chromium",
+  "executablePath": "/usr/bin/chromium",
+  "targets": [
+    {
+      "id": "khanmigo",
+      "url": "https://blog.khanacademy.org/how-khan-academy-is-building-a-better-ai-tutor-our-most-recent-learnings/",
+      "finalUrl": "https://blog.khanacademy.org/how-khan-academy-is-building-a-better-ai-tutor-our-most-recent-learnings/",
+      "status": 200,
+      "elapsedMs": 2050,
+      "title": "How Khan Academy Is Building a Better AI Tutor: Our Most Recent Learnings  - Khan Academy Blog",
+      "canonical": "https://blog.khanacademy.org/how-khan-academy-is-building-a-better-ai-tutor-our-most-recent-learnings/",
+      "description": "Khan Academy shares how it improved its AI tutor Khanmigo with faster responses, smarter data use, and better student learning outcomes.",
+      "headings": [
+        {
+          "level": "h1",
+          "text": "How Khan Academy Is Building a Better AI Tutor: Our Most Recent Learnings"
+        },
+        {
+          "level": "h3",
+          "text": "How We Study What Works"
+        },
+        {
+          "level": "h3",
+          "text": "How We Measure Success"
+        },
+        {
+          "level": "h3",
+          "text": "Making the math agent faster without sacrificing accuracy"
+        },
+        {
+          "level": "h3",
+          "text": "Using a student’s Khan Academy learning history to improve tutoring"
+        },
+        {
+          "level": "h3",
+          "text": "Our commitment to principled progress"
+        },
+        {
+          "level": "h2",
+          "text": "Search"
+        }
+      ],
+      "bodyExcerpt": "Skip to content Donate How Khan Academy Is Building a Better AI Tutor: Our Most Recent Learnings MAY 1, 2026 Three years ago, Khan Academy launched Khanmigo, a generative AI-powered tutor for students and assistant for teachers. Since then, we’ve worked continuously to improve its tutoring capabilities. Today we’re sharing the results of our most recent improvement efforts. Our efforts are incremental and ongoing, and we are encouraged by the six-percentage-point improvement described below. Applied across millions of practice sessions per day, the gain translates to a meaningful increase in the number of students who learn from each tutoring interaction. We believe this kind of product-development process—rigorously testing, carefully measuring outcomes, and discarding what doesn’t work—is essential for building effective AI tools in education. How We Study What Works We gather evidence about Khanmigo in a variety of ways, including classroom observations, teacher and student interviews, and analysis of student chat transcripts. Over six months, from October 2025 to April 2026, Khan Academy ran a rigorous series of product tests to understand what changes might improve Khanmigo’s effectiveness. The following findings summarize what we’ve learned and how we are using them to improve Khanmigo. How We Measure Success Throughout this work to improve Khanmigo, we tracked three core metrics. Depending on the test, each metric served as either the primary goal or a guardrail to ensure we weren’t improving one dimension at the expense of another. Our core metrics: Response latency: the time a student waits between asking a question and receiving Khanmigo’s response. A key element of keeping students engaged is having the interaction with Khanmigo feel like a natural conversation. Faster responses keep students focused and are critical to making the tool feel natural. Next-item correctness: whether the student answers the next problem correctly after receiving tutoring. Next-item correctness measures whether the student correctly answered the very next problem on the same skill during the same session without any help from Khanmigo. It is a direct measure of independent learning transfer, not just of performance with AI assistance. Cognitive engagement quality: Using a scale of “passive,” “active,” and “constructive” ratings, an automated assessment of whether the exchange in each tutoring interaction was at least active, meaning the student was reasoning and engaging instead of just passively receiving information. You can read more about our work to measure cognitive engagement in ACL Anthology. We also monitored additional guardrail metrics in every test, including instances of giving the answer away before a student submitted a response, math error rates, and interactions per thread, in order to ensure that changes were not causing unintended harm elsewhere. We run these experiments through an A/B testing platform that predicts whether the tested version will result in better metrics outcomes than our control version. This is called its “chance to win.” If that probability is greater than .95 without any negative impact on guardrail metrics, we implement the change. Making the math agent faster without sacrificing accuracy When a student is working through a math problem, Khanmigo has a specialized system that verifies calculations and checks mathematical expressions in real time. This “math agent” runs behind the scenes and helps ensure that when Khanmigo responds to a student, the math is correct. Reducing the time this system takes to respond is key. The less wait time a student experiences between asking a question and receiving a response, the more they stay engaged and the more natural the tool feels. We ran a series of product tests focused on reducing wait time while closely monitoring cognitive-engagement quality and next-item correctness to ensure that faster responses did not come at the expense of educational quality. Results: Switching the math agent to a faster AI model reduced response time by 0.3 seconds across 1.35 million tutoring threads over 12 days. Math accuracy held steady. Instructing the math agent to produce a more concise response to Khanmigo reduced mean response time by three seconds across 352,000 tutoring threads over five days. A follow-up experiment in which we limited the agent to focusing on the math the student had already done instead of also working out the remaining steps to get to the solution reduced latency by another 400 milliseconds and reduced giving away the answer by 50%. Math accuracy held steady. Adding a pre-check that determined whether a math-verification step was even needed before invoking the math agent reduced unnecessary calls to the system across 1.04 million tutoring threads, cutting response time by about 0.3 seconds. Math accuracy held steady. Key takeaway: We identified multiple levers for reducing Khanmigo’s response latency, including a faster model, shorter outputs, tighter time-outs, and smarter routing without sacrificing the quality of the tutoring. These improvements matter for student experience—faster responses keep students focused—and for cost sustainability at scale. Using a student’s Khan Academy learning history to improve tutoring When a student opens Khanmigo during a practice exercise, Khanmigo sees the problem they’re working on. But it doesn’t automatically know how the student has been performing on that exercise, what skill level they’ve demonstrated, or where they’ve been getting stuck. We ran a series of product tests to evaluate whether giving Khanmigo access to more of a student’s Khan Academy learning history, including their recent practice attempts, demonstrated skill levels, and prerequisite progress, would help it tutor more effectively. An important privacy note: Khanmigo complies with privacy regulations, including student data privacy regulations, such as FERPA, COPPA, and state privacy laws. The primary outcome here was next-item correctness: did the student get the next problem right after receiving tutoring? What worked: Providing a summary of the student’s recent problem-solving history on Khan Academy, including how many problems they attempted recently and which ones they got right and wrong, improved next-item correctness by +3.4% across 608,000 tutoring threads. There is a 97.5% chance including this information will be better than not including it in the overall population of users. All guardrail metrics held. Surfacing prerequisite skills the student hasn’t yet mastered and offering a brief review before the harder problem improved next-item correctness by 2.7% across 1.36 million tutoring threads. There is a 98.5% chance of better outcomes than when this information is not included. Providing the full in-session conversation log. Initially, including the full in-session conversation log as part of the information available to the model as students continued working on skills did not lead to measurable improvements in student performance on its own. We then made two changes: 1) we put the conversation in plain text instead of in hard-to-parse json, a data transfer format and 2) we added all the threads related to this skill for the previous 24 hours instead of just in the current session. When doing this, we found a 5.09% increase in cognitive engagement—a 99.4% chance of better engagement with this information than without it. We are currently planning experiments that involve extracting the pedagogically meaningful elements of the logs to pass to Khanmigo rather than just passing the raw logs. What didn’t move the needle: Adding examples of different problem types related to the skill as part of the prompt showed no effect. Providing more relevant follow-up content links based on the student’s position in the Khan Academy content showed no statistically significant change in next-item correctness. The change was rolled out because it did no harm and modestly reduced response time, making the experience slightly faster for students. Key takeaway: When Khanmigo has access to structured signals from a student’s Khan Academy learning record, such as their recent performance patterns and skill gaps, it produces measurably better tutoring. In total, we see a 6.1 percent improvement in next-item correctness. Our commitment to principled progress Across roughly 20 substantive product tests in this space over six months: What we tried Goal Core metrics Making the math agent faster Reduce response latency Held steady Giving Khanmigo structured Khan Academy learning history Improve next-item correctness Positive (+2.7% and +3.4% for a total of 6.1%) Giving Khanmigo hard-to-parse data Improve next-item correctness Neutral, no measurable effect These product tests covered a total of more than 15 million tutoring threads across a six-month period. Each test compared the new version against the existing product experience, and results were evaluated for their probability of changing our key metrics before any change was broadly shipped. The overall picture is one of careful, evidence-driven optimization. No single improvement on its own produced a dramatic leap forward, but collectively, this body of work has meaningfully improved Khanmigo’s effectiveness and identified less expensive and faster ways to run it at scale. A full paper describing our metrics, infrastructure, and experiment results will be published in the 27th International Conference in AI for Education. Meet the New Khan Academy Classroom Experience May 5, 2026 How Khan Academy Is Building a Better AI Tutor: Our Most Recent Learnings May 1, 2026 ADA Title II and Digital Accessibility: What Schools and EdTech Need to Know April 28, 2026 News Khanmigo Educators Districts Khan Academy Kids Families Learners Research Engineering Search Search for: Experience the best AI-powered tool in education. For teachers For families For districts Visit Khan Academy © 2026 Khan Academy",
+      "consoleErrors": [
+        "Failed to load resource: net::ERR_CONNECTION_REFUSED"
+      ],
+      "failedRequests": [
+        {
+          "url": "https://www.googletagmanager.com/gtm.js?id=GTM-NSBBJSL",
+          "error": "net::ERR_CONNECTION_REFUSED"
+        }
+      ]
+    },
+    {
+      "id": "gemini-study-notebooks",
+      "url": "https://blog.google/products-and-platforms/products/education/iste-students-2026/",
+      "finalUrl": "https://blog.google/products-and-platforms/products/education/iste-students-2026/",
+      "status": 200,
+      "elapsedMs": 2332,
+      "title": "Supporting students with connected AI tools for more personalized learning",
+      "canonical": "https://blog.google/products-and-platforms/products/education/iste-students-2026/",
+      "description": "Announcing connected AI tools for students, including study notebooks and no-cost practice ACT and GRE tests.",
+      "headings": [
+        {
+          "level": "h3",
+          "text": "Innovation & AI"
+        },
+        {
+          "level": "h3",
+          "text": "Products & platforms"
+        },
+        {
+          "level": "h3",
+          "text": "Company news"
+        },
+        {
+          "level": "h3",
+          "text": "Innovation & AI"
+        },
+        {
+          "level": "h3",
+          "text": "Products & platforms"
+        },
+        {
+          "level": "h3",
+          "text": "Company news"
+        },
+        {
+          "level": "h1",
+          "text": "Supporting students with connected AI tools for more personalized learning"
+        },
+        {
+          "level": "h2",
+          "text": "A more effective way to study and learn in Gemini"
+        },
+        {
+          "level": "h2",
+          "text": "Helping make standardized test prep more accessible"
+        },
+        {
+          "level": "h2",
+          "text": "Responsibly bringing AI to more students in Classroom"
+        },
+        {
+          "level": "h2",
+          "text": "Related stories"
+        },
+        {
+          "level": "h3",
+          "text": "Reimagining higher education with the Waterloo Futures Lab"
+        },
+        {
+          "level": "h3",
+          "text": "The latest AI news we announced in June 2026"
+        },
+        {
+          "level": "h3",
+          "text": "New York City educators and industry leaders gathered at Google’s offices to shape the future of AI in classrooms."
+        },
+        {
+          "level": "h3",
+          "text": "Building AI tailored for education, with educators in the lead"
+        },
+        {
+          "level": "h3",
+          "text": "How a Kentucky school district is scaling writing feedback with Gemini"
+        },
+        {
+          "level": "h3",
+          "text": "5 ways to learn with study notebooks in the Gemini app"
+        }
+      ],
+      "bodyExcerpt": "Skip to main content Innovation & AI Products & platforms Company news Feed Subscribe Home Products & Platforms Products Learning & Education Supporting students with connected AI tools for more personalized learning Jun 25, 2026 3 min read From new study notebooks that turn Gemini into an adaptive learning platform to no-cost practice ACT and GRE tests built in partnership with The Princeton Review, we’re announcing improvements to help students learn with connected AI tools. Akshay Kirtikar Group Product Manager, Google for Education Carol Walport Group Product Manager, Gemini app Share Millions of people use Google AI tools to learn new things, both in and out of the classroom. As our AI tools evolve alongside the institutions we serve, here’s a look at new features in Gemini and Google Classroom designed to support students. A more effective way to study and learn in Gemini In the Gemini app, we’re rolling out study notebooks, a dedicated space that turns Gemini into an interactive, adaptive learning platform with personalized lessons for every student based on their learning goal, whether that’s getting ready for a big test or just getting smart on a topic. Here’s how it works: Students type a prompt or upload class materials and take a diagnostic quiz that identifies the areas they should focus on. From there, Gemini builds a plan of bite-sized, interactive lessons to help them deepen their understanding. As students track their progress with quizzes, their lessons automatically update based on their results and any new material they upload, providing a learning experience that is personalized to them. Study notebooks also sync with NotebookLM so students can seamlessly continue learning there, ask questions about their course materials, and create flashcards, infographics and more. Study notebooks are rolling out now to personal accounts globally and will be available in school-issued accounts in the coming weeks. 1 Students who’ve tested study notebooks praised it for helping them identify knowledge gaps, engage in active recall, and ultimately make their test preparation more effective and successful. Read some helpful tips on how to learn with study notebooks. Study and learn more effectively with study notebooks in Gemini. \"It prioritized what I didn't know based off that initial test I took. it helped me fix all my mistakes. And then when I took another test later, I was like, okay, now I got it.\" By Ciara High School Student, Research Study Participant \"Being able to generate practice questions from my uploaded notes allowed me to engage in active recall and apply my knowledge in a good way, making my preparation more effective.\" By Jared High School Student, Research Study Participant Helping make standardized test prep more accessible Standardized tests are a huge part of applying to higher education. To help students prepare for such a milestone we’re partnering with experts at The Princeton Review to launch full-length, no-cost practice GRE and ACT tests in Gemini in the coming weeks. We’ll also be adding practice tests for the Akira ENEM for students in Brazil. After completing a practice test, students will get a detailed breakdown of their performance by topic, so they’ll know exactly what to focus on. Study notebooks also supports the SAT so students can prep with a more structured and personalized feedback loop, and will support more standardized tests soon. Prep for the ACT with no-cost practice tests in Gemini. Prep for the GRE with no-cost practice tests in Gemini. Responsibly bringing AI to more students in Classroom We’re also bringing Gemini in Classroom to students of all ages. It’s a safe and trusted way to engage with AI through experiences grounded in their course materials and vetted with pedagogy and safety experts. Through a central destination in Classroom, students can use Gemini to create a study guide, test their knowledge with a quiz or build a deep understanding of topics with Guided Learning, which is proven to drive positive learning outcomes. Beyond independent study, teachers will soon be able to assign students a study notebook grounded in their specific class materials directly in Google Classroom, where they’ll get insights into where the class or individual student might need extra help so everyone is better prepared for the next exam. Students of all ages can safely engage with AI through trusted experiences grounded in their course materials and vetted with pedagogy and safety experts directly in Google Classroom. Learn more about everything we’re announcing in our launch guide, and sign up for updates from Google for Education as these features roll out. POSTED IN: Learning & Education More Information Related stories Learning & Education Reimagining higher education with the Waterloo Futures Lab By Arathi Sethumadhavan AI The latest AI news we announced in June 2026 By News from Google Team Learning & Education New York City educators and industry leaders gathered at Google’s offices to shape the future of AI in classrooms. Learning & Education Building AI tailored for education, with educators in the lead By Brittany Mennuti Learning & Education How a Kentucky school district is scaling writing feedback with Gemini By Jim Masters Gemini App 5 ways to learn with study notebooks in the Gemini app By Carol Walport Privacy Terms Help More of Google Google Products About the Blog Global (English) Africa (English) Australia (English) Brasil (Português) Canada (English) Canada (Français) Česko (Čeština) Deutschland (Deutsch) España (Español) France (Français) Greece (Ελληνικά) India (English) Indonesia (Bahasa Indonesia) Ireland (English) Italia (Italiano) 日本 (日本語) 대한민국 (한국어) Latinoamérica (Español) الشرق الأوسط وشمال أفريقيا (اللغة العربية) MENA (English) Nederlands (Nederland) New Zealand (English) Polska (Polski) Portugal (Português) România (Română) Sverige (Svenska) ประเทศไทย (ไทย) Türkiye (Türkçe) 台灣 (中文)",
+      "consoleErrors": [
+        "Failed to load resource: net::ERR_CONNECTION_REFUSED"
+      ],
+      "failedRequests": [
+        {
+          "url": "https://www.googletagmanager.com/gtm.js?id=GTM-TRV24V",
+          "error": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "https://storage.googleapis.com/gweb-uniblog-publish-prod/original_videos/Practice_ACT_in_Gemini_app.mp4",
+          "error": "net::ERR_ABORTED"
+        }
+      ]
+    },
+    {
+      "id": "gemini-guided-learning",
+      "url": "https://blog.google/products-and-platforms/products/education/guided-learning/",
+      "finalUrl": "https://blog.google/products-and-platforms/products/education/guided-learning/",
+      "status": 200,
+      "elapsedMs": 2055,
+      "title": "Guided Learning in Gemini: From answers to understanding",
+      "canonical": "https://blog.google/products-and-platforms/products/education/guided-learning/",
+      "description": "Guided Learning is a new mode in Gemini that helps you learn and study by building a deep understanding instead of just getting answers.",
+      "headings": [
+        {
+          "level": "h3",
+          "text": "Innovation & AI"
+        },
+        {
+          "level": "h3",
+          "text": "Products & platforms"
+        },
+        {
+          "level": "h3",
+          "text": "Company news"
+        },
+        {
+          "level": "h3",
+          "text": "Innovation & AI"
+        },
+        {
+          "level": "h3",
+          "text": "Products & platforms"
+        },
+        {
+          "level": "h3",
+          "text": "Company news"
+        },
+        {
+          "level": "h1",
+          "text": "Guided Learning in Gemini: From answers to understanding"
+        },
+        {
+          "level": "h2",
+          "text": "Going beyond the answer with Guided Learning"
+        },
+        {
+          "level": "h2",
+          "text": "Built in partnership with experts and learners"
+        },
+        {
+          "level": "h2",
+          "text": "Back to school 2025"
+        },
+        {
+          "level": "h2",
+          "text": "Related stories"
+        },
+        {
+          "level": "h3",
+          "text": "Reimagining higher education with the Waterloo Futures Lab"
+        },
+        {
+          "level": "h3",
+          "text": "How Gemini is speaking the language of Southeast Asia"
+        },
+        {
+          "level": "h3",
+          "text": "Here’s how to make study notebooks in the Gemini app."
+        },
+        {
+          "level": "h3",
+          "text": "The latest AI news we announced in June 2026"
+        },
+        {
+          "level": "h3",
+          "text": "New York City educators and industry leaders gathered at Google’s offices to shape the future of AI in classrooms."
+        },
+        {
+          "level": "h3",
+          "text": "Gemini Spark updates: macOS launch, connected apps and more"
+        }
+      ],
+      "bodyExcerpt": "Skip to main content Innovation & AI Products & platforms Company news Feed Subscribe Home Products & Platforms Products Learning & Education Guided Learning in Gemini: From answers to understanding Aug 06, 2025 3 min read Use Guided Learning to go deeper into topics and learn in a way that works best for you. Maureen Heymans VP, Learning Share Read AI-generated summary Every day, people around the world come to Google to learn something new. Whether it’s watching a YouTube video on graphic design or asking Gemini to help create a custom study guide, our products have always aimed to help. We believe technology can be a powerful tool for learning, but we also know that true understanding goes deeper than a single answer. Insights from learning science show that people learn best when they actively engage with information. This principle is at the heart of our work. In close partnership with educators, students, and pedagogical experts, we developed LearnLM, a family of models fine-tuned for learning and grounded in educational research. Today, with those capabilities infused in Gemini, we’re introducing Guided Learning—a new experience designed to act as a personal learning companion. Going beyond the answer with Guided Learning Guided Learning encourages participation through probing and open-ended questions that spark a discussion and provide an opportunity to dive deeper into a subject. The aim is to help you build a deep understanding instead of just getting answers. Guided Learning breaks down problems step-by-step and adapts explanations to your needs — all to help you build knowledge and skills. Guided Learning takes you step-by-step to help you build a deep understanding instead of just getting quick answers Guided Learning provides rich, multimodal responses — including images, diagrams, videos and interactive quizzes — that can help you build and test your knowledge by focusing on the process, not just the answer. Whether you’re preparing for an exam about enzymes, starting the first draft of a paper on the importance of bee populations in supporting our food systems, or exploring your passion for photography, Guided Learning is a collaborative thinking partner that helps you get it — each step of the way. Built in partnership with experts and learners Guided Learning is informed by years of research and partnership with educators, pedagogical experts and students. We began by asking a fundamental question: how could AI support learning responsibly? In 2022, we established a cross-disciplinary team of AI experts, neuroscientists and cognitive scientists. Working closely with external learning experts, we found that simply improving prompting wasn’t enough to create a meaningful learning tool. This insight led to the creation of LearnLM, so we could infuse learning science into our foundational models. Earlier this year, we brought those capabilities into Gemini 2.5, making it the world’s leading model for learning. This enables Guided Learning to meet learners where they are and help them get where they want to go. Learners told us that they want to be able to go from quick answers to deep understanding, but don't always know how to. They also valued having a safe place to ask any question they might have. We designed Guided Learning to help with this by creating a conversational, judgment-free space for anyone to explore topics in an enjoyable way at their own pace, putting the power of a great learning experience in their own hands. We worked with educators to design Guided Learning to be a partner in their teaching, built on the core principle that real learning is an active, constructive process. It encourages students to move beyond answers and develop their own thinking by guiding them with questions that foster critical thought. To make it simple to bring this approach into their classrooms, we created a dedicated link that educators can post directly in Google Classroom or share with students. Guided Learning represents an important step in our path to helping everyone in the world learn anything in the world. We also recognize that the path forward is one of immense possibility and shared responsibility to ensure AI truly benefits all learners. We look forward to continued partnership, research and feedback to help make Guided Learning as helpful as possible for learners everywhere. Try out Guided Learning in the Gemini app. Collection Back to school 2025 Learn more about new Google updates for the Gemini app, in Search and more to help students as the school year approaches. See more POSTED IN: Learning & Education Gemini Features Gemini App Related stories Learning & Education Reimagining higher education with the Waterloo Futures Lab By Arathi Sethumadhavan Gemini App How Gemini is speaking the language of Southeast Asia By Sapna Chadha & Samuele Saini Gemini App Here’s how to make study notebooks in the Gemini app. By Lindsey Lanquist AI The latest AI news we announced in June 2026 By News from Google Team Learning & Education New York City educators and industry leaders gathered at Google’s offices to shape the future of AI in classrooms. Gemini App Gemini Spark updates: macOS launch, connected apps and more By Adam Coimbra & Srinivasan (Cheenu) Venkatachary Privacy Terms Help More of Google Google Products About the Blog Global (English) Africa (English) Australia (English) Brasil (Português) Canada (English) Canada (Français) Česko (Čeština) Deutschland (Deutsch) España (Español) France (Français) Greece (Ελληνικά) India (English) Indonesia (Bahasa Indonesia) Ireland (English) Italia (Italiano) 日本 (日本語) 대한민국 (한국어) Latinoamérica (Español) الشرق الأوسط وشمال أفريقيا (اللغة العربية) MENA (English) Nederlands (Nederland) New Zealand (English) Polska (Polski) Portugal (Português) România (Română) Sverige (Svenska) ประเทศไทย (ไทย) Türkiye (Türkçe) 台灣 (中文)",
+      "consoleErrors": [
+        "Failed to load resource: net::ERR_CONNECTION_REFUSED"
+      ],
+      "failedRequests": [
+        {
+          "url": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/Guided-1.width-200.format-webp.webp",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://www.googletagmanager.com/gtm.js?id=GTM-TRV24V",
+          "error": "net::ERR_CONNECTION_REFUSED"
+        }
+      ]
+    },
+    {
+      "id": "phet",
+      "url": "https://phet.colorado.edu/",
+      "finalUrl": "https://phet.colorado.edu/",
+      "status": 200,
+      "elapsedMs": 4047,
+      "title": "PhET: Free online physics, chemistry, biology, earth science and math simulations",
+      "canonical": null,
+      "description": "Free science and math simulations for teaching STEM topics, including physics, chemistry, biology, and math, from University of Colorado Boulder",
+      "headings": [
+        {
+          "level": "h1",
+          "text": "Interactive Simulations for Science and Math"
+        },
+        {
+          "level": "h3",
+          "text": "Physics"
+        },
+        {
+          "level": "h3",
+          "text": "Math & Statistics"
+        },
+        {
+          "level": "h3",
+          "text": "Chemistry"
+        },
+        {
+          "level": "h3",
+          "text": "Earth & Space"
+        },
+        {
+          "level": "h3",
+          "text": "Biology"
+        },
+        {
+          "level": "h2",
+          "text": "Teaching Resources, Activities, and Community"
+        },
+        {
+          "level": "h2",
+          "text": "Shouldn't All Students Experience STEM?"
+        },
+        {
+          "level": "h2",
+          "text": "PhET is supported in part by"
+        }
+      ],
+      "bodyExcerpt": "Skip to Main Content Website Navigation SIMULATIONS All Sims Physics Math & Statistics Chemistry Earth & Space Biology Translated Sims Customizable Sims STUDIO About Studio Customizable Sims Start a Free Trial Purchase a License TEACHING Activities Contribute an Activity Activity Contribution Guidelines Virtual Workshops Professional Learning with PhET Teaching with PhET RESEARCH INITIATIVES Inclusive Design PhET Global Data Fluency DEIB in STEM Ed SceneryStack OSE Impact Report Search the PhET Website Sign in / Register Sign in / Register Educators: To receive PhET's monthly newsletter, register for a free educator account. Interactive Simulations for Science and Math EXPLORE OUR SIMS Over 1.8 billion simulations delivered PHYSICS MATH & STATISTICS CHEMISTRY EARTH & SPACE BIOLOGY Teaching Resources, Activities, and Community Teachers have access to simulation-specific tips and video primers, resources for teaching with simulations, and activities shared by our teacher community. REGISTER NOW 173 interactive simulations 132 language translations 3673 teacher-submitted lessons Founded in 2002 by Nobel Laureate Carl Wieman, the PhET Interactive Simulations project at the University of Colorado Boulder creates free interactive math and science simulations. PhET sims are based on extensive education research and engage students through an intuitive, game-like environment where students learn through exploration and discovery. Shouldn't All Students Experience STEM? Learn how we are tackling challenges in STEM education, software development, and assistive technology. EXPLORE ACCESSIBLE SIMS PhET is supported in part by and other supporters, including educators like you. DONATE NOW ABOUT PHET OUR TEAM OUR SUPPORTERS PARTNERSHIPS ACCESSIBILITY OFFLINE ACCESS HELP CENTER PRIVACY POLICY SOURCE CODE LICENSING FOR TRANSLATORS CONTACT English العربية Azərbaycanca Euskara Беларуская Bosanski 简体中文 正體中文 Hrvatski Česky Dansk Nederlands Eesti Suomi Français Galego ქართული Deutsch Ελληνικά અંગ્રેજી Magyar English Italiano 日本語 한국어 كوردي Kurdî Lietuvių Македонски मराठी Монгол Norsk bokmål Norsk nynorsk فارسی polski Português Português do Brasil Română Српски සිංහල Slovensky Español Español Latinoamérica ไทย Türkçe Українська Oʻzbekcha Tiếng Việt GET APPS FOR SCHOOLS ©2026 University of Colorado. Some rights reserved.",
+      "consoleErrors": [
+        "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "Failed to load resource: net::ERR_CONNECTION_REFUSED"
+      ],
+      "failedRequests": [
+        {
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496",
+          "error": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "https://www.googletagmanager.com/gtm.js?id=GTM-WLNGBXD",
+          "error": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "https://phet.colorado.edu/_m/sockjs/info?t=1784402592653",
+          "error": "net::ERR_ABORTED"
+        }
+      ]
+    },
+    {
+      "id": "inqits",
+      "url": "https://www.inqits.com/",
+      "finalUrl": "https://www.inqits.com/",
+      "status": 200,
+      "elapsedMs": 3162,
+      "title": "Inq-ITS | AI Virtual Science Labs and Assessment",
+      "canonical": "https://www.inqits.com",
+      "description": "Inq-ITS AI Virtual Science Labs provide AI auto-graded science simulations with progress monitoring. Begin your 30-day free trial to try it with your science classroom! Students hypothesize, collect data, analyze data, and write claim-evidence-reasoning statements. ",
+      "headings": [
+        {
+          "level": "h1",
+          "text": "Real AI in Real Time"
+        },
+        {
+          "level": "h3",
+          "text": "Patented Science Labs with Auto-Grading, Personalized Learning & Teacher Alerts"
+        },
+        {
+          "level": "h1",
+          "text": "How InqITS Works"
+        },
+        {
+          "level": "h1",
+          "text": "Walk Through an InqITS Virtual Lab"
+        },
+        {
+          "level": "h1",
+          "text": "Awards and Endorsements"
+        },
+        {
+          "level": "h1",
+          "text": "Funded by both the National Science Foundation and US Department of Education"
+        },
+        {
+          "level": "h1",
+          "text": "Founded by University Researchers"
+        },
+        {
+          "level": "h1",
+          "text": "Endorsed by"
+        },
+        {
+          "level": "h1",
+          "text": "Teachers and the Press"
+        }
+      ],
+      "bodyExcerpt": "Sign Up Log In Home Labs Research Purchase Team Blog Contact Real AI in Real Time Patented Science Labs with Auto-Grading, Personalized Learning & Teacher Alerts Access Your 30-Day Trial Schedule a Call AI auto-graded student investigations Real-time AI science tutoring in English and Spanish Actionable alerts & TIPS for instruction See How It Works How InqITS Works InqITS (Inquiry Intelligent Tutoring System) is an online educational environment for science. InqITS puts students in control of their own learning by leading an authentic inquiry experience through our NGSS-aligned virtual labs in English or Spanish. As students work, InqITS uses patented algorithms that automatically assess students and generate real-time reports on classroom-wide and student-specific performance for educators. Teachers also receive real-time alerts as to which students need assistance and on what skills. Rex, an AI virtual tutor, can also help students in real-time as they move through the virtual labs. The distinctive design behind InqITS provides necessary resources for teacher instruction and assessment, and for student education on critical science and learning skills. “When we write claim, evidence, and reasoning in class, they now automatically look for the data thanks to Inq-ITS.” Angela Marksberry KY Teacher of the Year 2018 “Students are able to set up proper hands-on experiments and directed hypotheses with little to no guidance from us.” Joseph Ostgarden Teacher & Coach of World Champion Robotic Team, ND “Nearly 70% met or exceeded their state science tests. I honestly believe Inq-ITS helped with our students’ success.” Ken Guffey Science Department Chair, OR ​ Inquiry starts by forming a testable hypothesis All InqITS activities have a similar look-and-feel to guide students through inquiry: hypothesizing, collecting data, analyzing their data, and communicating findings. Students design and run their own investigations InqITS uses patented data-mined algorithms to determine when students do not test their hypotheses, or do not design controlled investigations, or properly analyze their data. See classroom trends with automatic Reports InqITS’ real-time assessment enables teachers to quickly tell how the class is progressing, and to assess each individual student’s understandings of key inquiry skills at a fine-grained level – both on each inquiry skill and its respective sub-skills. Focus help when it's needed with real-time Alerts Since timely feedback is critical to deep learning, our mobile alert system allows teachers to know who needs help the most, and on which specific inquiry skills. Teachers can get notifications about student activity on a desktop or smartphone. Try for Free Schedule a Consultation Walk Through an InqITS Virtual Lab Select an image to view it in Full Screen Mode. Awards and Endorsements Funded by both the National Science Foundation and US Department of Education Founded by University Researchers Endorsed by Teachers and the Press Home Labs Research Purchase Team Blog Contact Platform optimized by An APPRENDIS™ & WPI product Research generously funded by the National Science Foundation (DRL-1008649, DRL-0733286, DGE-0742503, DRL-1252477, IIS-1629045, IIS-1902647), and the US Department of Education (R305A090170, R305A120778, EDIES15C0018, EDIES16C0014, 91990018C0022, 91990019C0037). Any opinions, findings and conclusions or recommendations expressed in do not necessarily reflect the views of the funding agencies. ​​​​​​​ Privacy Policy and Terms of Use",
+      "consoleErrors": [
+        "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "Failed to load resource: net::ERR_CONNECTION_REFUSED"
+      ],
+      "failedRequests": [
+        {
+          "url": "https://www.googletagmanager.com/gtm.js?id=GTM-NFT7G8Q",
+          "error": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "https://www.googletagmanager.com/gtag/js?id=AW-939504674",
+          "error": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "https://www.googletagmanager.com/gtag/js?id=G-YZZPBQ6MLT",
+          "error": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "https://static.ads-twitter.com/uwt.js",
+          "error": "net::ERR_CONNECTION_REFUSED"
+        }
+      ]
+    },
+    {
+      "id": "jupyter-ai",
+      "url": "https://jupyter-ai.readthedocs.io/en/latest/",
+      "finalUrl": "https://jupyter-ai.readthedocs.io/en/latest/",
+      "status": 200,
+      "elapsedMs": 2753,
+      "title": "Jupyter AI",
+      "canonical": null,
+      "description": "Jupyter AI brings generative AI to Jupyter notebooks and JupyterLab.",
+      "headings": [
+        {
+          "level": "h1",
+          "text": "Jupyter AI#"
+        }
+      ],
+      "bodyExcerpt": "Jupyter AI Quickstart Users Contributors Developers / Jupyter AI An open source extension that connects AI agents to computational notebooks in JupyterLab. Get Started GitHub 💬 Collaborative Chats Collaborate with AI personas and other humans in shared chats. Drag-and-drop attachments to share context. 🤖 Frontier Agents Use Claude, Codex, GitHub Copilot, Gemini, Goose, Kiro, Mistral Vibe, OpenCode, or other agents directly in JupyterLab. ⚡ Real-Time UI Watch other humans or agents edit files in real-time, powered by a new RTC backend. 🛡️ Guardrails By Default Agents request permission before writing files, running commands, or using MCP tools. 📓 Powerful Notebook Tools Use AI personas to write, debug, and run notebooks in JupyterLab. 🧩 Flexible and Extensible Build your own AI persona or share custom MCP servers with AI personas. © 2023–2026, Project Jupyter Made with Sphinx and Shibuya theme. For the old v2 documentation, click here.",
+      "consoleErrors": [
+        "Failed to load resource: net::ERR_BLOCKED_BY_RESPONSE.NotSameOrigin"
+      ],
+      "failedRequests": [
+        {
+          "url": "https://server.ethicalads.io/api/v1/decision/?publisher=readthedocs&ad_types=text-v1&div_ids=readthedocs-ea-text-nostyle-nodoctool&callback=ad_1784402598892_673616&keywords=only+words%7Creadthedocs-project-847159%7Creadthedocs-project-jupyter-ai%7Cai%7Cjupyter%7Ccss&campaign_types=community%7Chouse%7Cpaid&format=jsonp&client_version=2.4.0&placement_index=0&url=https%3A%2F%2Fjupyter-ai.readthedocs.io%2Fen%2Flatest%2F",
+          "error": "net::ERR_BLOCKED_BY_RESPONSE.NotSameOrigin"
+        }
+      ]
+    },
+    {
+      "id": "jelai",
+      "url": "https://arxiv.org/abs/2505.17593",
+      "finalUrl": "https://arxiv.org/abs/2505.17593",
+      "status": 200,
+      "elapsedMs": 2127,
+      "title": "[2505.17593] JELAI: Integrating AI and Learning Analytics in Jupyter Notebooks",
+      "canonical": "https://arxiv.org/abs/2505.17593",
+      "description": "Abstract page for arXiv paper 2505.17593: JELAI: Integrating AI and Learning Analytics in Jupyter Notebooks",
+      "headings": [
+        {
+          "level": "h1",
+          "text": "Computer Science > Human-Computer Interaction"
+        },
+        {
+          "level": "h1",
+          "text": "Title:JELAI: Integrating AI and Learning Analytics in Jupyter Notebooks"
+        },
+        {
+          "level": "h2",
+          "text": "Submission history"
+        },
+        {
+          "level": "h2",
+          "text": "Access Paper:"
+        },
+        {
+          "level": "h3",
+          "text": "Current browse context:"
+        },
+        {
+          "level": "h3",
+          "text": "References & Citations"
+        },
+        {
+          "level": "h2",
+          "text": "BibTeX formatted citation"
+        },
+        {
+          "level": "h3",
+          "text": "Bookmark"
+        },
+        {
+          "level": "h1",
+          "text": "Bibliographic and Citation Tools"
+        },
+        {
+          "level": "h1",
+          "text": "Code, Data and Media Associated with this Article"
+        },
+        {
+          "level": "h1",
+          "text": "Demos"
+        },
+        {
+          "level": "h1",
+          "text": "Recommenders and Search Tools"
+        },
+        {
+          "level": "h1",
+          "text": "arXivLabs: experimental projects with community collaborators"
+        }
+      ],
+      "bodyExcerpt": "Skip to main content arXiv is now an independent nonprofit! Learn more × Search Submit Donate Log in Computer Science > Human-Computer Interaction [Submitted on 23 May 2025] JELAI: Integrating AI and Learning Analytics in Jupyter Notebooks Manuel Valle Torre, Thom van der Velden, Marcus Specht, Catharine Oertel Generative AI offers potential for educational support, but often lacks pedagogical grounding and awareness of the student's learning context. Furthermore, researching student interactions with these tools within authentic learning environments remains challenging. To address this, we present JELAI, an open-source platform architecture designed to integrate fine-grained Learning Analytics (LA) with Large Language Model (LLM)-based tutoring directly within a Jupyter Notebook environment. JELAI employs a modular, containerized design featuring JupyterLab extensions for telemetry and chat, alongside a central middleware handling LA processing and context-aware LLM prompt enrichment. This architecture enables the capture of integrated code interaction and chat data, facilitating real-time, context-sensitive AI scaffolding and research into student behaviour. We describe the system's design, implementation, and demonstrate its feasibility through system performance benchmarks and two proof-of-concept use cases illustrating its capabilities for logging multi-modal data, analysing help-seeking patterns, and supporting A/B testing of AI configurations. JELAI's primary contribution is its technical framework, providing a flexible tool for researchers and educators to develop, deploy, and study LA-informed AI tutoring within the widely used Jupyter ecosystem. Comments: Accepted for AIED 2025 Subjects: Human-Computer Interaction (cs.HC); Artificial Intelligence (cs.AI) Cite as: arXiv:2505.17593 [cs.HC] (or arXiv:2505.17593v1 [cs.HC] for this version) https://doi.org/10.48550/arXiv.2505.17593 Focus to learn more Related DOI: https://doi.org/10.1007/978-3-031-98465-5_9 Focus to learn more Submission history From: Manuel Valle Torre [view email] [v1] Fri, 23 May 2025 07:58:53 UTC (885 KB) Access Paper: View PDF HTML (experimental) TeX Source view license Current browse context: cs.HC < prev | next > new | recent | 2025-05 Change to browse by: cs cs.AI References & Citations NASA ADS Google Scholar Semantic Scholar Export BibTeX Citation Bookmark Bibliographic Tools Bibliographic and Citation Tools Bibliographic Explorer Toggle Bibliographic Explorer (What is the Explorer?) Connected Papers Toggle Connected Papers (What is Connected Papers?) Litmaps Toggle Litmaps (What is Litmaps?) scite.ai Toggle scite Smart Citations (What are Smart Citations?) Code, Data, Media Demos Related Papers About arXivLabs Which authors of this paper are endorsers? | Disable MathJax (What is MathJax?) We gratefully acknowledge support from our major funders, member institutions, and all contributors. About · Help · Contact · Subscribe · Copyright · Privacy · Accessibility · Operational Status (opens in new tab) Major funding support from",
+      "consoleErrors": [],
+      "failedRequests": []
+    },
+    {
+      "id": "ai-scientist-v2",
+      "url": "https://arxiv.org/abs/2504.08066",
+      "finalUrl": "https://arxiv.org/abs/2504.08066",
+      "status": 200,
+      "elapsedMs": 1767,
+      "title": "[2504.08066] The AI Scientist-v2: Workshop-Level Automated Scientific Discovery via Agentic Tree Search",
+      "canonical": "https://arxiv.org/abs/2504.08066",
+      "description": "Abstract page for arXiv paper 2504.08066: The AI Scientist-v2: Workshop-Level Automated Scientific Discovery via Agentic Tree Search",
+      "headings": [
+        {
+          "level": "h1",
+          "text": "Computer Science > Artificial Intelligence"
+        },
+        {
+          "level": "h1",
+          "text": "Title:The AI Scientist-v2: Workshop-Level Automated Scientific Discovery via Agentic Tree Search"
+        },
+        {
+          "level": "h2",
+          "text": "Submission history"
+        },
+        {
+          "level": "h2",
+          "text": "Access Paper:"
+        },
+        {
+          "level": "h3",
+          "text": "Current browse context:"
+        },
+        {
+          "level": "h3",
+          "text": "References & Citations"
+        },
+        {
+          "level": "h2",
+          "text": "BibTeX formatted citation"
+        },
+        {
+          "level": "h3",
+          "text": "Bookmark"
+        },
+        {
+          "level": "h1",
+          "text": "Bibliographic and Citation Tools"
+        },
+        {
+          "level": "h1",
+          "text": "Code, Data and Media Associated with this Article"
+        },
+        {
+          "level": "h1",
+          "text": "Demos"
+        },
+        {
+          "level": "h1",
+          "text": "Recommenders and Search Tools"
+        },
+        {
+          "level": "h1",
+          "text": "arXivLabs: experimental projects with community collaborators"
+        }
+      ],
+      "bodyExcerpt": "Skip to main content arXiv is now an independent nonprofit! Learn more × Search Submit Donate Log in Computer Science > Artificial Intelligence [Submitted on 10 Apr 2025] The AI Scientist-v2: Workshop-Level Automated Scientific Discovery via Agentic Tree Search Yutaro Yamada, Robert Tjarko Lange, Cong Lu, Shengran Hu, Chris Lu, Jakob Foerster, Jeff Clune, David Ha AI is increasingly playing a pivotal role in transforming how scientific discoveries are made. We introduce The AI Scientist-v2, an end-to-end agentic system capable of producing the first entirely AI generated peer-review-accepted workshop paper. This system iteratively formulates scientific hypotheses, designs and executes experiments, analyzes and visualizes data, and autonomously authors scientific manuscripts. Compared to its predecessor (v1, Lu et al., 2024 arXiv:2408.06292), The AI Scientist-v2 eliminates the reliance on human-authored code templates, generalizes effectively across diverse machine learning domains, and leverages a novel progressive agentic tree-search methodology managed by a dedicated experiment manager agent. Additionally, we enhance the AI reviewer component by integrating a Vision-Language Model (VLM) feedback loop for iterative refinement of content and aesthetics of the figures. We evaluated The AI Scientist-v2 by submitting three fully autonomous manuscripts to a peer-reviewed ICLR workshop. Notably, one manuscript achieved high enough scores to exceed the average human acceptance threshold, marking the first instance of a fully AI-generated paper successfully navigating a peer review. This accomplishment highlights the growing capability of AI in conducting all aspects of scientific research. We anticipate that further advancements in autonomous scientific discovery technologies will profoundly impact human knowledge generation, enabling unprecedented scalability in research productivity and significantly accelerating scientific breakthroughs, greatly benefiting society at large. We have open-sourced the code at this https URL to foster the future development of this transformative technology. We also discuss the role of AI in science, including AI safety. Subjects: Artificial Intelligence (cs.AI); Computation and Language (cs.CL); Machine Learning (cs.LG) Cite as: arXiv:2504.08066 [cs.AI] (or arXiv:2504.08066v1 [cs.AI] for this version) https://doi.org/10.48550/arXiv.2504.08066 Focus to learn more Submission history From: Yutaro Yamada [view email] [v1] Thu, 10 Apr 2025 18:44:41 UTC (9,205 KB) Access Paper: View PDF TeX Source view license Current browse context: cs.AI < prev | next > new | recent | 2025-04 Change to browse by: cs cs.CL cs.LG References & Citations NASA ADS Google Scholar Semantic Scholar Export BibTeX Citation Bookmark Bibliographic Tools Bibliographic and Citation Tools Bibliographic Explorer Toggle Bibliographic Explorer (What is the Explorer?) Connected Papers Toggle Connected Papers (What is Connected Papers?) Litmaps Toggle Litmaps (What is Litmaps?) scite.ai Toggle scite Smart Citations (What are Smart Citations?) Code, Data, Media Demos Related Papers About arXivLabs Which authors of this paper are endorsers? | Disable MathJax (What is MathJax?) We gratefully acknowledge support from our major funders, member institutions, and all contributors. About · Help · Contact · Subscribe · Copyright · Privacy · Accessibility · Operational Status (opens in new tab) Major funding support from",
+      "consoleErrors": [],
+      "failedRequests": []
+    }
+  ]
+}
