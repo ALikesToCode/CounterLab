@@ -216,6 +216,25 @@ describe("Cloudflare static asset routing", () => {
     expect(script).not.toMatch(/\brm\s+-/);
   });
 
+  it("preflights a new qualification receipt before registry promotion", () => {
+    const script = readFileSync(
+      resolve(process.cwd(), "../../scripts/qualify-runner-release.ts"),
+      "utf8",
+    );
+    const outputPreflight = script.indexOf(
+      "const output = await repositoryOutputPath(root, args.output);",
+    );
+    const registryPromotion = script.indexOf("await promoteImage({");
+
+    expect(outputPreflight).toBeGreaterThan(-1);
+    expect(registryPromotion).toBeGreaterThan(outputPreflight);
+    expect(script).toContain(
+      "qualification output already exists; refusing to replace it",
+    );
+    expect(script).toContain("assertCurrentGrypeReleaseEvidenceBinding");
+    expect(script).toContain('flag: "wx"');
+  });
+
   it("removes exact-image verification containers after bounded checks", () => {
     const script = readFileSync(
       resolve(process.cwd(), "../../scripts/verify-scientific-engines.sh"),

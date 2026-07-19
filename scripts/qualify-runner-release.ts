@@ -139,6 +139,14 @@ async function repositoryOutputPath(
       `qualification output parent escapes the repository: ${requested}`,
     );
   }
+  try {
+    await lstat(output);
+    throw new Error(
+      `qualification output already exists; refusing to replace it: ${requested}`,
+    );
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
   return output;
 }
 
@@ -433,6 +441,7 @@ async function main(): Promise<void> {
   if (commandText(root, "git", ["rev-parse", "--show-toplevel"]) !== root) {
     throw new Error("runner qualification requires the verified Git root");
   }
+  const output = await repositoryOutputPath(root, args.output);
   const buildReceiptPath = await existingRepositoryFile(
     root,
     args.buildReceipt,
@@ -751,7 +760,6 @@ async function main(): Promise<void> {
     throw new Error("qualified image changed before receipt creation");
   }
   const receipt = createQualifiedRunnerRelease(observation);
-  const output = await repositoryOutputPath(root, args.output);
   await mkdir(dirname(output), { recursive: true });
   await writeFile(output, `${JSON.stringify(receipt, null, 2)}\n`, {
     encoding: "utf8",
