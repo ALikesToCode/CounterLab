@@ -222,10 +222,20 @@ describe("contained runtime command policy", () => {
 
   it("keeps the bounded adapter inputs in the source-bound build context", () => {
     const dockerIgnore = readFileSync(resolve(root, ".dockerignore"), "utf8");
+    const sourceBuild = readFileSync(
+      resolve(root, "scripts/build-source-bound-runner.sh"),
+      "utf8",
+    );
 
     expect(dockerIgnore).toContain("!services/runner/Dockerfile");
     expect(dockerIgnore).toContain("!services/runner/image");
     expect(dockerIgnore).toContain("!services/runner/image/harness.py");
+    expect(sourceBuild).toContain(
+      'tar -C "${NORMALIZED_OCI_LAYOUT}" -cf "${NORMALIZED_OCI_TAR}" \\\n  oci-layout index.json blobs',
+    );
+    expect(sourceBuild).not.toContain(
+      'tar -C "${NORMALIZED_OCI_LAYOUT}" -cf "${NORMALIZED_OCI_TAR}" .',
+    );
   });
 
   it("keeps release diagnostics inside repository-owned files", () => {

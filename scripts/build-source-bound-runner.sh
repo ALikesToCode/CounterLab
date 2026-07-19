@@ -314,7 +314,8 @@ PY
   --source-layout "${RAW_OCI_LAYOUT}" \
   --output-layout "${NORMALIZED_OCI_LAYOUT}" \
   --report "${NORMALIZATION_REPORT}"
-tar -C "${NORMALIZED_OCI_LAYOUT}" -cf "${NORMALIZED_OCI_TAR}" .
+tar -C "${NORMALIZED_OCI_LAYOUT}" -cf "${NORMALIZED_OCI_TAR}" \
+  oci-layout index.json blobs
 NORMALIZED_MANIFEST_DIGEST="$(node -e 'const fs=require("node:fs");const value=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(value.normalizedManifestDigest)' "${NORMALIZATION_REPORT}")"
 
 LOCAL_OCI_ARCHIVE="$(realpath --relative-to="${ROOT_DIR}" "${NORMALIZED_OCI_TAR}")"
