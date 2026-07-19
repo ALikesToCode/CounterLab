@@ -2807,6 +2807,38 @@ describe("Cloudflare Worker API", () => {
     });
   });
 
+  it("refuses a live session for an intake-unsupported artifact", async () => {
+    const harness = await sessionHarness("sample");
+    const uploaded = await saveUploadedArtifact(
+      harness.artifactStore,
+      harness.artifactId,
+    );
+    await harness.artifactStore.save({
+      ...uploaded,
+      support: {
+        status: "UNSUPPORTED",
+        reasons: [
+          {
+            code: "UNSUPPORTED_ESTIMATOR",
+            message: "The estimator is outside the released support boundary.",
+          },
+        ],
+      },
+    });
+
+    const response = await postJson(harness.app, "/api/live/sessions", {
+      artifactId: uploaded.artifactId,
+    });
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: "ARTIFACT_UNSUPPORTED",
+        message: expect.not.stringMatching(/session_/u),
+      },
+    });
+  });
+
   describe("private owner capabilities", () => {
     function protectedApi() {
       const sessionRepository = new MemorySessionRepository();
@@ -2947,6 +2979,120 @@ describe("Cloudflare Worker API", () => {
       );
       expect(afterRevocation.status).toBe(404);
     });
+
+    it.each(["reject", "insufficient_evidence"] as const)(
+      "restarts a %s response as a distinct source-bound investigation",
+      async (action) => {
+        const { app, sessionRepository } = protectedApi();
+        const createdResponse = await postJson(app, "/api/sample/sessions", {
+          sampleId: "leakage-01",
+        });
+        const created = (await createdResponse.json()) as {
+          data: { sessionId: string; ownerCapability: string };
+        };
+        const authorization = `Bearer ${created.data.ownerCapability}`;
+        const route = `/api/sessions/${created.data.sessionId}`;
+        expect(
+          (
+            await postJson(
+              app,
+              `${route}/belief-test`,
+              {
+                learnerClaim:
+                  "The high score means this model works for new customers.",
+              },
+              { authorization },
+            )
+          ).status,
+        ).toBe(200);
+        expect(
+          (
+            await postJson(
+              app,
+              `${route}/belief-test/confirm`,
+              {
+                action,
+                reason:
+                  action === "reject"
+                    ? "The proposed explanation does not capture my claim."
+                    : "The current evidence does not support this claim.",
+              },
+              { authorization },
+            )
+          ).status,
+        ).toBe(200);
+
+        const unownedRestart = await postJson(app, `${route}/restart`);
+        expect(unownedRestart.status).toBe(404);
+        await expect(unownedRestart.json()).resolves.toMatchObject({
+          error: { code: "SESSION_ACCESS_DENIED" },
+        });
+
+        const restart = await postJson(
+          app,
+          `${route}/restart`,
+          {},
+          { authorization },
+        );
+        expect(restart.status).toBe(201);
+        const restarted = (await restart.json()) as {
+          data: {
+            sessionId: string;
+            artifactId: string;
+            mode: SessionMode;
+            state: string;
+            ownerCapability: string;
+          };
+        };
+        expect(restarted.data).toMatchObject({
+          artifactId: expect.any(String),
+          mode: { kind: "sample_lesson", sampleId: "leakage-01" },
+          state: "INGESTED",
+        });
+        expect(restarted.data.sessionId).not.toBe(created.data.sessionId);
+        expect(restarted.data.ownerCapability).toMatch(
+          /^cl_owner_[A-Za-z0-9_-]{43}$/u,
+        );
+
+        const oldSession = await sessionRepository.find(created.data.sessionId);
+        expect(oldSession?.state).toBe(
+          action === "reject" ? "REJECTED_BY_LEARNER" : "INSUFFICIENT_EVIDENCE",
+        );
+        const oldResubmission = await postJson(
+          app,
+          `${route}/belief-test`,
+          {
+            learnerClaim:
+              "The high score means this model works for new customers.",
+          },
+          { authorization },
+        );
+        expect(oldResubmission.status).toBe(409);
+        await expect(oldResubmission.json()).resolves.toMatchObject({
+          error: {
+            code: "SESSION_STEP_CLOSED",
+            message: expect.not.stringMatching(
+              /INGESTED|BELIEF_TEST_PROPOSED|INSUFFICIENT_EVIDENCE|REJECTED_BY_LEARNER/u,
+            ),
+          },
+        });
+        const nonterminalRestart = await postJson(
+          app,
+          `/api/sessions/${restarted.data.sessionId}/restart`,
+          {},
+          { authorization: `Bearer ${restarted.data.ownerCapability}` },
+        );
+        expect(nonterminalRestart.status).toBe(409);
+        await expect(nonterminalRestart.json()).resolves.toMatchObject({
+          error: {
+            code: "SESSION_RESTART_NOT_AVAILABLE",
+            message: expect.not.stringMatching(
+              /INGESTED|INSUFFICIENT_EVIDENCE|REJECTED_BY_LEARNER/u,
+            ),
+          },
+        });
+      },
+    );
 
     it("blocks session revocation while an authoritative runner job is active", async () => {
       const { app, runnerJobs, sessionRepository } = protectedApi();

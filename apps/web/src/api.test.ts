@@ -455,6 +455,40 @@ describe("CounterLabApiClient", () => {
     );
   });
 
+  it("starts a source-bound fresh investigation and remembers its new owner capability", async () => {
+    const restarted = {
+      ...session,
+      sessionId: "session_revision",
+      state: "INGESTED" as const,
+      version: 1,
+      ownerCapability: `cl_owner_${"a".repeat(43)}`,
+    };
+    const storage = new Map<string, string>();
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({ ok: true, data: restarted }),
+    );
+    const client = new CounterLabApiClient({
+      fetch: fetcher,
+      capabilityStorage: {
+        getItem: (key) => storage.get(key) ?? null,
+        setItem: (key, value) => storage.set(key, value),
+        removeItem: (key) => storage.delete(key),
+      },
+    });
+
+    await expect(
+      client.restartSession("session/source"),
+    ).resolves.toMatchObject({
+      sessionId: "session_revision",
+      state: "INGESTED",
+    });
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/sessions/session%2Fsource/restart",
+      expect.objectContaining({ method: "POST", body: "{}" }),
+    );
+    expect(client.hasSessionAccess("session_revision")).toBe(true);
+  });
+
   it("validates configured-but-unproven server capabilities", async () => {
     const health = {
       platform: "cloudflare-workers",

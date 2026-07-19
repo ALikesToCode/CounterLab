@@ -74,6 +74,54 @@ function ControlledTimeline({
 }
 
 describe("TimelineTransfer", () => {
+  it("asks learners to identify the future-leaking risk and names both choices unambiguously", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<ControlledTimeline />);
+
+    expect(
+      screen.getByRole("group", {
+        name: "Which feature leaks information from after NOW?",
+      }),
+    ).toHaveAccessibleDescription(
+      "Identify the future-leaking feature. The safe feature is a comparison, not the answer to this question.",
+    );
+
+    const safeFeature = screen.getByRole("radio", {
+      name: /known item price.*safe at prediction time.*not the future-leaking risk/i,
+    });
+    const futureFeature = screen.getByRole("radio", {
+      name: /centered rolling target.*future-leaking risk.*reads outcomes from after now/i,
+    });
+
+    await user.click(safeFeature);
+
+    expect(safeFeature).toBeChecked();
+    expect(
+      screen.getByText("safe comparison — risk not identified ×"),
+    ).toBeVisible();
+    expect(
+      screen.getByText(/selected feature: known item price/i),
+    ).toHaveTextContent(
+      "Selected feature classification: safe at prediction time. This does not identify the requested future-leaking risk.",
+    );
+    expect(
+      container.querySelector('[data-crosses-now="false"]'),
+    ).toBeInTheDocument();
+
+    await user.click(futureFeature);
+
+    expect(futureFeature).toBeChecked();
+    expect(screen.getByText("future-leaking risk identified ✓")).toBeVisible();
+    expect(
+      screen.getByText(/selected feature: centered rolling target/i),
+    ).toHaveTextContent(
+      "Selected feature classification: future-leaking risk. This identifies the risk requested by the fixed transfer task.",
+    );
+    expect(
+      container.querySelector('[data-crosses-now="true"]'),
+    ).toBeInTheDocument();
+  });
+
   it("synchronizes the visual with exact caller-owned split and feature values", async () => {
     const user = userEvent.setup();
     const onSplit = vi.fn();

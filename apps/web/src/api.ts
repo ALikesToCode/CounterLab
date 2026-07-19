@@ -701,6 +701,17 @@ export class CounterLabApiClient {
     });
   }
 
+  restartSession(sessionId: string): Promise<SessionView> {
+    return this.request(
+      `/api/sessions/${encodedId(sessionId)}/restart`,
+      SessionCreationViewSchema,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    ).then((created) => this.rememberCreatedSession(created));
+  }
+
   createReplaySession(input: CreateReplaySessionInput): Promise<SessionView> {
     return this.request("/api/replay/sessions", SessionCreationViewSchema, {
       method: "POST",

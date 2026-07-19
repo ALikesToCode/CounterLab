@@ -45,6 +45,22 @@ const uploadedArtifact = {
   fileSha256: "a".repeat(64),
 };
 
+const unsupportedArtifact = {
+  ...uploadedArtifact,
+  artifactId: "artifact_unsupported",
+  fileName: "unsupported_notebook.ipynb",
+  support: {
+    status: "UNSUPPORTED" as const,
+    reasons: [
+      {
+        code: "UNSUPPORTED_ESTIMATOR",
+        message:
+          "This estimator is outside the released notebook support boundary.",
+      },
+    ],
+  },
+};
+
 const liveBeliefTest = {
   schemaVersion: "1",
   id: "belief_live_ui",
@@ -264,8 +280,14 @@ function installApi(
     stallRunner?: boolean;
     failRunnerResume?: boolean;
     preview?: typeof livePreview | typeof sensitiveLivePreview;
+    uploadOutcomes?: readonly (
+      "supported" | "unsupported" | "malformed" | "interrupted"
+    )[];
+    liveSessionFailures?: number;
     restoredSessionState?:
       | "INGESTED"
+      | "INSUFFICIENT_EVIDENCE"
+      | "REJECTED_BY_LEARNER"
       | "BELIEF_TEST_PROPOSED"
       | "BELIEF_TEST_CONFIRMED"
       | "LAB_COMPILING"
@@ -277,6 +299,8 @@ function installApi(
     replay?: ReturnType<typeof publicReplayFixture>;
   } = {},
 ) {
+  const uploadOutcomes = [...(options.uploadOutcomes ?? [])];
+  let liveSessionFailures = options.liveSessionFailures ?? 0;
   let activeMode:
     | { kind: "sample_lesson"; sampleId: "leakage-01" }
     | { kind: "live_notebook" } = {
@@ -316,6 +340,22 @@ function installApi(
         });
       }
       if (path === "/api/artifacts") {
+        if (init?.body instanceof FormData) {
+          const outcome = uploadOutcomes.shift() ?? "supported";
+          if (outcome === "interrupted") {
+            throw new TypeError("network unavailable");
+          }
+          if (outcome === "malformed") {
+            return errorResponse(
+              "INVALID_NOTEBOOK",
+              "The notebook could not be parsed safely.",
+              400,
+            );
+          }
+          if (outcome === "unsupported") {
+            return response(unsupportedArtifact, 201);
+          }
+        }
         return response(
           init?.body instanceof FormData ? uploadedArtifact : artifact,
           201,
@@ -326,6 +366,10 @@ function installApi(
         return response(session("INGESTED", 1, { mode: activeMode }), 201);
       }
       if (path === "/api/live/sessions") {
+        if (liveSessionFailures > 0) {
+          liveSessionFailures -= 1;
+          throw new TypeError("network unavailable");
+        }
         activeMode = { kind: "live_notebook" };
         activeArtifactId = uploadedArtifact.artifactId;
         return response(
@@ -336,8 +380,30 @@ function installApi(
           201,
         );
       }
+      if (path.endsWith("/restart")) {
+        return response(
+          session("INGESTED", 1, {
+            sessionId: "session_revision",
+            artifactId: activeArtifactId,
+            mode: activeMode,
+          }),
+          201,
+        );
+      }
       if (path === "/api/sessions/session_ui/artifact") {
         return response(uploadedArtifact);
+      }
+      if (path === "/api/sessions/session_revision/artifact") {
+        return response(uploadedArtifact);
+      }
+      if (path === "/api/sessions/session_revision") {
+        return response(
+          session("INGESTED", 1, {
+            sessionId: "session_revision",
+            artifactId: uploadedArtifact.artifactId,
+            mode: { kind: "sample_lesson", sampleId: "leakage-01" },
+          }),
+        );
       }
       if (path === "/api/sessions/session_ui") {
         return response(
@@ -413,6 +479,23 @@ function installApi(
         );
       }
       if (path.endsWith("/belief-test/confirm")) {
+        const body = JSON.parse(String(init?.body)) as { action?: string };
+        if (body.action === "reject") {
+          return response(
+            session("REJECTED_BY_LEARNER", 3, {
+              artifactId: activeArtifactId,
+              mode: activeMode,
+            }),
+          );
+        }
+        if (body.action === "insufficient_evidence") {
+          return response(
+            session("INSUFFICIENT_EVIDENCE", 3, {
+              artifactId: activeArtifactId,
+              mode: activeMode,
+            }),
+          );
+        }
         return response(
           session("BELIEF_TEST_CONFIRMED", 3, {
             artifactId: activeArtifactId,
@@ -759,6 +842,165 @@ describe("CounterLab judged flow", () => {
     expect(document.body).not.toHaveTextContent(/local runner required/i);
   });
 
+  it("does not continue live setup until a supported notebook has been uploaded", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi({ liveGpt: "configured", runner: "configured" });
+    render(<App />);
+
+    await openLiveSetup(user);
+
+    expect(
+      await screen.findByText(/hosted notebook runner is ready/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /continue with my notebook/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/attach a supported notebook/i)).toBeEnabled();
+    expect(document.body).not.toHaveTextContent(/preparing artifact/i);
+    expect(
+      fetcher.mock.calls.some(([path]) => String(path) === "/api/artifacts"),
+    ).toBe(false);
+  });
+
+  it("keeps malformed notebook intake on the upload surface", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      uploadOutcomes: ["malformed"],
+    });
+    render(<App />);
+    await openLiveSetup(user);
+
+    await user.upload(
+      await screen.findByLabelText(/attach a supported notebook/i),
+      new File(["not-json"], "broken.ipynb", {
+        type: "application/json",
+      }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /could not be parsed safely/i,
+    );
+    expect(
+      screen.getByRole("heading", { name: /test my notebook/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/attach a supported notebook/i)).toBeEnabled();
+    expect(
+      fetcher.mock.calls.some(
+        ([path]) => String(path) === "/api/live/sessions",
+      ),
+    ).toBe(false);
+  });
+
+  it("shows an unsupported notebook refusal without creating a live session", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      uploadOutcomes: ["unsupported"],
+    });
+    render(<App />);
+    await openLiveSetup(user);
+
+    await user.upload(
+      await screen.findByLabelText(/attach a supported notebook/i),
+      new File(["{}"], unsupportedArtifact.fileName, {
+        type: "application/json",
+      }),
+    );
+
+    expect(
+      (
+        await screen.findAllByText(
+          /outside the released notebook support boundary/i,
+        )
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText(unsupportedArtifact.fileName)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /compare two explanations/i }),
+    ).toBeDisabled();
+    expect(
+      fetcher.mock.calls.some(
+        ([path]) => String(path) === "/api/live/sessions",
+      ),
+    ).toBe(false);
+  });
+
+  it("retries the same file after an interrupted upload", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      uploadOutcomes: ["interrupted", "supported"],
+    });
+    render(<App />);
+    await openLiveSetup(user);
+    const file = new File(["{}"], uploadedArtifact.fileName, {
+      type: "application/json",
+    });
+    const input = await screen.findByLabelText(/attach a supported notebook/i);
+
+    await user.upload(input, file);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /could not reach the api/i,
+    );
+    await user.upload(
+      screen.getByLabelText(/attach a supported notebook/i),
+      file,
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /what do you think the score means/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      fetcher.mock.calls.filter(([path]) => String(path) === "/api/artifacts"),
+    ).toHaveLength(2);
+  });
+
+  it("retries private session setup without uploading the notebook again", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      liveSessionFailures: 1,
+    });
+    render(<App />);
+    await openLiveSetup(user);
+
+    await user.upload(
+      await screen.findByLabelText(/attach a supported notebook/i),
+      new File(["{}"], uploadedArtifact.fileName, {
+        type: "application/json",
+      }),
+    );
+    expect(
+      await screen.findByRole("button", {
+        name: /retry private session setup/i,
+      }),
+    ).toBeEnabled();
+    await user.click(
+      screen.getByRole("button", { name: /retry private session setup/i }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /what do you think the score means/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      fetcher.mock.calls.filter(([path]) => String(path) === "/api/artifacts"),
+    ).toHaveLength(1);
+    expect(
+      fetcher.mock.calls.filter(
+        ([path]) => String(path) === "/api/live/sessions",
+      ),
+    ).toHaveLength(2);
+  });
+
   it("accepts a notebook from the question-first landing without running it", async () => {
     const user = userEvent.setup();
     const fetcher = installApi();
@@ -873,13 +1115,8 @@ describe("CounterLab judged flow", () => {
     render(<App />);
 
     await openLiveSetup(user);
-    await user.click(
-      await screen.findByRole("button", {
-        name: /continue with my notebook/i,
-      }),
-    );
     await user.upload(
-      screen.getByLabelText(/use a different notebook/i),
+      await screen.findByLabelText(/attach a supported notebook/i),
       new File(["{}"], uploadedArtifact.fileName, {
         type: "application/json",
       }),
@@ -921,17 +1158,8 @@ describe("CounterLab judged flow", () => {
     expect(
       screen.getByText(/hosted notebook runner is ready/i),
     ).toBeInTheDocument();
-    await user.click(
-      screen.getByRole("button", { name: /continue with my notebook/i }),
-    );
-
-    expect(
-      await screen.findByRole("heading", {
-        name: /what do you think the score means/i,
-      }),
-    ).toBeInTheDocument();
     await user.upload(
-      screen.getByLabelText(/use a different notebook/i),
+      screen.getByLabelText(/attach a supported notebook/i),
       new File(["{}"], uploadedArtifact.fileName, {
         type: "application/json",
       }),
@@ -1167,6 +1395,150 @@ describe("CounterLab judged flow", () => {
     ).toBe(false);
   });
 
+  it.each([
+    ["not enough evidence", "insufficient_evidence"],
+    ["reject", "reject"],
+  ])(
+    "recovers from %s in a fresh session while preserving the claim",
+    async (buttonName, action) => {
+      const user = userEvent.setup();
+      const fetcher = installApi();
+      render(<App />);
+      await openSampleModelDuel(user);
+
+      if (action === "insufficient_evidence") {
+        await user.click(screen.getByText(/more ways to respond/i));
+      }
+      await user.click(
+        screen.getByRole("button", { name: new RegExp(buttonName, "i") }),
+      );
+
+      expect(
+        await screen.findByRole("button", {
+          name: /revise in a new investigation/i,
+        }),
+      ).toBeEnabled();
+      expect(screen.getByLabelText(/your claim/i)).toHaveValue(
+        "The high score means the model will work for new customers.",
+      );
+      expect(document.body).not.toHaveTextContent(
+        /INSUFFICIENT_EVIDENCE|REJECTED_BY_LEARNER/,
+      );
+
+      await user.click(
+        screen.getByRole("button", {
+          name: /revise in a new investigation/i,
+        }),
+      );
+      await user.click(
+        screen.getByRole("button", { name: /compare two explanations/i }),
+      );
+
+      const restartRequests = fetcher.mock.calls.filter(([path]) =>
+        String(path).endsWith("/restart"),
+      );
+      expect(restartRequests).toHaveLength(1);
+      expect(
+        fetcher.mock.calls.some(
+          ([path]) =>
+            String(path) === "/api/sessions/session_revision/belief-test",
+        ),
+      ).toBe(true);
+      const responseRequests = fetcher.mock.calls.filter(
+        ([path, init]) =>
+          String(path).endsWith("/belief-test/confirm") &&
+          String(init?.body).includes(`\"action\":\"${action}\"`),
+      );
+      expect(responseRequests).toHaveLength(1);
+    },
+  );
+
+  it("restores a terminal learner response as a recoverable claim without raw state names", async () => {
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem(
+      "counterlab.claim",
+      "The high score means the model will work for new customers.",
+    );
+    window.localStorage.setItem("counterlab.mode", "live");
+    window.history.replaceState({}, "", "/session/session_ui");
+    installApi({
+      restoredSessionState: "REJECTED_BY_LEARNER",
+      restoredSessionExtra: { beliefSpec: liveBeliefSpec },
+    });
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("button", {
+        name: /revise in a new investigation/i,
+      }),
+    ).toBeEnabled();
+    expect(screen.getByLabelText(/your claim/i)).toHaveValue(
+      "The high score means the model will work for new customers.",
+    );
+    expect(document.body).not.toHaveTextContent(
+      /INSUFFICIENT_EVIDENCE|REJECTED_BY_LEARNER/,
+    );
+  });
+
+  it("keeps old terminal and new revision routes safe across browser back and forward", async () => {
+    const user = userEvent.setup();
+    installApi({
+      restoredSessionState: "REJECTED_BY_LEARNER",
+      restoredSessionExtra: { beliefSpec: liveBeliefSpec },
+    });
+    render(<App />);
+    await openSampleModelDuel(user);
+    await user.click(screen.getByText(/more ways to respond/i));
+    await user.click(screen.getByRole("button", { name: /^reject$/i }));
+    await user.click(
+      await screen.findByRole("button", {
+        name: /revise in a new investigation/i,
+      }),
+    );
+    await vi.waitFor(() =>
+      expect(window.location.pathname).toBe("/session/session_revision"),
+    );
+
+    await act(async () => window.history.back());
+    expect(
+      await screen.findByRole("button", {
+        name: /revise in a new investigation/i,
+      }),
+    ).toBeEnabled();
+    expect(screen.getByLabelText(/your claim/i)).toHaveValue(
+      liveBeliefSpec.claim,
+    );
+
+    await act(async () => window.history.forward());
+    await vi.waitFor(() =>
+      expect(window.location.pathname).toBe("/session/session_revision"),
+    );
+    await vi.waitFor(() =>
+      expect(
+        screen.queryByRole("button", {
+          name: /revise in a new investigation/i,
+        }),
+      ).not.toBeInTheDocument(),
+    );
+    await vi.waitFor(() =>
+      expect(screen.getByLabelText(/your claim/i)).toHaveValue(
+        "The high score means the model will work for new customers.",
+      ),
+    );
+    expect(
+      screen.getAllByText(uploadedArtifact.fileName).length,
+    ).toBeGreaterThan(0);
+    await vi.waitFor(() =>
+      expect(screen.queryByText(/recording evidence/i)).not.toBeInTheDocument(),
+    );
+    await vi.waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /compare two explanations/i }),
+      ).toBeEnabled(),
+    );
+  });
+
   it("keeps the first failed live request provider-neutral and on the claim screen", async () => {
     const user = userEvent.setup();
     installApi({
@@ -1177,11 +1549,8 @@ describe("CounterLab judged flow", () => {
     render(<App />);
 
     await openLiveSetup(user);
-    await user.click(
-      await screen.findByRole("button", { name: /continue with my notebook/i }),
-    );
     await user.upload(
-      screen.getByLabelText(/use a different notebook/i),
+      await screen.findByLabelText(/attach a supported notebook/i),
       new File(["{}"], uploadedArtifact.fileName, {
         type: "application/json",
       }),
@@ -1588,11 +1957,8 @@ describe("CounterLab judged flow", () => {
     render(<App />);
 
     await openLiveSetup(user);
-    await user.click(
-      await screen.findByRole("button", { name: /continue with my notebook/i }),
-    );
     await user.upload(
-      screen.getByLabelText(/use a different notebook/i),
+      await screen.findByLabelText(/attach a supported notebook/i),
       new File(["{}"], "fraud_model.ipynb", {
         type: "application/json",
       }),

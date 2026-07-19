@@ -16,6 +16,18 @@ export type TimelineFeatureOption<Value extends string = string> = Readonly<{
   crossesNow: boolean;
 }>;
 
+function featureOptionClassification(crossesNow: boolean): string {
+  return crossesNow
+    ? "Future-leaking risk. Reads outcomes from after NOW."
+    : "Safe at prediction time. Not the future-leaking risk.";
+}
+
+function selectedFeatureClassification(crossesNow: boolean): string {
+  return crossesNow
+    ? "Selected feature classification: future-leaking risk. This identifies the risk requested by the fixed transfer task."
+    : "Selected feature classification: safe at prediction time. This does not identify the requested future-leaking risk.";
+}
+
 export function TimelineTransfer<
   SplitValue extends string,
   FeatureValue extends string,
@@ -93,8 +105,8 @@ export function TimelineTransfer<
             {selectedFeature === undefined
               ? "Choose where its information comes from"
               : selectedFeature.crossesNow
-                ? "reads later outcomes ×"
-                : "uses available information ✓"}
+                ? "future-leaking risk identified ✓"
+                : "safe comparison — risk not identified ×"}
           </strong>
         </div>
         <figcaption id={`${instanceId}-timeline-summary`}>
@@ -104,7 +116,7 @@ export function TimelineTransfer<
             : `Selected split: ${selectedSplit.label}. ${selectedSplit.description}`}{" "}
           {selectedFeature === undefined
             ? "No feature selected."
-            : `Selected feature: ${selectedFeature.label}. ${selectedFeature.description}`}
+            : `Selected feature: ${selectedFeature.label}. ${selectedFeature.description} ${selectedFeatureClassification(selectedFeature.crossesNow)}`}
         </figcaption>
       </figure>
 
@@ -128,8 +140,18 @@ export function TimelineTransfer<
           ))}
         </fieldset>
 
-        <fieldset disabled={disabled}>
-          <legend>Which feature crosses NOW?</legend>
+        <fieldset
+          disabled={disabled}
+          aria-describedby={`${instanceId}-feature-task`}
+        >
+          <legend>Which feature leaks information from after NOW?</legend>
+          <p
+            className={styles.taskInstruction}
+            id={`${instanceId}-feature-task`}
+          >
+            Identify the future-leaking feature. The safe feature is a
+            comparison, not the answer to this question.
+          </p>
           {featureOptions.map((option) => (
             <label key={option.value}>
               <input
@@ -142,6 +164,9 @@ export function TimelineTransfer<
               <span>
                 <strong>{option.label}</strong>
                 <small>{option.description}</small>
+                <small className={styles.classification}>
+                  {featureOptionClassification(option.crossesNow)}
+                </small>
               </span>
             </label>
           ))}

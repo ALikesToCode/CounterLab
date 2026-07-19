@@ -159,6 +159,13 @@
   line-height: 1.4;
 }
 
+.questions .taskInstruction {
+  margin: 0 0 4px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .questions label {
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr);
@@ -202,6 +209,11 @@
   color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.4;
+}
+
+.questions label .classification {
+  color: var(--ink);
+  font-weight: 700;
 }
 
 .questions :disabled {

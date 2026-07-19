@@ -278,6 +278,13 @@ function sessionProofReady(session: SessionView | null): boolean {
   );
 }
 
+function beliefResponseClosed(session: SessionView | null): boolean {
+  return (
+    session?.state === "INSUFFICIENT_EVIDENCE" ||
+    session?.state === "REJECTED_BY_LEARNER"
+  );
+}
+
 type BeliefPresentation = {
   schemaVersion: "1" | "2";
   concept: BeliefTest["concept"];
@@ -366,6 +373,7 @@ const storageKeys = {
   sessionId: "counterlab.sessionId",
   mode: "counterlab.mode",
   claim: "counterlab.claim",
+  claimSessionId: "counterlab.claimSessionId",
   replayStage: "counterlab.replayStage",
   replayId: "counterlab.replayId",
   replayIntro: "counterlab.replayIntro",
@@ -1092,9 +1100,11 @@ function ClaimScreen({
   cancelPreview,
   continueToBelief,
   uploadNotebook,
+  requiresFreshSession,
+  startFreshSession,
   busy,
 }: {
-  artifact: ArtifactView | null;
+  artifact: ArtifactView;
   claim: string;
   updateClaim: (claim: string) => void;
   analysisPreview: BeliefAnalysisPreview | null;
@@ -1103,10 +1113,12 @@ function ClaimScreen({
   cancelPreview: () => void;
   continueToBelief: () => void;
   uploadNotebook: (file: File) => void;
+  requiresFreshSession: boolean;
+  startFreshSession: () => void;
   busy: boolean;
 }) {
-  const isSample = artifact?.fileSha256 === sampleArtifact.fileSha256;
-  const supported = artifact?.support.status === "SUPPORTED";
+  const isSample = artifact.fileSha256 === sampleArtifact.fileSha256;
+  const supported = artifact.support.status === "SUPPORTED";
   const evidenceReferences = notebookEvidenceReferences(artifact);
   const headlineMetric = notebookScoreDisplay(artifact);
   return (
@@ -1122,6 +1134,24 @@ function ClaimScreen({
         why="A high score is a result, but the notebook evidence does not yet show whether it generalizes to completely new customers."
       />
 
+      {requiresFreshSession && (
+        <section className="support-warning" role="status">
+          <strong>Your response closed that explanation.</strong>
+          <p>
+            Your notebook and claim are preserved. Start a fresh investigation
+            before asking CounterLab to frame another comparison.
+          </p>
+          <button
+            className="button button-primary"
+            type="button"
+            disabled={busy}
+            onClick={startFreshSession}
+          >
+            Revise in a new investigation <Mark name="arrow" />
+          </button>
+        </section>
+      )}
+
       <div className="claim-layout">
         <section className="notebook-card" aria-labelledby="artifact-title">
           <div className="notebook-topline">
@@ -1129,16 +1159,13 @@ function ClaimScreen({
             <span
               className={supported ? "verified-chip" : "support-chip rejected"}
             >
-              {supported && <Mark name="check" />}{" "}
-              {artifact?.support.status ?? "Loading"}
+              {supported && <Mark name="check" />} {artifact.support.status}
             </span>
           </div>
           <h2 id="artifact-title">
             {isSample ? sampleArtifact.title : "Uploaded notebook evidence"}
           </h2>
-          <p className="file-name">
-            {artifact?.fileName ?? "Preparing artifact…"}
-          </p>
+          <p className="file-name">{artifact.fileName}</p>
           <NotebookEvidenceStory
             title="What this notebook actually shows"
             headlineMetric={headlineMetric}
@@ -1146,19 +1173,19 @@ function ClaimScreen({
             integrity={[
               {
                 label: "Notebook SHA-256",
-                value: artifact?.fileSha256 ?? "Pending intake",
+                value: artifact.fileSha256,
               },
               {
                 label: "Evidence cells",
-                value: String(artifact?.cells.length ?? 0),
+                value: String(artifact.cells.length),
               },
               {
                 label: "Support decision",
-                value: artifact?.support.status ?? "Pending",
+                value: artifact.support.status,
               },
             ]}
           />
-          {artifact !== null && artifact.support.reasons.length > 0 && (
+          {artifact.support.reasons.length > 0 && (
             <div className="support-warning" role="status">
               <strong>Notebook support limits</strong>
               <ul>
@@ -1170,7 +1197,7 @@ function ClaimScreen({
               </ul>
             </div>
           )}
-          {artifact !== null && artifact.support.status !== "SUPPORTED" && (
+          {artifact.support.status !== "SUPPORTED" && (
             <aside
               className="unsupported-guide"
               aria-label="Unsupported notebook guidance"
@@ -1237,7 +1264,12 @@ function ClaimScreen({
               <button
                 className="button button-primary"
                 type="button"
-                disabled={claim.trim().length < 12 || !supported || busy}
+                disabled={
+                  claim.trim().length < 12 ||
+                  !supported ||
+                  requiresFreshSession ||
+                  busy
+                }
                 onClick={continueToBelief}
               >
                 Compare two explanations <Mark name="arrow" />
@@ -3039,7 +3071,7 @@ function LeakageRealityScreen({
           </div>
           <TimelineTransfer
             heading="What information exists at prediction time?"
-            scenario="A demand forecast learns from nearby days. Choose the split and feature that match what is available when a real prediction is made."
+            scenario="A demand forecast learns from nearby days. Choose the deployment split, then identify the feature that uses information unavailable when a real prediction is made."
             trainingRange="Jan — Mar"
             testRange="Apr — Jun"
             splitValue={splitChoice}
@@ -3062,9 +3094,9 @@ function LeakageRealityScreen({
             <div className="transfer-result rejected" role="status">
               <strong>Transfer not yet passed.</strong>
               <span>
-                Use the NOW line: pick a test where training happens before
-                testing, then remove any feature that reads values to the right
-                of NOW. The patch remains locked.
+                Use the NOW line: choose a test where training happens before
+                testing, then identify the feature that reads values to the
+                right of NOW. The patch remains locked.
               </span>
             </div>
           )}
@@ -3514,7 +3546,9 @@ function LiveSetup({
   health,
   checking,
   checkError,
-  startLive,
+  uploadNotebook,
+  pendingArtifact,
+  retrySessionSetup,
   retry,
   fallBack,
   busy,
@@ -3522,7 +3556,9 @@ function LiveSetup({
   health: CapabilityHealth | null;
   checking: boolean;
   checkError: string | null;
-  startLive: () => void;
+  uploadNotebook: (file: File) => void;
+  pendingArtifact: ArtifactView | null;
+  retrySessionSetup: () => void;
   retry: () => void;
   fallBack: (mode: Mode) => void;
   busy: boolean;
@@ -3600,16 +3636,49 @@ function LiveSetup({
           </>
         )}
       </section>
-      <div className="action-cluster">
-        {configured && runnerConfigured && !checking && checkError === null && (
+      {pendingArtifact?.support.status === "SUPPORTED" && (
+        <section className="setup-card panel" role="status">
+          <div className="setup-row">
+            <span className="status-dot configured" />
+            <div>
+              <strong>Notebook intake passed</strong>
+              <p>
+                {pendingArtifact.fileName} is preserved in this tab. The private
+                investigation still needs its source-bound session.
+              </p>
+            </div>
+          </div>
           <button
             className="button button-primary"
             type="button"
             disabled={busy}
-            onClick={startLive}
+            onClick={retrySessionSetup}
           >
-            Continue with my notebook <Mark name="arrow" />
+            Retry private session setup
           </button>
+        </section>
+      )}
+      <div className="action-cluster">
+        {configured && runnerConfigured && !checking && checkError === null && (
+          <label className="upload-control">
+            <span className="upload-title">
+              <Mark name="spark" /> Attach a supported notebook
+            </span>
+            <input
+              type="file"
+              accept=".ipynb,application/x-ipynb+json,application/json"
+              disabled={busy}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.currentTarget.value = "";
+                if (file !== undefined) uploadNotebook(file);
+              }}
+            />
+            <small>
+              Intake reads supported notebook evidence and never executes its
+              cells. The investigation starts only after a supported decision.
+            </small>
+          </label>
         )}
         {checkError !== null && (
           <button
@@ -3899,6 +3968,16 @@ export function App() {
     ) {
       setError(
         "Live reasoning is unavailable. Check the server configuration or use an offline path. No live result was produced.",
+      );
+      return;
+    }
+    if (
+      caught instanceof ApiClientError &&
+      (caught.code === "ILLEGAL_TRANSITION" ||
+        caught.code === "SESSION_STEP_CLOSED")
+    ) {
+      setError(
+        "That investigation step is closed. Keep your claim and start a fresh investigation to revise it.",
       );
       return;
     }
@@ -4366,11 +4445,13 @@ export function App() {
     }
 
     const sessionId = route.id;
+    const storedClaimOwner =
+      window.localStorage.getItem(storageKeys.claimSessionId) ??
+      window.localStorage.getItem(storageKeys.sessionId);
     const storedClaim =
-      window.localStorage.getItem(storageKeys.sessionId) === sessionId
+      storedClaimOwner === sessionId
         ? window.localStorage.getItem(storageKeys.claim)
         : null;
-    setClaim(storedClaim ?? "");
     setBusy(true);
     setError(null);
     void (async () => {
@@ -4413,6 +4494,8 @@ export function App() {
           return;
         }
         if (!active) return;
+        const restoredBelief = sessionBeliefPresentation(restored);
+        setClaim(storedClaim ?? restoredBelief?.claim ?? "");
         setArtifact(restoredArtifact);
         setSession(restored);
         setMode(presentationMode(restored.mode));
@@ -4451,8 +4534,13 @@ export function App() {
         // keeping hydration disabled until that network job succeeds would
         // freeze later retry navigation on the stale URL.
         setRouteHydrated(true);
-        if (restored.state === "INGESTED") setStage("claim");
-        else if (
+        if (
+          restored.state === "INGESTED" ||
+          restored.state === "INSUFFICIENT_EVIDENCE" ||
+          restored.state === "REJECTED_BY_LEARNER"
+        ) {
+          setStage("claim");
+        } else if (
           restored.state === "BELIEF_TEST_PROPOSED" ||
           restored.state === "BELIEF_TEST_CONFIRMED"
         ) {
@@ -4579,6 +4667,13 @@ export function App() {
       setArtifact(sample);
       setSession(created);
       window.localStorage.setItem(storageKeys.sessionId, created.sessionId);
+      if (claim.trim().length > 0) {
+        window.localStorage.setItem(storageKeys.claim, claim);
+        window.localStorage.setItem(
+          storageKeys.claimSessionId,
+          created.sessionId,
+        );
+      }
       setStage("claim");
     });
   };
@@ -4644,20 +4739,23 @@ export function App() {
     });
   };
 
-  const startLiveSession = () => {
-    if (liveHealth?.liveGpt !== "configured") return;
-    void withRequest(async () => {
-      setArtifact(null);
-      setSession(null);
-      setConfirmed(false);
-      setPrediction(null);
-      setConfidence(72);
-      setAnalysisPreview(null);
-      setSensitiveContentApproved(false);
-      window.localStorage.removeItem(storageKeys.sessionId);
-      window.localStorage.setItem(storageKeys.mode, "live");
-      setStage("claim");
+  const createLiveArtifactSession = async (uploaded: ArtifactView) => {
+    setMode("live");
+    setStage("live-setup");
+    window.localStorage.setItem(storageKeys.mode, "live");
+    const created = await counterLabApi.createLiveSession({
+      artifactId: uploaded.artifactId,
     });
+    setSession(created);
+    window.localStorage.setItem(storageKeys.sessionId, created.sessionId);
+    if (claim.trim().length > 0) {
+      window.localStorage.setItem(storageKeys.claim, claim);
+      window.localStorage.setItem(
+        storageKeys.claimSessionId,
+        created.sessionId,
+      );
+    }
+    setStage("claim");
   };
 
   const uploadNotebook = (file: File) => {
@@ -4668,20 +4766,53 @@ export function App() {
       setArtifact(uploaded);
       setSession(null);
       window.localStorage.removeItem(storageKeys.sessionId);
-      if (uploaded.support.status !== "SUPPORTED") return;
-      const created = await counterLabApi.createLiveSession({
-        artifactId: uploaded.artifactId,
-      });
-      setSession(created);
-      setMode("live");
-      window.localStorage.setItem(storageKeys.sessionId, created.sessionId);
-      window.localStorage.setItem(storageKeys.mode, "live");
+      if (uploaded.support.status !== "SUPPORTED") {
+        setMode("live");
+        setStage("claim");
+        window.localStorage.setItem(storageKeys.mode, "live");
+        setError(
+          uploaded.support.reasons[0]?.message ??
+            "This notebook is outside the released live support boundary. No investigation was created.",
+        );
+        return;
+      }
+      await createLiveArtifactSession(uploaded);
+    });
+  };
+
+  const retryLiveSessionSetup = () => {
+    if (artifact?.support.status !== "SUPPORTED" || session !== null) return;
+    void withRequest(() => createLiveArtifactSession(artifact));
+  };
+
+  const restartClosedBeliefResponse = () => {
+    if (session === null || !beliefResponseClosed(session)) return;
+    void withRequest(async () => {
+      const restarted = await counterLabApi.restartSession(session.sessionId);
+      setSession(restarted);
+      setConfirmed(false);
+      setPrediction(null);
+      setConfidence(72);
+      setAnalysisPreview(null);
+      setSensitiveContentApproved(false);
+      window.localStorage.setItem(storageKeys.sessionId, restarted.sessionId);
+      window.localStorage.setItem(storageKeys.claim, claim);
+      window.localStorage.setItem(
+        storageKeys.claimSessionId,
+        restarted.sessionId,
+      );
+      window.localStorage.setItem(
+        storageKeys.mode,
+        presentationMode(restarted.mode),
+      );
+      setStage("claim");
     });
   };
 
   const proposeBeliefTest = () => {
-    if (session === null) return;
+    if (session === null || beliefResponseClosed(session)) return;
     window.localStorage.setItem(storageKeys.claim, claim);
+    window.localStorage.setItem(storageKeys.claimSessionId, session.sessionId);
     void withRequest(async () => {
       if (mode === "live" && analysisPreview === null) {
         const preview = await counterLabApi.previewBeliefAnalysis(
@@ -4729,7 +4860,7 @@ export function App() {
   const stopBeliefTest = (reason: "rejected" | "insufficient") => {
     if (session === null) return;
     void withRequest(async () => {
-      await counterLabApi.respondToBeliefTest(
+      const stopped = await counterLabApi.respondToBeliefTest(
         session.sessionId,
         reason === "rejected"
           ? {
@@ -4741,6 +4872,11 @@ export function App() {
               reason: "Learner marked the available evidence insufficient.",
             },
       );
+      setSession(stopped);
+      setConfirmed(false);
+      setPrediction(null);
+      setAnalysisPreview(null);
+      setSensitiveContentApproved(false);
       setStage("claim");
     });
   };
@@ -4977,7 +5113,6 @@ export function App() {
           updateClaim={updateClaim}
           attachNotebook={(file) => {
             setMode("live");
-            setStage("claim");
             window.localStorage.setItem(storageKeys.mode, "live");
             uploadNotebook(file);
           }}
@@ -5004,7 +5139,6 @@ export function App() {
           onStartSample={() => chooseMode("instant")}
           onAttachNotebook={(file) => {
             setMode("live");
-            setStage("claim");
             window.localStorage.setItem(storageKeys.mode, "live");
             uploadNotebook(file);
           }}
@@ -5094,7 +5228,7 @@ export function App() {
                 />
               </div>
             )}
-            {reviewStep === null && stage === "claim" && (
+            {reviewStep === null && stage === "claim" && artifact !== null && (
               <ClaimScreen
                 artifact={artifact}
                 claim={claim}
@@ -5108,8 +5242,34 @@ export function App() {
                 }}
                 continueToBelief={proposeBeliefTest}
                 uploadNotebook={uploadNotebook}
+                requiresFreshSession={beliefResponseClosed(session)}
+                startFreshSession={restartClosedBeliefResponse}
                 busy={busy}
               />
+            )}
+            {reviewStep === null && stage === "claim" && artifact === null && (
+              <main
+                className="workspace shell narrow"
+                id="main-content"
+                tabIndex={-1}
+                role="alert"
+              >
+                <div className="screen-intro">
+                  <p className="eyebrow">Question · Evidence required</p>
+                  <h1>Attach a supported notebook before continuing.</h1>
+                  <p>
+                    No artifact-specific investigation exists yet, and no result
+                    can be created from a claim alone.
+                  </p>
+                </div>
+                <button
+                  className="button button-primary"
+                  type="button"
+                  onClick={() => chooseMode("live")}
+                >
+                  Return to notebook intake
+                </button>
+              </main>
             )}
             {reviewStep === null && stage === "belief" && (
               <BeliefScreen
@@ -5259,7 +5419,9 @@ export function App() {
                 health={liveHealth}
                 checking={checkingLiveHealth}
                 checkError={liveHealthError}
-                startLive={startLiveSession}
+                uploadNotebook={uploadNotebook}
+                pendingArtifact={session === null ? artifact : null}
+                retrySessionSetup={retryLiveSessionSetup}
                 retry={() => void checkLiveCapabilities()}
                 fallBack={chooseMode}
                 busy={busy}

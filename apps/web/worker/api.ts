@@ -289,6 +289,7 @@ const CreateLiveSessionSchema = z
 const CreateReplaySessionSchema = z
   .object({ replayId: z.literal("leakage-01") })
   .strict();
+const RestartSessionSchema = z.object({}).strict();
 const PublishReplaySchema = z.object({}).strict();
 const BeliefRequestSchema = z
   .object({
@@ -4080,6 +4081,13 @@ export function createApi(options: ApiOptions = {}) {
         409,
       );
     }
+    if (artifact.manifest.support.status !== "SUPPORTED") {
+      throw new ApiInputError(
+        "ARTIFACT_UNSUPPORTED",
+        "A live investigation requires a notebook inside the released intake support boundary",
+        422,
+      );
+    }
     const session = await sessionService(context, options).createSession({
       artifactId: input.artifactId,
       mode: { kind: "live_notebook" },
@@ -4147,6 +4155,60 @@ export function createApi(options: ApiOptions = {}) {
       );
     }
     return context.json(jsonSuccess(artifact.manifest));
+  });
+
+  app.post("/api/sessions/:sessionId/restart", async (context) => {
+    RestartSessionSchema.parse(await readJson(context));
+    const service = sessionService(context, options);
+    const source = await service.getSession(context.req.param("sessionId"));
+    if (
+      source.state !== "INSUFFICIENT_EVIDENCE" &&
+      source.state !== "REJECTED_BY_LEARNER"
+    ) {
+      throw new ApiInputError(
+        "SESSION_RESTART_NOT_AVAILABLE",
+        "A fresh investigation is available only after the learner closes the current explanation",
+        409,
+      );
+    }
+    requireMutableSession(source);
+    const artifact = await artifacts(context, options).find(source.artifactId);
+    if (artifact === undefined) {
+      throw new ApiInputError(
+        "ARTIFACT_NOT_FOUND",
+        "The source investigation artifact was not found",
+        404,
+      );
+    }
+    if (source.mode.kind === "live_notebook") {
+      if (artifact.manifest.support.status !== "SUPPORTED") {
+        throw new ApiInputError(
+          "ARTIFACT_UNSUPPORTED",
+          "The original notebook no longer satisfies the released intake support boundary",
+          422,
+        );
+      }
+    }
+    const restarted = await service.createSession({
+      artifactId: source.artifactId,
+      mode: source.mode,
+    });
+    const ownerCapability = await issueSessionOwnerCapability(
+      context,
+      options,
+      restarted.id,
+      restarted.createdAt,
+    );
+    if (ownerCapability !== undefined) {
+      setSessionOwnerCookie(context, restarted.id, ownerCapability);
+    }
+    return context.json(
+      jsonSuccess({
+        ...statePayload(restarted),
+        ...(ownerCapability === undefined ? {} : { ownerCapability }),
+      }),
+      201,
+    );
   });
 
   app.post("/api/sessions/:sessionId/access/revoke", async (context) => {
@@ -9563,8 +9625,17 @@ export function createApi(options: ApiOptions = {}) {
         409,
       );
     }
+    if (error instanceof InvalidSessionTransitionError) {
+      return context.json(
+        jsonError(
+          "SESSION_STEP_CLOSED",
+          "That investigation step is closed. Start a fresh investigation to revise it.",
+          409,
+        ),
+        409,
+      );
+    }
     if (
-      error instanceof InvalidSessionTransitionError ||
       error instanceof PredictionAlreadyCommittedError ||
       error instanceof ConcurrentD1SessionUpdateError ||
       error instanceof ConcurrentRunnerJobUpdateError ||
