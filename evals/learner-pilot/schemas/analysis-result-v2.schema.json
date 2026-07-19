@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://counterlab.local/schemas/pilot-analysis-result-v2.json",
+  "title": "CounterLab learner-pilot aggregate v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "analyzedAt",
+    "qualifiedReleaseReceiptSha256",
+    "participantCount",
+    "completedSessionCount",
+    "metrics",
+    "limitations"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "2" },
+    "status": { "enum": ["NO_DATA", "DESCRIPTIVE_ONLY"] },
+    "analyzedAt": { "type": "string", "format": "date-time" },
+    "qualifiedReleaseReceiptSha256": {
+      "oneOf": [
+        { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        { "type": "null" }
+      ]
+    },
+    "participantCount": { "type": "integer", "minimum": 0 },
+    "completedSessionCount": { "type": "integer", "minimum": 0 },
+    "metrics": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "completionRate",
+            "taskCount",
+            "firstUnassistedTransferPassRate",
+            "predictionDifferenceRate",
+            "confusionObservedRate",
+            "confusionCategoryCounts",
+            "abandonmentRate",
+            "medianTaskDurationSeconds",
+            "reactions",
+            "abandonmentReasons",
+            "byConcept"
+          ],
+          "properties": {
+            "completionRate": { "type": "number", "minimum": 0, "maximum": 1 },
+            "taskCount": { "type": "integer", "minimum": 0 },
+            "firstUnassistedTransferPassRate": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "predictionDifferenceRate": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "confusionObservedRate": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "confusionCategoryCounts": {
+              "$ref": "#/$defs/confusionCategoryCounts"
+            },
+            "abandonmentRate": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "medianTaskDurationSeconds": {
+              "oneOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }]
+            },
+            "reactions": { "$ref": "#/$defs/reactionCounts" },
+            "abandonmentReasons": { "$ref": "#/$defs/abandonmentCounts" },
+            "byConcept": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["entity_leakage", "class_imbalance"],
+              "properties": {
+                "entity_leakage": { "$ref": "#/$defs/conceptMetrics" },
+                "class_imbalance": { "$ref": "#/$defs/conceptMetrics" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "limitations": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "enum": [
+          "No consented learner-pilot session records were supplied; no learner outcome is claimed.",
+          "Results are descriptive pilot observations, not causal estimates or proof of mastery.",
+          "No untreated control arm is included; concept order is randomized only to reduce order effects.",
+          "Small convenience samples must not be generalized beyond the recruited participants.",
+          "Transfer pass rate uses only the first unassisted attempt recorded for each task.",
+          "The planned range of at least 12 completed participants was not reached."
+        ]
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "NO_DATA" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "participantCount": { "const": 0 },
+          "completedSessionCount": { "const": 0 },
+          "qualifiedReleaseReceiptSha256": { "type": "null" },
+          "metrics": { "type": "null" }
+        }
+      },
+      "else": {
+        "properties": {
+          "participantCount": { "type": "integer", "minimum": 1 },
+          "qualifiedReleaseReceiptSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "metrics": { "type": "object" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "conceptMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tasks",
+        "firstUnassistedTransferPassed",
+        "predictionDifferedFromResult",
+        "confusionObserved"
+      ],
+      "properties": {
+        "tasks": { "type": "integer", "minimum": 0 },
+        "firstUnassistedTransferPassed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "predictionDifferedFromResult": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "confusionObserved": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "confusionCategoryCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "navigation",
+        "prediction_meaning",
+        "test_rationale",
+        "boundary_interpretation",
+        "transfer_choice",
+        "repair_scope",
+        "proof_interpretation",
+        "other_no_detail"
+      ],
+      "properties": {
+        "navigation": { "type": "integer", "minimum": 0 },
+        "prediction_meaning": { "type": "integer", "minimum": 0 },
+        "test_rationale": { "type": "integer", "minimum": 0 },
+        "boundary_interpretation": { "type": "integer", "minimum": 0 },
+        "transfer_choice": { "type": "integer", "minimum": 0 },
+        "repair_scope": { "type": "integer", "minimum": 0 },
+        "proof_interpretation": { "type": "integer", "minimum": 0 },
+        "other_no_detail": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "reactionCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clarity", "usefulness"],
+      "properties": {
+        "clarity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["clearer", "unchanged", "less_clear", "declined"],
+          "properties": {
+            "clearer": { "type": "integer", "minimum": 0 },
+            "unchanged": { "type": "integer", "minimum": 0 },
+            "less_clear": { "type": "integer", "minimum": 0 },
+            "declined": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "usefulness": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["useful", "neutral", "not_useful", "declined"],
+          "properties": {
+            "useful": { "type": "integer", "minimum": 0 },
+            "neutral": { "type": "integer", "minimum": 0 },
+            "not_useful": { "type": "integer", "minimum": 0 },
+            "declined": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "abandonmentCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "participant_withdrew",
+        "accessibility_barrier",
+        "technical_failure",
+        "time_limit",
+        "facilitator_stopped",
+        "other_no_detail"
+      ],
+      "properties": {
+        "participant_withdrew": { "type": "integer", "minimum": 0 },
+        "accessibility_barrier": { "type": "integer", "minimum": 0 },
+        "technical_failure": { "type": "integer", "minimum": 0 },
+        "time_limit": { "type": "integer", "minimum": 0 },
+        "facilitator_stopped": { "type": "integer", "minimum": 0 },
+        "other_no_detail": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

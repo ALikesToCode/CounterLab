@@ -22,13 +22,25 @@ The order of the two concepts is randomized. The facilitator may help with navig
 
 ## Data collected
 
-The study export records a random participant ID, randomization slot, consent and task timestamps, completion, transfer pass/fail, whether a prediction changed, and task duration.
+The restricted study export records a pseudonymous participant ID,
+randomization slot, an opaque consent reference, exact session timestamps,
+completion, the first unassisted transfer result, whether the immutable
+Prediction differed from the observed result, task duration, bounded confusion
+and abandonment categories, closed clarity/usefulness reactions, and the hash
+of the exact qualified CounterLab release used.
 
-The study export does not include your name, email, IP address, raw claim or revision prose, notebook uploads, or private model reasoning. Recruitment contact details and any signed consent record are kept separately from the pseudonymous task export.
+The study export does not include your name, email, IP address, raw Question or
+revision prose, notebook uploads, private model reasoning, or free-text quotes.
+Recruitment contact details, consent content, and withdrawal material are kept
+separately from the pseudonymous task export. Pseudonymous IDs and exact
+timestamps are restricted data and are not treated as anonymous.
 
 ## Risks and benefits
 
-Risks are expected to be minor: temporary frustration, fatigue, or discomfort from making an incorrect prediction. You may pause, skip a task, or stop. There is no guaranteed personal benefit, though you may find the evaluation examples useful.
+Risks are expected to be minor: temporary frustration, fatigue, or discomfort
+when evidence differs from a prediction. You may pause, skip a task, or stop.
+There is no guaranteed personal benefit, though you may find the evaluation
+examples useful.
 
 ## Voluntary participation and withdrawal
 
@@ -36,7 +48,11 @@ Participation is voluntary. Declining or stopping has no penalty and does not af
 
 ## Use and reporting
 
-The team will use structured records to improve the prototype and report aggregate descriptive results. The pilot has no untreated control group, and reports will not claim causality or mastery. No identifiable quote will be published from this data format.
+The team will use structured records to improve the prototype and report
+aggregate descriptive results. Row-level exports are access-limited and are not
+committed to the public repository. The pilot has no untreated control group,
+and reports will not claim causality or mastery. No quote can be published from
+this closed-field data format.
 
 ## Consent statements
 

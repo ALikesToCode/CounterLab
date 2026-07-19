@@ -1,7 +1,8 @@
 {
-  "schemaVersion": "1",
+  "schemaVersion": "2",
   "status": "NO_DATA",
-  "analyzedAt": "2026-07-14T22:57:06.090Z",
+  "analyzedAt": "2026-07-19T09:59:55.301Z",
+  "qualifiedReleaseReceiptSha256": null,
   "participantCount": 0,
   "completedSessionCount": 0,
   "metrics": null,

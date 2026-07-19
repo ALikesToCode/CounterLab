@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://counterlab.local/schemas/pilot-session-result-v2.json",
+  "title": "CounterLab learner-pilot session result v2",
+  "description": "Pseudonymous, closed-field session outcomes. Cross-record assignment and consent-reference checks are enforced by validatePilotSessions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "participantId",
+    "assignmentSlotId",
+    "consentReferenceId",
+    "qualifiedReleaseReceiptSha256",
+    "startedAt",
+    "completedAt",
+    "completed",
+    "abandonmentReason",
+    "tasks"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "2" },
+    "participantId": {
+      "type": "string",
+      "pattern": "^participant_[A-Za-z0-9_-]{16,128}$"
+    },
+    "assignmentSlotId": {
+      "type": "string",
+      "pattern": "^slot_\\d{3}$"
+    },
+    "consentReferenceId": {
+      "type": "string",
+      "pattern": "^consent_ref_[A-Za-z0-9_-]{16,128}$"
+    },
+    "qualifiedReleaseReceiptSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 of the exact qualified release receipt used for this session."
+    },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "completedAt": {
+      "oneOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }]
+    },
+    "completed": { "type": "boolean" },
+    "abandonmentReason": {
+      "oneOf": [
+        {
+          "enum": [
+            "participant_withdrew",
+            "accessibility_barrier",
+            "technical_failure",
+            "time_limit",
+            "facilitator_stopped",
+            "other_no_detail"
+          ]
+        },
+        { "type": "null" }
+      ]
+    },
+    "tasks": {
+      "type": "array",
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "concept",
+          "firstUnassistedTransferPassed",
+          "predictionDifferedFromResult",
+          "durationSeconds",
+          "confusionCategories",
+          "reaction"
+        ],
+        "properties": {
+          "concept": {
+            "enum": ["entity_leakage", "class_imbalance"]
+          },
+          "firstUnassistedTransferPassed": { "type": "boolean" },
+          "predictionDifferedFromResult": { "type": "boolean" },
+          "durationSeconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 7200
+          },
+          "confusionCategories": {
+            "type": "array",
+            "maxItems": 8,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "navigation",
+                "prediction_meaning",
+                "test_rationale",
+                "boundary_interpretation",
+                "transfer_choice",
+                "repair_scope",
+                "proof_interpretation",
+                "other_no_detail"
+              ]
+            }
+          },
+          "reaction": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["clarity", "usefulness"],
+            "properties": {
+              "clarity": {
+                "enum": ["clearer", "unchanged", "less_clear", "declined"]
+              },
+              "usefulness": {
+                "enum": ["useful", "neutral", "not_useful", "declined"]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "completed": { "const": true } },
+        "required": ["completed"]
+      },
+      "then": {
+        "properties": {
+          "completedAt": { "type": "string", "format": "date-time" },
+          "abandonmentReason": { "type": "null" },
+          "tasks": { "minItems": 2, "maxItems": 2 }
+        }
+      },
+      "else": {
+        "properties": {
+          "completedAt": { "type": "null" },
+          "abandonmentReason": {
+            "enum": [
+              "participant_withdrew",
+              "accessibility_barrier",
+              "technical_failure",
+              "time_limit",
+              "facilitator_stopped",
+              "other_no_detail"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

@@ -362,8 +362,9 @@ pending.
 
 1. Freeze four leakage, four imbalance, and two unsupported held-out notebooks.
 2. Generate machine and human held-out matrices from actual runs.
-3. Add paired-crossover learner-study protocol, randomization, schema, privacy
-   note, study mode, and analysis script without inventing participant results.
+3. Add a no-control, counterbalanced two-task descriptive learner-pilot
+   protocol, randomization, restricted-data note, study mode, and deterministic
+   aggregate-only analysis without inventing participant results.
 4. Add browser coverage for live test runner, reconnect, second concept,
    interactive recomputation, patch download, proof share, mobile, keyboard, and
    reduced motion.

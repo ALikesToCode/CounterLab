@@ -35,10 +35,11 @@ The expected session length is 20–30 minutes.
 1. Present the consent form and answer questions before collecting data.
 2. Assign a randomization slot and pseudonymous participant ID.
 3. Give a two-minute orientation that identifies interface controls but does not explain either misconception.
-4. Run the first assigned concept through claim, Belief Test, immutable prediction, verified evidence, revision, and fixed transfer.
-5. Run the second assigned concept through the same sequence.
-6. Show the Reasoning Diff only after the relevant transfer result.
-7. Debrief the participant, explain the synthetic cases, and provide the withdrawal procedure.
+4. Record the SHA-256 of the exact qualified-release receipt used for the session. Do not mix builds within one pilot dataset.
+5. Run the first assigned concept through Question, immutable Prediction, Verified Test, Boundary, revision, and the fixed Apply task.
+6. Run the second assigned concept through the same sequence.
+7. Show the Reasoning Diff only after the relevant transfer result.
+8. Debrief the participant, explain the synthetic cases, and provide the withdrawal procedure.
 
 Facilitators may resolve navigation or accessibility problems. They must not suggest a prediction, revision, transfer choice, or correct answer.
 
@@ -47,11 +48,14 @@ Facilitators may resolve navigation or accessibility problems. They must not sug
 The structured pilot export records only:
 
 - session completion;
-- per-concept deterministic transfer pass/fail;
+- first-unassisted deterministic transfer pass/fail per concept;
 - whether the committed prediction differed from the observed result;
 - per-task duration in seconds;
+- bounded confusion categories;
+- a bounded abandonment reason for an incomplete session;
+- closed clarity and usefulness reactions;
 - randomized assignment slot; and
-- consent version and timestamps.
+- session timestamps, a separate opaque consent reference, and the exact qualified-release receipt SHA-256.
 
 The pilot export intentionally excludes names, email addresses, IP addresses, raw learner claims, revision prose, notebook uploads, model reasoning, and free-form quotes.
 
@@ -62,7 +66,10 @@ Primary descriptive measure:
 Secondary descriptive measures:
 
 - session completion rate;
-- prediction-change rate;
+- prediction/result difference rate;
+- confusion-observed rate and bounded confusion-category counts;
+- abandonment rate and bounded abandonment-reason counts;
+- closed clarity and usefulness reaction counts;
 - median task duration; and
 - task count and transfer passes by concept.
 
@@ -74,6 +81,8 @@ A session is included only when:
 
 - consent version `1` was recorded before the start time;
 - participant and assignment IDs are unique;
+- its assignment exists in the tracked seed-1729 randomization and task order matches that assignment;
+- the session is bound to the same frozen qualified-release receipt SHA-256 as every other included session;
 - a completed session contains one task for each concept; and
 - timestamps and durations pass the published schema.
 
@@ -88,6 +97,8 @@ The analysis is descriptive:
 - counts and rates use all schema-valid records under the rules above;
 - task duration uses the median;
 - concept results are reported separately;
+- bounded confusion, abandonment, and reaction categories are reported only as aggregate counts;
+- the exact qualified-release receipt SHA-256 is reported once for a non-empty aggregate;
 - `NO_DATA` is emitted when no records exist; and
 - no p-value, confidence interval, effect size, or causal comparison is produced for this uncontrolled pilot.
 
@@ -95,9 +106,11 @@ If fewer than 12 participants complete both tasks, the report must state that th
 
 ## Privacy, retention, and access
 
-Use random pseudonymous IDs unrelated to contact details. Recruitment contact information and consent records must be stored separately from session exports. Do not place either in the repository.
+Use random pseudonymous IDs unrelated to contact details. Exact timestamps and linked pseudonymous IDs remain restricted data; do not describe them as anonymous. Recruitment contact information and consent records must be stored separately from session exports. Do not place participant rows, consent rows, contact information, or withdrawal material in the repository.
 
 Only the study facilitator and named project owner should access row-level session records. Publish aggregates only. Delete row-level exports after the retention period disclosed during recruitment or immediately after a valid withdrawal request when the pseudonymous record can still be located.
+
+The machine-readable aggregate does not contain recruitment denominators. Invited, declined, consented, started, completed, and excluded counts must be reported separately as aggregate-only operational evidence.
 
 ## Safety and stopping rules
 

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://counterlab.local/schemas/pilot-consent-reference-v1.json",
+  "title": "CounterLab learner-pilot consent reference",
+  "description": "Opaque linkage metadata only. Consent statements, signatures, withdrawal codes, names, email addresses, and other consent content are stored outside this export.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "consentReferenceId",
+    "participantId",
+    "consentVersion",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "consentReferenceId": {
+      "type": "string",
+      "pattern": "^consent_ref_[A-Za-z0-9_-]{16,128}$"
+    },
+    "participantId": {
+      "type": "string",
+      "pattern": "^participant_[A-Za-z0-9_-]{16,128}$"
+    },
+    "consentVersion": { "const": "1" },
+    "recordedAt": { "type": "string", "format": "date-time" }
+  }
+}
