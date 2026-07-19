@@ -1,11 +1,7 @@
 import type { CapabilityHealth } from "../../api";
-import { getRun, verifiedReplay } from "../../sample";
+import { VerifiedBeliefBreakMechanism } from "../../components/learner/VerifiedBeliefBreakTheater";
+import { verifiedReplay } from "../../sample";
 import styles from "./JudgeModeView.module.css";
-
-const percentage = new Intl.NumberFormat("en", {
-  style: "percent",
-  maximumFractionDigits: 1,
-});
 
 const learnerStages = [
   ["01", "Question", "Name the claim and bind it to exact evidence."],
@@ -40,8 +36,6 @@ export function JudgeModeView({
   onRetryHealth: () => void;
   onStartSample: () => void;
 }) {
-  const random = getRun("random_row_split");
-  const grouped = getRun("customer_group_split");
   const liveReady = liveAuthorityReady(health);
   const release = health?.release?.status === "bound" ? health.release : null;
 
@@ -68,13 +62,34 @@ export function JudgeModeView({
         <div className={styles.heroCopy}>
           <p className={styles.kicker}>Ask like chat. Prove it like science.</p>
           <h1 id="judge-title" tabIndex={-1}>
-            See a belief break in twenty seconds.
+            See a verified belief break in ten seconds.
           </h1>
           <p className={styles.lede}>
             CounterLab turns a notebook claim into two competing models, locks
             the learner&apos;s prediction, and lets fixed computation—not fluent
             prose—decide what the evidence supports.
           </p>
+        </div>
+
+        <aside
+          className={styles.twentySecondProof}
+          aria-label="Ten second fixed sample preview"
+        >
+          <header>
+            <span>Completed fixed sample · not a live result</span>
+            <b>Hashes checked before values</b>
+          </header>
+          <blockquote>
+            “This score proves the model works for customers it has never seen.”
+          </blockquote>
+          <p className={styles.previewAuthority}>
+            Approved fixed sample framing. No GPT-5.6, Codex, or runner call
+            occurs in this preview.
+          </p>
+          <VerifiedBeliefBreakMechanism presentation="preview" />
+        </aside>
+
+        <div className={styles.heroAfter}>
           <div className={styles.heroActions}>
             <button type="button" onClick={onStartSample}>
               Start sample <span aria-hidden="true">→</span>
@@ -86,36 +101,6 @@ export function JudgeModeView({
             documented Python/scikit-learn Jupyter patterns.
           </p>
         </div>
-
-        <aside
-          className={styles.twentySecondProof}
-          aria-label="Twenty second proof"
-        >
-          <header>
-            <span>Verified sample notebook evidence</span>
-            <b>Fixed-kernel evidence</b>
-          </header>
-          <blockquote>
-            “This score proves the model works for customers it has never seen.”
-          </blockquote>
-          <div className={styles.scoreComparison}>
-            <div>
-              <span>Random rows</span>
-              <strong>{percentage.format(random.metrics.accuracy)}</strong>
-              <small>{random.entityOverlap.count} shared customers</small>
-            </div>
-            <i aria-hidden="true">≠</i>
-            <div>
-              <span>Whole customers</span>
-              <strong>{percentage.format(grouped.metrics.accuracy)}</strong>
-              <small>{grouped.entityOverlap.count} shared customers</small>
-            </div>
-          </div>
-          <p>
-            Same estimator and preprocessing. The evaluation unit changed to
-            match the deployment claim.
-          </p>
-        </aside>
       </section>
 
       <section

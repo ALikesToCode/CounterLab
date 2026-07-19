@@ -6618,7 +6618,20 @@ body {
 }
 
 .question-first-layout {
-  width: min(780px, 100%);
+  width: min(1220px, 100%);
+  display: grid;
+  grid-template-columns: minmax(440px, 0.84fr) minmax(560px, 1.16fr);
+  grid-template-areas:
+    "question belief-break"
+    "support support"
+    "recent recent";
+  gap: clamp(30px, 4vw, 58px);
+  align-items: start;
+}
+
+.landing-question-column {
+  grid-area: question;
+  min-width: 0;
   display: grid;
   justify-items: center;
   gap: 16px;
@@ -6644,7 +6657,44 @@ body {
   outline-offset: 6px;
 }
 
+.landing-belief-break {
+  grid-area: belief-break;
+  align-self: center;
+  min-width: 0;
+  padding: clamp(20px, 2.5vw, 30px);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--night-raised);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
+}
+
+.landing-belief-break > header > p {
+  margin: 0;
+  color: var(--aqua-bright);
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.4;
+}
+
+.landing-belief-break > header > h2 {
+  margin: 9px 0 0;
+  font-family: var(--display);
+  font-size: clamp(25px, 2.4vw, 36px);
+  font-weight: 520;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+}
+
+.landing-belief-break blockquote {
+  margin: 13px 0 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
 .landing-proof-note {
+  grid-area: support;
   width: min(680px, 100%);
   scroll-margin-top: 24px;
   color: var(--ink-soft);
@@ -6736,6 +6786,7 @@ body {
 }
 
 .landing-recent-work {
+  grid-area: recent;
   width: min(620px, 100%);
   color: var(--ink-soft);
 }
@@ -6846,6 +6897,17 @@ body {
 @media (max-width: 1040px) {
   .topbar-context {
     display: none;
+  }
+
+  .question-first-layout {
+    width: min(780px, 100%);
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "question"
+      "belief-break"
+      "support"
+      "recent";
+    gap: 36px;
   }
 }
 
@@ -6989,14 +7051,37 @@ body {
 @media (max-width: 560px) {
   .landing-canvas {
     place-items: start center;
-    padding-inline: 14px;
+    padding: 18px 12px 38px;
   }
 
   .question-first-layout {
-    gap: 20px;
+    gap: 18px;
+  }
+
+  .landing-question-column {
+    gap: 10px;
   }
 
   .landing-intro > h1 {
-    font-size: 30px;
+    font-size: 24px;
+  }
+
+  .landing-belief-break {
+    padding: 14px;
+    border-radius: 17px;
+  }
+
+  .landing-belief-break > header > p {
+    font-size: 11px;
+  }
+
+  .landing-belief-break > header > h2 {
+    margin-top: 6px;
+    font-size: 21px;
+  }
+
+  .landing-belief-break blockquote {
+    margin-top: 8px;
+    font-size: 13px;
   }
 }

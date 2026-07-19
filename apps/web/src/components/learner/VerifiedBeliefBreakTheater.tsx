@@ -10,7 +10,7 @@ import styles from "./VerifiedBeliefBreakTheater.module.css";
 
 const MODE_LABEL = "Verified sample exploration";
 
-export type VerifiedBeliefBreakPresentation = "full" | "preview";
+export type VerifiedBeliefBreakPresentation = "full" | "preview" | "compact";
 
 type VerifiedBeliefBreakEvidence = Readonly<{
   randomRows: VerifiedRun;
@@ -68,7 +68,9 @@ function runsKeepTheQuestionFair(
   );
 }
 
-async function verifyBundledEvidence(): Promise<VerifiedBeliefBreakEvidence> {
+async function verifyBundledEvidence(
+  expectedResultHash?: string,
+): Promise<VerifiedBeliefBreakEvidence> {
   const boundary = await verifySampleBoundaryFixtureIntegrity(
     sampleBoundaryFixture,
   );
@@ -78,6 +80,8 @@ async function verifyBundledEvidence(): Promise<VerifiedBeliefBreakEvidence> {
 
   if (
     sampleResult.concept !== "entity_leakage" ||
+    (expectedResultHash !== undefined &&
+      expectedResultHash !== sampleResult.resultHash) ||
     boundary.source.primaryResultHash !== sampleResult.resultHash ||
     boundary.source.primaryResultFileHash !== resultFileHash ||
     !runsKeepTheQuestionFair(randomRows, wholeCustomers)
@@ -102,7 +106,7 @@ function MechanismDiagram({
 }: {
   presentation: VerifiedBeliefBreakPresentation;
 }) {
-  const isPreview = presentation === "preview";
+  const isPreview = presentation !== "full";
 
   return (
     <figure
@@ -302,12 +306,14 @@ function PreviewComparison({
 function VerifiedEvidence({
   evidence,
   presentation,
+  revealFinding,
 }: {
   evidence: VerifiedBeliefBreakEvidence;
   presentation: VerifiedBeliefBreakPresentation;
+  revealFinding: boolean;
 }) {
   const { randomRows, wholeCustomers } = evidence;
-  const isPreview = presentation === "preview";
+  const isPreview = presentation !== "full";
 
   return (
     <div
@@ -351,10 +357,31 @@ function VerifiedEvidence({
       )}
 
       <p className={styles.finding}>
-        {isPreview
-          ? "A high score on familiar customers did not mean the model generalized to new ones."
-          : "When familiar customers disappear from the test set, the score falls. The original score did not demonstrate generalization to new customers."}
+        {revealFinding
+          ? isPreview
+            ? `${asPercent(randomRows.metrics.accuracy)} became ${asPercent(wholeCustomers.metrics.accuracy)} when the test contained only unseen customers. A high score on familiar customers did not mean the model generalized to new ones.`
+            : "When familiar customers disappear from the test set, the score falls. The original score did not demonstrate generalization to new customers."
+          : "What do you notice when the same model is tested on unseen customers? Record your interpretation before CounterLab reveals its bounded reading."}
       </p>
+
+      {revealFinding ? (
+        <dl className={styles.takeaway}>
+          <div>
+            <dt>Boundary consequence</dt>
+            <dd>
+              The conclusion changes when the test contains only unseen customer
+              identities.
+            </dd>
+          </div>
+          <div>
+            <dt>Learner benefit</dt>
+            <dd>
+              Choose an evaluation that matches who will be new at deployment
+              time.
+            </dd>
+          </div>
+        </dl>
+      ) : null}
 
       <details className={styles.evidenceDisclosure}>
         <summary>Exact values and integrity</summary>
@@ -424,9 +451,13 @@ function VerifiedEvidence({
 function IntegrityBoundMechanism({
   presentation,
   showModeLabel,
+  expectedResultHash,
+  revealFinding,
 }: {
   presentation: VerifiedBeliefBreakPresentation;
   showModeLabel: boolean;
+  expectedResultHash?: string;
+  revealFinding: boolean;
 }) {
   const [integrity, setIntegrity] = useState<IntegrityState>({
     status: "checking",
@@ -434,7 +465,7 @@ function IntegrityBoundMechanism({
 
   useEffect(() => {
     let active = true;
-    void verifyBundledEvidence()
+    void verifyBundledEvidence(expectedResultHash)
       .then((evidence) => {
         if (active) setIntegrity({ status: "verified", evidence });
       })
@@ -444,12 +475,12 @@ function IntegrityBoundMechanism({
     return () => {
       active = false;
     };
-  }, []);
+  }, [expectedResultHash]);
 
   return (
     <div
-      className={`${styles.mechanismBody} ${presentation === "preview" ? styles.previewBody : ""}`}
-      data-layout={presentation === "preview" ? "stable-preview" : "flow"}
+      className={`${styles.mechanismBody} ${presentation !== "full" ? styles.previewBody : ""} ${presentation === "compact" ? styles.compactBody : ""}`}
+      data-layout={presentation !== "full" ? "stable-preview" : "flow"}
     >
       {showModeLabel ? (
         <span className={styles.modeLabel}>
@@ -487,6 +518,7 @@ function IntegrityBoundMechanism({
         <VerifiedEvidence
           evidence={integrity.evidence}
           presentation={presentation}
+          revealFinding={revealFinding}
         />
       ) : null}
     </div>
@@ -495,18 +527,24 @@ function IntegrityBoundMechanism({
 
 export function VerifiedBeliefBreakMechanism({
   presentation = "full",
+  expectedResultHash,
+  revealFinding = true,
 }: {
   presentation?: VerifiedBeliefBreakPresentation;
+  expectedResultHash?: string;
+  revealFinding?: boolean;
 }) {
   return (
     <section
-      className={`${styles.embeddedMechanism} ${presentation === "preview" ? styles.preview : ""}`}
+      className={`${styles.embeddedMechanism} ${presentation !== "full" ? styles.preview : ""} ${presentation === "compact" ? styles.compact : ""}`}
       aria-label="Verified sample belief-break mechanism"
       data-presentation={presentation}
     >
       <IntegrityBoundMechanism
         presentation={presentation}
         showModeLabel={true}
+        revealFinding={revealFinding}
+        {...(expectedResultHash === undefined ? {} : { expectedResultHash })}
       />
     </section>
   );
@@ -518,7 +556,7 @@ export function VerifiedBeliefBreakTheater({
   presentation?: VerifiedBeliefBreakPresentation;
 }) {
   const headingId = useId();
-  const isPreview = presentation === "preview";
+  const isPreview = presentation !== "full";
 
   return (
     <section
@@ -547,6 +585,7 @@ export function VerifiedBeliefBreakTheater({
       <IntegrityBoundMechanism
         presentation={presentation}
         showModeLabel={false}
+        revealFinding={true}
       />
     </section>
   );

@@ -1,0 +1,19 @@
+.state {
+  min-height: 220px;
+  display: grid;
+  place-content: center;
+  gap: 7px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--ink-soft);
+  background: var(--paper-raised);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.state strong {
+  color: var(--ink);
+  font-size: 15px;
+}

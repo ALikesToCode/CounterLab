@@ -718,7 +718,7 @@ describe("CounterLab judged flow", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: /see a belief break in twenty seconds/i,
+        name: /see a verified belief break in ten seconds/i,
       }),
     ).toBeInTheDocument();
     expect(window.location.pathname).toBe("/judge");
@@ -778,6 +778,15 @@ describe("CounterLab judged flow", () => {
     expect(
       screen.getByRole("button", { name: /test this claim/i }),
     ).toBeDisabled();
+    expect(
+      screen.getByText(/completed fixed sample preview/i),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("98.5%")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/verified sample belief-break mechanism/i),
+    ).toHaveTextContent("59.4%");
+    expect(screen.getByText("Boundary consequence")).toBeInTheDocument();
+    expect(screen.getByText("Learner benefit")).toBeInTheDocument();
     const proofSummary = screen.getByText("Evidence & proof");
     await user.click(screen.getByRole("link", { name: /how proof works/i }));
     expect(proofSummary.closest("details")).toHaveAttribute("open");
@@ -797,13 +806,25 @@ describe("CounterLab judged flow", () => {
     await user.click(screen.getByRole("button", { name: "New question" }));
     expect(questionInput).toHaveValue("");
     expect(questionInput).toHaveFocus();
-    expect(document.body).not.toHaveTextContent(/98\.5|59\.4/);
     expect(document.body).not.toHaveTextContent(
       /formalize|discriminating|canonical|mutation/i,
     );
     expect(document.body).not.toHaveTextContent(
       /teaches two machine-learning mistakes/i,
     );
+
+    await user.click(
+      screen.getByRole("button", { name: /try verified sample/i }),
+    );
+    expect(
+      await screen.findByRole("heading", {
+        name: /what do you think the score means/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/verified sample belief-break mechanism/i),
+    ).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/59\.4%/);
   });
 
   it("preserves a plain question and offers an honest evidence choice before notebook setup", async () => {
@@ -1334,6 +1355,11 @@ describe("CounterLab judged flow", () => {
         name: /compare the verified result/i,
       }),
     ).toBeInTheDocument();
+    expect(
+      document.querySelector(
+        '[data-trusted-visual-id="verified_sample_belief_break_v1"]',
+      ),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /apply/i })).toBeDisabled();
     const boundaryTab = screen.getByRole("tab", { name: /boundary/i });
     expect(boundaryTab).toBeDisabled();
@@ -2284,6 +2310,20 @@ describe("CounterLab judged flow", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getByText("Verified result")).toBeInTheDocument();
+    expect(
+      await screen.findByLabelText(/verified sample belief-break mechanism/i),
+    ).toHaveTextContent("98.5%");
+    expect(
+      screen.getByLabelText(/verified sample belief-break mechanism/i),
+    ).toHaveTextContent("59.4%");
+    expect(
+      screen.getByLabelText(/verified sample belief-break mechanism/i),
+    ).toHaveTextContent(/record your interpretation/i);
+    expect(document.body).not.toHaveTextContent(
+      /a high score on familiar customers did not mean/i,
+    );
+    expect(screen.queryByText("Boundary consequence")).not.toBeInTheDocument();
+    expect(screen.queryByText("Learner benefit")).not.toBeInTheDocument();
     const tabs = screen.getByRole("tablist", { name: /experiment views/i });
     const applyTab = within(tabs).getByRole("tab", { name: /apply/i });
     const exploreTab = within(tabs).getByRole("tab", { name: /explore/i });
@@ -2305,6 +2345,11 @@ describe("CounterLab judged flow", () => {
       screen.getByRole("textbox", { name: /what do you notice/i }),
       "The result changes when the evaluation boundary changes.",
     );
+    expect(document.body).toHaveTextContent(
+      /a high score on familiar customers did not mean/i,
+    );
+    expect(screen.getByText("Boundary consequence")).toBeInTheDocument();
+    expect(screen.getByText("Learner benefit")).toBeInTheDocument();
     expect(exploreTab).toBeEnabled();
     expect(boundaryTab).toBeEnabled();
     expect(document.body).toHaveTextContent(/98\.5% became 59\.4%/i);
@@ -2322,9 +2367,11 @@ describe("CounterLab judged flow", () => {
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/verified sample exploration/i),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+      screen.getAllByText(/verified sample exploration/i).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.queryByRole("table", { name: /verified boundary map values/i }),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /reveal the map/i }));
     expect(
@@ -2368,6 +2415,11 @@ describe("CounterLab judged flow", () => {
     expect(
       screen.getByText(/verified replay · read-only stored evidence/i),
     ).toBeInTheDocument();
+    expect(
+      document.querySelector(
+        '[data-trusted-visual-id="verified_sample_belief_break_v1"]',
+      ),
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /try the rule on a new problem/i }),

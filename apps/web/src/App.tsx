@@ -37,6 +37,7 @@ import {
 } from "./hooks/runnerCheckpoint";
 import { parseStudioLocation, studioPath } from "./app/AppRouter";
 import { ClaimPathChooser } from "./components/learner/ClaimPathChooser";
+import { DeferredVerifiedBeliefBreak } from "./components/learner/DeferredVerifiedBeliefBreak";
 import { LearnerCompletion } from "./components/learner/LearnerCompletion";
 import { LearnerCoach } from "./components/learner/LearnerCoach";
 import { NeedAHint } from "./components/learner/NeedAHint";
@@ -104,7 +105,7 @@ import {
 import { subjectPackHint } from "./features/learner/subjectPackHints";
 import { useLearnerStageTiming } from "./hooks/useLearnerStageTiming";
 
-import { getRun, sampleArtifact, verifiedReplay } from "./sample";
+import { getRun, sampleArtifact, sampleResult, verifiedReplay } from "./sample";
 import { SAMPLE_LEAKAGE_QUESTION } from "../shared/sample-authority";
 
 const LazySampleBoundaryPanel = lazy(async () => {
@@ -922,29 +923,48 @@ function Landing({
     >
       <section className="landing-canvas" aria-labelledby="landing-title">
         <div className="question-first-layout">
-          <div className="landing-intro">
-            <h1 id="landing-title" tabIndex={-1}>
-              What result are you trying to understand?
-            </h1>
-          </div>
+          <section className="landing-question-column">
+            <div className="landing-intro">
+              <h1 id="landing-title" tabIndex={-1}>
+                What result are you trying to understand?
+              </h1>
+            </div>
 
-          <QuestionComposer
-            value={claim}
-            onChange={updateClaim}
-            onAttachNotebook={attachNotebook}
-            onSubmit={testClaim}
-            inputRef={composerInputRef}
-            busy={busy}
-          />
+            <QuestionComposer
+              value={claim}
+              onChange={updateClaim}
+              onAttachNotebook={attachNotebook}
+              onSubmit={testClaim}
+              inputRef={composerInputRef}
+              busy={busy}
+            />
 
-          <button
-            className="landing-mobile-sample"
-            type="button"
-            disabled={busy}
-            onClick={startSample}
+            <button
+              className="landing-mobile-sample"
+              type="button"
+              disabled={busy}
+              onClick={startSample}
+            >
+              Start verified sample lesson <span aria-hidden="true">→</span>
+            </button>
+          </section>
+
+          <aside
+            className="landing-belief-break"
+            aria-labelledby="landing-belief-break-title"
           >
-            Start verified sample lesson <span aria-hidden="true">→</span>
-          </button>
+            <header>
+              <p>Completed fixed sample preview · not your current result</p>
+              <h2 id="landing-belief-break-title">
+                Can a familiar-row score support a new-customer claim?
+              </h2>
+              <blockquote>
+                “This score proves the model works for customers it has never
+                seen.”
+              </blockquote>
+            </header>
+            <DeferredVerifiedBeliefBreak presentation="compact" />
+          </aside>
 
           <div
             className="landing-proof-note"
@@ -3232,6 +3252,16 @@ function LeakageRealityScreen({
       : session?.mode.kind !== "live_notebook" ||
         session.boundaryMapAuthority !== undefined;
   const theaterPayload: ExperimentTheaterVerifiedPayload = {
+    ...(session?.mode.kind === "sample_lesson" &&
+    result.resultHash === sampleResult.resultHash
+      ? {
+          trustedVisual: {
+            id: "verified_sample_belief_break_v1" as const,
+            resultHash: result.resultHash,
+            revealFinding: interpretationComplete,
+          },
+        }
+      : {}),
     comparison: {
       title: "Familiar rows versus new customers",
       accessibleSummary: `Verified accuracy comparison: familiar rows ${percent.format(random.metrics.accuracy)}; new customers ${percent.format(group.metrics.accuracy)}.`,

@@ -26,7 +26,7 @@ const configuredHealth: CapabilityHealth = {
 };
 
 describe("JudgeModeView", () => {
-  it("distinguishes sample, live, and legacy replay authority", () => {
+  it("distinguishes sample, live, and legacy replay authority", async () => {
     render(
       <JudgeModeView
         health={configuredHealth}
@@ -39,9 +39,25 @@ describe("JudgeModeView", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: /see a belief break in twenty seconds/i,
+        name: /see a verified belief break in ten seconds/i,
       }),
     ).toBeInTheDocument();
+    const proof = screen.getByRole("complementary", {
+      name: /ten second fixed sample preview/i,
+    });
+    expect(proof).toHaveTextContent(
+      /completed fixed sample.*not a live result/i,
+    );
+    expect(proof).toHaveTextContent(
+      /no gpt-5\.6, codex, or runner call occurs/i,
+    );
+    expect(await screen.findByText("98.5%")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/verified sample belief-break mechanism/i),
+    ).toHaveTextContent("98.5%");
+    expect(proof).toHaveTextContent("59.4%");
+    expect(proof).toHaveTextContent("Boundary consequence");
+    expect(proof).toHaveTextContent("Learner benefit");
     expect(screen.getByText("Sample lesson")).toBeInTheDocument();
     expect(screen.getByText("Live notebook analysis")).toBeInTheDocument();
     expect(screen.getByText("Verified replay")).toBeInTheDocument();

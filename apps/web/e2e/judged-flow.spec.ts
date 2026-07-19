@@ -15,6 +15,7 @@ import {
 } from "@counterlab/contracts";
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 
 const claim =
   "The 98 percent random split accuracy proves this model generalizes to customers it has never seen.";
@@ -544,6 +545,164 @@ async function expectMinimumTarget(locator: Locator, minimum = 44) {
   expect(box!.width).toBeGreaterThanOrEqual(minimum);
 }
 
+type BrowserFailureLog = {
+  consoleErrors: string[];
+  failedRequests: string[];
+  failedResponses: string[];
+};
+
+function observeBrowserFailures(page: Page): BrowserFailureLog {
+  const failures: BrowserFailureLog = {
+    consoleErrors: [],
+    failedRequests: [],
+    failedResponses: [],
+  };
+  page.on("console", (message) => {
+    if (message.type() === "error") failures.consoleErrors.push(message.text());
+  });
+  page.on("requestfailed", (request) => {
+    failures.failedRequests.push(
+      `${request.method()} ${request.url()} ${request.failure()?.errorText ?? "unknown failure"}`,
+    );
+  });
+  page.on("response", (response) => {
+    if (response.status() >= 400) {
+      failures.failedResponses.push(
+        `${response.status()} ${response.request().method()} ${response.url()}`,
+      );
+    }
+  });
+  return failures;
+}
+
+async function resetWithBrowserFailureObservation(
+  page: Page,
+): Promise<BrowserFailureLog> {
+  await reset(page);
+  await page.waitForLoadState("networkidle");
+  const failures = observeBrowserFailures(page);
+  await page.reload({ waitUntil: "networkidle" });
+  return failures;
+}
+
+function expectNoBrowserFailures(failures: BrowserFailureLog) {
+  expect(failures.consoleErrors, "browser console errors").toEqual([]);
+  expect(failures.failedRequests, "failed browser requests").toEqual([]);
+  expect(failures.failedResponses, "HTTP responses with error status").toEqual(
+    [],
+  );
+}
+
+async function expectEntirelyInFirstViewport(
+  page: Page,
+  locator: Locator,
+  label: string,
+) {
+  await expect(locator, label).toBeVisible();
+  const viewport = page.viewportSize();
+  const box = await locator.boundingBox();
+  expect(viewport, `${label}: viewport`).not.toBeNull();
+  expect(box, `${label}: bounding box`).not.toBeNull();
+  expect(box!.x, `${label}: left edge`).toBeGreaterThanOrEqual(0);
+  expect(box!.y, `${label}: top edge`).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width, `${label}: right edge`).toBeLessThanOrEqual(
+    viewport!.width,
+  );
+  expect(box!.y + box!.height, `${label}: bottom edge`).toBeLessThanOrEqual(
+    viewport!.height,
+  );
+}
+
+async function expectBeliefBreakInFirstViewport(
+  page: Page,
+  surface: Locator,
+  modeLabel: RegExp,
+) {
+  const mechanism = surface.getByRole("region", {
+    name: "Verified sample belief-break mechanism",
+  });
+  const requiredFirstFoldContent = [
+    {
+      label: "fixed-sample authority label",
+      locator: surface.getByText(modeLabel),
+    },
+    {
+      label: "learner claim",
+      locator: surface.getByText(
+        /This score proves the model works for customers it has never seen/i,
+      ),
+    },
+    {
+      label: "one changed evaluation unit",
+      locator: mechanism.getByText("Only the evaluation unit changed", {
+        exact: true,
+      }),
+    },
+    {
+      label: "familiar-row score",
+      locator: mechanism.getByText("98.5%", { exact: true }),
+    },
+    {
+      label: "familiar-row evaluation",
+      locator: mechanism.getByText("Random-row test", { exact: true }),
+    },
+    {
+      label: "unseen-customer score",
+      locator: mechanism.getByText("59.4%", { exact: true }),
+    },
+    {
+      label: "unseen-customer evaluation",
+      locator: mechanism.getByText("New-customer test", { exact: true }),
+    },
+    {
+      label: "held-fixed controls",
+      locator: mechanism.getByText(
+        /Model, features, preprocessing, sample sizes, and seed stayed fixed/i,
+      ),
+    },
+    {
+      label: "Boundary consequence",
+      locator: mechanism.getByText("Boundary consequence", { exact: true }),
+    },
+    {
+      label: "bounded conclusion",
+      locator: mechanism.getByText(
+        /The conclusion changes when the test contains only unseen customer identities/i,
+      ),
+    },
+    {
+      label: "learner benefit",
+      locator: mechanism.getByText("Learner benefit", { exact: true }),
+    },
+    {
+      label: "deployment benefit",
+      locator: mechanism.getByText(
+        /Choose an evaluation that matches who will be new at deployment time/i,
+      ),
+    },
+  ];
+
+  await expect(mechanism).toBeVisible();
+  for (const required of requiredFirstFoldContent) {
+    await expectEntirelyInFirstViewport(page, required.locator, required.label);
+  }
+}
+
+async function captureBeliefBreakScreenshot(page: Page, fileName: string) {
+  const configuredDirectory =
+    process.env.COUNTERLAB_E2E_BELIEF_BREAK_EVIDENCE_DIR;
+  if (
+    configuredDirectory === undefined ||
+    configuredDirectory.trim().length === 0
+  ) {
+    return;
+  }
+  const destination = await ensureRuntimeParent(
+    resolve(configuredDirectory, fileName),
+  );
+  await page.screenshot({ path: destination, fullPage: false });
+}
+
 async function openLiveSetup(page: Page, question = claim) {
   await reset(page);
   await page.getByLabel("Your question or claim").fill(question);
@@ -889,6 +1048,164 @@ test.describe("production release transport", () => {
   });
 });
 
+const beliefBreakViewports = [
+  { name: "desktop", width: 1440, height: 900 },
+  { name: "mobile", width: 390, height: 844 },
+] as const;
+
+for (const viewport of beliefBreakViewports) {
+  test(`${viewport.name} Landing shows the verified fixed-sample belief break in the first viewport`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    const failures = await resetWithBrowserFailureObservation(page);
+
+    await page.keyboard.press("Tab");
+    await expect(
+      page.getByRole("link", { name: /Skip to main content/i }),
+    ).toBeFocused();
+    await page.keyboard.press("Tab");
+    const composer = page.getByLabel("Your question or claim");
+    await expect(composer).toBeFocused();
+    await expectEntirelyInFirstViewport(
+      page,
+      composer,
+      "question composer before secondary paths",
+    );
+
+    const preview = page.getByRole("complementary", {
+      name: /Can a familiar-row score support a new-customer claim/i,
+    });
+    await expectBeliefBreakInFirstViewport(
+      page,
+      preview,
+      /Completed fixed sample preview.*not your current result/i,
+    );
+    await expectNoHorizontalOverflow(page);
+    await captureBeliefBreakScreenshot(
+      page,
+      `belief-break-landing-${viewport.name}.png`,
+    );
+    await page.waitForLoadState("networkidle");
+    expectNoBrowserFailures(failures);
+  });
+
+  test(`${viewport.name} Judge Mode shows the honest fixed-sample belief break in the first viewport`, async ({
+    page,
+  }) => {
+    const failures = observeBrowserFailures(page);
+    await page.setViewportSize(viewport);
+    await page.goto("/judge", { waitUntil: "networkidle" });
+    await expect(page).toHaveURL(/\/judge$/);
+
+    const preview = page.getByRole("complementary", {
+      name: /Ten second fixed sample preview/i,
+    });
+    await expectBeliefBreakInFirstViewport(
+      page,
+      preview,
+      /Completed fixed sample.*not a live result/i,
+    );
+    await expect(
+      preview.getByText(
+        /Approved fixed sample framing.*No GPT-5\.6, Codex, or runner call occurs/i,
+      ),
+    ).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await captureBeliefBreakScreenshot(
+      page,
+      `belief-break-judge-${viewport.name}.png`,
+    );
+    await page.waitForLoadState("networkidle");
+    expectNoBrowserFailures(failures);
+  });
+
+  test(`${viewport.name} sample removes the preview before Prediction and mounts the trusted mechanism only after sealing`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    const failures = await resetWithBrowserFailureObservation(page);
+    await expect(
+      page.getByRole("region", {
+        name: "Verified sample belief-break mechanism",
+      }),
+    ).toBeVisible();
+
+    const startSample =
+      viewport.width <= 700
+        ? page.getByRole("button", {
+            name: /Start verified sample lesson/i,
+          })
+        : page.getByRole("button", { name: /Try verified sample/i });
+    await startSample.click();
+    await expect(
+      page.getByRole("heading", { name: /What do you think the score means/i }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("region", {
+        name: "Verified sample belief-break mechanism",
+      }),
+    ).toHaveCount(0);
+    await expect(page.locator("body")).not.toContainText("59.4%");
+
+    await page
+      .getByRole("button", { name: /Compare two explanations/i })
+      .click();
+    await page
+      .getByRole("button", { name: /Yes, this captures my view/i })
+      .click();
+    await expect(
+      page.getByRole("heading", {
+        name: /Seal what you expect before the result appears/i,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("region", {
+        name: "Verified sample belief-break mechanism",
+      }),
+    ).toHaveCount(0);
+    await expect(page.locator("body")).not.toContainText("59.4%");
+
+    await page.getByLabel(/Fall materially/i).check();
+    await page.getByRole("button", { name: /Seal my prediction/i }).click();
+    await expect(
+      page.getByRole("heading", { name: /The result is ready/i }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("region", {
+        name: "Verified sample belief-break mechanism",
+      }),
+    ).toHaveCount(0);
+
+    await page.getByRole("button", { name: /Show me what happened/i }).click();
+    const trustedVisual = page.locator(
+      '[data-trusted-visual-id="verified_sample_belief_break_v1"]',
+    );
+    await expect(trustedVisual).toBeVisible();
+    const trustedMechanism = trustedVisual.getByRole("region", {
+      name: "Verified sample belief-break mechanism",
+    });
+    await expect(trustedMechanism).toBeVisible();
+    await expect(
+      trustedMechanism.getByText("59.4%", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Pinned prediction")).toContainText(
+      /falls materially/i,
+    );
+    await expect(
+      page.getByRole("region", {
+        name: "Verified sample belief-break mechanism",
+      }),
+    ).toHaveCount(1);
+    await captureBeliefBreakScreenshot(
+      page,
+      `belief-break-sample-post-seal-${viewport.name}.png`,
+    );
+    await page.waitForLoadState("networkidle");
+    expectNoBrowserFailures(failures);
+  });
+}
+
 test("Judge Mode distinguishes every authority path", async ({ page }) => {
   const healthResponse = await page.request.get("/api/health");
   expect(healthResponse.ok()).toBe(true);
@@ -913,7 +1230,7 @@ test("Judge Mode distinguishes every authority path", async ({ page }) => {
   await expect(page).toHaveURL(/\/judge$/);
   await expect(
     page.getByRole("heading", {
-      name: /see a belief break in twenty seconds/i,
+      name: /see a verified belief break in ten seconds/i,
     }),
   ).toBeVisible();
   await expect(page.getByText("Sample lesson")).toBeVisible();
@@ -952,7 +1269,7 @@ test("Judge Mode distinguishes every authority path", async ({ page }) => {
   await expect(page).toHaveURL(/\/judge$/);
   await expect(
     page.getByRole("heading", {
-      name: /see a belief break in twenty seconds/i,
+      name: /see a verified belief break in ten seconds/i,
     }),
   ).toBeVisible();
 

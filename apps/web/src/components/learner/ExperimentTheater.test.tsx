@@ -95,6 +95,80 @@ describe("ExperimentTheater", () => {
     expect(screen.getByRole("tablist")).toBeInTheDocument();
   });
 
+  it("mounts only the registered visual after a verified payload", async () => {
+    const visualPayload: ExperimentTheaterVerifiedPayload = {
+      ...payload,
+      trustedVisual: {
+        id: "verified_sample_belief_break_v1",
+        resultHash: "not-the-registered-sample-result",
+        revealFinding: false,
+      },
+    };
+    const { rerender } = render(
+      <ExperimentTheater prediction="I expect the score to stay high." />,
+    );
+
+    expect(
+      document.querySelector(
+        '[data-trusted-visual-id="verified_sample_belief_break_v1"]',
+      ),
+    ).not.toBeInTheDocument();
+
+    rerender(
+      <ExperimentTheater
+        prediction="I expect the score to stay high."
+        verifiedPayload={visualPayload}
+      />,
+    );
+
+    expect(
+      document.querySelector(
+        '[data-trusted-visual-id="verified_sample_belief_break_v1"]',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("group", {
+        name: /integrity-bound verified sample comparison/i,
+      }),
+    ).toHaveAttribute(
+      "data-trusted-visual-id",
+      "verified_sample_belief_break_v1",
+    );
+    expect(
+      await screen.findByRole("alert", {
+        name: /verified belief-break evidence unavailable/i,
+      }),
+    ).toHaveTextContent(/refused to present values/i);
+    expect(screen.queryByText("98.5%")).not.toBeInTheDocument();
+    expect(screen.queryByText("59.4%")).not.toBeInTheDocument();
+    expect(screen.queryByText(payload.finding)).not.toBeInTheDocument();
+  });
+
+  it("fails closed when a runtime payload names an unknown visual", () => {
+    const unknownVisualPayload = {
+      ...payload,
+      trustedVisual: {
+        id: "unregistered-result-visual",
+        resultHash: "untrusted-result",
+        revealFinding: true,
+      },
+    } as unknown as ExperimentTheaterVerifiedPayload;
+
+    render(
+      <ExperimentTheater
+        prediction="I expect the score to stay high."
+        verifiedPayload={unknownVisualPayload}
+      />,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /registered component did not resolve/i,
+    );
+    expect(screen.queryByText("98.5%")).not.toBeInTheDocument();
+    expect(screen.queryByText("59.4%")).not.toBeInTheDocument();
+    expect(screen.queryByText(payload.finding)).not.toBeInTheDocument();
+  });
+
   it("expands one local view at a time and keeps completed views reviewable", async () => {
     const user = userEvent.setup();
     render(

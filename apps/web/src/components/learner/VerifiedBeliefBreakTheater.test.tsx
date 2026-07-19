@@ -48,6 +48,8 @@ describe("VerifiedBeliefBreakTheater", () => {
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(screen.queryByText("98.5%")).not.toBeInTheDocument();
     expect(screen.queryByText("389")).not.toBeInTheDocument();
+    expect(screen.queryByText("Boundary consequence")).not.toBeInTheDocument();
+    expect(screen.queryByText("Learner benefit")).not.toBeInTheDocument();
   });
 
   it("uses an explicit stable preview presentation instead of compressing the full Theater", () => {
@@ -94,6 +96,8 @@ describe("VerifiedBeliefBreakTheater", () => {
     expect(
       within(theater).getByText(/did not mean the model generalized/i),
     ).toBeVisible();
+    expect(within(theater).getByText("Boundary consequence")).toBeVisible();
+    expect(within(theater).getByText("Learner benefit")).toBeVisible();
     expect(
       within(splitMechanism).getByRole("article", {
         name: /customer a appears in both training and test/i,
@@ -166,6 +170,8 @@ describe("VerifiedBeliefBreakTheater", () => {
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(screen.queryByText("98.5%")).not.toBeInTheDocument();
     expect(screen.queryByText("389")).not.toBeInTheDocument();
+    expect(screen.queryByText("Boundary consequence")).not.toBeInTheDocument();
+    expect(screen.queryByText("Learner benefit")).not.toBeInTheDocument();
   });
 
   it("exports the verified mechanism as a reusable integrity-bound body", async () => {

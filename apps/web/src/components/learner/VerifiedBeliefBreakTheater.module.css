@@ -600,6 +600,32 @@
   line-height: 1.5;
 }
 
+.takeaway {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 12px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.takeaway > div {
+  min-width: 0;
+}
+
+.takeaway dt {
+  color: var(--aqua-bright);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.takeaway dd {
+  margin: 4px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .previewEvidence .evidenceDisclosure {
   margin-top: 8px;
 }
@@ -610,6 +636,37 @@
 
 .embeddedMechanism.preview .modeLabel {
   margin-bottom: 0;
+}
+
+.embeddedMechanism.compact,
+.compactBody,
+.compactBody .previewEvidence {
+  min-height: 0;
+}
+
+.compactBody .previewEvidence {
+  margin-top: 10px;
+}
+
+.compactBody .previewSplits {
+  display: none;
+}
+
+.compactBody .previewComparison {
+  padding-block: 12px;
+}
+
+.compactBody .previewScoreShift {
+  margin-top: 13px;
+}
+
+.compactBody .previewScoreState > strong {
+  font-size: clamp(38px, 8vw, 56px);
+}
+
+.compactBody .previewControlNote,
+.compactBody .finding {
+  margin-top: 10px;
 }
 
 @keyframes evidence-in {
@@ -667,7 +724,7 @@
   }
 
   .previewComparison {
-    padding-block: 20px;
+    padding-block: 12px;
   }
 
   .previewComparison figcaption {
@@ -693,6 +750,29 @@
     gap: 8px;
   }
 
+  .embeddedMechanism.preview,
+  .previewBody,
+  .previewEvidence {
+    min-height: 0;
+  }
+
+  .previewBody .previewEvidence {
+    margin-top: 10px;
+  }
+
+  .previewBody .previewSplits {
+    display: none;
+  }
+
+  .previewBody .previewScoreShift {
+    margin-top: 12px;
+  }
+
+  .previewEvidence .finding {
+    margin-top: 10px;
+    font-size: 14px;
+  }
+
   .previewScoreState > strong {
     font-size: clamp(38px, 11vw, 56px);
   }
@@ -715,6 +795,11 @@
 
   .resultPair strong {
     font-size: clamp(29px, 10vw, 43px);
+  }
+
+  .takeaway {
+    grid-template-columns: 1fr;
+    gap: 9px;
   }
 }
 

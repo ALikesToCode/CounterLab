@@ -7,6 +7,7 @@ import {
 } from "react";
 
 import styles from "./ExperimentTheater.module.css";
+import { DeferredVerifiedBeliefBreak } from "./DeferredVerifiedBeliefBreak";
 
 export const theaterViews = [
   { id: "observe", label: "Observe" },
@@ -24,7 +25,14 @@ export type TheaterView = Readonly<{
   completed: boolean;
 }>;
 
+export type ExperimentTheaterTrustedVisual = Readonly<{
+  id: "verified_sample_belief_break_v1";
+  resultHash: string;
+  revealFinding: boolean;
+}>;
+
 export type ExperimentTheaterVerifiedPayload = Readonly<{
+  trustedVisual?: ExperimentTheaterTrustedVisual;
   comparison: Readonly<{
     title: string;
     accessibleSummary: string;
@@ -35,6 +43,25 @@ export type ExperimentTheaterVerifiedPayload = Readonly<{
   controlledVariables: string;
   views: Readonly<Record<TheaterViewId, TheaterView>>;
 }>;
+
+function TrustedVisual({ visual }: { visual: ExperimentTheaterTrustedVisual }) {
+  if (visual.id !== "verified_sample_belief_break_v1") {
+    return (
+      <div className={styles.trustedVisualUnavailable} role="alert">
+        This verified visual is unavailable because its registered component did
+        not resolve.
+      </div>
+    );
+  }
+
+  return (
+    <DeferredVerifiedBeliefBreak
+      presentation="preview"
+      expectedResultHash={visual.resultHash}
+      revealFinding={visual.revealFinding}
+    />
+  );
+}
 
 function viewEnabled(view: TheaterView): boolean {
   return view.available || view.completed;
@@ -144,40 +171,55 @@ export function ExperimentTheater({
         </div>
       ) : (
         <div className={styles.verifiedContent}>
-          <section
-            id="experiment-theater-comparison"
-            className={styles.comparison}
-            role="group"
-            aria-label={verifiedPayload.comparison.accessibleSummary}
-          >
-            <h3>{verifiedPayload.comparison.title}</h3>
-            <div>
-              <article>
-                <span>{verifiedPayload.comparison.first.label}</span>
-                <strong>{verifiedPayload.comparison.first.value}</strong>
-                {verifiedPayload.comparison.first.detail ===
-                undefined ? null : (
-                  <small>{verifiedPayload.comparison.first.detail}</small>
-                )}
-              </article>
-              <span aria-hidden="true">→</span>
-              <article>
-                <span>{verifiedPayload.comparison.second.label}</span>
-                <strong>{verifiedPayload.comparison.second.value}</strong>
-                {verifiedPayload.comparison.second.detail ===
-                undefined ? null : (
-                  <small>{verifiedPayload.comparison.second.detail}</small>
-                )}
-              </article>
-            </div>
-          </section>
+          {verifiedPayload.trustedVisual === undefined ? (
+            <section
+              id="experiment-theater-comparison"
+              className={styles.comparison}
+              role="group"
+              aria-label={verifiedPayload.comparison.accessibleSummary}
+            >
+              <h3>{verifiedPayload.comparison.title}</h3>
+              <div>
+                <article>
+                  <span>{verifiedPayload.comparison.first.label}</span>
+                  <strong>{verifiedPayload.comparison.first.value}</strong>
+                  {verifiedPayload.comparison.first.detail ===
+                  undefined ? null : (
+                    <small>{verifiedPayload.comparison.first.detail}</small>
+                  )}
+                </article>
+                <span aria-hidden="true">→</span>
+                <article>
+                  <span>{verifiedPayload.comparison.second.label}</span>
+                  <strong>{verifiedPayload.comparison.second.value}</strong>
+                  {verifiedPayload.comparison.second.detail ===
+                  undefined ? null : (
+                    <small>{verifiedPayload.comparison.second.detail}</small>
+                  )}
+                </article>
+              </div>
+            </section>
+          ) : (
+            <section
+              id="experiment-theater-comparison"
+              className={styles.dominantVisual}
+              role="group"
+              aria-label="Integrity-bound verified sample comparison"
+              data-trusted-visual-id={verifiedPayload.trustedVisual.id}
+            >
+              <TrustedVisual visual={verifiedPayload.trustedVisual} />
+            </section>
+          )}
 
-          <div className={styles.finding}>
-            <p>{verifiedPayload.finding}</p>
-            <p>
-              <strong>Held fixed:</strong> {verifiedPayload.controlledVariables}
-            </p>
-          </div>
+          {verifiedPayload.trustedVisual === undefined ? (
+            <div className={styles.finding}>
+              <p>{verifiedPayload.finding}</p>
+              <p>
+                <strong>Held fixed:</strong>{" "}
+                {verifiedPayload.controlledVariables}
+              </p>
+            </div>
+          ) : null}
 
           <div
             className={styles.viewTabs}
