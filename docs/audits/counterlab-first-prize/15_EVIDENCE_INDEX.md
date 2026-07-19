@@ -40,6 +40,7 @@ Evidence labels mean:
 | `3fb4aab86dafe14f138b91fd30337663751b8d49df245d57e6d8da333e137bba` | `evidence/test-results/visual-judge-public-baseline.json`            | Eight landing/Judge/setup/replay desktop/mobile first-fold inventories, console/network summary, and capture metadata.         |
 | `9b4a840f37178054a1b6bdbeee5a12307dc0978afd352e14f04152061247068b` | `evidence/test-results/visual-judge-audit.mjs`                       | Reproducible read-only visual-judge capture script; stock-Chromium fallback, not release qualification.                        |
 | `444382e9b2cd5366e07fed5f31ae849662f5e3228f7c518c708ea8aac98b8972` | `17_VISUAL_JUDGE_GENERATIVE_UI_AND_AGENTIC_CONTROL.md`               | Visual first-30-seconds synthesis, all-stage review, Lab Scene reachability trace, and bounded GPT-5.6 control recommendation. |
+| `8323837e88d071d1946cfa7f52ec67bc23ee9bdceeb41ea3214c924f77d98cde` | `evidence/test-results/visual-agentic-synthesis-validation.md`       | JSON/CSV/Markdown issue integrity, score arithmetic, deliverable/evidence presence, script syntax, and diff checks.            |
 
 Hashes were computed at synthesis time. Browser profile/cache/runtime directories are retained for reproducibility but are not authoritative evidence and are intentionally not indexed file-by-file.
 
@@ -55,6 +56,7 @@ Hashes were computed at synthesis time. Browser profile/cache/runtime directorie
 - `evidence/test-results/final-synthesis-validation.md`
 - `evidence/test-results/visual-judge-public-baseline.json`
 - `evidence/test-results/visual-judge-audit.mjs`
+- `evidence/test-results/visual-agentic-synthesis-validation.md`
 
 The historical one-off browser launch scripts are intentionally not tracked.
 The visual-judge addendum script is retained specifically to make its method
