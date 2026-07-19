@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import type { StudioCommand } from "./types";
 
@@ -35,6 +35,7 @@ export function CommandPalette({
   const input = useRef<HTMLInputElement>(null);
   const palette = useRef<HTMLElement>(null);
   const restoreFocusTo = useRef<HTMLElement | null>(null);
+  const commandA11yId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -127,26 +128,34 @@ export function CommandPalette({
             placeholder="What do you want to do?"
             aria-label="Search commands"
           />
-          <kbd>Esc</kbd>
+          <kbd aria-hidden="true">Esc</kbd>
         </label>
         <div className="command-results">
-          {visible.map((command) => (
-            <button
-              type="button"
-              disabled={command.disabled}
-              key={command.id}
-              onClick={() => {
-                command.run();
-                onClose();
-              }}
-            >
-              <span>
-                <strong>{command.label}</strong>
-                <small>{command.hint}</small>
-              </span>
-              {command.shortcut !== undefined && <kbd>{command.shortcut}</kbd>}
-            </button>
-          ))}
+          {visible.map((command, index) => {
+            const labelId = `${commandA11yId}-${index}-label`;
+            const hintId = `${commandA11yId}-${index}-hint`;
+            return (
+              <button
+                type="button"
+                disabled={command.disabled}
+                key={command.id}
+                aria-labelledby={labelId}
+                aria-describedby={hintId}
+                onClick={() => {
+                  command.run();
+                  onClose();
+                }}
+              >
+                <span>
+                  <strong id={labelId}>{command.label}</strong>
+                  <small id={hintId}>{command.hint}</small>
+                </span>
+                {command.shortcut !== undefined && (
+                  <kbd aria-hidden="true">{command.shortcut}</kbd>
+                )}
+              </button>
+            );
+          })}
           {visible.length === 0 && (
             <p className="command-empty">No matching command.</p>
           )}

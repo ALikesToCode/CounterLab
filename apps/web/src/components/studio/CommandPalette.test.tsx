@@ -11,12 +11,14 @@ const commands: readonly StudioCommand[] = [
     id: "analyze",
     label: "Analyze notebook",
     hint: "Start a live analysis",
+    shortcut: "N",
     run: vi.fn(),
   },
   {
     id: "evidence",
     label: "Show evidence",
     hint: "Open Evidence & proof",
+    shortcut: "E",
     run: vi.fn(),
   },
 ];
@@ -51,6 +53,65 @@ async function openPalette(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("CommandPalette", () => {
+  it("keeps command shortcuts visible and invokes the focused command from the keyboard", async () => {
+    const user = userEvent.setup();
+    const run = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <CommandPalette
+        open
+        commands={[
+          {
+            id: "analyze",
+            label: "Analyze notebook",
+            hint: "Start a live analysis",
+            shortcut: "N",
+            run,
+          },
+        ]}
+        onClose={onClose}
+      />,
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("textbox", { name: "Search commands" }),
+      ).toHaveFocus(),
+    );
+    const command = screen.getByRole("button", { name: /analyze notebook/i });
+    const shortcut = screen.getByText("N", { selector: "kbd" });
+
+    expect(command).toContainElement(shortcut);
+    command.focus();
+    expect(command).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(run).toHaveBeenCalledOnce();
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("uses concise command labels as accessible names and keeps shortcut glyphs out of the accessibility tree", async () => {
+    render(<CommandPalette open commands={commands} onClose={vi.fn()} />);
+    await waitFor(() =>
+      expect(
+        screen.getByRole("textbox", { name: "Search commands" }),
+      ).toHaveFocus(),
+    );
+
+    const analyze = screen.getByRole("button", { name: "Analyze notebook" });
+    const evidence = screen.getByRole("button", { name: "Show evidence" });
+    expect(analyze).toHaveAccessibleName("Analyze notebook");
+    expect(analyze).toHaveAccessibleDescription("Start a live analysis");
+    expect(evidence).toHaveAccessibleName("Show evidence");
+    expect(evidence).toHaveAccessibleDescription("Open Evidence & proof");
+
+    for (const shortcut of ["N", "E", "Esc"]) {
+      expect(screen.getByText(shortcut, { selector: "kbd" })).toHaveAttribute(
+        "aria-hidden",
+        "true",
+      );
+    }
+  });
+
   it("moves initial focus to the command search", async () => {
     const user = userEvent.setup();
     render(<PaletteHarness />);
