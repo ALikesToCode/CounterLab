@@ -406,6 +406,15 @@ describe("contained runtime command policy", () => {
     expect(runtimeLauncher).toContain('platform = "linux/amd64"');
     expect(runtimeLauncher).toContain('snapshotter = "native"');
 
+    const runtimeVerifier = readFileSync(
+      resolve(root, "scripts/verify-contained-runtime.mjs"),
+      "utf8",
+    );
+    for (const attestedEntry of ["clientFifoRoot", "runtimeRun"]) {
+      expect(runtimeLauncher, attestedEntry).toContain(attestedEntry);
+      expect(runtimeVerifier, attestedEntry).toContain(attestedEntry);
+    }
+
     const secretScan = readFileSync(
       resolve(root, "scripts/secret-scan.py"),
       "utf8",

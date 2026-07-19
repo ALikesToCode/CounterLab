@@ -115,6 +115,7 @@ const expectedPaths = {
   containerdRootlesskitApiSocket: `${sessionPrefix}/run/containerd-rootless/api.sock`,
   containerdSocket: `${sessionPrefix}/run/containerd.sock`,
   runtimeCommandSocket: `${sessionPrefix}/run/runtime-command.sock`,
+  clientFifoRoot: `${sessionPrefix}/run/client-fifo`,
   buildkitSocket: `${sessionPrefix}/run/buildkitd.sock`,
   containerdRoot: `${sessionPrefix}/data/containerd`,
   containerdState: `${sessionPrefix}/state/containerd`,
@@ -169,6 +170,7 @@ exactKeys(
   attestation.helperSha256,
   [
     "runtimeClient",
+    "runtimeRun",
     "runtimeServer",
     "commandValidator",
     "attestationVerifier",
