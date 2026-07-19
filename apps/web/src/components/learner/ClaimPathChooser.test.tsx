@@ -25,9 +25,12 @@ describe("ClaimPathChooser", () => {
       screen.getByText("Will this score hold for new customers?"),
     ).toBeInTheDocument();
     await user.click(
-      screen.getByRole("button", { name: /continue with verified sample/i }),
+      screen.getByRole("button", { name: /practice with leakage sample/i }),
     );
     expect(startSample).toHaveBeenCalledOnce();
+    expect(
+      screen.getByText(/never claims this sample analyzed or answered/i),
+    ).toBeInTheDocument();
 
     const notebookOption = screen.getByRole("complementary", {
       name: "Live notebook option",

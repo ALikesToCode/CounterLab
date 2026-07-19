@@ -147,7 +147,7 @@ export function ExperimentTheater({
           <section
             id="experiment-theater-comparison"
             className={styles.comparison}
-            role="img"
+            role="group"
             aria-label={verifiedPayload.comparison.accessibleSummary}
           >
             <h3>{verifiedPayload.comparison.title}</h3>

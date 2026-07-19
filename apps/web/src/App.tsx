@@ -1414,60 +1414,65 @@ function BeliefScreen({
         onReject={() => stop("rejected")}
       />
 
-      <section className="evidence-strip" aria-label="Evidence references">
-        {belief === undefined ? (
-          <>
-            <span className="evidence-chip">
-              Cell 3 · source <strong>customer_id encoded</strong>
-            </span>
-            <span className="evidence-chip">
-              Cell 3 · output 0 <strong>98.5% accuracy</strong>
-            </span>
-            <span className="evidence-chip">
-              Schema <strong>480 repeated customers</strong>
-            </span>
-          </>
-        ) : (
-          belief.evidenceRefs.slice(0, 3).map((evidence) => (
-            <span className="evidence-chip" key={evidence.hash}>
-              {evidence.cellIndex === undefined
-                ? evidence.kind
-                : `Cell ${evidence.cellIndex}${
-                    evidence.outputIndex === undefined
-                      ? " · source"
-                      : ` · output ${evidence.outputIndex}`
-                  }`}{" "}
-              <strong>{evidence.relevance}</strong>
-              <small>{evidence.excerpt}</small>
-            </span>
-          ))
-        )}
-      </section>
+      <details className="prediction-proof">
+        <summary>Evidence &amp; proof</summary>
+        <div className="prediction-proof-body">
+          <section className="evidence-strip" aria-label="Evidence references">
+            {belief === undefined ? (
+              <>
+                <span className="evidence-chip">
+                  Cell 3 · source <strong>customer_id encoded</strong>
+                </span>
+                <span className="evidence-chip">
+                  Cell 3 · output 0 <strong>98.5% accuracy</strong>
+                </span>
+                <span className="evidence-chip">
+                  Schema <strong>480 repeated customers</strong>
+                </span>
+              </>
+            ) : (
+              belief.evidenceRefs.slice(0, 3).map((evidence) => (
+                <span className="evidence-chip" key={evidence.hash}>
+                  {evidence.cellIndex === undefined
+                    ? evidence.kind
+                    : `Cell ${evidence.cellIndex}${
+                        evidence.outputIndex === undefined
+                          ? " · source"
+                          : ` · output ${evidence.outputIndex}`
+                      }`}{" "}
+                  <strong>{evidence.relevance}</strong>
+                  <small>{evidence.excerpt}</small>
+                </span>
+              ))
+            )}
+          </section>
 
-      <section className="intervention panel">
-        <div>
-          <p className="eyebrow">The fairer test</p>
-          <h2>{copy.fairTest}</h2>
-          <p>{copy.intervention}</p>
+          <section className="intervention panel">
+            <div>
+              <p className="eyebrow">The fairer test</p>
+              <h2>{copy.fairTest}</h2>
+              <p>{copy.intervention}</p>
+            </div>
+            <details>
+              <summary>Alternatives, limitations, and uncertainty</summary>
+              <p>
+                {belief === undefined
+                  ? "Class imbalance and temporal drift remain alternatives. The available notebook evidence is sufficient to test entity leakage, but this experiment does not establish production performance or causality."
+                  : `${belief.alternatives
+                      .map(
+                        (alternative) =>
+                          `${alternative.label}: ${alternative.rationale}`,
+                      )
+                      .join(" ")} ${belief.limitations.join(" ")}`}
+              </p>
+            </details>
+          </section>
+
+          <details className="concept-help panel">
+            <summary>Why can this test teach us something?</summary>
+            <p>{copy.help}</p>
+          </details>
         </div>
-        <details>
-          <summary>Alternatives, limitations, and uncertainty</summary>
-          <p>
-            {belief === undefined
-              ? "Class imbalance and temporal drift remain alternatives. The available notebook evidence is sufficient to test entity leakage, but this experiment does not establish production performance or causality."
-              : `${belief.alternatives
-                  .map(
-                    (alternative) =>
-                      `${alternative.label}: ${alternative.rationale}`,
-                  )
-                  .join(" ")} ${belief.limitations.join(" ")}`}
-          </p>
-        </details>
-      </section>
-
-      <details className="concept-help panel">
-        <summary>Why can this test teach us something?</summary>
-        <p>{copy.help}</p>
       </details>
 
       {confirmed && (
@@ -1560,6 +1565,18 @@ function BuildScreen({
         />
       )}
 
+      <div className="continue-row">
+        <p>Ready? Compare your prediction with what the test found.</p>
+        <button
+          className="button button-primary"
+          type="button"
+          onClick={openResult}
+        >
+          {resultReady ? "Show me what happened" : "Run the fair test"}{" "}
+          <Mark name="arrow" />
+        </button>
+      </div>
+
       <FairTestBuilder
         {...fairTest}
         events={[]}
@@ -1583,18 +1600,6 @@ function BuildScreen({
           },
         ]}
       />
-
-      <div className="continue-row">
-        <p>Ready? Compare your prediction with what the test found.</p>
-        <button
-          className="button button-primary"
-          type="button"
-          onClick={openResult}
-        >
-          {resultReady ? "Show me what happened" : "Run the fair test"}{" "}
-          <Mark name="arrow" />
-        </button>
-      </div>
     </main>
   );
 }

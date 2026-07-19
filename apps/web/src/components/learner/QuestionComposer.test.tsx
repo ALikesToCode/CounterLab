@@ -36,6 +36,9 @@ describe("QuestionComposer", () => {
       "State a claim or attach a notebook…",
     );
     expect(input).toHaveAccessibleName("Your question or claim");
+    expect(
+      screen.getByRole("group", { name: "Prompt starters" }),
+    ).toBeInTheDocument();
 
     await user.click(
       screen.getByRole("button", {
@@ -162,7 +165,7 @@ describe("QuestionComposer", () => {
       screen.getByRole("button", { name: "Preparing test…" }),
     ).toBeDisabled();
     for (const starter of screen.getAllByRole("button", {
-      name: /fail on new customers|rare cases are being caught/u,
+      name: /fail on new customers|repeated customers make my test score/u,
     })) {
       expect(starter).toBeDisabled();
     }

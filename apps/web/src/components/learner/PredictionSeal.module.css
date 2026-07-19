@@ -180,21 +180,21 @@
   font-size: 22px;
 }
 
-.sealedSummary {
+.committedSummary {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin: 18px 0 0;
 }
 
-.sealedSummary > div {
+.committedSummary > div {
   padding: 12px;
   border: 1px solid rgba(224, 179, 86, 0.24);
   border-radius: 10px;
   background: var(--paper);
 }
 
-.sealedSummary dt {
+.committedSummary dt {
   color: var(--gold);
   font-size: 12px;
   font-weight: 750;
@@ -202,7 +202,7 @@
   text-transform: uppercase;
 }
 
-.sealedSummary dd {
+.committedSummary dd {
   margin: 6px 0 0;
   font-size: 15px;
   font-weight: 750;
@@ -215,9 +215,15 @@
   line-height: 1.5;
 }
 
+@media (max-width: 900px) {
+  .committedSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 620px) {
   .comparison,
-  .sealedSummary {
+  .committedSummary {
     grid-template-columns: 1fr;
   }
 

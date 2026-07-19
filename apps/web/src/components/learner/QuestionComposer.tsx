@@ -12,7 +12,7 @@ import styles from "./QuestionComposer.module.css";
 
 export const defaultSamplePrompts = [
   "Why did my model score highly but fail on new customers?",
-  "Does high accuracy mean the rare cases are being caught?",
+  "Could repeated customers make my test score look better than it is?",
 ] as const;
 
 export type QuestionComposerProps = {
@@ -134,7 +134,11 @@ export function QuestionComposer({
         </div>
       </form>
 
-      <div className={styles.promptGroup} aria-label="Prompt starters">
+      <div
+        className={styles.promptGroup}
+        role="group"
+        aria-label="Prompt starters"
+      >
         <span>Try a question</span>
         <div>
           {samplePrompts.map((prompt) => (

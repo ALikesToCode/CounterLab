@@ -87,4 +87,36 @@ describe("ModelDuel", () => {
     expect(insufficient).toHaveBeenCalledOnce();
     expect(reject).toHaveBeenCalledOnce();
   });
+
+  it("collapses confirmed models behind an accessible review control", async () => {
+    const user = userEvent.setup();
+    render(
+      <ModelDuel
+        current={current}
+        alternative={alternative}
+        confirmed
+        onConfirm={vi.fn()}
+        onEdit={vi.fn()}
+        onInsufficientEvidence={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("region", {
+        name: "Does your current explanation capture what you mean?",
+      }),
+    ).toBeInTheDocument();
+    const review = screen.getByText(/explanation confirmed · review/i);
+    expect(review.closest("details")).not.toHaveAttribute("open");
+
+    await user.click(review);
+
+    expect(
+      screen.getByLabelText("Your current explanation"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Alternative CounterLab will test"),
+    ).toBeInTheDocument();
+  });
 });

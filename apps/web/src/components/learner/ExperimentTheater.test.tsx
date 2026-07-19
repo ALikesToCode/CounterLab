@@ -84,6 +84,11 @@ describe("ExperimentTheater", () => {
     );
 
     expect(screen.getByText("Verified result")).toBeInTheDocument();
+    expect(
+      screen.getByRole("group", {
+        name: payload.comparison.accessibleSummary,
+      }),
+    ).toBeInTheDocument();
     expect(screen.getByText("98.5%")).toBeInTheDocument();
     expect(screen.getByText("59.4%")).toBeInTheDocument();
     expect(screen.getByText(payload.finding)).toBeInTheDocument();

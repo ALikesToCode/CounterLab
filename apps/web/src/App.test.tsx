@@ -698,7 +698,7 @@ describe("CounterLab judged flow", () => {
     ).toBeInTheDocument();
     expect(screen.getByText(question)).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /continue with verified sample/i }),
+      screen.getByRole("button", { name: /practice with leakage sample/i }),
     ).toBeEnabled();
     expect(screen.getByLabelText(/attach a supported notebook/i)).toBeEnabled();
     expect(
@@ -706,7 +706,7 @@ describe("CounterLab judged flow", () => {
     ).toBe(false);
 
     await user.click(
-      screen.getByRole("button", { name: /continue with verified sample/i }),
+      screen.getByRole("button", { name: /practice with leakage sample/i }),
     );
     expect(
       await screen.findByRole("heading", {
@@ -796,7 +796,9 @@ describe("CounterLab judged flow", () => {
     );
 
     const story = within(
-      await screen.findByRole("region", { name: /notebook evidence story/i }),
+      await screen.findByRole("region", {
+        name: /what this notebook actually shows/i,
+      }),
     );
     const exactReferences = within(
       story.getByRole("list", { name: /exact evidence references/i }),
@@ -981,7 +983,9 @@ describe("CounterLab judged flow", () => {
     );
 
     expect(
-      await screen.findByRole("region", { name: /model duel/i }),
+      await screen.findByRole("region", {
+        name: /does your current explanation capture what you mean/i,
+      }),
     ).toBeInTheDocument();
     expect(screen.getByText(/live competing hypothesis/i)).toBeInTheDocument();
     expect(
@@ -1104,7 +1108,9 @@ describe("CounterLab judged flow", () => {
     render(<App />);
     await openSampleModelDuel(user);
 
-    const duel = await screen.findByRole("region", { name: /model duel/i });
+    const duel = await screen.findByRole("region", {
+      name: /does your current explanation capture what you mean/i,
+    });
     expect(
       within(duel).getByRole("article", {
         name: /your current explanation/i,

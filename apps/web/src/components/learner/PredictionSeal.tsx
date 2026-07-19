@@ -76,11 +76,15 @@ export function PredictionSeal({
           <span>Prediction sealed</span>
           <strong aria-hidden="true">🔒</strong>
         </header>
-        <PredictionComparison
-          notebookScore={notebookScore}
-          interventionExpectation={interventionExpectation}
-        />
-        <dl className={styles.sealedSummary}>
+        <dl className={styles.committedSummary}>
+          <div>
+            <dt>{notebookScore.label}</dt>
+            <dd>{notebookScore.value}</dd>
+          </div>
+          <div>
+            <dt>{interventionExpectation.label}</dt>
+            <dd>{interventionExpectation.value}</dd>
+          </div>
           <div>
             <dt>Categorical choice</dt>
             <dd>{selectedOption?.label ?? choice}</dd>

@@ -189,16 +189,42 @@
   padding: 6px 0;
 }
 
-.confirmed {
+.confirmedReview {
+  margin-top: 18px;
+}
+
+.confirmedReview > summary {
   width: fit-content;
-  padding: 12px 14px;
-  margin: 20px 0 0;
+  min-height: 44px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   border: 1px solid var(--aqua);
   border-radius: 10px;
   color: var(--aqua);
   background: var(--aqua-soft);
+  cursor: pointer;
   font-size: 15px;
   font-weight: 750;
+  list-style: none;
+}
+
+.confirmedReview > summary::-webkit-details-marker {
+  display: none;
+}
+
+.confirmedReview > summary:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.confirmedReview .models {
+  margin-top: 12px;
+}
+
+.duel[data-confirmed="true"] > header p {
+  margin-bottom: 0;
 }
 
 @media (max-width: 760px) {

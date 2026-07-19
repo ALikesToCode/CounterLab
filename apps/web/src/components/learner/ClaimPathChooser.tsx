@@ -28,8 +28,9 @@ export function ClaimPathChooser({
           Start with evidence that matches your question.
         </h1>
         <p>
-          Your question is saved. Start now with CounterLab's fixed lesson, or
-          attach a supported notebook when you need artifact-specific evidence.
+          Your question is saved. Practice with CounterLab's fixed
+          customer-identity lesson, or attach a supported notebook when you need
+          evidence that answers your exact question.
         </p>
       </header>
 
@@ -40,15 +41,15 @@ export function ClaimPathChooser({
 
       <section className={styles.paths} aria-label="Evidence choices">
         <article className={styles.primaryPath}>
-          <span>Fast path · Verified sample</span>
-          <h2>Continue to Prediction.</h2>
+          <span>Practice path · Verified leakage sample</span>
+          <h2>Test whether repeated customers inflated a score.</h2>
           <p>
-            CounterLab uses its bundled customer-churn notebook and keeps your
-            wording. The result is always labelled as sample evidence; it does
-            not claim to analyze your notebook.
+            This bundled customer-churn lesson answers only that fixed question.
+            CounterLab keeps your wording for reference, but never claims this
+            sample analyzed or answered an unrelated question.
           </p>
           <button type="button" disabled={busy} onClick={onStartSample}>
-            Continue with verified sample <span aria-hidden="true">→</span>
+            Practice with leakage sample <span aria-hidden="true">→</span>
           </button>
         </article>
 

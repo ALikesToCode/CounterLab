@@ -895,7 +895,9 @@ for (const viewport of [
       const progress = page.getByTestId("learner-progress-mobile");
       await expect(progress).toBeVisible();
       await expect(progress).toContainText("Step 1 of 6");
-      await expectMinimumTarget(progress.locator("summary"));
+      await expectMinimumTarget(
+        progress.getByRole("button", { name: /Step 1 of 6/i }),
+      );
     } else {
       const progress = page.getByRole("navigation", {
         name: "Learner progress",
@@ -1479,7 +1481,9 @@ test("the judged path is keyboard operable with reduced motion", async ({
 
   const mobileProgress = page.getByTestId("learner-progress-mobile");
   await expect(mobileProgress).toContainText("Step 1 of 6");
-  const progressSummary = mobileProgress.locator("summary");
+  const progressSummary = mobileProgress.getByRole("button", {
+    name: /Step 1 of 6/i,
+  });
   await progressSummary.focus();
   await page.keyboard.press("Space");
   await expect(

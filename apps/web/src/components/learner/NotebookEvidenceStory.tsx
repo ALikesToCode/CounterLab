@@ -31,8 +31,7 @@ export function NotebookEvidenceStory({
     <section
       id="notebook-evidence-story"
       className={styles.story}
-      aria-label="Notebook evidence story"
-      aria-describedby={titleId}
+      aria-labelledby={titleId}
     >
       <header className={styles.header}>
         <div>

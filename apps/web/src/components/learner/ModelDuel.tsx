@@ -65,13 +65,22 @@ export function ModelDuel({
   confirmed?: boolean;
 }) {
   const titleId = useId();
+  const comparison = (
+    <div className={styles.models}>
+      <ModelCard label="Your current explanation" model={current} />
+      <span className={styles.versus} aria-hidden="true">
+        versus
+      </span>
+      <ModelCard label="Alternative CounterLab will test" model={alternative} />
+    </div>
+  );
 
   return (
     <section
       id="model-duel"
       className={styles.duel}
-      aria-label="Model duel"
-      aria-describedby={titleId}
+      aria-labelledby={titleId}
+      data-confirmed={confirmed ? "true" : "false"}
     >
       <header>
         <span>Two explanations, one fair test</span>
@@ -84,23 +93,17 @@ export function ModelDuel({
         </p>
       </header>
 
-      <div className={styles.models}>
-        <ModelCard label="Your current explanation" model={current} />
-        <span className={styles.versus} aria-hidden="true">
-          versus
-        </span>
-        <ModelCard
-          label="Alternative CounterLab will test"
-          model={alternative}
-        />
-      </div>
-
       {confirmed ? (
-        <p className={styles.confirmed} role="status">
-          ✓ You confirmed that this captures your view.
-        </p>
+        <details className={styles.confirmedReview}>
+          <summary>
+            <span aria-hidden="true">✓</span> Explanation confirmed · Review
+            both models
+          </summary>
+          {comparison}
+        </details>
       ) : (
         <>
+          {comparison}
           <div className={styles.actions}>
             <button
               className={styles.primary}

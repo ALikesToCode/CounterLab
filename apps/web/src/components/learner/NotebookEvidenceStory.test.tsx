@@ -38,6 +38,9 @@ describe("NotebookEvidenceStory", () => {
     expect(
       screen.getByLabelText("Accuracy displayed by the notebook"),
     ).toHaveTextContent("98.5%");
+    expect(
+      screen.getByRole("region", { name: "Customer churn evaluation" }),
+    ).toBeInTheDocument();
     const references = within(
       screen.getByRole("list", { name: "Exact evidence references" }),
     );

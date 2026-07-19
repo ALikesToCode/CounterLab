@@ -6816,6 +6816,33 @@ body {
   padding-top: 16px;
 }
 
+.prediction-proof {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.prediction-proof > summary {
+  width: fit-content;
+  min-height: 44px;
+  padding: 10px 2px;
+  display: flex;
+  align-items: center;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.prediction-proof-body {
+  display: grid;
+  gap: 14px;
+  padding-top: 10px;
+}
+
+.prediction-proof-body > :is(.evidence-strip, .intervention, .concept-help) {
+  margin: 0;
+}
+
 @media (max-width: 1040px) {
   .topbar-context {
     display: none;
@@ -6844,6 +6871,10 @@ body {
     max-width: none;
     flex: 1 0 100%;
     order: 3;
+  }
+
+  .claim-layout > .claim-form {
+    order: -1;
   }
 }
 
