@@ -1,26 +1,31 @@
 # CounterLab first-prize issue register
 
-Audit checkpoint: `2026-07-18T19:39:42Z`
+Audit checkpoint: `2026-07-18T19:39:42Z`; visual/agentic addendum checkpoint: `2026-07-19T07:35:42Z`
 Public Worker version: `bef5edb7-6a76-4c72-94be-fcb2b94e668d` (deployment 82)
-Source checkpoint: `dd451c77606ec270cfba030784df50cb3aa19969`
+Base-audit source checkpoint: `dd451c77606ec270cfba030784df50cb3aa19969`; visual/agentic source checkpoint: `cf6108e306e43fb4dd270dfdcc1317f2e508aeda`
+
+Qualification boundary: the visual addendum used stock Chromium while the
+current repository policy requires CloakBrowser. CL-023's current-source
+finding and design recommendations remain valid audit input, but its browser
+counts, console/network observations, and screenshots do not qualify v6.1.
 
 ## Counts and classification
 
 | Severity  |  Count |
 | --------- | -----: |
 | P0        |      1 |
-| P1        |      9 |
+| P1        |     11 |
 | P2        |     11 |
 | P3        |      1 |
-| **Total** | **22** |
+| **Total** | **24** |
 
 - **A — Submission blocker:** CL-001.
-- **B — First-prize blockers:** CL-002 through CL-010.
+- **B — First-prize blockers:** CL-002 through CL-010, CL-023, and CL-024.
 - **C — Material improvements:** CL-011 through CL-021.
 - **D — Optional differentiation:** one cross-domain pack only after every release gate is green; tracked as the deferred response to CL-009, not as permission to expand scope now.
 - **E — Do not build:** see `14_DO_NOT_BUILD.md`.
 
-P0 and P1 records were independently challenged in `evidence/test-results/red-team.md`. “Observed live,” “verified in source,” “verified by test,” “documented only,” “inferred,” and “unverified” are used explicitly in Evidence fields.
+P0 and the original P1 records were independently challenged in `evidence/test-results/red-team.md`. CL-023 and CL-024 were independently confirmed in the visual/agentic addendum pass. “Observed live,” “verified in source,” “verified by test,” “documented only,” “inferred,” and “unverified” are used explicitly in Evidence fields.
 
 ---
 
@@ -725,6 +730,70 @@ Dependencies: Static asset/Worker routing ownership.
 Estimated effort: S
 Score leverage: low
 Related issues: CL-002
+
+---
+
+Issue ID: CL-023
+Title: The scientific transformation is described before it is experienced
+Severity: P1 — First-prize blocker
+Confidence: confirmed
+Reproducibility: always
+Category: UX
+Affected route or component: `/`, `/judge`, `/new`, `/replay/leakage-01`, and the Question-to-Repair learner journey
+Affected user: time-constrained judges, first-time learners, and visual learners
+Affected Devpost criterion: Design, Technological Implementation, and Quality of the Idea
+Environment: unqualified stock-Chromium design capture at 1440×900 and 390×844 plus current source/replay evidence
+Prerequisites: Clean first visit; no prior CounterLab explanation
+Reproduction steps: Open `/`, `/judge`, `/new`, and `/replay/leakage-01` at desktop and mobile; inspect the first 10, 20, and 30 seconds; inventory explanatory media; continue the read-only replay to Test/completion; trace the current learner-stage and Lab Scene render paths.
+Expected behaviour: Within 10–30 seconds, a judge sees one verified visual mechanism connect the learner claim, immutable Prediction, changed condition, held-fixed controls, fixed result, Boundary, and practical learner benefit; the same proof is visible in the first mobile viewport or through its first dominant CTA.
+Actual behaviour: Landing looks like a generic AI prompt shell; Judge desktop provides a strong but static numeric/editorial card; the proof card falls below the first mobile fold; live setup foregrounds readiness; replay foregrounds provenance; later stages rely mainly on cards, prose, lists, and tables. Runtime Codex produces a rich `lab-scene.json`, but the browser neither exposes nor renders it.
+Evidence: **Verified in source** in `17_VISUAL_JUDGE_GENERATIVE_UI_AND_AGENTIC_CONTROL.md`; the local stock-browser baseline and `evidence/screenshots/visual-judge/` are unqualified design-review inputs only and require CloakBrowser recapture.
+Console or network evidence: The unqualified capture reported eight successful route/viewport states and no unexpected console or failed-request events. This is not v6.1 browser evidence and is not used to claim a release pass.
+Source-code evidence: `packages/generative-ui-contracts/src/index.ts` defines the rich scene catalog; `packages/codex-client/src/prompts.ts` and `app-server.ts` create/validate it; `apps/web/worker/api.ts` hash-binds it. `apps/web/src` contains no Lab Scene consumer; `GeneratedProofView.tsx` deterministically renders only `ProofSequence`/`ProofStep` inside the collapsed proof drawer; `ExperimentTheater` is hand-assembled in `App.tsx`.
+Root-cause hypothesis: The team completed authority contracts and hand-crafted stage UI before connecting the generated presentation artifact to a trusted browser renderer and one persistent visual story.
+Learner impact: The learner must infer causality from prose and numbers instead of seeing why evidence changed and how the rule transfers.
+Judge impact: A visually stronger but technically weaker submission can feel more innovative and useful before CounterLab's deeper architecture becomes discoverable.
+Trust or integrity impact: Current copy is mostly honest; the correction must remain fixed-evidence bound so visual theater never becomes fake live or generated authority.
+Recommended correction: Connect the existing Lab Scene contract to a closed trusted React registry and use one verified Belief Break Theater across landing, Judge, Prediction, Test, Boundary, Apply, and Repair.
+Smallest acceptable fix: Render one clearly labelled fixed-evidence entity-leakage scene in the first viewport of `/` and `/judge` at desktop/mobile: repeated entities cross a random split, 389 overlap drops to zero under whole-customer holdout, 98.5% becomes 59.4%, and model/preprocessing/seed remain visibly fixed. Reuse the scene's pinned Prediction and compact Boundary preview in the sample journey.
+Acceptance criteria: A clean 10/20/30-second novice test meets the comprehension thresholds in report 17; the proof object is visible at 390×844; every value/axis/unit/motion/table resolves an allowlisted signed or sample-hash-bound path; result blocks remain locked before Prediction; unknown/stale/literal bindings fail closed; sample/replay/live labels persist; reduced-motion and accessible-table parity pass; no current LCP/CLS regression.
+Regression test: Component/contract tests for unknown blocks and bindings, result lock, ProofBadge authority, exact data parity, keyboard/table/reduced motion; Playwright first-fold screenshots and 10/20/30-second route assertions at 390×844 and 1440×900; source-bound sample/live/replay smoke.
+Dependencies: Existing Lab Scene contract and stored artifact, typed read-only scene API, verified binding manifest, trusted renderer registry, bundled fixed sample data, mobile layout.
+Estimated effort: M
+Score leverage: very high
+Related issues: CL-005, CL-010, CL-014, CL-024
+
+---
+
+Issue ID: CL-024
+Title: GPT-5.6 is a one-shot structured analyst rather than a bounded continuing learning agent
+Severity: P1 — First-prize blocker
+Confidence: confirmed
+Reproducibility: always
+Category: AI usage
+Affected route or component: `packages/belief-analyst`, belief proposal Worker route, learner-stage orchestration, and submission AI narrative
+Affected user: learners needing adaptive investigation and judges assessing substantive GPT-5.6 usage
+Affected Devpost criterion: Technological Implementation, Design, and Quality of the Idea
+Environment: current source inspected 2026-07-19; official OpenAI reasoning/tool guidance; no new production model call
+Prerequisites: Inspect the production Responses request type and belief-proposal call graph
+Reproduction steps: Trace `ResponsesTransportRequest`, `LiveBeliefAnalyst.proposeBeliefSpec`, the Worker invocation, response provenance reuse, scene generation, and learner-stage model calls; search for `tools`, `tool_choice`, `previous_response_id`, follow-up GPT result explanation, clarification loop, and scene composition.
+Expected behaviour: GPT-5.6 substantively directs a bounded multi-step investigation: it may inspect approved evidence, request one learner clarification, adapt the Belief Spec, choose trusted presentation emphasis, and explain signed outcomes, while fixed code and learner approvals retain every authority boundary.
+Actual behaviour: GPT-5.6 receives one sanitized packet and returns one schema-constrained Belief Spec through `responses.parse`. The request has no tools, tool choice, or continuation field; the recorded response ID is not reused. GPT does not iteratively inspect evidence, request clarification through a model loop, compose the Lab Scene, explain the signed result, or manage later learner stages. Runtime Codex produces the scene in a separate bounded one-turn compile/repair controller, but neither AI path drives the visible UI.
+Evidence: **Verified in source** and independently confirmed in `17_VISUAL_JUDGE_GENERATIVE_UI_AND_AGENTIC_CONTROL.md`; capability recommendations are supported by current official OpenAI reasoning and tools guides linked there. Actual production multi-turn GPT behavior is absent, not merely unobserved.
+Console or network evidence: None; the public health endpoint shows configuration only, and no model call was made during this read-only addendum.
+Source-code evidence: `packages/belief-analyst/src/index.ts` request type contains model/instructions/input/structured text/reasoning/`store:false`/safety identifier only; `proposeBeliefSpec` makes one parse call and persists provenance. `apps/web/worker/api.ts` invokes it once. `packages/codex-client/src/prompts.ts` assigns Lab Scene generation to Codex and explicitly prohibits tool calls in the scientific turn.
+Root-cause hypothesis: Safety and hackathon sequencing correctly constrained GPT to one role, but the product stopped at a structured-generation call instead of adding a bounded controller for inquiry and presentation.
+Learner impact: The experience cannot adapt its clarification, visual emphasis, hint, or next evidence view to the learner's actual artifact and decisions beyond fixed branching.
+Judge impact: GPT-5.6 appears as a labelled extraction/generation step rather than the agentic reasoning engine the current model and Responses API can support; first tie-break implementation credit is left unrealized.
+Trust or integrity impact: Current behavior is safe and substantive. Giving the model unrestricted control would be worse; only read-only/proposal tools and fixed transition checks are acceptable.
+Recommended correction: Add a bounded GPT-5.6 Learning Director loop for pedagogy/orchestration/presentation, with strict read-only/proposal tools, local schema validation, learner approval, and fixed authority unchanged.
+Smallest acceptable fix: Maximum one clarification and four allowlisted tool calls per relevant stage using approved sanitized evidence, registered Subject Pack capability lookup, Belief Spec/scene validation, and allowlisted signed-result projection. Return a validated `LearningDirectorPlan` plus scene intent; keep `store:false` and persist only a compact validated turn transcript or supported opaque continuity items.
+Acceptance criteria: Entity-leakage and imbalance fixtures cause meaningfully different bounded inquiry/scene choices; unknown/excess/state-changing tools fail closed; prompt-injected notebook text cannot create capabilities or bindings; GPT cannot select the final experiment, calculate a number, release a verdict, grade transfer, unlock repair, or issue proof; learner approval remains required; all tool names/approved refs/model/prompt IDs/durations/hashes are traceable without private reasoning; refusal/timeout degrades honestly.
+Regression test: Deterministic transport fixtures for clarification/no-clarification, tool-loop cap, invalid tool/arguments, injected evidence, schema repair, two-pack divergence, result explanation, timeout/refusal; state-machine tests prove presentation mutation/removal cannot change scorer, result, verdict, transfer, patch, or Capsule.
+Dependencies: Bounded controller design, tool schemas, sanitized state summary, scene renderer from CL-023, cost/latency budget from CL-007, privacy review.
+Estimated effort: M
+Score leverage: high
+Related issues: CL-007, CL-008, CL-023
 
 ## Integrity notes
 

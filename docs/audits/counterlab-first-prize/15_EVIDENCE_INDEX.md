@@ -4,7 +4,8 @@
 
 - Public Worker version: `bef5edb7-6a76-4c72-94be-fcb2b94e668d` (#82).
 - Cloudflare deployment: `dad4cd71-3dcd-4b00-a1b6-d16068d53c81`, 100% traffic, created `2026-07-18T18:12:53.84457Z`.
-- Final source checkpoint: `dd451c77606ec270cfba030784df50cb3aa19969`.
+- Base-audit source checkpoint: `dd451c77606ec270cfba030784df50cb3aa19969`.
+- Visual/agentic addendum source checkpoint: `cf6108e306e43fb4dd270dfdcc1317f2e508aeda`.
 - Browser: Chromium `150.0.7871.128`, Playwright `1.61.1`, explicitly owner-authorized because the required CloakBrowser endpoint was unavailable.
 - Public safety: GET/HEAD/OPTIONS-only; no production write, model call, job, patch, download, or deployment.
 - Source worktree: moving and dirty due concurrent owner/agent work. Relevant source hashes were rechecked by red team when HEAD advanced; audit files are the only intentional writes from this audit.
@@ -20,22 +21,25 @@ Evidence labels mean:
 
 ## Primary immutable-ish audit captures
 
-| SHA-256                                                            | Path                                                                 | Authority/use                                                                |
-| ------------------------------------------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `8cd883fe8c1da9b302519d701f7fa6cc8dd19345585a41fe8d3be856fb6b735c` | `evidence/network/public-api-baseline.md`                            | Worker/deployment identity, readiness, replay API, security-header baseline. |
-| `08e06b6a3748b38f36aa8c04ebf7361413eb0420b084b82d10154013dab8ee36` | `evidence/test-results/devpost-official-baseline.md`                 | Official deadline, mandatory fields, criteria, tie-break order.              |
-| `934e7b0908e93ba008c2e8611db5e1b4c160701d27a05e50eb44ff9a2c3a1b00` | `evidence/test-results/devpost-project-baseline.md`                  | Actual empty pre-draft project state.                                        |
-| `c31c636abf5e5921f85f576903ab5513b13301a2d1d38635835bf7bbe59d297b` | `evidence/test-results/live-chrome-public-routes-20260719.json`      | Executed public routes, viewports, DOM/state observations.                   |
-| `949641f7818096c5dd1736ec3115dd3dc717c8cad69fde5d0adf70adbadfa6bb` | `evidence/test-results/live-chrome-public-routes-trace-20260719.zip` | Playwright trace for public route pass.                                      |
-| `bc2f0905256ddd9948f94d2702d23cb0d3f41005f9650bdf377352464ccc061f` | `evidence/console/live-chrome-console-20260719.json`                 | Browser console/page errors; expected missing-resource cases separated.      |
-| `1713d6521fd835e30b7daed803bcb9cb55caf5d0931c4b597221cf635e20bf3a` | `evidence/network/live-chrome-network-20260719.json`                 | Public request/response/failure capture.                                     |
-| `810b17a6fd9107a2b9a167e3868df9b8d994773bea2f33edcaa38d37d3f6a028` | `evidence/performance/ux/live-performance-measurements.json`         | Cold/warm/throttled timing, transfer, cache, long-task data.                 |
-| `10d77e5ffa8ef0e9185ca9699ec0ce4cd95e1d4c0988db914f4d4b62210bb918` | `evidence/test-results/agent-repo-technical.md`                      | Commands, source trace, test results, sandbox limitations.                   |
-| `e7c13aa8d29f09f26916eccf9d953b91ee1821d7828ca29da0da2b2d275bb95d` | `evidence/test-results/agent-submission-market.md`                   | Official submission and current primary-source competitive scan.             |
-| `887ab303783e3901a958cd9e3fe7cbf7b8f43bc0c678ab1575e2cf86e7a83808` | `evidence/test-results/red-team.md`                                  | Independent P0/P1 reproduction, wording correction, score challenge.         |
-| `98c5b24d80f2349ebf0016dadcc0bd728262b3700b22f83ec7a2f2376808041a` | `evidence/test-results/final-public-recheck.json`                    | Final GET-only landing/Judge/readiness/health recheck at 20:04 UTC.          |
-| `f3c322b610bac9dd8b6859c76d6ac9756742477776a7b4bfc5c57fc4fe8762d5` | `evidence/test-results/final-source-delta.md`                        | Four-commit drift inspection through final repository checkpoint.            |
-| `e483aa7b37bc1e959557653d7f04b22a58889eb5726ba77683919bc4c35e1df7` | `evidence/test-results/final-synthesis-validation.md`                | Final JSON/CSV/path/test/public validation log.                              |
+| SHA-256                                                            | Path                                                                 | Authority/use                                                                                                                  |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `8cd883fe8c1da9b302519d701f7fa6cc8dd19345585a41fe8d3be856fb6b735c` | `evidence/network/public-api-baseline.md`                            | Worker/deployment identity, readiness, replay API, security-header baseline.                                                   |
+| `08e06b6a3748b38f36aa8c04ebf7361413eb0420b084b82d10154013dab8ee36` | `evidence/test-results/devpost-official-baseline.md`                 | Official deadline, mandatory fields, criteria, tie-break order.                                                                |
+| `934e7b0908e93ba008c2e8611db5e1b4c160701d27a05e50eb44ff9a2c3a1b00` | `evidence/test-results/devpost-project-baseline.md`                  | Actual empty pre-draft project state.                                                                                          |
+| `c31c636abf5e5921f85f576903ab5513b13301a2d1d38635835bf7bbe59d297b` | `evidence/test-results/live-chrome-public-routes-20260719.json`      | Executed public routes, viewports, DOM/state observations.                                                                     |
+| `949641f7818096c5dd1736ec3115dd3dc717c8cad69fde5d0adf70adbadfa6bb` | `evidence/test-results/live-chrome-public-routes-trace-20260719.zip` | Playwright trace for public route pass.                                                                                        |
+| `bc2f0905256ddd9948f94d2702d23cb0d3f41005f9650bdf377352464ccc061f` | `evidence/console/live-chrome-console-20260719.json`                 | Browser console/page errors; expected missing-resource cases separated.                                                        |
+| `1713d6521fd835e30b7daed803bcb9cb55caf5d0931c4b597221cf635e20bf3a` | `evidence/network/live-chrome-network-20260719.json`                 | Public request/response/failure capture.                                                                                       |
+| `810b17a6fd9107a2b9a167e3868df9b8d994773bea2f33edcaa38d37d3f6a028` | `evidence/performance/ux/live-performance-measurements.json`         | Cold/warm/throttled timing, transfer, cache, long-task data.                                                                   |
+| `10d77e5ffa8ef0e9185ca9699ec0ce4cd95e1d4c0988db914f4d4b62210bb918` | `evidence/test-results/agent-repo-technical.md`                      | Commands, source trace, test results, sandbox limitations.                                                                     |
+| `e7c13aa8d29f09f26916eccf9d953b91ee1821d7828ca29da0da2b2d275bb95d` | `evidence/test-results/agent-submission-market.md`                   | Official submission and current primary-source competitive scan.                                                               |
+| `887ab303783e3901a958cd9e3fe7cbf7b8f43bc0c678ab1575e2cf86e7a83808` | `evidence/test-results/red-team.md`                                  | Independent P0/P1 reproduction, wording correction, score challenge.                                                           |
+| `98c5b24d80f2349ebf0016dadcc0bd728262b3700b22f83ec7a2f2376808041a` | `evidence/test-results/final-public-recheck.json`                    | Final GET-only landing/Judge/readiness/health recheck at 20:04 UTC.                                                            |
+| `f3c322b610bac9dd8b6859c76d6ac9756742477776a7b4bfc5c57fc4fe8762d5` | `evidence/test-results/final-source-delta.md`                        | Four-commit drift inspection through final repository checkpoint.                                                              |
+| `e483aa7b37bc1e959557653d7f04b22a58889eb5726ba77683919bc4c35e1df7` | `evidence/test-results/final-synthesis-validation.md`                | Final JSON/CSV/path/test/public validation log.                                                                                |
+| `3fb4aab86dafe14f138b91fd30337663751b8d49df245d57e6d8da333e137bba` | `evidence/test-results/visual-judge-public-baseline.json`            | Eight landing/Judge/setup/replay desktop/mobile first-fold inventories, console/network summary, and capture metadata.         |
+| `9b4a840f37178054a1b6bdbeee5a12307dc0978afd352e14f04152061247068b` | `evidence/test-results/visual-judge-audit.mjs`                       | Reproducible read-only visual-judge capture script; stock-Chromium fallback, not release qualification.                        |
+| `444382e9b2cd5366e07fed5f31ae849662f5e3228f7c518c708ea8aac98b8972` | `17_VISUAL_JUDGE_GENERATIVE_UI_AND_AGENTIC_CONTROL.md`               | Visual first-30-seconds synthesis, all-stage review, Lab Scene reachability trace, and bounded GPT-5.6 control recommendation. |
 
 Hashes were computed at synthesis time. Browser profile/cache/runtime directories are retained for reproducibility but are not authoritative evidence and are intentionally not indexed file-by-file.
 
@@ -49,11 +53,15 @@ Hashes were computed at synthesis time. Browser profile/cache/runtime directorie
 - `evidence/network/live-chrome-network-20260719.json`
 - `evidence/test-results/final-public-recheck.json`
 - `evidence/test-results/final-synthesis-validation.md`
+- `evidence/test-results/visual-judge-public-baseline.json`
+- `evidence/test-results/visual-judge-audit.mjs`
 
 The historical one-off browser launch scripts are intentionally not tracked.
-They launched stock Chromium during the earlier audit and do not satisfy the
-repository's current CloakBrowser-only browser policy; the immutable result,
-trace, network, console, and screenshot captures remain the audit evidence.
+The visual-judge addendum script is retained specifically to make its method
+auditable. It launched stock Chromium only after the owner authorized Chrome
+while the Cloak CDP endpoint was unavailable. Neither its script nor its
+captures satisfy the repository's current CloakBrowser-only release policy;
+recapture through the formal release harness before submission use.
 
 ### Key screenshots
 
@@ -64,6 +72,7 @@ trace, network, console, and screenshot captures remain the audit evidence.
 - Missing/deep links: `evidence/screenshots/live-chrome-missing-session-1366x768.png`, `evidence/screenshots/live-chrome-missing-proof-1366x768.png`, `evidence/screenshots/live-chrome-unknown-route-1366x768.png`.
 - Keyboard/modal: `evidence/screenshots/ux/legacy-replay-command-palette.png`, `evidence/screenshots/ux/judge-keyboard-focus.png`.
 - Responsive/full-page set: `evidence/screenshots/ux/` for 375×812, 390×844, 768×1024, 1366×768, 1440×900, and 1920×1080.
+- Visual-judge first/second folds: `evidence/screenshots/visual-judge/` for landing, Judge, live setup, and replay at 1440×900 and 390×844.
 
 ### Accessibility/interaction/performance data
 
@@ -105,6 +114,7 @@ The competitive scan was targeted, not exhaustive, and uses current public prima
 - `evidence/test-results/agent-submission-market.md` is authoritative for the official submission baseline and targeted market scan.
 - `evidence/test-results/red-team.md` is authoritative for P0/P1 confirmation, narrowed claims, and score challenge.
 - `evidence/test-results/final-source-delta.md` records the inspected four-commit drift through the final repository checkpoint.
+- `17_VISUAL_JUDGE_GENERATIVE_UI_AND_AGENTIC_CONTROL.md` is authoritative for the later visual first-fold inventory, dormant Lab Scene trace, GPT-5.6 one-shot finding, and bounded agentic-control recommendation.
 
 ## Unresolved evidence limitations
 

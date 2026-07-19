@@ -4,6 +4,8 @@
 
 The AI implementation is substantive. GPT-5.6 and runtime Codex are not cosmetic chat wrappers: GPT-5.6 proposes an evidence-linked Belief Spec from an approved sanitized packet; Codex compiles or repairs bounded, source-free scientific plans; fixed scorers, kernels, transfer evaluators, and frozen verifiers decide what can become authoritative. Invalid or tool-using Codex output fails closed.
 
+Two separate first-prize gaps limit the visible credit. GPT-5.6 is currently a one-shot structured analyst with no bounded tool loop or continued inquiry state. Runtime Codex already emits a schema-constrained `labScene` that is validated and hash-bound, but the browser session/API does not expose it and the learner UI does not render it. The public `json-render` surface is only a deterministic event sequence in the collapsed proof drawer, not learner-visible generative UI.
+
 The main claim gap is generation read isolation. The hosted Container boundary stages credentials, changes UID/GID, and sets `no-new-privs`, but does not create a filesystem namespace/read allowlist. The Codex UID can read the world-readable runner bundle and installed runtime. Output authority still fails closed, and no exfiltration was demonstrated, but the architecture cannot honestly say hidden verifier/source unreadability is enforced on the hosted path.
 
 ## Traced authority map
@@ -16,7 +18,7 @@ learner claim + notebook bytes
   -> GPT-5.6 structured Belief Spec proposal
   -> local schema/evidence/claim validation
   -> learner confirmation + immutable Prediction
-  -> GPT/Codex candidate experiment proposal
+  -> runtime Codex candidate experiment proposal and Lab Scene draft
   -> schema-valid CounterLab Experiment IR
   -> fixed eligibility gates + deterministic scorer/tie-break
   -> frozen technical + epistemic plan verification
@@ -31,14 +33,14 @@ learner claim + notebook bytes
   -> Reasoning Diff + exact-byte Proof Capsule v2
 ```
 
-| Actor           | May do                                                                               | Cannot authorize                                                                            | Audit status                                                                      |
-| --------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| GPT-5.6         | Route intent; frame two models; explain bounded signed outcomes                      | Execute notebook, choose final experiment, compute metrics, grade transfer, declare mastery | Verified in source/tests; no live call made in audit                              |
-| Runtime Codex   | Produce/repair bounded plan artifacts with registered operation IDs                  | Formulas, unrestricted code/commands, fixed results, verifier decision, transfer grade      | Verified in source/tests; protocol child-process scenarios partly sandbox-blocked |
-| Fixed scorer    | Apply hard eligibility and deterministic ranking                                     | Model confidence as truth; hidden result inspection                                         | Verified by tests                                                                 |
-| Fixed kernel    | Own splits, preprocessing, metrics, chart data, Boundary cells, transfer scoring     | Generated formulas or result literals                                                       | Verified in TS/Python tests                                                       |
-| Frozen verifier | Decide technical/epistemic validity, bindings, release, reproducibility, patch scope | Learner intention or free-form grading                                                      | Verified in tests/mutations                                                       |
-| Learner         | Frame/confirm claim, lock Prediction, revise, transfer action, approve repair        | Numerical/verifier authority                                                                | Verified in state contracts/UI                                                    |
+| Actor           | May do                                                                               | Cannot authorize                                                                            | Audit status                                                                         |
+| --------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| GPT-5.6         | Route intent; frame two models; explain bounded signed outcomes                      | Execute notebook, choose final experiment, compute metrics, grade transfer, declare mastery | One structured Belief Spec call verified in source/tests; no live call made in audit |
+| Runtime Codex   | Produce/repair bounded plan artifacts with registered operation IDs                  | Formulas, unrestricted code/commands, fixed results, verifier decision, transfer grade      | Verified in source/tests; protocol child-process scenarios partly sandbox-blocked    |
+| Fixed scorer    | Apply hard eligibility and deterministic ranking                                     | Model confidence as truth; hidden result inspection                                         | Verified by tests                                                                    |
+| Fixed kernel    | Own splits, preprocessing, metrics, chart data, Boundary cells, transfer scoring     | Generated formulas or result literals                                                       | Verified in TS/Python tests                                                          |
+| Frozen verifier | Decide technical/epistemic validity, bindings, release, reproducibility, patch scope | Learner intention or free-form grading                                                      | Verified in tests/mutations                                                          |
+| Learner         | Frame/confirm claim, lock Prediction, revise, transfer action, approve repair        | Numerical/verifier authority                                                                | Verified in state contracts/UI                                                       |
 
 ## GPT-5.6 implementation
 
@@ -49,6 +51,19 @@ learner claim + notebook bytes
 - Refuses unresolved/invented/irrelevant evidence and keeps the learner confirmation gate.
 
 Privacy limitation: sanitization recognizes common secrets and absolute paths, not all personal data. It can send up to 12 source excerpts plus field names/types and claim; `privacyClass` metadata does not itself suppress a field. Exact packet preview and extra approval mitigate this, but copy must not imply guaranteed de-identification. Add common email/phone/identifier detection, suppress explicitly sensitive fields, and state that the learner controls disclosure.
+
+### Agentic-control and generative-UI gap
+
+Current source behavior:
+
+- `packages/belief-analyst/src/index.ts` makes one `responses.parse` request for a Belief Spec. It supplies no tools, does not continue with `previous_response_id`, and does not preserve an agentic reasoning thread through Test, Boundary, Apply, or Repair.
+- `packages/generative-ui-contracts/src/index.ts` already defines trusted blocks for hypotheses, Prediction, controls, metrics/charts, Boundary Maps, motion, notebook evidence/diffs, transfer, Reasoning Diff, proof, and limitations.
+- Codex emits `labScene` alongside the Discrimination Contract and Experiment IR; the App Server validates/materializes it, and the Worker/verifier binds its lineage.
+- `apps/web/src` has no `LabSceneV2` consumer, and the browser session contract has no scene payload. `ExperimentTheater` is hand-assembled. `GeneratedProofView` translates recent sanitized events into fixed `ProofStep` rows inside a collapsed technical drawer.
+
+Prize-quality correction is a bounded **Learning Director**, not authority expansion. GPT-5.6 may inspect only learner-approved evidence references, ask one needed clarification, select the narrative order and allowlisted trusted scene blocks, choose a verified Boundary view, provide calibrated hints, and explain signed results/limitations. It must never select the authoritative experiment, compute values, see hidden tests, decide verification, grade transfer, unlock Repair, or issue proof. Every tool call and scene decision must be schema-validated, budgeted, sanitized, auditable, and tied to current lineage; invalid output falls back to a deterministic safe presentation without changing evidence.
+
+The browser should render the verified Lab Scene through a fixed registry. The model chooses block IDs and bindings; React owns the components; the Worker supplies only allowlisted signed result paths; the verifier checks scene/result agreement; accessible tables and reduced-motion parity are mandatory. This closes CL-023 and CL-024 without allowing generated UI to become scientific authority. Detailed acceptance tests are in `17_VISUAL_JUDGE_GENERATIVE_UI_AND_AGENTIC_CONTROL.md`.
 
 ## Runtime Codex implementation
 

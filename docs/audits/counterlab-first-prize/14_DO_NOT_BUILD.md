@@ -10,11 +10,13 @@ The first-prize risk is not a shortage of features. It is an unsubmitted entry, 
 - Probability, chemistry, arbitrary physics notebooks, `.py` intake, screenshots, arbitrary datasets, package installation, or networked notebook execution.
 - Generated React/CSS/HTML/JavaScript/Python/SQL/shell or model-authored formulas/results. Generated components propose typed plans; fixed systems decide.
 
+This does **not** prohibit the required trusted Lab Scene renderer. GPT-5.6/Codex may select schema-valid block IDs, narrative order, and allowlisted bindings; audited React components, fixed kernels, and the verifier own rendering behavior, values, and release. Build that bounded scene path for CL-023/CL-024. Do not turn it into arbitrary front-end code generation.
+
 ## Product bloat
 
 - Accounts, authentication, profiles, multi-tenancy, social sharing network, public leaderboards, marketplace, badges, streaks, certificates, or generic gamification.
 - Instructor dashboard, LMS/gradebook, classroom administration, cohort analytics, or institutional reporting.
-- Voice, native mobile apps, desktop packaging, browser extension, or ChatGPT App integration.
+- A voice tutor, native mobile apps, desktop packaging, browser extension, or ChatGPT App integration. A captioned, optionally narrated submission video is evidence packaging, not product scope.
 - Global mastery graph, high-stakes grading/diagnosis/proctoring/hiring signals, or authorship detection.
 - More navigation, agent panels, activity cockpits, debug dashboards, or permanently expanded evidence drawers.
 

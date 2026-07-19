@@ -4,7 +4,7 @@
 
 CounterLab contains a pedagogically serious loop, not a quiz wrapper: it requires a pre-result commitment, reveals a controlled counterexperiment, asks the learner to revise a rule, tests it in a surface-different context, and withholds repair until transfer. The strongest implementation choices are the immutable Prediction, `Why this test?`, tri-state evidence, Boundary Map, deterministic transfer, and Reasoning Diff.
 
-The public learner experience does not yet prove that loop end to end. The dominant claim-first CTA suggests a notebook is optional, then sends the learner to `Test my notebook`. The fast sample is advertised as the complete loop but uses a static Boundary explanation rather than the full Boundary Hunt/Map. Its reflection begins with the correct rule already supplied, allowing the learner to advance with limited constructive reasoning. Finally, there is no human evidence that learners complete, understand, transfer, or retain the lesson.
+The public learner experience does not yet prove that loop end to end. The dominant claim-first CTA suggests a notebook is optional, then sends the learner to `Test my notebook`. The fast sample is advertised as the complete loop but uses a static Boundary explanation rather than the full Boundary Hunt/Map. Its reflection begins with the correct rule already supplied, allowing the learner to advance with limited constructive reasoning. More fundamentally for visual learners, the repeated-entity mechanism, controlled intervention, Boundary, and transfer are mostly described through text/cards/tables instead of carried as one changing visual model. Finally, there is no human evidence that learners complete, understand, transfer, or retain the lesson.
 
 ## Learner-loop audit
 
@@ -48,20 +48,20 @@ The learner landing nevertheless has two mismatches:
 1. `Question` and `Notebook` look like alternative input modes, while both ultimately require a notebook for live authority.
 2. `Ask like chat. Prove it like science.` sets the category, but the screen does not explicitly say “for ML learners with a notebook result they do not know whether to trust.”
 
-Judge Mode resolves most of the conceptual ambiguity. Its 98.5% versus 59.4% proof, fixed-computation copy, four-authority map, three mode cards, and bounded non-claims are clear and memorable. That explanatory success should be pulled into the learner’s first handoff and video, not replaced by more terminology.
+Judge Mode resolves most conceptual ambiguity for a reader. Its 98.5% versus 59.4% proof, fixed-computation copy, four-authority map, three mode cards, and bounded non-claims are clear. The later visual-judge pass found that this is still a static editorial explanation: no first-fold explanatory media object shows why entities crossing the split inflate the result, and the mobile proof begins below the fold. The learner needs to watch the model change, act on it, and carry the same visual rule into transfer—not merely read more terminology.
 
 ## First-20-seconds test
 
-| Question               | Learner landing                                                                      | Judge Mode                                            |
-| ---------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------- |
-| What is CounterLab?    | A place to state a claim and attach notebook evidence; category only partly explicit | A verified experiment for a notebook belief           |
-| Who is it for?         | Inferred Python/scikit-learn learner                                                 | Implied notebook/ML learner; still not directly named |
-| Problem solved         | Understanding what a result actually supports                                        | High scores can support the wrong deployment claim    |
-| First action           | State a claim                                                                        | Start sample                                          |
-| Different from ChatGPT | Fixed kernels/frozen checks, but technical                                           | Fixed computation, not fluent prose                   |
-| Codex role             | Absent                                                                               | Clear after one section/scroll                        |
-| Trusted evidence       | Fixed calculation plus frozen verification                                           | Fixed-kernel card, then explicit verifier             |
-| Mode/status            | Desktop alternatives visible; mobile behind Explore; primary route unlabeled         | Full sample/live/replay separation below fold         |
+| Question               | Learner landing                                                                  | Judge Mode                                                                                    |
+| ---------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| What is CounterLab?    | A place to state a claim and attach notebook evidence; generic prompt-shell risk | Clear in copy as a verified experiment for a notebook belief, not yet shown visually          |
+| Who is it for?         | Inferred Python/scikit-learn learner                                             | Implied notebook/ML learner; still not directly named                                         |
+| Problem solved         | Understanding what a result actually supports                                    | High scores can support the wrong deployment claim                                            |
+| First action           | State a claim                                                                    | Start sample                                                                                  |
+| Different from ChatGPT | Fixed kernels/frozen checks, but technical                                       | Fixed computation, not fluent prose                                                           |
+| Codex role             | Absent                                                                           | Clear after one section/scroll; no visible contribution in the fast proof                     |
+| Trusted evidence       | Fixed calculation plus frozen verification                                       | Explained by a fixed-kernel card, not experienced through a release gate                      |
+| Mode/status            | Desktop alternatives visible; mobile behind Explore; primary route unlabeled     | Full sample/live/replay separation below fold; numeric proof also below the first mobile fold |
 
 ## Impact evidence
 
@@ -75,13 +75,14 @@ The current protocol is honest but cannot support “better than explanations”
 
 ## Highest-leverage corrections
 
-1. On claim submit without a file, preserve the claim and show two explicit paths: attach a supported notebook for live evidence, or use an honestly labelled sample/guided lesson.
-2. Make the sample’s Boundary and revision genuinely learner-active, or stop calling the sample the complete learning loop.
-3. Split legacy stored playback from optional, explicitly non-authoritative practice; never project new local choices as verified replay completion.
-4. Name the audience and concrete expensive misconception in the learner/video opening.
-5. Surface recent investigations/proofs on the landing page without adding accounts.
-6. Run the smallest credible learner comparison only after the exact public core path is stable.
+1. Put a fixed-evidence entity-split belief break beside the first Question so a learner sees the problem and payoff before reading architecture; retain a static/reduced-motion equivalent and accessible table.
+2. On claim submit without a file, preserve the claim and show two explicit paths: attach a supported notebook for live evidence, or use an honestly labelled sample/guided lesson.
+3. Make the sample’s Boundary and revision genuinely learner-active, carrying the same visual rule into a surface-different transfer, or stop calling the sample the complete learning loop.
+4. Give GPT-5.6 bounded control over approved-evidence inquiry, one clarification, trusted visual order, calibrated hints, and signed-result explanation while preserving learner choices and fixed authority.
+5. Split legacy stored playback from optional, explicitly non-authoritative practice; never project new local choices as verified replay completion.
+6. Name the audience and concrete expensive misconception in the learner/video opening; surface recent investigations without adding accounts.
+7. Run the smallest credible learner comparison only after the exact public core path is stable.
 
 ## Do not add
 
-Gamification, mastery scores, leaderboards, more chat, broad subject generation, and classroom dashboards would dilute learner agency and evidence authority. The current pedagogical loop needs completion and proof, not more mechanics.
+Gamification, mastery scores, leaderboards, a voice tutor, more chat, broad subject generation, and classroom dashboards would dilute learner agency and evidence authority. The current pedagogical loop needs visible causal continuity, completion, and proof—not more mechanics. A captioned optional narration in the demo is useful; autoplay audio in the product is not.

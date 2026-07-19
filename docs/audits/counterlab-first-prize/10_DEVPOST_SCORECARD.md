@@ -4,34 +4,38 @@ Official rules checkpoint: `2026-07-18T19:39:42Z`
 Deadline: `2026-07-22T00:00:00Z` (Tuesday July 21, 5:00 PM PT)
 Tie-break order: Technological Implementation, Design, Potential Impact, Quality of the Idea.
 
+The visual addendum informs this diagnostic score as a design/source review,
+but its stock-Chromium capture is not v6.1 browser qualification. All rendered
+claims require formal CloakBrowser recapture against the exact deployed tuple.
+
 ## Score summary
 
 | State                                             | Technology | Design | Impact | Idea |      Total |
 | ------------------------------------------------- | ---------: | -----: | -----: | ---: | ---------: |
 | 1. Current public submission — official           |          0 |      0 |      0 |    0 |  **0/100** |
-| Diagnostic shadow package — not an official score |         17 |     15 |      7 |   18 | **57/100** |
-| 2. After confirmed P0/P1 corrections              |         22 |     21 |     16 |   22 | **81/100** |
-| 3. Realistic prize-one ceiling                    |         23 |     23 |     20 |   23 | **89/100** |
+| Diagnostic shadow package — not an official score |         17 |     13 |      7 |   18 | **55/100** |
+| 2. After confirmed P0/P1 corrections              |         22 |     22 |     16 |   22 | **82/100** |
+| 3. Realistic prize-one ceiling                    |         24 |     23 |     20 |   23 | **90/100** |
 
-The actual entry is an empty `submission_pre_draft`, so the official current score is zero. The 57-point shadow score answers a different question: how a strict judge might assess the currently inspectable app/repository package if it were submitted honestly. It must not be averaged with the official zero.
+The actual entry was an empty `submission_pre_draft` at the official audit checkpoint, so the official current score is zero. The 55-point shadow score answers a different question: how a strict judge might assess the currently inspectable app/repository package if it were submitted honestly. It must not be averaged with the official zero. The visual/agentic addendum lowered Design because the earlier assessment overweighted editorial polish and underweighted experiential proof.
 
 ## State 1 — current public submission
 
 ### Technological Implementation — 0/25 official; 17/25 shadow
 
 - Evidence supporting the shadow score: real GPT-5.6 structured Belief Spec work; bounded runtime Codex App Server plans; fixed scorer/kernel/transfer; independent technical and epistemic release; immutable bindings; copied repair; Capsule v2; strong focused tests; healthy public Worker.
-- Evidence preventing a higher score: no submitted entry; Worker 82 is not source/image bound or fully qualified; public live model/Codex/kernel/Capsule sequence was not observed; filesystem read-isolation language exceeds enforcement; no repository-visible inbound cost control.
+- Evidence preventing a higher score: no submitted entry; Worker 82 is not source/image bound or fully qualified; public live model/Codex/kernel/Capsule sequence was not observed; the verified Lab Scene never reaches the browser; GPT-5.6 is a one-shot structured analyst rather than a bounded continuing agent; filesystem read-isolation language exceeds enforcement; no repository-visible inbound cost control.
 - Confidence interval: official `0–0`; shadow `14–20`.
 - Most likely judge objection: “Show me that this exact public build—not the repository architecture or an older replay—completed the claimed authority chain.”
 - Largest score action: freeze commit/asset/Worker/Container identifiers and record one genuine source-bound public journey through Codex proposal, fixed selection/kernel, independent release, transfer, copied repair, and exact Capsule.
 
-### Design — 0/25 official; 15/25 shadow
+### Design — 0/25 official; 13/25 shadow
 
-- Evidence supporting the shadow score: Judge Mode has an excellent first fold; the 98.5% versus 59.4% hook is immediate; authority roles and mode labels are unusually clear; required viewports have no horizontal overflow; cold/throttled visual performance is good.
-- Evidence preventing a higher score: plain claim ends at notebook setup; replay overlays local practice on read-only proof; sample Boundary is static; sample reflection begins solved; mobile modes and recovery are under-disclosed; focus and contrast issues remain.
-- Confidence interval: official `0–0`; shadow `12–18`.
-- Most likely judge objection: “The dossier is polished, but can a new learner complete the promised scientific loop without knowing the implementation vocabulary?”
-- Largest score action: repair the judge fast path from plain question through a real sample Boundary and learner-authored revision, with one dominant CTA at each stage.
+- Evidence supporting the shadow score: Judge Mode has a strong desktop editorial composition and an immediate 98.5% versus 59.4% hook; authority roles and mode labels are clear; required viewports have no horizontal overflow; cold/throttled visual performance is good.
+- Evidence preventing a higher score: the landing resembles a generic prompt shell; first folds contain no explanatory media object; the Judge proof is a static card and falls below the first mobile fold; setup/replay foreground technical state; the rich generated Lab Scene is not rendered; later stages rely mainly on cards, prose, lists, and tables; plain claim, replay authority, static sample Boundary, reflection, mobile modes, recovery, focus, and contrast gaps remain.
+- Confidence interval: official `0–0`; shadow `10–17`.
+- Most likely judge objection: “I understand the architecture when I read it, but why can't I watch the belief break, the agent compose the test, and the learner carry the rule into a new problem?”
+- Largest score action: render one fixed-evidence Belief Break Theater above the fold on landing/Judge desktop/mobile and carry that same verified visual object through Prediction, Test, Boundary, Apply, and Repair.
 
 ### Potential Impact — 0/25 official; 7/25 shadow
 
@@ -49,15 +53,15 @@ The actual entry is an empty `submission_pre_draft`, so the official current sco
 - Most likely judge objection: “Is this a reusable product category or two unusually rigorous notebook lessons?”
 - Largest score action: make the six-step scientific loop and four-authority separation visible in the exact demo, while stating the two-pack scope precisely; only add a cross-domain pack after every core gate is green.
 
-### Total — 0/100 official; 57/100 shadow
+### Total — 0/100 official; 55/100 shadow
 
-- Confidence interval: official `0–0`; shadow `48–69`.
+- Confidence interval: official `0–0`; shadow `46–67`.
 - Most likely judge objection: “There is no submitted package, and the exact live authority journey is unproven.”
 - Largest score action: submit the mandatory Devpost entry while qualifying the exact public release in parallel.
 
 ## State 2 — after confirmed P0 and P1 corrections
 
-This state assumes all nine P1s are genuinely closed, not merely rewritten: exact release proof exists; claim-only routing works; replay authority is honest; sample Boundary is real; learner evidence exists or claims remain appropriately narrow; inbound cost control is visible; Codex isolation claims match enforcement; breadth is answered honestly; and every submission surface is consistent.
+This state assumes all eleven P1s are genuinely closed, not merely rewritten: exact release proof exists; claim-only routing works; replay authority is honest; sample Boundary is real; learner evidence exists or claims remain appropriately narrow; inbound cost control is visible; Codex isolation claims match enforcement; breadth is answered honestly; every submission surface is consistent; the verified Lab Scene is visibly rendered; and GPT-5.6 has a bounded, tested inquiry/presentation loop without authority expansion.
 
 ### Technological Implementation — 22/25
 
@@ -67,11 +71,11 @@ This state assumes all nine P1s are genuinely closed, not merely rewritten: exac
 - Likely objection: “How independently is generator isolation enforced in the production image?”
 - Largest score action: retain a digest-bound black-box isolation and authority-release receipt in the repository and Capsule.
 
-### Design — 21/25
+### Design — 22/25
 
-- Supporting evidence: repaired chat-first handoff, honest replay, real sample Boundary, strong Judge Mode, responsive layouts, and fixed accessibility failures.
-- Preventing a higher score: live journey remains intrinsically dense; some technical proof must stay disclosed; a small learner study may still reveal friction.
-- Confidence interval: `19–23`.
+- Supporting evidence: repaired chat-first handoff, honest replay, a fixed-evidence Belief Break Theater, trusted generated-scene rendering, real sample Boundary, strong Judge Mode, responsive layouts, and fixed accessibility failures.
+- Preventing a higher score: the live journey remains intrinsically dense; visual craft will have limited real-user iteration; some technical proof must stay disclosed.
+- Confidence interval: `20–24`.
 - Likely objection: “Does the learner interpret the evidence, or follow a beautifully staged wizard?”
 - Largest score action: use observed learner confusion to remove one highest-friction interaction without weakening prediction or transfer.
 
@@ -91,9 +95,9 @@ This state assumes all nine P1s are genuinely closed, not merely rewritten: exac
 - Likely objection: “The synthesis is novel; the reusable breadth is not yet fully demonstrated.”
 - Largest score action: show one artifact-specific plan/result/proof chain that could not be replaced by a generic tutor response.
 
-### Total — 81/100
+### Total — 82/100
 
-- Confidence interval: `74–88`.
+- Confidence interval: `75–89`.
 - Likely objection: impact evidence and cross-domain generality trail the technical ambition.
 - Largest score action: exact-current live proof remains the largest combined implementation/design lever.
 
@@ -101,9 +105,9 @@ This state assumes all nine P1s are genuinely closed, not merely rewritten: exac
 
 This is a deadline-realistic ceiling, not a promise. It assumes core reliability stays green, the submission/video are excellent, the learner study is honestly positive enough to support only immediate claims, accessibility and recovery P2s are corrected, and optional work does not destabilize the release.
 
-### Technological Implementation — 23/25
+### Technological Implementation — 24/25
 
-- Supporting evidence: immutable production receipt; public journey and failure-state proof; strong authority/mutation evidence; black-box generator isolation or fully honest partial claim; automated CI/release gate.
+- Supporting evidence: immutable production receipt; public journey and failure-state proof; bounded GPT-5.6 Learning Director with traceable read-only/proposal tools; rendered and verified Codex Lab Scene; strong authority/mutation evidence; black-box generator isolation or fully honest partial claim; automated CI/release gate.
 - Preventing a higher score: hackathon-scale operational history and limited independent external review.
 - Confidence interval: `22–25`.
 - Likely objection: “Can this remain reliable beyond curated packs and a short judging window?”
@@ -133,9 +137,9 @@ This is a deadline-realistic ceiling, not a promise. It assumes core reliability
 - Likely objection: “A powerful synthesis, but parts are established and breadth is early.”
 - Largest score action: explain the defensible novelty as an intersection, never as invention of tutoring, simulation, transfer, or notebook repair individually.
 
-### Total — 89/100
+### Total — 90/100
 
-- Confidence interval: `82–93`.
+- Confidence interval: `83–94`.
 - Likely objection: measured impact and reusable breadth remain behind technical implementation.
 - Largest score action: protect the first tie-break—never trade exact, visible, source-bound technical proof for a speculative feature.
 
@@ -154,3 +158,4 @@ This is a deadline-realistic ceiling, not a promise. It assumes core reliability
 - Submission simulation: `12_SUBMISSION_READINESS.md`
 - Technical evidence: `08_AI_CODEX_VERIFICATION_SECURITY.md`, `09_REPOSITORY_AND_TEST_AUDIT.md`
 - Market evidence: `11_NOVELTY_AND_COMPETITIVE_GAPS.md`
+- Visual/agentic evidence: `17_VISUAL_JUDGE_GENERATIVE_UI_AND_AGENTIC_CONTROL.md`, `evidence/test-results/visual-judge-public-baseline.json`

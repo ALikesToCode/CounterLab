@@ -50,14 +50,14 @@ Likely mental model: “technically serious notebook verification demo.” The j
 
 ## Simulation B — hands-on judge
 
-| Time       | What is understood                                                                          | What remains doubtful                                                                                   |
-| ---------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| 20 seconds | Notebook belief, prediction lock, fixed computation, memorable 98.5% vs 59.4%, Start sample | Exact audience, Codex role, mode separation, impact                                                     |
-| 60 seconds | Four authorities: GPT frames, Codex compiles, kernel computes, verifier releases            | Whether those roles ran in the clicked exact build                                                      |
-| 3 minutes  | Three modes, six-stage loop, bounded claims, reproduction commands                          | Only two ML packs; replay legacy/no Capsule; live says configured rather than smoke-passed              |
-| 10 minutes | Genuine replay provenance and much of the learner flow                                      | Local transfer/patch completion contradicts replay’s read-only promise; current live E2E still unproven |
+| Time       | What is understood                                                                                            | What remains doubtful                                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 20 seconds | Judge desktop communicates a belief-breaking notebook category and static 98.5% vs 59.4% contrast             | The causal mechanism, learner action, GPT/Codex contribution, and mobile proof, which begins below fold                 |
+| 60 seconds | Four authorities can be understood by reading: GPT frames, Codex compiles, kernel computes, verifier releases | Whether those roles actually acted in this build or merely appear in an architecture explanation                        |
+| 3 minutes  | Three modes, six-stage loop, bounded claims, and reproduction commands                                        | Only two ML packs; Lab Scene remains invisible; replay legacy/no Capsule; live says configured rather than smoke-passed |
+| 10 minutes | Genuine replay provenance and much of the learner flow                                                        | Local transfer/patch completion contradicts replay’s read-only promise; current live E2E still unproven                 |
 
-Judge Mode itself is a major strength and should be the public URL in judge instructions. The video should move from its result hook into a real qualified live journey, not remain a dossier tour.
+Judge Mode is the strongest editorial surface and should be the public URL in judge instructions, but it is not yet a prize-level visual demonstration. The video and page must move from the result hook into a visible belief break and real qualified journey, not remain a dossier tour.
 
 ## Required submission package
 
@@ -71,22 +71,22 @@ Judge Mode itself is a major strength and should be the public URL in judge inst
 
 ### Three-minute video spine
 
-1. 0:00–0:20 — learner/audience, misleading 98.5% score, category line.
-2. 0:20–0:45 — immutable Prediction and two competing models.
-3. 0:45–1:20 — runtime Codex bounded plan receipt; fixed scorer/verifier separate from generation.
-4. 1:20–1:45 — fixed result and `SUPPORTS|INCONCLUSIVE|REJECTED` authority.
-5. 1:45–2:15 — Boundary and surface-different transfer.
-6. 2:15–2:35 — copied repair and exact Proof Capsule.
-7. 2:35–2:55 — Judge authority map, two supported packs, honest limitations, Build Week/Codex collaboration.
+1. 0:00–0:12 — animate repeated customers crossing a random split, then move to whole-customer holdout: `389 → 0` shared and `98.5% → 59.4%`; say who benefits and “Chatbots explain. CounterLab lets reality answer.”
+2. 0:12–0:35 — learner Question, two genuinely different hypotheses, and sealed immutable Prediction.
+3. 0:35–1:10 — GPT-5.6 inspects approved evidence and directs trusted presentation; runtime Codex composes registered operations; fixed scorer/verifier remain visibly separate from generation.
+4. 1:10–1:35 — fixed result and `SUPPORTS | INCONCLUSIVE | REJECTED` release; show the verifier gate, not a prose claim.
+5. 1:35–2:05 — visual Boundary Map carried into a surface-different transfer case.
+6. 2:05–2:30 — copied artifact-specific repair, Reasoning Diff, and exact Proof Capsule/evidence passport.
+7. 2:30–2:55 — exact public build receipt, two supported packs, honest limitations, learner-evidence status, and Build Week/Codex collaboration.
 
 Show a genuine reject/repair only if it happened in the demonstrated live run; do not stage one. Keep persistent sample/replay/live labels visible.
 
 ### Four screenshots
 
-1. Judge 98.5%/59.4% proof with mode/route context.
-2. Four-authority map.
-3. Immutable Prediction plus `Why this test?` and controls.
-4. Transfer-passed copied repair plus Proof Capsule provenance.
+1. Verified Belief Break Theater showing entity overlap `389 → 0` and score `98.5% → 59.4%`, with mode/build context.
+2. Sealed Prediction plus the visual agent/test circuit: GPT-5.6 evidence choice, Codex registered plan, fixed scorer, verifier gate, changed variable, and held controls.
+3. Boundary Map with the same discovered rule visibly carried into the surface-different transfer.
+4. Artifact-specific notebook diff, Reasoning Diff, and Proof Capsule/evidence-passport provenance.
 
 Audit screenshots are evidence inputs, not automatically polished submission assets; capture them again from the frozen release.
 
@@ -106,6 +106,8 @@ Include expected duration, browser, sample filenames, support boundary, what req
 - [ ] Verify repository public access or both private-share recipients.
 - [ ] Freeze commit/Worker/Container; run exact live/sample/replay/download/browser/no-secret matrix.
 - [ ] Correct claim-only handoff and legacy replay semantics.
+- [ ] Put the fixed-evidence belief break above the fold on Judge and landing desktop/mobile; render trusted Lab Scenes through the core stages.
+- [ ] Bound GPT-5.6 to approved inquiry/presentation tools with strict budgets, lineage, audit events, learner gates, and no scientific authority.
 - [ ] Record/upload public YouTube video under three minutes with audio.
 - [ ] Capture four current screenshots and thumbnail.
 - [ ] Update README opening, Devpost copy, Codex docs, Progress, and judge instructions to the same release/vocabulary.
@@ -115,7 +117,7 @@ Include expected duration, browser, sample filenames, support boundary, what req
 
 ## Highest-leverage action
 
-Populate the Devpost entry now while freezing and qualifying one exact public release in parallel. A perfect unsubmitted build is worth zero; a submitted but unqualified build risks the first tie-break.
+Populate the Devpost entry now while freezing and qualifying one exact public release in parallel. A perfect unsubmitted build is worth zero. The highest-leverage product correction immediately after that administrative P0 is the fixed-evidence Belief Break Theater plus trusted Lab Scene: it converts the strongest technical idea into something a judge can understand before leaving.
 
 ## Evidence
 
@@ -124,6 +126,7 @@ Populate the Devpost entry now while freezing and qualifying one exact public re
 - `evidence/test-results/agent-submission-market.md`
 - `evidence/network/github-access-baseline.md`
 - `docs/DEVPOST_COPY.md`, `DEMO_SCRIPT.md`, `SCREENSHOT_PLAN.md`, `LEARNER_PILOT_RESULTS.json`
+- `17_VISUAL_JUDGE_GENERATIVE_UI_AND_AGENTIC_CONTROL.md`
 
 ## Limitations
 

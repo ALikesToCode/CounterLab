@@ -2,9 +2,11 @@
 
 ## Design verdict
 
-Judge Mode is the most visually persuasive surface in the project. It feels like a deliberate public evidence dossier, with excellent hierarchy, editorial typography, a memorable metric contrast, disciplined color, and a coherent sequence from claim to authority to modes to method to limitations. It looks substantially more finished than a typical hackathon dashboard.
+Judge Mode is the most visually persuasive surface in the project. It feels like a deliberate public evidence dossier, with strong hierarchy, editorial typography, a memorable metric contrast, disciplined color, and a coherent sequence from claim to authority to modes to method to limitations. It looks substantially more finished than a typical hackathon dashboard.
 
-The learner landing is also polished, but feels like a dark prompt shell while the studio/replay is a light notebook-lab application and Judge Mode is an editorial dossier. The three directions share copy and authority, yet the abrupt visual category changes make CounterLab feel like a suite of related surfaces rather than one unmistakable education product. This is secondary to the functional claim/replay problems and should not trigger a pre-submission redesign.
+The stricter visual-judge pass materially narrows that praise. Across `/`, `/judge`, `/new`, and replay at desktop and mobile, the first fold contains no explanatory image, figure, chart, canvas, video, audio, or accessible data table; Judge carries meaning through type and a static metric card. On mobile, even that proof begins below the fold. CounterLab therefore looks polished when read, but does not yet make its scientific mechanism, learner benefit, or agentic contribution visible in the 10–30 seconds that decide many hackathon evaluations.
+
+The learner landing feels like a dark prompt shell while the studio/replay is a light notebook-lab application and Judge Mode is an editorial dossier. The three directions share copy and authority, yet the abrupt visual category changes make CounterLab feel like a suite of related surfaces rather than one unmistakable education product. This should not trigger a broad redesign. It should trigger one tightly scoped, fixed-evidence visual spine: a Verified Belief Break Theater above the fold, the trusted Lab Scene through the six stages, and a Boundary-to-Transfer visual carried into Repair. See `17_VISUAL_JUDGE_GENERATIVE_UI_AND_AGENTIC_CONTROL.md`.
 
 ## Responsive matrix
 
@@ -16,10 +18,10 @@ Observed public routes: `/`, `/judge`, `/replay/leakage-01`.
 | 390×844   | Same; 1,114 px page height                                                     | Same; 7,091 px full page                                              | Covered at 375/768                                                       |
 | 768×1024  | No overflow; proof/support copy visible                                        | No overflow; proof card and key result visible                        | No overflow                                                              |
 | 1366×768  | Sidebar and main canvas clear; first fold contains support/modes               | Hero/result card effective                                            | Covered at 1440                                                          |
-| 1440×900  | Balanced composition                                                           | Complete first proof and start of authority story                     | No overflow; dense but legible                                           |
+| 1440×900  | Balanced composition; no explanatory media object                              | Static first proof and start of authority story                       | No overflow; dense but legible                                           |
 | 1920×1080 | Content remains bounded; no excessive stretch                                  | Authority section enters first fold                                   | Not separately captured                                                  |
 
-At every required viewport `documentElement.scrollWidth <= clientWidth`. The long Judge page is approximately 4,600 px desktop and 7,100 px mobile, but its section rhythm and headings make that length usable.
+At every required viewport `documentElement.scrollWidth <= clientWidth`. The long Judge page is approximately 4,600 px desktop and 7,100 px mobile, but its section rhythm and headings make that length usable. Usable length is not the same as fast judge comprehension: the first mobile viewport omits the numeric proof, and the mechanism/agent roles require further scrolling on every size.
 
 ## Accessibility results
 
@@ -79,12 +81,12 @@ Hashed CSS/JS/font assets were served with `Cache-Control: public, max-age=0, mu
 
 ## Product-form classification
 
-- **Judge Mode:** complete, coherent public evidence dossier.
+- **Judge Mode:** coherent public evidence dossier with strong editorial craft, but a static explanation rather than a prize-level interactive demonstration.
 - **Learner studio:** a credible new notebook learning product, with some engineering-dashboard affordances safely collapsed.
 - **Landing:** polished prompt/wizard front door, but not yet a complete claim-only experience.
 - **Legacy replay:** genuine stored evidence plus an incorrectly merged interactive reenactment.
 
-CounterLab does not read as a generic chatbot. Its principal design risk is coherence between surfaces and authority states, not visual polish.
+CounterLab's Judge page does not read as a generic chatbot, but the landing can be mistaken for a generic AI prompt shell. Its principal first-prize design risk is no longer mere polish: the verified scientific transformation is not yet a continuous visual experience, and the generated Lab Scene is unreachable from the learner UI.
 
 ## Evidence
 
@@ -95,6 +97,9 @@ CounterLab does not read as a generic chatbot. Its principal design risk is cohe
 - `evidence/performance/ux/live-performance-measurements.json`
 - `evidence/network/ux/live-network-events.json`
 - `evidence/console/ux/live-console-events.json`
+- `evidence/test-results/visual-judge-public-baseline.json`
+- `evidence/screenshots/visual-judge/`
+- `17_VISUAL_JUDGE_GENERATIVE_UI_AND_AGENTIC_CONTROL.md`
 
 ## Limitations
 

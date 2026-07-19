@@ -48,6 +48,8 @@ This is representative, not exhaustive. Primary pages were fetched successfully 
 - Interactive simulations and parameter exploration.
 - AI notebook writing/debugging agents, including Codex.
 - Experiment/hypothesis generation by agents.
+- Multi-step tool-using agents and adaptive/generated presentation; a single structured model call is no longer enough to feel agentic.
+- Visually legible, interactive explanation of causality; text cards and architecture diagrams alone are weak hackathon differentiation.
 - Transfer or next-item performance as an educational outcome.
 - Strong responsive design and accessible quantitative views.
 
@@ -67,6 +69,8 @@ These must appear in the video/live moment, not only architecture documentation.
 - The dominant learner CTA cannot serve a claim-only user despite the broad “belief” category.
 - Legacy replay blurs stored authority and local practice, attacking the category’s trust premise.
 - Runtime Codex’s artifact-specific contribution is explained in Judge Mode but not visually undeniable in the central live journey.
+- The bounded Lab Scene artifact is generated and verified but never rendered, so CounterLab forfeits the generative-UI advantage already latent in its architecture.
+- GPT-5.6 frames one Belief Spec and stops; it does not yet direct a bounded approved-evidence inquiry or adapt the trusted visual explanation across the learner journey.
 - Two adjacent ML packs show a reusable ML evaluation engine, not yet a cross-domain scientific debugger.
 - No learner outcome shows that the loop changes interpretation or unassisted transfer.
 - The submission/video does not yet exist, and current draft copy uses a weaker category and stale vocabulary.
@@ -75,6 +79,8 @@ These must appear in the video/live moment, not only architecture documentation.
 
 ### High value after the core is green
 
+- Render the existing bounded Lab Scene through a trusted component registry and make the verified Boundary-to-Transfer visual the product signature. This is not generic generated UI: model-selected blocks remain proposals, fixed signed paths supply values, and the verifier checks bindings.
+- Let GPT-5.6 act as a bounded Learning Director over approved evidence inspection, one clarification, trusted scene order, hints, and signed-result explanation. Its inability to compute, verify, grade, unlock, or release is part of the differentiation.
 - One cross-domain fixed guided pack such as `physics/free-fall`, with the same Prediction → discriminating Test → Boundary → transfer → proof architecture. This proves category generality more effectively than a third ML misconception.
 - A tiny paired learner comparison against explanation-only baseline, honestly framed as feasibility/usability at its sample size.
 - A visual “authority receipt” in the main journey that shows Codex proposed, fixed scorer selected, verifier released, and fixed kernel computed—without an agent cockpit.
@@ -93,7 +99,7 @@ Lead with the concrete failure and category:
 
 > A high notebook score can prove the wrong thing. CounterLab is a scientific debugger for beliefs: it locks the learner’s prediction, lets Codex propose a fair test, and lets fixed computation and an independent verifier decide what the evidence supports.
 
-Then immediately show 98.5% random rows versus 59.4% whole customers and zero shared entities. Avoid beginning with schemas, CI metaphors, agents, or general AI-for-education claims.
+Then immediately animate repeated customers crossing the random-row split, move to whole-customer holdout, and show `389 → 0` shared entities with `98.5% → 59.4%`. Only after the causal visual lands, reveal GPT-5.6/Codex/fixed/verifier authority. Avoid beginning with schemas, CI metaphors, agents, or general AI-for-education claims.
 
 ## Evidence limits
 

@@ -16,22 +16,24 @@ pass is never presented as a browser or production pass.
   `863a2a8257aae604b238f8e44d3db1bc0cdf1fcd`. The next source-bound build
   was made from documentation checkpoint
   `184b43796b382094de32a8d2f733d9fd232dab32` and records that identity in its
-  receipt. That build is now superseded as the release candidate because a
-  concurrent, untracked visual-audit evidence set appeared afterward and must
-  be preserved or explicitly excluded before the evidence refresh can run.
+  receipt. A second exact build from
+  `cf6108e306e43fb4dd270dfdcc1317f2e508aeda` followed after preserving the
+  concurrent screenshot set. That build is now also superseded as the release
+  candidate because a further concurrent visual/generative-UI audit document
+  appeared before evidence refresh. The audit is preserved with an explicit
+  non-qualification note; the final source build must use the next clean
+  checkpoint.
 - **Continuation starting commit:**
   `dd451c77606ec270cfba030784df50cb3aa19969`
 - **Repository boundary:** physical root
   `/home/mysterious/storage/github/CounterLab`; root marker present; all active
   build, scan, and browser state is required to remain inside the repository.
-- **Post-source-review working tree:** source, tests, scripts, and release
-  documentation are committed. Exactly 25 scientific-engine and SBOM paths
-  remain intentionally dirty as stale generated evidence. Seventeen untracked
-  visual-audit files also appeared under
-  `docs/audits/counterlab-first-prize/evidence/screenshots/visual-judge/` while
-  the contained build/evidence sequence was running. Their bytes are being
-  inspected and preserved without claiming current-source or CloakBrowser
-  provenance. Neither set may be folded silently into qualified evidence.
+- **Post-audit-preservation working tree:** the concurrent screenshot set and
+  the complete visual/generative-UI audit addendum are preserved in reviewed
+  documentation commits. Exactly 25 scientific-engine and SBOM paths remain
+  intentionally dirty as stale generated evidence. Those paths must be
+  regenerated against the next exact source commit and image; no audit file or
+  ignored stock-browser capture may be folded silently into qualified evidence.
 - **Integration rule:** commit source tooling first, build and qualify that
   exact commit, commit its generated evidence separately, deploy only the
   qualified image, then fast-forward this branch into `main` after every
@@ -53,7 +55,11 @@ pass is never presented as a browser or production pass.
 | Exact-image evidence generator implementation | PASS | Local commit `c6575a8` contains normalization, VEX preparation, source/image binding, 31 tracked output hashes, pinned scanner configs, 14-day KEV freshness, bounded verification, and persisted/hash-bound runtime evidence. Exact-image execution still follows the final source commit. |
 | Repository-contained release execution | PASS | Local commit `863a2a8` removes host `/dev/null` sinks from the formal release/deploy/smoke chain, uses physical roots and marker checks, symlink-checks ignored write roots and Git config, adds read-only held-out/achieved gates, gives each production Cloak stage a separate contained runtime, and moves public UI extraction into Cloak-backed Playwright. Shell syntax passed; graph-targeted Vitest passed 3 files/37 tests; release/production Pytest passed 26/26; setup smoke, TypeScript, and achieved-metrics checks passed. Exact-image qualification remains a separate pending gate. |
 | First exact source-bound runner build | PASS | The contained `rt-v61-0719j` runtime built source `184b43796b382094de32a8d2f733d9fd232dab32`. Receipt: `node_modules/.cache/counterlab-v6.1/releases/runner-build-184b43796b382094de32a8d2f733d9fd232dab32.json`; normalized runner digest `sha256:c76bc97f22caf25f26abc7d48bbcaf4dd96331aafe036d4651f595832d95f428`; adapter image digest `sha256:e9f2237e326a462eb0c2823ae13810c38714e54ef0559ae1eca489d99d08a979`; normalized OCI manifest `sha256:f78a0743306f251ed661eca023607f811f4a65c7dc7bb530495def366c74b743`. The image is retained but not yet qualified or deployed. Any preservation commit for the concurrent visual evidence will require a new exact-source build. |
-| Concurrent visual-audit evidence triage | PASS as preservation; NOT QUALIFIED as release evidence | Sixteen valid, byte-stable PNGs at the intended 1440x900 and 390x844 viewports plus one `.keep` file appeared under the audit evidence tree. All 16 were visually inspected; the final preservation-tree secret scan passed across 785 files; no ancillary PNG metadata, secret, personal content, or local path was found. Their source commit, capture URL, browser, and capture command are not recorded, so a local README marks them unverified and no browser/a11y pass is inferred from them. |
+| Second exact source-bound runner build | PASS | After preserving the screenshots, the contained `rt-v61-0719m` runtime built source `cf6108e306e43fb4dd270dfdcc1317f2e508aeda`. Receipt: `node_modules/.cache/counterlab-v6.1/releases/runner-build-cf6108e306e43fb4dd270dfdcc1317f2e508aeda.json`; runner config digest `sha256:9ad43785334e70dbaa738e08ece1efd48c51b55a578730d8620ec47f849f14b7`; normalized OCI manifest `sha256:d2cfc4a1455ebd426ab977733b6598221cebc2a78e965716aed48887ae600a7e`; adapter digest `sha256:32444ee794ab3abb35ac4e670ca62beb901faa5afc3d9709af472d588cf8c9e7`. A later concurrent audit document again advanced the preservation checkpoint, so this image is retained but will not be qualified or deployed. |
+| Concurrent visual-audit evidence triage | PASS as preservation; NOT QUALIFIED as release evidence | Sixteen valid, byte-stable PNGs at the intended 1440x900 and 390x844 viewports plus one `.keep` file appeared under the audit evidence tree. All 16 were visually inspected; no ancillary PNG metadata, secret, personal content, or local path was found. A later local ignored sidecar established the public URL, timestamps, source checkpoint, and stock-Chromium capture method. The README therefore marks them unqualified: they do not satisfy the current CloakBrowser-only policy and no browser/a11y pass is inferred from them. |
+| Visual/generative-UI audit addendum | PASS as preservation; NOT QUALIFIED as browser evidence | The concurrent audit correctly identifies a high-leverage visual gap and the dormant bounded Lab Scene opportunity. Its capture script used stock Chromium, however, so the addendum now carries a prominent CloakBrowser-policy disclaimer. The verified Belief Break visual and trusted scene-renderer recommendation enter the prize queue; the broader agentic Learning Director remains authority-gated and must not delay P0 production truth. |
+| Current-source P1 reconciliation | PASS as source audit; production proof pending | A read-only reconciliation found CL-003 (claim-only chooser), CL-004 (read-only replay), CL-005 (fixed-evidence sample Boundary plus learner-authored reflection), and CL-010 (current vocabulary/metadata) fixed in current source. CL-007 admission/cost controls are implemented but need deployed proof; CL-008 remains honestly `PARTIAL`; CL-009 is narrowly mitigated; CL-023 remains partial because no verified Lab Scene reaches the browser; CL-006 and CL-024 remain open. Old Worker 82 observations are not misrepresented as current feature-branch behavior. |
+| Contained Wrangler identity | BLOCKED on fresh OAuth | Current Wrangler 4.110.0 documentation was checked through Context7. Repository-contained `wrangler whoami` ran without printing a token and reported unauthenticated. A fresh `--browser=false --use-keyring=false` OAuth callback was started inside repository state but timed out before approval; no Cloudflare mutation occurred. Generate a new short-lived link only when the owner is ready to approve it. |
 | Code-review graph and parallel review | PASS | A full repository-contained graph rebuild parsed 419 files into 3,888 nodes and 63,020 edges. After the final incremental refresh, the queryable graph has 3,874 nodes, 62,632 edges, 414 files, 24 communities, and 190 flows. The dirty-slice risk fell from 0.80 to 0.65 after review repairs; 12 conservative orchestration/test-link gaps remain covered by static or integration gates where the graph cannot infer shell/top-level relationships. The ignored graph database remains local and unpublished; the untracked environment helper and `package.json` were reviewed manually because the graph did not index them. |
 | Focused scientific/release tests | PASS | Earlier combined release Vitest passed 4 files/35 tests; focused Python reachability/scientific/held-out gates passed 12 tests. The latest graph-targeted Vitest passed 2 root files/22 tests plus 1 Worker file/15 tests, release/production Pytest passed 26/26, and the read-only held-out execution matched tracked evidence at 10/10 intake and 7/8 legacy fixed-loop completion. |
 | CloakBrowser harness and static collection | BLOCKED | Playwright 1.61.1 statically collected 23 tests in one spec, including the new production asset/security journey. A missing `CLOAK_CDP_ENDPOINT` exits 1 before browser state is created; 0 rendered journeys ran and no stock browser was launched. |
@@ -76,10 +82,11 @@ test inventory may run in parallel, but no two workers edit the same file.
      behind CloakBrowser.
 2. **Exact runner image and evidence regeneration — IN PROGRESS**
    - Attest the repository-contained runtime.
-   - The first immutable image and receipt for `184b4379` built successfully.
-     Preserve the concurrent visual-audit files in a truthful documentation
-     checkpoint, then rebuild so the final receipt binds the new clean source
-     commit rather than treating untracked evidence as invisible.
+   - Immutable images and receipts for `184b4379` and `cf6108e` built
+     successfully. Both are retained but superseded after concurrent audit
+     work was preserved. Freeze the next clean documentation checkpoint and
+     rebuild once more so the final receipt binds every preserved source file
+     rather than treating audit work as invisible.
    - Generate Syft, Grype, CISA KEV, VEX, reachability, license, engine-health,
      registry, runtime-manifest, and snapshot evidence against that exact
      image.
@@ -142,6 +149,19 @@ test inventory may run in parallel, but no two workers edit the same file.
    - Resolve every technically actionable P0/P1/P2 item in
      `docs/audits/counterlab-first-prize` and update the diagnostic score with
      evidence.
+   - After the P0 exact-release gate, implement one signed-data-backed Verified
+     Belief Break visual for the landing/Judge fast path, with an accessible
+     table, reduced-motion parity, persistent sample/replay/live provenance,
+     and no browser-side numerical authority. Recapture it only through the
+     formal CloakBrowser harness.
+   - Treat the broader GPT-5.6 Learning Director as a separately evaluated,
+     bounded authority expansion; do not give it scorer, verifier, kernel,
+     transfer, patch-unlock, or Proof Capsule authority, and do not let it
+     delay the exact public release.
+   - Current source already repairs the claim-only handoff, replay authority,
+     fixed-evidence sample Boundary/reflection, and current metadata findings
+     from the older public audit. Prove those repairs on the exact deployment
+     before spending time rebuilding them.
    - Freeze an exact public build and bind screenshots, demo copy, source,
      Container digest, and claims to it.
    - A real learner-impact study and final Devpost submission require genuine
@@ -207,14 +227,19 @@ test inventory may run in parallel, but no two workers edit the same file.
 - Devpost submission and measured learner impact are not complete. The
   repository work can prepare and verify the evidence package, but it must not
   fabricate submission state, participants, or outcomes.
+- The isolated release profile is not yet authenticated to Cloudflare. The
+  owner's normal-home Wrangler login cannot be read under the repository
+  boundary; a new repository-contained OAuth flow must be approved promptly
+  after it is started.
 
 ### Review methods and capabilities used
 
 - Repository constitution, physical-root checks, marker checks, Git diff, and
   selective staging protect the filesystem and user-authored work.
-- Context7 supplied current `code-review-graph` command guidance; the installed
-  CLI performed the repository-contained full build, change detection,
-  architecture, impact, and test-link queries.
+- Context7 supplied current `code-review-graph` and official Cloudflare
+  Wrangler/D1/Container/deployment guidance; the installed graph CLI performed
+  the repository-contained full build, change detection, architecture, impact,
+  and test-link queries.
 - Three independent read-only subagent reviews covered release drift,
   deployment gates, test coverage, and documentation truth; the lead owns all
   edits and integration.

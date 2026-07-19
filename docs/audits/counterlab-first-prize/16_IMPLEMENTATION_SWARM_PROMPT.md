@@ -18,6 +18,7 @@ The required outcome is a submitted, judgeable, exact-release-bound Education en
 ```text
 learner Question/artifact
 -> learner-confirmed Belief Spec and immutable Prediction
+-> bounded GPT-5.6 inquiry and trusted scene direction
 -> bounded Codex proposal
 -> fixed candidate selection and fixed kernel
 -> independent technical/epistemic release
@@ -53,7 +54,8 @@ Read before changing anything:
 4. `docs/audits/counterlab-first-prize/10_DEVPOST_SCORECARD.md`.
 5. `docs/audits/counterlab-first-prize/13_PRIORITISED_FIX_ROADMAP.md`.
 6. `docs/audits/counterlab-first-prize/15_EVIDENCE_INDEX.md`.
-7. The relevant source/tests/config/docs for each assigned scope.
+7. `docs/audits/counterlab-first-prize/17_VISUAL_JUDGE_GENERATIVE_UI_AND_AGENTIC_CONTROL.md`.
+8. The relevant source/tests/config/docs for each assigned scope.
 
 Resolve conflicts in this order: current public behavior; production API/network/console; current source; tests/release artifacts; deployment config; docs; historical plans; assumptions.
 
@@ -64,7 +66,7 @@ Before spawning work:
 1. Record UTC time and exact time remaining to `2026-07-22T00:00:00Z`.
 2. Record `git rev-parse HEAD`, status, branch, relevant file hashes, active public Worker/deployment/Container identifiers, and Devpost state without changing them.
 3. Identify all unrelated dirty files and assign ownership; agents may not touch them without coordination.
-4. Freeze the candidate scope. Required fixes are CL-001 through CL-010. Selected P2s may proceed only where explicitly paired below. CL-022 and any new feature are gated optional work.
+4. Freeze the candidate scope. Required fixes are CL-001 through CL-010 plus CL-023 and CL-024. Selected P2s may proceed only where explicitly paired below. CL-022 and any unrelated new feature are gated optional work.
 5. Create a release evidence directory inside the repository. Keep all test/runtime/browser cache there.
 6. Run and retain the smallest relevant pre-change tests for every workstream. A pre-existing failure is recorded and reproduced; it is never hidden by weakening tests.
 7. Create a shared issue/acceptance ledger. Only the Commander changes issue status. An implementation agent supplies evidence but may not self-certify its P0/P1 closure.
@@ -91,7 +93,7 @@ Exclusive edit scope:
 - `apps/web/src/features/judge/JudgeModeView.tsx` and its tests;
 - learner-flow/replay/sample-specific components and styles explicitly imported by those paths.
 
-Issues: CL-003, CL-004, CL-005, CL-011, CL-014, CL-015, CL-016. CL-013 may be fixed here only in replay-owned tokens; otherwise hand it to Agent 5 after this agent finishes.
+Issues: CL-003, CL-004, CL-005, CL-011, CL-014, CL-015, CL-016, and the browser/presentation half of CL-023. CL-013 may be fixed here only in replay-owned tokens; otherwise hand it to Agent 5 after this agent finishes.
 
 Required changes and acceptance:
 
@@ -102,8 +104,9 @@ Required changes and acceptance:
 5. **Mobile modes (CL-014).** At 375×812 and 390×844, show a compact sample action and a control named `Modes` (or equally explicit), not generic `Explore`; sample/replay/live status is discoverable within one disclosure; targets and overflow pass.
 6. **Recovery/resume (CL-015).** Missing session, missing proof, and unknown routes get durable distinct recovery cards with retry/back/home. Landing shows up to three recent sessions with mode/status and removes stale entries safely. Test refresh, direct load, back/forward, and resume.
 7. **Start over (CL-016).** While a job is active, confirm reset, invoke idempotent cancel or invalidate lineage before clearing, handle timeout/already-terminal/offline, and reject late callbacks/events from advancing the next journey.
+8. **Verified visual spine (CL-023).** Put an 8–12 second fixed-evidence entity-split belief break above the fold on landing and Judge at 390×844 and 1440×900. Keep `Verified sample` visible; show 389 shared entities becoming 0 and 98.5% becoming 59.4% while model, preprocessing, and seed stay pinned. Render schema-valid Lab Scene blocks through a fixed component registry across Prediction, Test, Boundary, Apply, and Repair. No `eval`, dynamic generated source, unsafe HTML, model-supplied formulas, or literal authoritative values. Unknown blocks/bindings fail closed. Every quantitative view has an accessible table, non-color encoding, keyboard inspection, reduced-motion parity, and signed/fixed binding receipt. The sealed Prediction remains visible through result release; the same Boundary rule carries into transfer and the artifact-specific diff. Test first/second folds, 10/20/30-second comprehension, long content, zoom, keyboard, screen-reader names/live regions, and zero layout shift from scene loading.
 
-Do not change fixed kernels, scorer, verifier, proof schema, runner boundary, submission docs, or Worker admission policy.
+Do not change fixed kernels, scorer, verifier, proof schema, runner boundary, submission docs, Worker admission policy, or Learning Director server contracts. Consume the scene/session contract supplied by Agent 7 only after its tests pass.
 
 ### Agent 2 — Public admission and upload hardening
 
@@ -209,13 +212,41 @@ Must attempt to disprove:
 - sample Boundary authority and learner revision gate;
 - rate/budget enforcement and idempotency without load abuse;
 - Codex isolation wording/enforcement;
+- that the first-fold visual uses only fixed verified sample values and remains above the fold on desktop/mobile;
+- that every Lab Scene block resolves current-lineage signed bindings and fails closed on unknown/stale/model-literal values;
+- that GPT-5.6 tool use is bounded, sanitized, useful, and unable to select truth, verify, grade transfer, unlock Repair, or release proof;
 - learner-data denominators;
 - submission/video/build consistency;
 - proposed score increase.
 
 Repeat any P0/P1 failure. A single transient pass is insufficient. Reject closure if evidence belongs to another commit/build or if the fix merely hides the symptom/copy while misleading behavior remains.
 
-### Agent 7 — Conditional cross-domain differentiation
+### Agent 7 — GPT-5.6 Learning Director and trusted scene transport
+
+Exclusive edit scope:
+
+- `packages/belief-analyst/src/` and its focused tests;
+- `packages/generative-ui-contracts/src/` and its focused tests;
+- new narrowly scoped Learning Director/controller and scene-transport modules plus tests;
+- browser API/session scene contracts, but not `App.tsx`, Judge components, or visual styles;
+- no direct edits to `apps/web/worker/api.ts` while Agent 2 is active; the Commander owns that final seam after both agents stop.
+
+Issues: CL-024 and the contract/transport half of CL-023.
+
+Required changes and acceptance:
+
+1. Replace the one-shot-only path with a bounded Responses API inquiry/presentation loop. Preserve `store: false` where supported, the approved outbound preview, local schema validation, safety identifier, timeout/retry bounds, and explicit learner confirmation. Continue context only through validated locally retained items or an officially supported privacy-compatible response reference.
+2. Expose only read/proposal tools: approved evidence lookup, registered-candidate listing, trusted-scene block selection, current signed-result-path inspection, verified Boundary-view listing, and at most one learner clarification request. Tool inputs/outputs are strict schemas, current-lineage bound, size limited, sanitized, budgeted, and publicly auditable without private reasoning.
+3. Set hard per-turn limits for wall time, reasoning/tool calls, tokens, evidence references, clarifications, and recovery. Tool loops, duplicate calls, stale lineage, upstream quota/timeout, invalid schema, and prompt injection fail to a deterministic safe presentation without changing authoritative state.
+4. GPT-5.6 may choose what approved evidence to inspect, whether one clarification is needed, which hypothesis contrast to emphasize, the order of trusted scene blocks, one verified Boundary view, calibrated hints, and how to explain signed results/limitations. It may never select the final experiment, compute/display authoritative values, inspect hidden tests, decide verification, grade transfer, unlock Repair, or issue a Proof Capsule.
+5. Transport the validated/hash-bound `LabSceneV2` plus a current-lineage binding receipt to the browser. Result blocks resolve only allowlisted fixed/signed paths after release. Draft scenes before result release contain no literal verified values. Unknown blocks, operations, fields, paths, formulas, or stale hashes are rejected.
+6. Retain learner agency: the agent cannot auto-confirm a Belief Spec, lock Prediction, interpret evidence for the learner, submit transfer, approve Repair, or skip a required learner action.
+7. Add negative tests for notebook prompt injection, forged tool names, requested hidden data, model self-verification, authoritative literal insertion, stale scene/result binding, replay/live leakage, repeated clarification, runaway loops, quota/timeout, and invalid fallback. A pre-change test must demonstrate the prior one-shot/unreachable-scene gap.
+8. Emit only sanitized public events describing evidence inspected, trusted block types selected, budgets consumed, clarification requested, and fallback reason. Never persist chain-of-thought, raw rows, secrets, local paths, hidden tests, or full model payloads.
+
+Do not generate React/CSS/HTML/JavaScript, formulas, kernels, scorer rules, verifier rules, transfer answers, or state transitions. Do not make GPT-5.6 or Codex an authority. Do not edit learner visual components owned by Agent 1.
+
+### Agent 8 — Conditional cross-domain differentiation
 
 Do not spawn unless Agents 0 and 6 certify all required gates green, the release is source-bound, no P0/P1 remains, and at least 12 hours remain.
 
@@ -271,10 +302,12 @@ Never delete, skip, weaken, snapshot-overwrite, or broadly update a test to obta
 
 ### Wave 1 — core first-prize behavior
 
-- Agent 1 fixes claim handoff, replay authority, sample Boundary/revision, and mobile/recovery/reset.
+- Agent 1 fixes claim handoff, replay authority, sample Boundary/revision, mobile/recovery/reset, and the fixed-evidence visual spine without touching Agent 7's contracts.
 - Agent 2 adds admission/cost protection and early upload bounds.
 - Agent 3 may add bounded isolation only if the honest correction and focused tests are green.
 - Agent 4 runs learner evidence collection in parallel without changing product code.
+- Agent 7 builds the bounded Learning Director and scene transport in non-overlapping package/new-module files.
+- After Agents 2 and 7 stop, the Commander integrates their Worker seam; after that contract passes, Agent 1 connects the trusted scene renderer. No concurrent edits to the seam or UI files.
 
 ### Wave 2 — material quality and automation
 
@@ -314,6 +347,7 @@ After the exact public tuple passes:
 ### Required before submission
 
 - CL-001 through CL-010.
+- CL-023 and CL-024.
 - CL-011 because it is part of the fast sample credibility fix.
 - Minimal CI from CL-021.
 - Exact public production qualification and independent P0/P1 validation.
@@ -326,11 +360,11 @@ After the exact public tuple passes:
 
 ### Optional only if all critical work passes
 
-- Exactly one complete `physics/free-fall` pack under Agent 7.
+- Exactly one complete `physics/free-fall` pack under Agent 8.
 
 ### Forbidden before submission
 
-- Broad monolith refactor, generic tutor/chat features, arbitrary subjects/code/notebooks, more adjacent lessons, accounts/LMS/social/gamification/voice/mobile apps, dependency churn, new providers/databases, staged failures, unlabelled replay, invented metrics, or a visual redesign.
+- Broad monolith refactor, generic tutor/chat features, arbitrary subjects/code/notebooks, more adjacent lessons, accounts/LMS/social/gamification/voice/mobile apps, dependency churn, new providers/databases, staged failures, unlabelled replay, invented metrics, a broad visual redesign, or arbitrary generated UI/code. CL-023's fixed-evidence theater and trusted schema renderer are required, not forbidden redesign.
 
 ## Stop and rollback criteria
 
@@ -351,9 +385,9 @@ Use reversible commits only if authorized. Do not use destructive reset/checkout
 
 - Official entry is submitted and independently viewable.
 - One exact public release tuple is immutable and fully qualified twice.
-- Every CL-001 through CL-010 acceptance criterion passes and is independently reproduced.
+- Every CL-001 through CL-010 plus CL-023 and CL-024 acceptance criterion passes and is independently reproduced.
 - Claim-only learner path, sample Boundary/revision, replay authority, and Judge fast path are honest and finishable.
-- Runtime Codex contribution is visible but never authority; isolation claims exactly match enforcement.
+- GPT-5.6's bounded inquiry/presentation contribution and Runtime Codex's plan/scene contribution are visible but never authority; isolation claims exactly match enforcement.
 - Rate/cost control, failure/degraded behavior, reconnect/cancel/resume, patch copy, and Capsule integrity are proven.
 - Desktop/mobile keyboard/contrast/focus checks pass; console/network are clean except documented expected failures.
 - Learner impact is measured honestly or remains explicitly `NO_DATA`; no fabricated inference.
