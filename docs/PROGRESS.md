@@ -12,19 +12,20 @@ pass is never presented as a browser or production pass.
 ### Current checkpoint
 
 - **Branch:** `feat/learner-ux-v6.1`
-- **Pre-tooling source checkpoint:**
-  `fafa0e05984ed877ba4d9bfdd8ce8b82bd3d9bcc`. The exact runner source is the
-  commit containing this ledger and is recorded by the subsequent build and
-  evidence receipts rather than guessed in advance.
+- **Source-bound evidence tooling checkpoint:**
+  `c6575a85133a246d0b3a72c2c7f134c203a65440`. The final containment/read-only
+  release repair is still under review and uncommitted; its exact source hash
+  will be recorded only after the reviewed commit exists.
 - **Continuation starting commit:**
   `dd451c77606ec270cfba030784df50cb3aa19969`
 - **Repository boundary:** physical root
   `/home/mysterious/storage/github/CounterLab`; root marker present; all active
   build, scan, and browser state is required to remain inside the repository.
-- **Working tree:** intentionally dirty. New source-bound evidence tooling and
-  its focused tests are under review. Existing scientific-engine and SBOM
-  changes are stale generated evidence and must not be committed until they are
-  regenerated against the next exact source commit and exact runner image.
+- **Working tree:** intentionally dirty. The containment/read-only source,
+  tests, scripts, and documentation repair remains uncommitted alongside
+  separately stale scientific-engine and SBOM outputs. Generated evidence must
+  not enter the source commit and must not be committed until regenerated
+  against the exact source commit and exact runner image.
 - **Integration rule:** commit source tooling first, build and qualify that
   exact commit, commit its generated evidence separately, deploy only the
   qualified image, then fast-forward this branch into `main` after every
@@ -34,19 +35,22 @@ pass is never presented as a browser or production pass.
 
 | Work item | Status | Exact evidence |
 | --- | --- | --- |
-| Repository and dirty-tree preservation | PASS | Root, marker, branch, commit, and every dirty path were inspected; no stash, reset, clean, deletion, or out-of-repository operation was used. |
-| Learner-focused presentation and navigation | PASS locally | Commits `2ce90ad` and `fafa0e0` simplify the question-first entry, evidence choices, stage actions, accessible names, and client chunking while preserving signed-data authority. |
-| Full web component suite | PASS locally | 59 files, 375 tests passed after aligning the cleanup-policy assertion with ephemeral `--rm` verification containers. |
-| Web, Worker, and repository TypeScript | PASS locally | All three strict TypeScript checks passed at the current learner checkpoint. |
-| Production Vite/Worker build | PASS locally | Vite 8.1.4 built 388 Worker modules and 197 client modules with no chunk warning. Worker 1,697.79 kB / 329.18 kB gzip; main client 399.43 kB / 116.21 kB gzip; CSS 178.66 kB / 31.35 kB gzip; largest lazy chunk Sample Boundary 86.27 kB / 17.15 kB gzip. |
-| Formatting, whitespace, and secret scan | PASS locally | Prettier, Git whitespace checks, and the repository secret scan passed; the latest scan covered 766 files. |
-| Source-bound runner build inputs | PASS locally | Commit `e0559ff` includes the bounded adapter inputs required by the exact-image build. |
-| Pinned local Syft and Grype tools | PASS locally | Syft 1.44.0 and Grype 0.112.0 archives and binaries were independently hash-checked in repository-contained tool storage. |
-| Exact-image evidence generator implementation | PASS as an uncommitted source candidate | Normalization, VEX preparation, source/image binding, and one-shot refresh scripts are implemented. Independent read-only review completed and its concrete findings were repaired: exact review-path traversal rejection, no host `/dev/null`, 31 tracked output hashes, pinned Syft/Grype configs, 14-day KEV freshness, bounded verification containers, preflighted VEX outputs, direct helper tests, and a persisted/hash-bound exact-runtime report. Exact-image execution still follows the source commit. |
-| Focused scientific/release tests | PASS locally | Latest combined release Vitest: 4 files/35 tests passed. Latest focused Python reachability, scientific verifier, and held-out generator gate: 12 passed. Repository TypeScript, shell syntax, Python syntax, formatting, and whitespace checks passed. |
-| CloakBrowser harness and static collection | PASS fail-closed; execution BLOCKED | Playwright 1.61.1 statically collected 22 tests in 1 spec. The shell harness and direct Playwright command both reject a missing `CLOAK_CDP_ENDPOINT`; 0 browser journeys ran and no stock browser was launched. |
-| Broad product/runtime verification | PASS locally except expected evidence drift | Web Vitest 59 files/375 tests; Python kernel and runner 234/234; scientific verifier/reachability 10/10; leakage mutations 13/13; imbalance mutations 19/19; root, web, Worker, and hosted-runner TypeScript; production build; scientific import audit; Git whitespace; active-file formatting; and the 766-file secret scan all passed. Pre-refresh root Vitest passed 42/44 files and 499/502 tests; all three failures resolve through the intentionally stale scientific evidence graph and are queued for the exact-image refresh. |
-| Held-out benchmark | PASS configured gate and explicit accounting | Intake passed 10/10. Seven of seven patch-eligible cases complete the fixed loop; the separate RandomForest case is correctly refused with `PATCH_ESTIMATOR_OUTSIDE_CONTRACT` because its estimator/configuration is outside the registered patch contract. The legacy aggregate remains 7/8 for compatibility. Generator syntax and exact outcome assertions passed 10/10; held-out Vitest passed 3 files/11 tests. Generated evidence refresh remains in the source-commit queue. |
+| Repository and dirty-tree preservation | PASS | Root, marker, branch, commit, and every dirty path were inspected; no stash, reset, clean, tracked-file discard, or deletion was used. |
+| Direct test temporary containment | FAIL | One focused direct Pytest attempt inherited Pytest's host `/tmp` default before the missing environment was detected. It was stopped and no external cleanup or inspection followed. Every subsequent direct Python run uses a unique repository-contained `TMPDIR`, `PYTHONPYCACHEPREFIX`, and `--basetemp`; the formal test/release scripts now establish contained paths themselves. |
+| Learner-focused presentation and navigation | PASS | Local commits `2ce90ad` and `fafa0e0` simplify the question-first entry, evidence choices, stage actions, accessible names, and client chunking while preserving signed-data authority. |
+| Full web component suite | PASS | Local web Vitest passed 59 files/375 tests after aligning the cleanup-policy assertion with ephemeral verification containers. |
+| Web, Worker, and repository TypeScript | PASS | All three strict TypeScript checks passed at the current learner checkpoint. |
+| Production Vite/Worker build | PASS | Local Vite 8.1.4 built 388 Worker modules and 197 client modules with no chunk warning. Worker 1,697.79 kB / 329.18 kB gzip; main client 399.43 kB / 116.21 kB gzip; CSS 178.66 kB / 31.35 kB gzip; largest lazy chunk Sample Boundary 86.27 kB / 17.15 kB gzip. |
+| Formatting, whitespace, and secret scan | PASS | Prettier, Git whitespace checks, and the repository secret scan passed; the latest scan covered 767 files. |
+| Source-bound runner build inputs | PASS | Local commit `e0559ff` includes the bounded adapter inputs required by the exact-image build. |
+| Pinned local Syft and Grype tools | PASS | Syft 1.44.0 and Grype 0.112.0 archives and binaries were independently hash-checked in repository-contained tool storage. |
+| Exact-image evidence generator implementation | PASS | Local commit `c6575a8` contains normalization, VEX preparation, source/image binding, 31 tracked output hashes, pinned scanner configs, 14-day KEV freshness, bounded verification, and persisted/hash-bound runtime evidence. Exact-image execution still follows the final source commit. |
+| Repository-contained release execution | IN PROGRESS | The uncommitted working-tree candidate removes host `/dev/null` sinks from the formal release/deploy/smoke chain, uses physical roots and marker checks, symlink-checks ignored write roots and Git config, adds read-only held-out/achieved gates, gives each production Cloak stage a separate contained runtime, and moves public UI extraction into Cloak-backed Playwright. Shell syntax passed; graph-targeted Vitest passed 3 files/37 tests; release/production Pytest passed 26/26; TypeScript and achieved-metrics checks passed. It is not yet exact-image qualified. |
+| Code-review graph and parallel review | PASS | A full repository-contained graph rebuild parsed 419 files into 3,888 nodes and 63,020 edges. After the final incremental refresh, the queryable graph has 3,874 nodes, 62,632 edges, 414 files, 24 communities, and 190 flows. The dirty-slice risk fell from 0.80 to 0.65 after review repairs; 12 conservative orchestration/test-link gaps remain covered by static or integration gates where the graph cannot infer shell/top-level relationships. The ignored graph database remains local and unpublished; the untracked environment helper and `package.json` were reviewed manually because the graph did not index them. |
+| Focused scientific/release tests | PASS | Earlier combined release Vitest passed 4 files/35 tests; focused Python reachability/scientific/held-out gates passed 12 tests. The latest graph-targeted Vitest passed 2 root files/22 tests plus 1 Worker file/15 tests, release/production Pytest passed 26/26, and the read-only held-out execution matched tracked evidence at 10/10 intake and 7/8 legacy fixed-loop completion. |
+| CloakBrowser harness and static collection | BLOCKED | Playwright 1.61.1 statically collected 23 tests in one spec, including the new production asset/security journey. A missing `CLOAK_CDP_ENDPOINT` exits 1 before browser state is created; 0 rendered journeys ran and no stock browser was launched. |
+| Broad product/runtime verification | IN PROGRESS | Web Vitest 59 files/375 tests; Python kernel and runner 234/234; scientific verifier/reachability 10/10; leakage mutations 13/13; imbalance mutations 19/19; root, web, Worker, and hosted-runner TypeScript; production build; scientific import audit; whitespace; formatting; and the 767-file secret scan passed locally. Pre-refresh root Vitest passed 42/44 files and 499/502 tests; the three stale-evidence failures remain queued for exact-image refresh. |
+| Held-out benchmark | PASS | Intake passed 10/10. Seven of seven patch-eligible cases complete the fixed loop; the separate RandomForest case is correctly refused with `PATCH_ESTIMATOR_OUTSIDE_CONTRACT`. The legacy aggregate remains 7/8 for compatibility. The new read-only formal gate recomputed the benchmark and matched both tracked evidence documents without changing them. |
 
 ### Ordered completion queue
 
@@ -54,11 +58,14 @@ The lead owns integration, shared architecture, release scripts, deployment,
 documentation, commits, and the final merge. Independent read-only reviews and
 test inventory may run in parallel, but no two workers edit the same file.
 
-1. **Evidence tooling review and source commit — IN PROGRESS**
-   - Independent review and focused repair tests are complete.
-   - Inspect the final held-out and release-tool diffs, refresh held-out
-     evidence, run the broader pre-commit gates, selectively stage only
-     source/tests and this ledger, and create one user-authored local commit.
+1. **Final source containment review and source commit — IN PROGRESS**
+   - Source-bound evidence tooling was committed at `c6575a8` after independent
+     review and focused repair tests.
+   - The containment/read-only repair is tested but remains uncommitted. It
+     retains formal release diagnostics inside repository state, validates
+     contained Git configuration, uses read-only held-out/achieved evidence
+     checks in the formal clean-tree gate, and moves UI transport inspection
+     behind CloakBrowser.
 2. **Exact runner image and evidence regeneration — NOT RUN for the new source
    commit**
    - Attest the repository-contained runtime.
@@ -111,8 +118,10 @@ test inventory may run in parallel, but no two workers edit the same file.
      exact deployed-version binding.
 7. **CloakBrowser and accessibility qualification — BLOCKED until a live
    `CLOAK_CDP_ENDPOINT` is available**
-   - Execute all 22 collected Playwright journeys at 1440x900, 1280x720, and
-     390x844 using CloakBrowser only.
+   - Execute the 23 collected CloakBrowser tests. The explicit viewport matrix
+     covers 1440x900, 1280x720, and 390x844; the complete learner, replay, and
+     live journeys run at their configured viewport and must not be described
+     as 69 separately executed journeys.
    - Exercise keyboard-only navigation, screen-reader names and announcements,
      focus restoration, reduced motion, refresh during asynchronous phases,
      downloads, unsupported notebooks, failed verification/transfer, and
@@ -147,13 +156,23 @@ test inventory may run in parallel, but no two workers edit the same file.
   CloakBrowser endpoint is unavailable.
 - The existing browser suite has no Axe, Lighthouse, automated screen-reader,
   or Web Vitals integration. Keyboard, accessible-name, reduced-motion, and
-  viewport scenarios are represented in the 22-test specification, but their
+  viewport scenarios are represented in the 23-test specification, but their
   rendered behavior remains unverified until CloakBrowser is available.
+- One focused direct Pytest attempt in this continuation used Pytest's host
+  default temporary root before the missing containment environment was
+  detected. The attempt was stopped; no cleanup, inspection, or further action
+  was taken against that external path. Every subsequent direct Python test is
+  required to set repository-contained `TMPDIR`, `PYTHONPYCACHEPREFIX`, and
+  `--basetemp`; the formal release script already exports a contained `TMPDIR`.
 - A repository-wide Prettier scan can race with transient
   `.code-review-graph` SQLite sidecars. Explicit checks of every tracked and
   active untracked source file pass; the transient database files are not
   product evidence and must be excluded from the broad formatting surface
   rather than chased or deleted.
+- `scripts/clean-demo.sh` is not part of the formal v6.1 release chain and is
+  blocked under the current filesystem constitution: it still uses uncontained
+  package/tool setup and host diagnostic sinks. It will not be run or treated
+  as a release gate during this pass.
 - The held-out `leakage_random_forest` notebook is supported for intake and
   reaches verified result and transfer, but Repair is intentionally refused:
   the notebook only imports `RandomForestClassifier` and provides no admitted
@@ -170,7 +189,27 @@ test inventory may run in parallel, but no two workers edit the same file.
   repository work can prepare and verify the evidence package, but it must not
   fabricate submission state, participants, or outcomes.
 
-## Current status
+### Review methods and capabilities used
+
+- Repository constitution, physical-root checks, marker checks, Git diff, and
+  selective staging protect the filesystem and user-authored work.
+- Context7 supplied current `code-review-graph` command guidance; the installed
+  CLI performed the repository-contained full build, change detection,
+  architecture, impact, and test-link queries.
+- Three independent read-only subagent reviews covered release drift,
+  deployment gates, test coverage, and documentation truth; the lead owns all
+  edits and integration.
+- Vitest, Pytest, strict TypeScript, shell syntax, Prettier, the secret scan,
+  held-out recomputation, mutation suites, scientific verification, and builds
+  provide local evidence. Wrangler and CloakBrowser are listed only after their
+  commands actually run.
+
+## Historical milestone archive
+
+The material below preserves earlier milestone evidence and identifiers. It is
+not the active release status and may contain superseded counts, image digests,
+or authentication observations. The active v6.1 release board above is the
+only current operational ledger.
 
 ### Learner UX v6.1 local checkpoint
 

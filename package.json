@@ -25,7 +25,8 @@
     "vex:summarize": "node --import tsx scripts/summarize-vex-application.ts",
     "codex:live": "node --import tsx scripts/run-live-codex.ts",
     "belief:live:verify": "node --import tsx scripts/verify-live-belief.ts",
-    "held-out:run": "node --import tsx scripts/run-held-out.ts"
+    "held-out:run": "node --import tsx scripts/run-held-out.ts",
+    "held-out:check": "node --import tsx scripts/run-held-out.ts --check"
   },
   "dependencies": {
     "openai": "6.46.0",

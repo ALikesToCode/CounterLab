@@ -5,6 +5,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 BASE_URL="${1:-${COUNTERLAB_PRODUCTION_URL:-}}"
 REPORT_HELPER="${ROOT_DIR}/scripts/production_smoke_report.py"
 
+[[ -f "${ROOT_DIR}/COUNTERLAB_REPO_ROOT" ]] || {
+  echo "CounterLab repository marker is missing." >&2
+  exit 2
+}
+
 repo_path() {
   local requested="$1"
   local candidate
@@ -40,13 +45,25 @@ repo_path() {
 SMOKE_WORK_ROOT="$(repo_path "${COUNTERLAB_SMOKE_WORK_ROOT:-node_modules/.cache/counterlab-v6.1/production-smoke-work}")"
 CACHE_ROOT="$(repo_path "node_modules/.cache/counterlab-v6.1")"
 node "${ROOT_DIR}/scripts/assert-contained-path.mjs" \
-  "${SMOKE_WORK_ROOT}" "${CACHE_ROOT}"
+  "${SMOKE_WORK_ROOT}" "${CACHE_ROOT}" \
+  "${CACHE_ROOT}/home" "${CACHE_ROOT}/tmp" "${CACHE_ROOT}/xdg-cache" \
+  "${CACHE_ROOT}/xdg-config" "${CACHE_ROOT}/xdg-data" \
+  "${CACHE_ROOT}/gitconfig"
 export HOME="${CACHE_ROOT}/home"
 export TMPDIR="${CACHE_ROOT}/tmp"
 export XDG_CACHE_HOME="${CACHE_ROOT}/xdg-cache"
 export XDG_CONFIG_HOME="${CACHE_ROOT}/xdg-config"
 export XDG_DATA_HOME="${CACHE_ROOT}/xdg-data"
+export GIT_CONFIG_NOSYSTEM=1
+export GIT_CONFIG_GLOBAL="${CACHE_ROOT}/gitconfig"
 mkdir -p "${HOME}" "${TMPDIR}" "${XDG_CACHE_HOME}" "${XDG_CONFIG_HOME}" "${XDG_DATA_HOME}"
+node "${ROOT_DIR}/scripts/assert-contained-path.mjs" \
+  "${HOME}" "${TMPDIR}" "${XDG_CACHE_HOME}" "${XDG_CONFIG_HOME}" \
+  "${XDG_DATA_HOME}" "${GIT_CONFIG_GLOBAL}"
+[[ "$(git -C "${ROOT_DIR}" rev-parse --show-toplevel)" == "${ROOT_DIR}" ]] || {
+  echo "Production smoke requires the verified CounterLab Git root." >&2
+  exit 2
+}
 
 if [[ -z "${BASE_URL}" ]]; then
   echo "Usage: ./scripts/production-smoke.sh https://counterlab.example" >&2
@@ -61,11 +78,13 @@ if [[ ! "${BASE_URL}" =~ ^https:// ]]; then
 fi
 
 for command in curl git python3; do
-  if ! command -v "${command}" >/dev/null 2>&1; then
+  COMMAND_PATH="$(command -v "${command}" || true)"
+  if [[ -z "${COMMAND_PATH}" ]]; then
     echo "Missing required command: ${command}" >&2
     exit 2
   fi
 done
+CURL_BIN="$(command -v curl)"
 PNPM="${ROOT_DIR}/scripts/run-contained-pnpm.sh"
 [[ -x "${PNPM}" && ! -L "${PNPM}" ]] || {
   echo "Pinned repository-contained pnpm launcher is unavailable." >&2
@@ -435,8 +454,13 @@ REPORT_INITIALIZED=0
 SMOKE_STATUS="FAILED"
 cleanup() {
   if [[ "${REPORT_INITIALIZED}" == "1" && "${SMOKE_STATUS}" != "PASSED" ]]; then
-    python3 "${REPORT_HELPER}" finish "${REPORT_PATH}" \
-      --status FAILED --completed-at "$(timestamp)" >/dev/null 2>&1 || true
+    FAILED_REPORT_OUTPUT="$(
+      python3 "${REPORT_HELPER}" finish "${REPORT_PATH}" \
+        --status FAILED --completed-at "$(timestamp)" 2>&1
+    )" || true
+    if [[ -n "${FAILED_REPORT_OUTPUT}" ]]; then
+      printf 'Production-smoke report finalization: %s\n' "${FAILED_REPORT_OUTPUT}" >&2
+    fi
   fi
   printf 'Retained production-smoke workspace: %s\n' "${WORK_DIR}"
 }
@@ -460,7 +484,7 @@ printf '%-24s | %-13s | %s\n' "STAGE" "MODE" "STATUS"
 printf '%-24s-+-%-13s-+-%s\n' "------------------------" "-------------" "------"
 
 stage_started="$(timestamp)"
-curl --fail --silent --show-error \
+"${CURL_BIN}" --fail --silent --show-error \
   --proto '=https' --proto-redir '=https' --max-redirs 0 \
   --max-time 30 \
   "${BASE_URL}/ready" \
@@ -507,7 +531,7 @@ record_stage \
   "{\"responseSha256\":\"$(sha256_file "${WORK_DIR}/ready.json")\"}"
 
 stage_started="$(timestamp)"
-curl --fail --silent --show-error \
+"${CURL_BIN}" --fail --silent --show-error \
   --proto '=https' --proto-redir '=https' --max-redirs 0 \
   --max-time 30 \
   "${BASE_URL}/api/health" \
@@ -553,111 +577,30 @@ record_stage \
   "capability-health" "control_plane" "PASSED" "${stage_started}" "$(timestamp)" "" \
   "{\"responseSha256\":\"$(sha256_file "${WORK_DIR}/health.json")\"}"
 
+cd "${ROOT_DIR}"
+
+BROWSER_RUNTIME_PARENT="${ROOT_DIR}/apps/web/test-results/runtime/production-${SMOKE_RUN_ID}"
+node "${ROOT_DIR}/scripts/assert-contained-path.mjs" "${BROWSER_RUNTIME_PARENT}"
+mkdir -p "${BROWSER_RUNTIME_PARENT}"
+node "${ROOT_DIR}/scripts/assert-contained-path.mjs" "${BROWSER_RUNTIME_PARENT}"
+
 stage_started="$(timestamp)"
-python3 - "${BASE_URL}" "${WORK_DIR}" <<'PY'
-import pathlib
-import re
-import sys
-import urllib.parse
-import urllib.request
-
-base = sys.argv[1]
-destination = pathlib.Path(sys.argv[2])
-headers = {"User-Agent": "CounterLab release smoke"}
-
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        raise RuntimeError(f"public release redirected to {newurl}")
-
-opener = urllib.request.build_opener(NoRedirect)
-
-def open_public(url):
-    parsed = urllib.parse.urlsplit(url)
-    expected = urllib.parse.urlsplit(base)
-    if parsed.scheme != expected.scheme or parsed.netloc != expected.netloc:
-        raise RuntimeError(f"public asset escaped the release origin: {url}")
-    request = urllib.request.Request(url, headers=headers)
-    response = opener.open(request, timeout=30)
-    if response.geturl() != url:
-        response.close()
-        raise RuntimeError(f"public asset response changed origin or path: {url}")
-    return response
-
-required_headers = {
-    "content-security-policy": (
-        "default-src 'none'",
-        "frame-ancestors 'none'",
-        "script-src 'self'",
-        "connect-src 'self'",
-    ),
-    "x-content-type-options": ("nosniff",),
-    "x-frame-options": ("DENY",),
-    "referrer-policy": ("strict-origin-when-cross-origin",),
-    "permissions-policy": ("camera=()", "microphone=()", "payment=()"),
-    "strict-transport-security": ("max-age=31536000",),
-}
-
-def read_secured(path):
-    with open_public(base + path) as response:
-        body = response.read()
-        for name, expected_values in required_headers.items():
-            value = response.headers.get(name, "")
-            if any(expected not in value for expected in expected_values):
-                raise SystemExit(
-                    f"public route {path} is missing required {name} policy"
-                )
-        return body
-
-route_bodies = [
-    read_secured(path)
-    for path in (
-        "/",
-        "/judge",
-        "/new",
-        "/replay/leakage-01",
-        "/counterlab-release-route-that-does-not-exist",
-    )
-]
-html = route_bodies[0]
-(destination / "index.html").write_bytes(html)
-
-text = html.decode("utf-8", errors="replace")
-paths = set(re.findall(r'''(?:src|href)=["']([^"']+)["']''', text))
-public = list(route_bodies)
-for path in paths:
-    resolved = urllib.parse.urljoin(base + "/", path)
-    if urllib.parse.urlparse(resolved).netloc != urllib.parse.urlparse(base).netloc:
-        continue
-    if not urllib.parse.urlparse(resolved).path.endswith((".js", ".css")):
-        continue
-    with open_public(resolved) as response:
-        cache_control = response.headers.get("cache-control", "")
-        if not all(
-            value in cache_control
-            for value in ("public", "max-age=31536000", "immutable")
-        ):
-            raise SystemExit(f"fingerprinted asset cache policy is missing: {resolved}")
-        public.append(response.read())
-
-joined = b"\n".join(public).decode("utf-8", errors="replace")
-for label, pattern in {
-    "private key": r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----",
-    "API credential": r"\bsk-[A-Za-z0-9_-]{24,}\b",
-    "Codex credential bundle": r'CODEX_AUTH_JSON\s*[:=]\s*["\']?\{',
-    "runner signing value": r'COUNTERLAB_RUNNER_SIGNING_(?:PRIVATE_)?KEY\s*[:=]\s*["\'][A-Za-z0-9_-]{32,}',
-}.items():
-    if re.search(pattern, joined):
-        raise SystemExit(f"public asset secret scan failed: {label}")
-print(f"Public asset secret scan: PASS ({len(public)} response bodies)")
-PY
+PUBLIC_ASSET_RUNTIME_ROOT="${BROWSER_RUNTIME_PARENT}/public-assets"
+PUBLIC_ASSET_EVIDENCE="${PUBLIC_ASSET_RUNTIME_ROOT}/evidence/public-assets.json"
+COUNTERLAB_E2E_BASE_URL="${BASE_URL}" \
+COUNTERLAB_E2E_RUNTIME_ROOT="${PUBLIC_ASSET_RUNTIME_ROOT}" \
+COUNTERLAB_E2E_PUBLIC_ASSET_SCAN=1 \
+COUNTERLAB_E2E_PUBLIC_ASSET_EVIDENCE_PATH="${PUBLIC_ASSET_EVIDENCE}" \
+  "${PNPM}" --filter @counterlab/web exec playwright test \
+  --config playwright.config.ts \
+  --grep "Loaded public release routes and assets retain security headers and contain no secrets"
 record_stage \
   "public-secret-scan" "control_plane" "PASSED" "${stage_started}" "$(timestamp)" "" \
-  "{\"documentSha256\":\"$(sha256_file "${WORK_DIR}/index.html")\"}"
-
-cd "${ROOT_DIR}"
+  "{\"evidenceSha256\":\"$(sha256_file "${PUBLIC_ASSET_EVIDENCE}")\"}"
 
 stage_started="$(timestamp)"
 COUNTERLAB_E2E_BASE_URL="${BASE_URL}" \
+COUNTERLAB_E2E_RUNTIME_ROOT="${BROWSER_RUNTIME_PARENT}/judge" \
   "${PNPM}" --filter @counterlab/web exec playwright test \
   --config playwright.config.ts \
   --grep "Judge Mode distinguishes every authority path"
@@ -665,6 +608,7 @@ record_stage "judge-mode" "control_plane" "PASSED" "${stage_started}" "$(timesta
 
 stage_started="$(timestamp)"
 COUNTERLAB_E2E_BASE_URL="${BASE_URL}" \
+COUNTERLAB_E2E_RUNTIME_ROOT="${BROWSER_RUNTIME_PARENT}/sample" \
   "${PNPM}" --filter @counterlab/web exec playwright test \
   --config playwright.config.ts \
   --grep "Try Instantly persists"
@@ -672,19 +616,23 @@ record_stage "sample-lesson" "sample" "PASSED" "${stage_started}" "$(timestamp)"
 
 stage_started="$(timestamp)"
 COUNTERLAB_E2E_BASE_URL="${BASE_URL}" \
+COUNTERLAB_E2E_RUNTIME_ROOT="${BROWSER_RUNTIME_PARENT}/replay" \
   "${PNPM}" --filter @counterlab/web exec playwright test \
   --config playwright.config.ts \
   --grep "Replay remains visibly labelled"
 record_stage "verified-replay" "replay" "PASSED" "${stage_started}" "$(timestamp)"
 
 stage_started="$(timestamp)"
+LEAKAGE_RUNTIME_ROOT="${BROWSER_RUNTIME_PARENT}/live-leakage"
+LEAKAGE_EVIDENCE="${LEAKAGE_RUNTIME_ROOT}/evidence/live-leakage.json"
 COUNTERLAB_E2E_BASE_URL="${BASE_URL}" \
+COUNTERLAB_E2E_RUNTIME_ROOT="${LEAKAGE_RUNTIME_ROOT}" \
 COUNTERLAB_E2E_LIVE=1 \
-COUNTERLAB_E2E_EVIDENCE_PATH="${WORK_DIR}/live-leakage.json" \
+COUNTERLAB_E2E_EVIDENCE_PATH="${LEAKAGE_EVIDENCE}" \
   "${PNPM}" --filter @counterlab/web exec playwright test \
   --config playwright.config.ts \
   --grep "configured hosted runner completes an untouched leakage notebook"
-leakage_evidence="$(live_evidence "${WORK_DIR}/live-leakage.json" "entity_leakage")"
+leakage_evidence="$(live_evidence "${LEAKAGE_EVIDENCE}" "entity_leakage")"
 record_stage \
   "live-leakage" "live_notebook" "PASSED" "${stage_started}" "$(timestamp)" \
   "entity_leakage" "${leakage_evidence}"
@@ -693,15 +641,18 @@ record_stage \
   "entity_leakage" "${leakage_evidence}"
 
 stage_started="$(timestamp)"
+IMBALANCE_RUNTIME_ROOT="${BROWSER_RUNTIME_PARENT}/live-imbalance"
+IMBALANCE_EVIDENCE="${IMBALANCE_RUNTIME_ROOT}/evidence/live-imbalance.json"
 COUNTERLAB_E2E_BASE_URL="${BASE_URL}" \
+COUNTERLAB_E2E_RUNTIME_ROOT="${IMBALANCE_RUNTIME_ROOT}" \
 COUNTERLAB_E2E_LIVE=1 \
-COUNTERLAB_E2E_EVIDENCE_PATH="${WORK_DIR}/live-imbalance.json" \
+COUNTERLAB_E2E_EVIDENCE_PATH="${IMBALANCE_EVIDENCE}" \
   "${PNPM}" --filter @counterlab/web exec playwright test \
   --config playwright.config.ts \
   --grep "configured hosted runner completes an untouched class-imbalance notebook"
 record_stage \
   "live-imbalance" "live_notebook" "PASSED" "${stage_started}" "$(timestamp)" \
-  "class_imbalance" "$(live_evidence "${WORK_DIR}/live-imbalance.json" "class_imbalance")"
+  "class_imbalance" "$(live_evidence "${IMBALANCE_EVIDENCE}" "class_imbalance")"
 
 python3 "${REPORT_HELPER}" finish "${REPORT_PATH}" \
   --status PASSED --completed-at "$(timestamp)"

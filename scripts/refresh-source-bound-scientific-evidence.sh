@@ -4,6 +4,11 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "${ROOT_DIR}"
 
+[[ -f "${ROOT_DIR}/COUNTERLAB_REPO_ROOT" ]] || {
+  echo "CounterLab repository marker is missing." >&2
+  exit 2
+}
+
 BUILD_RECEIPT="${1:-}"
 [[ -n "${BUILD_RECEIPT}" ]] || {
   echo "Usage: ./scripts/refresh-source-bound-scientific-evidence.sh <build-receipt-v3.json>" >&2
@@ -17,19 +22,27 @@ export TMPDIR="${CACHE_ROOT}/tmp"
 export XDG_CACHE_HOME="${CACHE_ROOT}/xdg-cache"
 export XDG_CONFIG_HOME="${CACHE_ROOT}/xdg-config"
 export XDG_DATA_HOME="${CACHE_ROOT}/xdg-data"
+export GIT_CONFIG_NOSYSTEM=1
+export GIT_CONFIG_GLOBAL="${CACHE_ROOT}/gitconfig"
 node scripts/assert-contained-path.mjs \
   "${HOME}" \
   "${TMPDIR}" \
   "${XDG_CACHE_HOME}" \
   "${XDG_CONFIG_HOME}" \
-  "${XDG_DATA_HOME}"
+  "${XDG_DATA_HOME}" \
+  "${GIT_CONFIG_GLOBAL}"
+[[ "$(git rev-parse --show-toplevel)" == "${ROOT_DIR}" ]] || {
+  echo "Evidence refresh requires the verified CounterLab Git root." >&2
+  exit 2
+}
 mkdir -p "${HOME}" "${TMPDIR}" "${XDG_CACHE_HOME}" "${XDG_CONFIG_HOME}" "${XDG_DATA_HOME}"
 node scripts/assert-contained-path.mjs \
   "${HOME}" \
   "${TMPDIR}" \
   "${XDG_CACHE_HOME}" \
   "${XDG_CONFIG_HOME}" \
-  "${XDG_DATA_HOME}"
+  "${XDG_DATA_HOME}" \
+  "${GIT_CONFIG_GLOBAL}"
 
 LOCK_FILE="${CACHE_ROOT}/scientific-evidence-refresh.lock"
 node scripts/assert-contained-path.mjs "${LOCK_FILE}"

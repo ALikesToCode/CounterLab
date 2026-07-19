@@ -11,6 +11,11 @@ TSX="${ROOT_DIR}/node_modules/.bin/tsx"
 PNPM="${ROOT_DIR}/scripts/run-contained-pnpm.sh"
 PRODUCTION_ORIGIN="https://counterlab.cserules.workers.dev"
 
+[[ -f "${ROOT_DIR}/COUNTERLAB_REPO_ROOT" ]] || {
+  echo "CounterLab repository marker is missing." >&2
+  exit 2
+}
+
 repo_path() {
   local requested="$1"
   local candidate
@@ -55,16 +60,29 @@ cd "${ROOT_DIR}"
 RECEIPT="$(repo_path "${RECEIPT}")"
 RELEASE_CHECK_RECEIPT="$(repo_path "${RELEASE_CHECK_RECEIPT}")"
 CACHE_ROOT="$(repo_path "node_modules/.cache/counterlab-v6.1")"
-node scripts/assert-contained-path.mjs "${CACHE_ROOT}"
+node scripts/assert-contained-path.mjs \
+  "${CACHE_ROOT}" "${CACHE_ROOT}/home" "${CACHE_ROOT}/tmp" \
+  "${CACHE_ROOT}/xdg-cache" "${CACHE_ROOT}/xdg-config" "${CACHE_ROOT}/xdg-data" \
+  "${CACHE_ROOT}/gitconfig"
 export HOME="${CACHE_ROOT}/home"
 export TMPDIR="${CACHE_ROOT}/tmp"
 export XDG_CACHE_HOME="${CACHE_ROOT}/xdg-cache"
 export XDG_CONFIG_HOME="${CACHE_ROOT}/xdg-config"
 export XDG_DATA_HOME="${CACHE_ROOT}/xdg-data"
+export GIT_CONFIG_NOSYSTEM=1
+export GIT_CONFIG_GLOBAL="${CACHE_ROOT}/gitconfig"
 export CI=1
 mkdir -p "${HOME}" "${TMPDIR}" "${XDG_CACHE_HOME}" "${XDG_CONFIG_HOME}" "${XDG_DATA_HOME}"
+node scripts/assert-contained-path.mjs \
+  "${HOME}" "${TMPDIR}" "${XDG_CACHE_HOME}" "${XDG_CONFIG_HOME}" \
+  "${XDG_DATA_HOME}" "${GIT_CONFIG_GLOBAL}"
+[[ "$(git rev-parse --show-toplevel)" == "${ROOT_DIR}" ]] || {
+  echo "Qualified deployment requires the verified CounterLab Git root." >&2
+  exit 2
+}
 
-command -v curl >/dev/null 2>&1 || {
+CURL_BIN="$(command -v curl || true)"
+[[ -n "${CURL_BIN}" ]] || {
   echo "Qualified deployment requires curl for bounded release health probes." >&2
   exit 2
 }
@@ -213,7 +231,7 @@ wait_for_maintenance_health() {
   local candidate=""
   for attempt in $(seq 1 24); do
     candidate="${RELEASE_DIR}/maintenance-health-${attempt}.json"
-    if curl --silent --show-error --fail-with-body \
+    if "${CURL_BIN}" --silent --show-error --fail-with-body \
       --connect-timeout 10 --max-time 20 \
       --output "${candidate}" "${PRODUCTION_ORIGIN}/api/health" &&
       node - "${candidate}" "${EVIDENCE_COMMIT}" "${SOURCE_COMMIT}" "${REGISTRY_DIGEST}" <<'NODE'
@@ -243,7 +261,7 @@ wait_for_final_readiness() {
   local candidate=""
   for attempt in $(seq 1 24); do
     candidate="${RELEASE_DIR}/final-readiness-${attempt}.json"
-    if curl --silent --show-error --fail-with-body \
+    if "${CURL_BIN}" --silent --show-error --fail-with-body \
       --connect-timeout 10 --max-time 20 \
       --output "${candidate}" "${PRODUCTION_ORIGIN}/ready" &&
       node - "${candidate}" "${EVIDENCE_COMMIT}" "${SOURCE_COMMIT}" "${REGISTRY_DIGEST}" <<'NODE'

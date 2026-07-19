@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import http.server
 import json
 import pathlib
 import subprocess
 import sys
 import tempfile
-import threading
 
 import pytest
 
@@ -59,83 +57,6 @@ def _passing_stage(
     if concept is not None:
         stage["concept"] = concept
     return stage
-
-
-class _AssetHandler(http.server.BaseHTTPRequestHandler):
-    def do_GET(self) -> None:  # noqa: N802
-        if self.headers.get("user-agent") != "CounterLab release smoke":
-            self.send_error(403)
-            return
-        if self.path in {
-            "/",
-            "/judge",
-            "/new",
-            "/replay/leakage-01",
-            "/counterlab-release-route-that-does-not-exist",
-        }:
-            body = b'<script src="/assets/app.js"></script>'
-            self.send_response(200)
-            self.send_header("content-type", "text/html")
-            self.send_header(
-                "content-security-policy",
-                "default-src 'none'; frame-ancestors 'none'; "
-                "script-src 'self'; connect-src 'self'",
-            )
-            self.send_header("x-content-type-options", "nosniff")
-            self.send_header("x-frame-options", "DENY")
-            self.send_header("referrer-policy", "strict-origin-when-cross-origin")
-            self.send_header(
-                "permissions-policy",
-                "camera=(), microphone=(), payment=()",
-            )
-            self.send_header(
-                "strict-transport-security",
-                "max-age=31536000",
-            )
-        elif self.path == "/assets/app.js":
-            body = b"console.log('safe asset')"
-            self.send_response(200)
-            self.send_header("content-type", "text/javascript")
-            self.send_header(
-                "cache-control",
-                "public, max-age=31536000, immutable",
-            )
-        else:
-            self.send_error(404)
-            return
-        self.send_header("content-length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def log_message(self, _format: str, *args: object) -> None:
-        return
-
-
-class _RedirectingAssetHandler(_AssetHandler):
-    def do_GET(self) -> None:  # noqa: N802
-        if self.path == "/assets/app.js":
-            self.send_response(302)
-            self.send_header("location", "/assets/redirected.js")
-            self.end_headers()
-            return
-        if self.path == "/assets/redirected.js":
-            body = b"console.log('redirected asset')"
-            self.send_response(200)
-            self.send_header("content-type", "text/javascript")
-            self.send_header("content-length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
-        super().do_GET()
-
-
-def _scanner_source() -> str:
-    script = pathlib.Path(__file__).with_name("production-smoke.sh").read_text(
-        encoding="utf-8"
-    )
-    marker = 'python3 - "${BASE_URL}" "${WORK_DIR}" <<\'PY\'\n'
-    start = script.index(marker) + len(marker)
-    return script[start : script.index("\nPY\n", start)]
 
 
 def _live_evidence_source() -> str:
@@ -455,58 +376,31 @@ def _valid_live_evidence(
     return evidence
 
 
-def test_public_asset_scanner_uses_release_user_agent_for_every_request() -> None:
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _AssetHandler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        with tempfile.TemporaryDirectory() as destination:
-            completed = subprocess.run(
-                [
-                    sys.executable,
-                    "-c",
-                    _scanner_source(),
-                    f"http://127.0.0.1:{server.server_port}",
-                    destination,
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-    finally:
-        server.shutdown()
-        thread.join()
-
-    assert completed.returncode == 0, completed.stderr
-    assert "Public asset secret scan: PASS" in completed.stdout
-
-
-def test_public_asset_scanner_refuses_redirected_release_assets() -> None:
-    server = http.server.ThreadingHTTPServer(
-        ("127.0.0.1", 0), _RedirectingAssetHandler
+def test_public_asset_scan_is_cloak_backed_and_repo_contained() -> None:
+    script = pathlib.Path(__file__).with_name("production-smoke.sh").read_text(
+        encoding="utf-8"
     )
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        with tempfile.TemporaryDirectory() as destination:
-            completed = subprocess.run(
-                [
-                    sys.executable,
-                    "-c",
-                    _scanner_source(),
-                    f"http://127.0.0.1:{server.server_port}",
-                    destination,
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-    finally:
-        server.shutdown()
-        thread.join()
+    browser = (
+        pathlib.Path(__file__).parents[1]
+        / "apps/web/e2e/judged-flow.spec.ts"
+    ).read_text(encoding="utf-8")
 
-    assert completed.returncode != 0
-    assert "redirect" in completed.stderr.lower()
+    assert "urllib.request" not in script
+    assert "COUNTERLAB_E2E_PUBLIC_ASSET_SCAN=1" in script
+    assert "COUNTERLAB_E2E_PUBLIC_ASSET_EVIDENCE_PATH" in script
+    assert 'COUNTERLAB_E2E_RUNTIME_ROOT="${PUBLIC_ASSET_RUNTIME_ROOT}"' in script
+    assert (
+        "Loaded public release routes and assets retain security headers and contain no secrets"
+        in script
+    )
+    assert (
+        'test("Loaded public release routes and assets retain security headers and contain no secrets"'
+        in browser
+    )
+    assert "response!.request().redirectedFrom()" in browser
+    assert "expect(asset.redirectedFrom, url).toBeNull()" in browser
+    assert "max-age=31536000" in browser
+    assert "ensureRuntimeParent(evidencePath)" in browser
 
 
 def test_smoke_report_is_atomic_idempotent_and_secret_free() -> None:

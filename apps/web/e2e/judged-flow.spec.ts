@@ -745,6 +745,150 @@ async function revealVerifiedBoundary(page: Page) {
   await expect(verified).toBeVisible({ timeout: 180_000 });
 }
 
+test.describe("production release transport", () => {
+  test.skip(
+    process.env.COUNTERLAB_E2E_PUBLIC_ASSET_SCAN !== "1",
+    "Production-only public asset evidence",
+  );
+
+  test("Loaded public release routes and assets retain security headers and contain no secrets", async ({
+    page,
+  }) => {
+    const configuredBaseURL = process.env.COUNTERLAB_E2E_BASE_URL;
+    if (configuredBaseURL === undefined || configuredBaseURL.length === 0) {
+      throw new Error("Public asset evidence requires COUNTERLAB_E2E_BASE_URL");
+    }
+    const baseURL = new URL(configuredBaseURL);
+    const assetResponses = new Map<
+      string,
+      {
+        body: Uint8Array;
+        cacheControl: string;
+        redirectedFrom: string | null;
+        status: number;
+      }
+    >();
+    const seenAssetURLs = new Set<string>();
+    const assetTasks: Promise<void>[] = [];
+    page.on("response", (response) => {
+      const responseURL = new URL(response.url());
+      if (
+        responseURL.origin !== baseURL.origin ||
+        !/\.(?:css|js)$/u.test(responseURL.pathname) ||
+        seenAssetURLs.has(responseURL.href)
+      ) {
+        return;
+      }
+      seenAssetURLs.add(responseURL.href);
+      assetTasks.push(
+        (async () => {
+          const body = await response.body();
+          const headers = await response.allHeaders();
+          assetResponses.set(responseURL.href, {
+            body,
+            cacheControl: headers["cache-control"] ?? "",
+            redirectedFrom: response.request().redirectedFrom()?.url() ?? null,
+            status: response.status(),
+          });
+        })(),
+      );
+    });
+
+    const requiredHeaders: Record<string, readonly string[]> = {
+      "content-security-policy": [
+        "default-src 'none'",
+        "frame-ancestors 'none'",
+        "script-src 'self'",
+        "connect-src 'self'",
+      ],
+      "x-content-type-options": ["nosniff"],
+      "x-frame-options": ["DENY"],
+      "referrer-policy": ["strict-origin-when-cross-origin"],
+      "permissions-policy": ["camera=()", "microphone=()", "payment=()"],
+      "strict-transport-security": ["max-age=31536000"],
+    };
+    const routeBodies: Uint8Array[] = [];
+    const routeHashes: Record<string, string> = {};
+    for (const route of [
+      "/",
+      "/judge",
+      "/new",
+      "/replay/leakage-01",
+      "/counterlab-release-route-that-does-not-exist",
+    ]) {
+      const response = await page.goto(route, { waitUntil: "networkidle" });
+      expect(response, `missing browser response for ${route}`).not.toBeNull();
+      expect(response!.request().redirectedFrom(), route).toBeNull();
+      expect(response!.ok(), route).toBe(true);
+      expect(new URL(response!.url()).origin, route).toBe(baseURL.origin);
+      const headers = await response!.allHeaders();
+      for (const [name, requiredValues] of Object.entries(requiredHeaders)) {
+        for (const requiredValue of requiredValues) {
+          expect(headers[name] ?? "", `${route} ${name}`).toContain(
+            requiredValue,
+          );
+        }
+      }
+      const body = await response!.body();
+      routeBodies.push(body);
+      routeHashes[route] = sha256(body);
+    }
+
+    await Promise.all(assetTasks);
+    expect(assetResponses.size).toBeGreaterThan(0);
+    for (const [url, asset] of assetResponses) {
+      expect(asset.status, url).toBe(200);
+      expect(asset.redirectedFrom, url).toBeNull();
+      for (const directive of ["public", "max-age=31536000", "immutable"]) {
+        expect(asset.cacheControl, url).toContain(directive);
+      }
+    }
+
+    const publicText = new TextDecoder().decode(
+      Buffer.concat([
+        ...routeBodies.map((body) => Buffer.from(body)),
+        ...[...assetResponses.values()].map((asset) => Buffer.from(asset.body)),
+      ]),
+    );
+    for (const [label, pattern] of [
+      ["private key", /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/u],
+      ["API credential", /\bsk-[A-Za-z0-9_-]{24,}\b/u],
+      ["Codex credential bundle", /CODEX_AUTH_JSON\s*[:=]\s*["']?\{/u],
+      [
+        "runner signing value",
+        /COUNTERLAB_RUNNER_SIGNING_(?:PRIVATE_)?KEY\s*[:=]\s*["'][A-Za-z0-9_-]{32,}/u,
+      ],
+    ] as const) {
+      expect(publicText, label).not.toMatch(pattern);
+    }
+
+    const evidencePath = process.env.COUNTERLAB_E2E_PUBLIC_ASSET_EVIDENCE_PATH;
+    if (evidencePath !== undefined && evidencePath.length > 0) {
+      const destination = await ensureRuntimeParent(evidencePath);
+      await writeFile(
+        destination,
+        `${JSON.stringify(
+          {
+            schemaVersion: "1",
+            origin: baseURL.origin,
+            routeHashes,
+            assetCount: assetResponses.size,
+            assetHashes: [...assetResponses.entries()]
+              .sort(([left], [right]) => left.localeCompare(right))
+              .map(([url, asset]) => ({ url, sha256: sha256(asset.body) })),
+            securityHeadersVerified: Object.keys(requiredHeaders),
+            publicSecretScan: "PASSED",
+            browserAuthority: "CLOAK_CDP_ENDPOINT",
+          },
+          null,
+          2,
+        )}\n`,
+        { encoding: "utf8", mode: 0o600 },
+      );
+    }
+  });
+});
+
 test("Judge Mode distinguishes every authority path", async ({ page }) => {
   const healthResponse = await page.request.get("/api/health");
   expect(healthResponse.ok()).toBe(true);

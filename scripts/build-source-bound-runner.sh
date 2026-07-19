@@ -4,14 +4,31 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "${ROOT_DIR}"
 
+[[ -f "${ROOT_DIR}/COUNTERLAB_REPO_ROOT" ]] || {
+  echo "CounterLab repository marker is missing." >&2
+  exit 2
+}
+
 CACHE_ROOT="${ROOT_DIR}/node_modules/.cache/counterlab-v6.1"
-node scripts/assert-contained-path.mjs "${CACHE_ROOT}"
+node scripts/assert-contained-path.mjs \
+  "${CACHE_ROOT}" "${CACHE_ROOT}/home" "${CACHE_ROOT}/tmp" \
+  "${CACHE_ROOT}/xdg-cache" "${CACHE_ROOT}/xdg-config" "${CACHE_ROOT}/xdg-data" \
+  "${CACHE_ROOT}/gitconfig"
 export HOME="${CACHE_ROOT}/home"
 export TMPDIR="${CACHE_ROOT}/tmp"
 export XDG_CACHE_HOME="${CACHE_ROOT}/xdg-cache"
 export XDG_CONFIG_HOME="${CACHE_ROOT}/xdg-config"
 export XDG_DATA_HOME="${CACHE_ROOT}/xdg-data"
+export GIT_CONFIG_NOSYSTEM=1
+export GIT_CONFIG_GLOBAL="${CACHE_ROOT}/gitconfig"
 mkdir -p "${HOME}" "${TMPDIR}" "${XDG_CACHE_HOME}" "${XDG_CONFIG_HOME}" "${XDG_DATA_HOME}"
+node scripts/assert-contained-path.mjs \
+  "${HOME}" "${TMPDIR}" "${XDG_CACHE_HOME}" "${XDG_CONFIG_HOME}" \
+  "${XDG_DATA_HOME}" "${GIT_CONFIG_GLOBAL}"
+[[ "$(git rev-parse --show-toplevel)" == "${ROOT_DIR}" ]] || {
+  echo "Source-bound runner builds require the verified CounterLab Git root." >&2
+  exit 2
+}
 
 repo_path() {
   local requested="$1"

@@ -1,7 +1,14 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import {
+  lstat,
+  mkdir,
+  readFile,
+  realpath,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 import { z } from "zod";
 
@@ -60,6 +67,38 @@ function isRepositoryPath(root: string, candidate: string): boolean {
     pathFromRoot === "" ||
     (!pathFromRoot.startsWith("..") && !isAbsolute(pathFromRoot))
   );
+}
+
+async function assertContainedWritePath(
+  root: string,
+  candidate: string,
+): Promise<void> {
+  if (!isRepositoryPath(root, candidate) || candidate === root) {
+    throw new Error(
+      `qualification write path escapes the repository: ${candidate}`,
+    );
+  }
+  let current = root;
+  for (const component of relative(root, candidate).split(sep)) {
+    current = resolve(current, component);
+    let metadata: Awaited<ReturnType<typeof lstat>>;
+    try {
+      metadata = await lstat(current);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") break;
+      throw error;
+    }
+    if (metadata.isSymbolicLink()) {
+      throw new Error(
+        `qualification write path contains a symlink: ${candidate}`,
+      );
+    }
+    if (!isRepositoryPath(root, await realpath(current))) {
+      throw new Error(
+        `qualification write path resolves outside the repository: ${candidate}`,
+      );
+    }
+  }
 }
 
 async function existingRepositoryFile(
@@ -225,10 +264,25 @@ async function configureContainedEnvironment(root: string): Promise<void> {
     XDG_CONFIG_HOME: resolve(cacheRoot, "xdg-config"),
     XDG_DATA_HOME: resolve(cacheRoot, "xdg-data"),
   } as const;
+  const gitConfig = resolve(cacheRoot, "gitconfig");
+  await Promise.all(
+    [...Object.values(environment), gitConfig].map((path) =>
+      assertContainedWritePath(root, path),
+    ),
+  );
   await Promise.all(
     Object.values(environment).map((path) => mkdir(path, { recursive: true })),
   );
-  Object.assign(process.env, environment, { CI: "1" });
+  await Promise.all(
+    Object.values(environment).map((path) =>
+      assertContainedWritePath(root, path),
+    ),
+  );
+  Object.assign(process.env, environment, {
+    CI: "1",
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: gitConfig,
+  });
 }
 
 async function promoteImage(input: {
@@ -369,7 +423,11 @@ function argumentsFrom(argv: string[]): Arguments {
 async function main(): Promise<void> {
   const args = argumentsFrom(process.argv.slice(2));
   const root = await realpath(resolve(import.meta.dirname, ".."));
+  await existingRepositoryFile(root, "COUNTERLAB_REPO_ROOT");
   await configureContainedEnvironment(root);
+  if (commandText(root, "git", ["rev-parse", "--show-toplevel"]) !== root) {
+    throw new Error("runner qualification requires the verified Git root");
+  }
   const buildReceiptPath = await existingRepositoryFile(
     root,
     args.buildReceipt,

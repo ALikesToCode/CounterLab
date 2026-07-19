@@ -6,6 +6,14 @@ IMAGE=""
 REGISTRY_ONLY=0
 REQUIRE_PRODUCTION=0
 RUNTIME_REPORT=""
+ENVIRONMENT_HELPER="${ROOT_DIR}/scripts/prepare-contained-shell-environment.sh"
+
+[[ -f "${ENVIRONMENT_HELPER}" && ! -L "${ENVIRONMENT_HELPER}" ]] || {
+  echo "Contained shell environment helper is unavailable." >&2
+  exit 2
+}
+source "${ENVIRONMENT_HELPER}"
+counterlab_prepare_contained_shell_environment "${ROOT_DIR}"
 
 usage() {
   cat <<'EOF'

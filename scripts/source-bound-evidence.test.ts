@@ -20,6 +20,7 @@ const bindScript = resolve(
   root,
   "scripts/bind-source-bound-scientific-evidence.ts",
 );
+const containmentScript = resolve(root, "scripts/assert-contained-path.mjs");
 const refreshScript = resolve(
   root,
   "scripts/refresh-source-bound-scientific-evidence.sh",
@@ -222,6 +223,28 @@ describe("source-bound release evidence helpers", () => {
     expect(symlinkResult.status).not.toBe(0);
     expect(symlinkResult.stderr).toMatch(/not a regular contained file/u);
     expect(readFileSync(target, "utf8")).toBe("{}\n");
+  });
+
+  it("rejects a contained Git config path beneath a symlink", () => {
+    const stage = createStage();
+    const target = resolve(stage, "git-config-target");
+    const symlink = resolve(stage, "git-config-link");
+    mkdirSync(target, { mode: 0o700 });
+    symlinkSync("git-config-target", symlink, "dir");
+
+    const result = spawnSync(
+      process.execPath,
+      [containmentScript, resolve(symlink, "gitconfig")],
+      {
+        cwd: root,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 10_000,
+      },
+    );
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/path contains a symlink/u);
   });
 
   it("prepares source-bound review and positive/negative VEX documents", () => {

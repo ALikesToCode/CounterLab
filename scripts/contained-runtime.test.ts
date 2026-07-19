@@ -228,6 +228,73 @@ describe("contained runtime command policy", () => {
     expect(dockerIgnore).toContain("!services/runner/image/harness.py");
   });
 
+  it("keeps release diagnostics inside repository-owned files", () => {
+    for (const file of [
+      "start-contained-runtime.sh",
+      "setup-contained-runtime.sh",
+      "run-contained-pnpm.sh",
+      "test-all.sh",
+      "test-e2e.sh",
+      "run-mutations.sh",
+      "sandbox-smoke.sh",
+      "verify-scientific-engines.sh",
+      "deploy-qualified.sh",
+      "production-smoke.sh",
+      "refresh-source-bound-scientific-evidence.sh",
+      "release-check.sh",
+      "build-source-bound-runner.sh",
+      "reproduce-session.sh",
+      "replay-patch.sh",
+    ]) {
+      const script = readFileSync(resolve(root, "scripts", file), "utf8");
+      expect(script, file).not.toContain("/dev/null");
+      expect(script, file).toContain("pwd -P");
+      expect(script, file).not.toMatch(/&& pwd\)"/u);
+      if (script.includes("GIT_CONFIG_GLOBAL=")) {
+        expect(script, file).toContain('"${GIT_CONFIG_GLOBAL}"');
+      }
+    }
+
+    const environmentHelper = readFileSync(
+      resolve(root, "scripts/prepare-contained-shell-environment.sh"),
+      "utf8",
+    );
+    expect(environmentHelper).not.toContain("/dev/null");
+    expect(environmentHelper).toContain("assert-contained-path.mjs");
+    expect(environmentHelper).toContain("GIT_CONFIG_NOSYSTEM");
+
+    const runtimeSetup = readFileSync(
+      resolve(root, "scripts/setup-contained-runtime.sh"),
+      "utf8",
+    );
+    for (const containedPath of [
+      '"${HOME}"',
+      '"${TMPDIR}"',
+      '"${XDG_CACHE_HOME}"',
+      '"${XDG_CONFIG_HOME}"',
+      '"${XDG_DATA_HOME}"',
+    ]) {
+      expect(runtimeSetup.split(containedPath).length - 1).toBe(3);
+    }
+    expect(runtimeSetup.split('"${GIT_CONFIG_GLOBAL}"').length - 1).toBe(2);
+    const runtimeSetupMkdirStart = runtimeSetup.indexOf("mkdir -p");
+    const runtimeSetupMkdir = runtimeSetup.slice(
+      runtimeSetupMkdirStart,
+      runtimeSetup.indexOf(
+        "node scripts/assert-contained-path.mjs",
+        runtimeSetupMkdirStart,
+      ),
+    );
+    expect(runtimeSetupMkdir).not.toContain('"${GIT_CONFIG_GLOBAL}"');
+
+    const secretScan = readFileSync(
+      resolve(root, "scripts/secret-scan.py"),
+      "utf8",
+    );
+    expect(secretScan).toContain("assert_repository_path");
+    expect(secretScan).toContain("path traverses a repository symlink");
+  });
+
   it("allows bounded image inspection and repository OCI input", () => {
     expect(
       validate("image", "inspect", image, "--format", "{{.Config.User}}")

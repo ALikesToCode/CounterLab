@@ -4,10 +4,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "${ROOT_DIR}"
 
-[[ "$(git rev-parse --show-toplevel)" == "${ROOT_DIR}" ]] || {
-  echo "Contained runtime setup must run from the CounterLab Git root." >&2
-  exit 2
-}
 [[ -f "${ROOT_DIR}/COUNTERLAB_REPO_ROOT" ]] || {
   echo "CounterLab repository marker is missing." >&2
   exit 2
@@ -29,13 +25,25 @@ export TMPDIR="${CACHE_ROOT}/tmp"
 export XDG_CACHE_HOME="${CACHE_ROOT}/xdg-cache"
 export XDG_CONFIG_HOME="${CACHE_ROOT}/xdg-config"
 export XDG_DATA_HOME="${CACHE_ROOT}/xdg-data"
+export GIT_CONFIG_NOSYSTEM=1
+export GIT_CONFIG_GLOBAL="${CACHE_ROOT}/gitconfig"
 
 node scripts/assert-contained-path.mjs \
   "${CACHE_ROOT}" \
+  "${HOME}" \
+  "${TMPDIR}" \
+  "${XDG_CACHE_HOME}" \
+  "${XDG_CONFIG_HOME}" \
+  "${XDG_DATA_HOME}" \
+  "${GIT_CONFIG_GLOBAL}" \
   "${DOWNLOAD_ROOT}" \
   "${ARCHIVE_PATH}" \
   "${INSTALL_ROOT}" \
   "${ATTESTATION_PATH}"
+[[ "$(git rev-parse --show-toplevel)" == "${ROOT_DIR}" ]] || {
+  echo "Contained runtime setup must run from the CounterLab Git root." >&2
+  exit 2
+}
 
 mkdir -p \
   "${HOME}" \
@@ -43,6 +51,14 @@ mkdir -p \
   "${XDG_CACHE_HOME}" \
   "${XDG_CONFIG_HOME}" \
   "${XDG_DATA_HOME}" \
+  "${DOWNLOAD_ROOT}"
+node scripts/assert-contained-path.mjs \
+  "${HOME}" \
+  "${TMPDIR}" \
+  "${XDG_CACHE_HOME}" \
+  "${XDG_CONFIG_HOME}" \
+  "${XDG_DATA_HOME}" \
+  "${GIT_CONFIG_GLOBAL}" \
   "${DOWNLOAD_ROOT}"
 
 if [[ ! -e "${ARCHIVE_PATH}" ]]; then

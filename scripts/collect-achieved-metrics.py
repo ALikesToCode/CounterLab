@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -22,6 +23,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main() -> None:
+    arguments = sys.argv[1:]
+    if arguments not in ([], ["--check"]):
+        raise SystemExit("Usage: collect-achieved-metrics.py [--check]")
+    check_only = arguments == ["--check"]
+
     frame = pd.read_csv(ROOT / "fixtures/public/customer_churn.csv")
     result = run_leakage_experiment(frame, seed=1729)
     runs = {run["id"]: run for run in result["runs"]}
@@ -155,9 +161,17 @@ def main() -> None:
         ],
     }
     destination = ROOT / "docs/ACHIEVED_METRICS.json"
-    destination.write_text(f"{canonical_json(payload)}\n", encoding="utf-8")
+    rendered = f"{canonical_json(payload)}\n"
+    if check_only:
+        if destination.read_text(encoding="utf-8") != rendered:
+            raise RuntimeError(
+                "Executed metrics no longer match docs/ACHIEVED_METRICS.json"
+            )
+    else:
+        destination.write_text(rendered, encoding="utf-8")
     print(
-        f"wrote {destination.relative_to(ROOT)}: {detected}/{len(mutations)} "
+        f"{'verified' if check_only else 'wrote'} "
+        f"{destination.relative_to(ROOT)}: {detected}/{len(mutations)} "
         f"leakage mutations and {imbalance_detected}/{len(imbalance_mutations)} "
         f"imbalance mutations, result {result['resultHash']}"
     )

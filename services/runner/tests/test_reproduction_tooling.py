@@ -84,6 +84,25 @@ def test_release_check_keeps_engine_and_adapter_images_separate() -> None:
     assert 'verify-scientific-engines.sh --image "${ENGINE_IMAGE}"' in release_check
 
 
+def test_release_check_uses_read_only_evidence_checks() -> None:
+    release_check = (ROOT / "scripts/release-check.sh").read_text(encoding="utf-8")
+
+    assert '"${PNPM}" run held-out:check' in release_check
+    assert '"${PNPM}" run held-out:run' not in release_check
+    assert "scripts/collect-achieved-metrics.py --check" in release_check
+
+
+def test_release_check_preflights_a_unique_receipt() -> None:
+    release_check = (ROOT / "scripts/release-check.sh").read_text(encoding="utf-8")
+
+    assert 'RELEASE_RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"' in release_check
+    assert (
+        "release-check-${EVIDENCE_COMMIT}-${RELEASE_RUN_ID}.json"
+        in release_check
+    )
+    assert '[[ ! -e "${RELEASE_CHECK_RECEIPT}"' in release_check
+
+
 def test_replay_patch_validates_archived_and_current_authority() -> None:
     module = _script_module("replay_patch")
 

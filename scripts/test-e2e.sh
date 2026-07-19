@@ -2,9 +2,19 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+CACHE_ROOT="${ROOT_DIR}/node_modules/.cache/counterlab-v6.1"
+export HOME="${CACHE_ROOT}/home"
+export GIT_CONFIG_NOSYSTEM=1
+export GIT_CONFIG_GLOBAL="${CACHE_ROOT}/gitconfig"
+[[ -f "${ROOT_DIR}/COUNTERLAB_REPO_ROOT" ]] || {
+  echo "CounterLab repository marker is missing." >&2
+  exit 1
+}
+node "${ROOT_DIR}/scripts/assert-contained-path.mjs" \
+  "${CACHE_ROOT}" "${HOME}" "${GIT_CONFIG_GLOBAL}"
 REPO_ROOT="$(git -C "${ROOT_DIR}" rev-parse --show-toplevel)"
 
-if [[ "${ROOT_DIR}" != "${REPO_ROOT}" ]] || [[ ! -f "${REPO_ROOT}/COUNTERLAB_REPO_ROOT" ]]; then
+if [[ "${ROOT_DIR}" != "${REPO_ROOT}" ]]; then
   echo "Refusing browser QA outside the verified CounterLab repository root." >&2
   exit 1
 fi

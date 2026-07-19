@@ -5,8 +5,8 @@ umask 077
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "${ROOT_DIR}"
 
-[[ "$(git rev-parse --show-toplevel)" == "${ROOT_DIR}" && -f "${ROOT_DIR}/COUNTERLAB_REPO_ROOT" ]] || {
-  echo "Contained runtime launch must run from the CounterLab Git root." >&2
+[[ -f "${ROOT_DIR}/COUNTERLAB_REPO_ROOT" ]] || {
+  echo "CounterLab repository marker is missing." >&2
   exit 2
 }
 [[ ( $# -eq 2 || ( $# -eq 3 && "$3" == "--hold" ) ) && "$1" == "--session-id" && "$2" =~ ^rt-[a-z0-9][a-z0-9-]{7,13}$ ]] || {
@@ -20,6 +20,20 @@ if [[ "${3:-}" == "--hold" ]]; then
   HOLD_RUNTIME=true
 fi
 CACHE_ROOT="${ROOT_DIR}/node_modules/.cache/counterlab-v6.1"
+export HOME="${CACHE_ROOT}/home"
+export TMPDIR="${CACHE_ROOT}/tmp"
+export XDG_CACHE_HOME="${CACHE_ROOT}/xdg-cache"
+export XDG_CONFIG_HOME="${CACHE_ROOT}/xdg-config"
+export XDG_DATA_HOME="${CACHE_ROOT}/xdg-data"
+export GIT_CONFIG_NOSYSTEM=1
+export GIT_CONFIG_GLOBAL="${CACHE_ROOT}/gitconfig"
+node scripts/assert-contained-path.mjs \
+  "${CACHE_ROOT}" "${HOME}" "${TMPDIR}" "${XDG_CACHE_HOME}" \
+  "${XDG_CONFIG_HOME}" "${XDG_DATA_HOME}" "${GIT_CONFIG_GLOBAL}"
+[[ "$(git rev-parse --show-toplevel)" == "${ROOT_DIR}" ]] || {
+  echo "Contained runtime launch must run from the CounterLab Git root." >&2
+  exit 2
+}
 INSTALL_ROOT="${CACHE_ROOT}/rootless-tools/install-v2.3.1"
 SESSION_PARENT="${ROOT_DIR}/.rt"
 SESSION_ROOT="${SESSION_PARENT}/${SESSION_ID}"
@@ -86,12 +100,12 @@ terminate_failed_launch() {
   if [[ "${status}" -ne 0 ]]; then
     for pid in "${CONTAINERD_PID}" "${BUILDKIT_PID}"; do
       if [[ "${pid}" =~ ^[1-9][0-9]*$ ]]; then
-        kill -TERM "${pid}" 2>/dev/null || true
+        kill -TERM "${pid}" 2>>"${SESSION_ROOT}/logs/cleanup.log" || true
       fi
     done
     for pid in "${CONTAINERD_PID}" "${BUILDKIT_PID}"; do
       if [[ "${pid}" =~ ^[1-9][0-9]*$ ]]; then
-        wait "${pid}" 2>/dev/null || true
+        wait "${pid}" 2>>"${SESSION_ROOT}/logs/cleanup.log" || true
       fi
     done
   fi
@@ -160,7 +174,8 @@ for _ in {1..300}; do
   if [[ -S "${CONTAINERD_ROOTLESSKIT_API}" && -S "${CONTAINERD_SOCKET}" && -S "${RUNTIME_COMMAND_SOCKET}" && -S "${BUILDKIT_SOCKET}" ]]; then
     break
   fi
-  if ! kill -0 "${CONTAINERD_PID}" 2>/dev/null || ! kill -0 "${BUILDKIT_PID}" 2>/dev/null; then
+  if ! CONTAINERD_LIVENESS="$(kill -0 "${CONTAINERD_PID}" 2>&1)" ||
+    ! BUILDKIT_LIVENESS="$(kill -0 "${BUILDKIT_PID}" 2>&1)"; then
     echo "Contained runtime daemon exited during launch; retained logs are inside ${SESSION_ROOT}." >&2
     exit 1
   fi
@@ -175,9 +190,13 @@ node "${ROOT_DIR}/scripts/contained-runtime-client.mjs" \
   --session-id "${SESSION_ID}" \
   -- \
   version --format json >"${SESSION_ROOT}/logs/runtime-version.json"
-"${BIN_ROOT}/buildctl" \
+BUILDKIT_WORKERS="$("${BIN_ROOT}/buildctl" \
   --addr "unix://${BUILDKIT_SOCKET}" \
-  debug workers >/dev/null
+  debug workers)"
+[[ -n "${BUILDKIT_WORKERS}" ]] || {
+  echo "Contained BuildKit reported no workers." >&2
+  exit 1
+}
 
 node - \
   "${ROOT_DIR}" \
@@ -285,8 +304,14 @@ writeFileSync(
 );
 NODE
 
-COUNTERLAB_RUNTIME_SESSION_ID="${SESSION_ID}" \
-  "${ROOT_DIR}/scripts/contained-runtime-adapter.sh" counterlab-attest >/dev/null
+RUNTIME_ATTESTATION="$(
+  COUNTERLAB_RUNTIME_SESSION_ID="${SESSION_ID}" \
+    "${ROOT_DIR}/scripts/contained-runtime-adapter.sh" counterlab-attest
+)"
+[[ -n "${RUNTIME_ATTESTATION}" ]] || {
+  echo "Contained runtime attestation returned no evidence." >&2
+  exit 1
+}
 
 echo "Contained runtime session ready: ${SESSION_ID}"
 echo "COUNTERLAB_RUNTIME_SESSION_ID=${SESSION_ID}"
@@ -297,7 +322,7 @@ if [[ "${HOLD_RUNTIME}" == true ]]; then
   set +e
   wait -n "${CONTAINERD_PID}" "${BUILDKIT_PID}"
   RUNTIME_STATUS=$?
-  kill -TERM "${CONTAINERD_PID}" "${BUILDKIT_PID}" 2>/dev/null
-  wait "${CONTAINERD_PID}" "${BUILDKIT_PID}" 2>/dev/null
+  kill -TERM "${CONTAINERD_PID}" "${BUILDKIT_PID}" 2>>"${SESSION_ROOT}/logs/shutdown.log" || true
+  wait "${CONTAINERD_PID}" "${BUILDKIT_PID}" 2>>"${SESSION_ROOT}/logs/shutdown.log" || true
   exit "${RUNTIME_STATUS}"
 fi

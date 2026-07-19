@@ -2,7 +2,7 @@
 
 Checked product-authority boxes are supported by committed tests or the exact
 production report in `docs/PRODUCTION_SMOKE.json`. Release-command boxes are
-unchecked whenever the current v5.1 tree has not yet rerun that gate; an older
+unchecked whenever the current v6.1 tree has not yet rerun that gate; an older
 green release is evidence, but is not silently promoted to the current tree.
 
 ## Authority and concepts
@@ -20,13 +20,14 @@ green release is evidence, but is not silently promoted to the current tree.
 
 - [x] Leakage fixture/notebook and canonical v1 replay hash reproduce.
 - [x] Random/group/ablation ranges and zero group overlap pass.
-- [x] `./scripts/run-mutations.sh leakage` reports 12/12.
+- [x] `./scripts/run-mutations.sh leakage` reports 13/13.
 - [x] Imbalance fixture/notebook, confusion metrics, threshold and prevalence
       response pass.
-- [x] `./scripts/run-mutations.sh imbalance` reports 12/12.
+- [x] `./scripts/run-mutations.sh imbalance` reports 19/19.
 - [x] Python v2 result hashes match Worker canonicalization.
-- [x] Held-out intake/routing is 10/10 and fixed full-loop completion is 7/8
-      with the failure documented.
+- [x] Held-out intake/routing is 10/10; all 7/7 patch-eligible cases reached
+      `PATCH_VERIFIED`; the separate out-of-contract RandomForest case was
+      correctly refused 1/1. The legacy aggregate remains 7/8 for compatibility.
 
 ## Scientific-engine governance
 
@@ -134,19 +135,26 @@ Report SHA-256:
 
 ## Current-tree release commands
 
+- [ ] Review and commit the containment/read-only repair separately from stale
+      generated scientific-engine and SBOM evidence.
 - [ ] `./scripts/test-all.sh` on the v6.1 branch. Current root Vitest passes
-      486/488; the remaining exact-source evidence tests run after the image
-      build.
-- [ ] `pnpm run held-out:run` after the v5.1 contract migrations.
-- [ ] `pnpm run format:check` after all v6.1 changes.
-- [x] Repository secret scan: passed across 741 files while excluding generated
+      499/502; the three remaining exact-source evidence tests run after the
+      image/evidence refresh.
+- [x] `./scripts/run-contained-pnpm.sh run held-out:check` recomputed 10/10
+      intake and matched the tracked evidence without rewriting it.
+- [ ] `./scripts/run-contained-pnpm.sh run format:check` after all v6.1 changes.
+- [x] Repository secret scan: passed across 767 files while excluding generated
       browser-profile state.
-- [ ] `./scripts/clean-demo.sh` after all v5.1 changes.
-- [ ] `./scripts/reproduce-session.sh leakage-01` after all v5.1 changes.
-- [ ] `./scripts/replay-patch.sh leakage-01` after all v5.1 changes.
-- [ ] `./scripts/release-check.sh` on the final v5.1 tree (includes build and
+- [ ] `./scripts/clean-demo.sh` is BLOCKED under the current filesystem
+      constitution and is not a v6.1 release gate until its setup, cache, and
+      diagnostic paths are repository-contained.
+- [ ] `./scripts/reproduce-session.sh leakage-01` after all v6.1 changes.
+- [ ] `./scripts/replay-patch.sh leakage-01` after all v6.1 changes.
+- [ ] `./scripts/release-check.sh` on the final v6.1 tree (includes browser,
+      scientific, reproduction,
       secret scan).
-- [ ] Fresh temporary clone release check with locked Node and Python installs.
+- [ ] Complete the release check from a clean committed v6.1 worktree with
+      locked, repository-contained tool, cache, and runtime state.
 
 ## Browser/accessibility
 
@@ -203,21 +211,23 @@ or production evidence above does not qualify this source.
 - [x] Strict privacy-safe learner interaction schema, append-only D1 migration,
       API, and client recording pass tests and remain outside scientific
       evidence authority.
-- [x] Web Vitest passed 58 files and 360 tests.
+- [x] Web Vitest passed 59 files and 375 tests.
 - [x] Repository, web, and Worker TypeScript checks passed.
 - [x] Vite/Worker production build passed with a unique repository-local output
       directory and `--emptyOutDir=false`.
-- [x] Repository secret scan passed across 741 files while excluding generated
+- [x] Repository secret scan passed across 767 files while excluding generated
       browser-profile state.
-- [x] Cloak-only Playwright configuration statically collected 22 tests from one
-      spec file and refuses credentialed/non-loopback target URLs.
+- [x] Cloak-only Playwright configuration statically collected 23 tests from one
+      spec file, including the production route/header/asset secret scan, and
+      refuses credentialed/non-loopback target URLs.
 - [x] Missing `CLOAK_CDP_ENDPOINT` failed closed with status 1; no stock Chromium
       fallback was launched.
-- [x] Combined fixed-kernel and hosted-runner Python gate passed 231/231.
+- [x] Combined fixed-kernel and hosted-runner Python gate passed 234/234.
 - [ ] Refresh the exact source/image-bound scientific-engine and Node SBOM
       evidence, then rerun the scientific-engine verifier.
-- [x] Held-out intake/routing passed 10/10 and fixed completion passed 7/8; the
-      unsupported RandomForest patch remains an intentional refusal.
+- [x] Held-out intake/routing passed 10/10; all 7/7 patch-eligible cases reached
+      `PATCH_VERIFIED`, and the separate RandomForest case was correctly refused
+      1/1 outside the patch contract. The legacy aggregate remains 7/8.
 - [x] All eight D1 migrations, including owner-capability retirement and replay
       revocation, applied successfully to a fresh repository-contained local
       database; a second pass reported none pending.
@@ -229,13 +239,15 @@ or production evidence above does not qualify this source.
 - [ ] Verify rendered focus, typography floors, 44 px targets, reduced motion,
       async announcements, exact tables, and no horizontal overflow.
 - [ ] Capture current-source screenshots and measure Web Vitals.
-- [ ] Refresh source-bound evidence so the remaining 2 scientific release tests
-      join the 486 passing root tests.
-- [ ] Supply a repository-contained Cloudflare authentication session or API
-      token and a current exact-source qualified runner image/receipt. The
-      contained Wrangler session is currently unauthenticated.
-- [ ] Run a clean-clone release check, exact-image qualification, deployment,
-      and exact-version production smoke.
+- [ ] Refresh source-bound evidence so the remaining 3 scientific release tests
+      join the 499 passing root tests.
+- [ ] Verify the owner's reported Cloudflare login with a repository-contained
+      `wrangler whoami`, then create the current exact-source qualified runner
+      image and receipt. Authentication is not claimed until that command
+      passes.
+- [ ] Run the clean committed-worktree release check with repository-contained
+      state, exact-image qualification, deployment, and exact-version
+      production smoke.
 
 Detailed evidence and limitations are in
 [`LEARNER_UX_V6_1_EVIDENCE.md`](LEARNER_UX_V6_1_EVIDENCE.md).
