@@ -212,6 +212,7 @@ if (sha256File(adapter) !== attestation.adapterSha256) {
 
 const helperPaths = {
   runtimeClient: "scripts/contained-runtime-client.mjs",
+  runtimeRun: "scripts/contained-runtime-run.mjs",
   runtimeServer: "scripts/contained-runtime-server.mjs",
   commandValidator: "scripts/validate-contained-runtime-command.mjs",
   attestationVerifier: "scripts/verify-contained-runtime.mjs",
@@ -271,6 +272,7 @@ const expectedComponentVersions = {
   buildkitd: "0.30.0",
   containerd: "2.3.1",
   "containerd-shim-runc-v2": "2.3.1",
+  ctr: "2.3.1",
   nerdctl: "2.3.1",
   rootlesskit: "3.0.0",
   runc: "1.4.2",
@@ -305,6 +307,7 @@ const pathKinds = {
   containerdRootlesskitApiSocket: "socket",
   containerdSocket: "socket",
   runtimeCommandSocket: "socket",
+  clientFifoRoot: "directory",
   buildkitSocket: "socket",
   containerdRoot: "directory",
   containerdState: "directory",

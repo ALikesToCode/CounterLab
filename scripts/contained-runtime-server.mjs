@@ -6,6 +6,8 @@ import { createServer } from "node:net";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { executeContainedRun } from "./contained-runtime-run.mjs";
+
 const root = realpathSync(resolve(fileURLToPath(import.meta.url), "../.."));
 const argv = process.argv.slice(2);
 if (
@@ -25,6 +27,7 @@ const installRoot = resolve(
 const binRoot = resolve(installRoot, "bin");
 const containerdSocket = resolve(sessionRoot, "run/containerd.sock");
 const commandSocket = resolve(sessionRoot, "run/runtime-command.sock");
+const clientFifoRoot = resolve(sessionRoot, "run/client-fifo");
 const environment = {
   ...process.env,
   HOME: resolve(sessionRoot, "home"),
@@ -154,38 +157,51 @@ const server = createServer((socket) => {
           "contained runtime command failed independent validation",
         );
       }
-      const result = spawnSync(
-        resolve(binRoot, "nerdctl"),
-        [
-          "--address",
-          containerdSocket,
-          "--namespace",
-          "counterlab-v6.1",
-          "--snapshotter",
-          "native",
-          "--data-root",
-          resolve(sessionRoot, "data/nerdctl"),
-          "--cgroup-manager",
-          "cgroupfs",
-          "--cni-path",
-          resolve(installRoot, "libexec/cni"),
-          "--cni-netconfpath",
-          resolve(sessionRoot, "config/cni"),
-          "--hosts-dir",
-          resolve(sessionRoot, "config/certs.d"),
-          "--experimental=false",
-          ...request.args,
-        ],
-        {
-          cwd: root,
-          env: environment,
-          input: stdin,
-          encoding: null,
-          stdio: ["pipe", "pipe", "pipe"],
-          timeout: 1_800_000,
-          maxBuffer: 32 * 1024 * 1024,
-        },
-      );
+      const result =
+        request.args[0] === "run"
+          ? executeContainedRun({
+              args: request.args,
+              binRoot,
+              clientFifoRoot,
+              containerdSocket,
+              cwd: root,
+              environment,
+              installRoot,
+              sessionRoot,
+              stdin,
+            })
+          : spawnSync(
+              resolve(binRoot, "nerdctl"),
+              [
+                "--address",
+                containerdSocket,
+                "--namespace",
+                "counterlab-v6.1",
+                "--snapshotter",
+                "native",
+                "--data-root",
+                resolve(sessionRoot, "data/nerdctl"),
+                "--cgroup-manager",
+                "cgroupfs",
+                "--cni-path",
+                resolve(installRoot, "libexec/cni"),
+                "--cni-netconfpath",
+                resolve(sessionRoot, "config/cni"),
+                "--hosts-dir",
+                resolve(sessionRoot, "config/certs.d"),
+                "--experimental=false",
+                ...request.args,
+              ],
+              {
+                cwd: root,
+                env: environment,
+                input: stdin,
+                encoding: null,
+                stdio: ["pipe", "pipe", "pipe"],
+                timeout: 1_800_000,
+                maxBuffer: 32 * 1024 * 1024,
+              },
+            );
       response = {
         schemaVersion: "1",
         exitCode: result.status ?? 1,

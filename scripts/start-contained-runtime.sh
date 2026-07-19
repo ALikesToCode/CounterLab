@@ -72,6 +72,7 @@ mkdir -p \
   "${SESSION_ROOT}/home" \
   "${SESSION_ROOT}/logs" \
   "${SESSION_ROOT}/run" \
+  "${SESSION_ROOT}/run/client-fifo" \
   "${SESSION_ROOT}/run/inner" \
   "${SESSION_ROOT}/state/containerd" \
   "${SESSION_ROOT}/tmp" \
@@ -86,6 +87,7 @@ chmod 700 \
   "${SESSION_ROOT}/home" \
   "${SESSION_ROOT}/logs" \
   "${SESSION_ROOT}/run" \
+  "${SESSION_ROOT}/run/client-fifo" \
   "${SESSION_ROOT}/run/inner" \
   "${SESSION_ROOT}/state" \
   "${SESSION_ROOT}/tmp" \
@@ -239,6 +241,7 @@ const toolchainLockSha256 = sha256File(lockPath);
 const adapterSha256 = sha256File(adapterPath);
 const helperSha256 = {
   runtimeClient: sha256File(resolve(root, "scripts/contained-runtime-client.mjs")),
+  runtimeRun: sha256File(resolve(root, "scripts/contained-runtime-run.mjs")),
   runtimeServer: sha256File(resolve(root, "scripts/contained-runtime-server.mjs")),
   commandValidator: sha256File(
     resolve(root, "scripts/validate-contained-runtime-command.mjs"),
@@ -268,6 +271,7 @@ const paths = {
   containerdRootlesskitApiSocket: `${sessionPrefix}/run/containerd-rootless/api.sock`,
   containerdSocket: `${sessionPrefix}/run/containerd.sock`,
   runtimeCommandSocket: `${sessionPrefix}/run/runtime-command.sock`,
+  clientFifoRoot: `${sessionPrefix}/run/client-fifo`,
   buildkitSocket: `${sessionPrefix}/run/buildkitd.sock`,
   containerdRoot: `${sessionPrefix}/data/containerd`,
   containerdState: `${sessionPrefix}/state/containerd`,

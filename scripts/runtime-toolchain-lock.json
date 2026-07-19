@@ -24,6 +24,10 @@
       "version": "2.3.1",
       "sha256": "3d07a9da185c493f87dc72f88f8a90b71a2fdb7707588c060cc10cbe5a3bae89"
     },
+    "ctr": {
+      "version": "2.3.1",
+      "sha256": "ae1b50af36651b995e0affc500fefd90ae9c085d9e69f7f617eb766d9b7d36ed"
+    },
     "nerdctl": {
       "version": "2.3.1",
       "sha256": "d55cafc6b8a682530a02bc882653535f6e119cadc7623ec058a1154d5b1c5980"

@@ -98,6 +98,7 @@ required = {
     "bin/buildkitd",
     "bin/containerd",
     "bin/containerd-shim-runc-v2",
+    "bin/ctr",
     "bin/nerdctl",
     "bin/rootlesskit",
     "bin/runc",
@@ -148,6 +149,7 @@ PY
     buildkitd \
     containerd \
     containerd-shim-runc-v2 \
+    ctr \
     nerdctl \
     rootlesskit \
     runc; do
@@ -167,6 +169,7 @@ const executableNames = [
   "buildkitd",
   "containerd",
   "containerd-shim-runc-v2",
+  "ctr",
   "nerdctl",
   "rootlesskit",
   "runc",
@@ -218,6 +221,7 @@ const componentVersions = {
   buildkitd: "0.30.0",
   containerd: "2.3.1",
   "containerd-shim-runc-v2": "2.3.1",
+  ctr: "2.3.1",
   nerdctl: "2.3.1",
   rootlesskit: "3.0.0",
   runc: "1.4.2",
@@ -230,11 +234,15 @@ exactKeys(attestation, [
   "archiveSha256",
   "executableSha256",
 ], "runtime installation attestation");
-exactKeys(
-  attestation.executableSha256,
-  Object.keys(componentVersions),
-  "attested runtime executables",
-);
+const componentNames = Object.keys(componentVersions);
+const legacyAttestedNames = componentNames.filter((name) => name !== "ctr");
+const attestedNames = Object.keys(attestation.executableSha256).sort();
+if (
+  JSON.stringify(attestedNames) !== JSON.stringify(componentNames.sort()) &&
+  JSON.stringify(attestedNames) !== JSON.stringify(legacyAttestedNames.sort())
+) {
+  throw new Error("attested runtime executables contain missing or unknown fields");
+}
 exactKeys(lock, [
   "schemaVersion",
   "distribution",
@@ -246,7 +254,7 @@ exactKeys(lock, [
   "licenses",
   "components",
 ], "runtime toolchain lock");
-exactKeys(lock.components, Object.keys(componentVersions), "runtime components");
+exactKeys(lock.components, componentNames, "runtime components");
 if (
   attestation.schemaVersion !== "1" ||
   attestation.distribution !== "nerdctl-full" ||
@@ -272,21 +280,22 @@ if (
 ) {
   throw new Error("tracked runtime toolchain lock disagrees with the installation");
 }
-for (const [name, expected] of Object.entries(attestation.executableSha256)) {
+for (const [name, expectedVersion] of Object.entries(componentVersions)) {
   exactKeys(lock.components[name], ["version", "sha256"], `runtime component ${name}`);
-  if (lock.components[name].version !== componentVersions[name]) {
+  if (lock.components[name].version !== expectedVersion) {
     throw new Error(`tracked runtime version is invalid: ${name}`);
-  }
-  if (!/^[a-f0-9]{64}$/.test(expected)) {
-    throw new Error(`invalid attested executable hash: ${name}`);
   }
   const observed = createHash("sha256")
     .update(readFileSync(join(installRoot, "bin", name)))
     .digest("hex");
-  if (observed !== expected) {
+  const attested = attestation.executableSha256[name];
+  if (attested !== undefined && !/^[a-f0-9]{64}$/.test(attested)) {
+    throw new Error(`invalid attested executable hash: ${name}`);
+  }
+  if (attested !== undefined && observed !== attested) {
     throw new Error(`contained runtime executable changed: ${name}`);
   }
-  if (lock.components[name]?.sha256 !== expected) {
+  if (lock.components[name]?.sha256 !== observed) {
     throw new Error(`tracked runtime hash disagrees with the installation: ${name}`);
   }
 }

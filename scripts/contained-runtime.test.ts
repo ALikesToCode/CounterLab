@@ -4,6 +4,11 @@ import { resolve } from "node:path";
 
 import { beforeAll, describe, expect, it } from "vitest";
 
+import {
+  containedRunPlan,
+  executeContainedRun,
+} from "./contained-runtime-run.mjs";
+
 const root = process.cwd();
 const validator = resolve(
   root,
@@ -209,6 +214,79 @@ describe("contained runtime command policy", () => {
       command[ipcIndex] = "--ipc=host";
       expect(validate(...command).status).not.toBe(0);
     }
+  });
+
+  it("starts validated runs through ctr with a repository-contained FIFO root", () => {
+    const sessionRoot = resolve(root, ".rt/rt-validator-plan");
+    const clientFifoRoot = resolve(sessionRoot, "run/client-fifo");
+    const installRoot = resolve(
+      root,
+      "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
+    );
+    const plan = containedRunPlan({
+      args: startupCommand(),
+      binRoot: resolve(installRoot, "bin"),
+      clientFifoRoot,
+      containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+      installRoot,
+      sessionRoot,
+    });
+
+    expect(plan.create.args).toContain("create");
+    expect(plan.create.args).not.toContain("run");
+    expect(plan.start.program).toBe(resolve(installRoot, "bin/ctr"));
+    expect(plan.start.args).toEqual(
+      expect.arrayContaining([
+        "tasks",
+        "start",
+        "--fifo-dir",
+        clientFifoRoot,
+        "counterlab-startup-validator",
+      ]),
+    );
+    expect(plan.cleanup.args.slice(-3)).toEqual([
+      "rm",
+      "--force",
+      "counterlab-startup-validator",
+    ]);
+    expect(JSON.stringify(plan)).not.toContain("/run/containerd/fifo");
+  });
+
+  it("fails closed when ephemeral container cleanup fails", () => {
+    const sessionRoot = resolve(root, ".rt/rt-validator-cleanup");
+    const installRoot = resolve(
+      root,
+      "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
+    );
+    const responses = [
+      { status: 0, stdout: Buffer.from("created\n"), stderr: Buffer.alloc(0) },
+      { status: 0, stdout: Buffer.from("verified\n"), stderr: Buffer.alloc(0) },
+      {
+        status: 1,
+        stdout: Buffer.alloc(0),
+        stderr: Buffer.from("cleanup refused\n"),
+      },
+    ];
+    const result = executeContainedRun(
+      {
+        args: startupCommand(),
+        binRoot: resolve(installRoot, "bin"),
+        clientFifoRoot: resolve(sessionRoot, "run/client-fifo"),
+        containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+        cwd: root,
+        environment: process.env,
+        installRoot,
+        sessionRoot,
+        stdin: Buffer.alloc(0),
+      },
+      () => responses.shift()!,
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stdout.toString("utf8")).toBe("verified\n");
+    expect(result.stderr.toString("utf8")).toContain(
+      "contained runtime cleanup failed",
+    );
   });
 
   it("rejects root identities for scientific evidence containers", () => {
