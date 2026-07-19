@@ -14,8 +14,11 @@ pass is never presented as a browser or production pass.
 - **Branch:** `feat/learner-ux-v6.1`
 - **Containment implementation checkpoint:**
   `863a2a8257aae604b238f8e44d3db1bc0cdf1fcd`. The next source-bound build
-  receipt records the exact clean documentation checkpoint containing this
-  ledger; it is not guessed in advance.
+  was made from documentation checkpoint
+  `184b43796b382094de32a8d2f733d9fd232dab32` and records that identity in its
+  receipt. That build is now superseded as the release candidate because a
+  concurrent, untracked visual-audit evidence set appeared afterward and must
+  be preserved or explicitly excluded before the evidence refresh can run.
 - **Continuation starting commit:**
   `dd451c77606ec270cfba030784df50cb3aa19969`
 - **Repository boundary:** physical root
@@ -23,9 +26,12 @@ pass is never presented as a browser or production pass.
   build, scan, and browser state is required to remain inside the repository.
 - **Post-source-review working tree:** source, tests, scripts, and release
   documentation are committed. Exactly 25 scientific-engine and SBOM paths
-  remain intentionally dirty as stale generated evidence. They must not be
-  committed until regenerated against the exact source commit and exact runner
-  image.
+  remain intentionally dirty as stale generated evidence. Seventeen untracked
+  visual-audit files also appeared under
+  `docs/audits/counterlab-first-prize/evidence/screenshots/visual-judge/` while
+  the contained build/evidence sequence was running. Their bytes are being
+  inspected and preserved without claiming current-source or CloakBrowser
+  provenance. Neither set may be folded silently into qualified evidence.
 - **Integration rule:** commit source tooling first, build and qualify that
   exact commit, commit its generated evidence separately, deploy only the
   qualified image, then fast-forward this branch into `main` after every
@@ -46,6 +52,8 @@ pass is never presented as a browser or production pass.
 | Pinned local Syft and Grype tools | PASS | Syft 1.44.0 and Grype 0.112.0 archives and binaries were independently hash-checked in repository-contained tool storage. |
 | Exact-image evidence generator implementation | PASS | Local commit `c6575a8` contains normalization, VEX preparation, source/image binding, 31 tracked output hashes, pinned scanner configs, 14-day KEV freshness, bounded verification, and persisted/hash-bound runtime evidence. Exact-image execution still follows the final source commit. |
 | Repository-contained release execution | PASS | Local commit `863a2a8` removes host `/dev/null` sinks from the formal release/deploy/smoke chain, uses physical roots and marker checks, symlink-checks ignored write roots and Git config, adds read-only held-out/achieved gates, gives each production Cloak stage a separate contained runtime, and moves public UI extraction into Cloak-backed Playwright. Shell syntax passed; graph-targeted Vitest passed 3 files/37 tests; release/production Pytest passed 26/26; setup smoke, TypeScript, and achieved-metrics checks passed. Exact-image qualification remains a separate pending gate. |
+| First exact source-bound runner build | PASS | The contained `rt-v61-0719j` runtime built source `184b43796b382094de32a8d2f733d9fd232dab32`. Receipt: `node_modules/.cache/counterlab-v6.1/releases/runner-build-184b43796b382094de32a8d2f733d9fd232dab32.json`; normalized runner digest `sha256:c76bc97f22caf25f26abc7d48bbcaf4dd96331aafe036d4651f595832d95f428`; adapter image digest `sha256:e9f2237e326a462eb0c2823ae13810c38714e54ef0559ae1eca489d99d08a979`; normalized OCI manifest `sha256:f78a0743306f251ed661eca023607f811f4a65c7dc7bb530495def366c74b743`. The image is retained but not yet qualified or deployed. Any preservation commit for the concurrent visual evidence will require a new exact-source build. |
+| Concurrent visual-audit evidence triage | PASS as preservation; NOT QUALIFIED as release evidence | Sixteen valid, byte-stable PNGs at the intended 1440x900 and 390x844 viewports plus one `.keep` file appeared under the audit evidence tree. All 16 were visually inspected; the final preservation-tree secret scan passed across 785 files; no ancillary PNG metadata, secret, personal content, or local path was found. Their source commit, capture URL, browser, and capture command are not recorded, so a local README marks them unverified and no browser/a11y pass is inferred from them. |
 | Code-review graph and parallel review | PASS | A full repository-contained graph rebuild parsed 419 files into 3,888 nodes and 63,020 edges. After the final incremental refresh, the queryable graph has 3,874 nodes, 62,632 edges, 414 files, 24 communities, and 190 flows. The dirty-slice risk fell from 0.80 to 0.65 after review repairs; 12 conservative orchestration/test-link gaps remain covered by static or integration gates where the graph cannot infer shell/top-level relationships. The ignored graph database remains local and unpublished; the untracked environment helper and `package.json` were reviewed manually because the graph did not index them. |
 | Focused scientific/release tests | PASS | Earlier combined release Vitest passed 4 files/35 tests; focused Python reachability/scientific/held-out gates passed 12 tests. The latest graph-targeted Vitest passed 2 root files/22 tests plus 1 Worker file/15 tests, release/production Pytest passed 26/26, and the read-only held-out execution matched tracked evidence at 10/10 intake and 7/8 legacy fixed-loop completion. |
 | CloakBrowser harness and static collection | BLOCKED | Playwright 1.61.1 statically collected 23 tests in one spec, including the new production asset/security journey. A missing `CLOAK_CDP_ENDPOINT` exits 1 before browser state is created; 0 rendered journeys ran and no stock browser was launched. |
@@ -66,10 +74,12 @@ test inventory may run in parallel, but no two workers edit the same file.
      contained Git configuration, uses read-only held-out/achieved evidence
      checks in the formal clean-tree gate, and moves UI transport inspection
      behind CloakBrowser.
-2. **Exact runner image and evidence regeneration — NOT RUN for the new source
-   commit**
+2. **Exact runner image and evidence regeneration — IN PROGRESS**
    - Attest the repository-contained runtime.
-   - Build one immutable source-bound OCI image and receipt.
+   - The first immutable image and receipt for `184b4379` built successfully.
+     Preserve the concurrent visual-audit files in a truthful documentation
+     checkpoint, then rebuild so the final receipt binds the new clean source
+     commit rather than treating untracked evidence as invisible.
    - Generate Syft, Grype, CISA KEV, VEX, reachability, license, engine-health,
      registry, runtime-manifest, and snapshot evidence against that exact
      image.
@@ -154,6 +164,9 @@ test inventory may run in parallel, but no two workers edit the same file.
 - No current-branch rendered browser journey, screenshot, screen-reader
   session, accessibility audit, or Web Vitals result is claimed while the
   CloakBrowser endpoint is unavailable.
+- The concurrent `visual-judge` PNGs are useful design-review artifacts but
+  have no recorded source/URL/browser provenance. They are being preserved as
+  unverified audit inputs, not promoted into current-release browser evidence.
 - The existing browser suite has no Axe, Lighthouse, automated screen-reader,
   or Web Vitals integration. Keyboard, accessible-name, reduced-motion, and
   viewport scenarios are represented in the 23-test specification, but their
@@ -164,6 +177,12 @@ test inventory may run in parallel, but no two workers edit the same file.
   was taken against that external path. Every subsequent direct Python test is
   required to set repository-contained `TMPDIR`, `PYTHONPYCACHEPREFIX`, and
   `--basetemp`; the formal release script already exports a contained `TMPDIR`.
+- During triage of a transient in-repository FUSE placeholder, one read-only
+  `lsof` invocation emitted host mount warnings; no outside path was modified
+  or subsequently inspected. Separately, one read-only visual-audit search
+  mistakenly redirected diagnostics to `/dev/null`; it made no persistent
+  change and was not repeated. Both are recorded because the repository-only
+  boundary applies to diagnostics as well as writes.
 - A repository-wide Prettier scan can race with transient
   `.code-review-graph` SQLite sidecars. Explicit checks of every tracked and
   active untracked source file pass; the transient database files are not
