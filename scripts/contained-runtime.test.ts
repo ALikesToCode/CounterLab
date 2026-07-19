@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { beforeAll, describe, expect, it } from "vitest";
@@ -18,6 +18,11 @@ const sandboxRoot = resolve(
 );
 const workspace = resolve(sandboxRoot, "runs/workspace-fixture");
 const output = resolve(sandboxRoot, "runs/adapter-fixture");
+const reviewRoot = resolve(
+  root,
+  `node_modules/.cache/counterlab-v6.1/scientific-evidence-${sourceCommit}-20260719T000000Z-1`,
+);
+const reviewFile = resolve(reviewRoot, "reachability-review.json");
 
 function validate(...args: string[]) {
   return spawnSync(process.execPath, [validator, ...args], {
@@ -31,13 +36,24 @@ function validate(...args: string[]) {
 function startupCommand(): string[] {
   return [
     "run",
+    "--rm",
     "--name",
     "counterlab-startup-validator",
+    "--pull=never",
     "--network",
     "none",
     "--read-only",
+    "--cap-drop=ALL",
+    "--security-opt=no-new-privileges=true",
+    "--ipc=none",
+    "--pids-limit=32",
+    "--memory=1024m",
+    "--memory-swap=1024m",
+    "--cpus=2.0",
+    "--ulimit=fsize=1048576:1048576",
+    "--ulimit=nofile=64:64",
     "--tmpfs",
-    "/counterlab-runtime:rw,noexec,nosuid,size=64m",
+    "/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700",
     "-e",
     "TMPDIR=/counterlab-runtime",
     "-e",
@@ -53,19 +69,31 @@ function startupCommand(): string[] {
 function scientificRuntimeCommand(): string[] {
   return [
     "run",
+    "--rm",
     "--name",
     "counterlab-runtime-validator",
     "--user",
     "1000:1000",
+    "--pull=never",
     "--network",
     "none",
     "--read-only",
+    "--cap-drop=ALL",
+    "--security-opt=no-new-privileges=true",
+    "--ipc=none",
+    "--pids-limit=32",
+    "--memory=1024m",
+    "--memory-swap=1024m",
+    "--cpus=2.0",
+    "--ulimit=fsize=1048576:1048576",
+    "--ulimit=nofile=64:64",
     "--tmpfs",
-    "/counterlab-runtime:rw,noexec,nosuid,size=64m",
+    "/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=1000,gid=1000,mode=0700",
     "-e",
     "TMPDIR=/counterlab-runtime",
     "-v",
     `${root}:/repo:ro`,
+    "--workdir=/repo",
     "--entrypoint",
     "python",
     image,
@@ -76,6 +104,46 @@ function scientificRuntimeCommand(): string[] {
     `sha256:${"b".repeat(64)}`,
     "--source-commit",
     sourceCommit,
+  ];
+}
+
+function reachabilityCommand(): string[] {
+  return [
+    "run",
+    "--rm",
+    "--name",
+    "counterlab-reachability-validator",
+    "--pull=never",
+    "--network=none",
+    "--read-only",
+    "--user=1000:1000",
+    "--cap-drop=ALL",
+    "--security-opt=no-new-privileges=true",
+    "--ipc=none",
+    "--pids-limit=32",
+    "--memory=1024m",
+    "--memory-swap=1024m",
+    "--cpus=2.0",
+    "--ulimit=fsize=1048576:1048576",
+    "--ulimit=nofile=64:64",
+    "--tmpfs=/counterlab-runtime:rw,noexec,nosuid,nodev,size=256m,uid=1000,gid=1000,mode=0700",
+    "--env=TMPDIR=/counterlab-runtime",
+    "--volume",
+    `${root}:/repo:ro`,
+    "--workdir=/repo",
+    "--entrypoint=python",
+    image,
+    "/repo/scripts/probe_cpython_htmlparser_reachability.py",
+    "--root",
+    "/repo",
+    "--image-digest",
+    `sha256:${"b".repeat(64)}`,
+    "--source-commit",
+    sourceCommit,
+    "--sbom-sha256",
+    "c".repeat(64),
+    "--review-file",
+    `/repo/${reviewFile.slice(root.length + 1)}`,
   ];
 }
 
@@ -114,12 +182,42 @@ describe("contained runtime command policy", () => {
   beforeAll(() => {
     mkdirSync(workspace, { recursive: true, mode: 0o700 });
     mkdirSync(output, { recursive: true, mode: 0o700 });
+    mkdirSync(reviewRoot, { recursive: true, mode: 0o700 });
+    writeFileSync(reviewFile, "{}\n", { mode: 0o600 });
   });
 
   it("allows only the exact release verification profiles", () => {
     expect(validate(...startupCommand()).status).toBe(0);
     expect(validate(...scientificRuntimeCommand()).status).toBe(0);
+    expect(validate(...reachabilityCommand()).status).toBe(0);
     expect(validate(...boundedAdapterCommand()).status).toBe(0);
+  });
+
+  it("rejects root identities for scientific evidence containers", () => {
+    const runtime = scientificRuntimeCommand();
+    runtime[runtime.indexOf("1000:1000")] = "0:0";
+    expect(validate(...runtime).status).not.toBe(0);
+
+    const reachability = reachabilityCommand();
+    reachability[reachability.indexOf("--user=1000:1000")] = "--user=0:0";
+    expect(validate(...reachability).status).not.toBe(0);
+  });
+
+  it("rejects reachability command or review-path expansion", () => {
+    const command = reachabilityCommand();
+    command[
+      command.indexOf("/repo/scripts/probe_cpython_htmlparser_reachability.py")
+    ] = "/repo/scripts/verify_scientific_runtime.py";
+    expect(validate(...command).status).not.toBe(0);
+
+    const escaped = reachabilityCommand();
+    escaped[escaped.length - 1] = "/repo/scientific-engines/registry.json";
+    expect(validate(...escaped).status).not.toBe(0);
+
+    const traversed = reachabilityCommand();
+    traversed[traversed.length - 1] =
+      `/repo/node_modules/.cache/counterlab-v6.1/scientific-evidence-${sourceCommit}-20260719T000000Z-1/../../../../scientific-engines/registry.json`;
+    expect(validate(...traversed).status).not.toBe(0);
   });
 
   it("keeps the bounded adapter inputs in the source-bound build context", () => {

@@ -7,7 +7,7 @@ import {
   canonicalizeScientificEngineSnapshot,
   hashScientificEngineSnapshot,
   OpenVexDocumentSchema,
-  ReachabilityReportV1Schema,
+  ReachabilityReportV2Schema,
   summarizeGrypeScan,
   summarizeVexApplication,
   validateScientificEngineSnapshot,
@@ -1229,7 +1229,7 @@ export async function verifyVulnerabilityReport(
       OpenVexDocumentSchema.safeParse(
         await json(resolve(root, vexRecord.path)),
       ),
-      ReachabilityReportV1Schema.safeParse(
+      ReachabilityReportV2Schema.safeParse(
         await json(resolve(root, reachabilityRecord.path)),
       ),
       VexApplicationReportV1Schema.safeParse(

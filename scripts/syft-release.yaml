@@ -1,0 +1,48 @@
+log:
+  quiet: false
+  level: warn
+  file: ""
+format:
+  pretty: false
+check-for-app-update: false
+default-catalogers: []
+select-catalogers: []
+package:
+  search-unindexed-archives: false
+  search-indexed-archives: true
+  exclude-binary-overlap-by-ownership: true
+license:
+  content: none
+  coverage: 75
+file:
+  metadata:
+    selection: owned-by-package
+    digests:
+      - sha1
+      - sha256
+scope: squashed
+relationships:
+  package-file-ownership: true
+  package-file-ownership-overlap: true
+enrich: []
+golang:
+  search-local-mod-cache-licenses: false
+  search-local-vendor-licenses: false
+  search-remote-licenses: false
+java:
+  use-network: false
+  use-maven-local-repository: false
+  resolve-transitive-dependencies: false
+javascript:
+  search-remote-licenses: false
+python:
+  search-remote-licenses: false
+registry:
+  insecure-skip-tls-verify: false
+  insecure-use-http: false
+  auth: []
+from: []
+exclude: []
+cache:
+  dir: ""
+  ttl: 0s

@@ -6,6 +6,11 @@ import { routeArtifactConcept } from "../../../packages/concept-registry/src/ind
 import { parseNotebook } from "../../../packages/notebook-parser/src/index.js";
 
 import {
+  completionMatchesExpectation,
+  heldOutCasePasses,
+  observedCompletionOutcome,
+} from "./completion-expectations.js";
+import {
   HeldOutBenchmarkResultSchema,
   ReviewLabelFileSchema,
   type HeldOutBenchmarkResult,
@@ -69,7 +74,7 @@ async function evaluateCase(
     supportReasonCodes,
     fileSha256: first.fileSha256,
   };
-  const checks = {
+  const intakeChecks = {
     notebookHashMatches: sha256(bytes) === label.notebookSha256,
     supportStatusMatches:
       observed.supportStatus === label.expected.supportStatus,
@@ -94,7 +99,7 @@ async function evaluateCase(
       first.fileSha256 === second.fileSha256 &&
       canonicalJson(first.cells) === canonicalJson(second.cells),
   };
-  const completion =
+  const completionResult =
     routing.kind === "selected"
       ? await runHeldOutCompletion({
           root,
@@ -117,6 +122,17 @@ async function evaluateCase(
           durationMs: 0,
           failureCode: null,
         };
+  const completion = {
+    ...completionResult,
+    outcome: observedCompletionOutcome(completionResult),
+  };
+  const checks = {
+    ...intakeChecks,
+    completionOutcomeMatches: completionMatchesExpectation(
+      label.expected.completionOutcome,
+      completionResult,
+    ),
+  };
   return {
     caseId: label.caseId,
     fileName: label.fileName,
@@ -125,13 +141,14 @@ async function evaluateCase(
     humanReviewStatus: label.humanReview.status,
     executedParser: true as const,
     expected: {
+      completionOutcome: label.expected.completionOutcome,
       supportStatus: label.expected.supportStatus,
       concept: label.expected.concept,
     },
     observed,
     checks,
     completion,
-    passed: Object.values(checks).every(Boolean),
+    passed: heldOutCasePasses(checks),
   };
 }
 
@@ -179,6 +196,14 @@ export async function runHeldOutBenchmark(
       item.completion.transferPassed &&
       item.completion.patchVerified,
   );
+  const patchEligible = cases.filter(
+    (item) => item.expected.completionOutcome === "PATCH_VERIFIED",
+  );
+  const expectedEstimatorRefusals = cases.filter(
+    (item) =>
+      item.expected.completionOutcome ===
+      "PATCH_REFUSED_ESTIMATOR_OUTSIDE_CONTRACT",
+  );
   return HeldOutBenchmarkResultSchema.parse({
     schemaVersion: "2",
     benchmarkId: "counterlab-held-out-v2",
@@ -195,12 +220,25 @@ export async function runHeldOutBenchmark(
         passed: completed.length,
         total: supported.length,
       },
+      patchEligibleCompletion: {
+        passed: patchEligible.filter(
+          (item) => item.checks.completionOutcomeMatches,
+        ).length,
+        total: patchEligible.length,
+      },
+      expectedEstimatorContractRefusals: {
+        passed: expectedEstimatorRefusals.filter(
+          (item) => item.checks.completionOutcomeMatches,
+        ).length,
+        total: expectedEstimatorRefusals.length,
+      },
     },
     cases,
     limitations: [
       "The intake benchmark executes the safe notebook parser; it never executes uploaded notebook cells.",
       "Supported cases additionally exercise a deterministic contract probe through the independent Plan verifier, fixed synthetic kernel, fixed transfer evaluator, and fixed copy-patch verifier.",
       "The completion probe does not call GPT or Codex and is labelled deterministic_contract_probe; it measures fixed authority coverage, not live model-generation success.",
+      "Completion accounting keeps patch-eligible cases separate from labelled estimator-contract refusals while retaining the legacy all-supported total.",
       "Concept-family inference is a deterministic evidence heuristic, not an LLM evaluation.",
       "Human review labels remain PENDING until independent reviewers complete and adjudicate the matrix.",
       "Held-out parser accuracy does not establish learner outcomes or arbitrary-notebook support.",
@@ -211,14 +249,14 @@ export async function runHeldOutBenchmark(
 export function renderHeldOutMatrix(result: HeldOutBenchmarkResult): string {
   const rows = result.cases.map(
     (item) =>
-      `| ${item.caseId} | ${item.family} | ${item.variation} | ${item.expected.supportStatus} | ${item.observed.supportStatus} | ${item.expected.concept ?? "refuse"} | ${item.observed.concept ?? "refuse"} | ${item.completion.attempted ? (item.completion.patchVerified ? "PASS" : (item.completion.failureCode ?? "FAIL")) : "N/A"} | ${item.humanReviewStatus} | ${item.passed ? "PASS" : "FAIL"} |`,
+      `| ${item.caseId} | ${item.family} | ${item.variation} | ${item.expected.supportStatus} | ${item.observed.supportStatus} | ${item.expected.concept ?? "refuse"} | ${item.observed.concept ?? "refuse"} | ${item.expected.completionOutcome} | ${item.completion.outcome} | ${item.humanReviewStatus} | ${item.passed ? "PASS" : "FAIL"} |`,
   );
   return `# Held-out review matrix
 
 Generated from the real safe-parser and fixed-authority execution recorded in \`docs/HELD_OUT_RESULTS.json\`. Uploaded notebook cells were not executed. The completion Plan source is explicitly \`deterministic_contract_probe\`, not GPT or Codex. Human review remains pending and no learner outcome is implied.
 
-| Case | Family | Variation | Expected support | Observed support | Expected concept | Observed concept | Fixed completion | Human review | Intake checks |
-|---|---|---|---|---|---|---|---|---|---|
+| Case | Family | Variation | Expected support | Observed support | Expected concept | Observed concept | Expected completion | Observed completion | Human review | Case checks |
+|---|---|---|---|---|---|---|---|---|---|---|
 ${rows.join("\n")}
 
 ## Summary
@@ -227,7 +265,9 @@ ${rows.join("\n")}
 - Leakage variants: ${result.summary.byFamily.entity_leakage.passed}/${result.summary.byFamily.entity_leakage.total} passed.
 - Imbalance variants: ${result.summary.byFamily.class_imbalance.passed}/${result.summary.byFamily.class_imbalance.total} passed.
 - Unsupported/refusal cases: ${result.summary.byFamily.unsupported.passed}/${result.summary.byFamily.unsupported.total} passed.
-- Fixed full-loop completion: ${result.summary.supportedCompletion.passed}/${result.summary.supportedCompletion.total} supported cases passed without source edits.
+- Patch-eligible completion: ${result.summary.patchEligibleCompletion.passed}/${result.summary.patchEligibleCompletion.total} verified patches.
+- Expected estimator-contract refusals: ${result.summary.expectedEstimatorContractRefusals.passed}/${result.summary.expectedEstimatorContractRefusals.total} matched.
+- Legacy all-supported completion: ${result.summary.supportedCompletion.passed}/${result.summary.supportedCompletion.total} produced verified patches.
 - Human review status: pending for all cases until reviewer labels and adjudication are recorded.
 `;
 }

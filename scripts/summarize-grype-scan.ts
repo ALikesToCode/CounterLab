@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 
 import {
   GrypeJsonReportSchema,
-  ReachabilityReportV1Schema,
+  ReachabilityReportV2Schema,
   summarizeGrypeScan,
 } from "../packages/scientific-engine-registry/src/index.js";
 
@@ -66,7 +66,7 @@ async function main(): Promise<void> {
   const raw = GrypeJsonReportSchema.parse(
     JSON.parse(rawBytes.toString("utf8")),
   );
-  const reachability = ReachabilityReportV1Schema.parse(
+  const reachability = ReachabilityReportV2Schema.parse(
     JSON.parse(reachabilityBytes),
   );
   if (

@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 IMAGE=""
 REGISTRY_ONLY=0
 REQUIRE_PRODUCTION=0
+RUNTIME_REPORT=""
 
 usage() {
   cat <<'EOF'
@@ -14,6 +15,7 @@ Options:
   --image IMAGE          Verify the exact local runner image from inside its runtime.
   --registry-only        Skip Proof Capsule linkage and permit an omitted runtime image.
   --require-production   Reject a local-candidate runtime manifest.
+  --runtime-report PATH Persist the exact runtime report to a new contained file.
   --help                 Show this help.
 
 The default release gate fails closed unless an image is supplied and Proof Capsule
@@ -36,6 +38,11 @@ while [[ $# -gt 0 ]]; do
       REQUIRE_PRODUCTION=1
       shift
       ;;
+    --runtime-report)
+      [[ $# -ge 2 ]] || { echo "--runtime-report requires a value" >&2; exit 2; }
+      RUNTIME_REPORT="$2"
+      shift 2
+      ;;
     --help|-h)
       usage
       exit 0
@@ -49,6 +56,17 @@ while [[ $# -gt 0 ]]; do
 done
 
 cd "${ROOT_DIR}"
+
+if [[ -n "${RUNTIME_REPORT}" ]]; then
+  if [[ "${RUNTIME_REPORT}" != /* ]]; then
+    RUNTIME_REPORT="${ROOT_DIR}/${RUNTIME_REPORT#./}"
+  fi
+  node scripts/assert-contained-path.mjs "${RUNTIME_REPORT}"
+  [[ ! -e "${RUNTIME_REPORT}" && ! -L "${RUNTIME_REPORT}" ]] || {
+    echo "Runtime report output must be a new repository-contained file." >&2
+    exit 2
+  }
+fi
 
 [[ -x "./node_modules/.bin/tsx" ]] || {
   echo "Missing local TypeScript runtime. Install the pinned workspace dependencies first." >&2
@@ -114,15 +132,38 @@ if [[ "${IMAGE_USER}" != "10001:10001" ]]; then
   echo "Runner image must declare the non-root user 10001:10001; observed '${IMAGE_USER}'." >&2
   exit 1
 fi
+if [[ -n "${RUNTIME_REPORT}" ]]; then
+  RUNTIME_REPORT_RELATIVE="${RUNTIME_REPORT#${ROOT_DIR}/}"
+  if [[ ! "${RUNTIME_REPORT_RELATIVE}" =~ ^node_modules/\.cache/counterlab-v6\.1/scientific-evidence-${SOURCE_COMMIT}-[0-9]{8}T[0-9]{6}Z-[0-9]+/runtime-verification\.json$ ]]; then
+    echo "Runtime report output must use the exact source-bound evidence staging path." >&2
+    exit 2
+  fi
+fi
 
 RUN_ID="${SOURCE_COMMIT:0:12}-$$"
 STARTUP_CONTAINER="counterlab-startup-${RUN_ID}"
 RUNTIME_CONTAINER="counterlab-runtime-${RUN_ID}"
+HOST_UID="$(id -u)"
+HOST_GID="$(id -g)"
+[[ "${HOST_UID}" != "0" && "${HOST_GID}" != "0" ]] || {
+  echo "Scientific runtime verification refuses a root host identity." >&2
+  exit 2
+}
 
-STARTUP_PROBE_OUTPUT="$("${DOCKER_BIN}" run --name "${STARTUP_CONTAINER}" \
+STARTUP_PROBE_OUTPUT="$("${DOCKER_BIN}" run --rm --name "${STARTUP_CONTAINER}" \
+  --pull=never \
   --network none \
   --read-only \
-  --tmpfs /counterlab-runtime:rw,noexec,nosuid,size=64m \
+  --cap-drop=ALL \
+  --security-opt=no-new-privileges=true \
+  --ipc=none \
+  --pids-limit=32 \
+  --memory=1024m \
+  --memory-swap=1024m \
+  --cpus=2.0 \
+  --ulimit=fsize=1048576:1048576 \
+  --ulimit=nofile=64:64 \
+  --tmpfs /counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700 \
   -e TMPDIR=/counterlab-runtime \
   -e COUNTERLAB_RUNNER_STARTUP_PROBE=1 \
   -e COUNTERLAB_RUNNER_WORK_ROOT=/counterlab-runtime/jobs \
@@ -144,19 +185,57 @@ node -e '
 # The preceding probe executes the real OCI entrypoint as Config.User. This
 # second run adopts the host identity only so the exact-image verifier can read
 # the repository evidence mounted read-only.
-"${DOCKER_BIN}" run --name "${RUNTIME_CONTAINER}" \
-  --user "$(id -u):$(id -g)" \
+RUNTIME_VERIFICATION_OUTPUT="$("${DOCKER_BIN}" run --rm --name "${RUNTIME_CONTAINER}" \
+  --user "${HOST_UID}:${HOST_GID}" \
+  --pull=never \
   --network none \
   --read-only \
-  --tmpfs /counterlab-runtime:rw,noexec,nosuid,size=64m \
+  --cap-drop=ALL \
+  --security-opt=no-new-privileges=true \
+  --ipc=none \
+  --pids-limit=32 \
+  --memory=1024m \
+  --memory-swap=1024m \
+  --cpus=2.0 \
+  --ulimit=fsize=1048576:1048576 \
+  --ulimit=nofile=64:64 \
+  --tmpfs "/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=${HOST_UID},gid=${HOST_GID},mode=0700" \
   -e TMPDIR=/counterlab-runtime \
   -v "${ROOT_DIR}:/repo:ro" \
+  --workdir=/repo \
   --entrypoint python \
   "${IMAGE}" \
   /repo/scripts/verify_scientific_runtime.py \
   --root /repo \
   --image-digest "${IMAGE_DIGEST}" \
-  --source-commit "${SOURCE_COMMIT}"
+  --source-commit "${SOURCE_COMMIT}")"
+
+node -e '
+  const value = JSON.parse(process.argv[1]);
+  if (
+    value.status !== "VERIFIED" ||
+    value.environmentId !== "counterlab-runner-linux-amd64-v2" ||
+    !Array.isArray(value.findings) ||
+    value.findings.length !== 0 ||
+    value.observed?.imageDigest !== process.argv[2] ||
+    value.observed?.sourceCommit !== process.argv[3]
+  ) {
+    throw new Error("Exact runtime verification report is invalid");
+  }
+' "${RUNTIME_VERIFICATION_OUTPUT}" "${IMAGE_DIGEST}" "${SOURCE_COMMIT}"
+
+if [[ -n "${RUNTIME_REPORT}" ]]; then
+  node - "${RUNTIME_REPORT}" "${RUNTIME_VERIFICATION_OUTPUT}" <<'NODE'
+const fs = require("node:fs");
+const [output, report] = process.argv.slice(2);
+fs.writeFileSync(output, `${JSON.stringify(JSON.parse(report), null, 2)}\n`, {
+  flag: "wx",
+  mode: 0o600,
+});
+NODE
+else
+  printf '%s\n' "${RUNTIME_VERIFICATION_OUTPUT}"
+fi
 
 echo "Scientific engine gate passed for ${IMAGE} (${IMAGE_DIGEST})."
-echo "Retained verification containers: ${STARTUP_CONTAINER}, ${RUNTIME_CONTAINER}"
+echo "Ephemeral verification containers removed: ${STARTUP_CONTAINER}, ${RUNTIME_CONTAINER}"

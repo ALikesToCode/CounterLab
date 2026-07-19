@@ -1,10 +1,10 @@
 {
   "schemaVersion": "2",
   "benchmarkId": "counterlab-held-out-v2",
-  "executedAt": "2026-07-18T11:44:52.810Z",
+  "executedAt": "2026-07-19T06:11:54.380Z",
   "parser": "@counterlab/notebook-parser",
   "executionMode": "safe_parse_plus_fixed_contract_completion",
-  "labelsSha256": "3ca1d08a8a96f807c8fbe81d96632d2eb2d6b473850301f6d048ebc9016dfc18",
+  "labelsSha256": "752c323c3d1fa4167eb4329e4ffb67daf910bc345ab49498311317996b91da4d",
   "summary": {
     "total": 10,
     "passed": 10,
@@ -26,6 +26,14 @@
     "supportedCompletion": {
       "passed": 7,
       "total": 8
+    },
+    "patchEligibleCompletion": {
+      "passed": 7,
+      "total": 7
+    },
+    "expectedEstimatorContractRefusals": {
+      "passed": 1,
+      "total": 1
     }
   },
   "cases": [
@@ -37,6 +45,7 @@
       "humanReviewStatus": "PENDING",
       "executedParser": true,
       "expected": {
+        "completionOutcome": "PATCH_VERIFIED",
         "supportStatus": "SUPPORTED",
         "concept": "entity_leakage"
       },
@@ -68,7 +77,8 @@
         "symbolsPresent": true,
         "packagesPresent": true,
         "supportReasonsMatch": true,
-        "stableEvidenceReferences": true
+        "stableEvidenceReferences": true,
+        "completionOutcomeMatches": true
       },
       "completion": {
         "attempted": true,
@@ -80,8 +90,9 @@
         "unchangedCellCount": 1,
         "resultHash": "f2cc4b758a1f41d86d501f1c9f8b2747f9e726eea32a3ac2bb671ce84fd33ada",
         "patchHash": "301ee38de473f32c9ab61016b256c43cc9438a40ed28716a66a0f405b28df391",
-        "durationMs": 3806,
-        "failureCode": null
+        "durationMs": 3600,
+        "failureCode": null,
+        "outcome": "PATCH_VERIFIED"
       },
       "passed": true
     },
@@ -93,6 +104,7 @@
       "humanReviewStatus": "PENDING",
       "executedParser": true,
       "expected": {
+        "completionOutcome": "PATCH_VERIFIED",
         "supportStatus": "SUPPORTED",
         "concept": "entity_leakage"
       },
@@ -124,7 +136,8 @@
         "symbolsPresent": true,
         "packagesPresent": true,
         "supportReasonsMatch": true,
-        "stableEvidenceReferences": true
+        "stableEvidenceReferences": true,
+        "completionOutcomeMatches": true
       },
       "completion": {
         "attempted": true,
@@ -136,8 +149,9 @@
         "unchangedCellCount": 1,
         "resultHash": "8e429b2a27d53ded9d91bb93000ec097738197e34c7fc1fd1e324bfb1bd9f3e8",
         "patchHash": "bbd5e8e905b13ab7bebbadbddbe5484f1876bf669ce018293d79d3424bc23ac7",
-        "durationMs": 3734,
-        "failureCode": null
+        "durationMs": 3494,
+        "failureCode": null,
+        "outcome": "PATCH_VERIFIED"
       },
       "passed": true
     },
@@ -149,6 +163,7 @@
       "humanReviewStatus": "PENDING",
       "executedParser": true,
       "expected": {
+        "completionOutcome": "PATCH_VERIFIED",
         "supportStatus": "SUPPORTED",
         "concept": "entity_leakage"
       },
@@ -181,7 +196,8 @@
         "symbolsPresent": true,
         "packagesPresent": true,
         "supportReasonsMatch": true,
-        "stableEvidenceReferences": true
+        "stableEvidenceReferences": true,
+        "completionOutcomeMatches": true
       },
       "completion": {
         "attempted": true,
@@ -193,8 +209,9 @@
         "unchangedCellCount": 1,
         "resultHash": "e86007011ca35531c0e7a44e35d53c680cbbe2a68eee7e98bd1bd108c4420131",
         "patchHash": "883a3b7eb0d395727fd71af1f181c21e93cd2bc56df95e7e6fda0998cd0c84a8",
-        "durationMs": 3684,
-        "failureCode": null
+        "durationMs": 3650,
+        "failureCode": null,
+        "outcome": "PATCH_VERIFIED"
       },
       "passed": true
     },
@@ -206,6 +223,7 @@
       "humanReviewStatus": "PENDING",
       "executedParser": true,
       "expected": {
+        "completionOutcome": "PATCH_REFUSED_ESTIMATOR_OUTSIDE_CONTRACT",
         "supportStatus": "SUPPORTED",
         "concept": "entity_leakage"
       },
@@ -236,7 +254,8 @@
         "symbolsPresent": true,
         "packagesPresent": true,
         "supportReasonsMatch": true,
-        "stableEvidenceReferences": true
+        "stableEvidenceReferences": true,
+        "completionOutcomeMatches": true
       },
       "completion": {
         "attempted": true,
@@ -248,8 +267,9 @@
         "unchangedCellCount": 0,
         "resultHash": "ac9a59ccb6bef119212c86c0c79db6614cd0a8c1fbc4a9aaf0d832e7ee627d52",
         "patchHash": null,
-        "durationMs": 3481,
-        "failureCode": "PATCH_ESTIMATOR_OUTSIDE_CONTRACT"
+        "durationMs": 3517,
+        "failureCode": "PATCH_ESTIMATOR_OUTSIDE_CONTRACT",
+        "outcome": "PATCH_REFUSED_ESTIMATOR_OUTSIDE_CONTRACT"
       },
       "passed": true
     },
@@ -261,6 +281,7 @@
       "humanReviewStatus": "PENDING",
       "executedParser": true,
       "expected": {
+        "completionOutcome": "PATCH_VERIFIED",
         "supportStatus": "SUPPORTED",
         "concept": "class_imbalance"
       },
@@ -288,7 +309,8 @@
         "symbolsPresent": true,
         "packagesPresent": true,
         "supportReasonsMatch": true,
-        "stableEvidenceReferences": true
+        "stableEvidenceReferences": true,
+        "completionOutcomeMatches": true
       },
       "completion": {
         "attempted": true,
@@ -300,8 +322,9 @@
         "unchangedCellCount": 1,
         "resultHash": "ac172206578cc240cdd089f4183fcf3eea8475d61901097b7344f6a35c51c396",
         "patchHash": "8a766ee56a0a3d6c51cc3feaf4a1588833e81e50359e43e044934048b8a94734",
-        "durationMs": 4090,
-        "failureCode": null
+        "durationMs": 3823,
+        "failureCode": null,
+        "outcome": "PATCH_VERIFIED"
       },
       "passed": true
     },
@@ -313,6 +336,7 @@
       "humanReviewStatus": "PENDING",
       "executedParser": true,
       "expected": {
+        "completionOutcome": "PATCH_VERIFIED",
         "supportStatus": "SUPPORTED",
         "concept": "class_imbalance"
       },
@@ -345,7 +369,8 @@
         "symbolsPresent": true,
         "packagesPresent": true,
         "supportReasonsMatch": true,
-        "stableEvidenceReferences": true
+        "stableEvidenceReferences": true,
+        "completionOutcomeMatches": true
       },
       "completion": {
         "attempted": true,
@@ -357,8 +382,9 @@
         "unchangedCellCount": 1,
         "resultHash": "80f4bdd01aa7c7f21fe737b5cb0e7a32d52c04544571be2273c005a60e438d5d",
         "patchHash": "4bdfbe563622aba7d048ac03575cf3b8be755b9a8c572f24d0c795953d1a54a5",
-        "durationMs": 4106,
-        "failureCode": null
+        "durationMs": 4009,
+        "failureCode": null,
+        "outcome": "PATCH_VERIFIED"
       },
       "passed": true
     },
@@ -370,6 +396,7 @@
       "humanReviewStatus": "PENDING",
       "executedParser": true,
       "expected": {
+        "completionOutcome": "PATCH_VERIFIED",
         "supportStatus": "SUPPORTED",
         "concept": "class_imbalance"
       },
@@ -400,7 +427,8 @@
         "symbolsPresent": true,
         "packagesPresent": true,
         "supportReasonsMatch": true,
-        "stableEvidenceReferences": true
+        "stableEvidenceReferences": true,
+        "completionOutcomeMatches": true
       },
       "completion": {
         "attempted": true,
@@ -412,8 +440,9 @@
         "unchangedCellCount": 1,
         "resultHash": "abb6b197f9bab15804d7e3b8bc295b9e4ec29fb9b17b8eb5edb8851aae301696",
         "patchHash": "88879bc55684c680f18a580244d3601677d5665bcf7d68a4601dfe4f0ce578a9",
-        "durationMs": 4067,
-        "failureCode": null
+        "durationMs": 3887,
+        "failureCode": null,
+        "outcome": "PATCH_VERIFIED"
       },
       "passed": true
     },
@@ -425,6 +454,7 @@
       "humanReviewStatus": "PENDING",
       "executedParser": true,
       "expected": {
+        "completionOutcome": "PATCH_VERIFIED",
         "supportStatus": "SUPPORTED",
         "concept": "class_imbalance"
       },
@@ -455,7 +485,8 @@
         "symbolsPresent": true,
         "packagesPresent": true,
         "supportReasonsMatch": true,
-        "stableEvidenceReferences": true
+        "stableEvidenceReferences": true,
+        "completionOutcomeMatches": true
       },
       "completion": {
         "attempted": true,
@@ -467,8 +498,9 @@
         "unchangedCellCount": 1,
         "resultHash": "e3a90e1c6b041327b743f1ffb86d2d2290e9aace981f9303f235917165b1443b",
         "patchHash": "53fb10890b54cc5ed345041f5bed29253fb9c460a979ebf6dd22c99d0b6da242",
-        "durationMs": 4355,
-        "failureCode": null
+        "durationMs": 9213,
+        "failureCode": null,
+        "outcome": "PATCH_VERIFIED"
       },
       "passed": true
     },
@@ -480,6 +512,7 @@
       "humanReviewStatus": "PENDING",
       "executedParser": true,
       "expected": {
+        "completionOutcome": "NOT_APPLICABLE",
         "supportStatus": "UNSUPPORTED",
         "concept": null
       },
@@ -509,7 +542,8 @@
         "symbolsPresent": true,
         "packagesPresent": true,
         "supportReasonsMatch": true,
-        "stableEvidenceReferences": true
+        "stableEvidenceReferences": true,
+        "completionOutcomeMatches": true
       },
       "completion": {
         "attempted": false,
@@ -522,7 +556,8 @@
         "resultHash": null,
         "patchHash": null,
         "durationMs": 0,
-        "failureCode": null
+        "failureCode": null,
+        "outcome": "NOT_APPLICABLE"
       },
       "passed": true
     },
@@ -534,6 +569,7 @@
       "humanReviewStatus": "PENDING",
       "executedParser": true,
       "expected": {
+        "completionOutcome": "NOT_APPLICABLE",
         "supportStatus": "UNSUPPORTED",
         "concept": null
       },
@@ -564,7 +600,8 @@
         "symbolsPresent": true,
         "packagesPresent": true,
         "supportReasonsMatch": true,
-        "stableEvidenceReferences": true
+        "stableEvidenceReferences": true,
+        "completionOutcomeMatches": true
       },
       "completion": {
         "attempted": false,
@@ -577,7 +614,8 @@
         "resultHash": null,
         "patchHash": null,
         "durationMs": 0,
-        "failureCode": null
+        "failureCode": null,
+        "outcome": "NOT_APPLICABLE"
       },
       "passed": true
     }
@@ -586,6 +624,7 @@
     "The intake benchmark executes the safe notebook parser; it never executes uploaded notebook cells.",
     "Supported cases additionally exercise a deterministic contract probe through the independent Plan verifier, fixed synthetic kernel, fixed transfer evaluator, and fixed copy-patch verifier.",
     "The completion probe does not call GPT or Codex and is labelled deterministic_contract_probe; it measures fixed authority coverage, not live model-generation success.",
+    "Completion accounting keeps patch-eligible cases separate from labelled estimator-contract refusals while retaining the legacy all-supported total.",
     "Concept-family inference is a deterministic evidence heuristic, not an LLM evaluation.",
     "Human review labels remain PENDING until independent reviewers complete and adjudicate the matrix.",
     "Held-out parser accuracy does not establish learner outcomes or arbitrary-notebook support."

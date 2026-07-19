@@ -1,6 +1,174 @@
 # Progress
 
-Updated: 2026-07-18
+Updated: 2026-07-19
+
+## Active v6.1 release board
+
+This is the live execution ledger for `feat/learner-ux-v6.1`. It is updated at
+each material test, qualification, deployment, and integration gate. Statuses
+mean exactly `PASS`, `FAIL`, `IN PROGRESS`, `BLOCKED`, or `NOT RUN`; a local
+pass is never presented as a browser or production pass.
+
+### Current checkpoint
+
+- **Branch:** `feat/learner-ux-v6.1`
+- **Pre-tooling source checkpoint:**
+  `fafa0e05984ed877ba4d9bfdd8ce8b82bd3d9bcc`. The exact runner source is the
+  commit containing this ledger and is recorded by the subsequent build and
+  evidence receipts rather than guessed in advance.
+- **Continuation starting commit:**
+  `dd451c77606ec270cfba030784df50cb3aa19969`
+- **Repository boundary:** physical root
+  `/home/mysterious/storage/github/CounterLab`; root marker present; all active
+  build, scan, and browser state is required to remain inside the repository.
+- **Working tree:** intentionally dirty. New source-bound evidence tooling and
+  its focused tests are under review. Existing scientific-engine and SBOM
+  changes are stale generated evidence and must not be committed until they are
+  regenerated against the next exact source commit and exact runner image.
+- **Integration rule:** commit source tooling first, build and qualify that
+  exact commit, commit its generated evidence separately, deploy only the
+  qualified image, then fast-forward this branch into `main` after every
+  required gate is recorded.
+
+### Completed in this continuation
+
+| Work item | Status | Exact evidence |
+| --- | --- | --- |
+| Repository and dirty-tree preservation | PASS | Root, marker, branch, commit, and every dirty path were inspected; no stash, reset, clean, deletion, or out-of-repository operation was used. |
+| Learner-focused presentation and navigation | PASS locally | Commits `2ce90ad` and `fafa0e0` simplify the question-first entry, evidence choices, stage actions, accessible names, and client chunking while preserving signed-data authority. |
+| Full web component suite | PASS locally | 59 files, 375 tests passed after aligning the cleanup-policy assertion with ephemeral `--rm` verification containers. |
+| Web, Worker, and repository TypeScript | PASS locally | All three strict TypeScript checks passed at the current learner checkpoint. |
+| Production Vite/Worker build | PASS locally | Vite 8.1.4 built 388 Worker modules and 197 client modules with no chunk warning. Worker 1,697.79 kB / 329.18 kB gzip; main client 399.43 kB / 116.21 kB gzip; CSS 178.66 kB / 31.35 kB gzip; largest lazy chunk Sample Boundary 86.27 kB / 17.15 kB gzip. |
+| Formatting, whitespace, and secret scan | PASS locally | Prettier, Git whitespace checks, and the repository secret scan passed; the latest scan covered 766 files. |
+| Source-bound runner build inputs | PASS locally | Commit `e0559ff` includes the bounded adapter inputs required by the exact-image build. |
+| Pinned local Syft and Grype tools | PASS locally | Syft 1.44.0 and Grype 0.112.0 archives and binaries were independently hash-checked in repository-contained tool storage. |
+| Exact-image evidence generator implementation | PASS as an uncommitted source candidate | Normalization, VEX preparation, source/image binding, and one-shot refresh scripts are implemented. Independent read-only review completed and its concrete findings were repaired: exact review-path traversal rejection, no host `/dev/null`, 31 tracked output hashes, pinned Syft/Grype configs, 14-day KEV freshness, bounded verification containers, preflighted VEX outputs, direct helper tests, and a persisted/hash-bound exact-runtime report. Exact-image execution still follows the source commit. |
+| Focused scientific/release tests | PASS locally | Latest combined release Vitest: 4 files/35 tests passed. Latest focused Python reachability, scientific verifier, and held-out generator gate: 12 passed. Repository TypeScript, shell syntax, Python syntax, formatting, and whitespace checks passed. |
+| CloakBrowser harness and static collection | PASS fail-closed; execution BLOCKED | Playwright 1.61.1 statically collected 22 tests in 1 spec. The shell harness and direct Playwright command both reject a missing `CLOAK_CDP_ENDPOINT`; 0 browser journeys ran and no stock browser was launched. |
+| Broad product/runtime verification | PASS locally except expected evidence drift | Web Vitest 59 files/375 tests; Python kernel and runner 234/234; scientific verifier/reachability 10/10; leakage mutations 13/13; imbalance mutations 19/19; root, web, Worker, and hosted-runner TypeScript; production build; scientific import audit; Git whitespace; active-file formatting; and the 766-file secret scan all passed. Pre-refresh root Vitest passed 42/44 files and 499/502 tests; all three failures resolve through the intentionally stale scientific evidence graph and are queued for the exact-image refresh. |
+| Held-out benchmark | PASS configured gate and explicit accounting | Intake passed 10/10. Seven of seven patch-eligible cases complete the fixed loop; the separate RandomForest case is correctly refused with `PATCH_ESTIMATOR_OUTSIDE_CONTRACT` because its estimator/configuration is outside the registered patch contract. The legacy aggregate remains 7/8 for compatibility. Generator syntax and exact outcome assertions passed 10/10; held-out Vitest passed 3 files/11 tests. Generated evidence refresh remains in the source-commit queue. |
+
+### Ordered completion queue
+
+The lead owns integration, shared architecture, release scripts, deployment,
+documentation, commits, and the final merge. Independent read-only reviews and
+test inventory may run in parallel, but no two workers edit the same file.
+
+1. **Evidence tooling review and source commit — IN PROGRESS**
+   - Independent review and focused repair tests are complete.
+   - Inspect the final held-out and release-tool diffs, refresh held-out
+     evidence, run the broader pre-commit gates, selectively stage only
+     source/tests and this ledger, and create one user-authored local commit.
+2. **Exact runner image and evidence regeneration — NOT RUN for the new source
+   commit**
+   - Attest the repository-contained runtime.
+   - Build one immutable source-bound OCI image and receipt.
+   - Generate Syft, Grype, CISA KEV, VEX, reachability, license, engine-health,
+     registry, runtime-manifest, and snapshot evidence against that exact
+     image.
+   - Run the negative VEX control and reject wrong-image, wrong-component,
+     stale, or unbound evidence.
+   - Commit generated evidence separately only after the full exact-image
+     verifier passes.
+3. **Broad local qualification — IN PROGRESS**
+   - The current baseline is green for product/runtime behavior. Pre-refresh
+     root Vitest is 499/502, with all three failures isolated to the
+     intentionally stale evidence graph. The formal registry-only engine gate
+     reports exactly 14 binding
+     findings: the pnpm lock hash, SBOM tool-lock hash, and 12 internal
+     renderer/oracle/mutation integrity hashes.
+   - `docs/sbom/node.cdx.json` still identifies pnpm 11.13.0 while the pinned
+     build tool is 11.13.1. Regeneration must correct that evidence; the check
+     must not be weakened.
+   - Full web Vitest, repository/web/Worker/hosted-runner TypeScript, full
+     Python kernel/runner suites, mutation suites, held-out cases, and the
+     production build are green. Full root Vitest must be rerun after evidence
+     regeneration.
+   - Migrations, production-smoke harness tests, release-script tests,
+     formatting, whitespace, secret scan, and SBOM/scientific evidence gates.
+   - Repair implementation failures; never weaken or skip tests to turn a gate
+     green.
+4. **Container qualification and registry promotion — NOT RUN for the new
+   source commit**
+   - Qualify the exact immutable image with a clean tree.
+   - Publish only the qualified source-bound tag to the configured Cloudflare
+     registry.
+   - Record source commit, OCI/config/manifest digests, evidence authority,
+     tool versions, and exact qualification receipt.
+5. **Cloudflare release gate and Wrangler deployment — NOT RUN for this
+   branch**
+   - Verify the active Cloudflare identity and destination without changing
+     Git or remote identity.
+   - Run the exact release check and bounded D1 migration gate.
+   - Deploy the qualified Worker and Container with Wrangler.
+   - Record the actual Worker version, Container version/digest, and deployment
+     receipt; do not claim deployment before those commands succeed.
+6. **Production smoke and live authority journeys — NOT RUN for this branch**
+   - Readiness/capability/no-secret checks.
+   - Untouched live entity-leakage and class-imbalance journeys.
+   - Event reconnect, verified Boundary, deterministic transfer, copied patch
+     download, Proof Capsule export/replay, failed-verification behavior, and
+     exact deployed-version binding.
+7. **CloakBrowser and accessibility qualification — BLOCKED until a live
+   `CLOAK_CDP_ENDPOINT` is available**
+   - Execute all 22 collected Playwright journeys at 1440x900, 1280x720, and
+     390x844 using CloakBrowser only.
+   - Exercise keyboard-only navigation, screen-reader names and announcements,
+     focus restoration, reduced motion, refresh during asynchronous phases,
+     downloads, unsupported notebooks, failed verification/transfer, and
+     horizontal-overflow checks.
+   - Capture rendered screenshots and Web Vitals only from the exact qualified
+     public release. Never fall back to stock Chromium.
+8. **Prize submission evidence and impact — PARTIAL**
+   - Resolve every technically actionable P0/P1/P2 item in
+     `docs/audits/counterlab-first-prize` and update the diagnostic score with
+     evidence.
+   - Freeze an exact public build and bind screenshots, demo copy, source,
+     Container digest, and claims to it.
+   - A real learner-impact study and final Devpost submission require genuine
+     external participants/account actions; no synthetic impact or submission
+     is claimed.
+9. **Final documentation and merge — NOT RUN**
+   - Update release checklist, evidence report, support limits, production
+     identities, browser/a11y evidence, known limitations, and complete test
+     totals.
+   - Confirm a clean feature branch, verify `main` ancestry, switch to `main`,
+     and merge `feat/learner-ux-v6.1` with `--ff-only`.
+   - Do not delete the feature branch, rewrite history, force-push, or deploy a
+     commit different from the one documented.
+
+### Current blockers and non-claims
+
+- The current public audit snapshot is not proof that this branch is deployed;
+  exact source, image, Worker, and Container identities still need to be
+  qualified together.
+- No current-branch rendered browser journey, screenshot, screen-reader
+  session, accessibility audit, or Web Vitals result is claimed while the
+  CloakBrowser endpoint is unavailable.
+- The existing browser suite has no Axe, Lighthouse, automated screen-reader,
+  or Web Vitals integration. Keyboard, accessible-name, reduced-motion, and
+  viewport scenarios are represented in the 22-test specification, but their
+  rendered behavior remains unverified until CloakBrowser is available.
+- A repository-wide Prettier scan can race with transient
+  `.code-review-graph` SQLite sidecars. Explicit checks of every tracked and
+  active untracked source file pass; the transient database files are not
+  product evidence and must be excluded from the broad formatting surface
+  rather than chased or deleted.
+- The held-out `leakage_random_forest` notebook is supported for intake and
+  reaches verified result and transfer, but Repair is intentionally refused:
+  the notebook only imports `RandomForestClassifier` and provides no admitted
+  estimator/configuration shape for a fixed verified patch. Broadening the
+  patcher from an import token would weaken authority. The benchmark will
+  report this as one expected contract refusal, not as a fabricated eighth
+  patch.
+- The interactive Verified Sample Playground remains omitted unless its
+  fixture-integrity authority can be satisfied without browser-side
+  authoritative computation.
+- Physics/free-fall remains outside this UX/release pass until the two existing
+  ML Subject Packs pass the production authority gate.
+- Devpost submission and measured learner impact are not complete. The
+  repository work can prepare and verify the evidence package, but it must not
+  fabricate submission state, participants, or outcomes.
 
 ## Current status
 

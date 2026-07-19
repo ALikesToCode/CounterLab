@@ -216,19 +216,19 @@ describe("Cloudflare static asset routing", () => {
     expect(script).not.toMatch(/\brm\s+-/);
   });
 
-  it("retains exact-image verification containers for safety review", () => {
+  it("removes exact-image verification containers after bounded checks", () => {
     const script = readFileSync(
       resolve(process.cwd(), "../../scripts/verify-scientific-engines.sh"),
       "utf8",
     );
 
     expect(script).toContain(
-      '"${DOCKER_BIN}" run --name "${STARTUP_CONTAINER}"',
+      '"${DOCKER_BIN}" run --rm --name "${STARTUP_CONTAINER}"',
     );
     expect(script).toContain(
-      '"${DOCKER_BIN}" run --name "${RUNTIME_CONTAINER}"',
+      '"${DOCKER_BIN}" run --rm --name "${RUNTIME_CONTAINER}"',
     );
-    expect(script).not.toContain("docker run --rm");
+    expect(script).toContain("Ephemeral verification containers removed:");
     expect(script).toContain(
       "Docker-compatible adapter must be contained inside the repository.",
     );

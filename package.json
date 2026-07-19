@@ -18,6 +18,7 @@
     "claims:generate": "node --import tsx scripts/generate-release-capability-manifest.ts",
     "engines:check-bindings": "node --import tsx scripts/refresh-scientific-engine-bindings.ts --check",
     "engines:refresh-bindings": "node --import tsx scripts/refresh-scientific-engine-bindings.ts --write",
+    "engines:refresh-source-bound": "bash scripts/refresh-source-bound-scientific-evidence.sh",
     "engines:snapshot": "node --import tsx scripts/generate-scientific-engine-snapshot.ts",
     "sbom:normalize": "node --import tsx scripts/normalize-cyclonedx.ts",
     "vulnerability:summarize": "node --import tsx scripts/summarize-grype-scan.ts",

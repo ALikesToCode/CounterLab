@@ -5,6 +5,7 @@
     {
       "caseId": "leakage_rows_pipeline",
       "expected": {
+        "completionOutcome": "PATCH_VERIFIED",
         "concept": "entity_leakage",
         "requiredMetricNames": ["accuracy", "roc_auc"],
         "requiredPackageHints": ["sklearn"],
@@ -32,6 +33,7 @@
     {
       "caseId": "leakage_shuffled_observations",
       "expected": {
+        "completionOutcome": "PATCH_VERIFIED",
         "concept": "entity_leakage",
         "requiredMetricNames": ["accuracy", "roc_auc"],
         "requiredPackageHints": ["sklearn"],
@@ -55,6 +57,7 @@
     {
       "caseId": "leakage_column_transformer",
       "expected": {
+        "completionOutcome": "PATCH_VERIFIED",
         "concept": "entity_leakage",
         "requiredMetricNames": ["accuracy", "roc_auc"],
         "requiredPackageHints": ["sklearn"],
@@ -82,6 +85,7 @@
     {
       "caseId": "leakage_random_forest",
       "expected": {
+        "completionOutcome": "PATCH_REFUSED_ESTIMATOR_OUTSIDE_CONTRACT",
         "concept": "entity_leakage",
         "requiredMetricNames": ["accuracy", "roc_auc"],
         "requiredPackageHints": ["sklearn"],
@@ -105,6 +109,7 @@
     {
       "caseId": "imbalance_accuracy_only",
       "expected": {
+        "completionOutcome": "PATCH_VERIFIED",
         "concept": "class_imbalance",
         "requiredMetricNames": ["accuracy"],
         "requiredPackageHints": ["sklearn"],
@@ -128,6 +133,7 @@
     {
       "caseId": "imbalance_confusion_metrics",
       "expected": {
+        "completionOutcome": "PATCH_VERIFIED",
         "concept": "class_imbalance",
         "requiredMetricNames": ["accuracy", "precision", "recall", "f1_score"],
         "requiredPackageHints": ["sklearn"],
@@ -155,6 +161,7 @@
     {
       "caseId": "imbalance_weighted_model",
       "expected": {
+        "completionOutcome": "PATCH_VERIFIED",
         "concept": "class_imbalance",
         "requiredMetricNames": ["precision", "recall", "f1_score"],
         "requiredPackageHints": ["sklearn"],
@@ -182,6 +189,7 @@
     {
       "caseId": "imbalance_threshold_policy",
       "expected": {
+        "completionOutcome": "PATCH_VERIFIED",
         "concept": "class_imbalance",
         "requiredMetricNames": ["precision", "recall", "f1_score"],
         "requiredPackageHints": ["sklearn"],
@@ -205,6 +213,7 @@
     {
       "caseId": "unsupported_network_dependency",
       "expected": {
+        "completionOutcome": "NOT_APPLICABLE",
         "concept": null,
         "requiredMetricNames": ["accuracy"],
         "requiredPackageHints": ["requests", "sklearn"],
@@ -228,6 +237,7 @@
     {
       "caseId": "unsupported_magic_package",
       "expected": {
+        "completionOutcome": "NOT_APPLICABLE",
         "concept": null,
         "requiredMetricNames": ["accuracy"],
         "requiredPackageHints": ["sklearn", "xgboost"],

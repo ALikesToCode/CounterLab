@@ -29,6 +29,11 @@ from counterlab_kernel import generate_leakage_fixture, run_leakage_experiment
 SEED = 1729
 CREATED_AT = "2026-07-15T00:00:00.000Z"
 Family = Literal["entity_leakage", "class_imbalance", "unsupported"]
+CompletionOutcome = Literal[
+    "PATCH_VERIFIED",
+    "PATCH_REFUSED_ESTIMATOR_OUTSIDE_CONTRACT",
+    "NOT_APPLICABLE",
+]
 
 
 def _canonical(value: object) -> str:
@@ -211,6 +216,7 @@ class Case:
     metric_names: tuple[str, ...]
     symbols: tuple[str, ...]
     packages: tuple[str, ...]
+    completion_outcome: CompletionOutcome
     reason_codes: tuple[str, ...] = ()
 
 
@@ -331,6 +337,11 @@ def _cases() -> list[Case]:
                 ("accuracy", "roc_auc"),
                 symbols,
                 ("sklearn",),
+                (
+                    "PATCH_REFUSED_ESTIMATOR_OUTSIDE_CONTRACT"
+                    if case_id == "leakage_random_forest"
+                    else "PATCH_VERIFIED"
+                ),
             )
         )
 
@@ -435,6 +446,7 @@ def _cases() -> list[Case]:
                 metric_names,
                 symbols,
                 ("sklearn",),
+                "PATCH_VERIFIED",
             )
         )
 
@@ -483,6 +495,7 @@ def _cases() -> list[Case]:
                 ("accuracy",),
                 ("accuracy_score",),
                 packages,
+                "NOT_APPLICABLE",
                 reasons,
             )
         )
@@ -520,6 +533,7 @@ def generate(output_root: Path) -> dict[str, Any]:
                 },
                 "notebookSha256": _sha256(notebook_bytes),
                 "expected": {
+                    "completionOutcome": case.completion_outcome,
                     "supportStatus": case.support_status,
                     "concept": case.concept,
                     "requiredMetricNames": list(case.metric_names),

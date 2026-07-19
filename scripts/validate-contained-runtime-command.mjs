@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { realpathSync, statSync } from "node:fs";
+import { lstatSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -11,7 +11,7 @@ const adapterImage = /^counterlab-adapter:git-[a-f0-9]{40}$/;
 const registryImage =
   /^registry\.cloudflare\.com\/[A-Za-z0-9_-]{3,64}\/counterlab-runner:git-[a-f0-9]{40}$/;
 const containerName =
-  /^counterlab-(?:[a-f0-9]{20}|(?:startup|runtime)-[A-Za-z0-9-]{1,80})$/;
+  /^counterlab-(?:[a-f0-9]{20}|(?:startup|runtime|reachability)-[A-Za-z0-9-]{1,80})$/;
 const inspectFormats = new Set([
   "{{.Id}}",
   "{{.Config.User}}",
@@ -48,6 +48,7 @@ function repositoryFile(requested, label, expectedKind = "any") {
   }
   const candidate = resolve(root, requested);
   if (!isContained(candidate)) fail(`${label} escaped the repository`);
+  if (lstatSync(candidate).isSymbolicLink()) fail(`${label} is a symlink`);
   const physical = realpathSync(candidate);
   if (!isContained(physical)) fail(`${label} resolved outside the repository`);
   const metadata = statSync(physical);
@@ -273,11 +274,29 @@ function validateRun(runArgs) {
     fail("container entrypoint is not approved");
   }
 
+  const requestedUser = options.get("--user")?.[0];
+  if (requestedUser !== undefined) {
+    const match = requestedUser.match(/^(\d{1,6}):(\d{1,6})$/);
+    if (
+      match === null ||
+      Number.parseInt(match[1], 10) === 0 ||
+      Number.parseInt(match[2], 10) === 0
+    ) {
+      fail("container user and group must both be non-root");
+    }
+  }
+
   if (name.startsWith("counterlab-startup-")) {
     expectHostedImage(image);
     expectOptionShape(options, {
       "--name": 1,
       "--network": 1,
+      "--security-opt": 1,
+      "--pids-limit": 1,
+      "--memory": 1,
+      "--memory-swap": 1,
+      "--cpus": 1,
+      "--ulimit": 2,
       "--tmpfs": 1,
       "--env": 4,
     });
@@ -290,8 +309,23 @@ function validateRun(runArgs) {
         "COUNTERLAB_CODEX_HOME_ROOT=/counterlab-runtime/codex",
       ]) ||
       options.get("--tmpfs")?.[0] !==
-        "/counterlab-runtime:rw,noexec,nosuid,size=64m" ||
-      !sameValues(flags, ["--read-only"])
+        "/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700" ||
+      options.get("--security-opt")?.[0] !== "no-new-privileges=true" ||
+      options.get("--pids-limit")?.[0] !== "32" ||
+      options.get("--memory")?.[0] !== "1024m" ||
+      options.get("--memory-swap")?.[0] !== "1024m" ||
+      options.get("--cpus")?.[0] !== "2.0" ||
+      !sameValues(options.get("--ulimit") ?? [], [
+        "fsize=1048576:1048576",
+        "nofile=64:64",
+      ]) ||
+      !sameValues(flags, [
+        "--rm",
+        "--read-only",
+        "--pull=never",
+        "--cap-drop=ALL",
+        "--ipc=none",
+      ])
     ) {
       fail("startup probe profile is incomplete");
     }
@@ -301,21 +335,46 @@ function validateRun(runArgs) {
       "--name": 1,
       "--user": 1,
       "--network": 1,
+      "--security-opt": 1,
+      "--pids-limit": 1,
+      "--memory": 1,
+      "--memory-swap": 1,
+      "--cpus": 1,
+      "--ulimit": 2,
       "--tmpfs": 1,
       "--env": 1,
       "--volume": 1,
+      "--workdir": 1,
       "--entrypoint": 1,
     });
+    const uid = requestedUser?.split(":")[0];
+    const gid = requestedUser?.split(":")[1];
     if (
       entrypoint !== "python" ||
-      !sameValues(flags, ["--read-only"]) ||
+      !sameValues(flags, [
+        "--rm",
+        "--read-only",
+        "--pull=never",
+        "--cap-drop=ALL",
+        "--ipc=none",
+      ]) ||
+      options.get("--security-opt")?.[0] !== "no-new-privileges=true" ||
+      options.get("--pids-limit")?.[0] !== "32" ||
+      options.get("--memory")?.[0] !== "1024m" ||
+      options.get("--memory-swap")?.[0] !== "1024m" ||
+      options.get("--cpus")?.[0] !== "2.0" ||
+      !sameValues(options.get("--ulimit") ?? [], [
+        "fsize=1048576:1048576",
+        "nofile=64:64",
+      ]) ||
       options.get("--tmpfs")?.[0] !==
-        "/counterlab-runtime:rw,noexec,nosuid,size=64m" ||
+        `/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=${uid},gid=${gid},mode=0700` ||
       !sameValues(environment, ["TMPDIR=/counterlab-runtime"]) ||
       volumes.length !== 1 ||
       volumes[0].source !== root ||
       volumes[0].destination !== "/repo" ||
       volumes[0].mode !== "ro" ||
+      options.get("--workdir")?.[0] !== "/repo" ||
       command[0] !== "/repo/scripts/verify_scientific_runtime.py" ||
       command[1] !== "--root" ||
       command[2] !== "/repo" ||
@@ -328,6 +387,76 @@ function validateRun(runArgs) {
     ) {
       fail("scientific runtime verification profile is invalid");
     }
+  } else if (name.startsWith("counterlab-reachability-")) {
+    expectHostedImage(image);
+    expectOptionShape(options, {
+      "--name": 1,
+      "--network": 1,
+      "--user": 1,
+      "--security-opt": 1,
+      "--pids-limit": 1,
+      "--memory": 1,
+      "--memory-swap": 1,
+      "--cpus": 1,
+      "--ulimit": 2,
+      "--tmpfs": 1,
+      "--env": 1,
+      "--volume": 1,
+      "--workdir": 1,
+      "--entrypoint": 1,
+    });
+    const uid = requestedUser?.split(":")[0];
+    const gid = requestedUser?.split(":")[1];
+    const reviewPath = command[10] ?? "";
+    const reviewMatch = reviewPath.match(
+      /^\/repo\/node_modules\/\.cache\/counterlab-v6\.1\/scientific-evidence-([a-f0-9]{40})-\d{8}T\d{6}Z-\d+\/reachability-review\.json$/,
+    );
+    const hostReviewPath =
+      reviewMatch?.[1] === image.slice("counterlab-runner:git-".length)
+      ? resolve(root, reviewPath.slice("/repo/".length))
+      : "";
+    if (
+      entrypoint !== "python" ||
+      !sameValues(flags, [
+        "--rm",
+        "--read-only",
+        "--pull=never",
+        "--cap-drop=ALL",
+        "--ipc=none",
+      ]) ||
+      options.get("--security-opt")?.[0] !== "no-new-privileges=true" ||
+      options.get("--pids-limit")?.[0] !== "32" ||
+      options.get("--memory")?.[0] !== "1024m" ||
+      options.get("--memory-swap")?.[0] !== "1024m" ||
+      options.get("--cpus")?.[0] !== "2.0" ||
+      !sameValues(options.get("--ulimit") ?? [], [
+        "fsize=1048576:1048576",
+        "nofile=64:64",
+      ]) ||
+      options.get("--tmpfs")?.[0] !==
+        `/counterlab-runtime:rw,noexec,nosuid,nodev,size=256m,uid=${uid},gid=${gid},mode=0700` ||
+      !sameValues(environment, ["TMPDIR=/counterlab-runtime"]) ||
+      volumes.length !== 1 ||
+      volumes[0].source !== root ||
+      volumes[0].destination !== "/repo" ||
+      volumes[0].mode !== "ro" ||
+      options.get("--workdir")?.[0] !== "/repo" ||
+      command[0] !== "/repo/scripts/probe_cpython_htmlparser_reachability.py" ||
+      command[1] !== "--root" ||
+      command[2] !== "/repo" ||
+      command[3] !== "--image-digest" ||
+      !/^sha256:[a-f0-9]{64}$/.test(command[4] ?? "") ||
+      command[5] !== "--source-commit" ||
+      command[6] !== image.slice("counterlab-runner:git-".length) ||
+      command[7] !== "--sbom-sha256" ||
+      !/^[a-f0-9]{64}$/.test(command[8] ?? "") ||
+      command[9] !== "--review-file" ||
+      hostReviewPath.length === 0 ||
+      command.length !== 11
+    ) {
+      fail("scientific reachability profile is invalid");
+    }
+    repositoryFile(hostReviewPath, "reachability review", "file");
   } else {
     expectAdapterImage(image);
     expectOptionShape(options, {

@@ -76,6 +76,8 @@ def test_runtime_verifier_fails_version_threads_hash_and_determinism() -> None:
         artifact_hashes={"numpy": "f" * 64},
         image_digest=f"sha256:{'0' * 64}",
         source_commit="1" * 40,
+        health_checks={"pipCheck": False},
+        runtime_license_sha256="2" * 64,
     )
 
     codes = {finding["code"] for finding in findings}
@@ -87,6 +89,8 @@ def test_runtime_verifier_fails_version_threads_hash_and_determinism() -> None:
         "ENGINE_ARTIFACT_HASH_MISMATCH",
         "IMAGE_DIGEST_MISMATCH",
         "SOURCE_COMMIT_MISMATCH",
+        "ENGINE_HEALTH_CHECK_FAILED",
+        "RUNTIME_LICENSE_HASH_MISMATCH",
     } <= codes
 
 
@@ -103,17 +107,73 @@ def test_runtime_verifier_accepts_matching_observations() -> None:
         engine["engineId"]: engine["artifactSha256"]
         for engine in manifest["installedEngines"]
     }
+    installed_file_hashes = {
+        engine["engineId"]: {
+            "metadataSha256": "1" * 64,
+            "recordSha256": "2" * 64,
+            "licenseSha256": "3" * 64,
+        }
+        for engine in manifest["installedEngines"]
+    }
+    health_checks = {
+        "pipCheck": True,
+        "leakageRepeatedRun": True,
+        "leakageRowOrder": True,
+        "imbalanceRepeatedRun": True,
+        "imbalanceRowOrder": True,
+        "leakageCanonicalInputFingerprint": True,
+        "imbalanceCanonicalInputFingerprint": True,
+    }
 
     findings = verify_runtime(
         snapshot,
         python_version=manifest["runtimes"][0]["exactVersion"],
         distributions=distributions,
         thread_pools=[{"num_threads": 1}],
-        golden_runs={"leakage": ["d" * 64, "d" * 64]},
-        expected_golden_hashes={"leakage": "d" * 64},
+        golden_runs={
+            "leakage": ["d" * 64, "d" * 64],
+            "imbalance": ["e" * 64, "e" * 64],
+        },
+        expected_golden_hashes={"leakage": "d" * 64, "imbalance": "e" * 64},
         artifact_hashes=artifacts,
         image_digest=manifest["container"]["imageDigest"],
         source_commit=manifest["sourceCommit"],
+        installed_file_hashes=installed_file_hashes,
+        expected_installed_file_hashes=installed_file_hashes,
+        health_checks=health_checks,
+        runtime_license_sha256=manifest["runtimes"][0]["licenseFileHash"],
     )
 
     assert findings == []
+
+
+def test_runtime_verifier_rejects_omitted_exact_image_evidence() -> None:
+    snapshot = json.loads(
+        Path("scientific-engines/snapshot.json").read_text(encoding="utf-8")
+    )
+    manifest = snapshot["runtimeManifest"]
+    findings = verify_runtime(
+        snapshot,
+        python_version=manifest["runtimes"][0]["exactVersion"],
+        distributions={
+            engine["packageName"]: engine["exactVersion"]
+            for engine in manifest["installedEngines"]
+        },
+        thread_pools=[],
+        golden_runs={},
+        expected_golden_hashes={},
+        artifact_hashes={
+            engine["engineId"]: engine["artifactSha256"]
+            for engine in manifest["installedEngines"]
+        },
+        image_digest=manifest["container"]["imageDigest"],
+        source_commit=manifest["sourceCommit"],
+        runtime_license_sha256=manifest["runtimes"][0]["licenseFileHash"],
+    )
+
+    assert {
+        "THREAD_EVIDENCE_MISSING",
+        "GOLDEN_EVIDENCE_INCOMPLETE",
+        "INSTALLED_ENGINE_EVIDENCE_INCOMPLETE",
+        "ENGINE_HEALTH_EVIDENCE_INCOMPLETE",
+    } <= {finding["code"] for finding in findings}

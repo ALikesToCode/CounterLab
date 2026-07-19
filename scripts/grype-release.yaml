@@ -1,0 +1,92 @@
+log:
+  quiet: false
+  level: warn
+  file: ""
+output: []
+file: ""
+pretty: false
+distro: ""
+add-cpes-if-none: false
+output-template-file: ""
+check-for-app-update: false
+only-fixed: false
+only-notfixed: false
+ignore-wontfix: ""
+platform: ""
+search:
+  scope: squashed
+  unindexed-archives: false
+  indexed-archives: true
+ignore: []
+exclude: []
+external-sources:
+  enable: false
+  maven:
+    search-maven-upstream: false
+    base-url: "https://search.maven.org/solrsearch/select"
+    rate-limit: 300ms
+match:
+  java:
+    using-cpes: false
+  jvm:
+    using-cpes: true
+  dotnet:
+    using-cpes: false
+  golang:
+    using-cpes: false
+    always-use-cpe-for-stdlib: true
+    allow-main-module-pseudo-version-comparison: false
+  javascript:
+    using-cpes: false
+  python:
+    using-cpes: false
+  ruby:
+    using-cpes: false
+  rust:
+    using-cpes: false
+  hex:
+    using-cpes: false
+  stock:
+    using-cpes: true
+  dpkg:
+    using-cpes: false
+    missing-epoch-strategy: zero
+    use-cpes-for-eol: false
+  rpm:
+    using-cpes: false
+    missing-epoch-strategy: auto
+    use-cpes-for-eol: false
+fail-on-severity: ""
+registry:
+  insecure-skip-tls-verify: false
+  insecure-use-http: false
+  auth: []
+  ca-cert: ""
+show-suppressed: false
+by-cve: false
+sort-by: risk
+name: ""
+default-image-pull-source: ""
+from: []
+vex-documents: []
+vex-add: []
+match-upstream-kernel-headers: false
+fix-channel:
+  redhat-eus:
+    apply: auto
+    versions: ">= 8.0"
+timestamp: true
+alerts:
+  enable-eol-distro-warnings: true
+db:
+  update-url: "https://grype.anchore.io/databases"
+  ca-cert: ""
+  auto-update: false
+  validate-by-hash-on-start: true
+  validate-age: true
+  max-allowed-built-age: 120h0m0s
+  require-update-check: false
+  update-available-timeout: 30s
+  update-download-timeout: 5m0s
+  max-update-check-frequency: 2h0m0s
+exp: {}

@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+import {
+  EXPECTED_COMPLETION_OUTCOMES,
+  OBSERVED_COMPLETION_OUTCOMES,
+} from "./completion-expectations.js";
+
 const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
 const ConceptSchema = z.enum(["entity_leakage", "class_imbalance"]);
 const FamilySchema = z.enum([
@@ -27,6 +32,7 @@ export const ReviewLabelSchema = z
     notebookSha256: Sha256Schema,
     expected: z
       .object({
+        completionOutcome: z.enum(EXPECTED_COMPLETION_OUTCOMES),
         supportStatus: z.enum(["SUPPORTED", "PARTIAL", "UNSUPPORTED"]),
         concept: ConceptSchema.nullable(),
         requiredMetricNames: z.array(z.string().min(1)),
@@ -76,6 +82,8 @@ export const HeldOutBenchmarkResultSchema = z
           })
           .strict(),
         supportedCompletion: FamilyCountSchema,
+        patchEligibleCompletion: FamilyCountSchema,
+        expectedEstimatorContractRefusals: FamilyCountSchema,
       })
       .strict(),
     cases: z.array(
@@ -89,6 +97,7 @@ export const HeldOutBenchmarkResultSchema = z
           executedParser: z.literal(true),
           expected: z
             .object({
+              completionOutcome: z.enum(EXPECTED_COMPLETION_OUTCOMES),
               supportStatus: z.enum(["SUPPORTED", "PARTIAL", "UNSUPPORTED"]),
               concept: ConceptSchema.nullable(),
             })
@@ -114,6 +123,7 @@ export const HeldOutBenchmarkResultSchema = z
               packagesPresent: z.boolean(),
               supportReasonsMatch: z.boolean(),
               stableEvidenceReferences: z.boolean(),
+              completionOutcomeMatches: z.boolean(),
             })
             .strict(),
           completion: z
@@ -129,6 +139,7 @@ export const HeldOutBenchmarkResultSchema = z
               patchHash: Sha256Schema.nullable(),
               durationMs: z.number().int().nonnegative(),
               failureCode: z.string().min(1).nullable(),
+              outcome: z.enum(OBSERVED_COMPLETION_OUTCOMES),
             })
             .strict(),
           passed: z.boolean(),
