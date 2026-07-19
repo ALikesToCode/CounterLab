@@ -2,9 +2,17 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { lstatSync, readFileSync, realpathSync, statSync } from "node:fs";
+import {
+  lstatSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { createContainedRuntimeEnvironment } from "./contained-runtime-environment.mjs";
 
 const root = realpathSync(resolve(fileURLToPath(import.meta.url), "../.."));
 const args = process.argv.slice(2);
@@ -116,6 +124,7 @@ const expectedPaths = {
   containerdSocket: `${sessionPrefix}/run/containerd.sock`,
   runtimeCommandSocket: `${sessionPrefix}/run/runtime-command.sock`,
   clientFifoRoot: `${sessionPrefix}/run/client-fifo`,
+  runcStateRoot: `${sessionPrefix}/run/runc`,
   buildkitSocket: `${sessionPrefix}/run/buildkitd.sock`,
   containerdRoot: `${sessionPrefix}/data/containerd`,
   containerdState: `${sessionPrefix}/state/containerd`,
@@ -135,7 +144,12 @@ const expectedPaths = {
   buildkitRootlesskitState: `${sessionPrefix}/run/buildkit-rootless`,
 };
 
-const attestationPath = resolve(root, sessionPrefix, "attestation.json");
+const attestationPath = repositoryPath(
+  `${sessionPrefix}/attestation.json`,
+  "file",
+  "runtime attestation",
+);
+secureFile(attestationPath, "runtime attestation");
 const attestation = JSON.parse(readFileSync(attestationPath, "utf8"));
 exactKeys(
   attestation,
@@ -171,6 +185,8 @@ exactKeys(
   [
     "runtimeClient",
     "runtimeRun",
+    "runtimeEnvironment",
+    "runcWrapper",
     "containerdConfigWriter",
     "runtimeServer",
     "commandValidator",
@@ -216,6 +232,8 @@ if (sha256File(adapter) !== attestation.adapterSha256) {
 const helperPaths = {
   runtimeClient: "scripts/contained-runtime-client.mjs",
   runtimeRun: "scripts/contained-runtime-run.mjs",
+  runtimeEnvironment: "scripts/contained-runtime-environment.mjs",
+  runcWrapper: "scripts/runtime-bin/runc",
   containerdConfigWriter: "scripts/contained-containerd-config.mjs",
   runtimeServer: "scripts/contained-runtime-server.mjs",
   commandValidator: "scripts/validate-contained-runtime-command.mjs",
@@ -225,9 +243,25 @@ const helperPaths = {
 for (const [key, helperPath] of Object.entries(helperPaths)) {
   const helper = repositoryPath(helperPath, "file", `runtime helper ${key}`);
   secureFile(helper, `runtime helper ${key}`);
+  if (key === "runcWrapper" && (statSync(helper).mode & 0o111) === 0) {
+    throw new Error("contained runc wrapper is not executable");
+  }
   if (sha256File(helper) !== attestation.helperSha256[key]) {
     throw new Error(`runtime helper changed after session launch: ${key}`);
   }
+}
+
+const runtimeWrapperRoot = repositoryPath(
+  "scripts/runtime-bin",
+  "directory",
+  "runtime wrapper directory",
+);
+secureFile(runtimeWrapperRoot, "runtime wrapper directory");
+if (
+  JSON.stringify(readdirSync(runtimeWrapperRoot).sort()) !==
+  JSON.stringify(["runc"])
+) {
+  throw new Error("runtime wrapper directory contains an unknown entry");
 }
 
 const lockPath = repositoryPath(
@@ -312,6 +346,7 @@ const pathKinds = {
   containerdSocket: "socket",
   runtimeCommandSocket: "socket",
   clientFifoRoot: "directory",
+  runcStateRoot: "directory",
   buildkitSocket: "socket",
   containerdRoot: "directory",
   containerdState: "directory",
@@ -341,6 +376,9 @@ for (const key of [
   "buildkitPidFile",
 ]) {
   secureFile(resolvedPaths[key], key);
+}
+if ((statSync(resolvedPaths.runcStateRoot).mode & 0o777) !== 0o700) {
+  throw new Error("contained runc state root is not private");
 }
 if (
   sha256File(resolvedPaths.containerdConfig) !==
@@ -375,6 +413,7 @@ const shimSocketMatches = [
 if (
   shimSocketMatches.length !== 1 ||
   shimSocketMatches[0][1].length > 42 ||
+  shimSocketMatches[0][1] !== root ||
   realpathSync(shimSocketMatches[0][1]) !== root
 ) {
   throw new Error("runtime shim socket directory is not repository-contained");
@@ -398,18 +437,20 @@ if (sha256Value(fingerprint) !== attestation.runtimeToolchainSha256) {
   throw new Error("runtime toolchain fingerprint is invalid");
 }
 
-const runtimeEnvironment = {
-  ...process.env,
-  HOME: resolvedPaths.home,
-  TMPDIR: resolvedPaths.tmp,
-  XDG_CACHE_HOME: resolvedPaths.xdgCache,
-  XDG_CONFIG_HOME: resolvedPaths.xdgConfig,
-  XDG_DATA_HOME: resolvedPaths.xdgData,
-  XDG_RUNTIME_DIR: resolve(root, sessionPrefix, "run"),
-  DOCKER_CONFIG: resolvedPaths.auth,
-  BUILDKIT_HOST: `unix://${resolvedPaths.buildkitSocket}`,
-  PATH: `${resolve(root, installPrefix, "bin")}:/usr/bin:/bin`,
-};
+const runtimeEnvironment = createContainedRuntimeEnvironment({
+  auth: resolvedPaths.auth,
+  binRoot: resolve(root, installPrefix, "bin"),
+  buildkitSocket: resolvedPaths.buildkitSocket,
+  home: resolvedPaths.home,
+  runcBinary: resolve(root, installPrefix, "bin/runc"),
+  runcStateRoot: resolvedPaths.runcStateRoot,
+  runtimeWrapperRoot,
+  tmp: resolvedPaths.tmp,
+  xdgCache: resolvedPaths.xdgCache,
+  xdgConfig: resolvedPaths.xdgConfig,
+  xdgData: resolvedPaths.xdgData,
+  xdgRuntime: resolve(root, sessionPrefix, "run"),
+});
 const version = JSON.parse(
   execFileSync(
     process.execPath,

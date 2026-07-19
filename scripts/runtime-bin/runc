@@ -1,0 +1,104 @@
+#!/bin/bash -p
+set -euo pipefail
+umask 077
+
+fail() {
+  echo "contained runc wrapper rejected the invocation: $1" >&2
+  exit 2
+}
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+[[ -f "${ROOT_DIR}/COUNTERLAB_REPO_ROOT" ]] || fail "repository marker is missing"
+
+EXPECTED_BINARY="${ROOT_DIR}/node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1/bin/runc"
+RUNC_BINARY="${COUNTERLAB_RUNC_BINARY:-}"
+RUNC_STATE_ROOT="${COUNTERLAB_RUNC_STATE_ROOT:-}"
+
+[[ "${RUNC_BINARY}" == "${EXPECTED_BINARY}" ]] || fail "runc binary is not pinned"
+[[ -f "${RUNC_BINARY}" && -x "${RUNC_BINARY}" && ! -L "${RUNC_BINARY}" ]] || fail "runc binary is not a regular executable"
+
+case "${RUNC_STATE_ROOT}" in
+  "${ROOT_DIR}"/.rt/rt-*/run/runc) ;;
+  *) fail "runc state root escaped the runtime session" ;;
+esac
+
+SESSION_SEGMENT="${RUNC_STATE_ROOT#"${ROOT_DIR}/.rt/"}"
+SESSION_SEGMENT="${SESSION_SEGMENT%%/*}"
+[[ "${SESSION_SEGMENT}" =~ ^rt-[a-z0-9][a-z0-9-]{7,13}$ ]] || fail "runtime session ID is invalid"
+[[ -d "${RUNC_STATE_ROOT}" && ! -L "${RUNC_STATE_ROOT}" ]] || fail "runc state root is not a directory"
+[[ "$(cd "${RUNC_STATE_ROOT}" && pwd -P)" == "${RUNC_STATE_ROOT}" ]] || fail "runc state root is not physical"
+[[ "$(stat -c '%u:%a' "${RUNC_STATE_ROOT}")" == "${UID}:700" ]] || fail "runc state root is not private"
+
+if [[ "${1:-}" != "--root" ]]; then
+  [[ $# -eq 1 && ( "$1" == "--version" || "$1" == "-v" || "$1" == "features" ) ]] || fail "a supported read-only probe or one --root value is required"
+  exec -- "${RUNC_BINARY}" --root "${RUNC_STATE_ROOT}/default" "$1"
+fi
+
+(( $# >= 3 )) || fail "--root requires a value and subcommand"
+ORIGINAL_ROOT="$2"
+shift 2
+case "${ORIGINAL_ROOT}" in
+  /run/containerd/runc)
+    CONTAINED_ROOT="${RUNC_STATE_ROOT}"
+    ;;
+  /run/containerd/runc/counterlab-v6.1)
+    CONTAINED_ROOT="${RUNC_STATE_ROOT}/counterlab-v6.1"
+    ;;
+  *)
+    fail "runc root does not match the pinned containerd default"
+    ;;
+esac
+
+REWRITTEN=("--root" "${CONTAINED_ROOT}")
+SUBCOMMAND_SEEN=0
+while (( $# > 0 )); do
+  if (( SUBCOMMAND_SEEN == 1 )); then
+    REWRITTEN+=("$@")
+    break
+  fi
+  case "$1" in
+    --debug|--systemd-cgroup|--rootless=true|--rootless=false)
+      REWRITTEN+=("$1")
+      shift
+      ;;
+    --log)
+      (( $# >= 2 )) || fail "$1 requires a value"
+      LOG_PATH="$2"
+      case "${LOG_PATH}" in
+        "${ROOT_DIR}/.rt/${SESSION_SEGMENT}/"*) ;;
+        *) fail "runc log path escaped the runtime session" ;;
+      esac
+      LOG_PARENT="${LOG_PATH%/*}"
+      [[ "${LOG_PARENT}" != "${LOG_PATH}" && -d "${LOG_PARENT}" && ! -L "${LOG_PARENT}" ]] || fail "runc log parent is invalid"
+      [[ "$(cd "${LOG_PARENT}" && pwd -P)" == "${LOG_PARENT}" ]] || fail "runc log parent is not physical"
+      [[ "$(stat -c '%u' "${LOG_PARENT}")" == "${UID}" ]] || fail "runc log parent is not owned by the current user"
+      LOG_PARENT_MODE="$(stat -c '%a' "${LOG_PARENT}")"
+      (( (8#${LOG_PARENT_MODE} & 0022) == 0 )) || fail "runc log parent is group- or world-writable"
+      [[ ! -L "${LOG_PATH}" ]] || fail "runc log target is a symlink"
+      if [[ -e "${LOG_PATH}" ]]; then
+        [[ -f "${LOG_PATH}" ]] || fail "runc log target is not a regular file"
+        [[ "$(stat -c '%u' "${LOG_PATH}")" == "${UID}" ]] || fail "runc log target is not owned by the current user"
+      fi
+      REWRITTEN+=("$1" "$2")
+      shift 2
+      ;;
+    --log-format)
+      (( $# >= 2 )) || fail "$1 requires a value"
+      [[ "$2" == "json" || "$2" == "text" ]] || fail "runc log format is invalid"
+      REWRITTEN+=("$1" "$2")
+      shift 2
+      ;;
+    --root|--root=*)
+      fail "multiple or joined --root values are forbidden"
+      ;;
+    --*)
+      fail "unsupported global runc option"
+      ;;
+    *)
+      SUBCOMMAND_SEEN=1
+      ;;
+  esac
+done
+(( SUBCOMMAND_SEEN == 1 )) || fail "runc subcommand is missing"
+
+exec -- "${RUNC_BINARY}" "${REWRITTEN[@]}"

@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 
 import { spawn, spawnSync } from "node:child_process";
-import { chmodSync, realpathSync, statSync } from "node:fs";
+import {
+  chmodSync,
+  lstatSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
 import { createServer } from "node:net";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,6 +17,7 @@ import {
   createContainedContainerdConfig,
   probeContainedShimSocketDirectory,
 } from "./contained-containerd-config.mjs";
+import { createContainedRuntimeEnvironment } from "./contained-runtime-environment.mjs";
 
 const root = realpathSync(resolve(fileURLToPath(import.meta.url), "../.."));
 const argv = process.argv.slice(2);
@@ -29,30 +36,51 @@ const installRoot = resolve(
   "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
 );
 const binRoot = resolve(installRoot, "bin");
+const runtimeWrapperRoot = resolve(root, "scripts/runtime-bin");
+const runcWrapper = resolve(runtimeWrapperRoot, "runc");
+const runcBinary = resolve(binRoot, "runc");
+const runcStateRoot = resolve(sessionRoot, "run/runc");
 const containerdSocket = resolve(sessionRoot, "run/containerd.sock");
 const commandSocket = resolve(sessionRoot, "run/runtime-command.sock");
 const clientFifoRoot = resolve(sessionRoot, "run/client-fifo");
-const environment = {
-  ...process.env,
-  HOME: resolve(sessionRoot, "home"),
-  TMPDIR: resolve(sessionRoot, "tmp"),
-  XDG_CACHE_HOME: resolve(sessionRoot, "xdg-cache"),
-  XDG_CONFIG_HOME: resolve(sessionRoot, "xdg-config"),
-  XDG_DATA_HOME: resolve(sessionRoot, "xdg-data"),
-  XDG_RUNTIME_DIR: resolve(sessionRoot, "run/inner"),
-  DOCKER_CONFIG: resolve(sessionRoot, "auth"),
-  BUILDKIT_HOST: `unix://${resolve(sessionRoot, "run/buildkitd.sock")}`,
-  PATH: `${binRoot}:/usr/bin:/bin`,
-};
-delete environment.CONTAINERD_ADDRESS;
-delete environment.CONTAINERD_NAMESPACE;
-delete environment.CONTAINERD_SNAPSHOTTER;
-delete environment.NERDCTL_TOML;
-delete environment.DOCKER_HOST;
-delete environment.ROOTLESSKIT_STATE_DIR;
-delete environment.ROOTLESSKIT_PARENT_EUID;
-delete environment.ROOTLESSKIT_PARENT_EGID;
-delete environment._CONTAINERD_ROOTLESS_CHILD;
+
+const runcWrapperMetadata = statSync(runcWrapper);
+const runtimeWrapperMetadata = statSync(runtimeWrapperRoot);
+const runcStateMetadata = statSync(runcStateRoot);
+const runtimeWrapperEntries = readdirSync(runtimeWrapperRoot).sort();
+if (
+  JSON.stringify(runtimeWrapperEntries) !== JSON.stringify(["runc"]) ||
+  !runtimeWrapperMetadata.isDirectory() ||
+  runtimeWrapperMetadata.uid !== process.getuid() ||
+  (runtimeWrapperMetadata.mode & 0o022) !== 0 ||
+  lstatSync(runcWrapper).isSymbolicLink() ||
+  realpathSync(runcWrapper) !== runcWrapper ||
+  !runcWrapperMetadata.isFile() ||
+  runcWrapperMetadata.uid !== process.getuid() ||
+  (runcWrapperMetadata.mode & 0o100) === 0 ||
+  (runcWrapperMetadata.mode & 0o022) !== 0 ||
+  realpathSync(runcStateRoot) !== runcStateRoot ||
+  !runcStateMetadata.isDirectory() ||
+  runcStateMetadata.uid !== process.getuid() ||
+  (runcStateMetadata.mode & 0o777) !== 0o700
+) {
+  throw new Error("contained runc boundary is invalid");
+}
+
+const environment = createContainedRuntimeEnvironment({
+  auth: resolve(sessionRoot, "auth"),
+  binRoot,
+  buildkitSocket: resolve(sessionRoot, "run/buildkitd.sock"),
+  home: resolve(sessionRoot, "home"),
+  runcBinary,
+  runcStateRoot,
+  runtimeWrapperRoot,
+  tmp: resolve(sessionRoot, "tmp"),
+  xdgCache: resolve(sessionRoot, "xdg-cache"),
+  xdgConfig: resolve(sessionRoot, "xdg-config"),
+  xdgData: resolve(sessionRoot, "xdg-data"),
+  xdgRuntime: resolve(sessionRoot, "run/inner"),
+});
 
 const shimSocketBinding = createContainedContainerdConfig({
   configPath: resolve(sessionRoot, "config/containerd.toml"),

@@ -4,6 +4,7 @@ CounterLab_Codex_Master_Build_Prompt.md
 findings.md
 progress.md
 task_plan.md
+scripts/runtime-bin/runc
 
 # Browser profiles and state are opaque runtime artifacts, never source input.
 docs/a/**

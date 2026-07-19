@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env -S -i PATH=/usr/bin:/bin /bin/bash -p
 set -euo pipefail
 umask 077
 
@@ -42,6 +42,7 @@ CONTAINERD_ROOTLESSKIT_API="${SESSION_ROOT}/run/containerd-rootless/api.sock"
 CONTAINERD_SOCKET="${SESSION_ROOT}/run/containerd.sock"
 RUNTIME_COMMAND_SOCKET="${SESSION_ROOT}/run/runtime-command.sock"
 BUILDKIT_SOCKET="${SESSION_ROOT}/run/buildkitd.sock"
+RUNC_STATE_ROOT="${SESSION_ROOT}/run/runc"
 CONTAINERD_PID_FILE="${SESSION_ROOT}/run/containerd-rootlesskit.pid"
 BUILDKIT_PID_FILE="${SESSION_ROOT}/run/buildkit-rootlesskit.pid"
 CONTAINERD_CONFIG="${SESSION_ROOT}/config/containerd.toml"
@@ -74,6 +75,7 @@ mkdir -p \
   "${SESSION_ROOT}/run" \
   "${SESSION_ROOT}/run/client-fifo" \
   "${SESSION_ROOT}/run/inner" \
+  "${RUNC_STATE_ROOT}" \
   "${SESSION_ROOT}/state/containerd" \
   "${SESSION_ROOT}/tmp" \
   "${SESSION_ROOT}/xdg-cache" \
@@ -89,6 +91,7 @@ chmod 700 \
   "${SESSION_ROOT}/run" \
   "${SESSION_ROOT}/run/client-fifo" \
   "${SESSION_ROOT}/run/inner" \
+  "${RUNC_STATE_ROOT}" \
   "${SESSION_ROOT}/state" \
   "${SESSION_ROOT}/tmp" \
   "${SESSION_ROOT}/xdg-cache" \
@@ -228,6 +231,10 @@ const adapterSha256 = sha256File(adapterPath);
 const helperSha256 = {
   runtimeClient: sha256File(resolve(root, "scripts/contained-runtime-client.mjs")),
   runtimeRun: sha256File(resolve(root, "scripts/contained-runtime-run.mjs")),
+  runtimeEnvironment: sha256File(
+    resolve(root, "scripts/contained-runtime-environment.mjs"),
+  ),
+  runcWrapper: sha256File(resolve(root, "scripts/runtime-bin/runc")),
   containerdConfigWriter: sha256File(
     resolve(root, "scripts/contained-containerd-config.mjs"),
   ),
@@ -261,6 +268,7 @@ const paths = {
   containerdSocket: `${sessionPrefix}/run/containerd.sock`,
   runtimeCommandSocket: `${sessionPrefix}/run/runtime-command.sock`,
   clientFifoRoot: `${sessionPrefix}/run/client-fifo`,
+  runcStateRoot: `${sessionPrefix}/run/runc`,
   buildkitSocket: `${sessionPrefix}/run/buildkitd.sock`,
   containerdRoot: `${sessionPrefix}/data/containerd`,
   containerdState: `${sessionPrefix}/state/containerd`,

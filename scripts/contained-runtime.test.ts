@@ -3,7 +3,9 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { resolve } from "node:path";
@@ -19,6 +21,7 @@ import {
   createContainedContainerdConfig,
   renderContainedContainerdConfig,
 } from "./contained-containerd-config.mjs";
+import { createContainedRuntimeEnvironment } from "./contained-runtime-environment.mjs";
 
 const root = process.cwd();
 const validator = resolve(
@@ -39,6 +42,15 @@ const reviewRoot = resolve(
   `node_modules/.cache/counterlab-v6.1/scientific-evidence-${sourceCommit}-20260719T000000Z-1`,
 );
 const reviewFile = resolve(reviewRoot, "reachability-review.json");
+const runcWrapper = resolve(root, "scripts/runtime-bin/runc");
+const runtimeWrapperRoot = resolve(root, "scripts/runtime-bin");
+const pinnedRunc = resolve(
+  root,
+  "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1/bin/runc",
+);
+const runcStateRoot = resolve(root, ".rt/rt-runc-test/run/runc");
+const shellInjectionFixture = resolve(sandboxRoot, "hostile-bash-env.sh");
+let runcLogSymlink = "";
 
 function validate(...args: string[]) {
   return spawnSync(process.execPath, [validator, ...args], {
@@ -235,7 +247,180 @@ describe("contained runtime command policy", () => {
     mkdirSync(workspace, { recursive: true, mode: 0o700 });
     mkdirSync(output, { recursive: true, mode: 0o700 });
     mkdirSync(reviewRoot, { recursive: true, mode: 0o700 });
+    mkdirSync(resolve(runcStateRoot, "counterlab-v6.1"), {
+      recursive: true,
+      mode: 0o700,
+    });
     writeFileSync(reviewFile, "{}\n", { mode: 0o600 });
+    writeFileSync(shellInjectionFixture, "exit 91\n", { mode: 0o600 });
+    const logFixtureRoot = mkdtempSync(
+      resolve(root, ".rt/rt-runc-test/runc-log-"),
+    );
+    const logTarget = resolve(logFixtureRoot, "target.log");
+    runcLogSymlink = resolve(logFixtureRoot, "runc.log");
+    writeFileSync(logTarget, "sentinel\n", { mode: 0o600 });
+    symlinkSync(logTarget, runcLogSymlink);
+  });
+
+  it("maps only the pinned runc state root into the runtime session", () => {
+    const environment = {
+      ...process.env,
+      COUNTERLAB_RUNC_BINARY: pinnedRunc,
+      COUNTERLAB_RUNC_STATE_ROOT: runcStateRoot,
+    };
+    const listed = spawnSync(
+      runcWrapper,
+      [
+        "--root",
+        "/run/containerd/runc/counterlab-v6.1",
+        "list",
+        "--format=json",
+      ],
+      {
+        cwd: root,
+        env: environment,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 10_000,
+      },
+    );
+    expect(listed.status).toBe(0);
+    expect(JSON.parse(listed.stdout)).toBeNull();
+
+    const version = spawnSync(runcWrapper, ["--version"], {
+      cwd: root,
+      env: { ...environment, BASH_ENV: shellInjectionFixture },
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 10_000,
+    });
+    expect(version.status).toBe(0);
+    expect(version.stdout).toContain("runc version 1.4.2");
+
+    const escaped = spawnSync(
+      runcWrapper,
+      ["--root", "/run/user/1000/runc", "list", "--format=json"],
+      {
+        cwd: root,
+        env: environment,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 10_000,
+      },
+    );
+    expect(escaped.status).not.toBe(0);
+    expect(escaped.stderr).toContain(
+      "runc root does not match the pinned containerd default",
+    );
+
+    for (const args of [
+      ["--root=/run/containerd/runc", "list"],
+      [
+        "--root",
+        "/run/containerd/runc",
+        "--root",
+        "/run/containerd/runc",
+        "list",
+      ],
+      [
+        "--root",
+        "/run/containerd/runc",
+        "--log",
+        "/run/containerd/runc.log",
+        "list",
+      ],
+      ["--root", "/run/containerd/runc", "--log", runcLogSymlink, "list"],
+      ["run"],
+    ]) {
+      const invalid = spawnSync(runcWrapper, args, {
+        cwd: root,
+        env: environment,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 10_000,
+      });
+      expect(invalid.status, args.join(" ")).not.toBe(0);
+    }
+  });
+
+  it("uses one exact wrapper and scrubs inherited runtime injection", () => {
+    expect(readdirSync(runtimeWrapperRoot).sort()).toEqual(["runc"]);
+
+    const environment = createContainedRuntimeEnvironment({
+      auth: resolve(root, ".rt/rt-runc-test/auth"),
+      binRoot: resolve(
+        root,
+        "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1/bin",
+      ),
+      buildkitSocket: resolve(root, ".rt/rt-runc-test/run/buildkitd.sock"),
+      home: resolve(root, ".rt/rt-runc-test/home"),
+      runcBinary: pinnedRunc,
+      runcStateRoot,
+      runtimeWrapperRoot,
+      tmp: resolve(root, ".rt/rt-runc-test/tmp"),
+      xdgCache: resolve(root, ".rt/rt-runc-test/xdg-cache"),
+      xdgConfig: resolve(root, ".rt/rt-runc-test/xdg-config"),
+      xdgData: resolve(root, ".rt/rt-runc-test/xdg-data"),
+      xdgRuntime: resolve(root, ".rt/rt-runc-test/run"),
+    });
+
+    expect(Object.keys(environment).sort()).toEqual(
+      [
+        "BUILDKIT_HOST",
+        "COUNTERLAB_RUNC_BINARY",
+        "COUNTERLAB_RUNC_STATE_ROOT",
+        "DOCKER_CONFIG",
+        "HOME",
+        "PATH",
+        "TMPDIR",
+        "XDG_CACHE_HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "XDG_RUNTIME_DIR",
+      ].sort(),
+    );
+    for (const inherited of [
+      "AWS_SHARED_CREDENTIALS_FILE",
+      "BASH_ENV",
+      "GOTMPDIR",
+      "LD_PRELOAD",
+      "NODE_OPTIONS",
+      "SSH_AUTH_SOCK",
+      "SSL_CERT_FILE",
+      "TMP",
+    ]) {
+      expect(environment).not.toHaveProperty(inherited);
+    }
+    expect(environment.COUNTERLAB_RUNC_BINARY).toBe(pinnedRunc);
+    expect(environment.COUNTERLAB_RUNC_STATE_ROOT).toBe(runcStateRoot);
+    expect(environment.PATH).toBe(
+      `${runtimeWrapperRoot}:${resolve(
+        root,
+        "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1/bin",
+      )}:/usr/bin:/bin`,
+    );
+  });
+
+  it("starts the launcher in an empty privileged shell environment", () => {
+    const launcher = resolve(root, "scripts/start-contained-runtime.sh");
+    expect(readFileSync(launcher, "utf8").split("\n", 1)[0]).toBe(
+      "#!/usr/bin/env -S -i PATH=/usr/bin:/bin /bin/bash -p",
+    );
+
+    const result = spawnSync(launcher, ["--invalid"], {
+      cwd: root,
+      env: {
+        ...process.env,
+        BASH_ENV: shellInjectionFixture,
+        NODE_OPTIONS: "--definitely-not-a-node-option",
+      },
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 10_000,
+    });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("Usage: start-contained-runtime.sh");
+    expect(result.stderr).not.toContain("definitely-not-a-node-option");
   });
 
   it("allows only the exact release verification profiles", () => {
@@ -524,7 +709,10 @@ describe("contained runtime command policy", () => {
     );
     for (const attestedEntry of [
       "clientFifoRoot",
+      "runcStateRoot",
       "runtimeRun",
+      "runtimeEnvironment",
+      "runcWrapper",
       "containerdConfigWriter",
     ]) {
       expect(runtimeLauncher, attestedEntry).toContain(attestedEntry);
