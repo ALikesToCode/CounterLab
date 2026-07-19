@@ -126,6 +126,7 @@ const expectedPaths = {
   clientFifoRoot: `${sessionPrefix}/run/client-fifo`,
   runcStateRoot: `${sessionPrefix}/run/runc`,
   buildkitSocket: `${sessionPrefix}/run/buildkitd.sock`,
+  buildkitOtelSocket: `${sessionPrefix}/run/inner/buildkit-otel.sock`,
   containerdRoot: `${sessionPrefix}/data/containerd`,
   containerdState: `${sessionPrefix}/state/containerd`,
   buildkitRoot: `${sessionPrefix}/data/buildkit`,
@@ -135,6 +136,7 @@ const expectedPaths = {
   xdgCache: `${sessionPrefix}/xdg-cache`,
   xdgConfig: `${sessionPrefix}/xdg-config`,
   xdgData: `${sessionPrefix}/xdg-data`,
+  xdgRuntime: `${sessionPrefix}/run/inner`,
   auth: `${sessionPrefix}/auth`,
   containerdConfig: `${sessionPrefix}/config/containerd.toml`,
   buildkitConfig: `${sessionPrefix}/config/buildkitd.toml`,
@@ -348,6 +350,7 @@ const pathKinds = {
   clientFifoRoot: "directory",
   runcStateRoot: "directory",
   buildkitSocket: "socket",
+  buildkitOtelSocket: "socket",
   containerdRoot: "directory",
   containerdState: "directory",
   buildkitRoot: "directory",
@@ -357,6 +360,7 @@ const pathKinds = {
   xdgCache: "directory",
   xdgConfig: "directory",
   xdgData: "directory",
+  xdgRuntime: "directory",
   auth: "directory",
   containerdConfig: "file",
   buildkitConfig: "file",
@@ -449,7 +453,7 @@ const runtimeEnvironment = createContainedRuntimeEnvironment({
   xdgCache: resolvedPaths.xdgCache,
   xdgConfig: resolvedPaths.xdgConfig,
   xdgData: resolvedPaths.xdgData,
-  xdgRuntime: resolve(root, sessionPrefix, "run"),
+  xdgRuntime: resolvedPaths.xdgRuntime,
 });
 const version = JSON.parse(
   execFileSync(

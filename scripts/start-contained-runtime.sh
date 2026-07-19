@@ -42,6 +42,7 @@ CONTAINERD_ROOTLESSKIT_API="${SESSION_ROOT}/run/containerd-rootless/api.sock"
 CONTAINERD_SOCKET="${SESSION_ROOT}/run/containerd.sock"
 RUNTIME_COMMAND_SOCKET="${SESSION_ROOT}/run/runtime-command.sock"
 BUILDKIT_SOCKET="${SESSION_ROOT}/run/buildkitd.sock"
+BUILDKIT_OTEL_SOCKET="${SESSION_ROOT}/run/inner/buildkit-otel.sock"
 RUNC_STATE_ROOT="${SESSION_ROOT}/run/runc"
 CONTAINERD_PID_FILE="${SESSION_ROOT}/run/containerd-rootlesskit.pid"
 BUILDKIT_PID_FILE="${SESSION_ROOT}/run/buildkit-rootlesskit.pid"
@@ -118,14 +119,18 @@ terminate_failed_launch() {
 }
 trap terminate_failed_launch EXIT
 
-node - "${BUILDKIT_CONFIG}" <<'NODE'
+node - "${BUILDKIT_CONFIG}" "${BUILDKIT_OTEL_SOCKET}" <<'NODE'
 const { writeFileSync } = require("node:fs");
-const [buildkitConfig] = process.argv.slice(2);
-writeFileSync(buildkitConfig, "debug = false\n", {
-  encoding: "utf8",
-  flag: "wx",
-  mode: 0o600,
-});
+const [buildkitConfig, buildkitOtelSocket] = process.argv.slice(2);
+writeFileSync(
+  buildkitConfig,
+  `debug = false\n\n[otel]\n  socketPath = ${JSON.stringify(buildkitOtelSocket)}\n`,
+  {
+    encoding: "utf8",
+    flag: "wx",
+    mode: 0o600,
+  },
+);
 NODE
 
 export HOME="${SESSION_ROOT}/home"
@@ -133,7 +138,7 @@ export TMPDIR="${SESSION_ROOT}/tmp"
 export XDG_CACHE_HOME="${SESSION_ROOT}/xdg-cache"
 export XDG_CONFIG_HOME="${SESSION_ROOT}/xdg-config"
 export XDG_DATA_HOME="${SESSION_ROOT}/xdg-data"
-export XDG_RUNTIME_DIR="${SESSION_ROOT}/run"
+export XDG_RUNTIME_DIR="${SESSION_ROOT}/run/inner"
 export DOCKER_CONFIG="${SESSION_ROOT}/auth"
 export PATH="${BIN_ROOT}:/usr/bin:/bin"
 unset CONTAINERD_ADDRESS CONTAINERD_NAMESPACE CONTAINERD_SNAPSHOTTER NERDCTL_TOML DOCKER_HOST BUILDKIT_HOST
@@ -270,6 +275,7 @@ const paths = {
   clientFifoRoot: `${sessionPrefix}/run/client-fifo`,
   runcStateRoot: `${sessionPrefix}/run/runc`,
   buildkitSocket: `${sessionPrefix}/run/buildkitd.sock`,
+  buildkitOtelSocket: `${sessionPrefix}/run/inner/buildkit-otel.sock`,
   containerdRoot: `${sessionPrefix}/data/containerd`,
   containerdState: `${sessionPrefix}/state/containerd`,
   buildkitRoot: `${sessionPrefix}/data/buildkit`,
@@ -279,6 +285,7 @@ const paths = {
   xdgCache: `${sessionPrefix}/xdg-cache`,
   xdgConfig: `${sessionPrefix}/xdg-config`,
   xdgData: `${sessionPrefix}/xdg-data`,
+  xdgRuntime: `${sessionPrefix}/run/inner`,
   auth: `${sessionPrefix}/auth`,
   containerdConfig: `${sessionPrefix}/config/containerd.toml`,
   buildkitConfig: `${sessionPrefix}/config/buildkitd.toml`,

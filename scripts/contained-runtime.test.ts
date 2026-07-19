@@ -696,6 +696,9 @@ describe("contained runtime command policy", () => {
       "[plugins.'io.containerd.shim.v1.manager']",
     );
     expect(runtimeLauncher).toContain("contained-runtime-server.mjs");
+    expect(runtimeLauncher).toContain("[otel]");
+    expect(runtimeLauncher).toContain("buildkitOtelSocket");
+    expect(runtimeLauncher).toContain("xdgRuntime");
     expect(
       readFileSync(
         resolve(root, "scripts/contained-runtime-server.mjs"),
