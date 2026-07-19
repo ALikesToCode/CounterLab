@@ -33,8 +33,20 @@ pass is never presented as a browser or production pass.
   and Grype scanning before exposing an obsolete tagged-image identity
   assumption. Commit
   `e73494d2518060a76786a83cf61f256bcbcd22ae` contains the replacement
-  untagged-OCI identity gate; the next exact rebuild and complete refresh are
-  pending.
+  untagged-OCI identity gate. Source
+  `41394afd7aa102bc91f3cce0700a20c0f9722537` then built successfully in
+  fresh runtime `rt-v61-0719p`: runner config digest
+  `sha256:fdba354f631a38fa3e0775789cd6ac871430dc309bae43bbde6ce1bfdedc81cd`,
+  normalized manifest
+  `sha256:26cf61f40bc7a22de58ccb884ba1d69933c7cc96f4d877e10c06f8935451b55c`,
+  and adapter digest
+  `sha256:818a42278b66f4bce0d18b62e7a883cab751ed7cf547ed78d180c1f4315edbbd`.
+  Its refresh imported the image, generated both SBOMs, hydrated the pinned
+  Grype database, scanned 129 packages, and prepared source-bound VEX before
+  nerdctl 2.3.1 rejected Docker's `--ipc=none`. The reviewed repair uses the
+  explicit isolated nerdctl namespace `--ipc=private`; because the validator is
+  attested, the old runtime, build, and partial refresh are retained but cannot
+  be qualified. A fresh runtime and exact rebuild are required.
 - **Continuation starting commit:**
   `dd451c77606ec270cfba030784df50cb3aa19969`
 - **Repository boundary:** physical root
@@ -43,11 +55,13 @@ pass is never presented as a browser or production pass.
 - **Post-audit-preservation working tree:** the concurrent screenshot set and
   the complete visual/generative-UI audit addendum are preserved in reviewed
   documentation commits. Exactly 25 scientific-engine and SBOM paths remain
-  intentionally dirty as stale generated evidence, alongside the reviewed
-  learner-pilot hardening and this ledger update. Those evidence paths must be
-  regenerated against the next exact source commit and image; no stale
-  evidence, audit file, or ignored stock-browser capture may be folded silently
-  into qualified evidence.
+  intentionally dirty as one coherent older generated snapshot. The failed
+  `41394afd...` refresh did not replace those tracked files; its zero-byte
+  reachability output and incomplete scan artifacts remain only in a unique
+  ignored repository-contained staging directory. Those tracked evidence paths
+  must be regenerated against the next exact source commit and image; no stale
+  evidence, partial staging file, audit file, or ignored stock-browser capture
+  may be folded silently into qualified evidence.
 - **Integration rule:** commit source tooling first, build and qualify that
   exact commit, commit its generated evidence separately, deploy only the
   qualified image, then fast-forward this branch into `main` after every
@@ -81,6 +95,7 @@ pass is never presented as a browser or production pass.
 | Current-source P1 reconciliation | PASS as source audit; production proof pending | A read-only reconciliation found CL-003 (claim-only chooser), CL-004 (read-only replay), CL-005 (fixed-evidence sample Boundary plus learner-authored reflection), and CL-010 (current vocabulary/metadata) fixed in current source. CL-007 admission/cost controls are implemented but need deployed proof; CL-008 remains honestly `PARTIAL`; CL-009 is narrowly mitigated; CL-023 remains partial because no verified Lab Scene reaches the browser; CL-006 and CL-024 remain open. Old Worker 82 observations are not misrepresented as current feature-branch behavior. |
 | Verified Belief Break component | PASS in isolation; integration/browser pending | A new fixed-evidence `VerifiedBeliefBreakTheater` was created only under the learner component boundary. It verifies the exact checked-in sample bytes, result lineage, Boundary fixture, and controlled runs before exposing values; keeps a persistent sample label; provides a non-color mechanism and exact-value table; reserves a stable explicit preview layout; and makes no model, runner, or network call. Focused Vitest passed 2 files/14 tests; web TypeScript, Prettier, and Git whitespace checks passed. `App.tsx` and Judge integration remain lead-owned and not yet changed. |
 | Learner-pilot evidence hardening | PASS locally; outcomes remain `NO_DATA` | Pilot v2 now fails closed on assignment/order, consent-reference, duplicate-linkage, exact-release, escaped/symlinked path, malformed-line, and aggregate-reconciliation failures. It records first-unassisted transfer, prediction/result difference, bounded confusion/abandonment, and closed reactions while publishing only aggregates plus one frozen qualified-release hash. The contained wrapper loads the tracked seed-1729 schedule, treats only a missing implicit session input as `NO_DATA`, and computes before replacing the fixed aggregate. Focused Vitest passed 3 files/24 tests; pilot, eval, and repository TypeScript plus Prettier and Git whitespace checks passed. The `tsx` CLI could not create its repository-contained IPC socket under the managed sandbox (`EPERM`); the non-IPC `node --import tsx` path succeeded and regenerated schema-v2 `NO_DATA`. No participant or learner-impact result is claimed. |
+| Contained-runtime IPC portability | PASS policy; exact rebuild pending | Pinned nerdctl 2.3.1 documents `private` as its isolated IPC namespace and rejects Docker's `none` spelling. All four approved runtime profiles now require `--ipc=private`; focused Vitest passes 1 file/14 tests, including rejection of both `--ipc=none` and `--ipc=host`; TypeScript formatting, shell syntax, and Git whitespace checks pass. A diagnostic call reached container creation instead of the prior IPC parser error, then failed at a separate stale-runtime `/run/containerd/fifo` permission boundary. No runtime pass is claimed. The attestation correctly rejects the modified validator in `rt-v61-0719p`, so a fresh runtime and new exact build are mandatory. |
 | Contained Wrangler identity | BLOCKED on fresh OAuth | Current Wrangler 4.110.0 documentation was checked through Context7. Repository-contained `wrangler whoami` ran without printing a token and reported unauthenticated. A fresh `--browser=false --use-keyring=false` OAuth callback was started inside repository state but timed out before approval; no Cloudflare mutation occurred. Generate a new short-lived link only when the owner is ready to approve it. |
 | Code-review graph and parallel review | PASS | A full repository-contained graph rebuild parsed 419 files into 3,888 nodes and 63,020 edges. The latest incremental update reports 3,900 nodes, 63,410 edges, 415 files, and 0.40 risk across the 43-file release/component/pilot/evidence working slice. The graph labels 17 private-helper gaps; focused public-entry tests exercise the OCI helpers transitively, while final integration tests remain required for the UI/pilot slices. The ignored graph database remains local and unpublished. |
 | Focused scientific/release tests | PASS | Earlier combined release Vitest passed 4 files/35 tests; focused Python reachability/scientific/held-out gates passed 12 tests. The latest graph-targeted Vitest passed 2 root files/22 tests plus 1 Worker file/15 tests, release/production Pytest passed 26/26, and the read-only held-out execution matched tracked evidence at 10/10 intake and 7/8 legacy fixed-loop completion. |
@@ -120,6 +135,11 @@ test inventory may run in parallel, but no two workers edit the same file.
      stale, or unbound evidence.
    - Commit generated evidence separately only after the full exact-image
      verifier passes.
+   - Source `41394afd...` built successfully and reached source-bound VEX, but
+     its evidence refresh exposed the nerdctl IPC spelling mismatch. Commit the
+     reviewed `private`-namespace repair, start a fresh attested runtime, and
+     rebuild. Do not reuse runtime `rt-v61-0719p`, its build receipt, or its
+     partial evidence staging directory for qualification.
 3. **Broad local qualification — IN PROGRESS**
    - The current baseline is green for product/runtime behavior. Pre-refresh
      root Vitest is 499/502, with all three failures isolated to the
@@ -217,6 +237,10 @@ test inventory may run in parallel, but no two workers edit the same file.
   or Web Vitals integration. Keyboard, accessible-name, reduced-motion, and
   viewport scenarios are represented in the 23-test specification, but their
   rendered behavior remains unverified until CloakBrowser is available.
+- The `41394afd...` source-bound evidence refresh is deliberately ineligible:
+  it ended before binding tracked evidence, and release-helper source changed
+  afterward. The old runtime attestation now rejects that helper drift. Its
+  retained staging artifacts are diagnostic history only.
 - One focused direct Pytest attempt in this continuation used Pytest's host
   default temporary root before the missing containment environment was
   detected. The attempt was stopped; no cleanup, inspection, or further action
@@ -268,8 +292,8 @@ test inventory may run in parallel, but no two workers edit the same file.
 
 - Repository constitution, physical-root checks, marker checks, Git diff, and
   selective staging protect the filesystem and user-authored work.
-- Context7 supplied current `code-review-graph` and official Cloudflare
-  Wrangler/D1/Container/deployment guidance; the installed graph CLI performed
+- Context7 supplied current `code-review-graph`, nerdctl, and official
+  Cloudflare Wrangler/D1/Container/deployment guidance; the installed graph CLI performed
   the repository-contained full build, change detection, architecture, impact,
   and test-link queries.
 - Three independent read-only subagent reviews covered release drift,

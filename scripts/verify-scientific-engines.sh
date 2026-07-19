@@ -164,7 +164,7 @@ STARTUP_PROBE_OUTPUT="$("${DOCKER_BIN}" run --rm --name "${STARTUP_CONTAINER}" \
   --read-only \
   --cap-drop=ALL \
   --security-opt=no-new-privileges=true \
-  --ipc=none \
+  --ipc=private \
   --pids-limit=32 \
   --memory=1024m \
   --memory-swap=1024m \
@@ -200,7 +200,7 @@ RUNTIME_VERIFICATION_OUTPUT="$("${DOCKER_BIN}" run --rm --name "${RUNTIME_CONTAI
   --read-only \
   --cap-drop=ALL \
   --security-opt=no-new-privileges=true \
-  --ipc=none \
+  --ipc=private \
   --pids-limit=32 \
   --memory=1024m \
   --memory-swap=1024m \

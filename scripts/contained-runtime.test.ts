@@ -45,7 +45,7 @@ function startupCommand(): string[] {
     "--read-only",
     "--cap-drop=ALL",
     "--security-opt=no-new-privileges=true",
-    "--ipc=none",
+    "--ipc=private",
     "--pids-limit=32",
     "--memory=1024m",
     "--memory-swap=1024m",
@@ -80,7 +80,7 @@ function scientificRuntimeCommand(): string[] {
     "--read-only",
     "--cap-drop=ALL",
     "--security-opt=no-new-privileges=true",
-    "--ipc=none",
+    "--ipc=private",
     "--pids-limit=32",
     "--memory=1024m",
     "--memory-swap=1024m",
@@ -119,7 +119,7 @@ function reachabilityCommand(): string[] {
     "--user=1000:1000",
     "--cap-drop=ALL",
     "--security-opt=no-new-privileges=true",
-    "--ipc=none",
+    "--ipc=private",
     "--pids-limit=32",
     "--memory=1024m",
     "--memory-swap=1024m",
@@ -158,7 +158,7 @@ function boundedAdapterCommand(): string[] {
     "--user=65532:65532",
     "--cap-drop=ALL",
     "--security-opt=no-new-privileges=true",
-    "--ipc=none",
+    "--ipc=private",
     "--pids-limit=16",
     "--memory=512m",
     "--memory-swap=512m",
@@ -191,6 +191,24 @@ describe("contained runtime command policy", () => {
     expect(validate(...scientificRuntimeCommand()).status).toBe(0);
     expect(validate(...reachabilityCommand()).status).toBe(0);
     expect(validate(...boundedAdapterCommand()).status).toBe(0);
+  });
+
+  it("requires a private IPC namespace for every run profile", () => {
+    for (const command of [
+      startupCommand(),
+      scientificRuntimeCommand(),
+      reachabilityCommand(),
+      boundedAdapterCommand(),
+    ]) {
+      const ipcIndex = command.indexOf("--ipc=private");
+      expect(ipcIndex).toBeGreaterThan(-1);
+
+      command[ipcIndex] = "--ipc=none";
+      expect(validate(...command).status).not.toBe(0);
+
+      command[ipcIndex] = "--ipc=host";
+      expect(validate(...command).status).not.toBe(0);
+    }
   });
 
   it("rejects root identities for scientific evidence containers", () => {

@@ -380,7 +380,7 @@ REVIEW_RELATIVE="$(realpath --relative-to="${ROOT_DIR}" "${WORK}/reachability-re
   --user="${HOST_UID}:${HOST_GID}" \
   --cap-drop=ALL \
   --security-opt=no-new-privileges=true \
-  --ipc=none \
+  --ipc=private \
   --pids-limit=32 \
   --memory=1024m \
   --memory-swap=1024m \

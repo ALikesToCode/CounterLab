@@ -208,7 +208,7 @@ function validateRun(runArgs) {
     "--read-only",
     "--pull=never",
     "--cap-drop=ALL",
-    "--ipc=none",
+    "--ipc=private",
   ]);
 
   while (index < runArgs.length) {
@@ -324,7 +324,7 @@ function validateRun(runArgs) {
         "--read-only",
         "--pull=never",
         "--cap-drop=ALL",
-        "--ipc=none",
+        "--ipc=private",
       ])
     ) {
       fail("startup probe profile is incomplete");
@@ -356,7 +356,7 @@ function validateRun(runArgs) {
         "--read-only",
         "--pull=never",
         "--cap-drop=ALL",
-        "--ipc=none",
+        "--ipc=private",
       ]) ||
       options.get("--security-opt")?.[0] !== "no-new-privileges=true" ||
       options.get("--pids-limit")?.[0] !== "32" ||
@@ -422,7 +422,7 @@ function validateRun(runArgs) {
         "--read-only",
         "--pull=never",
         "--cap-drop=ALL",
-        "--ipc=none",
+        "--ipc=private",
       ]) ||
       options.get("--security-opt")?.[0] !== "no-new-privileges=true" ||
       options.get("--pids-limit")?.[0] !== "32" ||
@@ -502,7 +502,7 @@ function validateRun(runArgs) {
         "--read-only",
         "--pull=never",
         "--cap-drop=ALL",
-        "--ipc=none",
+        "--ipc=private",
       ]) ||
       options.get("--user")?.[0] !== "65532:65532" ||
       options.get("--security-opt")?.[0] !== "no-new-privileges=true" ||
