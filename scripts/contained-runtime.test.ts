@@ -236,14 +236,10 @@ describe("contained runtime command policy", () => {
     expect(plan.create.args).not.toContain("run");
     expect(plan.start.program).toBe(resolve(installRoot, "bin/ctr"));
     expect(plan.start.args).toEqual(
-      expect.arrayContaining([
-        "tasks",
-        "start",
-        "--fifo-dir",
-        clientFifoRoot,
-        "counterlab-startup-validator",
-      ]),
+      expect.arrayContaining(["tasks", "start", "--fifo-dir", clientFifoRoot]),
     );
+    expect(plan.containerName).toBe("counterlab-startup-validator");
+    expect(plan.start.args).not.toContain("counterlab-startup-validator");
     expect(plan.cleanup.args.slice(-3)).toEqual([
       "rm",
       "--force",
@@ -258,14 +254,61 @@ describe("contained runtime command policy", () => {
       root,
       "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
     );
+    const containerId = "d".repeat(64);
     const responses = [
-      { status: 0, stdout: Buffer.from("created\n"), stderr: Buffer.alloc(0) },
+      {
+        status: 0,
+        stdout: Buffer.from(`${containerId}\n`),
+        stderr: Buffer.alloc(0),
+      },
       { status: 0, stdout: Buffer.from("verified\n"), stderr: Buffer.alloc(0) },
       {
         status: 1,
         stdout: Buffer.alloc(0),
         stderr: Buffer.from("cleanup refused\n"),
       },
+    ];
+    const calls: string[][] = [];
+    const result = executeContainedRun(
+      {
+        args: startupCommand(),
+        binRoot: resolve(installRoot, "bin"),
+        clientFifoRoot: resolve(sessionRoot, "run/client-fifo"),
+        containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+        cwd: root,
+        environment: process.env,
+        installRoot,
+        sessionRoot,
+        stdin: Buffer.alloc(0),
+      },
+      (_program, args) => {
+        calls.push(args);
+        return responses.shift()!;
+      },
+    );
+
+    expect(result.status).toBe(1);
+    expect(calls[1]?.at(-1)).toBe(containerId);
+    expect(result.stdout.toString("utf8")).toBe("verified\n");
+    expect(result.stderr.toString("utf8")).toContain(
+      "contained runtime cleanup failed",
+    );
+  });
+
+  it("rejects an invalid generated container ID before task start", () => {
+    const sessionRoot = resolve(root, ".rt/rt-validator-id");
+    const installRoot = resolve(
+      root,
+      "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
+    );
+    const calls: string[][] = [];
+    const responses = [
+      {
+        status: 0,
+        stdout: Buffer.from("counterlab-startup-validator\n"),
+        stderr: Buffer.alloc(0),
+      },
+      { status: 0, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) },
     ];
     const result = executeContainedRun(
       {
@@ -279,14 +322,22 @@ describe("contained runtime command policy", () => {
         sessionRoot,
         stdin: Buffer.alloc(0),
       },
-      () => responses.shift()!,
+      (_program, args) => {
+        calls.push(args);
+        return responses.shift()!;
+      },
     );
 
     expect(result.status).toBe(1);
-    expect(result.stdout.toString("utf8")).toBe("verified\n");
     expect(result.stderr.toString("utf8")).toContain(
-      "contained runtime cleanup failed",
+      "create returned an invalid ID",
     );
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.slice(-3)).toEqual([
+      "rm",
+      "--force",
+      "counterlab-startup-validator",
+    ]);
   });
 
   it("rejects root identities for scientific evidence containers", () => {

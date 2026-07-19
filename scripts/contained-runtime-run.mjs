@@ -6,6 +6,7 @@ import { isAbsolute, relative, resolve } from "node:path";
 const namespace = "counterlab-v6.1";
 const containerNamePattern =
   /^counterlab-(?:[a-f0-9]{20}|(?:startup|runtime|reachability)-[A-Za-z0-9-]{1,80})$/;
+const containerIdPattern = /^[a-f0-9]{64}$/;
 
 function contained(parent, candidate) {
   const fromParent = relative(parent, candidate);
@@ -87,6 +88,7 @@ export function containedRunPlan({
   ];
 
   return {
+    containerName: name,
     create: {
       program: resolve(binRoot, "nerdctl"),
       args: [...nerdctlGlobalArgs, "create", ...args.slice(1)],
@@ -102,7 +104,6 @@ export function containedRunPlan({
         "start",
         "--fifo-dir",
         clientFifoRoot,
-        name,
       ],
     },
     cleanup: {
@@ -147,7 +148,31 @@ export function executeContainedRun(context, spawn = spawnSync) {
     };
   }
 
-  const started = spawn(plan.start.program, plan.start.args, {
+  const containerId = Buffer.from(created.stdout ?? "")
+    .toString("utf8")
+    .trim();
+  if (!containerIdPattern.test(containerId)) {
+    const cleaned = spawn(plan.cleanup.program, plan.cleanup.args, {
+      ...options,
+      input: Buffer.alloc(0),
+    });
+    const cleanupFailed = cleaned.status !== 0;
+    return {
+      status: 1,
+      stdout: Buffer.alloc(0),
+      stderr: appendBuffers(
+        created.stderr,
+        Buffer.from("contained runtime create returned an invalid ID\n"),
+        cleanupFailed
+          ? Buffer.from("contained runtime cleanup failed\n")
+          : Buffer.alloc(0),
+        cleanupFailed ? cleaned.stderr : Buffer.alloc(0),
+        cleanupFailed ? resultError(cleaned) : Buffer.alloc(0),
+      ),
+    };
+  }
+
+  const started = spawn(plan.start.program, [...plan.start.args, containerId], {
     ...options,
     input: context.stdin,
   });

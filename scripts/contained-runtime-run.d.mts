@@ -4,6 +4,7 @@ export interface ContainedRuntimeCommand {
 }
 
 export interface ContainedRuntimeRunPlan {
+  containerName: string;
   create: ContainedRuntimeCommand;
   start: ContainedRuntimeCommand;
   cleanup: ContainedRuntimeCommand;
