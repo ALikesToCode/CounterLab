@@ -1,4 +1,10 @@
-import type { ArtifactView, PublicCompilerEvent, SessionView } from "../../api";
+import type {
+  ArtifactView,
+  EvidenceEvent,
+  PublicCompilerEvent,
+  SessionView,
+} from "../../api";
+import type { ProofEventMergeIssue } from "../../features/proof/mergeProofEvents";
 
 export type StudioMode = "instant" | "live" | "replay";
 export type StudioStage =
@@ -28,10 +34,15 @@ export type StudioCommand = {
   run: () => void;
 };
 
+export type ProofEventLoadStatus = "idle" | "loading" | "ready" | "failed";
+
 export type StudioContext = {
   mode: StudioMode;
   stage: StudioStage;
   artifact: ArtifactView | null;
   session: SessionView | null;
   events: readonly PublicCompilerEvent[];
+  evidenceEvents?: readonly EvidenceEvent[];
+  proofEventIssues?: readonly ProofEventMergeIssue[];
+  proofEventStatus?: ProofEventLoadStatus;
 };

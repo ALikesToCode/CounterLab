@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   migrateBeliefTestV1ToV2,
   VerifiedResultSetSchema,
+  type EvidenceEvent,
 } from "@counterlab/contracts";
 
 import imbalanceResultText from "../../../fixtures/held-out/imbalance_epistemic_competing_v2.json?raw";
@@ -250,6 +251,36 @@ function session(
   };
 }
 
+function storedEvidenceEvent(
+  sessionId: string,
+  sequence: number,
+  kind: string,
+  actor: EvidenceEvent["actor"] = "system",
+): EvidenceEvent {
+  const eventHash = sequence.toString(16).repeat(64).slice(0, 64);
+  return {
+    schemaVersion: "1",
+    eventId: `${sessionId}_event_${sequence}`,
+    sessionId,
+    sequence,
+    timestamp: `2026-07-19T10:00:0${sequence}.000Z`,
+    actor,
+    kind,
+    inputHashes: [],
+    outputHashes: [eventHash],
+    payload: {},
+    ...(sequence === 1
+      ? {}
+      : {
+          previousEventHash: (sequence - 1)
+            .toString(16)
+            .repeat(64)
+            .slice(0, 64),
+        }),
+    eventHash,
+  };
+}
+
 function response(data: unknown, status = 200) {
   return new Response(JSON.stringify({ ok: true, data }), {
     status,
@@ -298,6 +329,10 @@ function installApi(
       | "PROOF_CAPSULE_ISSUED";
     restoredSessionExtra?: Record<string, unknown>;
     replay?: ReturnType<typeof publicReplayFixture>;
+    eventsHandler?: (
+      sessionId: string,
+      requestIndex: number,
+    ) => Response | Promise<Response>;
   } = {},
 ) {
   const uploadOutcomes = [...(options.uploadOutcomes ?? [])];
@@ -309,6 +344,7 @@ function installApi(
     sampleId: "leakage-01",
   };
   let activeArtifactId = artifact.artifactId;
+  let eventRequestIndex = 0;
   const fetcher = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
@@ -389,6 +425,17 @@ function installApi(
             mode: activeMode,
           }),
           201,
+        );
+      }
+      const eventsMatch = path.match(/^\/api\/sessions\/([^/]+)\/events$/u);
+      if (eventsMatch?.[1] !== undefined) {
+        const requestIndex = eventRequestIndex;
+        eventRequestIndex += 1;
+        return (
+          (await options.eventsHandler?.(
+            decodeURIComponent(eventsMatch[1]),
+            requestIndex,
+          )) ?? response({ events: [] })
         );
       }
       if (path === "/api/sessions/session_ui/artifact") {
@@ -1814,6 +1861,130 @@ describe("CounterLab judged flow", () => {
     expect(screen.getByText(/live notebook analysis/i)).toBeInTheDocument();
   });
 
+  it("hydrates restored session evidence from the canonical private endpoint", async () => {
+    const user = userEvent.setup();
+    const storedEvents = [
+      storedEvidenceEvent("session_ui", 1, "session.created"),
+      storedEvidenceEvent("session_ui", 2, "prediction.committed", "learner"),
+      storedEvidenceEvent("session_ui", 3, "experiment.completed", "kernel"),
+    ];
+    const fetcher = installApi({
+      restoredSessionState: "EXPERIMENT_COMPLETED",
+      restoredSessionExtra: {
+        beliefSpec: liveBeliefSpec,
+        prediction: committedPrediction,
+        verifiedResult: liveResult,
+      },
+      eventsHandler: () => response({ events: storedEvents }),
+    });
+    window.history.replaceState({}, "", "/session/session_ui");
+
+    render(<App />);
+
+    const proofToggle = await screen.findByRole("button", {
+      name: /evidence & proof/i,
+    });
+    await user.click(proofToggle);
+    const chain = await screen.findByRole("region", {
+      name: /session event chain/i,
+    });
+    expect(chain).toHaveTextContent(
+      /session\.created[\s\S]*prediction\.committed[\s\S]*experiment\.completed/,
+    );
+    expect(chain).toHaveTextContent(/Sequence 2 · learner/);
+    expect(
+      fetcher.mock.calls.some(
+        ([path]) => String(path) === "/api/sessions/session_ui/events",
+      ),
+    ).toBe(true);
+  });
+
+  it("retains same-session evidence while refreshing and ignores an older response", async () => {
+    const user = userEvent.setup();
+    let resolveOlderRequest: ((value: Response) => void) | undefined;
+    const olderRequest = new Promise<Response>((resolve) => {
+      resolveOlderRequest = resolve;
+    });
+    installApi({
+      eventsHandler: (_sessionId, requestIndex) => {
+        if (requestIndex === 0) {
+          return response({
+            events: [storedEvidenceEvent("session_ui", 1, "session.created")],
+          });
+        }
+        if (requestIndex === 1) return olderRequest;
+        return response({
+          events: [
+            storedEvidenceEvent("session_ui", 1, "session.created"),
+            storedEvidenceEvent("session_ui", 2, "belief_test.proposed"),
+            storedEvidenceEvent(
+              "session_ui",
+              3,
+              "belief_test.confirmed",
+              "learner",
+            ),
+          ],
+        });
+      },
+    });
+    render(<App />);
+    await openSampleModelDuel(user);
+
+    await user.click(screen.getByRole("button", { name: /evidence & proof/i }));
+    expect(
+      await screen.findByRole("region", { name: /session event chain/i }),
+    ).toHaveTextContent("session.created");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /loading the stored session event chain/i,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /yes, this captures my view/i }),
+    );
+    await vi.waitFor(() =>
+      expect(
+        screen.getByRole("region", { name: /session event chain/i }),
+      ).toHaveTextContent("belief_test.confirmed"),
+    );
+
+    resolveOlderRequest?.(
+      response({
+        events: [storedEvidenceEvent("session_ui", 1, "stale.response.marker")],
+      }),
+    );
+    await act(async () => Promise.resolve());
+
+    expect(
+      screen.getByRole("region", { name: /session event chain/i }),
+    ).toHaveTextContent("belief_test.confirmed");
+    expect(document.body).not.toHaveTextContent("stale.response.marker");
+  });
+
+  it("reports an unavailable stored chain without inferring lifecycle evidence", async () => {
+    const user = userEvent.setup();
+    installApi({
+      restoredSessionState: "INGESTED",
+      eventsHandler: () =>
+        errorResponse(
+          "EVENT_CHAIN_UNAVAILABLE",
+          "Stored session evidence could not be loaded.",
+          503,
+        ),
+    });
+    window.history.replaceState({}, "", "/session/session_ui");
+
+    render(<App />);
+
+    await user.click(
+      await screen.findByRole("button", { name: /evidence & proof/i }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /stored session event chain is unavailable/i,
+    );
+    expect(document.body).not.toHaveTextContent("session.created");
+    expect(screen.getByText(/0 chain events/)).toBeInTheDocument();
+  });
+
   it("keeps URL synchronization active when a restored runner resume fails", async () => {
     installApi({
       restoredSessionState: "LAB_COMPILING",
@@ -2401,6 +2572,18 @@ describe("CounterLab judged flow", () => {
         [undefined, "GET"].includes(init?.method),
       ),
     ).toBe(true);
+
+    await user.click(
+      screen.getByText(
+        /evidence & proof · provenance, activity, and limitations/i,
+      ),
+    );
+    expect(screen.getByText("Allowlisted activity")).toBeInTheDocument();
+    expect(
+      fetcher.mock.calls.some(([path]) =>
+        /\/api\/sessions\/[^/]+\/events$/u.test(String(path)),
+      ),
+    ).toBe(false);
 
     await user.click(
       screen.getByRole("button", { name: /start new analysis/i }),

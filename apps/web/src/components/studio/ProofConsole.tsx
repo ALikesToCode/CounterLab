@@ -1,6 +1,6 @@
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 
-import type { PublicCompilerEvent } from "../../api";
+import type { EvidenceEvent, PublicCompilerEvent } from "../../api";
 import { CapabilityLinkDisclosure } from "../learner/CapabilityLinkDisclosure";
 import { GeneratedProofView } from "./GeneratedProofView";
 import type { StudioContext } from "./types";
@@ -44,7 +44,10 @@ function eventSummary(event: PublicCompilerEvent): string {
   }
 }
 
-function eventsForTab(events: readonly PublicCompilerEvent[], tab: ProofTab) {
+function compilerEventsForTab(
+  events: readonly PublicCompilerEvent[],
+  tab: ProofTab,
+) {
   if (tab === "Activity") return events;
   if (tab === "Plan")
     return events.filter((event) =>
@@ -66,6 +69,100 @@ function eventsForTab(events: readonly PublicCompilerEvent[], tab: ProofTab) {
   return [];
 }
 
+const evidenceKindsByTab = {
+  Plan: new Set(["lab.compilation_started", "lab.rejected", "lab.verified"]),
+  Diff: new Set([
+    "patch.compilation_started",
+    "patch.rejected",
+    "patch.verified",
+    "reasoning_diff.issued",
+    "reasoning_diff_v2.issued",
+  ]),
+  Tests: new Set([
+    "experiment.completed",
+    "boundary_map.verified",
+    "transfer.started",
+    "transfer.passed",
+    "transfer.failed",
+  ]),
+  Verifier: new Set([
+    "lab.rejected",
+    "lab.verified",
+    "experiment.evidence_verified",
+    "experiment.evidence_rejected",
+    "boundary_map.verified",
+    "patch.rejected",
+    "patch.verified",
+  ]),
+} satisfies Partial<Record<ProofTab, ReadonlySet<string>>>;
+
+function evidenceEventsForTab(
+  events: readonly EvidenceEvent[],
+  tab: ProofTab,
+): readonly EvidenceEvent[] {
+  if (tab === "Activity") return events;
+  const kinds = evidenceKindsByTab[tab as keyof typeof evidenceKindsByTab];
+  return kinds === undefined
+    ? []
+    : events.filter((event) => kinds.has(event.kind));
+}
+
+function EvidenceEventList({ events }: { events: readonly EvidenceEvent[] }) {
+  return (
+    <section aria-label="Session event chain">
+      <h3>Session event chain</h3>
+      <p>
+        Ordered session lifecycle evidence returned by the session event store.
+      </p>
+      <ol className="console-events">
+        {events.map((event) => (
+          <li key={event.eventId}>
+            <time dateTime={event.timestamp}>
+              {new Date(event.timestamp).toLocaleTimeString()}
+            </time>
+            <span>{event.kind}</span>
+            <p>
+              Sequence {event.sequence} · {event.actor} · Event hash{" "}
+              {event.eventHash.slice(0, 12)}…
+            </p>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function CompilerEventList({
+  events,
+  tab,
+}: {
+  events: readonly PublicCompilerEvent[];
+  tab: ProofTab;
+}) {
+  return (
+    <section aria-label="Runner activity">
+      <h3>Runner activity</h3>
+      <p>
+        Browser-safe compiler events, ordered by their recorded job cursors.
+      </p>
+      {(tab === "Plan" || tab === "Verifier") && (
+        <GeneratedProofView events={events} />
+      )}
+      <ol className="console-events">
+        {events.map((event) => (
+          <li key={event.eventId}>
+            <time dateTime={event.at}>
+              {new Date(event.at).toLocaleTimeString()}
+            </time>
+            <span>{event.kind}</span>
+            <p>{eventSummary(event)}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 export function ProofConsole({
   context,
   open,
@@ -83,7 +180,19 @@ export function ProofConsole({
   onRevokeSessionAccess?: () => void;
   revokeSessionAccessDisabled?: boolean;
 }) {
-  const filteredEvents = eventsForTab(context.events, activeTab);
+  const evidenceEvents = context.evidenceEvents ?? [];
+  const proofEventIssues = context.proofEventIssues ?? [];
+  const proofEventStatus = context.proofEventStatus ?? "idle";
+  const filteredCompilerEvents = compilerEventsForTab(
+    context.events,
+    activeTab,
+  );
+  const filteredEvidenceEvents = evidenceEventsForTab(
+    evidenceEvents,
+    activeTab,
+  );
+  const hasTabEvents =
+    filteredEvidenceEvents.length > 0 || filteredCompilerEvents.length > 0;
   const moveTab = (
     event: ReactKeyboardEvent<HTMLButtonElement>,
     index: number,
@@ -115,7 +224,9 @@ export function ProofConsole({
           <i /> Evidence &amp; proof
         </span>
         <strong>
-          {context.events.length} event{context.events.length === 1 ? "" : "s"}
+          {evidenceEvents.length} chain event
+          {evidenceEvents.length === 1 ? "" : "s"} · {context.events.length}{" "}
+          runner event{context.events.length === 1 ? "" : "s"}
         </strong>
         <kbd>{open ? "Close" : "Open"}</kbd>
       </button>
@@ -145,6 +256,48 @@ export function ProofConsole({
             aria-labelledby={`proof-tab-${activeTab.toLowerCase()}`}
             tabIndex={0}
           >
+            {proofEventStatus === "loading" ? (
+              <div className="console-empty" role="status" aria-live="polite">
+                <strong>Loading the stored session event chain…</strong>
+                <span>Runner activity remains a separate event domain.</span>
+              </div>
+            ) : null}
+            {proofEventStatus === "failed" ? (
+              <div className="console-empty" role="alert">
+                <strong>Stored session event chain is unavailable.</strong>
+                <span>
+                  No missing lifecycle evidence was inferred from runner
+                  activity.
+                </span>
+              </div>
+            ) : null}
+            {proofEventStatus === "idle" && evidenceEvents.length === 0 ? (
+              <div className="console-empty">
+                <strong>Stored session event chain not loaded.</strong>
+                <span>
+                  Any runner activity shown below remains a separate
+                  browser-safe stream.
+                </span>
+              </div>
+            ) : null}
+            {proofEventIssues.length > 0 ? (
+              <div className="console-empty" role="alert">
+                <strong>Conflicting proof activity was excluded.</strong>
+                <span>
+                  Validated records remain visible; the conflicting records do
+                  not contribute to the counts above.
+                </span>
+                <ul>
+                  {proofEventIssues.map((issue) => (
+                    <li
+                      key={`${issue.source}:${issue.index}:${issue.code}:${issue.cursor ?? issue.identity ?? "unknown"}`}
+                    >
+                      <code>{issue.code}</code> · {issue.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             {activeTab === "Provenance" ? (
               <>
                 <dl className="console-provenance">
@@ -188,25 +341,28 @@ export function ProofConsole({
                   />
                 )}
               </>
-            ) : filteredEvents.length === 0 ? (
+            ) : !hasTabEvents &&
+              proofEventStatus !== "loading" &&
+              proofEventStatus !== "failed" ? (
               <div className="console-empty">
-                <strong>No {activeTab.toLowerCase()} evidence yet.</strong>
-                <span>It will appear here when the session produces it.</span>
+                <strong>
+                  No recorded {activeTab.toLowerCase()} evidence is available.
+                </strong>
+                <span>
+                  Nothing was inferred or reconstructed for this surface.
+                </span>
               </div>
             ) : (
               <>
-                {(activeTab === "Plan" || activeTab === "Verifier") && (
-                  <GeneratedProofView events={filteredEvents} />
-                )}
-                <ol className="console-events">
-                  {filteredEvents.map((event) => (
-                    <li key={event.eventId}>
-                      <time>{new Date(event.at).toLocaleTimeString()}</time>
-                      <span>{event.kind}</span>
-                      <p>{eventSummary(event)}</p>
-                    </li>
-                  ))}
-                </ol>
+                {filteredEvidenceEvents.length > 0 ? (
+                  <EvidenceEventList events={filteredEvidenceEvents} />
+                ) : null}
+                {filteredCompilerEvents.length > 0 ? (
+                  <CompilerEventList
+                    events={filteredCompilerEvents}
+                    tab={activeTab}
+                  />
+                ) : null}
               </>
             )}
           </div>

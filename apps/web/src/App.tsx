@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -16,6 +17,7 @@ import {
   type BeliefAnalysisPreview,
   type BeliefTest,
   type CapabilityHealth,
+  type EvidenceEvent,
   type ImbalanceVerifiedResultSet,
   type LeakageVerifiedResultSet,
   type PatchResult,
@@ -79,9 +81,14 @@ import {
 } from "./components/learner/learnerStages";
 import { DeferredReasoningDiffView } from "./components/proof/DeferredReasoningDiffView";
 import { LegacyReplayResult } from "./components/replay/LegacyReplayResult";
-import type { RecentProject, StudioStage } from "./components/studio/types";
+import type {
+  ProofEventLoadStatus,
+  RecentProject,
+  StudioStage,
+} from "./components/studio/types";
 import { BoundaryStage } from "./features/boundary/BoundaryStage";
 import { recordLearnerInteraction } from "./features/learner/interactionEvidence";
+import { mergeProofEventSources } from "./features/proof/mergeProofEvents";
 import {
   listActiveRunnerJobs,
   markActiveRunnerJobTerminal,
@@ -4070,6 +4077,16 @@ export function App() {
   const routeRecoveryHeadingRef = useRef<HTMLHeadingElement>(null);
   const [artifact, setArtifact] = useState<ArtifactView | null>(null);
   const [session, setSession] = useState<SessionView | null>(null);
+  const [storedProofSnapshot, setStoredProofSnapshot] = useState<{
+    sessionId: string;
+    sessionVersion: number;
+    events: readonly EvidenceEvent[];
+  } | null>(null);
+  const [proofEventRequest, setProofEventRequest] = useState<{
+    sessionId: string;
+    sessionVersion: number;
+    status: Exclude<ProofEventLoadStatus, "idle">;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [liveHealth, setLiveHealth] = useState<CapabilityHealth | null>(null);
@@ -4087,6 +4104,43 @@ export function App() {
     useState(false);
   const [runnerJob, setRunnerJob] = useState<RunnerJob | null>(null);
   const runner = useRunnerEvents();
+  const proofEventRequestGeneration = useRef(0);
+  const activeSessionId = session?.sessionId ?? null;
+  const activeSessionVersion = session?.version ?? null;
+  const mergedProofEvents = useMemo(() => {
+    const proofBundle = session?.proofBundle;
+    return mergeProofEventSources({
+      ...(activeSessionId === null
+        ? {}
+        : { expectedSessionId: activeSessionId }),
+      storedEvidenceEvents:
+        storedProofSnapshot?.sessionId === activeSessionId
+          ? storedProofSnapshot.events
+          : [],
+      recordedCompilerEvents:
+        proofBundle?.schemaVersion === "2"
+          ? proofBundle.publicCompilerEvents
+          : [],
+      streamedCompilerEvents:
+        activeSessionId !== null &&
+        (runnerJob === null || runnerJob.sessionId === activeSessionId)
+          ? runner.events
+          : [],
+    });
+  }, [
+    activeSessionId,
+    runner.events,
+    runnerJob,
+    session?.proofBundle,
+    storedProofSnapshot,
+  ]);
+  const proofEventStatus: ProofEventLoadStatus =
+    activeSessionId === null
+      ? "idle"
+      : proofEventRequest?.sessionId === activeSessionId &&
+          proofEventRequest.sessionVersion === activeSessionVersion
+        ? proofEventRequest.status
+        : "loading";
   const replay = mode === "replay";
   const hostedReplay =
     activeReplay !== null && "projectionKind" in activeReplay
@@ -4485,6 +4539,58 @@ export function App() {
       );
     }
   }, [activeReplay, activeReplayId, session]);
+
+  useEffect(() => {
+    proofEventRequestGeneration.current += 1;
+    const requestGeneration = proofEventRequestGeneration.current;
+    if (activeSessionId === null || activeSessionVersion === null) {
+      setStoredProofSnapshot(null);
+      setProofEventRequest(null);
+      return;
+    }
+
+    let active = true;
+    setProofEventRequest({
+      sessionId: activeSessionId,
+      sessionVersion: activeSessionVersion,
+      status: "loading",
+    });
+    void counterLabApi
+      .getEvents(activeSessionId)
+      .then((events) => {
+        if (
+          !active ||
+          proofEventRequestGeneration.current !== requestGeneration
+        )
+          return;
+        setStoredProofSnapshot({
+          sessionId: activeSessionId,
+          sessionVersion: activeSessionVersion,
+          events,
+        });
+        setProofEventRequest({
+          sessionId: activeSessionId,
+          sessionVersion: activeSessionVersion,
+          status: "ready",
+        });
+      })
+      .catch(() => {
+        if (
+          !active ||
+          proofEventRequestGeneration.current !== requestGeneration
+        )
+          return;
+        setProofEventRequest({
+          sessionId: activeSessionId,
+          sessionVersion: activeSessionVersion,
+          status: "failed",
+        });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [activeSessionId, activeSessionVersion]);
 
   useEffect(() => {
     let active = true;
@@ -5331,7 +5437,10 @@ export function App() {
               stage: stage as StudioStage,
               artifact,
               session,
-              events: runner.events,
+              events: mergedProofEvents.compilerEvents,
+              evidenceEvents: mergedProofEvents.evidenceEvents,
+              proofEventIssues: mergedProofEvents.issues,
+              proofEventStatus,
             }}
             actions={{
               newAnalysis: () => {
