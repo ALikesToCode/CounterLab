@@ -115,23 +115,9 @@ terminate_failed_launch() {
 }
 trap terminate_failed_launch EXIT
 
-node - "${CONTAINERD_CONFIG}" "${BUILDKIT_CONFIG}" <<'NODE'
+node - "${BUILDKIT_CONFIG}" <<'NODE'
 const { writeFileSync } = require("node:fs");
-const [containerdConfig, buildkitConfig] = process.argv.slice(2);
-const containerdConfiguration = [
-  "version = 3",
-  "",
-  "[plugins.'io.containerd.transfer.v1.local']",
-  "  [[plugins.'io.containerd.transfer.v1.local'.unpack_config]]",
-  '    platform = "linux/amd64"',
-  '    snapshotter = "native"',
-  "",
-].join("\n");
-writeFileSync(containerdConfig, containerdConfiguration, {
-  encoding: "utf8",
-  flag: "wx",
-  mode: 0o600,
-});
+const [buildkitConfig] = process.argv.slice(2);
 writeFileSync(buildkitConfig, "debug = false\n", {
   encoding: "utf8",
   flag: "wx",
@@ -242,6 +228,9 @@ const adapterSha256 = sha256File(adapterPath);
 const helperSha256 = {
   runtimeClient: sha256File(resolve(root, "scripts/contained-runtime-client.mjs")),
   runtimeRun: sha256File(resolve(root, "scripts/contained-runtime-run.mjs")),
+  containerdConfigWriter: sha256File(
+    resolve(root, "scripts/contained-containerd-config.mjs"),
+  ),
   runtimeServer: sha256File(resolve(root, "scripts/contained-runtime-server.mjs")),
   commandValidator: sha256File(
     resolve(root, "scripts/validate-contained-runtime-command.mjs"),

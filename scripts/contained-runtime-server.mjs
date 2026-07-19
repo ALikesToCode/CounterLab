@@ -7,6 +7,10 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { executeContainedRun } from "./contained-runtime-run.mjs";
+import {
+  createContainedContainerdConfig,
+  probeContainedShimSocketDirectory,
+} from "./contained-containerd-config.mjs";
 
 const root = realpathSync(resolve(fileURLToPath(import.meta.url), "../.."));
 const argv = process.argv.slice(2);
@@ -49,6 +53,13 @@ delete environment.ROOTLESSKIT_STATE_DIR;
 delete environment.ROOTLESSKIT_PARENT_EUID;
 delete environment.ROOTLESSKIT_PARENT_EGID;
 delete environment._CONTAINERD_ROOTLESS_CHILD;
+
+const shimSocketBinding = createContainedContainerdConfig({
+  configPath: resolve(sessionRoot, "config/containerd.toml"),
+  repositoryRoot: root,
+  shimSocketRoot: root,
+});
+await probeContainedShimSocketDirectory(shimSocketBinding);
 
 const containerd = spawn(
   resolve(binRoot, "containerd"),

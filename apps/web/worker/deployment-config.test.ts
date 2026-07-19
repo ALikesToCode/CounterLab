@@ -233,6 +233,11 @@ describe("Cloudflare static asset routing", () => {
     );
     expect(script).toContain("assertCurrentGrypeReleaseEvidenceBinding");
     expect(script).toContain('flag: "wx"');
+    expect(
+      script.match(
+        /\["load", "--platform", "linux\/amd64", "--input", [^\]]+\]/gu,
+      ),
+    ).toHaveLength(2);
   });
 
   it("removes exact-image verification containers after bounded checks", () => {

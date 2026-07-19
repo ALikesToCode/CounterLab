@@ -1,5 +1,11 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import { resolve } from "node:path";
 
 import { beforeAll, describe, expect, it } from "vitest";
@@ -8,6 +14,11 @@ import {
   containedRunPlan,
   executeContainedRun,
 } from "./contained-runtime-run.mjs";
+import {
+  CONTAINERD_SHIM_SOCKET_DIR_MAX_LENGTH,
+  createContainedContainerdConfig,
+  renderContainedContainerdConfig,
+} from "./contained-containerd-config.mjs";
 
 const root = process.cwd();
 const validator = resolve(
@@ -184,6 +195,42 @@ function boundedAdapterCommand(): string[] {
 }
 
 describe("contained runtime command policy", () => {
+  it("renders a bounded containerd shim manager configuration", () => {
+    const config = renderContainedContainerdConfig(root);
+
+    expect(root.length).toBeLessThanOrEqual(
+      CONTAINERD_SHIM_SOCKET_DIR_MAX_LENGTH,
+    );
+    expect(config).toContain("version = 4");
+    expect(config).toContain("imports = []");
+    expect(config).toContain("[plugins.'io.containerd.shim.v1.manager']");
+    expect(config).toContain(`socket_dir = '${root}'`);
+    expect(config).toContain("'io.containerd.grpc.v1.cri'");
+    expect(config).toContain("'io.containerd.nri.v1.nri'");
+    expect(() =>
+      renderContainedContainerdConfig(resolve(root, "shim-sockets")),
+    ).toThrow(/directory is invalid/u);
+  });
+
+  it("configures the full Linux shim socket path in the repository", () => {
+    const fixtureParent = resolve(
+      root,
+      "node_modules/.cache/counterlab-v6.1/tmp/containerd-config-tests",
+    );
+    mkdirSync(fixtureParent, { recursive: true, mode: 0o700 });
+    const fixtureRoot = mkdtempSync(resolve(fixtureParent, "shim-"));
+    const binding = createContainedContainerdConfig({
+      configPath: resolve(fixtureRoot, "containerd.toml"),
+      repositoryRoot: root,
+      shimSocketRoot: root,
+    });
+    expect(binding.shimSocketDirectory.length).toBeLessThanOrEqual(42);
+    expect(realpathSync(binding.shimSocketDirectory)).toBe(realpathSync(root));
+    expect(
+      readFileSync(resolve(fixtureRoot, "containerd.toml"), "utf8"),
+    ).toContain(`socket_dir = '${binding.shimSocketDirectory}'`);
+  });
+
   beforeAll(() => {
     mkdirSync(workspace, { recursive: true, mode: 0o700 });
     mkdirSync(output, { recursive: true, mode: 0o700 });
@@ -448,20 +495,38 @@ describe("contained runtime command policy", () => {
       resolve(root, "scripts/start-contained-runtime.sh"),
       "utf8",
     );
-    expect(runtimeLauncher).toContain(
+    const containerdConfigWriter = readFileSync(
+      resolve(root, "scripts/contained-containerd-config.mjs"),
+      "utf8",
+    );
+    expect(containerdConfigWriter).toContain(
       "[plugins.'io.containerd.transfer.v1.local']",
     );
-    expect(runtimeLauncher).toContain(
+    expect(containerdConfigWriter).toContain(
       "[[plugins.'io.containerd.transfer.v1.local'.unpack_config]]",
     );
-    expect(runtimeLauncher).toContain('platform = "linux/amd64"');
-    expect(runtimeLauncher).toContain('snapshotter = "native"');
+    expect(containerdConfigWriter).toContain('platform = "linux/amd64"');
+    expect(containerdConfigWriter).toContain('snapshotter = "native"');
+    expect(containerdConfigWriter).toContain(
+      "[plugins.'io.containerd.shim.v1.manager']",
+    );
+    expect(runtimeLauncher).toContain("contained-runtime-server.mjs");
+    expect(
+      readFileSync(
+        resolve(root, "scripts/contained-runtime-server.mjs"),
+        "utf8",
+      ),
+    ).toContain("await probeContainedShimSocketDirectory(shimSocketBinding)");
 
     const runtimeVerifier = readFileSync(
       resolve(root, "scripts/verify-contained-runtime.mjs"),
       "utf8",
     );
-    for (const attestedEntry of ["clientFifoRoot", "runtimeRun"]) {
+    for (const attestedEntry of [
+      "clientFifoRoot",
+      "runtimeRun",
+      "containerdConfigWriter",
+    ]) {
       expect(runtimeLauncher, attestedEntry).toContain(attestedEntry);
       expect(runtimeVerifier, attestedEntry).toContain(attestedEntry);
     }

@@ -185,6 +185,7 @@ exact(value.componentSha256, [
   "buildkitd",
   "containerd",
   "containerd-shim-runc-v2",
+  "ctr",
   "nerdctl",
   "rootlesskit",
   "runc",

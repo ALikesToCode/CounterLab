@@ -59,6 +59,7 @@ function runtimeAttestation() {
       buildkitd: "b".repeat(64),
       containerd: "c".repeat(64),
       "containerd-shim-runc-v2": "d".repeat(64),
+      ctr: "1".repeat(64),
       nerdctl: "e".repeat(64),
       rootlesskit: "f".repeat(64),
       runc: "0".repeat(64),

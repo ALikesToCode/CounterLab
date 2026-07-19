@@ -406,6 +406,7 @@ export const ContainedRuntimeAttestationSchema = z
       buildkitd: Sha256Schema,
       containerd: Sha256Schema,
       "containerd-shim-runc-v2": Sha256Schema,
+      ctr: Sha256Schema,
       nerdctl: Sha256Schema,
       rootlesskit: Sha256Schema,
       runc: Sha256Schema,

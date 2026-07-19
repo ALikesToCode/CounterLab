@@ -51,6 +51,10 @@
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
         },
+        "ctr": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
         "nerdctl": {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
@@ -69,6 +73,7 @@
         "buildkitd",
         "containerd",
         "containerd-shim-runc-v2",
+        "ctr",
         "nerdctl",
         "rootlesskit",
         "runc"

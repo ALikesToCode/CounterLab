@@ -507,14 +507,22 @@ async function main(): Promise<void> {
     throw new Error("adapter OCI archive changed after the source-bound build");
   }
 
-  execFileSync(runtimeAdapter, ["load", "--input", ociArchive], {
-    cwd: root,
-    stdio: "inherit",
-  });
-  execFileSync(runtimeAdapter, ["load", "--input", adapterOciArchive], {
-    cwd: root,
-    stdio: "inherit",
-  });
+  execFileSync(
+    runtimeAdapter,
+    ["load", "--platform", "linux/amd64", "--input", ociArchive],
+    {
+      cwd: root,
+      stdio: "inherit",
+    },
+  );
+  execFileSync(
+    runtimeAdapter,
+    ["load", "--platform", "linux/amd64", "--input", adapterOciArchive],
+    {
+      cwd: root,
+      stdio: "inherit",
+    },
+  );
   if (
     observeLocalImageDigest(
       root,

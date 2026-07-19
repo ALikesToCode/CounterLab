@@ -171,6 +171,7 @@ exactKeys(
   [
     "runtimeClient",
     "runtimeRun",
+    "containerdConfigWriter",
     "runtimeServer",
     "commandValidator",
     "attestationVerifier",
@@ -215,6 +216,7 @@ if (sha256File(adapter) !== attestation.adapterSha256) {
 const helperPaths = {
   runtimeClient: "scripts/contained-runtime-client.mjs",
   runtimeRun: "scripts/contained-runtime-run.mjs",
+  containerdConfigWriter: "scripts/contained-containerd-config.mjs",
   runtimeServer: "scripts/contained-runtime-server.mjs",
   commandValidator: "scripts/validate-contained-runtime-command.mjs",
   attestationVerifier: "scripts/verify-contained-runtime.mjs",
@@ -361,6 +363,21 @@ if (
     attestation.pids.buildkitRootlesskit
 ) {
   throw new Error("runtime PID file disagrees with the attestation");
+}
+
+const containerdConfigText = readFileSync(
+  resolvedPaths.containerdConfig,
+  "utf8",
+);
+const shimSocketMatches = [
+  ...containerdConfigText.matchAll(/^\s*socket_dir = '([^']+)'\s*$/gmu),
+];
+if (
+  shimSocketMatches.length !== 1 ||
+  shimSocketMatches[0][1].length > 42 ||
+  realpathSync(shimSocketMatches[0][1]) !== root
+) {
+  throw new Error("runtime shim socket directory is not repository-contained");
 }
 
 const fingerprint = {
