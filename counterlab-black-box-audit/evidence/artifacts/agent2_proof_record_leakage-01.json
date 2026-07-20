@@ -1,0 +1,858 @@
+{
+  "schemaVersion": "1",
+  "bundleId": "proof_98bb1bef-b680-4a3b-9f86-4b8bfed60423",
+  "sessionId": "session_db9778ae-2e82-456a-a193-9c03292e1eba",
+  "replayId": "leakage-01",
+  "createdAt": "2026-07-18T21:06:59.244Z",
+  "events": [
+    {
+      "schemaVersion": "1",
+      "eventId": "event_b5528007-ca57-46a6-aec6-6ec77fd449cc",
+      "sessionId": "session_db9778ae-2e82-456a-a193-9c03292e1eba",
+      "sequence": 1,
+      "timestamp": "2026-07-18T20:57:27.675Z",
+      "actor": "system",
+      "kind": "session.created",
+      "inputHashes": [],
+      "outputHashes": [
+        "bd08b8b6b670888ed159d483351a0563794dda8ce0b8aff5287464a292b74e90"
+      ],
+      "payload": {
+        "artifactId": "artifact_d0e9f3238753f1ca55534446",
+        "mode": {
+          "kind": "sample_lesson",
+          "sampleId": "leakage-01"
+        },
+        "state": "INGESTED"
+      },
+      "eventHash": "c04b1dc870101bf1bb3d9d467d373797da30efce67eabae151ac71b146929786"
+    },
+    {
+      "schemaVersion": "1",
+      "eventId": "event_adbf5056-742b-421a-a8ba-3ff663b9692b",
+      "sessionId": "session_db9778ae-2e82-456a-a193-9c03292e1eba",
+      "sequence": 2,
+      "timestamp": "2026-07-18T20:58:37.523Z",
+      "actor": "system",
+      "kind": "belief_test.proposed",
+      "inputHashes": [],
+      "outputHashes": [
+        "2741a0b6032a275412db42d1664756c0e45fb0d091410c801c51fc9053d2ec58"
+      ],
+      "payload": {
+        "beliefTestId": "belief_9a52b9e87bfa1b863130"
+      },
+      "modelId": "leakage-customer-churn-belief-v1",
+      "previousEventHash": "c04b1dc870101bf1bb3d9d467d373797da30efce67eabae151ac71b146929786",
+      "eventHash": "3fcab3dd69aa5b3a1dc2eae453a94a3d6df0c88891f7be8235f37c4e9954be6a"
+    },
+    {
+      "schemaVersion": "1",
+      "eventId": "event_675b2c13-564a-4023-a5cf-e883345e1f3b",
+      "sessionId": "session_db9778ae-2e82-456a-a193-9c03292e1eba",
+      "sequence": 3,
+      "timestamp": "2026-07-18T20:59:48.688Z",
+      "actor": "learner",
+      "kind": "belief_test.confirmed",
+      "inputHashes": [
+        "2741a0b6032a275412db42d1664756c0e45fb0d091410c801c51fc9053d2ec58"
+      ],
+      "outputHashes": [],
+      "payload": {
+        "beliefTestId": "belief_9a52b9e87bfa1b863130"
+      },
+      "previousEventHash": "3fcab3dd69aa5b3a1dc2eae453a94a3d6df0c88891f7be8235f37c4e9954be6a",
+      "eventHash": "3158b7ce37d2e49ecc9b4f41bba965888bfc423bfd403ef708bd1eb61e636688"
+    },
+    {
+      "schemaVersion": "1",
+      "eventId": "event_c169f25e-0b57-41cc-b399-66ada81664e6",
+      "sessionId": "session_db9778ae-2e82-456a-a193-9c03292e1eba",
+      "sequence": 4,
+      "timestamp": "2026-07-18T21:00:49.234Z",
+      "actor": "learner",
+      "kind": "prediction.committed",
+      "inputHashes": [],
+      "outputHashes": [
+        "47e5b2dca37cf681b950b0c6f8f9438f47f35435051f5912a5720e56c54c4e0b",
+        "1a3c84f889ca4da470b697815b9a0b89938e00c4eddf443ca82ea3f84e72a799"
+      ],
+      "payload": {
+        "predictionId": "prediction_0d9cd7d7-a127-4226-8f5d-c9304c72148c",
+        "immutableHash": "47e5b2dca37cf681b950b0c6f8f9438f47f35435051f5912a5720e56c54c4e0b"
+      },
+      "previousEventHash": "3158b7ce37d2e49ecc9b4f41bba965888bfc423bfd403ef708bd1eb61e636688",
+      "eventHash": "b5e3c2b6040f49e630e070d8b4528ff93fc9215c0ce16d97f5a99581286603d8"
+    },
+    {
+      "schemaVersion": "1",
+      "eventId": "event_1cad8466-a03b-49a6-a624-f9fde32eddf4",
+      "sessionId": "session_db9778ae-2e82-456a-a193-9c03292e1eba",
+      "sequence": 5,
+      "timestamp": "2026-07-18T21:00:49.803Z",
+      "actor": "codex",
+      "kind": "lab.compilation_started",
+      "inputHashes": [],
+      "outputHashes": [],
+      "payload": {},
+      "previousEventHash": "b5e3c2b6040f49e630e070d8b4528ff93fc9215c0ce16d97f5a99581286603d8",
+      "eventHash": "cb91f5d0f911703b170f6ad98fb26149e9d079e266f958a3ca2e6dfd5564581d"
+    },
+    {
+      "schemaVersion": "1",
+      "eventId": "event_0508e56c-44b7-4391-9642-f03f378aa5a7",
+      "sessionId": "session_db9778ae-2e82-456a-a193-9c03292e1eba",
+      "sequence": 6,
+      "timestamp": "2026-07-18T21:00:50.061Z",
+      "actor": "verifier",
+      "kind": "lab.verified",
+      "inputHashes": [],
+      "outputHashes": [
+        "ed70072a2e20e3d70f4603f42714eadfe679b4c06edd17c98c62f6766e188208",
+        "30663c3bd71d5f8de41f995ed8cfd198057cbe86cf02efd4429f01956b27352d",
+        "9304e07716d6b5fec99b16916c2393bc371744faf0e403fb25278cb537214598",
+        "6b5dfd85cc25e6be3846d30b1032aed54fc9af7fe430c260eb961630d3ea6b8e"
+      ],
+      "payload": {
+        "adapterHash": "ed70072a2e20e3d70f4603f42714eadfe679b4c06edd17c98c62f6766e188208",
+        "commitHash": "1050fa76b9e7b759bf6cd56d1f0d789f67e8f1c8",
+        "externalVerifierReportHash": "9304e07716d6b5fec99b16916c2393bc371744faf0e403fb25278cb537214598",
+        "image": "counterlab-runner:local",
+        "planHash": "7a1abdf0ef453654a13571761224f978eb4fe8e81bf277aff3fc2c72fe8a0b75",
+        "publicTestsReportHash": "30663c3bd71d5f8de41f995ed8cfd198057cbe86cf02efd4429f01956b27352d",
+        "recordedAt": "2026-07-14T11:18:03.807233Z",
+        "reportHash": "0926dcecbc0f61843f10fb8900a850ca2ea2a558178381f6b09b3eded225fcd0",
+        "resourceEvidence": {
+          "containerUser": "65532:65532",
+          "hiddenReadAttemptsDenied": true,
+          "limits": {
+            "maxFiles": true,
+            "maxOutputBytes": true,
+            "maxProcesses": true,
+            "memoryMb": true,
+            "wallSeconds": true
+          },
+          "mountedTargets": [
+            "/workspace",
+            "/fixtures/customer_churn.csv",
+            "/output"
+          ],
+          "networkDenied": true
+        },
+        "resultHash": "2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0",
+        "schemaVersion": "1",
+        "source": "stored-approved-leakage-v1",
+        "status": "VERIFIED"
+      },
+      "previousEventHash": "cb91f5d0f911703b170f6ad98fb26149e9d079e266f958a3ca2e6dfd5564581d",
+      "eventHash": "328ee8a11b50e8479ad3185f91b18af8b0d2af9bb65bcbd795846f41127c5137"
+    },
+    {
+      "schemaVersion": "1",
+      "eventId": "event_ffe52270-91e3-418a-928e-51be0b202d06",
+      "sessionId": "session_db9778ae-2e82-456a-a193-9c03292e1eba",
+      "sequence": 7,
+      "timestamp": "2026-07-18T21:01:36.406Z",
+      "actor": "kernel",
+      "kind": "experiment.completed",
+      "inputHashes": [],
+      "outputHashes": [
+        "a6ae7652e04e4d70196f991c63b8f7bcb3b76f8c4ab833d3ce2b626df0ab6c94",
+        "9ed789e806e476498c5b98b0d6503f20c24aab8c4679d8d8422bdce792fa8d27"
+      ],
+      "payload": {
+        "resultHash": "a6ae7652e04e4d70196f991c63b8f7bcb3b76f8c4ab833d3ce2b626df0ab6c94"
+      },
+      "previousEventHash": "328ee8a11b50e8479ad3185f91b18af8b0d2af9bb65bcbd795846f41127c5137",
+      "eventHash": "1057465eb33503598fb9d0c785f39811e86898a04c665eb69c4a33e56b56384b"
+    },
+    {
+      "schemaVersion": "1",
+      "eventId": "event_dbac4b77-763f-4eee-8134-e71594bd1485",
+      "sessionId": "session_db9778ae-2e82-456a-a193-9c03292e1eba",
+      "sequence": 8,
+      "timestamp": "2026-07-18T21:04:42.689Z",
+      "actor": "learner",
+      "kind": "revision.recorded",
+      "inputHashes": [
+        "a6ae7652e04e4d70196f991c63b8f7bcb3b76f8c4ab833d3ce2b626df0ab6c94",
+        "2741a0b6032a275412db42d1664756c0e45fb0d091410c801c51fc9053d2ec58",
+        "9ed789e806e476498c5b98b0d6503f20c24aab8c4679d8d8422bdce792fa8d27"
+      ],
+      "outputHashes": [
+        "bdd96d3af8edc8141542a218d6d32e7b8c9f3f15d499bb97c08b27ad546675fc"
+      ],
+      "payload": {
+        "revision": "When rows repeat the same entity,\nI should hold out whole entities,\nbecause random rows can share identity across train and test."
+      },
+      "previousEventHash": "1057465eb33503598fb9d0c785f39811e86898a04c665eb69c4a33e56b56384b",
+      "eventHash": "7715c2ffe460b3c177f2e6964be20ff278610afe2a49f66f372755eddbb7a709"
+    },
+    {
+      "schemaVersion": "1",
+      "eventId": "event_f1124f8e-23b1-4bc3-85bc-53e14ddecab9",
+      "sessionId": "session_db9778ae-2e82-456a-a193-9c03292e1eba",
+      "sequence": 9,
+      "timestamp": "2026-07-18T21:06:16.462Z",
+      "actor": "learner",
+      "kind": "transfer.started",
+      "inputHashes": [
+        "a6ae7652e04e4d70196f991c63b8f7bcb3b76f8c4ab833d3ce2b626df0ab6c94",
+        "2741a0b6032a275412db42d1664756c0e45fb0d091410c801c51fc9053d2ec58",
+        "9ed789e806e476498c5b98b0d6503f20c24aab8c4679d8d8422bdce792fa8d27"
+      ],
+      "outputHashes": [],
+      "payload": {},
+      "previousEventHash": "7715c2ffe460b3c177f2e6964be20ff278610afe2a49f66f372755eddbb7a709",
+      "eventHash": "325487e2358a60fe91b929c91589f8005df92faa8644bf7f507daaf80258ba79"
+    },
+    {
+      "schemaVersion": "1",
+      "eventId": "event_3849cf46-c489-4e5b-adde-705455239f31",
+      "sessionId": "session_db9778ae-2e82-456a-a193-9c03292e1eba",
+      "sequence": 10,
+      "timestamp": "2026-07-18T21:06:16.740Z",
+      "actor": "verifier",
+      "kind": "transfer.passed",
+      "inputHashes": [],
+      "outputHashes": [
+        "5c3e305bbb7810297a68fbbd03fb406aa589764a1ddfbe83fc9f5891d27e657f",
+        "bbdf1af81c1bf06d76e4dd8c470f16500e8e7f1060c687720d438b607d5e92ac"
+      ],
+      "payload": {
+        "outcome": "PASSED",
+        "resultHash": "5c3e305bbb7810297a68fbbd03fb406aa589764a1ddfbe83fc9f5891d27e657f"
+      },
+      "previousEventHash": "325487e2358a60fe91b929c91589f8005df92faa8644bf7f507daaf80258ba79",
+      "eventHash": "aca3c8e3a260fd1d3e6b650b95763e02164143088092d6864ac4c723f8eff1e5"
+    },
+    {
+      "schemaVersion": "1",
+      "eventId": "event_5307b4ca-850a-4849-91a9-cd7313d06811",
+      "sessionId": "session_db9778ae-2e82-456a-a193-9c03292e1eba",
+      "sequence": 11,
+      "timestamp": "2026-07-18T21:06:57.610Z",
+      "actor": "codex",
+      "kind": "patch.compilation_started",
+      "inputHashes": [
+        "a6ae7652e04e4d70196f991c63b8f7bcb3b76f8c4ab833d3ce2b626df0ab6c94",
+        "2741a0b6032a275412db42d1664756c0e45fb0d091410c801c51fc9053d2ec58",
+        "9ed789e806e476498c5b98b0d6503f20c24aab8c4679d8d8422bdce792fa8d27"
+      ],
+      "outputHashes": [],
+      "payload": {},
+      "previousEventHash": "aca3c8e3a260fd1d3e6b650b95763e02164143088092d6864ac4c723f8eff1e5",
+      "eventHash": "5cec9b4e7d78bb4fabc2b7e29e1ff498e7c05d4d22e214a84ae61c467af9382c"
+    },
+    {
+      "schemaVersion": "1",
+      "eventId": "event_ab9d0216-59cc-4c9a-aa45-82bdff82f916",
+      "sessionId": "session_db9778ae-2e82-456a-a193-9c03292e1eba",
+      "sequence": 12,
+      "timestamp": "2026-07-18T21:06:58.806Z",
+      "actor": "verifier",
+      "kind": "patch.verified",
+      "inputHashes": [],
+      "outputHashes": [
+        "21ab8670e6506173547b6a8ba24d0f1495b5f823faa0a045aff76ee50cf77b03",
+        "1871254692553440b2f234e198982597e348a0bb2f81ecb7066de8a933cfe077",
+        "eb20dc7e71431ad5b4a57437d740a1c8844cd335bf3a3d54db48e23dfbd3a034",
+        "fba1a8935b41b95bd1047e360469304b1766fc66b054fcc2ca83277c3b85de12"
+      ],
+      "payload": {
+        "status": "VERIFIED",
+        "resultHash": "21ab8670e6506173547b6a8ba24d0f1495b5f823faa0a045aff76ee50cf77b03"
+      },
+      "previousEventHash": "5cec9b4e7d78bb4fabc2b7e29e1ff498e7c05d4d22e214a84ae61c467af9382c",
+      "eventHash": "4b7d1de7d0db99b81cca30101b1bfc025e6eafa90efc5805a91ce7c27c60f7a1"
+    }
+  ],
+  "artifactManifest": {
+    "artifactId": "artifact_d0e9f3238753f1ca55534446",
+    "fileName": "customer_churn_leakage.ipynb",
+    "fileSha256": "d0e9f3238753f1ca55534446d83e36041590f31c607a011def3f1d0db3a5bbc9",
+    "nbformat": 4,
+    "support": {
+      "status": "SUPPORTED",
+      "reasons": []
+    },
+    "cells": [
+      {
+        "index": 0,
+        "type": "markdown",
+        "sourceSha256": "209a116d9976e05001b46a3741a321daef5e28df283bd313341875564f97d665",
+        "sourceExcerpt": "# Customer churn: does 99% mean new-customer generalization? This public sample intentionally uses a row-wise split while retaining `customer_id`.",
+        "outputHashes": [],
+        "symbols": [],
+        "metricCandidates": []
+      },
+      {
+        "index": 1,
+        "type": "code",
+        "sourceSha256": "acf23811d7e111ee37be71dd4182e90ed69719f090586d66721882ec0f664abf",
+        "sourceExcerpt": "from pathlib import Path import pandas as pd data_path = Path('../public/customer_churn.csv') df = pd.read_csv(data_path) df[['customer_id', 'churned']].head()",
+        "executionCount": 1,
+        "outputHashes": [
+          "799b0dea67c9d8ffb82ec6166155bdeddcb4f27b11d89fd138f25ede0e98b0fd"
+        ],
+        "symbols": [],
+        "metricCandidates": []
+      },
+      {
+        "index": 2,
+        "type": "markdown",
+        "sourceSha256": "a9461d19533c078644bd72d4f6004b051f9332a9489ba02709927e575869e28f",
+        "sourceExcerpt": "## Reported evaluation The next cell uses a random row split. Repeated observations from one customer can land on both sides.",
+        "outputHashes": [],
+        "symbols": [],
+        "metricCandidates": []
+      },
+      {
+        "index": 3,
+        "type": "code",
+        "sourceSha256": "af9b2153da597bd0b7f164e8a05bfbfd1426095481d69abf5387dc61c9b48c87",
+        "sourceExcerpt": "from sklearn.compose import ColumnTransformer from sklearn.impute import SimpleImputer from sklearn.linear_model import LogisticRegression from sklearn.metrics import accuracy_score, roc_auc_score from sklearn.model_selection import train_test_split from sklearn.pipeline import Pipeline from sklearn.preprocessing impor",
+        "executionCount": 2,
+        "outputHashes": [
+          "00bad59d595b3f3629337f4a413dfa5c20352aab545a9b8926e271974ecacbf4",
+          "7c41918bdb9c57a95d1d91b2576fbfb36ec113784b470d963f392509b6bd5113"
+        ],
+        "symbols": [
+          "train_test_split",
+          "ColumnTransformer",
+          "OneHotEncoder",
+          "Pipeline",
+          "LogisticRegression",
+          "accuracy_score",
+          "roc_auc_score"
+        ],
+        "metricCandidates": [
+          {
+            "name": "accuracy",
+            "value": 0.985,
+            "outputIndex": 0
+          },
+          {
+            "name": "roc_auc",
+            "value": 0.984,
+            "outputIndex": 0
+          }
+        ]
+      },
+      {
+        "index": 4,
+        "type": "markdown",
+        "sourceSha256": "0ec8bac100acc27b608fe93e584296e8d9f9fa80004238c706d318495ea8b3eb",
+        "sourceExcerpt": "**Learner claim to test:** This result proves the model generalizes to customers it has never seen.",
+        "outputHashes": [],
+        "symbols": [],
+        "metricCandidates": []
+      }
+    ],
+    "schemaSummary": {
+      "fields": [
+        {
+          "name": "observation_id",
+          "inferredType": "categorical",
+          "privacyClass": "feature"
+        },
+        {
+          "name": "customer_id",
+          "inferredType": "categorical",
+          "privacyClass": "entity_identifier"
+        },
+        {
+          "name": "tenure_months",
+          "inferredType": "number",
+          "privacyClass": "feature"
+        },
+        {
+          "name": "monthly_charges",
+          "inferredType": "number",
+          "privacyClass": "feature"
+        },
+        {
+          "name": "support_tickets",
+          "inferredType": "number",
+          "privacyClass": "feature"
+        },
+        {
+          "name": "activity_days_30d",
+          "inferredType": "number",
+          "privacyClass": "feature"
+        },
+        {
+          "name": "contract_type",
+          "inferredType": "categorical",
+          "privacyClass": "feature"
+        },
+        {
+          "name": "churned",
+          "inferredType": "integer",
+          "privacyClass": "target"
+        }
+      ],
+      "rowCount": 2880,
+      "entityCandidates": [
+        "customer_id"
+      ],
+      "targetCandidates": [
+        "churned"
+      ]
+    },
+    "packageHints": [
+      "pandas",
+      "pathlib",
+      "sklearn"
+    ],
+    "createdAt": "2026-07-14T00:00:00.000Z"
+  },
+  "beliefTest": {
+    "schemaVersion": "1",
+    "id": "belief_9a52b9e87bfa1b863130",
+    "concept": "entity_leakage",
+    "learnerClaim": "I think the model will work for completely new customers, because a 0.985 accuracy means it is almost always right.",
+    "currentHypothesis": {
+      "statement": "The notebook's random-row test accuracy demonstrates generalization to new customers.",
+      "predictedOutcome": "Accuracy should remain close to the notebook result when complete customers are held out."
+    },
+    "competingHypothesis": {
+      "statement": "Customer identity crosses the random split, so the model recognizes customers instead of generalizing to unseen ones.",
+      "predictedOutcome": "Accuracy should fall materially under a customer-group split and after identity ablation."
+    },
+    "evidenceRefs": [
+      {
+        "cellIndex": 3,
+        "kind": "code",
+        "hash": "af9b2153da597bd0b7f164e8a05bfbfd1426095481d69abf5387dc61c9b48c87",
+        "excerpt": "train_test_split from sklearn.pipeline import Pipeline from sklearn.preprocessing impor",
+        "relevance": "The notebook evaluates a row-wise random split."
+      },
+      {
+        "cellIndex": 3,
+        "outputIndex": 0,
+        "kind": "metric",
+        "hash": "00bad59d595b3f3629337f4a413dfa5c20352aab545a9b8926e271974ecacbf4",
+        "excerpt": "accuracy: 0.985",
+        "relevance": "This is the deceptive random-split headline under test."
+      },
+      {
+        "kind": "schema",
+        "hash": "7ac68ff737dc589d9800b18d9e56fc21d7f52ac83a6048b9d815b4943d6c1a0f",
+        "excerpt": "Entity candidates: customer_id",
+        "relevance": "The schema identifies the customer entity boundary."
+      }
+    ],
+    "alternatives": [
+      {
+        "label": "Class imbalance",
+        "rationale": "Accuracy can also hide minority-class errors, but it does not explain customer overlap by itself."
+      }
+    ],
+    "decisiveIntervention": {
+      "id": "group-split-and-identity-ablation",
+      "description": "Compare the fixed model under random-row, customer-group, and identity-ablated evaluation.",
+      "controlledVariables": [
+        "fixture",
+        "model",
+        "seed",
+        "metric"
+      ],
+      "changedVariables": [
+        "split boundary",
+        "customer identity feature"
+      ],
+      "discriminatesBecause": "The learner's hypothesis predicts stable performance, while leakage predicts a large out-of-customer drop."
+    },
+    "uncertainty": {
+      "confidence": 0.93,
+      "limitations": [
+        "The intervention can test evaluation leakage in this supported notebook; it does not prove global model quality or learner mastery."
+      ],
+      "insufficientEvidence": false
+    },
+    "requiresLearnerConfirmation": true
+  },
+  "predictionContract": {
+    "schemaVersion": "1",
+    "id": "prediction_0d9cd7d7-a127-4226-8f5d-c9304c72148c",
+    "sessionId": "session_db9778ae-2e82-456a-a193-9c03292e1eba",
+    "beliefTestId": "belief_9a52b9e87bfa1b863130",
+    "choice": "Accuracy remains near 98%",
+    "confidence": 72,
+    "committedAt": "2026-07-18T21:00:49.138Z",
+    "immutableHash": "47e5b2dca37cf681b950b0c6f8f9438f47f35435051f5912a5720e56c54c4e0b"
+  },
+  "experimentPlan": {
+    "schemaVersion": "1",
+    "concept": "entity_leakage",
+    "datasetAdapter": "customer_churn_v1",
+    "competingHypotheses": [
+      "The random-row test accuracy generalizes to customers the model has never seen.",
+      "Repeated customer identity lets the model exploit a shortcut that does not transfer to new customers."
+    ],
+    "expectedDiscrimination": [
+      {
+        "runId": "random_row_split",
+        "expectedUnderCurrent": "Accuracy remains representative of unseen customers.",
+        "expectedUnderCompeting": "Accuracy is inflated while customer identities overlap."
+      },
+      {
+        "runId": "customer_group_split",
+        "expectedUnderCurrent": "Accuracy remains close to the random-row result.",
+        "expectedUnderCompeting": "Accuracy falls materially with zero customer overlap."
+      },
+      {
+        "runId": "identity_ablation",
+        "expectedUnderCurrent": "Removing identity has little effect.",
+        "expectedUnderCompeting": "Removing identity removes the shortcut and lowers accuracy."
+      }
+    ],
+    "runs": [
+      {
+        "id": "random_row_split",
+        "split": "random",
+        "model": "logistic_regression",
+        "seed": 1729
+      },
+      {
+        "id": "customer_group_split",
+        "split": "group",
+        "groupBy": "customer_id",
+        "model": "logistic_regression",
+        "seed": 1729
+      },
+      {
+        "id": "identity_ablation",
+        "split": "random",
+        "dropFeatures": [
+          "customer_id"
+        ],
+        "model": "logistic_regression",
+        "seed": 1729
+      }
+    ],
+    "metrics": [
+      "accuracy",
+      "roc_auc"
+    ],
+    "views": [
+      "metric_comparison",
+      "entity_overlap"
+    ],
+    "invariants": [
+      "zero_group_overlap",
+      "identity_feature_removed",
+      "declared_variable_control"
+    ],
+    "resourceLimits": {
+      "wallSeconds": 20,
+      "memoryMb": 512,
+      "maxProcesses": 16,
+      "maxFiles": 8,
+      "maxOutputBytes": 262144
+    }
+  },
+  "generatedAdapter": {
+    "sha256": "ed70072a2e20e3d70f4603f42714eadfe679b4c06edd17c98c62f6766e188208",
+    "commitHash": "1050fa76b9e7b759bf6cd56d1f0d789f67e8f1c8"
+  },
+  "publicTests": {
+    "passed": 1,
+    "failed": 0,
+    "command": "python /workspace/public_tests.py",
+    "reportHash": "30663c3bd71d5f8de41f995ed8cfd198057cbe86cf02efd4429f01956b27352d"
+  },
+  "externalVerifier": {
+    "status": "VERIFIED",
+    "verifiedInvariants": [
+      "baseline_overlap_exists",
+      "canonical_result_hash",
+      "chart_payload_matches",
+      "declared_variable_control",
+      "discriminating_outcomes",
+      "discriminating_plan",
+      "hidden_artifact_isolation",
+      "identity_feature_removed",
+      "metric_ranges",
+      "metrics_are_computed",
+      "network_isolation",
+      "repeat_run_reproducibility",
+      "required_runs",
+      "resource_limits_enforced",
+      "result_contract",
+      "row_order_invariance",
+      "supported_case_only",
+      "zero_group_overlap"
+    ],
+    "mutations": [
+      "group-overlap-leak",
+      "stale-metrics-after-label-mutation",
+      "changed-intervention-seed",
+      "identity-feature-retained",
+      "row-order-sensitive-result",
+      "forged-canonical-hash",
+      "chart-series-stale",
+      "network-probe-escaped",
+      "wall-limit-not-enforced",
+      "non-discriminating-plan",
+      "hidden-verifier-mounted",
+      "unsupported-artifact-accepted"
+    ],
+    "reportHash": "9304e07716d6b5fec99b16916c2393bc371744faf0e403fb25278cb537214598"
+  },
+  "verifiedResultSet": {
+    "schemaVersion": "1",
+    "concept": "entity_leakage",
+    "fixture": {
+      "customers": 480,
+      "rows": 2880,
+      "sha256": "5c482f39e4e948a92dab61bf9c9f5c6577fbe9fc688fd597c9fefd785ee1be70",
+      "targetRate": 0.497569444444
+    },
+    "kernelVersion": "0.1.0",
+    "seed": 1729,
+    "runs": [
+      {
+        "id": "random_row_split",
+        "splitStrategy": "random",
+        "groupBy": null,
+        "dropFeatures": [],
+        "model": "logistic_regression",
+        "seed": 1729,
+        "inputFingerprint": "5c482f39e4e948a92dab61bf9c9f5c6577fbe9fc688fd597c9fefd785ee1be70",
+        "featureSetFingerprint": "1fd4ea95c8cbe12d5598484f1907d86fc7587000ba5657e1faddd40cb1be4e44",
+        "pipelineFingerprint": "234782290268e64b80af2e23b2b9b97268db8cd8e8740522834cde57cae78824",
+        "metrics": {
+          "accuracy": 0.984722222222,
+          "rocAuc": 0.983803512454
+        },
+        "sampleSizes": {
+          "train": 2160,
+          "test": 720
+        },
+        "entityCounts": {
+          "train": 480,
+          "test": 389
+        },
+        "entityOverlap": {
+          "count": 389,
+          "rate": 1
+        }
+      },
+      {
+        "id": "customer_group_split",
+        "splitStrategy": "group",
+        "groupBy": "customer_id",
+        "dropFeatures": [],
+        "model": "logistic_regression",
+        "seed": 1729,
+        "inputFingerprint": "5c482f39e4e948a92dab61bf9c9f5c6577fbe9fc688fd597c9fefd785ee1be70",
+        "featureSetFingerprint": "1fd4ea95c8cbe12d5598484f1907d86fc7587000ba5657e1faddd40cb1be4e44",
+        "pipelineFingerprint": "234782290268e64b80af2e23b2b9b97268db8cd8e8740522834cde57cae78824",
+        "metrics": {
+          "accuracy": 0.594444444444,
+          "rocAuc": 0.641242588933
+        },
+        "sampleSizes": {
+          "train": 2160,
+          "test": 720
+        },
+        "entityCounts": {
+          "train": 360,
+          "test": 120
+        },
+        "entityOverlap": {
+          "count": 0,
+          "rate": 0
+        }
+      },
+      {
+        "id": "identity_ablation",
+        "splitStrategy": "random",
+        "groupBy": null,
+        "dropFeatures": [
+          "customer_id"
+        ],
+        "model": "logistic_regression",
+        "seed": 1729,
+        "inputFingerprint": "5c482f39e4e948a92dab61bf9c9f5c6577fbe9fc688fd597c9fefd785ee1be70",
+        "featureSetFingerprint": "9641773fdead963da5fb0582be52c255307fc4d601c4a4b580f5730d088f2362",
+        "pipelineFingerprint": "234782290268e64b80af2e23b2b9b97268db8cd8e8740522834cde57cae78824",
+        "metrics": {
+          "accuracy": 0.673611111111,
+          "rocAuc": 0.725006944659
+        },
+        "sampleSizes": {
+          "train": 2160,
+          "test": 720
+        },
+        "entityCounts": {
+          "train": 480,
+          "test": 389
+        },
+        "entityOverlap": {
+          "count": 389,
+          "rate": 1
+        }
+      }
+    ],
+    "chartData": [
+      {
+        "runId": "random_row_split",
+        "splitStrategy": "random",
+        "accuracy": 0.984722222222,
+        "rocAuc": 0.983803512454,
+        "sampleSize": 720,
+        "seed": 1729
+      },
+      {
+        "runId": "customer_group_split",
+        "splitStrategy": "group",
+        "accuracy": 0.594444444444,
+        "rocAuc": 0.641242588933,
+        "sampleSize": 720,
+        "seed": 1729
+      },
+      {
+        "runId": "identity_ablation",
+        "splitStrategy": "random",
+        "accuracy": 0.673611111111,
+        "rocAuc": 0.725006944659,
+        "sampleSize": 720,
+        "seed": 1729
+      }
+    ],
+    "resultHash": "a6ae7652e04e4d70196f991c63b8f7bcb3b76f8c4ab833d3ce2b626df0ab6c94"
+  },
+  "learnerRevision": {
+    "text": "When rows repeat the same entity,\nI should hold out whole entities,\nbecause random rows can share identity across train and test.",
+    "recordedAt": "2026-07-18T21:04:42.689Z",
+    "eventHash": "7715c2ffe460b3c177f2e6964be20ff278610afe2a49f66f372755eddbb7a709"
+  },
+  "transferResult": {
+    "schemaVersion": "1",
+    "id": "transfer_c92ab4f6-fa23-4ba6-b14d-582b1b4131f6",
+    "sessionId": "session_db9778ae-2e82-456a-a193-9c03292e1eba",
+    "taskId": "forecasting-future-leakage-01",
+    "outcome": "PASSED",
+    "selectedStrategy": "time_ordered_holdout",
+    "identifiedRisks": [
+      "centered_window_reads_future"
+    ],
+    "evidenceChoices": [
+      "center_true_uses_later_targets",
+      "random_split_mixes_dates"
+    ],
+    "checks": [
+      {
+        "invariant": "TIME_AWARE_EVALUATION",
+        "passed": true,
+        "evidence": "A deployment-aligned forecast trains on earlier dates and evaluates later dates."
+      },
+      {
+        "invariant": "FUTURE_INFORMATION_RISK",
+        "passed": true,
+        "evidence": "A centered target window reads observations that do not exist at prediction time."
+      },
+      {
+        "invariant": "EVIDENCE_GROUNDED",
+        "passed": true,
+        "evidence": "Both center=True and the shuffled date split must be selected as code evidence."
+      }
+    ],
+    "evaluatorVersion": "counterlab-transfer-v1",
+    "evaluatedAt": "2026-07-18T21:06:16.659Z",
+    "resultHash": "5c3e305bbb7810297a68fbbd03fb406aa589764a1ddfbe83fc9f5891d27e657f"
+  },
+  "patchResult": {
+    "schemaVersion": "1",
+    "id": "patch_3f99f2ed-56ad-4c30-af5e-6863fa0d1e93",
+    "sessionId": "session_db9778ae-2e82-456a-a193-9c03292e1eba",
+    "status": "VERIFIED",
+    "sourceArtifactHash": "d0e9f3238753f1ca55534446d83e36041590f31c607a011def3f1d0db3a5bbc9",
+    "patchedArtifactHash": "eb20dc7e71431ad5b4a57437d740a1c8844cd335bf3a3d54db48e23dfbd3a034",
+    "patchHash": "1871254692553440b2f234e198982597e348a0bb2f81ecb7066de8a933cfe077",
+    "modifiedCells": [
+      3
+    ],
+    "diff": "--- cell-3-before.py\n+++ cell-3-after.py\n@@ -2,11 +2,12 @@\n from sklearn.impute import SimpleImputer\n\n from sklearn.linear_model import LogisticRegression\n\n from sklearn.metrics import accuracy_score, roc_auc_score\n\n-from sklearn.model_selection import train_test_split\n\n+from sklearn.model_selection import GroupShuffleSplit\n\n from sklearn.pipeline import Pipeline\n\n from sklearn.preprocessing import OneHotEncoder, StandardScaler\n\n \n\n-X = df.drop(columns=['churned'])\n\n+groups = df['customer_id']\n\n+X = df.drop(columns=['churned', 'customer_id', 'observation_id'])\n\n y = df['churned']\n\n categorical = [c for c in X.columns if X[c].dtype == 'object']\n\n numeric = [c for c in X.columns if c not in categorical]\n\n@@ -15,11 +16,17 @@\n     ('numeric', Pipeline([('impute', SimpleImputer()), ('scale', StandardScaler())]), numeric),\n\n ])\n\n model = Pipeline([('preprocess', preprocess), ('model', LogisticRegression(C=100, max_iter=2000))])\n\n-X_train, X_test, y_train, y_test = train_test_split(\n\n-    X, y, test_size=0.25, random_state=1729, stratify=y\n\n-)\n\n+splitter = GroupShuffleSplit(n_splits=1, test_size=0.25, random_state=1729)\n\n+train_index, test_index = next(splitter.split(X, y, groups=groups))\n\n+X_train, X_test = X.iloc[train_index], X.iloc[test_index]\n\n+y_train, y_test = y.iloc[train_index], y.iloc[test_index]\n\n+train_customers = set(groups.iloc[train_index])\n\n+test_customers = set(groups.iloc[test_index])\n\n+customer_overlap = train_customers.intersection(test_customers)\n\n+assert not customer_overlap\n\n model.fit(X_train, y_train)\n\n probability = model.predict_proba(X_test)[:, 1]\n\n prediction = (probability >= 0.5).astype(int)\n\n-print(f'Random row-split accuracy: {accuracy_score(y_test, prediction):.3f}')\n\n-print(f'Random row-split ROC AUC: {roc_auc_score(y_test, probability):.3f}')\n+print(f'Customer group-split accuracy: {accuracy_score(y_test, prediction):.3f}')\n\n+print(f'Customer group-split ROC AUC: {roc_auc_score(y_test, probability):.3f}')\n\n+print(f'Train/test customer overlap: {len(customer_overlap)}')",
+    "verification": {
+      "passed": true,
+      "invariants": [
+        "VALID_NBFORMAT",
+        "EVALUATION_CELL_ONLY",
+        "NO_ADDED_DEPENDENCIES",
+        "GROUP_OVERLAP_ZERO",
+        "IDENTITY_FEATURE_REMOVED",
+        "METRICS_RECOMPUTED",
+        "DETERMINISTIC_PATCH_BYTES"
+      ],
+      "unchangedCellHashes": [
+        "209a116d9976e05001b46a3741a321daef5e28df283bd313341875564f97d665",
+        "acf23811d7e111ee37be71dd4182e90ed69719f090586d66721882ec0f664abf",
+        "a9461d19533c078644bd72d4f6004b051f9332a9489ba02709927e575869e28f",
+        "0ec8bac100acc27b608fe93e584296e8d9f9fa80004238c706d318495ea8b3eb"
+      ]
+    },
+    "generatedAt": "2026-07-18T21:06:57.788Z",
+    "resultHash": "21ab8670e6506173547b6a8ba24d0f1495b5f823faa0a045aff76ee50cf77b03"
+  },
+  "reasoningDiff": {
+    "schemaVersion": "1",
+    "id": "reasoning_ad968f83-5e5d-4f42-bb80-d9fb9913bbda",
+    "sessionId": "session_db9778ae-2e82-456a-a193-9c03292e1eba",
+    "dimensions": {
+      "belief": {
+        "before": "I think the model will work for completely new customers, because a 0.985 accuracy means it is almost always right.",
+        "after": "When rows repeat the same entity,\nI should hold out whole entities,\nbecause random rows can share identity across train and test."
+      },
+      "prediction": {
+        "before": "Accuracy remains near 98% at 72% confidence",
+        "after": "Customer-group accuracy 0.594 with zero customer overlap"
+      },
+      "code": {
+        "before": "Random row split with customer identity in model features",
+        "after": "Cell 3 uses customer-group evaluation and removes customer identity; unrelated cells retain their source hashes"
+      },
+      "transfer": {
+        "before": "The entity-boundary rule had not been tested on a new surface",
+        "after": "The fixed forecasting evaluator passed the time-aware split and future-information checks"
+      }
+    },
+    "evidenceEventHashes": [
+      "b5e3c2b6040f49e630e070d8b4528ff93fc9215c0ce16d97f5a99581286603d8",
+      "1057465eb33503598fb9d0c785f39811e86898a04c665eb69c4a33e56b56384b",
+      "aca3c8e3a260fd1d3e6b650b95763e02164143088092d6864ac4c723f8eff1e5",
+      "4b7d1de7d0db99b81cca30101b1bfc025e6eafa90efc5805a91ce7c27c60f7a1"
+    ],
+    "issuedAt": "2026-07-18T21:06:59.244Z"
+  },
+  "versions": {
+    "environment": "Cloudflare Worker with recorded local Docker runner evidence",
+    "dependencies": "pnpm-lock.yaml and requirements.lock.txt",
+    "fixture": "5c482f39e4e948a92dab61bf9c9f5c6577fbe9fc688fd597c9fefd785ee1be70",
+    "kernel": "0.1.0",
+    "verifier": "leakage-verifier-v1",
+    "prompt": "leakage-customer-churn-belief-v1",
+    "model": "leakage-customer-churn-belief-v1",
+    "template": "1050fa76b9e7b759bf6cd56d1f0d789f67e8f1c8"
+  },
+  "limitations": [
+    "Verification covers the documented public entity-leakage experiment and supported notebook path.",
+    "Docker enforcement is evidence for this local run, not a formal sandbox proof.",
+    "Passing transfer verifies fixed choices for this task; it does not prove global learner mastery."
+  ],
+  "reproductionCommands": [
+    "./scripts/reproduce-session.sh leakage-01",
+    "./scripts/replay-patch.sh leakage-01",
+    "./scripts/run-mutations.sh leakage"
+  ],
+  "integrity": {
+    "mode": "hmac-signed",
+    "algorithm": "hmac-sha256",
+    "contentHash": "bdc2fdb38a86aa1e927ed33ce4a3cd83a37b8b4c36405170d28d2e5c9bb73558",
+    "eventChainHead": "4b7d1de7d0db99b81cca30101b1bfc025e6eafa90efc5805a91ce7c27c60f7a1",
+    "signature": "74d452ded7f842cf1de54aa7f753b69c37596fd9fcddfa3d21609b6d03061c15"
+  }
+}
