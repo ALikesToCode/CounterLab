@@ -108,6 +108,20 @@ describe("static shell security and metadata", () => {
     ).toBe(false);
   });
 
+  it("keeps private and learner-published capability routes out of indexes and referrers", async () => {
+    const rules = parseHeaderRules(await readStaticFile("../public/_headers"));
+    for (const path of ["/session/*", "/proof/*", "/replay/*"]) {
+      const rule = rules.find((candidate) => candidate.path === path);
+      expect(rule?.headers.get("x-robots-tag"), path).toBe("noindex, nofollow");
+      expect(rule?.headers.get("referrer-policy"), path).toBe("no-referrer");
+    }
+
+    const robots = await readStaticFile("../public/robots.txt");
+    expect(robots).toBe(
+      "User-agent: *\nDisallow: /session/\nDisallow: /proof/\nDisallow: /replay/\n",
+    );
+  });
+
   it("publishes frozen product metadata without legacy or unfrozen URL metadata", async () => {
     const source = await readStaticFile("../index.html");
     const document = new DOMParser().parseFromString(source, "text/html");

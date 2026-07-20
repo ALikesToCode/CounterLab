@@ -8,3 +8,15 @@
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+
+/session/*
+  X-Robots-Tag: noindex, nofollow
+  Referrer-Policy: no-referrer
+
+/proof/*
+  X-Robots-Tag: noindex, nofollow
+  Referrer-Policy: no-referrer
+
+/replay/*
+  X-Robots-Tag: noindex, nofollow
+  Referrer-Policy: no-referrer

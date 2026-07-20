@@ -1,0 +1,4 @@
+User-agent: *
+Disallow: /session/
+Disallow: /proof/
+Disallow: /replay/
