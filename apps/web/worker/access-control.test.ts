@@ -9,7 +9,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   D1OwnerCapabilityRepository,
+  OwnerCapabilityConflictError,
   createOwnerCapability,
+  deriveRestartOwnerCapability,
+  deriveUploadOwnerCapability,
+  ensureArtifactOwnerCapability,
+  ensureSessionOwnerCapability,
   hashOwnerCapability,
   ownerCapabilityIdentifies,
   ownerCapabilityMatches,
@@ -141,6 +146,154 @@ function legacyUpgradeDatabase(): DatabaseSync {
 }
 
 describe("owner capability access plane", () => {
+  it("derives and reconciles one capability for an upload operation", async () => {
+    const serverSecret =
+      "contained-upload-owner-test-secret-with-at-least-32-characters";
+    const uploadKey = `upload_123e4567-e89b-42d3-a456-426614174000_${"a".repeat(64)}`;
+    const artifactId = "artifact_private_1";
+    const fileSha256 = "b".repeat(64);
+    const derived = await deriveUploadOwnerCapability(
+      serverSecret,
+      uploadKey,
+      artifactId,
+      fileSha256,
+    );
+    await expect(
+      deriveUploadOwnerCapability(
+        serverSecret,
+        uploadKey,
+        artifactId,
+        fileSha256,
+      ),
+    ).resolves.toBe(derived);
+    await expect(
+      deriveUploadOwnerCapability(
+        serverSecret,
+        `upload_123e4567-e89b-42d3-a456-426614174001_${"a".repeat(64)}`,
+        artifactId,
+        fileSha256,
+      ),
+    ).resolves.not.toBe(derived);
+    await expect(
+      deriveUploadOwnerCapability(
+        serverSecret,
+        uploadKey,
+        "artifact_private_2",
+        fileSha256,
+      ),
+    ).resolves.not.toBe(derived);
+    await expect(
+      deriveUploadOwnerCapability(
+        serverSecret,
+        uploadKey,
+        artifactId,
+        "c".repeat(64),
+      ),
+    ).resolves.not.toBe(derived);
+    await expect(
+      deriveUploadOwnerCapability(
+        serverSecret,
+        "upload_not-bound",
+        artifactId,
+        fileSha256,
+      ),
+    ).rejects.toThrow(/hash-bound/u);
+    expect(derived).toMatch(/^cl_owner_[A-Za-z0-9_-]{43}$/u);
+
+    const database = migratedDatabase();
+    const repository = new D1OwnerCapabilityRepository({
+      prepare: (sql: string) =>
+        new SqliteD1Statement(database, sql) as unknown as D1PreparedStatement,
+    } as D1Database);
+    const record = {
+      resourceId: artifactId,
+      tokenHash: await hashOwnerCapability(derived),
+      createdAt: "2026-07-18T10:00:00.000Z",
+    };
+    await expect(
+      ensureArtifactOwnerCapability(repository, record),
+    ).resolves.toBe("created");
+    await expect(
+      ensureArtifactOwnerCapability(repository, record),
+    ).resolves.toBe("existing");
+    const persisted = database
+      .prepare(
+        "SELECT owner_token_hash, revoked_at FROM artifact_capabilities WHERE artifact_id = ?",
+      )
+      .get(artifactId) as {
+      owner_token_hash: string;
+      revoked_at: string | null;
+    };
+    expect(persisted.owner_token_hash).toBe(record.tokenHash);
+    expect(JSON.stringify(persisted)).not.toContain(uploadKey);
+    expect(JSON.stringify(persisted)).not.toContain(derived);
+
+    database
+      .prepare(
+        "UPDATE artifact_capabilities SET revoked_at = ? WHERE artifact_id = ? AND owner_token_hash = ?",
+      )
+      .run("2026-07-18T10:01:00.000Z", artifactId, record.tokenHash);
+    await expect(
+      ensureArtifactOwnerCapability(repository, record),
+    ).rejects.toBeInstanceOf(OwnerCapabilityConflictError);
+  });
+
+  it("derives and reconciles a least-privilege restart capability", async () => {
+    const source = `cl_owner_${"a".repeat(43)}`;
+    const childId = `session_restart_${"b".repeat(64)}`;
+    const derived = await deriveRestartOwnerCapability(source, childId);
+    await expect(deriveRestartOwnerCapability(source, childId)).resolves.toBe(
+      derived,
+    );
+    await expect(
+      deriveRestartOwnerCapability(`cl_owner_${"c".repeat(43)}`, childId),
+    ).resolves.not.toBe(derived);
+    expect(derived).toMatch(/^cl_owner_[A-Za-z0-9_-]{43}$/u);
+    expect(derived).not.toBe(source);
+
+    const database = migratedDatabase();
+    database
+      .prepare(
+        `INSERT INTO sessions
+          (id, artifact_id, state, version, aggregate_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        childId,
+        "artifact_private_1",
+        "INGESTED",
+        1,
+        "{}",
+        "2026-07-18T10:05:00.000Z",
+        "2026-07-18T10:05:00.000Z",
+      );
+    const repository = new D1OwnerCapabilityRepository({
+      prepare: (sql: string) =>
+        new SqliteD1Statement(database, sql) as unknown as D1PreparedStatement,
+    } as D1Database);
+    const record = {
+      resourceId: childId,
+      tokenHash: await hashOwnerCapability(derived),
+      createdAt: "2026-07-18T10:05:00.000Z",
+    };
+    await expect(
+      ensureSessionOwnerCapability(repository, record),
+    ).resolves.toBe("created");
+    await expect(
+      ensureSessionOwnerCapability(repository, record),
+    ).resolves.toBe("existing");
+    await expect(
+      ensureSessionOwnerCapability(repository, {
+        ...record,
+        tokenHash: "d".repeat(64),
+      }),
+    ).rejects.toBeInstanceOf(OwnerCapabilityConflictError);
+    await repository.revokeSession(childId, "2026-07-18T10:06:00.000Z");
+    await expect(
+      ensureSessionOwnerCapability(repository, record),
+    ).rejects.toBeInstanceOf(OwnerCapabilityConflictError);
+  });
+
   it("stores only hashes, supports repeated artifact uploads, and revokes a session", async () => {
     const database = migratedDatabase();
     const repository = new D1OwnerCapabilityRepository({

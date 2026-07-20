@@ -18,6 +18,13 @@ export interface OwnerCapabilityRepository {
   revokeSession(sessionId: string, revokedAt: string): Promise<boolean>;
 }
 
+export class OwnerCapabilityConflictError extends Error {
+  constructor(resourceId: string) {
+    super(`Owner capability conflict for resource ${resourceId}`);
+    this.name = "OwnerCapabilityConflictError";
+  }
+}
+
 type CapabilityRow = {
   resource_id: string;
   token_hash: string;
@@ -131,6 +138,149 @@ export function createOwnerCapability(): string {
     .replace(/\//gu, "_")
     .replace(/=+$/gu, "");
   return `cl_owner_${encoded}`;
+}
+
+function ownerCapabilityFromBytes(bytes: Uint8Array): string {
+  const encoded = btoa(String.fromCharCode(...bytes))
+    .replace(/\+/gu, "-")
+    .replace(/\//gu, "_")
+    .replace(/=+$/gu, "");
+  return `cl_owner_${encoded}`;
+}
+
+export async function deriveRestartOwnerCapability(
+  sourceCapability: string,
+  restartedSessionId: string,
+): Promise<string> {
+  if (!/^cl_owner_[A-Za-z0-9_-]{43}$/u.test(sourceCapability)) {
+    throw new Error("A valid source owner capability is required");
+  }
+  if (!/^session_restart_[a-f0-9]{64}$/u.test(restartedSessionId)) {
+    throw new Error("A deterministic restarted session ID is required");
+  }
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(sourceCapability),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(
+      `counterlab.restart-owner-capability.v1\0${restartedSessionId}`,
+    ),
+  );
+  return ownerCapabilityFromBytes(new Uint8Array(signature));
+}
+
+export async function deriveUploadOwnerCapability(
+  serverSecret: string,
+  uploadIdempotencyKey: string,
+  artifactId: string,
+  fileSha256: string,
+): Promise<string> {
+  if (serverSecret.trim().length < 32) {
+    throw new Error(
+      "Upload owner capability derivation requires a server secret",
+    );
+  }
+  if (
+    !/^upload_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}_[a-f0-9]{64}$/u.test(
+      uploadIdempotencyKey,
+    )
+  ) {
+    throw new Error("A hash-bound upload idempotency key is required");
+  }
+  if (!/^artifact_[A-Za-z0-9_-]{8,96}$/u.test(artifactId)) {
+    throw new Error("A valid artifact ID is required");
+  }
+  if (!/^[a-f0-9]{64}$/u.test(fileSha256)) {
+    throw new Error("A full artifact SHA-256 is required");
+  }
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(serverSecret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(
+      `counterlab.upload-owner-capability.v1\0${uploadIdempotencyKey}\0${artifactId}\0${fileSha256}`,
+    ),
+  );
+  return ownerCapabilityFromBytes(new Uint8Array(signature));
+}
+
+function ownerCapabilityRecordsMatch(
+  left: OwnerCapabilityRecord,
+  right: OwnerCapabilityRecord,
+): boolean {
+  return (
+    left.resourceId === right.resourceId &&
+    left.tokenHash === right.tokenHash &&
+    left.createdAt === right.createdAt &&
+    left.revokedAt === undefined &&
+    right.revokedAt === undefined
+  );
+}
+
+export async function ensureArtifactOwnerCapability(
+  repository: OwnerCapabilityRepository,
+  record: OwnerCapabilityRecord,
+): Promise<"created" | "existing"> {
+  const existing = await repository.findArtifact(
+    record.resourceId,
+    record.tokenHash,
+  );
+  if (existing !== undefined) {
+    if (!ownerCapabilityRecordsMatch(existing, record)) {
+      throw new OwnerCapabilityConflictError(record.resourceId);
+    }
+    return "existing";
+  }
+  try {
+    await repository.createArtifact(record);
+    return "created";
+  } catch (error) {
+    const raced = await repository.findArtifact(
+      record.resourceId,
+      record.tokenHash,
+    );
+    if (raced === undefined) throw error;
+    if (!ownerCapabilityRecordsMatch(raced, record)) {
+      throw new OwnerCapabilityConflictError(record.resourceId);
+    }
+    return "existing";
+  }
+}
+
+export async function ensureSessionOwnerCapability(
+  repository: OwnerCapabilityRepository,
+  record: OwnerCapabilityRecord,
+): Promise<"created" | "existing"> {
+  const existing = await repository.findSession(record.resourceId);
+  if (existing !== undefined) {
+    if (!ownerCapabilityRecordsMatch(existing, record)) {
+      throw new OwnerCapabilityConflictError(record.resourceId);
+    }
+    return "existing";
+  }
+  try {
+    await repository.createSession(record);
+    return "created";
+  } catch (error) {
+    const raced = await repository.findSession(record.resourceId);
+    if (raced === undefined) throw error;
+    if (!ownerCapabilityRecordsMatch(raced, record)) {
+      throw new OwnerCapabilityConflictError(record.resourceId);
+    }
+    return "existing";
+  }
 }
 
 export async function hashOwnerCapability(token: string): Promise<string> {
