@@ -60,7 +60,7 @@
         ]
       },
       "attribution": "CounterLab contributors; MIT license.",
-      "integrityHash": "cf69989076ad24f490095864657e5b65a90ddfe3d2f81a2cc80b583bfc8dc40e"
+      "integrityHash": "ec713c5ff20f0f05c111f00811a76e1e723692aa9c895be5b31dbf55c3e1625f"
     },
     {
       "id": "numpy",
@@ -120,7 +120,7 @@
         ]
       },
       "attribution": "NumPy Developers; BSD-3-Clause and bundled third-party notices.",
-      "integrityHash": "29e92f33a13259ac5bdfed367bd6d31883e07a38f3c0d5ee2bebbc19d1a239ec"
+      "integrityHash": "8de895c6af34ee7f12c11b81572431b766243ba2d8c0469080817f6df8f66917"
     },
     {
       "id": "pandas",
@@ -179,7 +179,7 @@
         ]
       },
       "attribution": "pandas development team; BSD-3-Clause license.",
-      "integrityHash": "322e00025d4f639c5a3bbfaf7b9e4ffd40c56bb842794dcdd4ecb19b9ae73ccf"
+      "integrityHash": "13bc86dcdf56ee0cbdd90cc4b094201911e28821a64814b3e863658aab98497a"
     },
     {
       "id": "scikit-learn",
@@ -239,7 +239,7 @@
         ]
       },
       "attribution": "scikit-learn developers; BSD-3-Clause license.",
-      "integrityHash": "cac5c794e4d27a130b9c2a62a69efee15b69d012c2c93c5540e7e87ab554f376"
+      "integrityHash": "ddbe40da029dbf03474c66c980b903cbccb4c2918f34c96f5f4a6ae53ae84993"
     }
   ]
 }

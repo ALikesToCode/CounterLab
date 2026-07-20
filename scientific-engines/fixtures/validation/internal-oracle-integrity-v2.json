@@ -4,7 +4,7 @@
   "kind": "integrity",
   "files": {
     "packages/boundary-map/src/index.ts": "c11967a0d97da2e56fc2eb7d4fd87dcdfc7051968450d18b1af601ddb80ca5e1",
-    "packages/concept-registry/src/index.ts": "4f64c6080eb391c14c5819a0cebb764a66ba9f8b887d785e100e77f922cbb838",
+    "packages/concept-registry/src/index.ts": "a085f37c0d004044ba1f514d85c22107d879247e2b95c89e19a090de1a214e6d",
     "packages/experiment-ir/src/canonicalize.ts": "3c3564d19b7c4853c1a8f6ec33737723e340450e0e947c994a8acf6b13dc703e",
     "packages/experiment-ir/src/hash.ts": "fae332ab6a45a345f5be177808f6f64fd0d8ee686e2d733d9919ced38a25152b",
     "packages/experiment-ir/src/policy.ts": "effb319261753660ab497624819a9a6d005d4c45253dee9be29e7663bbdf00b8",
@@ -14,9 +14,9 @@
     "packages/plan-verifier/src/epistemic.ts": "cc7efcdc8e8bbae3576348343eb39a2364b2df1878b7418487d14a9e97352617",
     "packages/plan-verifier/src/scientific-candidate.ts": "09e451f7f9f03d85bcbdc048bbf69c19608108b6557dfcb83fb992722d922f87",
     "services/kernel/src/counterlab_kernel/boundary_map.py": "599578e7a082e529d04c14a17196b038a52a6ad486ecfda3610a252a333125e6",
-    "services/kernel/src/counterlab_kernel/imbalance_transfer.py": "9bb54ee44706cd3cda46b49cf8b20234547311fd6503146f99cece203c5aab4f",
+    "services/kernel/src/counterlab_kernel/imbalance_transfer.py": "ae3330c0d8bb89e5979cd6a19b835c624ca4cc69db355ffedc706d34bb2b0e32",
     "services/kernel/src/counterlab_kernel/imbalance_verifier.py": "49d713b71db6b08f7561ae2128fbcb23872ffea640cccd71eedd97805bcc0280",
-    "services/kernel/src/counterlab_kernel/transfer.py": "650cb209716f297e5b212db287fd16621f715db5089b5986b2eafe3b641f2736",
-    "services/kernel/src/counterlab_kernel/verifier.py": "ab364bc26fc5a4141e49da2f199b68f10c60b243f0442c2ed4cf64e9f21f6ce1"
+    "services/kernel/src/counterlab_kernel/transfer.py": "eaee77c5c4fa4995f7e9b147ea16aeddc7055b65e96478b3a0b2122b2363edc1",
+    "services/kernel/src/counterlab_kernel/verifier.py": "5fbfbe94d7f31e8adb6af8403b4ffb2df7a4cecbbabcfd8de5c78a0e4c4e883d"
   }
 }

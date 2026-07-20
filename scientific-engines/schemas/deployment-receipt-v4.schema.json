@@ -1,0 +1,229 @@
+{
+  "$id": "https://counterlab.dev/schemas/deployment-receipt-v4.schema.json",
+  "title": "CounterLab deployment receipt v4",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "4"
+    },
+    "status": {
+      "type": "string",
+      "const": "DEPLOYED"
+    },
+    "workerName": {
+      "type": "string",
+      "const": "counterlab"
+    },
+    "productionOrigin": {
+      "type": "string",
+      "const": "https://counterlab.cserules.workers.dev"
+    },
+    "generationFilesystemReadIsolation": {
+      "type": "string",
+      "const": "PARTIAL"
+    },
+    "workerEvidenceCommit": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "runnerSourceCommit": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "qualifiedRunnerReceiptSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "releaseCheckReceiptSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "releaseCheckCheckedAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+    },
+    "timeoutCleanupReceiptSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "aggregateLimitEvidenceSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "runtimeToolchainSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "runtimePolicySha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "proofDependencyManifestSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "runtimeAdapterSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "adapterImageDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "workerVersionId": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+    },
+    "workerTag": {
+      "type": "string",
+      "pattern": "^git-[a-f0-9]{40}$"
+    },
+    "workerMessage": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "containerApplicationId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,128}$"
+    },
+    "containerApplicationVersion": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$"
+    },
+    "containerImage": {
+      "type": "string",
+      "pattern": "^registry\\.cloudflare\\.com\\/[A-Za-z0-9_-]{3,64}\\/counterlab-runner@sha256:[a-f0-9]{64}$"
+    },
+    "containerState": {
+      "type": "string",
+      "enum": [
+        "active",
+        "ready"
+      ]
+    },
+    "containerImageDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "workerArtifactClassification": {
+      "type": "string",
+      "const": "PROCESS_BOUND_PARTIAL"
+    },
+    "workerArtifactManifestSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "deployConfigSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "workerBundleSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "clientAssetsSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "clientAssetCount": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "clientPublicAssetsSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "clientPublicAssetCount": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "viteVersion": {
+      "type": "string",
+      "const": "8.1.4"
+    },
+    "wranglerVersion": {
+      "type": "string",
+      "const": "4.110.0"
+    },
+    "dryRunSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "dryRunFileCount": {
+      "type": "number",
+      "const": 1
+    },
+    "deploymentStatusSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "workerVersionSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "containerStatusSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "deployedAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+    },
+    "verifierVersion": {
+      "type": "string",
+      "const": "counterlab-deployment-v4"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "status",
+    "workerName",
+    "productionOrigin",
+    "generationFilesystemReadIsolation",
+    "workerEvidenceCommit",
+    "runnerSourceCommit",
+    "qualifiedRunnerReceiptSha256",
+    "releaseCheckReceiptSha256",
+    "releaseCheckCheckedAt",
+    "timeoutCleanupReceiptSha256",
+    "aggregateLimitEvidenceSha256",
+    "runtimeToolchainSha256",
+    "runtimePolicySha256",
+    "proofDependencyManifestSha256",
+    "runtimeAdapterSha256",
+    "adapterImageDigest",
+    "workerVersionId",
+    "workerTag",
+    "workerMessage",
+    "containerApplicationId",
+    "containerApplicationVersion",
+    "containerImage",
+    "containerState",
+    "containerImageDigest",
+    "workerArtifactClassification",
+    "workerArtifactManifestSha256",
+    "deployConfigSha256",
+    "workerBundleSha256",
+    "clientAssetsSha256",
+    "clientAssetCount",
+    "clientPublicAssetsSha256",
+    "clientPublicAssetCount",
+    "viteVersion",
+    "wranglerVersion",
+    "dryRunSha256",
+    "dryRunFileCount",
+    "deploymentStatusSha256",
+    "workerVersionSha256",
+    "containerStatusSha256",
+    "deployedAt",
+    "verifierVersion"
+  ],
+  "additionalProperties": false
+}

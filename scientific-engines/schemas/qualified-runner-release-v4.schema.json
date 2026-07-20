@@ -1,0 +1,230 @@
+{
+  "$id": "https://counterlab.dev/schemas/qualified-runner-release-v4.schema.json",
+  "title": "CounterLab qualified runner release v4",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "4"
+    },
+    "status": {
+      "type": "string",
+      "const": "VERIFIED"
+    },
+    "sourceCommit": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "sourceArchiveSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "sourceTreeSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "dockerfileSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "localImageTag": {
+      "type": "string",
+      "pattern": "^counterlab-runner:git-[a-f0-9]{40}$"
+    },
+    "localImageDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "ociRevision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "ociSourceTreeSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "engineAuthorityHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "runtimeManifestHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "runtimeToolchainSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "runtimePolicySha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "proofDependencyManifestSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "toolchainLockSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "runtimeAdapterSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "buildctlSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "buildkitdSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "buildkitConfigSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "adapterDockerfileSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "adapterImageTag": {
+      "type": "string",
+      "pattern": "^counterlab-adapter:git-[a-f0-9]{40}$"
+    },
+    "adapterImageDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "adapterManifestDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "adapterOciArchiveSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "adapterOciRevision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "adapterOciSourceTreeSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "limitMode": {
+      "type": "string",
+      "const": "container-cgroup-and-process-rlimit"
+    },
+    "aggregateLimitIntentEnforced": {
+      "type": "boolean",
+      "const": true
+    },
+    "aggregateLimitEvidenceSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "timeoutCleanupReceipt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "timeoutCleanupReceiptSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "timeoutCleanupPayloadSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "timeoutRunControlReceiptSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "timeoutRootlessReceiptSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "timeoutRuntimeSessionId": {
+      "type": "string",
+      "pattern": "^rt-[a-z0-9][a-z0-9-]{7,13}$"
+    },
+    "timeoutVerifiedAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+    },
+    "evidenceCommit": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "registryImage": {
+      "type": "string",
+      "pattern": "^registry\\.cloudflare\\.com\\/[A-Za-z0-9_-]{3,64}\\/counterlab-runner:git-[a-f0-9]{40}$"
+    },
+    "registryDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "registryResolvedAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+    },
+    "qualifiedAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+    },
+    "verifierVersion": {
+      "type": "string",
+      "const": "counterlab-release-v4"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "status",
+    "sourceCommit",
+    "sourceArchiveSha256",
+    "sourceTreeSha256",
+    "dockerfileSha256",
+    "localImageTag",
+    "localImageDigest",
+    "ociRevision",
+    "ociSourceTreeSha256",
+    "engineAuthorityHash",
+    "runtimeManifestHash",
+    "runtimeToolchainSha256",
+    "runtimePolicySha256",
+    "proofDependencyManifestSha256",
+    "toolchainLockSha256",
+    "runtimeAdapterSha256",
+    "buildctlSha256",
+    "buildkitdSha256",
+    "buildkitConfigSha256",
+    "adapterDockerfileSha256",
+    "adapterImageTag",
+    "adapterImageDigest",
+    "adapterManifestDigest",
+    "adapterOciArchiveSha256",
+    "adapterOciRevision",
+    "adapterOciSourceTreeSha256",
+    "limitMode",
+    "aggregateLimitIntentEnforced",
+    "aggregateLimitEvidenceSha256",
+    "timeoutCleanupReceipt",
+    "timeoutCleanupReceiptSha256",
+    "timeoutCleanupPayloadSha256",
+    "timeoutRunControlReceiptSha256",
+    "timeoutRootlessReceiptSha256",
+    "timeoutRuntimeSessionId",
+    "timeoutVerifiedAt",
+    "evidenceCommit",
+    "registryImage",
+    "registryDigest",
+    "registryResolvedAt",
+    "qualifiedAt",
+    "verifierVersion"
+  ],
+  "additionalProperties": false
+}
