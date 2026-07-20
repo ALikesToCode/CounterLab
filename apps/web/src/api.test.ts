@@ -860,7 +860,15 @@ describe("CounterLabApiClient", () => {
     });
 
     expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(fetcher.mock.calls[0]).toEqual(fetcher.mock.calls[1]);
+    const [firstUrl, firstInit] = fetcher.mock.calls[0]!;
+    const [secondUrl, secondInit] = fetcher.mock.calls[1]!;
+    const { signal: firstSignal, ...firstRequest } = firstInit!;
+    const { signal: secondSignal, ...secondRequest } = secondInit!;
+    expect(secondUrl).toBe(firstUrl);
+    expect(secondRequest).toEqual(firstRequest);
+    expect(firstSignal).toBeInstanceOf(AbortSignal);
+    expect(secondSignal).toBeInstanceOf(AbortSignal);
+    expect(secondSignal).not.toBe(firstSignal);
   });
 
   it("validates authoritative runner cancellation and its encoded route", async () => {

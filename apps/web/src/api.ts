@@ -65,6 +65,7 @@ const NonEmptyString = z.string().trim().min(1);
 const Sha256Digest = z
   .string()
   .regex(/^[a-f0-9]{64}$/, "expected a lowercase SHA-256 digest");
+const DEFAULT_REQUEST_TIMEOUT_MS = 210_000;
 
 const ReleaseIdentitySchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("unbound") }).strict(),
@@ -548,6 +549,7 @@ export type CounterLabApiClientOptions = {
   baseUrl?: string;
   fetch?: typeof fetch;
   capabilityStorage?: Pick<Storage, "getItem" | "setItem" | "removeItem">;
+  requestTimeoutMs?: number;
 };
 
 function encodedId(value: string): string {
@@ -620,6 +622,7 @@ export class CounterLabApiClient {
   private readonly fetcher: typeof fetch | undefined;
   private readonly capabilityStorage:
     Pick<Storage, "getItem" | "setItem" | "removeItem"> | undefined;
+  private readonly requestTimeoutMs: number;
   private readonly ownerCapabilities = new Map<string, string>();
   private readonly artifactCapabilities = new Map<string, string>();
   private readonly uploadIdempotencyKeys = new WeakMap<File, string>();
@@ -628,6 +631,19 @@ export class CounterLabApiClient {
     this.baseUrl = (options.baseUrl ?? "").replace(/\/+$/, "");
     this.fetcher = options.fetch;
     this.capabilityStorage = options.capabilityStorage;
+    this.requestTimeoutMs =
+      options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    if (
+      !Number.isInteger(this.requestTimeoutMs) ||
+      this.requestTimeoutMs < 1 ||
+      this.requestTimeoutMs > DEFAULT_REQUEST_TIMEOUT_MS
+    ) {
+      throw new ApiClientError({
+        code: "INVALID_CONFIGURATION",
+        message: "API request timeout is outside the supported range",
+        status: 0,
+      });
+    }
   }
 
   hasSessionAccess(sessionId: string): boolean {
@@ -1117,6 +1133,7 @@ export class CounterLabApiClient {
     path: string,
     dataSchema: z.ZodType<T>,
     init: RequestInit = { method: "GET" },
+    timeoutMs = this.requestTimeoutMs,
   ): Promise<T> {
     const headers: Record<string, string> = { accept: "application/json" };
     if (
@@ -1149,7 +1166,22 @@ export class CounterLabApiClient {
       }
     }
 
-    let response: Response;
+    const controller = new AbortController();
+    const callerSignal = init.signal;
+    let timedOut = false;
+    const timeout = globalThis.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+    const abortFromCaller = () => controller.abort(callerSignal?.reason);
+    if (callerSignal?.aborted) {
+      abortFromCaller();
+    } else {
+      callerSignal?.addEventListener("abort", abortFromCaller, { once: true });
+    }
+
+    let response: Response | undefined;
+    let responseText: string;
     try {
       const fetcher = this.fetcher ?? globalThis.fetch.bind(globalThis);
       response = await fetcher(`${this.baseUrl}${path}`, {
@@ -1157,21 +1189,38 @@ export class CounterLabApiClient {
         method: init.method ?? "GET",
         headers,
         credentials: init.credentials ?? "same-origin",
+        signal: controller.signal,
       });
+      responseText = await response.text();
     } catch (cause) {
       if (cause instanceof ApiClientError) throw cause;
+      if (timedOut) {
+        throw new ApiClientError({
+          code: "REQUEST_TIMEOUT",
+          message: "CounterLab stopped waiting for the API response",
+          status: 0,
+          retryable: true,
+          cause,
+        });
+      }
       throw new ApiClientError({
-        code: "NETWORK_ERROR",
-        message: "CounterLab could not reach the API",
-        status: 0,
-        retryable: true,
+        code: response === undefined ? "NETWORK_ERROR" : "INVALID_API_RESPONSE",
+        message:
+          response === undefined
+            ? "CounterLab could not reach the API"
+            : "CounterLab could not read the API response",
+        status: response?.status ?? 0,
+        retryable: response === undefined,
         cause,
       });
+    } finally {
+      globalThis.clearTimeout(timeout);
+      callerSignal?.removeEventListener("abort", abortFromCaller);
     }
 
     let payload: unknown;
     try {
-      payload = JSON.parse(await response.text());
+      payload = JSON.parse(responseText);
     } catch (cause) {
       throw new ApiClientError({
         code: "INVALID_API_RESPONSE",
