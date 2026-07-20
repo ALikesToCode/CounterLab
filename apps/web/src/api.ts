@@ -69,6 +69,7 @@ const Sha256Digest = z
   .regex(/^[a-f0-9]{64}$/, "expected a lowercase SHA-256 digest");
 const DEFAULT_REQUEST_TIMEOUT_MS = 210_000;
 const UPLOAD_REQUEST_TIMEOUT_MS = 60_000;
+const RESTART_IDEMPOTENCY_KEY = "counterlab.restart.v1";
 
 const ReleaseIdentitySchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("unbound") }).strict(),
@@ -798,6 +799,7 @@ export class CounterLabApiClient {
       SessionCreationViewSchema,
       {
         method: "POST",
+        headers: { "idempotency-key": RESTART_IDEMPOTENCY_KEY },
         body: JSON.stringify({}),
       },
     ).then((created) => this.rememberCreatedSession(created));

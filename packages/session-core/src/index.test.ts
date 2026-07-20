@@ -906,6 +906,9 @@ describe("SessionService state machine", () => {
     expect((await service.getSession("session-2")).state).toBe(
       "REJECTED_BY_LEARNER",
     );
+    const rejectedEvent = (await service.listEvents("session-2")).at(-1);
+    expect(rejectedEvent?.inputHashes).toHaveLength(1);
+    expect(rejectedEvent?.outputHashes).toHaveLength(1);
 
     await service.createSession({
       id: "session-3",
@@ -924,6 +927,30 @@ describe("SessionService state machine", () => {
     expect((await service.getSession("session-3")).state).toBe(
       "INSUFFICIENT_EVIDENCE",
     );
+    const insufficientEvent = (await service.listEvents("session-3")).at(-1);
+    expect(insufficientEvent?.inputHashes).toHaveLength(1);
+    expect(insufficientEvent?.outputHashes).toHaveLength(1);
+
+    const sourceEventHash = insufficientEvent?.eventHash;
+    const restarted = await service.createSession({
+      id: "session-4",
+      artifactId: "artifact-1",
+      mode: { kind: "sample_lesson", sampleId: "leakage-01" },
+      sourceSessionId: "session-3",
+    });
+    expect(restarted.state).toBe("INGESTED");
+    const restartEvent = (await service.listEvents("session-4"))[0];
+    expect(restartEvent).toMatchObject({
+      kind: "session.created",
+      payload: {
+        sourceSessionId: "session-3",
+        sourceState: "INSUFFICIENT_EVIDENCE",
+        sourceEventHash,
+      },
+    });
+    expect(restartEvent?.inputHashes).toContain(sourceEventHash);
+    expect(restartEvent?.inputHashes).toHaveLength(2);
+    expect(restartEvent?.outputHashes).toHaveLength(1);
     repository.close();
   });
 

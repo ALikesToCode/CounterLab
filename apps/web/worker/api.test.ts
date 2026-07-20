@@ -28,7 +28,12 @@ import type {
   SessionMode,
   SessionRepository,
 } from "@counterlab/session-core";
-import { createEvidenceEvent, hashCanonical } from "@counterlab/session-core";
+import {
+  SessionAlreadyExistsError,
+  SessionService,
+  createEvidenceEvent,
+  hashCanonical,
+} from "@counterlab/session-core";
 import { validateProofBundle } from "@counterlab/proof-bundle";
 import {
   validatePublicReplayProjectionV1,
@@ -119,6 +124,9 @@ class MemorySessionRepository implements SessionRepository {
     session: CounterLabSession,
     firstEvent: EvidenceEvent,
   ): Promise<void> {
+    if (this.sessions.has(session.id)) {
+      throw new SessionAlreadyExistsError(session.id);
+    }
     this.sessions.set(session.id, structuredClone(session));
     this.eventLog.set(session.id, [structuredClone(firstEvent)]);
   }
@@ -335,6 +343,22 @@ class MemoryOwnerCapabilityRepository implements OwnerCapabilityRepository {
     if (current === undefined || current.revokedAt !== undefined) return false;
     this.sessions.set(sessionId, { ...current, revokedAt });
     return true;
+  }
+}
+
+class RecoverableOwnerCapabilityRepository extends MemoryOwnerCapabilityRepository {
+  private failNextSessionInsert = false;
+
+  failNextSessionCapabilityInsert(): void {
+    this.failNextSessionInsert = true;
+  }
+
+  override async createSession(record: OwnerCapabilityRecord): Promise<void> {
+    if (this.failNextSessionInsert) {
+      this.failNextSessionInsert = false;
+      throw new Error("simulated capability insert failure");
+    }
+    await super.createSession(record);
   }
 }
 
@@ -3347,10 +3371,11 @@ describe("Cloudflare Worker API", () => {
   });
 
   describe("private owner capabilities", () => {
-    function protectedApi() {
+    function protectedApi(
+      ownerCapabilityRepository: OwnerCapabilityRepository = new MemoryOwnerCapabilityRepository(),
+    ) {
       const sessionRepository = new MemorySessionRepository();
       const artifactStore = new MemoryArtifactStore();
-      const ownerCapabilityRepository = new MemoryOwnerCapabilityRepository();
       const replayRepository = new MemoryProofCapsuleReplayRepository();
       const runnerJobs = new MemoryRunnerJobRepository();
       let sequence = 0;
@@ -3369,6 +3394,51 @@ describe("Cloudflare Worker API", () => {
         ownerCapabilityRepository,
         runnerJobs,
         sessionRepository,
+      };
+    }
+
+    async function closeProtectedSample(
+      app: ReturnType<typeof createApi>,
+    ): Promise<{
+      sourceSessionId: string;
+      authorization: string;
+      route: string;
+    }> {
+      const createdResponse = await postJson(app, "/api/sample/sessions", {
+        sampleId: "leakage-01",
+      });
+      const created = (await createdResponse.json()) as {
+        data: { sessionId: string; ownerCapability: string };
+      };
+      const authorization = `Bearer ${created.data.ownerCapability}`;
+      const route = `/api/sessions/${created.data.sessionId}`;
+      expect(
+        (
+          await postJson(
+            app,
+            `${route}/belief-test`,
+            { learnerClaim: SAMPLE_LEAKAGE_QUESTION },
+            { authorization },
+          )
+        ).status,
+      ).toBe(200);
+      expect(
+        (
+          await postJson(
+            app,
+            `${route}/belief-test/confirm`,
+            {
+              action: "reject",
+              reason: "The proposed explanation does not capture my claim.",
+            },
+            { authorization },
+          )
+        ).status,
+      ).toBe(200);
+      return {
+        sourceSessionId: created.data.sessionId,
+        authorization,
+        route,
       };
     }
 
@@ -3505,8 +3575,7 @@ describe("Cloudflare Worker API", () => {
               app,
               `${route}/belief-test`,
               {
-                learnerClaim:
-                  "The high score means this model works for new customers.",
+                learnerClaim: SAMPLE_LEAKAGE_QUESTION,
               },
               { authorization },
             )
@@ -3535,6 +3604,20 @@ describe("Cloudflare Worker API", () => {
           error: { code: "SESSION_ACCESS_DENIED" },
         });
 
+        const invalidRestart = await postJson(
+          app,
+          `${route}/restart`,
+          {},
+          {
+            authorization,
+            "idempotency-key": "short",
+          },
+        );
+        expect(invalidRestart.status).toBe(400);
+        await expect(invalidRestart.json()).resolves.toMatchObject({
+          error: { code: "INVALID_IDEMPOTENCY_KEY" },
+        });
+
         const restart = await postJson(
           app,
           `${route}/restart`,
@@ -3561,6 +3644,21 @@ describe("Cloudflare Worker API", () => {
           /^cl_owner_[A-Za-z0-9_-]{43}$/u,
         );
 
+        const repeatedRestartResponse = await postJson(
+          app,
+          `${route}/restart`,
+          {},
+          { authorization },
+        );
+        expect(repeatedRestartResponse.status).toBe(200);
+        const repeatedRestart = (await repeatedRestartResponse.json()) as {
+          data: { sessionId: string; ownerCapability: string };
+        };
+        expect(repeatedRestart.data).toMatchObject({
+          sessionId: restarted.data.sessionId,
+          ownerCapability: restarted.data.ownerCapability,
+        });
+
         const oldSession = await sessionRepository.find(created.data.sessionId);
         expect(oldSession?.state).toBe(
           action === "reject" ? "REJECTED_BY_LEARNER" : "INSUFFICIENT_EVIDENCE",
@@ -3568,10 +3666,7 @@ describe("Cloudflare Worker API", () => {
         const oldResubmission = await postJson(
           app,
           `${route}/belief-test`,
-          {
-            learnerClaim:
-              "The high score means this model works for new customers.",
-          },
+          { learnerClaim: SAMPLE_LEAKAGE_QUESTION },
           { authorization },
         );
         expect(oldResubmission.status).toBe(409);
@@ -3583,11 +3678,72 @@ describe("Cloudflare Worker API", () => {
             ),
           },
         });
+
+        const sourceEvents = await sessionRepository.listEvents(
+          created.data.sessionId,
+        );
+        const sourceHead = sourceEvents.at(-1);
+        const restartEvents = await sessionRepository.listEvents(
+          restarted.data.sessionId,
+        );
+        expect(restartEvents).toHaveLength(1);
+        expect(restartEvents[0]).toMatchObject({
+          kind: "session.created",
+          payload: {
+            sourceSessionId: created.data.sessionId,
+            sourceState:
+              action === "reject"
+                ? "REJECTED_BY_LEARNER"
+                : "INSUFFICIENT_EVIDENCE",
+            sourceEventHash: sourceHead?.eventHash,
+          },
+          inputHashes: expect.arrayContaining([sourceHead?.eventHash]),
+        });
+
+        const restartedAuthorization = `Bearer ${restarted.data.ownerCapability}`;
+        const restartedRoute = `/api/sessions/${restarted.data.sessionId}`;
+        expect(
+          (
+            await postJson(
+              app,
+              `${restartedRoute}/belief-test`,
+              { learnerClaim: SAMPLE_LEAKAGE_QUESTION },
+              { authorization: restartedAuthorization },
+            )
+          ).status,
+        ).toBe(200);
+        expect(
+          (
+            await postJson(
+              app,
+              `${restartedRoute}/belief-test/confirm`,
+              { action: "confirm" },
+              { authorization: restartedAuthorization },
+            )
+          ).status,
+        ).toBe(200);
+        expect(
+          (
+            await postJson(
+              app,
+              `${restartedRoute}/prediction`,
+              {
+                choice: "The score will remain high for unseen customers.",
+                confidence: 72,
+              },
+              { authorization: restartedAuthorization },
+            )
+          ).status,
+        ).toBe(201);
+        expect(
+          (await sessionRepository.find(restarted.data.sessionId))?.state,
+        ).toBe("PREDICTION_COMMITTED");
+
         const nonterminalRestart = await postJson(
           app,
-          `/api/sessions/${restarted.data.sessionId}/restart`,
+          `${restartedRoute}/restart`,
           {},
-          { authorization: `Bearer ${restarted.data.ownerCapability}` },
+          { authorization: restartedAuthorization },
         );
         expect(nonterminalRestart.status).toBe(409);
         await expect(nonterminalRestart.json()).resolves.toMatchObject({
@@ -3600,6 +3756,124 @@ describe("Cloudflare Worker API", () => {
         });
       },
     );
+
+    it("repairs a response-loss window after the child session was created", async () => {
+      const capabilities = new RecoverableOwnerCapabilityRepository();
+      const { app, sessionRepository } = protectedApi(capabilities);
+      const source = await closeProtectedSample(app);
+      capabilities.failNextSessionCapabilityInsert();
+
+      const interrupted = await postJson(
+        app,
+        `${source.route}/restart`,
+        {},
+        { authorization: source.authorization },
+      );
+      expect(interrupted.status).toBe(500);
+
+      const retried = await postJson(
+        app,
+        `${source.route}/restart`,
+        {},
+        { authorization: source.authorization },
+      );
+      expect(retried.status).toBe(200);
+      const body = (await retried.json()) as {
+        data: { sessionId: string; ownerCapability: string };
+      };
+      expect(body.data.ownerCapability).toMatch(
+        /^cl_owner_[A-Za-z0-9_-]{43}$/u,
+      );
+      expect(
+        await sessionRepository.listEvents(body.data.sessionId),
+      ).toHaveLength(1);
+      expect(
+        (
+          await app.request(`/api/sessions/${body.data.sessionId}`, {
+            headers: {
+              authorization: `Bearer ${body.data.ownerCapability}`,
+            },
+          })
+        ).status,
+      ).toBe(200);
+    });
+
+    it("reconciles simultaneous restart requests to one child and one capability", async () => {
+      const { app, sessionRepository } = protectedApi();
+      const source = await closeProtectedSample(app);
+
+      const responses = await Promise.all([
+        postJson(
+          app,
+          `${source.route}/restart`,
+          {},
+          { authorization: source.authorization },
+        ),
+        postJson(
+          app,
+          `${source.route}/restart`,
+          {},
+          { authorization: source.authorization },
+        ),
+      ]);
+      expect(responses.map((response) => response.status).sort()).toEqual([
+        200, 201,
+      ]);
+      const bodies = (await Promise.all(
+        responses.map((response) => response.json()),
+      )) as Array<{
+        data: { sessionId: string; ownerCapability: string };
+      }>;
+      expect(bodies[0]?.data).toEqual(bodies[1]?.data);
+      const restarted = bodies[0]?.data;
+      if (restarted === undefined) throw new Error("missing restarted session");
+      expect(
+        await sessionRepository.listEvents(restarted.sessionId),
+      ).toHaveLength(1);
+      expect(
+        (
+          await app.request(`/api/sessions/${restarted.sessionId}`, {
+            headers: {
+              authorization: `Bearer ${restarted.ownerCapability}`,
+            },
+          })
+        ).status,
+      ).toBe(200);
+    });
+
+    it("fails closed when a deterministic restart ID has unrelated lineage", async () => {
+      const { app, sessionRepository } = protectedApi();
+      const sourceAccess = await closeProtectedSample(app);
+      const source = await sessionRepository.find(sourceAccess.sourceSessionId);
+      if (source === undefined) throw new Error("missing source session");
+      const fingerprint = await hashCanonical({
+        schemaVersion: "1",
+        operation: "restart-closed-belief-response",
+        sourceSessionId: source.id,
+        idempotencyKey: "counterlab.restart.v1",
+      });
+      const conflictingId = `session_restart_${fingerprint}`;
+      const conflictService = new SessionService(sessionRepository, {
+        id: (prefix) => `${prefix}_conflict`,
+        now: () => new Date("2026-07-18T10:00:00.000Z"),
+      });
+      await conflictService.createSession({
+        id: conflictingId,
+        artifactId: source.artifactId,
+        mode: source.mode,
+      });
+
+      const response = await postJson(
+        app,
+        `${sourceAccess.route}/restart`,
+        {},
+        { authorization: sourceAccess.authorization },
+      );
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "SESSION_RESTART_CONFLICT" },
+      });
+    });
 
     it("blocks session revocation while an authoritative runner job is active", async () => {
       const { app, runnerJobs, sessionRepository } = protectedApi();

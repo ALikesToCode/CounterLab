@@ -102,6 +102,7 @@ import {
   RunnerJobNotFoundError,
   RunnerJobService,
   SessionInputError,
+  SessionAlreadyExistsError,
   SessionNotFoundError,
   SessionService,
   getSessionBeliefAuthority,
@@ -138,9 +139,12 @@ import {
 } from "./artifact-store";
 import {
   D1OwnerCapabilityRepository,
+  OwnerCapabilityConflictError,
   createOwnerCapability,
+  deriveRestartOwnerCapability,
   deriveUploadOwnerCapability,
   ensureArtifactOwnerCapability,
+  ensureSessionOwnerCapability,
   hashOwnerCapability,
   ownerCapabilityMatches,
   ownerCapabilityIdentifies,
@@ -731,6 +735,46 @@ async function issueSessionOwnerCapability(
   return token;
 }
 
+async function issueRestartedSessionOwnerCapability(
+  context: Context<AppBindings>,
+  options: ApiOptions,
+  sourceSessionId: string,
+  restarted: CounterLabSession,
+): Promise<string | undefined> {
+  if (!ownerCapabilitiesEnabled(options)) return undefined;
+  const sourceCapability =
+    bearerOwnerCapability(context) ??
+    sessionOwnerCookie(context, sourceSessionId);
+  if (sourceCapability === undefined) {
+    throw new ApiInputError(
+      "SESSION_ACCESS_DENIED",
+      "The requested private session is unavailable",
+      404,
+    );
+  }
+  const token = await deriveRestartOwnerCapability(
+    sourceCapability,
+    restarted.id,
+  );
+  try {
+    await ensureSessionOwnerCapability(ownerCapabilities(context, options), {
+      resourceId: restarted.id,
+      tokenHash: await hashOwnerCapability(token),
+      createdAt: restarted.createdAt,
+    });
+  } catch (error) {
+    if (error instanceof OwnerCapabilityConflictError) {
+      throw new ApiInputError(
+        "SESSION_RESTART_CONFLICT",
+        "The fresh investigation could not be reconciled safely",
+        409,
+      );
+    }
+    throw error;
+  }
+  return token;
+}
+
 async function requireSessionOwnerCapability(
   context: Context<AppBindings>,
   options: ApiOptions,
@@ -1225,6 +1269,73 @@ async function requireUploadRequestBinding(
       409,
     );
   }
+}
+
+const DEFAULT_RESTART_IDEMPOTENCY_KEY = "counterlab.restart.v1";
+
+function restartIdempotencyKey(context: Context<AppBindings>): string {
+  const provided =
+    context.req.header("idempotency-key") ?? DEFAULT_RESTART_IDEMPOTENCY_KEY;
+  if (!/^[A-Za-z0-9._:-]{16,128}$/u.test(provided)) {
+    throw new ApiInputError(
+      "INVALID_IDEMPOTENCY_KEY",
+      "Idempotency-Key must contain 16 to 128 safe ASCII characters",
+      400,
+    );
+  }
+  return provided;
+}
+
+async function deterministicRestartSessionId(
+  sourceSessionId: string,
+  idempotencyKey: string,
+): Promise<string> {
+  const fingerprint = await hashCanonical({
+    schemaVersion: "1",
+    operation: "restart-closed-belief-response",
+    sourceSessionId,
+    idempotencyKey,
+  });
+  return `session_restart_${fingerprint}`;
+}
+
+async function requireReconciledRestart(
+  service: SessionService,
+  source: CounterLabSession,
+  restartedSessionId: string,
+): Promise<CounterLabSession> {
+  const restarted = await service.getSession(restartedSessionId);
+  const [sourceEvents, restartedEvents, sourceModeHash, restartedModeHash] =
+    await Promise.all([
+      service.listEvents(source.id),
+      service.listEvents(restarted.id),
+      hashCanonical(source.mode),
+      hashCanonical(restarted.mode),
+    ]);
+  const sourceHead = sourceEvents.at(-1);
+  const creation = restartedEvents[0];
+  const expectedSourceHash = await hashCanonical(source);
+  const lineageValid =
+    restarted.id === restartedSessionId &&
+    restarted.artifactId === source.artifactId &&
+    sourceModeHash === restartedModeHash &&
+    sourceHead !== undefined &&
+    creation?.kind === "session.created" &&
+    creation.sequence === 1 &&
+    creation.payload.sourceSessionId === source.id &&
+    creation.payload.sourceState === source.state &&
+    creation.payload.sourceEventHash === sourceHead.eventHash &&
+    creation.inputHashes.length === 2 &&
+    creation.inputHashes[0] === expectedSourceHash &&
+    creation.inputHashes[1] === sourceHead.eventHash;
+  if (!lineageValid) {
+    throw new ApiInputError(
+      "SESSION_RESTART_CONFLICT",
+      "The fresh investigation could not be reconciled safely",
+      409,
+    );
+  }
+  return restarted;
 }
 
 function liveRunnerRequestIdentity(
@@ -4361,7 +4472,8 @@ export function createApi(options: ApiOptions = {}) {
   app.post("/api/sessions/:sessionId/restart", async (context) => {
     RestartSessionSchema.parse(await readJson(context));
     const service = sessionService(context, options);
-    const source = await service.getSession(context.req.param("sessionId"));
+    const sourceSessionId = context.req.param("sessionId");
+    const source = await service.getSession(sourceSessionId);
     if (
       source.state !== "INSUFFICIENT_EVIDENCE" &&
       source.state !== "REJECTED_BY_LEARNER"
@@ -4390,15 +4502,33 @@ export function createApi(options: ApiOptions = {}) {
         );
       }
     }
-    const restarted = await service.createSession({
-      artifactId: source.artifactId,
-      mode: source.mode,
-    });
-    const ownerCapability = await issueSessionOwnerCapability(
+    const restartedSessionId = await deterministicRestartSessionId(
+      source.id,
+      restartIdempotencyKey(context),
+    );
+    let created = true;
+    let restarted: CounterLabSession;
+    try {
+      restarted = await service.createSession({
+        id: restartedSessionId,
+        artifactId: source.artifactId,
+        mode: source.mode,
+        sourceSessionId: source.id,
+      });
+    } catch (error) {
+      if (!(error instanceof SessionAlreadyExistsError)) throw error;
+      created = false;
+      restarted = await requireReconciledRestart(
+        service,
+        source,
+        restartedSessionId,
+      );
+    }
+    const ownerCapability = await issueRestartedSessionOwnerCapability(
       context,
       options,
-      restarted.id,
-      restarted.createdAt,
+      sourceSessionId,
+      restarted,
     );
     if (ownerCapability !== undefined) {
       setSessionOwnerCookie(context, restarted.id, ownerCapability);
@@ -4408,7 +4538,7 @@ export function createApi(options: ApiOptions = {}) {
         ...statePayload(restarted),
         ...(ownerCapability === undefined ? {} : { ownerCapability }),
       }),
-      201,
+      created ? 201 : 200,
     );
   });
 

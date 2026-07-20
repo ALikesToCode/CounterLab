@@ -484,9 +484,49 @@ describe("CounterLabApiClient", () => {
     });
     expect(fetcher).toHaveBeenCalledWith(
       "/api/sessions/session%2Fsource/restart",
-      expect.objectContaining({ method: "POST", body: "{}" }),
+      expect.objectContaining({
+        method: "POST",
+        body: "{}",
+        headers: expect.objectContaining({
+          "idempotency-key": "counterlab.restart.v1",
+        }),
+      }),
     );
     expect(client.hasSessionAccess("session_revision")).toBe(true);
+  });
+
+  it("reuses the same restart key after a response is lost", async () => {
+    const restarted = {
+      ...session,
+      sessionId: "session_revision",
+      state: "INGESTED" as const,
+      version: 1,
+      ownerCapability: `cl_owner_${"b".repeat(43)}`,
+    };
+    let calls = 0;
+    const fetcher = vi.fn<typeof fetch>(async () => {
+      calls += 1;
+      if (calls === 1) throw new TypeError("response lost");
+      return jsonResponse({ ok: true, data: restarted });
+    });
+    const client = new CounterLabApiClient({ fetch: fetcher });
+
+    await expect(client.restartSession("session_source")).rejects.toMatchObject(
+      { code: "NETWORK_ERROR", retryable: true },
+    );
+    await expect(
+      client.restartSession("session_source"),
+    ).resolves.toMatchObject({ sessionId: "session_revision" });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    for (const call of fetcher.mock.calls) {
+      expect(call[1]).toEqual(
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            "idempotency-key": "counterlab.restart.v1",
+          }),
+        }),
+      );
+    }
   });
 
   it("validates configured-but-unproven server capabilities", async () => {

@@ -51,6 +51,7 @@ export interface CreateSessionInput {
   id?: string;
   artifactId: string;
   mode: SessionMode;
+  sourceSessionId?: string;
 }
 
 export class SessionService {
@@ -65,9 +66,53 @@ export class SessionService {
 
   async createSession(input: CreateSessionInput): Promise<CounterLabSession> {
     const timestamp = this.runtime.now().toISOString();
+    const artifactId = requiredString(input.artifactId, "artifactId");
+    let restartLineage:
+      | {
+          sourceSessionId: string;
+          sourceState: "INSUFFICIENT_EVIDENCE" | "REJECTED_BY_LEARNER";
+          sourceEventHash: string;
+          inputHashes: string[];
+        }
+      | undefined;
+    if (input.sourceSessionId !== undefined) {
+      const sourceSessionId = requiredString(
+        input.sourceSessionId,
+        "sourceSessionId",
+      );
+      const source = await this.requireSession(sourceSessionId);
+      if (
+        source.state !== "INSUFFICIENT_EVIDENCE" &&
+        source.state !== "REJECTED_BY_LEARNER"
+      ) {
+        throw new SessionInputError(
+          "sourceSessionId must reference a closed learner response",
+        );
+      }
+      if (
+        source.artifactId !== artifactId ||
+        (await hashCanonical(source.mode)) !== (await hashCanonical(input.mode))
+      ) {
+        throw new SessionInputError(
+          "restart session must preserve source artifact and mode",
+        );
+      }
+      const sourceEvent = await this.repository.lastEvent(sourceSessionId);
+      if (sourceEvent === undefined) {
+        throw new SessionInputError(
+          "restart source event chain is unavailable",
+        );
+      }
+      restartLineage = {
+        sourceSessionId,
+        sourceState: source.state,
+        sourceEventHash: sourceEvent.eventHash,
+        inputHashes: [await hashCanonical(source), sourceEvent.eventHash],
+      };
+    }
     const session = createSessionAggregate({
       id: input.id ?? this.runtime.id("session"),
-      artifactId: requiredString(input.artifactId, "artifactId"),
+      artifactId,
       mode: input.mode,
       timestamp,
     });
@@ -83,7 +128,17 @@ export class SessionService {
           artifactId: session.artifactId,
           mode: session.mode,
           state: session.state,
+          ...(restartLineage === undefined
+            ? {}
+            : {
+                sourceSessionId: restartLineage.sourceSessionId,
+                sourceState: restartLineage.sourceState,
+                sourceEventHash: restartLineage.sourceEventHash,
+              }),
         },
+        ...(restartLineage === undefined
+          ? {}
+          : { inputHashes: restartLineage.inputHashes }),
         outputHashes: [await hashCanonical(session)],
       },
     });
@@ -331,6 +386,8 @@ export class SessionService {
     reason: string,
   ): Promise<CounterLabSession> {
     const current = await this.requireSession(sessionId);
+    const beliefAuthority = getSessionBeliefAuthority(current);
+    const cleanReason = requiredString(reason, "reason");
     const rejectedBeliefSpec =
       current.beliefSpec === undefined
         ? undefined
@@ -350,7 +407,17 @@ export class SessionService {
           rejectedBeliefSpec === undefined
             ? "belief_test.rejected"
             : "belief_spec.rejected",
-        payload: { reason: requiredString(reason, "reason") },
+        payload: { reason: cleanReason },
+        inputHashes: [await hashCanonical(beliefAuthority)],
+        outputHashes: [
+          await hashCanonical(
+            rejectedBeliefSpec ?? {
+              beliefTestId: getObjectString(beliefAuthority, "id"),
+              learnerDecision: "REJECTED",
+              reason: cleanReason,
+            },
+          ),
+        ],
       },
     );
   }
@@ -360,6 +427,8 @@ export class SessionService {
     reason: string,
   ): Promise<CounterLabSession> {
     const current = await this.requireSession(sessionId);
+    const beliefAuthority = getSessionBeliefAuthority(current);
+    const cleanReason = requiredString(reason, "reason");
     const insufficientBeliefSpec =
       current.beliefSpec === undefined
         ? undefined
@@ -379,7 +448,17 @@ export class SessionService {
           insufficientBeliefSpec === undefined
             ? "belief_test.insufficient_evidence"
             : "belief_spec.insufficient_evidence",
-        payload: { reason: requiredString(reason, "reason") },
+        payload: { reason: cleanReason },
+        inputHashes: [await hashCanonical(beliefAuthority)],
+        outputHashes: [
+          await hashCanonical(
+            insufficientBeliefSpec ?? {
+              beliefTestId: getObjectString(beliefAuthority, "id"),
+              learnerDecision: "INSUFFICIENT_EVIDENCE",
+              reason: cleanReason,
+            },
+          ),
+        ],
       },
     );
   }

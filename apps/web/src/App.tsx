@@ -180,6 +180,19 @@ type Stage =
   | "live-setup"
   | "live-compile";
 type PredictionChoice = "stays-high" | "falls" | "unsure";
+
+const predictionReceiptChoices: Readonly<Record<string, PredictionChoice>> = {
+  "Accuracy remains near 98%": "stays-high",
+  "Accuracy falls materially": "falls",
+  "I am unsure": "unsure",
+  "Accuracy still supports useful rare-case detection": "stays-high",
+  "Minority metrics expose a serious evaluation problem": "falls",
+};
+
+function predictionChoiceFromReceipt(choice: string): PredictionChoice | null {
+  return predictionReceiptChoices[choice] ?? null;
+}
+
 type LeakageTransferSplit = "" | "random" | "time";
 type LeakageTransferRisk = "" | "price" | "future";
 type TransferState =
@@ -292,6 +305,33 @@ function beliefResponseClosed(session: SessionView | null): boolean {
     session?.state === "INSUFFICIENT_EVIDENCE" ||
     session?.state === "REJECTED_BY_LEARNER"
   );
+}
+
+function restoredStageForSession(
+  session: SessionView,
+): "claim" | "belief" | "build" | "reality" {
+  if (
+    session.state === "INGESTED" ||
+    session.state === "INSUFFICIENT_EVIDENCE" ||
+    session.state === "REJECTED_BY_LEARNER"
+  ) {
+    return "claim";
+  }
+  if (
+    session.state === "BELIEF_TEST_PROPOSED" ||
+    session.state === "BELIEF_TEST_CONFIRMED"
+  ) {
+    return "belief";
+  }
+  if (
+    session.state === "PREDICTION_COMMITTED" ||
+    session.state === "LAB_COMPILING" ||
+    session.state === "LAB_REJECTED" ||
+    session.state === "LAB_VERIFIED"
+  ) {
+    return "build";
+  }
+  return "reality";
 }
 
 type BeliefPresentation = {
@@ -5081,25 +5121,47 @@ export function App() {
 
   const restartClosedBeliefResponse = () => {
     if (session === null || !beliefResponseClosed(session)) return;
+    const sourceClaim = claim.trim();
     void withRequest(async () => {
       const restarted = await counterLabApi.restartSession(session.sessionId);
+      const restartedClaim =
+        sessionBeliefPresentation(restarted)?.claim ?? sourceClaim;
       setSession(restarted);
-      setConfirmed(false);
-      setPrediction(null);
-      setConfidence(72);
+      setMode(presentationMode(restarted.mode));
+      setClaim(restartedClaim);
+      setConfirmed(
+        restarted.state !== "INGESTED" &&
+          restarted.state !== "BELIEF_TEST_PROPOSED",
+      );
+      setPrediction(
+        restarted.prediction === undefined
+          ? null
+          : predictionChoiceFromReceipt(restarted.prediction.choice),
+      );
+      setConfidence(restarted.prediction?.confidence ?? 72);
       setAnalysisPreview(null);
       setSensitiveContentApproved(false);
-      window.localStorage.setItem(storageKeys.sessionId, restarted.sessionId);
-      window.localStorage.setItem(storageKeys.claim, claim);
-      window.localStorage.setItem(
-        storageKeys.claimSessionId,
-        restarted.sessionId,
-      );
-      window.localStorage.setItem(
-        storageKeys.mode,
-        presentationMode(restarted.mode),
-      );
-      setStage("claim");
+      try {
+        window.localStorage.setItem(storageKeys.sessionId, restarted.sessionId);
+        window.localStorage.setItem(
+          storageKeys.mode,
+          presentationMode(restarted.mode),
+        );
+        if (restartedClaim.length > 0) {
+          window.localStorage.setItem(storageKeys.claim, restartedClaim);
+          window.localStorage.setItem(
+            storageKeys.claimSessionId,
+            restarted.sessionId,
+          );
+        } else {
+          window.localStorage.removeItem(storageKeys.claim);
+          window.localStorage.removeItem(storageKeys.claimSessionId);
+        }
+      } catch {
+        // The reconciled server session remains authoritative when this
+        // browser blocks optional local recovery storage.
+      }
+      setStage(restoredStageForSession(restarted));
     });
   };
 
@@ -5165,7 +5227,7 @@ export function App() {
         reason === "rejected"
           ? {
               action: "reject",
-              reason: "Learner rejected the proposed Belief Test.",
+              reason: "Learner chose not to confirm the proposed explanation.",
             }
           : {
               action: "insufficient_evidence",

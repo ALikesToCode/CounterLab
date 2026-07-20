@@ -328,6 +328,12 @@ function installApi(
       | "REASONING_DIFF_ISSUED"
       | "PROOF_CAPSULE_ISSUED";
     restoredSessionExtra?: Record<string, unknown>;
+    restartSessionState?:
+      | "INGESTED"
+      | "BELIEF_TEST_PROPOSED"
+      | "BELIEF_TEST_CONFIRMED"
+      | "PREDICTION_COMMITTED";
+    restartSessionExtra?: Record<string, unknown>;
     replay?: ReturnType<typeof publicReplayFixture>;
     eventsHandler?: (
       sessionId: string,
@@ -348,6 +354,7 @@ function installApi(
   const fetcher = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
+      const routedSessionId = /^\/api\/sessions\/([^/]+)/u.exec(path)?.[1];
       if (path === "/api/health") {
         return response({
           platform: "cloudflare-workers",
@@ -419,10 +426,11 @@ function installApi(
       }
       if (path.endsWith("/restart")) {
         return response(
-          session("INGESTED", 1, {
+          session(options.restartSessionState ?? "INGESTED", 1, {
             sessionId: "session_revision",
             artifactId: activeArtifactId,
             mode: activeMode,
+            ...(options.restartSessionExtra ?? {}),
           }),
           201,
         );
@@ -446,14 +454,16 @@ function installApi(
       }
       if (path === "/api/sessions/session_revision") {
         return response(
-          session("INGESTED", 1, {
+          session(options.restartSessionState ?? "INGESTED", 1, {
             sessionId: "session_revision",
-            artifactId: uploadedArtifact.artifactId,
-            mode: { kind: "sample_lesson", sampleId: "leakage-01" },
+            artifactId: activeArtifactId,
+            mode: activeMode,
+            ...(options.restartSessionExtra ?? {}),
           }),
         );
       }
       if (path === "/api/sessions/session_ui") {
+        activeMode = { kind: "live_notebook" };
         return response(
           session(options.restoredSessionState ?? "LAB_COMPILING", 5, {
             artifactId: uploadedArtifact.artifactId,
@@ -518,6 +528,9 @@ function installApi(
         }
         return response(
           session("BELIEF_TEST_PROPOSED", 2, {
+            ...(routedSessionId === undefined
+              ? {}
+              : { sessionId: decodeURIComponent(routedSessionId) }),
             artifactId: activeArtifactId,
             mode: activeMode,
             ...(activeMode.kind === "live_notebook"
@@ -531,6 +544,9 @@ function installApi(
         if (body.action === "reject") {
           return response(
             session("REJECTED_BY_LEARNER", 3, {
+              ...(routedSessionId === undefined
+                ? {}
+                : { sessionId: decodeURIComponent(routedSessionId) }),
               artifactId: activeArtifactId,
               mode: activeMode,
             }),
@@ -539,6 +555,9 @@ function installApi(
         if (body.action === "insufficient_evidence") {
           return response(
             session("INSUFFICIENT_EVIDENCE", 3, {
+              ...(routedSessionId === undefined
+                ? {}
+                : { sessionId: decodeURIComponent(routedSessionId) }),
               artifactId: activeArtifactId,
               mode: activeMode,
             }),
@@ -546,6 +565,9 @@ function installApi(
         }
         return response(
           session("BELIEF_TEST_CONFIRMED", 3, {
+            ...(routedSessionId === undefined
+              ? {}
+              : { sessionId: decodeURIComponent(routedSessionId) }),
             artifactId: activeArtifactId,
             mode: activeMode,
           }),
@@ -554,6 +576,9 @@ function installApi(
       if (path.endsWith("/prediction")) {
         return response(
           session("PREDICTION_COMMITTED", 4, {
+            ...(routedSessionId === undefined
+              ? {}
+              : { sessionId: decodeURIComponent(routedSessionId) }),
             artifactId: activeArtifactId,
             mode: activeMode,
           }),
@@ -1547,6 +1572,33 @@ describe("CounterLab judged flow", () => {
           String(init?.body).includes(`\"action\":\"${action}\"`),
       );
       expect(responseRequests).toHaveLength(1);
+      const responseBody = String(responseRequests[0]?.[1]?.body ?? "");
+      expect(responseBody).not.toContain("Belief Test");
+      if (action === "reject") {
+        expect(responseBody).toContain(
+          "Learner chose not to confirm the proposed explanation.",
+        );
+      }
+
+      await user.click(
+        await screen.findByRole("button", {
+          name: /yes, this captures my view/i,
+        }),
+      );
+      await user.click(screen.getByRole("radio", { name: /remain near 98/i }));
+      await user.click(
+        screen.getByRole("button", { name: /seal my prediction/i }),
+      );
+
+      expect(
+        await screen.findByRole("region", { name: /sealed prediction/i }),
+      ).toBeInTheDocument();
+      await vi.waitFor(() =>
+        expect(
+          fetcher.mock.calls.map(([path]) => String(path)),
+          fetcher.mock.calls.map(([path]) => String(path)).join("\n"),
+        ).toContain("/api/sessions/session_revision/prediction"),
+      );
     },
   );
 
@@ -1578,62 +1630,154 @@ describe("CounterLab judged flow", () => {
     );
   });
 
-  it("keeps old terminal and new revision routes safe across browser back and forward", async () => {
+  it("hydrates an already-progressed revision returned by restart reconciliation", async () => {
     const user = userEvent.setup();
+    const progressedClaim =
+      "The revised claim is limited to performance on entirely new customers.";
+    const progressedBeliefSpec = {
+      ...liveBeliefSpec,
+      claim: progressedClaim,
+    };
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem("counterlab.claim", liveBeliefSpec.claim);
+    window.localStorage.setItem("counterlab.mode", "live");
+    window.history.replaceState({}, "", "/session/session_ui");
     installApi({
       restoredSessionState: "REJECTED_BY_LEARNER",
       restoredSessionExtra: { beliefSpec: liveBeliefSpec },
+      restartSessionState: "BELIEF_TEST_PROPOSED",
+      restartSessionExtra: { beliefSpec: progressedBeliefSpec },
     });
+
     render(<App />);
-    await openSampleModelDuel(user);
-    await user.click(screen.getByText(/more ways to respond/i));
-    await user.click(screen.getByRole("button", { name: /^reject$/i }));
     await user.click(
       await screen.findByRole("button", {
         name: /revise in a new investigation/i,
       }),
     );
-    await vi.waitFor(() =>
-      expect(window.location.pathname).toBe("/session/session_revision"),
-    );
 
-    await act(async () => window.history.back());
     expect(
-      await screen.findByRole("button", {
-        name: /revise in a new investigation/i,
+      await screen.findByRole("heading", {
+        name: /does your current explanation capture what you mean/i,
       }),
-    ).toBeEnabled();
-    expect(screen.getByLabelText(/your claim/i)).toHaveValue(
-      liveBeliefSpec.claim,
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText(/your claim/i)).not.toBeInTheDocument();
+    expect(screen.getByText(progressedClaim)).toBeInTheDocument();
+    expect(window.localStorage.getItem("counterlab.claim")).toBe(
+      progressedClaim,
     );
+    expect(window.localStorage.getItem("counterlab.claimSessionId")).toBe(
+      "session_revision",
+    );
+    expect(window.location.pathname).toBe("/session/session_revision");
+  });
 
-    await act(async () => window.history.forward());
-    await vi.waitFor(() =>
-      expect(window.location.pathname).toBe("/session/session_revision"),
-    );
-    await vi.waitFor(() =>
+  it.each([
+    ["rejected", "REJECTED_BY_LEARNER"],
+    ["insufficient", "INSUFFICIENT_EVIDENCE"],
+  ] as const)(
+    "keeps a learner-authored live claim through %s restart, reload, back, and forward",
+    async (_response, terminalState) => {
+      const user = userEvent.setup();
+      const learnerClaim =
+        "My familiar-row score should hold when entirely new customers arrive.";
+      const learnerBeliefTest = { ...liveBeliefTest, learnerClaim };
+      const learnerBeliefSpec = {
+        ...migrateBeliefTestV1ToV2(learnerBeliefTest),
+        learnerDecision:
+          terminalState === "REJECTED_BY_LEARNER"
+            ? ("REJECTED" as const)
+            : ("UNDECIDED" as const),
+        ...(terminalState === "INSUFFICIENT_EVIDENCE"
+          ? { supportState: "INSUFFICIENT_EVIDENCE" as const }
+          : {}),
+      };
+      window.localStorage.setItem("counterlab.sessionId", "session_ui");
+      window.localStorage.setItem("counterlab.claim", learnerClaim);
+      window.localStorage.setItem("counterlab.claimSessionId", "session_ui");
+      window.localStorage.setItem("counterlab.mode", "live");
+      window.history.replaceState({}, "", "/session/session_ui");
+      const fetcher = installApi({
+        beliefTest: learnerBeliefTest,
+        restoredSessionState: terminalState,
+        restoredSessionExtra: { beliefSpec: learnerBeliefSpec },
+      });
+
+      const mounted = render(<App />);
       expect(
-        screen.queryByRole("button", {
+        await screen.findByRole("button", {
           name: /revise in a new investigation/i,
         }),
-      ).not.toBeInTheDocument(),
-    );
-    await vi.waitFor(() =>
-      expect(screen.queryByLabelText(/your claim/i)).not.toBeInTheDocument(),
-    );
-    expect(screen.getByText(SAMPLE_LEAKAGE_QUESTION)).toBeInTheDocument();
-    expect(
-      screen.getAllByText(uploadedArtifact.fileName).length,
-    ).toBeGreaterThan(0);
-    await vi.waitFor(() =>
-      expect(screen.queryByText(/recording evidence/i)).not.toBeInTheDocument(),
-    );
-    await vi.waitFor(() =>
+      ).toBeEnabled();
+      expect(screen.getByLabelText(/your claim/i)).toHaveValue(learnerClaim);
+
+      await user.click(
+        screen.getByRole("button", {
+          name: /revise in a new investigation/i,
+        }),
+      );
+      await vi.waitFor(() =>
+        expect(window.location.pathname).toBe("/session/session_revision"),
+      );
+      expect(window.localStorage.getItem("counterlab.sessionId")).toBe(
+        "session_revision",
+      );
+      expect(window.localStorage.getItem("counterlab.claimSessionId")).toBe(
+        "session_revision",
+      );
+      expect(window.localStorage.getItem("counterlab.claim")).toBe(
+        learnerClaim,
+      );
+
+      mounted.unmount();
+      render(<App />);
+      expect(await screen.findByLabelText(/your claim/i)).toHaveValue(
+        learnerClaim,
+      );
+
+      await act(async () => window.history.back());
+      await vi.waitFor(() =>
+        expect(window.location.pathname).toBe("/session/session_ui"),
+      );
       expect(
+        await screen.findByRole("button", {
+          name: /revise in a new investigation/i,
+        }),
+      ).toBeEnabled();
+      expect(screen.getByLabelText(/your claim/i)).toHaveValue(learnerClaim);
+
+      await act(async () => window.history.forward());
+      await vi.waitFor(() =>
+        expect(window.location.pathname).toBe("/session/session_revision"),
+      );
+      expect(await screen.findByLabelText(/your claim/i)).toHaveValue(
+        learnerClaim,
+      );
+
+      await user.click(
         screen.getByRole("button", { name: /compare two explanations/i }),
-      ).toBeEnabled(),
-    );
-  });
+      );
+      await user.click(
+        await screen.findByRole("button", { name: /send this evidence/i }),
+      );
+      const proposal = fetcher.mock.calls.find(
+        ([path]) =>
+          String(path) === "/api/sessions/session_revision/belief-test",
+      );
+      expect(proposal).toBeDefined();
+      expect(JSON.parse(String(proposal?.[1]?.body))).toMatchObject({
+        learnerClaim,
+      });
+      expect(
+        await screen.findByRole("heading", {
+          name: /does your current explanation capture what you mean/i,
+        }),
+      ).toBeInTheDocument();
+      expect(document.body).not.toHaveTextContent(
+        /INSUFFICIENT_EVIDENCE|REJECTED_BY_LEARNER/,
+      );
+    },
+  );
 
   it("keeps the first failed live request provider-neutral and on the claim screen", async () => {
     const user = userEvent.setup();
