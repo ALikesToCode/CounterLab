@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import shutil
 from pathlib import Path
 from types import ModuleType
@@ -91,7 +92,10 @@ def test_release_check_keeps_engine_and_adapter_images_separate() -> None:
         'COUNTERLAB_SANDBOX_IMAGE="${ADAPTER_IMAGE}" '
         "bash scripts/reproduce-session.sh leakage-01" in release_check
     )
-    assert 'verify-scientific-engines.sh --image "${ENGINE_IMAGE}"' in release_check
+    assert re.search(
+        r'verify-scientific-engines\.sh\s+\\\s*\n\s*--image "\$\{ENGINE_IMAGE\}"',
+        release_check,
+    )
 
 
 def test_release_check_uses_read_only_evidence_checks() -> None:
