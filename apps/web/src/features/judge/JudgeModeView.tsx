@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import type { CapabilityHealth } from "../../api";
 import { VerifiedBeliefBreakMechanism } from "../../components/learner/VerifiedBeliefBreakTheater";
 import { verifiedReplay } from "../../sampleReplayMetadata";
@@ -40,6 +42,8 @@ export function JudgeModeView({
 }) {
   const liveReady = liveAuthorityReady(health);
   const release = health?.release?.status === "bound" ? health.release : null;
+  const [sampleEvidenceInspectionRequest, setSampleEvidenceInspectionRequest] =
+    useState(0);
 
   return (
     <main className={styles.page} id="main-content" tabIndex={-1}>
@@ -92,8 +96,14 @@ export function JudgeModeView({
             occurs in this preview.
           </p>
           <VerifiedBeliefBreakMechanism presentation="compact" />
-          <a className={styles.previewProofLink} href="#sample-evidence">
-            Inspect exact values and integrity
+          <a
+            className={styles.previewProofLink}
+            href="#sample-evidence"
+            onClick={() =>
+              setSampleEvidenceInspectionRequest((request) => request + 1)
+            }
+          >
+            Inspect verified sample proof
           </a>
         </aside>
 
@@ -341,7 +351,7 @@ export function JudgeModeView({
         </div>
       </section>
 
-      <SampleEvidencePack />
+      <SampleEvidencePack inspectionRequest={sampleEvidenceInspectionRequest} />
 
       <section className={styles.methodSection} aria-labelledby="method-title">
         <div className={styles.methodIntro}>

@@ -1,9 +1,14 @@
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { CapabilityHealth } from "../../api";
 import { JudgeModeView } from "./JudgeModeView";
+
+const repositoryRoot = resolve(import.meta.dirname, "../../../../..");
 
 const configuredHealth: CapabilityHealth = {
   platform: "cloudflare-workers",
@@ -45,6 +50,10 @@ const isolatedHealth: CapabilityHealth = {
 };
 
 describe("JudgeModeView", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("distinguishes sample, live, and legacy replay authority", async () => {
     render(
       <JudgeModeView
@@ -91,7 +100,7 @@ describe("JudgeModeView", () => {
     );
     expect(
       screen.getByRole("link", {
-        name: /inspect exact values and integrity/i,
+        name: /inspect verified sample proof/i,
       }),
     ).toHaveAttribute("href", "#sample-evidence");
     expect(screen.getByText("Sample lesson")).toBeInTheDocument();
@@ -201,6 +210,43 @@ describe("JudgeModeView", () => {
       screen.getByRole("button", { name: /open disclosed walkthrough/i }),
     );
     expect(onStartSample).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens the verified Sample Proof Capsule from the first fold in one action", async () => {
+    const capsuleBytes = await readFile(
+      resolve(
+        repositoryRoot,
+        "fixtures/public/leakage_sample_proof_capsule_v1.counterlab",
+      ),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(capsuleBytes, { status: 200 })),
+    );
+    const user = userEvent.setup();
+
+    render(
+      <JudgeModeView
+        health={configuredHealth}
+        healthPending={false}
+        healthError={null}
+        onRetryHealth={vi.fn()}
+        onStartSample={vi.fn()}
+      />,
+    );
+
+    await screen.findByText(/capsule bytes match the checked-in reference/iu);
+    await user.click(
+      screen.getByRole("link", {
+        name: /inspect verified sample proof/iu,
+      }),
+    );
+
+    const summary = screen.getByText("Inspect Sample Proof Capsule", {
+      selector: "summary",
+    });
+    expect(summary.closest("details")).toHaveAttribute("open");
+    expect(summary).toHaveFocus();
   });
 
   it("does not offer a live link when deployed authority is unavailable", async () => {
