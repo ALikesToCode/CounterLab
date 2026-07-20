@@ -245,6 +245,9 @@ type WorkerBindings = Omit<Env, "COUNTERLAB_MAINTENANCE_MODE"> & {
   COUNTERLAB_RUNNER_IMAGE_DIGEST?: string;
   COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256?: string;
   COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256?: string;
+  COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256?: string;
+  COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256?: string;
+  COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT?: string;
   COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256?: string;
   COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256?: string;
   COUNTERLAB_RUNTIME_POLICY_SHA256?: string;
@@ -1068,6 +1071,9 @@ function releaseIdentity(context: Context<AppBindings>):
       runnerImageDigest: string;
       generationIsolationEvidenceSha256: string;
       generationIsolationProbeSha256: string;
+      releaseCheckGenerationIsolationEvidenceSha256: string;
+      releaseCheckGenerationIsolationProbeSha256: string;
+      releaseCheckGenerationIsolationVerifiedAt: string;
       timeoutCleanupReceiptSha256: string;
       aggregateLimitEvidenceSha256: string;
       runtimePolicySha256: string;
@@ -1091,6 +1097,15 @@ function releaseIdentity(context: Context<AppBindings>):
     context.env?.COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256 ?? "";
   const generationIsolationProbeSha256 =
     context.env?.COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256 ?? "";
+  const releaseCheckGenerationIsolationEvidenceSha256 =
+    context.env
+      ?.COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256 ?? "";
+  const releaseCheckGenerationIsolationProbeSha256 =
+    context.env?.COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256 ??
+    "";
+  const releaseCheckGenerationIsolationVerifiedAt =
+    context.env?.COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT ??
+    "";
   const timeoutCleanupReceiptSha256 =
     context.env?.COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256 ?? "";
   const aggregateLimitEvidenceSha256 =
@@ -1125,6 +1140,13 @@ function releaseIdentity(context: Context<AppBindings>):
     !/^sha256:[a-f0-9]{64}$/u.test(runnerImageDigest) ||
     !/^[a-f0-9]{64}$/u.test(generationIsolationEvidenceSha256) ||
     !/^[a-f0-9]{64}$/u.test(generationIsolationProbeSha256) ||
+    !/^[a-f0-9]{64}$/u.test(releaseCheckGenerationIsolationEvidenceSha256) ||
+    releaseCheckGenerationIsolationProbeSha256 !==
+      generationIsolationProbeSha256 ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u.test(
+      releaseCheckGenerationIsolationVerifiedAt,
+    ) ||
+    !Number.isFinite(Date.parse(releaseCheckGenerationIsolationVerifiedAt)) ||
     !/^[a-f0-9]{64}$/u.test(timeoutCleanupReceiptSha256) ||
     !/^[a-f0-9]{64}$/u.test(aggregateLimitEvidenceSha256) ||
     !/^[a-f0-9]{64}$/u.test(runtimePolicySha256) ||
@@ -1154,6 +1176,9 @@ function releaseIdentity(context: Context<AppBindings>):
     runnerImageDigest,
     generationIsolationEvidenceSha256,
     generationIsolationProbeSha256,
+    releaseCheckGenerationIsolationEvidenceSha256,
+    releaseCheckGenerationIsolationProbeSha256,
+    releaseCheckGenerationIsolationVerifiedAt,
     timeoutCleanupReceiptSha256,
     aggregateLimitEvidenceSha256,
     runtimePolicySha256,

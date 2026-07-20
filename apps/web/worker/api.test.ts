@@ -10495,6 +10495,14 @@ describe("Cloudflare Worker API", () => {
       COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
       COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "5".repeat(64),
       COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(64),
+      COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256: "7".repeat(
+        64,
+      ),
+      COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(
+        64,
+      ),
+      COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT:
+        "2026-07-19T05:31:00.000+05:30",
       COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256: "d".repeat(64),
       COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256: "9".repeat(64),
       COUNTERLAB_RUNTIME_POLICY_SHA256: "e".repeat(64),
@@ -10515,32 +10523,35 @@ describe("Cloudflare Worker API", () => {
       },
     } as unknown as Env);
 
-    await expect(response.json()).resolves.toMatchObject({
-      data: {
-        release: {
-          status: "bound",
-          workerVersionId,
-          workerVersionTag: `git-${workerEvidenceCommit}`,
-          workerEvidenceCommit,
-          runnerSourceCommit: "b".repeat(40),
-          runnerImageDigest: `sha256:${"c".repeat(64)}`,
-          generationIsolationEvidenceSha256: "5".repeat(64),
-          generationIsolationProbeSha256: "6".repeat(64),
-          timeoutCleanupReceiptSha256: "d".repeat(64),
-          aggregateLimitEvidenceSha256: "9".repeat(64),
-          runtimePolicySha256: "e".repeat(64),
-          proofDependencyManifestSha256: "f".repeat(64),
-          workerArtifactClassification: "PROCESS_BOUND_PARTIAL",
-          workerArtifactManifestSha256: "1".repeat(64),
-          workerBundleSha256: "2".repeat(64),
-          clientAssetsSha256: "3".repeat(64),
-          clientAssetCount: 27,
-          clientPublicAssetsSha256: "4".repeat(64),
-          clientPublicAssetCount: 25,
-          viteVersion: "8.1.4",
-          wranglerVersion: "4.110.0",
-        },
-      },
+    const releaseHealth = (await response.json()) as {
+      data: { release: unknown };
+    };
+    expect(releaseHealth.data.release).toEqual({
+      status: "bound",
+      workerVersionId,
+      workerVersionTag: `git-${workerEvidenceCommit}`,
+      workerEvidenceCommit,
+      runnerSourceCommit: "b".repeat(40),
+      runnerImageDigest: `sha256:${"c".repeat(64)}`,
+      generationIsolationEvidenceSha256: "5".repeat(64),
+      generationIsolationProbeSha256: "6".repeat(64),
+      releaseCheckGenerationIsolationEvidenceSha256: "7".repeat(64),
+      releaseCheckGenerationIsolationProbeSha256: "6".repeat(64),
+      releaseCheckGenerationIsolationVerifiedAt:
+        "2026-07-19T05:31:00.000+05:30",
+      timeoutCleanupReceiptSha256: "d".repeat(64),
+      aggregateLimitEvidenceSha256: "9".repeat(64),
+      runtimePolicySha256: "e".repeat(64),
+      proofDependencyManifestSha256: "f".repeat(64),
+      workerArtifactClassification: "PROCESS_BOUND_PARTIAL",
+      workerArtifactManifestSha256: "1".repeat(64),
+      workerBundleSha256: "2".repeat(64),
+      clientAssetsSha256: "3".repeat(64),
+      clientAssetCount: 27,
+      clientPublicAssetsSha256: "4".repeat(64),
+      clientPublicAssetCount: 25,
+      viteVersion: "8.1.4",
+      wranglerVersion: "4.110.0",
     });
 
     const mismatchedTag = await api.request("/api/health", undefined, {
@@ -10549,6 +10560,14 @@ describe("Cloudflare Worker API", () => {
       COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
       COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "5".repeat(64),
       COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(64),
+      COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256: "7".repeat(
+        64,
+      ),
+      COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(
+        64,
+      ),
+      COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT:
+        "2026-07-19T05:31:00.000+05:30",
       COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256: "d".repeat(64),
       COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256: "9".repeat(64),
       COUNTERLAB_RUNTIME_POLICY_SHA256: "e".repeat(64),
@@ -10593,6 +10612,29 @@ describe("Cloudflare Worker API", () => {
       { COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "0".repeat(63) },
       { COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: undefined },
       { COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "0".repeat(63) },
+      {
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256:
+          undefined,
+      },
+      {
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256:
+          "0".repeat(63),
+      },
+      {
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256: undefined,
+      },
+      {
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256: "0".repeat(
+          64,
+        ),
+      },
+      {
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT: undefined,
+      },
+      {
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT:
+          "not-a-timestamp",
+      },
       { COUNTERLAB_RUNTIME_POLICY_SHA256: undefined },
       { COUNTERLAB_RUNTIME_POLICY_SHA256: "0".repeat(63) },
       { COUNTERLAB_PROOF_DEPENDENCY_MANIFEST_SHA256: undefined },
@@ -10622,6 +10664,13 @@ describe("Cloudflare Worker API", () => {
         COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
         COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "5".repeat(64),
         COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(64),
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256:
+          "7".repeat(64),
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(
+          64,
+        ),
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT:
+          "2026-07-19T05:31:00.000+05:30",
         COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256: "d".repeat(64),
         COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256: "9".repeat(64),
         COUNTERLAB_RUNTIME_POLICY_SHA256: "e".repeat(64),

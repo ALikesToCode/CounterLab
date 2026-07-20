@@ -8,6 +8,7 @@ import {
   DeploymentReceiptV4Schema,
   DeploymentReceiptV5Schema,
   DeploymentReceiptV6Schema,
+  DeploymentReceiptV7Schema,
   GenerationIsolationEvidenceSchema,
   GenerationIsolationEvidenceV1Schema,
   GenerationIsolationProbePayloadSchema,
@@ -31,6 +32,7 @@ import {
   ReleaseCheckReceiptV2Schema,
   ReleaseCheckReceiptV3Schema,
   ReleaseCheckReceiptV4Schema,
+  ReleaseCheckReceiptV5Schema,
   SubjectPackAuthorityBindingSchema,
   SubjectPackEngineBindingSchema,
   SubjectPackEngineBindingsSchema,
@@ -48,6 +50,7 @@ export type DeploymentReceiptV3 = z.infer<typeof DeploymentReceiptV3Schema>;
 export type DeploymentReceiptV4 = z.infer<typeof DeploymentReceiptV4Schema>;
 export type DeploymentReceiptV5 = z.infer<typeof DeploymentReceiptV5Schema>;
 export type DeploymentReceiptV6 = z.infer<typeof DeploymentReceiptV6Schema>;
+export type DeploymentReceiptV7 = z.infer<typeof DeploymentReceiptV7Schema>;
 export type GenerationIsolationEvidence = z.infer<
   typeof GenerationIsolationEvidenceSchema
 >;
@@ -116,3 +119,4 @@ export type ReleaseCheckReceiptV1 = z.infer<typeof ReleaseCheckReceiptV1Schema>;
 export type ReleaseCheckReceiptV2 = z.infer<typeof ReleaseCheckReceiptV2Schema>;
 export type ReleaseCheckReceiptV3 = z.infer<typeof ReleaseCheckReceiptV3Schema>;
 export type ReleaseCheckReceiptV4 = z.infer<typeof ReleaseCheckReceiptV4Schema>;
+export type ReleaseCheckReceiptV5 = z.infer<typeof ReleaseCheckReceiptV5Schema>;

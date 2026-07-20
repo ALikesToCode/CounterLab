@@ -4,15 +4,16 @@ import { realpath, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  DeploymentReceiptV6Schema,
-  ReleaseCheckReceiptV4Schema,
-} from "../packages/scientific-engine-registry/src/index.js";
+import { DeploymentReceiptV7Schema } from "../packages/scientific-engine-registry/src/index.js";
 import type {
   QualifiedRunnerReleaseV6,
-  ReleaseCheckReceiptV4,
+  ReleaseCheckReceiptV5,
 } from "../packages/scientific-engine-registry/src/index.js";
-import { parseQualifiedRunnerReleaseV6 } from "./generation-isolation-evidence.js";
+import {
+  parseQualifiedRunnerReleaseV6,
+  verifyGenerationIsolationEvidence,
+} from "./generation-isolation-evidence.js";
+import { parseReleaseCheckReceiptV5 } from "./release-check-receipt.js";
 import {
   collectFrozenClientAssets,
   verifyFrozenWorkerReleaseManifest,
@@ -224,6 +225,9 @@ export function assertActiveWorkerReleaseBindings(
     runnerImageDigest: string;
     generationIsolationEvidenceSha256: string;
     generationIsolationProbeSha256: string;
+    releaseCheckGenerationIsolationEvidenceSha256: string;
+    releaseCheckGenerationIsolationProbeSha256: string;
+    releaseCheckGenerationIsolationVerifiedAt: string;
     timeoutCleanupReceiptSha256: string;
     aggregateLimitEvidenceSha256: string;
     runtimePolicySha256: string;
@@ -250,6 +254,12 @@ export function assertActiveWorkerReleaseBindings(
       expected.generationIsolationEvidenceSha256,
     COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256:
       expected.generationIsolationProbeSha256,
+    COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256:
+      expected.releaseCheckGenerationIsolationEvidenceSha256,
+    COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256:
+      expected.releaseCheckGenerationIsolationProbeSha256,
+    COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT:
+      expected.releaseCheckGenerationIsolationVerifiedAt,
     COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256:
       expected.timeoutCleanupReceiptSha256,
     COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256:
@@ -273,10 +283,12 @@ export function assertActiveWorkerReleaseBindings(
     COUNTERLAB_MAINTENANCE_MODE: "false",
   } as const;
   for (const [name, value] of Object.entries(expectedBindings)) {
-    const binding = (bindings as Array<Record<string, unknown>>).find(
+    const matchingBindings = (
+      bindings as Array<Record<string, unknown>>
+    ).filter(
       (candidate) => candidate.name === name && candidate.type === "plain_text",
     );
-    if (binding?.text !== value) {
+    if (matchingBindings.length !== 1 || matchingBindings[0]?.text !== value) {
       throw new Error(`active Worker binding ${name} is not release-bound`);
     }
   }
@@ -286,6 +298,7 @@ type QualifiedDeploymentIdentity = Pick<
   QualifiedRunnerReleaseV6,
   | "evidenceCommit"
   | "sourceCommit"
+  | "sourceTreeSha256"
   | "registryDigest"
   | "qualifiedAt"
   | "localImageTag"
@@ -303,7 +316,7 @@ type QualifiedDeploymentIdentity = Pick<
 >;
 
 type ReleaseCheckDeploymentIdentity = Pick<
-  ReleaseCheckReceiptV4,
+  ReleaseCheckReceiptV5,
   | "evidenceCommit"
   | "sourceCommit"
   | "qualifiedRunnerReceiptSha256"
@@ -321,6 +334,10 @@ type ReleaseCheckDeploymentIdentity = Pick<
   | "generationIsolationEvidenceSha256"
   | "generationIsolationProbeSha256"
   | "generationIsolationVerifiedAt"
+  | "releaseCheckGenerationIsolationEvidence"
+  | "releaseCheckGenerationIsolationEvidenceSha256"
+  | "releaseCheckGenerationIsolationProbeSha256"
+  | "releaseCheckGenerationIsolationVerifiedAt"
 >;
 
 export function assertDeploymentReceiptBindings(input: {
@@ -331,6 +348,19 @@ export function assertDeploymentReceiptBindings(input: {
   sourceCommit: string;
   registryDigest: string;
 }): void {
+  verifyGenerationIsolationEvidence({
+    evidence: input.releaseCheck.releaseCheckGenerationIsolationEvidence,
+    evidenceSha256:
+      input.releaseCheck.releaseCheckGenerationIsolationEvidenceSha256,
+    expected: {
+      sourceCommit: input.qualified.sourceCommit,
+      sourceTreeSha256: input.qualified.sourceTreeSha256,
+      localImageTag: input.qualified.localImageTag,
+      localImageDigest: input.qualified.localImageDigest,
+      probeSha256: input.qualified.generationIsolationProbeSha256,
+      verifiedAt: input.releaseCheck.releaseCheckGenerationIsolationVerifiedAt,
+    },
+  });
   const comparisons: ReadonlyArray<readonly [string, string, string]> = [
     [
       "qualified evidence commit",
@@ -381,6 +411,11 @@ export function assertDeploymentReceiptBindings(input: {
       "generation isolation verification time",
       input.releaseCheck.generationIsolationVerifiedAt,
       input.qualified.generationIsolationVerifiedAt,
+    ],
+    [
+      "release-check generation isolation probe",
+      input.releaseCheck.releaseCheckGenerationIsolationProbeSha256,
+      input.qualified.generationIsolationProbeSha256,
     ],
     [
       "runner image tag",
@@ -504,6 +539,10 @@ async function main(): Promise<void> {
   const qualified = parseQualifiedRunnerReleaseV6(
     JSON.parse(qualifiedBytes.toString("utf8")) as unknown,
   );
+  const releaseCheckBytes = readFileSync(paths.releaseCheck);
+  const releaseCheck = parseReleaseCheckReceiptV5(
+    JSON.parse(releaseCheckBytes.toString("utf8")) as unknown,
+  );
   assertActiveWorkerReleaseBindings(bindings, {
     workerEvidenceCommit: args["--evidence-commit"],
     runnerSourceCommit: args["--source-commit"],
@@ -511,6 +550,12 @@ async function main(): Promise<void> {
     generationIsolationEvidenceSha256:
       qualified.generationIsolationEvidenceSha256,
     generationIsolationProbeSha256: qualified.generationIsolationProbeSha256,
+    releaseCheckGenerationIsolationEvidenceSha256:
+      releaseCheck.releaseCheckGenerationIsolationEvidenceSha256,
+    releaseCheckGenerationIsolationProbeSha256:
+      releaseCheck.releaseCheckGenerationIsolationProbeSha256,
+    releaseCheckGenerationIsolationVerifiedAt:
+      releaseCheck.releaseCheckGenerationIsolationVerifiedAt,
     timeoutCleanupReceiptSha256: qualified.timeoutCleanupReceiptSha256,
     aggregateLimitEvidenceSha256: qualified.aggregateLimitEvidenceSha256,
     runtimePolicySha256: qualified.runtimePolicySha256,
@@ -536,10 +581,6 @@ async function main(): Promise<void> {
     throw new Error("active Worker lacks version metadata");
   }
 
-  const releaseCheckBytes = readFileSync(paths.releaseCheck);
-  const releaseCheck = ReleaseCheckReceiptV4Schema.parse(
-    JSON.parse(releaseCheckBytes.toString("utf8")) as unknown,
-  );
   assertDeploymentReceiptBindings({
     qualified,
     qualifiedReceiptBytes: qualifiedBytes,
@@ -588,8 +629,8 @@ async function main(): Promise<void> {
   }
   const dryRun = dryRunWorkerHash(root, paths.dryRun, workerBundleSha256);
   const configBytes = readFileSync(paths.config);
-  const receipt = DeploymentReceiptV6Schema.parse({
-    schemaVersion: "6",
+  const receipt = DeploymentReceiptV7Schema.parse({
+    schemaVersion: "7",
     status: "DEPLOYED",
     workerName: "counterlab",
     productionOrigin: "https://counterlab.cserules.workers.dev",
@@ -599,6 +640,12 @@ async function main(): Promise<void> {
       releaseCheck.generationIsolationEvidenceSha256,
     generationIsolationProbeSha256: releaseCheck.generationIsolationProbeSha256,
     generationIsolationVerifiedAt: releaseCheck.generationIsolationVerifiedAt,
+    releaseCheckGenerationIsolationEvidenceSha256:
+      releaseCheck.releaseCheckGenerationIsolationEvidenceSha256,
+    releaseCheckGenerationIsolationProbeSha256:
+      releaseCheck.releaseCheckGenerationIsolationProbeSha256,
+    releaseCheckGenerationIsolationVerifiedAt:
+      releaseCheck.releaseCheckGenerationIsolationVerifiedAt,
     workerEvidenceCommit: args["--evidence-commit"],
     runnerSourceCommit: args["--source-commit"],
     qualifiedRunnerReceiptSha256: sha256(qualifiedBytes),
@@ -635,7 +682,7 @@ async function main(): Promise<void> {
     workerVersionSha256: sha256(versionBytes),
     containerStatusSha256: sha256(containersBytes),
     deployedAt: new Date().toISOString(),
-    verifierVersion: "counterlab-deployment-v6",
+    verifierVersion: "counterlab-deployment-v7",
   });
   await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, {
     encoding: "utf8",

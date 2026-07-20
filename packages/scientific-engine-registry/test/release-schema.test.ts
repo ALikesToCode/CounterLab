@@ -7,6 +7,7 @@ import {
   DeploymentReceiptV3Schema,
   DeploymentReceiptV4Schema,
   DeploymentReceiptV5Schema,
+  DeploymentReceiptV6Schema,
   QualifiedRunnerReleaseSchema,
   QualifiedRunnerReleaseV2Schema,
   QualifiedRunnerReleaseV3Schema,
@@ -391,7 +392,7 @@ describe("deployment receipt schema", () => {
     const runner = "b".repeat(40);
     const digest = `sha256:${"c".repeat(64)}`;
     return {
-      schemaVersion: "6",
+      schemaVersion: "7",
       status: "DEPLOYED",
       workerName: "counterlab",
       productionOrigin: "https://counterlab.cserules.workers.dev",
@@ -399,6 +400,9 @@ describe("deployment receipt schema", () => {
       generationIsolationEvidenceSha256: "0".repeat(64),
       generationIsolationProbeSha256: "1".repeat(64),
       generationIsolationVerifiedAt: "2026-07-19T00:01:00.000Z",
+      releaseCheckGenerationIsolationEvidenceSha256: "2".repeat(64),
+      releaseCheckGenerationIsolationProbeSha256: "1".repeat(64),
+      releaseCheckGenerationIsolationVerifiedAt: "2026-07-19T00:01:30.000Z",
       workerEvidenceCommit: worker,
       runnerSourceCommit: runner,
       qualifiedRunnerReceiptSha256: "1".repeat(64),
@@ -435,13 +439,13 @@ describe("deployment receipt schema", () => {
       workerVersionSha256: "b".repeat(64),
       containerStatusSha256: "c".repeat(64),
       deployedAt: "2026-07-19T00:03:00.000Z",
-      verifierVersion: "counterlab-deployment-v6",
+      verifierVersion: "counterlab-deployment-v7",
     } as const;
   }
 
   it("binds the deployed Worker, Container, release checks, and exact artifacts", () => {
     expect(DeploymentReceiptSchema.parse(receipt())).toMatchObject({
-      schemaVersion: "6",
+      schemaVersion: "7",
       status: "DEPLOYED",
       workerName: "counterlab",
     });
@@ -463,15 +467,55 @@ describe("deployment receipt schema", () => {
         generationFilesystemReadIsolation: "PARTIAL",
       }),
     ).toThrow();
+    expect(() =>
+      DeploymentReceiptSchema.parse({
+        ...receipt(),
+        releaseCheckGenerationIsolationProbeSha256: "0".repeat(64),
+      }),
+    ).toThrow(/must match the qualified probe/u);
+    expect(() =>
+      DeploymentReceiptSchema.parse({
+        ...receipt(),
+        releaseCheckGenerationIsolationVerifiedAt: "2026-07-19T00:04:00.000Z",
+      }),
+    ).toThrow(/precede deployment/u);
+    expect(() =>
+      DeploymentReceiptSchema.parse({
+        ...receipt(),
+        releaseCheckGenerationIsolationVerifiedAt: "2026-07-19T00:00:30.000Z",
+      }),
+    ).toThrow(/follow qualification/u);
+    expect(() =>
+      DeploymentReceiptSchema.parse({
+        ...receipt(),
+        releaseCheckGenerationIsolationVerifiedAt: "2026-07-19T00:02:30.000Z",
+      }),
+    ).toThrow(/precede receipt issuance/u);
   });
 
-  it("retains the historical v5 and v4 isolation contracts", () => {
+  it("retains the historical v6, v5, and v4 isolation contracts", () => {
+    const {
+      releaseCheckGenerationIsolationEvidenceSha256:
+        _releaseCheckGenerationIsolationEvidenceSha256,
+      releaseCheckGenerationIsolationProbeSha256:
+        _releaseCheckGenerationIsolationProbeSha256,
+      releaseCheckGenerationIsolationVerifiedAt:
+        _releaseCheckGenerationIsolationVerifiedAt,
+      ...legacyV6
+    } = receipt();
+    expect(
+      DeploymentReceiptV6Schema.parse({
+        ...legacyV6,
+        schemaVersion: "6",
+        verifierVersion: "counterlab-deployment-v6",
+      }),
+    ).toMatchObject({ schemaVersion: "6" });
     const {
       generationIsolationEvidenceSha256: _generationIsolationEvidenceSha256,
       generationIsolationProbeSha256: _generationIsolationProbeSha256,
       generationIsolationVerifiedAt: _generationIsolationVerifiedAt,
       ...legacyV5
-    } = receipt();
+    } = legacyV6;
     expect(
       DeploymentReceiptV5Schema.parse({
         ...legacyV5,
@@ -509,6 +553,12 @@ describe("deployment receipt schema", () => {
 
   it("retains strict parsing for historical v3 deployment receipts", () => {
     const {
+      releaseCheckGenerationIsolationEvidenceSha256:
+        _releaseCheckGenerationIsolationEvidenceSha256,
+      releaseCheckGenerationIsolationProbeSha256:
+        _releaseCheckGenerationIsolationProbeSha256,
+      releaseCheckGenerationIsolationVerifiedAt:
+        _releaseCheckGenerationIsolationVerifiedAt,
       generationIsolationEvidenceSha256: _generationIsolationEvidenceSha256,
       generationIsolationProbeSha256: _generationIsolationProbeSha256,
       generationIsolationVerifiedAt: _generationIsolationVerifiedAt,
@@ -569,8 +619,13 @@ describe("deployment receipt schema", () => {
       process.cwd(),
       "scientific-engines/schemas/deployment-receipt-v5.schema.json",
     );
+    const v7Path = resolve(
+      process.cwd(),
+      "scientific-engines/schemas/deployment-receipt-v7.schema.json",
+    );
     expect(existsSync(v4Path)).toBe(true);
     expect(existsSync(v5Path)).toBe(true);
+    expect(existsSync(v7Path)).toBe(true);
     const v4 = JSON.parse(readFileSync(v4Path, "utf8")) as {
       properties?: {
         schemaVersion?: { const?: string };
@@ -580,6 +635,7 @@ describe("deployment receipt schema", () => {
       required?: string[];
     };
     const v5 = JSON.parse(readFileSync(v5Path, "utf8")) as typeof v4;
+    const v7 = JSON.parse(readFileSync(v7Path, "utf8")) as typeof v4;
     expect(v4.properties?.schemaVersion?.const).toBe("4");
     expect(v4.properties?.generationFilesystemReadIsolation?.const).toBe(
       "PARTIAL",
@@ -602,6 +658,14 @@ describe("deployment receipt schema", () => {
     expect(v5.properties?.schemaVersion?.const).toBe("5");
     expect(v5.properties?.generationFilesystemReadIsolation?.const).toBe(
       "OS_ENFORCED",
+    );
+    expect(v7.properties?.schemaVersion?.const).toBe("7");
+    expect(v7.required).toEqual(
+      expect.arrayContaining([
+        "releaseCheckGenerationIsolationEvidenceSha256",
+        "releaseCheckGenerationIsolationProbeSha256",
+        "releaseCheckGenerationIsolationVerifiedAt",
+      ]),
     );
   });
 });

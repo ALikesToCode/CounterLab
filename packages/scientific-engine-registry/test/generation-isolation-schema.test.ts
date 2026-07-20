@@ -6,9 +6,11 @@ import { z } from "zod";
 
 import {
   DeploymentReceiptV6Schema,
+  DeploymentReceiptV7Schema,
   GenerationIsolationEvidenceV1Schema,
   QualifiedRunnerReleaseV6Schema,
   ReleaseCheckReceiptV4Schema,
+  ReleaseCheckReceiptV5Schema,
 } from "../src/index.js";
 
 const sourceCommit = "a".repeat(40);
@@ -112,6 +114,26 @@ describe("generation isolation evidence schema", () => {
         ]),
       );
     }
+    for (const [schema, version] of [
+      [ReleaseCheckReceiptV5Schema, "5"],
+      [DeploymentReceiptV7Schema, "7"],
+    ] as const) {
+      const jsonSchema = z.toJSONSchema(schema) as {
+        properties?: Record<string, { const?: string }>;
+        required?: string[];
+      };
+      expect(jsonSchema.properties?.schemaVersion?.const).toBe(version);
+      expect(jsonSchema.required).toEqual(
+        expect.arrayContaining([
+          "releaseCheckGenerationIsolationEvidenceSha256",
+          "releaseCheckGenerationIsolationProbeSha256",
+          "releaseCheckGenerationIsolationVerifiedAt",
+          ...(version === "5"
+            ? ["releaseCheckGenerationIsolationEvidence"]
+            : []),
+        ]),
+      );
+    }
   });
 
   it("publishes the evidence and next-version receipt schemas", () => {
@@ -119,7 +141,9 @@ describe("generation isolation evidence schema", () => {
       "generation-isolation-evidence-v1.schema.json",
       "qualified-runner-release-v6.schema.json",
       "release-check-receipt-v4.schema.json",
+      "release-check-receipt-v5.schema.json",
       "deployment-receipt-v6.schema.json",
+      "deployment-receipt-v7.schema.json",
     ]) {
       const absolute = resolve(
         process.cwd(),

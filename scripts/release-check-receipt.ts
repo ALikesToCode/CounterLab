@@ -9,10 +9,13 @@ import {
   ContainedRuntimeAttestationSchema,
   DeploymentReceiptV5Schema,
   DeploymentReceiptV6Schema,
+  DeploymentReceiptV7Schema,
   GenerationIsolationEvidenceV1Schema,
   RELEASE_CHECK_IDS,
   QualifiedRunnerReleaseV5Schema,
   ReleaseCheckReceiptV4Schema,
+  ReleaseCheckReceiptV5Schema,
+  type ReleaseCheckReceiptV5,
 } from "../packages/scientific-engine-registry/src/index.js";
 import {
   hashGenerationIsolationEvidence,
@@ -59,13 +62,16 @@ export function createQualifiedReleaseIdentity(receiptBytes: Buffer) {
 
 export function createDeploymentReleaseIdentity(receiptBytes: Buffer) {
   const value = JSON.parse(receiptBytes.toString("utf8")) as unknown;
+  const schemaVersion =
+    typeof value === "object" && value !== null && "schemaVersion" in value
+      ? value.schemaVersion
+      : undefined;
   const receipt =
-    typeof value === "object" &&
-    value !== null &&
-    "schemaVersion" in value &&
-    value.schemaVersion === "6"
-      ? DeploymentReceiptV6Schema.parse(value)
-      : DeploymentReceiptV5Schema.parse(value);
+    schemaVersion === "7"
+      ? DeploymentReceiptV7Schema.parse(value)
+      : schemaVersion === "6"
+        ? DeploymentReceiptV6Schema.parse(value)
+        : DeploymentReceiptV5Schema.parse(value);
   return {
     identitySchemaVersion: "1",
     receiptType: "deployment-receipt",
@@ -74,14 +80,61 @@ export function createDeploymentReleaseIdentity(receiptBytes: Buffer) {
   } as const;
 }
 
+export function parseReleaseCheckReceiptV5(
+  value: unknown,
+): ReleaseCheckReceiptV5 {
+  const receipt = ReleaseCheckReceiptV5Schema.parse(value);
+  verifyGenerationIsolationEvidence({
+    evidence: receipt.releaseCheckGenerationIsolationEvidence,
+    evidenceSha256: receipt.releaseCheckGenerationIsolationEvidenceSha256,
+    expected: {
+      sourceCommit: receipt.sourceCommit,
+      sourceTreeSha256:
+        receipt.releaseCheckGenerationIsolationEvidence.sourceTreeSha256,
+      localImageTag: receipt.runnerImageTag,
+      localImageDigest: receipt.runnerImageDigest,
+      probeSha256: receipt.releaseCheckGenerationIsolationProbeSha256,
+      verifiedAt: receipt.releaseCheckGenerationIsolationVerifiedAt,
+    },
+  });
+  return receipt;
+}
+
+export function createReleaseCheckReleaseIdentity(receiptBytes: Buffer) {
+  const value = JSON.parse(receiptBytes.toString("utf8")) as unknown;
+  const receipt =
+    typeof value === "object" &&
+    value !== null &&
+    "schemaVersion" in value &&
+    value.schemaVersion === "5"
+      ? parseReleaseCheckReceiptV5(value)
+      : ReleaseCheckReceiptV4Schema.parse(value);
+  return {
+    identitySchemaVersion: "1",
+    receiptType: "release-check-receipt",
+    receiptSha256: sha256(receiptBytes),
+    receipt,
+  } as const;
+}
+
 export function assertReleaseCheckBinding(input: BindingInput) {
   const qualified = parseQualifiedRunnerReleaseV6(input.qualifiedReceipt);
-  const releaseCheck = ReleaseCheckReceiptV4Schema.parse(
-    input.releaseCheckReceipt,
-  );
+  const releaseCheck = parseReleaseCheckReceiptV5(input.releaseCheckReceipt);
   const runtime = ContainedRuntimeAttestationSchema.parse(
     input.runtimeAttestation,
   );
+  verifyGenerationIsolationEvidence({
+    evidence: releaseCheck.releaseCheckGenerationIsolationEvidence,
+    evidenceSha256: releaseCheck.releaseCheckGenerationIsolationEvidenceSha256,
+    expected: {
+      sourceCommit: qualified.sourceCommit,
+      sourceTreeSha256: qualified.sourceTreeSha256,
+      localImageTag: qualified.localImageTag,
+      localImageDigest: qualified.localImageDigest,
+      probeSha256: qualified.generationIsolationProbeSha256,
+      verifiedAt: releaseCheck.releaseCheckGenerationIsolationVerifiedAt,
+    },
+  });
   const comparisons: Array<[string, string, string]> = [
     ["evidence commit", releaseCheck.evidenceCommit, qualified.evidenceCommit],
     ["source commit", releaseCheck.sourceCommit, qualified.sourceCommit],
@@ -223,7 +276,7 @@ export function createReleaseCheckReceipt(input: {
   const freshEvidence = GenerationIsolationEvidenceV1Schema.parse(
     input.generationIsolationEvidence,
   );
-  verifyGenerationIsolationEvidence({
+  const freshVerification = verifyGenerationIsolationEvidence({
     evidence: freshEvidence,
     evidenceSha256: hashGenerationIsolationEvidence(freshEvidence),
     expected: {
@@ -244,8 +297,8 @@ export function createReleaseCheckReceipt(input: {
   ) {
     throw new Error("release-check generation-isolation evidence is not fresh");
   }
-  const receipt = ReleaseCheckReceiptV4Schema.parse({
-    schemaVersion: "4",
+  const receipt = parseReleaseCheckReceiptV5({
+    schemaVersion: "5",
     status: "PASSED",
     generationFilesystemReadIsolation:
       qualified.generationFilesystemReadIsolation,
@@ -253,6 +306,12 @@ export function createReleaseCheckReceipt(input: {
       qualified.generationIsolationEvidenceSha256,
     generationIsolationProbeSha256: qualified.generationIsolationProbeSha256,
     generationIsolationVerifiedAt: qualified.generationIsolationVerifiedAt,
+    releaseCheckGenerationIsolationEvidence: freshVerification.evidence,
+    releaseCheckGenerationIsolationEvidenceSha256:
+      freshVerification.evidenceSha256,
+    releaseCheckGenerationIsolationProbeSha256: freshVerification.probeSha256,
+    releaseCheckGenerationIsolationVerifiedAt:
+      freshVerification.evidence.verifiedAt,
     evidenceCommit: qualified.evidenceCommit,
     sourceCommit: qualified.sourceCommit,
     qualifiedRunnerReceiptSha256: sha256(input.qualifiedReceiptBytes),
@@ -269,7 +328,7 @@ export function createReleaseCheckReceipt(input: {
     runtimeAdapterSha256: qualified.runtimeAdapterSha256,
     checks: RELEASE_CHECK_IDS.map((id) => ({ id, status: "PASSED" })),
     checkedAt,
-    verifierVersion: "counterlab-release-check-v4",
+    verifierVersion: "counterlab-release-check-v5",
   });
   return assertReleaseCheckBinding({
     qualifiedReceipt: qualified,
@@ -399,6 +458,21 @@ async function main(): Promise<void> {
     const deploymentPath = await existingRepositoryFile(root, process.argv[4]!);
     process.stdout.write(
       `${JSON.stringify(createDeploymentReleaseIdentity(readFileSync(deploymentPath)))}\n`,
+    );
+    return;
+  }
+  if (process.argv[2] === "release-check-identity") {
+    if (process.argv.length !== 5 || process.argv[3] !== "--release-check") {
+      throw new Error(
+        "Usage: release-check-receipt release-check-identity --release-check FILE",
+      );
+    }
+    const releaseCheckPath = await existingRepositoryFile(
+      root,
+      process.argv[4]!,
+    );
+    process.stdout.write(
+      `${JSON.stringify(createReleaseCheckReleaseIdentity(readFileSync(releaseCheckPath)))}\n`,
     );
     return;
   }

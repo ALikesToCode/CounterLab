@@ -3,10 +3,11 @@ import { existsSync, readdirSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
+import { RELEASE_CHECK_IDS } from "../../../packages/scientific-engine-registry/src/index";
 
 import {
   bindFrozenWorkerRelease,
-  qualifiedDeployConfig,
+  qualifiedDeployConfig as generateQualifiedDeployConfig,
 } from "../../../scripts/prepare-qualified-deploy";
 import { createGenerationIsolationEvidence } from "../../../scripts/generation-isolation-evidence";
 
@@ -198,6 +199,85 @@ function generationIsolationQualification(input: {
   } as const;
 }
 
+function releaseCheckReceiptFor(qualified: {
+  evidenceCommit: string;
+  sourceCommit: string;
+  sourceTreeSha256: string;
+  qualifiedAt: string;
+  localImageTag: string;
+  localImageDigest: string;
+  adapterImageTag: string;
+  adapterImageDigest: string;
+  registryDigest: string;
+  runtimeToolchainSha256: string;
+  runtimePolicySha256: string;
+  proofDependencyManifestSha256: string;
+  aggregateLimitEvidenceSha256: string;
+  runtimeAdapterSha256: string;
+  generationIsolationEvidenceSha256: string;
+  generationIsolationProbeSha256: string;
+  generationIsolationVerifiedAt: string;
+}) {
+  const fresh = generationIsolationQualification({
+    sourceCommit: qualified.sourceCommit,
+    sourceTreeSha256: qualified.sourceTreeSha256,
+    localImageTag: qualified.localImageTag,
+    localImageDigest: qualified.localImageDigest,
+    verifiedAt: "2026-07-16T16:30:30.000Z",
+  });
+  return {
+    schemaVersion: "5",
+    status: "PASSED",
+    generationFilesystemReadIsolation: "OS_ENFORCED",
+    generationIsolationEvidenceSha256:
+      qualified.generationIsolationEvidenceSha256,
+    generationIsolationProbeSha256: qualified.generationIsolationProbeSha256,
+    generationIsolationVerifiedAt: qualified.generationIsolationVerifiedAt,
+    releaseCheckGenerationIsolationEvidence: fresh.generationIsolationEvidence,
+    releaseCheckGenerationIsolationEvidenceSha256:
+      fresh.generationIsolationEvidenceSha256,
+    releaseCheckGenerationIsolationProbeSha256:
+      fresh.generationIsolationProbeSha256,
+    releaseCheckGenerationIsolationVerifiedAt:
+      fresh.generationIsolationVerifiedAt,
+    evidenceCommit: qualified.evidenceCommit,
+    sourceCommit: qualified.sourceCommit,
+    qualifiedRunnerReceiptSha256: "2".repeat(64),
+    qualifiedAt: qualified.qualifiedAt,
+    runnerImageTag: qualified.localImageTag,
+    runnerImageDigest: qualified.localImageDigest,
+    adapterImageTag: qualified.adapterImageTag,
+    adapterImageDigest: qualified.adapterImageDigest,
+    registryDigest: qualified.registryDigest,
+    runtimeToolchainSha256: qualified.runtimeToolchainSha256,
+    runtimePolicySha256: qualified.runtimePolicySha256,
+    proofDependencyManifestSha256: qualified.proofDependencyManifestSha256,
+    aggregateLimitEvidenceSha256: qualified.aggregateLimitEvidenceSha256,
+    runtimeAdapterSha256: qualified.runtimeAdapterSha256,
+    checks: RELEASE_CHECK_IDS.map((id) => ({ id, status: "PASSED" as const })),
+    checkedAt: "2026-07-16T16:31:00.000Z",
+    verifierVersion: "counterlab-release-check-v5",
+  } as const;
+}
+
+function qualifiedDeployConfig(
+  input: Omit<
+    Parameters<typeof generateQualifiedDeployConfig>[0],
+    "releaseCheckReceipt"
+  > & {
+    releaseCheckReceipt?: unknown;
+  },
+) {
+  return generateQualifiedDeployConfig({
+    ...input,
+    releaseCheckReceipt:
+      input.releaseCheckReceipt ??
+      releaseCheckReceiptFor(
+        input.receipt as Parameters<typeof releaseCheckReceiptFor>[0],
+      ),
+  });
+}
+
 function luminance(color: string): number {
   const channels = [1, 3, 5].map((offset) =>
     Number.parseInt(color.slice(offset, offset + 2), 16),
@@ -310,6 +390,18 @@ describe("Cloudflare static asset routing", () => {
     expect(script).toContain("--containers-rollout immediate");
     expect(script).toContain("deployments status");
     expect(script).toContain("scripts/create-deployment-receipt.ts");
+    expect(script).toContain("release-check-identity");
+    expect(script).toContain(
+      "Release-check receipt bytes changed after identity validation.",
+    );
+    expect(script).toContain(
+      "RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256",
+    );
+    expect(script).toContain("RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT");
+    expect(script).toContain(
+      'exactKeys(payload, ["status", "service", "checks", "maintenance", "release"])',
+    );
+    expect(script).toContain('exactKeys(payload, ["ok", "data"])');
     expect(receiptVerifier).toContain("active.percentage !== 100");
     expect(script).toContain("deployment-receipt.json");
     expect(script).not.toContain("--containers-rollout gradual");
@@ -357,12 +449,10 @@ describe("Cloudflare static asset routing", () => {
     expect(script.slice(finalDeploy, finalReadiness)).toContain(
       "--containers-rollout none",
     );
-    expect(script).toContain(
-      "data.release.workerVersionId !== expectedVersion",
-    );
-    expect(script).toContain(
-      "payload.release.workerVersionId !== expectedVersion",
-    );
+    expect(script.match(/workerVersionId: expectedVersion/gu)).toHaveLength(2);
+    expect(
+      script.match(/releaseCheckGenerationIsolationEvidenceSha256:/gu),
+    ).toHaveLength(2);
     expect(script).toContain(
       'rollback "${recovery_version}" \\\n      --config "${RECOVERY_CONFIG}"',
     );
@@ -674,6 +764,7 @@ describe("Cloudflare static asset routing", () => {
       qualifiedAt: "2026-07-16T16:30:00.000Z",
       verifierVersion: "counterlab-release-v6",
     };
+    const releaseCheckReceipt = releaseCheckReceiptFor(receipt);
     const observation = {
       generationFilesystemReadIsolation: "OS_ENFORCED" as const,
       ...generationIsolationQualification({
@@ -719,6 +810,7 @@ describe("Cloudflare static asset routing", () => {
     const generated = qualifiedDeployConfig({
       config: productionDeployConfig(),
       receipt,
+      releaseCheckReceipt,
       image,
       observation,
     });
@@ -750,8 +842,29 @@ describe("Cloudflare static asset routing", () => {
           receipt.generationIsolationEvidenceSha256,
         COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256:
           receipt.generationIsolationProbeSha256,
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256:
+          releaseCheckReceipt.releaseCheckGenerationIsolationEvidenceSha256,
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256:
+          releaseCheckReceipt.releaseCheckGenerationIsolationProbeSha256,
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT:
+          releaseCheckReceipt.releaseCheckGenerationIsolationVerifiedAt,
       }),
     );
+    expect(() =>
+      qualifiedDeployConfig({
+        config: productionDeployConfig(),
+        receipt,
+        releaseCheckReceipt: {
+          ...releaseCheckReceipt,
+          releaseCheckGenerationIsolationEvidence: {
+            ...releaseCheckReceipt.releaseCheckGenerationIsolationEvidence,
+            sourceTreeSha256: "0".repeat(64),
+          },
+        },
+        image,
+        observation,
+      }),
+    ).toThrow(/evidence hash mismatch/u);
     const generatedFromVite = qualifiedDeployConfig({
       config: viteGeneratedDeployConfig(),
       receipt,
@@ -947,6 +1060,7 @@ describe("Cloudflare static asset routing", () => {
       qualifiedAt: "2026-07-16T16:30:00.000Z",
       verifierVersion: "counterlab-release-v6",
     };
+    const releaseCheckReceipt = releaseCheckReceiptFor(receipt);
     const config = productionDeployConfig();
     config.durable_objects.bindings = [
       { name: "RUNNER", class_name: "CounterLabRunner" },
@@ -956,6 +1070,7 @@ describe("Cloudflare static asset routing", () => {
       qualifiedDeployConfig({
         config,
         receipt,
+        releaseCheckReceipt,
         image,
         observation: {
           generationFilesystemReadIsolation: "OS_ENFORCED",
@@ -1049,6 +1164,7 @@ describe("Cloudflare static asset routing", () => {
       qualifiedAt: "2026-07-16T16:30:00.000Z",
       verifierVersion: "counterlab-release-v6",
     };
+    const releaseCheckReceipt = releaseCheckReceiptFor(receipt);
 
     expect(() =>
       qualifiedDeployConfig({
@@ -1057,6 +1173,7 @@ describe("Cloudflare static asset routing", () => {
           containers: [{ class_name: "CounterLabRunner" }],
         },
         receipt,
+        releaseCheckReceipt,
         image,
         observation: {
           generationFilesystemReadIsolation: "OS_ENFORCED",

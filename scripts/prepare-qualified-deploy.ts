@@ -16,7 +16,10 @@ import {
   parseQualifiedRunnerReleaseV6,
   verifyGenerationIsolationEvidence,
 } from "./generation-isolation-evidence.js";
-import { assertReleaseCheckBinding } from "./release-check-receipt.js";
+import {
+  assertReleaseCheckBinding,
+  parseReleaseCheckReceiptV5,
+} from "./release-check-receipt.js";
 import {
   containedRuntimeAdapterArguments,
   requireContainedRuntimeSessionId,
@@ -1109,11 +1112,25 @@ function assertProductionBindings(config: Record<string, unknown>): void {
 export function qualifiedDeployConfig(input: {
   config: unknown;
   receipt: unknown;
+  releaseCheckReceipt: unknown;
   image: string;
   observation: QualifiedReleaseObservation;
 }): Record<string, unknown> {
   const config = canonicalReleaseConfig(input.config);
   const receipt = parseQualifiedRunnerReleaseV6(input.receipt);
+  const releaseCheck = parseReleaseCheckReceiptV5(input.releaseCheckReceipt);
+  verifyGenerationIsolationEvidence({
+    evidence: releaseCheck.releaseCheckGenerationIsolationEvidence,
+    evidenceSha256: releaseCheck.releaseCheckGenerationIsolationEvidenceSha256,
+    expected: {
+      sourceCommit: receipt.sourceCommit,
+      sourceTreeSha256: receipt.sourceTreeSha256,
+      localImageTag: receipt.localImageTag,
+      localImageDigest: receipt.localImageDigest,
+      probeSha256: receipt.generationIsolationProbeSha256,
+      verifiedAt: releaseCheck.releaseCheckGenerationIsolationVerifiedAt,
+    },
+  });
   const comparisons: Array<[string, string, string]> = [
     ["source commit", receipt.sourceCommit, input.observation.sourceCommit],
     [
@@ -1276,6 +1293,31 @@ export function qualifiedDeployConfig(input: {
       receipt.generationIsolationVerifiedAt,
       input.observation.generationIsolationVerifiedAt,
     ],
+    [
+      "release-check evidence commit",
+      releaseCheck.evidenceCommit,
+      receipt.evidenceCommit,
+    ],
+    [
+      "release-check source commit",
+      releaseCheck.sourceCommit,
+      receipt.sourceCommit,
+    ],
+    [
+      "release-check qualification isolation evidence",
+      releaseCheck.generationIsolationEvidenceSha256,
+      receipt.generationIsolationEvidenceSha256,
+    ],
+    [
+      "release-check qualification isolation probe",
+      releaseCheck.generationIsolationProbeSha256,
+      receipt.generationIsolationProbeSha256,
+    ],
+    [
+      "release-check isolation probe",
+      releaseCheck.releaseCheckGenerationIsolationProbeSha256,
+      receipt.generationIsolationProbeSha256,
+    ],
     ["registry image", receipt.registryImage, input.observation.registryImage],
     [
       "registry digest",
@@ -1387,6 +1429,12 @@ export function qualifiedDeployConfig(input: {
       receipt.generationIsolationEvidenceSha256,
     COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256:
       receipt.generationIsolationProbeSha256,
+    COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256:
+      releaseCheck.releaseCheckGenerationIsolationEvidenceSha256,
+    COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256:
+      releaseCheck.releaseCheckGenerationIsolationProbeSha256,
+    COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT:
+      releaseCheck.releaseCheckGenerationIsolationVerifiedAt,
     COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256:
       receipt.timeoutCleanupReceiptSha256,
     COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256:
@@ -1493,6 +1541,7 @@ async function main(): Promise<void> {
     qualifiedDeployConfig({
       config: JSON.parse(configText) as unknown,
       receipt,
+      releaseCheckReceipt: JSON.parse(releaseCheckReceiptText) as unknown,
       image: args.image,
       observation,
     }),

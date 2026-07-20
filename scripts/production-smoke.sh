@@ -98,7 +98,7 @@ esac
 
 if [[ -z "${COUNTERLAB_DEPLOYMENT_RECEIPT:-}" ]]; then
   echo "Production smoke requires COUNTERLAB_DEPLOYMENT_RECEIPT." >&2
-  echo "Use the schema-v6 receipt written by scripts/deploy-qualified.sh." >&2
+  echo "Use the schema-v7 receipt written by scripts/deploy-qualified.sh." >&2
   exit 2
 fi
 DEPLOYMENT_RECEIPT="$(repo_path "${COUNTERLAB_DEPLOYMENT_RECEIPT}")"
@@ -159,6 +159,9 @@ PROOF_DEPENDENCY_MANIFEST_SHA256="$(deployment_identity_value proofDependencyMan
 GENERATION_ISOLATION_EVIDENCE_SHA256="$(deployment_identity_value generationIsolationEvidenceSha256)"
 GENERATION_ISOLATION_PROBE_SHA256="$(deployment_identity_value generationIsolationProbeSha256)"
 GENERATION_ISOLATION_VERIFIED_AT="$(deployment_identity_value generationIsolationVerifiedAt)"
+RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256="$(deployment_identity_value releaseCheckGenerationIsolationEvidenceSha256)"
+RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256="$(deployment_identity_value releaseCheckGenerationIsolationProbeSha256)"
+RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT="$(deployment_identity_value releaseCheckGenerationIsolationVerifiedAt)"
 WORKER_ARTIFACT_CLASSIFICATION="$(deployment_identity_value workerArtifactClassification)"
 WORKER_ARTIFACT_MANIFEST_SHA256="$(deployment_identity_value workerArtifactManifestSha256)"
 WORKER_BUNDLE_SHA256="$(deployment_identity_value workerBundleSha256)"
@@ -407,6 +410,9 @@ init_args+=(--proof-dependency-manifest-sha256 "${PROOF_DEPENDENCY_MANIFEST_SHA2
 init_args+=(--generation-isolation-evidence-sha256 "${GENERATION_ISOLATION_EVIDENCE_SHA256}")
 init_args+=(--generation-isolation-probe-sha256 "${GENERATION_ISOLATION_PROBE_SHA256}")
 init_args+=(--generation-isolation-verified-at "${GENERATION_ISOLATION_VERIFIED_AT}")
+init_args+=(--release-check-generation-isolation-evidence-sha256 "${RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256}")
+init_args+=(--release-check-generation-isolation-probe-sha256 "${RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256}")
+init_args+=(--release-check-generation-isolation-verified-at "${RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT}")
 init_args+=(--worker-artifact-classification "${WORKER_ARTIFACT_CLASSIFICATION}")
 init_args+=(--worker-artifact-manifest-sha256 "${WORKER_ARTIFACT_MANIFEST_SHA256}")
 init_args+=(--worker-bundle-sha256 "${WORKER_BUNDLE_SHA256}")
@@ -429,13 +435,17 @@ stage_started="$(timestamp)"
   --max-time 30 \
   "${BASE_URL}/ready" \
   >"${WORK_DIR}/ready.json"
-python3 - "${WORK_DIR}/ready.json" "${WORKER_VERSION_ID}" "${WORKER_EVIDENCE_COMMIT}" "${RUNNER_SOURCE_COMMIT}" "${CONTAINER_IMAGE_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" "${GENERATION_ISOLATION_EVIDENCE_SHA256}" "${GENERATION_ISOLATION_PROBE_SHA256}" <<'PY'
+python3 - "${WORK_DIR}/ready.json" "${WORKER_VERSION_ID}" "${WORKER_EVIDENCE_COMMIT}" "${RUNNER_SOURCE_COMMIT}" "${CONTAINER_IMAGE_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" "${GENERATION_ISOLATION_EVIDENCE_SHA256}" "${GENERATION_ISOLATION_PROBE_SHA256}" "${RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256}" "${RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256}" "${RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT}" <<'PY'
 import json
 import pathlib
 import sys
 payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+if set(payload) != {"status", "service", "checks", "maintenance", "release"}:
+    raise SystemExit("public readiness response has unknown or missing fields")
 if payload.get("status") != "ready":
     raise SystemExit("public readiness response is not ready")
+if payload.get("service") != "counterlab-control-plane":
+    raise SystemExit("public readiness service identity is invalid")
 checks = payload.get("checks")
 expected_checks = {
     "admission",
@@ -462,6 +472,9 @@ expected_release = {
     "runnerImageDigest": sys.argv[5],
     "generationIsolationEvidenceSha256": sys.argv[19],
     "generationIsolationProbeSha256": sys.argv[20],
+    "releaseCheckGenerationIsolationEvidenceSha256": sys.argv[21],
+    "releaseCheckGenerationIsolationProbeSha256": sys.argv[22],
+    "releaseCheckGenerationIsolationVerifiedAt": sys.argv[23],
     "timeoutCleanupReceiptSha256": sys.argv[6],
     "aggregateLimitEvidenceSha256": sys.argv[7],
     "runtimePolicySha256": sys.argv[8],
@@ -491,15 +504,33 @@ stage_started="$(timestamp)"
   --max-time 30 \
   "${BASE_URL}/api/health?readiness=probe" \
   >"${WORK_DIR}/health.json"
-python3 - "${WORK_DIR}/health.json" "${WORKER_VERSION_ID}" "${WORKER_EVIDENCE_COMMIT}" "${RUNNER_SOURCE_COMMIT}" "${CONTAINER_IMAGE_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" "${GENERATION_ISOLATION_EVIDENCE_SHA256}" "${GENERATION_ISOLATION_PROBE_SHA256}" <<'PY'
+python3 - "${WORK_DIR}/health.json" "${WORKER_VERSION_ID}" "${WORKER_EVIDENCE_COMMIT}" "${RUNNER_SOURCE_COMMIT}" "${CONTAINER_IMAGE_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" "${GENERATION_ISOLATION_EVIDENCE_SHA256}" "${GENERATION_ISOLATION_PROBE_SHA256}" "${RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256}" "${RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256}" "${RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT}" <<'PY'
 import json
 import pathlib
 import sys
 
 payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
-if payload.get("ok") is not True:
+if set(payload) != {"ok", "data"} or payload.get("ok") is not True:
     raise SystemExit("health response is not a success envelope")
 health = payload.get("data", {})
+expected_health_fields = {
+    "platform",
+    "sample",
+    "replay",
+    "liveGpt",
+    "liveCodex",
+    "liveKernel",
+    "maintenance",
+    "readiness",
+    "release",
+    "sandbox",
+    "generationFilesystemReadIsolation",
+    "requestId",
+}
+if not isinstance(health, dict) or set(health) != expected_health_fields:
+    raise SystemExit("health data has unknown or missing fields")
+if not isinstance(health.get("requestId"), str) or not health["requestId"]:
+    raise SystemExit("health request ID is unavailable")
 required = {
     "platform": "cloudflare-workers",
     "sample": "available",
@@ -528,6 +559,9 @@ expected_release = {
     "runnerImageDigest": sys.argv[5],
     "generationIsolationEvidenceSha256": sys.argv[19],
     "generationIsolationProbeSha256": sys.argv[20],
+    "releaseCheckGenerationIsolationEvidenceSha256": sys.argv[21],
+    "releaseCheckGenerationIsolationProbeSha256": sys.argv[22],
+    "releaseCheckGenerationIsolationVerifiedAt": sys.argv[23],
     "timeoutCleanupReceiptSha256": sys.argv[6],
     "aggregateLimitEvidenceSha256": sys.argv[7],
     "runtimePolicySha256": sys.argv[8],

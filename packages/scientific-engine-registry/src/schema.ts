@@ -1346,7 +1346,106 @@ export const ReleaseCheckReceiptV4Schema = z
     }
   });
 
-export const ReleaseCheckReceiptSchema = ReleaseCheckReceiptV4Schema;
+export const ReleaseCheckReceiptV5Schema = z
+  .strictObject({
+    ...ReleaseCheckReceiptV4Schema.shape,
+    schemaVersion: z.literal("5"),
+    releaseCheckGenerationIsolationEvidence:
+      GenerationIsolationEvidenceV1Schema,
+    releaseCheckGenerationIsolationEvidenceSha256: Sha256Schema,
+    releaseCheckGenerationIsolationProbeSha256: Sha256Schema,
+    releaseCheckGenerationIsolationVerifiedAt: z.iso.datetime({ offset: true }),
+    verifierVersion: z.literal("counterlab-release-check-v5"),
+  })
+  .superRefine((receipt, context) => {
+    const {
+      releaseCheckGenerationIsolationEvidence:
+        _releaseCheckGenerationIsolationEvidence,
+      releaseCheckGenerationIsolationEvidenceSha256:
+        _releaseCheckGenerationIsolationEvidenceSha256,
+      releaseCheckGenerationIsolationProbeSha256:
+        _releaseCheckGenerationIsolationProbeSha256,
+      releaseCheckGenerationIsolationVerifiedAt:
+        _releaseCheckGenerationIsolationVerifiedAt,
+      ...legacyReceipt
+    } = receipt;
+    const result = ReleaseCheckReceiptV4Schema.safeParse({
+      ...legacyReceipt,
+      schemaVersion: "4",
+      verifierVersion: "counterlab-release-check-v4",
+    });
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        context.addIssue({
+          code: "custom",
+          path: issue.path,
+          message: issue.message,
+        });
+      }
+    }
+    const evidence = receipt.releaseCheckGenerationIsolationEvidence;
+    for (const [field, expected, observed] of [
+      ["sourceCommit", receipt.sourceCommit, evidence.sourceCommit],
+      ["runnerImageTag", receipt.runnerImageTag, evidence.localImageTag],
+      [
+        "runnerImageDigest",
+        receipt.runnerImageDigest,
+        evidence.localImageDigest,
+      ],
+      [
+        "releaseCheckGenerationIsolationProbeSha256",
+        receipt.releaseCheckGenerationIsolationProbeSha256,
+        evidence.probePayloadSha256,
+      ],
+      [
+        "releaseCheckGenerationIsolationVerifiedAt",
+        receipt.releaseCheckGenerationIsolationVerifiedAt,
+        evidence.verifiedAt,
+      ],
+    ] as const) {
+      if (expected !== observed) {
+        context.addIssue({
+          code: "custom",
+          path: [field],
+          message: `${field} must match release-check isolation evidence`,
+        });
+      }
+    }
+    if (
+      Date.parse(receipt.releaseCheckGenerationIsolationVerifiedAt) >
+      Date.parse(receipt.checkedAt)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["releaseCheckGenerationIsolationVerifiedAt"],
+        message: "release-check isolation proof must precede receipt issuance",
+      });
+    }
+    if (
+      Date.parse(receipt.releaseCheckGenerationIsolationVerifiedAt) <
+      Date.parse(receipt.qualifiedAt)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["releaseCheckGenerationIsolationVerifiedAt"],
+        message: "release-check isolation proof must follow qualification",
+      });
+    }
+    if (
+      Date.parse(receipt.checkedAt) -
+        Date.parse(receipt.releaseCheckGenerationIsolationVerifiedAt) >
+      30 * 60_000
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["releaseCheckGenerationIsolationVerifiedAt"],
+        message:
+          "release-check isolation proof must be within 30 minutes of receipt issuance",
+      });
+    }
+  });
+
+export const ReleaseCheckReceiptSchema = ReleaseCheckReceiptV5Schema;
 
 export const DeploymentReceiptV3Schema = z
   .strictObject({
@@ -1609,4 +1708,79 @@ export const DeploymentReceiptV6Schema = z
     }
   });
 
-export const DeploymentReceiptSchema = DeploymentReceiptV6Schema;
+export const DeploymentReceiptV7Schema = z
+  .strictObject({
+    ...DeploymentReceiptV6Schema.shape,
+    schemaVersion: z.literal("7"),
+    releaseCheckGenerationIsolationEvidenceSha256: Sha256Schema,
+    releaseCheckGenerationIsolationProbeSha256: Sha256Schema,
+    releaseCheckGenerationIsolationVerifiedAt: z.iso.datetime({ offset: true }),
+    verifierVersion: z.literal("counterlab-deployment-v7"),
+  })
+  .superRefine((receipt, context) => {
+    const {
+      releaseCheckGenerationIsolationEvidenceSha256:
+        _releaseCheckGenerationIsolationEvidenceSha256,
+      releaseCheckGenerationIsolationProbeSha256:
+        _releaseCheckGenerationIsolationProbeSha256,
+      releaseCheckGenerationIsolationVerifiedAt:
+        _releaseCheckGenerationIsolationVerifiedAt,
+      ...legacyReceipt
+    } = receipt;
+    const result = DeploymentReceiptV6Schema.safeParse({
+      ...legacyReceipt,
+      schemaVersion: "6",
+      verifierVersion: "counterlab-deployment-v6",
+    });
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        context.addIssue({
+          code: "custom",
+          path: issue.path,
+          message: issue.message,
+        });
+      }
+    }
+    if (
+      receipt.releaseCheckGenerationIsolationProbeSha256 !==
+      receipt.generationIsolationProbeSha256
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["releaseCheckGenerationIsolationProbeSha256"],
+        message: "release-check isolation probe must match the qualified probe",
+      });
+    }
+    if (
+      Date.parse(receipt.releaseCheckGenerationIsolationVerifiedAt) >
+      Date.parse(receipt.deployedAt)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["releaseCheckGenerationIsolationVerifiedAt"],
+        message: "release-check isolation proof must precede deployment",
+      });
+    }
+    if (
+      Date.parse(receipt.releaseCheckGenerationIsolationVerifiedAt) >
+      Date.parse(receipt.releaseCheckCheckedAt)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["releaseCheckGenerationIsolationVerifiedAt"],
+        message: "release-check isolation proof must precede receipt issuance",
+      });
+    }
+    if (
+      Date.parse(receipt.releaseCheckGenerationIsolationVerifiedAt) <
+      Date.parse(receipt.generationIsolationVerifiedAt)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["releaseCheckGenerationIsolationVerifiedAt"],
+        message: "release-check isolation proof must follow qualification",
+      });
+    }
+  });
+
+export const DeploymentReceiptSchema = DeploymentReceiptV7Schema;
