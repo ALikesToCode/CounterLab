@@ -497,11 +497,11 @@ export async function runHeldOutCompletion(
         selectedStrategy:
           input.concept === "entity_leakage"
             ? "time_ordered_holdout"
-            : "cost_aware_threshold",
+            : "reject_accuracy_only",
         identifiedRisks:
           input.concept === "entity_leakage"
             ? ["centered_window_reads_future"]
-            : ["minority_false_negative_cost"],
+            : ["recall_and_pr_auc"],
       },
       patchContract: pack.patchContract,
       allowedCellIndices: targetCells,

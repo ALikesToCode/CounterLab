@@ -1,0 +1,533 @@
+{
+  "schemaVersion": "1",
+  "normalizationProfile": "counterlab-transfer-semantic-projection-v1",
+  "packs": [
+    {
+      "concept": "entity_leakage",
+      "submissionKind": "leakage",
+      "binding": {
+        "irTaskId": "forecast-future-leakage-v1",
+        "evaluatorTaskId": "forecasting-future-leakage-01",
+        "evaluatorVersion": "counterlab-transfer-v1"
+      },
+      "vectors": [
+        {
+          "id": "minimal-pass",
+          "equivalenceGroup": "required-evidence-pass",
+          "input": {
+            "strategyChoice": "time_ordered_holdout",
+            "riskChoice": "centered_window_reads_future",
+            "evidenceChoices": [
+              "center_true_uses_later_targets",
+              "random_split_mixes_dates"
+            ]
+          },
+          "expected": {
+            "accepted": true,
+            "passed": true,
+            "primaryChoice": "time_ordered_holdout",
+            "secondaryChoice": "centered_window_reads_future",
+            "canonicalEvidence": [
+              "center_true_uses_later_targets",
+              "random_split_mixes_dates"
+            ],
+            "checks": {
+              "TIME_AWARE_EVALUATION": true,
+              "FUTURE_INFORMATION_RISK": true,
+              "EVIDENCE_GROUNDED": true
+            }
+          }
+        },
+        {
+          "id": "optional-evidence-pass",
+          "input": {
+            "strategyChoice": "time_ordered_holdout",
+            "riskChoice": "centered_window_reads_future",
+            "evidenceChoices": [
+              "random_split_mixes_dates",
+              "metric_is_mae",
+              "center_true_uses_later_targets"
+            ]
+          },
+          "expected": {
+            "accepted": true,
+            "passed": true,
+            "primaryChoice": "time_ordered_holdout",
+            "secondaryChoice": "centered_window_reads_future",
+            "canonicalEvidence": [
+              "center_true_uses_later_targets",
+              "metric_is_mae",
+              "random_split_mixes_dates"
+            ],
+            "checks": {
+              "TIME_AWARE_EVALUATION": true,
+              "FUTURE_INFORMATION_RISK": true,
+              "EVIDENCE_GROUNDED": true
+            }
+          }
+        },
+        {
+          "id": "strategy-failure-random-row",
+          "input": {
+            "strategyChoice": "random_row_holdout",
+            "riskChoice": "centered_window_reads_future",
+            "evidenceChoices": [
+              "center_true_uses_later_targets",
+              "random_split_mixes_dates"
+            ]
+          },
+          "expected": {
+            "accepted": true,
+            "passed": false,
+            "primaryChoice": "random_row_holdout",
+            "secondaryChoice": "centered_window_reads_future",
+            "canonicalEvidence": [
+              "center_true_uses_later_targets",
+              "random_split_mixes_dates"
+            ],
+            "checks": {
+              "TIME_AWARE_EVALUATION": false,
+              "FUTURE_INFORMATION_RISK": true,
+              "EVIDENCE_GROUNDED": true
+            }
+          }
+        },
+        {
+          "id": "strategy-failure-grouped-store",
+          "input": {
+            "strategyChoice": "grouped_store_holdout",
+            "riskChoice": "centered_window_reads_future",
+            "evidenceChoices": [
+              "center_true_uses_later_targets",
+              "random_split_mixes_dates"
+            ]
+          },
+          "expected": {
+            "accepted": true,
+            "passed": false,
+            "primaryChoice": "grouped_store_holdout",
+            "secondaryChoice": "centered_window_reads_future",
+            "canonicalEvidence": [
+              "center_true_uses_later_targets",
+              "random_split_mixes_dates"
+            ],
+            "checks": {
+              "TIME_AWARE_EVALUATION": false,
+              "FUTURE_INFORMATION_RISK": true,
+              "EVIDENCE_GROUNDED": true
+            }
+          }
+        },
+        {
+          "id": "risk-failure-simple-model",
+          "input": {
+            "strategyChoice": "time_ordered_holdout",
+            "riskChoice": "model_is_too_simple",
+            "evidenceChoices": [
+              "center_true_uses_later_targets",
+              "random_split_mixes_dates"
+            ]
+          },
+          "expected": {
+            "accepted": true,
+            "passed": false,
+            "primaryChoice": "time_ordered_holdout",
+            "secondaryChoice": "model_is_too_simple",
+            "canonicalEvidence": [
+              "center_true_uses_later_targets",
+              "random_split_mixes_dates"
+            ],
+            "checks": {
+              "TIME_AWARE_EVALUATION": true,
+              "FUTURE_INFORMATION_RISK": false,
+              "EVIDENCE_GROUNDED": true
+            }
+          }
+        },
+        {
+          "id": "risk-failure-store-scales",
+          "input": {
+            "strategyChoice": "time_ordered_holdout",
+            "riskChoice": "stores_have_different_scales",
+            "evidenceChoices": [
+              "center_true_uses_later_targets",
+              "random_split_mixes_dates"
+            ]
+          },
+          "expected": {
+            "accepted": true,
+            "passed": false,
+            "primaryChoice": "time_ordered_holdout",
+            "secondaryChoice": "stores_have_different_scales",
+            "canonicalEvidence": [
+              "center_true_uses_later_targets",
+              "random_split_mixes_dates"
+            ],
+            "checks": {
+              "TIME_AWARE_EVALUATION": true,
+              "FUTURE_INFORMATION_RISK": false,
+              "EVIDENCE_GROUNDED": true
+            }
+          }
+        },
+        {
+          "id": "missing-centered-window-evidence",
+          "input": {
+            "strategyChoice": "time_ordered_holdout",
+            "riskChoice": "centered_window_reads_future",
+            "evidenceChoices": ["random_split_mixes_dates"]
+          },
+          "expected": {
+            "accepted": true,
+            "passed": false,
+            "primaryChoice": "time_ordered_holdout",
+            "secondaryChoice": "centered_window_reads_future",
+            "canonicalEvidence": ["random_split_mixes_dates"],
+            "checks": {
+              "TIME_AWARE_EVALUATION": true,
+              "FUTURE_INFORMATION_RISK": true,
+              "EVIDENCE_GROUNDED": false
+            }
+          }
+        },
+        {
+          "id": "missing-random-split-evidence",
+          "input": {
+            "strategyChoice": "time_ordered_holdout",
+            "riskChoice": "centered_window_reads_future",
+            "evidenceChoices": ["center_true_uses_later_targets"]
+          },
+          "expected": {
+            "accepted": true,
+            "passed": false,
+            "primaryChoice": "time_ordered_holdout",
+            "secondaryChoice": "centered_window_reads_future",
+            "canonicalEvidence": ["center_true_uses_later_targets"],
+            "checks": {
+              "TIME_AWARE_EVALUATION": true,
+              "FUTURE_INFORMATION_RISK": true,
+              "EVIDENCE_GROUNDED": false
+            }
+          }
+        },
+        {
+          "id": "duplicate-evidence-rejected",
+          "input": {
+            "strategyChoice": "time_ordered_holdout",
+            "riskChoice": "centered_window_reads_future",
+            "evidenceChoices": [
+              "center_true_uses_later_targets",
+              "center_true_uses_later_targets"
+            ]
+          },
+          "expected": { "accepted": false }
+        },
+        {
+          "id": "unknown-strategy-rejected",
+          "input": {
+            "strategyChoice": "model_selected_holdout",
+            "riskChoice": "centered_window_reads_future",
+            "evidenceChoices": [
+              "center_true_uses_later_targets",
+              "random_split_mixes_dates"
+            ]
+          },
+          "expected": { "accepted": false }
+        },
+        {
+          "id": "unknown-risk-rejected",
+          "input": {
+            "strategyChoice": "time_ordered_holdout",
+            "riskChoice": "model_selected_risk",
+            "evidenceChoices": [
+              "center_true_uses_later_targets",
+              "random_split_mixes_dates"
+            ]
+          },
+          "expected": { "accepted": false }
+        },
+        {
+          "id": "unknown-evidence-rejected",
+          "input": {
+            "strategyChoice": "time_ordered_holdout",
+            "riskChoice": "centered_window_reads_future",
+            "evidenceChoices": [
+              "center_true_uses_later_targets",
+              "random_split_mixes_dates",
+              "model_authored_evidence"
+            ]
+          },
+          "expected": { "accepted": false }
+        },
+        {
+          "id": "reordered-required-evidence-pass",
+          "equivalenceGroup": "required-evidence-pass",
+          "input": {
+            "strategyChoice": "time_ordered_holdout",
+            "riskChoice": "centered_window_reads_future",
+            "evidenceChoices": [
+              "random_split_mixes_dates",
+              "center_true_uses_later_targets"
+            ]
+          },
+          "expected": {
+            "accepted": true,
+            "passed": true,
+            "primaryChoice": "time_ordered_holdout",
+            "secondaryChoice": "centered_window_reads_future",
+            "canonicalEvidence": [
+              "center_true_uses_later_targets",
+              "random_split_mixes_dates"
+            ],
+            "checks": {
+              "TIME_AWARE_EVALUATION": true,
+              "FUTURE_INFORMATION_RISK": true,
+              "EVIDENCE_GROUNDED": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "concept": "class_imbalance",
+      "submissionKind": "imbalance",
+      "binding": {
+        "irTaskId": "manufacturing-rare-defect-v1",
+        "evaluatorTaskId": "manufacturing-defect-transfer-01",
+        "evaluatorVersion": "counterlab-imbalance-transfer-v1"
+      },
+      "vectors": [
+        {
+          "id": "minimal-pass",
+          "equivalenceGroup": "required-evidence-pass",
+          "input": {
+            "decisionChoice": "reject_accuracy_only",
+            "metricChoice": "recall_and_pr_auc",
+            "evidenceChoices": ["zero_true_positives", "rare_base_rate"]
+          },
+          "expected": {
+            "accepted": true,
+            "passed": true,
+            "primaryChoice": "reject_accuracy_only",
+            "secondaryChoice": "recall_and_pr_auc",
+            "canonicalEvidence": ["rare_base_rate", "zero_true_positives"],
+            "checks": {
+              "ACCURACY_CLAIM_REJECTED": true,
+              "MINORITY_METRICS_SELECTED": true,
+              "EVIDENCE_GROUNDED": true
+            }
+          }
+        },
+        {
+          "id": "optional-evidence-pass",
+          "input": {
+            "decisionChoice": "reject_accuracy_only",
+            "metricChoice": "recall_and_pr_auc",
+            "evidenceChoices": [
+              "zero_true_positives",
+              "many_true_negatives",
+              "rare_base_rate"
+            ]
+          },
+          "expected": {
+            "accepted": true,
+            "passed": true,
+            "primaryChoice": "reject_accuracy_only",
+            "secondaryChoice": "recall_and_pr_auc",
+            "canonicalEvidence": [
+              "many_true_negatives",
+              "rare_base_rate",
+              "zero_true_positives"
+            ],
+            "checks": {
+              "ACCURACY_CLAIM_REJECTED": true,
+              "MINORITY_METRICS_SELECTED": true,
+              "EVIDENCE_GROUNDED": true
+            }
+          }
+        },
+        {
+          "id": "decision-failure-approve-accuracy",
+          "input": {
+            "decisionChoice": "approve_high_accuracy",
+            "metricChoice": "recall_and_pr_auc",
+            "evidenceChoices": ["zero_true_positives", "rare_base_rate"]
+          },
+          "expected": {
+            "accepted": true,
+            "passed": false,
+            "primaryChoice": "approve_high_accuracy",
+            "secondaryChoice": "recall_and_pr_auc",
+            "canonicalEvidence": ["rare_base_rate", "zero_true_positives"],
+            "checks": {
+              "ACCURACY_CLAIM_REJECTED": false,
+              "MINORITY_METRICS_SELECTED": true,
+              "EVIDENCE_GROUNDED": true
+            }
+          }
+        },
+        {
+          "id": "decision-failure-more-negatives",
+          "input": {
+            "decisionChoice": "collect_more_negatives",
+            "metricChoice": "recall_and_pr_auc",
+            "evidenceChoices": ["zero_true_positives", "rare_base_rate"]
+          },
+          "expected": {
+            "accepted": true,
+            "passed": false,
+            "primaryChoice": "collect_more_negatives",
+            "secondaryChoice": "recall_and_pr_auc",
+            "canonicalEvidence": ["rare_base_rate", "zero_true_positives"],
+            "checks": {
+              "ACCURACY_CLAIM_REJECTED": false,
+              "MINORITY_METRICS_SELECTED": true,
+              "EVIDENCE_GROUNDED": true
+            }
+          }
+        },
+        {
+          "id": "metric-failure-accuracy",
+          "input": {
+            "decisionChoice": "reject_accuracy_only",
+            "metricChoice": "accuracy",
+            "evidenceChoices": ["zero_true_positives", "rare_base_rate"]
+          },
+          "expected": {
+            "accepted": true,
+            "passed": false,
+            "primaryChoice": "reject_accuracy_only",
+            "secondaryChoice": "accuracy",
+            "canonicalEvidence": ["rare_base_rate", "zero_true_positives"],
+            "checks": {
+              "ACCURACY_CLAIM_REJECTED": true,
+              "MINORITY_METRICS_SELECTED": false,
+              "EVIDENCE_GROUNDED": true
+            }
+          }
+        },
+        {
+          "id": "metric-failure-negative-specificity",
+          "input": {
+            "decisionChoice": "reject_accuracy_only",
+            "metricChoice": "negative_specificity",
+            "evidenceChoices": ["zero_true_positives", "rare_base_rate"]
+          },
+          "expected": {
+            "accepted": true,
+            "passed": false,
+            "primaryChoice": "reject_accuracy_only",
+            "secondaryChoice": "negative_specificity",
+            "canonicalEvidence": ["rare_base_rate", "zero_true_positives"],
+            "checks": {
+              "ACCURACY_CLAIM_REJECTED": true,
+              "MINORITY_METRICS_SELECTED": false,
+              "EVIDENCE_GROUNDED": true
+            }
+          }
+        },
+        {
+          "id": "missing-zero-true-positives-evidence",
+          "input": {
+            "decisionChoice": "reject_accuracy_only",
+            "metricChoice": "recall_and_pr_auc",
+            "evidenceChoices": ["rare_base_rate"]
+          },
+          "expected": {
+            "accepted": true,
+            "passed": false,
+            "primaryChoice": "reject_accuracy_only",
+            "secondaryChoice": "recall_and_pr_auc",
+            "canonicalEvidence": ["rare_base_rate"],
+            "checks": {
+              "ACCURACY_CLAIM_REJECTED": true,
+              "MINORITY_METRICS_SELECTED": true,
+              "EVIDENCE_GROUNDED": false
+            }
+          }
+        },
+        {
+          "id": "missing-rare-base-rate-evidence",
+          "input": {
+            "decisionChoice": "reject_accuracy_only",
+            "metricChoice": "recall_and_pr_auc",
+            "evidenceChoices": ["zero_true_positives"]
+          },
+          "expected": {
+            "accepted": true,
+            "passed": false,
+            "primaryChoice": "reject_accuracy_only",
+            "secondaryChoice": "recall_and_pr_auc",
+            "canonicalEvidence": ["zero_true_positives"],
+            "checks": {
+              "ACCURACY_CLAIM_REJECTED": true,
+              "MINORITY_METRICS_SELECTED": true,
+              "EVIDENCE_GROUNDED": false
+            }
+          }
+        },
+        {
+          "id": "duplicate-evidence-rejected",
+          "input": {
+            "decisionChoice": "reject_accuracy_only",
+            "metricChoice": "recall_and_pr_auc",
+            "evidenceChoices": ["zero_true_positives", "zero_true_positives"]
+          },
+          "expected": { "accepted": false }
+        },
+        {
+          "id": "unknown-decision-rejected",
+          "input": {
+            "decisionChoice": "model_selected_decision",
+            "metricChoice": "recall_and_pr_auc",
+            "evidenceChoices": ["zero_true_positives", "rare_base_rate"]
+          },
+          "expected": { "accepted": false }
+        },
+        {
+          "id": "unknown-metric-rejected",
+          "input": {
+            "decisionChoice": "reject_accuracy_only",
+            "metricChoice": "model_selected_metric",
+            "evidenceChoices": ["zero_true_positives", "rare_base_rate"]
+          },
+          "expected": { "accepted": false }
+        },
+        {
+          "id": "unknown-evidence-rejected",
+          "input": {
+            "decisionChoice": "reject_accuracy_only",
+            "metricChoice": "recall_and_pr_auc",
+            "evidenceChoices": [
+              "zero_true_positives",
+              "rare_base_rate",
+              "model_authored_evidence"
+            ]
+          },
+          "expected": { "accepted": false }
+        },
+        {
+          "id": "reordered-required-evidence-pass",
+          "equivalenceGroup": "required-evidence-pass",
+          "input": {
+            "decisionChoice": "reject_accuracy_only",
+            "metricChoice": "recall_and_pr_auc",
+            "evidenceChoices": ["rare_base_rate", "zero_true_positives"]
+          },
+          "expected": {
+            "accepted": true,
+            "passed": true,
+            "primaryChoice": "reject_accuracy_only",
+            "secondaryChoice": "recall_and_pr_auc",
+            "canonicalEvidence": ["rare_base_rate", "zero_true_positives"],
+            "checks": {
+              "ACCURACY_CLAIM_REJECTED": true,
+              "MINORITY_METRICS_SELECTED": true,
+              "EVIDENCE_GROUNDED": true
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

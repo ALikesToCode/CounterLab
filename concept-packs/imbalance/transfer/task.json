@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1",
-  "id": "manufacturing-defect-imbalance-01",
+  "id": "manufacturing-defect-transfer-01",
   "concept": "class_imbalance_transfer",
   "title": "Would this inspection model catch rare defects?",
   "scenario": "A factory evaluated 20,000 parts, including 200 defective parts. The model predicted every part as acceptable and reports 99% accuracy. Decide whether that evidence supports deployment and select the evidence needed to evaluate the rare defective class.",
