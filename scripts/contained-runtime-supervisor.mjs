@@ -332,7 +332,7 @@ async function handleRequest(request) {
   throw new Error("runtime supervisor action is invalid");
 }
 
-const controlServer = createServer((socket) => {
+const controlServer = createServer({ allowHalfOpen: true }, (socket) => {
   const chunks = [];
   let total = 0;
   socket.setTimeout(35_000);

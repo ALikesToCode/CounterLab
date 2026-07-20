@@ -55,6 +55,17 @@ function drainReceipt() {
 }
 
 describe("contained runtime supervisor protocol", () => {
+  it("keeps the response side open after a client finishes its request", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "scripts/contained-runtime-supervisor.mjs"),
+      "utf8",
+    );
+
+    expect(source).toContain(
+      "const controlServer = createServer({ allowHalfOpen: true }, (socket) => {",
+    );
+  });
+
   it("keeps a failed owned-child shutdown retryable", () => {
     const source = readFileSync(
       resolve(process.cwd(), "scripts/contained-runtime-supervisor.mjs"),
