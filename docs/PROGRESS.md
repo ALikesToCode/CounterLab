@@ -2960,3 +2960,77 @@ deleted.
    receipt before publication.
 8. Push the completed feature branch, review its exact tip, fast-forward it
    into `main`, and push `main` only after the release state is truthful.
+
+## Finish Commander image-isolation evidence checkpoint — 2026-07-20T21:37:26Z
+
+Deadline: `2026-07-22T00:00:00Z`; **26 hours 22 minutes 34 seconds remained at
+this checkpoint**. The feature branch is at committed HEAD `56638e9`; its only
+worktree entry is the preserved untracked
+`scripts/.fuse_hidden0000a9600000801f`. It remains unopened, unstaged, and
+undeleted.
+
+### Newly frozen independent commits
+
+- `b5d2359 fix(runner): hash Bubblewrap startup evidence` parses the actual
+  Bubblewrap stdout, rejects missing, malformed, false, or unknown evidence,
+  and hashes a canonical startup-probe payload.
+- `fc1c581 fix(runner): bind pinned Bubblewrap version` observes and binds the
+  exact image-pinned Bubblewrap `0.11.0` version into that payload.
+- `9a15ec4 feat(release): define image isolation evidence` preserves historical
+  receipt schemas, adds strict evidence plus qualified v6/release-check
+  v4/deployment v6 contracts, closes generated tuple semantics, and adds a
+  canonical hash verifier with mutation coverage.
+- `56638e9 feat(release): persist exact-image isolation evidence` lets the
+  exact-image scientific verifier create a contained, `0600`, non-overwriting
+  evidence record bound to OCI source, source-tree, image config digest, image
+  user, and recomputed probe hash.
+
+### Exact local verification
+
+- Hosted-runner startup probe: **8/8 passed**; full hosted-runner suite:
+  **45 passed, 2 skipped** after rerunning the five socket tests with loopback
+  permission.
+- Isolation contracts and canonical verifier: **4 files, 27/27 passed**.
+- Worker deployment configuration: **17/17 passed**.
+- Contained-runtime source validation: **35/35 passed**.
+- Root, Worker, and hosted-runner TypeScript at the affected checkpoints:
+  **passed**.
+- Shell syntax, scoped Prettier, Git whitespace, historical v5/v3/v5 schema
+  byte preservation, and scoped secret scans: **passed**.
+- The image evidence writer has not yet been exercised against a newly built
+  exact image. Source coverage is not represented as image or production
+  evidence.
+
+### Reconciled issue and external-gate truth
+
+- Internal P0/P1 reconciliation is now five source-pass, four partial or
+  mitigated, and three open; **zero are production-closed**.
+- Black-box product issues are 17 source-covered and one partial; **none are
+  verified against the current public tuple**. All 11 submission requirements
+  remain externally unverified.
+- This active session exposes no `CLOAK_CDP_ENDPOINT` or Playwright-safe tool
+  surface. Stock Chromium remains design-review-only under the checked-in
+  browser policy and cannot close release QA.
+- Repository-contained Wrangler `4.110.0` currently reports
+  `loggedIn:false`; normal-home credentials are not inspected or copied.
+- The host still lacks the delegated aggregate cgroup-v2 authority required by
+  the current qualification contract. This is a genuine external release
+  blocker and must not be converted into a synthetic receipt.
+
+### Ordered next work
+
+1. Consume the exact-image evidence in qualified v6, release-check v4, and
+   deployment v6; require the same probe hash from Container `/ready`, Worker
+   deep readiness, public release identity, and production smoke.
+2. Resolve the named FUSE artifact only with immediate destructive-action
+   approval, then freeze source and regenerate exact source/image-bound
+   scientific and supply-chain evidence.
+3. Obtain a real aggregate-containment receipt on a capable authorized host,
+   authenticate Wrangler inside the repository boundary, qualify, deploy, and
+   smoke exactly one tuple.
+4. Run CloakBrowser desktop/mobile/accessibility journeys in a session that
+   exposes the required endpoint. Keep learner evidence `NO_DATA` unless real
+   consented observations occur.
+5. Align and verify Devpost, public video, repository, feedback ID, and
+   submission receipt; push the feature branch and fast-forward its verified
+   tip into `main` only after the recorded gates are truthful.
