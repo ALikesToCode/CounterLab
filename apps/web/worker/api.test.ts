@@ -10493,6 +10493,8 @@ describe("Cloudflare Worker API", () => {
       COUNTERLAB_WORKER_EVIDENCE_COMMIT: workerEvidenceCommit,
       COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
       COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+      COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "5".repeat(64),
+      COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(64),
       COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256: "d".repeat(64),
       COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256: "9".repeat(64),
       COUNTERLAB_RUNTIME_POLICY_SHA256: "e".repeat(64),
@@ -10522,6 +10524,8 @@ describe("Cloudflare Worker API", () => {
           workerEvidenceCommit,
           runnerSourceCommit: "b".repeat(40),
           runnerImageDigest: `sha256:${"c".repeat(64)}`,
+          generationIsolationEvidenceSha256: "5".repeat(64),
+          generationIsolationProbeSha256: "6".repeat(64),
           timeoutCleanupReceiptSha256: "d".repeat(64),
           aggregateLimitEvidenceSha256: "9".repeat(64),
           runtimePolicySha256: "e".repeat(64),
@@ -10543,6 +10547,8 @@ describe("Cloudflare Worker API", () => {
       COUNTERLAB_WORKER_EVIDENCE_COMMIT: workerEvidenceCommit,
       COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
       COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+      COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "5".repeat(64),
+      COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(64),
       COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256: "d".repeat(64),
       COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256: "9".repeat(64),
       COUNTERLAB_RUNTIME_POLICY_SHA256: "e".repeat(64),
@@ -10583,6 +10589,10 @@ describe("Cloudflare Worker API", () => {
     for (const invalidQualificationBinding of [
       { COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256: undefined },
       { COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256: "0".repeat(63) },
+      { COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: undefined },
+      { COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "0".repeat(63) },
+      { COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: undefined },
+      { COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "0".repeat(63) },
       { COUNTERLAB_RUNTIME_POLICY_SHA256: undefined },
       { COUNTERLAB_RUNTIME_POLICY_SHA256: "0".repeat(63) },
       { COUNTERLAB_PROOF_DEPENDENCY_MANIFEST_SHA256: undefined },
@@ -10610,6 +10620,8 @@ describe("Cloudflare Worker API", () => {
         COUNTERLAB_WORKER_EVIDENCE_COMMIT: workerEvidenceCommit,
         COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
         COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+        COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "5".repeat(64),
+        COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(64),
         COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256: "d".repeat(64),
         COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256: "9".repeat(64),
         COUNTERLAB_RUNTIME_POLICY_SHA256: "e".repeat(64),
@@ -10930,6 +10942,8 @@ describe("Cloudflare Worker API", () => {
       COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY: TEST_RUNNER_SIGNING_PRIVATE_KEY,
       COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
       COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+      COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "5".repeat(64),
+      COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(64),
     } as unknown as Env & Record<string, string>);
 
     expect(response.status).toBe(200);
@@ -10947,6 +10961,8 @@ describe("Cloudflare Worker API", () => {
       COUNTERLAB_RUNNER_BASE_URL: "http://127.0.0.1:8788",
       COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
       COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+      COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "5".repeat(64),
+      COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(64),
     } as unknown as Env & Record<string, string>);
     await expect(unsigned.json()).resolves.toMatchObject({
       data: { liveCodex: "local-runner-required" },

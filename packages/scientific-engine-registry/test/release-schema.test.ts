@@ -6,11 +6,14 @@ import {
   DeploymentReceiptSchema,
   DeploymentReceiptV3Schema,
   DeploymentReceiptV4Schema,
+  DeploymentReceiptV5Schema,
   QualifiedRunnerReleaseSchema,
   QualifiedRunnerReleaseV2Schema,
   QualifiedRunnerReleaseV3Schema,
   QualifiedRunnerReleaseV4Schema,
+  QualifiedRunnerReleaseV5Schema,
 } from "../src/index";
+import { createGenerationIsolationEvidence } from "../../../scripts/generation-isolation-evidence";
 import * as releaseTools from "../../../scripts/prepare-qualified-deploy";
 
 function legacyReceipt() {
@@ -34,12 +37,67 @@ function legacyReceipt() {
   };
 }
 
+function generationIsolationQualification(input: {
+  sourceCommit: string;
+  sourceTreeSha256: string;
+  localImageTag: string;
+  localImageDigest: string;
+  verifiedAt?: string;
+}) {
+  const probePayload = {
+    schemaVersion: "1",
+    probeVersion: "counterlab-generation-isolation-v1",
+    service: "counterlab-hosted-runner",
+    probe: "non-root-startup",
+    checks: [
+      "entrypoint",
+      "non-root-user",
+      "immutable-paths",
+      "codex",
+      "python",
+      "bubblewrap",
+      "bubblewrap-read-isolation",
+      "setpriv",
+      "writable-roots",
+    ],
+    generationFilesystemReadIsolation: "OS_ENFORCED",
+    bubblewrapVersion: "0.11.0",
+    bubblewrap: {
+      forbiddenHostPathsHidden: true,
+      parentEnvironmentHidden: true,
+      workspaceVisible: true,
+      workspaceWritable: true,
+    },
+  } as const;
+  const result = createGenerationIsolationEvidence({
+    ...input,
+    imageUser: "10001:10001",
+    verifiedAt: input.verifiedAt ?? "2026-07-16T16:23:00.000Z",
+    startupProbe: {
+      status: "ready",
+      service: "counterlab-hosted-runner",
+      probe: "non-root-startup",
+      checks: probePayload.checks,
+      generationFilesystemReadIsolation: "OS_ENFORCED",
+      generationIsolationProbe: probePayload,
+      generationIsolationProbeSha256:
+        "700cc58bedc163846e3854415170f49f55da9fd3ba316cc4967747d5268199dc",
+    },
+  });
+  return {
+    generationIsolationEvidence: result.evidence,
+    generationIsolationEvidenceSha256: result.evidenceSha256,
+    generationIsolationProbeSha256: result.probeSha256,
+    generationIsolationVerifiedAt: result.evidence.verifiedAt,
+  } as const;
+}
+
 describe("qualified runner release schema", () => {
   it("requires an exact registry promotion digest", () => {
     expect(() => QualifiedRunnerReleaseSchema.parse(legacyReceipt())).toThrow();
   });
 
-  it("creates a runtime-bound promoted v5 receipt from recomputed evidence", () => {
+  it("creates a runtime-bound promoted v6 receipt from recomputed evidence", () => {
     const sourceCommit = "a".repeat(40);
     const evidenceCommit = "2".repeat(40);
     const registryImage = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
@@ -91,6 +149,12 @@ describe("qualified runner release schema", () => {
         timeoutVerifiedAt: "2026-07-16T16:24:00.000Z",
         currentCommit: evidenceCommit,
         generationFilesystemReadIsolation: "OS_ENFORCED",
+        ...generationIsolationQualification({
+          sourceCommit,
+          sourceTreeSha256: "c".repeat(64),
+          localImageTag: `counterlab-runner:git-${sourceCommit}`,
+          localImageDigest: `sha256:${"e".repeat(64)}`,
+        }),
         sourceIsAncestor: true,
         changedPaths: ["scientific-engines/snapshot.json"],
         registryImage,
@@ -102,7 +166,7 @@ describe("qualified runner release schema", () => {
     );
 
     expect(QualifiedRunnerReleaseSchema.parse(receipt)).toMatchObject({
-      schemaVersion: "5",
+      schemaVersion: "6",
       generationFilesystemReadIsolation: "OS_ENFORCED",
       evidenceCommit,
       registryImage,
@@ -119,7 +183,7 @@ describe("qualified runner release schema", () => {
     ).toThrow();
   });
 
-  it("retains the exact historical v4 receipt contract", () => {
+  it("retains the exact historical v5 and v4 receipt contracts", () => {
     const sourceCommit = "a".repeat(40);
     const evidenceCommit = "2".repeat(40);
     const current = (
@@ -168,6 +232,12 @@ describe("qualified runner release schema", () => {
         timeoutVerifiedAt: "2026-07-16T16:24:00.000Z",
         currentCommit: evidenceCommit,
         generationFilesystemReadIsolation: "OS_ENFORCED",
+        ...generationIsolationQualification({
+          sourceCommit,
+          sourceTreeSha256: "c".repeat(64),
+          localImageTag: `counterlab-runner:git-${sourceCommit}`,
+          localImageDigest: `sha256:${"e".repeat(64)}`,
+        }),
         sourceIsAncestor: true,
         changedPaths: ["scientific-engines/snapshot.json"],
         registryImage: `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`,
@@ -178,9 +248,23 @@ describe("qualified runner release schema", () => {
       "2026-07-16T16:30:00.000Z",
     );
     const {
+      generationIsolationEvidence: _generationIsolationEvidence,
+      generationIsolationEvidenceSha256: _generationIsolationEvidenceSha256,
+      generationIsolationProbeSha256: _generationIsolationProbeSha256,
+      generationIsolationVerifiedAt: _generationIsolationVerifiedAt,
+      ...legacyV5
+    } = current;
+    expect(
+      QualifiedRunnerReleaseV5Schema.parse({
+        ...legacyV5,
+        schemaVersion: "5",
+        verifierVersion: "counterlab-release-v5",
+      }),
+    ).toMatchObject({ schemaVersion: "5" });
+    const {
       generationFilesystemReadIsolation: _generationFilesystemReadIsolation,
       ...legacyV4
-    } = current;
+    } = legacyV5;
 
     expect(
       QualifiedRunnerReleaseV4Schema.parse({
@@ -307,11 +391,14 @@ describe("deployment receipt schema", () => {
     const runner = "b".repeat(40);
     const digest = `sha256:${"c".repeat(64)}`;
     return {
-      schemaVersion: "5",
+      schemaVersion: "6",
       status: "DEPLOYED",
       workerName: "counterlab",
       productionOrigin: "https://counterlab.cserules.workers.dev",
       generationFilesystemReadIsolation: "OS_ENFORCED",
+      generationIsolationEvidenceSha256: "0".repeat(64),
+      generationIsolationProbeSha256: "1".repeat(64),
+      generationIsolationVerifiedAt: "2026-07-19T00:01:00.000Z",
       workerEvidenceCommit: worker,
       runnerSourceCommit: runner,
       qualifiedRunnerReceiptSha256: "1".repeat(64),
@@ -348,13 +435,13 @@ describe("deployment receipt schema", () => {
       workerVersionSha256: "b".repeat(64),
       containerStatusSha256: "c".repeat(64),
       deployedAt: "2026-07-19T00:03:00.000Z",
-      verifierVersion: "counterlab-deployment-v5",
+      verifierVersion: "counterlab-deployment-v6",
     } as const;
   }
 
   it("binds the deployed Worker, Container, release checks, and exact artifacts", () => {
     expect(DeploymentReceiptSchema.parse(receipt())).toMatchObject({
-      schemaVersion: "5",
+      schemaVersion: "6",
       status: "DEPLOYED",
       workerName: "counterlab",
     });
@@ -378,10 +465,23 @@ describe("deployment receipt schema", () => {
     ).toThrow();
   });
 
-  it("retains the historical v4 PARTIAL isolation contract", () => {
+  it("retains the historical v5 and v4 isolation contracts", () => {
+    const {
+      generationIsolationEvidenceSha256: _generationIsolationEvidenceSha256,
+      generationIsolationProbeSha256: _generationIsolationProbeSha256,
+      generationIsolationVerifiedAt: _generationIsolationVerifiedAt,
+      ...legacyV5
+    } = receipt();
+    expect(
+      DeploymentReceiptV5Schema.parse({
+        ...legacyV5,
+        schemaVersion: "5",
+        verifierVersion: "counterlab-deployment-v5",
+      }),
+    ).toMatchObject({ schemaVersion: "5" });
     expect(
       DeploymentReceiptV4Schema.parse({
-        ...receipt(),
+        ...legacyV5,
         schemaVersion: "4",
         generationFilesystemReadIsolation: "PARTIAL",
         verifierVersion: "counterlab-deployment-v4",
@@ -409,6 +509,9 @@ describe("deployment receipt schema", () => {
 
   it("retains strict parsing for historical v3 deployment receipts", () => {
     const {
+      generationIsolationEvidenceSha256: _generationIsolationEvidenceSha256,
+      generationIsolationProbeSha256: _generationIsolationProbeSha256,
+      generationIsolationVerifiedAt: _generationIsolationVerifiedAt,
       timeoutCleanupReceiptSha256: _timeoutCleanupReceiptSha256,
       aggregateLimitEvidenceSha256: _aggregateLimitEvidenceSha256,
       runtimePolicySha256: _runtimePolicySha256,

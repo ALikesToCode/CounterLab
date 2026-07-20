@@ -5,14 +5,14 @@ import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  DeploymentReceiptSchema,
-  QualifiedRunnerReleaseSchema,
-  ReleaseCheckReceiptSchema,
+  DeploymentReceiptV6Schema,
+  ReleaseCheckReceiptV4Schema,
 } from "../packages/scientific-engine-registry/src/index.js";
 import type {
-  QualifiedRunnerRelease,
-  ReleaseCheckReceipt,
+  QualifiedRunnerReleaseV6,
+  ReleaseCheckReceiptV4,
 } from "../packages/scientific-engine-registry/src/index.js";
+import { parseQualifiedRunnerReleaseV6 } from "./generation-isolation-evidence.js";
 import {
   collectFrozenClientAssets,
   verifyFrozenWorkerReleaseManifest,
@@ -222,6 +222,8 @@ export function assertActiveWorkerReleaseBindings(
     workerEvidenceCommit: string;
     runnerSourceCommit: string;
     runnerImageDigest: string;
+    generationIsolationEvidenceSha256: string;
+    generationIsolationProbeSha256: string;
     timeoutCleanupReceiptSha256: string;
     aggregateLimitEvidenceSha256: string;
     runtimePolicySha256: string;
@@ -244,6 +246,10 @@ export function assertActiveWorkerReleaseBindings(
     COUNTERLAB_WORKER_EVIDENCE_COMMIT: expected.workerEvidenceCommit,
     COUNTERLAB_RUNNER_SOURCE_COMMIT: expected.runnerSourceCommit,
     COUNTERLAB_RUNNER_IMAGE_DIGEST: expected.runnerImageDigest,
+    COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256:
+      expected.generationIsolationEvidenceSha256,
+    COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256:
+      expected.generationIsolationProbeSha256,
     COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256:
       expected.timeoutCleanupReceiptSha256,
     COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256:
@@ -277,7 +283,7 @@ export function assertActiveWorkerReleaseBindings(
 }
 
 type QualifiedDeploymentIdentity = Pick<
-  QualifiedRunnerRelease,
+  QualifiedRunnerReleaseV6,
   | "evidenceCommit"
   | "sourceCommit"
   | "registryDigest"
@@ -291,10 +297,13 @@ type QualifiedDeploymentIdentity = Pick<
   | "proofDependencyManifestSha256"
   | "aggregateLimitEvidenceSha256"
   | "runtimeAdapterSha256"
+  | "generationIsolationEvidenceSha256"
+  | "generationIsolationProbeSha256"
+  | "generationIsolationVerifiedAt"
 >;
 
 type ReleaseCheckDeploymentIdentity = Pick<
-  ReleaseCheckReceipt,
+  ReleaseCheckReceiptV4,
   | "evidenceCommit"
   | "sourceCommit"
   | "qualifiedRunnerReceiptSha256"
@@ -309,6 +318,9 @@ type ReleaseCheckDeploymentIdentity = Pick<
   | "proofDependencyManifestSha256"
   | "aggregateLimitEvidenceSha256"
   | "runtimeAdapterSha256"
+  | "generationIsolationEvidenceSha256"
+  | "generationIsolationProbeSha256"
+  | "generationIsolationVerifiedAt"
 >;
 
 export function assertDeploymentReceiptBindings(input: {
@@ -354,6 +366,21 @@ export function assertDeploymentReceiptBindings(input: {
       "qualification time",
       input.releaseCheck.qualifiedAt,
       input.qualified.qualifiedAt,
+    ],
+    [
+      "generation isolation evidence",
+      input.releaseCheck.generationIsolationEvidenceSha256,
+      input.qualified.generationIsolationEvidenceSha256,
+    ],
+    [
+      "generation isolation probe",
+      input.releaseCheck.generationIsolationProbeSha256,
+      input.qualified.generationIsolationProbeSha256,
+    ],
+    [
+      "generation isolation verification time",
+      input.releaseCheck.generationIsolationVerifiedAt,
+      input.qualified.generationIsolationVerifiedAt,
     ],
     [
       "runner image tag",
@@ -474,13 +501,16 @@ async function main(): Promise<void> {
   }
   const bindings = version.resources?.bindings;
   const qualifiedBytes = readFileSync(paths.qualified);
-  const qualified = QualifiedRunnerReleaseSchema.parse(
+  const qualified = parseQualifiedRunnerReleaseV6(
     JSON.parse(qualifiedBytes.toString("utf8")) as unknown,
   );
   assertActiveWorkerReleaseBindings(bindings, {
     workerEvidenceCommit: args["--evidence-commit"],
     runnerSourceCommit: args["--source-commit"],
     runnerImageDigest: args["--registry-digest"],
+    generationIsolationEvidenceSha256:
+      qualified.generationIsolationEvidenceSha256,
+    generationIsolationProbeSha256: qualified.generationIsolationProbeSha256,
     timeoutCleanupReceiptSha256: qualified.timeoutCleanupReceiptSha256,
     aggregateLimitEvidenceSha256: qualified.aggregateLimitEvidenceSha256,
     runtimePolicySha256: qualified.runtimePolicySha256,
@@ -507,7 +537,7 @@ async function main(): Promise<void> {
   }
 
   const releaseCheckBytes = readFileSync(paths.releaseCheck);
-  const releaseCheck = ReleaseCheckReceiptSchema.parse(
+  const releaseCheck = ReleaseCheckReceiptV4Schema.parse(
     JSON.parse(releaseCheckBytes.toString("utf8")) as unknown,
   );
   assertDeploymentReceiptBindings({
@@ -558,13 +588,17 @@ async function main(): Promise<void> {
   }
   const dryRun = dryRunWorkerHash(root, paths.dryRun, workerBundleSha256);
   const configBytes = readFileSync(paths.config);
-  const receipt = DeploymentReceiptSchema.parse({
-    schemaVersion: "5",
+  const receipt = DeploymentReceiptV6Schema.parse({
+    schemaVersion: "6",
     status: "DEPLOYED",
     workerName: "counterlab",
     productionOrigin: "https://counterlab.cserules.workers.dev",
     generationFilesystemReadIsolation:
       releaseCheck.generationFilesystemReadIsolation,
+    generationIsolationEvidenceSha256:
+      releaseCheck.generationIsolationEvidenceSha256,
+    generationIsolationProbeSha256: releaseCheck.generationIsolationProbeSha256,
+    generationIsolationVerifiedAt: releaseCheck.generationIsolationVerifiedAt,
     workerEvidenceCommit: args["--evidence-commit"],
     runnerSourceCommit: args["--source-commit"],
     qualifiedRunnerReceiptSha256: sha256(qualifiedBytes),
@@ -601,7 +635,7 @@ async function main(): Promise<void> {
     workerVersionSha256: sha256(versionBytes),
     containerStatusSha256: sha256(containersBytes),
     deployedAt: new Date().toISOString(),
-    verifierVersion: "counterlab-deployment-v5",
+    verifierVersion: "counterlab-deployment-v6",
   });
   await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, {
     encoding: "utf8",

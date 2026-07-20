@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 IMAGE=""
+EXPECTED_IMAGE_DIGEST=""
 REGISTRY_ONLY=0
 REQUIRE_PRODUCTION=0
 RUNTIME_REPORT=""
@@ -22,6 +23,8 @@ Usage: ./scripts/verify-scientific-engines.sh [options]
 
 Options:
   --image IMAGE          Verify the exact local runner image from inside its runtime.
+  --expected-image-digest SHA256
+                         Refuse to start unless IMAGE resolves to this immutable ID.
   --registry-only        Skip Proof Capsule linkage and permit an omitted runtime image.
   --require-production   Reject a local-candidate runtime manifest.
   --runtime-report PATH Persist the exact runtime report to a new contained file.
@@ -39,6 +42,11 @@ while [[ $# -gt 0 ]]; do
     --image)
       [[ $# -ge 2 ]] || { echo "--image requires a value" >&2; exit 2; }
       IMAGE="$2"
+      shift 2
+      ;;
+    --expected-image-digest)
+      [[ $# -ge 2 ]] || { echo "--expected-image-digest requires a value" >&2; exit 2; }
+      EXPECTED_IMAGE_DIGEST="$2"
       shift 2
       ;;
     --registry-only)
@@ -161,6 +169,10 @@ if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
   echo "Runner image does not expose a valid sha256 image ID." >&2
   exit 1
 fi
+if [[ -n "${EXPECTED_IMAGE_DIGEST}" && "${IMAGE_DIGEST}" != "${EXPECTED_IMAGE_DIGEST}" ]]; then
+  echo "Runner image does not match the required immutable image ID." >&2
+  exit 1
+fi
 if [[ ! "${SOURCE_COMMIT}" =~ ^[a-f0-9]{40}$ ]]; then
   echo "Runner image has an unbound or invalid OCI source revision." >&2
   exit 1
@@ -212,7 +224,7 @@ STARTUP_PROBE_OUTPUT="$("${DOCKER_COMMAND[@]}" run --rm --name "${STARTUP_CONTAI
   -e COUNTERLAB_RUNNER_STARTUP_PROBE=1 \
   -e COUNTERLAB_RUNNER_WORK_ROOT=/counterlab-runtime/jobs \
   -e COUNTERLAB_CODEX_HOME_ROOT=/counterlab-runtime/codex \
-  "${IMAGE}")"
+  "${IMAGE_DIGEST}")"
 node -e '
   const value = JSON.parse(process.argv[1]);
   if (
@@ -267,7 +279,7 @@ RUNTIME_VERIFICATION_OUTPUT="$("${DOCKER_COMMAND[@]}" run --rm --name "${RUNTIME
   --mount "type=bind,src=${ROOT_DIR}/scientific-engines,dst=/repo/scientific-engines,readonly" \
   --workdir=/repo \
   --entrypoint python \
-  "${IMAGE}" \
+  "${IMAGE_DIGEST}" \
   /repo/scripts/verify_scientific_runtime.py \
   --root /repo \
   --image-digest "${IMAGE_DIGEST}" \

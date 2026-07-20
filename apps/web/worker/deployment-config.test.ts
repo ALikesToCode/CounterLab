@@ -8,6 +8,7 @@ import {
   bindFrozenWorkerRelease,
   qualifiedDeployConfig,
 } from "../../../scripts/prepare-qualified-deploy";
+import { createGenerationIsolationEvidence } from "../../../scripts/generation-isolation-evidence";
 
 function productionDeployConfig() {
   return {
@@ -141,6 +142,62 @@ function timeoutQualification(sourceCommit: string) {
   } as const;
 }
 
+function generationIsolationQualification(input: {
+  sourceCommit: string;
+  sourceTreeSha256: string;
+  localImageTag: string;
+  localImageDigest: string;
+  verifiedAt?: string;
+}) {
+  const probePayload = {
+    schemaVersion: "1",
+    probeVersion: "counterlab-generation-isolation-v1",
+    service: "counterlab-hosted-runner",
+    probe: "non-root-startup",
+    checks: [
+      "entrypoint",
+      "non-root-user",
+      "immutable-paths",
+      "codex",
+      "python",
+      "bubblewrap",
+      "bubblewrap-read-isolation",
+      "setpriv",
+      "writable-roots",
+    ],
+    generationFilesystemReadIsolation: "OS_ENFORCED",
+    bubblewrapVersion: "0.11.0",
+    bubblewrap: {
+      forbiddenHostPathsHidden: true,
+      parentEnvironmentHidden: true,
+      workspaceVisible: true,
+      workspaceWritable: true,
+    },
+  } as const;
+  const probeSha256 =
+    "700cc58bedc163846e3854415170f49f55da9fd3ba316cc4967747d5268199dc";
+  const result = createGenerationIsolationEvidence({
+    ...input,
+    imageUser: "10001:10001",
+    verifiedAt: input.verifiedAt ?? "2026-07-16T16:18:00.000Z",
+    startupProbe: {
+      status: "ready",
+      service: "counterlab-hosted-runner",
+      probe: "non-root-startup",
+      checks: probePayload.checks,
+      generationFilesystemReadIsolation: "OS_ENFORCED",
+      generationIsolationProbe: probePayload,
+      generationIsolationProbeSha256: probeSha256,
+    },
+  });
+  return {
+    generationIsolationEvidence: result.evidence,
+    generationIsolationEvidenceSha256: result.evidenceSha256,
+    generationIsolationProbeSha256: result.probeSha256,
+    generationIsolationVerifiedAt: result.evidence.verifiedAt,
+  } as const;
+}
+
 function luminance(color: string): number {
   const channels = [1, 3, 5].map((offset) =>
     Number.parseInt(color.slice(offset, offset + 2), 16),
@@ -219,6 +276,7 @@ describe("Cloudflare static asset routing", () => {
 
     expect(verifyIndex).toBeGreaterThan(0);
     expect(buildIndex).toBeGreaterThan(verifyIndex);
+    expect(script).toContain('--expected-image-digest "${LOCAL_IMAGE_DIGEST}"');
   });
 
   it("gates deployment on immutable authority, migrations, secrets, and 100 percent traffic", () => {
@@ -401,6 +459,12 @@ describe("Cloudflare static asset routing", () => {
       "qualification output already exists; refusing to replace it",
     );
     expect(script).toContain("assertCurrentGrypeReleaseEvidenceBinding");
+    expect(script).toContain("input.expectedConfigDigest");
+    expect(script).toContain('"--expected-image-digest"');
+    expect(script).toContain("buildReceipt.localImageDigest");
+    expect(script).toContain(
+      '"qualified local image digest is unavailable for promotion"',
+    );
     expect(script).toContain('flag: "wx"');
     expect(
       script.match(
@@ -546,8 +610,15 @@ describe("Cloudflare static asset routing", () => {
     expect(probe).toContain("COUNTERLAB_RUNNER_STARTUP_PROBE=1");
     expect(probe).not.toContain("--user");
     expect(probe).not.toContain("--entrypoint");
-    expect(probe).toContain('"${IMAGE}"');
+    expect(probe).toContain('"${IMAGE_DIGEST}"');
+    expect(
+      verifier.match(/"\$\{IMAGE_DIGEST\}"/gu)?.length,
+    ).toBeGreaterThanOrEqual(2);
     expect(verifier).toContain("--generation-isolation-report");
+    expect(verifier).toContain("--expected-image-digest");
+    expect(verifier).toContain(
+      '"${IMAGE_DIGEST}" != "${EXPECTED_IMAGE_DIGEST}"',
+    );
     expect(verifier).toContain(
       '{{index .Config.Labels "io.counterlab.source-tree-sha256"}}',
     );
@@ -561,7 +632,7 @@ describe("Cloudflare static asset routing", () => {
     const evidenceCommit = "2".repeat(40);
     const image = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
     const receipt = {
-      schemaVersion: "5",
+      schemaVersion: "6",
       status: "VERIFIED",
       generationFilesystemReadIsolation: "OS_ENFORCED",
       sourceCommit,
@@ -570,6 +641,12 @@ describe("Cloudflare static asset routing", () => {
       dockerfileSha256: "d".repeat(64),
       localImageTag: `counterlab-runner:git-${sourceCommit}`,
       localImageDigest: `sha256:${"e".repeat(64)}`,
+      ...generationIsolationQualification({
+        sourceCommit,
+        sourceTreeSha256: "c".repeat(64),
+        localImageTag: `counterlab-runner:git-${sourceCommit}`,
+        localImageDigest: `sha256:${"e".repeat(64)}`,
+      }),
       ociRevision: sourceCommit,
       ociSourceTreeSha256: "c".repeat(64),
       engineAuthorityHash: "f".repeat(64),
@@ -595,10 +672,16 @@ describe("Cloudflare static asset routing", () => {
       registryDigest: `sha256:${"3".repeat(64)}`,
       registryResolvedAt: "2026-07-16T16:20:00.000Z",
       qualifiedAt: "2026-07-16T16:30:00.000Z",
-      verifierVersion: "counterlab-release-v5",
+      verifierVersion: "counterlab-release-v6",
     };
     const observation = {
       generationFilesystemReadIsolation: "OS_ENFORCED" as const,
+      ...generationIsolationQualification({
+        sourceCommit,
+        sourceTreeSha256: receipt.sourceTreeSha256,
+        localImageTag: receipt.localImageTag,
+        localImageDigest: receipt.localImageDigest,
+      }),
       sourceCommit,
       sourceArchiveSha256: receipt.sourceArchiveSha256,
       sourceTreeSha256: receipt.sourceTreeSha256,
@@ -663,6 +746,10 @@ describe("Cloudflare static asset routing", () => {
         COUNTERLAB_RUNTIME_POLICY_SHA256: receipt.runtimePolicySha256,
         COUNTERLAB_PROOF_DEPENDENCY_MANIFEST_SHA256:
           receipt.proofDependencyManifestSha256,
+        COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256:
+          receipt.generationIsolationEvidenceSha256,
+        COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256:
+          receipt.generationIsolationProbeSha256,
       }),
     );
     const generatedFromVite = qualifiedDeployConfig({
@@ -776,6 +863,19 @@ describe("Cloudflare static asset routing", () => {
         observation,
       }),
     ).toThrow(/runtime policy/u);
+    for (const [field, label] of [
+      ["generationIsolationEvidenceSha256", /generation isolation evidence/u],
+      ["generationIsolationProbeSha256", /generation isolation probe/u],
+    ] as const) {
+      expect(() =>
+        qualifiedDeployConfig({
+          config: productionDeployConfig(),
+          receipt,
+          image,
+          observation: { ...observation, [field]: "0".repeat(64) },
+        }),
+      ).toThrow(label);
+    }
     expect(() =>
       qualifiedDeployConfig({
         config: productionDeployConfig(),
@@ -805,7 +905,7 @@ describe("Cloudflare static asset routing", () => {
     const evidenceCommit = "2".repeat(40);
     const image = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
     const receipt = {
-      schemaVersion: "5",
+      schemaVersion: "6",
       status: "VERIFIED",
       generationFilesystemReadIsolation: "OS_ENFORCED",
       sourceCommit,
@@ -814,6 +914,12 @@ describe("Cloudflare static asset routing", () => {
       dockerfileSha256: "d".repeat(64),
       localImageTag: `counterlab-runner:git-${sourceCommit}`,
       localImageDigest: `sha256:${"e".repeat(64)}`,
+      ...generationIsolationQualification({
+        sourceCommit,
+        sourceTreeSha256: "c".repeat(64),
+        localImageTag: `counterlab-runner:git-${sourceCommit}`,
+        localImageDigest: `sha256:${"e".repeat(64)}`,
+      }),
       ociRevision: sourceCommit,
       ociSourceTreeSha256: "c".repeat(64),
       engineAuthorityHash: "f".repeat(64),
@@ -839,7 +945,7 @@ describe("Cloudflare static asset routing", () => {
       registryDigest: `sha256:${"3".repeat(64)}`,
       registryResolvedAt: "2026-07-16T16:20:00.000Z",
       qualifiedAt: "2026-07-16T16:30:00.000Z",
-      verifierVersion: "counterlab-release-v5",
+      verifierVersion: "counterlab-release-v6",
     };
     const config = productionDeployConfig();
     config.durable_objects.bindings = [
@@ -853,6 +959,12 @@ describe("Cloudflare static asset routing", () => {
         image,
         observation: {
           generationFilesystemReadIsolation: "OS_ENFORCED",
+          ...generationIsolationQualification({
+            sourceCommit,
+            sourceTreeSha256: receipt.sourceTreeSha256,
+            localImageTag: receipt.localImageTag,
+            localImageDigest: receipt.localImageDigest,
+          }),
           sourceCommit,
           sourceArchiveSha256: receipt.sourceArchiveSha256,
           sourceTreeSha256: receipt.sourceTreeSha256,
@@ -895,7 +1007,7 @@ describe("Cloudflare static asset routing", () => {
     const sourceCommit = "a".repeat(40);
     const image = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
     const receipt = {
-      schemaVersion: "5",
+      schemaVersion: "6",
       status: "VERIFIED",
       generationFilesystemReadIsolation: "OS_ENFORCED",
       sourceCommit,
@@ -904,6 +1016,12 @@ describe("Cloudflare static asset routing", () => {
       dockerfileSha256: "d".repeat(64),
       localImageTag: `counterlab-runner:git-${sourceCommit}`,
       localImageDigest: `sha256:${"e".repeat(64)}`,
+      ...generationIsolationQualification({
+        sourceCommit,
+        sourceTreeSha256: "c".repeat(64),
+        localImageTag: `counterlab-runner:git-${sourceCommit}`,
+        localImageDigest: `sha256:${"e".repeat(64)}`,
+      }),
       ociRevision: sourceCommit,
       ociSourceTreeSha256: "c".repeat(64),
       engineAuthorityHash: "f".repeat(64),
@@ -929,7 +1047,7 @@ describe("Cloudflare static asset routing", () => {
       registryDigest: `sha256:${"3".repeat(64)}`,
       registryResolvedAt: "2026-07-16T15:55:00.000Z",
       qualifiedAt: "2026-07-16T16:30:00.000Z",
-      verifierVersion: "counterlab-release-v5",
+      verifierVersion: "counterlab-release-v6",
     };
 
     expect(() =>
@@ -942,6 +1060,12 @@ describe("Cloudflare static asset routing", () => {
         image,
         observation: {
           generationFilesystemReadIsolation: "OS_ENFORCED",
+          ...generationIsolationQualification({
+            sourceCommit,
+            sourceTreeSha256: receipt.sourceTreeSha256,
+            localImageTag: receipt.localImageTag,
+            localImageDigest: receipt.localImageDigest,
+          }),
           sourceCommit,
           sourceArchiveSha256: "9".repeat(64),
           sourceTreeSha256: receipt.sourceTreeSha256,

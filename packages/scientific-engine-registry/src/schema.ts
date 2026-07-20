@@ -1127,7 +1127,7 @@ export const QualifiedRunnerReleaseV6Schema = z
     }
   });
 
-export const QualifiedRunnerReleaseSchema = QualifiedRunnerReleaseV5Schema;
+export const QualifiedRunnerReleaseSchema = QualifiedRunnerReleaseV6Schema;
 
 export const RELEASE_CHECK_IDS = [
   "test-all",
@@ -1346,7 +1346,7 @@ export const ReleaseCheckReceiptV4Schema = z
     }
   });
 
-export const ReleaseCheckReceiptSchema = ReleaseCheckReceiptV3Schema;
+export const ReleaseCheckReceiptSchema = ReleaseCheckReceiptV4Schema;
 
 export const DeploymentReceiptV3Schema = z
   .strictObject({
@@ -1609,4 +1609,4 @@ export const DeploymentReceiptV6Schema = z
     }
   });
 
-export const DeploymentReceiptSchema = DeploymentReceiptV5Schema;
+export const DeploymentReceiptSchema = DeploymentReceiptV6Schema;

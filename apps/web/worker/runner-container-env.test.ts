@@ -17,6 +17,8 @@ describe("runner Container environment", () => {
       COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY: signingKeys.privateKey,
       COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
       COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+      COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "d".repeat(64),
+      COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "e".repeat(64),
     });
 
     expect(environment).toEqual({
@@ -37,6 +39,8 @@ describe("runner Container environment", () => {
       COUNTERLAB_RUNNER_ONE_SHOT: "1",
       COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
       COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+      COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "d".repeat(64),
+      COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "e".repeat(64),
     });
   });
 

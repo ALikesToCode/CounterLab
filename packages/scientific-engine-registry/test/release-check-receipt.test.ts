@@ -7,7 +7,9 @@ import { describe, expect, it } from "vitest";
 import {
   ReleaseCheckReceiptSchema,
   ReleaseCheckReceiptV2Schema,
+  ReleaseCheckReceiptV3Schema,
 } from "../src/index";
+import { createGenerationIsolationEvidence } from "../../../scripts/generation-isolation-evidence";
 
 import {
   assertReleaseCheckBinding,
@@ -19,11 +21,72 @@ import {
 const sourceCommit = "a".repeat(40);
 const evidenceCommit = "b".repeat(40);
 
+function generationIsolation(verifiedAt = "2026-07-19T00:00:30.000Z") {
+  const probePayload = {
+    schemaVersion: "1",
+    probeVersion: "counterlab-generation-isolation-v1",
+    service: "counterlab-hosted-runner",
+    probe: "non-root-startup",
+    checks: [
+      "entrypoint",
+      "non-root-user",
+      "immutable-paths",
+      "codex",
+      "python",
+      "bubblewrap",
+      "bubblewrap-read-isolation",
+      "setpriv",
+      "writable-roots",
+    ],
+    generationFilesystemReadIsolation: "OS_ENFORCED",
+    bubblewrapVersion: "0.11.0",
+    bubblewrap: {
+      forbiddenHostPathsHidden: true,
+      parentEnvironmentHidden: true,
+      workspaceVisible: true,
+      workspaceWritable: true,
+    },
+  } as const;
+  return createGenerationIsolationEvidence({
+    sourceCommit,
+    sourceTreeSha256: "2".repeat(64),
+    localImageTag: `counterlab-runner:git-${sourceCommit}`,
+    localImageDigest: `sha256:${"4".repeat(64)}`,
+    imageUser: "10001:10001",
+    verifiedAt,
+    startupProbe: {
+      status: "ready",
+      service: "counterlab-hosted-runner",
+      probe: "non-root-startup",
+      checks: probePayload.checks,
+      generationFilesystemReadIsolation: "OS_ENFORCED",
+      generationIsolationProbe: probePayload,
+      generationIsolationProbeSha256:
+        "700cc58bedc163846e3854415170f49f55da9fd3ba316cc4967747d5268199dc",
+    },
+  });
+}
+
+function generationIsolationFields() {
+  const result = generationIsolation();
+  return {
+    generationIsolationEvidence: result.evidence,
+    generationIsolationEvidenceSha256: result.evidenceSha256,
+    generationIsolationProbeSha256: result.probeSha256,
+    generationIsolationVerifiedAt: result.evidence.verifiedAt,
+  } as const;
+}
+
+function freshGenerationIsolationEvidence() {
+  return generationIsolation("2026-07-19T00:01:30.000Z").evidence;
+}
+
 function qualifiedReceipt() {
   return {
-    schemaVersion: "5",
+    schemaVersion: "6",
     status: "VERIFIED",
     generationFilesystemReadIsolation: "OS_ENFORCED",
+    ...generationIsolationFields(),
     sourceCommit,
     sourceArchiveSha256: "1".repeat(64),
     sourceTreeSha256: "2".repeat(64),
@@ -64,7 +127,7 @@ function qualifiedReceipt() {
     registryDigest: `sha256:${"1".repeat(64)}`,
     registryResolvedAt: "2026-07-19T00:00:00.000Z",
     qualifiedAt: "2026-07-19T00:01:00.000Z",
-    verifierVersion: "counterlab-release-v5",
+    verifierVersion: "counterlab-release-v6",
   } as const;
 }
 
@@ -110,11 +173,14 @@ function deploymentReceipt() {
   const runner = "d".repeat(40);
   const digest = `sha256:${"a".repeat(64)}`;
   return {
-    schemaVersion: "5",
+    schemaVersion: "6",
     status: "DEPLOYED",
     workerName: "counterlab",
     productionOrigin: "https://counterlab.cserules.workers.dev",
     generationFilesystemReadIsolation: "OS_ENFORCED",
+    generationIsolationEvidenceSha256: "0".repeat(64),
+    generationIsolationProbeSha256: "1".repeat(64),
+    generationIsolationVerifiedAt: "2026-07-18T23:58:00.000Z",
     workerEvidenceCommit: worker,
     runnerSourceCommit: runner,
     qualifiedRunnerReceiptSha256: "1".repeat(64),
@@ -151,7 +217,7 @@ function deploymentReceipt() {
     workerVersionSha256: "c".repeat(64),
     containerStatusSha256: "d".repeat(64),
     deployedAt: "2026-07-19T00:00:00.000Z",
-    verifierVersion: "counterlab-deployment-v5",
+    verifierVersion: "counterlab-deployment-v6",
   } as const;
 }
 
@@ -266,21 +332,22 @@ describe("release-check receipt", () => {
       worktreeClean: true,
       runnerImageDigest: qualifiedReceipt().localImageDigest,
       adapterImageDigest: qualifiedReceipt().adapterImageDigest,
+      generationIsolationEvidence: freshGenerationIsolationEvidence(),
       checkedAt: "2026-07-19T00:02:00.000Z",
     });
 
     expect(receipt).toMatchObject({
-      schemaVersion: "3",
+      schemaVersion: "4",
       status: "PASSED",
       generationFilesystemReadIsolation: "OS_ENFORCED",
       evidenceCommit,
-      verifierVersion: "counterlab-release-check-v3",
+      verifierVersion: "counterlab-release-check-v4",
     });
     expect(receipt.checks).toHaveLength(11);
   });
 
-  it("preserves v2 receipts while requiring OS isolation in v3", () => {
-    const current = createReleaseCheckReceipt({
+  it("requires a fresh exact-image probe that matches qualification", () => {
+    const input = {
       qualifiedReceipt: qualifiedReceipt(),
       qualifiedReceiptBytes: qualifiedBytes(),
       runtimeAttestation: runtimeAttestation(),
@@ -289,11 +356,55 @@ describe("release-check receipt", () => {
       runnerImageDigest: qualifiedReceipt().localImageDigest,
       adapterImageDigest: qualifiedReceipt().adapterImageDigest,
       checkedAt: "2026-07-19T00:02:00.000Z",
+    } as const;
+    expect(() =>
+      createReleaseCheckReceipt({
+        ...input,
+        generationIsolationEvidence: {
+          ...freshGenerationIsolationEvidence(),
+          sourceCommit: "0".repeat(40),
+        },
+      }),
+    ).toThrow(/source commit|sourceCommit/iu);
+    expect(() =>
+      createReleaseCheckReceipt({
+        ...input,
+        generationIsolationEvidence: generationIsolation(
+          "2026-07-18T22:00:00.000Z",
+        ).evidence,
+      }),
+    ).toThrow(/not fresh/u);
+  });
+
+  it("preserves v3 and v2 receipts while requiring hash binding in v4", () => {
+    const current = createReleaseCheckReceipt({
+      qualifiedReceipt: qualifiedReceipt(),
+      qualifiedReceiptBytes: qualifiedBytes(),
+      runtimeAttestation: runtimeAttestation(),
+      currentCommit: evidenceCommit,
+      worktreeClean: true,
+      runnerImageDigest: qualifiedReceipt().localImageDigest,
+      adapterImageDigest: qualifiedReceipt().adapterImageDigest,
+      generationIsolationEvidence: freshGenerationIsolationEvidence(),
+      checkedAt: "2026-07-19T00:02:00.000Z",
     });
+    const {
+      generationIsolationEvidenceSha256: _generationIsolationEvidenceSha256,
+      generationIsolationProbeSha256: _generationIsolationProbeSha256,
+      generationIsolationVerifiedAt: _generationIsolationVerifiedAt,
+      ...legacyV3
+    } = current;
+    expect(
+      ReleaseCheckReceiptV3Schema.parse({
+        ...legacyV3,
+        schemaVersion: "3",
+        verifierVersion: "counterlab-release-check-v3",
+      }),
+    ).toMatchObject({ schemaVersion: "3" });
     const {
       generationFilesystemReadIsolation: _generationFilesystemReadIsolation,
       ...legacy
-    } = current;
+    } = legacyV3;
 
     expect(
       ReleaseCheckReceiptV2Schema.parse({
@@ -348,6 +459,7 @@ describe("release-check receipt", () => {
       worktreeClean: true,
       runnerImageDigest: qualifiedReceipt().localImageDigest,
       adapterImageDigest: qualifiedReceipt().adapterImageDigest,
+      generationIsolationEvidence: freshGenerationIsolationEvidence(),
       checkedAt: "2026-07-19T00:02:00.000Z",
     });
     const common = {
@@ -405,6 +517,31 @@ describe("release-check receipt", () => {
         }),
       ).toThrow(new RegExp(`live ${label.source}`, "u"));
     }
+    for (const [field, value, label] of [
+      [
+        "generationIsolationEvidenceSha256",
+        "0".repeat(64),
+        /generation isolation evidence/u,
+      ],
+      [
+        "generationIsolationProbeSha256",
+        "0".repeat(64),
+        /generation isolation probe/u,
+      ],
+      [
+        "generationIsolationVerifiedAt",
+        "2026-07-19T00:00:31.000Z",
+        /generation isolation verification/u,
+      ],
+    ] as const) {
+      expect(() =>
+        assertReleaseCheckBinding({
+          ...common,
+          releaseCheckReceipt: { ...receipt, [field]: value },
+          runtimeAttestation: runtimeAttestation(),
+        }),
+      ).toThrow(label);
+    }
   });
 
   it("rejects stale receipts and incomplete check sets", () => {
@@ -416,6 +553,7 @@ describe("release-check receipt", () => {
       worktreeClean: true,
       runnerImageDigest: qualifiedReceipt().localImageDigest,
       adapterImageDigest: qualifiedReceipt().adapterImageDigest,
+      generationIsolationEvidence: freshGenerationIsolationEvidence(),
       checkedAt: "2026-07-19T00:02:00.000Z",
     });
     const common = {

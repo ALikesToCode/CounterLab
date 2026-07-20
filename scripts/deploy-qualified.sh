@@ -189,11 +189,14 @@ process.stdout.write(identity.receipt[field]);
 EVIDENCE_COMMIT="$(qualified_identity_value evidenceCommit)"
 SOURCE_COMMIT="$(qualified_identity_value sourceCommit)"
 LOCAL_IMAGE="$(qualified_identity_value localImageTag)"
+LOCAL_IMAGE_DIGEST="$(qualified_identity_value localImageDigest)"
 REGISTRY_DIGEST="$(qualified_identity_value registryDigest)"
 TIMEOUT_CLEANUP_RECEIPT_SHA256="$(qualified_identity_value timeoutCleanupReceiptSha256)"
 AGGREGATE_LIMIT_EVIDENCE_SHA256="$(qualified_identity_value aggregateLimitEvidenceSha256)"
 RUNTIME_POLICY_SHA256="$(qualified_identity_value runtimePolicySha256)"
 PROOF_DEPENDENCY_MANIFEST_SHA256="$(qualified_identity_value proofDependencyManifestSha256)"
+GENERATION_ISOLATION_EVIDENCE_SHA256="$(qualified_identity_value generationIsolationEvidenceSha256)"
+GENERATION_ISOLATION_PROBE_SHA256="$(qualified_identity_value generationIsolationProbeSha256)"
 QUALIFIED_RECEIPT_SHA256="$(
   node -e '
 const identity = JSON.parse(process.argv[1]);
@@ -228,7 +231,9 @@ CLIENT_DIR="$(repo_path "apps/web/dist/client")"
 WORKER_ARTIFACT_MANIFEST="${RELEASE_DIR}/frozen-worker-release.json"
 mkdir -p "${RELEASE_DIR}"
 
-./scripts/verify-scientific-engines.sh --image "${LOCAL_IMAGE}"
+./scripts/verify-scientific-engines.sh \
+  --image "${LOCAL_IMAGE}" \
+  --expected-image-digest "${LOCAL_IMAGE_DIGEST}"
 
 "${PNPM}" --filter @counterlab/web build
 [[ -f "apps/web/dist/client/_headers" ]] || {
@@ -409,9 +414,9 @@ wait_for_maintenance_health() {
     if "${CURL_BIN}" --silent --show-error --fail-with-body \
       --connect-timeout 10 --max-time 20 \
       --output "${candidate}" "${PRODUCTION_ORIGIN}/api/health" &&
-      node - "${candidate}" "${EVIDENCE_COMMIT}" "${SOURCE_COMMIT}" "${REGISTRY_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" "${expected_version}" <<'NODE'
+      node - "${candidate}" "${EVIDENCE_COMMIT}" "${SOURCE_COMMIT}" "${REGISTRY_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" "${expected_version}" "${GENERATION_ISOLATION_EVIDENCE_SHA256}" "${GENERATION_ISOLATION_PROBE_SHA256}" <<'NODE'
 const fs = require("node:fs");
-const [path, evidenceCommit, sourceCommit, digest, timeoutReceipt, aggregateEvidence, runtimePolicy, proofManifest, artifactClassification, artifactManifest, workerBundle, clientAssets, clientAssetCount, publicAssets, publicAssetCount, viteVersion, wranglerVersion, expectedVersion] = process.argv.slice(2);
+const [path, evidenceCommit, sourceCommit, digest, timeoutReceipt, aggregateEvidence, runtimePolicy, proofManifest, artifactClassification, artifactManifest, workerBundle, clientAssets, clientAssetCount, publicAssets, publicAssetCount, viteVersion, wranglerVersion, expectedVersion, isolationEvidence, isolationProbe] = process.argv.slice(2);
 const payload = JSON.parse(fs.readFileSync(path, "utf8"));
 const data = payload?.ok === true ? payload.data : undefined;
 if (
@@ -421,6 +426,8 @@ if (
   data.release.workerEvidenceCommit !== evidenceCommit ||
   data.release.runnerSourceCommit !== sourceCommit ||
   data.release.runnerImageDigest !== digest ||
+  data.release.generationIsolationEvidenceSha256 !== isolationEvidence ||
+  data.release.generationIsolationProbeSha256 !== isolationProbe ||
   data.release.timeoutCleanupReceiptSha256 !== timeoutReceipt ||
   data.release.aggregateLimitEvidenceSha256 !== aggregateEvidence ||
   data.release.runtimePolicySha256 !== runtimePolicy ||
@@ -459,9 +466,9 @@ wait_for_final_readiness() {
     if "${CURL_BIN}" --silent --show-error --fail-with-body \
       --connect-timeout 10 --max-time 20 \
       --output "${candidate}" "${PRODUCTION_ORIGIN}/ready" &&
-      node - "${candidate}" "${EVIDENCE_COMMIT}" "${SOURCE_COMMIT}" "${REGISTRY_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" "${expected_version}" <<'NODE'
+      node - "${candidate}" "${EVIDENCE_COMMIT}" "${SOURCE_COMMIT}" "${REGISTRY_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" "${expected_version}" "${GENERATION_ISOLATION_EVIDENCE_SHA256}" "${GENERATION_ISOLATION_PROBE_SHA256}" <<'NODE'
 const fs = require("node:fs");
-const [path, evidenceCommit, sourceCommit, digest, timeoutReceipt, aggregateEvidence, runtimePolicy, proofManifest, artifactClassification, artifactManifest, workerBundle, clientAssets, clientAssetCount, publicAssets, publicAssetCount, viteVersion, wranglerVersion, expectedVersion] = process.argv.slice(2);
+const [path, evidenceCommit, sourceCommit, digest, timeoutReceipt, aggregateEvidence, runtimePolicy, proofManifest, artifactClassification, artifactManifest, workerBundle, clientAssets, clientAssetCount, publicAssets, publicAssetCount, viteVersion, wranglerVersion, expectedVersion, isolationEvidence, isolationProbe] = process.argv.slice(2);
 const payload = JSON.parse(fs.readFileSync(path, "utf8"));
 if (
   payload?.status !== "ready" ||
@@ -471,6 +478,8 @@ if (
   payload.release.workerEvidenceCommit !== evidenceCommit ||
   payload.release.runnerSourceCommit !== sourceCommit ||
   payload.release.runnerImageDigest !== digest ||
+  payload.release.generationIsolationEvidenceSha256 !== isolationEvidence ||
+  payload.release.generationIsolationProbeSha256 !== isolationProbe ||
   payload.release.timeoutCleanupReceiptSha256 !== timeoutReceipt ||
   payload.release.aggregateLimitEvidenceSha256 !== aggregateEvidence ||
   payload.release.runtimePolicySha256 !== runtimePolicy ||

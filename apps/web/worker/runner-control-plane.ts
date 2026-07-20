@@ -40,6 +40,8 @@ export type RunnerContainerBinding = {
 export type RunnerReleaseIdentity = {
   runnerSourceCommit: string;
   runnerImageDigest: string;
+  generationIsolationEvidenceSha256: string;
+  generationIsolationProbeSha256: string;
 };
 
 export type HttpRunnerDispatcherOptions = {
@@ -90,6 +92,18 @@ function assertExactRunnerReleaseIdentity(
   if (!/^sha256:[a-f0-9]{64}$/u.test(releaseIdentity.runnerImageDigest)) {
     throw new Error("Runner image digest must be exact for readiness");
   }
+  if (!/^[a-f0-9]{64}$/u.test(releaseIdentity.generationIsolationProbeSha256)) {
+    throw new Error(
+      "Generation-isolation probe hash must be exact for readiness",
+    );
+  }
+  if (
+    !/^[a-f0-9]{64}$/u.test(releaseIdentity.generationIsolationEvidenceSha256)
+  ) {
+    throw new Error(
+      "Generation-isolation evidence hash must be exact for readiness",
+    );
+  }
 }
 
 async function runnerReadinessMatches(
@@ -107,6 +121,8 @@ async function runnerReadinessMatches(
       JSON.stringify(
         [
           "generationFilesystemReadIsolation",
+          "generationIsolationEvidenceSha256",
+          "generationIsolationProbeSha256",
           "runnerImageDigest",
           "runnerSourceCommit",
           "service",
@@ -119,6 +135,12 @@ async function runnerReadinessMatches(
     payload.service === "counterlab-hosted-runner" &&
     "generationFilesystemReadIsolation" in payload &&
     payload.generationFilesystemReadIsolation === "OS_ENFORCED" &&
+    "generationIsolationEvidenceSha256" in payload &&
+    payload.generationIsolationEvidenceSha256 ===
+      releaseIdentity.generationIsolationEvidenceSha256 &&
+    "generationIsolationProbeSha256" in payload &&
+    payload.generationIsolationProbeSha256 ===
+      releaseIdentity.generationIsolationProbeSha256 &&
     "runnerSourceCommit" in payload &&
     payload.runnerSourceCommit === releaseIdentity.runnerSourceCommit &&
     "runnerImageDigest" in payload &&
@@ -209,7 +231,7 @@ export class CloudflareContainerRunnerDispatcher implements RunnerDispatcher {
     private readonly releaseIdentity: RunnerReleaseIdentity,
   ) {
     assertExactRunnerReleaseIdentity(releaseIdentity);
-    this.readinessInstanceName = `counterlab-readiness-${releaseIdentity.runnerImageDigest.slice("sha256:".length)}`;
+    this.readinessInstanceName = `counterlab-readiness-${releaseIdentity.generationIsolationEvidenceSha256}`;
   }
 
   async ready(): Promise<boolean> {

@@ -98,7 +98,7 @@ esac
 
 if [[ -z "${COUNTERLAB_DEPLOYMENT_RECEIPT:-}" ]]; then
   echo "Production smoke requires COUNTERLAB_DEPLOYMENT_RECEIPT." >&2
-  echo "Use the schema-v4 receipt written by scripts/deploy-qualified.sh." >&2
+  echo "Use the schema-v6 receipt written by scripts/deploy-qualified.sh." >&2
   exit 2
 fi
 DEPLOYMENT_RECEIPT="$(repo_path "${COUNTERLAB_DEPLOYMENT_RECEIPT}")"
@@ -156,6 +156,9 @@ TIMEOUT_CLEANUP_RECEIPT_SHA256="$(deployment_identity_value timeoutCleanupReceip
 AGGREGATE_LIMIT_EVIDENCE_SHA256="$(deployment_identity_value aggregateLimitEvidenceSha256)"
 RUNTIME_POLICY_SHA256="$(deployment_identity_value runtimePolicySha256)"
 PROOF_DEPENDENCY_MANIFEST_SHA256="$(deployment_identity_value proofDependencyManifestSha256)"
+GENERATION_ISOLATION_EVIDENCE_SHA256="$(deployment_identity_value generationIsolationEvidenceSha256)"
+GENERATION_ISOLATION_PROBE_SHA256="$(deployment_identity_value generationIsolationProbeSha256)"
+GENERATION_ISOLATION_VERIFIED_AT="$(deployment_identity_value generationIsolationVerifiedAt)"
 WORKER_ARTIFACT_CLASSIFICATION="$(deployment_identity_value workerArtifactClassification)"
 WORKER_ARTIFACT_MANIFEST_SHA256="$(deployment_identity_value workerArtifactManifestSha256)"
 WORKER_BUNDLE_SHA256="$(deployment_identity_value workerBundleSha256)"
@@ -401,6 +404,9 @@ init_args+=(--timeout-cleanup-receipt-sha256 "${TIMEOUT_CLEANUP_RECEIPT_SHA256}"
 init_args+=(--aggregate-limit-evidence-sha256 "${AGGREGATE_LIMIT_EVIDENCE_SHA256}")
 init_args+=(--runtime-policy-sha256 "${RUNTIME_POLICY_SHA256}")
 init_args+=(--proof-dependency-manifest-sha256 "${PROOF_DEPENDENCY_MANIFEST_SHA256}")
+init_args+=(--generation-isolation-evidence-sha256 "${GENERATION_ISOLATION_EVIDENCE_SHA256}")
+init_args+=(--generation-isolation-probe-sha256 "${GENERATION_ISOLATION_PROBE_SHA256}")
+init_args+=(--generation-isolation-verified-at "${GENERATION_ISOLATION_VERIFIED_AT}")
 init_args+=(--worker-artifact-classification "${WORKER_ARTIFACT_CLASSIFICATION}")
 init_args+=(--worker-artifact-manifest-sha256 "${WORKER_ARTIFACT_MANIFEST_SHA256}")
 init_args+=(--worker-bundle-sha256 "${WORKER_BUNDLE_SHA256}")
@@ -423,7 +429,7 @@ stage_started="$(timestamp)"
   --max-time 30 \
   "${BASE_URL}/ready" \
   >"${WORK_DIR}/ready.json"
-python3 - "${WORK_DIR}/ready.json" "${WORKER_VERSION_ID}" "${WORKER_EVIDENCE_COMMIT}" "${RUNNER_SOURCE_COMMIT}" "${CONTAINER_IMAGE_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" <<'PY'
+python3 - "${WORK_DIR}/ready.json" "${WORKER_VERSION_ID}" "${WORKER_EVIDENCE_COMMIT}" "${RUNNER_SOURCE_COMMIT}" "${CONTAINER_IMAGE_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" "${GENERATION_ISOLATION_EVIDENCE_SHA256}" "${GENERATION_ISOLATION_PROBE_SHA256}" <<'PY'
 import json
 import pathlib
 import sys
@@ -454,6 +460,8 @@ expected_release = {
     "workerEvidenceCommit": sys.argv[3],
     "runnerSourceCommit": sys.argv[4],
     "runnerImageDigest": sys.argv[5],
+    "generationIsolationEvidenceSha256": sys.argv[19],
+    "generationIsolationProbeSha256": sys.argv[20],
     "timeoutCleanupReceiptSha256": sys.argv[6],
     "aggregateLimitEvidenceSha256": sys.argv[7],
     "runtimePolicySha256": sys.argv[8],
@@ -483,7 +491,7 @@ stage_started="$(timestamp)"
   --max-time 30 \
   "${BASE_URL}/api/health?readiness=probe" \
   >"${WORK_DIR}/health.json"
-python3 - "${WORK_DIR}/health.json" "${WORKER_VERSION_ID}" "${WORKER_EVIDENCE_COMMIT}" "${RUNNER_SOURCE_COMMIT}" "${CONTAINER_IMAGE_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" <<'PY'
+python3 - "${WORK_DIR}/health.json" "${WORKER_VERSION_ID}" "${WORKER_EVIDENCE_COMMIT}" "${RUNNER_SOURCE_COMMIT}" "${CONTAINER_IMAGE_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" "${GENERATION_ISOLATION_EVIDENCE_SHA256}" "${GENERATION_ISOLATION_PROBE_SHA256}" <<'PY'
 import json
 import pathlib
 import sys
@@ -518,6 +526,8 @@ expected_release = {
     "workerEvidenceCommit": sys.argv[3],
     "runnerSourceCommit": sys.argv[4],
     "runnerImageDigest": sys.argv[5],
+    "generationIsolationEvidenceSha256": sys.argv[19],
+    "generationIsolationProbeSha256": sys.argv[20],
     "timeoutCleanupReceiptSha256": sys.argv[6],
     "aggregateLimitEvidenceSha256": sys.argv[7],
     "runtimePolicySha256": sys.argv[8],

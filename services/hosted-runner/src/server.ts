@@ -29,12 +29,16 @@ const DispatchSchema = z
   })
   .strict();
 
+export type HostedRunnerReleaseIdentity = {
+  runnerSourceCommit: string;
+  runnerImageDigest: string;
+  generationIsolationEvidenceSha256: string;
+  generationIsolationProbeSha256: string;
+};
+
 export type HostedRunnerServerOptions = {
   generationFilesystemReadIsolation: "OS_ENFORCED";
-  releaseIdentity?: {
-    runnerSourceCommit: string;
-    runnerImageDigest: string;
-  };
+  releaseIdentity?: HostedRunnerReleaseIdentity;
   authorizeToken(
     token: string,
     jobId: string,
@@ -49,6 +53,30 @@ export type HostedRunnerServerOptions = {
   }): Promise<void>;
   onJobSettled?(input: { jobId: string }): Promise<void> | void;
 };
+
+export function verifiedHostedRunnerReleaseIdentity(
+  candidate: HostedRunnerReleaseIdentity,
+  observedProbeSha256: string,
+): HostedRunnerReleaseIdentity | undefined {
+  const values = Object.values(candidate);
+  if (values.every((value) => value.length === 0)) return undefined;
+  if (
+    !/^[a-f0-9]{40}$/u.test(candidate.runnerSourceCommit) ||
+    !/^sha256:[a-f0-9]{64}$/u.test(candidate.runnerImageDigest) ||
+    !/^[a-f0-9]{64}$/u.test(candidate.generationIsolationEvidenceSha256) ||
+    !/^[a-f0-9]{64}$/u.test(candidate.generationIsolationProbeSha256)
+  ) {
+    throw new Error(
+      "Runner release identity must contain an exact source commit, image digest, generation-isolation evidence hash, and probe hash",
+    );
+  }
+  if (candidate.generationIsolationProbeSha256 !== observedProbeSha256) {
+    throw new Error(
+      "Runner startup probe does not match the qualified generation-isolation evidence",
+    );
+  }
+  return candidate;
+}
 
 type ActiveJob = {
   controller: AbortController;
@@ -230,6 +258,10 @@ async function startProductionServer(): Promise<void> {
     process.env.COUNTERLAB_RUNNER_SOURCE_COMMIT?.trim() ?? "";
   const runnerImageDigest =
     process.env.COUNTERLAB_RUNNER_IMAGE_DIGEST?.trim() ?? "";
+  const generationIsolationEvidenceSha256 =
+    process.env.COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256?.trim() ?? "";
+  const generationIsolationProbeSha256 =
+    process.env.COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256?.trim() ?? "";
   delete process.env.CODEX_AUTH_JSON;
   delete process.env.COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY;
   if (authJson === undefined || authJson.trim().length === 0) {
@@ -243,17 +275,15 @@ async function startProductionServer(): Promise<void> {
       "COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY is required by the hosted runner",
     );
   }
-  const releaseIdentityMissing =
-    runnerSourceCommit.length === 0 && runnerImageDigest.length === 0;
-  if (
-    !releaseIdentityMissing &&
-    (!/^[a-f0-9]{40}$/u.test(runnerSourceCommit) ||
-      !/^sha256:[a-f0-9]{64}$/u.test(runnerImageDigest))
-  ) {
-    throw new Error(
-      "Runner release identity must contain an exact source commit and image digest",
-    );
-  }
+  const releaseIdentity = verifiedHostedRunnerReleaseIdentity(
+    {
+      runnerSourceCommit,
+      runnerImageDigest,
+      generationIsolationEvidenceSha256,
+      generationIsolationProbeSha256,
+    },
+    startupProbe.generationIsolationProbeSha256,
+  );
   const workspaceRoot = process.env.COUNTERLAB_RUNNER_WORK_ROOT ?? "/work/jobs";
   const codexHomeRoot =
     process.env.COUNTERLAB_CODEX_HOME_ROOT ?? "/run/counterlab-codex";
@@ -291,9 +321,7 @@ async function startProductionServer(): Promise<void> {
   const server = createHostedRunnerServer({
     generationFilesystemReadIsolation:
       startupProbe.generationFilesystemReadIsolation,
-    ...(releaseIdentityMissing
-      ? {}
-      : { releaseIdentity: { runnerSourceCommit, runnerImageDigest } }),
+    ...(releaseIdentity === undefined ? {} : { releaseIdentity }),
     async authorizeToken(scopedToken, jobId, purpose, controlPlaneOrigin) {
       try {
         await verifyRunnerJobToken(scopedToken, runnerVerifyingPublicKey, {

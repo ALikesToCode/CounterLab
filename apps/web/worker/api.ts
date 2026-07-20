@@ -243,6 +243,8 @@ type WorkerBindings = Omit<Env, "COUNTERLAB_MAINTENANCE_MODE"> & {
   COUNTERLAB_WORKER_EVIDENCE_COMMIT?: string;
   COUNTERLAB_RUNNER_SOURCE_COMMIT?: string;
   COUNTERLAB_RUNNER_IMAGE_DIGEST?: string;
+  COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256?: string;
+  COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256?: string;
   COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256?: string;
   COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256?: string;
   COUNTERLAB_RUNTIME_POLICY_SHA256?: string;
@@ -972,9 +974,15 @@ function runnerDispatcher(
     context.env?.COUNTERLAB_RUNNER_SOURCE_COMMIT?.trim() ?? "";
   const runnerImageDigest =
     context.env?.COUNTERLAB_RUNNER_IMAGE_DIGEST?.trim() ?? "";
+  const generationIsolationEvidenceSha256 =
+    context.env?.COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256?.trim() ?? "";
+  const generationIsolationProbeSha256 =
+    context.env?.COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256?.trim() ?? "";
   const exactRunnerIdentity =
     /^[a-f0-9]{40}$/u.test(runnerSourceCommit) &&
-    /^sha256:[a-f0-9]{64}$/u.test(runnerImageDigest);
+    /^sha256:[a-f0-9]{64}$/u.test(runnerImageDigest) &&
+    /^[a-f0-9]{64}$/u.test(generationIsolationEvidenceSha256) &&
+    /^[a-f0-9]{64}$/u.test(generationIsolationProbeSha256);
   const processRunnerURL = context.env?.COUNTERLAB_RUNNER_BASE_URL?.trim();
   if (
     processRunnerURL !== undefined &&
@@ -984,7 +992,12 @@ function runnerDispatcher(
     try {
       return new HttpRunnerDispatcher({
         baseURL: processRunnerURL,
-        releaseIdentity: { runnerSourceCommit, runnerImageDigest },
+        releaseIdentity: {
+          runnerSourceCommit,
+          runnerImageDigest,
+          generationIsolationEvidenceSha256,
+          generationIsolationProbeSha256,
+        },
       });
     } catch {
       return undefined;
@@ -996,7 +1009,12 @@ function runnerDispatcher(
     ? new CloudflareContainerRunnerDispatcher(
         context.env.RUNNER,
         createRunnerContainerEnvVars(context.env),
-        { runnerSourceCommit, runnerImageDigest },
+        {
+          runnerSourceCommit,
+          runnerImageDigest,
+          generationIsolationEvidenceSha256,
+          generationIsolationProbeSha256,
+        },
       )
     : undefined;
 }
@@ -1048,6 +1066,8 @@ function releaseIdentity(context: Context<AppBindings>):
       workerEvidenceCommit: string;
       runnerSourceCommit: string;
       runnerImageDigest: string;
+      generationIsolationEvidenceSha256: string;
+      generationIsolationProbeSha256: string;
       timeoutCleanupReceiptSha256: string;
       aggregateLimitEvidenceSha256: string;
       runtimePolicySha256: string;
@@ -1067,6 +1087,10 @@ function releaseIdentity(context: Context<AppBindings>):
     context.env?.COUNTERLAB_WORKER_EVIDENCE_COMMIT ?? "";
   const runnerSourceCommit = context.env?.COUNTERLAB_RUNNER_SOURCE_COMMIT ?? "";
   const runnerImageDigest = context.env?.COUNTERLAB_RUNNER_IMAGE_DIGEST ?? "";
+  const generationIsolationEvidenceSha256 =
+    context.env?.COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256 ?? "";
+  const generationIsolationProbeSha256 =
+    context.env?.COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256 ?? "";
   const timeoutCleanupReceiptSha256 =
     context.env?.COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256 ?? "";
   const aggregateLimitEvidenceSha256 =
@@ -1099,6 +1123,8 @@ function releaseIdentity(context: Context<AppBindings>):
     !/^[a-f0-9]{40}$/u.test(workerEvidenceCommit) ||
     !/^[a-f0-9]{40}$/u.test(runnerSourceCommit) ||
     !/^sha256:[a-f0-9]{64}$/u.test(runnerImageDigest) ||
+    !/^[a-f0-9]{64}$/u.test(generationIsolationEvidenceSha256) ||
+    !/^[a-f0-9]{64}$/u.test(generationIsolationProbeSha256) ||
     !/^[a-f0-9]{64}$/u.test(timeoutCleanupReceiptSha256) ||
     !/^[a-f0-9]{64}$/u.test(aggregateLimitEvidenceSha256) ||
     !/^[a-f0-9]{64}$/u.test(runtimePolicySha256) ||
@@ -1126,6 +1152,8 @@ function releaseIdentity(context: Context<AppBindings>):
     workerEvidenceCommit,
     runnerSourceCommit,
     runnerImageDigest,
+    generationIsolationEvidenceSha256,
+    generationIsolationProbeSha256,
     timeoutCleanupReceiptSha256,
     aggregateLimitEvidenceSha256,
     runtimePolicySha256,

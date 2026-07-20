@@ -167,7 +167,7 @@ def validate_report(report: dict[str, Any]) -> dict[str, Any]:
         "privacy",
     }:
         raise ValueError("smoke report has unknown or missing fields")
-    if report["schemaVersion"] not in {"2", "3", "4"} or report[
+    if report["schemaVersion"] not in {"2", "3", "4", "5"} or report[
         "status"
     ] not in _REPORT_STATUSES:
         raise ValueError("smoke report schema or status is invalid")
@@ -186,7 +186,7 @@ def validate_report(report: dict[str, Any]) -> dict[str, Any]:
         "containerImageDigest",
         "deploymentReceiptSha256",
     }
-    if report["schemaVersion"] in {"3", "4"}:
+    if report["schemaVersion"] in {"3", "4", "5"}:
         deployment_fields.update(
             {
                 "timeoutCleanupReceiptSha256",
@@ -194,7 +194,7 @@ def validate_report(report: dict[str, Any]) -> dict[str, Any]:
                 "proofDependencyManifestSha256",
             }
         )
-    if report["schemaVersion"] == "4":
+    if report["schemaVersion"] in {"4", "5"}:
         deployment_fields.update(
             {
                 "aggregateLimitEvidenceSha256",
@@ -207,6 +207,14 @@ def validate_report(report: dict[str, Any]) -> dict[str, Any]:
                 "clientPublicAssetCount",
                 "viteVersion",
                 "wranglerVersion",
+            }
+        )
+    if report["schemaVersion"] == "5":
+        deployment_fields.update(
+            {
+                "generationIsolationEvidenceSha256",
+                "generationIsolationProbeSha256",
+                "generationIsolationVerifiedAt",
             }
         )
     if not isinstance(deployment, dict) or set(deployment) != deployment_fields:
@@ -222,7 +230,7 @@ def validate_report(report: dict[str, Any]) -> dict[str, Any]:
         if commit is not None and not _COMMIT.fullmatch(commit):
             raise ValueError(f"{field} is invalid")
     hash_fields = ["deploymentReceiptSha256"]
-    if report["schemaVersion"] in {"3", "4"}:
+    if report["schemaVersion"] in {"3", "4", "5"}:
         hash_fields.extend(
             [
                 "timeoutCleanupReceiptSha256",
@@ -230,7 +238,7 @@ def validate_report(report: dict[str, Any]) -> dict[str, Any]:
                 "proofDependencyManifestSha256",
             ]
         )
-    if report["schemaVersion"] == "4":
+    if report["schemaVersion"] in {"4", "5"}:
         hash_fields.extend(
             [
                 "aggregateLimitEvidenceSha256",
@@ -240,11 +248,18 @@ def validate_report(report: dict[str, Any]) -> dict[str, Any]:
                 "clientPublicAssetsSha256",
             ]
         )
+    if report["schemaVersion"] == "5":
+        hash_fields.extend(
+            [
+                "generationIsolationEvidenceSha256",
+                "generationIsolationProbeSha256",
+            ]
+        )
     for field in hash_fields:
         value = deployment[field]
         if value is not None and not _SHA256.fullmatch(value):
             raise ValueError(f"{field} is invalid")
-    if report["schemaVersion"] == "4":
+    if report["schemaVersion"] in {"4", "5"}:
         artifact_values = [
             deployment[field]
             for field in (
@@ -283,6 +298,13 @@ def validate_report(report: dict[str, Any]) -> dict[str, Any]:
                 or public_count > client_count
             ):
                 raise ValueError("client asset counts are invalid")
+    if report["schemaVersion"] == "5":
+        isolation_verified_at = deployment["generationIsolationVerifiedAt"]
+        if isolation_verified_at is not None:
+            _timestamp(
+                isolation_verified_at,
+                "generationIsolationVerifiedAt",
+            )
     if report["privacy"] != {
         "containsSecrets": False,
         "containsRawNotebookBytes": False,
@@ -359,6 +381,9 @@ def initialize_report(
     aggregate_limit_evidence_sha256: str | None = None,
     runtime_policy_sha256: str | None = None,
     proof_dependency_manifest_sha256: str | None = None,
+    generation_isolation_evidence_sha256: str | None = None,
+    generation_isolation_probe_sha256: str | None = None,
+    generation_isolation_verified_at: str | None = None,
     worker_artifact_classification: str | None = None,
     worker_artifact_manifest_sha256: str | None = None,
     worker_bundle_sha256: str | None = None,
@@ -372,7 +397,7 @@ def initialize_report(
 ) -> dict[str, Any]:
     report = validate_report(
         {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "status": "RUNNING",
             "baseUrl": _base_url(base_url),
             "startedAt": _timestamp(started_at, "startedAt"),
@@ -390,6 +415,13 @@ def initialize_report(
                 "proofDependencyManifestSha256": (
                     proof_dependency_manifest_sha256
                 ),
+                "generationIsolationEvidenceSha256": (
+                    generation_isolation_evidence_sha256
+                ),
+                "generationIsolationProbeSha256": (
+                    generation_isolation_probe_sha256
+                ),
+                "generationIsolationVerifiedAt": generation_isolation_verified_at,
                 "workerArtifactClassification": worker_artifact_classification,
                 "workerArtifactManifestSha256": worker_artifact_manifest_sha256,
                 "workerBundleSha256": worker_bundle_sha256,
@@ -481,6 +513,9 @@ def _parser() -> argparse.ArgumentParser:
     initialize.add_argument("--aggregate-limit-evidence-sha256")
     initialize.add_argument("--runtime-policy-sha256")
     initialize.add_argument("--proof-dependency-manifest-sha256")
+    initialize.add_argument("--generation-isolation-evidence-sha256")
+    initialize.add_argument("--generation-isolation-probe-sha256")
+    initialize.add_argument("--generation-isolation-verified-at")
     initialize.add_argument("--worker-artifact-classification")
     initialize.add_argument("--worker-artifact-manifest-sha256")
     initialize.add_argument("--worker-bundle-sha256")
@@ -521,6 +556,15 @@ def main() -> int:
             runtime_policy_sha256=arguments.runtime_policy_sha256,
             proof_dependency_manifest_sha256=(
                 arguments.proof_dependency_manifest_sha256
+            ),
+            generation_isolation_evidence_sha256=(
+                arguments.generation_isolation_evidence_sha256
+            ),
+            generation_isolation_probe_sha256=(
+                arguments.generation_isolation_probe_sha256
+            ),
+            generation_isolation_verified_at=(
+                arguments.generation_isolation_verified_at
             ),
             worker_artifact_classification=(
                 arguments.worker_artifact_classification

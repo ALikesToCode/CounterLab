@@ -18,6 +18,7 @@ import {
 } from "./contained-runtime-attestation.mjs";
 import {
   ContainedRuntimeAttestationSchema,
+  GenerationIsolationEvidenceV1Schema,
   assertCurrentGrypeReleaseEvidenceBinding,
 } from "../packages/scientific-engine-registry/src/index.js";
 import {
@@ -25,6 +26,10 @@ import {
   createQualifiedRunnerRelease,
 } from "./prepare-qualified-deploy.js";
 import { validateTimeoutCleanupProof } from "./timeout-cleanup-receipt.js";
+import {
+  hashGenerationIsolationEvidence,
+  verifyGenerationIsolationEvidence,
+} from "./generation-isolation-evidence.js";
 import {
   SourceBoundBuildReceiptSchema,
   type SourceBoundBuildReceipt,
@@ -322,6 +327,23 @@ async function promoteImage(input: {
       "registry image tag must match the built runner source commit",
     );
   }
+  if (
+    commandText(
+      input.root,
+      input.runtimeAdapter,
+      runtimeAdapterArguments([
+        "image",
+        "inspect",
+        input.expectedConfigDigest,
+        "--format",
+        "{{.Id}}",
+      ]),
+    ) !== input.expectedConfigDigest
+  ) {
+    throw new Error(
+      "qualified local image digest is unavailable for promotion",
+    );
+  }
   const wrangler = resolve(input.root, "node_modules/.bin/wrangler");
   const credentials = RegistryCredentialsSchema.parse(
     JSON.parse(
@@ -395,7 +417,11 @@ async function promoteImage(input: {
   );
   execFileSync(
     input.runtimeAdapter,
-    runtimeAdapterArguments(["tag", input.localImage, input.registryImage]),
+    runtimeAdapterArguments([
+      "tag",
+      input.expectedConfigDigest,
+      input.registryImage,
+    ]),
     { cwd: input.root, stdio: "inherit", timeout: 30_000 },
   );
   execFileSync(
@@ -453,6 +479,10 @@ async function main(): Promise<void> {
     throw new Error("runner qualification requires the verified Git root");
   }
   const output = await repositoryOutputPath(root, args.output);
+  const isolationOutput = await repositoryOutputPath(
+    root,
+    `${output}.generation-isolation-${Date.now()}-${process.pid}.json`,
+  );
   const buildReceiptPath = await existingRepositoryFile(
     root,
     args.buildReceipt,
@@ -637,6 +667,10 @@ async function main(): Promise<void> {
       "scripts/verify-scientific-engines.sh",
       "--image",
       buildReceipt.localImageTag,
+      "--expected-image-digest",
+      buildReceipt.localImageDigest,
+      "--generation-isolation-report",
+      isolationOutput,
     ],
     {
       cwd: root,
@@ -644,6 +678,22 @@ async function main(): Promise<void> {
       stdio: "inherit",
     },
   );
+  const readGenerationIsolation = async () => {
+    const evidence = GenerationIsolationEvidenceV1Schema.parse(
+      JSON.parse(await readFile(isolationOutput, "utf8")) as unknown,
+    );
+    return verifyGenerationIsolationEvidence({
+      evidence,
+      evidenceSha256: hashGenerationIsolationEvidence(evidence),
+      expected: {
+        sourceCommit: buildReceipt.sourceCommit,
+        sourceTreeSha256: buildReceipt.sourceTreeSha256,
+        localImageTag: buildReceipt.localImageTag,
+        localImageDigest: buildReceipt.localImageDigest,
+      },
+    });
+  };
+  const initialGenerationIsolation = await readGenerationIsolation();
   assertCleanWorktree(root);
 
   runtimeAttestation = observeRuntimeAttestation(root, runtimeAdapter);
@@ -733,10 +783,24 @@ async function main(): Promise<void> {
     adapterManifestDigest: buildReceipt.adapterManifestDigest,
     adapterOciArchiveSha256: buildReceipt.adapterOciArchiveSha256,
   });
+  const generationIsolation = await readGenerationIsolation();
+  if (
+    generationIsolation.evidenceSha256 !==
+      initialGenerationIsolation.evidenceSha256 ||
+    generationIsolation.probeSha256 !== initialGenerationIsolation.probeSha256
+  ) {
+    throw new Error(
+      "generation-isolation evidence changed during qualification",
+    );
+  }
   const observation = {
     ...releaseObservation,
     ...timeoutProof,
     generationFilesystemReadIsolation: "OS_ENFORCED" as const,
+    generationIsolationEvidence: generationIsolation.evidence,
+    generationIsolationEvidenceSha256: generationIsolation.evidenceSha256,
+    generationIsolationProbeSha256: generationIsolation.probeSha256,
+    generationIsolationVerifiedAt: generationIsolation.evidence.verifiedAt,
   };
   for (const [label, built, observed] of [
     [

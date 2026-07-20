@@ -9,9 +9,13 @@ import { z } from "zod";
 
 import {
   ContainedRuntimeAttestationSchema,
-  QualifiedRunnerReleaseSchema,
+  type GenerationIsolationEvidenceV1,
 } from "../packages/scientific-engine-registry/src/index.js";
 import { canonicalJson } from "../packages/session-core/src/index.js";
+import {
+  parseQualifiedRunnerReleaseV6,
+  verifyGenerationIsolationEvidence,
+} from "./generation-isolation-evidence.js";
 import { assertReleaseCheckBinding } from "./release-check-receipt.js";
 import {
   containedRuntimeAdapterArguments,
@@ -69,6 +73,10 @@ export type RunnerReleaseObservation = {
 
 export type QualifiedReleaseObservation = RunnerReleaseObservation & {
   generationFilesystemReadIsolation: "OS_ENFORCED";
+  generationIsolationEvidence: GenerationIsolationEvidenceV1;
+  generationIsolationEvidenceSha256: string;
+  generationIsolationProbeSha256: string;
+  generationIsolationVerifiedAt: string;
   limitMode: "container-cgroup-and-process-rlimit";
   aggregateLimitIntentEnforced: true;
   aggregateLimitEvidenceSha256: string;
@@ -267,6 +275,18 @@ function assertQualifiedObservation(
       "qualified source commit is not an ancestor of the evidence commit",
     );
   }
+  verifyGenerationIsolationEvidence({
+    evidence: observation.generationIsolationEvidence,
+    evidenceSha256: observation.generationIsolationEvidenceSha256,
+    expected: {
+      sourceCommit: observation.sourceCommit,
+      sourceTreeSha256: observation.sourceTreeSha256,
+      localImageTag: observation.localImageTag,
+      localImageDigest: observation.localImageDigest,
+      probeSha256: observation.generationIsolationProbeSha256,
+      verifiedAt: observation.generationIsolationVerifiedAt,
+    },
+  });
   assertEvidenceOnlyReleaseDelta(observation.changedPaths);
 }
 
@@ -607,7 +627,7 @@ export async function collectQualifiedReleaseObservation(input: {
   root: string;
   receipt: unknown;
 }): Promise<QualifiedReleaseObservation> {
-  const receipt = QualifiedRunnerReleaseSchema.parse(input.receipt);
+  const receipt = parseQualifiedRunnerReleaseV6(input.receipt);
   const runtimeAdapter = process.env.COUNTERLAB_DOCKER_BIN;
   if (runtimeAdapter === undefined || runtimeAdapter.trim().length === 0) {
     throw new Error(
@@ -651,6 +671,11 @@ export async function collectQualifiedReleaseObservation(input: {
     ...timeout,
     generationFilesystemReadIsolation:
       receipt.generationFilesystemReadIsolation,
+    generationIsolationEvidence: receipt.generationIsolationEvidence,
+    generationIsolationEvidenceSha256:
+      receipt.generationIsolationEvidenceSha256,
+    generationIsolationProbeSha256: receipt.generationIsolationProbeSha256,
+    generationIsolationVerifiedAt: receipt.generationIsolationVerifiedAt,
   };
 }
 
@@ -659,11 +684,16 @@ export function createQualifiedRunnerRelease(
   qualifiedAt = new Date().toISOString(),
 ): unknown {
   assertQualifiedObservation(observation);
-  return QualifiedRunnerReleaseSchema.parse({
-    schemaVersion: "5",
+  return parseQualifiedRunnerReleaseV6({
+    schemaVersion: "6",
     status: "VERIFIED",
     generationFilesystemReadIsolation:
       observation.generationFilesystemReadIsolation,
+    generationIsolationEvidence: observation.generationIsolationEvidence,
+    generationIsolationEvidenceSha256:
+      observation.generationIsolationEvidenceSha256,
+    generationIsolationProbeSha256: observation.generationIsolationProbeSha256,
+    generationIsolationVerifiedAt: observation.generationIsolationVerifiedAt,
     sourceCommit: observation.sourceCommit,
     sourceArchiveSha256: observation.sourceArchiveSha256,
     sourceTreeSha256: observation.sourceTreeSha256,
@@ -704,7 +734,7 @@ export function createQualifiedRunnerRelease(
     registryDigest: observation.registryDigest,
     registryResolvedAt: observation.registryResolvedAt,
     qualifiedAt,
-    verifierVersion: "counterlab-release-v5",
+    verifierVersion: "counterlab-release-v6",
   });
 }
 
@@ -1083,7 +1113,7 @@ export function qualifiedDeployConfig(input: {
   observation: QualifiedReleaseObservation;
 }): Record<string, unknown> {
   const config = canonicalReleaseConfig(input.config);
-  const receipt = QualifiedRunnerReleaseSchema.parse(input.receipt);
+  const receipt = parseQualifiedRunnerReleaseV6(input.receipt);
   const comparisons: Array<[string, string, string]> = [
     ["source commit", receipt.sourceCommit, input.observation.sourceCommit],
     [
@@ -1231,6 +1261,21 @@ export function qualifiedDeployConfig(input: {
       receipt.timeoutVerifiedAt,
       input.observation.timeoutVerifiedAt,
     ],
+    [
+      "generation isolation evidence",
+      receipt.generationIsolationEvidenceSha256,
+      input.observation.generationIsolationEvidenceSha256,
+    ],
+    [
+      "generation isolation probe",
+      receipt.generationIsolationProbeSha256,
+      input.observation.generationIsolationProbeSha256,
+    ],
+    [
+      "generation isolation verification time",
+      receipt.generationIsolationVerifiedAt,
+      input.observation.generationIsolationVerifiedAt,
+    ],
     ["registry image", receipt.registryImage, input.observation.registryImage],
     [
       "registry digest",
@@ -1338,6 +1383,10 @@ export function qualifiedDeployConfig(input: {
     COUNTERLAB_WORKER_EVIDENCE_COMMIT: receipt.evidenceCommit,
     COUNTERLAB_RUNNER_SOURCE_COMMIT: receipt.sourceCommit,
     COUNTERLAB_RUNNER_IMAGE_DIGEST: receipt.registryDigest,
+    COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256:
+      receipt.generationIsolationEvidenceSha256,
+    COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256:
+      receipt.generationIsolationProbeSha256,
     COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256:
       receipt.timeoutCleanupReceiptSha256,
     COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256:

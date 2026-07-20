@@ -7,11 +7,18 @@ import { fileURLToPath } from "node:url";
 
 import {
   ContainedRuntimeAttestationSchema,
-  DeploymentReceiptSchema,
-  QualifiedRunnerReleaseSchema,
+  DeploymentReceiptV5Schema,
+  DeploymentReceiptV6Schema,
+  GenerationIsolationEvidenceV1Schema,
   RELEASE_CHECK_IDS,
-  ReleaseCheckReceiptSchema,
+  QualifiedRunnerReleaseV5Schema,
+  ReleaseCheckReceiptV4Schema,
 } from "../packages/scientific-engine-registry/src/index.js";
+import {
+  hashGenerationIsolationEvidence,
+  parseQualifiedRunnerReleaseV6,
+  verifyGenerationIsolationEvidence,
+} from "./generation-isolation-evidence.js";
 import {
   containedRuntimeAdapterArguments,
   requireContainedRuntimeSessionId,
@@ -34,9 +41,14 @@ function sha256(value: Buffer): string {
 }
 
 export function createQualifiedReleaseIdentity(receiptBytes: Buffer) {
-  const receipt = QualifiedRunnerReleaseSchema.parse(
-    JSON.parse(receiptBytes.toString("utf8")) as unknown,
-  );
+  const value = JSON.parse(receiptBytes.toString("utf8")) as unknown;
+  const receipt =
+    typeof value === "object" &&
+    value !== null &&
+    "schemaVersion" in value &&
+    value.schemaVersion === "6"
+      ? parseQualifiedRunnerReleaseV6(value)
+      : QualifiedRunnerReleaseV5Schema.parse(value);
   return {
     identitySchemaVersion: "1",
     receiptType: "qualified-runner-release",
@@ -46,9 +58,14 @@ export function createQualifiedReleaseIdentity(receiptBytes: Buffer) {
 }
 
 export function createDeploymentReleaseIdentity(receiptBytes: Buffer) {
-  const receipt = DeploymentReceiptSchema.parse(
-    JSON.parse(receiptBytes.toString("utf8")) as unknown,
-  );
+  const value = JSON.parse(receiptBytes.toString("utf8")) as unknown;
+  const receipt =
+    typeof value === "object" &&
+    value !== null &&
+    "schemaVersion" in value &&
+    value.schemaVersion === "6"
+      ? DeploymentReceiptV6Schema.parse(value)
+      : DeploymentReceiptV5Schema.parse(value);
   return {
     identitySchemaVersion: "1",
     receiptType: "deployment-receipt",
@@ -58,8 +75,8 @@ export function createDeploymentReleaseIdentity(receiptBytes: Buffer) {
 }
 
 export function assertReleaseCheckBinding(input: BindingInput) {
-  const qualified = QualifiedRunnerReleaseSchema.parse(input.qualifiedReceipt);
-  const releaseCheck = ReleaseCheckReceiptSchema.parse(
+  const qualified = parseQualifiedRunnerReleaseV6(input.qualifiedReceipt);
+  const releaseCheck = ReleaseCheckReceiptV4Schema.parse(
     input.releaseCheckReceipt,
   );
   const runtime = ContainedRuntimeAttestationSchema.parse(
@@ -74,6 +91,21 @@ export function assertReleaseCheckBinding(input: BindingInput) {
       sha256(input.qualifiedReceiptBytes),
     ],
     ["qualification time", releaseCheck.qualifiedAt, qualified.qualifiedAt],
+    [
+      "generation isolation evidence",
+      releaseCheck.generationIsolationEvidenceSha256,
+      qualified.generationIsolationEvidenceSha256,
+    ],
+    [
+      "generation isolation probe",
+      releaseCheck.generationIsolationProbeSha256,
+      qualified.generationIsolationProbeSha256,
+    ],
+    [
+      "generation isolation verification time",
+      releaseCheck.generationIsolationVerifiedAt,
+      qualified.generationIsolationVerifiedAt,
+    ],
     ["runner image tag", releaseCheck.runnerImageTag, qualified.localImageTag],
     [
       "runner image digest",
@@ -180,18 +212,47 @@ export function createReleaseCheckReceipt(input: {
   worktreeClean: boolean;
   runnerImageDigest: string;
   adapterImageDigest: string;
+  generationIsolationEvidence: unknown;
   checkedAt?: string;
 }) {
-  const qualified = QualifiedRunnerReleaseSchema.parse(input.qualifiedReceipt);
+  const qualified = parseQualifiedRunnerReleaseV6(input.qualifiedReceipt);
   const runtime = ContainedRuntimeAttestationSchema.parse(
     input.runtimeAttestation,
   );
   const checkedAt = input.checkedAt ?? new Date().toISOString();
-  const receipt = ReleaseCheckReceiptSchema.parse({
-    schemaVersion: "3",
+  const freshEvidence = GenerationIsolationEvidenceV1Schema.parse(
+    input.generationIsolationEvidence,
+  );
+  verifyGenerationIsolationEvidence({
+    evidence: freshEvidence,
+    evidenceSha256: hashGenerationIsolationEvidence(freshEvidence),
+    expected: {
+      sourceCommit: qualified.sourceCommit,
+      sourceTreeSha256: qualified.sourceTreeSha256,
+      localImageTag: qualified.localImageTag,
+      localImageDigest: qualified.localImageDigest,
+      probeSha256: qualified.generationIsolationProbeSha256,
+    },
+  });
+  const freshVerifiedAt = Date.parse(freshEvidence.verifiedAt);
+  const checkedAtMilliseconds = Date.parse(checkedAt);
+  if (
+    !Number.isFinite(freshVerifiedAt) ||
+    !Number.isFinite(checkedAtMilliseconds) ||
+    freshVerifiedAt > checkedAtMilliseconds + 5 * 60_000 ||
+    checkedAtMilliseconds - freshVerifiedAt > 30 * 60_000
+  ) {
+    throw new Error("release-check generation-isolation evidence is not fresh");
+  }
+  const receipt = ReleaseCheckReceiptV4Schema.parse({
+    schemaVersion: "4",
     status: "PASSED",
     generationFilesystemReadIsolation:
       qualified.generationFilesystemReadIsolation,
+    generationIsolationEvidenceSha256:
+      qualified.generationIsolationEvidenceSha256,
+    generationIsolationProbeSha256: qualified.generationIsolationProbeSha256,
+    generationIsolationVerifiedAt: qualified.generationIsolationVerifiedAt,
     evidenceCommit: qualified.evidenceCommit,
     sourceCommit: qualified.sourceCommit,
     qualifiedRunnerReceiptSha256: sha256(input.qualifiedReceiptBytes),
@@ -208,7 +269,7 @@ export function createReleaseCheckReceipt(input: {
     runtimeAdapterSha256: qualified.runtimeAdapterSha256,
     checks: RELEASE_CHECK_IDS.map((id) => ({ id, status: "PASSED" })),
     checkedAt,
-    verifierVersion: "counterlab-release-check-v3",
+    verifierVersion: "counterlab-release-check-v4",
   });
   return assertReleaseCheckBinding({
     qualifiedReceipt: qualified,
@@ -288,23 +349,29 @@ function argumentsFrom(argv: string[]) {
     if (
       flag === undefined ||
       value === undefined ||
-      !["--qualified", "--runtime-adapter", "--output"].includes(flag) ||
+      ![
+        "--qualified",
+        "--runtime-adapter",
+        "--generation-isolation-report",
+        "--output",
+      ].includes(flag) ||
       values.has(flag)
     ) {
       throw new Error(
-        "Usage: release-check-receipt --qualified FILE --runtime-adapter FILE --output FILE",
+        "Usage: release-check-receipt --qualified FILE --runtime-adapter FILE --generation-isolation-report FILE --output FILE",
       );
     }
     values.set(flag, value);
   }
-  if (values.size !== 3) {
+  if (values.size !== 4) {
     throw new Error(
-      "Usage: release-check-receipt --qualified FILE --runtime-adapter FILE --output FILE",
+      "Usage: release-check-receipt --qualified FILE --runtime-adapter FILE --generation-isolation-report FILE --output FILE",
     );
   }
   return {
     qualified: values.get("--qualified")!,
     runtimeAdapter: values.get("--runtime-adapter")!,
+    generationIsolationReport: values.get("--generation-isolation-report")!,
     output: values.get("--output")!,
   };
 }
@@ -336,16 +403,18 @@ async function main(): Promise<void> {
     return;
   }
   const args = argumentsFrom(process.argv.slice(2));
-  const [qualifiedPath, runtimeAdapter, output] = await Promise.all([
-    existingRepositoryFile(root, args.qualified),
-    existingRepositoryFile(root, args.runtimeAdapter),
-    repositoryOutput(root, args.output),
-  ]);
+  const [qualifiedPath, runtimeAdapter, generationIsolationReport, output] =
+    await Promise.all([
+      existingRepositoryFile(root, args.qualified),
+      existingRepositoryFile(root, args.runtimeAdapter),
+      existingRepositoryFile(root, args.generationIsolationReport),
+      repositoryOutput(root, args.output),
+    ]);
   if (((await stat(runtimeAdapter)).mode & 0o111) === 0) {
     throw new Error("release-check runtime adapter is not executable");
   }
   const qualifiedReceiptBytes = readFileSync(qualifiedPath);
-  const qualifiedReceipt = QualifiedRunnerReleaseSchema.parse(
+  const qualifiedReceipt = parseQualifiedRunnerReleaseV6(
     JSON.parse(qualifiedReceiptBytes.toString("utf8")) as unknown,
   );
   const runtimeAttestation = JSON.parse(
@@ -390,6 +459,9 @@ async function main(): Promise<void> {
       ]).length === 0,
     runnerImageDigest,
     adapterImageDigest,
+    generationIsolationEvidence: JSON.parse(
+      readFileSync(generationIsolationReport, "utf8"),
+    ) as unknown,
   });
   await writeFile(output, `${JSON.stringify(receipt, null, 2)}\n`, {
     encoding: "utf8",

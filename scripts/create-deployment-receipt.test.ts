@@ -97,6 +97,8 @@ describe("deployment receipt Worker identity", () => {
     workerEvidenceCommit: "a".repeat(40),
     runnerSourceCommit: "b".repeat(40),
     runnerImageDigest: `sha256:${"c".repeat(64)}`,
+    generationIsolationEvidenceSha256: "5".repeat(64),
+    generationIsolationProbeSha256: "6".repeat(64),
     timeoutCleanupReceiptSha256: "d".repeat(64),
     aggregateLimitEvidenceSha256: "9".repeat(64),
     runtimePolicySha256: "e".repeat(64),
@@ -115,6 +117,14 @@ describe("deployment receipt Worker identity", () => {
     ["COUNTERLAB_WORKER_EVIDENCE_COMMIT", expected.workerEvidenceCommit],
     ["COUNTERLAB_RUNNER_SOURCE_COMMIT", expected.runnerSourceCommit],
     ["COUNTERLAB_RUNNER_IMAGE_DIGEST", expected.runnerImageDigest],
+    [
+      "COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256",
+      expected.generationIsolationEvidenceSha256,
+    ],
+    [
+      "COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256",
+      expected.generationIsolationProbeSha256,
+    ],
     [
       "COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256",
       expected.timeoutCleanupReceiptSha256,
@@ -159,6 +169,8 @@ describe("deployment receipt Worker identity", () => {
 
     for (const name of [
       "COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256",
+      "COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256",
+      "COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256",
       "COUNTERLAB_RUNTIME_POLICY_SHA256",
       "COUNTERLAB_PROOF_DEPENDENCY_MANIFEST_SHA256",
       "COUNTERLAB_WORKER_ARTIFACT_MANIFEST_SHA256",
@@ -208,6 +220,9 @@ describe("deployment receipt qualification binding", () => {
     proofDependencyManifestSha256: "3".repeat(64),
     runtimeAdapterSha256: "4".repeat(64),
     aggregateLimitEvidenceSha256: "5".repeat(64),
+    generationIsolationEvidenceSha256: "6".repeat(64),
+    generationIsolationProbeSha256: "7".repeat(64),
+    generationIsolationVerifiedAt: "2026-07-19T00:00:30.000Z",
   } as const;
   const releaseCheck = {
     generationFilesystemReadIsolation:
@@ -228,6 +243,10 @@ describe("deployment receipt qualification binding", () => {
     proofDependencyManifestSha256: qualified.proofDependencyManifestSha256,
     runtimeAdapterSha256: qualified.runtimeAdapterSha256,
     aggregateLimitEvidenceSha256: qualified.aggregateLimitEvidenceSha256,
+    generationIsolationEvidenceSha256:
+      qualified.generationIsolationEvidenceSha256,
+    generationIsolationProbeSha256: qualified.generationIsolationProbeSha256,
+    generationIsolationVerifiedAt: qualified.generationIsolationVerifiedAt,
   } as const;
   const common = {
     qualified,
@@ -247,6 +266,9 @@ describe("deployment receipt qualification binding", () => {
       ["aggregateLimitEvidenceSha256", /aggregate limit evidence/u],
       ["runtimePolicySha256", /runtime policy/u],
       ["proofDependencyManifestSha256", /proof dependency manifest/u],
+      ["generationIsolationEvidenceSha256", /generation isolation evidence/u],
+      ["generationIsolationProbeSha256", /generation isolation probe/u],
+      ["generationIsolationVerifiedAt", /generation isolation verification/u],
     ] as const) {
       expect(() =>
         assertDeploymentReceiptBindings({
