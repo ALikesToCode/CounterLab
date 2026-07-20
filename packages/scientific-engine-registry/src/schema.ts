@@ -616,6 +616,70 @@ export const TimeoutCleanupReceiptSchema = z
     }
   });
 
+export const GENERATION_ISOLATION_PROBE_VERSION =
+  "counterlab-generation-isolation-v1" as const;
+
+export const GENERATION_ISOLATION_MOUNT_POLICY_VERSION =
+  "counterlab-bwrap-mount-policy-v1" as const;
+
+export const GenerationIsolationProbePayloadSchema = z.strictObject({
+  schemaVersion: z.literal("1"),
+  probeVersion: z.literal(GENERATION_ISOLATION_PROBE_VERSION),
+  service: z.literal("counterlab-hosted-runner"),
+  probe: z.literal("non-root-startup"),
+  checks: z.tuple([
+    z.literal("entrypoint"),
+    z.literal("non-root-user"),
+    z.literal("immutable-paths"),
+    z.literal("codex"),
+    z.literal("python"),
+    z.literal("bubblewrap"),
+    z.literal("bubblewrap-read-isolation"),
+    z.literal("setpriv"),
+    z.literal("writable-roots"),
+  ]),
+  generationFilesystemReadIsolation: z.literal("OS_ENFORCED"),
+  bubblewrapVersion: z.literal("0.11.0"),
+  bubblewrap: z.strictObject({
+    forbiddenHostPathsHidden: z.literal(true),
+    parentEnvironmentHidden: z.literal(true),
+    workspaceVisible: z.literal(true),
+    workspaceWritable: z.literal(true),
+  }),
+});
+
+export const GenerationIsolationEvidenceV1Schema = z
+  .strictObject({
+    schemaVersion: z.literal("1"),
+    status: z.literal("VERIFIED"),
+    generationFilesystemReadIsolation: z.literal("OS_ENFORCED"),
+    sourceCommit: GitCommitSchema,
+    sourceTreeSha256: Sha256Schema,
+    localImageTag: z.string().regex(/^counterlab-runner:git-[a-f0-9]{40}$/),
+    localImageDigest: OciDigestSchema,
+    imageUser: z.literal("10001:10001"),
+    mountPolicyVersion: z.literal(GENERATION_ISOLATION_MOUNT_POLICY_VERSION),
+    probePayload: GenerationIsolationProbePayloadSchema,
+    probePayloadSha256: Sha256Schema,
+    verifiedAt: z.iso.datetime({ offset: true }),
+    verifierVersion: z.literal("counterlab-generation-isolation-evidence-v1"),
+  })
+  .superRefine((evidence, context) => {
+    if (
+      evidence.localImageTag !==
+      `counterlab-runner:git-${evidence.sourceCommit}`
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["localImageTag"],
+        message: "generation-isolation image tag must bind the source commit",
+      });
+    }
+  });
+
+export const GenerationIsolationEvidenceSchema =
+  GenerationIsolationEvidenceV1Schema;
+
 export const QualifiedRunnerReleaseV1Schema = z
   .strictObject({
     schemaVersion: z.literal("1"),
@@ -966,7 +1030,7 @@ export const QualifiedRunnerReleaseV4Schema = z
     }
   });
 
-export const QualifiedRunnerReleaseSchema = z
+export const QualifiedRunnerReleaseV5Schema = z
   .strictObject({
     ...QualifiedRunnerReleaseV4Schema.shape,
     schemaVersion: z.literal("5"),
@@ -993,6 +1057,77 @@ export const QualifiedRunnerReleaseSchema = z
       }
     }
   });
+
+export const QualifiedRunnerReleaseV6Schema = z
+  .strictObject({
+    ...QualifiedRunnerReleaseV5Schema.shape,
+    schemaVersion: z.literal("6"),
+    generationIsolationEvidence: GenerationIsolationEvidenceV1Schema,
+    generationIsolationEvidenceSha256: Sha256Schema,
+    generationIsolationProbeSha256: Sha256Schema,
+    generationIsolationVerifiedAt: z.iso.datetime({ offset: true }),
+    verifierVersion: z.literal("counterlab-release-v6"),
+  })
+  .superRefine((release, context) => {
+    const {
+      generationIsolationEvidence: _generationIsolationEvidence,
+      generationIsolationEvidenceSha256: _generationIsolationEvidenceSha256,
+      generationIsolationProbeSha256: _generationIsolationProbeSha256,
+      generationIsolationVerifiedAt: _generationIsolationVerifiedAt,
+      ...legacyRelease
+    } = release;
+    const result = QualifiedRunnerReleaseV5Schema.safeParse({
+      ...legacyRelease,
+      schemaVersion: "5",
+      verifierVersion: "counterlab-release-v5",
+    });
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        context.addIssue({
+          code: "custom",
+          path: issue.path,
+          message: issue.message,
+        });
+      }
+    }
+    if (
+      Date.parse(release.generationIsolationVerifiedAt) >
+      Date.parse(release.qualifiedAt)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["generationIsolationVerifiedAt"],
+        message: "generation-isolation proof must precede qualification",
+      });
+    }
+    const evidence = release.generationIsolationEvidence;
+    for (const [field, expected, observed] of [
+      ["sourceCommit", release.sourceCommit, evidence.sourceCommit],
+      ["sourceTreeSha256", release.sourceTreeSha256, evidence.sourceTreeSha256],
+      ["localImageTag", release.localImageTag, evidence.localImageTag],
+      ["localImageDigest", release.localImageDigest, evidence.localImageDigest],
+      [
+        "generationIsolationProbeSha256",
+        release.generationIsolationProbeSha256,
+        evidence.probePayloadSha256,
+      ],
+      [
+        "generationIsolationVerifiedAt",
+        release.generationIsolationVerifiedAt,
+        evidence.verifiedAt,
+      ],
+    ] as const) {
+      if (expected !== observed) {
+        context.addIssue({
+          code: "custom",
+          path: [field],
+          message: `${field} must match embedded generation-isolation evidence`,
+        });
+      }
+    }
+  });
+
+export const QualifiedRunnerReleaseSchema = QualifiedRunnerReleaseV5Schema;
 
 export const RELEASE_CHECK_IDS = [
   "test-all",
@@ -1141,7 +1276,7 @@ export const ReleaseCheckReceiptV2Schema = z
     }
   });
 
-export const ReleaseCheckReceiptSchema = z
+export const ReleaseCheckReceiptV3Schema = z
   .strictObject({
     ...ReleaseCheckReceiptV2Schema.shape,
     schemaVersion: z.literal("3"),
@@ -1168,6 +1303,50 @@ export const ReleaseCheckReceiptSchema = z
       }
     }
   });
+
+export const ReleaseCheckReceiptV4Schema = z
+  .strictObject({
+    ...ReleaseCheckReceiptV3Schema.shape,
+    schemaVersion: z.literal("4"),
+    generationIsolationEvidenceSha256: Sha256Schema,
+    generationIsolationProbeSha256: Sha256Schema,
+    generationIsolationVerifiedAt: z.iso.datetime({ offset: true }),
+    verifierVersion: z.literal("counterlab-release-check-v4"),
+  })
+  .superRefine((receipt, context) => {
+    const {
+      generationIsolationEvidenceSha256: _generationIsolationEvidenceSha256,
+      generationIsolationProbeSha256: _generationIsolationProbeSha256,
+      generationIsolationVerifiedAt: _generationIsolationVerifiedAt,
+      ...legacyReceipt
+    } = receipt;
+    const result = ReleaseCheckReceiptV3Schema.safeParse({
+      ...legacyReceipt,
+      schemaVersion: "3",
+      verifierVersion: "counterlab-release-check-v3",
+    });
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        context.addIssue({
+          code: "custom",
+          path: issue.path,
+          message: issue.message,
+        });
+      }
+    }
+    if (
+      Date.parse(receipt.generationIsolationVerifiedAt) >
+      Date.parse(receipt.checkedAt)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["generationIsolationVerifiedAt"],
+        message: "generation-isolation proof must precede release checks",
+      });
+    }
+  });
+
+export const ReleaseCheckReceiptSchema = ReleaseCheckReceiptV3Schema;
 
 export const DeploymentReceiptV3Schema = z
   .strictObject({
@@ -1363,7 +1542,7 @@ export const DeploymentReceiptV4Schema = z
     }
   });
 
-export const DeploymentReceiptSchema = z
+export const DeploymentReceiptV5Schema = z
   .strictObject({
     ...DeploymentReceiptV4Schema.shape,
     schemaVersion: z.literal("5"),
@@ -1387,3 +1566,47 @@ export const DeploymentReceiptSchema = z
       }
     }
   });
+
+export const DeploymentReceiptV6Schema = z
+  .strictObject({
+    ...DeploymentReceiptV5Schema.shape,
+    schemaVersion: z.literal("6"),
+    generationIsolationEvidenceSha256: Sha256Schema,
+    generationIsolationProbeSha256: Sha256Schema,
+    generationIsolationVerifiedAt: z.iso.datetime({ offset: true }),
+    verifierVersion: z.literal("counterlab-deployment-v6"),
+  })
+  .superRefine((receipt, context) => {
+    const {
+      generationIsolationEvidenceSha256: _generationIsolationEvidenceSha256,
+      generationIsolationProbeSha256: _generationIsolationProbeSha256,
+      generationIsolationVerifiedAt: _generationIsolationVerifiedAt,
+      ...legacyReceipt
+    } = receipt;
+    const result = DeploymentReceiptV5Schema.safeParse({
+      ...legacyReceipt,
+      schemaVersion: "5",
+      verifierVersion: "counterlab-deployment-v5",
+    });
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        context.addIssue({
+          code: "custom",
+          path: issue.path,
+          message: issue.message,
+        });
+      }
+    }
+    if (
+      Date.parse(receipt.generationIsolationVerifiedAt) >
+      Date.parse(receipt.deployedAt)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["generationIsolationVerifiedAt"],
+        message: "generation-isolation proof must precede deployment",
+      });
+    }
+  });
+
+export const DeploymentReceiptSchema = DeploymentReceiptV5Schema;

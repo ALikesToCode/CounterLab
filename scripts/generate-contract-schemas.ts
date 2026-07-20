@@ -18,16 +18,20 @@ import {
 import {
   ContainedRuntimeAttestationSchema,
   ContainedRuntimeAttestationV1Schema,
-  DeploymentReceiptSchema,
   DeploymentReceiptV3Schema,
   DeploymentReceiptV4Schema,
-  QualifiedRunnerReleaseSchema,
+  DeploymentReceiptV5Schema,
+  DeploymentReceiptV6Schema,
+  GenerationIsolationEvidenceV1Schema,
   QualifiedRunnerReleaseV2Schema,
   QualifiedRunnerReleaseV3Schema,
   QualifiedRunnerReleaseV4Schema,
-  ReleaseCheckReceiptSchema,
+  QualifiedRunnerReleaseV5Schema,
+  QualifiedRunnerReleaseV6Schema,
   ReleaseCheckReceiptV1Schema,
   ReleaseCheckReceiptV2Schema,
+  ReleaseCheckReceiptV3Schema,
+  ReleaseCheckReceiptV4Schema,
   ScientificEngineEvidenceCatalogSchema,
   ScientificEngineRegistrySchema,
   ScientificEngineRuntimeManifestSchema,
@@ -42,7 +46,36 @@ import {
 } from "../packages/generative-ui-contracts/src/index.js";
 
 const root = resolve(import.meta.dirname, "..");
+
+function closeTupleArrays(value: unknown): void {
+  if (Array.isArray(value)) {
+    for (const item of value) closeTupleArrays(item);
+    return;
+  }
+  if (typeof value !== "object" || value === null) return;
+  const record = value as Record<string, unknown>;
+  if (Array.isArray(record.prefixItems)) {
+    record.minItems = record.prefixItems.length;
+    record.maxItems = record.prefixItems.length;
+    record.items = false;
+  }
+  for (const item of Object.values(record)) closeTupleArrays(item);
+}
+
 const schemas = [
+  {
+    fileName: "generation-isolation-evidence-v1.schema.json",
+    id: "https://counterlab.dev/schemas/generation-isolation-evidence-v1.schema.json",
+    title: "CounterLab generation isolation evidence v1",
+    schema: GenerationIsolationEvidenceV1Schema,
+    closeTupleArrays: true,
+    destinations: [
+      resolve(
+        root,
+        "scientific-engines/schemas/generation-isolation-evidence-v1.schema.json",
+      ),
+    ],
+  },
   {
     fileName: "boundary-map-result-v1.schema.json",
     id: "https://counterlab.dev/schemas/boundary-map-result-v1.schema.json",
@@ -252,11 +285,24 @@ const schemas = [
     fileName: "qualified-runner-release-v5.schema.json",
     id: "https://counterlab.dev/schemas/qualified-runner-release-v5.schema.json",
     title: "CounterLab qualified runner release v5",
-    schema: QualifiedRunnerReleaseSchema,
+    schema: QualifiedRunnerReleaseV5Schema,
     destinations: [
       resolve(
         root,
         "scientific-engines/schemas/qualified-runner-release-v5.schema.json",
+      ),
+    ],
+  },
+  {
+    fileName: "qualified-runner-release-v6.schema.json",
+    id: "https://counterlab.dev/schemas/qualified-runner-release-v6.schema.json",
+    title: "CounterLab qualified runner release v6",
+    schema: QualifiedRunnerReleaseV6Schema,
+    closeTupleArrays: true,
+    destinations: [
+      resolve(
+        root,
+        "scientific-engines/schemas/qualified-runner-release-v6.schema.json",
       ),
     ],
   },
@@ -324,11 +370,23 @@ const schemas = [
     fileName: "release-check-receipt-v3.schema.json",
     id: "https://counterlab.dev/schemas/release-check-receipt-v3.schema.json",
     title: "CounterLab release-check receipt v3",
-    schema: ReleaseCheckReceiptSchema,
+    schema: ReleaseCheckReceiptV3Schema,
     destinations: [
       resolve(
         root,
         "scientific-engines/schemas/release-check-receipt-v3.schema.json",
+      ),
+    ],
+  },
+  {
+    fileName: "release-check-receipt-v4.schema.json",
+    id: "https://counterlab.dev/schemas/release-check-receipt-v4.schema.json",
+    title: "CounterLab release-check receipt v4",
+    schema: ReleaseCheckReceiptV4Schema,
+    destinations: [
+      resolve(
+        root,
+        "scientific-engines/schemas/release-check-receipt-v4.schema.json",
       ),
     ],
   },
@@ -360,7 +418,7 @@ const schemas = [
     fileName: "deployment-receipt-v5.schema.json",
     id: "https://counterlab.dev/schemas/deployment-receipt-v5.schema.json",
     title: "CounterLab deployment receipt v5",
-    schema: DeploymentReceiptSchema,
+    schema: DeploymentReceiptV5Schema,
     destinations: [
       resolve(
         root,
@@ -368,10 +426,25 @@ const schemas = [
       ),
     ],
   },
+  {
+    fileName: "deployment-receipt-v6.schema.json",
+    id: "https://counterlab.dev/schemas/deployment-receipt-v6.schema.json",
+    title: "CounterLab deployment receipt v6",
+    schema: DeploymentReceiptV6Schema,
+    destinations: [
+      resolve(
+        root,
+        "scientific-engines/schemas/deployment-receipt-v6.schema.json",
+      ),
+    ],
+  },
 ];
 
 for (const definition of schemas) {
   const generated = z.toJSONSchema(definition.schema);
+  if ("closeTupleArrays" in definition && definition.closeTupleArrays) {
+    closeTupleArrays(generated);
+  }
   const serialized = `${JSON.stringify(
     { $id: definition.id, title: definition.title, ...generated },
     null,
