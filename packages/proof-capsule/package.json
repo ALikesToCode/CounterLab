@@ -5,7 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./node-cli": "./src/node-cli.ts"
+    "./node-cli": "./src/node-cli.ts",
+    "./sample": "./src/sample.ts",
+    "./sample-boundary-authority": "./src/sample-boundary-authority.ts"
   },
   "dependencies": {
     "@counterlab/concept-registry": "workspace:*",

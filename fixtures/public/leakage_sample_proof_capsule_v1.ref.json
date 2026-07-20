@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1",
+  "capsuleId": "sample-proof-leakage-01-v1",
+  "assetFile": "leakage_sample_proof_capsule_v1.counterlab",
+  "mediaType": "application/vnd.counterlab.sample-capsule+json",
+  "byteLength": 94236,
+  "bytesSha256": "74af6091ad7d55e4e5870c374e887d0a4c5f365734a576df96f721ea11293907",
+  "rootHash": "e45cf88f1bbdd470723f83def9550d47ac272f7c5aaf8554bec52c2a34f9856b",
+  "fixtureIntegrityHash": "5b33c4adad52d797fa8268c53fe8a0dec560161c76a162ffe83e87d91271ffd2",
+  "sourceArtifactFileSha256": "d0e9f3238753f1ca55534446d83e36041590f31c607a011def3f1d0db3a5bbc9",
+  "artifactManifestFileSha256": "dd091f1898a4f25f16d9b32cbebc2f13d59fcf3b73d1e641026cc4b658c06b25",
+  "primaryResultCanonicalHash": "a6ae7652e04e4d70196f991c63b8f7bcb3b76f8c4ab833d3ce2b626df0ab6c94",
+  "boundaryResultHash": "c948d25fef6ab5f5f33322dde2025557f0704f01bff2bde48ee93149066ccbd3",
+  "scientificEngineSnapshotAuthorityHash": "4e00b944654aded551c528e2c827d41e975a1bbfebcfae8dd3fc24db670004de"
+}

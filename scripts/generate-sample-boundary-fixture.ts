@@ -92,6 +92,58 @@ function sha256(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+function changedFixturePaths(
+  left: unknown,
+  right: unknown,
+  prefix = "fixture",
+): string[] {
+  if (fixtureValuesEqual(left, right)) return [];
+  if (
+    left !== null &&
+    right !== null &&
+    typeof left === "object" &&
+    typeof right === "object"
+  ) {
+    const leftRecord = left as Record<string, unknown>;
+    const rightRecord = right as Record<string, unknown>;
+    const keys = [
+      ...new Set([...Object.keys(leftRecord), ...Object.keys(rightRecord)]),
+    ].sort();
+    return keys.flatMap((key) =>
+      changedFixturePaths(
+        leftRecord[key],
+        rightRecord[key],
+        `${prefix}.${key}`,
+      ),
+    );
+  }
+  return [prefix];
+}
+
+function fixtureValuesEqual(left: unknown, right: unknown): boolean {
+  if (left === undefined || right === undefined) {
+    return left === right;
+  }
+  return canonicalJsonV1(left) === canonicalJsonV1(right);
+}
+
+function probeFailure(
+  label: string,
+  probe: ReturnType<typeof spawnSync>,
+): Error {
+  const details = [
+    probe.error === undefined ? null : probe.error.message,
+    probe.signal === null ? null : `signal=${probe.signal}`,
+    probe.status === null ? null : `status=${probe.status}`,
+    typeof probe.stderr === "string" && probe.stderr.trim().length > 0
+      ? probe.stderr.trim()
+      : null,
+  ].filter((value): value is string => value !== null);
+  return new Error(
+    `${label} failed${details.length === 0 ? " without diagnostics" : `: ${details.join("; ")}`}`,
+  );
+}
+
 function fixedExperimentIr(input: {
   artifactManifestHash: string;
   beliefSpec: ReturnType<typeof BeliefSpecV2Schema.parse>;
@@ -234,26 +286,21 @@ function fixedExperimentIr(input: {
   });
 }
 
-const pythonSource = String.raw`
+const primaryPythonSource = String.raw`
 import json
-import sys
 
-from counterlab_kernel.boundary_map import compute_leakage_boundary_map
 from counterlab_kernel.experiment import run_leakage_experiment
 from counterlab_kernel.fixture import generate_leakage_fixture
 from counterlab_kernel.verifier import verify_candidate
 
-payload = json.load(sys.stdin)
 primary_result = run_leakage_experiment(
     generate_leakage_fixture(seed=1729), seed=1729
 )
 technical_report = verify_candidate(primary_result)
-boundary = compute_leakage_boundary_map(**payload["lineage"])
 print(json.dumps(
     {
         "primaryResult": primary_result,
         "technicalReport": technical_report,
-        "boundary": boundary,
     },
     sort_keys=True,
     separators=(",", ":"),
@@ -261,7 +308,29 @@ print(json.dumps(
 ))
 `;
 
+const boundaryPythonSource = String.raw`
+import json
+import sys
+
+from counterlab_kernel.boundary_map import compute_leakage_boundary_map
+
+payload = json.loads(sys.argv[1])
+boundary = compute_leakage_boundary_map(**payload["lineage"])
+print(json.dumps(
+    {"boundary": boundary},
+    sort_keys=True,
+    separators=(",", ":"),
+    ensure_ascii=False,
+))
+`;
+
 async function main(): Promise<void> {
+  const mode = process.argv[2] ?? "--write";
+  if (mode !== "--write" && mode !== "--check") {
+    throw new Error(
+      "Usage: generate-sample-boundary-fixture.ts [--write|--check]",
+    );
+  }
   await access(marker);
   await access(pythonPath);
   await assertSafeOutput();
@@ -325,18 +394,18 @@ async function main(): Promise<void> {
     OMP_NUM_THREADS: "1",
     MKL_NUM_THREADS: "1",
   };
-  const primaryProbe = spawnSync(pythonPath, ["-c", pythonSource], {
+  process.stdout.write("CHECKING_SAMPLE_BOUNDARY primary\n");
+  const primaryProbe = spawnSync(pythonPath, ["-c", primaryPythonSource], {
     cwd: root,
     encoding: "utf8",
-    input: JSON.stringify({ lineage: preliminaryLineage }),
     maxBuffer: 16 * 1024 * 1024,
+    timeout: 180_000,
     env: pythonEnvironment,
   });
   if (primaryProbe.status !== 0) {
-    throw new Error(
-      `Fixed sample Boundary kernel failed: ${primaryProbe.stderr.trim()}`,
-    );
+    throw probeFailure("Fixed sample primary kernel", primaryProbe);
   }
+  process.stdout.write("CHECKING_SAMPLE_BOUNDARY sweep\n");
   const firstOutput = JSON.parse(primaryProbe.stdout) as {
     primaryResult: unknown;
     technicalReport: Record<string, unknown>;
@@ -376,25 +445,24 @@ async function main(): Promise<void> {
     evidence_verdict_hash: evidenceVerdictHash,
   };
 
-  const completedProbe = spawnSync(pythonPath, ["-c", pythonSource], {
-    cwd: root,
-    encoding: "utf8",
-    input: JSON.stringify({ lineage }),
-    maxBuffer: 16 * 1024 * 1024,
-    env: pythonEnvironment,
-  });
+  const completedProbe = spawnSync(
+    pythonPath,
+    ["-c", boundaryPythonSource, JSON.stringify({ lineage })],
+    {
+      cwd: root,
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+      timeout: 600_000,
+      env: pythonEnvironment,
+    },
+  );
   if (completedProbe.status !== 0) {
-    throw new Error(
-      `Fixed sample Boundary kernel failed: ${completedProbe.stderr.trim()}`,
-    );
+    throw probeFailure("Fixed sample Boundary sweep", completedProbe);
   }
+  process.stdout.write("CHECKING_SAMPLE_BOUNDARY bindings\n");
   const output = JSON.parse(completedProbe.stdout) as {
-    technicalReport: Record<string, unknown>;
     boundary: unknown;
   };
-  if (hashBoundaryMapValue(output.technicalReport) !== technicalReportHash) {
-    throw new Error("Primary technical verifier output changed between runs");
-  }
   const result = BoundaryMapResultV1Schema.parse(output.boundary);
   const expected: BoundaryMapExpectationV1 = {
     boundaryMapId: result.boundaryMapId,
@@ -452,7 +520,7 @@ async function main(): Promise<void> {
     },
     beliefSpec,
     experimentIr,
-    technicalReport: output.technicalReport,
+    technicalReport: firstOutput.technicalReport,
     evidenceVerdict,
     boundary,
   };
@@ -460,12 +528,39 @@ async function main(): Promise<void> {
     ...unsignedFixture,
     fixtureIntegrityHash: hashBoundaryMapValue(unsignedFixture),
   };
-  await writeFile(outputPath, `${canonicalJsonV1(fixture)}\n`, {
-    encoding: "utf8",
-    mode: 0o644,
-  });
+  const fixtureText = `${canonicalJsonV1(fixture)}\n`;
+  if (mode === "--check") {
+    const checkedInText = await readFile(outputPath, "utf8");
+    if (checkedInText !== fixtureText) {
+      const checkedInFixture = JSON.parse(checkedInText) as Record<
+        string,
+        unknown
+      >;
+      const freshFixture = fixture as unknown as Record<string, unknown>;
+      const changedSections = [
+        ...new Set([
+          ...Object.keys(checkedInFixture),
+          ...Object.keys(freshFixture),
+        ]),
+      ].filter(
+        (key) => !fixtureValuesEqual(checkedInFixture[key], freshFixture[key]),
+      );
+      const changedPaths = changedFixturePaths(
+        checkedInFixture,
+        freshFixture,
+      ).slice(0, 20);
+      throw new Error(
+        `Checked-in Sample Boundary fixture is stale or differs from a fresh fixed-kernel run (changed sections: ${changedSections.join(", ")}; first changed paths: ${changedPaths.join(", ")})`,
+      );
+    }
+  } else {
+    await writeFile(outputPath, fixtureText, {
+      encoding: "utf8",
+      mode: 0o644,
+    });
+  }
   process.stdout.write(
-    `VERIFIED_SAMPLE_BOUNDARY ${result.resultHash} fixture=${fixture.fixtureIntegrityHash} cells=${result.cells.length}\n`,
+    `${mode === "--check" ? "CHECKED" : "WROTE"}_SAMPLE_BOUNDARY ${result.resultHash} fixture=${fixture.fixtureIntegrityHash} cells=${result.cells.length}\n`,
   );
 }
 

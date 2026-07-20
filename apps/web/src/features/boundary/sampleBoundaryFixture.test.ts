@@ -79,8 +79,17 @@ describe("verified sample Boundary fixture", () => {
         "../../fixtures/public/leakage_verified_result.json",
       ),
     );
+    const notebookBytes = await readFile(
+      resolve(
+        process.cwd(),
+        "../../fixtures/notebooks/customer_churn_leakage.ipynb",
+      ),
+    );
 
     expect(hashBoundaryMapValue(unsignedFixture)).toBe(fixtureIntegrityHash);
+    expect(createHash("sha256").update(notebookBytes).digest("hex")).toBe(
+      fixture.source.artifactManifestHash,
+    );
     expect(createHash("sha256").update(primaryResultBytes).digest("hex")).toBe(
       fixture.source.primaryResultFileHash,
     );
