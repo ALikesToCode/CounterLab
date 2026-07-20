@@ -20,6 +20,7 @@ import {
   DisabledBeliefAnalyst,
   LiveBeliefAnalyst,
   OpenAIResponsesTransport,
+  assessClaimApplicability,
   buildSanitizedAnalystContext,
   createLiveBeliefAnalystFromEnv,
   deriveSafetyIdentifier,
@@ -27,6 +28,7 @@ import {
   normalizeResponsesTimeout,
   resolveBeliefSpecV2Evidence,
   resolveBeliefTestEvidence,
+  requireApplicableClaim,
   schemaSummaryHash,
   type ResponsesTransport,
 } from "./index.js";
@@ -331,6 +333,106 @@ class CapturingTransport implements ResponsesTransport {
   }
 }
 
+describe("deterministic live claim applicability", () => {
+  it.each([
+    [
+      "entity_leakage" as const,
+      "Does random-row accuracy generalize to completely new customers?",
+    ],
+    [
+      "class_imbalance" as const,
+      "Does high accuracy hide missed rare defects and low recall?",
+    ],
+  ])("accepts a question within the selected pack", (concept, learnerClaim) => {
+    expect(assessClaimApplicability(concept, learnerClaim)).toMatchObject({
+      applicable: true,
+      policyVersion: "claim-applicability-v1",
+    });
+  });
+
+  it.each([
+    ["entity_leakage" as const, "Purple bananas sing together at midnight."],
+    ["entity_leakage" as const, "The customer likes the model's purple color."],
+    ["entity_leakage" as const, "Does the customer score purple?"],
+    [
+      "class_imbalance" as const,
+      "I have a positive feeling that the model is amazing.",
+    ],
+    ["class_imbalance" as const, "Why is precision beautiful?"],
+    [
+      "entity_leakage" as const,
+      "High accuracy hides missed rare defects and low recall.",
+    ],
+  ])(
+    "rejects an unrelated statement without treating it as model input",
+    (concept, learnerClaim) => {
+      expect(() => requireApplicableClaim(concept, learnerClaim)).toThrowError(
+        expect.objectContaining({
+          code: "CLAIM_NOT_APPLICABLE",
+          details: expect.objectContaining({
+            concept,
+            policyVersion: "claim-applicability-v1",
+            reason: "OFF_TOPIC",
+          }),
+        }),
+      );
+    },
+  );
+
+  it.each([
+    [
+      "entity_leakage" as const,
+      "The model generalizes to new customers and does not generalize to new customers.",
+    ],
+    [
+      "class_imbalance" as const,
+      "The model detects rare defects and does not detect rare defects.",
+    ],
+    [
+      "entity_leakage" as const,
+      "The model generalizes to new customers but doesn't generalize to new customers.",
+    ],
+  ])(
+    "rejects an explicit declarative contradiction",
+    (concept, learnerClaim) => {
+      expect(assessClaimApplicability(concept, learnerClaim)).toMatchObject({
+        applicable: false,
+        reason: "SELF_CONTRADICTORY",
+      });
+    },
+  );
+
+  it("allows a learner to ask an explicit contrast question", () => {
+    expect(
+      assessClaimApplicability(
+        "entity_leakage",
+        "Does the model generalize to new customers, or does identity leakage prevent it?",
+      ),
+    ).toMatchObject({ applicable: true });
+  });
+
+  it("accepts an artifact-relevant production-validity question", () => {
+    expect(
+      assessClaimApplicability(
+        "entity_leakage",
+        "Does this 98% validation score hold in production?",
+      ),
+    ).toMatchObject({ applicable: true });
+  });
+
+  it("does not let question punctuation disguise a contradiction", () => {
+    expect(
+      assessClaimApplicability(
+        "entity_leakage",
+        "Does the model generalize and not generalize to new customers?",
+      ),
+    ).toMatchObject({
+      applicable: false,
+      reason: "SELF_CONTRADICTORY",
+    });
+  });
+});
+
 describe("privacy-preserving analyst input", () => {
   it("derives a stable opaque safety identifier from the local session", () => {
     const first = deriveSafetyIdentifier("session-user@example.com");
@@ -597,6 +699,48 @@ describe("evidence resolution", () => {
 });
 
 describe("LiveBeliefAnalyst", () => {
+  it("does not call the model transport for an inapplicable live claim", async () => {
+    const transport = new CapturingTransport({
+      outputParsed: liveBeliefSpecOutput(manifest()),
+      refusals: [],
+    });
+    const analyst = new LiveBeliefAnalyst({
+      apiKey: "server-only-key",
+      transport,
+    });
+
+    await expect(
+      analyst.proposeBeliefSpec({
+        sessionId: "session_off_topic",
+        learnerClaim: "Purple bananas sing together at midnight.",
+        manifest: manifest(),
+        concept: "entity_leakage",
+      }),
+    ).rejects.toMatchObject({ code: "CLAIM_NOT_APPLICABLE" });
+    expect(transport.request).toBeUndefined();
+  });
+
+  it("preserves input-validation precedence before applicability checks", async () => {
+    const transport = new CapturingTransport({
+      outputParsed: liveBeliefSpecOutput(manifest()),
+      refusals: [],
+    });
+    const analyst = new LiveBeliefAnalyst({
+      apiKey: "server-only-key",
+      transport,
+    });
+
+    await expect(
+      analyst.proposeBeliefSpec({
+        sessionId: "session_overlong",
+        learnerClaim: "x".repeat(4_001),
+        manifest: manifest(),
+        concept: "entity_leakage",
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    expect(transport.request).toBeUndefined();
+  });
+
   it("proposes a native v2 Belief Spec without granting the model learner authority", async () => {
     const artifact = manifest();
     const transport = new CapturingTransport({
@@ -724,6 +868,37 @@ describe("LiveBeliefAnalyst", () => {
       analyst.proposeBeliefSpec({
         sessionId: "session_v2_invalid",
         learnerClaim: claim,
+        manifest: manifest(),
+        concept: "entity_leakage",
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+
+  it("rejects model-authored result, verdict, and repair prose before persistence", async () => {
+    const base = liveBeliefSpecOutput();
+    const analyst = new LiveBeliefAnalyst({
+      apiKey: "server-only-key",
+      transport: new CapturingTransport({
+        outputParsed: {
+          ...base,
+          hypotheses: [
+            base.hypotheses[0],
+            {
+              ...base.hypotheses[1],
+              statement:
+                "The verified result supports this hypothesis at 59.4%; the fix is to remove customer_id.",
+            },
+          ],
+        },
+        refusals: [],
+      }),
+    });
+
+    await expect(
+      analyst.proposeBeliefSpec({
+        sessionId: "session_v2_preseal_leak",
+        learnerClaim:
+          "Does random-row accuracy generalize to completely new customers?",
         manifest: manifest(),
         concept: "entity_leakage",
       }),
@@ -1210,6 +1385,43 @@ describe("sample and disabled analysts", () => {
         concept: "entity_leakage",
       }),
     ).rejects.toMatchObject({ code: "UNSUPPORTED_ARTIFACT" });
+  });
+
+  it("refuses a noncanonical claim for the exact approved sample artifact", async () => {
+    const analyst = new ApprovedSampleBeliefAnalyst();
+
+    await expect(
+      analyst.propose({
+        sessionId: "session_noncanonical_claim",
+        learnerClaim: "This unrelated claim should become the sample result.",
+        manifest: manifest(),
+        concept: "entity_leakage",
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message:
+        "the approved sample analyst only applies to the canonical fixed sample question",
+    });
+  });
+
+  it("preserves the exact historical fixed-fixture claim without opening arbitrary sample claims", async () => {
+    const analyst = new ApprovedSampleBeliefAnalyst();
+
+    await expect(
+      analyst.propose({
+        sessionId: "session_historical_fixture_claim",
+        learnerClaim:
+          "The notebook accuracy proves generalization to new customers.",
+        manifest: manifest(),
+        concept: "entity_leakage",
+      }),
+    ).resolves.toMatchObject({
+      provenance: { mode: "approved-sample" },
+      beliefTest: {
+        learnerClaim:
+          "The notebook accuracy proves generalization to new customers.",
+      },
+    });
   });
 
   it("returns a typed setup error when no server API key exists", async () => {

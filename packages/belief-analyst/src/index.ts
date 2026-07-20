@@ -4,6 +4,7 @@ import {
   ArtifactManifestSchema,
   BeliefSpecV2Schema,
   BeliefTestSchema,
+  PrePredictionBeliefSpecV2Schema,
   type ArtifactManifest,
   type BeliefSpecV2,
   type BeliefTest,
@@ -149,6 +150,7 @@ export type ReasoningEffort =
 
 export type BeliefAnalystErrorCode =
   | "CONFIGURATION_ERROR"
+  | "CLAIM_NOT_APPLICABLE"
   | "INVALID_INPUT"
   | "INVALID_RESPONSE"
   | "LIVE_UNAVAILABLE"
@@ -178,6 +180,133 @@ export type BeliefAnalystInput = {
   manifest: ArtifactManifest;
   concept: ConceptId;
 };
+
+export const CLAIM_APPLICABILITY_POLICY_VERSION = "claim-applicability-v1";
+
+export type ClaimApplicabilityAssessment =
+  | {
+      applicable: true;
+      policyVersion: typeof CLAIM_APPLICABILITY_POLICY_VERSION;
+    }
+  | {
+      applicable: false;
+      policyVersion: typeof CLAIM_APPLICABILITY_POLICY_VERSION;
+      reason: "OFF_TOPIC" | "SELF_CONTRADICTORY";
+      guidance: string;
+    };
+
+const ENTITY_LEAKAGE_CLAIM_PATTERNS = [
+  /\bgeneraliz(?:e|es|ed|ing|ation)\b/,
+  /\b(?:unseen|new)\s+(?:customer|entity|account|patient|user)s?\b/,
+  /\b(?:entity|identity)\s+(?:leak(?:age|ing)?|overlap|feature|memorization)\b/,
+  /\b(?:random[- ]row|row[- ]level|group[- ]aware|group)\s+(?:split|holdout|evaluation)\b/,
+  /\b(?:hold\s*out|holdout)\s+(?:whole\s+)?(?:customer|entity|account|patient|user|group)s?\b/,
+  /\b(?:memorize|memorise|memorization|memorisation)\b/,
+  /\b(?:accuracy|score|metric|performance|validation|test)\b.{0,48}\b(?:production|deployment|real[- ]world|unseen|new\s+data|future)\b/,
+  /\b(?:production|deployment|real[- ]world|unseen|new\s+data|future)\b.{0,48}\b(?:accuracy|score|metric|performance|validation|test)\b/,
+] as const;
+
+const CLASS_IMBALANCE_CLAIM_PATTERNS = [
+  /\bclass\s+imbalance\b/,
+  /\b(?:rare|minority|majority)\s+(?:class|case|event|example|defect|fraud|positive|negative)s?\b/,
+  /\b(?:recall|precision|f1|pr[- ]?auc|confusion\s+matrix|prevalence|decision\s+threshold)\b.{0,48}\b(?:enough|appropriate|matter|high|low|poor|good|trust|show|mean|hide|mask|compare|choose|use|change|affect)\w*\b/,
+  /\b(?:enough|appropriate|matter|high|low|poor|good|trust|show|mean|hide|mask|compare|choose|use|change|affect)\w*\b.{0,48}\b(?:recall|precision|f1|pr[- ]?auc|confusion\s+matrix|prevalence|decision\s+threshold)\b/,
+  /\b(?:recall|precision|f1|pr[- ]?auc|confusion\s+matrix|prevalence|decision\s+threshold)\b.{0,24}\b(?:versus|vs\.?)\b.{0,24}\b(?:recall|precision|f1|pr[- ]?auc|confusion\s+matrix|prevalence|decision\s+threshold)\b/,
+  /\bfalse[- ]?(?:negative|positive)s?\b/,
+  /\bmiss(?:ed|es|ing)?\s+(?:case|event|defect|fraud|positive)s?\b/,
+  /\b(?:defect|fraud|minority)s?\b.{0,48}\b(?:accuracy|score|metric|performance|detect|catch|find)\w*\b/,
+  /\b(?:accuracy|score|metric|performance|detect|catch|find)\w*\b.{0,48}\b(?:defect|fraud|minority)s?\b/,
+] as const;
+
+const ENTITY_LEAKAGE_CONTRADICTIONS = [
+  /\bgeneraliz\w*\b.{0,120}\b(?:and|but)\b.{0,80}\b(?:(?:does|do|did|will|can|could|would|is|are)\s+)?(?:not|never)\s+generaliz\w*/,
+  /\b(?:(?:does|do|did|will|can|could|would|is|are)\s+)?(?:not|never)\s+generaliz\w*.{0,120}\b(?:and|but)\b.{0,80}\bgeneraliz\w*/,
+] as const;
+
+const CLASS_IMBALANCE_CONTRADICTIONS = [
+  /\b(?:detect|catch|find|identify)\w*\b.{0,80}\b(?:rare|minority|defect|fraud|positive)s?\b.{0,120}\b(?:and|but)\b.{0,80}\b(?:(?:does|do|did|will|can|could|would)\s+)?(?:not|never)\s+(?:detect|catch|find|identify)\w*/,
+  /\b(?:(?:does|do|did|will|can|could|would)\s+)?(?:not|never)\s+(?:detect|catch|find|identify)\w*.{0,80}\b(?:rare|minority|defect|fraud|positive)s?\b.{0,120}\b(?:and|but)\b.{0,80}\b(?:detect|catch|find|identify)\w*/,
+] as const;
+
+const CLAIM_APPLICABILITY_POLICIES = {
+  entity_leakage: {
+    topicPatterns: ENTITY_LEAKAGE_CLAIM_PATTERNS,
+    contradictionPatterns: ENTITY_LEAKAGE_CONTRADICTIONS,
+    guidance:
+      "Ask how the notebook evaluates generalization across distinct entities, such as customers, patients, or accounts.",
+  },
+  class_imbalance: {
+    topicPatterns: CLASS_IMBALANCE_CLAIM_PATTERNS,
+    contradictionPatterns: CLASS_IMBALANCE_CONTRADICTIONS,
+    guidance:
+      "Ask how the notebook evaluates rare cases, metric choice, threshold choice, or error cost.",
+  },
+} satisfies Record<
+  ConceptId,
+  {
+    topicPatterns: readonly RegExp[];
+    contradictionPatterns: readonly RegExp[];
+    guidance: string;
+  }
+>;
+
+function normalizeClaimForApplicability(claim: string): string {
+  return claim
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[’']/g, "'")
+    .replace(/\bdoesn't\b/g, "does not")
+    .replace(/\bcan't\b/g, "can not")
+    .replace(/\bwon't\b/g, "will not")
+    .replace(/\bisn't\b/g, "is not")
+    .replace(/\baren't\b/g, "are not")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function assessClaimApplicability(
+  concept: ConceptId,
+  learnerClaim: string,
+): ClaimApplicabilityAssessment {
+  const claim = normalizeClaimForApplicability(learnerClaim);
+  const policy = CLAIM_APPLICABILITY_POLICIES[concept];
+  if (!policy.topicPatterns.some((pattern) => pattern.test(claim))) {
+    return {
+      applicable: false,
+      policyVersion: CLAIM_APPLICABILITY_POLICY_VERSION,
+      reason: "OFF_TOPIC",
+      guidance: policy.guidance,
+    };
+  }
+
+  if (policy.contradictionPatterns.some((pattern) => pattern.test(claim))) {
+    return {
+      applicable: false,
+      policyVersion: CLAIM_APPLICABILITY_POLICY_VERSION,
+      reason: "SELF_CONTRADICTORY",
+      guidance:
+        "State one uncertainty or ask a comparison question so CounterLab can frame two distinct explanations.",
+    };
+  }
+
+  return {
+    applicable: true,
+    policyVersion: CLAIM_APPLICABILITY_POLICY_VERSION,
+  };
+}
+
+export function requireApplicableClaim(
+  concept: ConceptId,
+  learnerClaim: string,
+): void {
+  const assessment = assessClaimApplicability(concept, learnerClaim);
+  if (assessment.applicable) return;
+  throw new BeliefAnalystError("CLAIM_NOT_APPLICABLE", assessment.guidance, {
+    concept,
+    policyVersion: assessment.policyVersion,
+    reason: assessment.reason,
+  });
+}
 
 export type BeliefAnalystHealth =
   | {
@@ -801,7 +930,7 @@ function fromBeliefSpecWire(
           : "PARTIAL",
     learnerDecision: "UNDECIDED" as const,
   };
-  const parsed = BeliefSpecV2Schema.safeParse(candidate);
+  const parsed = PrePredictionBeliefSpecV2Schema.safeParse(candidate);
   if (!parsed.success) {
     throw new BeliefAnalystError(
       "INVALID_RESPONSE",
@@ -1039,6 +1168,7 @@ export class LiveBeliefAnalyst implements BeliefAnalyst, BeliefSpecAnalyst {
     input: BeliefAnalystInput,
   ): Promise<BeliefAnalystResult> {
     const context = buildSanitizedAnalystContext(input);
+    requireApplicableClaim(input.concept, input.learnerClaim);
     const serializedContext = JSON.stringify(context);
     const request: ResponsesTransportRequest = {
       model: this.model,
@@ -1090,6 +1220,7 @@ export class LiveBeliefAnalyst implements BeliefAnalyst, BeliefSpecAnalyst {
     input: BeliefAnalystInput,
   ): Promise<BeliefSpecAnalystResult> {
     const context = buildSanitizedAnalystContext(input);
+    requireApplicableClaim(input.concept, input.learnerClaim);
     const serializedContext = JSON.stringify(context);
     const response = await this.transport.parse({
       model: this.model,
@@ -1140,6 +1271,14 @@ export class LiveBeliefAnalyst implements BeliefAnalyst, BeliefSpecAnalyst {
 }
 
 const APPROVED_SAMPLE_ID = "leakage-customer-churn-belief-v2";
+const APPROVED_LEAKAGE_SAMPLE_CLAIM =
+  "Does the notebook's random-row accuracy generalize to completely new customers?";
+const APPROVED_LEAKAGE_SAMPLE_FIXTURE_CLAIM =
+  "The notebook accuracy proves generalization to new customers.";
+const APPROVED_LEAKAGE_SAMPLE_CLAIMS = new Set([
+  APPROVED_LEAKAGE_SAMPLE_CLAIM,
+  APPROVED_LEAKAGE_SAMPLE_FIXTURE_CLAIM,
+]);
 
 function approvedSampleBeliefTest(input: BeliefAnalystInput): BeliefTest {
   const codeCell = input.manifest.cells.find(
@@ -1268,6 +1407,12 @@ export class ApprovedSampleBeliefAnalyst implements BeliefAnalyst {
       throw new BeliefAnalystError(
         "UNSUPPORTED_ARTIFACT",
         "the approved sample analyst only applies to the bundled customer-churn artifact",
+      );
+    }
+    if (!APPROVED_LEAKAGE_SAMPLE_CLAIMS.has(input.learnerClaim)) {
+      throw new BeliefAnalystError(
+        "INVALID_INPUT",
+        "the approved sample analyst only applies to the canonical fixed sample question",
       );
     }
     return {
