@@ -137,7 +137,7 @@ export const CapabilityHealthSchema = z
       "credential-and-privilege-boundary",
       "local-runner-required",
     ]),
-    generationFilesystemReadIsolation: z.literal("PARTIAL"),
+    generationFilesystemReadIsolation: z.enum(["PARTIAL", "OS_ENFORCED"]),
     requestId: NonEmptyString,
   })
   .strict();

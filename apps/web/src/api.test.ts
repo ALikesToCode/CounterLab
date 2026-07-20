@@ -662,6 +662,31 @@ describe("CounterLabApiClient", () => {
     );
   });
 
+  it("accepts an explicitly OS-enforced generation isolation claim", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({
+        ok: true,
+        data: {
+          platform: "cloudflare-workers",
+          sample: "available",
+          replay: "available",
+          liveGpt: "configured",
+          liveCodex: "configured",
+          liveKernel: "configured",
+          readiness: "ready",
+          sandbox: "credential-and-privilege-boundary",
+          generationFilesystemReadIsolation: "OS_ENFORCED",
+          requestId: "request_isolated",
+        },
+      }),
+    );
+    const client = new CounterLabApiClient({ fetch: fetcher });
+
+    await expect(client.getHealth()).resolves.toMatchObject({
+      generationFilesystemReadIsolation: "OS_ENFORCED",
+    });
+  });
+
   it("rejects health responses that claim configured means available", async () => {
     const fetcher = vi.fn<typeof fetch>(async () =>
       jsonResponse({

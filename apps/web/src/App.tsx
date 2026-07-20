@@ -4107,7 +4107,7 @@ function LiveSetup({
     health?.liveCodex === "configured" &&
     health.liveKernel === "configured" &&
     health.sandbox === "credential-and-privilege-boundary" &&
-    health.generationFilesystemReadIsolation === "PARTIAL" &&
+    health.generationFilesystemReadIsolation === "OS_ENFORCED" &&
     health.release?.status === "bound";
   return (
     <main className="workspace shell narrow" id="main-content" tabIndex={-1}>
@@ -4168,7 +4168,9 @@ function LiveSetup({
                 <p>
                   {runnerConfigured
                     ? "Plans, verification, and fixed-kernel results can complete in this hosted session."
-                    : "You can review the notebook and make a prediction here. The checked experiment runs only on a separately protected device."}
+                    : health?.generationFilesystemReadIsolation === "PARTIAL"
+                      ? "Generation filesystem read isolation is partial and is not accepted as live authority. Use the verified sample or replay."
+                      : "You can review the notebook and make a prediction here. The checked experiment runs only on a separately protected device."}
                 </p>
               </div>
             </div>

@@ -39,11 +39,16 @@ const configuredHealth: CapabilityHealth = {
   requestId: "request_judge_1",
 };
 
+const isolatedHealth: CapabilityHealth = {
+  ...configuredHealth,
+  generationFilesystemReadIsolation: "OS_ENFORCED",
+};
+
 describe("JudgeModeView", () => {
   it("distinguishes sample, live, and legacy replay authority", async () => {
     render(
       <JudgeModeView
-        health={configuredHealth}
+        health={isolatedHealth}
         healthPending={false}
         healthError={null}
         onRetryHealth={vi.fn()}
@@ -153,6 +158,28 @@ describe("JudgeModeView", () => {
     );
   });
 
+  it("does not offer live authority for partial generation read isolation", () => {
+    render(
+      <JudgeModeView
+        health={configuredHealth}
+        healthPending={false}
+        healthError={null}
+        onRetryHealth={vi.fn()}
+        onStartSample={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("link", { name: /run an unprimed live test/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /run live/i }),
+    ).not.toBeInTheDocument();
+    expect(document.body).toHaveTextContent(
+      /generation filesystem read isolation is partial.*live authority remains unavailable/i,
+    );
+  });
+
   it("labels the primed sample as a disclosed walkthrough", async () => {
     const user = userEvent.setup();
     const onStartSample = vi.fn();
@@ -229,7 +256,7 @@ describe("JudgeModeView", () => {
   it("does not equate configured services with observed readiness", () => {
     render(
       <JudgeModeView
-        health={{ ...configuredHealth, readiness: "not-ready" }}
+        health={{ ...isolatedHealth, readiness: "not-ready" }}
         healthPending={false}
         healthError={null}
         onRetryHealth={vi.fn()}
@@ -248,7 +275,7 @@ describe("JudgeModeView", () => {
   it("does not deep-probe or expose live entry before readiness is checked", () => {
     render(
       <JudgeModeView
-        health={{ ...configuredHealth, readiness: "not-checked" }}
+        health={{ ...isolatedHealth, readiness: "not-checked" }}
         healthPending={false}
         healthError={null}
         onRetryHealth={vi.fn()}

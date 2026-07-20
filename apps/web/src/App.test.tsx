@@ -418,6 +418,7 @@ function installApi(
   options: {
     liveGpt?: "configured" | "server-key-required";
     runner?: "configured" | "local-runner-required";
+    generationIsolation?: "PARTIAL" | "OS_ENFORCED";
     rejectLiveBelief?: boolean;
     cancelOffline?: boolean;
     beliefTest?: typeof liveBeliefTest | typeof imbalanceBeliefTest;
@@ -491,7 +492,9 @@ function installApi(
             options.runner === "configured"
               ? "credential-and-privilege-boundary"
               : "local-runner-required",
-          generationFilesystemReadIsolation: "PARTIAL",
+          generationFilesystemReadIsolation:
+            options.generationIsolation ??
+            (options.runner === "configured" ? "OS_ENFORCED" : "PARTIAL"),
           ...(options.runner === "configured"
             ? {
                 release: {
@@ -1273,6 +1276,28 @@ describe("CounterLab judged flow", () => {
       await screen.findByText(/hosted notebook runner is ready/i),
     ).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(/local runner required/i);
+  });
+
+  it("keeps live notebook upload disabled when generation read isolation is partial", async () => {
+    const user = userEvent.setup();
+    installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      generationIsolation: "PARTIAL",
+    });
+    render(<App />);
+
+    await openLiveSetup(user);
+
+    expect(
+      await screen.findByText(/qualified hosted runner is needed/i),
+    ).toBeInTheDocument();
+    expect(document.body).toHaveTextContent(
+      /generation filesystem read isolation is partial.*not accepted as live authority/i,
+    );
+    expect(
+      screen.queryByLabelText(/attach a supported notebook/i),
+    ).not.toBeInTheDocument();
   });
 
   it("does not continue live setup until a supported notebook has been uploaded", async () => {
@@ -2176,10 +2201,7 @@ describe("CounterLab judged flow", () => {
       };
       window.localStorage.setItem("counterlab.sessionId", "session_ui");
       window.localStorage.setItem("counterlab.claim", learnerClaim);
-      window.localStorage.setItem(
-        "counterlab.claimSessionId",
-        "session_ui",
-      );
+      window.localStorage.setItem("counterlab.claimSessionId", "session_ui");
       window.localStorage.setItem("counterlab.mode", "live");
       window.history.replaceState({}, "", "/session/session_ui");
       const fetcher = installApi({

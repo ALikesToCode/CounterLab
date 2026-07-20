@@ -20,7 +20,7 @@ function liveAuthorityReady(health: CapabilityHealth | null): boolean {
     health.liveCodex === "configured" &&
     health.liveKernel === "configured" &&
     health.sandbox === "credential-and-privilege-boundary" &&
-    health.generationFilesystemReadIsolation === "PARTIAL" &&
+    health.generationFilesystemReadIsolation === "OS_ENFORCED" &&
     health.release?.status === "bound"
   );
 }
@@ -211,9 +211,11 @@ export function JudgeModeView({
                   ? "Exact runner readiness was observed; model credentials are exercised only by a live run"
                   : healthError !== null
                     ? "Live authority is unavailable; readiness could not be checked"
-                    : health?.readiness === "not-checked"
-                      ? "Live readiness has not been checked"
-                      : "Live authority did not pass the latest readiness check"}
+                    : health?.generationFilesystemReadIsolation === "PARTIAL"
+                      ? "Generation filesystem read isolation is partial, so live authority remains unavailable"
+                      : health?.readiness === "not-checked"
+                        ? "Live readiness has not been checked"
+                        : "Live authority did not pass the latest readiness check"}
             </div>
             {liveReady ? (
               <a href="/new">

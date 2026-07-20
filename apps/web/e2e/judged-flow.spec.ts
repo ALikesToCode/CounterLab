@@ -1511,7 +1511,7 @@ test("Judge Mode distinguishes every authority path", async ({ page }) => {
     health.data.liveCodex === "configured" &&
     health.data.liveKernel === "configured" &&
     health.data.sandbox === "credential-and-privilege-boundary" &&
-    health.data.generationFilesystemReadIsolation === "PARTIAL" &&
+    health.data.generationFilesystemReadIsolation === "OS_ENFORCED" &&
     health.data.release?.status === "bound";
   await page.goto("/judge");
   await expect(page).toHaveURL(/\/judge$/);
@@ -2191,6 +2191,38 @@ test("configured reasoning cannot start without a qualified hosted runner", asyn
   );
 });
 
+test("partial generation isolation cannot expose live notebook upload", async ({
+  page,
+}) => {
+  await page.route("**/api/health", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          platform: "cloudflare-workers",
+          sample: "available",
+          replay: "available",
+          liveGpt: "configured",
+          liveCodex: "configured",
+          liveKernel: "configured",
+          readiness: "ready",
+          sandbox: "credential-and-privilege-boundary",
+          generationFilesystemReadIsolation: "PARTIAL",
+          requestId: "e2e-health-partial-isolation",
+        },
+      }),
+    });
+  });
+
+  await openLiveSetup(page);
+  await expect(
+    page.getByText(/generation filesystem read isolation is partial/i),
+  ).toBeVisible();
+  await expect(page.locator('input[type="file"]')).toHaveCount(0);
+});
+
 test("unsupported notebooks are parsed without execution and cannot advance", async ({
   page,
 }) => {
@@ -2382,7 +2414,7 @@ test("a configured hosted runner completes an untouched leakage notebook", async
     liveCodex: "configured",
     liveKernel: "configured",
     sandbox: "credential-and-privilege-boundary",
-    generationFilesystemReadIsolation: "PARTIAL",
+    generationFilesystemReadIsolation: "OS_ENFORCED",
     release: { status: "bound" },
   });
 
@@ -2621,7 +2653,7 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
     liveCodex: "configured",
     liveKernel: "configured",
     sandbox: "credential-and-privilege-boundary",
-    generationFilesystemReadIsolation: "PARTIAL",
+    generationFilesystemReadIsolation: "OS_ENFORCED",
     release: { status: "bound" },
   });
 
