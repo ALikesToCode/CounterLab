@@ -126,6 +126,21 @@ describe("CostTransfer", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Ten inspections")).toBeInTheDocument();
     expect(screen.getByText("1 in 200 units")).toBeInTheDocument();
+    expect(
+      screen.getByRole("group", {
+        name: "Which evaluation decision matches deployment?",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("group", {
+        name: "Which error needs explicit weight?",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("group", {
+        name: "Select the evidence that supports the decision",
+      }),
+    ).toBeInTheDocument();
 
     await user.click(
       screen.getByRole("radio", { name: /use a cost-aware threshold/i }),
@@ -188,5 +203,41 @@ describe("CostTransfer", () => {
     expect(existing).toEqual(["confusion_matrix_exposes_misses"]);
     expect(onEvidenceChange).toHaveBeenCalledWith([]);
     expect(onEvidenceChange.mock.calls[0]?.[0]).not.toBe(existing);
+  });
+
+  it("uses caller-supplied legends as the accessible fieldset names", () => {
+    render(
+      <CostTransfer
+        heading="Does the evidence transfer?"
+        scenario="A fixed transfer scenario."
+        matrix={matrix}
+        missedCost="Caller-supplied cost"
+        deploymentPrevalence="Caller-supplied prevalence"
+        strategyValue=""
+        strategyOptions={strategyOptions}
+        onStrategyChange={vi.fn()}
+        riskValue=""
+        riskOptions={riskOptions}
+        onRiskChange={vi.fn()}
+        evidenceValues={[]}
+        evidenceOptions={evidenceOptions}
+        onEvidenceChange={vi.fn()}
+        firstFieldsetLegend="Choose a deployment conclusion"
+        secondFieldsetLegend="Choose a minority-sensitive metric"
+        evidenceFieldsetLegend="Choose the supporting evidence"
+      />,
+    );
+
+    expect(
+      screen.getByRole("group", { name: "Choose a deployment conclusion" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("group", {
+        name: "Choose a minority-sensitive metric",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("group", { name: "Choose the supporting evidence" }),
+    ).toBeInTheDocument();
   });
 });

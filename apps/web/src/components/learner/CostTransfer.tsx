@@ -38,6 +38,9 @@ export function CostTransfer<
   evidenceValues,
   evidenceOptions,
   onEvidenceChange,
+  firstFieldsetLegend = "Which evaluation decision matches deployment?",
+  secondFieldsetLegend = "Which error needs explicit weight?",
+  evidenceFieldsetLegend = "Select the evidence that supports the decision",
   disabled = false,
 }: {
   heading: string;
@@ -54,6 +57,9 @@ export function CostTransfer<
   evidenceValues: readonly EvidenceValue[];
   evidenceOptions: readonly CostTransferChoice<EvidenceValue>[];
   onEvidenceChange: (values: EvidenceValue[]) => void;
+  firstFieldsetLegend?: string;
+  secondFieldsetLegend?: string;
+  evidenceFieldsetLegend?: string;
   disabled?: boolean;
 }) {
   const instanceId = useId();
@@ -114,7 +120,7 @@ export function CostTransfer<
 
       <div className={styles.questions}>
         <fieldset disabled={disabled}>
-          <legend>Which evaluation decision matches deployment?</legend>
+          <legend>{firstFieldsetLegend}</legend>
           {strategyOptions.map((option) => (
             <label key={option.value}>
               <input
@@ -133,7 +139,7 @@ export function CostTransfer<
         </fieldset>
 
         <fieldset disabled={disabled}>
-          <legend>Which error needs explicit weight?</legend>
+          <legend>{secondFieldsetLegend}</legend>
           {riskOptions.map((option) => (
             <label key={option.value}>
               <input
@@ -152,7 +158,7 @@ export function CostTransfer<
         </fieldset>
 
         <fieldset className={styles.evidenceChoices} disabled={disabled}>
-          <legend>Select the evidence that supports the decision</legend>
+          <legend>{evidenceFieldsetLegend}</legend>
           {evidenceOptions.map((option) => (
             <label key={option.value}>
               <input
