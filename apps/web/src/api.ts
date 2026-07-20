@@ -61,11 +61,14 @@ import {
 } from "@counterlab/contracts";
 import { z } from "zod";
 
+import { canonicalUploadRequestBinding } from "../shared/upload-operation";
+
 const NonEmptyString = z.string().trim().min(1);
 const Sha256Digest = z
   .string()
   .regex(/^[a-f0-9]{64}$/, "expected a lowercase SHA-256 digest");
 const DEFAULT_REQUEST_TIMEOUT_MS = 210_000;
+const UPLOAD_REQUEST_TIMEOUT_MS = 60_000;
 
 const ReleaseIdentitySchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("unbound") }).strict(),
@@ -617,6 +620,44 @@ async function validatePublicReplayContent(
   }
 }
 
+async function createUploadIdempotencyKey(file: File): Promise<string> {
+  if (
+    globalThis.crypto?.subtle === undefined ||
+    typeof globalThis.crypto.randomUUID !== "function"
+  ) {
+    throw new ApiClientError({
+      code: "UPLOAD_INTEGRITY_UNAVAILABLE",
+      message: "This browser cannot create a hash-bound upload operation",
+      status: 0,
+    });
+  }
+  const digest = await globalThis.crypto.subtle.digest(
+    "SHA-256",
+    await file.arrayBuffer(),
+  );
+  const fileSha256 = [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  const operationId = globalThis.crypto.randomUUID();
+  const requestBinding = await globalThis.crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(
+      canonicalJsonV1(
+        canonicalUploadRequestBinding({
+          operationId,
+          fileSha256,
+          fileName: file.name,
+          mediaType: file.type,
+        }),
+      ),
+    ),
+  );
+  const bindingHash = [...new Uint8Array(requestBinding)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  return `upload_${operationId}_${bindingHash}`;
+}
+
 export class CounterLabApiClient {
   private readonly baseUrl: string;
   private readonly fetcher: typeof fetch | undefined;
@@ -625,7 +666,11 @@ export class CounterLabApiClient {
   private readonly requestTimeoutMs: number;
   private readonly ownerCapabilities = new Map<string, string>();
   private readonly artifactCapabilities = new Map<string, string>();
-  private readonly uploadIdempotencyKeys = new WeakMap<File, string>();
+  private readonly uploadIdempotencyKeys = new WeakMap<File, Promise<string>>();
+  private readonly activeUploads = new WeakMap<
+    File,
+    Promise<ArtifactManifest>
+  >();
 
   constructor(options: CounterLabApiClientOptions = {}) {
     this.baseUrl = (options.baseUrl ?? "").replace(/\/+$/, "");
@@ -662,22 +707,52 @@ export class CounterLabApiClient {
   }
 
   uploadArtifact(file: File): Promise<ArtifactManifest> {
+    const active = this.activeUploads.get(file);
+    if (active !== undefined) return active;
+    const upload = this.performArtifactUpload(file).finally(() => {
+      if (this.activeUploads.get(file) === upload) {
+        this.activeUploads.delete(file);
+      }
+    });
+    this.activeUploads.set(file, upload);
+    return upload;
+  }
+
+  private async performArtifactUpload(file: File): Promise<ArtifactManifest> {
+    const existingKey = this.uploadIdempotencyKeys.get(file);
+    const keyPromise = existingKey ?? createUploadIdempotencyKey(file);
+    if (existingKey === undefined) {
+      this.uploadIdempotencyKeys.set(file, keyPromise);
+    }
+    let idempotencyKey: string;
+    try {
+      idempotencyKey = await keyPromise;
+    } catch (error) {
+      if (this.uploadIdempotencyKeys.get(file) === keyPromise) {
+        this.uploadIdempotencyKeys.delete(file);
+      }
+      throw error;
+    }
     const form = new FormData();
     form.set("file", file, file.name);
-    const idempotencyKey =
-      this.uploadIdempotencyKeys.get(file) ?? `upload_${crypto.randomUUID()}`;
-    this.uploadIdempotencyKeys.set(file, idempotencyKey);
-    return this.request("/api/artifacts", ArtifactUploadViewSchema, {
-      method: "POST",
-      headers: { "idempotency-key": idempotencyKey },
-      body: form,
-    }).then(({ ownerCapability, ...artifact }) => {
+    const uploaded = await this.request(
+      "/api/artifacts",
+      ArtifactUploadViewSchema,
+      {
+        method: "POST",
+        headers: { "idempotency-key": idempotencyKey },
+        body: form,
+      },
+      Math.min(this.requestTimeoutMs, UPLOAD_REQUEST_TIMEOUT_MS),
+    );
+    if (this.uploadIdempotencyKeys.get(file) === keyPromise) {
       this.uploadIdempotencyKeys.delete(file);
-      if (ownerCapability !== undefined) {
-        this.artifactCapabilities.set(artifact.artifactId, ownerCapability);
-      }
-      return artifact;
-    });
+    }
+    const { ownerCapability, ...artifact } = uploaded;
+    if (ownerCapability !== undefined) {
+      this.artifactCapabilities.set(artifact.artifactId, ownerCapability);
+    }
+    return artifact;
   }
 
   getArtifact(artifactId: string): Promise<ArtifactManifest> {

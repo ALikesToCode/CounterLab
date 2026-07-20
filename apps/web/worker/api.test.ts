@@ -67,6 +67,7 @@ import type {
   AdmissionRequest,
 } from "./admission-control";
 import {
+  hashOwnerCapability,
   type OwnerCapabilityRecord,
   type OwnerCapabilityRepository,
 } from "./access-control";
@@ -90,6 +91,7 @@ import {
 } from "./runner-token";
 import { summarizeOperationalRows } from "./operational-diagnostics";
 import { SAMPLE_LEAKAGE_QUESTION } from "../shared/sample-authority";
+import { canonicalUploadRequestBinding } from "../shared/upload-operation";
 
 const {
   privateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
@@ -170,6 +172,43 @@ class MemoryArtifactStore implements ArtifactStore {
   async find(artifactId: string): Promise<StoredArtifact | undefined> {
     const artifact = this.artifacts.get(artifactId);
     return artifact === undefined ? undefined : structuredClone(artifact);
+  }
+}
+
+class StableMemoryArtifactStore implements ArtifactStore {
+  private readonly artifacts = new Map<string, StoredArtifact>();
+  readonly saves: Array<{ manifest: ArtifactManifest; objectKey?: string }> =
+    [];
+
+  async save(
+    manifest: ArtifactManifest,
+    objectKey?: string,
+  ): Promise<StoredArtifact> {
+    this.saves.push({
+      manifest: structuredClone(manifest),
+      ...(objectKey === undefined ? {} : { objectKey }),
+    });
+    const existing = this.artifacts.get(manifest.artifactId);
+    const stored =
+      existing === undefined
+        ? {
+            manifest: structuredClone(manifest),
+            ...(objectKey === undefined ? {} : { objectKey }),
+          }
+        : {
+            manifest: existing.manifest,
+            ...(existing.objectKey === undefined && objectKey !== undefined
+              ? { objectKey }
+              : existing.objectKey === undefined
+                ? {}
+                : { objectKey: existing.objectKey }),
+          };
+    this.artifacts.set(manifest.artifactId, structuredClone(stored));
+    return structuredClone(stored);
+  }
+
+  async find(artifactId: string): Promise<StoredArtifact | undefined> {
+    return structuredClone(this.artifacts.get(artifactId));
   }
 }
 
@@ -264,8 +303,10 @@ class MemoryLearnerInteractionRepository implements LearnerInteractionRepository
 class MemoryOwnerCapabilityRepository implements OwnerCapabilityRepository {
   private readonly artifacts = new Map<string, OwnerCapabilityRecord>();
   private readonly sessions = new Map<string, OwnerCapabilityRecord>();
+  readonly artifactCreates: OwnerCapabilityRecord[] = [];
 
   async createArtifact(record: OwnerCapabilityRecord): Promise<void> {
+    this.artifactCreates.push(structuredClone(record));
     this.artifacts.set(
       `${record.resourceId}:${record.tokenHash}`,
       structuredClone(record),
@@ -505,19 +546,31 @@ class CapturingRunnerDispatcher implements RunnerDispatcher {
 class CapturingAdmissionControl implements AdmissionControl {
   readonly admitted: AdmissionRequest[] = [];
   readonly released: AdmissionRelease[] = [];
+  private decisionIndex = 0;
+  private readonly decisions: readonly AdmissionDecision[];
 
   constructor(
-    private readonly decision: AdmissionDecision = {
+    decision: AdmissionDecision | readonly AdmissionDecision[] = {
       admitted: true,
       reused: false,
       leaseStatus: "acquired",
       leaseExpiresAt: Date.parse("2026-07-14T10:15:00.000Z"),
     },
-  ) {}
+  ) {
+    this.decisions = Array.isArray(decision) ? decision : [decision];
+  }
 
   admit(input: AdmissionRequest): Promise<AdmissionDecision> {
     this.admitted.push(structuredClone(input));
-    return Promise.resolve(structuredClone(this.decision));
+    const decision =
+      this.decisions[
+        Math.min(this.decisionIndex, Math.max(0, this.decisions.length - 1))
+      ];
+    this.decisionIndex += 1;
+    if (decision === undefined) {
+      throw new Error("test admission control has no decision");
+    }
+    return Promise.resolve(structuredClone(decision));
   }
 
   release(input: AdmissionRelease): Promise<void> {
@@ -2527,6 +2580,61 @@ describe("Cloudflare Worker API", () => {
       return form;
     }
 
+    async function boundUploadKey(
+      body = sourceNotebookText,
+      name = "customer-model.ipynb",
+      type = "application/x-ipynb+json",
+      operationId = "123e4567-e89b-42d3-a456-426614174000",
+    ): Promise<string> {
+      const fileSha256 = await sha256Text(body);
+      const bindingHash = await hashCanonical(
+        canonicalUploadRequestBinding({
+          operationId,
+          fileSha256,
+          fileName: name,
+          mediaType: type,
+        }),
+      );
+      return `upload_${operationId}_${bindingHash}`;
+    }
+
+    function reconciledUploadEnv(maxBytes: number) {
+      const objects = new Map<
+        string,
+        { body: Uint8Array; customMetadata: Record<string, string> }
+      >();
+      const put = vi.fn(
+        async (
+          key: string,
+          value: Uint8Array,
+          options?: { customMetadata?: Record<string, string> },
+        ) => {
+          objects.set(key, {
+            body: new Uint8Array(value),
+            customMetadata: { ...(options?.customMetadata ?? {}) },
+          });
+        },
+      );
+      const head = vi.fn(async (key: string) => {
+        const object = objects.get(key);
+        return object === undefined
+          ? null
+          : {
+              size: object.body.byteLength,
+              customMetadata: { ...object.customMetadata },
+            };
+      });
+      return {
+        env: {
+          COUNTERLAB_MAX_NOTEBOOK_BYTES: String(maxBytes),
+          ARTIFACTS: { head, put },
+        } as unknown as Env,
+        head,
+        objects,
+        put,
+      };
+    }
+
     it("rejects an upload budget before reading or storing its body", async () => {
       const admissionControl = new CapturingAdmissionControl({
         admitted: false,
@@ -2544,7 +2652,7 @@ describe("Cloudflare Worker API", () => {
         method: "POST",
         headers: {
           "content-type": "multipart/form-data; boundary=counterlab-test",
-          "idempotency-key": "upload_operation_0001",
+          "idempotency-key": `upload_123e4567-e89b-42d3-a456-426614174000_${"a".repeat(64)}`,
         },
         body: "--counterlab-test--",
       });
@@ -2574,11 +2682,13 @@ describe("Cloudflare Worker API", () => {
       );
     });
 
-    it("rejects a reused upload operation before reading or storing another body", async () => {
+    it("defers an active duplicate upload before reading or storing another body", async () => {
       const admissionControl = new CapturingAdmissionControl({
         admitted: true,
         reused: true,
-        leaseStatus: "none",
+        leaseStatus: "already-active",
+        leaseExpiresAt: Date.parse("2026-07-14T10:02:00.000Z"),
+        leaseGeneration: 1,
       });
       const put = vi.fn();
       const app = createApi({
@@ -2592,7 +2702,7 @@ describe("Cloudflare Worker API", () => {
         method: "POST",
         headers: {
           "content-type": "multipart/form-data; boundary=counterlab-test",
-          "idempotency-key": "upload_operation_0001",
+          "idempotency-key": `upload_123e4567-e89b-42d3-a456-426614174000_${"a".repeat(64)}`,
         },
         body: "--counterlab-test--",
       });
@@ -2606,10 +2716,361 @@ describe("Cloudflare Worker API", () => {
       expect(put).not.toHaveBeenCalled();
       await expect(response.json()).resolves.toMatchObject({
         error: {
-          code: "UPLOAD_OPERATION_ALREADY_USED",
+          code: "UPLOAD_IN_PROGRESS",
+          retryable: true,
           status: 409,
         },
       });
+      expect(admissionControl.released).toHaveLength(0);
+    });
+
+    it("reconciles an identical same-key retry without rewriting the object or issuing new authority", async () => {
+      const admissionControl = new CapturingAdmissionControl([
+        {
+          admitted: true,
+          reused: false,
+          leaseStatus: "acquired",
+          leaseExpiresAt: Date.parse("2026-07-14T10:02:00.000Z"),
+          leaseGeneration: 1,
+        },
+        {
+          admitted: true,
+          reused: true,
+          leaseStatus: "reacquired",
+          leaseExpiresAt: Date.parse("2026-07-14T10:04:00.000Z"),
+          leaseGeneration: 2,
+        },
+      ]);
+      const artifactStore = new StableMemoryArtifactStore();
+      const ownerCapabilities = new MemoryOwnerCapabilityRepository();
+      const secret =
+        "contained-api-admission-test-key-with-at-least-32-characters";
+      const app = createApi({
+        artifactStore,
+        ownerCapabilityRepository: ownerCapabilities,
+        admissionControl,
+        admissionHmacKey: secret,
+        admissionCaller: () => "203.0.113.8",
+        now: () => new Date("2026-07-14T10:00:00.000Z"),
+      });
+      const maxBytes = new TextEncoder().encode(sourceNotebookText).byteLength;
+      const storage = reconciledUploadEnv(maxBytes);
+      const idempotencyKey = await boundUploadKey();
+
+      const first = await app.request(
+        "/api/artifacts",
+        {
+          method: "POST",
+          headers: { "idempotency-key": idempotencyKey },
+          body: notebookForm(),
+        },
+        storage.env,
+      );
+      const firstBody = (await first.json()) as {
+        data: ArtifactManifest & { ownerCapability: string };
+      };
+      const retry = await app.request(
+        "/api/artifacts",
+        {
+          method: "POST",
+          headers: { "idempotency-key": idempotencyKey },
+          body: notebookForm(),
+        },
+        storage.env,
+      );
+      const retryBody = (await retry.json()) as {
+        data: ArtifactManifest & { ownerCapability: string };
+      };
+
+      expect(first.status).toBe(201);
+      expect(retry.status).toBe(201);
+      expect(retryBody).toEqual(firstBody);
+      expect(firstBody.data.ownerCapability).toMatch(
+        /^cl_owner_[A-Za-z0-9_-]{43}$/u,
+      );
+      expect(storage.put).toHaveBeenCalledTimes(1);
+      expect(storage.head).toHaveBeenCalledTimes(1);
+      expect(storage.objects.size).toBe(1);
+      expect(artifactStore.saves).toHaveLength(2);
+      expect(ownerCapabilities.artifactCreates).toHaveLength(1);
+      await expect(
+        ownerCapabilities.findArtifact(
+          firstBody.data.artifactId,
+          await hashOwnerCapability(firstBody.data.ownerCapability),
+        ),
+      ).resolves.toMatchObject({ resourceId: firstBody.data.artifactId });
+      expect(admissionControl.released).toEqual([
+        expect.objectContaining({ kind: "upload", leaseGeneration: 1 }),
+        expect.objectContaining({ kind: "upload", leaseGeneration: 2 }),
+      ]);
+    });
+
+    it("shares one object while issuing independent authority for new upload keys", async () => {
+      const admissionControl = new CapturingAdmissionControl([
+        {
+          admitted: true,
+          reused: false,
+          leaseStatus: "acquired",
+          leaseExpiresAt: Date.parse("2026-07-14T10:02:00.000Z"),
+          leaseGeneration: 1,
+        },
+        {
+          admitted: true,
+          reused: false,
+          leaseStatus: "acquired",
+          leaseExpiresAt: Date.parse("2026-07-14T10:02:00.000Z"),
+          leaseGeneration: 1,
+        },
+      ]);
+      const artifactStore = new StableMemoryArtifactStore();
+      const ownerCapabilities = new MemoryOwnerCapabilityRepository();
+      const app = createApi({
+        artifactStore,
+        ownerCapabilityRepository: ownerCapabilities,
+        sessionRepository: new MemorySessionRepository(),
+        admissionControl,
+        admissionHmacKey:
+          "contained-api-admission-test-key-with-at-least-32-characters",
+        admissionCaller: () => "203.0.113.8",
+        now: () => new Date("2026-07-14T10:00:00.000Z"),
+      });
+      const uploadBody = imbalanceNotebookText;
+      const uploadName = "rare-event.ipynb";
+      const maxBytes = new TextEncoder().encode(uploadBody).byteLength;
+      const storage = reconciledUploadEnv(maxBytes);
+      const firstKey = await boundUploadKey(uploadBody, uploadName);
+      const secondKey = await boundUploadKey(
+        uploadBody,
+        uploadName,
+        "application/x-ipynb+json",
+        "223e4567-e89b-42d3-a456-426614174000",
+      );
+
+      const first = await app.request(
+        "/api/artifacts",
+        {
+          method: "POST",
+          headers: { "idempotency-key": firstKey },
+          body: notebookForm(uploadBody, uploadName),
+        },
+        storage.env,
+      );
+      const second = await app.request(
+        "/api/artifacts",
+        {
+          method: "POST",
+          headers: { "idempotency-key": secondKey },
+          body: notebookForm(uploadBody, uploadName),
+        },
+        storage.env,
+      );
+      const firstBody = (await first.json()) as {
+        data: ArtifactManifest & { ownerCapability: string };
+      };
+      const secondBody = (await second.json()) as {
+        data: ArtifactManifest & { ownerCapability: string };
+      };
+
+      expect(first.status).toBe(201);
+      expect(second.status).toBe(201);
+      expect(secondBody.data.artifactId).toBe(firstBody.data.artifactId);
+      expect(secondBody.data.ownerCapability).not.toBe(
+        firstBody.data.ownerCapability,
+      );
+      expect(storage.put).toHaveBeenCalledTimes(1);
+      expect(storage.head).toHaveBeenCalledTimes(1);
+      expect(storage.objects.size).toBe(1);
+      expect(ownerCapabilities.artifactCreates).toHaveLength(2);
+      for (const capability of [
+        firstBody.data.ownerCapability,
+        secondBody.data.ownerCapability,
+      ]) {
+        await expect(
+          ownerCapabilities.findArtifact(
+            firstBody.data.artifactId,
+            await hashOwnerCapability(capability),
+          ),
+        ).resolves.toMatchObject({ resourceId: firstBody.data.artifactId });
+      }
+
+      const firstSession = await app.request("/api/live/sessions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          artifactId: firstBody.data.artifactId,
+          artifactCapability: firstBody.data.ownerCapability,
+        }),
+      });
+      const secondSession = await app.request("/api/live/sessions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          artifactId: secondBody.data.artifactId,
+          artifactCapability: secondBody.data.ownerCapability,
+        }),
+      });
+      expect(firstSession.status).toBe(201);
+      expect(secondSession.status).toBe(201);
+    });
+
+    it("canonicalizes an empty browser MIME type before binding the upload", async () => {
+      const admissionControl = new CapturingAdmissionControl({
+        admitted: true,
+        reused: false,
+        leaseStatus: "acquired",
+        leaseExpiresAt: Date.parse("2026-07-14T10:02:00.000Z"),
+        leaseGeneration: 1,
+      });
+      const ownerCapabilities = new MemoryOwnerCapabilityRepository();
+      const app = createApi({
+        artifactStore: new StableMemoryArtifactStore(),
+        ownerCapabilityRepository: ownerCapabilities,
+        admissionControl,
+        admissionHmacKey:
+          "contained-api-admission-test-key-with-at-least-32-characters",
+        admissionCaller: () => "203.0.113.8",
+      });
+      const maxBytes = new TextEncoder().encode(sourceNotebookText).byteLength;
+      const storage = reconciledUploadEnv(maxBytes);
+
+      const response = await app.request(
+        "/api/artifacts",
+        {
+          method: "POST",
+          headers: {
+            "idempotency-key": await boundUploadKey(undefined, undefined, ""),
+          },
+          body: notebookForm(undefined, undefined, ""),
+        },
+        storage.env,
+      );
+      const body = (await response.json()) as {
+        data: ArtifactManifest & { ownerCapability: string };
+      };
+
+      expect(response.status).toBe(201);
+      expect(body.data.support.status).toBe("SUPPORTED");
+      expect(body.data.ownerCapability).toMatch(
+        /^cl_owner_[A-Za-z0-9_-]{43}$/u,
+      );
+      expect(storage.put).toHaveBeenCalledTimes(1);
+      expect(ownerCapabilities.artifactCreates).toHaveLength(1);
+    });
+
+    it("fails closed without exposing metadata for renamed identical bytes", async () => {
+      const admissionControl = new CapturingAdmissionControl([
+        {
+          admitted: true,
+          reused: false,
+          leaseStatus: "acquired",
+          leaseExpiresAt: Date.parse("2026-07-14T10:02:00.000Z"),
+          leaseGeneration: 1,
+        },
+        {
+          admitted: true,
+          reused: false,
+          leaseStatus: "acquired",
+          leaseExpiresAt: Date.parse("2026-07-14T10:02:00.000Z"),
+          leaseGeneration: 1,
+        },
+      ]);
+      const artifactStore = new StableMemoryArtifactStore();
+      const ownerCapabilities = new MemoryOwnerCapabilityRepository();
+      const app = createApi({
+        artifactStore,
+        ownerCapabilityRepository: ownerCapabilities,
+        admissionControl,
+        admissionHmacKey:
+          "contained-api-admission-test-key-with-at-least-32-characters",
+        admissionCaller: () => "203.0.113.8",
+      });
+      const maxBytes = new TextEncoder().encode(sourceNotebookText).byteLength;
+      const storage = reconciledUploadEnv(maxBytes);
+
+      const first = await app.request(
+        "/api/artifacts",
+        {
+          method: "POST",
+          headers: { "idempotency-key": await boundUploadKey() },
+          body: notebookForm(),
+        },
+        storage.env,
+      );
+      const renamed = await app.request(
+        "/api/artifacts",
+        {
+          method: "POST",
+          headers: {
+            "idempotency-key": await boundUploadKey(
+              sourceNotebookText,
+              "renamed-copy.ipynb",
+              "application/x-ipynb+json",
+              "223e4567-e89b-42d3-a456-426614174000",
+            ),
+          },
+          body: notebookForm(sourceNotebookText, "renamed-copy.ipynb"),
+        },
+        storage.env,
+      );
+      const renamedBody = (await renamed.json()) as {
+        error: { code: string; message: string };
+      };
+
+      expect(first.status).toBe(201);
+      expect(renamed.status).toBe(409);
+      expect(renamedBody).toMatchObject({
+        error: { code: "UPLOAD_ARTIFACT_METADATA_CONFLICT" },
+      });
+      expect(JSON.stringify(renamedBody)).not.toContain("customer-model.ipynb");
+      expect(JSON.stringify(renamedBody)).not.toContain("renamed-copy.ipynb");
+      expect(storage.put).toHaveBeenCalledTimes(1);
+      expect(ownerCapabilities.artifactCreates).toHaveLength(1);
+    });
+
+    it("rejects a hash-bound upload key reused with different bytes", async () => {
+      const admissionControl = new CapturingAdmissionControl({
+        admitted: true,
+        reused: false,
+        leaseStatus: "acquired",
+        leaseExpiresAt: Date.parse("2026-07-14T10:02:00.000Z"),
+        leaseGeneration: 7,
+      });
+      const artifactStore = new StableMemoryArtifactStore();
+      const secret =
+        "contained-api-admission-test-key-with-at-least-32-characters";
+      const app = createApi({
+        artifactStore,
+        admissionControl,
+        admissionHmacKey: secret,
+        admissionCaller: () => "203.0.113.8",
+      });
+      const alteredNotebook = `${sourceNotebookText}\n`;
+      const storage = reconciledUploadEnv(
+        new TextEncoder().encode(alteredNotebook).byteLength,
+      );
+      const response = await app.request(
+        "/api/artifacts",
+        {
+          method: "POST",
+          headers: { "idempotency-key": await boundUploadKey() },
+          body: notebookForm(alteredNotebook),
+        },
+        storage.env,
+      );
+
+      expect(response.status).toBe(409);
+      const responseBody = (await response.json()) as {
+        error: { code: string; retryable?: boolean };
+      };
+      expect(responseBody).toMatchObject({
+        error: { code: "UPLOAD_IDEMPOTENCY_CONFLICT" },
+      });
+      expect(responseBody.error).not.toHaveProperty("retryable");
+      expect(storage.put).not.toHaveBeenCalled();
+      expect(artifactStore.saves).toHaveLength(0);
+      expect(admissionControl.released).toEqual([
+        expect.objectContaining({ kind: "upload", leaseGeneration: 7 }),
+      ]);
     });
 
     it("does not consume costly-operation admission for public replay reads", async () => {
@@ -2725,7 +3186,7 @@ describe("Cloudflare Worker API", () => {
       });
     });
 
-    it("fails closed on an interrupted body stream", async () => {
+    it("releases an interrupted upload lease and permits the same-key retry", async () => {
       let pullCount = 0;
       const stream = new ReadableStream<Uint8Array>({
         pull(controller) {
@@ -2741,18 +3202,63 @@ describe("Cloudflare Worker API", () => {
         method: "POST",
         headers: {
           "content-type": "multipart/form-data; boundary=counterlab",
+          "idempotency-key": await boundUploadKey(),
         },
         body: stream,
         duplex: "half",
       } as RequestInit & { duplex: "half" });
-      const app = createApi({ artifactStore: new MemoryArtifactStore() });
+      const admissionControl = new CapturingAdmissionControl([
+        {
+          admitted: true,
+          reused: false,
+          leaseStatus: "acquired",
+          leaseExpiresAt: Date.parse("2026-07-14T10:02:00.000Z"),
+          leaseGeneration: 4,
+        },
+        {
+          admitted: true,
+          reused: true,
+          leaseStatus: "reacquired",
+          leaseExpiresAt: Date.parse("2026-07-14T10:04:00.000Z"),
+          leaseGeneration: 5,
+        },
+      ]);
+      const app = createApi({
+        artifactStore: new StableMemoryArtifactStore(),
+        ownerCapabilityRepository: new MemoryOwnerCapabilityRepository(),
+        admissionControl,
+        admissionHmacKey:
+          "contained-api-admission-test-key-with-at-least-32-characters",
+        admissionCaller: () => "203.0.113.8",
+      });
+      const storage = reconciledUploadEnv(
+        new TextEncoder().encode(sourceNotebookText).byteLength,
+      );
 
-      const response = await app.fetch(request, uploadEnv(1_024));
+      const response = await app.fetch(request, storage.env);
 
       expect(response.status).toBe(400);
       await expect(response.json()).resolves.toMatchObject({
-        error: { code: "REQUEST_BODY_INTERRUPTED" },
+        error: { code: "REQUEST_BODY_INTERRUPTED", retryable: true },
       });
+      expect(admissionControl.released).toEqual([
+        expect.objectContaining({ kind: "upload", leaseGeneration: 4 }),
+      ]);
+
+      const retried = await app.request(
+        "/api/artifacts",
+        {
+          method: "POST",
+          headers: { "idempotency-key": await boundUploadKey() },
+          body: notebookForm(),
+        },
+        storage.env,
+      );
+      expect(retried.status).toBe(201);
+      expect(admissionControl.released).toEqual([
+        expect.objectContaining({ kind: "upload", leaseGeneration: 4 }),
+        expect.objectContaining({ kind: "upload", leaseGeneration: 5 }),
+      ]);
     });
 
     it("rejects ambiguous, malformed, and over-broad multipart envelopes", async () => {

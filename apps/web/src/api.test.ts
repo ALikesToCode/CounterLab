@@ -581,10 +581,12 @@ describe("CounterLabApiClient", () => {
     expect(request?.body).toBeInstanceOf(FormData);
     const headers = new Headers(request?.headers);
     expect(headers.has("content-type")).toBe(false);
-    expect(headers.get("idempotency-key")).toMatch(/^upload_[0-9a-f-]{36}$/u);
+    expect(headers.get("idempotency-key")).toMatch(
+      /^upload_[0-9a-f-]{36}_[a-f0-9]{64}$/u,
+    );
   });
 
-  it("reuses the upload idempotency key after a recoverable network failure", async () => {
+  it("reuses the hash-bound upload key after an ambiguous network failure", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockRejectedValueOnce(new TypeError("network unavailable"))
@@ -604,8 +606,84 @@ describe("CounterLabApiClient", () => {
     const second = new Headers(fetcher.mock.calls[1]?.[1]?.headers).get(
       "idempotency-key",
     );
-    expect(first).toMatch(/^upload_[0-9a-f-]{36}$/u);
+    expect(first).toMatch(/^upload_[0-9a-f-]{36}_[a-f0-9]{64}$/u);
     expect(second).toBe(first);
+  });
+
+  it("reuses a server-consumed upload key after an interrupted body", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            ok: false,
+            error: {
+              code: "REQUEST_BODY_INTERRUPTED",
+              message: "The notebook body was interrupted",
+              status: 400,
+              retryable: true,
+            },
+          },
+          400,
+        ),
+      )
+      .mockResolvedValueOnce(jsonResponse({ ok: true, data: artifact }, 201));
+    const client = new CounterLabApiClient({ fetch: fetcher });
+    const file = new File(["{}"], "sample.ipynb", {
+      type: "application/json",
+    });
+
+    await expect(client.uploadArtifact(file)).rejects.toMatchObject({
+      code: "REQUEST_BODY_INTERRUPTED",
+    });
+    await expect(client.uploadArtifact(file)).resolves.toEqual(artifact);
+    const first = new Headers(fetcher.mock.calls[0]?.[1]?.headers).get(
+      "idempotency-key",
+    );
+    const second = new Headers(fetcher.mock.calls[1]?.[1]?.headers).get(
+      "idempotency-key",
+    );
+    expect(second).toBe(first);
+  });
+
+  it("coalesces concurrent calls for the same File into one upload", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({ ok: true, data: artifact }, 201),
+    );
+    const client = new CounterLabApiClient({ fetch: fetcher });
+    const file = new File(["{}"], "sample.ipynb", {
+      type: "application/json",
+    });
+
+    await expect(
+      Promise.all([client.uploadArtifact(file), client.uploadArtifact(file)]),
+    ).resolves.toEqual([artifact, artifact]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const first = new Headers(fetcher.mock.calls[0]?.[1]?.headers).get(
+      "idempotency-key",
+    );
+    expect(first).toMatch(/^upload_[0-9a-f-]{36}_[a-f0-9]{64}$/u);
+  });
+
+  it("uses distinct operation keys for distinct File objects", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({ ok: true, data: artifact }, 201),
+    );
+    const client = new CounterLabApiClient({ fetch: fetcher });
+
+    await client.uploadArtifact(
+      new File(["{}"], "first.ipynb", { type: "application/json" }),
+    );
+    await client.uploadArtifact(
+      new File(["{}"], "second.ipynb", { type: "application/json" }),
+    );
+    const first = new Headers(fetcher.mock.calls[0]?.[1]?.headers).get(
+      "idempotency-key",
+    );
+    const second = new Headers(fetcher.mock.calls[1]?.[1]?.headers).get(
+      "idempotency-key",
+    );
+    expect(second).not.toBe(first);
   });
 
   it("creates mode-specific typed session views and retrieves a session", async () => {

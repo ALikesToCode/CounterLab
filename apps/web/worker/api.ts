@@ -44,6 +44,10 @@ import {
 
 import { SAMPLE_LEAKAGE_QUESTION } from "../shared/sample-authority";
 import {
+  canonicalUploadMediaType,
+  canonicalUploadRequestBinding,
+} from "../shared/upload-operation";
+import {
   ExperimentIRV5Schema,
   RunnerBoundaryMapBundleV5Schema,
   RunnerLabCompileBundleV5Schema,
@@ -135,6 +139,8 @@ import {
 import {
   D1OwnerCapabilityRepository,
   createOwnerCapability,
+  deriveUploadOwnerCapability,
+  ensureArtifactOwnerCapability,
   hashOwnerCapability,
   ownerCapabilityMatches,
   ownerCapabilityIdentifies,
@@ -476,6 +482,7 @@ async function readBoundedBody(
       "REQUEST_BODY_INTERRUPTED",
       "The request body ended before it could be validated",
       400,
+      true,
     );
   } finally {
     reader.releaseLock();
@@ -644,6 +651,41 @@ async function issueArtifactOwnerCapability(
     resourceId: artifactId,
     tokenHash: await hashOwnerCapability(token),
     createdAt,
+  });
+  return token;
+}
+
+async function issueUploadArtifactOwnerCapability(
+  context: Context<AppBindings>,
+  options: ApiOptions,
+  input: {
+    artifactId: string;
+    createdAt: string;
+    fileSha256: string;
+    uploadIdempotencyKey: string;
+  },
+): Promise<string | undefined> {
+  if (!ownerCapabilitiesEnabled(options)) return undefined;
+  const secret =
+    options.admissionHmacKey ?? context.env?.COUNTERLAB_ADMISSION_KEY ?? "";
+  if (secret.trim().length < 32) {
+    throw new ApiInputError(
+      "UPLOAD_CAPABILITY_UNAVAILABLE",
+      "Hash-bound notebook upload authority is not configured",
+      503,
+      true,
+    );
+  }
+  const token = await deriveUploadOwnerCapability(
+    secret,
+    input.uploadIdempotencyKey,
+    input.artifactId,
+    input.fileSha256,
+  );
+  await ensureArtifactOwnerCapability(ownerCapabilities(context, options), {
+    resourceId: input.artifactId,
+    tokenHash: await hashOwnerCapability(token),
+    createdAt: input.createdAt,
   });
   return token;
 }
@@ -1085,6 +1127,7 @@ async function releaseAdmissionBestEffort(
   options: ApiOptions,
   kind: AdmissionKind,
   rawOperationKey: string | undefined,
+  leaseGeneration?: number,
 ): Promise<void> {
   if (!admissionEnabled(options) || rawOperationKey === undefined) return;
   try {
@@ -1097,6 +1140,7 @@ async function releaseAdmissionBestEffort(
       policyVersion: ADMISSION_POLICY_VERSION,
       kind,
       operationKey,
+      ...(leaseGeneration === undefined ? {} : { leaseGeneration }),
     });
   } catch (error) {
     console.warn("CounterLab could not release an expiring admission lease", {
@@ -1133,6 +1177,54 @@ function requestIdempotencyKey(
     );
   }
   return provided;
+}
+
+const UploadIdempotencyKeyPattern =
+  /^upload_([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})_([a-f0-9]{64})$/u;
+
+type UploadOperationIdentity = Readonly<{
+  bindingHash: string;
+  operationId: string;
+  rawKey: string;
+}>;
+
+function requireUploadOperationIdentity(
+  rawKey: string,
+): UploadOperationIdentity {
+  const match = UploadIdempotencyKeyPattern.exec(rawKey);
+  if (match?.[1] === undefined || match[2] === undefined) {
+    throw new ApiInputError(
+      "INVALID_UPLOAD_IDEMPOTENCY_KEY",
+      "Notebook uploads require one hash-bound upload operation key",
+      400,
+    );
+  }
+  return {
+    rawKey,
+    operationId: match[1],
+    bindingHash: match[2],
+  };
+}
+
+async function requireUploadRequestBinding(
+  operation: UploadOperationIdentity,
+  input: { fileName: string; fileSha256: string; mediaType: string },
+): Promise<void> {
+  const expected = await hashCanonical(
+    canonicalUploadRequestBinding({
+      operationId: operation.operationId,
+      fileSha256: input.fileSha256,
+      fileName: input.fileName,
+      mediaType: input.mediaType,
+    }),
+  );
+  if (!constantTimeEqual(operation.bindingHash, expected)) {
+    throw new ApiInputError(
+      "UPLOAD_IDEMPOTENCY_CONFLICT",
+      "This upload operation key is bound to different notebook content or metadata",
+      409,
+    );
+  }
 }
 
 function liveRunnerRequestIdentity(
@@ -3890,129 +3982,235 @@ export function createApi(options: ApiOptions = {}) {
         400,
       );
     }
+    const rawUploadOperationKey = requestIdempotencyKey(
+      context,
+      options,
+      "artifact_upload",
+    );
+    const uploadOperation = admissionEnabled(options)
+      ? requireUploadOperationIdentity(rawUploadOperationKey)
+      : undefined;
     const uploadAdmission = await admitOperation(context, options, {
       kind: "upload",
-      operationKey: requestIdempotencyKey(context, options, "artifact_upload"),
+      operationKey: rawUploadOperationKey,
     });
-    if (uploadAdmission.reused) {
+    if (uploadAdmission.leaseStatus === "already-active") {
+      const retryAfterSeconds = Math.max(
+        1,
+        Math.ceil(
+          ((uploadAdmission.leaseExpiresAt ??
+            requestNow(options).getTime() + 1_000) -
+            requestNow(options).getTime()) /
+            1_000,
+        ),
+      );
       throw new ApiInputError(
-        "UPLOAD_OPERATION_ALREADY_USED",
-        "This notebook upload key was already used. Start a fresh upload with a new operation key.",
+        "UPLOAD_IN_PROGRESS",
+        "The same notebook upload is already in progress",
         409,
+        true,
+        retryAfterSeconds,
       );
     }
-    let bodyBytes: Uint8Array;
     try {
-      bodyBytes = await readBoundedBody(
-        context,
-        maxBytes + MAX_MULTIPART_OVERHEAD_BYTES,
-      );
-    } catch (error) {
+      let bodyBytes: Uint8Array;
+      try {
+        bodyBytes = await readBoundedBody(
+          context,
+          maxBytes + MAX_MULTIPART_OVERHEAD_BYTES,
+        );
+      } catch (error) {
+        if (
+          error instanceof ApiInputError &&
+          error.code === "REQUEST_TOO_LARGE"
+        ) {
+          throw new ApiInputError(
+            "MAXIMUM_SIZE_EXCEEDED",
+            `Notebook upload exceeds ${maxBytes} bytes plus the permitted multipart envelope`,
+            413,
+          );
+        }
+        throw error;
+      }
+      let form: FormData;
+      try {
+        form = await new Response(bodyBytes, {
+          headers: { "content-type": rawContentType },
+        }).formData();
+      } catch {
+        throw new ApiInputError(
+          "INVALID_MULTIPART_BODY",
+          "The multipart notebook upload could not be parsed",
+          400,
+        );
+      }
+      const entries = [...form.entries()];
       if (
-        error instanceof ApiInputError &&
-        error.code === "REQUEST_TOO_LARGE"
+        entries.length !== 1 ||
+        entries[0]?.[0] !== "file" ||
+        !isFile(entries[0]?.[1] ?? null)
       ) {
         throw new ApiInputError(
+          "INVALID_UPLOAD_FIELDS",
+          "A notebook upload must contain exactly one file field",
+          400,
+        );
+      }
+      const file = form.get("file");
+      if (!isFile(file)) {
+        throw new ApiInputError(
+          "FILE_REQUIRED",
+          "A notebook file is required",
+          400,
+        );
+      }
+      if (!file.name.toLowerCase().endsWith(".ipynb")) {
+        throw new ApiInputError(
+          "INVALID_EXTENSION",
+          "Only .ipynb notebook files are accepted",
+          415,
+        );
+      }
+      if (file.name.length > MAX_UPLOAD_FILE_NAME_CHARACTERS) {
+        throw new ApiInputError(
+          "FILE_NAME_TOO_LONG",
+          `Notebook file names may contain at most ${MAX_UPLOAD_FILE_NAME_CHARACTERS} characters`,
+          400,
+        );
+      }
+      if (file.type.length > 0 && !ACCEPTED_NOTEBOOK_TYPES.has(file.type)) {
+        throw new ApiInputError(
+          "UNSUPPORTED_CONTENT_TYPE",
+          `Notebook content type ${file.type} is not accepted`,
+          415,
+        );
+      }
+      if (file.size > maxBytes) {
+        throw new ApiInputError(
           "MAXIMUM_SIZE_EXCEEDED",
-          `Notebook upload exceeds ${maxBytes} bytes plus the permitted multipart envelope`,
+          `Notebook upload exceeds ${maxBytes} bytes`,
           413,
         );
       }
-      throw error;
-    }
-    let form: FormData;
-    try {
-      form = await new Response(bodyBytes, {
-        headers: { "content-type": rawContentType },
-      }).formData();
-    } catch {
-      throw new ApiInputError(
-        "INVALID_MULTIPART_BODY",
-        "The multipart notebook upload could not be parsed",
-        400,
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const manifest = ArtifactManifestSchema.parse(
+        parseNotebook(bytes, file.name, {
+          maxBytes,
+          createdAt: requestNow(options).toISOString(),
+        }),
+      );
+      if (uploadOperation !== undefined) {
+        await requireUploadRequestBinding(uploadOperation, {
+          fileName: file.name,
+          fileSha256: manifest.fileSha256,
+          mediaType: canonicalUploadMediaType(file.type),
+        });
+      }
+      if (context.env?.ARTIFACTS === undefined) {
+        throw new ApiInputError(
+          "ARTIFACT_STORAGE_UNAVAILABLE",
+          "Private artifact storage is not configured",
+          503,
+        );
+      }
+      const artifactStore = artifacts(context, options);
+      const objectKey = `uploads/${manifest.artifactId}/${manifest.fileSha256}.ipynb`;
+      const existing = await artifactStore.find(manifest.artifactId);
+      if (
+        existing !== undefined &&
+        (existing.manifest.artifactId !== manifest.artifactId ||
+          existing.manifest.fileSha256 !== manifest.fileSha256)
+      ) {
+        throw new ApiInputError(
+          "UPLOAD_ARTIFACT_IDENTITY_CONFLICT",
+          "The stored artifact identity conflicts with this notebook",
+          409,
+        );
+      }
+      if (
+        existing !== undefined &&
+        existing.manifest.fileName !== manifest.fileName
+      ) {
+        throw new ApiInputError(
+          "UPLOAD_ARTIFACT_METADATA_CONFLICT",
+          "This notebook content is already bound to different upload metadata",
+          409,
+        );
+      }
+      if (
+        existing?.objectKey !== undefined &&
+        existing.objectKey !== objectKey
+      ) {
+        throw new ApiInputError(
+          "UPLOAD_ARTIFACT_STORAGE_CONFLICT",
+          "The stored artifact object binding conflicts with this notebook",
+          409,
+        );
+      }
+      let objectIsValid = false;
+      if (existing?.objectKey === objectKey) {
+        const object = await context.env.ARTIFACTS.head(objectKey);
+        objectIsValid =
+          object !== null &&
+          object !== undefined &&
+          object.size === bytes.byteLength &&
+          object.customMetadata?.artifactId === manifest.artifactId &&
+          object.customMetadata?.fileSha256 === manifest.fileSha256 &&
+          object.customMetadata?.byteLength === String(bytes.byteLength);
+      }
+      if (!objectIsValid) {
+        await context.env.ARTIFACTS.put(objectKey, bytes, {
+          httpMetadata: { contentType: "application/x-ipynb+json" },
+          customMetadata: {
+            artifactId: manifest.artifactId,
+            fileSha256: manifest.fileSha256,
+            byteLength: String(bytes.byteLength),
+          },
+        });
+      }
+      const stored = await artifactStore.save(manifest, objectKey);
+      if (
+        stored.objectKey !== objectKey ||
+        stored.manifest.artifactId !== manifest.artifactId ||
+        stored.manifest.fileSha256 !== manifest.fileSha256 ||
+        stored.manifest.fileName !== manifest.fileName
+      ) {
+        throw new ApiInputError(
+          "UPLOAD_ARTIFACT_RECONCILIATION_FAILED",
+          "The uploaded notebook could not be reconciled with durable storage",
+          409,
+        );
+      }
+      const ownerCapability =
+        uploadOperation === undefined
+          ? await issueArtifactOwnerCapability(
+              context,
+              options,
+              stored.manifest.artifactId,
+              stored.manifest.createdAt,
+            )
+          : await issueUploadArtifactOwnerCapability(context, options, {
+              artifactId: stored.manifest.artifactId,
+              createdAt: stored.manifest.createdAt,
+              fileSha256: stored.manifest.fileSha256,
+              uploadIdempotencyKey: uploadOperation.rawKey,
+            });
+      return context.json(
+        jsonSuccess({
+          ...stored.manifest,
+          ...(ownerCapability === undefined ? {} : { ownerCapability }),
+        }),
+        201,
+      );
+    } finally {
+      await releaseAdmissionBestEffort(
+        context,
+        options,
+        "upload",
+        rawUploadOperationKey,
+        uploadAdmission.leaseGeneration,
       );
     }
-    const entries = [...form.entries()];
-    if (
-      entries.length !== 1 ||
-      entries[0]?.[0] !== "file" ||
-      !isFile(entries[0]?.[1] ?? null)
-    ) {
-      throw new ApiInputError(
-        "INVALID_UPLOAD_FIELDS",
-        "A notebook upload must contain exactly one file field",
-        400,
-      );
-    }
-    const file = form.get("file");
-    if (!isFile(file)) {
-      throw new ApiInputError(
-        "FILE_REQUIRED",
-        "A notebook file is required",
-        400,
-      );
-    }
-    if (!file.name.toLowerCase().endsWith(".ipynb")) {
-      throw new ApiInputError(
-        "INVALID_EXTENSION",
-        "Only .ipynb notebook files are accepted",
-        415,
-      );
-    }
-    if (file.name.length > MAX_UPLOAD_FILE_NAME_CHARACTERS) {
-      throw new ApiInputError(
-        "FILE_NAME_TOO_LONG",
-        `Notebook file names may contain at most ${MAX_UPLOAD_FILE_NAME_CHARACTERS} characters`,
-        400,
-      );
-    }
-    if (file.type.length > 0 && !ACCEPTED_NOTEBOOK_TYPES.has(file.type)) {
-      throw new ApiInputError(
-        "UNSUPPORTED_CONTENT_TYPE",
-        `Notebook content type ${file.type} is not accepted`,
-        415,
-      );
-    }
-    if (file.size > maxBytes) {
-      throw new ApiInputError(
-        "MAXIMUM_SIZE_EXCEEDED",
-        `Notebook upload exceeds ${maxBytes} bytes`,
-        413,
-      );
-    }
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const manifest = ArtifactManifestSchema.parse(
-      parseNotebook(bytes, file.name, {
-        maxBytes,
-        createdAt: new Date().toISOString(),
-      }),
-    );
-    if (context.env?.ARTIFACTS === undefined) {
-      throw new ApiInputError(
-        "ARTIFACT_STORAGE_UNAVAILABLE",
-        "Private artifact storage is not configured",
-        503,
-      );
-    }
-    const objectKey = `uploads/${manifest.artifactId}/${manifest.fileSha256}.ipynb`;
-    await context.env.ARTIFACTS.put(objectKey, bytes, {
-      httpMetadata: { contentType: "application/x-ipynb+json" },
-      customMetadata: { artifactId: manifest.artifactId },
-    });
-    await artifacts(context, options).save(manifest, objectKey);
-    const ownerCapability = await issueArtifactOwnerCapability(
-      context,
-      options,
-      manifest.artifactId,
-      manifest.createdAt,
-    );
-    return context.json(
-      jsonSuccess({
-        ...manifest,
-        ...(ownerCapability === undefined ? {} : { ownerCapability }),
-      }),
-      201,
-    );
   });
 
   app.get("/api/artifacts/:artifactId", async (context) => {

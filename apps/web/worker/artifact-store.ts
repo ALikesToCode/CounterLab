@@ -1,4 +1,7 @@
-import type { ArtifactManifest } from "@counterlab/contracts";
+import {
+  ArtifactManifestSchema,
+  type ArtifactManifest,
+} from "@counterlab/contracts";
 
 export interface StoredArtifact {
   manifest: ArtifactManifest;
@@ -23,7 +26,6 @@ export class D1ArtifactStore implements ArtifactStore {
           (id, file_name, file_sha256, manifest_json, object_key, created_at)
          VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(file_sha256) DO UPDATE SET
-           manifest_json = excluded.manifest_json,
            object_key = COALESCE(artifacts.object_key, excluded.object_key)`,
       )
       .bind(
@@ -35,8 +37,11 @@ export class D1ArtifactStore implements ArtifactStore {
         manifest.createdAt,
       )
       .run();
-
-    return { manifest, ...(objectKey === undefined ? {} : { objectKey }) };
+    const stored = await this.find(manifest.artifactId);
+    if (stored === undefined) {
+      throw new Error("Artifact persistence did not return the stored record");
+    }
+    return stored;
   }
 
   async find(artifactId: string): Promise<StoredArtifact | undefined> {
@@ -46,7 +51,7 @@ export class D1ArtifactStore implements ArtifactStore {
       .first<{ manifest_json: string; object_key: string | null }>();
     if (row === null) return undefined;
     return {
-      manifest: JSON.parse(row.manifest_json) as ArtifactManifest,
+      manifest: ArtifactManifestSchema.parse(JSON.parse(row.manifest_json)),
       ...(row.object_key === null ? {} : { objectKey: row.object_key }),
     };
   }
