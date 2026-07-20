@@ -154,9 +154,12 @@ describe("RouteRecovery", () => {
       .closest("section");
     expect(recent).not.toBeNull();
     expect(within(recent!).getAllByRole("button")).toHaveLength(3);
-    expect(recent).toHaveTextContent("Live notebook · lab compiling");
-    expect(recent).toHaveTextContent("Verified sample · experiment completed");
-    expect(recent).toHaveTextContent("Verified replay · proof capsule issued");
+    expect(recent).toHaveTextContent("Live notebook · Test preparing");
+    expect(recent).toHaveTextContent("Verified sample · Result ready");
+    expect(recent).toHaveTextContent("Verified replay · Proof Capsule ready");
+    expect(recent).not.toHaveTextContent(
+      /LAB_COMPILING|EXPERIMENT_COMPLETED|PROOF_CAPSULE_ISSUED/,
+    );
     expect(screen.queryByText("Not displayed")).not.toBeInTheDocument();
 
     await user.click(
@@ -165,5 +168,28 @@ describe("RouteRecovery", () => {
       }),
     );
     expect(openFirst).toHaveBeenCalledOnce();
+  });
+
+  it("uses bounded learner copy for an unknown legacy status", () => {
+    render(
+      <RouteRecovery
+        reason="missing-session"
+        attemptedPath="/session/missing"
+        onRetry={vi.fn()}
+        onHome={vi.fn()}
+        recentSessions={[
+          {
+            id: "session-legacy",
+            title: "Older investigation",
+            mode: "live",
+            status: "PRIVATE_INTERNAL_STATE",
+            onOpen: vi.fn(),
+          },
+        ]}
+      />,
+    );
+
+    expect(document.body).toHaveTextContent("Live notebook · Saved work");
+    expect(document.body).not.toHaveTextContent("PRIVATE_INTERNAL_STATE");
   });
 });

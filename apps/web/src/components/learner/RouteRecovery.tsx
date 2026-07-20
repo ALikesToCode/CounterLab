@@ -1,5 +1,6 @@
 import { forwardRef, useId } from "react";
 
+import { learnerSessionStatusLabel } from "./learnerStages";
 import styles from "./RouteRecovery.module.css";
 
 export type RouteRecoveryReason =
@@ -8,6 +9,7 @@ export type RouteRecoveryReason =
   | "missing-proof"
   | "proof-not-ready"
   | "missing-replay"
+  | "unverified-replay"
   | "missing-artifact";
 
 export type RouteRecoveryRecentSession = Readonly<{
@@ -68,6 +70,12 @@ const recoveryCopy: Readonly<
     body: "No replay evidence was found for this address. CounterLab did not label or substitute a different replay.",
     retryLabel: "Retry replay",
   },
+  "unverified-replay": {
+    eyebrow: "Replay verification failed",
+    title: "This replay could not be verified.",
+    body: "CounterLab could not confirm the stored replay evidence. It did not label or substitute another replay.",
+    retryLabel: "Retry verification",
+  },
   "missing-artifact": {
     eyebrow: "Evidence unavailable",
     title: "This session's notebook evidence could not be restored.",
@@ -82,10 +90,6 @@ const modeLabels: Readonly<Record<RouteRecoveryRecentSession["mode"], string>> =
     live: "Live notebook",
     replay: "Verified replay",
   };
-
-function readableStatus(status: string): string {
-  return status.trim().replaceAll("_", " ").toLowerCase();
-}
 
 export const RouteRecovery = forwardRef<HTMLHeadingElement, RouteRecoveryProps>(
   function RouteRecovery(
@@ -159,7 +163,7 @@ export const RouteRecovery = forwardRef<HTMLHeadingElement, RouteRecoveryProps>(
                     <strong>{session.title}</strong>
                     <span>
                       {modeLabels[session.mode]} ·{" "}
-                      {readableStatus(session.status)}
+                      {learnerSessionStatusLabel(session.status)}
                     </span>
                   </button>
                 </li>

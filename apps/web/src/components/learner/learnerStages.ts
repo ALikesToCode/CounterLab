@@ -41,6 +41,35 @@ const sessionStateStage = {
   PROOF_CAPSULE_ISSUED: "repair",
 } as const satisfies Record<SessionState, LearnerStageId>;
 
+const sessionStateLabel = {
+  INGESTED: "Question ready",
+  BELIEF_TEST_PROPOSED: "Explanation ready to review",
+  BELIEF_TEST_CONFIRMED: "Explanation confirmed",
+  INSUFFICIENT_EVIDENCE: "More evidence needed",
+  REJECTED_BY_LEARNER: "Explanation needs revision",
+  PREDICTION_COMMITTED: "Prediction sealed",
+  LAB_COMPILING: "Test preparing",
+  LAB_REJECTED: "Test needs repair",
+  LAB_VERIFIED: "Test verified",
+  EXPERIMENT_COMPLETED: "Result ready",
+  BOUNDARY_VERIFIED: "Boundary verified",
+  REVISION_RECORDED: "Rule recorded",
+  TRANSFER_IN_PROGRESS: "Application in progress",
+  TRANSFER_FAILED: "Application needs another try",
+  TRANSFER_PASSED: "Application passed",
+  PATCH_COMPILING: "Repair preparing",
+  PATCH_REJECTED: "Repair needs review",
+  PATCH_VERIFIED: "Repair verified",
+  REASONING_DIFF_ISSUED: "Reasoning comparison ready",
+  PROOF_CAPSULE_ISSUED: "Proof Capsule ready",
+} as const satisfies Record<SessionState, string>;
+
+export function learnerSessionStatusLabel(status: string): string {
+  return Object.hasOwn(sessionStateLabel, status)
+    ? sessionStateLabel[status as SessionState]
+    : "Saved work";
+}
+
 export function currentLearnerStage(
   studioStage: StudioStage,
   sessionState?: SessionState,
