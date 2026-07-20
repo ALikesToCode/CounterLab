@@ -13,17 +13,23 @@ pass is never presented as a browser or production pass.
 
 - **Branch:** `feat/learner-ux-v6.1`
 - **Current product checkpoint:**
-  `d6c4aec6c3f32b264aef8a90e1f9c8fa148b77f4`. At
-  `2026-07-20T19:17:12Z`, 28 hours, 42 minutes, and 48 seconds remained. The
-  newest independent commits are `b9dd722` for retry-safe notebook intake and
-  `d6c4aec` for source-bound recovery from terminal learner responses. The
-  exact staged restart snapshot passed App **55/55**, client API **32/32**,
-  Worker API **90/90**, and session core **29/29** tests; repository, web, and
-  Worker strict TypeScript; scoped Prettier; Git whitespace; and an eight-file
-  secret scan. Two independent review axes found no source blocker. These are
-  local source results only. No current CloakBrowser journey, exact image,
-  qualification receipt, deployment, production smoke, learner observation,
-  Devpost publication, submission receipt, or merge is inferred.
+  `134c22ff21afefb82c4e1bf0a51357254ca9a306`. The owner partitioned the
+  preserved integration delta into nine commits and fast-forwarded both
+  `feat/learner-ux-v6.1` and `main` to this candidate before qualification. The
+  lead switched back to the feature branch for small independent fix-forward
+  commits; the existing `main` ref is an unqualified candidate, not release
+  evidence. At `2026-07-20T19:33:40Z`, 28 hours, 26 minutes, and 20 seconds
+  remained. Current local source verification passes web Vitest **605/605**,
+  repository/web/Worker strict TypeScript, and the expanded Python matrix
+  **323/324**; the sole Python failure is denied localhost socket creation in
+  the managed sandbox. Root Vitest passes **619/646**; 24 failures are denied
+  process/socket/sandbox capabilities and three are stale scientific-evidence
+  expectations. The source-bound SBOM and scientific manifests still name
+  source `6f551367`, not this checkpoint, so qualification and deployment are
+  prohibited until the final source freezes and all evidence is regenerated.
+  No current CloakBrowser journey, exact image, qualification receipt,
+  deployment, production smoke, learner observation, Devpost publication, or
+  submission receipt is inferred.
 - **Finish-command starting checkpoint:** committed `HEAD`
   `24262ea6f40e988d7be054bdba6f531531b1679f` plus the explicitly preserved
   dirty slices listed by `git status`. At `2026-07-19T15:18:04Z`, the
@@ -2806,3 +2812,42 @@ browser proof, submission, and the final merge remain serialized.
 8. Merge the reviewed feature branch into `main` only after the release and
    submission state is truthfully recorded. No deployment, submission, or
    merge is claimed at this checkpoint.
+
+## Finish Commander reconciliation — 2026-07-20T19:33:40Z
+
+### Completed and frozen
+
+- `0509833 fix(api): bound stalled client requests`
+- `51d989f fix(admission): fence retry lease releases`
+- `b9dd722 fix(upload): reconcile retryable notebook intake`
+- `d6c4aec fix(session): reconcile terminal investigation restart`
+- The owner partitioned the remaining preserved integration delta into nine
+  commits ending at `134c22f`; web Vitest passes **77/77 files, 605/605 tests**,
+  repository/web/Worker TypeScript passes, and the expanded kernel, runner,
+  secret, smoke, and OCI-normalization Python matrix passes **323/324**. The
+  one Python failure is `test_kernel_service_exposes_health_and_only_the_fixed_public_run`
+  because this managed sandbox rejects an IPv4 socket with `EPERM`.
+
+### Open release-critical graph
+
+```text
+truthful live-readiness gate + accessibility/publication hygiene
+  -> focused tests and small independent commits
+  -> complete deterministic suites, build, format, whitespace, secrets
+  -> clean final source freeze
+  -> one exact runner image and real aggregate containment sentinel
+  -> regenerate source/image-bound SBOM, VEX, registry, and negative controls
+  -> issue exact qualification and release-check receipts
+  -> verify contained Wrangler identity and deploy only that tuple
+  -> public identity/smoke plus full CloakBrowser desktop/mobile matrix
+  -> truthful learner evidence or NO_DATA, video, Devpost, and receipt
+  -> fast-forward the verified feature tip into main
+```
+
+Current blockers are explicit: `PARTIAL` generation-filesystem isolation is
+still treated as live-ready in two web surfaces; generated scientific evidence
+is stale; one untracked FUSE placeholder prevents a clean tree; no aggregate
+cgroup-v2 enforcement receipt exists; and public browser, impact, video, and
+submission evidence have not occurred. Audit-agent attribution and a residual
+`Ctrl K` accessible-name defect are publication/accessibility repairs, not
+release proof. No blocker is closed by source code alone.
