@@ -38,9 +38,19 @@ const fixturePath = resolve(
   root,
   "fixtures/public/leakage_sample_boundary_v1.json",
 );
-const snapshotPath = resolve(root, "scientific-engines/snapshot.json");
-const snapshotRefPath = resolve(root, "scientific-engines/snapshot-hash.json");
-const sbomPath = resolve(root, "docs/sbom/manifest.json");
+const fixedProvenanceRoot = resolve(
+  root,
+  "fixtures/public/leakage_sample_proof_sources_v1",
+);
+const snapshotPath = resolve(
+  fixedProvenanceRoot,
+  "scientific-engine-snapshot.json",
+);
+const snapshotRefPath = resolve(
+  fixedProvenanceRoot,
+  "scientific-engine-snapshot-ref.json",
+);
+const sbomPath = resolve(fixedProvenanceRoot, "sbom-manifest.json");
 const capsulePath = resolve(
   root,
   "fixtures/public/leakage_sample_proof_capsule_v1.counterlab",
