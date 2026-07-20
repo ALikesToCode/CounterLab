@@ -29,7 +29,7 @@ describe("ClaimPathChooser", () => {
     );
     expect(startSample).toHaveBeenCalledOnce();
     expect(
-      screen.getByText(/never claims this sample analyzed or answered/i),
+      screen.getByText(/starts a separate practice question/i),
     ).toBeInTheDocument();
 
     const notebookOption = screen.getByRole("complementary", {
@@ -59,5 +59,31 @@ describe("ClaimPathChooser", () => {
       }),
     );
     expect(checkTools).toHaveBeenCalledOnce();
+  });
+
+  it("allows the same supported notebook to be selected again after an attachment attempt", async () => {
+    const user = userEvent.setup();
+    const attachNotebook = vi.fn();
+    render(
+      <ClaimPathChooser
+        claim="Will this score hold for new customers?"
+        busy={false}
+        onStartSample={vi.fn()}
+        onAttachNotebook={attachNotebook}
+        onCheckLiveTools={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+    const notebook = new File(["{}"], "lesson.ipynb", {
+      type: "application/json",
+    });
+    const fileInput = screen.getByLabelText("Attach a supported notebook");
+
+    await user.upload(fileInput, notebook);
+    await user.upload(fileInput, notebook);
+
+    expect(attachNotebook).toHaveBeenNthCalledWith(1, notebook);
+    expect(attachNotebook).toHaveBeenNthCalledWith(2, notebook);
+    expect(attachNotebook).toHaveBeenCalledTimes(2);
   });
 });

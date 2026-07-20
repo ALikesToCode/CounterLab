@@ -45,8 +45,8 @@ export function ClaimPathChooser({
           <h2>Test whether repeated customers inflated a score.</h2>
           <p>
             This bundled customer-churn lesson answers only that fixed question.
-            CounterLab keeps your wording for reference, but never claims this
-            sample analyzed or answered an unrelated question.
+            It starts a separate practice question and never claims the sample
+            analyzed or answered your wording.
           </p>
           <button type="button" disabled={busy} onClick={onStartSample}>
             Practice with leakage sample <span aria-hidden="true">→</span>
@@ -74,7 +74,9 @@ export function ClaimPathChooser({
                 disabled={busy}
                 aria-label="Attach a supported notebook"
                 onChange={(event) => {
-                  const file = event.target.files?.[0];
+                  const input = event.currentTarget;
+                  const file = input.files?.[0];
+                  input.value = "";
                   if (file !== undefined) onAttachNotebook(file);
                 }}
               />

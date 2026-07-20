@@ -112,7 +112,9 @@ export function QuestionComposer({
               disabled={busy}
               aria-label="Attach notebook"
               onChange={(event) => {
-                const file = event.target.files?.[0];
+                const input = event.currentTarget;
+                const file = input.files?.[0];
+                input.value = "";
                 if (file !== undefined) onAttachNotebook(file);
               }}
             />

@@ -102,6 +102,23 @@ describe("QuestionComposer", () => {
     expect(attach).toHaveBeenCalledWith(notebook);
   });
 
+  it("allows the same notebook to be selected again after an attachment attempt", async () => {
+    const user = userEvent.setup();
+    const attach = vi.fn();
+    render(<ControlledComposer onAttachNotebook={attach} />);
+    const notebook = new File(["{}"], "lesson.ipynb", {
+      type: "application/json",
+    });
+    const fileInput = screen.getByLabelText("Attach notebook");
+
+    await user.upload(fileInput, notebook);
+    await user.upload(fileInput, notebook);
+
+    expect(attach).toHaveBeenNthCalledWith(1, notebook);
+    expect(attach).toHaveBeenNthCalledWith(2, notebook);
+    expect(attach).toHaveBeenCalledTimes(2);
+  });
+
   it("submits a typed claim from the dominant action by keyboard", async () => {
     const user = userEvent.setup();
     const submit = vi.fn();
