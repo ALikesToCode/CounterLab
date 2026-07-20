@@ -30,6 +30,7 @@ const DispatchSchema = z
   .strict();
 
 export type HostedRunnerServerOptions = {
+  generationFilesystemReadIsolation: "OS_ENFORCED";
   releaseIdentity?: {
     runnerSourceCommit: string;
     runnerImageDigest: string;
@@ -104,6 +105,8 @@ export function createHostedRunnerServer(options: HostedRunnerServerOptions) {
       respond(response, 200, {
         status: "ready",
         service: "counterlab-hosted-runner",
+        generationFilesystemReadIsolation:
+          options.generationFilesystemReadIsolation,
         ...(options.releaseIdentity ?? {}),
       });
       return;
@@ -219,6 +222,7 @@ async function startProductionServer(): Promise<void> {
     console.log(JSON.stringify(await runHostedRunnerStartupProbe()));
     return;
   }
+  const startupProbe = await runHostedRunnerStartupProbe();
   const authJson = process.env.CODEX_AUTH_JSON;
   const runnerVerifyingPublicKey =
     process.env.COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY;
@@ -255,6 +259,9 @@ async function startProductionServer(): Promise<void> {
     process.env.COUNTERLAB_CODEX_HOME_ROOT ?? "/run/counterlab-codex";
   const codexExecutable =
     process.env.COUNTERLAB_CODEX_EXECUTABLE ?? "/usr/local/bin/codex";
+  const codexRoot = process.env.COUNTERLAB_CODEX_ROOT ?? "/opt/codex";
+  const bwrapExecutable =
+    process.env.COUNTERLAB_BWRAP_EXECUTABLE ?? "/usr/bin/bwrap";
   const setprivExecutable =
     process.env.COUNTERLAB_SETPRIV_EXECUTABLE ?? "/usr/bin/setpriv";
   const uid = Number(process.env.COUNTERLAB_CODEX_UID ?? "10001");
@@ -267,7 +274,9 @@ async function startProductionServer(): Promise<void> {
     authJson,
     workspaceRoot: resolve(workspaceRoot),
     codexHomeRoot: resolve(codexHomeRoot),
+    codexRoot: resolve(codexRoot),
     codexExecutable: resolve(codexExecutable),
+    bwrapExecutable: resolve(bwrapExecutable),
     setprivExecutable: resolve(setprivExecutable),
     uid,
     gid,
@@ -280,6 +289,8 @@ async function startProductionServer(): Promise<void> {
     current?: ReturnType<typeof createHostedRunnerServer>;
   } = {};
   const server = createHostedRunnerServer({
+    generationFilesystemReadIsolation:
+      startupProbe.generationFilesystemReadIsolation,
     ...(releaseIdentityMissing
       ? {}
       : { releaseIdentity: { runnerSourceCommit, runnerImageDigest } }),

@@ -36,6 +36,7 @@ async function start(
   releaseIdentity?: HostedRunnerServerOptions["releaseIdentity"],
 ) {
   const server = createHostedRunnerServer({
+    generationFilesystemReadIsolation: "OS_ENFORCED",
     authorizeToken,
     processJob,
     ...(onJobSettled === undefined ? {} : { onJobSettled }),
@@ -117,6 +118,7 @@ describe("hosted runner HTTP service", () => {
     await expect(ready.json()).resolves.toEqual({
       status: "ready",
       service: "counterlab-hosted-runner",
+      generationFilesystemReadIsolation: "OS_ENFORCED",
       runnerSourceCommit,
       runnerImageDigest,
     });

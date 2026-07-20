@@ -1,7 +1,10 @@
 import { execFile } from "node:child_process";
 import { constants } from "node:fs";
-import { access, mkdir, stat } from "node:fs/promises";
+import { access, mkdir, stat, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { promisify } from "node:util";
+
+import { buildContainerBubblewrapProbe } from "./launch-boundary.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -19,6 +22,7 @@ export type HostedRunnerStartupProbeOptions = {
   access?: typeof access;
   mkdir?: typeof mkdir;
   stat?: typeof stat;
+  writeFile?: typeof writeFile;
   getUid?: () => number | undefined;
   getGid?: () => number | undefined;
   execute?: Execute;
@@ -34,9 +38,12 @@ export type HostedRunnerStartupProbeResult = {
     "immutable-paths",
     "codex",
     "python",
+    "bubblewrap",
+    "bubblewrap-read-isolation",
     "setpriv",
     "writable-roots",
   ];
+  generationFilesystemReadIsolation: "OS_ENFORCED";
 };
 
 export async function runHostedRunnerStartupProbe(
@@ -46,6 +53,7 @@ export async function runHostedRunnerStartupProbe(
   const accessFile = options.access ?? access;
   const makeDirectory = options.mkdir ?? mkdir;
   const readMetadata = options.stat ?? stat;
+  const writeProbeFile = options.writeFile ?? writeFile;
   const uid = (options.getUid ?? process.getuid)?.();
   const gid = (options.getGid ?? process.getgid)?.();
   const execute =
@@ -61,11 +69,15 @@ export async function runHostedRunnerStartupProbe(
     environment.COUNTERLAB_CODEX_HOME_ROOT ?? "/run/counterlab-codex";
   const codexExecutable =
     environment.COUNTERLAB_CODEX_EXECUTABLE ?? "/usr/local/bin/codex";
+  const codexRoot = environment.COUNTERLAB_CODEX_ROOT ?? "/opt/codex";
+  const bwrapExecutable =
+    environment.COUNTERLAB_BWRAP_EXECUTABLE ?? "/usr/bin/bwrap";
   const setprivExecutable =
     environment.COUNTERLAB_SETPRIV_EXECUTABLE ?? "/usr/bin/setpriv";
   const pythonExecutable =
     environment.COUNTERLAB_PYTHON_EXECUTABLE ??
     "/opt/counterlab-venv/bin/python";
+  const probeWorkspace = join(workspaceRoot, ".isolation-probe");
 
   if (uid !== 10001 || gid !== 10001) {
     throw new Error(
@@ -95,11 +107,19 @@ export async function runHostedRunnerStartupProbe(
     accessFile(nodeExecutable, constants.X_OK),
     accessFile(bundlePath, constants.R_OK),
     accessFile(codexExecutable, constants.X_OK),
+    accessFile(codexRoot, constants.R_OK | constants.X_OK),
+    accessFile(bwrapExecutable, constants.X_OK),
     accessFile(setprivExecutable, constants.X_OK),
     accessFile(pythonExecutable, constants.X_OK),
     makeDirectory(workspaceRoot, { recursive: true, mode: 0o700 }),
     makeDirectory(codexHomeRoot, { recursive: true, mode: 0o700 }),
+    makeDirectory(probeWorkspace, { recursive: true, mode: 0o700 }),
   ]);
+  await writeProbeFile(join(probeWorkspace, "approved.txt"), "approved\n", {
+    encoding: "utf8",
+    flag: "w",
+    mode: 0o600,
+  });
 
   const childEnvironment: NodeJS.ProcessEnv = {
     HOME: codexHomeRoot,
@@ -133,6 +153,15 @@ export async function runHostedRunnerStartupProbe(
     env: childEnvironment,
     timeout: 30_000,
   });
+  const isolationProbe = buildContainerBubblewrapProbe({
+    bwrapExecutable,
+    codexRoot,
+    workspace: probeWorkspace,
+  });
+  await execute(isolationProbe.command, isolationProbe.args, {
+    env: isolationProbe.environment,
+    timeout: 30_000,
+  });
 
   return {
     status: "ready",
@@ -144,8 +173,11 @@ export async function runHostedRunnerStartupProbe(
       "immutable-paths",
       "codex",
       "python",
+      "bubblewrap",
+      "bubblewrap-read-isolation",
       "setpriv",
       "writable-roots",
     ],
+    generationFilesystemReadIsolation: "OS_ENFORCED",
   };
 }

@@ -709,6 +709,7 @@ function parseInput<T>(schema: z.ZodType<T>, value: unknown): T {
 
 class AppServerConnection {
   private readonly process: ChildProcessWithoutNullStreams;
+  private readonly terminated: Promise<void>;
   private readonly pending = new Map<string, PendingRequest>();
   private readonly events = new AsyncEventQueue();
   private stdoutBuffer = "";
@@ -737,6 +738,9 @@ class AppServerConnection {
     } catch (error) {
       throw asSetupError(error);
     }
+    this.terminated = new Promise((resolve) => {
+      this.process.once("close", () => resolve());
+    });
 
     this.process.stdout.setEncoding("utf8");
     this.process.stderr.setEncoding("utf8");
@@ -794,20 +798,22 @@ class AppServerConnection {
       : undefined;
   }
 
-  close(): void {
-    if (this.closed) return;
-    this.closed = true;
-    for (const request of this.pending.values()) {
-      clearTimeout(request.timer);
-      request.reject(
-        new CompilerSetupError(
-          "CODEX_PROCESS_EXITED",
-          "Codex App Server connection closed.",
-        ),
-      );
+  async close(): Promise<void> {
+    if (!this.closed) {
+      this.closed = true;
+      for (const request of this.pending.values()) {
+        clearTimeout(request.timer);
+        request.reject(
+          new CompilerSetupError(
+            "CODEX_PROCESS_EXITED",
+            "Codex App Server connection closed.",
+          ),
+        );
+      }
+      this.pending.clear();
+      this.terminateProcess();
     }
-    this.pending.clear();
-    this.terminateProcess();
+    await this.awaitTermination();
   }
 
   cancel(): void {
@@ -962,6 +968,24 @@ class AppServerConnection {
       }
     }, 250);
     timer.unref();
+  }
+
+  private async awaitTermination(): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(
+          new CompilerSetupError(
+            "CODEX_PROCESS_EXITED",
+            "Codex App Server did not terminate after forced shutdown.",
+          ),
+        );
+      }, 5_000);
+      timer.unref();
+      void this.terminated.then(() => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
   }
 
   private killProcessTree(signal: NodeJS.Signals): void {
@@ -1470,7 +1494,7 @@ export class AppServerCodexCompiler implements CodexCompiler {
       throw asSetupError(error);
     } finally {
       signal?.removeEventListener("abort", cancel);
-      connection.close();
+      await connection.close();
       await launch.dispose?.();
     }
   }
