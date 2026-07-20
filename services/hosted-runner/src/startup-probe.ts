@@ -1,8 +1,12 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { access, mkdir, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
+
+import { canonicalJson } from "@counterlab/session-core";
+import { z } from "zod";
 
 import { buildContainerBubblewrapProbe } from "./launch-boundary.js";
 
@@ -13,6 +17,72 @@ type Execute = (
   args: string[],
   options: { env: NodeJS.ProcessEnv; timeout: number },
 ) => Promise<unknown>;
+
+const STARTUP_CHECKS = [
+  "entrypoint",
+  "non-root-user",
+  "immutable-paths",
+  "codex",
+  "python",
+  "bubblewrap",
+  "bubblewrap-read-isolation",
+  "setpriv",
+  "writable-roots",
+] as const;
+
+const BubblewrapReadIsolationOutputSchema = z.strictObject({
+  forbiddenHostPathsHidden: z.literal(true),
+  parentEnvironmentHidden: z.literal(true),
+  workspaceVisible: z.literal(true),
+  workspaceWritable: z.literal(true),
+});
+
+export const GENERATION_ISOLATION_PROBE_VERSION =
+  "counterlab-generation-isolation-v1" as const;
+
+export type GenerationIsolationProbePayload = {
+  schemaVersion: "1";
+  probeVersion: typeof GENERATION_ISOLATION_PROBE_VERSION;
+  service: "counterlab-hosted-runner";
+  probe: "non-root-startup";
+  checks: typeof STARTUP_CHECKS;
+  generationFilesystemReadIsolation: "OS_ENFORCED";
+  bubblewrap: z.infer<typeof BubblewrapReadIsolationOutputSchema>;
+};
+
+function readExecutionStdout(result: unknown): string {
+  if (typeof result !== "object" || result === null || !("stdout" in result)) {
+    throw new Error(
+      "Hosted runner Bubblewrap probe did not return inspectable stdout",
+    );
+  }
+  const stdout = result.stdout;
+  if (typeof stdout === "string") return stdout;
+  if (Buffer.isBuffer(stdout)) return stdout.toString("utf8");
+  throw new Error(
+    "Hosted runner Bubblewrap probe returned an invalid stdout payload",
+  );
+}
+
+export function createGenerationIsolationProbePayload(
+  bubblewrapOutput: unknown,
+): GenerationIsolationProbePayload {
+  return {
+    schemaVersion: "1",
+    probeVersion: GENERATION_ISOLATION_PROBE_VERSION,
+    service: "counterlab-hosted-runner",
+    probe: "non-root-startup",
+    checks: STARTUP_CHECKS,
+    generationFilesystemReadIsolation: "OS_ENFORCED",
+    bubblewrap: BubblewrapReadIsolationOutputSchema.parse(bubblewrapOutput),
+  };
+}
+
+export function hashGenerationIsolationProbe(
+  payload: GenerationIsolationProbePayload,
+): string {
+  return createHash("sha256").update(canonicalJson(payload)).digest("hex");
+}
 
 export type HostedRunnerStartupProbeOptions = {
   environment?: NodeJS.ProcessEnv;
@@ -32,18 +102,10 @@ export type HostedRunnerStartupProbeResult = {
   status: "ready";
   service: "counterlab-hosted-runner";
   probe: "non-root-startup";
-  checks: [
-    "entrypoint",
-    "non-root-user",
-    "immutable-paths",
-    "codex",
-    "python",
-    "bubblewrap",
-    "bubblewrap-read-isolation",
-    "setpriv",
-    "writable-roots",
-  ];
+  checks: typeof STARTUP_CHECKS;
   generationFilesystemReadIsolation: "OS_ENFORCED";
+  generationIsolationProbe: GenerationIsolationProbePayload;
+  generationIsolationProbeSha256: string;
 };
 
 export async function runHostedRunnerStartupProbe(
@@ -59,7 +121,7 @@ export async function runHostedRunnerStartupProbe(
   const execute =
     options.execute ??
     (async (executable, args, executionOptions) => {
-      await execFileAsync(executable, args, executionOptions);
+      return execFileAsync(executable, args, executionOptions);
     });
   const nodeExecutable = options.nodeExecutable ?? process.execPath;
   const bundlePath = options.bundlePath ?? new URL(import.meta.url).pathname;
@@ -158,26 +220,37 @@ export async function runHostedRunnerStartupProbe(
     codexRoot,
     workspace: probeWorkspace,
   });
-  await execute(isolationProbe.command, isolationProbe.args, {
-    env: isolationProbe.environment,
-    timeout: 30_000,
-  });
+  const isolationProbeExecution = await execute(
+    isolationProbe.command,
+    isolationProbe.args,
+    {
+      env: isolationProbe.environment,
+      timeout: 30_000,
+    },
+  );
+  let bubblewrapOutput: unknown;
+  try {
+    bubblewrapOutput = JSON.parse(
+      readExecutionStdout(isolationProbeExecution).trim(),
+    ) as unknown;
+  } catch (error) {
+    throw new Error(
+      "Hosted runner Bubblewrap probe returned invalid JSON evidence",
+      { cause: error },
+    );
+  }
+  const generationIsolationProbe =
+    createGenerationIsolationProbePayload(bubblewrapOutput);
 
   return {
     status: "ready",
     service: "counterlab-hosted-runner",
     probe: "non-root-startup",
-    checks: [
-      "entrypoint",
-      "non-root-user",
-      "immutable-paths",
-      "codex",
-      "python",
-      "bubblewrap",
-      "bubblewrap-read-isolation",
-      "setpriv",
-      "writable-roots",
-    ],
+    checks: STARTUP_CHECKS,
     generationFilesystemReadIsolation: "OS_ENFORCED",
+    generationIsolationProbe,
+    generationIsolationProbeSha256: hashGenerationIsolationProbe(
+      generationIsolationProbe,
+    ),
   };
 }

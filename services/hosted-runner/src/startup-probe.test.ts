@@ -1,6 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { runHostedRunnerStartupProbe } from "./startup-probe.js";
+import {
+  hashGenerationIsolationProbe,
+  runHostedRunnerStartupProbe,
+} from "./startup-probe.js";
+
+const BUBBLEWRAP_OUTPUT = {
+  forbiddenHostPathsHidden: true,
+  parentEnvironmentHidden: true,
+  workspaceVisible: true,
+  workspaceWritable: true,
+} as const;
 
 describe("hosted runner startup probe", () => {
   it("checks the real runtime chain without propagating credentials", async () => {
@@ -14,7 +24,10 @@ describe("hosted runner startup probe", () => {
         _executable: string,
         _args: string[],
         _options: { env: NodeJS.ProcessEnv; timeout: number },
-      ) => undefined,
+      ) =>
+        _executable === "/runtime/bwrap"
+          ? { stdout: `${JSON.stringify(BUBBLEWRAP_OUTPUT)}\n` }
+          : { stdout: "" },
     );
     const writeFile = vi.fn(async () => undefined);
     const stat = vi.fn(async (path: string) => ({
@@ -67,7 +80,33 @@ describe("hosted runner startup probe", () => {
         "writable-roots",
       ],
       generationFilesystemReadIsolation: "OS_ENFORCED",
+      generationIsolationProbe: {
+        schemaVersion: "1",
+        probeVersion: "counterlab-generation-isolation-v1",
+        service: "counterlab-hosted-runner",
+        probe: "non-root-startup",
+        checks: [
+          "entrypoint",
+          "non-root-user",
+          "immutable-paths",
+          "codex",
+          "python",
+          "bubblewrap",
+          "bubblewrap-read-isolation",
+          "setpriv",
+          "writable-roots",
+        ],
+        generationFilesystemReadIsolation: "OS_ENFORCED",
+        bubblewrap: BUBBLEWRAP_OUTPUT,
+      },
+      generationIsolationProbeSha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
     });
+    expect(result.generationIsolationProbeSha256).toBe(
+      hashGenerationIsolationProbe(result.generationIsolationProbe),
+    );
+    expect(result.generationIsolationProbeSha256).toBe(
+      "cc950c368771f715d7b8807b20c91a04b53065d0ad64ba51024b638f7da329ea",
+    );
     expect(stat.mock.calls.map(([path]) => path)).toEqual([
       "/runtime/app",
       "/runtime/runner.mjs",
@@ -145,6 +184,54 @@ describe("hosted runner startup probe", () => {
         },
       }),
     ).rejects.toThrow("not executable");
+  });
+
+  it.each([
+    ["missing stdout", undefined],
+    ["invalid JSON", { stdout: "not-json" }],
+    [
+      "a false isolation check",
+      {
+        stdout: JSON.stringify({
+          ...BUBBLEWRAP_OUTPUT,
+          parentEnvironmentHidden: false,
+        }),
+      },
+    ],
+    [
+      "an unknown isolation field",
+      {
+        stdout: JSON.stringify({
+          ...BUBBLEWRAP_OUTPUT,
+          unverifiedClaim: true,
+        }),
+      },
+    ],
+  ])("fails closed when Bubblewrap returns %s", async (_label, probeResult) => {
+    let invocation = 0;
+    await expect(
+      runHostedRunnerStartupProbe({
+        bundlePath: "/app/runner.mjs",
+        access: async () => undefined,
+        mkdir: async () => undefined as never,
+        writeFile: async () => undefined,
+        stat: (async (
+          path: Parameters<typeof import("node:fs/promises").stat>[0],
+        ) => ({
+          uid: 0,
+          gid: 0,
+          mode: 0o555,
+          isDirectory: () => path === "/app",
+          isFile: () => path === "/app/runner.mjs",
+        })) as unknown as typeof import("node:fs/promises").stat,
+        getUid: () => 10001,
+        getGid: () => 10001,
+        execute: async () => {
+          invocation += 1;
+          return invocation === 4 ? probeResult : { stdout: "" };
+        },
+      }),
+    ).rejects.toThrow();
   });
 
   it("fails closed when PID 1 is not the declared non-root identity", async () => {
