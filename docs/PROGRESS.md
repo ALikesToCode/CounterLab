@@ -3145,3 +3145,66 @@ the preserved untracked `scripts/.fuse_hidden0000a9600000801f`.
 - The three scientific release-verifier failures remain the expected stale
   exact-image evidence and can be resolved only after a clean source build and
   authoritative full refresh.
+
+## Finish Commander proof-access checkpoint — 2026-07-20T23:29:33Z
+
+Deadline: `2026-07-22T00:00:00Z`; **24 hours 30 minutes 27 seconds remained at
+this checkpoint**. The feature branch is at committed HEAD `773e808`; the only
+visible worktree entry is the already-unlinked FUSE tombstone
+`scripts/.fuse_hidden0000a9600000801f` (`nlink=0`). It remains unstaged and was
+not removed.
+
+### Newly frozen independent commit
+
+- `773e808 fix(judge): open verified sample proof directly` closes the strict
+  source-level MB-015 interaction gap. The first-fold Judge action now opens
+  the checked-in Sample Proof Capsule disclosure after its bytes and authority
+  bindings verify, then places keyboard focus on the disclosure summary. A
+  failed integrity check still withholds both inspection and download.
+
+### Exact verification
+
+- The new Judge regression failed before implementation and passed afterward.
+- Judge Mode plus SampleEvidencePack Vitest: **2 files, 11/11 passed**.
+- Web strict TypeScript: **passed**.
+- Scoped Prettier, Git whitespace, and explicit three-file secret scan:
+  **passed**.
+
+### Reconciled source and external truth
+
+- Black-box product P0/P1 source status is now **17 source-covered and one
+  partial**. MB-014 remains partial because real cold-user comprehension has
+  not been measured. No product issue is production-closed yet.
+- Internal status remains **five source-pass, four partial or mitigated, and
+  three open**. CL-001 submission, CL-006 learner evidence, and optional
+  CL-024 continuing Learning Director remain open.
+- Aggregate containment cannot be produced by the current runtime: it removes
+  OCI cgroup resources and explicitly disables cgroups. A genuine fix requires
+  a delegated cgroup-v2 subtree plus owned-process inspection outside the
+  repository, which the current filesystem constitution forbids. The strict
+  gate remains unchanged and no evidence is synthesized.
+- `playwright_safe` is registered but its tools were not injected into this
+  session, and no `CLOAK_CDP_ENDPOINT` exists. Direct CloakBrowser launch
+  failed with `SIGTRAP`; stock Chromium is not substituted. A fresh Codex
+  session with the registered safe-browser namespace is required for current
+  browser qualification.
+- Repository-contained Wrangler remains unauthenticated after the earlier
+  manual OAuth callback timed out. No Worker, Container, D1, R2, secret, or
+  submission state was mutated.
+
+### Ordered remaining gates
+
+1. Run the consolidated local P0/P1 acceptance matrix and full deterministic
+   source gates; repair only evidence-backed regressions in independent
+   commits.
+2. Resolve the already-unlinked FUSE tombstone by closing its owning temporary
+   process, without deleting or sweeping repository content.
+3. Obtain an explicit, narrow authority decision for real delegated cgroup-v2
+   observation, or keep exact-image qualification fail-closed.
+4. Freeze one source, build one image, regenerate the exact SBOM/VEX/scientific
+   evidence, qualify, release-check, and deploy only that tuple.
+5. Start a fresh safe-browser-capable session and run the complete public
+   desktop/mobile/accessibility/error-path matrix.
+6. Keep learner evidence `NO_DATA` without consented participants; align and
+   verify the exact public app, repository, video, Devpost, feedback ID, and
+   submission receipt before the final feature push and fast-forward merge.
