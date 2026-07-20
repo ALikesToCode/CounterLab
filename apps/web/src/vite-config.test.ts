@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -30,6 +31,8 @@ vi.mock("vite", async (importOriginal) => {
 import config from "../vite.config";
 
 const protectedKeys = [
+  "COUNTERLAB_BROWSER_AUTHORITY",
+  "COUNTERLAB_E2E_RUNTIME_ROOT",
   "COUNTERLAB_SIGNING_KEY",
   "COUNTERLAB_SIGNING_KEY_ID",
   "OPENAI_TIMEOUT_MS",
@@ -96,5 +99,45 @@ describe("local Worker environment bindings", () => {
 
     expect(mocks.cloudflare).toHaveBeenCalledTimes(1);
     expect(mocks.cloudflare).toHaveBeenCalledWith(undefined);
+  });
+
+  it("disables local Containers only for an explicitly labelled stock Chromium design review", async () => {
+    mocks.loadEnv.mockReturnValue({});
+    process.env.COUNTERLAB_BROWSER_AUTHORITY = "stock-chromium-design-review";
+    process.env.COUNTERLAB_E2E_RUNTIME_ROOT = fileURLToPath(
+      new URL("../test-results/runtime/vite-config-test", import.meta.url),
+    );
+
+    await configure("serve");
+
+    const pluginOptions = mocks.cloudflare.mock.calls[0]?.[0] as
+      | {
+          config?: (worker: { dev?: Record<string, unknown> }) => {
+            dev?: Record<string, unknown>;
+          };
+          persistState?: { path: string };
+        }
+      | undefined;
+    const override = pluginOptions?.config?.({
+      dev: { ip: "127.0.0.1", enable_containers: true },
+    });
+    expect(override?.dev).toEqual({
+      ip: "127.0.0.1",
+      enable_containers: false,
+    });
+    expect(pluginOptions?.persistState?.path).toMatch(
+      /apps\/web\/test-results\/runtime\/vite-config-test\/wrangler-state$/u,
+    );
+  });
+
+  it("rejects an E2E persistence path outside the contained runtime parent", () => {
+    mocks.loadEnv.mockReturnValue({});
+    process.env.COUNTERLAB_E2E_RUNTIME_ROOT = fileURLToPath(
+      new URL("../../outside-e2e-runtime", import.meta.url),
+    );
+
+    expect(() => configure("serve")).toThrow(
+      /must stay below apps\/web\/test-results\/runtime/i,
+    );
   });
 });

@@ -14,10 +14,13 @@ __pycache__/
 coverage.xml
 node_modules/
 .cache/
+.counterlab/
+.code-review-graph/
 .local/
 .pnpm-store/
 playwright-report/
 test-results/
+/.playwright-cli/
 docs/a/
 docs/audits/**/browser-state/
 docs/audits/**/evidence/browser-tmp/

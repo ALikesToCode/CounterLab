@@ -5,6 +5,13 @@ import { fileURLToPath } from "node:url";
 
 import { test as base } from "@playwright/test";
 
+import {
+  currentBrowserAuthorityLabel,
+  resolveBrowserAuthority,
+} from "./browser-authority";
+
+export { currentBrowserAuthorityLabel };
+
 const repositoryRoot = realpathSync(
   fileURLToPath(new URL("../../..", import.meta.url)),
 );
@@ -81,13 +88,7 @@ export function runtimeOutputPath(candidate: string, label: string): string {
   return resolved;
 }
 
-function cloakEndpoint(): string {
-  const configured = process.env.CLOAK_CDP_ENDPOINT;
-  if (configured === undefined || configured.trim().length === 0) {
-    throw new Error(
-      "CLOAK_CDP_ENDPOINT is required; CounterLab browser QA will not launch stock Chromium",
-    );
-  }
+function validatedCloakEndpoint(configured: string): string {
   const endpoint = new URL(configured);
   if (!["http:", "https:", "ws:", "wss:"].includes(endpoint.protocol)) {
     throw new Error(
@@ -103,24 +104,67 @@ function cloakEndpoint(): string {
 export const test = base.extend({
   browser: [
     async ({ playwright }, use) => {
+      const authority = resolveBrowserAuthority(process.env);
       const artifactsDir = runtimeOutputPath(
         resolve(requiredRuntimeRoot(), "browser-artifacts"),
         "Playwright browser artifacts",
       );
       await mkdir(artifactsDir, { recursive: true });
       assertContainedPath(artifactsDir, "Playwright browser artifacts");
-      const browser = await playwright.chromium.connectOverCDP(
-        cloakEndpoint(),
-        {
-          artifactsDir,
-          timeout: 30_000,
-        },
-      );
+      if (authority.kind === "cloak") {
+        const browser = await playwright.chromium.connectOverCDP(
+          validatedCloakEndpoint(authority.endpoint),
+          {
+            artifactsDir,
+            timeout: 30_000,
+          },
+        );
 
-      await use(browser);
-      // The CloakBrowser process and CDP connection are shared infrastructure.
-      // Playwright closes each test-created context/page; never close or kill the
-      // remote browser from this worker fixture.
+        await use(browser);
+        // The CloakBrowser process and CDP connection are shared
+        // infrastructure. Each test closes its own context/page; never close
+        // or kill the remote browser from this worker fixture.
+        return;
+      }
+
+      const browserRuntime = resolve(requiredRuntimeRoot(), "stock-chromium");
+      const browserHome = resolve(browserRuntime, "home");
+      const browserCache = resolve(browserRuntime, "cache");
+      const browserConfig = resolve(browserRuntime, "config");
+      // Chromium's process singleton uses a Unix socket below TMPDIR. Keep
+      // this repository-contained path short enough for the platform limit.
+      const browserTmp = resolve(repositoryRoot, ".counterlab/tmp");
+      for (const [path, label] of [
+        [browserRuntime, "Stock Chromium runtime"],
+        [browserHome, "Stock Chromium home"],
+        [browserCache, "Stock Chromium cache"],
+        [browserConfig, "Stock Chromium config"],
+        [browserTmp, "Stock Chromium temporary directory"],
+      ] as const) {
+        assertContainedPath(path, label);
+        await mkdir(path, { recursive: true });
+      }
+      const browser = await playwright.chromium.launch({
+        executablePath: authority.executablePath,
+        headless: true,
+        artifactsDir,
+        downloadsPath: artifactsDir,
+        tracesDir: artifactsDir,
+        env: {
+          HOME: browserHome,
+          LANG: process.env.LANG ?? "C.UTF-8",
+          PATH: process.env.PATH,
+          TMPDIR: browserTmp,
+          XDG_CACHE_HOME: browserCache,
+          XDG_CONFIG_HOME: browserConfig,
+        },
+      });
+
+      try {
+        await use(browser);
+      } finally {
+        await browser.close();
+      }
     },
     { scope: "worker" },
   ],

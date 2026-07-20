@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "deploy": "bash ../../scripts/deploy-qualified.sh",
     "test:e2e": "playwright test",
+    "typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json",
     "test": "vitest run --config vitest.config.ts",
     "types:worker": "wrangler types --config wrangler.jsonc --include-runtime=true",
     "typecheck": "tsc --noEmit -p tsconfig.json && pnpm run types:worker && tsc --noEmit -p tsconfig.worker.json"

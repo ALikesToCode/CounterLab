@@ -1,0 +1,64 @@
+export const STOCK_CHROMIUM_DESIGN_REVIEW =
+  "stock-chromium-design-review" as const;
+
+const APPROVED_STOCK_CHROMIUM_EXECUTABLE = "/usr/bin/chromium";
+
+export type BrowserAuthority =
+  | {
+      kind: "cloak";
+      evidenceLabel: "CLOAK_CDP_ENDPOINT";
+      endpoint: string;
+    }
+  | {
+      kind: "stock-chromium-design-review";
+      evidenceLabel: typeof STOCK_CHROMIUM_DESIGN_REVIEW;
+      executablePath: typeof APPROVED_STOCK_CHROMIUM_EXECUTABLE;
+    };
+
+type BrowserEnvironment = Readonly<Record<string, string | undefined>>;
+
+export function resolveBrowserAuthority(
+  environment: BrowserEnvironment,
+): BrowserAuthority {
+  const endpoint = (environment.CLOAK_CDP_ENDPOINT ?? "").trim();
+  const requestedAuthority = (
+    environment.COUNTERLAB_BROWSER_AUTHORITY ?? ""
+  ).trim();
+
+  if (endpoint !== "" && requestedAuthority !== "") {
+    throw new Error(
+      "CLOAK_CDP_ENDPOINT and COUNTERLAB_BROWSER_AUTHORITY cannot be combined",
+    );
+  }
+  if (endpoint !== "") {
+    return {
+      kind: "cloak",
+      evidenceLabel: "CLOAK_CDP_ENDPOINT",
+      endpoint,
+    };
+  }
+  if (requestedAuthority !== STOCK_CHROMIUM_DESIGN_REVIEW) {
+    throw new Error(
+      "CLOAK_CDP_ENDPOINT is required unless stock-chromium-design-review is explicitly requested",
+    );
+  }
+
+  const executablePath = (
+    environment.COUNTERLAB_STOCK_CHROMIUM_EXECUTABLE ??
+    APPROVED_STOCK_CHROMIUM_EXECUTABLE
+  ).trim();
+  if (executablePath !== APPROVED_STOCK_CHROMIUM_EXECUTABLE) {
+    throw new Error(
+      `Stock Chromium design review permits only ${APPROVED_STOCK_CHROMIUM_EXECUTABLE}`,
+    );
+  }
+  return {
+    kind: STOCK_CHROMIUM_DESIGN_REVIEW,
+    evidenceLabel: STOCK_CHROMIUM_DESIGN_REVIEW,
+    executablePath: APPROVED_STOCK_CHROMIUM_EXECUTABLE,
+  };
+}
+
+export function currentBrowserAuthorityLabel(): BrowserAuthority["evidenceLabel"] {
+  return resolveBrowserAuthority(process.env).evidenceLabel;
+}

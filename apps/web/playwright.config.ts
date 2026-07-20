@@ -2,6 +2,8 @@ import { defineConfig } from "@playwright/test";
 import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
+import { resolveBrowserAuthority } from "./e2e/browser-authority";
+
 const repositoryRoot = realpathSync(resolve(import.meta.dirname, "../.."));
 const runtimeParent = resolve(import.meta.dirname, "test-results/runtime");
 const configuredRuntimeRoot = process.env.COUNTERLAB_E2E_RUNTIME_ROOT;
@@ -50,11 +52,7 @@ const resultsFile = join(runtimeRoot, "evidence/results.json");
 assertNoSymlinkTraversal(outputDir, "Playwright output directory");
 assertNoSymlinkTraversal(resultsFile, "Playwright results file");
 
-if ((process.env.CLOAK_CDP_ENDPOINT ?? "").trim() === "") {
-  throw new Error(
-    "CLOAK_CDP_ENDPOINT is required; CounterLab browser QA never launches stock Chromium",
-  );
-}
+const browserAuthority = resolveBrowserAuthority(process.env);
 
 const port = Number(process.env.COUNTERLAB_E2E_PORT ?? "5173");
 if (!Number.isInteger(port) || port < 1024 || port > 65_535) {
@@ -89,6 +87,9 @@ if (configuredBaseURL !== undefined) {
   remoteBaseURL = remote.origin;
 }
 const baseURL = remoteBaseURL ?? `http://127.0.0.1:${port}`;
+const staticDesignReview =
+  browserAuthority.kind === "stock-chromium-design-review" &&
+  process.env.COUNTERLAB_E2E_STATIC_CLIENT === "true";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -101,23 +102,32 @@ export default defineConfig({
   use: {
     baseURL,
     browserName: "chromium",
-    connectOptions: {
-      // The e2e fixture overrides the browser with connectOverCDP. This guard
-      // makes any test that bypasses that fixture fail instead of launching a
-      // local or stock browser.
-      wsEndpoint: "ws://127.0.0.1:1/counterlab-cdp-fixture-required",
-      timeout: 1_000,
-    },
+    ...(browserAuthority.kind === "cloak"
+      ? {
+          connectOptions: {
+            // The e2e fixture overrides the browser with connectOverCDP. This
+            // guard makes any test that bypasses that fixture fail instead of
+            // launching a local browser.
+            wsEndpoint: "ws://127.0.0.1:1/counterlab-cdp-fixture-required",
+            timeout: 1_000,
+          },
+        }
+      : {}),
     acceptDownloads: true,
     viewport: { width: 1440, height: 900 },
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
-    video: "retain-on-failure",
+    // Stock Chromium is an explicitly labelled design-review fallback. It
+    // keeps screenshots and traces but cannot stand in for Cloak video
+    // evidence or install Playwright's FFmpeg outside this repository.
+    video: browserAuthority.kind === "cloak" ? "retain-on-failure" : "off",
   },
   ...(remoteBaseURL === undefined
     ? {
         webServer: {
-          command: `./node_modules/.bin/vite --host 127.0.0.1 --port ${port}`,
+          command: staticDesignReview
+            ? "node ../../scripts/serve-built-client.mjs"
+            : `./node_modules/.bin/vite --host 127.0.0.1 --port ${port}`,
           cwd: import.meta.dirname,
           url: baseURL,
           reuseExistingServer: false,
