@@ -500,6 +500,7 @@ node --import tsx scripts/refresh-scientific-engine-bindings.ts --check
 COUNTERLAB_DOCKER_BIN="${RUNTIME_ADAPTER}" \
   ./scripts/verify-scientific-engines.sh \
     --image "${IMAGE}" \
+    --expected-image-digest "${IMAGE_DIGEST}" \
     --runtime-report "${WORK}/runtime-verification.json"
 
 RECEIPT="${WORK}/evidence-refresh-receipt.json"

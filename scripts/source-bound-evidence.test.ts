@@ -591,6 +591,7 @@ describe("source-bound release evidence helpers", () => {
     expect(refresh).toContain(
       '--runtime-report "${WORK}/runtime-verification.json"',
     );
+    expect(refresh).toContain('--expected-image-digest "${IMAGE_DIGEST}"');
     expect(
       refresh.match(/--manifest-digest "\$\{MANIFEST_DIGEST\}"/gu),
     ).toHaveLength(2);
