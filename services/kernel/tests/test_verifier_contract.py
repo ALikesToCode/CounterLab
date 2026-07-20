@@ -90,6 +90,81 @@ def test_complete_reference_contract_is_verified() -> None:
     assert report["verifiedInvariants"]
 
 
+def test_scoped_rootless_limits_are_not_reported_as_aggregate_enforcement() -> None:
+    candidate = reference_candidate()
+    candidate["resourceEnforcement"] = {
+        "networkDenied": True,
+        "limits": {
+            "wallSeconds": True,
+            "memoryMb": True,
+            "maxProcesses": True,
+            "maxFiles": True,
+            "maxOutputBytes": True,
+        },
+        "limitMode": "process-address-space-rlimit-with-unenforced-cgroup-intent",
+        "aggregateLimitIntentEnforced": False,
+        "intendedAggregateLimits": {
+            "cpuCount": 1.0,
+            "maxProcesses": 16,
+            "memoryBytes": 536_870_912,
+        },
+        "limitAuthority": {
+            "wallSeconds": {
+                "enforced": True,
+                "scope": "request-deadline-and-process-cpu-rlimit",
+            },
+            "memoryMb": {
+                "enforced": True,
+                "scope": "per-process-address-space-rlimit",
+            },
+            "maxProcesses": {
+                "enforced": True,
+                "scope": "real-user-process-count-rlimit",
+            },
+            "maxFiles": {
+                "enforced": True,
+                "scope": "host-output-postcondition",
+            },
+            "maxOutputBytes": {
+                "enforced": True,
+                "scope": "process-file-rlimit-and-host-output-postcondition",
+            },
+        },
+    }
+
+    report = verify_candidate(candidate)
+
+    assert report["status"] == "VERIFIED"
+    assert "scoped_resource_limits_enforced" in report["verifiedInvariants"]
+    assert "resource_limits_enforced" not in report["verifiedInvariants"]
+    assert any("Aggregate cgroup intent was not enforced" in item for item in report["limitations"])
+
+
+def test_legacy_resource_evidence_remains_scoped_without_limit_mode() -> None:
+    candidate = reference_candidate()
+    candidate["resourceEnforcement"] = {
+        "networkDenied": True,
+        "limits": {
+            "wallSeconds": True,
+            "memoryMb": True,
+            "maxProcesses": True,
+            "maxFiles": True,
+            "maxOutputBytes": True,
+        },
+    }
+
+    report = verify_candidate(candidate)
+
+    assert report["status"] == "VERIFIED"
+    assert "scoped_resource_limits_enforced" in report["verifiedInvariants"]
+    assert "resource_limits_enforced" not in report["verifiedInvariants"]
+    assert any(
+        "Legacy runner evidence does not identify aggregate versus scoped limit authority."
+        in item
+        for item in report["limitations"]
+    )
+
+
 def test_result_hash_covers_every_canonical_field() -> None:
     candidate = reference_candidate()
     changed = copy.deepcopy(candidate)

@@ -24,6 +24,38 @@ _SUPPLEMENTAL_KEYS = frozenset(
     {"probes", "plan", "resourceEnforcement", "isolation", "support"}
 )
 _HASH_LENGTH = 64
+_LIMIT_SCOPES = {
+    "container-cgroup-and-process-rlimit": {
+        "aggregate": True,
+        "scopes": {
+            "wallSeconds": "request-deadline-and-process-cpu-rlimit",
+            "memoryMb": "container-cgroup-and-process-address-space-rlimit",
+            "maxProcesses": "container-cgroup-and-process-count-rlimit",
+            "maxFiles": "host-output-postcondition",
+            "maxOutputBytes": "process-file-rlimit-and-host-output-postcondition",
+        },
+    },
+    "process-rlimit-with-unenforced-cgroup-intent": {
+        "aggregate": False,
+        "scopes": {
+            "wallSeconds": "request-deadline-and-process-cpu-rlimit",
+            "memoryMb": "per-process-data-segment-rlimit",
+            "maxProcesses": "real-user-process-count-rlimit",
+            "maxFiles": "host-output-postcondition",
+            "maxOutputBytes": "process-file-rlimit-and-host-output-postcondition",
+        },
+    },
+    "process-address-space-rlimit-with-unenforced-cgroup-intent": {
+        "aggregate": False,
+        "scopes": {
+            "wallSeconds": "request-deadline-and-process-cpu-rlimit",
+            "memoryMb": "per-process-address-space-rlimit",
+            "maxProcesses": "real-user-process-count-rlimit",
+            "maxFiles": "host-output-postcondition",
+            "maxOutputBytes": "process-file-rlimit-and-host-output-postcondition",
+        },
+    },
+}
 
 
 def _canonical_payload(candidate: Mapping[str, Any]) -> dict[str, Any]:
@@ -339,18 +371,82 @@ def _verify_optional_evidence(
             for name in required_limits
             if limits is None or limits.get(name) is not True
         )
-        if failed_limits:
+        limit_mode = resources.get("limitMode")
+        policy = None
+        authority_failure: object | None = None
+        if limit_mode is not None:
+            policy = _LIMIT_SCOPES.get(limit_mode)
+            authority = _mapping(resources.get("limitAuthority"))
+            intended = _mapping(resources.get("intendedAggregateLimits"))
+            if policy is None or authority is None or intended is None:
+                authority_failure = {
+                    "limitMode": limit_mode,
+                    "aggregateLimitIntentEnforced": resources.get(
+                        "aggregateLimitIntentEnforced"
+                    ),
+                }
+            else:
+                expected_scopes = policy["scopes"]
+                invalid_authority = sorted(
+                    name
+                    for name, scope in expected_scopes.items()
+                    if _mapping(authority.get(name))
+                    != {"enforced": True, "scope": scope}
+                )
+                intended_values = [
+                    intended.get("cpuCount"),
+                    intended.get("maxProcesses"),
+                    intended.get("memoryBytes"),
+                ]
+                if (
+                    resources.get("aggregateLimitIntentEnforced")
+                    is not policy["aggregate"]
+                    or invalid_authority
+                    or any(
+                        not _is_number(value) or float(value) <= 0
+                        for value in intended_values
+                    )
+                ):
+                    authority_failure = {
+                        "limitMode": limit_mode,
+                        "aggregateLimitIntentEnforced": resources.get(
+                            "aggregateLimitIntentEnforced"
+                        ),
+                        "invalidAuthority": invalid_authority,
+                    }
+        if failed_limits or authority_failure is not None:
             _append_once(
                 failures,
                 _failure(
                     "resource_limits_enforced",
-                    {"failed": failed_limits},
-                    {"enforced": sorted(required_limits)},
-                    "At least one required resource-limit probe did not enforce its limit.",
+                    {
+                        "failed": failed_limits,
+                        "authority": authority_failure,
+                    },
+                    {
+                        "enforced": sorted(required_limits),
+                        "authority": "known exact limit mode and scope",
+                    },
+                    "At least one required scoped resource control was absent or mislabelled.",
                 ),
             )
         else:
-            verified.append("resource_limits_enforced")
+            verified.append(
+                "resource_limits_enforced"
+                if policy is not None and policy["aggregate"] is True
+                else "scoped_resource_limits_enforced"
+            )
+            if limit_mode is None:
+                limitations.append(
+                    "Legacy runner evidence does not identify aggregate versus scoped limit authority."
+                )
+            elif limit_mode in {
+                "process-rlimit-with-unenforced-cgroup-intent",
+                "process-address-space-rlimit-with-unenforced-cgroup-intent",
+            }:
+                limitations.append(
+                    "Aggregate cgroup intent was not enforced; memory and process controls are explicitly scoped to process or real-user rlimits."
+                )
 
     isolation = _mapping(candidate.get("isolation"))
     if isolation is None:
@@ -762,6 +858,19 @@ def _with_complete_probe_evidence(candidate: Mapping[str, Any]) -> dict[str, Any
             "maxFiles": True,
             "maxOutputBytes": True,
         },
+        "limitMode": "container-cgroup-and-process-rlimit",
+        "aggregateLimitIntentEnforced": True,
+        "intendedAggregateLimits": {
+            "cpuCount": 2.0,
+            "maxProcesses": 16,
+            "memoryBytes": 536870912,
+        },
+        "limitAuthority": {
+            name: {"enforced": True, "scope": scope}
+            for name, scope in _LIMIT_SCOPES[
+                "container-cgroup-and-process-rlimit"
+            ]["scopes"].items()
+        },
     }
     enriched["isolation"] = {
         "hiddenVerifierMounted": False,
@@ -878,6 +987,13 @@ def critical_mutations(reference: Mapping[str, Any]) -> list[dict[str, object]]:
         "resource_limits_enforced",
         lambda candidate: candidate["resourceEnforcement"]["limits"].update(
             {"wallSeconds": False}
+        ),
+    )
+    add(
+        "aggregate-limit-authority-forged",
+        "resource_limits_enforced",
+        lambda candidate: candidate["resourceEnforcement"].update(
+            {"aggregateLimitIntentEnforced": False}
         ),
     )
     add(
