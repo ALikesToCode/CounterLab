@@ -10,19 +10,9 @@ import {
   OpenVexDocumentSchema,
   assertGrypeOciArchiveBinding,
 } from "../packages/scientific-engine-registry/src/index.js";
+import { SourceBoundBuildReceiptSchema } from "./source-bound-build-receipt.js";
 
-const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
-const BuildReceiptSchema = z.strictObject({
-  schemaVersion: z.literal("3"),
-  status: z.literal("BUILT"),
-  sourceCommit: z.string().regex(/^[a-f0-9]{40}$/),
-  sourceTreeSha256: Sha256Schema,
-  localImageTag: z.string().regex(/^counterlab-runner:git-[a-f0-9]{40}$/),
-  localImageDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
-  localManifestDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
-  localOciArchive: z.string().min(1),
-  localOciArchiveSha256: Sha256Schema,
-});
+const BuildReceiptSchema = SourceBoundBuildReceiptSchema;
 const KevCatalogSchema = z
   .object({
     title: z.literal("CISA Catalog of Known Exploited Vulnerabilities"),
@@ -188,7 +178,7 @@ const [receiptBytes, sbomBytes, rawBytes, kevBytes, currentVexBytes] =
       ),
     ),
   ]);
-const receipt = BuildReceiptSchema.passthrough().parse(
+const receipt = BuildReceiptSchema.parse(
   JSON.parse(receiptBytes.toString("utf8")),
 );
 if (receipt.localImageTag !== `counterlab-runner:git-${receipt.sourceCommit}`) {

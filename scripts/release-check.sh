@@ -69,22 +69,59 @@ case "${RUNTIME_ADAPTER}" in "${ROOT_DIR}"/*) ;; *) echo "Runtime adapter escape
   exit 2
 }
 export COUNTERLAB_DOCKER_BIN="${RUNTIME_ADAPTER}"
+RUNTIME_SESSION_ID="${COUNTERLAB_RUNTIME_SESSION_ID:-}"
+[[ "${RUNTIME_SESSION_ID}" =~ ^rt-[a-z0-9][a-z0-9-]{7,13}$ ]] || {
+  echo "COUNTERLAB_RUNTIME_SESSION_ID must identify the contained runtime." >&2
+  exit 2
+}
+RUNTIME_COMMAND=(
+  "${RUNTIME_ADAPTER}"
+  --session-id "${RUNTIME_SESSION_ID}"
+  --
+)
 
-readarray -t RELEASE_IDENTITY < <(
+RELEASE_IDENTITY_JSON="$(
   node --import tsx scripts/release-check-receipt.ts \
     identity \
     --qualified "${RECEIPT}"
-)
-[[ "${#RELEASE_IDENTITY[@]}" -eq 10 ]] || {
-  echo "Qualified receipt did not expose the exact release identity." >&2
+)"
+qualified_identity_value() {
+  local field="$1"
+  node -e '
+const [raw, field] = process.argv.slice(1);
+const identity = JSON.parse(raw);
+const outerFields = ["identitySchemaVersion", "receipt", "receiptSha256", "receiptType"];
+if (
+  Object.keys(identity).sort().join("\n") !== outerFields.sort().join("\n") ||
+  identity.identitySchemaVersion !== "1" ||
+  identity.receiptType !== "qualified-runner-release" ||
+  !/^[a-f0-9]{64}$/.test(identity.receiptSha256)
+) throw new Error("qualified release identity envelope is invalid");
+if (!Object.hasOwn(identity.receipt, field) || typeof identity.receipt[field] !== "string") {
+  throw new Error(`qualified release identity field is unavailable: ${field}`);
+}
+process.stdout.write(identity.receipt[field]);
+' "${RELEASE_IDENTITY_JSON}" "${field}"
+}
+EVIDENCE_COMMIT="$(qualified_identity_value evidenceCommit)"
+SOURCE_COMMIT="$(qualified_identity_value sourceCommit)"
+ENGINE_IMAGE="$(qualified_identity_value localImageTag)"
+EXPECTED_IMAGE_DIGEST="$(qualified_identity_value localImageDigest)"
+ADAPTER_IMAGE="$(qualified_identity_value adapterImageTag)"
+EXPECTED_ADAPTER_IMAGE_DIGEST="$(qualified_identity_value adapterImageDigest)"
+QUALIFIED_RECEIPT_SHA256="$(
+  node -e '
+const identity = JSON.parse(process.argv[1]);
+if (identity?.identitySchemaVersion !== "1" || !/^[a-f0-9]{64}$/.test(identity?.receiptSha256)) {
+  throw new Error("qualified receipt byte hash is unavailable");
+}
+process.stdout.write(identity.receiptSha256);
+' "${RELEASE_IDENTITY_JSON}"
+)"
+[[ "$(sha256sum "${RECEIPT}" | cut -d ' ' -f 1)" == "${QUALIFIED_RECEIPT_SHA256}" ]] || {
+  echo "Qualified receipt bytes changed after identity validation." >&2
   exit 2
 }
-EVIDENCE_COMMIT="${RELEASE_IDENTITY[0]}"
-SOURCE_COMMIT="${RELEASE_IDENTITY[1]}"
-ENGINE_IMAGE="${RELEASE_IDENTITY[2]}"
-EXPECTED_IMAGE_DIGEST="${RELEASE_IDENTITY[3]}"
-ADAPTER_IMAGE="${RELEASE_IDENTITY[4]}"
-EXPECTED_ADAPTER_IMAGE_DIGEST="${RELEASE_IDENTITY[5]}"
 [[ "$(git rev-parse HEAD)" == "${EVIDENCE_COMMIT}" ]] || {
   echo "Release checks require HEAD to equal the qualified evidence commit." >&2
   exit 2
@@ -106,16 +143,18 @@ node scripts/assert-contained-path.mjs "${RELEASE_RECEIPT_DIR}" "${RELEASE_CHECK
   echo "Release-check receipt output already exists; refusing to overwrite it." >&2
   exit 2
 }
-[[ "$("${RUNTIME_ADAPTER}" image inspect "${ENGINE_IMAGE}" --format '{{.Id}}')" == "${EXPECTED_IMAGE_DIGEST}" ]] || {
+[[ "$("${RUNTIME_COMMAND[@]}" image inspect "${ENGINE_IMAGE}" --format '{{.Id}}')" == "${EXPECTED_IMAGE_DIGEST}" ]] || {
   echo "Runtime image does not match the qualified receipt." >&2
   exit 2
 }
-[[ "$("${RUNTIME_ADAPTER}" image inspect "${ADAPTER_IMAGE}" --format '{{.Id}}')" == "${EXPECTED_ADAPTER_IMAGE_DIGEST}" ]] || {
+[[ "$("${RUNTIME_COMMAND[@]}" image inspect "${ADAPTER_IMAGE}" --format '{{.Id}}')" == "${EXPECTED_ADAPTER_IMAGE_DIGEST}" ]] || {
   echo "Runtime adapter image does not match the qualified receipt." >&2
   exit 2
 }
 
 "${PNPM}" exec prettier --check .
+node --import tsx scripts/generate-sample-boundary-fixture.ts --check
+node --import tsx scripts/generate-sample-proof-capsule.ts --check
 bash scripts/test-all.sh
 bash scripts/run-mutations.sh leakage
 bash scripts/run-mutations.sh imbalance
@@ -123,6 +162,9 @@ bash scripts/run-mutations.sh imbalance
 COUNTERLAB_SANDBOX_IMAGE="${ADAPTER_IMAGE}" bash scripts/sandbox-smoke.sh
 bash scripts/verify-scientific-engines.sh --image "${ENGINE_IMAGE}"
 "${PNPM}" --filter @counterlab/web build
+.venv/bin/python scripts/secret-scan.py \
+  apps/web/dist/counterlab/index.js \
+  apps/web/dist/client
 PYTHONPATH=services/kernel/src .venv/bin/python scripts/collect-achieved-metrics.py --check
 COUNTERLAB_SANDBOX_IMAGE="${ADAPTER_IMAGE}" bash scripts/reproduce-session.sh leakage-01
 bash scripts/replay-patch.sh leakage-01

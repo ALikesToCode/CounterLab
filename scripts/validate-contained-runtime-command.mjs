@@ -153,6 +153,25 @@ function sameValues(actual, expected) {
   );
 }
 
+function rlimitMap(values) {
+  if (values.length !== 5) fail("exactly five process rlimits are required");
+  const parsed = new Map();
+  for (const value of values) {
+    const match = value.match(/^(as|cpu|fsize|nofile|nproc)=(\d+):(\d+)$/);
+    if (
+      match === null ||
+      match[2] !== match[3] ||
+      parsed.has(match[1]) ||
+      !Number.isSafeInteger(Number(match[2]))
+    ) {
+      fail("process rlimit set is invalid");
+    }
+    parsed.set(match[1], Number(match[2]));
+  }
+  if (parsed.size !== 5) fail("process rlimit set is incomplete");
+  return parsed;
+}
+
 function expectOptionShape(options, expected) {
   const observed = Object.fromEntries(
     [...options.entries()].map(([name, values]) => [name, values.length]),
@@ -296,7 +315,7 @@ function validateRun(runArgs) {
       "--memory": 1,
       "--memory-swap": 1,
       "--cpus": 1,
-      "--ulimit": 2,
+      "--ulimit": 5,
       "--tmpfs": 1,
       "--env": 4,
     });
@@ -316,8 +335,11 @@ function validateRun(runArgs) {
       options.get("--memory-swap")?.[0] !== "1024m" ||
       options.get("--cpus")?.[0] !== "2.0" ||
       !sameValues(options.get("--ulimit") ?? [], [
+        "cpu=300:300",
+        "as=1073741824:1073741824",
         "fsize=1048576:1048576",
         "nofile=64:64",
+        "nproc=32:32",
       ]) ||
       !sameValues(flags, [
         "--rm",
@@ -340,15 +362,23 @@ function validateRun(runArgs) {
       "--memory": 1,
       "--memory-swap": 1,
       "--cpus": 1,
-      "--ulimit": 2,
+      "--ulimit": 5,
       "--tmpfs": 1,
       "--env": 1,
-      "--volume": 1,
+      "--mount": 3,
       "--workdir": 1,
       "--entrypoint": 1,
     });
     const uid = requestedUser?.split(":")[0];
     const gid = requestedUser?.split(":")[1];
+    const byDestination = new Map(
+      mounts.map((mount) => [mount.destination, mount]),
+    );
+    const scientificScript = byDestination.get(
+      "/repo/scripts/verify_scientific_runtime.py",
+    );
+    const runnerLock = byDestination.get("/repo/requirements.runner.lock.txt");
+    const engineEvidence = byDestination.get("/repo/scientific-engines");
     if (
       entrypoint !== "python" ||
       !sameValues(flags, [
@@ -364,16 +394,38 @@ function validateRun(runArgs) {
       options.get("--memory-swap")?.[0] !== "1024m" ||
       options.get("--cpus")?.[0] !== "2.0" ||
       !sameValues(options.get("--ulimit") ?? [], [
+        "cpu=300:300",
+        "as=1073741824:1073741824",
         "fsize=1048576:1048576",
         "nofile=64:64",
+        "nproc=32:32",
       ]) ||
       options.get("--tmpfs")?.[0] !==
         `/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=${uid},gid=${gid},mode=0700` ||
       !sameValues(environment, ["TMPDIR=/counterlab-runtime"]) ||
-      volumes.length !== 1 ||
-      volumes[0].source !== root ||
-      volumes[0].destination !== "/repo" ||
-      volumes[0].mode !== "ro" ||
+      volumes.length !== 0 ||
+      byDestination.size !== 3 ||
+      scientificScript?.source !==
+        repositoryFile(
+          "scripts/verify_scientific_runtime.py",
+          "scientific runtime verifier",
+          "file",
+        ) ||
+      !scientificScript.readonly ||
+      runnerLock?.source !==
+        repositoryFile(
+          "requirements.runner.lock.txt",
+          "runner dependency lock",
+          "file",
+        ) ||
+      !runnerLock.readonly ||
+      engineEvidence?.source !==
+        repositoryFile(
+          "scientific-engines",
+          "scientific engine evidence",
+          "directory",
+        ) ||
+      !engineEvidence.readonly ||
       options.get("--workdir")?.[0] !== "/repo" ||
       command[0] !== "/repo/scripts/verify_scientific_runtime.py" ||
       command[1] !== "--root" ||
@@ -398,23 +450,29 @@ function validateRun(runArgs) {
       "--memory": 1,
       "--memory-swap": 1,
       "--cpus": 1,
-      "--ulimit": 2,
+      "--ulimit": 5,
       "--tmpfs": 1,
       "--env": 1,
-      "--volume": 1,
+      "--mount": 4,
       "--workdir": 1,
       "--entrypoint": 1,
     });
     const uid = requestedUser?.split(":")[0];
     const gid = requestedUser?.split(":")[1];
-    const reviewPath = command[10] ?? "";
-    const reviewMatch = reviewPath.match(
-      /^\/repo\/node_modules\/\.cache\/counterlab-v6\.1\/scientific-evidence-([a-f0-9]{40})-\d{8}T\d{6}Z-\d+\/reachability-review\.json$/,
+    const byDestination = new Map(
+      mounts.map((mount) => [mount.destination, mount]),
     );
-    const hostReviewPath =
-      reviewMatch?.[1] === image.slice("counterlab-runner:git-".length)
-        ? resolve(root, reviewPath.slice("/repo/".length))
-        : "";
+    const reachabilityScript = byDestination.get(
+      "/repo/scripts/probe_cpython_htmlparser_reachability.py",
+    );
+    const publicFixtures = byDestination.get("/repo/fixtures/public");
+    const notebookFixtures = byDestination.get("/repo/fixtures/notebooks");
+    const review = byDestination.get("/repo/reachability-review.json");
+    const reviewRelativePath =
+      review === undefined ? "" : relative(root, review.source);
+    const reviewMatch = reviewRelativePath.match(
+      /^node_modules\/\.cache\/counterlab-v6\.1\/scientific-evidence-([a-f0-9]{40})-\d{8}T\d{6}Z-\d+\/reachability-review\.json$/,
+    );
     if (
       entrypoint !== "python" ||
       !sameValues(flags, [
@@ -430,16 +488,37 @@ function validateRun(runArgs) {
       options.get("--memory-swap")?.[0] !== "1024m" ||
       options.get("--cpus")?.[0] !== "2.0" ||
       !sameValues(options.get("--ulimit") ?? [], [
+        "cpu=300:300",
+        "as=1073741824:1073741824",
         "fsize=1048576:1048576",
         "nofile=64:64",
+        "nproc=32:32",
       ]) ||
       options.get("--tmpfs")?.[0] !==
         `/counterlab-runtime:rw,noexec,nosuid,nodev,size=256m,uid=${uid},gid=${gid},mode=0700` ||
       !sameValues(environment, ["TMPDIR=/counterlab-runtime"]) ||
-      volumes.length !== 1 ||
-      volumes[0].source !== root ||
-      volumes[0].destination !== "/repo" ||
-      volumes[0].mode !== "ro" ||
+      volumes.length !== 0 ||
+      byDestination.size !== 4 ||
+      reachabilityScript?.source !==
+        repositoryFile(
+          "scripts/probe_cpython_htmlparser_reachability.py",
+          "reachability verifier",
+          "file",
+        ) ||
+      !reachabilityScript.readonly ||
+      publicFixtures?.source !==
+        repositoryFile("fixtures/public", "public fixtures", "directory") ||
+      !publicFixtures.readonly ||
+      notebookFixtures?.source !==
+        repositoryFile(
+          "fixtures/notebooks",
+          "notebook fixtures",
+          "directory",
+        ) ||
+      !notebookFixtures.readonly ||
+      review === undefined ||
+      !review.readonly ||
+      reviewMatch?.[1] !== image.slice("counterlab-runner:git-".length) ||
       options.get("--workdir")?.[0] !== "/repo" ||
       command[0] !== "/repo/scripts/probe_cpython_htmlparser_reachability.py" ||
       command[1] !== "--root" ||
@@ -451,12 +530,12 @@ function validateRun(runArgs) {
       command[7] !== "--sbom-sha256" ||
       !/^[a-f0-9]{64}$/.test(command[8] ?? "") ||
       command[9] !== "--review-file" ||
-      hostReviewPath.length === 0 ||
+      command[10] !== "/repo/reachability-review.json" ||
       command.length !== 11
     ) {
       fail("scientific reachability profile is invalid");
     }
-    repositoryFile(hostReviewPath, "reachability review", "file");
+    repositoryFile(review.source, "reachability review", "file");
   } else {
     expectAdapterImage(image);
     expectOptionShape(options, {
@@ -468,7 +547,7 @@ function validateRun(runArgs) {
       "--memory": 1,
       "--memory-swap": 1,
       "--cpus": 1,
-      "--ulimit": 2,
+      "--ulimit": 5,
       "--tmpfs": 1,
       "--mount": 3,
       "--env": 1,
@@ -476,14 +555,20 @@ function validateRun(runArgs) {
     });
     const memory = options.get("--memory")?.[0];
     const memorySwap = options.get("--memory-swap")?.[0];
-    boundedNumber(
+    const processLimit = boundedNumber(
       options.get("--pids-limit")?.[0],
       /^\d{1,2}$/,
       1,
       32,
       "process limit",
     );
-    boundedNumber(memory, /^\d{2,4}m$/, 64, 1_024, "memory limit");
+    const memoryMegabytes = boundedNumber(
+      memory,
+      /^\d{2,4}m$/,
+      64,
+      1_024,
+      "memory limit",
+    );
     boundedNumber(
       options.get("--cpus")?.[0],
       /^(?:\d|\d\.\d{1,2})$/,
@@ -491,9 +576,7 @@ function validateRun(runArgs) {
       2,
       "CPU limit",
     );
-    const ulimits = options.get("--ulimit") ?? [];
-    const fileSize = ulimits.find((value) => value.startsWith("fsize="));
-    const fileSizeMatch = fileSize?.match(/^fsize=(\d+):\1$/);
+    const ulimits = rlimitMap(options.get("--ulimit") ?? []);
     if (
       command.length !== 0 ||
       entrypoint !== undefined ||
@@ -507,9 +590,13 @@ function validateRun(runArgs) {
       options.get("--user")?.[0] !== "65532:65532" ||
       options.get("--security-opt")?.[0] !== "no-new-privileges=true" ||
       memory !== memorySwap ||
-      fileSizeMatch === null ||
-      Number(fileSizeMatch[1]) > 1_048_576 ||
-      !ulimits.includes("nofile=64:64") ||
+      (ulimits.get("cpu") ?? 0) < 1 ||
+      (ulimits.get("cpu") ?? 0) > 60 ||
+      ulimits.get("as") !== memoryMegabytes * 1024 * 1024 ||
+      (ulimits.get("fsize") ?? 0) < 1 ||
+      (ulimits.get("fsize") ?? 0) > 1_048_576 ||
+      ulimits.get("nofile") !== 64 ||
+      ulimits.get("nproc") !== processLimit ||
       options.get("--tmpfs")?.[0] !==
         "/tmp:rw,noexec,nosuid,nodev,size=16m,uid=65532,gid=65532,mode=0700" ||
       !sameValues(environment, ["PYTHONHASHSEED=0"]) ||
@@ -560,6 +647,11 @@ switch (args[0]) {
   case "version":
     if (args.length !== 3 || args[1] !== "--format" || args[2] !== "json") {
       fail("version probe arguments are invalid");
+    }
+    break;
+  case "counterlab-drain":
+    if (args.length !== 2 || !/^[a-f0-9]{64}$/u.test(args[1] ?? "")) {
+      fail("drain arguments are invalid");
     }
     break;
   case "image": {

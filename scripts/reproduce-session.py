@@ -8,12 +8,15 @@ from copy import deepcopy
 import json
 import os
 import shutil
-import tempfile
 from pathlib import Path
 from typing import Sequence
 
 from counterlab_kernel.verifier import critical_mutations, verify_candidate
-from counterlab_runner.docker import DockerAdapterExecutor
+from counterlab_runner.docker import (
+    DockerAdapterExecutor,
+    bind_contained_runtime_adapter,
+    create_repository_work_directory,
+)
 from counterlab_runner.pipeline import HostCompileVerifyPipeline
 from counterlab_runner.workspace import create_fresh_workspace
 
@@ -70,25 +73,33 @@ def main(argv: Sequence[str] | None = None) -> None:
     if verify_candidate(archived_result)["status"] != "VERIFIED":
         raise SystemExit("archived replay result no longer validates")
     candidate = replay / "compiler/verified-live-run/final-candidate"
-    with tempfile.TemporaryDirectory(prefix="counterlab-reproduce-") as temporary:
-        temporary_root = Path(temporary)
-        generated = temporary_root / "generated"
-        workspace = create_fresh_workspace(generated, "leakage-01")
-        for name in (
-            "experiment-plan.json",
-            "artifact-adapter.py",
-            "public_tests.py",
-        ):
-            shutil.copy2(candidate / name, workspace / name)
-        outcome = HostCompileVerifyPipeline(
-            generated_root=generated,
-            fixture_path=ROOT / "fixtures/public/customer_churn.csv",
-            executor=DockerAdapterExecutor(
-                image=arguments.image,
-                docker_bin=os.environ.get("COUNTERLAB_DOCKER_BIN", "docker"),
-            ),
-            run_root=temporary_root / "runs",
-        )(workspace)
+    docker_bin = os.environ.get("COUNTERLAB_DOCKER_BIN", "docker")
+    contained_runtime_adapter = bind_contained_runtime_adapter(ROOT, docker_bin)
+    contained_runtime_session_id = (
+        os.environ.get("COUNTERLAB_RUNTIME_SESSION_ID")
+        if contained_runtime_adapter is not None
+        else None
+    )
+    temporary_root = create_repository_work_directory(ROOT, "reproduce-session")
+    generated = temporary_root / "generated"
+    workspace = create_fresh_workspace(generated, "leakage-01")
+    for name in (
+        "experiment-plan.json",
+        "artifact-adapter.py",
+        "public_tests.py",
+    ):
+        shutil.copy2(candidate / name, workspace / name)
+    outcome = HostCompileVerifyPipeline(
+        generated_root=generated,
+        fixture_path=ROOT / "fixtures/public/customer_churn.csv",
+        executor=DockerAdapterExecutor(
+            image=arguments.image,
+            docker_bin=docker_bin,
+            contained_runtime_adapter=contained_runtime_adapter,
+            contained_runtime_session_id=contained_runtime_session_id,
+        ),
+        run_root=temporary_root / "runs",
+    )(workspace)
     if outcome.status != "VERIFIED" or outcome.result is None:
         raise SystemExit(f"live replay candidate did not reproduce: {outcome.failures}")
     try:

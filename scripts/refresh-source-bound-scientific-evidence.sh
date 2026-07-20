@@ -11,7 +11,7 @@ cd "${ROOT_DIR}"
 
 BUILD_RECEIPT="${1:-}"
 [[ -n "${BUILD_RECEIPT}" ]] || {
-  echo "Usage: ./scripts/refresh-source-bound-scientific-evidence.sh <build-receipt-v3.json>" >&2
+  echo "Usage: ./scripts/refresh-source-bound-scientific-evidence.sh <build-receipt-v4.json>" >&2
   exit 2
 }
 
@@ -105,16 +105,38 @@ readarray -t BUILD_IDENTITY < <(
 const fs = require("node:fs");
 const value = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 const sha = /^[a-f0-9]{64}$/;
+const shaFields = [
+  "sourceArchiveSha256",
+  "sourceTreeSha256",
+  "dockerfileSha256",
+  "localOciArchiveSha256",
+  "adapterDockerfileSha256",
+  "adapterOciArchiveSha256",
+  "adapterOciSourceTreeSha256",
+  "runtimeToolchainSha256",
+  "runtimePolicySha256",
+  "proofDependencyManifestSha256",
+  "toolchainLockSha256",
+  "runtimeAdapterSha256",
+  "buildctlSha256",
+  "buildkitdSha256",
+  "buildkitConfigSha256",
+];
 if (
-  value?.schemaVersion !== "3" ||
+  value?.schemaVersion !== "4" ||
   value?.status !== "BUILT" ||
   !/^[a-f0-9]{40}$/.test(value.sourceCommit ?? "") ||
-  !sha.test(value.sourceTreeSha256 ?? "") ||
+  shaFields.some((field) => !sha.test(value[field] ?? "")) ||
   value.localImageTag !== `counterlab-runner:git-${value.sourceCommit}` ||
   !/^sha256:[a-f0-9]{64}$/.test(value.localImageDigest ?? "") ||
   !/^sha256:[a-f0-9]{64}$/.test(value.localManifestDigest ?? "") ||
-  !sha.test(value.localOciArchiveSha256 ?? "") ||
-  typeof value.localOciArchive !== "string"
+  typeof value.localOciArchive !== "string" ||
+  value.adapterImageTag !== `counterlab-adapter:git-${value.sourceCommit}` ||
+  !/^sha256:[a-f0-9]{64}$/.test(value.adapterImageDigest ?? "") ||
+  !/^sha256:[a-f0-9]{64}$/.test(value.adapterManifestDigest ?? "") ||
+  typeof value.adapterOciArchive !== "string" ||
+  value.adapterOciRevision !== value.sourceCommit ||
+  !Number.isFinite(Date.parse(value.builtAt ?? ""))
 ) throw new Error("Build receipt identity is invalid");
 for (const entry of [
   value.sourceCommit,
@@ -184,6 +206,7 @@ for path in "${DIRTY_PATHS[@]}"; do
     scientific-engines/fixtures/validation/internal-mutations-integrity-v2.json | \
     scientific-engines/fixtures/validation/internal-oracle-integrity-v2.json | \
     scientific-engines/fixtures/validation/internal-renderer-integrity-v2.json | \
+    scientific-engines/fixtures/validation/signed-result-binding-v2.json | \
     scientific-engines/licenses/manifest.json | \
     scientific-engines/notices/current-ml-engines.NOTICE.md | \
     scientific-engines/registry.json | \
@@ -205,11 +228,24 @@ RUNTIME_ADAPTER_INPUT="${COUNTERLAB_DOCKER_BIN:-}"
   exit 2
 }
 RUNTIME_ADAPTER="$(repo_path "${RUNTIME_ADAPTER_INPUT}")"
+RUNTIME_SESSION_ID="${COUNTERLAB_RUNTIME_SESSION_ID:-}"
 [[ -x "${RUNTIME_ADAPTER}" && ! -L "${RUNTIME_ADAPTER}" ]] || {
   echo "Contained runtime adapter is unavailable." >&2
   exit 2
 }
-RUNTIME_ATTESTATION="$("${RUNTIME_ADAPTER}" counterlab-attest)"
+[[ "${RUNTIME_SESSION_ID}" =~ ^rt-[a-z0-9][a-z0-9-]{7,13}$ ]] || {
+  echo "COUNTERLAB_RUNTIME_SESSION_ID must identify the contained runtime." >&2
+  exit 2
+}
+RUNTIME_COMMAND=(
+  "${RUNTIME_ADAPTER}"
+  --session-id
+  "${RUNTIME_SESSION_ID}"
+  --
+)
+RUNTIME_ATTESTATION="$(
+  "${RUNTIME_COMMAND[@]}" counterlab-attest
+)"
 [[ -n "${RUNTIME_ATTESTATION}" ]] || {
   echo "Contained runtime attestation returned no evidence." >&2
   exit 2
@@ -313,16 +349,16 @@ export GRYPE_CHECK_FOR_APP_UPDATE=false
 export GRYPE_EXTERNAL_SOURCES_ENABLE=false
 export SYFT_CHECK_FOR_APP_UPDATE=false
 
-"${RUNTIME_ADAPTER}" load --platform linux/amd64 --input "${OCI_ARCHIVE}"
-[[ "$("${RUNTIME_ADAPTER}" image inspect "${IMAGE}" --format '{{.Id}}')" == "${IMAGE_DIGEST}" ]] || {
+"${RUNTIME_COMMAND[@]}" load --platform linux/amd64 --input "${OCI_ARCHIVE}"
+[[ "$("${RUNTIME_COMMAND[@]}" image inspect "${IMAGE}" --format '{{.Id}}')" == "${IMAGE_DIGEST}" ]] || {
   echo "Loaded image digest does not match the build receipt." >&2
   exit 2
 }
-[[ "$("${RUNTIME_ADAPTER}" image inspect "${IMAGE}" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" == "${SOURCE_COMMIT}" ]] || {
+[[ "$("${RUNTIME_COMMAND[@]}" image inspect "${IMAGE}" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" == "${SOURCE_COMMIT}" ]] || {
   echo "Loaded image source revision does not match the build receipt." >&2
   exit 2
 }
-[[ "$("${RUNTIME_ADAPTER}" image inspect "${IMAGE}" --format '{{index .Config.Labels "io.counterlab.source-tree-sha256"}}')" == "${SOURCE_TREE_SHA256}" ]] || {
+[[ "$("${RUNTIME_COMMAND[@]}" image inspect "${IMAGE}" --format '{{index .Config.Labels "io.counterlab.source-tree-sha256"}}')" == "${SOURCE_TREE_SHA256}" ]] || {
   echo "Loaded image source-tree label does not match the build receipt." >&2
   exit 2
 }
@@ -370,8 +406,7 @@ HOST_GID="$(id -g)"
   echo "Exact-image evidence refuses a root host identity." >&2
   exit 2
 }
-REVIEW_RELATIVE="$(realpath --relative-to="${ROOT_DIR}" "${WORK}/reachability-review.json")"
-"${RUNTIME_ADAPTER}" run \
+"${RUNTIME_COMMAND[@]}" run \
   --rm \
   --name "counterlab-reachability-${SOURCE_COMMIT:0:12}-$$" \
   --pull=never \
@@ -385,11 +420,17 @@ REVIEW_RELATIVE="$(realpath --relative-to="${ROOT_DIR}" "${WORK}/reachability-re
   --memory=1024m \
   --memory-swap=1024m \
   --cpus=2.0 \
+  --ulimit=cpu=300:300 \
+  --ulimit=as=1073741824:1073741824 \
   --ulimit=fsize=1048576:1048576 \
   --ulimit=nofile=64:64 \
+  --ulimit=nproc=32:32 \
   --tmpfs="/counterlab-runtime:rw,noexec,nosuid,nodev,size=256m,uid=${HOST_UID},gid=${HOST_GID},mode=0700" \
   --env=TMPDIR=/counterlab-runtime \
-  --volume "${ROOT_DIR}:/repo:ro" \
+  --mount "type=bind,src=${ROOT_DIR}/scripts/probe_cpython_htmlparser_reachability.py,dst=/repo/scripts/probe_cpython_htmlparser_reachability.py,readonly" \
+  --mount "type=bind,src=${ROOT_DIR}/fixtures/public,dst=/repo/fixtures/public,readonly" \
+  --mount "type=bind,src=${ROOT_DIR}/fixtures/notebooks,dst=/repo/fixtures/notebooks,readonly" \
+  --mount "type=bind,src=${WORK}/reachability-review.json,dst=/repo/reachability-review.json,readonly" \
   --workdir=/repo \
   --entrypoint=python \
   "${IMAGE}" \
@@ -398,7 +439,7 @@ REVIEW_RELATIVE="$(realpath --relative-to="${ROOT_DIR}" "${WORK}/reachability-re
   --image-digest "${IMAGE_DIGEST}" \
   --source-commit "${SOURCE_COMMIT}" \
   --sbom-sha256 "${CONTAINER_SBOM_SHA256}" \
-  --review-file "/repo/${REVIEW_RELATIVE}" >"${WORK}/reachability.json"
+  --review-file /repo/reachability-review.json >"${WORK}/reachability.json"
 
 node --import tsx scripts/summarize-grype-scan.ts \
   --raw "${WORK}/grype-raw.json" \
@@ -513,6 +554,7 @@ const files = [
   "scientific-engines/fixtures/validation/internal-mutations-integrity-v2.json",
   "scientific-engines/fixtures/validation/internal-oracle-integrity-v2.json",
   "scientific-engines/fixtures/validation/internal-renderer-integrity-v2.json",
+  "scientific-engines/fixtures/validation/signed-result-binding-v2.json",
   "scientific-engines/licenses/manifest.json",
   "scientific-engines/notices/current-ml-engines.NOTICE.md",
   "scientific-engines/registry.json",

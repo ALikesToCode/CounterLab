@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import pathlib
 import subprocess
@@ -13,6 +14,7 @@ from scripts.production_smoke_report import (
     initialize_report,
     load_report,
     record_stage,
+    validate_report,
 )
 
 
@@ -29,12 +31,25 @@ _REQUIRED_PASSING_STAGES = (
 )
 
 
-def _deployment_identity(**overrides: str) -> dict[str, str]:
+def _deployment_identity(**overrides: object) -> dict[str, object]:
     identity = {
         "deployment_id": "11111111-2222-3333-4444-555555555555",
         "worker_evidence_commit": "c" * 40,
         "runner_source_commit": "d" * 40,
         "container_image_digest": "sha256:" + "a" * 64,
+        "timeout_cleanup_receipt_sha256": "b" * 64,
+        "aggregate_limit_evidence_sha256": "9" * 64,
+        "runtime_policy_sha256": "c" * 64,
+        "proof_dependency_manifest_sha256": "d" * 64,
+        "worker_artifact_classification": "PROCESS_BOUND_PARTIAL",
+        "worker_artifact_manifest_sha256": "1" * 64,
+        "worker_bundle_sha256": "2" * 64,
+        "client_assets_sha256": "3" * 64,
+        "client_asset_count": 27,
+        "client_public_assets_sha256": "4" * 64,
+        "client_public_asset_count": 25,
+        "vite_version": "8.1.4",
+        "wrangler_version": "4.110.0",
         "deployment_receipt_sha256": "e" * 64,
     }
     identity.update(overrides)
@@ -68,13 +83,25 @@ def _live_evidence_source() -> str:
     return script[start : script.index("\nPY\n", start)]
 
 
-def _deployment_receipt_source() -> str:
-    script = pathlib.Path(__file__).with_name("production-smoke.sh").read_text(
-        encoding="utf-8"
+def _parse_deployment_identity(
+    path: pathlib.Path,
+) -> subprocess.CompletedProcess[str]:
+    root = pathlib.Path(__file__).parents[1]
+    return subprocess.run(
+        [
+            "node",
+            "--import",
+            "tsx",
+            "scripts/release-check-receipt.ts",
+            "deployment-identity",
+            "--deployment",
+            str(path),
+        ],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
     )
-    marker = 'python3 - "${DEPLOYMENT_RECEIPT}" <<\'PY\'\n'
-    start = script.index(marker) + len(marker)
-    return script[start : script.index("\nPY\n", start)]
 
 
 def _control_plane_validator_source(kind: str) -> str:
@@ -84,7 +111,14 @@ def _control_plane_validator_source(kind: str) -> str:
     marker = (
         f'python3 - "${{WORK_DIR}}/{kind}.json" "${{WORKER_VERSION_ID}}" '
         '"${WORKER_EVIDENCE_COMMIT}" "${RUNNER_SOURCE_COMMIT}" '
-        '"${CONTAINER_IMAGE_DIGEST}" <<\'PY\'\n'
+        '"${CONTAINER_IMAGE_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" '
+        '"${AGGREGATE_LIMIT_EVIDENCE_SHA256}" '
+        '"${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" '
+        '"${WORKER_ARTIFACT_CLASSIFICATION}" '
+        '"${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" '
+        '"${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" '
+        '"${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" '
+        '"${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" <<\'PY\'\n'
     )
     start = script.index(marker) + len(marker)
     return script[start : script.index("\nPY\n", start)]
@@ -112,7 +146,7 @@ def _deployment_receipt() -> dict[str, object]:
     runner = "b" * 40
     digest = "sha256:" + "c" * 64
     return {
-        "schemaVersion": "3",
+        "schemaVersion": "4",
         "status": "DEPLOYED",
         "workerName": "counterlab",
         "productionOrigin": "https://counterlab.cserules.workers.dev",
@@ -122,7 +156,11 @@ def _deployment_receipt() -> dict[str, object]:
         "qualifiedRunnerReceiptSha256": "1" * 64,
         "releaseCheckReceiptSha256": "2" * 64,
         "releaseCheckCheckedAt": "2026-07-18T23:59:00.000Z",
+        "timeoutCleanupReceiptSha256": "d" * 64,
+        "aggregateLimitEvidenceSha256": "9" * 64,
         "runtimeToolchainSha256": "3" * 64,
+        "runtimePolicySha256": "e" * 64,
+        "proofDependencyManifestSha256": "f" * 64,
         "runtimeAdapterSha256": "4" * 64,
         "adapterImageDigest": "sha256:" + "5" * 64,
         "workerVersionId": "11111111-2222-3333-4444-555555555555",
@@ -135,63 +173,67 @@ def _deployment_receipt() -> dict[str, object]:
         ),
         "containerState": "active",
         "containerImageDigest": digest,
+        "workerArtifactClassification": "PROCESS_BOUND_PARTIAL",
+        "workerArtifactManifestSha256": "5" * 64,
         "deployConfigSha256": "d" * 64,
         "workerBundleSha256": "6" * 64,
         "clientAssetsSha256": "7" * 64,
         "clientAssetCount": 8,
-        "dryRunSha256": "8" * 64,
-        "dryRunFileCount": 9,
+        "clientPublicAssetsSha256": "8" * 64,
+        "clientPublicAssetCount": 6,
+        "viteVersion": "8.1.4",
+        "wranglerVersion": "4.110.0",
+        "dryRunSha256": "6" * 64,
+        "dryRunFileCount": 1,
         "deploymentStatusSha256": "9" * 64,
         "workerVersionSha256": "a" * 64,
         "containerStatusSha256": "b" * 64,
         "deployedAt": "2026-07-19T00:00:00.000Z",
-        "verifierVersion": "counterlab-deployment-v3",
+        "verifierVersion": "counterlab-deployment-v4",
     }
 
 
 def test_deployment_receipt_parser_accepts_only_the_exact_release_tuple() -> None:
-    with tempfile.TemporaryDirectory() as destination:
+    root = pathlib.Path(__file__).parents[1]
+    contained_temp = root / "node_modules/.cache/counterlab-v6.1/test-tmp"
+    contained_temp.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=contained_temp) as destination:
         path = pathlib.Path(destination) / "deployment-receipt.json"
         receipt = _deployment_receipt()
         path.write_text(json.dumps(receipt), encoding="utf-8")
-        accepted = subprocess.run(
-            [sys.executable, "-c", _deployment_receipt_source(), str(path)],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+        accepted = _parse_deployment_identity(path)
         assert accepted.returncode == 0, accepted.stderr
-        fields = accepted.stdout.strip().split("\t")
-        assert fields[:4] == [
-            receipt["workerVersionId"],
-            receipt["workerEvidenceCommit"],
-            receipt["runnerSourceCommit"],
-            receipt["containerImageDigest"],
-        ]
-        assert len(fields[4]) == 64
+        identity = json.loads(accepted.stdout)
+        assert set(identity) == {
+            "identitySchemaVersion",
+            "receiptType",
+            "receiptSha256",
+            "receipt",
+        }
+        assert identity["identitySchemaVersion"] == "1"
+        assert identity["receiptType"] == "deployment-receipt"
+        assert identity["receipt"] == receipt
+        assert identity["receiptSha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
 
         receipt["unexpected"] = True
         path.write_text(json.dumps(receipt), encoding="utf-8")
-        unknown = subprocess.run(
-            [sys.executable, "-c", _deployment_receipt_source(), str(path)],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+        unknown = _parse_deployment_identity(path)
         assert unknown.returncode != 0
-        assert "fields are invalid" in unknown.stderr
+        assert "unexpected" in unknown.stderr
+
+        receipt = _deployment_receipt()
+        receipt.pop("releaseCheckReceiptSha256")
+        path.write_text(json.dumps(receipt), encoding="utf-8")
+        missing = _parse_deployment_identity(path)
+        assert missing.returncode != 0
+        assert "releaseCheckReceiptSha256" in missing.stderr
 
         receipt = _deployment_receipt()
         receipt["containerState"] = "degraded"
         path.write_text(json.dumps(receipt), encoding="utf-8")
-        degraded = subprocess.run(
-            [sys.executable, "-c", _deployment_receipt_source(), str(path)],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+        degraded = _parse_deployment_identity(path)
         assert degraded.returncode != 0
-        assert "Container observation is invalid" in degraded.stderr
+        assert "containerState" in degraded.stderr
 
         receipt = _deployment_receipt()
         receipt["containerImage"] = (
@@ -200,14 +242,9 @@ def test_deployment_receipt_parser_accepts_only_the_exact_release_tuple() -> Non
             + str(receipt["containerImageDigest"])
         )
         path.write_text(json.dumps(receipt), encoding="utf-8")
-        embedded = subprocess.run(
-            [sys.executable, "-c", _deployment_receipt_source(), str(path)],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+        embedded = _parse_deployment_identity(path)
         assert embedded.returncode != 0
-        assert "Container observation is invalid" in embedded.stderr
+        assert "Container image must bind" in embedded.stderr
 
 
 def test_control_plane_validators_bind_exact_release_and_maintenance_state() -> None:
@@ -215,6 +252,19 @@ def test_control_plane_validators_bind_exact_release_and_maintenance_state() -> 
     worker = "a" * 40
     runner = "b" * 40
     digest = "sha256:" + "c" * 64
+    timeout_receipt = "d" * 64
+    aggregate_limit_evidence = "9" * 64
+    runtime_policy = "e" * 64
+    proof_manifest = "f" * 64
+    artifact_classification = "PROCESS_BOUND_PARTIAL"
+    artifact_manifest = "1" * 64
+    worker_bundle = "2" * 64
+    client_assets = "3" * 64
+    client_asset_count = 27
+    public_assets = "4" * 64
+    public_asset_count = 25
+    vite_version = "8.1.4"
+    wrangler_version = "4.110.0"
     release = {
         "status": "bound",
         "workerVersionId": version,
@@ -222,6 +272,19 @@ def test_control_plane_validators_bind_exact_release_and_maintenance_state() -> 
         "workerEvidenceCommit": worker,
         "runnerSourceCommit": runner,
         "runnerImageDigest": digest,
+        "timeoutCleanupReceiptSha256": timeout_receipt,
+        "aggregateLimitEvidenceSha256": aggregate_limit_evidence,
+        "runtimePolicySha256": runtime_policy,
+        "proofDependencyManifestSha256": proof_manifest,
+        "workerArtifactClassification": artifact_classification,
+        "workerArtifactManifestSha256": artifact_manifest,
+        "workerBundleSha256": worker_bundle,
+        "clientAssetsSha256": client_assets,
+        "clientAssetCount": client_asset_count,
+        "clientPublicAssetsSha256": public_assets,
+        "clientPublicAssetCount": public_asset_count,
+        "viteVersion": vite_version,
+        "wranglerVersion": wrangler_version,
     }
     ready = {
         "status": "ready",
@@ -252,29 +315,49 @@ def test_control_plane_validators_bind_exact_release_and_maintenance_state() -> 
             "liveKernel": "configured",
             "sandbox": "credential-and-privilege-boundary",
             "generationFilesystemReadIsolation": "PARTIAL",
+            "readiness": "not-checked",
             "maintenance": False,
             "release": release,
         },
     }
+
+    def run_validator(
+        kind: str, path: pathlib.Path
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                _control_plane_validator_source(kind),
+                str(path),
+                version,
+                worker,
+                runner,
+                digest,
+                timeout_receipt,
+                aggregate_limit_evidence,
+                runtime_policy,
+                proof_manifest,
+                artifact_classification,
+                artifact_manifest,
+                worker_bundle,
+                client_assets,
+                str(client_asset_count),
+                public_assets,
+                str(public_asset_count),
+                vite_version,
+                wrangler_version,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
     with tempfile.TemporaryDirectory() as destination:
         for kind, payload in (("ready", ready), ("health", health)):
             path = pathlib.Path(destination) / f"{kind}.json"
             path.write_text(json.dumps(payload), encoding="utf-8")
-            accepted = subprocess.run(
-                [
-                    sys.executable,
-                    "-c",
-                    _control_plane_validator_source(kind),
-                    str(path),
-                    version,
-                    worker,
-                    runner,
-                    digest,
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
+            accepted = run_validator(kind, path)
             assert accepted.returncode == 0, accepted.stderr
 
             tampered = json.loads(json.dumps(payload))
@@ -285,23 +368,37 @@ def test_control_plane_validators_bind_exact_release_and_maintenance_state() -> 
             )
             tampered_release["runnerImageDigest"] = "sha256:" + "d" * 64
             path.write_text(json.dumps(tampered), encoding="utf-8")
-            rejected = subprocess.run(
-                [
-                    sys.executable,
-                    "-c",
-                    _control_plane_validator_source(kind),
-                    str(path),
-                    version,
-                    worker,
-                    runner,
-                    digest,
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
+            rejected = run_validator(kind, path)
             assert rejected.returncode != 0
             assert "release identity does not match" in rejected.stderr
+
+            for field in (
+                "aggregateLimitEvidenceSha256",
+                "runtimePolicySha256",
+                "proofDependencyManifestSha256",
+                "workerArtifactClassification",
+                "workerArtifactManifestSha256",
+                "workerBundleSha256",
+                "clientAssetsSha256",
+                "clientAssetCount",
+                "clientPublicAssetsSha256",
+                "clientPublicAssetCount",
+                "viteVersion",
+                "wranglerVersion",
+            ):
+                tampered = json.loads(json.dumps(payload))
+                tampered_release = (
+                    tampered["release"]
+                    if kind == "ready"
+                    else tampered["data"]["release"]
+                )
+                tampered_release[field] = (
+                    1 if field.endswith("Count") else "0" * 64
+                )
+                path.write_text(json.dumps(tampered), encoding="utf-8")
+                rejected = run_validator(kind, path)
+                assert rejected.returncode != 0
+                assert "release identity does not match" in rejected.stderr
 
             maintenance = json.loads(json.dumps(payload))
             if kind == "ready":
@@ -309,21 +406,7 @@ def test_control_plane_validators_bind_exact_release_and_maintenance_state() -> 
             else:
                 maintenance["data"]["maintenance"] = True
             path.write_text(json.dumps(maintenance), encoding="utf-8")
-            frozen = subprocess.run(
-                [
-                    sys.executable,
-                    "-c",
-                    _control_plane_validator_source(kind),
-                    str(path),
-                    version,
-                    worker,
-                    runner,
-                    digest,
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
+            frozen = run_validator(kind, path)
             assert frozen.returncode != 0
             assert "maintenance" in frozen.stderr
 
@@ -388,6 +471,9 @@ def test_public_asset_scan_is_cloak_backed_and_repo_contained() -> None:
     assert "urllib.request" not in script
     assert "COUNTERLAB_E2E_PUBLIC_ASSET_SCAN=1" in script
     assert "COUNTERLAB_E2E_PUBLIC_ASSET_EVIDENCE_PATH" in script
+    assert "COUNTERLAB_E2E_FROZEN_WORKER_MANIFEST_PATH" in script
+    assert "COUNTERLAB_E2E_CLIENT_PUBLIC_ASSETS_SHA256" in script
+    assert "COUNTERLAB_E2E_CLIENT_PUBLIC_ASSET_COUNT" in script
     assert 'COUNTERLAB_E2E_RUNTIME_ROOT="${PUBLIC_ASSET_RUNTIME_ROOT}"' in script
     assert (
         "Loaded public release routes and assets retain security headers and contain no secrets"
@@ -401,6 +487,10 @@ def test_public_asset_scan_is_cloak_backed_and_repo_contained() -> None:
     assert "expect(asset.redirectedFrom, url).toBeNull()" in browser
     assert "max-age=31536000" in browser
     assert "ensureRuntimeParent(evidencePath)" in browser
+    assert "FrozenWorkerReleaseManifestSchema" in browser
+    assert 'crypto.subtle.digest("SHA-256", bytes)' in browser
+    assert "exactPublicAssets" in browser
+    assert "manifest.clientPublicAssetsSha256" in browser
 
 
 def test_smoke_report_is_atomic_idempotent_and_secret_free() -> None:
@@ -413,6 +503,7 @@ def test_smoke_report_is_atomic_idempotent_and_secret_free() -> None:
             **_deployment_identity(),
         )
         assert initialized["status"] == "RUNNING"
+        assert initialized["schemaVersion"] == "4"
         assert initialized["baseUrl"] == "https://counterlab.example.test"
         assert initialized["stages"] == []
 
@@ -435,6 +526,67 @@ def test_smoke_report_is_atomic_idempotent_and_secret_free() -> None:
             "containsRawNotebookBytes": False,
             "containsPrivateReasoning": False,
         }
+
+
+def test_smoke_report_versions_preserve_v2_v3_and_require_v4_artifact_bindings() -> None:
+    with tempfile.TemporaryDirectory() as destination:
+        path = pathlib.Path(destination) / "production-smoke.json"
+        current = initialize_report(
+            path,
+            base_url="https://counterlab.example.test",
+            started_at="2026-07-15T12:00:00Z",
+            **_deployment_identity(),
+        )
+        assert current["schemaVersion"] == "4"
+
+        v4_fields = (
+            "aggregateLimitEvidenceSha256",
+            "workerArtifactClassification",
+            "workerArtifactManifestSha256",
+            "workerBundleSha256",
+            "clientAssetsSha256",
+            "clientAssetCount",
+            "clientPublicAssetsSha256",
+            "clientPublicAssetCount",
+            "viteVersion",
+            "wranglerVersion",
+        )
+
+        historical_v3 = json.loads(json.dumps(current))
+        historical_v3["schemaVersion"] = "3"
+        for field in v4_fields:
+            historical_v3["deployment"].pop(field)
+        assert validate_report(historical_v3)["schemaVersion"] == "3"
+
+        historical = json.loads(json.dumps(historical_v3))
+        historical["schemaVersion"] = "2"
+        for field in (
+            "timeoutCleanupReceiptSha256",
+            "runtimePolicySha256",
+            "proofDependencyManifestSha256",
+        ):
+            historical["deployment"].pop(field)
+        assert validate_report(historical)["schemaVersion"] == "2"
+
+        expanded_v2 = json.loads(json.dumps(current))
+        expanded_v2["schemaVersion"] = "2"
+        with pytest.raises(ValueError, match="deployment metadata"):
+            validate_report(expanded_v2)
+
+        incomplete_v3 = json.loads(json.dumps(historical_v3))
+        incomplete_v3["deployment"].pop("runtimePolicySha256")
+        with pytest.raises(ValueError, match="deployment metadata"):
+            validate_report(incomplete_v3)
+
+        malformed_v3 = json.loads(json.dumps(historical_v3))
+        malformed_v3["deployment"]["proofDependencyManifestSha256"] = "short"
+        with pytest.raises(ValueError, match="proofDependencyManifestSha256"):
+            validate_report(malformed_v3)
+
+        invalid_v4 = json.loads(json.dumps(current))
+        invalid_v4["deployment"]["clientPublicAssetCount"] = 28
+        with pytest.raises(ValueError, match="asset counts"):
+            validate_report(invalid_v4)
 
 
 def test_smoke_report_rejects_conflicts_secrets_and_credential_urls() -> None:

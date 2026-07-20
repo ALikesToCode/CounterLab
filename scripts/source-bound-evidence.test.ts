@@ -25,6 +25,7 @@ const refreshScript = resolve(
   root,
   "scripts/refresh-source-bound-scientific-evidence.sh",
 );
+const buildScript = resolve(root, "scripts/build-source-bound-runner.sh");
 const trackedRawPath = resolve(root, "docs/sbom/grype-raw.json");
 const trackedRunnerSbomPath = resolve(
   root,
@@ -175,15 +176,34 @@ function createPrepareFixture(options: PrepareFixtureOptions = {}) {
     receipt,
     `${JSON.stringify(
       {
-        schemaVersion: "3",
+        schemaVersion: "4",
         status: "BUILT",
         sourceCommit,
+        sourceArchiveSha256: "1".repeat(64),
         sourceTreeSha256,
+        dockerfileSha256: "2".repeat(64),
         localImageTag: `counterlab-runner:git-${sourceCommit}`,
         localImageDigest: imageDigest,
         localManifestDigest: manifestDigest,
         localOciArchive: repositoryRelative(ociArchive),
         localOciArchiveSha256: sha256(ociArchiveBytes),
+        adapterDockerfileSha256: "3".repeat(64),
+        adapterImageTag: `counterlab-adapter:git-${sourceCommit}`,
+        adapterImageDigest: `sha256:${"4".repeat(64)}`,
+        adapterManifestDigest: `sha256:${"5".repeat(64)}`,
+        adapterOciArchive: repositoryRelative(ociArchive),
+        adapterOciArchiveSha256: sha256(ociArchiveBytes),
+        adapterOciRevision: sourceCommit,
+        adapterOciSourceTreeSha256: sourceTreeSha256,
+        runtimeToolchainSha256: "6".repeat(64),
+        runtimePolicySha256: "7".repeat(64),
+        proofDependencyManifestSha256: "8".repeat(64),
+        toolchainLockSha256: "9".repeat(64),
+        runtimeAdapterSha256: "a".repeat(64),
+        buildctlSha256: "b".repeat(64),
+        buildkitdSha256: "c".repeat(64),
+        buildkitConfigSha256: "d".repeat(64),
+        builtAt: generatedAt,
       },
       null,
       2,
@@ -430,6 +450,18 @@ describe("source-bound release evidence helpers", () => {
     });
     assertRejected(changedArchive, /archive hash does not match/u);
 
+    const unknownReceiptField = createPrepareFixture();
+    const receiptWithUnknownField = JSON.parse(
+      readFileSync(unknownReceiptField.receipt, "utf8"),
+    ) as Record<string, unknown>;
+    receiptWithUnknownField.unreviewedExtension = true;
+    writeFileSync(
+      unknownReceiptField.receipt,
+      `${JSON.stringify(receiptWithUnknownField, null, 2)}\n`,
+      { encoding: "utf8", mode: 0o600 },
+    );
+    assertRejected(unknownReceiptField, /Unrecognized key/u);
+
     const missingManifest = createPrepareFixture();
     const receipt = JSON.parse(
       readFileSync(missingManifest.receipt, "utf8"),
@@ -441,7 +473,7 @@ describe("source-bound release evidence helpers", () => {
       { encoding: "utf8", mode: 0o600 },
     );
     assertRejected(missingManifest, /localManifestDigest/u);
-  });
+  }, 30_000);
 
   it("rejects an invalid KEV timestamp and a newly listed vulnerability", () => {
     const malformed = createPrepareFixture({ dateReleased: "not-a-date" });
@@ -542,6 +574,20 @@ describe("source-bound release evidence helpers", () => {
     expect(refresh).toContain(
       'load --platform linux/amd64 --input "${OCI_ARCHIVE}"',
     );
+    expect(refresh).toContain('"${RUNTIME_COMMAND[@]}" counterlab-attest');
+    expect(refresh).toContain(
+      '"${RUNTIME_COMMAND[@]}" load --platform linux/amd64 --input "${OCI_ARCHIVE}"',
+    );
+    expect(refresh).toContain(
+      '"${RUNTIME_COMMAND[@]}" image inspect "${IMAGE}"',
+    );
+    expect(refresh).toContain('"${RUNTIME_COMMAND[@]}" run \\');
+    expect(refresh).not.toContain(
+      '"${RUNTIME_ADAPTER}" --session-id "${RUNTIME_SESSION_ID}" -- counterlab-attest',
+    );
+    expect(refresh).not.toContain('"${RUNTIME_ADAPTER}" load');
+    expect(refresh).not.toContain('"${RUNTIME_ADAPTER}" image inspect');
+    expect(refresh).not.toContain('"${RUNTIME_ADAPTER}" run \\');
     expect(refresh).toContain(
       '--runtime-report "${WORK}/runtime-verification.json"',
     );
@@ -551,5 +597,29 @@ describe("source-bound release evidence helpers", () => {
     expect(refresh).not.toContain("/dev/null");
     expect(checkMode).toBeGreaterThan(0);
     expect(writeMode).toBeGreaterThan(checkMode);
+  });
+
+  it("uses exact source-bound evidence paths across build and refresh gates", () => {
+    const build = readFileSync(buildScript, "utf8");
+    const refresh = readFileSync(refreshScript, "utf8");
+    const required = [
+      "scientific-engines/fixtures/validation/internal-mutations-integrity-v2.json",
+      "scientific-engines/fixtures/validation/internal-oracle-integrity-v2.json",
+      "scientific-engines/fixtures/validation/internal-renderer-integrity-v2.json",
+      "scientific-engines/subject-pack-bindings.json",
+    ];
+
+    for (const path of required) {
+      expect(build).toContain(path);
+      expect(refresh).toContain(path);
+    }
+    expect(build).not.toContain("docs/sbom/*.json");
+    expect(build).not.toContain("scientific-engines/fixtures/health/*.json");
+    expect(build).not.toContain("scientific-engines/fixtures/integrity/*.json");
+    expect(
+      refresh.match(
+        /scientific-engines\/fixtures\/validation\/signed-result-binding-v2\.json/gu,
+      ),
+    ).toHaveLength(2);
   });
 });

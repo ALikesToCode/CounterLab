@@ -7,8 +7,10 @@ RELEASE_CHECK_RECEIPT="${COUNTERLAB_RELEASE_CHECK_RECEIPT:-}"
 IMAGE="${COUNTERLAB_QUALIFIED_RUNNER_IMAGE:-}"
 RUNTIME_ADAPTER="${COUNTERLAB_DOCKER_BIN:-}"
 WRANGLER="${ROOT_DIR}/node_modules/.bin/wrangler"
+VITE="${ROOT_DIR}/node_modules/.bin/vite"
 TSX="${ROOT_DIR}/node_modules/.bin/tsx"
 PNPM="${ROOT_DIR}/scripts/run-contained-pnpm.sh"
+PRODUCTION_SMOKE="${ROOT_DIR}/scripts/production-smoke.sh"
 PRODUCTION_ORIGIN="https://counterlab.cserules.workers.dev"
 
 [[ -f "${ROOT_DIR}/COUNTERLAB_REPO_ROOT" ]] || {
@@ -96,6 +98,15 @@ case "${WRANGLER}" in
   "${ROOT_DIR}"/*) ;;
   *) echo "Wrangler resolves outside the repository." >&2; exit 2 ;;
 esac
+[[ -x "${VITE}" ]] || {
+  echo "Pinned repository-contained Vite is unavailable." >&2
+  exit 2
+}
+VITE="$(realpath -e -- "${VITE}")"
+case "${VITE}" in
+  "${ROOT_DIR}"/*) ;;
+  *) echo "Vite resolves outside the repository." >&2; exit 2 ;;
+esac
 [[ -x "${TSX}" ]] || {
   echo "Pinned repository-contained TypeScript runtime is unavailable." >&2
   exit 2
@@ -114,6 +125,15 @@ case "${PNPM}" in
   "${ROOT_DIR}"/*) ;;
   *) echo "pnpm launcher resolves outside the repository." >&2; exit 2 ;;
 esac
+[[ -x "${PRODUCTION_SMOKE}" && ! -L "${PRODUCTION_SMOKE}" ]] || {
+  echo "Repository-contained production smoke launcher is unavailable." >&2
+  exit 2
+}
+PRODUCTION_SMOKE="$(realpath -e -- "${PRODUCTION_SMOKE}")"
+case "${PRODUCTION_SMOKE}" in
+  "${ROOT_DIR}"/*) ;;
+  *) echo "Production smoke launcher resolves outside the repository." >&2; exit 2 ;;
+esac
 [[ -n "${RUNTIME_ADAPTER}" ]] || {
   echo "COUNTERLAB_DOCKER_BIN must name the repository-contained runtime adapter." >&2
   exit 2
@@ -125,6 +145,9 @@ RUNTIME_ADAPTER="$(repo_path "${RUNTIME_ADAPTER}")"
 }
 RUNTIME_ADAPTER="$(realpath -e -- "${RUNTIME_ADAPTER}")"
 export COUNTERLAB_DOCKER_BIN="${RUNTIME_ADAPTER}"
+
+OBSERVED_VITE_VERSION="$("${VITE}" --version)"
+OBSERVED_WRANGLER_VERSION="$("${WRANGLER}" --version)"
 
 if [[ -n "$(git status --porcelain=v1 --untracked-files=all)" ]]; then
   echo "Qualified deployment requires a completely clean worktree, including untracked files." >&2
@@ -140,21 +163,54 @@ fi
   exit 2
 }
 
-readarray -t RELEASE_IDENTITY < <(
+RELEASE_IDENTITY_JSON="$(
   node --import tsx scripts/release-check-receipt.ts \
     identity \
     --qualified "${RECEIPT}"
-)
-[[ "${#RELEASE_IDENTITY[@]}" -eq 10 ]] || {
-  echo "Qualified receipt did not expose the exact deployment identity." >&2
+)"
+qualified_identity_value() {
+  local field="$1"
+  node -e '
+const [raw, field] = process.argv.slice(1);
+const identity = JSON.parse(raw);
+const outerFields = ["identitySchemaVersion", "receipt", "receiptSha256", "receiptType"];
+if (
+  Object.keys(identity).sort().join("\n") !== outerFields.sort().join("\n") ||
+  identity.identitySchemaVersion !== "1" ||
+  identity.receiptType !== "qualified-runner-release" ||
+  !/^[a-f0-9]{64}$/.test(identity.receiptSha256)
+) throw new Error("qualified release identity envelope is invalid");
+if (!Object.hasOwn(identity.receipt, field) || typeof identity.receipt[field] !== "string") {
+  throw new Error(`qualified release identity field is unavailable: ${field}`);
+}
+process.stdout.write(identity.receipt[field]);
+' "${RELEASE_IDENTITY_JSON}" "${field}"
+}
+EVIDENCE_COMMIT="$(qualified_identity_value evidenceCommit)"
+SOURCE_COMMIT="$(qualified_identity_value sourceCommit)"
+LOCAL_IMAGE="$(qualified_identity_value localImageTag)"
+REGISTRY_DIGEST="$(qualified_identity_value registryDigest)"
+TIMEOUT_CLEANUP_RECEIPT_SHA256="$(qualified_identity_value timeoutCleanupReceiptSha256)"
+AGGREGATE_LIMIT_EVIDENCE_SHA256="$(qualified_identity_value aggregateLimitEvidenceSha256)"
+RUNTIME_POLICY_SHA256="$(qualified_identity_value runtimePolicySha256)"
+PROOF_DEPENDENCY_MANIFEST_SHA256="$(qualified_identity_value proofDependencyManifestSha256)"
+QUALIFIED_RECEIPT_SHA256="$(
+  node -e '
+const identity = JSON.parse(process.argv[1]);
+if (identity?.identitySchemaVersion !== "1" || !/^[a-f0-9]{64}$/.test(identity?.receiptSha256)) {
+  throw new Error("qualified receipt byte hash is unavailable");
+}
+process.stdout.write(identity.receiptSha256);
+' "${RELEASE_IDENTITY_JSON}"
+)"
+[[ "$(sha256sum "${RECEIPT}" | cut -d ' ' -f 1)" == "${QUALIFIED_RECEIPT_SHA256}" ]] || {
+  echo "Qualified receipt bytes changed after identity validation." >&2
   exit 2
 }
-EVIDENCE_COMMIT="${RELEASE_IDENTITY[0]}"
-SOURCE_COMMIT="${RELEASE_IDENTITY[1]}"
-LOCAL_IMAGE="${RELEASE_IDENTITY[2]}"
-REGISTRY_DIGEST="${RELEASE_IDENTITY[9]}"
+RELEASE_CHECK_RECEIPT_SHA256="$(sha256sum "${RELEASE_CHECK_RECEIPT}" | cut -d ' ' -f 1)"
 CONTAINER_APPLICATION_NAME="counterlab-counterlabrunner"
 QUALIFIED_CONTAINER_IMAGE="${IMAGE%:git-*}@${REGISTRY_DIGEST}"
+WORKER_TAG="git-${EVIDENCE_COMMIT}"
 
 [[ "$(git rev-parse HEAD)" == "${EVIDENCE_COMMIT}" ]] || {
   echo "The qualified evidence commit must equal the deployment HEAD." >&2
@@ -165,7 +221,11 @@ RELEASE_ID="${EVIDENCE_COMMIT}-runner-${SOURCE_COMMIT:0:12}-$(date -u +%Y%m%dT%H
 RELEASE_DIR="$(repo_path "node_modules/.cache/counterlab-v6.1/releases/worker-${RELEASE_ID}")"
 RELEASE_CONFIG="$(repo_path "apps/web/dist/counterlab/wrangler.release-${RELEASE_ID}.json")"
 MAINTENANCE_CONFIG="$(repo_path "apps/web/dist/counterlab/wrangler.maintenance-${RELEASE_ID}.json")"
+RECOVERY_CONFIG="${RELEASE_DIR}/wrangler.recovery.json"
 DRY_RUN_DIR="${RELEASE_DIR}/dry-run"
+WORKER_BUNDLE="$(repo_path "apps/web/dist/counterlab/index.js")"
+CLIENT_DIR="$(repo_path "apps/web/dist/client")"
+WORKER_ARTIFACT_MANIFEST="${RELEASE_DIR}/frozen-worker-release.json"
 mkdir -p "${RELEASE_DIR}"
 
 ./scripts/verify-scientific-engines.sh --image "${LOCAL_IMAGE}"
@@ -180,16 +240,75 @@ mkdir -p "${RELEASE_DIR}"
   exit 2
 }
 
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/secret-scan.py \
+  "${WORKER_BUNDLE}" "${CLIENT_DIR}"
+
+node --import tsx scripts/frozen-worker-release.ts create \
+  --source-commit "${EVIDENCE_COMMIT}" \
+  --worker-bundle "${WORKER_BUNDLE}" \
+  --client-dir "${CLIENT_DIR}" \
+  --vite-version "${OBSERVED_VITE_VERSION}" \
+  --wrangler-version "${OBSERVED_WRANGLER_VERSION}" \
+  --output "${WORKER_ARTIFACT_MANIFEST}"
+WORKER_ARTIFACT_IDENTITY_JSON="$(
+  node --import tsx scripts/frozen-worker-release.ts identity \
+    --manifest "${WORKER_ARTIFACT_MANIFEST}"
+)"
+frozen_worker_identity_value() {
+  local field="$1"
+  node -e '
+const [raw, field] = process.argv.slice(1);
+const identity = JSON.parse(raw);
+const fields = [
+  "classification",
+  "clientAssetCount",
+  "clientAssetsSha256",
+  "clientPublicAssetCount",
+  "clientPublicAssetsSha256",
+  "manifestSha256",
+  "schemaVersion",
+  "sourceCommit",
+  "viteVersion",
+  "workerBundleSha256",
+  "wranglerVersion",
+];
+if (Object.keys(identity).sort().join("\n") !== fields.sort().join("\n") || identity.schemaVersion !== "1" || identity.classification !== "PROCESS_BOUND_PARTIAL") {
+  throw new Error("frozen Worker identity envelope is invalid");
+}
+if (!Object.hasOwn(identity, field)) {
+  throw new Error(`frozen Worker identity field is unavailable: ${field}`);
+}
+const value = identity[field];
+if (
+  !(typeof value === "string" && value.length > 0) &&
+  !(Number.isSafeInteger(value) && value > 0)
+) {
+  throw new Error(`frozen Worker identity field is invalid: ${field}`);
+}
+process.stdout.write(String(value));
+' "${WORKER_ARTIFACT_IDENTITY_JSON}" "${field}"
+}
+WORKER_ARTIFACT_CLASSIFICATION="$(frozen_worker_identity_value classification)"
+WORKER_ARTIFACT_MANIFEST_SHA256="$(frozen_worker_identity_value manifestSha256)"
+WORKER_BUNDLE_SHA256="$(frozen_worker_identity_value workerBundleSha256)"
+CLIENT_ASSETS_SHA256="$(frozen_worker_identity_value clientAssetsSha256)"
+CLIENT_ASSET_COUNT="$(frozen_worker_identity_value clientAssetCount)"
+CLIENT_PUBLIC_ASSETS_SHA256="$(frozen_worker_identity_value clientPublicAssetsSha256)"
+CLIENT_PUBLIC_ASSET_COUNT="$(frozen_worker_identity_value clientPublicAssetCount)"
+FROZEN_VITE_VERSION="$(frozen_worker_identity_value viteVersion)"
+FROZEN_WRANGLER_VERSION="$(frozen_worker_identity_value wranglerVersion)"
+
 "${TSX}" scripts/prepare-qualified-deploy.ts \
   --config apps/web/dist/counterlab/wrangler.json \
   --receipt "${RECEIPT}" \
   --release-check-receipt "${RELEASE_CHECK_RECEIPT}" \
+  --worker-artifact-manifest "${WORKER_ARTIFACT_MANIFEST}" \
   --image "${IMAGE}" \
   --output "${RELEASE_CONFIG}"
 
-node - "${RELEASE_CONFIG}" "${MAINTENANCE_CONFIG}" <<'NODE'
+node - "${RELEASE_CONFIG}" "${MAINTENANCE_CONFIG}" "${RECOVERY_CONFIG}" <<'NODE'
 const fs = require("node:fs");
-const [sourcePath, outputPath] = process.argv.slice(2);
+const [sourcePath, outputPath, recoveryPath] = process.argv.slice(2);
 const config = JSON.parse(fs.readFileSync(sourcePath, "utf8"));
 if (config.vars?.COUNTERLAB_MAINTENANCE_MODE !== "false") {
   throw new Error("final release config does not explicitly disable maintenance mode");
@@ -200,7 +319,56 @@ fs.writeFileSync(outputPath, `${JSON.stringify(config, null, 2)}\n`, {
   flag: "wx",
   mode: 0o600,
 });
+fs.copyFileSync(sourcePath, recoveryPath, fs.constants.COPYFILE_EXCL);
 NODE
+
+RELEASE_CONFIG_SHA256="$(sha256sum "${RELEASE_CONFIG}" | cut -d ' ' -f 1)"
+MAINTENANCE_CONFIG_SHA256="$(sha256sum "${MAINTENANCE_CONFIG}" | cut -d ' ' -f 1)"
+RECOVERY_CONFIG_SHA256="$(sha256sum "${RECOVERY_CONFIG}" | cut -d ' ' -f 1)"
+assert_frozen_worker_release() {
+  [[ "$(git rev-parse HEAD)" == "${EVIDENCE_COMMIT}" ]] || {
+    echo "The deployment HEAD changed after qualification." >&2
+    return 2
+  }
+  [[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]] || {
+    echo "The deployment worktree changed after qualification." >&2
+    return 2
+  }
+  [[ "$(sha256sum "${RECEIPT}" | cut -d ' ' -f 1)" == "${QUALIFIED_RECEIPT_SHA256}" ]] || {
+    echo "The qualified runner receipt changed." >&2
+    return 2
+  }
+  [[ "$(sha256sum "${RELEASE_CHECK_RECEIPT}" | cut -d ' ' -f 1)" == "${RELEASE_CHECK_RECEIPT_SHA256}" ]] || {
+    echo "The release-check receipt changed." >&2
+    return 2
+  }
+  [[ "$(sha256sum "${WORKER_ARTIFACT_MANIFEST}" | cut -d ' ' -f 1)" == "${WORKER_ARTIFACT_MANIFEST_SHA256}" ]] || {
+    echo "The frozen Worker manifest bytes changed." >&2
+    return 2
+  }
+  [[ "$("${VITE}" --version)" == "${OBSERVED_VITE_VERSION}" && "${FROZEN_VITE_VERSION}" == "8.1.4" ]] || {
+    echo "The frozen Vite toolchain changed." >&2
+    return 2
+  }
+  [[ "$("${WRANGLER}" --version)" == "${OBSERVED_WRANGLER_VERSION}" && "${FROZEN_WRANGLER_VERSION}" == "4.110.0" ]] || {
+    echo "The frozen Wrangler toolchain changed." >&2
+    return 2
+  }
+  node --import tsx scripts/frozen-worker-release.ts verify \
+    --manifest "${WORKER_ARTIFACT_MANIFEST}"
+  [[ "$(sha256sum "${RELEASE_CONFIG}" | cut -d ' ' -f 1)" == "${RELEASE_CONFIG_SHA256}" ]] || {
+    echo "The frozen release Wrangler config changed." >&2
+    return 2
+  }
+  [[ "$(sha256sum "${MAINTENANCE_CONFIG}" | cut -d ' ' -f 1)" == "${MAINTENANCE_CONFIG_SHA256}" ]] || {
+    echo "The frozen maintenance Wrangler config changed." >&2
+    return 2
+  }
+  [[ "$(sha256sum "${RECOVERY_CONFIG}" | cut -d ' ' -f 1)" == "${RECOVERY_CONFIG_SHA256}" ]] || {
+    echo "The preserved recovery Wrangler config changed." >&2
+    return 2
+  }
+}
 
 query_legacy_replay_count() {
   local output_path="$1"
@@ -227,24 +395,45 @@ process.stdout.write(String(counts[0]));
 NODE
 }
 
+FINAL_READINESS_RUN=0
+
 wait_for_maintenance_health() {
   local candidate=""
+  local expected_version="${MAINTENANCE_VERSION_ID:-}"
+  [[ "${expected_version}" =~ ^[a-f0-9-]{36}$ ]] || {
+    echo "The exact maintenance Worker version is unavailable." >&2
+    return 1
+  }
   for attempt in $(seq 1 24); do
     candidate="${RELEASE_DIR}/maintenance-health-${attempt}.json"
     if "${CURL_BIN}" --silent --show-error --fail-with-body \
       --connect-timeout 10 --max-time 20 \
       --output "${candidate}" "${PRODUCTION_ORIGIN}/api/health" &&
-      node - "${candidate}" "${EVIDENCE_COMMIT}" "${SOURCE_COMMIT}" "${REGISTRY_DIGEST}" <<'NODE'
+      node - "${candidate}" "${EVIDENCE_COMMIT}" "${SOURCE_COMMIT}" "${REGISTRY_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" "${expected_version}" <<'NODE'
 const fs = require("node:fs");
-const [path, evidenceCommit, sourceCommit, digest] = process.argv.slice(2);
+const [path, evidenceCommit, sourceCommit, digest, timeoutReceipt, aggregateEvidence, runtimePolicy, proofManifest, artifactClassification, artifactManifest, workerBundle, clientAssets, clientAssetCount, publicAssets, publicAssetCount, viteVersion, wranglerVersion, expectedVersion] = process.argv.slice(2);
 const payload = JSON.parse(fs.readFileSync(path, "utf8"));
 const data = payload?.ok === true ? payload.data : undefined;
 if (
   data?.maintenance !== true ||
   data?.release?.status !== "bound" ||
+  data.release.workerVersionId !== expectedVersion ||
   data.release.workerEvidenceCommit !== evidenceCommit ||
   data.release.runnerSourceCommit !== sourceCommit ||
-  data.release.runnerImageDigest !== digest
+  data.release.runnerImageDigest !== digest ||
+  data.release.timeoutCleanupReceiptSha256 !== timeoutReceipt ||
+  data.release.aggregateLimitEvidenceSha256 !== aggregateEvidence ||
+  data.release.runtimePolicySha256 !== runtimePolicy ||
+  data.release.proofDependencyManifestSha256 !== proofManifest ||
+  data.release.workerArtifactClassification !== artifactClassification ||
+  data.release.workerArtifactManifestSha256 !== artifactManifest ||
+  data.release.workerBundleSha256 !== workerBundle ||
+  data.release.clientAssetsSha256 !== clientAssets ||
+  data.release.clientAssetCount !== Number(clientAssetCount) ||
+  data.release.clientPublicAssetsSha256 !== publicAssets ||
+  data.release.clientPublicAssetCount !== Number(publicAssetCount) ||
+  data.release.viteVersion !== viteVersion ||
+  data.release.wranglerVersion !== wranglerVersion
 ) process.exit(1);
 NODE
     then
@@ -259,22 +448,42 @@ NODE
 
 wait_for_final_readiness() {
   local candidate=""
+  local expected_version="${DEPLOYED_VERSION_ID:-}"
+  FINAL_READINESS_RUN=$((FINAL_READINESS_RUN + 1))
+  [[ "${expected_version}" =~ ^[a-f0-9-]{36}$ ]] || {
+    echo "The exact final Worker version is unavailable." >&2
+    return 1
+  }
   for attempt in $(seq 1 24); do
-    candidate="${RELEASE_DIR}/final-readiness-${attempt}.json"
+    candidate="${RELEASE_DIR}/final-readiness-${FINAL_READINESS_RUN}-${attempt}.json"
     if "${CURL_BIN}" --silent --show-error --fail-with-body \
       --connect-timeout 10 --max-time 20 \
       --output "${candidate}" "${PRODUCTION_ORIGIN}/ready" &&
-      node - "${candidate}" "${EVIDENCE_COMMIT}" "${SOURCE_COMMIT}" "${REGISTRY_DIGEST}" <<'NODE'
+      node - "${candidate}" "${EVIDENCE_COMMIT}" "${SOURCE_COMMIT}" "${REGISTRY_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" "${expected_version}" <<'NODE'
 const fs = require("node:fs");
-const [path, evidenceCommit, sourceCommit, digest] = process.argv.slice(2);
+const [path, evidenceCommit, sourceCommit, digest, timeoutReceipt, aggregateEvidence, runtimePolicy, proofManifest, artifactClassification, artifactManifest, workerBundle, clientAssets, clientAssetCount, publicAssets, publicAssetCount, viteVersion, wranglerVersion, expectedVersion] = process.argv.slice(2);
 const payload = JSON.parse(fs.readFileSync(path, "utf8"));
 if (
   payload?.status !== "ready" ||
   payload?.maintenance !== false ||
   payload?.release?.status !== "bound" ||
+  payload.release.workerVersionId !== expectedVersion ||
   payload.release.workerEvidenceCommit !== evidenceCommit ||
   payload.release.runnerSourceCommit !== sourceCommit ||
-  payload.release.runnerImageDigest !== digest
+  payload.release.runnerImageDigest !== digest ||
+  payload.release.timeoutCleanupReceiptSha256 !== timeoutReceipt ||
+  payload.release.aggregateLimitEvidenceSha256 !== aggregateEvidence ||
+  payload.release.runtimePolicySha256 !== runtimePolicy ||
+  payload.release.proofDependencyManifestSha256 !== proofManifest ||
+  payload.release.workerArtifactClassification !== artifactClassification ||
+  payload.release.workerArtifactManifestSha256 !== artifactManifest ||
+  payload.release.workerBundleSha256 !== workerBundle ||
+  payload.release.clientAssetsSha256 !== clientAssets ||
+  payload.release.clientAssetCount !== Number(clientAssetCount) ||
+  payload.release.clientPublicAssetsSha256 !== publicAssets ||
+  payload.release.clientPublicAssetCount !== Number(publicAssetCount) ||
+  payload.release.viteVersion !== viteVersion ||
+  payload.release.wranglerVersion !== wranglerVersion
 ) process.exit(1);
 NODE
     then
@@ -287,17 +496,107 @@ NODE
   return 1
 }
 
+extract_worker_version_id() {
+  local deploy_log="$1"
+  node - "${deploy_log}" <<'NODE'
+const fs = require("node:fs");
+const output = fs.readFileSync(process.argv[2], "utf8");
+const matches = [...output.matchAll(/(?:Current|Worker) Version ID:\s*([a-f0-9-]{36})/g)];
+if (matches.length !== 1) throw new Error("Wrangler did not return exactly one Worker version ID");
+process.stdout.write(matches[0][1]);
+NODE
+}
+
+capture_active_worker() {
+  local expected_version="$1"
+  local output_path="$2"
+  local config_path="${3:-${RELEASE_CONFIG}}"
+  for attempt in $(seq 1 24); do
+    if "${WRANGLER}" deployments status \
+      --config "${config_path}" \
+      --json >"${output_path}" &&
+      node - "${output_path}" "${expected_version}" <<'NODE'
+const fs = require("node:fs");
+const [path, expectedVersion] = process.argv.slice(2);
+const status = JSON.parse(fs.readFileSync(path, "utf8"));
+if (!Array.isArray(status.versions) || status.versions.length !== 1) {
+  throw new Error("deployment status must expose one active Worker version");
+}
+const active = status.versions[0];
+if (active?.percentage !== 100 || active.version_id !== expectedVersion) {
+  throw new Error("the expected Worker version does not own 100 percent traffic");
+}
+NODE
+    then
+      return 0
+    fi
+    echo "Waiting for exact Worker ${expected_version} to own all traffic (${attempt}/24)."
+    sleep 5
+  done
+  echo "The exact Worker ${expected_version} did not reach 100 percent traffic." >&2
+  return 1
+}
+
 if [[ -n "$(git status --porcelain=v1 --untracked-files=all)" ]]; then
   echo "Release verification changed the tracked or untracked worktree." >&2
   exit 2
 fi
 
+assert_frozen_worker_release
 "${WRANGLER}" deploy \
+  "${WORKER_BUNDLE}" \
   --config "${RELEASE_CONFIG}" \
   --dry-run \
+  --no-bundle \
   --strict \
   --containers-rollout none \
   --outdir "${DRY_RUN_DIR}"
+
+[[ -f "${DRY_RUN_DIR}/index.js" ]] || {
+  echo "Wrangler dry-run did not emit the frozen Worker bundle." >&2
+  exit 2
+}
+[[ "$(sha256sum "${DRY_RUN_DIR}/index.js" | cut -d ' ' -f 1)" == "$(sha256sum "${WORKER_BUNDLE}" | cut -d ' ' -f 1)" ]] || {
+  echo "Wrangler dry-run changed the frozen Worker bytes." >&2
+  exit 2
+}
+assert_frozen_worker_release
+DRY_RUN_PROJECTION_JSON="$(
+  node --import tsx scripts/frozen-worker-release.ts verify-dry-run \
+    --manifest "${WORKER_ARTIFACT_MANIFEST}" \
+    --dry-run-dir "${DRY_RUN_DIR}"
+)"
+
+authenticated_cloudflare_account() {
+  "${WRANGLER}" whoami --json |
+    "${TSX}" scripts/cloudflare-account-identity.ts \
+      --config "${RELEASE_CONFIG}"
+}
+AUTHENTICATED_CLOUDFLARE_ACCOUNT_ID="$(authenticated_cloudflare_account)"
+[[ "${AUTHENTICATED_CLOUDFLARE_ACCOUNT_ID}" =~ ^[a-f0-9]{32}$ ]] || {
+  echo "The authenticated Cloudflare account identity is invalid." >&2
+  exit 2
+}
+
+assert_release_authority() {
+  local dry_run_projection=""
+  local authenticated_account=""
+  assert_frozen_worker_release
+  dry_run_projection="$(
+    node --import tsx scripts/frozen-worker-release.ts verify-dry-run \
+      --manifest "${WORKER_ARTIFACT_MANIFEST}" \
+      --dry-run-dir "${DRY_RUN_DIR}"
+  )"
+  [[ "${dry_run_projection}" == "${DRY_RUN_PROJECTION_JSON}" ]] || {
+    echo "The strict Wrangler dry-run projection changed." >&2
+    return 2
+  }
+  authenticated_account="$(authenticated_cloudflare_account)"
+  [[ "${authenticated_account}" == "${AUTHENTICATED_CLOUDFLARE_ACCOUNT_ID}" ]] || {
+    echo "The authenticated Cloudflare account changed." >&2
+    return 2
+  }
+}
 
 "${WRANGLER}" secret list \
   --config "${RELEASE_CONFIG}" \
@@ -399,35 +698,60 @@ fi
 RECOVERY_ARMED=0
 MIGRATIONS_STARTED=0
 CONTAINER_ROLLOUT_STARTED=0
+MAINTENANCE_VERSION_ID=""
 recover_previous_worker() {
   local original_status="$?"
+  local recovery_target=""
+  local recovery_mode=""
+  local recovery_version=""
+  local recovery_status=1
   trap - EXIT
   if [[ "${original_status}" -ne 0 && "${RECOVERY_ARMED}" -eq 1 ]]; then
-    if [[ "${CONTAINER_ROLLOUT_STARTED}" -eq 1 ]]; then
-      echo "CRITICAL: qualified deployment failed after the Container rollout began." >&2
-      echo "Automatic Worker rollback was intentionally skipped to avoid pairing the prior Worker with a possibly changed Container. The maintenance Worker should remain active." >&2
+    if ! recovery_target="$(
+      "${TSX}" scripts/deployment-recovery-target.ts \
+        --migrations-started "${MIGRATIONS_STARTED}" \
+        --container-rollout-started "${CONTAINER_ROLLOUT_STARTED}" \
+        --previous-version-id "${PREVIOUS_VERSION_ID}" \
+        --maintenance-version-id "${MAINTENANCE_VERSION_ID}"
+    )"; then
+      echo "CRITICAL: no exact Worker recovery target is available." >&2
       echo "Prior Container evidence: id=${PREVIOUS_CONTAINER_ID}, version=${PREVIOUS_CONTAINER_VERSION}, image=${PREVIOUS_CONTAINER_IMAGE}." >&2
-      echo "D1 migrations may remain applied. Repair forward and verify the exact Worker, Container, and schema identities before leaving maintenance." >&2
+      exit "${original_status}"
+    fi
+    IFS=$'\t' read -r recovery_mode recovery_version <<<"${recovery_target}"
+    if [[ "${recovery_mode}" == "maintenance" ]]; then
+      echo "Qualified deployment failed after schema or Container mutation; restoring exact maintenance Worker ${recovery_version}." >&2
     else
-      echo "Qualified deployment failed before Container rollout; restoring only Worker ${PREVIOUS_VERSION_ID}." >&2
-      set +e
-      "${WRANGLER}" rollback "${PREVIOUS_VERSION_ID}" \
-        --config "${RELEASE_CONFIG}" \
-        --message "CounterLab Worker-only recovery after failed ${EVIDENCE_COMMIT} deployment" \
-        --yes >"${RELEASE_DIR}/wrangler-recovery.log" 2>&1
-      local recovery_status="$?"
-      set -e
-      if [[ "${recovery_status}" -eq 0 ]]; then
-        echo "Prior Worker version restored. Bound resources were not rolled back." >&2
-        if [[ "${MIGRATIONS_STARTED}" -eq 1 ]]; then
-          echo "D1 migration files may remain applied and require explicit review." >&2
-        fi
-        echo "Review ${RELEASE_DIR}/wrangler-recovery.log before retrying." >&2
-      else
-        echo "CRITICAL: automatic Worker recovery failed. Run the prevalidated Worker-only command:" >&2
-        echo "${WRANGLER} rollback ${PREVIOUS_VERSION_ID} --config ${RELEASE_CONFIG} --yes" >&2
-        echo "Recovery log: ${RELEASE_DIR}/wrangler-recovery.log" >&2
-      fi
+      echo "Qualified deployment failed before Container rollout; restoring prior Worker ${recovery_version}." >&2
+    fi
+
+    set +e
+    "${WRANGLER}" rollback "${recovery_version}" \
+      --config "${RECOVERY_CONFIG}" \
+      --message "CounterLab ${recovery_mode} Worker recovery after failed ${EVIDENCE_COMMIT} deployment" \
+      --yes >"${RELEASE_DIR}/wrangler-recovery.log" 2>&1
+    recovery_status="$?"
+    if [[ "${recovery_status}" -eq 0 ]]; then
+      capture_active_worker \
+        "${recovery_version}" \
+        "${RELEASE_DIR}/recovery-deployment-status.json" \
+        "${RECOVERY_CONFIG}"
+      recovery_status="$?"
+    fi
+    if [[ "${recovery_status}" -eq 0 && "${recovery_mode}" == "maintenance" ]]; then
+      wait_for_maintenance_health
+      recovery_status="$?"
+    fi
+    set -e
+
+    if [[ "${recovery_status}" -eq 0 ]]; then
+      echo "Exact ${recovery_mode} Worker restored and observed at 100 percent traffic." >&2
+      echo "Bound resources and D1 migrations were not rolled back." >&2
+      echo "Review ${RELEASE_DIR}/wrangler-recovery.log before retrying." >&2
+    else
+      echo "CRITICAL: automatic ${recovery_mode} Worker recovery failed." >&2
+      echo "Expected recovery version: ${recovery_version}" >&2
+      echo "Recovery log: ${RELEASE_DIR}/wrangler-recovery.log" >&2
     fi
   fi
   exit "${original_status}"
@@ -435,14 +759,23 @@ recover_previous_worker() {
 trap recover_previous_worker EXIT
 RECOVERY_ARMED=1
 
-MAINTENANCE_TAG="maintenance-${EVIDENCE_COMMIT}"
+MAINTENANCE_TAG="${WORKER_TAG}"
 MAINTENANCE_MESSAGE="CounterLab migration freeze for Worker ${EVIDENCE_COMMIT}"
+MAINTENANCE_DEPLOY_LOG="${RELEASE_DIR}/wrangler-maintenance-deploy.log"
+assert_release_authority
 "${WRANGLER}" deploy \
+  "${WORKER_BUNDLE}" \
   --config "${MAINTENANCE_CONFIG}" \
+  --no-bundle \
   --strict \
   --tag "${MAINTENANCE_TAG}" \
   --message "${MAINTENANCE_MESSAGE}" \
-  --containers-rollout none | tee "${RELEASE_DIR}/wrangler-maintenance-deploy.log"
+  --containers-rollout none | tee "${MAINTENANCE_DEPLOY_LOG}"
+
+MAINTENANCE_VERSION_ID="$(extract_worker_version_id "${MAINTENANCE_DEPLOY_LOG}")"
+capture_active_worker \
+  "${MAINTENANCE_VERSION_ID}" \
+  "${RELEASE_DIR}/maintenance-deployment-status.json"
 
 wait_for_maintenance_health
 
@@ -453,6 +786,7 @@ if [[ "${POST_FREEZE_REPLAY_COUNT}" != "0" ]]; then
   exit 2
 fi
 
+assert_release_authority
 MIGRATIONS_STARTED=1
 "${WRANGLER}" d1 migrations apply DB \
   --remote \
@@ -463,13 +797,22 @@ if [[ -n "$(git status --porcelain=v1 --untracked-files=all)" ]]; then
   exit 2
 fi
 
+assert_release_authority
 CONTAINER_ROLLOUT_STARTED=1
+CONTAINER_ROLLOUT_LOG="${RELEASE_DIR}/wrangler-container-rollout.log"
 "${WRANGLER}" deploy \
+  "${WORKER_BUNDLE}" \
   --config "${MAINTENANCE_CONFIG}" \
+  --no-bundle \
   --strict \
-  --tag "maintenance-container-${EVIDENCE_COMMIT}" \
+  --tag "${WORKER_TAG}" \
   --message "CounterLab qualified Container rollout for ${EVIDENCE_COMMIT}" \
-  --containers-rollout immediate | tee "${RELEASE_DIR}/wrangler-container-rollout.log"
+  --containers-rollout immediate | tee "${CONTAINER_ROLLOUT_LOG}"
+
+MAINTENANCE_VERSION_ID="$(extract_worker_version_id "${CONTAINER_ROLLOUT_LOG}")"
+capture_active_worker \
+  "${MAINTENANCE_VERSION_ID}" \
+  "${RELEASE_DIR}/container-rollout-deployment-status.json"
 
 CONTAINER_STATUS=""
 for attempt in $(seq 1 30); do
@@ -480,12 +823,11 @@ const fs = require("node:fs");
 const [path, expectedName, expectedImage] = process.argv.slice(2);
 const applications = JSON.parse(fs.readFileSync(path, "utf8"));
 if (!Array.isArray(applications)) process.exit(1);
-const match = applications.find((application) =>
-  application?.name === expectedName &&
-  application?.image === expectedImage
-);
+const named = applications.filter((application) => application?.name === expectedName);
+if (named.length !== 1) process.exit(1);
+const match = named[0];
 if (
-  match === undefined ||
+  match?.image !== expectedImage ||
   !["active", "ready"].includes(match.state) ||
   typeof match.id !== "string" ||
   !/^[A-Za-z0-9_-]{1,128}$/.test(match.id) ||
@@ -506,28 +848,26 @@ done
   echo "Cloudflare did not report the exact qualified Container digest." >&2
   exit 1
 }
+wait_for_maintenance_health
 
-WORKER_TAG="git-${EVIDENCE_COMMIT}"
 WORKER_MESSAGE="CounterLab Worker ${EVIDENCE_COMMIT}; runner ${SOURCE_COMMIT}"
+assert_release_authority
 "${WRANGLER}" deploy \
+  "${WORKER_BUNDLE}" \
   --config "${RELEASE_CONFIG}" \
+  --no-bundle \
   --strict \
   --tag "${WORKER_TAG}" \
   --message "${WORKER_MESSAGE}" \
   --containers-rollout none | tee "${RELEASE_DIR}/wrangler-deploy.log"
 
-DEPLOYED_VERSION_ID="$(node - "${RELEASE_DIR}/wrangler-deploy.log" <<'NODE'
-const fs = require("node:fs");
-const output = fs.readFileSync(process.argv[2], "utf8");
-const matches = [...output.matchAll(/(?:Current|Worker) Version ID:\s*([a-f0-9-]{36})/g)];
-if (matches.length !== 1) throw new Error("Wrangler did not return exactly one Worker version ID");
-process.stdout.write(matches[0][1]);
-NODE
-)"
+DEPLOYED_VERSION_ID="$(extract_worker_version_id "${RELEASE_DIR}/wrangler-deploy.log")"
 
-"${WRANGLER}" deployments status \
-  --config "${RELEASE_CONFIG}" \
-  --json >"${RELEASE_DIR}/deployment-status.json"
+wait_for_final_readiness
+
+capture_active_worker \
+  "${DEPLOYED_VERSION_ID}" \
+  "${RELEASE_DIR}/deployment-status.json"
 
 "${WRANGLER}" versions view "${DEPLOYED_VERSION_ID}" \
   --config "${RELEASE_CONFIG}" \
@@ -535,19 +875,18 @@ NODE
 
 CONTAINER_STATUS=""
 for attempt in $(seq 1 30); do
-  candidate="${RELEASE_DIR}/containers-${attempt}.json"
+  candidate="${RELEASE_DIR}/final-containers-${attempt}.json"
   "${WRANGLER}" containers list --per-page 100 --json --config "${RELEASE_CONFIG}" >"${candidate}"
   if node - "${candidate}" "${CONTAINER_APPLICATION_NAME}" "${QUALIFIED_CONTAINER_IMAGE}" <<'NODE'
 const fs = require("node:fs");
 const [path, expectedName, expectedImage] = process.argv.slice(2);
 const applications = JSON.parse(fs.readFileSync(path, "utf8"));
 if (!Array.isArray(applications)) process.exit(1);
-const match = applications.find((application) =>
-  application?.name === expectedName &&
-  application?.image === expectedImage
-);
+const named = applications.filter((application) => application?.name === expectedName);
+if (named.length !== 1) process.exit(1);
+const match = named[0];
 if (
-  match === undefined ||
+  match?.image !== expectedImage ||
   !["active", "ready"].includes(match.state) ||
   typeof match.id !== "string" ||
   !/^[A-Za-z0-9_-]{1,128}$/.test(match.id) ||
@@ -571,6 +910,7 @@ done
 
 wait_for_final_readiness
 
+assert_release_authority
 node --import tsx scripts/create-deployment-receipt.ts \
   --status "${RELEASE_DIR}/deployment-status.json" \
   --version "${RELEASE_DIR}/worker-version.json" \
@@ -587,14 +927,20 @@ node --import tsx scripts/create-deployment-receipt.ts \
   --container-image "${QUALIFIED_CONTAINER_IMAGE}" \
   --qualified-receipt "${RECEIPT}" \
   --release-check-receipt "${RELEASE_CHECK_RECEIPT}" \
-  --worker-bundle apps/web/dist/counterlab/index.js \
-  --client-dir apps/web/dist/client \
+  --worker-artifact-manifest "${WORKER_ARTIFACT_MANIFEST}" \
+  --worker-bundle "${WORKER_BUNDLE}" \
+  --client-dir "${CLIENT_DIR}" \
   --dry-run-dir "${DRY_RUN_DIR}"
+
+DEPLOYMENT_RECEIPT="${RELEASE_DIR}/deployment-receipt.json"
+COUNTERLAB_DEPLOYMENT_RECEIPT="${DEPLOYMENT_RECEIPT}" \
+COUNTERLAB_FROZEN_WORKER_MANIFEST="${WORKER_ARTIFACT_MANIFEST}" \
+  "${PRODUCTION_SMOKE}" "${PRODUCTION_ORIGIN}" |
+  tee "${RELEASE_DIR}/production-smoke.log"
 
 RECOVERY_ARMED=0
 trap - EXIT
 
-echo "Qualified Cloudflare deployment is active and identity-observed."
-echo "Production smoke is still required before this release is complete."
-echo "Deployment receipt: ${RELEASE_DIR}/deployment-receipt.json"
+echo "Qualified Cloudflare deployment and production smoke are complete."
+echo "Deployment receipt: ${DEPLOYMENT_RECEIPT}"
 echo "Container image digest: ${REGISTRY_DIGEST}"

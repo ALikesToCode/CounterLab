@@ -12,7 +12,17 @@ import {
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  RUNTIME_HELPER_PATHS,
+  canonicalRuntimeJson,
+  createPublicContainedRuntimeAttestation,
+  createRuntimeToolchainFingerprint,
+} from "./contained-runtime-attestation.mjs";
 import { createContainedRuntimeEnvironment } from "./contained-runtime-environment.mjs";
+import {
+  sendSupervisorRequest,
+  validateSupervisorReadyReceipt,
+} from "./contained-runtime-supervisor-protocol.mjs";
 
 const root = realpathSync(resolve(fileURLToPath(import.meta.url), "../.."));
 const args = process.argv.slice(2);
@@ -45,10 +55,6 @@ function canonicalJson(value) {
 
 function sha256File(path) {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
-}
-
-function sha256Value(value) {
-  return createHash("sha256").update(canonicalJson(value)).digest("hex");
 }
 
 function exactKeys(value, keys, label) {
@@ -126,7 +132,10 @@ const expectedPaths = {
   clientFifoRoot: `${sessionPrefix}/run/client-fifo`,
   runcStateRoot: `${sessionPrefix}/run/runc`,
   buildkitSocket: `${sessionPrefix}/run/buildkitd.sock`,
+  buildkitInnerSocket: `${sessionPrefix}/run/inner/buildkitd.sock`,
   buildkitOtelSocket: `${sessionPrefix}/run/inner/buildkit-otel.sock`,
+  runtimeSupervisorSocket: `${sessionPrefix}/run/runtime-supervisor.sock`,
+  runtimeSupervisorReady: `${sessionPrefix}/run/runtime-supervisor-ready.json`,
   containerdRoot: `${sessionPrefix}/data/containerd`,
   containerdState: `${sessionPrefix}/state/containerd`,
   buildkitRoot: `${sessionPrefix}/data/buildkit`,
@@ -164,6 +173,9 @@ exactKeys(
     "toolchainLockSha256",
     "adapterSha256",
     "helperSha256",
+    "runtimePolicySha256",
+    "proofDependencyManifest",
+    "proofDependencyManifestSha256",
     "runtimeToolchainSha256",
     "paths",
     "pids",
@@ -174,31 +186,21 @@ exactKeys(
 exactKeys(attestation.paths, Object.keys(expectedPaths), "runtime paths");
 exactKeys(
   attestation.pids,
-  ["containerdRootlesskit", "buildkitRootlesskit"],
+  ["supervisor", "containerdRootlesskit", "buildkitRootlesskit"],
   "runtime PIDs",
 );
 exactKeys(
   attestation.fileSha256,
-  ["containerdConfig", "buildkitConfig"],
+  ["containerdConfig", "buildkitConfig", "supervisorReady"],
   "runtime file hashes",
 );
 exactKeys(
   attestation.helperSha256,
-  [
-    "runtimeClient",
-    "runtimeRun",
-    "runtimeEnvironment",
-    "runcWrapper",
-    "containerdConfigWriter",
-    "runtimeServer",
-    "commandValidator",
-    "attestationVerifier",
-    "runtimeLauncher",
-  ],
+  Object.keys(RUNTIME_HELPER_PATHS),
   "runtime helper hashes",
 );
 if (
-  attestation.schemaVersion !== "1" ||
+  attestation.schemaVersion !== "3" ||
   attestation.status !== "READY" ||
   attestation.sessionId !== sessionId ||
   attestation.namespace !== "counterlab-v6.1" ||
@@ -210,6 +212,8 @@ if (
   Object.values(attestation.helperSha256).some(
     (value) => typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value),
   ) ||
+  !/^[a-f0-9]{64}$/.test(attestation.runtimePolicySha256) ||
+  !/^[a-f0-9]{64}$/.test(attestation.proofDependencyManifestSha256) ||
   !/^[a-f0-9]{64}$/.test(attestation.runtimeToolchainSha256)
 ) {
   throw new Error("runtime attestation identity is invalid");
@@ -231,18 +235,7 @@ if (sha256File(adapter) !== attestation.adapterSha256) {
   throw new Error("runtime adapter changed after session launch");
 }
 
-const helperPaths = {
-  runtimeClient: "scripts/contained-runtime-client.mjs",
-  runtimeRun: "scripts/contained-runtime-run.mjs",
-  runtimeEnvironment: "scripts/contained-runtime-environment.mjs",
-  runcWrapper: "scripts/runtime-bin/runc",
-  containerdConfigWriter: "scripts/contained-containerd-config.mjs",
-  runtimeServer: "scripts/contained-runtime-server.mjs",
-  commandValidator: "scripts/validate-contained-runtime-command.mjs",
-  attestationVerifier: "scripts/verify-contained-runtime.mjs",
-  runtimeLauncher: "scripts/start-contained-runtime.sh",
-};
-for (const [key, helperPath] of Object.entries(helperPaths)) {
+for (const [key, helperPath] of Object.entries(RUNTIME_HELPER_PATHS)) {
   const helper = repositoryPath(helperPath, "file", `runtime helper ${key}`);
   secureFile(helper, `runtime helper ${key}`);
   if (key === "runcWrapper" && (statSync(helper).mode & 0o111) === 0) {
@@ -350,7 +343,10 @@ const pathKinds = {
   clientFifoRoot: "directory",
   runcStateRoot: "directory",
   buildkitSocket: "socket",
+  buildkitInnerSocket: "socket",
   buildkitOtelSocket: "socket",
+  runtimeSupervisorSocket: "socket",
+  runtimeSupervisorReady: "file",
   containerdRoot: "directory",
   containerdState: "directory",
   buildkitRoot: "directory",
@@ -378,6 +374,7 @@ for (const key of [
   "buildkitConfig",
   "containerdPidFile",
   "buildkitPidFile",
+  "runtimeSupervisorReady",
 ]) {
   secureFile(resolvedPaths[key], key);
 }
@@ -388,23 +385,84 @@ if (
   sha256File(resolvedPaths.containerdConfig) !==
     attestation.fileSha256.containerdConfig ||
   sha256File(resolvedPaths.buildkitConfig) !==
-    attestation.fileSha256.buildkitConfig
+    attestation.fileSha256.buildkitConfig ||
+  sha256File(resolvedPaths.runtimeSupervisorReady) !==
+    attestation.fileSha256.supervisorReady
 ) {
   throw new Error("runtime daemon configuration changed after launch");
 }
 
-for (const [key, value] of Object.entries(attestation.pids)) {
-  if (!Number.isSafeInteger(value) || value <= 1)
-    throw new Error(`runtime PID is invalid: ${key}`);
-  process.kill(value, 0);
-}
+const supervisorReady = validateSupervisorReadyReceipt(
+  JSON.parse(readFileSync(resolvedPaths.runtimeSupervisorReady, "utf8")),
+  {
+    sessionId,
+    supervisorSocket: attestation.paths.runtimeSupervisorSocket,
+    buildkitProxySocket: attestation.paths.buildkitSocket,
+    buildkitInnerSocket: attestation.paths.buildkitInnerSocket,
+  },
+);
 if (
-  Number(readFileSync(resolvedPaths.containerdPidFile, "utf8").trim()) !==
+  supervisorReady.supervisorPid !== attestation.pids.supervisor ||
+  supervisorReady.childPids.containerdRootlesskit !==
     attestation.pids.containerdRootlesskit ||
+  supervisorReady.childPids.buildkitRootlesskit !==
+    attestation.pids.buildkitRootlesskit ||
+  Number(readFileSync(resolvedPaths.containerdPidFile, "utf8").trim()) !==
+    supervisorReady.childPids.containerdRootlesskit ||
   Number(readFileSync(resolvedPaths.buildkitPidFile, "utf8").trim()) !==
-    attestation.pids.buildkitRootlesskit
+    supervisorReady.childPids.buildkitRootlesskit
 ) {
   throw new Error("runtime PID file disagrees with the attestation");
+}
+
+const attestationSha256 = sha256File(attestationPath);
+const supervisorStatus = await sendSupervisorRequest({
+  socketPath: resolvedPaths.runtimeSupervisorSocket,
+  timeoutMs: 10_000,
+  request: {
+    schemaVersion: "1",
+    action: "status",
+    sessionId,
+    attestationSha256,
+  },
+});
+exactKeys(
+  supervisorStatus,
+  [
+    "schemaVersion",
+    "status",
+    "sessionId",
+    "namespace",
+    "state",
+    "supervisorPid",
+    "childPids",
+    "childHandlesOwned",
+    "buildkitAdmissionOpen",
+    "activeBuildkitConnections",
+    "attestationSha256",
+  ],
+  "runtime supervisor status",
+);
+exactKeys(
+  supervisorStatus.childPids,
+  ["containerdRootlesskit", "buildkitRootlesskit"],
+  "runtime supervisor status child PIDs",
+);
+if (
+  supervisorStatus.schemaVersion !== "1" ||
+  supervisorStatus.status !== "ACTIVE" ||
+  supervisorStatus.sessionId !== sessionId ||
+  supervisorStatus.namespace !== "counterlab-v6.1" ||
+  supervisorStatus.state !== "ACTIVE" ||
+  supervisorStatus.supervisorPid !== attestation.pids.supervisor ||
+  canonicalJson(supervisorStatus.childPids) !==
+    canonicalJson(supervisorReady.childPids) ||
+  supervisorStatus.childHandlesOwned !== true ||
+  supervisorStatus.buildkitAdmissionOpen !== true ||
+  supervisorStatus.activeBuildkitConnections !== 0 ||
+  supervisorStatus.attestationSha256 !== attestationSha256
+) {
+  throw new Error("runtime supervisor ownership attestation is invalid");
 }
 
 const containerdConfigText = readFileSync(
@@ -423,21 +481,22 @@ if (
   throw new Error("runtime shim socket directory is not repository-contained");
 }
 
-const fingerprint = {
-  schemaVersion: "1",
-  namespace: attestation.namespace,
-  toolchainLockSha256: attestation.toolchainLockSha256,
-  adapterSha256: attestation.adapterSha256,
-  helperSha256: attestation.helperSha256,
-  components: Object.fromEntries(
-    Object.entries(lock.components).map(([name, component]) => [
-      name,
-      component.sha256,
-    ]),
-  ),
-  fileSha256: attestation.fileSha256,
-};
-if (sha256Value(fingerprint) !== attestation.runtimeToolchainSha256) {
+const material = createRuntimeToolchainFingerprint({
+  root,
+  adapterPath: adapter,
+  containerdConfigPath: resolvedPaths.containerdConfig,
+  buildkitConfigPath: resolvedPaths.buildkitConfig,
+});
+if (
+  canonicalRuntimeJson(material.helperSha256) !==
+    canonicalRuntimeJson(attestation.helperSha256) ||
+  canonicalRuntimeJson(material.proofDependencyManifest) !==
+    canonicalRuntimeJson(attestation.proofDependencyManifest) ||
+  material.runtimePolicySha256 !== attestation.runtimePolicySha256 ||
+  material.proofDependencyManifestSha256 !==
+    attestation.proofDependencyManifestSha256 ||
+  material.runtimeToolchainSha256 !== attestation.runtimeToolchainSha256
+) {
   throw new Error("runtime toolchain fingerprint is invalid");
 }
 
@@ -459,7 +518,7 @@ const version = JSON.parse(
   execFileSync(
     process.execPath,
     [
-      resolve(root, helperPaths.runtimeClient),
+      resolve(root, RUNTIME_HELPER_PATHS.runtimeClient),
       "--session-id",
       sessionId,
       "--",
@@ -503,25 +562,15 @@ execFileSync(
 );
 
 process.stdout.write(
-  `${canonicalJson({
-    schemaVersion: "1",
-    status: "VERIFIED",
-    sessionId,
-    namespace: attestation.namespace,
-    runtimeToolchainSha256: attestation.runtimeToolchainSha256,
-    toolchainLockSha256: attestation.toolchainLockSha256,
-    adapterSha256: attestation.adapterSha256,
-    componentSha256: Object.fromEntries(
-      Object.entries(lock.components).map(([name, component]) => [
-        name,
-        component.sha256,
-      ]),
-    ),
-    fileSha256: attestation.fileSha256,
-    containerdRootlesskitApiSocket:
-      attestation.paths.containerdRootlesskitApiSocket,
-    containerdSocket: attestation.paths.containerdSocket,
-    runtimeCommandSocket: attestation.paths.runtimeCommandSocket,
-    buildkitSocket: attestation.paths.buildkitSocket,
-  })}\n`,
+  `${canonicalJson(
+    createPublicContainedRuntimeAttestation({
+      attestation,
+      componentSha256: Object.fromEntries(
+        Object.entries(lock.components).map(([name, component]) => [
+          name,
+          component.sha256,
+        ]),
+      ),
+    }),
+  )}\n`,
 );

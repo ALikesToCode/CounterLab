@@ -167,7 +167,9 @@ def validate_report(report: dict[str, Any]) -> dict[str, Any]:
         "privacy",
     }:
         raise ValueError("smoke report has unknown or missing fields")
-    if report["schemaVersion"] != "2" or report["status"] not in _REPORT_STATUSES:
+    if report["schemaVersion"] not in {"2", "3", "4"} or report[
+        "status"
+    ] not in _REPORT_STATUSES:
         raise ValueError("smoke report schema or status is invalid")
     report["baseUrl"] = _base_url(report["baseUrl"])
     report_started = _parsed_timestamp(report["startedAt"], "startedAt")
@@ -177,13 +179,37 @@ def validate_report(report: dict[str, Any]) -> dict[str, Any]:
         if report_completed < report_started:
             raise ValueError("smoke report completedAt precedes startedAt")
     deployment = report["deployment"]
-    if not isinstance(deployment, dict) or set(deployment) != {
+    deployment_fields = {
         "workerVersion",
         "workerEvidenceCommit",
         "runnerSourceCommit",
         "containerImageDigest",
         "deploymentReceiptSha256",
-    }:
+    }
+    if report["schemaVersion"] in {"3", "4"}:
+        deployment_fields.update(
+            {
+                "timeoutCleanupReceiptSha256",
+                "runtimePolicySha256",
+                "proofDependencyManifestSha256",
+            }
+        )
+    if report["schemaVersion"] == "4":
+        deployment_fields.update(
+            {
+                "aggregateLimitEvidenceSha256",
+                "workerArtifactClassification",
+                "workerArtifactManifestSha256",
+                "workerBundleSha256",
+                "clientAssetsSha256",
+                "clientAssetCount",
+                "clientPublicAssetsSha256",
+                "clientPublicAssetCount",
+                "viteVersion",
+                "wranglerVersion",
+            }
+        )
+    if not isinstance(deployment, dict) or set(deployment) != deployment_fields:
         raise ValueError("smoke deployment metadata is invalid")
     worker_version = deployment["workerVersion"]
     if worker_version is not None and not _WORKER_VERSION.fullmatch(worker_version):
@@ -195,9 +221,68 @@ def validate_report(report: dict[str, Any]) -> dict[str, Any]:
         commit = deployment[field]
         if commit is not None and not _COMMIT.fullmatch(commit):
             raise ValueError(f"{field} is invalid")
-    receipt_hash = deployment["deploymentReceiptSha256"]
-    if receipt_hash is not None and not _SHA256.fullmatch(receipt_hash):
-        raise ValueError("deployment receipt hash is invalid")
+    hash_fields = ["deploymentReceiptSha256"]
+    if report["schemaVersion"] in {"3", "4"}:
+        hash_fields.extend(
+            [
+                "timeoutCleanupReceiptSha256",
+                "runtimePolicySha256",
+                "proofDependencyManifestSha256",
+            ]
+        )
+    if report["schemaVersion"] == "4":
+        hash_fields.extend(
+            [
+                "aggregateLimitEvidenceSha256",
+                "workerArtifactManifestSha256",
+                "workerBundleSha256",
+                "clientAssetsSha256",
+                "clientPublicAssetsSha256",
+            ]
+        )
+    for field in hash_fields:
+        value = deployment[field]
+        if value is not None and not _SHA256.fullmatch(value):
+            raise ValueError(f"{field} is invalid")
+    if report["schemaVersion"] == "4":
+        artifact_values = [
+            deployment[field]
+            for field in (
+                "workerArtifactClassification",
+                "workerArtifactManifestSha256",
+                "workerBundleSha256",
+                "clientAssetsSha256",
+                "clientAssetCount",
+                "clientPublicAssetsSha256",
+                "clientPublicAssetCount",
+                "viteVersion",
+                "wranglerVersion",
+            )
+        ]
+        if any(value is not None for value in artifact_values):
+            if any(value is None for value in artifact_values):
+                raise ValueError("Worker artifact identity is incomplete")
+            if (
+                deployment["workerArtifactClassification"]
+                != "PROCESS_BOUND_PARTIAL"
+            ):
+                raise ValueError("worker artifact classification is invalid")
+            if deployment["viteVersion"] != "8.1.4":
+                raise ValueError("Vite version is invalid")
+            if deployment["wranglerVersion"] != "4.110.0":
+                raise ValueError("Wrangler version is invalid")
+            client_count = deployment["clientAssetCount"]
+            public_count = deployment["clientPublicAssetCount"]
+            if (
+                not isinstance(client_count, int)
+                or isinstance(client_count, bool)
+                or client_count < 1
+                or not isinstance(public_count, int)
+                or isinstance(public_count, bool)
+                or public_count < 1
+                or public_count > client_count
+            ):
+                raise ValueError("client asset counts are invalid")
     if report["privacy"] != {
         "containsSecrets": False,
         "containsRawNotebookBytes": False,
@@ -270,11 +355,24 @@ def initialize_report(
     worker_evidence_commit: str | None = None,
     runner_source_commit: str | None = None,
     container_image_digest: str | None = None,
+    timeout_cleanup_receipt_sha256: str | None = None,
+    aggregate_limit_evidence_sha256: str | None = None,
+    runtime_policy_sha256: str | None = None,
+    proof_dependency_manifest_sha256: str | None = None,
+    worker_artifact_classification: str | None = None,
+    worker_artifact_manifest_sha256: str | None = None,
+    worker_bundle_sha256: str | None = None,
+    client_assets_sha256: str | None = None,
+    client_asset_count: int | None = None,
+    client_public_assets_sha256: str | None = None,
+    client_public_asset_count: int | None = None,
+    vite_version: str | None = None,
+    wrangler_version: str | None = None,
     deployment_receipt_sha256: str | None = None,
 ) -> dict[str, Any]:
     report = validate_report(
         {
-            "schemaVersion": "2",
+            "schemaVersion": "4",
             "status": "RUNNING",
             "baseUrl": _base_url(base_url),
             "startedAt": _timestamp(started_at, "startedAt"),
@@ -284,6 +382,23 @@ def initialize_report(
                 "workerEvidenceCommit": worker_evidence_commit,
                 "runnerSourceCommit": runner_source_commit,
                 "containerImageDigest": container_image_digest,
+                "timeoutCleanupReceiptSha256": timeout_cleanup_receipt_sha256,
+                "aggregateLimitEvidenceSha256": (
+                    aggregate_limit_evidence_sha256
+                ),
+                "runtimePolicySha256": runtime_policy_sha256,
+                "proofDependencyManifestSha256": (
+                    proof_dependency_manifest_sha256
+                ),
+                "workerArtifactClassification": worker_artifact_classification,
+                "workerArtifactManifestSha256": worker_artifact_manifest_sha256,
+                "workerBundleSha256": worker_bundle_sha256,
+                "clientAssetsSha256": client_assets_sha256,
+                "clientAssetCount": client_asset_count,
+                "clientPublicAssetsSha256": client_public_assets_sha256,
+                "clientPublicAssetCount": client_public_asset_count,
+                "viteVersion": vite_version,
+                "wranglerVersion": wrangler_version,
                 "deploymentReceiptSha256": deployment_receipt_sha256,
             },
             "stages": [],
@@ -362,6 +477,19 @@ def _parser() -> argparse.ArgumentParser:
     initialize.add_argument("--worker-evidence-commit")
     initialize.add_argument("--runner-source-commit")
     initialize.add_argument("--container-image-digest")
+    initialize.add_argument("--timeout-cleanup-receipt-sha256")
+    initialize.add_argument("--aggregate-limit-evidence-sha256")
+    initialize.add_argument("--runtime-policy-sha256")
+    initialize.add_argument("--proof-dependency-manifest-sha256")
+    initialize.add_argument("--worker-artifact-classification")
+    initialize.add_argument("--worker-artifact-manifest-sha256")
+    initialize.add_argument("--worker-bundle-sha256")
+    initialize.add_argument("--client-assets-sha256")
+    initialize.add_argument("--client-asset-count", type=int)
+    initialize.add_argument("--client-public-assets-sha256")
+    initialize.add_argument("--client-public-asset-count", type=int)
+    initialize.add_argument("--vite-version")
+    initialize.add_argument("--wrangler-version")
     initialize.add_argument("--deployment-receipt-sha256")
     stage = subparsers.add_parser("stage")
     stage.add_argument("path", type=pathlib.Path)
@@ -384,6 +512,31 @@ def main() -> int:
             worker_evidence_commit=arguments.worker_evidence_commit,
             runner_source_commit=arguments.runner_source_commit,
             container_image_digest=arguments.container_image_digest,
+            timeout_cleanup_receipt_sha256=(
+                arguments.timeout_cleanup_receipt_sha256
+            ),
+            aggregate_limit_evidence_sha256=(
+                arguments.aggregate_limit_evidence_sha256
+            ),
+            runtime_policy_sha256=arguments.runtime_policy_sha256,
+            proof_dependency_manifest_sha256=(
+                arguments.proof_dependency_manifest_sha256
+            ),
+            worker_artifact_classification=(
+                arguments.worker_artifact_classification
+            ),
+            worker_artifact_manifest_sha256=(
+                arguments.worker_artifact_manifest_sha256
+            ),
+            worker_bundle_sha256=arguments.worker_bundle_sha256,
+            client_assets_sha256=arguments.client_assets_sha256,
+            client_asset_count=arguments.client_asset_count,
+            client_public_assets_sha256=(
+                arguments.client_public_assets_sha256
+            ),
+            client_public_asset_count=arguments.client_public_asset_count,
+            vite_version=arguments.vite_version,
+            wrangler_version=arguments.wrangler_version,
             deployment_receipt_sha256=arguments.deployment_receipt_sha256,
         )
     elif arguments.command == "stage":

@@ -3,8 +3,6 @@ import { constants } from "node:fs";
 import { access, lstat, readFile, realpath, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 
-import { z } from "zod";
-
 import {
   GrypeJsonReportSchema,
   OpenVexDocumentSchema,
@@ -22,27 +20,17 @@ import {
   hashSubjectPackEngineBindings,
   validateScientificEngineSnapshot,
 } from "../packages/scientific-engine-registry/src/index.js";
+import {
+  INTERNAL_SCIENTIFIC_INTEGRITY_EVIDENCE_IDS,
+  SIGNED_RESULT_BINDING_V2_SCOPE,
+  assertScientificIntegrityScopeRelationships,
+  assertSignedResultBindingV2Scope,
+  internalScientificIntegrityPaths,
+} from "./internal-scientific-integrity-scope.js";
+import { SourceBoundBuildReceiptSchema } from "./source-bound-build-receipt.js";
 
-const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
-const BuildReceiptSchema = z
-  .strictObject({
-    schemaVersion: z.literal("3"),
-    status: z.literal("BUILT"),
-    sourceCommit: z.string().regex(/^[a-f0-9]{40}$/),
-    sourceTreeSha256: Sha256Schema,
-    localImageTag: z.string().regex(/^counterlab-runner:git-[a-f0-9]{40}$/),
-    localImageDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
-    localManifestDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
-    localOciArchive: z.string().min(1),
-    localOciArchiveSha256: Sha256Schema,
-  })
-  .passthrough();
+const BuildReceiptSchema = SourceBoundBuildReceiptSchema;
 
-const INTERNAL_EVIDENCE = [
-  "internal-oracle-integrity-v2",
-  "internal-renderer-integrity-v2",
-  "internal-mutations-integrity-v2",
-] as const;
 const ENGINE_INTEGRITY: Record<string, string> = {
   "counterlab-fixed-ml-kernel":
     "scientific-engines/fixtures/integrity/counterlab-fixed-ml-kernel-0.1.0.json",
@@ -412,15 +400,53 @@ const cpython = object(await json(cpythonPath), cpythonPath);
 cpython.imageDigest = receipt.localImageDigest;
 outputs.set(cpythonPath, pretty(cpython));
 
-for (const evidenceId of INTERNAL_EVIDENCE) {
+assertScientificIntegrityScopeRelationships();
+for (const evidenceId of INTERNAL_SCIENTIFIC_INTEGRITY_EVIDENCE_IDS) {
   const path = `scientific-engines/fixtures/validation/${evidenceId}.json`;
   const evidence = object(await json(path), path);
-  const files = object(evidence.files, `${path}.files`);
-  for (const sourcePath of Object.keys(files).sort()) {
+  if (
+    evidence.schemaVersion !== "2" ||
+    evidence.evidenceId !== evidenceId ||
+    evidence.kind !== "integrity"
+  ) {
+    throw new Error(`${path} has an unexpected identity`);
+  }
+  const files: Record<string, string> = {};
+  for (const sourcePath of internalScientificIntegrityPaths(evidenceId)) {
     files[sourcePath] = sha256(await diskBytes(sourcePath));
   }
+  evidence.files = files;
   outputs.set(path, pretty(evidence));
 }
+
+const signedResultBindingPath =
+  "scientific-engines/fixtures/validation/signed-result-binding-v2.json";
+const signedResultBinding = object(
+  await json(signedResultBindingPath),
+  signedResultBindingPath,
+);
+if (
+  signedResultBinding.schemaVersion !== "2" ||
+  signedResultBinding.evidenceId !== "signed-result-binding-v2" ||
+  signedResultBinding.kind !== "golden_fixture"
+) {
+  throw new Error(`${signedResultBindingPath} has an unexpected identity`);
+}
+signedResultBinding.contractPath = SIGNED_RESULT_BINDING_V2_SCOPE.contractPath;
+signedResultBinding.codePaths = [...SIGNED_RESULT_BINDING_V2_SCOPE.codePaths];
+signedResultBinding.tests = [...SIGNED_RESULT_BINDING_V2_SCOPE.tests];
+assertSignedResultBindingV2Scope({
+  contractPath: String(signedResultBinding.contractPath),
+  codePaths: array(
+    signedResultBinding.codePaths,
+    `${signedResultBindingPath}.codePaths`,
+  ).map(String),
+  tests: array(
+    signedResultBinding.tests,
+    `${signedResultBindingPath}.tests`,
+  ).map(String),
+});
+outputs.set(signedResultBindingPath, pretty(signedResultBinding));
 
 const summaryPath =
   "scientific-engines/fixtures/integrity/local-candidate-ml-runtime.json";

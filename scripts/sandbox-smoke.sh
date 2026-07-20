@@ -36,18 +36,28 @@ if [[ ! -x "${RUNTIME_ADAPTER}" || -L "${RUNTIME_ADAPTER}" ]]; then
   echo "The repository-contained runtime adapter is unavailable." >&2
   exit 2
 fi
+RUNTIME_SESSION_ID="${COUNTERLAB_RUNTIME_SESSION_ID:-}"
+[[ "${RUNTIME_SESSION_ID}" =~ ^rt-[a-z0-9][a-z0-9-]{7,13}$ ]] || {
+  echo "COUNTERLAB_RUNTIME_SESSION_ID must identify the contained runtime." >&2
+  exit 2
+}
+RUNTIME_COMMAND=(
+  "${RUNTIME_ADAPTER}"
+  --session-id "${RUNTIME_SESSION_ID}"
+  --
+)
 if [[ ! -x "${PYTHON_BIN}" ]]; then
   echo "CounterLab Python environment is missing at ${PYTHON_BIN}." >&2
   exit 2
 fi
 
-if ! IMAGE_INSPECTION="$("${RUNTIME_ADAPTER}" image inspect "${IMAGE}" 2>&1)"; then
+if ! IMAGE_INSPECTION="$("${RUNTIME_COMMAND[@]}" image inspect "${IMAGE}" 2>&1)"; then
   if [[ "${BUILD_IMAGE}" != true ]]; then
     echo "Sandbox image ${IMAGE} is missing." >&2
     echo "Build and run the smoke test explicitly with: $0 --build" >&2
     exit 2
   fi
-  "${RUNTIME_ADAPTER}" build \
+  "${RUNTIME_COMMAND[@]}" build \
     --file "${ROOT_DIR}/services/runner/Dockerfile" \
     --tag "${IMAGE}" \
     "${ROOT_DIR}"

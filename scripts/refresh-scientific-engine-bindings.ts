@@ -11,12 +11,13 @@ import {
   hashSubjectPackEngineBindings,
   validateScientificEngineSnapshot,
 } from "../packages/scientific-engine-registry/src/index.js";
-
-const INTERNAL_EVIDENCE = [
-  "internal-oracle-integrity-v2",
-  "internal-renderer-integrity-v2",
-  "internal-mutations-integrity-v2",
-] as const;
+import {
+  INTERNAL_SCIENTIFIC_INTEGRITY_EVIDENCE_IDS,
+  SIGNED_RESULT_BINDING_V2_SCOPE,
+  assertScientificIntegrityScopeRelationships,
+  assertSignedResultBindingV2Scope,
+  internalScientificIntegrityPaths,
+} from "./internal-scientific-integrity-scope.js";
 
 const root = await realpath(resolve(import.meta.dirname, ".."));
 
@@ -72,7 +73,7 @@ function pretty(value: unknown): string {
 }
 
 async function desiredInternalEvidence(
-  evidenceId: (typeof INTERNAL_EVIDENCE)[number],
+  evidenceId: (typeof INTERNAL_SCIENTIFIC_INTEGRITY_EVIDENCE_IDS)[number],
 ): Promise<{ path: string; content: string; hash: string }> {
   const path = `scientific-engines/fixtures/validation/${evidenceId}.json`;
   const current = object(await json(path), path);
@@ -83,12 +84,41 @@ async function desiredInternalEvidence(
   ) {
     throw new Error(`${path} has an unexpected identity`);
   }
-  const declaredFiles = object(current.files, `${path}.files`);
   const refreshedFiles: Record<string, string> = {};
-  for (const sourcePath of Object.keys(declaredFiles).sort()) {
+  for (const sourcePath of internalScientificIntegrityPaths(evidenceId)) {
     refreshedFiles[sourcePath] = sha256(await bytes(sourcePath));
   }
   const content = pretty({ ...current, files: refreshedFiles });
+  return { path, content, hash: sha256(content) };
+}
+
+async function desiredSignedResultBinding(): Promise<{
+  path: string;
+  content: string;
+  hash: string;
+}> {
+  const path =
+    "scientific-engines/fixtures/validation/signed-result-binding-v2.json";
+  const current = object(await json(path), path);
+  if (
+    current.schemaVersion !== "2" ||
+    current.evidenceId !== "signed-result-binding-v2" ||
+    current.kind !== "golden_fixture"
+  ) {
+    throw new Error(`${path} has an unexpected identity`);
+  }
+  const desired = {
+    ...current,
+    contractPath: SIGNED_RESULT_BINDING_V2_SCOPE.contractPath,
+    codePaths: [...SIGNED_RESULT_BINDING_V2_SCOPE.codePaths],
+    tests: [...SIGNED_RESULT_BINDING_V2_SCOPE.tests],
+  };
+  assertSignedResultBindingV2Scope({
+    contractPath: String(desired.contractPath),
+    codePaths: array(desired.codePaths, `${path}.codePaths`).map(String),
+    tests: array(desired.tests, `${path}.tests`).map(String),
+  });
+  const content = pretty(desired);
   return { path, content, hash: sha256(content) };
 }
 
@@ -133,11 +163,16 @@ function assertNormalizedNodeSbom(value: unknown): number {
 }
 
 async function desiredOutputs(): Promise<Map<string, string>> {
+  assertScientificIntegrityScopeRelationships();
   const outputs = new Map<string, string>();
   const internal = await Promise.all(
-    INTERNAL_EVIDENCE.map((evidenceId) => desiredInternalEvidence(evidenceId)),
+    INTERNAL_SCIENTIFIC_INTEGRITY_EVIDENCE_IDS.map((evidenceId) =>
+      desiredInternalEvidence(evidenceId),
+    ),
   );
   for (const evidence of internal) outputs.set(evidence.path, evidence.content);
+  const signedResultBinding = await desiredSignedResultBinding();
+  outputs.set(signedResultBinding.path, signedResultBinding.content);
 
   const catalog = ScientificEngineEvidenceCatalogSchema.parse(
     await json("scientific-engines/evidence-catalog.json"),
@@ -179,6 +214,14 @@ async function desiredOutputs(): Promise<Map<string, string>> {
       );
     }
   }
+  const signedResultRecord = exactRecord(catalog, "signed-result-binding-v2");
+  if (
+    signedResultRecord.kind !== "golden_fixture" ||
+    signedResultRecord.path !== signedResultBinding.path
+  ) {
+    throw new Error("Signed-result binding evidence record is misbound");
+  }
+  signedResultRecord.sha256 = signedResultBinding.hash;
 
   const pnpmLockHash = sha256(await bytes("pnpm-lock.yaml"));
   const nodeSbomBytes = await bytes("docs/sbom/node.cdx.json");

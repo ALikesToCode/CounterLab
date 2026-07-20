@@ -71,17 +71,38 @@ mapfile -t DIRTY_PATHS < <(
 )
 for path in "${DIRTY_PATHS[@]}"; do
   case "${path}" in
-    docs/sbom/*.json | \
+    docs/sbom/node.cdx.json | \
+    docs/sbom/runner-container.cdx.json | \
+    docs/sbom/grype-raw.json | \
+    docs/sbom/grype-vex-applied.json | \
+    docs/sbom/grype-vex-negative-control.json | \
+    docs/sbom/manifest.json | \
+    docs/sbom/vulnerability-report.json | \
+    docs/sbom/vex-application-report.json | \
     scientific-engines/evidence-catalog.json | \
-    scientific-engines/fixtures/health/*.json | \
-    scientific-engines/fixtures/integrity/*.json | \
+    scientific-engines/fixtures/health/counterlab-fixed-ml-kernel-health-v1.json | \
+    scientific-engines/fixtures/health/numpy-health-v1.json | \
+    scientific-engines/fixtures/health/pandas-health-v1.json | \
+    scientific-engines/fixtures/health/scikit-learn-health-v1.json | \
+    scientific-engines/fixtures/integrity/counterlab-fixed-ml-kernel-0.1.0.json | \
+    scientific-engines/fixtures/integrity/cpython-html-parser-reachability-v2.json | \
+    scientific-engines/fixtures/integrity/cpython-runtime-3.13.14.json | \
+    scientific-engines/fixtures/integrity/local-candidate-ml-runtime.json | \
+    scientific-engines/fixtures/integrity/numpy-2.4.6.json | \
+    scientific-engines/fixtures/integrity/pandas-2.3.3.json | \
+    scientific-engines/fixtures/integrity/scikit-learn-1.9.0.json | \
+    scientific-engines/fixtures/validation/internal-mutations-integrity-v2.json | \
+    scientific-engines/fixtures/validation/internal-oracle-integrity-v2.json | \
+    scientific-engines/fixtures/validation/internal-renderer-integrity-v2.json | \
+    scientific-engines/fixtures/validation/signed-result-binding-v2.json | \
     scientific-engines/licenses/manifest.json | \
     scientific-engines/notices/current-ml-engines.NOTICE.md | \
     scientific-engines/registry.json | \
     scientific-engines/runtime-manifest.json | \
     scientific-engines/snapshot-hash.json | \
     scientific-engines/snapshot.json | \
-    scientific-engines/vex/*.json) ;;
+    scientific-engines/subject-pack-bindings.json | \
+    scientific-engines/vex/cpython-html-parser-v1.openvex.json) ;;
     *)
       echo "Source-bound runner builds reject non-evidence tracked changes: ${path}" >&2
       exit 2
@@ -122,8 +143,13 @@ RUNTIME_ADAPTER_INPUT="${COUNTERLAB_DOCKER_BIN:-}"
   exit 2
 }
 RUNTIME_ADAPTER="$(repo_path "${RUNTIME_ADAPTER_INPUT}")"
+RUNTIME_SESSION_ID="${COUNTERLAB_RUNTIME_SESSION_ID:-}"
 [[ -x "${RUNTIME_ADAPTER}" && ! -L "${RUNTIME_ADAPTER}" ]] || {
   echo "Repository-contained runtime adapter is unavailable." >&2
+  exit 2
+}
+[[ "${RUNTIME_SESSION_ID}" =~ ^rt-[a-z0-9][a-z0-9-]{7,13}$ ]] || {
+  echo "COUNTERLAB_RUNTIME_SESSION_ID must identify the contained runtime." >&2
   exit 2
 }
 [[ -x "${BUILDCTL}" && ! -L "${BUILDCTL}" ]] || {
@@ -151,7 +177,9 @@ case "${BUILDKIT_SOCKET}" in
     ;;
 esac
 
-RUNTIME_ATTESTATION="$("${RUNTIME_ADAPTER}" counterlab-attest)"
+RUNTIME_ATTESTATION="$(
+  "${RUNTIME_ADAPTER}" --session-id "${RUNTIME_SESSION_ID}" -- counterlab-attest
+)"
 readarray -t RUNTIME_BINDING < <(node - "${RUNTIME_ATTESTATION}" <<'NODE'
 const value = JSON.parse(process.argv[2]);
 const sha = /^[a-f0-9]{64}$/;
@@ -171,6 +199,8 @@ exact(value, [
   "sessionId",
   "namespace",
   "runtimeToolchainSha256",
+  "runtimePolicySha256",
+  "proofDependencyManifestSha256",
   "toolchainLockSha256",
   "adapterSha256",
   "componentSha256",
@@ -192,13 +222,15 @@ exact(value.componentSha256, [
 ], "runtime component hashes");
 exact(value.fileSha256, ["containerdConfig", "buildkitConfig"], "runtime file hashes");
 if (
-  value.schemaVersion !== "1" ||
+  value.schemaVersion !== "2" ||
   value.status !== "VERIFIED" ||
   value.namespace !== "counterlab-v6.1" ||
   !/^rt-[a-z0-9][a-z0-9-]{7,13}$/.test(value.sessionId) ||
   !Object.values(value.componentSha256).every((entry) => sha.test(entry)) ||
   !Object.values(value.fileSha256).every((entry) => sha.test(entry)) ||
   !sha.test(value.runtimeToolchainSha256) ||
+  !sha.test(value.runtimePolicySha256) ||
+  !sha.test(value.proofDependencyManifestSha256) ||
   !sha.test(value.toolchainLockSha256) ||
   !sha.test(value.adapterSha256) ||
   !/^\.rt\/rt-[a-z0-9-]+\/run\/buildkitd\.sock$/.test(value.buildkitSocket)
@@ -207,6 +239,8 @@ if (
 }
 for (const entry of [
   value.runtimeToolchainSha256,
+  value.runtimePolicySha256,
+  value.proofDependencyManifestSha256,
   value.toolchainLockSha256,
   value.adapterSha256,
   value.componentSha256.buildctl,
@@ -218,17 +252,19 @@ for (const entry of [
 }
 NODE
 )
-[[ "${#RUNTIME_BINDING[@]}" -eq 7 ]] || {
+[[ "${#RUNTIME_BINDING[@]}" -eq 9 ]] || {
   echo "Runtime attestation did not produce the exact build binding." >&2
   exit 2
 }
 RUNTIME_TOOLCHAIN_SHA256="${RUNTIME_BINDING[0]}"
-TOOLCHAIN_LOCK_SHA256="${RUNTIME_BINDING[1]}"
-RUNTIME_ADAPTER_SHA256="${RUNTIME_BINDING[2]}"
-BUILDCTL_SHA256="${RUNTIME_BINDING[3]}"
-BUILDKITD_SHA256="${RUNTIME_BINDING[4]}"
-BUILDKIT_CONFIG_SHA256="${RUNTIME_BINDING[5]}"
-ATTESTED_BUILDKIT_ADDR="unix://${ROOT_DIR}/${RUNTIME_BINDING[6]}"
+RUNTIME_POLICY_SHA256="${RUNTIME_BINDING[1]}"
+PROOF_DEPENDENCY_MANIFEST_SHA256="${RUNTIME_BINDING[2]}"
+TOOLCHAIN_LOCK_SHA256="${RUNTIME_BINDING[3]}"
+RUNTIME_ADAPTER_SHA256="${RUNTIME_BINDING[4]}"
+BUILDCTL_SHA256="${RUNTIME_BINDING[5]}"
+BUILDKITD_SHA256="${RUNTIME_BINDING[6]}"
+BUILDKIT_CONFIG_SHA256="${RUNTIME_BINDING[7]}"
+ATTESTED_BUILDKIT_ADDR="unix://${ROOT_DIR}/${RUNTIME_BINDING[8]}"
 [[ "$(sha256sum "${BUILDCTL}" | cut -d ' ' -f 1)" == "${BUILDCTL_SHA256}" ]] || {
   echo "Pinned buildctl does not match the runtime attestation." >&2
   exit 2
@@ -281,7 +317,7 @@ DOCKERFILE_SHA256="$(sha256sum "${ARCHIVE_ROOT}/Dockerfile.runner" | cut -d ' ' 
   --output "type=oci,dest=${RAW_OCI_TAR},name=${LOCAL_IMAGE_TAG}" \
   --metadata-file "${BUILD_METADATA}"
 
-[[ "$("${RUNTIME_ADAPTER}" counterlab-attest)" == "${RUNTIME_ATTESTATION}" ]] || {
+[[ "$("${RUNTIME_ADAPTER}" --session-id "${RUNTIME_SESSION_ID}" -- counterlab-attest)" == "${RUNTIME_ATTESTATION}" ]] || {
   echo "Contained runtime attestation changed during the runner build." >&2
   exit 2
 }
@@ -337,7 +373,7 @@ ADAPTER_DOCKERFILE_SHA256="$(sha256sum "${ARCHIVE_ROOT}/services/runner/Dockerfi
   --output "type=oci,dest=${ADAPTER_RAW_OCI_TAR},name=${ADAPTER_IMAGE_TAG}" \
   --metadata-file "${ADAPTER_BUILD_METADATA}"
 
-[[ "$("${RUNTIME_ADAPTER}" counterlab-attest)" == "${RUNTIME_ATTESTATION}" ]] || {
+[[ "$("${RUNTIME_ADAPTER}" --session-id "${RUNTIME_SESSION_ID}" -- counterlab-attest)" == "${RUNTIME_ATTESTATION}" ]] || {
   echo "Contained runtime attestation changed during the adapter build." >&2
   exit 2
 }
@@ -435,7 +471,7 @@ ADAPTER_OCI_ARCHIVE_SHA256="$(sha256sum "${ADAPTER_RAW_OCI_TAR}" | cut -d ' ' -f
 node -e '
   const fs = require("node:fs");
   const path = require("node:path");
-  const [output, sourceCommit, archiveHash, treeHash, dockerfileHash, imageTag, reportPath, layoutPath, claimedManifestDigest, ociArchive, ociArchiveHash, adapterDockerfileSha256, adapterImageTag, adapterReportPath, adapterOciArchive, adapterOciArchiveHash, runtimeToolchainSha256, toolchainLockSha256, runtimeAdapterSha256, buildctlSha256, buildkitdSha256, buildkitConfigSha256, builtAt] = process.argv.slice(1);
+  const [output, sourceCommit, archiveHash, treeHash, dockerfileHash, imageTag, reportPath, layoutPath, claimedManifestDigest, ociArchive, ociArchiveHash, adapterDockerfileSha256, adapterImageTag, adapterReportPath, adapterOciArchive, adapterOciArchiveHash, runtimeToolchainSha256, runtimePolicySha256, proofDependencyManifestSha256, toolchainLockSha256, runtimeAdapterSha256, buildctlSha256, buildkitdSha256, buildkitConfigSha256, builtAt] = process.argv.slice(1);
   const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
   const adapterReport = JSON.parse(fs.readFileSync(adapterReportPath, "utf8"));
   const configDigest = report.normalizedConfigDigest;
@@ -457,7 +493,7 @@ node -e '
     throw new Error("Normalized runner config is not bound to the expected non-root source");
   }
   const receipt = {
-    schemaVersion: "3",
+    schemaVersion: "4",
     status: "BUILT",
     sourceCommit,
     sourceArchiveSha256: archiveHash,
@@ -477,6 +513,8 @@ node -e '
     adapterOciRevision: adapterReport.ociRevision,
     adapterOciSourceTreeSha256: adapterReport.ociSourceTreeSha256,
     runtimeToolchainSha256,
+    runtimePolicySha256,
+    proofDependencyManifestSha256,
     toolchainLockSha256,
     runtimeAdapterSha256,
     buildctlSha256,
@@ -500,7 +538,7 @@ node -e '
     flag: "wx",
     mode: 0o600,
   });
-' "${OUTPUT}" "${SOURCE_COMMIT}" "${SOURCE_ARCHIVE_SHA256}" "${SOURCE_TREE_SHA256}" "${DOCKERFILE_SHA256}" "${LOCAL_IMAGE_TAG}" "${NORMALIZATION_REPORT}" "${NORMALIZED_OCI_LAYOUT}" "${NORMALIZED_MANIFEST_DIGEST}" "${LOCAL_OCI_ARCHIVE}" "${LOCAL_OCI_ARCHIVE_SHA256}" "${ADAPTER_DOCKERFILE_SHA256}" "${ADAPTER_IMAGE_TAG}" "${ADAPTER_OCI_REPORT}" "${ADAPTER_OCI_ARCHIVE}" "${ADAPTER_OCI_ARCHIVE_SHA256}" "${RUNTIME_TOOLCHAIN_SHA256}" "${TOOLCHAIN_LOCK_SHA256}" "${RUNTIME_ADAPTER_SHA256}" "${BUILDCTL_SHA256}" "${BUILDKITD_SHA256}" "${BUILDKIT_CONFIG_SHA256}" "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+' "${OUTPUT}" "${SOURCE_COMMIT}" "${SOURCE_ARCHIVE_SHA256}" "${SOURCE_TREE_SHA256}" "${DOCKERFILE_SHA256}" "${LOCAL_IMAGE_TAG}" "${NORMALIZATION_REPORT}" "${NORMALIZED_OCI_LAYOUT}" "${NORMALIZED_MANIFEST_DIGEST}" "${LOCAL_OCI_ARCHIVE}" "${LOCAL_OCI_ARCHIVE_SHA256}" "${ADAPTER_DOCKERFILE_SHA256}" "${ADAPTER_IMAGE_TAG}" "${ADAPTER_OCI_REPORT}" "${ADAPTER_OCI_ARCHIVE}" "${ADAPTER_OCI_ARCHIVE_SHA256}" "${RUNTIME_TOOLCHAIN_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${TOOLCHAIN_LOCK_SHA256}" "${RUNTIME_ADAPTER_SHA256}" "${BUILDCTL_SHA256}" "${BUILDKITD_SHA256}" "${BUILDKIT_CONFIG_SHA256}" "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
 
 LOCAL_IMAGE_DIGEST="$(node -e 'const fs=require("node:fs");const value=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(value.localImageDigest)' "${OUTPUT}")"
 ADAPTER_IMAGE_DIGEST="$(node -e 'const fs=require("node:fs");const value=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(value.adapterImageDigest)' "${OUTPUT}")"

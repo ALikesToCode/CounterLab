@@ -18,5 +18,11 @@ if [[ "${REPLAY_ID}" != "leakage-01" ]]; then
 fi
 
 cd "${ROOT_DIR}"
+WORK_DIR="${TMPDIR}/replay-patch-${REPLAY_ID}-${BASHPID}-${RANDOM}-${RANDOM}"
+[[ ! -e "${WORK_DIR}" && ! -L "${WORK_DIR}" ]] || {
+  echo "Replay patch work directory already exists: ${WORK_DIR}" >&2
+  exit 2
+}
 PYTHONPATH=services/kernel/src .venv/bin/python scripts/replay_patch.py \
-  --root "${ROOT_DIR}"
+  --root "${ROOT_DIR}" \
+  --work-dir "${WORK_DIR}"

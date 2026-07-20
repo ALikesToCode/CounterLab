@@ -1,17 +1,33 @@
-#!/usr/bin/env bash
+#!/usr/bin/env -S -i PATH=/usr/bin:/bin /bin/bash -p
 set -euo pipefail
+
+usage() {
+  echo "Usage: contained-runtime-adapter --session-id ID [--control-receipt PATH] -- COMMAND [ARG...]" >&2
+  exit 2
+}
+
+[[ $# -ge 4 && "${1:-}" == "--session-id" ]] || usage
+SESSION_ID="${2:-}"
+[[ "${SESSION_ID}" =~ ^rt-[a-z0-9][a-z0-9-]{7,13}$ ]] || {
+  echo "contained runtime session ID is invalid." >&2
+  exit 2
+}
+shift 2
+
+CONTROL_RECEIPT=""
+if [[ "${1:-}" == "--control-receipt" ]]; then
+  [[ $# -ge 4 && -n "${2:-}" ]] || usage
+  CONTROL_RECEIPT="${2}"
+  shift 2
+fi
+[[ $# -ge 2 && "${1:-}" == "--" ]] || usage
+shift
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "${ROOT_DIR}"
 
 [[ "$(git rev-parse --show-toplevel)" == "${ROOT_DIR}" && -f "${ROOT_DIR}/COUNTERLAB_REPO_ROOT" ]] || {
   echo "The contained runtime adapter must run from the CounterLab repository." >&2
-  exit 2
-}
-
-SESSION_ID="${COUNTERLAB_RUNTIME_SESSION_ID:-}"
-[[ "${SESSION_ID}" =~ ^rt-[a-z0-9][a-z0-9-]{7,13}$ ]] || {
-  echo "COUNTERLAB_RUNTIME_SESSION_ID is missing or invalid." >&2
   exit 2
 }
 
@@ -29,31 +45,36 @@ BUILDKIT_SOCKET="${SESSION_ROOT}/run/buildkitd.sock"
   exit 2
 }
 
-export HOME="${SESSION_ROOT}/home"
-export TMPDIR="${SESSION_ROOT}/tmp"
-export XDG_CACHE_HOME="${SESSION_ROOT}/xdg-cache"
-export XDG_CONFIG_HOME="${SESSION_ROOT}/xdg-config"
-export XDG_DATA_HOME="${SESSION_ROOT}/xdg-data"
-export XDG_RUNTIME_DIR="${SESSION_ROOT}/run"
-export DOCKER_CONFIG="${SESSION_ROOT}/auth"
-export BUILDKIT_HOST="unix://${BUILDKIT_SOCKET}"
-export PATH="${INSTALL_ROOT}/bin:/usr/bin:/bin"
-
-unset CONTAINERD_ADDRESS CONTAINERD_NAMESPACE CONTAINERD_SNAPSHOTTER NERDCTL_TOML DOCKER_HOST
+CLEAN_ENV=(
+  /usr/bin/env -i
+  "HOME=${SESSION_ROOT}/home"
+  "TMPDIR=${SESSION_ROOT}/tmp"
+  "XDG_CACHE_HOME=${SESSION_ROOT}/xdg-cache"
+  "XDG_CONFIG_HOME=${SESSION_ROOT}/xdg-config"
+  "XDG_DATA_HOME=${SESSION_ROOT}/xdg-data"
+  "XDG_RUNTIME_DIR=${SESSION_ROOT}/run"
+  "DOCKER_CONFIG=${SESSION_ROOT}/auth"
+  "BUILDKIT_HOST=unix://${BUILDKIT_SOCKET}"
+  "PATH=${INSTALL_ROOT}/bin:/usr/bin:/bin"
+)
 
 if [[ "${1:-}" == "counterlab-attest" ]]; then
-  [[ $# -eq 1 ]] || {
+  [[ $# -eq 1 && -z "${CONTROL_RECEIPT}" ]] || {
     echo "counterlab-attest does not accept arguments." >&2
     exit 2
   }
-  exec node "${ROOT_DIR}/scripts/verify-contained-runtime.mjs" \
+  exec "${CLEAN_ENV[@]}" node "${ROOT_DIR}/scripts/verify-contained-runtime.mjs" \
     --adapter "${ROOT_DIR}/scripts/contained-runtime-adapter.sh" \
     --session-id "${SESSION_ID}"
 fi
 
-node "${ROOT_DIR}/scripts/validate-contained-runtime-command.mjs" "$@"
+"${CLEAN_ENV[@]}" node "${ROOT_DIR}/scripts/validate-contained-runtime-command.mjs" "$@"
 
-exec node "${ROOT_DIR}/scripts/contained-runtime-client.mjs" \
-  --session-id "${SESSION_ID}" \
-  -- \
-  "$@"
+CLIENT_ARGS=(--session-id "${SESSION_ID}")
+if [[ -n "${CONTROL_RECEIPT}" ]]; then
+  CLIENT_ARGS+=(--control-receipt "${CONTROL_RECEIPT}")
+fi
+CLIENT_ARGS+=(-- "$@")
+
+exec "${CLEAN_ENV[@]}" node "${ROOT_DIR}/scripts/contained-runtime-client.mjs" \
+  "${CLIENT_ARGS[@]}"

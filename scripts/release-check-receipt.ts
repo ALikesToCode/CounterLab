@@ -7,10 +7,15 @@ import { fileURLToPath } from "node:url";
 
 import {
   ContainedRuntimeAttestationSchema,
+  DeploymentReceiptSchema,
   QualifiedRunnerReleaseSchema,
   RELEASE_CHECK_IDS,
   ReleaseCheckReceiptSchema,
 } from "../packages/scientific-engine-registry/src/index.js";
+import {
+  containedRuntimeAdapterArguments,
+  requireContainedRuntimeSessionId,
+} from "./contained-runtime-attestation.mjs";
 
 type BindingInput = {
   qualifiedReceipt: unknown;
@@ -26,6 +31,30 @@ type BindingInput = {
 
 function sha256(value: Buffer): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+export function createQualifiedReleaseIdentity(receiptBytes: Buffer) {
+  const receipt = QualifiedRunnerReleaseSchema.parse(
+    JSON.parse(receiptBytes.toString("utf8")) as unknown,
+  );
+  return {
+    identitySchemaVersion: "1",
+    receiptType: "qualified-runner-release",
+    receiptSha256: sha256(receiptBytes),
+    receipt,
+  } as const;
+}
+
+export function createDeploymentReleaseIdentity(receiptBytes: Buffer) {
+  const receipt = DeploymentReceiptSchema.parse(
+    JSON.parse(receiptBytes.toString("utf8")) as unknown,
+  );
+  return {
+    identitySchemaVersion: "1",
+    receiptType: "deployment-receipt",
+    receiptSha256: sha256(receiptBytes),
+    receipt,
+  } as const;
 }
 
 export function assertReleaseCheckBinding(input: BindingInput) {
@@ -68,6 +97,21 @@ export function assertReleaseCheckBinding(input: BindingInput) {
       qualified.runtimeToolchainSha256,
     ],
     [
+      "runtime policy",
+      releaseCheck.runtimePolicySha256,
+      qualified.runtimePolicySha256,
+    ],
+    [
+      "proof dependency manifest",
+      releaseCheck.proofDependencyManifestSha256,
+      qualified.proofDependencyManifestSha256,
+    ],
+    [
+      "aggregate limit evidence",
+      releaseCheck.aggregateLimitEvidenceSha256,
+      qualified.aggregateLimitEvidenceSha256,
+    ],
+    [
       "runtime adapter",
       releaseCheck.runtimeAdapterSha256,
       qualified.runtimeAdapterSha256,
@@ -78,9 +122,24 @@ export function assertReleaseCheckBinding(input: BindingInput) {
       qualified.runtimeToolchainSha256,
     ],
     [
+      "live runtime policy",
+      runtime.runtimePolicySha256,
+      qualified.runtimePolicySha256,
+    ],
+    [
+      "live proof dependency manifest",
+      runtime.proofDependencyManifestSha256,
+      qualified.proofDependencyManifestSha256,
+    ],
+    [
       "live runtime adapter",
       runtime.adapterSha256,
       qualified.runtimeAdapterSha256,
+    ],
+    [
+      "timeout runtime session",
+      runtime.sessionId,
+      qualified.timeoutRuntimeSessionId,
     ],
     ["live runner image", input.runnerImageDigest, qualified.localImageDigest],
     [
@@ -129,7 +188,7 @@ export function createReleaseCheckReceipt(input: {
   );
   const checkedAt = input.checkedAt ?? new Date().toISOString();
   const receipt = ReleaseCheckReceiptSchema.parse({
-    schemaVersion: "1",
+    schemaVersion: "2",
     status: "PASSED",
     evidenceCommit: qualified.evidenceCommit,
     sourceCommit: qualified.sourceCommit,
@@ -141,10 +200,13 @@ export function createReleaseCheckReceipt(input: {
     adapterImageDigest: qualified.adapterImageDigest,
     registryDigest: qualified.registryDigest,
     runtimeToolchainSha256: qualified.runtimeToolchainSha256,
+    runtimePolicySha256: qualified.runtimePolicySha256,
+    proofDependencyManifestSha256: qualified.proofDependencyManifestSha256,
+    aggregateLimitEvidenceSha256: qualified.aggregateLimitEvidenceSha256,
     runtimeAdapterSha256: qualified.runtimeAdapterSha256,
     checks: RELEASE_CHECK_IDS.map((id) => ({ id, status: "PASSED" })),
     checkedAt,
-    verifierVersion: "counterlab-release-check-v1",
+    verifierVersion: "counterlab-release-check-v2",
   });
   return assertReleaseCheckBinding({
     qualifiedReceipt: qualified,
@@ -209,6 +271,13 @@ function commandText(root: string, command: string, args: string[]): string {
   }).trim();
 }
 
+function runtimeAdapterArguments(args: string[]): string[] {
+  return containedRuntimeAdapterArguments(
+    requireContainedRuntimeSessionId(process.env.COUNTERLAB_RUNTIME_SESSION_ID),
+    args,
+  );
+}
+
 function argumentsFrom(argv: string[]) {
   const values = new Map<string, string>();
   for (let index = 0; index < argv.length; index += 2) {
@@ -247,23 +316,21 @@ async function main(): Promise<void> {
       throw new Error("Usage: release-check-receipt identity --qualified FILE");
     }
     const qualifiedPath = await existingRepositoryFile(root, process.argv[4]!);
-    const qualified = QualifiedRunnerReleaseSchema.parse(
-      JSON.parse(readFileSync(qualifiedPath, "utf8")) as unknown,
+    process.stdout.write(
+      `${JSON.stringify(createQualifiedReleaseIdentity(readFileSync(qualifiedPath)))}\n`,
     );
-    for (const value of [
-      qualified.evidenceCommit,
-      qualified.sourceCommit,
-      qualified.localImageTag,
-      qualified.localImageDigest,
-      qualified.adapterImageTag,
-      qualified.adapterImageDigest,
-      qualified.runtimeToolchainSha256,
-      qualified.runtimeAdapterSha256,
-      qualified.qualifiedAt,
-      qualified.registryDigest,
-    ]) {
-      process.stdout.write(`${value}\n`);
+    return;
+  }
+  if (process.argv[2] === "deployment-identity") {
+    if (process.argv.length !== 5 || process.argv[3] !== "--deployment") {
+      throw new Error(
+        "Usage: release-check-receipt deployment-identity --deployment FILE",
+      );
     }
+    const deploymentPath = await existingRepositoryFile(root, process.argv[4]!);
+    process.stdout.write(
+      `${JSON.stringify(createDeploymentReleaseIdentity(readFileSync(deploymentPath)))}\n`,
+    );
     return;
   }
   const args = argumentsFrom(process.argv.slice(2));
@@ -280,22 +347,34 @@ async function main(): Promise<void> {
     JSON.parse(qualifiedReceiptBytes.toString("utf8")) as unknown,
   );
   const runtimeAttestation = JSON.parse(
-    commandText(root, runtimeAdapter, ["counterlab-attest"]),
+    commandText(
+      root,
+      runtimeAdapter,
+      runtimeAdapterArguments(["counterlab-attest"]),
+    ),
   ) as unknown;
-  const runnerImageDigest = commandText(root, runtimeAdapter, [
-    "image",
-    "inspect",
-    qualifiedReceipt.localImageTag,
-    "--format",
-    "{{.Id}}",
-  ]);
-  const adapterImageDigest = commandText(root, runtimeAdapter, [
-    "image",
-    "inspect",
-    qualifiedReceipt.adapterImageTag,
-    "--format",
-    "{{.Id}}",
-  ]);
+  const runnerImageDigest = commandText(
+    root,
+    runtimeAdapter,
+    runtimeAdapterArguments([
+      "image",
+      "inspect",
+      qualifiedReceipt.localImageTag,
+      "--format",
+      "{{.Id}}",
+    ]),
+  );
+  const adapterImageDigest = commandText(
+    root,
+    runtimeAdapter,
+    runtimeAdapterArguments([
+      "image",
+      "inspect",
+      qualifiedReceipt.adapterImageTag,
+      "--format",
+      "{{.Id}}",
+    ]),
+  );
   const receipt = createReleaseCheckReceipt({
     qualifiedReceipt,
     qualifiedReceiptBytes,

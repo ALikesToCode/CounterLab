@@ -77,7 +77,7 @@ if [[ ! "${BASE_URL}" =~ ^https:// ]]; then
   exit 2
 fi
 
-for command in curl git python3; do
+for command in curl git node python3 sha256sum; do
   COMMAND_PATH="$(command -v "${command}" || true)"
   if [[ -z "${COMMAND_PATH}" ]]; then
     echo "Missing required command: ${command}" >&2
@@ -98,7 +98,7 @@ esac
 
 if [[ -z "${COUNTERLAB_DEPLOYMENT_RECEIPT:-}" ]]; then
   echo "Production smoke requires COUNTERLAB_DEPLOYMENT_RECEIPT." >&2
-  echo "Use the schema-v3 receipt written by scripts/deploy-qualified.sh." >&2
+  echo "Use the schema-v4 receipt written by scripts/deploy-qualified.sh." >&2
   exit 2
 fi
 DEPLOYMENT_RECEIPT="$(repo_path "${COUNTERLAB_DEPLOYMENT_RECEIPT}")"
@@ -106,156 +106,77 @@ DEPLOYMENT_RECEIPT="$(repo_path "${COUNTERLAB_DEPLOYMENT_RECEIPT}")"
   echo "Production deployment receipt is unavailable or unsafe: ${DEPLOYMENT_RECEIPT}" >&2
   exit 2
 }
-
-RELEASE_IDENTITY="$(
-  python3 - "${DEPLOYMENT_RECEIPT}" <<'PY'
-from __future__ import annotations
-
-import hashlib
-import json
-import pathlib
-import re
-import sys
-from datetime import datetime
-
-path = pathlib.Path(sys.argv[1])
-body = path.read_bytes()
-payload = json.loads(body)
-expected = {
-    "schemaVersion",
-    "status",
-    "workerName",
-    "productionOrigin",
-    "generationFilesystemReadIsolation",
-    "workerEvidenceCommit",
-    "runnerSourceCommit",
-    "qualifiedRunnerReceiptSha256",
-    "releaseCheckReceiptSha256",
-    "releaseCheckCheckedAt",
-    "runtimeToolchainSha256",
-    "runtimeAdapterSha256",
-    "adapterImageDigest",
-    "workerVersionId",
-    "workerTag",
-    "workerMessage",
-    "containerApplicationId",
-    "containerApplicationVersion",
-    "containerImage",
-    "containerState",
-    "containerImageDigest",
-    "deployConfigSha256",
-    "workerBundleSha256",
-    "clientAssetsSha256",
-    "clientAssetCount",
-    "dryRunSha256",
-    "dryRunFileCount",
-    "deploymentStatusSha256",
-    "workerVersionSha256",
-    "containerStatusSha256",
-    "deployedAt",
-    "verifierVersion",
+if [[ -z "${COUNTERLAB_FROZEN_WORKER_MANIFEST:-}" ]]; then
+  echo "Production smoke requires COUNTERLAB_FROZEN_WORKER_MANIFEST." >&2
+  exit 2
+fi
+FROZEN_WORKER_MANIFEST="$(repo_path "${COUNTERLAB_FROZEN_WORKER_MANIFEST}")"
+[[ -f "${FROZEN_WORKER_MANIFEST}" && ! -L "${FROZEN_WORKER_MANIFEST}" ]] || {
+  echo "Frozen Worker manifest is unavailable or unsafe: ${FROZEN_WORKER_MANIFEST}" >&2
+  exit 2
 }
-if not isinstance(payload, dict) or set(payload) != expected:
-    raise SystemExit("deployment receipt fields are invalid")
-if (
-    payload["schemaVersion"] != "3"
-    or payload["status"] != "DEPLOYED"
-    or payload["workerName"] != "counterlab"
-    or payload["productionOrigin"] != "https://counterlab.cserules.workers.dev"
-    or payload["generationFilesystemReadIsolation"] != "PARTIAL"
-    or payload["verifierVersion"] != "counterlab-deployment-v3"
-):
-    raise SystemExit("deployment receipt is not the deployed schema-v3 release")
-commit = re.compile(r"^[a-f0-9]{40}$")
-sha256 = re.compile(r"^[a-f0-9]{64}$")
-image_digest = re.compile(r"^sha256:[a-f0-9]{64}$")
-worker = payload["workerEvidenceCommit"]
-runner = payload["runnerSourceCommit"]
-version = payload["workerVersionId"]
-digest = payload["containerImageDigest"]
-if not isinstance(worker, str) or commit.fullmatch(worker) is None:
-    raise SystemExit("deployment receipt Worker evidence commit is invalid")
-if not isinstance(runner, str) or commit.fullmatch(runner) is None:
-    raise SystemExit("deployment receipt runner source commit is invalid")
-if (
-    not isinstance(version, str)
-    or re.fullmatch(
-        r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}",
-        version,
-    )
-    is None
-):
-    raise SystemExit("deployment receipt Worker version is invalid")
-if not isinstance(digest, str) or image_digest.fullmatch(digest) is None:
-    raise SystemExit("deployment receipt Container digest is invalid")
-if payload["workerTag"] != f"git-{worker}":
-    raise SystemExit("deployment receipt Worker tag is not commit-bound")
-if payload["workerMessage"] != f"CounterLab Worker {worker}; runner {runner}":
-    raise SystemExit("deployment receipt Worker message is not release-bound")
-container_image = payload["containerImage"]
-if not isinstance(container_image, str) or re.fullmatch(
-    r"registry\.cloudflare\.com/[A-Za-z0-9_-]{3,64}/counterlab-runner@"
-    + re.escape(digest),
-    container_image,
-) is None or payload["containerState"] not in {"active", "ready"}:
-    raise SystemExit("deployment receipt Container observation is invalid")
-if not isinstance(payload["containerApplicationId"], str) or re.fullmatch(
-    r"[A-Za-z0-9_-]{1,128}", payload["containerApplicationId"]
-) is None:
-    raise SystemExit("deployment receipt Container application is invalid")
-if not isinstance(payload["containerApplicationVersion"], str) or re.fullmatch(
-    r"[1-9][0-9]*", payload["containerApplicationVersion"]
-) is None:
-    raise SystemExit("deployment receipt Container version is invalid")
-for field in (
-    "qualifiedRunnerReceiptSha256",
-    "releaseCheckReceiptSha256",
-    "runtimeToolchainSha256",
-    "runtimeAdapterSha256",
-    "deployConfigSha256",
-    "workerBundleSha256",
-    "clientAssetsSha256",
-    "dryRunSha256",
-    "deploymentStatusSha256",
-    "workerVersionSha256",
-    "containerStatusSha256",
-):
-    if not isinstance(payload[field], str) or sha256.fullmatch(payload[field]) is None:
-        raise SystemExit(f"deployment receipt {field} is invalid")
-if not isinstance(payload["adapterImageDigest"], str) or image_digest.fullmatch(
-    payload["adapterImageDigest"]
-) is None:
-    raise SystemExit("deployment receipt adapter digest is invalid")
-for field in ("clientAssetCount", "dryRunFileCount"):
-    if (
-        not isinstance(payload[field], int)
-        or isinstance(payload[field], bool)
-        or payload[field] <= 0
-    ):
-        raise SystemExit(f"deployment receipt {field} is invalid")
-try:
-    checked_at = datetime.fromisoformat(
-        str(payload["releaseCheckCheckedAt"]).replace("Z", "+00:00")
-    )
-    deployed_at = datetime.fromisoformat(
-        str(payload["deployedAt"]).replace("Z", "+00:00")
-    )
-except ValueError as error:
-    raise SystemExit("deployment receipt timestamp is invalid") from error
-if checked_at.tzinfo is None or deployed_at.tzinfo is None or checked_at > deployed_at:
-    raise SystemExit("deployment receipt timestamp order is invalid")
-receipt_hash = hashlib.sha256(body).hexdigest()
-print("\t".join((
-    version,
-    worker,
-    runner,
-    digest,
-    receipt_hash,
-    payload["productionOrigin"],
-)))
-PY
+
+RELEASE_IDENTITY_JSON="$(
+  cd "${ROOT_DIR}"
+  node --import tsx scripts/release-check-receipt.ts \
+    deployment-identity \
+    --deployment "${DEPLOYMENT_RECEIPT}"
 )"
-IFS=$'\t' read -r WORKER_VERSION_ID WORKER_EVIDENCE_COMMIT RUNNER_SOURCE_COMMIT CONTAINER_IMAGE_DIGEST DEPLOYMENT_RECEIPT_SHA256 PRODUCTION_ORIGIN <<<"${RELEASE_IDENTITY}"
+deployment_identity_value() {
+  local field="$1"
+  node -e '
+const [raw, field] = process.argv.slice(1);
+const identity = JSON.parse(raw);
+const outerFields = ["identitySchemaVersion", "receipt", "receiptSha256", "receiptType"];
+if (
+  Object.keys(identity).sort().join("\n") !== outerFields.sort().join("\n") ||
+  identity.identitySchemaVersion !== "1" ||
+  identity.receiptType !== "deployment-receipt" ||
+  !/^[a-f0-9]{64}$/.test(identity.receiptSha256)
+) throw new Error("deployment release identity envelope is invalid");
+if (field === "receiptSha256") {
+  process.stdout.write(identity.receiptSha256);
+} else if (Object.hasOwn(identity.receipt, field)) {
+  const value = identity.receipt[field];
+  if (
+    !(typeof value === "string" && value.length > 0) &&
+    !(Number.isSafeInteger(value) && value > 0)
+  ) throw new Error(`deployment release identity field is invalid: ${field}`);
+  process.stdout.write(String(value));
+} else {
+  throw new Error(`deployment release identity field is unavailable: ${field}`);
+}
+' "${RELEASE_IDENTITY_JSON}" "${field}"
+}
+WORKER_VERSION_ID="$(deployment_identity_value workerVersionId)"
+WORKER_EVIDENCE_COMMIT="$(deployment_identity_value workerEvidenceCommit)"
+RUNNER_SOURCE_COMMIT="$(deployment_identity_value runnerSourceCommit)"
+CONTAINER_IMAGE_DIGEST="$(deployment_identity_value containerImageDigest)"
+TIMEOUT_CLEANUP_RECEIPT_SHA256="$(deployment_identity_value timeoutCleanupReceiptSha256)"
+AGGREGATE_LIMIT_EVIDENCE_SHA256="$(deployment_identity_value aggregateLimitEvidenceSha256)"
+RUNTIME_POLICY_SHA256="$(deployment_identity_value runtimePolicySha256)"
+PROOF_DEPENDENCY_MANIFEST_SHA256="$(deployment_identity_value proofDependencyManifestSha256)"
+WORKER_ARTIFACT_CLASSIFICATION="$(deployment_identity_value workerArtifactClassification)"
+WORKER_ARTIFACT_MANIFEST_SHA256="$(deployment_identity_value workerArtifactManifestSha256)"
+WORKER_BUNDLE_SHA256="$(deployment_identity_value workerBundleSha256)"
+CLIENT_ASSETS_SHA256="$(deployment_identity_value clientAssetsSha256)"
+CLIENT_ASSET_COUNT="$(deployment_identity_value clientAssetCount)"
+CLIENT_PUBLIC_ASSETS_SHA256="$(deployment_identity_value clientPublicAssetsSha256)"
+CLIENT_PUBLIC_ASSET_COUNT="$(deployment_identity_value clientPublicAssetCount)"
+FROZEN_VITE_VERSION="$(deployment_identity_value viteVersion)"
+FROZEN_WRANGLER_VERSION="$(deployment_identity_value wranglerVersion)"
+DEPLOYMENT_RECEIPT_SHA256="$(deployment_identity_value receiptSha256)"
+PRODUCTION_ORIGIN="$(deployment_identity_value productionOrigin)"
+[[ "$(sha256sum "${DEPLOYMENT_RECEIPT}" | cut -d ' ' -f 1)" == "${DEPLOYMENT_RECEIPT_SHA256}" ]] || {
+  echo "Deployment receipt bytes changed after identity validation." >&2
+  exit 2
+}
+[[ "$(sha256sum "${FROZEN_WORKER_MANIFEST}" | cut -d ' ' -f 1)" == "${WORKER_ARTIFACT_MANIFEST_SHA256}" ]] || {
+  echo "Frozen Worker manifest bytes do not match the deployment receipt." >&2
+  exit 2
+}
+node --import tsx scripts/frozen-worker-release.ts verify \
+  --manifest "${FROZEN_WORKER_MANIFEST}"
 
 if [[ "${BASE_URL}" != "${PRODUCTION_ORIGIN}" ]]; then
   echo "Production smoke URL does not match the deployment receipt origin." >&2
@@ -476,6 +397,19 @@ init_args+=(--deployment-id "${WORKER_VERSION_ID}")
 init_args+=(--worker-evidence-commit "${WORKER_EVIDENCE_COMMIT}")
 init_args+=(--runner-source-commit "${RUNNER_SOURCE_COMMIT}")
 init_args+=(--container-image-digest "${CONTAINER_IMAGE_DIGEST}")
+init_args+=(--timeout-cleanup-receipt-sha256 "${TIMEOUT_CLEANUP_RECEIPT_SHA256}")
+init_args+=(--aggregate-limit-evidence-sha256 "${AGGREGATE_LIMIT_EVIDENCE_SHA256}")
+init_args+=(--runtime-policy-sha256 "${RUNTIME_POLICY_SHA256}")
+init_args+=(--proof-dependency-manifest-sha256 "${PROOF_DEPENDENCY_MANIFEST_SHA256}")
+init_args+=(--worker-artifact-classification "${WORKER_ARTIFACT_CLASSIFICATION}")
+init_args+=(--worker-artifact-manifest-sha256 "${WORKER_ARTIFACT_MANIFEST_SHA256}")
+init_args+=(--worker-bundle-sha256 "${WORKER_BUNDLE_SHA256}")
+init_args+=(--client-assets-sha256 "${CLIENT_ASSETS_SHA256}")
+init_args+=(--client-asset-count "${CLIENT_ASSET_COUNT}")
+init_args+=(--client-public-assets-sha256 "${CLIENT_PUBLIC_ASSETS_SHA256}")
+init_args+=(--client-public-asset-count "${CLIENT_PUBLIC_ASSET_COUNT}")
+init_args+=(--vite-version "${FROZEN_VITE_VERSION}")
+init_args+=(--wrangler-version "${FROZEN_WRANGLER_VERSION}")
 init_args+=(--deployment-receipt-sha256 "${DEPLOYMENT_RECEIPT_SHA256}")
 python3 "${REPORT_HELPER}" "${init_args[@]}"
 REPORT_INITIALIZED=1
@@ -489,7 +423,7 @@ stage_started="$(timestamp)"
   --max-time 30 \
   "${BASE_URL}/ready" \
   >"${WORK_DIR}/ready.json"
-python3 - "${WORK_DIR}/ready.json" "${WORKER_VERSION_ID}" "${WORKER_EVIDENCE_COMMIT}" "${RUNNER_SOURCE_COMMIT}" "${CONTAINER_IMAGE_DIGEST}" <<'PY'
+python3 - "${WORK_DIR}/ready.json" "${WORKER_VERSION_ID}" "${WORKER_EVIDENCE_COMMIT}" "${RUNNER_SOURCE_COMMIT}" "${CONTAINER_IMAGE_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" <<'PY'
 import json
 import pathlib
 import sys
@@ -520,6 +454,19 @@ expected_release = {
     "workerEvidenceCommit": sys.argv[3],
     "runnerSourceCommit": sys.argv[4],
     "runnerImageDigest": sys.argv[5],
+    "timeoutCleanupReceiptSha256": sys.argv[6],
+    "aggregateLimitEvidenceSha256": sys.argv[7],
+    "runtimePolicySha256": sys.argv[8],
+    "proofDependencyManifestSha256": sys.argv[9],
+    "workerArtifactClassification": sys.argv[10],
+    "workerArtifactManifestSha256": sys.argv[11],
+    "workerBundleSha256": sys.argv[12],
+    "clientAssetsSha256": sys.argv[13],
+    "clientAssetCount": int(sys.argv[14]),
+    "clientPublicAssetsSha256": sys.argv[15],
+    "clientPublicAssetCount": int(sys.argv[16]),
+    "viteVersion": sys.argv[17],
+    "wranglerVersion": sys.argv[18],
 }
 if payload.get("release") != expected_release:
     raise SystemExit("public readiness release identity does not match the receipt")
@@ -536,7 +483,7 @@ stage_started="$(timestamp)"
   --max-time 30 \
   "${BASE_URL}/api/health" \
   >"${WORK_DIR}/health.json"
-python3 - "${WORK_DIR}/health.json" "${WORKER_VERSION_ID}" "${WORKER_EVIDENCE_COMMIT}" "${RUNNER_SOURCE_COMMIT}" "${CONTAINER_IMAGE_DIGEST}" <<'PY'
+python3 - "${WORK_DIR}/health.json" "${WORKER_VERSION_ID}" "${WORKER_EVIDENCE_COMMIT}" "${RUNNER_SOURCE_COMMIT}" "${CONTAINER_IMAGE_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" <<'PY'
 import json
 import pathlib
 import sys
@@ -562,6 +509,8 @@ for key, expected in required.items():
         )
 if health.get("maintenance") is not False:
     raise SystemExit("production health reports maintenance mode")
+if health.get("readiness") != "not-checked":
+    raise SystemExit("ordinary production health must not perform a deep readiness probe")
 expected_release = {
     "status": "bound",
     "workerVersionId": sys.argv[2],
@@ -569,6 +518,19 @@ expected_release = {
     "workerEvidenceCommit": sys.argv[3],
     "runnerSourceCommit": sys.argv[4],
     "runnerImageDigest": sys.argv[5],
+    "timeoutCleanupReceiptSha256": sys.argv[6],
+    "aggregateLimitEvidenceSha256": sys.argv[7],
+    "runtimePolicySha256": sys.argv[8],
+    "proofDependencyManifestSha256": sys.argv[9],
+    "workerArtifactClassification": sys.argv[10],
+    "workerArtifactManifestSha256": sys.argv[11],
+    "workerBundleSha256": sys.argv[12],
+    "clientAssetsSha256": sys.argv[13],
+    "clientAssetCount": int(sys.argv[14]),
+    "clientPublicAssetsSha256": sys.argv[15],
+    "clientPublicAssetCount": int(sys.argv[16]),
+    "viteVersion": sys.argv[17],
+    "wranglerVersion": sys.argv[18],
 }
 if health.get("release") != expected_release:
     raise SystemExit("production health release identity does not match the receipt")
@@ -591,6 +553,12 @@ COUNTERLAB_E2E_BASE_URL="${BASE_URL}" \
 COUNTERLAB_E2E_RUNTIME_ROOT="${PUBLIC_ASSET_RUNTIME_ROOT}" \
 COUNTERLAB_E2E_PUBLIC_ASSET_SCAN=1 \
 COUNTERLAB_E2E_PUBLIC_ASSET_EVIDENCE_PATH="${PUBLIC_ASSET_EVIDENCE}" \
+COUNTERLAB_E2E_FROZEN_WORKER_MANIFEST_PATH="${FROZEN_WORKER_MANIFEST}" \
+COUNTERLAB_E2E_WORKER_ARTIFACT_MANIFEST_SHA256="${WORKER_ARTIFACT_MANIFEST_SHA256}" \
+COUNTERLAB_E2E_CLIENT_ASSETS_SHA256="${CLIENT_ASSETS_SHA256}" \
+COUNTERLAB_E2E_CLIENT_ASSET_COUNT="${CLIENT_ASSET_COUNT}" \
+COUNTERLAB_E2E_CLIENT_PUBLIC_ASSETS_SHA256="${CLIENT_PUBLIC_ASSETS_SHA256}" \
+COUNTERLAB_E2E_CLIENT_PUBLIC_ASSET_COUNT="${CLIENT_PUBLIC_ASSET_COUNT}" \
   "${PNPM}" --filter @counterlab/web exec playwright test \
   --config playwright.config.ts \
   --grep "Loaded public release routes and assets retain security headers and contain no secrets"

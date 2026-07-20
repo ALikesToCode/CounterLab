@@ -13,6 +13,10 @@ import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { z } from "zod";
 
 import {
+  containedRuntimeAdapterArguments,
+  requireContainedRuntimeSessionId,
+} from "./contained-runtime-attestation.mjs";
+import {
   ContainedRuntimeAttestationSchema,
   assertCurrentGrypeReleaseEvidenceBinding,
 } from "../packages/scientific-engine-registry/src/index.js";
@@ -20,36 +24,13 @@ import {
   collectRunnerReleaseEvidence,
   createQualifiedRunnerRelease,
 } from "./prepare-qualified-deploy.js";
+import { validateTimeoutCleanupProof } from "./timeout-cleanup-receipt.js";
+import {
+  SourceBoundBuildReceiptSchema,
+  type SourceBoundBuildReceipt,
+} from "./source-bound-build-receipt.js";
 
-const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
-const BuildReceiptSchema = z.strictObject({
-  schemaVersion: z.literal("3"),
-  status: z.literal("BUILT"),
-  sourceCommit: z.string().regex(/^[a-f0-9]{40}$/),
-  sourceArchiveSha256: Sha256Schema,
-  sourceTreeSha256: Sha256Schema,
-  dockerfileSha256: Sha256Schema,
-  localImageTag: z.string().regex(/^counterlab-runner:git-[a-f0-9]{40}$/),
-  localImageDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
-  localManifestDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
-  localOciArchive: z.string().min(1),
-  localOciArchiveSha256: Sha256Schema,
-  adapterDockerfileSha256: Sha256Schema,
-  adapterImageTag: z.string().regex(/^counterlab-adapter:git-[a-f0-9]{40}$/),
-  adapterImageDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
-  adapterManifestDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
-  adapterOciArchive: z.string().min(1),
-  adapterOciArchiveSha256: Sha256Schema,
-  adapterOciRevision: z.string().regex(/^[a-f0-9]{40}$/),
-  adapterOciSourceTreeSha256: Sha256Schema,
-  runtimeToolchainSha256: Sha256Schema,
-  toolchainLockSha256: Sha256Schema,
-  runtimeAdapterSha256: Sha256Schema,
-  buildctlSha256: Sha256Schema,
-  buildkitdSha256: Sha256Schema,
-  buildkitConfigSha256: Sha256Schema,
-  builtAt: z.iso.datetime({ offset: true }),
-});
+const BuildReceiptSchema = SourceBoundBuildReceiptSchema;
 
 const RegistryCredentialsSchema = z
   .object({
@@ -60,6 +41,7 @@ const RegistryCredentialsSchema = z
 
 type Arguments = {
   buildReceipt: string;
+  timeoutReceipt: string;
   registryImage: string;
   output: string;
 };
@@ -190,18 +172,23 @@ function sha256Command(root: string, command: string, args: string[]): string {
     .digest("hex");
 }
 
+function runtimeAdapterArguments(args: string[]): string[] {
+  return containedRuntimeAdapterArguments(
+    requireContainedRuntimeSessionId(process.env.COUNTERLAB_RUNTIME_SESSION_ID),
+    args,
+  );
+}
+
 function observeLocalImageDigest(
   root: string,
   runtimeAdapter: string,
   image: string,
 ): string {
-  const digest = commandText(root, runtimeAdapter, [
-    "image",
-    "inspect",
-    image,
-    "--format",
-    "{{.Id}}",
-  ]);
+  const digest = commandText(
+    root,
+    runtimeAdapter,
+    runtimeAdapterArguments(["image", "inspect", image, "--format", "{{.Id}}"]),
+  );
   if (!/^sha256:[a-f0-9]{64}$/.test(digest)) {
     throw new Error("runtime adapter returned an invalid local image digest");
   }
@@ -211,13 +198,17 @@ function observeLocalImageDigest(
 function observeRuntimeAttestation(root: string, runtimeAdapter: string) {
   return ContainedRuntimeAttestationSchema.parse(
     JSON.parse(
-      commandText(root, runtimeAdapter, ["counterlab-attest"]),
+      commandText(
+        root,
+        runtimeAdapter,
+        runtimeAdapterArguments(["counterlab-attest"]),
+      ),
     ) as unknown,
   );
 }
 
 function assertBuildRuntimeBinding(
-  buildReceipt: z.infer<typeof BuildReceiptSchema>,
+  buildReceipt: SourceBoundBuildReceipt,
   runtime: z.infer<typeof ContainedRuntimeAttestationSchema>,
 ): void {
   const bindings = [
@@ -225,6 +216,16 @@ function assertBuildRuntimeBinding(
       "runtime toolchain",
       buildReceipt.runtimeToolchainSha256,
       runtime.runtimeToolchainSha256,
+    ],
+    [
+      "runtime policy",
+      buildReceipt.runtimePolicySha256,
+      runtime.runtimePolicySha256,
+    ],
+    [
+      "runtime proof dependency manifest",
+      buildReceipt.proofDependencyManifestSha256,
+      runtime.proofDependencyManifestSha256,
     ],
     [
       "toolchain lock",
@@ -378,13 +379,13 @@ async function promoteImage(input: {
   }
   execFileSync(
     input.runtimeAdapter,
-    [
+    runtimeAdapterArguments([
       "login",
       "--username",
       credentials.username,
       "--password-stdin",
       "registry.cloudflare.com",
-    ],
+    ]),
     {
       cwd: input.root,
       input: credentials.password,
@@ -394,14 +395,18 @@ async function promoteImage(input: {
   );
   execFileSync(
     input.runtimeAdapter,
-    ["tag", input.localImage, input.registryImage],
+    runtimeAdapterArguments(["tag", input.localImage, input.registryImage]),
     { cwd: input.root, stdio: "inherit", timeout: 30_000 },
   );
-  execFileSync(input.runtimeAdapter, ["push", input.registryImage], {
-    cwd: input.root,
-    stdio: "inherit",
-    timeout: 10 * 60_000,
-  });
+  execFileSync(
+    input.runtimeAdapter,
+    runtimeAdapterArguments(["push", input.registryImage]),
+    {
+      cwd: input.root,
+      stdio: "inherit",
+      timeout: 10 * 60_000,
+    },
+  );
 }
 
 function argumentsFrom(argv: string[]): Arguments {
@@ -412,22 +417,28 @@ function argumentsFrom(argv: string[]): Arguments {
     if (
       flag === undefined ||
       value === undefined ||
-      !["--build-receipt", "--registry-image", "--output"].includes(flag) ||
+      ![
+        "--build-receipt",
+        "--timeout-receipt",
+        "--registry-image",
+        "--output",
+      ].includes(flag) ||
       values.has(flag)
     ) {
       throw new Error(
-        "Usage: qualify-runner-release --build-receipt FILE --registry-image URI --output FILE",
+        "Usage: qualify-runner-release --build-receipt FILE --timeout-receipt FILE --registry-image URI --output FILE",
       );
     }
     values.set(flag, value);
   }
-  if (values.size !== 3) {
+  if (values.size !== 4) {
     throw new Error(
-      "Usage: qualify-runner-release --build-receipt FILE --registry-image URI --output FILE",
+      "Usage: qualify-runner-release --build-receipt FILE --timeout-receipt FILE --registry-image URI --output FILE",
     );
   }
   return {
     buildReceipt: values.get("--build-receipt")!,
+    timeoutReceipt: values.get("--timeout-receipt")!,
     registryImage: values.get("--registry-image")!,
     output: values.get("--output")!,
   };
@@ -446,8 +457,13 @@ async function main(): Promise<void> {
     root,
     args.buildReceipt,
   );
+  const timeoutReceiptPath = await existingRepositoryFile(
+    root,
+    args.timeoutReceipt,
+  );
+  const buildReceiptBytes = await readFile(buildReceiptPath);
   const buildReceipt = BuildReceiptSchema.parse(
-    JSON.parse(await readFile(buildReceiptPath, "utf8")) as unknown,
+    JSON.parse(buildReceiptBytes.toString("utf8")) as unknown,
   );
   if (
     buildReceipt.localImageTag !==
@@ -486,6 +502,30 @@ async function main(): Promise<void> {
   );
   let runtimeAttestation = observeRuntimeAttestation(root, runtimeAdapter);
   assertBuildRuntimeBinding(buildReceipt, runtimeAttestation);
+  const timeoutProof = await validateTimeoutCleanupProof({
+    root,
+    receiptPath: timeoutReceiptPath,
+    expectedBuildReceiptPath: buildReceiptPath,
+    expectedBuildReceiptBytes: buildReceiptBytes,
+    expected: {
+      sourceCommit: buildReceipt.sourceCommit,
+      sourceTreeSha256: buildReceipt.sourceTreeSha256,
+      adapterImageTag: buildReceipt.adapterImageTag,
+      adapterImageDigest: buildReceipt.adapterImageDigest,
+      adapterManifestDigest: buildReceipt.adapterManifestDigest,
+      adapterOciArchiveSha256: buildReceipt.adapterOciArchiveSha256,
+      runtimeToolchainSha256: buildReceipt.runtimeToolchainSha256,
+      runtimePolicySha256: buildReceipt.runtimePolicySha256,
+      proofDependencyManifestSha256: buildReceipt.proofDependencyManifestSha256,
+    },
+    runtimeAttestation,
+  });
+  if (
+    Date.parse(timeoutProof.timeoutVerifiedAt) <
+    Date.parse(buildReceipt.builtAt)
+  ) {
+    throw new Error("timeout cleanup proof predates the source-bound build");
+  }
   const ociArchive = await existingRepositoryFile(
     root,
     buildReceipt.localOciArchive,
@@ -509,7 +549,13 @@ async function main(): Promise<void> {
 
   execFileSync(
     runtimeAdapter,
-    ["load", "--platform", "linux/amd64", "--input", ociArchive],
+    runtimeAdapterArguments([
+      "load",
+      "--platform",
+      "linux/amd64",
+      "--input",
+      ociArchive,
+    ]),
     {
       cwd: root,
       stdio: "inherit",
@@ -517,7 +563,13 @@ async function main(): Promise<void> {
   );
   execFileSync(
     runtimeAdapter,
-    ["load", "--platform", "linux/amd64", "--input", adapterOciArchive],
+    runtimeAdapterArguments([
+      "load",
+      "--platform",
+      "linux/amd64",
+      "--input",
+      adapterOciArchive,
+    ]),
     {
       cwd: root,
       stdio: "inherit",
@@ -542,27 +594,39 @@ async function main(): Promise<void> {
     throw new Error("imported adapter image does not match its build receipt");
   }
   if (
-    commandText(root, runtimeAdapter, [
-      "image",
-      "inspect",
-      buildReceipt.adapterImageTag,
-      "--format",
-      "{{.Config.User}}",
-    ]) !== "65532:65532" ||
-    commandText(root, runtimeAdapter, [
-      "image",
-      "inspect",
-      buildReceipt.adapterImageTag,
-      "--format",
-      '{{index .Config.Labels "org.opencontainers.image.revision"}}',
-    ]) !== buildReceipt.sourceCommit ||
-    commandText(root, runtimeAdapter, [
-      "image",
-      "inspect",
-      buildReceipt.adapterImageTag,
-      "--format",
-      '{{index .Config.Labels "io.counterlab.source-tree-sha256"}}',
-    ]) !== buildReceipt.sourceTreeSha256
+    commandText(
+      root,
+      runtimeAdapter,
+      runtimeAdapterArguments([
+        "image",
+        "inspect",
+        buildReceipt.adapterImageTag,
+        "--format",
+        "{{.Config.User}}",
+      ]),
+    ) !== "65532:65532" ||
+    commandText(
+      root,
+      runtimeAdapter,
+      runtimeAdapterArguments([
+        "image",
+        "inspect",
+        buildReceipt.adapterImageTag,
+        "--format",
+        '{{index .Config.Labels "org.opencontainers.image.revision"}}',
+      ]),
+    ) !== buildReceipt.sourceCommit ||
+    commandText(
+      root,
+      runtimeAdapter,
+      runtimeAdapterArguments([
+        "image",
+        "inspect",
+        buildReceipt.adapterImageTag,
+        "--format",
+        '{{index .Config.Labels "io.counterlab.source-tree-sha256"}}',
+      ]),
+    ) !== buildReceipt.sourceTreeSha256
   ) {
     throw new Error("imported adapter image provenance is invalid");
   }
@@ -658,7 +722,7 @@ async function main(): Promise<void> {
   runtimeAttestation = observeRuntimeAttestation(root, runtimeAdapter);
   assertBuildRuntimeBinding(buildReceipt, runtimeAttestation);
 
-  const observation = await collectRunnerReleaseEvidence({
+  const releaseObservation = await collectRunnerReleaseEvidence({
     root,
     sourceCommit: buildReceipt.sourceCommit,
     localImageTag: buildReceipt.localImageTag,
@@ -669,6 +733,7 @@ async function main(): Promise<void> {
     adapterManifestDigest: buildReceipt.adapterManifestDigest,
     adapterOciArchiveSha256: buildReceipt.adapterOciArchiveSha256,
   });
+  const observation = { ...releaseObservation, ...timeoutProof };
   for (const [label, built, observed] of [
     [
       "source archive",
@@ -753,6 +818,27 @@ async function main(): Promise<void> {
   }
   runtimeAttestation = observeRuntimeAttestation(root, runtimeAdapter);
   assertBuildRuntimeBinding(buildReceipt, runtimeAttestation);
+  const finalTimeoutProof = await validateTimeoutCleanupProof({
+    root,
+    receiptPath: timeoutReceiptPath,
+    expectedBuildReceiptPath: buildReceiptPath,
+    expectedBuildReceiptBytes: buildReceiptBytes,
+    expected: {
+      sourceCommit: buildReceipt.sourceCommit,
+      sourceTreeSha256: buildReceipt.sourceTreeSha256,
+      adapterImageTag: buildReceipt.adapterImageTag,
+      adapterImageDigest: buildReceipt.adapterImageDigest,
+      adapterManifestDigest: buildReceipt.adapterManifestDigest,
+      adapterOciArchiveSha256: buildReceipt.adapterOciArchiveSha256,
+      runtimeToolchainSha256: buildReceipt.runtimeToolchainSha256,
+      runtimePolicySha256: buildReceipt.runtimePolicySha256,
+      proofDependencyManifestSha256: buildReceipt.proofDependencyManifestSha256,
+    },
+    runtimeAttestation,
+  });
+  if (JSON.stringify(finalTimeoutProof) !== JSON.stringify(timeoutProof)) {
+    throw new Error("timeout cleanup proof changed during qualification");
+  }
   if (
     observeLocalImageDigest(
       root,

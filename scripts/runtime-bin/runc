@@ -44,12 +44,18 @@ case "${ORIGINAL_ROOT}" in
   /run/containerd/runc/counterlab-v6.1)
     CONTAINED_ROOT="${RUNC_STATE_ROOT}/counterlab-v6.1"
     ;;
+  "${RUNC_STATE_ROOT}")
+    CONTAINED_ROOT="${RUNC_STATE_ROOT}"
+    ;;
+  "${RUNC_STATE_ROOT}/counterlab-v6.1")
+    CONTAINED_ROOT="${RUNC_STATE_ROOT}/counterlab-v6.1"
+    ;;
   *)
     fail "runc root does not match the pinned containerd default"
     ;;
 esac
 
-REWRITTEN=("--root" "${CONTAINED_ROOT}")
+REWRITTEN=("--root" "${CONTAINED_ROOT}" "--rootless=true")
 SUBCOMMAND_SEEN=0
 while (( $# > 0 )); do
   if (( SUBCOMMAND_SEEN == 1 )); then
@@ -57,9 +63,15 @@ while (( $# > 0 )); do
     break
   fi
   case "$1" in
-    --debug|--systemd-cgroup|--rootless=true|--rootless=false)
+    --debug|--systemd-cgroup)
       REWRITTEN+=("$1")
       shift
+      ;;
+    --rootless=true)
+      shift
+      ;;
+    --rootless=false)
+      fail "non-root container execution requires runc rootless mode"
       ;;
     --log)
       (( $# >= 2 )) || fail "$1 requires a value"

@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   mkdirSync,
   mkdtempSync,
@@ -13,9 +14,30 @@ import { resolve } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import {
+  CONTAINED_RUNTIME_CALLER_GRACE_SECONDS,
+  CONTAINED_RUNTIME_CONTROL_BUDGET_SECONDS,
+  CONTAINED_RUNTIME_POLICY_SHA256,
+  containedRuntimeResourceAbsent,
   containedRunPlan,
   executeContainedRun,
+  validateContainedImageRootfsSnapshot,
+  validateContainedRunControlReceipt,
 } from "./contained-runtime-run.mjs";
+import {
+  createContainedImageAuthority,
+  parseContainedImageManifest,
+  parseContainedImageTarget,
+  selectContainedImageManifest,
+  validateContainedImageAliasTarget,
+  verifyContainedReadOnlyMounts,
+} from "./contained-image-authority.mjs";
+import {
+  persistContainedRootlessSpec,
+  sanitizeContainedRootlessSpec,
+  validateContainedContainerInfo,
+  validateContainedConfigContainerInfo,
+  verifyPersistedContainedRootlessSpec,
+} from "./contained-rootless-spec.mjs";
 import {
   CONTAINERD_SHIM_SOCKET_DIR_MAX_LENGTH,
   createContainedContainerdConfig,
@@ -31,6 +53,7 @@ const validator = resolve(
 const sourceCommit = "a".repeat(40);
 const image = `counterlab-runner:git-${sourceCommit}`;
 const adapterImage = `counterlab-adapter:git-${sourceCommit}`;
+const invocationId = "1".repeat(64);
 const sandboxRoot = resolve(
   root,
   "node_modules/.cache/counterlab-v6.1/tmp/counterlab-sandbox-validator-fixture",
@@ -78,8 +101,11 @@ function startupCommand(): string[] {
     "--memory=1024m",
     "--memory-swap=1024m",
     "--cpus=2.0",
+    "--ulimit=cpu=300:300",
+    "--ulimit=as=1073741824:1073741824",
     "--ulimit=fsize=1048576:1048576",
     "--ulimit=nofile=64:64",
+    "--ulimit=nproc=32:32",
     "--tmpfs",
     "/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700",
     "-e",
@@ -113,14 +139,21 @@ function scientificRuntimeCommand(): string[] {
     "--memory=1024m",
     "--memory-swap=1024m",
     "--cpus=2.0",
+    "--ulimit=cpu=300:300",
+    "--ulimit=as=1073741824:1073741824",
     "--ulimit=fsize=1048576:1048576",
     "--ulimit=nofile=64:64",
+    "--ulimit=nproc=32:32",
     "--tmpfs",
     "/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=1000,gid=1000,mode=0700",
     "-e",
     "TMPDIR=/counterlab-runtime",
-    "-v",
-    `${root}:/repo:ro`,
+    "--mount",
+    `type=bind,src=${resolve(root, "scripts/verify_scientific_runtime.py")},dst=/repo/scripts/verify_scientific_runtime.py,readonly`,
+    "--mount",
+    `type=bind,src=${resolve(root, "requirements.runner.lock.txt")},dst=/repo/requirements.runner.lock.txt,readonly`,
+    "--mount",
+    `type=bind,src=${resolve(root, "scientific-engines")},dst=/repo/scientific-engines,readonly`,
     "--workdir=/repo",
     "--entrypoint",
     "python",
@@ -152,12 +185,21 @@ function reachabilityCommand(): string[] {
     "--memory=1024m",
     "--memory-swap=1024m",
     "--cpus=2.0",
+    "--ulimit=cpu=300:300",
+    "--ulimit=as=1073741824:1073741824",
     "--ulimit=fsize=1048576:1048576",
     "--ulimit=nofile=64:64",
+    "--ulimit=nproc=32:32",
     "--tmpfs=/counterlab-runtime:rw,noexec,nosuid,nodev,size=256m,uid=1000,gid=1000,mode=0700",
     "--env=TMPDIR=/counterlab-runtime",
-    "--volume",
-    `${root}:/repo:ro`,
+    "--mount",
+    `type=bind,src=${resolve(root, "scripts/probe_cpython_htmlparser_reachability.py")},dst=/repo/scripts/probe_cpython_htmlparser_reachability.py,readonly`,
+    "--mount",
+    `type=bind,src=${resolve(root, "fixtures/public")},dst=/repo/fixtures/public,readonly`,
+    "--mount",
+    `type=bind,src=${resolve(root, "fixtures/notebooks")},dst=/repo/fixtures/notebooks,readonly`,
+    "--mount",
+    `type=bind,src=${reviewFile},dst=/repo/reachability-review.json,readonly`,
     "--workdir=/repo",
     "--entrypoint=python",
     image,
@@ -171,7 +213,7 @@ function reachabilityCommand(): string[] {
     "--sbom-sha256",
     "c".repeat(64),
     "--review-file",
-    `/repo/${reviewFile.slice(root.length + 1)}`,
+    "/repo/reachability-review.json",
   ];
 }
 
@@ -191,8 +233,11 @@ function boundedAdapterCommand(): string[] {
     "--memory=512m",
     "--memory-swap=512m",
     "--cpus=1.0",
+    "--ulimit=cpu=20:20",
+    "--ulimit=as=536870912:536870912",
     "--ulimit=fsize=262144:262144",
     "--ulimit=nofile=64:64",
+    "--ulimit=nproc=16:16",
     "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=16m,uid=65532,gid=65532,mode=0700",
     "--mount",
     `type=bind,src=${workspace},dst=/workspace,readonly`,
@@ -204,6 +249,533 @@ function boundedAdapterCommand(): string[] {
     "--workdir=/workspace",
     adapterImage,
   ];
+}
+
+function successful(stdout = ""): {
+  status: number;
+  stdout: Buffer;
+  stderr: Buffer;
+} {
+  return {
+    status: 0,
+    stdout: Buffer.from(stdout),
+    stderr: Buffer.alloc(0),
+  };
+}
+
+function missing(): { status: number; stdout: Buffer; stderr: Buffer } {
+  return {
+    status: 1,
+    stdout: Buffer.alloc(0),
+    stderr: Buffer.from("not found\n"),
+  };
+}
+
+function digest(source: string): string {
+  return `sha256:${createHash("sha256").update(source).digest("hex")}`;
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    return `{${Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function imageFixture(command: string[]) {
+  const commandImage = command.find((entry) =>
+    /^counterlab-(?:adapter|runner):git-[a-f0-9]{40}$/.test(entry),
+  )!;
+  const configSource = JSON.stringify({
+    architecture: "amd64",
+    os: "linux",
+    rootfs: {
+      type: "layers",
+      diff_ids: [`sha256:${"3".repeat(64)}`],
+    },
+    config: {
+      User: "10001:10001",
+      Env: ["PATH=/usr/local/bin:/usr/bin:/bin"],
+      Entrypoint: ["/usr/local/bin/node", "/app/runner.mjs"],
+      Cmd: [],
+      WorkingDir: "/app",
+      Labels: {
+        "io.counterlab.source-tree-sha256": "2".repeat(64),
+        "org.opencontainers.image.revision": sourceCommit,
+        "org.opencontainers.image.source":
+          "https://github.com/ALikesToCode/CounterLab",
+      },
+    },
+  });
+  const configDigest = digest(configSource);
+  const layerDigest = `sha256:${"4".repeat(64)}`;
+  const manifestSource = JSON.stringify({
+    schemaVersion: 2,
+    mediaType: "application/vnd.oci.image.manifest.v1+json",
+    config: {
+      mediaType: "application/vnd.oci.image.config.v1+json",
+      digest: configDigest,
+      size: configSource.length,
+    },
+    layers: [
+      {
+        mediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
+        digest: layerDigest,
+        size: 1024,
+      },
+    ],
+  });
+  const manifestDigest = digest(manifestSource);
+  const targetSource = JSON.stringify([
+    {
+      Id: configDigest,
+      RepoTags: [commandImage],
+      RepoDigests: [
+        `${commandImage.slice(0, commandImage.lastIndexOf(":"))}@${manifestDigest}`,
+      ],
+      Architecture: "amd64",
+      Os: "linux",
+    },
+  ]);
+  const target = parseContainedImageTarget({
+    image: commandImage,
+    source: targetSource,
+  });
+  const selected = selectContainedImageManifest({
+    source: manifestSource,
+    target,
+  });
+  expect(
+    parseContainedImageManifest({ manifestDigest, source: manifestSource }),
+  ).toEqual({
+    configDigest,
+    configSize: configSource.length,
+    layerDigests: [layerDigest],
+  });
+  return {
+    authority: createContainedImageAuthority({
+      args: command,
+      configSource,
+      manifestDigest: selected.manifestDigest,
+      manifestSource,
+      target,
+    }),
+    configDigest,
+    configSource,
+    layerDigest,
+    manifestDigest,
+    manifestSource,
+    target,
+    targetSource,
+  };
+}
+
+function aliasMetadata(
+  alias: string,
+  fixture: ReturnType<typeof imageFixture>,
+) {
+  const shortAlias = alias.slice("docker.io/library/".length);
+  return JSON.stringify([
+    {
+      Id: fixture.configDigest,
+      RepoTags: [shortAlias],
+      RepoDigests: [
+        `${shortAlias.slice(0, shortAlias.lastIndexOf(":"))}@${fixture.target.targetDigest}`,
+      ],
+      Architecture: "amd64",
+      Os: "linux",
+    },
+  ]);
+}
+
+function rootlessSpec(
+  containerId: string,
+  expected: {
+    containerName: string;
+    cpuCount: number;
+    maxProcesses: number;
+    memoryBytes: number;
+    rlimits: Array<{ type: string; soft: number; hard: number }>;
+    sessionRoot: string;
+  },
+  authority = imageFixture(startupCommand()).authority,
+): string {
+  const containerdSocket = resolve(expected.sessionRoot, "run/containerd.sock");
+  const dataStore = resolve(
+    expected.sessionRoot,
+    "data/nerdctl",
+    createHash("sha256").update(containerdSocket).digest("hex").slice(0, 8),
+  );
+  const stateDir = resolve(
+    dataStore,
+    "containers/counterlab-v6.1",
+    containerId,
+  );
+  const hostsDir = resolve(dataStore, "etchosts/counterlab-v6.1", containerId);
+  mkdirSync(stateDir, { recursive: true, mode: 0o700 });
+  mkdirSync(hostsDir, { recursive: true, mode: 0o700 });
+  const internalMountSources: Array<
+    [destination: string, source: string, contents: string]
+  > = [
+    [
+      "/etc/hostname",
+      resolve(stateDir, "hostname"),
+      `${containerId.slice(0, 12)}\n`,
+    ],
+    ["/etc/hosts", resolve(hostsDir, "hosts"), "127.0.0.1 localhost\n"],
+    [
+      "/etc/resolv.conf",
+      resolve(stateDir, "resolv.conf"),
+      "nameserver 127.0.0.1\n",
+    ],
+  ];
+  const internalMounts = internalMountSources.map(
+    ([destination, source, contents]) => {
+      writeFileSync(source, contents, { mode: 0o644 });
+      return {
+        destination,
+        type: "bind",
+        source,
+        options: ["bind", "rprivate"],
+      };
+    },
+  );
+  const requestedMounts = authority.requestedMounts.map((entry) => ({
+    destination: entry.destination,
+    type: "bind",
+    source: entry.source,
+    options: [
+      "rbind",
+      ...(entry.readonly ? ["ro"] : []),
+      "rprivate",
+      "nodev",
+      "nosuid",
+    ],
+  }));
+  const requestedTmpfs = authority.requestedTmpfs.map((entry) => ({
+    destination: entry.destination,
+    type: "tmpfs",
+    source: "tmpfs",
+    options: [...entry.options, "rprivate"],
+  }));
+  const annotations = {
+    "nerdctl/auto-remove": "true",
+    "nerdctl/dns": JSON.stringify({
+      DNSServers: null,
+      DNSResolvConfOptions: null,
+      DNSSearchDomains: null,
+    }),
+    "nerdctl/domainname": "",
+    "nerdctl/extraHosts": "[]",
+    "nerdctl/host-config": JSON.stringify({
+      BlkioWeight: 0,
+      CidFile: "",
+      Devices: null,
+    }),
+    "nerdctl/hostname": containerId.slice(0, 12),
+    "nerdctl/ipc": '{"mode":"private"}',
+    "nerdctl/log-config": JSON.stringify({
+      driver: "json-file",
+      address: containerdSocket,
+    }),
+    "nerdctl/log-uri": (() => {
+      const value = new URL(
+        `binary://${resolve(root, "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1/bin/nerdctl")}`,
+      );
+      value.searchParams.set("_NERDCTL_INTERNAL_LOGGING", dataStore);
+      return value.toString();
+    })(),
+    "nerdctl/mounts": JSON.stringify([
+      ...authority.requestedTmpfs.map((entry) => ({
+        Type: "tmpfs",
+        Source: "tmpfs",
+        Destination: entry.destination,
+        Mode: entry.options.join(","),
+        RW: true,
+        Propagation: "",
+      })),
+      ...authority.requestedMounts.map((entry) => ({
+        Type: "bind",
+        Source: entry.source,
+        Destination: entry.destination,
+        Mode: entry.readonly ? "ro,rbind" : "rbind",
+        RW: !entry.readonly,
+        Propagation: "",
+      })),
+    ]),
+    "nerdctl/name": expected.containerName,
+    "nerdctl/namespace": "counterlab-v6.1",
+    "nerdctl/networks": '["none"]',
+    "nerdctl/platform": "linux/amd64",
+    "nerdctl/state-dir": resolve(
+      dataStore,
+      "containers/counterlab-v6.1",
+      containerId,
+    ),
+    "nerdctl/user": `${authority.process.uid}:${authority.process.gid}`,
+  };
+  const binRoot = resolve(
+    root,
+    "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1/bin",
+  );
+  const nerdctl = resolve(binRoot, "nerdctl");
+  const runtimePath = `${resolve(root, "scripts/runtime-bin")}:${binRoot}:/usr/bin:/bin`;
+  const hookEnvironment = [
+    `HOME=${resolve(expected.sessionRoot, "home")}`,
+    `TMPDIR=${resolve(expected.sessionRoot, "tmp")}`,
+    `XDG_CACHE_HOME=${resolve(expected.sessionRoot, "xdg-cache")}`,
+    `XDG_CONFIG_HOME=${resolve(expected.sessionRoot, "xdg-config")}`,
+    `XDG_DATA_HOME=${resolve(expected.sessionRoot, "xdg-data")}`,
+    `XDG_RUNTIME_DIR=${resolve(expected.sessionRoot, "run/inner")}`,
+    `DOCKER_CONFIG=${resolve(expected.sessionRoot, "auth")}`,
+    `BUILDKIT_HOST=unix://${resolve(expected.sessionRoot, "run/buildkitd.sock")}`,
+    `COUNTERLAB_RUNC_BINARY=${resolve(binRoot, "runc")}`,
+    `COUNTERLAB_RUNC_STATE_ROOT=${resolve(expected.sessionRoot, "run/runc")}`,
+    `PATH=${runtimePath}`,
+    `PATH=${runtimePath}:/usr/sbin:/sbin`,
+  ];
+  const hookArgs = [
+    nerdctl,
+    `--H=${containerdSocket}`,
+    `--a=${containerdSocket}`,
+    `--address=${containerdSocket}`,
+    "--cgroup-manager=cgroupfs",
+    `--cni-netconfpath=${resolve(expected.sessionRoot, "config/cni")}`,
+    `--cni-path=${resolve(root, "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1/libexec/cni")}`,
+    `--data-root=${resolve(expected.sessionRoot, "data/nerdctl")}`,
+    "--experimental=false",
+    `--host=${containerdSocket}`,
+    `--hosts-dir=[${resolve(expected.sessionRoot, "config/certs.d")}]`,
+    "--n=counterlab-v6.1",
+    "--namespace=counterlab-v6.1",
+    "--snapshotter=native",
+    "--storage-driver=native",
+    "internal",
+    "oci-hook",
+  ];
+  return JSON.stringify({
+    ociVersion: "1.3.0",
+    hostname: containerId.slice(0, 12),
+    annotations,
+    hooks: {
+      createRuntime: [
+        {
+          path: nerdctl,
+          args: [...hookArgs, "createRuntime"],
+          env: hookEnvironment,
+        },
+      ],
+      poststop: [
+        {
+          path: nerdctl,
+          args: [...hookArgs, "postStop"],
+          env: hookEnvironment,
+        },
+      ],
+    },
+    process: {
+      user: {
+        uid: authority.process.uid,
+        gid: authority.process.gid,
+        additionalGids: [authority.process.gid],
+      },
+      args: authority.process.args,
+      env: [...authority.process.env, `HOSTNAME=${containerId.slice(0, 12)}`],
+      cwd: authority.process.cwd,
+      capabilities: {},
+      rlimits: expected.rlimits,
+      noNewPrivileges: true,
+    },
+    root: { path: "rootfs", readonly: true },
+    mounts: [
+      {
+        destination: "/proc",
+        type: "proc",
+        source: "proc",
+        options: ["nosuid", "noexec", "nodev"],
+      },
+      {
+        destination: "/dev",
+        type: "tmpfs",
+        source: "tmpfs",
+        options: ["nosuid", "strictatime", "mode=755", "size=65536k"],
+      },
+      {
+        destination: "/dev/pts",
+        type: "devpts",
+        source: "devpts",
+        options: [
+          "nosuid",
+          "noexec",
+          "newinstance",
+          "ptmxmode=0666",
+          "mode=0620",
+          "gid=5",
+        ],
+      },
+      {
+        destination: "/dev/shm",
+        type: "tmpfs",
+        source: "shm",
+        options: ["nosuid", "noexec", "nodev", "mode=1777", "size=65536k"],
+      },
+      {
+        destination: "/dev/mqueue",
+        type: "mqueue",
+        source: "mqueue",
+        options: ["nosuid", "noexec", "nodev"],
+      },
+      {
+        destination: "/sys",
+        type: "sysfs",
+        source: "sysfs",
+        options: ["nosuid", "noexec", "nodev", "ro"],
+      },
+      ...requestedTmpfs,
+      ...requestedMounts,
+      ...internalMounts,
+    ],
+    linux: {
+      cgroupsPath: `counterlab-v6.1/${containerId}`,
+      resources: {
+        devices: [
+          { allow: false, access: "rwm" },
+          ...[
+            [1, 3],
+            [1, 8],
+            [1, 7],
+            [5, 0],
+            [1, 5],
+            [1, 9],
+            [5, 1],
+            [5, 2],
+          ].map(([major, minor]) => ({
+            allow: true,
+            type: "c",
+            major,
+            minor,
+            access: "rwm",
+          })),
+          { allow: true, type: "c", major: 136, access: "rwm" },
+        ],
+        memory: { limit: expected.memoryBytes, swap: expected.memoryBytes },
+        cpu: {
+          quota: Math.round(expected.cpuCount * 100_000),
+          period: 100_000,
+          realtimeRuntime: 0,
+          realtimePeriod: 0,
+        },
+        pids: { limit: expected.maxProcesses },
+      },
+      namespaces: [
+        { type: "pid" },
+        { type: "ipc" },
+        { type: "uts" },
+        { type: "mount" },
+        { type: "network" },
+        { type: "cgroup" },
+      ],
+      maskedPaths: [
+        "/proc/acpi",
+        "/proc/asound",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/scsi",
+        "/proc/sched_debug",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/sys/firmware",
+        "/sys/devices/virtual/powercap",
+      ],
+      readonlyPaths: [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger",
+      ],
+      seccomp: {
+        defaultAction: "SCMP_ACT_ERRNO",
+        architectures: ["SCMP_ARCH_X86_64"],
+        syscalls: [
+          { names: ["exit", "exit_group"], action: "SCMP_ACT_ALLOW" },
+          { names: ["fork", "vfork"], action: "SCMP_ACT_ALLOW" },
+          {
+            names: ["clone"],
+            action: "SCMP_ACT_ALLOW",
+            args: [
+              {
+                index: 0,
+                value: 0x7e020000,
+                valueTwo: 0,
+                op: "SCMP_CMP_MASKED_EQ",
+              },
+            ],
+          },
+          {
+            names: ["process_vm_readv", "process_vm_writev", "ptrace"],
+            action: "SCMP_ACT_ALLOW",
+          },
+        ],
+      },
+      sysctl: { "net.ipv4.ip_unprivileged_port_start": "0" },
+    },
+  });
+}
+
+function containerMetadata(
+  containerId: string,
+  imageName: string,
+  invocation = invocationId,
+): string {
+  const labels: Record<string, string> = {
+    "io.counterlab.runtime.invocation": invocation,
+  };
+  return JSON.stringify({
+    ID: containerId,
+    Image: imageName,
+    Labels: labels,
+    Runtime: { Name: "io.containerd.runc.v2" },
+    SnapshotKey: containerId,
+    Snapshotter: "native",
+  });
+}
+
+function configContainerMetadata(
+  containerId: string,
+  baseSpecSha256: string,
+): string {
+  return JSON.stringify({
+    ID: containerId,
+    Image: "",
+    Labels: {
+      "io.counterlab.runtime.invocation": invocationId,
+      "io.counterlab.runtime.base-spec-sha256": baseSpecSha256,
+    },
+    Runtime: { Name: "io.containerd.runc.v2" },
+    SnapshotKey: "",
+    Snapshotter: "",
+  });
+}
+
+function imageRootfsSnapshotMetadata(
+  imageRootfsPath: string,
+  parentChainId: string,
+): string {
+  return JSON.stringify({
+    Kind: "Active",
+    Name: imageRootfsPath,
+    Parent: parentChainId,
+  });
+}
+
+function absentInspectionResponses() {
+  return [successful(), missing(), missing()];
 }
 
 describe("contained runtime command policy", () => {
@@ -260,6 +832,56 @@ describe("contained runtime command policy", () => {
     runcLogSymlink = resolve(logFixtureRoot, "runc.log");
     writeFileSync(logTarget, "sentinel\n", { mode: 0o600 });
     symlinkSync(logTarget, runcLogSymlink);
+  });
+
+  it("accepts only a self-hashed clean timeout control receipt", () => {
+    const payload = {
+      schemaVersion: "2",
+      status: "TIMED_OUT_CLEAN",
+      timeoutKind: "WALL_CLOCK",
+      runtimePolicySha256: CONTAINED_RUNTIME_POLICY_SHA256,
+      invocationId,
+      finalContainerId: "f".repeat(64),
+      commandSha256: "2".repeat(64),
+      rootlessReceiptFileSha256: "3".repeat(64),
+      rootlessReceiptPayloadSha256: "4".repeat(64),
+      timeoutObserved: true,
+      candidateWallSeconds: 1,
+      elapsedMs: 1_001,
+      cleanupReserveMs: 120_000,
+      taskAbsent: true,
+      containerAbsent: true,
+      snapshotAbsent: true,
+      invocationAliasAbsent: true,
+      imageRootfsAbsent: true,
+      persistedAuthorityVerified: true,
+      readOnlyMountsUnchanged: true,
+      imageRootfsUnchanged: true,
+      resultReleased: false,
+    } as const;
+    const receipt = {
+      ...payload,
+      receiptPayloadSha256: createHash("sha256")
+        .update(canonicalJson(payload))
+        .digest("hex"),
+    };
+
+    expect(validateContainedRunControlReceipt(receipt)).toEqual(receipt);
+    expect(() =>
+      validateContainedRunControlReceipt({
+        ...receipt,
+        resultReleased: true,
+      }),
+    ).toThrow(/binding|status/u);
+    expect(() =>
+      validateContainedRunControlReceipt({
+        ...receipt,
+        status: "TIMED_OUT_UNCLEAN",
+        receiptPayloadSha256: createHash("sha256")
+          .update(canonicalJson({ ...payload, status: "TIMED_OUT_UNCLEAN" }))
+          .digest("hex"),
+      }),
+    ).toThrow(/status/u);
   });
 
   it("maps only the pinned runc state root into the runtime session", () => {
@@ -330,6 +952,7 @@ describe("contained runtime command policy", () => {
         "list",
       ],
       ["--root", "/run/containerd/runc", "--log", runcLogSymlink, "list"],
+      ["--root", "/run/containerd/runc", "--rootless=false", "list"],
       ["run"],
     ]) {
       const invalid = spawnSync(runcWrapper, args, {
@@ -430,6 +1053,19 @@ describe("contained runtime command policy", () => {
     expect(validate(...boundedAdapterCommand()).status).toBe(0);
   });
 
+  it("mounts only bounded release inputs instead of the repository root", () => {
+    for (const command of [scientificRuntimeCommand(), reachabilityCommand()]) {
+      expect(command).not.toContain(`${root}:/repo:ro`);
+      expect(command).not.toContain(`type=bind,src=${root},dst=/repo,readonly`);
+    }
+    expect(
+      scientificRuntimeCommand().filter((value) => value === "--mount"),
+    ).toHaveLength(3);
+    expect(
+      reachabilityCommand().filter((value) => value === "--mount"),
+    ).toHaveLength(4);
+  });
+
   it("requires a private IPC namespace for every run profile", () => {
     for (const command of [
       startupCommand(),
@@ -461,6 +1097,7 @@ describe("contained runtime command policy", () => {
       clientFifoRoot,
       containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
       installRoot,
+      invocationId,
       sessionRoot,
     });
 
@@ -468,42 +1105,1133 @@ describe("contained runtime command policy", () => {
     expect(plan.create.args).not.toContain("run");
     expect(plan.start.program).toBe(resolve(installRoot, "bin/ctr"));
     expect(plan.start.args).toEqual(
-      expect.arrayContaining(["tasks", "start", "--fifo-dir", clientFifoRoot]),
+      expect.arrayContaining([
+        "run",
+        "--rm",
+        "--fifo-dir",
+        clientFifoRoot,
+        "--cgroup",
+        "",
+        "--platform",
+        "linux/amd64",
+      ]),
     );
     expect(plan.containerName).toBe("counterlab-startup-validator");
     expect(plan.start.args).not.toContain("counterlab-startup-validator");
-    expect(plan.cleanup.args.slice(-3)).toEqual([
-      "rm",
-      "--force",
-      "counterlab-startup-validator",
-    ]);
+    expect(plan.mountImageRootfs).toEqual({
+      program: resolve(installRoot, "bin/ctr"),
+      args: expect.arrayContaining([
+        "images",
+        "mount",
+        "--snapshotter",
+        "native",
+        "--platform",
+        "linux/amd64",
+        "--rw",
+      ]),
+    });
+    expect(plan.cleanupImageRootfs).toEqual({
+      program: resolve(installRoot, "bin/ctr"),
+      args: expect.arrayContaining([
+        "images",
+        "unmount",
+        "--snapshotter",
+        "native",
+        "--rm",
+      ]),
+    });
+    expect(plan.cleanupStaging.args.slice(-2)).toEqual(["rm", "--force"]);
+    expect(plan.cleanupImageAlias.args.slice(-2)).toEqual(["images", "remove"]);
+    expect(plan.expected.rlimits).toHaveLength(5);
+    expect(CONTAINED_RUNTIME_CONTROL_BUDGET_SECONDS).toBe(420);
+    expect(CONTAINED_RUNTIME_CALLER_GRACE_SECONDS).toBe(5);
     expect(JSON.stringify(plan)).not.toContain("/run/containerd/fifo");
   });
 
-  it("fails closed when ephemeral container cleanup fails", () => {
+  it("requires exact snapshot ownership and does not hide snapshotter failure", () => {
+    const imageRootfsPath = resolve(
+      root,
+      ".rt/rt-validator-snapshot-owner/run/rootless-specs/rootfs",
+    );
+    const parentChainId = `sha256:${"3".repeat(64)}`;
+    expect(() =>
+      validateContainedImageRootfsSnapshot(
+        imageRootfsSnapshotMetadata(imageRootfsPath, parentChainId),
+        imageRootfsPath,
+        parentChainId,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      validateContainedImageRootfsSnapshot(
+        imageRootfsSnapshotMetadata(
+          imageRootfsPath,
+          `sha256:${"4".repeat(64)}`,
+        ),
+        imageRootfsPath,
+        parentChainId,
+      ),
+    ).toThrow(/ownership changed/u);
+    expect(
+      containedRuntimeResourceAbsent({
+        status: 1,
+        stdout: Buffer.alloc(0),
+        stderr: Buffer.from("snapshotter native not found\n"),
+      }),
+    ).toBe(false);
+    expect(containedRuntimeResourceAbsent(missing())).toBe(true);
+  });
+
+  it("removes only unsupported cgroup fields from a bounded OCI spec", () => {
+    const sessionRoot = resolve(root, ".rt/rt-validator-spec");
+    const installRoot = resolve(
+      root,
+      "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
+    );
+    const plan = containedRunPlan({
+      args: startupCommand(),
+      binRoot: resolve(installRoot, "bin"),
+      clientFifoRoot: resolve(sessionRoot, "run/client-fifo"),
+      containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+      installRoot,
+      invocationId,
+      sessionRoot,
+    });
+    const containerId = "d".repeat(64);
+    const fixture = imageFixture(startupCommand());
+    const expected = {
+      ...plan.expected,
+      containerName: plan.containerName,
+      imageAuthority: fixture.authority,
+      invocationId,
+      sessionRoot,
+    };
+    const source = rootlessSpec(containerId, plan.expected, fixture.authority);
+    const prepared = sanitizeContainedRootlessSpec({
+      containerId,
+      expected,
+      metadataSha256: "3".repeat(64),
+      source,
+    });
+    const sanitized = JSON.parse(prepared.config);
+
+    expect(sanitized.linux).not.toHaveProperty("cgroupsPath");
+    expect(sanitized.linux).not.toHaveProperty("resources");
+    expect(sanitized.process.rlimits).toEqual(plan.expected.rlimits);
+    expect(sanitized.process.noNewPrivileges).toBe(true);
+    expect(sanitized.process.terminal).toBe(false);
+    expect(sanitized.process.user.additionalGids).toEqual([]);
+    expect(sanitized.process.env).toEqual(fixture.authority.process.env);
+    expect(sanitized.process.capabilities).toEqual({
+      ambient: [],
+      bounding: [],
+      effective: [],
+      inheritable: [],
+      permitted: [],
+    });
+    expect(sanitized.root.readonly).toBe(true);
+    expect(sanitized.root.path).toBe(
+      resolve(sessionRoot, `run/rootless-specs/${invocationId}.image-rootfs`),
+    );
+    expect(
+      sanitized.mounts.filter((mount: { destination: string }) =>
+        ["/etc/hostname", "/etc/hosts", "/etc/resolv.conf"].includes(
+          mount.destination,
+        ),
+      ),
+    ).toEqual([]);
+    expect(sanitized.annotations).toEqual({
+      "io.counterlab.runtime.base-spec-sha256": prepared.receipt.baseSpecSha256,
+      "io.counterlab.runtime.invocation": invocationId,
+    });
+    expect(sanitized.linux).not.toHaveProperty("sysctl");
+    expect(JSON.stringify(sanitized.linux.seccomp)).not.toContain("ptrace");
+    const allowedProcessCreation = sanitized.linux.seccomp.syscalls.filter(
+      (rule: { action: string; names: string[] }) =>
+        rule.action === "SCMP_ACT_ALLOW" &&
+        rule.names.some((name) =>
+          ["clone", "clone3", "fork", "vfork"].includes(name),
+        ),
+    );
+    expect(allowedProcessCreation).toEqual([
+      { action: "SCMP_ACT_ALLOW", names: ["fork", "vfork"] },
+      {
+        action: "SCMP_ACT_ALLOW",
+        args: [
+          {
+            index: 0,
+            op: "SCMP_CMP_MASKED_EQ",
+            value: 0x7e020000,
+            valueTwo: 0,
+          },
+        ],
+        names: ["clone"],
+      },
+    ]);
+    expect(prepared.finalContainerId).toMatch(/^[a-f0-9]{64}$/u);
+    expect(prepared.finalContainerId).not.toBe(containerId);
+    expect(prepared.receipt).toMatchObject({
+      limitMode: "process-address-space-rlimit-with-unenforced-cgroup-intent",
+      aggregateLimitIntentEnforced: false,
+      aggregateLimitEvidence: null,
+      invocationId,
+      imageRootfs: {
+        mode: "containerd-ephemeral-writable-snapshot-readonly-runtime",
+        mountPath: resolve(
+          sessionRoot,
+          `run/rootless-specs/${invocationId}.image-rootfs`,
+        ),
+        parentChainId: fixture.authority.rootfsChainId,
+        snapshotter: "native",
+      },
+      removedFields: [
+        "hooks",
+        "annotations",
+        "linux.cgroupsPath",
+        "linux.resources",
+        "linux.sysctl",
+        "linux.seccomp.restrictedTraceRule",
+      ],
+      stagingContainerId: containerId,
+      finalContainerId: prepared.finalContainerId,
+      removedMounts: ["/etc/hostname", "/etc/hosts", "/etc/resolv.conf"],
+    });
+
+    const missingHookSource = JSON.parse(source);
+    missingHookSource.hooks = null;
+    expect(() =>
+      sanitizeContainedRootlessSpec({
+        containerId,
+        expected,
+        metadataSha256: "3".repeat(64),
+        source: JSON.stringify(missingHookSource),
+      }),
+    ).toThrow(/hooks/u);
+
+    const unsafe = JSON.parse(source);
+    unsafe.root.readonly = false;
+    expect(() =>
+      sanitizeContainedRootlessSpec({
+        containerId,
+        expected,
+        metadataSha256: "3".repeat(64),
+        source: JSON.stringify(unsafe),
+      }),
+    ).toThrow(/root filesystem/u);
+
+    validateContainedContainerInfo({
+      containerId,
+      image: plan.imageAlias,
+      invocationId,
+      source: containerMetadata(containerId, plan.imageAlias),
+    });
+    expect(() =>
+      validateContainedContainerInfo({
+        containerId,
+        image: plan.imageAlias,
+        invocationId,
+        source: containerMetadata("e".repeat(64), plan.imageAlias),
+      }),
+    ).toThrow(/metadata ID changed/u);
+
+    const finalContainerId = "f".repeat(64);
+    const baseSpecSha256 = "4".repeat(64);
+    validateContainedConfigContainerInfo({
+      baseSpecSha256,
+      containerId: finalContainerId,
+      invocationId,
+      source: configContainerMetadata(finalContainerId, baseSpecSha256),
+    });
+    const imageBackedFinal = JSON.parse(
+      configContainerMetadata(finalContainerId, baseSpecSha256),
+    );
+    imageBackedFinal.Image = plan.imageAlias;
+    expect(() =>
+      validateContainedConfigContainerInfo({
+        baseSpecSha256,
+        containerId: finalContainerId,
+        invocationId,
+        source: JSON.stringify(imageBackedFinal),
+      }),
+    ).toThrow(/ownership changed/u);
+  });
+
+  it("authenticates image target, manifest, config, and invocation alias", () => {
+    const fixture = imageFixture(startupCommand());
+    const alias = `docker.io/library/counterlab-runtime-invocation:${invocationId}`;
+
+    validateContainedImageAliasTarget({
+      alias,
+      expectedTarget: fixture.target,
+      source: aliasMetadata(alias, fixture),
+    });
+    const sourceRepositoryMetadata = JSON.parse(aliasMetadata(alias, fixture));
+    sourceRepositoryMetadata[0].RepoDigests = [
+      `counterlab-runner@${fixture.target.targetDigest}`,
+    ];
+    validateContainedImageAliasTarget({
+      alias,
+      expectedTarget: fixture.target,
+      source: JSON.stringify(sourceRepositoryMetadata),
+    });
+    const wrongRepository = JSON.parse(aliasMetadata(alias, fixture));
+    wrongRepository[0].RepoDigests = [
+      `counterlab-runtime-invocation-shadow@${fixture.target.targetDigest}`,
+    ];
+    expect(() =>
+      validateContainedImageAliasTarget({
+        alias,
+        expectedTarget: fixture.target,
+        source: JSON.stringify(wrongRepository),
+      }),
+    ).toThrow(/repository path/u);
+    expect(() =>
+      selectContainedImageManifest({
+        source: `${fixture.manifestSource} `,
+        target: fixture.target,
+      }),
+    ).toThrow(/digest changed/u);
+    expect(() =>
+      createContainedImageAuthority({
+        args: startupCommand(),
+        configSource: `${fixture.configSource} `,
+        manifestDigest: fixture.manifestDigest,
+        manifestSource: fixture.manifestSource,
+        target: fixture.target,
+      }),
+    ).toThrow(/config content digest/u);
+    expect(() =>
+      validateContainedImageAliasTarget({
+        alias,
+        expectedTarget: fixture.target,
+        source: JSON.stringify({
+          Name: alias,
+          Target: {
+            digest: `sha256:${"9".repeat(64)}`,
+            mediaType: "application/vnd.oci.image.manifest.v1+json",
+          },
+        }),
+      }),
+    ).toThrow(/alias target changed/u);
+
+    const indexSource = JSON.stringify({
+      schemaVersion: 2,
+      mediaType: "application/vnd.oci.image.index.v1+json",
+      manifests: [
+        {
+          digest: fixture.manifestDigest,
+          mediaType: "application/vnd.oci.image.manifest.v1+json",
+          platform: { os: "linux", architecture: "amd64" },
+        },
+        {
+          digest: fixture.manifestDigest,
+          mediaType: "application/vnd.oci.image.manifest.v1+json",
+          platform: { os: "linux", architecture: "amd64" },
+        },
+      ],
+    });
+    const indexTarget = parseContainedImageTarget({
+      image,
+      source: JSON.stringify({
+        Name: `docker.io/library/${image}`,
+        Target: {
+          digest: digest(indexSource),
+          mediaType: "application/vnd.oci.image.index.v1+json",
+        },
+      }),
+    });
+    expect(() =>
+      selectContainedImageManifest({
+        source: indexSource,
+        target: indexTarget,
+      }),
+    ).toThrow(/one linux\/amd64 manifest/u);
+  });
+
+  it("hash-binds every read-only mount and rejects incomplete image layers", () => {
+    const mountProbe = resolve(workspace, "mount-binding.txt");
+    writeFileSync(mountProbe, "first\n", { mode: 0o600 });
+    const command = boundedAdapterCommand();
+    const first = imageFixture(command).authority;
+    const firstReadonly = first.requestedMounts.filter(
+      (mount) => mount.readonly,
+    );
+
+    expect(firstReadonly).toHaveLength(2);
+    expect(firstReadonly).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          destination: "/workspace",
+          contentManifestSha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        }),
+        expect.objectContaining({
+          destination: "/fixtures/customer_churn.csv",
+          contentManifestSha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        }),
+      ]),
+    );
+
+    const sessionRoot = resolve(root, ".rt/rt-validator-mount-authority");
+    const installRoot = resolve(
+      root,
+      "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
+    );
+    const plan = containedRunPlan({
+      args: command,
+      binRoot: resolve(installRoot, "bin"),
+      clientFifoRoot: resolve(sessionRoot, "run/client-fifo"),
+      containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+      installRoot,
+      invocationId,
+      sessionRoot,
+    });
+    const containerId = "5".repeat(64);
+    const firstPrepared = sanitizeContainedRootlessSpec({
+      containerId,
+      expected: {
+        ...plan.expected,
+        imageAuthority: first,
+        invocationId,
+      },
+      metadataSha256: "7".repeat(64),
+      source: rootlessSpec(containerId, plan.expected, first),
+    });
+
+    writeFileSync(mountProbe, "second\n", { mode: 0o600 });
+    expect(() => verifyContainedReadOnlyMounts(first.requestedMounts)).toThrow(
+      /read-only mount \/workspace changed/u,
+    );
+    const second = imageFixture(command).authority;
+    expect(() =>
+      verifyContainedReadOnlyMounts(second.requestedMounts),
+    ).not.toThrow();
+    expect(second.requestedMounts[0]?.contentManifestSha256).not.toBe(
+      first.requestedMounts[0]?.contentManifestSha256,
+    );
+    const secondPrepared = sanitizeContainedRootlessSpec({
+      containerId,
+      expected: {
+        ...plan.expected,
+        imageAuthority: second,
+        invocationId,
+      },
+      metadataSha256: "7".repeat(64),
+      source: rootlessSpec(containerId, plan.expected, second),
+    });
+    expect(firstPrepared.finalContainerId).not.toBe(
+      secondPrepared.finalContainerId,
+    );
+    expect(secondPrepared.receipt).toMatchObject({
+      schemaVersion: "4",
+      readOnlyMountManifest: second.readOnlyMountManifest,
+      readOnlyMountManifestSha256: second.readOnlyMountManifestSha256,
+      imageAuthority: {
+        layerDigests: second.layerDigests,
+      },
+    });
+
+    const emptyLayers = JSON.parse(
+      imageFixture(startupCommand()).manifestSource,
+    );
+    emptyLayers.layers = [];
+    const emptySource = JSON.stringify(emptyLayers);
+    expect(() =>
+      parseContainedImageManifest({
+        manifestDigest: digest(emptySource),
+        source: emptySource,
+      }),
+    ).toThrow(/layers/u);
+
+    for (const [label, mutate] of [
+      [
+        "external layer URL",
+        (value: Record<string, any>) => {
+          value.layers[0].urls = ["https://example.invalid/layer"];
+        },
+      ],
+      [
+        "unsupported layer media type",
+        (value: Record<string, any>) => {
+          value.layers[0].mediaType = "application/octet-stream";
+        },
+      ],
+      [
+        "invalid layer size",
+        (value: Record<string, any>) => {
+          value.layers[0].size = 0;
+        },
+      ],
+    ] as const) {
+      const candidate = JSON.parse(
+        imageFixture(startupCommand()).manifestSource,
+      );
+      mutate(candidate);
+      const candidateSource = JSON.stringify(candidate);
+      expect(
+        () =>
+          parseContainedImageManifest({
+            manifestDigest: digest(candidateSource),
+            source: candidateSource,
+          }),
+        label,
+      ).toThrow();
+    }
+
+    const fixture = imageFixture(startupCommand());
+    const mismatchedLayers = JSON.parse(fixture.manifestSource);
+    mismatchedLayers.layers.push({ ...mismatchedLayers.layers[0] });
+    const mismatchedLayerSource = JSON.stringify(mismatchedLayers);
+    expect(() =>
+      createContainedImageAuthority({
+        args: startupCommand(),
+        configSource: fixture.configSource,
+        manifestDigest: digest(mismatchedLayerSource),
+        manifestSource: mismatchedLayerSource,
+        target: {
+          ...fixture.target,
+          targetDigest: digest(mismatchedLayerSource),
+        },
+      }),
+    ).toThrow(/layer count/u);
+  });
+
+  it("rejects hostile OCI hooks, identity, mounts, devices, and Linux policy", () => {
+    const sessionRoot = resolve(root, ".rt/rt-validator-attacks");
+    const installRoot = resolve(
+      root,
+      "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
+    );
+    const plan = containedRunPlan({
+      args: startupCommand(),
+      binRoot: resolve(installRoot, "bin"),
+      clientFifoRoot: resolve(sessionRoot, "run/client-fifo"),
+      containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+      installRoot,
+      invocationId,
+      sessionRoot,
+    });
+    const fixture = imageFixture(startupCommand());
+    const containerId = "6".repeat(64);
+    const expected = {
+      ...plan.expected,
+      containerName: plan.containerName,
+      imageAuthority: fixture.authority,
+      invocationId,
+      sessionRoot,
+    };
+    const valid = JSON.parse(
+      rootlessSpec(containerId, plan.expected, fixture.authority),
+    );
+    const mutations: Array<[string, (value: any) => void]> = [
+      [
+        "hooks",
+        (value) => {
+          value.hooks = {
+            prestart: [{ path: "/counterlab-forbidden-hook" }],
+          };
+        },
+      ],
+      [
+        "supplementary group",
+        (value) => {
+          value.process.user.additionalGids = [0];
+        },
+      ],
+      [
+        "terminal allocation",
+        (value) => {
+          value.process.terminal = true;
+        },
+      ],
+      [
+        "hostname environment",
+        (value) => {
+          value.process.env[value.process.env.length - 1] = "HOSTNAME=wrong";
+        },
+      ],
+      [
+        "retained capability",
+        (value) => {
+          value.process.capabilities = { bounding: ["CAP_SYS_ADMIN"] };
+        },
+      ],
+      [
+        "entrypoint",
+        (value) => {
+          value.process.args = ["/counterlab-forbidden-entrypoint"];
+        },
+      ],
+      [
+        "environment",
+        (value) => {
+          value.process.env.push(["OPENAI_API_KEY", "forbidden"].join("="));
+        },
+      ],
+      [
+        "working directory",
+        (value) => {
+          value.process.cwd = "/counterlab-forbidden-cwd";
+        },
+      ],
+      [
+        "unknown process field",
+        (value) => {
+          value.process.ioPriority = { class: "IOPRIO_CLASS_RT", priority: 0 };
+        },
+      ],
+      [
+        "disguised external bind",
+        (value) => {
+          value.mounts.push({
+            destination: "/escape",
+            type: "none",
+            source: "/counterlab-outside-repository-sentinel",
+            options: ["rbind", "rw"],
+          });
+        },
+      ],
+      [
+        "unsafe propagation",
+        (value) => {
+          value.mounts.push({
+            destination: "/escape",
+            type: "bind",
+            source: root,
+            options: ["rbind", "rshared", "ro"],
+          });
+        },
+      ],
+      [
+        "default allow seccomp",
+        (value) => {
+          value.linux.seccomp.defaultAction = "SCMP_ACT_ALLOW";
+        },
+      ],
+      [
+        "dangerous allowed syscall",
+        (value) => {
+          value.linux.seccomp.syscalls.push({
+            names: ["mount"],
+            action: "SCMP_ACT_ALLOW",
+          });
+        },
+      ],
+      [
+        "changed restricted trace rule",
+        (value) => {
+          const rule = value.linux.seccomp.syscalls.find(
+            (entry: { names: string[] }) => entry.names.includes("ptrace"),
+          );
+          rule.names = ["ptrace"];
+        },
+      ],
+      [
+        "unfiltered clone",
+        (value) => {
+          value.linux.seccomp.syscalls.push({
+            names: ["clone"],
+            action: "SCMP_ACT_ALLOW",
+          });
+        },
+      ],
+      [
+        "allowed clone3",
+        (value) => {
+          value.linux.seccomp.syscalls.push({
+            names: ["clone3"],
+            action: "SCMP_ACT_ALLOW",
+            args: [
+              {
+                index: 0,
+                value: 0x7e020000,
+                valueTwo: 0,
+                op: "SCMP_CMP_MASKED_EQ",
+              },
+            ],
+          });
+        },
+      ],
+      [
+        "malformed seccomp argument",
+        (value) => {
+          value.linux.seccomp.syscalls.push({
+            names: ["read"],
+            action: "SCMP_ACT_ALLOW",
+            args: [{ index: 6, value: 0, op: "SCMP_CMP_EQ" }],
+          });
+        },
+      ],
+      [
+        "unexpected rootfs path",
+        (value) => {
+          value.root.path = "alternate-rootfs";
+        },
+      ],
+      [
+        "extra device",
+        (value) => {
+          value.linux.devices = [
+            {
+              path: "/dev/forbidden",
+              type: "c",
+              major: 10,
+              minor: 200,
+              fileMode: 0o666,
+              uid: 0,
+              gid: 0,
+            },
+          ];
+        },
+      ],
+      [
+        "host sysctl",
+        (value) => {
+          value.linux.sysctl = { "kernel.domainname": "forbidden" };
+        },
+      ],
+    ];
+    for (const [label, mutate] of mutations) {
+      const candidate = structuredClone(valid);
+      mutate(candidate);
+      expect(
+        () =>
+          sanitizeContainedRootlessSpec({
+            containerId,
+            expected,
+            metadataSha256: "7".repeat(64),
+            source: JSON.stringify(candidate),
+          }),
+        label,
+      ).toThrow();
+    }
+  });
+
+  it("replaces nerdctl annotations with exact runtime authority bindings", () => {
+    const sessionRoot = resolve(root, ".rt/rt-validator-annotations");
+    const installRoot = resolve(
+      root,
+      "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
+    );
+    const command = startupCommand();
+    const plan = containedRunPlan({
+      args: command,
+      binRoot: resolve(installRoot, "bin"),
+      clientFifoRoot: resolve(sessionRoot, "run/client-fifo"),
+      containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+      installRoot,
+      invocationId,
+      sessionRoot,
+    });
+    const fixture = imageFixture(command);
+    const containerId = "6".repeat(64);
+    const prepared = sanitizeContainedRootlessSpec({
+      containerId,
+      expected: {
+        ...plan.expected,
+        imageAuthority: fixture.authority,
+        invocationId,
+      },
+      metadataSha256: "7".repeat(64),
+      source: rootlessSpec(containerId, plan.expected, fixture.authority),
+    });
+    expect(JSON.parse(prepared.config).annotations).toEqual({
+      "io.counterlab.runtime.base-spec-sha256": prepared.receipt.baseSpecSha256,
+      "io.counterlab.runtime.invocation": invocationId,
+    });
+    expect(prepared.receipt.removedFields).toContain("annotations");
+
+    const invalid = JSON.parse(
+      rootlessSpec(containerId, plan.expected, fixture.authority),
+    );
+    invalid.annotations["nerdctl/namespace"] = "default";
+    expect(() =>
+      sanitizeContainedRootlessSpec({
+        containerId,
+        expected: {
+          ...plan.expected,
+          imageAuthority: fixture.authority,
+          invocationId,
+        },
+        metadataSha256: "7".repeat(64),
+        source: JSON.stringify(invalid),
+      }),
+    ).toThrow(/nerdctl\/namespace changed/u);
+  });
+
+  it("rejects conflicting or unknown requested bind mount modes", () => {
+    const sessionRoot = resolve(root, ".rt/rt-validator-bind-modes");
+    const installRoot = resolve(
+      root,
+      "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
+    );
+    const command = startupCommand();
+    command.splice(
+      command.length - 1,
+      0,
+      "-v",
+      `${resolve(root, "fixtures/public")}:/fixtures:ro`,
+    );
+    const plan = containedRunPlan({
+      args: command,
+      binRoot: resolve(installRoot, "bin"),
+      clientFifoRoot: resolve(sessionRoot, "run/client-fifo"),
+      containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+      installRoot,
+      invocationId,
+      sessionRoot,
+    });
+    const fixture = imageFixture(command);
+    const containerId = "6".repeat(64);
+    const expected = {
+      ...plan.expected,
+      containerName: plan.containerName,
+      imageAuthority: fixture.authority,
+      invocationId,
+      sessionRoot,
+    };
+    const valid = JSON.parse(
+      rootlessSpec(containerId, plan.expected, fixture.authority),
+    );
+
+    for (const option of ["rw", "counterlab-unknown-mode"]) {
+      const candidate = structuredClone(valid);
+      const requested = candidate.mounts.find(
+        (mount: { destination: string }) => mount.destination === "/fixtures",
+      );
+      requested.options.push(option);
+      expect(
+        () =>
+          sanitizeContainedRootlessSpec({
+            containerId,
+            expected,
+            metadataSha256: "7".repeat(64),
+            source: JSON.stringify(candidate),
+          }),
+        option,
+      ).toThrow(/requested bind/u);
+    }
+  });
+
+  it("accepts only the pinned default-writable --mount shape", () => {
+    const sessionRoot = resolve(root, ".rt/rt-validator-writable-bind");
+    const installRoot = resolve(
+      root,
+      "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
+    );
+    const command = startupCommand();
+    command.splice(
+      command.length - 1,
+      0,
+      "--mount",
+      `type=bind,src=${sandboxRoot},dst=/output`,
+    );
+    const plan = containedRunPlan({
+      args: command,
+      binRoot: resolve(installRoot, "bin"),
+      clientFifoRoot: resolve(sessionRoot, "run/client-fifo"),
+      containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+      installRoot,
+      invocationId,
+      sessionRoot,
+    });
+    const fixture = imageFixture(command);
+    const containerId = "5".repeat(64);
+    const expected = {
+      ...plan.expected,
+      containerName: plan.containerName,
+      imageAuthority: fixture.authority,
+      invocationId,
+      sessionRoot,
+    };
+    const valid = JSON.parse(
+      rootlessSpec(containerId, plan.expected, fixture.authority),
+    );
+    const outputMount = valid.mounts.find(
+      (mount: { destination: string }) => mount.destination === "/output",
+    );
+    expect(outputMount.options).toEqual([
+      "rbind",
+      "rprivate",
+      "nodev",
+      "nosuid",
+    ]);
+    expect(() =>
+      sanitizeContainedRootlessSpec({
+        containerId,
+        expected,
+        metadataSha256: "7".repeat(64),
+        source: JSON.stringify(valid),
+      }),
+    ).not.toThrow();
+
+    for (const option of ["ro", "rw", "noexec"]) {
+      const candidate = structuredClone(valid);
+      candidate.mounts
+        .find(
+          (mount: { destination: string }) => mount.destination === "/output",
+        )
+        .options.push(option);
+      expect(
+        () =>
+          sanitizeContainedRootlessSpec({
+            containerId,
+            expected,
+            metadataSha256: "7".repeat(64),
+            source: JSON.stringify(candidate),
+          }),
+        option,
+      ).toThrow(/requested bind/u);
+    }
+  });
+
+  it("binds cleanup ownership to the exact invocation image alias", () => {
+    const otherAlias = `docker.io/library/counterlab-runtime-invocation:${"2".repeat(64)}`;
+    expect(() =>
+      validateContainedContainerInfo({
+        containerId: "6".repeat(64),
+        image: otherAlias,
+        invocationId,
+        source: containerMetadata("6".repeat(64), otherAlias),
+      }),
+    ).toThrow(/image identity/u);
+  });
+
+  it("persists and verifies both config and self-hashed receipt", () => {
+    const sessionRoot = mkdtempSync(resolve(root, ".rt/persisted-spec-"));
+    mkdirSync(resolve(sessionRoot, "run"), { mode: 0o700 });
+    const installRoot = resolve(
+      root,
+      "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
+    );
+    const plan = containedRunPlan({
+      args: startupCommand(),
+      binRoot: resolve(installRoot, "bin"),
+      clientFifoRoot: resolve(sessionRoot, "run/client-fifo"),
+      containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+      installRoot,
+      invocationId,
+      sessionRoot,
+    });
+    const fixture = imageFixture(startupCommand());
+    const prepared = sanitizeContainedRootlessSpec({
+      containerId: "8".repeat(64),
+      expected: {
+        ...plan.expected,
+        containerName: plan.containerName,
+        imageAuthority: fixture.authority,
+        invocationId,
+        sessionRoot,
+      },
+      metadataSha256: "9".repeat(64),
+      source: rootlessSpec("8".repeat(64), plan.expected, fixture.authority),
+    });
+    const persisted = persistContainedRootlessSpec({
+      config: prepared.config,
+      finalContainerId: prepared.finalContainerId,
+      internalMounts: prepared.internalMounts,
+      receipt: prepared.receipt,
+      sessionRoot,
+    });
+    const binding = {
+      ...persisted,
+      finalContainerId: prepared.finalContainerId,
+      sessionRoot,
+    };
+
+    expect(prepared.internalMounts).toHaveLength(3);
+    const persistedConfig = JSON.parse(
+      readFileSync(persisted.configPath, "utf8"),
+    ) as { mounts: Array<{ destination: string; source: string }> };
+    const internalSources = persistedConfig.mounts
+      .filter((mount) =>
+        ["/etc/hostname", "/etc/hosts", "/etc/resolv.conf"].includes(
+          mount.destination,
+        ),
+      )
+      .map((mount) => mount.source);
+    expect(internalSources).toEqual([]);
+    expect(() => verifyPersistedContainedRootlessSpec(binding)).not.toThrow();
+    expect(() =>
+      verifyPersistedContainedRootlessSpec({
+        ...binding,
+        configPath: resolve(root, "COUNTERLAB_REPO_ROOT"),
+      }),
+    ).toThrow(/persisted paths changed/u);
+    writeFileSync(persisted.receiptPath, "{}\n", { mode: 0o600 });
+    expect(() => verifyPersistedContainedRootlessSpec(binding)).toThrow(
+      /persisted receipt changed/u,
+    );
+  });
+
+  it("fails closed when owned final cleanup fails", () => {
     const sessionRoot = resolve(root, ".rt/rt-validator-cleanup");
     const installRoot = resolve(
       root,
       "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
     );
     const containerId = "d".repeat(64);
-    const responses = [
-      {
-        status: 0,
-        stdout: Buffer.from(`${containerId}\n`),
-        stderr: Buffer.alloc(0),
-      },
-      { status: 0, stdout: Buffer.from("verified\n"), stderr: Buffer.alloc(0) },
-      {
-        status: 1,
-        stdout: Buffer.alloc(0),
-        stderr: Buffer.from("cleanup refused\n"),
-      },
-    ];
+    const command = startupCommand();
+    const fixture = imageFixture(command);
+    const alias = `docker.io/library/counterlab-runtime-invocation:${invocationId}`;
+    let stagingDeleted = false;
+    let started = false;
+    let finalId = "";
+    let baseSpecSha256 = "";
+    let finalContainerDeleted = false;
+    let aliasPresent = false;
+    let imageRootfsMounted = false;
+    let imageRootfsUnmountAttempts = 0;
+    let snapshotDiffInspections = 0;
+    const imageRootfsPath = resolve(
+      sessionRoot,
+      `run/rootless-specs/${invocationId}.image-rootfs`,
+    );
     const calls: string[][] = [];
+
+    const fakeSpawn = (
+      _program: string,
+      args: string[],
+      options: { timeout: number },
+    ) => {
+      calls.push(args);
+      const joined = args.join(" ");
+      if (
+        joined.includes("image inspect docker.io/library/counterlab-runner")
+      ) {
+        return successful(fixture.targetSource);
+      }
+      if (joined.includes(`content get ${fixture.manifestDigest}`)) {
+        return successful(fixture.manifestSource);
+      }
+      if (joined.includes(`content get ${fixture.configDigest}`)) {
+        return successful(fixture.configSource);
+      }
+      if (joined.includes(`images inspect ${alias}`)) {
+        return aliasPresent ? successful("{}") : missing();
+      }
+      if (joined.includes(`image inspect ${alias}`)) {
+        return successful(aliasMetadata(alias, fixture));
+      }
+      if (joined.includes("images tag")) {
+        aliasPresent = true;
+        return successful();
+      }
+      if (joined.includes(`images remove ${alias}`)) {
+        aliasPresent = false;
+        return successful();
+      }
+      if (joined.includes("images mount")) {
+        expect(options.timeout).toBe(300_000);
+        imageRootfsMounted = true;
+        return successful(
+          `${fixture.authority.rootfsChainId}\n${imageRootfsPath}\n`,
+        );
+      }
+      if (joined.includes("images unmount")) {
+        expect(options.timeout).toBe(120_000);
+        imageRootfsUnmountAttempts += 1;
+        if (imageRootfsUnmountAttempts === 1) {
+          return {
+            status: 1,
+            stdout: Buffer.alloc(0),
+            stderr: Buffer.from("transient unmount failure\n"),
+          };
+        }
+        imageRootfsMounted = false;
+        return successful(`${imageRootfsPath}\n`);
+      }
+      if (joined.includes(" create ")) return successful(`${containerId}\n`);
+      if (args.includes("--spec")) {
+        return successful(
+          rootlessSpec(
+            containerId,
+            {
+              containerName: "counterlab-startup-validator",
+              cpuCount: 2,
+              maxProcesses: 32,
+              memoryBytes: 1024 * 1024 * 1024,
+              rlimits: [
+                { type: "RLIMIT_CPU", soft: 300, hard: 300 },
+                { type: "RLIMIT_AS", soft: 1073741824, hard: 1073741824 },
+                { type: "RLIMIT_FSIZE", soft: 1048576, hard: 1048576 },
+                { type: "RLIMIT_NOFILE", soft: 64, hard: 64 },
+                { type: "RLIMIT_NPROC", soft: 32, hard: 32 },
+              ],
+              sessionRoot,
+            },
+            fixture.authority,
+          ),
+        );
+      }
+      if (joined.includes("containers info")) {
+        const id = args.at(-1);
+        if (id === containerId) {
+          return stagingDeleted
+            ? missing()
+            : successful(containerMetadata(containerId, alias));
+        }
+        if (id === finalId && started && !finalContainerDeleted) {
+          return successful(configContainerMetadata(finalId, baseSpecSha256));
+        }
+        return missing();
+      }
+      if (joined.includes("tasks list")) {
+        return successful(
+          started && !finalContainerDeleted ? `${finalId}\n` : "",
+        );
+      }
+      if (joined.includes("snapshots") && joined.includes(" diff ")) {
+        snapshotDiffInspections += 1;
+        return successful(
+          snapshotDiffInspections === 1
+            ? "stable-rootfs-diff"
+            : "changed-rootfs-diff",
+        );
+      }
+      if (joined.includes("snapshots") && joined.includes(" info ")) {
+        const id = args.at(-1);
+        if (id === containerId)
+          return stagingDeleted ? missing() : successful("{}");
+        if (id === imageRootfsPath)
+          return imageRootfsMounted
+            ? successful(
+                imageRootfsSnapshotMetadata(
+                  imageRootfsPath,
+                  fixture.authority.rootfsChainId,
+                ),
+              )
+            : missing();
+        return missing();
+      }
+      if (joined.includes(" rm --force ")) {
+        stagingDeleted = true;
+        return successful();
+      }
+      if (joined.includes(" run ")) {
+        started = true;
+        finalId = args.at(-1)!;
+        const label = args.find((entry) =>
+          entry.startsWith("io.counterlab.runtime.base-spec-sha256="),
+        );
+        baseSpecSha256 = label!.split("=", 2)[1]!;
+        return successful("verified\n");
+      }
+      if (joined.includes("tasks delete")) {
+        return {
+          status: 1,
+          stdout: Buffer.alloc(0),
+          stderr: Buffer.from("cleanup refused\n"),
+        };
+      }
+      if (joined.includes("containers delete")) {
+        finalContainerDeleted = true;
+        return successful();
+      }
+      throw new Error(`unexpected mock command: ${joined}`);
+    };
+
     const result = executeContainedRun(
       {
-        args: startupCommand(),
+        args: command,
         binRoot: resolve(installRoot, "bin"),
         clientFifoRoot: resolve(sessionRoot, "run/client-fifo"),
         containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
@@ -513,38 +2241,75 @@ describe("contained runtime command policy", () => {
         sessionRoot,
         stdin: Buffer.alloc(0),
       },
-      (_program, args) => {
-        calls.push(args);
-        return responses.shift()!;
-      },
+      fakeSpawn,
+      ({ finalContainerId, receipt, sessionRoot }) => ({
+        configFileSha256: String(receipt.configFileSha256),
+        configPath: resolve(
+          sessionRoot,
+          `run/rootless-specs/${finalContainerId}.config.json`,
+        ),
+        imageRootfsPath,
+        receiptFileSha256: "4".repeat(64),
+        receiptPath: resolve(
+          sessionRoot,
+          `run/rootless-specs/${finalContainerId}.receipt.json`,
+        ),
+      }),
+      () => undefined,
+      () => invocationId,
     );
 
     expect(result.status).toBe(1);
-    expect(calls[1]?.at(-1)).toBe(containerId);
     expect(result.stdout.toString("utf8")).toBe("verified\n");
     expect(result.stderr.toString("utf8")).toContain(
       "contained runtime cleanup failed",
     );
+    expect(result.stderr.toString("utf8")).toContain(
+      "contained runtime image rootfs changed during execution",
+    );
+    expect(result.stderr.toString("utf8")).toContain(
+      "contained runtime image rootfs cleanup failed",
+    );
+    expect(imageRootfsUnmountAttempts).toBe(2);
+    expect(aliasPresent).toBe(false);
+    expect(
+      calls.some((args) => args.join(" ").includes(`images remove ${alias}`)),
+    ).toBe(true);
+    const startCall = calls.find((args) => args.includes("--config"));
+    expect(startCall).toEqual(
+      expect.arrayContaining([
+        "--cgroup",
+        "",
+        "--label",
+        `io.counterlab.runtime.invocation=${invocationId}`,
+      ]),
+    );
+    expect(startCall).not.toContain(alias);
+    expect(startCall?.at(-1)).toBe(finalId);
+    expect(
+      calls.some(
+        (args) =>
+          args.includes("delete") &&
+          args.includes("snapshots") &&
+          args.at(-1) === finalId,
+      ),
+    ).toBe(false);
   });
 
-  it("rejects an invalid generated container ID before task start", () => {
+  it("rejects an invalid generated container ID without deleting by name", () => {
     const sessionRoot = resolve(root, ".rt/rt-validator-id");
     const installRoot = resolve(
       root,
       "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
     );
+    const command = startupCommand();
+    const fixture = imageFixture(command);
+    const alias = `docker.io/library/counterlab-runtime-invocation:${invocationId}`;
     const calls: string[][] = [];
-    const responses = [
-      {
-        status: 0,
-        stdout: Buffer.from("counterlab-startup-validator\n"),
-        stderr: Buffer.alloc(0),
-      },
-      { status: 0, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) },
-    ];
+    let aliasPresent = false;
     const result = executeContainedRun(
       {
-        args: startupCommand(),
+        args: command,
         binRoot: resolve(installRoot, "bin"),
         clientFifoRoot: resolve(sessionRoot, "run/client-fifo"),
         containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
@@ -556,20 +2321,106 @@ describe("contained runtime command policy", () => {
       },
       (_program, args) => {
         calls.push(args);
-        return responses.shift()!;
+        const joined = args.join(" ");
+        if (
+          joined.includes("image inspect docker.io/library/counterlab-runner")
+        ) {
+          return successful(fixture.targetSource);
+        }
+        if (joined.includes(`content get ${fixture.manifestDigest}`)) {
+          return successful(fixture.manifestSource);
+        }
+        if (joined.includes(`content get ${fixture.configDigest}`)) {
+          return successful(fixture.configSource);
+        }
+        if (joined.includes(`images inspect ${alias}`)) {
+          return aliasPresent ? successful("{}") : missing();
+        }
+        if (joined.includes(`image inspect ${alias}`)) {
+          return successful(aliasMetadata(alias, fixture));
+        }
+        if (joined.includes("images tag")) {
+          aliasPresent = true;
+          return successful();
+        }
+        if (joined.includes(`images remove ${alias}`)) {
+          aliasPresent = false;
+          return successful();
+        }
+        if (joined.includes(" create ")) {
+          return successful("counterlab-startup-validator\n");
+        }
+        throw new Error(`unexpected mock command: ${joined}`);
       },
+      undefined,
+      undefined,
+      () => invocationId,
     );
 
     expect(result.status).toBe(1);
     expect(result.stderr.toString("utf8")).toContain(
       "create returned an invalid ID",
     );
-    expect(calls).toHaveLength(2);
-    expect(calls[1]?.slice(-3)).toEqual([
-      "rm",
-      "--force",
-      "counterlab-startup-validator",
-    ]);
+    expect(aliasPresent).toBe(false);
+    expect(
+      calls.some((args) => args.join(" ").includes(`images remove ${alias}`)),
+    ).toBe(true);
+    expect(calls.some((args) => args.includes("delete"))).toBe(false);
+    expect(calls.some((args) => args.includes("rm"))).toBe(false);
+  });
+
+  it("allows only a hash-bound drain control and keeps stop non-destructive", () => {
+    expect(validate("counterlab-drain", "a".repeat(64)).status).toBe(0);
+    expect(validate("counterlab-drain", "a".repeat(63)).status).not.toBe(0);
+    expect(
+      validate("counterlab-drain", "a".repeat(64), "extra").status,
+    ).not.toBe(0);
+
+    const stopSource = readFileSync(
+      resolve(root, "scripts/stop-contained-runtime.mjs"),
+      "utf8",
+    );
+    const supervisorSource = readFileSync(
+      resolve(root, "scripts/contained-runtime-supervisor.mjs"),
+      "utf8",
+    );
+    const launcherSource = readFileSync(
+      resolve(root, "scripts/start-contained-runtime.sh"),
+      "utf8",
+    );
+    const verifierSource = readFileSync(
+      resolve(root, "scripts/verify-contained-runtime.mjs"),
+      "utf8",
+    );
+    const attestationSource = readFileSync(
+      resolve(root, "scripts/contained-runtime-attestation.mjs"),
+      "utf8",
+    );
+    expect(launcherSource).toContain(
+      "scripts/write-contained-runtime-attestation.mjs",
+    );
+    expect(launcherSource).toContain("contained-runtime-supervisor.mjs");
+    expect(stopSource).toContain('action: "begin-drain"');
+    expect(stopSource).toContain('action: "shutdown"');
+    expect(stopSource).not.toContain("process.kill(");
+    expect(supervisorSource).toContain('child.kill("SIGTERM")');
+    expect(supervisorSource).not.toContain("process.kill(");
+    expect(stopSource).not.toContain("SIGKILL");
+    expect(supervisorSource).not.toContain("SIGKILL");
+    expect(stopSource).not.toMatch(
+      /\b(?:unlink|rmdir|rmSync|rm -|shutil\.rmtree)\b/u,
+    );
+    expect(supervisorSource).not.toMatch(
+      /\b(?:unlink|rmdir|rmSync|rm -|shutil\.rmtree)\b/u,
+    );
+    for (const helper of [
+      "runtimeStop",
+      "timeoutProofDriver",
+      "timeoutProofModule",
+    ]) {
+      expect(attestationSource).toContain(helper);
+    }
+    expect(verifierSource).toContain("Object.entries(RUNTIME_HELPER_PATHS)");
   });
 
   it("rejects root identities for scientific evidence containers", () => {
@@ -680,6 +2531,14 @@ describe("contained runtime command policy", () => {
       resolve(root, "scripts/start-contained-runtime.sh"),
       "utf8",
     );
+    const runtimeSupervisor = readFileSync(
+      resolve(root, "scripts/contained-runtime-supervisor.mjs"),
+      "utf8",
+    );
+    const attestationWriter = readFileSync(
+      resolve(root, "scripts/write-contained-runtime-attestation.mjs"),
+      "utf8",
+    );
     const containerdConfigWriter = readFileSync(
       resolve(root, "scripts/contained-containerd-config.mjs"),
       "utf8",
@@ -695,10 +2554,11 @@ describe("contained runtime command policy", () => {
     expect(containerdConfigWriter).toContain(
       "[plugins.'io.containerd.shim.v1.manager']",
     );
-    expect(runtimeLauncher).toContain("contained-runtime-server.mjs");
+    expect(runtimeLauncher).toContain("contained-runtime-supervisor.mjs");
+    expect(runtimeSupervisor).toContain("contained-runtime-server.mjs");
     expect(runtimeLauncher).toContain("[otel]");
     expect(runtimeLauncher).toContain("buildkitOtelSocket");
-    expect(runtimeLauncher).toContain("xdgRuntime");
+    expect(attestationWriter).toContain("xdgRuntime");
     expect(
       readFileSync(
         resolve(root, "scripts/contained-runtime-server.mjs"),
@@ -710,17 +2570,49 @@ describe("contained runtime command policy", () => {
       resolve(root, "scripts/verify-contained-runtime.mjs"),
       "utf8",
     );
-    for (const attestedEntry of [
-      "clientFifoRoot",
-      "runcStateRoot",
+    const runtimeRunDeclaration = readFileSync(
+      resolve(root, "scripts/contained-runtime-run.d.mts"),
+      "utf8",
+    );
+    const planDeclaration = runtimeRunDeclaration.slice(
+      runtimeRunDeclaration.indexOf("export interface ContainedRuntimeRunPlan"),
+      runtimeRunDeclaration.indexOf(
+        "export interface ContainedRuntimeRunPlanInput",
+      ),
+    );
+    const inputDeclaration = runtimeRunDeclaration.slice(
+      runtimeRunDeclaration.indexOf(
+        "export interface ContainedRuntimeRunPlanInput",
+      ),
+      runtimeRunDeclaration.indexOf("export type ContainedRuntimeRunContext"),
+    );
+    expect(planDeclaration).toContain(
+      "inspectImagePresence: ContainedRuntimeCommand;",
+    );
+    expect(planDeclaration).toContain(
+      "inspectSnapshotDiff: ContainedRuntimeCommand;",
+    );
+    expect(inputDeclaration).toContain("invocationId: string;");
+    expect(inputDeclaration).not.toContain("invocationId?: string;");
+    for (const attestedPath of ["clientFifoRoot", "runcStateRoot"]) {
+      expect(attestationWriter, attestedPath).toContain(attestedPath);
+      expect(runtimeVerifier, attestedPath).toContain(attestedPath);
+    }
+    const runtimeAttestation = readFileSync(
+      resolve(root, "scripts/contained-runtime-attestation.mjs"),
+      "utf8",
+    );
+    for (const attestedHelper of [
       "runtimeRun",
+      "rootlessSpec",
+      "imageAuthority",
       "runtimeEnvironment",
       "runcWrapper",
       "containerdConfigWriter",
     ]) {
-      expect(runtimeLauncher, attestedEntry).toContain(attestedEntry);
-      expect(runtimeVerifier, attestedEntry).toContain(attestedEntry);
+      expect(runtimeAttestation, attestedHelper).toContain(attestedHelper);
     }
+    expect(runtimeVerifier).toContain("Object.entries(RUNTIME_HELPER_PATHS)");
 
     const secretScan = readFileSync(
       resolve(root, "scripts/secret-scan.py"),

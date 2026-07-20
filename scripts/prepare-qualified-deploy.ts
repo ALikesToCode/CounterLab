@@ -13,16 +13,26 @@ import {
 } from "../packages/scientific-engine-registry/src/index.js";
 import { canonicalJson } from "../packages/session-core/src/index.js";
 import { assertReleaseCheckBinding } from "./release-check-receipt.js";
+import {
+  containedRuntimeAdapterArguments,
+  requireContainedRuntimeSessionId,
+} from "./contained-runtime-attestation.mjs";
+import {
+  type FrozenWorkerReleaseIdentity,
+  verifyFrozenWorkerReleaseManifest,
+} from "./frozen-worker-release.js";
+import { validateTimeoutCleanupProof } from "./timeout-cleanup-receipt.js";
 
 type Arguments = {
   config: string;
   receipt: string;
   releaseCheckReceipt: string;
+  workerArtifactManifest: string;
   image: string;
   output: string;
 };
 
-export type QualifiedReleaseObservation = {
+export type RunnerReleaseObservation = {
   sourceCommit: string;
   sourceArchiveSha256: string;
   sourceTreeSha256: string;
@@ -34,6 +44,8 @@ export type QualifiedReleaseObservation = {
   engineAuthorityHash: string;
   runtimeManifestHash: string;
   runtimeToolchainSha256: string;
+  runtimePolicySha256: string;
+  proofDependencyManifestSha256: string;
   toolchainLockSha256: string;
   runtimeAdapterSha256: string;
   buildctlSha256: string;
@@ -55,13 +67,57 @@ export type QualifiedReleaseObservation = {
   observedAt: string;
 };
 
-const RELEASE_EVIDENCE_PATHS = ["scientific-engines/", "docs/sbom/"] as const;
+export type QualifiedReleaseObservation = RunnerReleaseObservation & {
+  limitMode: "container-cgroup-and-process-rlimit";
+  aggregateLimitIntentEnforced: true;
+  aggregateLimitEvidenceSha256: string;
+  timeoutCleanupReceipt: string;
+  timeoutCleanupReceiptSha256: string;
+  timeoutCleanupPayloadSha256: string;
+  timeoutRunControlReceiptSha256: string;
+  timeoutRootlessReceiptSha256: string;
+  timeoutRuntimeSessionId: string;
+  timeoutVerifiedAt: string;
+};
+
 const RELEASE_EVIDENCE_FILES = new Set([
   "docs/DECISIONS.md",
   "docs/DEPENDENCY_ADMISSION.md",
   "docs/FIRST_PRIZE_UPGRADE_PLAN.md",
   "docs/PROGRESS.md",
   "docs/SCIENTIFIC_ENGINES.md",
+  "docs/sbom/grype-raw.json",
+  "docs/sbom/grype-vex-applied.json",
+  "docs/sbom/grype-vex-negative-control.json",
+  "docs/sbom/manifest.json",
+  "docs/sbom/node.cdx.json",
+  "docs/sbom/runner-container.cdx.json",
+  "docs/sbom/vex-application-report.json",
+  "docs/sbom/vulnerability-report.json",
+  "scientific-engines/evidence-catalog.json",
+  "scientific-engines/fixtures/health/counterlab-fixed-ml-kernel-health-v1.json",
+  "scientific-engines/fixtures/health/numpy-health-v1.json",
+  "scientific-engines/fixtures/health/pandas-health-v1.json",
+  "scientific-engines/fixtures/health/scikit-learn-health-v1.json",
+  "scientific-engines/fixtures/integrity/counterlab-fixed-ml-kernel-0.1.0.json",
+  "scientific-engines/fixtures/integrity/cpython-html-parser-reachability-v2.json",
+  "scientific-engines/fixtures/integrity/cpython-runtime-3.13.14.json",
+  "scientific-engines/fixtures/integrity/local-candidate-ml-runtime.json",
+  "scientific-engines/fixtures/integrity/numpy-2.4.6.json",
+  "scientific-engines/fixtures/integrity/pandas-2.3.3.json",
+  "scientific-engines/fixtures/integrity/scikit-learn-1.9.0.json",
+  "scientific-engines/fixtures/validation/internal-mutations-integrity-v2.json",
+  "scientific-engines/fixtures/validation/internal-oracle-integrity-v2.json",
+  "scientific-engines/fixtures/validation/internal-renderer-integrity-v2.json",
+  "scientific-engines/fixtures/validation/signed-result-binding-v2.json",
+  "scientific-engines/licenses/manifest.json",
+  "scientific-engines/notices/current-ml-engines.NOTICE.md",
+  "scientific-engines/registry.json",
+  "scientific-engines/runtime-manifest.json",
+  "scientific-engines/snapshot-hash.json",
+  "scientific-engines/snapshot.json",
+  "scientific-engines/subject-pack-bindings.json",
+  "scientific-engines/vex/cpython-html-parser-v1.openvex.json",
 ]);
 
 async function configureContainedEnvironment(root: string): Promise<void> {
@@ -137,11 +193,69 @@ function commandText(root: string, command: string, args: string[]): string {
   return commandBuffer(root, command, args).toString("utf8").trim();
 }
 
-function evidenceOnly(path: string): boolean {
-  return (
-    RELEASE_EVIDENCE_FILES.has(path) ||
-    RELEASE_EVIDENCE_PATHS.some((prefix) => path.startsWith(prefix))
+function runtimeCommandText(
+  root: string,
+  runtimeAdapter: string,
+  args: string[],
+): string {
+  return commandText(
+    root,
+    runtimeAdapter,
+    containedRuntimeAdapterArguments(
+      requireContainedRuntimeSessionId(
+        process.env.COUNTERLAB_RUNTIME_SESSION_ID,
+      ),
+      args,
+    ),
   );
+}
+
+export function assertEvidenceOnlyReleaseDelta(
+  changedPaths: readonly string[],
+): void {
+  const unauthorized = changedPaths.filter(
+    (path) => !RELEASE_EVIDENCE_FILES.has(path),
+  );
+  if (unauthorized.length > 0) {
+    throw new Error(
+      `qualified evidence commit changes runtime source: ${unauthorized.join(", ")}`,
+    );
+  }
+}
+
+export function parseEvidenceOnlyReleaseDelta(raw: string): string[] {
+  if (raw.trim() === "") return [];
+  const paths: string[] = [];
+  for (const line of raw.trimEnd().split("\n")) {
+    const match =
+      /^:(?<oldMode>[0-7]{6}) (?<newMode>[0-7]{6}) [a-f0-9]+ [a-f0-9]+ (?<status>[AM])\t(?<path>.+)$/u.exec(
+        line,
+      );
+    if (match?.groups === undefined) {
+      throw new Error("qualified evidence commit has an unsupported Git delta");
+    }
+    const { oldMode, newMode, status, path } = match.groups;
+    if (
+      oldMode === undefined ||
+      newMode === undefined ||
+      status === undefined ||
+      path === undefined
+    ) {
+      throw new Error("qualified evidence commit has an incomplete Git delta");
+    }
+    if (
+      newMode !== "100644" ||
+      (status === "A" && oldMode !== "000000") ||
+      (status === "M" && oldMode !== "100644")
+    ) {
+      throw new Error(
+        `qualified evidence commit changes a file type or mode: ${path}`,
+      );
+    }
+    paths.push(path);
+  }
+  assertEvidenceOnlyReleaseDelta(paths);
+  return paths;
 }
 
 function assertQualifiedObservation(
@@ -152,14 +266,7 @@ function assertQualifiedObservation(
       "qualified source commit is not an ancestor of the evidence commit",
     );
   }
-  const unauthorized = observation.changedPaths.filter(
-    (path) => !evidenceOnly(path),
-  );
-  if (unauthorized.length > 0) {
-    throw new Error(
-      `qualified evidence commit changes runtime source: ${unauthorized.join(", ")}`,
-    );
-  }
+  assertEvidenceOnlyReleaseDelta(observation.changedPaths);
 }
 
 async function resolveRegistryDigest(input: {
@@ -300,7 +407,7 @@ export async function collectRunnerReleaseEvidence(input: {
   adapterImageTag: string;
   adapterManifestDigest: string;
   adapterOciArchiveSha256: string;
-}): Promise<QualifiedReleaseObservation> {
+}): Promise<RunnerReleaseObservation> {
   const root = resolve(input.root);
   const runtimeAdapter = await existingRepositoryFile(
     root,
@@ -311,59 +418,59 @@ export async function collectRunnerReleaseEvidence(input: {
   }
   const runtimeAttestation = ContainedRuntimeAttestationSchema.parse(
     JSON.parse(
-      commandText(root, runtimeAdapter, ["counterlab-attest"]),
+      runtimeCommandText(root, runtimeAdapter, ["counterlab-attest"]),
     ) as unknown,
   );
-  const localImageDigest = commandText(root, runtimeAdapter, [
+  const localImageDigest = runtimeCommandText(root, runtimeAdapter, [
     "image",
     "inspect",
     input.localImageTag,
     "--format",
     "{{.Id}}",
   ]);
-  const localImageUser = commandText(root, runtimeAdapter, [
+  const localImageUser = runtimeCommandText(root, runtimeAdapter, [
     "image",
     "inspect",
     input.localImageTag,
     "--format",
     "{{.Config.User}}",
   ]);
-  const localOciRevision = commandText(root, runtimeAdapter, [
+  const localOciRevision = runtimeCommandText(root, runtimeAdapter, [
     "image",
     "inspect",
     input.localImageTag,
     "--format",
     '{{index .Config.Labels "org.opencontainers.image.revision"}}',
   ]);
-  const localSourceTree = commandText(root, runtimeAdapter, [
+  const localSourceTree = runtimeCommandText(root, runtimeAdapter, [
     "image",
     "inspect",
     input.localImageTag,
     "--format",
     '{{index .Config.Labels "io.counterlab.source-tree-sha256"}}',
   ]);
-  const adapterImageDigest = commandText(root, runtimeAdapter, [
+  const adapterImageDigest = runtimeCommandText(root, runtimeAdapter, [
     "image",
     "inspect",
     input.adapterImageTag,
     "--format",
     "{{.Id}}",
   ]);
-  const adapterImageUser = commandText(root, runtimeAdapter, [
+  const adapterImageUser = runtimeCommandText(root, runtimeAdapter, [
     "image",
     "inspect",
     input.adapterImageTag,
     "--format",
     "{{.Config.User}}",
   ]);
-  const adapterOciRevision = commandText(root, runtimeAdapter, [
+  const adapterOciRevision = runtimeCommandText(root, runtimeAdapter, [
     "image",
     "inspect",
     input.adapterImageTag,
     "--format",
     '{{index .Config.Labels "org.opencontainers.image.revision"}}',
   ]);
-  const adapterOciSourceTreeSha256 = commandText(root, runtimeAdapter, [
+  const adapterOciSourceTreeSha256 = runtimeCommandText(root, runtimeAdapter, [
     "image",
     "inspect",
     input.adapterImageTag,
@@ -394,13 +501,14 @@ export async function collectRunnerReleaseEvidence(input: {
     ["merge-base", "--is-ancestor", input.sourceCommit, currentCommit],
     { cwd: root, stdio: "ignore" },
   );
-  const changedPaths = commandText(root, "git", [
-    "diff",
-    "--name-only",
-    `${input.sourceCommit}..${currentCommit}`,
-  ])
-    .split("\n")
-    .filter(Boolean);
+  const changedPaths = parseEvidenceOnlyReleaseDelta(
+    commandText(root, "git", [
+      "diff",
+      "--raw",
+      "--no-renames",
+      `${input.sourceCommit}..${currentCommit}`,
+    ]),
+  );
   const snapshotHash = JSON.parse(
     readFileSync(
       resolve(root, "scientific-engines/snapshot-hash.json"),
@@ -464,6 +572,9 @@ export async function collectRunnerReleaseEvidence(input: {
     engineAuthorityHash: snapshotHash.authorityHash ?? "",
     runtimeManifestHash: sha256(canonicalJson(runtimeManifest)),
     runtimeToolchainSha256: runtimeAttestation.runtimeToolchainSha256,
+    runtimePolicySha256: runtimeAttestation.runtimePolicySha256,
+    proofDependencyManifestSha256:
+      runtimeAttestation.proofDependencyManifestSha256,
     toolchainLockSha256: runtimeAttestation.toolchainLockSha256,
     runtimeAdapterSha256: runtimeAttestation.adapterSha256,
     buildctlSha256: runtimeAttestation.componentSha256.buildctl,
@@ -502,7 +613,7 @@ export async function collectQualifiedReleaseObservation(input: {
       "COUNTERLAB_DOCKER_BIN must name the repository-contained runtime adapter",
     );
   }
-  return collectRunnerReleaseEvidence({
+  const observation = await collectRunnerReleaseEvidence({
     root: input.root,
     sourceCommit: receipt.sourceCommit,
     localImageTag: receipt.localImageTag,
@@ -513,6 +624,31 @@ export async function collectQualifiedReleaseObservation(input: {
     adapterManifestDigest: receipt.adapterManifestDigest,
     adapterOciArchiveSha256: receipt.adapterOciArchiveSha256,
   });
+  const runtimeAttestation = ContainedRuntimeAttestationSchema.parse(
+    JSON.parse(
+      runtimeCommandText(input.root, runtimeAdapter, ["counterlab-attest"]),
+    ) as unknown,
+  );
+  const timeout = await validateTimeoutCleanupProof({
+    root: input.root,
+    receiptPath: receipt.timeoutCleanupReceipt,
+    expected: {
+      sourceCommit: receipt.sourceCommit,
+      sourceTreeSha256: receipt.sourceTreeSha256,
+      adapterImageTag: receipt.adapterImageTag,
+      adapterImageDigest: receipt.adapterImageDigest,
+      adapterManifestDigest: receipt.adapterManifestDigest,
+      adapterOciArchiveSha256: receipt.adapterOciArchiveSha256,
+      runtimeToolchainSha256: receipt.runtimeToolchainSha256,
+      runtimePolicySha256: receipt.runtimePolicySha256,
+      proofDependencyManifestSha256: receipt.proofDependencyManifestSha256,
+    },
+    runtimeAttestation,
+  });
+  return {
+    ...observation,
+    ...timeout,
+  };
 }
 
 export function createQualifiedRunnerRelease(
@@ -521,7 +657,7 @@ export function createQualifiedRunnerRelease(
 ): unknown {
   assertQualifiedObservation(observation);
   return QualifiedRunnerReleaseSchema.parse({
-    schemaVersion: "3",
+    schemaVersion: "4",
     status: "VERIFIED",
     sourceCommit: observation.sourceCommit,
     sourceArchiveSha256: observation.sourceArchiveSha256,
@@ -534,6 +670,8 @@ export function createQualifiedRunnerRelease(
     engineAuthorityHash: observation.engineAuthorityHash,
     runtimeManifestHash: observation.runtimeManifestHash,
     runtimeToolchainSha256: observation.runtimeToolchainSha256,
+    runtimePolicySha256: observation.runtimePolicySha256,
+    proofDependencyManifestSha256: observation.proofDependencyManifestSha256,
     toolchainLockSha256: observation.toolchainLockSha256,
     runtimeAdapterSha256: observation.runtimeAdapterSha256,
     buildctlSha256: observation.buildctlSha256,
@@ -546,12 +684,22 @@ export function createQualifiedRunnerRelease(
     adapterOciArchiveSha256: observation.adapterOciArchiveSha256,
     adapterOciRevision: observation.adapterOciRevision,
     adapterOciSourceTreeSha256: observation.adapterOciSourceTreeSha256,
+    limitMode: observation.limitMode,
+    aggregateLimitIntentEnforced: observation.aggregateLimitIntentEnforced,
+    aggregateLimitEvidenceSha256: observation.aggregateLimitEvidenceSha256,
+    timeoutCleanupReceipt: observation.timeoutCleanupReceipt,
+    timeoutCleanupReceiptSha256: observation.timeoutCleanupReceiptSha256,
+    timeoutCleanupPayloadSha256: observation.timeoutCleanupPayloadSha256,
+    timeoutRunControlReceiptSha256: observation.timeoutRunControlReceiptSha256,
+    timeoutRootlessReceiptSha256: observation.timeoutRootlessReceiptSha256,
+    timeoutRuntimeSessionId: observation.timeoutRuntimeSessionId,
+    timeoutVerifiedAt: observation.timeoutVerifiedAt,
     evidenceCommit: observation.currentCommit,
     registryImage: observation.registryImage,
     registryDigest: observation.registryDigest,
     registryResolvedAt: observation.registryResolvedAt,
     qualifiedAt,
-    verifierVersion: "counterlab-release-v3",
+    verifierVersion: "counterlab-release-v4",
   });
 }
 
@@ -567,26 +715,28 @@ function argumentsFrom(argv: string[]): Arguments {
         "--config",
         "--receipt",
         "--release-check-receipt",
+        "--worker-artifact-manifest",
         "--image",
         "--output",
       ].includes(flag) ||
       values.has(flag)
     ) {
       throw new Error(
-        "Usage: prepare-qualified-deploy --config FILE --receipt FILE --release-check-receipt FILE --image REGISTRY_IMAGE --output FILE",
+        "Usage: prepare-qualified-deploy --config FILE --receipt FILE --release-check-receipt FILE --worker-artifact-manifest FILE --image REGISTRY_IMAGE --output FILE",
       );
     }
     values.set(flag, value);
   }
-  if (values.size !== 5) {
+  if (values.size !== 6) {
     throw new Error(
-      "Usage: prepare-qualified-deploy --config FILE --receipt FILE --release-check-receipt FILE --image REGISTRY_IMAGE --output FILE",
+      "Usage: prepare-qualified-deploy --config FILE --receipt FILE --release-check-receipt FILE --worker-artifact-manifest FILE --image REGISTRY_IMAGE --output FILE",
     );
   }
   return {
     config: values.get("--config")!,
     receipt: values.get("--receipt")!,
     releaseCheckReceipt: values.get("--release-check-receipt")!,
+    workerArtifactManifest: values.get("--worker-artifact-manifest")!,
     image: values.get("--image")!,
     output: values.get("--output")!,
   };
@@ -599,11 +749,186 @@ function record(value: unknown, label: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function assertExactKeys(
+  value: Record<string, unknown>,
+  keys: readonly string[],
+  label: string,
+): void {
+  if (
+    JSON.stringify(Object.keys(value).sort()) !==
+    JSON.stringify([...keys].sort())
+  ) {
+    throw new Error(`${label} contains missing or unknown fields`);
+  }
+}
+
+const CANONICAL_RELEASE_CONFIG_KEYS = [
+  "account_id",
+  "assets",
+  "compatibility_date",
+  "compatibility_flags",
+  "containers",
+  "d1_databases",
+  "durable_objects",
+  "main",
+  "migrations",
+  "name",
+  "no_bundle",
+  "observability",
+  "r2_buckets",
+  "vars",
+  "version_metadata",
+] as const;
+
+const VITE_GENERATED_CONFIG_KEYS = [
+  ...CANONICAL_RELEASE_CONFIG_KEYS,
+  "agent_memory",
+  "ai_search",
+  "ai_search_namespaces",
+  "analytics_engine_datasets",
+  "artifacts",
+  "cloudchamber",
+  "configPath",
+  "definedEnvironments",
+  "dev",
+  "dispatch_namespaces",
+  "exports",
+  "flagship",
+  "hyperdrive",
+  "jsx_factory",
+  "jsx_fragment",
+  "kv_namespaces",
+  "legacy_env",
+  "logfwdr",
+  "mtls_certificates",
+  "pipelines",
+  "python_modules",
+  "queues",
+  "ratelimits",
+  "rules",
+  "secrets_store_secrets",
+  "send_email",
+  "services",
+  "topLevelName",
+  "triggers",
+  "unsafe_hello_world",
+  "userConfigPath",
+  "vectorize",
+  "vpc_networks",
+  "vpc_services",
+  "worker_loaders",
+  "workflows",
+] as const;
+
+const VITE_GENERATED_INERT_DEFAULTS = {
+  agent_memory: [],
+  ai_search: [],
+  ai_search_namespaces: [],
+  analytics_engine_datasets: [],
+  artifacts: [],
+  cloudchamber: {},
+  definedEnvironments: [],
+  dev: {
+    enable_containers: true,
+    generate_types: false,
+    ip: "localhost",
+    local_protocol: "http",
+    upstream_protocol: "http",
+  },
+  dispatch_namespaces: [],
+  exports: {},
+  flagship: [],
+  hyperdrive: [],
+  jsx_factory: "React.createElement",
+  jsx_fragment: "React.Fragment",
+  kv_namespaces: [],
+  legacy_env: true,
+  logfwdr: { bindings: [] },
+  mtls_certificates: [],
+  pipelines: [],
+  python_modules: { exclude: ["**/*.pyc"] },
+  queues: { consumers: [], producers: [] },
+  ratelimits: [],
+  rules: [{ globs: ["**/*.js", "**/*.mjs"], type: "ESModule" }],
+  secrets_store_secrets: [],
+  send_email: [],
+  services: [],
+  topLevelName: "counterlab",
+  triggers: {},
+  unsafe_hello_world: [],
+  vectorize: [],
+  vpc_networks: [],
+  vpc_services: [],
+  worker_loaders: [],
+  workflows: [],
+} as const;
+
+export function projectViteGeneratedWranglerConfig(
+  value: unknown,
+): Record<string, unknown> {
+  const config = structuredClone(
+    record(value, "Vite-generated Wrangler config"),
+  );
+  assertExactKeys(
+    config,
+    VITE_GENERATED_CONFIG_KEYS,
+    "Vite-generated Wrangler config",
+  );
+  if (
+    typeof config.configPath !== "string" ||
+    config.configPath !== config.userConfigPath ||
+    !config.configPath.endsWith("/apps/web/wrangler.jsonc")
+  ) {
+    throw new Error(
+      "Vite-generated Wrangler source config is not release-bound",
+    );
+  }
+  const repositoryRoot = resolve(dirname(config.configPath), "../..");
+  const containers = config.containers;
+  if (!Array.isArray(containers) || containers.length !== 1) {
+    throw new Error(
+      "Vite-generated Wrangler config must contain one Container",
+    );
+  }
+  const container = record(containers[0], "Vite-generated Container config");
+  if (
+    container.image !== resolve(repositoryRoot, "Dockerfile.runner") ||
+    container.image_build_context !== repositoryRoot
+  ) {
+    throw new Error(
+      "Vite-generated Container build paths are not source-bound",
+    );
+  }
+  const observedDefaults = Object.fromEntries(
+    Object.keys(VITE_GENERATED_INERT_DEFAULTS).map((key) => [key, config[key]]),
+  );
+  if (
+    canonicalJson(observedDefaults) !==
+    canonicalJson(VITE_GENERATED_INERT_DEFAULTS)
+  ) {
+    throw new Error(
+      "Vite-generated Wrangler defaults changed from the pinned projection",
+    );
+  }
+  return Object.fromEntries(
+    CANONICAL_RELEASE_CONFIG_KEYS.map((key) => [key, config[key]]),
+  );
+}
+
+function canonicalReleaseConfig(value: unknown): Record<string, unknown> {
+  const config = record(value, "Wrangler config");
+  return "configPath" in config
+    ? projectViteGeneratedWranglerConfig(config)
+    : structuredClone(config);
+}
+
 function assertProductionBindings(config: Record<string, unknown>): void {
+  assertExactKeys(config, CANONICAL_RELEASE_CONFIG_KEYS, "Wrangler config");
   if (
     config.name !== "counterlab" ||
     config.main !== "index.js" ||
     config.compatibility_date !== "2026-07-14" ||
+    config.no_bundle !== true ||
     JSON.stringify(config.compatibility_flags) !==
       JSON.stringify(["nodejs_compat"])
   ) {
@@ -632,6 +957,11 @@ function assertProductionBindings(config: Record<string, unknown>): void {
     }
   }
   const assets = record(config.assets, "assets config");
+  assertExactKeys(
+    assets,
+    ["directory", "not_found_handling", "run_worker_first"],
+    "assets config",
+  );
   if (
     assets.directory !== "../client" ||
     assets.not_found_handling !== "single-page-application" ||
@@ -644,6 +974,7 @@ function assertProductionBindings(config: Record<string, unknown>): void {
     config.version_metadata,
     "Worker version metadata",
   );
+  assertExactKeys(versionMetadata, ["binding"], "Worker version metadata");
   if (versionMetadata.binding !== "CF_VERSION_METADATA") {
     throw new Error("Worker version metadata binding is not release-bound");
   }
@@ -653,6 +984,11 @@ function assertProductionBindings(config: Record<string, unknown>): void {
     throw new Error("Wrangler config must contain exactly one D1 database");
   }
   const database = record(databases[0], "D1 database config");
+  assertExactKeys(
+    database,
+    ["binding", "database_id", "database_name", "migrations_dir"],
+    "D1 database config",
+  );
   if (
     database.binding !== "DB" ||
     database.database_name !== "counterlab" ||
@@ -667,6 +1003,7 @@ function assertProductionBindings(config: Record<string, unknown>): void {
     throw new Error("Wrangler config must contain exactly one R2 bucket");
   }
   const bucket = record(buckets[0], "R2 bucket config");
+  assertExactKeys(bucket, ["binding", "bucket_name"], "R2 bucket config");
   if (
     bucket.binding !== "ARTIFACTS" ||
     bucket.bucket_name !== "counterlab-artifacts"
@@ -678,11 +1015,20 @@ function assertProductionBindings(config: Record<string, unknown>): void {
     config.durable_objects,
     "Durable Object config",
   );
+  assertExactKeys(durableObjects, ["bindings"], "Durable Object config");
   if (!Array.isArray(durableObjects.bindings)) {
     throw new Error("Wrangler Durable Object bindings are missing");
   }
   const bindings = durableObjects.bindings
     .map((binding) => record(binding, "Durable Object binding"))
+    .map((binding) => {
+      assertExactKeys(
+        binding,
+        ["class_name", "name"],
+        "Durable Object binding",
+      );
+      return binding;
+    })
     .map((binding) => `${String(binding.name)}:${String(binding.class_name)}`)
     .sort();
   if (
@@ -700,6 +1046,13 @@ function assertProductionBindings(config: Record<string, unknown>): void {
   const migrations = config.migrations.map((migration) =>
     record(migration, "Durable Object migration"),
   );
+  for (const migration of migrations) {
+    assertExactKeys(
+      migration,
+      ["new_sqlite_classes", "tag"],
+      "Durable Object migration",
+    );
+  }
   if (
     migrations.length !== 2 ||
     migrations[0]?.tag !== "v1" ||
@@ -712,6 +1065,7 @@ function assertProductionBindings(config: Record<string, unknown>): void {
     throw new Error("Wrangler Durable Object migrations are incomplete");
   }
   const observability = record(config.observability, "observability config");
+  assertExactKeys(observability, ["enabled"], "observability config");
   if (observability.enabled !== true) {
     throw new Error("Wrangler observability must remain enabled");
   }
@@ -723,7 +1077,7 @@ export function qualifiedDeployConfig(input: {
   image: string;
   observation: QualifiedReleaseObservation;
 }): Record<string, unknown> {
-  const config = structuredClone(record(input.config, "Wrangler config"));
+  const config = canonicalReleaseConfig(input.config);
   const receipt = QualifiedRunnerReleaseSchema.parse(input.receipt);
   const comparisons: Array<[string, string, string]> = [
     ["source commit", receipt.sourceCommit, input.observation.sourceCommit],
@@ -768,6 +1122,16 @@ export function qualifiedDeployConfig(input: {
       "runtime toolchain",
       receipt.runtimeToolchainSha256,
       input.observation.runtimeToolchainSha256,
+    ],
+    [
+      "runtime policy",
+      receipt.runtimePolicySha256,
+      input.observation.runtimePolicySha256,
+    ],
+    [
+      "proof dependency manifest",
+      receipt.proofDependencyManifestSha256,
+      input.observation.proofDependencyManifestSha256,
     ],
     [
       "toolchain lock",
@@ -821,6 +1185,47 @@ export function qualifiedDeployConfig(input: {
       receipt.adapterOciSourceTreeSha256,
       input.observation.adapterOciSourceTreeSha256,
     ],
+    ["runtime limit mode", receipt.limitMode, input.observation.limitMode],
+    [
+      "aggregate limit evidence",
+      receipt.aggregateLimitEvidenceSha256,
+      input.observation.aggregateLimitEvidenceSha256,
+    ],
+    [
+      "timeout cleanup receipt path",
+      receipt.timeoutCleanupReceipt,
+      input.observation.timeoutCleanupReceipt,
+    ],
+    [
+      "timeout cleanup receipt",
+      receipt.timeoutCleanupReceiptSha256,
+      input.observation.timeoutCleanupReceiptSha256,
+    ],
+    [
+      "timeout cleanup payload",
+      receipt.timeoutCleanupPayloadSha256,
+      input.observation.timeoutCleanupPayloadSha256,
+    ],
+    [
+      "timeout run control receipt",
+      receipt.timeoutRunControlReceiptSha256,
+      input.observation.timeoutRunControlReceiptSha256,
+    ],
+    [
+      "timeout rootless receipt",
+      receipt.timeoutRootlessReceiptSha256,
+      input.observation.timeoutRootlessReceiptSha256,
+    ],
+    [
+      "timeout runtime session",
+      receipt.timeoutRuntimeSessionId,
+      input.observation.timeoutRuntimeSessionId,
+    ],
+    [
+      "timeout verification time",
+      receipt.timeoutVerifiedAt,
+      input.observation.timeoutVerifiedAt,
+    ],
     ["registry image", receipt.registryImage, input.observation.registryImage],
     [
       "registry digest",
@@ -834,6 +1239,12 @@ export function qualifiedDeployConfig(input: {
         `qualified ${label} does not match recomputed release evidence`,
       );
     }
+  }
+  if (
+    receipt.aggregateLimitIntentEnforced !== true ||
+    input.observation.aggregateLimitIntentEnforced !== true
+  ) {
+    throw new Error("qualified aggregate runtime limits are not enforced");
   }
   if (input.observation.currentCommit !== receipt.evidenceCommit) {
     throw new Error("qualified evidence commit is not the current HEAD");
@@ -878,10 +1289,24 @@ export function qualifiedDeployConfig(input: {
     throw new Error("Wrangler config must contain exactly one Container");
   }
   const container = record(config.containers[0], "Container config");
+  assertExactKeys(
+    container,
+    [
+      "class_name",
+      "image",
+      "image_build_context",
+      "instance_type",
+      "max_instances",
+      "name",
+      "wrangler_ssh",
+    ],
+    "Container config",
+  );
   if (container.class_name !== "CounterLabRunner") {
     throw new Error("qualified image may bind only to CounterLabRunner");
   }
   const ssh = record(container.wrangler_ssh, "Container SSH config");
+  assertExactKeys(ssh, ["enabled"], "Container SSH config");
   if (
     container.name !== "counterlab-counterlabrunner" ||
     container.max_instances !== 10 ||
@@ -890,18 +1315,72 @@ export function qualifiedDeployConfig(input: {
   ) {
     throw new Error("qualified Container capacity or SSH policy changed");
   }
-  container.image = input.image.replace(
-    /:git-[a-f0-9]{40}$/,
-    `@${receipt.registryDigest}`,
-  );
-  delete container.image_vars;
-  delete container.image_build_context;
-  config.containers = [container];
+  config.containers = [
+    {
+      class_name: "CounterLabRunner",
+      image: input.image.replace(
+        /:git-[a-f0-9]{40}$/,
+        `@${receipt.registryDigest}`,
+      ),
+      instance_type: "basic",
+      max_instances: 10,
+      name: "counterlab-counterlabrunner",
+      ssh: { enabled: false },
+    },
+  ];
   config.vars = {
     ...record(config.vars, "Worker vars"),
     COUNTERLAB_WORKER_EVIDENCE_COMMIT: receipt.evidenceCommit,
     COUNTERLAB_RUNNER_SOURCE_COMMIT: receipt.sourceCommit,
     COUNTERLAB_RUNNER_IMAGE_DIGEST: receipt.registryDigest,
+    COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256:
+      receipt.timeoutCleanupReceiptSha256,
+    COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256:
+      receipt.aggregateLimitEvidenceSha256,
+    COUNTERLAB_RUNTIME_POLICY_SHA256: receipt.runtimePolicySha256,
+    COUNTERLAB_PROOF_DEPENDENCY_MANIFEST_SHA256:
+      receipt.proofDependencyManifestSha256,
+  };
+  return config;
+}
+
+export function bindFrozenWorkerRelease(
+  configValue: unknown,
+  identity: FrozenWorkerReleaseIdentity,
+): Record<string, unknown> {
+  const config = structuredClone(
+    record(configValue, "qualified Wrangler config"),
+  );
+  if (
+    identity.classification !== "PROCESS_BOUND_PARTIAL" ||
+    !/^[a-f0-9]{40}$/u.test(identity.sourceCommit) ||
+    !/^[a-f0-9]{64}$/u.test(identity.manifestSha256) ||
+    !/^[a-f0-9]{64}$/u.test(identity.workerBundleSha256) ||
+    !/^[a-f0-9]{64}$/u.test(identity.clientAssetsSha256) ||
+    !Number.isInteger(identity.clientAssetCount) ||
+    identity.clientAssetCount < 1 ||
+    !/^[a-f0-9]{64}$/u.test(identity.clientPublicAssetsSha256) ||
+    !Number.isInteger(identity.clientPublicAssetCount) ||
+    identity.clientPublicAssetCount < 1 ||
+    identity.clientPublicAssetCount > identity.clientAssetCount ||
+    identity.viteVersion !== "8.1.4" ||
+    identity.wranglerVersion !== "4.110.0"
+  ) {
+    throw new Error("frozen Worker release identity is invalid");
+  }
+  config.vars = {
+    ...record(config.vars, "qualified Worker vars"),
+    COUNTERLAB_WORKER_ARTIFACT_CLASSIFICATION: identity.classification,
+    COUNTERLAB_WORKER_ARTIFACT_MANIFEST_SHA256: identity.manifestSha256,
+    COUNTERLAB_WORKER_BUNDLE_SHA256: identity.workerBundleSha256,
+    COUNTERLAB_CLIENT_ASSETS_SHA256: identity.clientAssetsSha256,
+    COUNTERLAB_CLIENT_ASSET_COUNT: String(identity.clientAssetCount),
+    COUNTERLAB_CLIENT_PUBLIC_ASSETS_SHA256: identity.clientPublicAssetsSha256,
+    COUNTERLAB_CLIENT_PUBLIC_ASSET_COUNT: String(
+      identity.clientPublicAssetCount,
+    ),
+    COUNTERLAB_VITE_VERSION: identity.viteVersion,
+    COUNTERLAB_WRANGLER_VERSION: identity.wranglerVersion,
   };
   return config;
 }
@@ -915,6 +1394,10 @@ async function main(): Promise<void> {
     existingRepositoryFile(root, args.receipt),
     existingRepositoryFile(root, args.releaseCheckReceipt),
   ]);
+  const frozenWorkerRelease = await verifyFrozenWorkerReleaseManifest(
+    root,
+    args.workerArtifactManifest,
+  );
   const [configText, receiptBytes, releaseCheckReceiptText] = await Promise.all(
     [
       readFile(configPath, "utf8"),
@@ -936,7 +1419,7 @@ async function main(): Promise<void> {
     qualifiedReceiptBytes: receiptBytes,
     releaseCheckReceipt: JSON.parse(releaseCheckReceiptText) as unknown,
     runtimeAttestation: JSON.parse(
-      commandText(root, runtimeAdapter, ["counterlab-attest"]),
+      runtimeCommandText(root, runtimeAdapter, ["counterlab-attest"]),
     ) as unknown,
     currentCommit: observation.currentCommit,
     worktreeClean:
@@ -949,12 +1432,18 @@ async function main(): Promise<void> {
     adapterImageDigest: observation.adapterImageDigest,
     observedAt: observation.observedAt,
   });
-  const generated = qualifiedDeployConfig({
-    config: JSON.parse(configText) as unknown,
-    receipt,
-    image: args.image,
-    observation,
-  });
+  if (frozenWorkerRelease.identity.sourceCommit !== observation.currentCommit) {
+    throw new Error("frozen Worker artifacts do not bind the evidence commit");
+  }
+  const generated = bindFrozenWorkerRelease(
+    qualifiedDeployConfig({
+      config: JSON.parse(configText) as unknown,
+      receipt,
+      image: args.image,
+      observation,
+    }),
+    frozenWorkerRelease.identity,
+  );
   const output = await repositoryOutputPath(root, args.output);
   await mkdir(dirname(output), { recursive: true });
   await writeFile(output, `${JSON.stringify(generated, null, 2)}\n`, {

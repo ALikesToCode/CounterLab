@@ -5,12 +5,14 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import tempfile
 from pathlib import Path
 
 from counterlab_kernel.canonical import canonical_json, sha256_json
 from counterlab_kernel.verifier import critical_mutations, verify_candidate
-from counterlab_runner.docker import DockerAdapterExecutor
+from counterlab_runner.docker import (
+    DockerAdapterExecutor,
+    create_repository_work_directory,
+)
 from counterlab_runner.pipeline import HostCompileVerifyPipeline
 
 
@@ -28,13 +30,13 @@ def verify(root: Path, run_directory: Path, image: str) -> bool:
     session_id = run_directory.name
     generated_root = run_directory / "generated"
     workspace = generated_root / session_id
-    with tempfile.TemporaryDirectory(prefix="counterlab-live-sandbox-") as temporary:
-        outcome = HostCompileVerifyPipeline(
-            generated_root=generated_root,
-            fixture_path=root / "fixtures/public/customer_churn.csv",
-            executor=DockerAdapterExecutor(image=image),
-            run_root=Path(temporary),
-        )(workspace)
+    temporary_root = create_repository_work_directory(root, "live-verifier")
+    outcome = HostCompileVerifyPipeline(
+        generated_root=generated_root,
+        fixture_path=root / "fixtures/public/customer_churn.csv",
+        executor=DockerAdapterExecutor(image=image),
+        run_root=temporary_root,
+    )(workspace)
 
     if outcome.status != "VERIFIED" or outcome.result is None:
         report = {

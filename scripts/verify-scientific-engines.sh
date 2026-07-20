@@ -124,10 +124,20 @@ case "${DOCKER_BIN}" in
     exit 2
     ;;
 esac
+RUNTIME_SESSION_ID="${COUNTERLAB_RUNTIME_SESSION_ID:-}"
+[[ "${RUNTIME_SESSION_ID}" =~ ^rt-[a-z0-9][a-z0-9-]{7,13}$ ]] || {
+  echo "COUNTERLAB_RUNTIME_SESSION_ID must identify the contained runtime." >&2
+  exit 2
+}
+DOCKER_COMMAND=(
+  "${DOCKER_BIN}"
+  --session-id "${RUNTIME_SESSION_ID}"
+  --
+)
 
-IMAGE_DIGEST="$("${DOCKER_BIN}" image inspect "${IMAGE}" --format '{{.Id}}')"
-SOURCE_COMMIT="$("${DOCKER_BIN}" image inspect "${IMAGE}" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
-IMAGE_USER="$("${DOCKER_BIN}" image inspect "${IMAGE}" --format '{{.Config.User}}')"
+IMAGE_DIGEST="$("${DOCKER_COMMAND[@]}" image inspect "${IMAGE}" --format '{{.Id}}')"
+SOURCE_COMMIT="$("${DOCKER_COMMAND[@]}" image inspect "${IMAGE}" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
+IMAGE_USER="$("${DOCKER_COMMAND[@]}" image inspect "${IMAGE}" --format '{{.Config.User}}')"
 if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
   echo "Runner image does not expose a valid sha256 image ID." >&2
   exit 1
@@ -158,7 +168,7 @@ HOST_GID="$(id -g)"
   exit 2
 }
 
-STARTUP_PROBE_OUTPUT="$("${DOCKER_BIN}" run --rm --name "${STARTUP_CONTAINER}" \
+STARTUP_PROBE_OUTPUT="$("${DOCKER_COMMAND[@]}" run --rm --name "${STARTUP_CONTAINER}" \
   --pull=never \
   --network none \
   --read-only \
@@ -169,8 +179,11 @@ STARTUP_PROBE_OUTPUT="$("${DOCKER_BIN}" run --rm --name "${STARTUP_CONTAINER}" \
   --memory=1024m \
   --memory-swap=1024m \
   --cpus=2.0 \
+  --ulimit=cpu=300:300 \
+  --ulimit=as=1073741824:1073741824 \
   --ulimit=fsize=1048576:1048576 \
   --ulimit=nofile=64:64 \
+  --ulimit=nproc=32:32 \
   --tmpfs /counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700 \
   -e TMPDIR=/counterlab-runtime \
   -e COUNTERLAB_RUNNER_STARTUP_PROBE=1 \
@@ -193,7 +206,7 @@ node -e '
 # The preceding probe executes the real OCI entrypoint as Config.User. This
 # second run adopts the host identity only so the exact-image verifier can read
 # the repository evidence mounted read-only.
-RUNTIME_VERIFICATION_OUTPUT="$("${DOCKER_BIN}" run --rm --name "${RUNTIME_CONTAINER}" \
+RUNTIME_VERIFICATION_OUTPUT="$("${DOCKER_COMMAND[@]}" run --rm --name "${RUNTIME_CONTAINER}" \
   --user "${HOST_UID}:${HOST_GID}" \
   --pull=never \
   --network none \
@@ -205,11 +218,16 @@ RUNTIME_VERIFICATION_OUTPUT="$("${DOCKER_BIN}" run --rm --name "${RUNTIME_CONTAI
   --memory=1024m \
   --memory-swap=1024m \
   --cpus=2.0 \
+  --ulimit=cpu=300:300 \
+  --ulimit=as=1073741824:1073741824 \
   --ulimit=fsize=1048576:1048576 \
   --ulimit=nofile=64:64 \
+  --ulimit=nproc=32:32 \
   --tmpfs "/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=${HOST_UID},gid=${HOST_GID},mode=0700" \
   -e TMPDIR=/counterlab-runtime \
-  -v "${ROOT_DIR}:/repo:ro" \
+  --mount "type=bind,src=${ROOT_DIR}/scripts/verify_scientific_runtime.py,dst=/repo/scripts/verify_scientific_runtime.py,readonly" \
+  --mount "type=bind,src=${ROOT_DIR}/requirements.runner.lock.txt,dst=/repo/requirements.runner.lock.txt,readonly" \
+  --mount "type=bind,src=${ROOT_DIR}/scientific-engines,dst=/repo/scientific-engines,readonly" \
   --workdir=/repo \
   --entrypoint python \
   "${IMAGE}" \
