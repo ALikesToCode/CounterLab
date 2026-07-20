@@ -6,7 +6,7 @@
   "metadata": {
     "lifecycles": [
       {
-        "phase": "build"
+        "phase": "pre-build"
       }
     ],
     "tools": {
@@ -14,7 +14,7 @@
         {
           "type": "application",
           "name": "pnpm",
-          "version": "11.13.0"
+          "version": "11.13.1"
         }
       ]
     },
@@ -41,12 +41,6 @@
       "purl": "pkg:npm/%40cloudflare/containers@0.3.7",
       "bom-ref": "pkg:npm/%40cloudflare/containers@0.3.7",
       "group": "@cloudflare",
-      "description": "Helper class for container-enabled Durable Objects",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
       "externalReferences": [
         {
           "type": "distribution",
@@ -57,18 +51,6 @@
               "content": "0ccf5d9b71672014b289227514b6af2b097f964de80264daca70b3650f69651d277113eab92c64c5df0dbb630520bc660c3b0f9312ac48d121f661c732dcb817"
             }
           ]
-        },
-        {
-          "type": "website",
-          "url": "https://github.com/cloudflare/containers#readme"
-        },
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/cloudflare/containers.git"
-        },
-        {
-          "type": "issue-tracker",
-          "url": "https://github.com/cloudflare/containers/issues"
         }
       ]
     },
@@ -79,19 +61,6 @@
       "purl": "pkg:npm/%40fontsource-variable/instrument-sans@5.2.8",
       "bom-ref": "pkg:npm/%40fontsource-variable/instrument-sans@5.2.8",
       "group": "@fontsource-variable",
-      "description": "Self-host the Instrument Sans font in a neatly bundled NPM package.",
-      "authors": [
-        {
-          "name": "Google Inc."
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "OFL-1.1"
-          }
-        }
-      ],
       "externalReferences": [
         {
           "type": "distribution",
@@ -102,63 +71,6 @@
               "content": "99309aba46dd2238e88a98f61374395e864cdd9c4959dcf21debdffcb1bfd0f1e57c5f50f39a7138cec1ec0f4c7ab172c66473cf991596e9a022f803486e023e"
             }
           ]
-        },
-        {
-          "type": "website",
-          "url": "https://fontsource.org/fonts/instrument-sans"
-        },
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/fontsource/font-files.git"
-        },
-        {
-          "type": "issue-tracker",
-          "url": "https://github.com/fontsource/font-files/issues"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "newsreader",
-      "version": "5.2.10",
-      "purl": "pkg:npm/%40fontsource-variable/newsreader@5.2.10",
-      "bom-ref": "pkg:npm/%40fontsource-variable/newsreader@5.2.10",
-      "group": "@fontsource-variable",
-      "description": "Self-host the Newsreader font in a neatly bundled NPM package.",
-      "authors": [
-        {
-          "name": "Google Inc."
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "OFL-1.1"
-          }
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "distribution",
-          "url": "https://registry.npmjs.org/@fontsource-variable/newsreader/-/newsreader-5.2.10.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "31d236891c2ba96a4c394ff6695d8181f6787493658ff5e561a63c65beedf3b996a87b24616d1789400d92dd5cc8e0a211f5b6550d1b439bd98063e9e81d81e3"
-            }
-          ]
-        },
-        {
-          "type": "website",
-          "url": "https://fontsource.org/fonts/newsreader"
-        },
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/fontsource/font-files.git"
-        },
-        {
-          "type": "issue-tracker",
-          "url": "https://github.com/fontsource/font-files/issues"
         }
       ]
     },
@@ -169,14 +81,6 @@
       "purl": "pkg:npm/%40json-render/core@0.19.0",
       "bom-ref": "pkg:npm/%40json-render/core@0.19.0",
       "group": "@json-render",
-      "description": "JSON becomes real things. Define your catalog, register your components, let AI generate.",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0"
-          }
-        }
-      ],
       "externalReferences": [
         {
           "type": "distribution",
@@ -187,18 +91,6 @@
               "content": "bef73267ed7410364a6c4c81d49da45ce19f0da8994762eead9192aa2dabe524c7c8aafe4def390d6681c53c111a033b5352ed22f371f39073ce312544aa0022"
             }
           ]
-        },
-        {
-          "type": "website",
-          "url": "https://json-render.dev"
-        },
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/vercel-labs/json-render.git"
-        },
-        {
-          "type": "issue-tracker",
-          "url": "https://github.com/vercel-labs/json-render/issues"
         }
       ]
     },
@@ -209,14 +101,6 @@
       "purl": "pkg:npm/%40json-render/react@0.19.0",
       "bom-ref": "pkg:npm/%40json-render/react@0.19.0",
       "group": "@json-render",
-      "description": "React renderer for @json-render/core. JSON becomes React components.",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0"
-          }
-        }
-      ],
       "externalReferences": [
         {
           "type": "distribution",
@@ -227,18 +111,6 @@
               "content": "9135ba6fa712351ae511f0947ffebd48ba0b9fe0ae7c2f7af2bba07bdb67425a7da434c61bf48af2980ce78d45760c0c140e339b7b399a93371bcadd38329cfc"
             }
           ]
-        },
-        {
-          "type": "website",
-          "url": "https://json-render.dev"
-        },
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/vercel-labs/json-render.git"
-        },
-        {
-          "type": "issue-tracker",
-          "url": "https://github.com/vercel-labs/json-render/issues"
         }
       ]
     },
@@ -249,14 +121,6 @@
       "purl": "pkg:npm/%40openai/codex@0.144.4",
       "bom-ref": "pkg:npm/%40openai/codex@0.144.4",
       "group": "@openai",
-      "description": "Codex CLI is a coding agent from OpenAI that runs locally on your computer.",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0"
-          }
-        }
-      ],
       "externalReferences": [
         {
           "type": "distribution",
@@ -267,18 +131,6 @@
               "content": "0d31f361ab652aaf5dc39e44d3f1ec6cae2d44210a69bb89d74c9b6eaa6c1bc815bff92fc04760dd9e0e23772f2d729adb5c6421ae25906959a0efc79aa98517"
             }
           ]
-        },
-        {
-          "type": "website",
-          "url": "https://github.com/openai/codex#readme"
-        },
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/openai/codex.git"
-        },
-        {
-          "type": "issue-tracker",
-          "url": "https://github.com/openai/codex/issues"
         }
       ]
     },
@@ -349,13 +201,6 @@
       "purl": "pkg:npm/%40openai/codex@0.144.4-linux-x64",
       "bom-ref": "pkg:npm/%40openai/codex@0.144.4-linux-x64",
       "group": "@openai",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0"
-          }
-        }
-      ],
       "externalReferences": [
         {
           "type": "distribution",
@@ -366,18 +211,6 @@
               "content": "da3c6b995ebeffb78135d839ba18663843c5bb6a36f1e618fc294bcd68520471fcba8ddfd8a035cfd250715b7095b4e85b4de710f944cd83587c2175501aac55"
             }
           ]
-        },
-        {
-          "type": "website",
-          "url": "https://github.com/openai/codex#readme"
-        },
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/openai/codex.git"
-        },
-        {
-          "type": "issue-tracker",
-          "url": "https://github.com/openai/codex/issues"
         }
       ]
     },
@@ -427,19 +260,6 @@
       "version": "4.12.30",
       "purl": "pkg:npm/hono@4.12.30",
       "bom-ref": "pkg:npm/hono@4.12.30",
-      "description": "Web framework built on Web Standards",
-      "authors": [
-        {
-          "name": "Yusuke Wada"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
       "externalReferences": [
         {
           "type": "distribution",
@@ -450,18 +270,6 @@
               "content": "7a69fe268263acdf584e94434b98adfd423648ef41004dfb4fa23777deb7471719f351bd038a6bd9265312289a88a6f3c7e34a460e4167cf5f08bee0089094a2"
             }
           ]
-        },
-        {
-          "type": "website",
-          "url": "https://hono.dev"
-        },
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/honojs/hono.git"
-        },
-        {
-          "type": "issue-tracker",
-          "url": "https://github.com/honojs/hono/issues"
         }
       ]
     },
@@ -471,19 +279,6 @@
       "version": "6.46.0",
       "purl": "pkg:npm/openai@6.46.0",
       "bom-ref": "pkg:npm/openai@6.46.0",
-      "description": "The official TypeScript library for the OpenAI API",
-      "authors": [
-        {
-          "name": "OpenAI"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0"
-          }
-        }
-      ],
       "externalReferences": [
         {
           "type": "distribution",
@@ -494,18 +289,6 @@
               "content": "0c583a8c43d3d913bea00c97b5d75e50953cce41b2d4e4350231b33482543101b4dd34eabc2a72f6d06943ed955559efae5dc4e7a17c1848a7d8962d5a9213b4"
             }
           ]
-        },
-        {
-          "type": "website",
-          "url": "https://github.com/openai/openai-node#readme"
-        },
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/openai/openai-node.git"
-        },
-        {
-          "type": "issue-tracker",
-          "url": "https://github.com/openai/openai-node/issues"
         }
       ]
     },
@@ -515,14 +298,6 @@
       "version": "19.2.7",
       "purl": "pkg:npm/react-dom@19.2.7",
       "bom-ref": "pkg:npm/react-dom@19.2.7",
-      "description": "React package for working with the DOM.",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
       "externalReferences": [
         {
           "type": "distribution",
@@ -533,18 +308,6 @@
               "content": "b74051557bdb884fe8db41dfc3aebdacb6cc0835ad6192ef9898a0cb67f4331b1717eef5a71851df13a4b299ac3bc877665373ca26c09ad09ade5e2560a93a81"
             }
           ]
-        },
-        {
-          "type": "website",
-          "url": "https://react.dev/"
-        },
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/facebook/react.git"
-        },
-        {
-          "type": "issue-tracker",
-          "url": "https://github.com/facebook/react/issues"
         }
       ]
     },
@@ -554,14 +317,6 @@
       "version": "19.2.7",
       "purl": "pkg:npm/react@19.2.7",
       "bom-ref": "pkg:npm/react@19.2.7",
-      "description": "React is a JavaScript library for building user interfaces.",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
       "externalReferences": [
         {
           "type": "distribution",
@@ -572,18 +327,6 @@
               "content": "1cd7bd5ac9536d79852bca3c726c2001e245481bedd5b3dd1c254ab5a695f96940377ea6a53e21711a706dfddf639e9aaf6a085f3b01a4e0222111c0758d0e95"
             }
           ]
-        },
-        {
-          "type": "website",
-          "url": "https://react.dev/"
-        },
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/facebook/react.git"
-        },
-        {
-          "type": "issue-tracker",
-          "url": "https://github.com/facebook/react/issues"
         }
       ]
     },
@@ -593,14 +336,6 @@
       "version": "0.27.0",
       "purl": "pkg:npm/scheduler@0.27.0",
       "bom-ref": "pkg:npm/scheduler@0.27.0",
-      "description": "Cooperative scheduler for the browser environment.",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
       "externalReferences": [
         {
           "type": "distribution",
@@ -611,18 +346,6 @@
               "content": "78dbfe5ab55b2aed5fdef6d8253ff1b62179b320391cf20cb5ff48818fe72a0d2c5aacc0504bea63fc66ece71973fa9a7cbc7f88ef4580e99e480a78bf9b62fd"
             }
           ]
-        },
-        {
-          "type": "website",
-          "url": "https://react.dev/"
-        },
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/facebook/react.git"
-        },
-        {
-          "type": "issue-tracker",
-          "url": "https://github.com/facebook/react/issues"
         }
       ]
     },
@@ -632,19 +355,6 @@
       "version": "8.21.0",
       "purl": "pkg:npm/ws@8.21.0",
       "bom-ref": "pkg:npm/ws@8.21.0",
-      "description": "Simple to use, blazing fast and thoroughly tested websocket client and server for Node.js",
-      "authors": [
-        {
-          "name": "Einar Otto Stangvik"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
       "externalReferences": [
         {
           "type": "distribution",
@@ -655,18 +365,6 @@
               "content": "56ca76f1bec345c8a6150bebaaed967a4df3d626310c25aa1d807c42c9e4fd2e117da090ccf18fc8136e563255ddc77a5222ad52da7ab0d33bee05afcdc087fa"
             }
           ]
-        },
-        {
-          "type": "website",
-          "url": "https://github.com/websockets/ws"
-        },
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/websockets/ws.git"
-        },
-        {
-          "type": "issue-tracker",
-          "url": "https://github.com/websockets/ws/issues"
         }
       ]
     },
@@ -676,19 +374,6 @@
       "version": "4.4.3",
       "purl": "pkg:npm/zod@4.4.3",
       "bom-ref": "pkg:npm/zod@4.4.3",
-      "description": "TypeScript-first schema declaration and validation library with static type inference",
-      "authors": [
-        {
-          "name": "Colin McDonnell"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
       "externalReferences": [
         {
           "type": "distribution",
@@ -699,18 +384,6 @@
               "content": "cad10d163209165d94c1882575eda37215b61f09b818914b0e249759d4eb25004837d15cca9ee7e0387124489634024c575fc1a967d6fe4920ef55037072724d"
             }
           ]
-        },
-        {
-          "type": "website",
-          "url": "https://zod.dev"
-        },
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/colinhacks/zod.git"
-        },
-        {
-          "type": "issue-tracker",
-          "url": "https://github.com/colinhacks/zod/issues"
         }
       ]
     }
@@ -722,10 +395,6 @@
     },
     {
       "ref": "pkg:npm/%40fontsource-variable/instrument-sans@5.2.8",
-      "dependsOn": []
-    },
-    {
-      "ref": "pkg:npm/%40fontsource-variable/newsreader@5.2.10",
       "dependsOn": []
     },
     {
@@ -776,7 +445,6 @@
       "dependsOn": [
         "pkg:npm/%40cloudflare/containers@0.3.7",
         "pkg:npm/%40fontsource-variable/instrument-sans@5.2.8",
-        "pkg:npm/%40fontsource-variable/newsreader@5.2.10",
         "pkg:npm/%40json-render/core@0.19.0",
         "pkg:npm/%40json-render/react@0.19.0",
         "pkg:npm/%40openai/codex@0.144.4",

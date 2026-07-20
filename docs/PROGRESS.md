@@ -13,24 +13,17 @@ pass is never presented as a browser or production pass.
 
 - **Branch:** `feat/learner-ux-v6.1`
 - **Current product checkpoint:**
-  `0ac752d83b346ca23be36917eff6eb41a6870268`. This includes the
-  core-journey commits `d2a56c9`, `e0998f3`, stored-proof hydration at
-  `7bf3c67`, accessible command names at `2656666`, and the integrity-bound
-  landing/Judge/sample belief-break integration at `cc61917` and its
-  fail-closed evidence-rebinding review fix at `0ac752d`. At
-  `2026-07-20T13:30:06Z`, 34 hours, 29 minutes, and 54 seconds remained.
-  Current dirty-tree product verification is 72 web test files/558 tests,
-  repository/web/Worker strict TypeScript, and the production Vite/Worker
-  build. Root Vitest is 615/642 across 52/58 files with 27
-  capability/stale-evidence failures; kernel Pytest is 220/221 with one denied
-  localhost-socket test; runner Pytest is 75/75. The deterministic Sample
-  Boundary and fixed Sample Proof Capsule checks pass after reviewed
-  regeneration, and the repository secret scan passes across 1,384 files.
-  Exact scoped Prettier remains to be rerun after final edits; whitespace
-  checks pass. The last static Playwright collection is not rendered browser
-  evidence; no current CloakBrowser journey, deployment, learner observation,
-  Devpost publication, or submission result is inferred from these local
-  checks.
+  `d6c4aec6c3f32b264aef8a90e1f9c8fa148b77f4`. At
+  `2026-07-20T19:17:12Z`, 28 hours, 42 minutes, and 48 seconds remained. The
+  newest independent commits are `b9dd722` for retry-safe notebook intake and
+  `d6c4aec` for source-bound recovery from terminal learner responses. The
+  exact staged restart snapshot passed App **55/55**, client API **32/32**,
+  Worker API **90/90**, and session core **29/29** tests; repository, web, and
+  Worker strict TypeScript; scoped Prettier; Git whitespace; and an eight-file
+  secret scan. Two independent review axes found no source blocker. These are
+  local source results only. No current CloakBrowser journey, exact image,
+  qualification receipt, deployment, production smoke, learner observation,
+  Devpost publication, submission receipt, or merge is inferred.
 - **Finish-command starting checkpoint:** committed `HEAD`
   `24262ea6f40e988d7be054bdba6f531531b1679f` plus the explicitly preserved
   dirty slices listed by `git status`. At `2026-07-19T15:18:04Z`, the
@@ -2714,3 +2707,102 @@ in the preserved working tree and still require logical review.
   authentication, CloakBrowser qualification, public live/sample/replay
   journeys, learner evidence, video, Devpost receipt, deployment, and the main
   merge are all still absent.
+
+## Finish Commander update — 2026-07-20T19:17:12Z
+
+Deadline: `2026-07-22T00:00:00Z`; **28 hours 42 minutes 48 seconds remained at
+this checkpoint**. The branch is at committed HEAD
+`d6c4aec6c3f32b264aef8a90e1f9c8fa148b77f4`. The Git index is empty and the
+large pre-existing dirty tree remains preserved for independent review.
+
+### Newly frozen independent commits
+
+- `0509833 fix(api): bound stalled client requests` bounds ordinary and upload
+  requests without changing scientific authority.
+- `51d989f fix(admission): fence retry lease releases` prevents a stale
+  request from releasing another generation's admission lease.
+- `b9dd722 fix(upload): reconcile retryable notebook intake` binds upload
+  identity to content and metadata, reconciles ambiguous committed responses,
+  preserves one private artifact authority, and keeps malformed,
+  unsupported, interrupted, and session-creation retry paths explicit.
+- `d6c4aec fix(session): reconcile terminal investigation restart` preserves
+  terminal evidence, creates or recovers a deterministic source-bound child,
+  preserves artifact/mode/Question authority, derives an independent owner
+  capability, rejects unrelated deterministic-ID lineage, and restores the
+  authoritative child stage instead of resubmitting the terminal source.
+
+### Exact restart commit evidence
+
+- App Vitest: **55/55 passed**.
+- Client API Vitest: **32/32 passed**.
+- Worker API Vitest: **90/90 passed**.
+- Session-core Vitest: **29/29 passed**.
+- Repository, web, and Worker strict TypeScript: **passed**.
+- Scoped Prettier, Git whitespace, and the explicit eight-file secret scan:
+  **passed**.
+- Standards review: **zero blockers**. MB-001 specification review: **zero
+  source blockers** after the reviewer discarded an obsolete snapshot and
+  reran the current exact index. Focused Reject recovery passed **1/1** and
+  both terminal actions reach successful resubmission and sealed Prediction.
+- The isolated snapshot initially lacked generated Cloudflare declarations
+  and hosted-runner workspace links. Those harness-only checks failed before
+  collection/typing, were wired only to repository-contained dependencies,
+  and then passed. No missing-type result is counted as a product failure or a
+  pass.
+
+### Live source and production issue matrix
+
+| Slice | Frozen source status | Next acceptance evidence | Production status |
+| --- | --- | --- | --- |
+| MB-001 terminal recovery | **PASS** at `d6c4aec` | CloakBrowser Reject and insufficient-evidence journeys with real refresh/back/forward | **NOT RUN** |
+| MB-002 upload/session intake | **PASS** across `0509833`, `51d989f`, and `b9dd722` | CloakBrowser absent, malformed, unsupported, supported, interrupted, ambiguous-response, and retry matrix | **NOT RUN** |
+| In-flight navigation freshness | Dirty implementation preserved; commit review pending | Stale Sample/replay/upload/cancel/restart responses cannot mutate a newer route | **NOT RUN** |
+| MB-006 transfer authority | Dirty cross-runtime implementation preserved; atomic commit pending | Leakage and imbalance fail/pass vectors agree in UI, IR, Worker, and Python; failed transfer keeps Repair locked | **NOT RUN** |
+| MB-010 replay/capability lifecycle | Dirty migration/API/UI implementation preserved; atomic commit pending | Invalid, private, public, revoked, and expired links plus download behavior | **NOT RUN** |
+| Trusted post-result Lab Scene | Dirty renderer/contracts/App integration preserved; atomic commit pending | Canonical signed binding, stale/unknown fail-closed behavior, reset isolation, keyboard/table equivalence | **NOT RUN** |
+| Exact contained release | Runtime/release work remains dirty and separately owned | Clean source, one exact image, real startup/timeout/resource sentinels, regenerated evidence, qualification | **BLOCKED / NOT RUN** |
+| Submission and learner impact | No source commit can create external evidence | Truthful `NO_DATA` or consented aggregate, exact video/repo/app agreement, Devpost receipt | **OPEN** |
+
+### Code-review and release dependency graph
+
+```text
+preserve and classify the dirty tree
+  -> bounded requests [0509833]
+  -> generation-fenced upload admission [51d989f]
+  -> retry-safe artifact/session intake [b9dd722]
+  -> terminal-response child reconciliation [d6c4aec]
+  -> navigation freshness + replay/capability + transfer + trusted Lab Scene
+  -> complete source tests, mutation/held-out checks, build, format, secrets
+  -> clean source freeze
+  -> one exact runner image and real contained startup/timeout/resource proof
+  -> regenerate source/image-bound SBOM, VEX, registry, and negative controls
+  -> exact qualification and release checks
+  -> contained Wrangler identity/preflight and qualified-only deployment
+  -> public identity, health, production smoke, and CloakBrowser matrix
+  -> truthful video, learner evidence or NO_DATA, and Devpost receipt
+  -> reviewed fast-forward merge into main
+```
+
+No downstream receipt can be reused after an upstream source change. Parallel
+read-only review and disjoint source work may shorten preparation, but source
+freeze, image build, evidence regeneration, qualification, deployment, public
+browser proof, submission, and the final merge remain serialized.
+
+### Immediate ordered queue
+
+1. Commit this factual progress checkpoint independently.
+2. Partition and review the remaining App/navigation, replay/capability,
+   transfer, trusted Lab Scene, and accessibility slices without broad staging.
+3. Run focused checks after each commit, then the complete TypeScript, Vitest,
+   Pytest, mutation, held-out, build, formatting, whitespace, and secret gates.
+4. Freeze one clean source only after the product and authority slices are
+   complete; do not refresh scientific/release evidence earlier.
+5. Produce the exact image and real contained sentinels. Aggregate cgroup-v2
+   qualification remains fail-closed until a compliant evidence path exists.
+6. Qualify and deploy only that exact tuple, then execute the complete public
+   CloakBrowser journey matrix and re-audit every P0/P1.
+7. Keep learner evidence `NO_DATA` unless real consented observations occur;
+   align app, repo, video, Devpost, feedback ID, and receipts before submission.
+8. Merge the reviewed feature branch into `main` only after the release and
+   submission state is truthfully recorded. No deployment, submission, or
+   merge is claimed at this checkpoint.

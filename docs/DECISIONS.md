@@ -702,3 +702,72 @@ New sessions receive a separate 256-bit owner key.
   component themes alias those tokens instead of defining a second palette.
 - Preserve historical design plans as history; `DESIGN.md` and
   `docs/FRONTEND_MAP.md` describe the current browser contract.
+
+## 2026-07-20 — Recover terminal learner decisions through a distinct child session
+
+- Keep `INSUFFICIENT_EVIDENCE` and `REJECTED_BY_LEARNER` terminal so their
+  original evidence chains cannot be rewritten.
+- Restart through an owner-authenticated, deterministic child session with an
+  idempotency key and exact lineage. Reconcile response-loss retries by loading
+  the same child instead of creating another session.
+- Preserve the learner Question, allow an already-progressed child to hydrate,
+  and expose only learner-facing state labels in recent work and recovery UI.
+
+## 2026-07-20 — Make transfer semantics one strict cross-language contract
+
+- Preserve the released imbalance v1 authority: the IR action remains
+  `choose_minority_sensitive_metric`, the corrected task ID remains
+  `manufacturing-defect-transfer-01`, and its evaluator remains
+  `counterlab-imbalance-transfer-v1`. A future cost/prevalence exercise requires
+  new v2 task, evaluator, resolver, and replay IDs; it cannot relabel v1.
+- Use the fixed decision, metric, and evidence identifiers directly in the
+  learner UI, Worker ingress, JSON task fixture, Python evaluator, held-out
+  harness, and hosted patch verifier. Keep the legacy generic projection only
+  as an explicit compatibility boundary.
+- Reject duplicate, unknown, and cross-pack evidence before mutating a session.
+  A failed transfer cannot unlock Repair.
+- Treat hosted patch summary prose as evidence, not authority. Verify task,
+  evaluator, choices, invariant IDs, and pass states independently; harmless
+  explanation-copy changes must not alter patch eligibility.
+- Maintain one checked-in semantic-vector corpus for TypeScript and Python so
+  drift in either evaluator or patch policy fails review before release.
+
+## 2026-07-20 — Keep fixed Sample Proof Capsule v1 distinct from live proof
+
+- Permit Judge Mode to inspect and download the checked-in fixed Sample Proof
+  Capsule only after browser-side integrity and authority binding validation.
+- Label it `Sample Proof Capsule v1`, integrity-hashed and not signed. State
+  explicitly that GPT-5.6, Runtime Codex, the runner, learner Prediction,
+  revision, and learner event chain were not represented.
+- Never rename it to Live Proof Capsule v2 or use its local reproduction
+  candidate as a deployment receipt.
+
+## 2026-07-20 — Use one strict source-bound build receipt v4 schema
+
+- Bind scientific evidence, VEX preparation, qualification, and refresh tooling
+  to one shared receipt parser rather than maintaining permissive local shapes.
+- Reject v3, partial, unknown-field, or missing adapter/runtime/toolchain
+  receipts at the current release boundary.
+- Treat deployed Worker/client byte identity as process-bound and partial until
+  remote evidence independently proves the exact bytes. Version metadata and
+  self-reported hashes alone are not independent byte attestation.
+
+## 2026-07-20 — Freeze prebuilt Worker bytes without overstating public identity
+
+- Build the Worker and client once, hash every regular non-symlink asset in a
+  deterministic manifest, and pass the same positional Worker bundle with
+  Wrangler `--no-bundle` through dry-run, maintenance, Container rollout, and
+  final deployment.
+- Project only reviewed Vite-generated Wrangler fields into the canonical
+  release config; fail closed when ignored defaults or repository-derived
+  Container paths drift.
+- Treat Wrangler's generated dry-run README as timestamp metadata, not deployed
+  code authority. The authoritative dry-run payload is the single emitted
+  Worker `index.js`, which must equal the frozen bundle.
+- Keep the binding classification `PROCESS_BOUND_PARTIAL` until an independent
+  public verifier fetches every serveable client asset and proves exact
+  path/hash/count equality. Worker self-reported hashes and a local upload
+  process are necessary receipts, not remote byte attestation.
+- Rehash the manifest, qualification receipt, and release-check receipt before
+  every state-changing deployment step. Any byte drift stops before maintenance
+  mode, migrations, Container rollout, or final Worker upload.

@@ -137,14 +137,18 @@ Report SHA-256:
 
 - [x] Review and commit the containment/read-only repair separately from stale
       generated scientific-engine and SBOM evidence.
-- [ ] `./scripts/test-all.sh` on the v6.1 branch. Current root Vitest passes
-      499/502; the three remaining exact-source evidence tests run after the
-      image/evidence refresh.
+- [ ] `./scripts/test-all.sh` on the v6.1 branch. The latest component gates are
+      recorded in the authoritative current-tree section below. The aggregate
+      command remains red because this managed host denies nested Node stdio,
+      localhost sockets, and Bubblewrap setup, and because exact-source
+      scientific evidence intentionally remains stale until the clean source
+      freeze and image rebuild.
 - [x] `./scripts/run-contained-pnpm.sh run held-out:check` recomputed 10/10
       intake and matched the tracked evidence without rewriting it.
 - [ ] `./scripts/run-contained-pnpm.sh run format:check` after all v6.1 changes.
-- [x] Repository secret scan: passed across 767 files while excluding generated
-      browser-profile state.
+- [x] Repository secret scan: passed across 1,384 files after repository-local
+      `.counterlab` tool state was explicitly ignored; generated browser-profile
+      state remains excluded.
 - [ ] `./scripts/clean-demo.sh` is BLOCKED under the current filesystem
       constitution and is not a v6.1 release gate until its setup, cache, and
       diagnostic paths are repository-contained.
@@ -251,3 +255,105 @@ or production evidence above does not qualify this source.
 
 Detailed evidence and limitations are in
 [`LEARNER_UX_V6_1_EVIDENCE.md`](LEARNER_UX_V6_1_EVIDENCE.md).
+
+## Finish Commander current-tree gate — 2026-07-20T07:22:00Z
+
+Earlier checked items above are evidence at their named checkpoints. The
+following list is authoritative for the current dirty tree and must be rerun
+after the final source freeze.
+
+- [x] Repository root, marker, physical path, branch, HEAD, and dirty paths were
+      inspected without stash, reset, clean, discard, or deletion.
+- [x] MB-001 terminal recovery is source-covered through distinct-session
+      resubmission, retry reconciliation, progressed-child restoration, and
+      learner-facing status labels.
+- [x] MB-007 uses a closed reviewed Subject Pack renderer for all
+      pre-Prediction hypotheses, predicted patterns, conditions, non-claims,
+      alternatives, and limitations while preserving the exact learner
+      Question and sanitized evidence excerpts. The v1/v2 narrative guard
+      remains defense in depth for result, verdict, elimination, and repair
+      paraphrases. Historical v1 remains parseable without rewriting its signed
+      object; focused contract and App suites pass.
+- [x] MB-048 quarantines historical out-of-scope fixed-sample claims from all
+      result/proof reads and mutable transitions while retaining the original
+      record. New fixed samples still require the exact canonical Question.
+- [x] MB-005 restores bounded all-status compiler history from D1 alongside the
+      verified session event chain, detects snapshot races and invalid
+      job/cursor identities, merges stored/live/patch/interactive streams, and
+      keeps public replay on a separate five-group share-safe projection.
+      Source suites pass; public CloakBrowser proof remains open.
+- [x] MB-006 canonical transfer behavior passes 46 contracts, 72 App/learner,
+      129 Worker, and 71 Python affected tests. Pre-submit answer leakage is
+      removed, the released imbalance v1 authority is preserved, failed answers
+      restore, Worker/Python patch gates reconstruct fixed semantics, and one
+      26-vector corpus checks cross-runtime parity. Public/browser proof remains
+      open.
+- [x] The fixed Sample Proof Capsule v1 is checked in and validated before Judge
+      inspection/download; it remains explicitly separate from Live Proof
+      Capsule v2.
+- [x] The strict source-bound build receipt v4 parser is shared by binding, VEX,
+      qualification, and refresh tooling; focused tests pass 11/11.
+- [x] Playwright collection fails closed without CloakBrowser. Rerun and execute
+      the complete final statically collected suite after source freeze; a
+      static count is not rendered-browser evidence.
+- [ ] Regenerate current scientific integrity bindings, source/image-bound
+      engine evidence, and the normalized pnpm 11.13.1 production Node SBOM
+      after the final source freeze. Current generated evidence is deliberately
+      stale and no dirty-tree binding pass is claimed.
+- [x] Frozen Worker/client source guards cover generated-config projection,
+      one-build manifest creation, positional `--no-bundle` uploads,
+      pre-mutation singleton enforcement, pre-step evidence-byte rehashing,
+      dry-run equality, production-smoke identity, public path/hash/count
+      verification, ignored frozen-output secret scanning, and explicit
+      `PROCESS_BOUND_PARTIAL` propagation. The exact manifest and qualified
+      tuple still require regeneration after source freeze.
+- [ ] Prove aggregate runtime enforcement with a real exact-image sentinel.
+      Qualified v4 now requires the exact aggregate mode, an enforced flag, and
+      a strict hash-bound cgroup v2 observation covering exact controller
+      values, task membership, memory/PID/CPU negative-control deltas, cleanup,
+      runtime/spec/observer identity, and freshness. Process-only, declared-only,
+      unknown, false, empty, or self-inconsistent evidence fails closed. The
+      current rootless producer emits process-only/false/null and cannot
+      qualify on this host.
+- [x] Trusted Lab Scene source integration is live-only and post-result, uses a
+      strict shared envelope and closed renderer registry, and verifier v4
+      requires two distinct fixed-result Metric bindings. Source-owned oracle,
+      renderer, mutation, signed-binding, and Subject Pack scopes are covered;
+      production and rendered-browser proof remain open.
+- [x] Dirty-tree broad verification: web Vitest 72/72 files and 558/558 tests;
+      root Vitest 615/642 across 52/58 files with 27 classified
+      capability/stale-evidence failures; kernel Pytest 220/221 with one denied
+      localhost-socket test; runner Pytest 75/75; repository, web, and Worker
+      TypeScript passed; production build passed. The deterministic Sample
+      Boundary and fixed Sample Proof Capsule checks pass, focused sample
+      authority/UI tests pass 18/18, the repository secret scan passes across
+      1,384 files, and whitespace passes. Final scoped changed-file Prettier is
+      still pending. These are not frozen-release results.
+- [x] Private patch/Capsule downloads now use authenticated fetch, strict byte
+      and filename validation, bounded timeouts, browser-save initiation after
+      validation, failure-without-telemetry semantics, and duplicate-action
+      guards. Stage timing preserves the original entry and exact first
+      completion payload across refresh. Focused download/timing/App/Worker
+      verification passes; actual downloads still require final CloakBrowser
+      evidence.
+- [x] Source-covered issue set: MB-001/002/003/004/005/006/007/009/010/012/013/
+      015/016/017/048. Every item still needs exact public acceptance evidence.
+      CL-023 remains partial because landing withholds result values while Judge
+      shows the full fixed break and rendered comprehension is unmeasured.
+      CL-001, CL-006 (`NO_DATA`), and CL-024 remain open.
+- [ ] Freeze one clean source commit, build one exact runner image, run startup,
+      timeout-cleanup, no-secret, refusal, held-out, and negative-control gates,
+      and issue one qualified receipt.
+- [ ] Verify the repository-contained Wrangler identity and intended account;
+      no normal-home credential read is permitted.
+- [ ] Deploy the exact qualified Container/Worker tuple and bind the active
+      version to the release source, image, Worker, client, and receipt domains.
+- [ ] Execute production smoke plus all 31 CloakBrowser journeys, including
+      desktop/mobile sample, replay, supported live, malformed/unsupported,
+      refusal, transfer fail/pass, patch, Capsule, refresh/reconnect,
+      back/forward, accessibility, console/network, and Web Vitals checks.
+- [ ] Keep learner evidence `NO_DATA` unless real consented observations exist;
+      capture an honest public video and Devpost submission receipt only from
+      the qualified deployed tuple.
+- [ ] Review and commit each logical slice with the configured user identity,
+      then fast-forward merge `feat/learner-ux-v6.1` into `main`.

@@ -69,7 +69,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 COPY --from=node-builder /usr/local/bin/node /usr/local/bin/node
 
-RUN test -x /usr/sbin/groupadd \
+RUN chmod 0555 /usr/local/bin/node \
+    && test -x /usr/local/bin/node \
+    && test -x /usr/sbin/groupadd \
     && test -x /usr/sbin/useradd \
     && test -x /usr/bin/setpriv \
     && groupadd --gid 10001 counterlab-codex \
@@ -91,6 +93,14 @@ RUN chmod -R a+rX /opt/codex \
     && /opt/counterlab-venv/bin/pip install --no-cache-dir --no-deps --no-index --find-links=/opt/counterlab-wheelhouse counterlab-kernel==0.1.0 \
     && /opt/counterlab-venv/bin/pip check \
     && mkdir -p /work/jobs /run/counterlab-codex \
+        /repo/scripts /repo/scientific-engines \
+        /repo/fixtures/public /repo/fixtures/notebooks \
+    && touch /repo/requirements.runner.lock.txt \
+        /repo/reachability-review.json \
+        /repo/scripts/verify_scientific_runtime.py \
+        /repo/scripts/probe_cpython_htmlparser_reachability.py \
+    && chown -R root:root /repo \
+    && chmod -R a=rX /repo \
     && chown -R root:root /app \
     && chmod -R a=rX /app \
     && chmod 555 /app/runner.mjs \

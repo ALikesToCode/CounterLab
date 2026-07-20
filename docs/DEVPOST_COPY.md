@@ -19,6 +19,10 @@ models, an immutable Prediction, the smallest verified discriminating Test, a
 signed or integrity-hashed Boundary Map, deterministic transfer, and a minimal
 repair unlocked only after transfer passes.
 
+CounterLab is evidence-first learning for notebook users: seal a Prediction,
+change one condition, and let fixed evidence—not AI prose—release the bounded
+result.
+
 ## Product story
 
 A fluent explanation can leave the original misconception untouched.
@@ -72,6 +76,32 @@ and binds the mode, evidence, prediction, selected experiment, canonical IR,
 compiler events, verifier reports, result, Boundary Map, transfer, repair,
 event chain, versions, limitations, and reproduction commands.
 
+## Learning-science lineage and closest prior art
+
+CounterLab does not claim to invent predict-before-reveal. Predict–Observe–Explain
+and Peer Instruction established prediction and commitment before the reveal;
+the [LAMS POE template](https://teach.lams.es/pedagogies/poe) already pairs
+prediction, confidence, explanation, and reflection. CounterLab's narrower
+contribution is binding that learning loop to a supported learner artifact,
+fixed computation, frozen verification, deterministic transfer, and a portable
+evidence record.
+
+Three concrete contrasts keep that claim scoped:
+
+- **Predict–Observe–Explain and Peer Instruction** supply the pedagogical
+  lineage. CounterLab carries the loop into artifact-bound, machine-checked
+  evidence; the pedagogy itself is not new.
+- **LAMS Predict–Observe–Explain** supplies a close lesson template. CounterLab
+  adds a fixed transfer gate and separates the learner-facing Reasoning Diff
+  from the machine-facing Proof Capsule.
+- **[NBLyzer](https://arxiv.org/html/2603.10742v3) and
+  [sklearn-diagnose](https://github.com/leockl/sklearn-diagnose)** detect or
+  diagnose notebook and model problems. CounterLab's scoped difference is the
+  learner sequence: predict, inspect one controlled test, map a Boundary, and
+  pass transfer before Repair unlocks.
+
+This is a distinctive synthesis claim, not a categorical uniqueness claim.
+
 ## Honest product boundary
 
 The release contains exactly two reviewed ML Subject Packs: entity leakage and
@@ -119,7 +149,7 @@ claim should be copied into the submission until a measured study exists.
    Upload a supported notebook, approve the exact outbound packet, and follow
    reconnect, transfer, repaired-copy download, and Proof Capsule export.
 5. Inspect `docs/RELEASE_CHECKLIST.md`, `docs/PRODUCTION_SMOKE.json`, and the
-   schema-v3 deployment receipt for the exact commit, Worker version, Container
+   schema-v4 deployment receipt for the exact commit, Worker version, Container
    digest, asset hashes, and smoke outcomes. If those identifiers do not agree,
    treat live qualification as not proven.
 6. Run the repository-contained verification commands documented in `README.md`

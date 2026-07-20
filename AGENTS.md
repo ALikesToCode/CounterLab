@@ -35,6 +35,12 @@ file:
 - Invoking an already-installed executable outside the repository is permitted
   only when required, but all file inputs, outputs, configuration, caches,
   profiles, and other filesystem side effects must remain inside the repository.
+- Narrow Playwright exception: Codex may read the installed
+  `/home/mysterious/.codex/skills/playwright/` skill and invoke the registered
+  `/home/mysterious/.local/bin/playwright-mcp-cloak` launcher. These are
+  read-only runtime dependencies; they grant no broader external filesystem
+  access. The launcher must keep all session state and evidence beneath the
+  active repository's `.playwright-cli/` directory.
 - If a required action cannot be completed within this boundary, stop and ask
   the owner. Never broaden the filesystem scope by assumption.
 
@@ -94,6 +100,53 @@ workflow with explicit authority boundaries.
 - Use CloakBrowser at `/home/mysterious/.local/bin/cloakbrowser-chromium` for
   Chromium-based Playwright and browser automation unless a task explicitly
   requires another browser.
+
+## Playwright and browser-evidence protocol
+
+- Use the installed `playwright` skill whenever work requires opening or
+  rendering a webpage, interacting with controls, testing a UI journey,
+  inspecting responsive behavior, capturing screenshots, extracting rendered
+  content, or reviewing console and network activity.
+- In ordinary Codex sessions, use the `playwright_safe` MCP namespace. It owns
+  the verified CloakBrowser lifecycle. Inside `codex-safe`, either
+  `playwright_safe` or the verified `/home/mysterious/.local/bin/playwright-cli`
+  wrapper is allowed. Never use the skill's `npx` fallback, install a Playwright
+  browser, or silently launch stock Chromium.
+- Treat the `@Chrome` plugin as a separate regular-Chrome surface. Do not use it
+  as evidence that a CloakBrowser-required journey was tested.
+- Begin baseline journeys from a clean browser context with repository-provided
+  samples or synthetic data. Never use private user data.
+- Follow the semantic interaction loop: navigate, snapshot, interact using refs
+  from the latest snapshot, then snapshot again after navigation or substantial
+  UI changes. When a ref is stale, re-snapshot instead of bypassing it with
+  unrestricted page code.
+- Use accessibility snapshots to understand structure and stable refs. Use
+  screenshots to assess hierarchy, density, clipping, contrast, animation, and
+  visual polish. Important visual claims require both forms of evidence when
+  applicable.
+- For important journeys, record the exact URL, date and time, viewport,
+  browser state, cold or warm status, exact actions, elapsed time, completion
+  status, confusion points, console errors, failed or slow requests, and
+  screenshot paths. Repeat a failure before marking it reproducible.
+- Exercise the required responsive matrix when relevant: approximately
+  `375x812`, `390x844`, `768x1024`, `1366x768`, `1440x900`, and `1920x1080`.
+  Also test keyboard navigation, visible focus, 200% zoom, reduced motion, long
+  content, narrow visualizations, and touch target sizing when the scope calls
+  for accessibility or release validation.
+- Keep immediate Playwright output under the repository's `.playwright-cli/`
+  directory. Curate durable audit evidence into the active
+  `docs/audits/<audit-name>/evidence/` subtree and reference it from the evidence
+  index. The launcher may clean only its own
+  `.playwright-cli/.runtime/session.*` directories after a session. Do not
+  delete pre-existing browser evidence without owner approval.
+- Inspect `browser_console_messages` and `browser_network_requests` after
+  reproducing a defect and after completing a release-critical path. Preserve
+  only sanitized evidence; never record credentials, raw private data, or
+  sensitive headers.
+- If `playwright_safe` is unavailable, run the read-only check
+  `codex mcp get playwright_safe`, report the limitation, and require a fresh
+  Codex session. Do not fall back to another browser or claim the journey was
+  tested.
 
 ## Prize-one scope and sequencing
 

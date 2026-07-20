@@ -1,5 +1,11 @@
 # CounterLab first-prize deep audit
 
+> Historical audit checkpoint: this report describes the public and repository
+> state observed on 2026-07-18–19. Current source status, later fixes, test
+> evidence, and remaining release gates are tracked in `docs/PROGRESS.md` and
+> `docs/RELEASE_CHECKLIST.md`. Audit-time scores and issue counts are not claims
+> about a later unqualified worktree or deployment.
+
 Audit window: 2026-07-18–19 UTC
 Public target: `https://counterlab.cserules.workers.dev/` and `/judge`
 Public Worker tested: `bef5edb7-6a76-4c72-94be-fcb2b94e668d` (#82), deployment `dad4cd71-3dcd-4b00-a1b6-d16068d53c81`
@@ -40,6 +46,7 @@ Audit mode: read-only public inspection and repository analysis; audit files onl
 | `15_EVIDENCE_INDEX.md`                                 | Evidence provenance, hashes, limitations, and canonical-source notes.                                    |
 | `16_IMPLEMENTATION_SWARM_PROMPT.md`                    | Complete follow-on implementation prompt; created but not executed.                                      |
 | `17_VISUAL_JUDGE_GENERATIVE_UI_AND_AGENTIC_CONTROL.md` | Visual first-30-seconds audit, all-stage visual map, trusted generative UI, and bounded GPT-5.6 control. |
+| `18_CURRENT_PROGRESS_AND_NEXT_AGENT_HANDOFF.md`        | Current-source reconciliation, completion status, remaining blockers, and a paste-ready next-agent TODO. |
 
 ## Source-of-truth resolution
 
