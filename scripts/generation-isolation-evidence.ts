@@ -1,4 +1,7 @@
 import { createHash } from "node:crypto";
+import { lstat, realpath, stat, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   GENERATION_ISOLATION_MOUNT_POLICY_VERSION,
@@ -179,4 +182,114 @@ export function parseQualifiedRunnerReleaseV6(
     },
   });
   return release;
+}
+
+function isContained(root: string, candidate: string): boolean {
+  const fromRoot = relative(root, candidate);
+  return (
+    fromRoot === "" || (!fromRoot.startsWith("..") && !isAbsolute(fromRoot))
+  );
+}
+
+async function newContainedOutput(root: string, requested: string) {
+  const output = resolve(root, requested);
+  if (!isContained(root, output) || output === root) {
+    throw new Error(
+      "Generation-isolation output must remain in the repository",
+    );
+  }
+  let current = root;
+  for (const component of relative(root, output).split(sep)) {
+    current = resolve(current, component);
+    try {
+      const metadata = await lstat(current);
+      if (metadata.isSymbolicLink()) {
+        throw new Error("Generation-isolation output path contains a symlink");
+      }
+      if (!isContained(root, await realpath(current))) {
+        throw new Error(
+          "Generation-isolation output path escapes the repository",
+        );
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") break;
+      throw error;
+    }
+  }
+  const parent = await realpath(dirname(output));
+  if (!isContained(root, parent) || !(await stat(parent)).isDirectory()) {
+    throw new Error("Generation-isolation output parent is not contained");
+  }
+  try {
+    await lstat(output);
+    throw new Error("Generation-isolation output already exists");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  return output;
+}
+
+function cliArguments(argv: string[]): Record<string, string> {
+  const allowed = new Set([
+    "--source-commit",
+    "--source-tree-sha256",
+    "--local-image-tag",
+    "--local-image-digest",
+    "--image-user",
+    "--startup-probe-json",
+    "--verified-at",
+    "--output",
+  ]);
+  const values = new Map<string, string>();
+  for (let index = 0; index < argv.length; index += 2) {
+    const flag = argv[index];
+    const value = argv[index + 1];
+    if (
+      flag === undefined ||
+      value === undefined ||
+      !allowed.has(flag) ||
+      values.has(flag)
+    ) {
+      throw new Error("Invalid generation-isolation evidence arguments");
+    }
+    values.set(flag, value);
+  }
+  if (values.size !== allowed.size) {
+    throw new Error("Incomplete generation-isolation evidence arguments");
+  }
+  return Object.fromEntries(values);
+}
+
+async function main(): Promise<void> {
+  const root = await realpath(resolve(import.meta.dirname, ".."));
+  const values = cliArguments(process.argv.slice(2));
+  const output = await newContainedOutput(root, values["--output"] ?? "");
+  const result = createGenerationIsolationEvidence({
+    sourceCommit: values["--source-commit"] ?? "",
+    sourceTreeSha256: values["--source-tree-sha256"] ?? "",
+    localImageTag: values["--local-image-tag"] ?? "",
+    localImageDigest: values["--local-image-digest"] ?? "",
+    imageUser: values["--image-user"] ?? "",
+    startupProbe: JSON.parse(values["--startup-probe-json"] ?? "") as unknown,
+    verifiedAt: values["--verified-at"] ?? "",
+  });
+  await writeFile(output, `${JSON.stringify(result.evidence, null, 2)}\n`, {
+    encoding: "utf8",
+    flag: "wx",
+    mode: 0o600,
+  });
+  console.log(
+    JSON.stringify({
+      evidenceSha256: result.evidenceSha256,
+      probeSha256: result.probeSha256,
+      output: relative(root, output),
+    }),
+  );
+}
+
+if (
+  process.argv[1] !== undefined &&
+  fileURLToPath(import.meta.url) === resolve(process.argv[1])
+) {
+  await main();
 }

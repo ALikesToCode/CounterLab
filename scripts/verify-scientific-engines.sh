@@ -6,6 +6,7 @@ IMAGE=""
 REGISTRY_ONLY=0
 REQUIRE_PRODUCTION=0
 RUNTIME_REPORT=""
+GENERATION_ISOLATION_REPORT=""
 ENVIRONMENT_HELPER="${ROOT_DIR}/scripts/prepare-contained-shell-environment.sh"
 
 [[ -f "${ENVIRONMENT_HELPER}" && ! -L "${ENVIRONMENT_HELPER}" ]] || {
@@ -24,6 +25,8 @@ Options:
   --registry-only        Skip Proof Capsule linkage and permit an omitted runtime image.
   --require-production   Reject a local-candidate runtime manifest.
   --runtime-report PATH Persist the exact runtime report to a new contained file.
+  --generation-isolation-report PATH
+                         Persist source/image-bound generation isolation evidence.
   --help                 Show this help.
 
 The default release gate fails closed unless an image is supplied and Proof Capsule
@@ -51,6 +54,11 @@ while [[ $# -gt 0 ]]; do
       RUNTIME_REPORT="$2"
       shift 2
       ;;
+    --generation-isolation-report)
+      [[ $# -ge 2 ]] || { echo "--generation-isolation-report requires a value" >&2; exit 2; }
+      GENERATION_ISOLATION_REPORT="$2"
+      shift 2
+      ;;
     --help|-h)
       usage
       exit 0
@@ -72,6 +80,16 @@ if [[ -n "${RUNTIME_REPORT}" ]]; then
   node scripts/assert-contained-path.mjs "${RUNTIME_REPORT}"
   [[ ! -e "${RUNTIME_REPORT}" && ! -L "${RUNTIME_REPORT}" ]] || {
     echo "Runtime report output must be a new repository-contained file." >&2
+    exit 2
+  }
+fi
+if [[ -n "${GENERATION_ISOLATION_REPORT}" ]]; then
+  if [[ "${GENERATION_ISOLATION_REPORT}" != /* ]]; then
+    GENERATION_ISOLATION_REPORT="${ROOT_DIR}/${GENERATION_ISOLATION_REPORT#./}"
+  fi
+  node scripts/assert-contained-path.mjs "${GENERATION_ISOLATION_REPORT}"
+  [[ ! -e "${GENERATION_ISOLATION_REPORT}" && ! -L "${GENERATION_ISOLATION_REPORT}" ]] || {
+    echo "Generation-isolation output must be a new repository-contained file." >&2
     exit 2
   }
 fi
@@ -137,6 +155,7 @@ DOCKER_COMMAND=(
 
 IMAGE_DIGEST="$("${DOCKER_COMMAND[@]}" image inspect "${IMAGE}" --format '{{.Id}}')"
 SOURCE_COMMIT="$("${DOCKER_COMMAND[@]}" image inspect "${IMAGE}" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
+SOURCE_TREE_SHA256="$("${DOCKER_COMMAND[@]}" image inspect "${IMAGE}" --format '{{index .Config.Labels "io.counterlab.source-tree-sha256"}}')"
 IMAGE_USER="$("${DOCKER_COMMAND[@]}" image inspect "${IMAGE}" --format '{{.Config.User}}')"
 if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
   echo "Runner image does not expose a valid sha256 image ID." >&2
@@ -144,6 +163,10 @@ if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
 fi
 if [[ ! "${SOURCE_COMMIT}" =~ ^[a-f0-9]{40}$ ]]; then
   echo "Runner image has an unbound or invalid OCI source revision." >&2
+  exit 1
+fi
+if [[ ! "${SOURCE_TREE_SHA256}" =~ ^[a-f0-9]{64}$ ]]; then
+  echo "Runner image has an unbound or invalid OCI source-tree hash." >&2
   exit 1
 fi
 if [[ "${IMAGE_USER}" != "10001:10001" ]]; then
@@ -203,6 +226,19 @@ node -e '
     throw new Error("Runner non-root startup probe returned an invalid sentinel");
   }
 ' "${STARTUP_PROBE_OUTPUT}"
+
+if [[ -n "${GENERATION_ISOLATION_REPORT}" ]]; then
+  VERIFIED_AT="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+  node --import tsx scripts/generation-isolation-evidence.ts \
+    --source-commit "${SOURCE_COMMIT}" \
+    --source-tree-sha256 "${SOURCE_TREE_SHA256}" \
+    --local-image-tag "${IMAGE}" \
+    --local-image-digest "${IMAGE_DIGEST}" \
+    --image-user "${IMAGE_USER}" \
+    --startup-probe-json "${STARTUP_PROBE_OUTPUT}" \
+    --verified-at "${VERIFIED_AT}" \
+    --output "${GENERATION_ISOLATION_REPORT}"
+fi
 
 # The preceding probe executes the real OCI entrypoint as Config.User. This
 # second run adopts the host identity only so the exact-image verifier can read

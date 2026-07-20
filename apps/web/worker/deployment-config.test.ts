@@ -547,6 +547,13 @@ describe("Cloudflare static asset routing", () => {
     expect(probe).not.toContain("--user");
     expect(probe).not.toContain("--entrypoint");
     expect(probe).toContain('"${IMAGE}"');
+    expect(verifier).toContain("--generation-isolation-report");
+    expect(verifier).toContain(
+      '{{index .Config.Labels "io.counterlab.source-tree-sha256"}}',
+    );
+    expect(verifier).toContain(
+      "node --import tsx scripts/generation-isolation-evidence.ts",
+    );
   });
 
   it("generates a deploy config from a source-bound qualified image receipt", () => {
