@@ -3,7 +3,11 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { LabSceneDraftV2Schema, LabSceneV2Schema } from "../src/index.js";
+import {
+  LabSceneDraftV2Schema,
+  LabSceneV2Schema,
+  VerifiedLabSceneViewV1Schema,
+} from "../src/index.js";
 
 const digest = (character: string) => character.repeat(64);
 
@@ -144,6 +148,66 @@ describe("Lab Scene v2", () => {
       ),
     };
     expect(() => LabSceneV2Schema.parse(withoutBinding)).toThrow();
+  });
+
+  it("binds a verified scene to one exact authoritative result envelope", () => {
+    const resultHash = digest("c");
+    const view = {
+      schemaVersion: "1" as const,
+      scene: scene(),
+      verifiedSceneHash: digest("d"),
+      signedResult: {
+        schemaVersion: "1" as const,
+        verificationStatus: "VERIFIED" as const,
+        sceneHash: digest("d"),
+        sceneId: scene().sceneId,
+        sessionId: scene().sessionId,
+        concept: scene().concept,
+        experimentIrHash: scene().provenance.experimentIrHash,
+        discriminationContractHash:
+          scene().provenance.discriminationContractHash,
+        resultHash,
+        integrity: {
+          mode: "integrity-hashed" as const,
+          contentHash: resultHash,
+        },
+        result: { resultHash, runs: [] },
+      },
+    };
+
+    expect(VerifiedLabSceneViewV1Schema.parse(view)).toEqual(view);
+    expect(() =>
+      VerifiedLabSceneViewV1Schema.parse({
+        ...view,
+        signedResult: {
+          ...view.signedResult,
+          integrity: {
+            mode: "hmac-signed",
+            contentHash: resultHash,
+            signature: digest("f"),
+            keyId: "counterlab-result-v1",
+          },
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      VerifiedLabSceneViewV1Schema.parse({
+        ...view,
+        signedResult: {
+          ...view.signedResult,
+          integrity: {
+            mode: "integrity-hashed",
+            contentHash: digest("e"),
+          },
+        },
+      }),
+    ).toThrow(/bind the authoritative result/i);
+    expect(() =>
+      VerifiedLabSceneViewV1Schema.parse({
+        ...view,
+        signedResult: { ...view.signedResult, sceneHash: digest("f") },
+      }),
+    ).toThrow(/authority does not resolve/i);
   });
 
   it("keeps the committed JSON Schema aligned with the runtime scene", async () => {

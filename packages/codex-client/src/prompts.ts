@@ -157,6 +157,10 @@ function renderHostedScientificMethodPrompt(
   input: CompileHostedScientificMethodInput,
 ): string {
   validateHostedScientificOutputs(input.permittedOutputs);
+  const resultMetricFields =
+    input.conceptPack.id === "entity_leakage"
+      ? ["accuracy", "rocAuc"]
+      : ["accuracy", "precision", "recall", "f1", "prAuc", "rocAuc"];
   return `You are the bounded CounterLab scientific-method compiler. Turn one learner-approved Belief Spec into candidate counterexperiments and a display-only scene using only the selected Subject Pack.
 
 Authority boundary:
@@ -164,6 +168,7 @@ Authority boundary:
 - Produce discriminationContract, experimentIr, and labScene fields matching the supplied schemas. publicRationale is display-only.
 - Experiment IR selection must remain UNSELECTED. The fixed scorer, never Codex, selects the decisive experiment.
 - The Lab Scene is an unverified draft. Use GUIDED_VISUAL or EXPLANATION_ONLY, never VERIFIED_TEST or ProofBadge; fixed verification owns promotion.
+- For the current fixed-kernel release, use GUIDED_VISUAL and include at least two distinct Metric blocks. Each resultBinding must be /runs/byId/<runId>/metrics/<field>, where runId exactly matches a baseline or intervention runId shared by every candidate and field comes from the fixed binding manifest below. Bind at least two different runIds so the learner sees the changed evaluation. Do not add Prediction, chart, BoundaryMap, MotionCanvas, NotebookCell, NotebookDiff, ReasoningDiff, or ProofBadge bindings; those surfaces are not present in the authoritative result root.
 - Use operation IDs only. No literal result values are permitted. Do not include source code, commands, SQL, arbitrary formulas, imports, network actions, dynamic expressions, or raw paths.
 - Copy evidence only from the approved Belief Spec and sanitized Artifact Manifest. Do not invent cells, outputs, rows, support status, measurements, or results.
 - Preserve the supplied session, artifact, Belief Spec, Subject Pack, resource, and provenance lineage exactly.
@@ -210,6 +215,17 @@ ${json(input.conceptPack)}
 
 Fixed scorer composition requirements:
 ${json(input.conceptPack.planRequirements)}
+
+Fixed post-result Lab Scene binding manifest:
+${json({
+  schemaVersion: "1",
+  bindingRoot: "authoritative-result-v2",
+  requiredBlockType: "Metric",
+  minimumMetricBindings: 2,
+  minimumDistinctRunIds: 2,
+  resultBindingPattern: "/runs/byId/<runId>/metrics/<field>",
+  metricFields: resultMetricFields,
+})}
 
 Discrimination Contract JSON Schema:
 ${json(input.schemas.discriminationContract)}

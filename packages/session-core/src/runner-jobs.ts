@@ -47,6 +47,7 @@ export interface RunnerJobRepository {
   findReusableRequest(
     requestFingerprint: string,
   ): Promise<RunnerJob | undefined>;
+  findForSession(sessionId: string): Promise<RunnerJob[]>;
   findActiveForSession(sessionId: string): Promise<RunnerJob[]>;
   save(job: RunnerJob, expectedVersion: number): Promise<void>;
   appendEvent(
@@ -238,6 +239,26 @@ export class RunnerJobService {
       }
     }
     return structuredClone(jobs);
+  }
+
+  async listForSession(sessionId: string): Promise<RunnerJob[]> {
+    const jobs = await this.repository.findForSession(sessionId);
+    const jobIds = new Set<string>();
+    for (const job of jobs) {
+      if (job.sessionId !== sessionId || jobIds.has(job.jobId)) {
+        throw new RunnerCallbackStateError(
+          "Runner repository returned invalid session history",
+        );
+      }
+      jobIds.add(job.jobId);
+    }
+    return structuredClone(
+      [...jobs].sort(
+        (left, right) =>
+          left.createdAt.localeCompare(right.createdAt) ||
+          left.jobId.localeCompare(right.jobId),
+      ),
+    );
   }
 
   async cancelJob(jobId: string): Promise<RunnerJob> {

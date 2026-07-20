@@ -338,6 +338,33 @@ const EpistemicTokenIdSchema = z
     /^[a-z][a-z0-9._:-]{0,95}$/,
     "expected a bounded lowercase contract token",
   );
+
+export const VerifiedOperationSummaryV1Schema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    authority: z.enum([
+      "fixed-approved-sample",
+      "verified-selected-experiment-ir",
+    ]),
+    authorityHash: Sha256Schema,
+    selectionRef: EpistemicTokenIdSchema,
+    operationIds: z.array(FixedOperationIdSchema).min(1).max(8),
+  })
+  .strict()
+  .superRefine((summary, context) => {
+    if (new Set(summary.operationIds).size !== summary.operationIds.length) {
+      context.addIssue({
+        code: "custom",
+        message: "verified operation IDs must be unique",
+        path: ["operationIds"],
+      });
+    }
+  });
+
+export type VerifiedOperationSummaryV1 = z.infer<
+  typeof VerifiedOperationSummaryV1Schema
+>;
+
 const EpistemicReasonCodeSchema = z
   .string()
   .regex(/^[A-Z][A-Z0-9_]{0,95}$/, "expected an uppercase reason code");
@@ -2475,6 +2502,7 @@ export const HostedExperimentLineageV5Schema = z
       "scientific-candidate-verifier-v1",
       "scientific-candidate-verifier-v2",
       "scientific-candidate-verifier-v3",
+      "scientific-candidate-verifier-v4",
     ]),
     selectionHash: Sha256Schema,
     selectedExperimentIrHash: Sha256Schema,
@@ -3219,6 +3247,93 @@ export type VerifiedResultSet = z.infer<typeof VerifiedResultSetSchema>;
 export type LeakageVerifiedResultSet =
   z.infer<typeof VerifiedResultSetV1Schema> | HostedLeakageVerifiedResultSetV2;
 export type ImbalanceVerifiedResultSet = HostedImbalanceVerifiedResultSetV2;
+
+export const LeakageTransferSubmissionSchema = z
+  .object({
+    strategyChoice: z.enum([
+      "random_row_holdout",
+      "time_ordered_holdout",
+      "grouped_store_holdout",
+    ]),
+    riskChoice: z.enum([
+      "centered_window_reads_future",
+      "model_is_too_simple",
+      "stores_have_different_scales",
+    ]),
+    evidenceChoices: z
+      .array(
+        z.enum([
+          "center_true_uses_later_targets",
+          "random_split_mixes_dates",
+          "metric_is_mae",
+        ]),
+      )
+      .min(1)
+      .max(3),
+  })
+  .strict()
+  .superRefine((submission, context) => {
+    if (
+      new Set(submission.evidenceChoices).size !==
+      submission.evidenceChoices.length
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "transfer evidence choices must be unique",
+        path: ["evidenceChoices"],
+      });
+    }
+  });
+
+export const ImbalanceTransferSubmissionSchema = z
+  .object({
+    decisionChoice: z.enum([
+      "approve_high_accuracy",
+      "reject_accuracy_only",
+      "collect_more_negatives",
+    ]),
+    metricChoice: z.enum([
+      "accuracy",
+      "recall_and_pr_auc",
+      "negative_specificity",
+    ]),
+    evidenceChoices: z
+      .array(
+        z.enum([
+          "zero_true_positives",
+          "rare_base_rate",
+          "many_true_negatives",
+        ]),
+      )
+      .min(1)
+      .max(3),
+  })
+  .strict()
+  .superRefine((submission, context) => {
+    if (
+      new Set(submission.evidenceChoices).size !==
+      submission.evidenceChoices.length
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "transfer evidence choices must be unique",
+        path: ["evidenceChoices"],
+      });
+    }
+  });
+
+export const TransferSubmissionSchema = z.union([
+  LeakageTransferSubmissionSchema,
+  ImbalanceTransferSubmissionSchema,
+]);
+
+export type LeakageTransferSubmission = z.infer<
+  typeof LeakageTransferSubmissionSchema
+>;
+export type ImbalanceTransferSubmission = z.infer<
+  typeof ImbalanceTransferSubmissionSchema
+>;
+export type TransferSubmission = z.infer<typeof TransferSubmissionSchema>;
 
 export const TransferResultSchema = z
   .object({
@@ -4089,6 +4204,49 @@ export const PublicReplayPublicationReceiptV1Schema = z
 
 export type PublicReplayPublicationReceiptV1 = z.infer<
   typeof PublicReplayPublicationReceiptV1Schema
+>;
+
+export const PublicReplayPublicationReceiptV2Schema =
+  PublicReplayPublicationReceiptV1Schema.omit({
+    schemaVersion: true,
+    retention: true,
+  })
+    .extend({
+      schemaVersion: z.literal("2"),
+      retention: z
+        .object({
+          policy: z.literal("expires_or_revoked"),
+          revocable: z.literal(true),
+          publishedAt: z.iso.datetime({ offset: true }),
+          expiresAt: z.iso.datetime({ offset: true }),
+        })
+        .strict(),
+    })
+    .strict()
+    .superRefine((receipt, context) => {
+      if (
+        Date.parse(receipt.retention.expiresAt) <=
+        Date.parse(receipt.retention.publishedAt)
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "public replay expiry must follow publication",
+          path: ["retention", "expiresAt"],
+        });
+      }
+    });
+
+export type PublicReplayPublicationReceiptV2 = z.infer<
+  typeof PublicReplayPublicationReceiptV2Schema
+>;
+
+export const PublicReplayPublicationReceiptSchema = z.union([
+  PublicReplayPublicationReceiptV2Schema,
+  PublicReplayPublicationReceiptV1Schema,
+]);
+
+export type PublicReplayPublicationReceipt = z.infer<
+  typeof PublicReplayPublicationReceiptSchema
 >;
 
 export const ProofCapsuleRefV2Schema = ProofCapsuleRefV2BaseSchema.superRefine(

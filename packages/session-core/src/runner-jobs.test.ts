@@ -77,6 +77,12 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
     );
   }
 
+  async findForSession(sessionId: string): Promise<RunnerJob[]> {
+    return structuredClone(
+      [...this.jobs.values()].filter((job) => job.sessionId === sessionId),
+    );
+  }
+
   async findForState(input: {
     sessionId: string;
     kind: RunnerJobKind;
@@ -194,6 +200,46 @@ function service(repository = new MemoryRunnerJobRepository()) {
 }
 
 describe("RunnerJobService", () => {
+  it("returns deterministic all-status session history and rejects foreign jobs", async () => {
+    const harness = service();
+    const later = await harness.service.createJob({
+      ...jobInput(),
+      jobId: "job_z",
+    });
+    const earlier = await harness.service.createJob({
+      ...jobInput(),
+      jobId: "job_a",
+    });
+    harness.repository.jobs.set(later.jobId, {
+      ...later,
+      createdAt: earlier.createdAt,
+      updatedAt: earlier.updatedAt,
+      status: "REJECTED",
+      error: {
+        code: "TEST_REJECTED",
+        message: "The bounded test job was rejected.",
+        retryable: true,
+      },
+      runnerIdentity: "runner-history-test",
+    });
+
+    await expect(
+      harness.service.listForSession("session_live_1"),
+    ).resolves.toMatchObject([
+      { jobId: "job_a", status: "QUEUED" },
+      { jobId: "job_z", status: "REJECTED" },
+    ]);
+
+    const original = harness.repository.findForSession.bind(harness.repository);
+    harness.repository.findForSession = async (sessionId) => [
+      ...(await original(sessionId)),
+      { ...earlier, jobId: "job_foreign", sessionId: "session_foreign" },
+    ];
+    await expect(
+      harness.service.listForSession("session_live_1"),
+    ).rejects.toThrow(/invalid session history/u);
+  });
+
   it("atomically reuses one semantic request and separates interactive configurations", async () => {
     const harness = service();
     const identity = {

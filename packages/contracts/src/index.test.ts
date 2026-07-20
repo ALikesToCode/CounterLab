@@ -20,8 +20,10 @@ import {
   HostedLabLineageSchema,
   InteractiveImbalanceRunRequestSchema,
   InteractiveLeakageRunRequestSchema,
+  ImbalanceTransferSubmissionSchema,
   LearnerInteractionInputSchema,
   LearnerInteractionRecordSchema,
+  LeakageTransferSubmissionSchema,
   PatchResultSchema,
   PatchPlanV1Schema,
   PredictionContractSchema,
@@ -32,6 +34,7 @@ import {
   ProofCapsuleRefV2Schema,
   ProofCapsuleReplayReceiptV2Schema,
   PublicProofCapsuleRefV2Schema,
+  PublicReplayPublicationReceiptV2Schema,
   ReasoningDiffSchema,
   ReasoningDiffV2Schema,
   SessionModeSchema,
@@ -43,13 +46,123 @@ import {
   RunnerJobTokenClaimsSchema,
   RunnerRequestIdentityV1Schema,
   TransferResultSchema,
+  TransferSubmissionSchema,
   VerifiedResultSetSchema,
+  VerifiedOperationSummaryV1Schema,
   apiResponseSchema,
   apiSuccessSchema,
   assertTransition,
   assertRunnerJobTransition,
   migrateBeliefTestV1ToV2,
 } from "./index.js";
+
+describe("transfer submission contracts", () => {
+  it("accepts registered wrong answers but rejects unknown and duplicate IDs", () => {
+    expect(
+      LeakageTransferSubmissionSchema.parse({
+        strategyChoice: "random_row_holdout",
+        riskChoice: "model_is_too_simple",
+        evidenceChoices: ["metric_is_mae"],
+      }),
+    ).toBeDefined();
+    expect(
+      ImbalanceTransferSubmissionSchema.parse({
+        decisionChoice: "approve_high_accuracy",
+        metricChoice: "accuracy",
+        evidenceChoices: ["many_true_negatives"],
+      }),
+    ).toBeDefined();
+    expect(() =>
+      TransferSubmissionSchema.parse({
+        strategyChoice: "invented_strategy",
+        riskChoice: "model_is_too_simple",
+        evidenceChoices: ["metric_is_mae"],
+      }),
+    ).toThrow();
+    expect(() =>
+      LeakageTransferSubmissionSchema.parse({
+        strategyChoice: "time_ordered_holdout",
+        riskChoice: "centered_window_reads_future",
+        evidenceChoices: [
+          "random_split_mixes_dates",
+          "random_split_mixes_dates",
+        ],
+      }),
+    ).toThrow(/unique/i);
+    expect(() =>
+      TransferSubmissionSchema.parse({
+        strategyChoice: "time_ordered_holdout",
+        metricChoice: "recall_and_pr_auc",
+        evidenceChoices: ["zero_true_positives"],
+      }),
+    ).toThrow();
+    expect(() =>
+      ImbalanceTransferSubmissionSchema.parse({
+        decisionChoice: "reject_accuracy_only",
+        metricChoice: "recall_and_pr_auc",
+        evidenceChoices: ["rare_base_rate", "rare_base_rate"],
+      }),
+    ).toThrow(/unique/i);
+  });
+});
+
+describe("verified public operation summary", () => {
+  it("accepts only fixed, unique operation IDs bound to an authority hash", () => {
+    const summary = {
+      schemaVersion: "1",
+      authority: "verified-selected-experiment-ir",
+      authorityHash: "a".repeat(64),
+      selectionRef: "group-holdout-plus-ablation",
+      operationIds: ["leakage.random_row_split", "leakage.group_holdout"],
+    } as const;
+
+    expect(VerifiedOperationSummaryV1Schema.parse(summary)).toEqual(summary);
+    expect(() =>
+      VerifiedOperationSummaryV1Schema.parse({
+        ...summary,
+        operationIds: ["leakage.group_holdout", "leakage.group_holdout"],
+      }),
+    ).toThrow(/must be unique/i);
+    expect(() =>
+      VerifiedOperationSummaryV1Schema.parse({
+        ...summary,
+        operationIds: ["model.authored_formula"],
+      }),
+    ).toThrow();
+  });
+});
+
+describe("public replay access lifecycle", () => {
+  it("requires an exact server-owned expiry after publication", () => {
+    const receipt = {
+      schemaVersion: "2",
+      replayId: "replay_public_1",
+      replay: true,
+      label: "Verified replay",
+      concept: "entity_leakage",
+      recordedAt: "2026-07-16T10:00:00.000Z",
+      retention: {
+        policy: "expires_or_revoked",
+        revocable: true,
+        publishedAt: "2026-07-19T10:00:00.000Z",
+        expiresAt: "2026-08-18T10:00:00.000Z",
+      },
+    } as const;
+
+    expect(PublicReplayPublicationReceiptV2Schema.parse(receipt)).toEqual(
+      receipt,
+    );
+    expect(() =>
+      PublicReplayPublicationReceiptV2Schema.parse({
+        ...receipt,
+        retention: {
+          ...receipt.retention,
+          expiresAt: receipt.retention.publishedAt,
+        },
+      }),
+    ).toThrow(/expiry must follow publication/i);
+  });
+});
 
 describe("privacy-safe learner interaction contracts", () => {
   it("accepts only fixed categorical interaction shapes", () => {

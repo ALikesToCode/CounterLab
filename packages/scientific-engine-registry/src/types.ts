@@ -2,7 +2,9 @@ import { z } from "zod";
 
 import {
   ContainedRuntimeAttestationSchema,
+  ContainedRuntimeAttestationV1Schema,
   DeploymentReceiptSchema,
+  DeploymentReceiptV3Schema,
   ScientificEngineDescriptorSchema,
   ScientificEngineEvidenceCatalogSchema,
   ScientificEngineEvidenceKindSchema,
@@ -14,16 +16,23 @@ import {
   QualifiedRunnerReleaseSchema,
   QualifiedRunnerReleaseV1Schema,
   QualifiedRunnerReleaseV2Schema,
+  QualifiedRunnerReleaseV3Schema,
   ReleaseCheckReceiptSchema,
+  ReleaseCheckReceiptV1Schema,
   SubjectPackAuthorityBindingSchema,
   SubjectPackEngineBindingSchema,
   SubjectPackEngineBindingsSchema,
+  TimeoutCleanupReceiptSchema,
 } from "./schema.js";
 
 export type ContainedRuntimeAttestation = z.infer<
   typeof ContainedRuntimeAttestationSchema
 >;
+export type ContainedRuntimeAttestationV1 = z.infer<
+  typeof ContainedRuntimeAttestationV1Schema
+>;
 export type DeploymentReceipt = z.infer<typeof DeploymentReceiptSchema>;
+export type DeploymentReceiptV3 = z.infer<typeof DeploymentReceiptV3Schema>;
 
 export type ScientificEngineRole = z.infer<typeof ScientificEngineRoleSchema>;
 export type ScientificEngineDescriptor = z.infer<
@@ -65,4 +74,9 @@ export type QualifiedRunnerReleaseV1 = z.infer<
 export type QualifiedRunnerReleaseV2 = z.infer<
   typeof QualifiedRunnerReleaseV2Schema
 >;
+export type QualifiedRunnerReleaseV3 = z.infer<
+  typeof QualifiedRunnerReleaseV3Schema
+>;
+export type TimeoutCleanupReceipt = z.infer<typeof TimeoutCleanupReceiptSchema>;
 export type ReleaseCheckReceipt = z.infer<typeof ReleaseCheckReceiptSchema>;
+export type ReleaseCheckReceiptV1 = z.infer<typeof ReleaseCheckReceiptV1Schema>;

@@ -4,8 +4,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   DeploymentReceiptSchema,
+  DeploymentReceiptV3Schema,
   QualifiedRunnerReleaseSchema,
   QualifiedRunnerReleaseV2Schema,
+  QualifiedRunnerReleaseV3Schema,
 } from "../src/index";
 import * as releaseTools from "../../../scripts/prepare-qualified-deploy";
 
@@ -35,7 +37,7 @@ describe("qualified runner release schema", () => {
     expect(() => QualifiedRunnerReleaseSchema.parse(legacyReceipt())).toThrow();
   });
 
-  it("creates a runtime-bound promoted v3 receipt from recomputed evidence", () => {
+  it("creates a runtime-bound promoted v4 receipt from recomputed evidence", () => {
     const sourceCommit = "a".repeat(40);
     const evidenceCommit = "2".repeat(40);
     const registryImage = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
@@ -61,6 +63,8 @@ describe("qualified runner release schema", () => {
         engineAuthorityHash: "f".repeat(64),
         runtimeManifestHash: "1".repeat(64),
         runtimeToolchainSha256: "4".repeat(64),
+        runtimePolicySha256: "0".repeat(64),
+        proofDependencyManifestSha256: "1".repeat(64),
         toolchainLockSha256: "5".repeat(64),
         runtimeAdapterSha256: "6".repeat(64),
         buildctlSha256: "7".repeat(64),
@@ -73,6 +77,16 @@ describe("qualified runner release schema", () => {
         adapterOciArchiveSha256: "d".repeat(64),
         adapterOciRevision: sourceCommit,
         adapterOciSourceTreeSha256: "c".repeat(64),
+        limitMode: "container-cgroup-and-process-rlimit",
+        aggregateLimitIntentEnforced: true,
+        aggregateLimitEvidenceSha256: "e".repeat(64),
+        timeoutCleanupReceipt: `node_modules/.cache/counterlab-v6.1/releases/timeout-cleanup-${sourceCommit}.json`,
+        timeoutCleanupReceiptSha256: "e".repeat(64),
+        timeoutCleanupPayloadSha256: "f".repeat(64),
+        timeoutRunControlReceiptSha256: "0".repeat(64),
+        timeoutRootlessReceiptSha256: "1".repeat(64),
+        timeoutRuntimeSessionId: "rt-v61-test1",
+        timeoutVerifiedAt: "2026-07-16T16:24:00.000Z",
         currentCommit: evidenceCommit,
         sourceIsAncestor: true,
         changedPaths: ["scientific-engines/snapshot.json"],
@@ -85,11 +99,48 @@ describe("qualified runner release schema", () => {
     );
 
     expect(QualifiedRunnerReleaseSchema.parse(receipt)).toMatchObject({
-      schemaVersion: "3",
+      schemaVersion: "4",
       evidenceCommit,
       registryImage,
       registryDigest: `sha256:${"3".repeat(64)}`,
+      limitMode: "container-cgroup-and-process-rlimit",
+      aggregateLimitIntentEnforced: true,
     });
+
+    expect(() =>
+      QualifiedRunnerReleaseSchema.parse({
+        ...(receipt as Record<string, unknown>),
+        aggregateLimitIntentEnforced: false,
+      }),
+    ).toThrow();
+  });
+
+  it("retains strict parsing for historical v3 receipts", () => {
+    const sourceCommit = "a".repeat(40);
+    expect(
+      QualifiedRunnerReleaseV3Schema.parse({
+        ...legacyReceipt(),
+        schemaVersion: "3",
+        runtimeToolchainSha256: "4".repeat(64),
+        toolchainLockSha256: "5".repeat(64),
+        runtimeAdapterSha256: "6".repeat(64),
+        buildctlSha256: "7".repeat(64),
+        buildkitdSha256: "8".repeat(64),
+        buildkitConfigSha256: "9".repeat(64),
+        adapterDockerfileSha256: "a".repeat(64),
+        adapterImageTag: `counterlab-adapter:git-${sourceCommit}`,
+        adapterImageDigest: `sha256:${"b".repeat(64)}`,
+        adapterManifestDigest: `sha256:${"c".repeat(64)}`,
+        adapterOciArchiveSha256: "d".repeat(64),
+        adapterOciRevision: sourceCommit,
+        adapterOciSourceTreeSha256: "c".repeat(64),
+        registryImage: `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`,
+        registryDigest: `sha256:${"3".repeat(64)}`,
+        registryResolvedAt: "2026-07-16T16:25:00.000Z",
+        qualifiedAt: "2026-07-16T16:30:00.000Z",
+        verifierVersion: "counterlab-release-v3",
+      }),
+    ).toMatchObject({ schemaVersion: "3" });
   });
 
   it("retains strict parsing for historical v2 receipts", () => {
@@ -127,6 +178,32 @@ describe("qualified runner release schema", () => {
       ]),
     );
   });
+
+  it("publishes the timeout-bound v4 receipt as generated JSON Schema", () => {
+    const path = resolve(
+      process.cwd(),
+      "scientific-engines/schemas/qualified-runner-release-v4.schema.json",
+    );
+    expect(existsSync(path)).toBe(true);
+    const schema = JSON.parse(readFileSync(path, "utf8")) as {
+      properties?: { schemaVersion?: { const?: string } };
+      required?: string[];
+    };
+    expect(schema.properties?.schemaVersion?.const).toBe("4");
+    expect(schema.required).toEqual(
+      expect.arrayContaining([
+        "timeoutCleanupReceipt",
+        "timeoutCleanupReceiptSha256",
+        "timeoutRunControlReceiptSha256",
+        "timeoutRootlessReceiptSha256",
+        "limitMode",
+        "aggregateLimitIntentEnforced",
+        "aggregateLimitEvidenceSha256",
+        "runtimePolicySha256",
+        "proofDependencyManifestSha256",
+      ]),
+    );
+  });
 });
 
 describe("deployment receipt schema", () => {
@@ -135,7 +212,7 @@ describe("deployment receipt schema", () => {
     const runner = "b".repeat(40);
     const digest = `sha256:${"c".repeat(64)}`;
     return {
-      schemaVersion: "3",
+      schemaVersion: "4",
       status: "DEPLOYED",
       workerName: "counterlab",
       productionOrigin: "https://counterlab.cserules.workers.dev",
@@ -145,7 +222,11 @@ describe("deployment receipt schema", () => {
       qualifiedRunnerReceiptSha256: "1".repeat(64),
       releaseCheckReceiptSha256: "2".repeat(64),
       releaseCheckCheckedAt: "2026-07-19T00:02:00.000Z",
+      timeoutCleanupReceiptSha256: "d".repeat(64),
+      aggregateLimitEvidenceSha256: "6".repeat(64),
       runtimeToolchainSha256: "3".repeat(64),
+      runtimePolicySha256: "d".repeat(64),
+      proofDependencyManifestSha256: "e".repeat(64),
       runtimeAdapterSha256: "4".repeat(64),
       adapterImageDigest: `sha256:${"5".repeat(64)}`,
       workerVersionId: "11111111-2222-3333-4444-555555555555",
@@ -156,23 +237,29 @@ describe("deployment receipt schema", () => {
       containerImage: `registry.cloudflare.com/account/counterlab-runner@${digest}`,
       containerState: "active",
       containerImageDigest: digest,
+      workerArtifactClassification: "PROCESS_BOUND_PARTIAL",
+      workerArtifactManifestSha256: "f".repeat(64),
       deployConfigSha256: "6".repeat(64),
       workerBundleSha256: "7".repeat(64),
       clientAssetsSha256: "8".repeat(64),
       clientAssetCount: 9,
-      dryRunSha256: "9".repeat(64),
-      dryRunFileCount: 10,
+      clientPublicAssetsSha256: "9".repeat(64),
+      clientPublicAssetCount: 7,
+      viteVersion: "8.1.4",
+      wranglerVersion: "4.110.0",
+      dryRunSha256: "7".repeat(64),
+      dryRunFileCount: 1,
       deploymentStatusSha256: "a".repeat(64),
       workerVersionSha256: "b".repeat(64),
       containerStatusSha256: "c".repeat(64),
       deployedAt: "2026-07-19T00:03:00.000Z",
-      verifierVersion: "counterlab-deployment-v3",
+      verifierVersion: "counterlab-deployment-v4",
     } as const;
   }
 
   it("binds the deployed Worker, Container, release checks, and exact artifacts", () => {
     expect(DeploymentReceiptSchema.parse(receipt())).toMatchObject({
-      schemaVersion: "3",
+      schemaVersion: "4",
       status: "DEPLOYED",
       workerName: "counterlab",
     });
@@ -194,6 +281,44 @@ describe("deployment receipt schema", () => {
         generationFilesystemReadIsolation: "OS_ENFORCED",
       }),
     ).toThrow();
+  });
+
+  it("rejects a dry-run projection that changes bytes or contains another file", () => {
+    expect(() =>
+      DeploymentReceiptSchema.parse({
+        ...receipt(),
+        dryRunSha256: "0".repeat(64),
+      }),
+    ).toThrow(/equal the frozen Worker bundle/u);
+    expect(() =>
+      DeploymentReceiptSchema.parse({
+        ...receipt(),
+        dryRunFileCount: 2,
+      }),
+    ).toThrow();
+  });
+
+  it("retains strict parsing for historical v3 deployment receipts", () => {
+    const {
+      timeoutCleanupReceiptSha256: _timeoutCleanupReceiptSha256,
+      aggregateLimitEvidenceSha256: _aggregateLimitEvidenceSha256,
+      runtimePolicySha256: _runtimePolicySha256,
+      proofDependencyManifestSha256: _proofDependencyManifestSha256,
+      workerArtifactClassification: _workerArtifactClassification,
+      workerArtifactManifestSha256: _workerArtifactManifestSha256,
+      clientPublicAssetsSha256: _clientPublicAssetsSha256,
+      clientPublicAssetCount: _clientPublicAssetCount,
+      viteVersion: _viteVersion,
+      wranglerVersion: _wranglerVersion,
+      ...historical
+    } = receipt();
+    expect(
+      DeploymentReceiptV3Schema.parse({
+        ...historical,
+        schemaVersion: "3",
+        verifierVersion: "counterlab-deployment-v3",
+      }),
+    ).toMatchObject({ schemaVersion: "3" });
   });
 
   it("publishes the strict v3 deployment receipt as generated JSON Schema", () => {
@@ -218,6 +343,37 @@ describe("deployment receipt schema", () => {
         "adapterImageDigest",
         "workerBundleSha256",
         "clientAssetsSha256",
+      ]),
+    );
+  });
+
+  it("publishes the timeout-bound v4 deployment receipt as generated JSON Schema", () => {
+    const path = resolve(
+      process.cwd(),
+      "scientific-engines/schemas/deployment-receipt-v4.schema.json",
+    );
+    expect(existsSync(path)).toBe(true);
+    const schema = JSON.parse(readFileSync(path, "utf8")) as {
+      properties?: {
+        schemaVersion?: { const?: string };
+        dryRunFileCount?: { const?: number };
+      };
+      required?: string[];
+    };
+    expect(schema.properties?.schemaVersion?.const).toBe("4");
+    expect(schema.properties?.dryRunFileCount?.const).toBe(1);
+    expect(schema.required).toEqual(
+      expect.arrayContaining([
+        "timeoutCleanupReceiptSha256",
+        "aggregateLimitEvidenceSha256",
+        "runtimePolicySha256",
+        "proofDependencyManifestSha256",
+        "workerArtifactClassification",
+        "workerArtifactManifestSha256",
+        "clientPublicAssetsSha256",
+        "clientPublicAssetCount",
+        "viteVersion",
+        "wranglerVersion",
       ]),
     );
   });

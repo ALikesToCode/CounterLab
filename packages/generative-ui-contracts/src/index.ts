@@ -323,6 +323,78 @@ export const LabSceneV2Schema = z
     }
   });
 
+const TrustedLabSceneIntegrityV1Schema = z
+  .object({
+    mode: z.literal("integrity-hashed"),
+    contentHash: Sha256,
+  })
+  .strict();
+
+export const TrustedLabSceneResultEnvelopeV1Schema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    verificationStatus: z.literal("VERIFIED"),
+    sceneHash: Sha256,
+    sceneId: BlockId,
+    sessionId: NonEmptyString,
+    concept: ConceptIdSchema,
+    experimentIrHash: Sha256,
+    discriminationContractHash: Sha256,
+    resultHash: Sha256,
+    integrity: TrustedLabSceneIntegrityV1Schema,
+    result: z.record(z.string(), z.unknown()),
+  })
+  .strict()
+  .superRefine((envelope, context) => {
+    if (envelope.integrity.contentHash !== envelope.resultHash) {
+      context.addIssue({
+        code: "custom",
+        message: "scene result integrity must bind the authoritative result",
+        path: ["integrity", "contentHash"],
+      });
+    }
+    if (envelope.result.resultHash !== envelope.resultHash) {
+      context.addIssue({
+        code: "custom",
+        message: "scene result payload hash must match its envelope",
+        path: ["result", "resultHash"],
+      });
+    }
+  });
+
+export const VerifiedLabSceneViewV1Schema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    scene: LabSceneV2Schema,
+    verifiedSceneHash: Sha256,
+    signedResult: TrustedLabSceneResultEnvelopeV1Schema,
+  })
+  .strict()
+  .superRefine((view, context) => {
+    const envelope = view.signedResult;
+    if (
+      envelope.sceneHash !== view.verifiedSceneHash ||
+      envelope.sceneId !== view.scene.sceneId ||
+      envelope.sessionId !== view.scene.sessionId ||
+      envelope.concept !== view.scene.concept ||
+      envelope.experimentIrHash !== view.scene.provenance.experimentIrHash ||
+      envelope.discriminationContractHash !==
+        view.scene.provenance.discriminationContractHash
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "verified scene view authority does not resolve",
+        path: ["signedResult"],
+      });
+    }
+  });
+
 export type LabSceneBlockV2 = z.infer<typeof LabSceneBlockV2Schema>;
 export type LabSceneDraftV2 = z.infer<typeof LabSceneDraftV2Schema>;
 export type LabSceneV2 = z.infer<typeof LabSceneV2Schema>;
+export type TrustedLabSceneResultEnvelopeV1 = z.infer<
+  typeof TrustedLabSceneResultEnvelopeV1Schema
+>;
+export type VerifiedLabSceneViewV1 = z.infer<
+  typeof VerifiedLabSceneViewV1Schema
+>;

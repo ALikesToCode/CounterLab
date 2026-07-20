@@ -14,6 +14,7 @@ import {
   ReasoningDiffSchema,
   ReasoningDiffV2Schema,
   TransferResultSchema,
+  VerifiedOperationSummaryV1Schema,
   VerifiedResultSetSchema,
   type BeliefSpecV2,
 } from "@counterlab/contracts";
@@ -501,15 +502,24 @@ export class SessionService {
     );
   }
 
-  async startLabCompilation(sessionId: string): Promise<CounterLabSession> {
+  async startLabCompilation(
+    sessionId: string,
+    provenance: {
+      actor?: "system";
+      authority?: "fixed-approved-sample" | "runtime-codex-requested";
+    } = {},
+  ): Promise<CounterLabSession> {
     return this.transition(
       sessionId,
       "LAB_COMPILING",
       {},
       {
-        actor: "codex",
+        actor: provenance.actor ?? "system",
         kind: "lab.compilation_started",
-        payload: {},
+        payload:
+          provenance.authority === undefined
+            ? {}
+            : { authority: provenance.authority },
       },
     );
   }
@@ -534,6 +544,7 @@ export class SessionService {
     sessionId: string,
     verification: unknown,
     evidenceHashes: string[] = [],
+    verifiedOperationSummary?: unknown,
   ): Promise<CounterLabSession> {
     const validatedEvidenceHashes = evidenceHashes.map((hash, index) => {
       if (!/^[a-f0-9]{64}$/.test(hash)) {
@@ -543,6 +554,21 @@ export class SessionService {
       }
       return hash;
     });
+    const verificationPayload = asJsonRecord(verification, "verification");
+    if ("verifiedOperationSummary" in verificationPayload) {
+      throw new SessionInputError(
+        "verification cannot define the reserved verifiedOperationSummary field",
+      );
+    }
+    const eventPayload =
+      verifiedOperationSummary === undefined
+        ? verificationPayload
+        : {
+            ...verificationPayload,
+            verifiedOperationSummary: VerifiedOperationSummaryV1Schema.parse(
+              verifiedOperationSummary,
+            ),
+          };
     return this.transition(
       sessionId,
       "LAB_VERIFIED",
@@ -550,7 +576,7 @@ export class SessionService {
       {
         actor: "verifier",
         kind: "lab.verified",
-        payload: asJsonRecord(verification, "verification"),
+        payload: eventPayload,
         outputHashes: [
           ...new Set(validatedEvidenceHashes),
           await hashCanonical(verification),
@@ -865,6 +891,9 @@ export class SessionService {
         "Rejected evidence cannot advance to transfer",
       );
     }
+    if (current.state === "TRANSFER_IN_PROGRESS") {
+      return structuredClone(current);
+    }
     return this.transitionFrom(
       current,
       "TRANSFER_IN_PROGRESS",
@@ -902,7 +931,13 @@ export class SessionService {
     );
   }
 
-  async startPatchCompilation(sessionId: string): Promise<CounterLabSession> {
+  async startPatchCompilation(
+    sessionId: string,
+    provenance: {
+      actor?: "system";
+      authority?: "fixed-approved-sample" | "runtime-codex-requested";
+    } = {},
+  ): Promise<CounterLabSession> {
     const current = await this.requireSession(sessionId);
     const authority = await resolveSessionEvidenceAuthority(current);
     if (authority.verdict === "REJECTED") {
@@ -918,9 +953,12 @@ export class SessionService {
       "PATCH_COMPILING",
       {},
       {
-        actor: "codex",
+        actor: provenance.actor ?? "system",
         kind: "patch.compilation_started",
-        payload: {},
+        payload:
+          provenance.authority === undefined
+            ? {}
+            : { authority: provenance.authority },
         inputHashes: await sessionEvidenceInputHashes(authority),
       },
     );
@@ -981,7 +1019,11 @@ export class SessionService {
       {
         actor: "verifier",
         kind: "patch.verified",
-        payload: { status: parsed.status, resultHash: parsed.resultHash },
+        payload: {
+          status: parsed.status,
+          resultHash: parsed.resultHash,
+          ...(patchAuthority === undefined ? {} : { patchAuthority }),
+        },
         outputHashes: [
           parsed.resultHash,
           parsed.patchHash,

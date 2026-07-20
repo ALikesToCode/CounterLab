@@ -588,6 +588,50 @@ describe("SessionService state machine", () => {
     repository.close();
   });
 
+  it("records compiler dispatch as requested until verifier-bound artifacts exist", async () => {
+    const { service, repository } = memoryService();
+    await service.createSession({
+      id: "session-1",
+      artifactId: "artifact-1",
+      mode: { kind: "live_notebook" },
+    });
+    await service.proposeBeliefSpecV2(
+      "session-1",
+      migrateBeliefTestV1ToV2(beliefTest),
+    );
+    await service.confirmBeliefTest("session-1");
+    await service.commitPrediction("session-1", prediction);
+    await service.startLabCompilation("session-1", {
+      actor: "system",
+      authority: "runtime-codex-requested",
+    });
+
+    let events = await service.listEvents("session-1");
+    expect(events.at(-1)).toMatchObject({
+      actor: "system",
+      kind: "lab.compilation_started",
+      payload: { authority: "runtime-codex-requested" },
+    });
+    expect(events.some((event) => event.actor === "codex")).toBe(false);
+
+    const beliefSpec = (await service.getSession("session-1")).beliefSpec;
+    const lineage = await scientificLineage(beliefSpec);
+    await service.verifyLab("session-1", lineage);
+    events = await service.listEvents("session-1");
+    expect(events.at(-1)).toMatchObject({
+      actor: "verifier",
+      kind: "lab.verified",
+      payload: {
+        status: "VERIFIED",
+        source: "hosted-experiment-ir-v5",
+        jobId: lineage.jobId,
+        compilerOutputFileHashes: lineage.compilerOutputFileHashes,
+      },
+    });
+    expect(events.some((event) => event.actor === "codex")).toBe(false);
+    repository.close();
+  });
+
   it("atomically persists a supported epistemic result, verdict, and report authority", async () => {
     const { service, repository } = memoryService();
     await throughVerifiedLab(service);
@@ -1038,14 +1082,26 @@ describe("SessionService state machine", () => {
 
     const adapterHash = "a".repeat(64);
     const verifierHash = "b".repeat(64);
-    await service.verifyLab("session-1", { status: "VERIFIED" }, [
-      adapterHash,
-      verifierHash,
-      adapterHash,
-    ]);
-    expect(
-      (await service.listEvents("session-1")).at(-1)?.outputHashes,
-    ).toEqual(expect.arrayContaining([adapterHash, verifierHash]));
+    const operationSummary = {
+      schemaVersion: "1",
+      authority: "fixed-approved-sample",
+      authorityHash: adapterHash,
+      selectionRef: "stored-approved-leakage-v1",
+      operationIds: ["leakage.random_row_split", "leakage.group_holdout"],
+    } as const;
+    await service.verifyLab(
+      "session-1",
+      { status: "VERIFIED" },
+      [adapterHash, verifierHash, adapterHash],
+      operationSummary,
+    );
+    const verifiedEvent = (await service.listEvents("session-1")).at(-1);
+    expect(verifiedEvent?.outputHashes).toEqual(
+      expect.arrayContaining([adapterHash, verifierHash]),
+    );
+    expect(verifiedEvent?.payload).toMatchObject({
+      verifiedOperationSummary: operationSummary,
+    });
 
     const second = memoryService();
     await second.service.createSession({
@@ -1070,6 +1126,14 @@ describe("SessionService state machine", () => {
         "not-a-hash",
       ]),
     ).rejects.toThrow(/SHA-256/);
+    await expect(
+      second.service.verifyLab(
+        "session-2",
+        { status: "VERIFIED" },
+        [adapterHash],
+        { ...operationSummary, operationIds: ["model.authored_formula"] },
+      ),
+    ).rejects.toThrow();
     repository.close();
     second.repository.close();
   });

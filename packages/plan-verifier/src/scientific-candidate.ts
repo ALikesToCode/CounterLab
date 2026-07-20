@@ -20,7 +20,10 @@ import {
   scoreExperiments,
   type ExperimentSelection,
 } from "@counterlab/experiment-scorer";
-import { LabSceneV2Schema } from "@counterlab/generative-ui-contracts";
+import {
+  LabSceneV2Schema,
+  type LabSceneV2,
+} from "@counterlab/generative-ui-contracts";
 import { hashCanonical } from "@counterlab/session-core";
 
 const PublicRationaleSchema = z
@@ -68,7 +71,8 @@ export type ScientificCandidateReportV1 = {
   verifierVersion:
     | "scientific-candidate-verifier-v1"
     | "scientific-candidate-verifier-v2"
-    | "scientific-candidate-verifier-v3";
+    | "scientific-candidate-verifier-v3"
+    | "scientific-candidate-verifier-v4";
   discriminationContractHash: string;
   rawExperimentIrHash: string;
   labSceneHash: string;
@@ -229,6 +233,193 @@ function fixedPackSnapshot(
       : {}),
     ...(includeTransferTask ? { transferTask: pack.transferTask } : {}),
     planRequirements: pack.experimentPlanRules,
+  };
+}
+
+const RESULT_METRIC_FIELDS = {
+  entity_leakage: ["accuracy", "rocAuc"],
+  class_imbalance: ["accuracy", "precision", "recall", "f1", "prAuc", "rocAuc"],
+} as const;
+
+const FIXED_SCENE_COPY = {
+  entity_leakage: {
+    title: "Does the score survive a whole-customer holdout?",
+    assumptions: ["The fixed kernel executes only registered operations."],
+    limitations: ["No result is shown before external verification."],
+  },
+  class_imbalance: {
+    title: "Does accuracy hide missed rare cases?",
+    assumptions: ["The fixed kernel computes every class-specific metric."],
+    limitations: ["No result is shown before external verification."],
+  },
+} as const;
+
+const FIXED_METRIC_NAMES: Readonly<Record<string, string>> = {
+  accuracy: "accuracy",
+  precision: "precision",
+  recall: "recall",
+  f1: "F1",
+  prAuc: "PR AUC",
+  rocAuc: "ROC AUC",
+};
+
+function fixedMetricLabel(operation: string, metric: string): string {
+  if (operation === "imbalance.stratified_holdout" && metric === "recall") {
+    return "Rare-class recall";
+  }
+  const prefix: Readonly<Record<string, string>> = {
+    "leakage.random_row_split": "Familiar-row",
+    "leakage.group_holdout": "Unseen-customer",
+    "leakage.identity_ablation": "Identity-removed",
+    "imbalance.majority_baseline": "Majority-baseline",
+    "imbalance.stratified_holdout": "Stratified-model",
+    "imbalance.threshold_sweep": "Threshold-sweep",
+    "imbalance.prevalence_sweep": "Prevalence-sweep",
+  };
+  const fixedPrefix = prefix[operation];
+  const fixedMetric = FIXED_METRIC_NAMES[metric];
+  if (fixedPrefix === undefined || fixedMetric === undefined) {
+    throw new TypeError("fixed Lab Scene metric presentation is unavailable");
+  }
+  return `${fixedPrefix} ${fixedMetric}`;
+}
+
+function sceneBindings(block: LabSceneV2["blocks"][number]): string[] {
+  switch (block.type) {
+    case "Prediction":
+      return [block.immutableBinding];
+    case "Metric":
+    case "BarChart":
+    case "LineChart":
+    case "Scatter":
+    case "ReasoningDiff":
+      return [block.resultBinding];
+    case "BoundaryMap":
+      return [block.resultBinding, block.accessibleTableBinding];
+    case "MotionCanvas":
+      return [
+        block.resultBinding,
+        block.accessibleTableBinding,
+        block.reducedMotionBinding,
+      ];
+    case "NotebookCell":
+      return [block.evidenceBinding];
+    case "NotebookDiff":
+      return [block.diffBinding];
+    case "ProofBadge":
+      return [block.proofBinding];
+    default:
+      return [];
+  }
+}
+
+function fixedSceneResultBindingManifest(
+  scene: LabSceneV2,
+  plan: ExperimentPlanV2,
+): { passed: boolean; observed: unknown; expected: unknown } {
+  const runs = [plan.baseline, ...plan.interventions];
+  const runIds = runs.map((run) => run.runId);
+  const metricFields = RESULT_METRIC_FIELDS[plan.concept];
+  const allowedMetricPresentations = runs.flatMap((run) =>
+    metricFields.map((field) => ({
+      resultBinding: `/runs/byId/${run.runId}/metrics/${field}`,
+      label: fixedMetricLabel(run.operation, field),
+      unit: "proportion",
+    })),
+  );
+  const allowedMetricBindings = allowedMetricPresentations.map(
+    (presentation) => presentation.resultBinding,
+  );
+  const allowed = new Set(allowedMetricBindings);
+  const metricPresentations = scene.blocks
+    .filter((block) => block.type === "Metric")
+    .map((block) => ({
+      resultBinding: block.resultBinding,
+      label: block.label,
+      unit: block.unit,
+    }));
+  const metricBindings = metricPresentations.map(
+    (presentation) => presentation.resultBinding,
+  );
+  const fixedPresentationByBinding = new Map(
+    allowedMetricPresentations.map((presentation) => [
+      presentation.resultBinding,
+      presentation,
+    ]),
+  );
+  const mismatchedMetricPresentations = metricPresentations.filter(
+    (presentation) =>
+      !sameJson(
+        presentation,
+        fixedPresentationByBinding.get(presentation.resultBinding),
+      ),
+  );
+  const fixedCopy = FIXED_SCENE_COPY[plan.concept];
+  const limitationBlockTexts = scene.blocks
+    .filter((block) => block.type === "Limitation")
+    .map((block) => block.text);
+  const fixedCopyMatches =
+    scene.title === fixedCopy.title &&
+    sameJson(scene.assumptions, fixedCopy.assumptions) &&
+    sameJson(scene.limitations, fixedCopy.limitations) &&
+    limitationBlockTexts.every((text) =>
+      fixedCopy.limitations.some((limitation) => limitation === text),
+    );
+  const unsupportedBoundBlocks = scene.blocks
+    .filter(
+      (block) => block.type !== "Metric" && sceneBindings(block).length > 0,
+    )
+    .map((block) => ({ type: block.type, bindings: sceneBindings(block) }));
+  const runIdByBinding = new Map(
+    allowedMetricBindings.map((binding) => [
+      binding,
+      runIds.find((runId) => binding.startsWith(`/runs/byId/${runId}/`)),
+    ]),
+  );
+  const boundRunIds = new Set(
+    metricBindings
+      .map((binding) => runIdByBinding.get(binding))
+      .filter((runId): runId is string => runId !== undefined),
+  );
+  const distinctMetricBindings = new Set(metricBindings);
+  const passed =
+    scene.supportLabel === "GUIDED_VISUAL" &&
+    metricBindings.length >= 2 &&
+    distinctMetricBindings.size === metricBindings.length &&
+    boundRunIds.size >= 2 &&
+    metricBindings.every((binding) => allowed.has(binding)) &&
+    mismatchedMetricPresentations.length === 0 &&
+    fixedCopyMatches &&
+    unsupportedBoundBlocks.length === 0;
+
+  return {
+    passed,
+    observed: {
+      supportLabel: scene.supportLabel,
+      metricBindings,
+      metricPresentations,
+      mismatchedMetricPresentations,
+      distinctRunCount: boundRunIds.size,
+      title: scene.title,
+      assumptions: scene.assumptions,
+      limitations: scene.limitations,
+      limitationBlockTexts,
+      unsupportedBoundBlocks,
+    },
+    expected: {
+      schemaVersion: "1",
+      bindingRoot: "authoritative-result-v2",
+      supportLabel: "GUIDED_VISUAL",
+      minimumMetricBindings: 2,
+      minimumDistinctRunCount: 2,
+      allowedMetricBindings,
+      allowedMetricPresentations,
+      title: fixedCopy.title,
+      assumptions: fixedCopy.assumptions,
+      limitations: fixedCopy.limitations,
+      limitationBlockTexts: fixedCopy.limitations,
+      unsupportedBoundBlocks: [],
+    },
   };
 }
 
@@ -431,7 +622,7 @@ export async function verifyScientificCandidateV5(
   const verifierVersion: ScientificCandidateReportV1["verifierVersion"] =
     bundleResult.success &&
     bundleResult.data.conceptPack.fixedExecutionContract !== undefined
-      ? "scientific-candidate-verifier-v3"
+      ? "scientific-candidate-verifier-v4"
       : bundleResult.success &&
           bundleResult.data.conceptPack.transferTask !== undefined
         ? "scientific-candidate-verifier-v2"
@@ -887,6 +1078,10 @@ export async function verifyScientificCandidateV5(
     executionPlan,
     bundle.conceptPack.fixedExecutionContract !== undefined,
   );
+  const sceneResultBindings = fixedSceneResultBindingManifest(
+    scene,
+    executionPlan,
+  );
   const nonClaimsMatch = sameSet(contract.nonClaims, selectedIr.nonClaims);
   const [contractNonClaimsHash, experimentIrNonClaimsHash] = await Promise.all([
     hashCanonical(contract.nonClaims),
@@ -977,6 +1172,17 @@ export async function verifyScientificCandidateV5(
       selectedSemantics.expected,
       "The fixed-selected candidate does not compose the complete Subject Pack execution contract.",
     ),
+    ...(bundle.conceptPack.fixedExecutionContract === undefined
+      ? []
+      : [
+          invariant(
+            "lab_scene_result_binding_manifest",
+            sceneResultBindings.passed,
+            sceneResultBindings.observed,
+            sceneResultBindings.expected,
+            "The generated Lab Scene must compare at least two selected runs through exact fixed-result metric bindings and may not bind unsupported result surfaces.",
+          ),
+        ]),
     invariant(
       "projected_plan_binding",
       executionPlan.sessionId === bundle.sessionId &&

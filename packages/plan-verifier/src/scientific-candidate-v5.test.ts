@@ -391,6 +391,11 @@ async function sceneFor(
   discriminationContract: ScientificCandidateArtifacts["discriminationContract"],
   experimentIr: ExperimentIRV5,
 ): Promise<LabSceneV2> {
+  const candidate = experimentIr.candidateExperiments[0];
+  const comparisonRun = candidate?.interventions[0];
+  if (candidate === undefined || comparisonRun === undefined) {
+    throw new Error("the scientific fixture requires two comparable runs");
+  }
   return LabSceneV2Schema.parse({
     schemaVersion: "2",
     sceneId: "scene-scientific-v5",
@@ -409,6 +414,20 @@ async function sceneFor(
         id: "why",
         type: "WhyThisTest",
         text: discriminationContract.whyThisTest,
+      },
+      {
+        id: "baseline-metric",
+        type: "Metric",
+        label: "Familiar-row accuracy",
+        resultBinding: `/runs/byId/${candidate.baseline.runId}/metrics/accuracy`,
+        unit: "proportion",
+      },
+      {
+        id: "comparison-metric",
+        type: "Metric",
+        label: "Unseen-customer accuracy",
+        resultBinding: `/runs/byId/${comparisonRun.runId}/metrics/accuracy`,
+        unit: "proportion",
       },
     ],
     assumptions: ["The fixed kernel executes only registered operations."],
@@ -465,7 +484,7 @@ describe("scientific v5 candidate verification", () => {
       disposition: "VERIFIED",
       report: {
         status: "VERIFIED",
-        verifierVersion: "scientific-candidate-verifier-v3",
+        verifierVersion: "scientific-candidate-verifier-v4",
       },
       selection: {
         selectedCandidateId: "group-holdout-plus-ablation",
@@ -492,6 +511,89 @@ describe("scientific v5 candidate verification", () => {
     expect(result.executionPlanHash).toBe(
       await hashCanonical(result.executionPlan),
     );
+  });
+
+  it.each([
+    {
+      label: "explanatory copy without a result comparison",
+      mutate: (scene: LabSceneV2) => ({
+        ...scene,
+        blocks: scene.blocks.filter((block) => block.type !== "Metric"),
+      }),
+    },
+    {
+      label: "a metric outside the selected-run manifest",
+      mutate: (scene: LabSceneV2) => ({
+        ...scene,
+        blocks: scene.blocks.map((block) =>
+          block.id === "comparison-metric" && block.type === "Metric"
+            ? {
+                ...block,
+                resultBinding: "/runs/byId/model_authored_run/metrics/accuracy",
+              }
+            : block,
+        ),
+      }),
+    },
+    {
+      label: "a signed accuracy value presented as recall",
+      mutate: (scene: LabSceneV2) => ({
+        ...scene,
+        blocks: scene.blocks.map((block) =>
+          block.id === "comparison-metric" && block.type === "Metric"
+            ? { ...block, label: "Unseen-customer recall" }
+            : block,
+        ),
+      }),
+    },
+    {
+      label: "a signed proportion presented with a percent unit",
+      mutate: (scene: LabSceneV2) => ({
+        ...scene,
+        blocks: scene.blocks.map((block) =>
+          block.id === "comparison-metric" && block.type === "Metric"
+            ? { ...block, unit: "percent" }
+            : block,
+        ),
+      }),
+    },
+    {
+      label: "an invented result claim in the scene title",
+      mutate: (scene: LabSceneV2) => ({
+        ...scene,
+        title: "The repeated-identity explanation won after accuracy collapsed.",
+      }),
+    },
+    {
+      label: "an invented verdict in the scene limitations",
+      mutate: (scene: LabSceneV2) => ({
+        ...scene,
+        limitations: [
+          "The result proves identity caused the score and grouped evaluation fixes it.",
+        ],
+      }),
+    },
+  ])("rejects $label", async ({ mutate }) => {
+    const fixture = await scientificFixture();
+    fixture.artifacts.labScene = LabSceneV2Schema.parse(
+      mutate(fixture.artifacts.labScene),
+    );
+
+    const result = await scientificVerifier()(fixture);
+    const finding = result.report.invariants?.find(
+      (candidate) => candidate.name === "lab_scene_result_binding_manifest",
+    );
+
+    expect(result.disposition).toBe("REPAIRABLE_REJECTION");
+    expect(finding).toMatchObject({
+      passed: false,
+      expected: {
+        bindingRoot: "authoritative-result-v2",
+        minimumMetricBindings: 2,
+        minimumDistinctRunCount: 2,
+      },
+    });
+    expect(result).not.toHaveProperty("executionPlan");
   });
 
   it("keeps the compiler-authored IR unselected while deriving a selected copy", async () => {
@@ -625,7 +727,7 @@ describe("scientific v5 candidate verification", () => {
       verifierVersion: "scientific-candidate-verifier-v1",
     });
     expect(await hashCanonical(result.report)).toBe(
-      "de1d35aad3dbf18d0e7427fe5077b63bd79267854eb115600e4682987c08989c",
+      "9c13944ebb1a848c5c4fc5bf47077d45d2bef123e45105868024424aee25dc07",
     );
     expect(result.report.invariants).not.toEqual(
       expect.arrayContaining([

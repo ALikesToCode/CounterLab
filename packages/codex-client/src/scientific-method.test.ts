@@ -226,6 +226,11 @@ describe("hosted scientific-method compiler", () => {
       /candidate.*operationIds.*observableIds.*allowlists/i,
     );
     expect(prompt).toMatch(/no literal result values/i);
+    expect(prompt).toContain("Fixed post-result Lab Scene binding manifest:");
+    expect(prompt).toContain("/runs/byId/<runId>/metrics/<field>");
+    expect(prompt).toMatch(/at least two distinct Metric blocks/i);
+    expect(prompt).toContain('"metricFields": [');
+    expect(prompt).toContain('"rocAuc"');
     expect(prompt).toMatch(/copy conceptPack\.boundarySweep exactly/i);
     expect(prompt).toMatch(/fixedExecutionContract\.runSeed for every run/i);
     expect(prompt).toMatch(

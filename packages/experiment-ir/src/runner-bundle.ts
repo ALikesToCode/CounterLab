@@ -424,6 +424,7 @@ export const RunnerLabRunBundleV5Schema = z
           "scientific-candidate-verifier-v1",
           "scientific-candidate-verifier-v2",
           "scientific-candidate-verifier-v3",
+          "scientific-candidate-verifier-v4",
         ]),
         candidateVerificationReportHash: Sha256,
         scorerVersion: TokenId,
