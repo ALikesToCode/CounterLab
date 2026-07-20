@@ -65,20 +65,20 @@ isolation. Therefore generation-time hidden-verifier unreadability is `PARTIAL`.
 Post-generation candidate execution is separately OS-constrained and verified;
 that does not retroactively prove generation isolation.
 
-Current code prevents another unisolated launch. A real Bubblewrap probe creates
-a root containing only `/usr` and the exact generation workspace and verifies
-that repository, held-out, and hidden-verifier host paths resolve as missing.
-This proves the mount shape, not authenticated end-to-end generation: stable
-Codex authentication is file-backed and would be readable to model-invoked
-commands if mounted into that namespace.
+Current source prevents another unisolated hosted launch. Its exact-image
+startup probe requires pinned Bubblewrap, an allowlisted runtime mount set, a
+writable generation workspace, a fixed non-root UID, `no-new-privs`, and
+missing repository, held-out, hidden-verifier, and unrelated-job paths. The
+probe output is parsed, canonicalized, hashed, and carried through the strict
+release contracts.
 
-The current hosted Container launch is a separate credential-and-privilege
-boundary. It runs Codex at a fixed non-root UID with
-`setpriv --no-new-privs`, stages and revokes authentication, and constrains
-writes. It does not provide a mount namespace or filesystem read allowlist, so
-hosted filesystem generation read isolation is also `PARTIAL`. This is a claim
-limitation, not evidence that generated output gained scoring, kernel, or
-verifier authority.
+That source mechanism is not itself authenticated end-to-end or production
+evidence. Stable Codex authentication would be readable to model-invoked
+commands if mounted into the namespace, so the hosted path stages credentials
+only for initialization and revokes them before the generated turn. A newly
+built exact image must pass the sentinel and qualification before health may
+report `OS_ENFORCED`; otherwise live authority fails closed. The historical
+local App Server replay remains explicitly `PARTIAL`.
 
 Hosted source-free Plans remove arbitrary model-authored Python from the public
 critical path, but the Container runtime, Codex CLI, configured model endpoint,
@@ -107,10 +107,11 @@ honest patch refusal even when intake and the fixed lab are supported.
 ## Highest-priority hardening
 
 Keep the historical local replay labelled `PARTIAL`; do not spend the release
-critical path pretending it is the hosted runner. For hosted execution, add and
-test phase-specific outbound filtering after model compilation, non-root fixed
+critical path pretending it is the hosted runner. For hosted execution, retain
+phase-specific outbound filtering after model compilation, non-root fixed
 children with process/file/CPU limits, deterministic single-thread numeric
 settings, pinned base images and hash-locked Python artifacts, and scientific
-engine/SBOM/license drift gates. Requalify staged-auth revocation after every
-Codex CLI protocol change. Until those checks execute, no formal sandbox or
-fully no-network hosted-process claim is made.
+engine/SBOM/license drift gates. Requalify the Bubblewrap sentinel and staged
+authentication revocation after every Codex CLI or runner-image change. Until
+those checks execute on the exact deployed tuple, no formal sandbox or fully
+no-network hosted-process claim is made.

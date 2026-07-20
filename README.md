@@ -310,11 +310,14 @@ The recorded local host App Server replay could inspect global skill files
 outside its generation directory, so that replay remains labelled `PARTIAL`.
 The hosted source-free Plan path is separate: credentials are staged only for
 App Server initialization and revoked before the generated turn; generated
-child commands receive neither model credentials nor signing authority. The
-Container launch uses a fixed non-root UID, `setpriv --no-new-privs`, and write
-constraints, but it has no
-mount namespace or filesystem read allowlist. Hosted filesystem generation
-read isolation is explicitly `PARTIAL`; formal sandbox proof is not claimed.
+child commands receive neither model credentials nor signing authority. Current
+source refuses a live launch unless the exact runner reports a pinned
+Bubblewrap boundary with an allowlisted runtime mount set, a writable
+generation workspace, missing repository/held-out/verifier paths, a fixed
+non-root UID, and `no-new-privs`. That is source-level admission logic, not production evidence:
+until a newly built exact image passes the sentinel and release qualification,
+hosted live authority remains unavailable and no `OS_ENFORCED` deployment claim
+is made.
 See [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
 
 ## How Codex accelerated the build

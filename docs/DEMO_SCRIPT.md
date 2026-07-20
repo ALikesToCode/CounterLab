@@ -68,10 +68,11 @@ and use the primary download. Emphasize that the upload was never overwritten.
 
 ## 2:32–2:45 — Completion and proof
 
-Show: “You can now distinguish ‘good on familiar rows’ from ‘generalizes to new
-entities.’” Then open Evidence & proof for the Reasoning Diff and Proof Capsule.
-Close: “Chatbots explain. CounterLab lets reality answer—and only then helps you
-fix the code.”
+Show: “You completed one verified entity-leakage loop: this fixed task separated
+performance on familiar rows from performance on new entities. It does not
+establish mastery.” Then open Evidence & proof for the Reasoning Diff and Proof
+Capsule. Close: “Chatbots explain. CounterLab lets reality answer—and only then
+helps you fix the code.”
 
 ## Backup disclosure
 

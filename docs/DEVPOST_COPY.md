@@ -114,10 +114,11 @@ never executes uploaded cells, and sends only the learner-approved sanitized
 packet to the reasoning analyst. Raw rows, the notebook file, secrets, and
 local paths are excluded.
 
-Hosted Runtime Codex uses a credential-and-privilege launch boundary with a
-fixed non-root UID, `setpriv --no-new-privs`, and source-free typed plans. It
-has no mount namespace or filesystem read allowlist,
-so filesystem generation read isolation is explicitly `PARTIAL`. Fixed scoring,
+Hosted Runtime Codex is admitted only when the exact runner proves a pinned
+Bubblewrap boundary with a fixed non-root UID, `no-new-privs`, an allowlisted
+runtime mount set, a writable generation workspace, and missing repository,
+held-out, verifier, and unrelated-job paths. If that exact-image sentinel or
+release binding is absent, Judge Mode keeps Live unavailable. Fixed scoring,
 execution, and verification remain independent of generated output.
 
 ## Evidence modes
@@ -149,7 +150,7 @@ claim should be copied into the submission until a measured study exists.
    Upload a supported notebook, approve the exact outbound packet, and follow
    reconnect, transfer, repaired-copy download, and Proof Capsule export.
 5. Inspect `docs/RELEASE_CHECKLIST.md`, `docs/PRODUCTION_SMOKE.json`, and the
-   schema-v4 deployment receipt for the exact commit, Worker version, Container
+   schema-v7 deployment receipt for the exact commit, Worker version, Container
    digest, asset hashes, and smoke outcomes. If those identifiers do not agree,
    treat live qualification as not proven.
 6. Run the repository-contained verification commands documented in `README.md`

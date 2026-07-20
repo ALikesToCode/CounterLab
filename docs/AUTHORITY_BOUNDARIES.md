@@ -75,13 +75,14 @@ The live implementation is `AppServerCodexCompiler` in `packages/codex-client`. 
 
 Launching additionally requires a trusted `AppServerLaunchBoundary`. Without
 one, the compiler fails with `CODEX_ISOLATION_UNAVAILABLE`; direct spawn is
-available only to fake unit-test processes. The hosted Container boundary
-stages and revokes credentials, uses a fixed non-root UID plus
-`setpriv --no-new-privs`, and constrains writes, but
-does not provide a mount namespace or filesystem read allowlist. Filesystem
-generation read isolation is therefore `PARTIAL`. The included Bubblewrap
-probe proves a stronger target mount shape but is not the authenticated hosted
-launcher.
+available only to fake unit-test processes. Current hosted source stages and
+revokes credentials, uses a fixed non-root UID plus `no-new-privs`, and requires
+the exact runner to report a pinned Bubblewrap boundary with an allowlisted
+runtime mount set and a writable generation workspace. The startup sentinel
+must also prove that repository, held-out, verifier, and unrelated-job paths are
+missing. This is not yet a production claim: a newly built exact image must
+exercise and bind the sentinel before health may report `OS_ENFORCED`; otherwise
+live authority fails closed.
 
 The hosted lab turn is limited to approved belief evidence, public
 schema/documentation, redacted fixture structure, resource limits, and permitted
