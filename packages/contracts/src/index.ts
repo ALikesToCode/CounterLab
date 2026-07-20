@@ -1990,6 +1990,168 @@ export const BeliefSpecV2Schema = z
 
 export type BeliefSpecV2 = z.infer<typeof BeliefSpecV2Schema>;
 
+export type PrePredictionNarrativeIssueCode =
+  "UNSOURCED_RESULT_LITERAL" | "VERDICT_LANGUAGE" | "REPAIR_DIRECTIVE";
+
+export type PrePredictionNarrativeIssue = Readonly<{
+  code: PrePredictionNarrativeIssueCode;
+  path: readonly (string | number)[];
+}>;
+
+const NarrativeNumberPattern = /\b\d+(?:\.\d+)?(?:\s*(?:%|percent))?/giu;
+const RetrospectiveVerdictPatterns = [
+  /\b(?:the|this|verified)\s+(?:result|test|evidence|experiment)\s+(?:has\s+)?(?:showed|shows|found|confirmed|supports?|supported|rejects?|rejected|proves?|proved)\b/u,
+  /\b(?:evidence\s+verdict|supported\s+hypothesis|correct\s+answer|incorrect\s+answer)\b/u,
+  /\bcounterlab\s+(?:found|confirmed|verified|supports?|rejected|proved)\b/u,
+  /\b(?:deceptive|misleading)\b/u,
+  /\b(?:accuracy|score|metric|performance|recall|precision|overlap|error\s+rate)\b.{0,80}\b(?:collapsed|fell|dropped|declined|decreased|rose|increased|improved|worsened)\b/u,
+  /\b(?:collapsed|fell|dropped|declined|decreased|rose|increased|improved|worsened)\b.{0,80}\b(?:accuracy|score|metric|performance|recall|precision|overlap|error\s+rate)\b/u,
+  /\b(?:current|competing|alternative)\s+(?:explanation|hypothesis|model)\s+(?:won|wins|prevailed|was\s+(?:right|correct)|fits?\s+(?:better|best))\b/u,
+  /\b(?:winner|won|prevailed)\b.{0,60}\b(?:explanation|hypothesis|model)\b/u,
+  /\bonly\s+(?:the\s+)?\b.{0,60}\b(?:explanation|hypothesis|model)\b.{0,60}\b(?:remains?|is|was)\s+compatible\b/u,
+  /\b(?:observations?|evidence|results?)\b.{0,80}\b(?:leave|left|favor|favored|select|selected)\b.{0,80}\b(?:explanation|hypothesis|model)\b/u,
+  /\b(?:observations?|evidence|results?)\b.{0,80}\b(?:eliminate|eliminated|exclude|excluded|rule|ruled)\b.{0,80}\b(?:explanation|hypothesis|model)\b/u,
+  /\b(?:explanation|hypothesis|model)\b.{0,80}\b(?:sole|only)\s+compatible\b/u,
+] as const;
+const RepairDirectivePatterns = [
+  /\b(?:the\s+)?(?:fix|repair)\s+(?:is|by|requires?)\b/u,
+  /\b(?:patch|repair)\b/u,
+  /\b(?:must|should|need(?:s)?\s+to|have\s+to)\s+(?:switch|replace|remove|drop|ablate|keep)\b.{0,80}\b(?:evaluation|identity|customer|entity|split|holdout|threshold|metric)\b/u,
+  /(?:^|[.!?]\s*)(?:switch|replace|remove|drop|ablate|keep)\b.{0,80}\b(?:evaluation|identity|customer|entity|split|holdout|threshold|metric)\b/u,
+  /\b(?:identity|customer(?:[_ -]?id)?)\b.{0,40}\b(?:removed|dropped|ablated)\b/u,
+  /\b(?:keep|hold\s+out)\b.{0,40}\b(?:whole\s+)?(?:customer|entity)s?\b/u,
+  /(?:^|[.!?]\s*)(?:use|adopt|choose|prefer)\b.{0,80}\b(?:grouped|group|whole[- ]entity|holdout|evaluation|split)\b/u,
+  /\b(?:omit|exclude)\b.{0,40}\b(?:identity|customer(?:[_ -]?id)?|entity(?:[_ -]?id)?|identifier)\b/u,
+  /\b(?:separate|partition)\b.{0,60}\b(?:customer|entity)s?\b.{0,80}\b(?:folds?|split|holdout)\b.{0,80}\b(?:discard|drop|exclude|omit|remove)\b.{0,40}\b(?:identity|identifier|column)s?\b/u,
+] as const;
+
+function normalizeNarrativeText(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[’']/gu, "'")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+function narrativeNumberKey(token: string): string | null {
+  const normalized = normalizeNarrativeText(token);
+  const percent = /(?:%|percent)$/u.test(normalized);
+  const numeric = Number(normalized.replace(/\s*(?:%|percent)$/u, ""));
+  if (!Number.isFinite(numeric)) return null;
+  if (percent || (numeric >= 0 && numeric <= 1)) {
+    const proportion = percent ? numeric / 100 : numeric;
+    return `proportion:${proportion.toPrecision(12)}`;
+  }
+  return `number:${numeric.toPrecision(12)}`;
+}
+
+function narrativeNumberKeys(value: string): string[] {
+  return [...normalizeNarrativeText(value).matchAll(NarrativeNumberPattern)]
+    .map((match) => narrativeNumberKey(match[0]))
+    .filter((key): key is string => key !== null);
+}
+
+function prePredictionNarrativeFields(
+  beliefSpec: BeliefSpecV2,
+): ReadonlyArray<
+  Readonly<{ path: readonly (string | number)[]; value: string }>
+> {
+  return [
+    ...beliefSpec.evidenceRefs.map((evidence, index) => ({
+      path: ["evidenceRefs", index, "relevance"] as const,
+      value: evidence.relevance,
+    })),
+    ...beliefSpec.hypotheses.flatMap((hypothesis, index) => [
+      {
+        path: ["hypotheses", index, "statement"] as const,
+        value: hypothesis.statement,
+      },
+      ...hypothesis.conditions.map((value, conditionIndex) => ({
+        path: ["hypotheses", index, "conditions", conditionIndex] as const,
+        value,
+      })),
+      ...hypothesis.nonClaims.map((value, nonClaimIndex) => ({
+        path: ["hypotheses", index, "nonClaims", nonClaimIndex] as const,
+        value,
+      })),
+    ]),
+    ...beliefSpec.alternatives.flatMap((alternative, index) => [
+      {
+        path: ["alternatives", index, "label"] as const,
+        value: alternative.label,
+      },
+      {
+        path: ["alternatives", index, "statement"] as const,
+        value: alternative.statement,
+      },
+      {
+        path: ["alternatives", index, "rationale"] as const,
+        value: alternative.rationale,
+      },
+      ...alternative.conditions.map((value, conditionIndex) => ({
+        path: ["alternatives", index, "conditions", conditionIndex] as const,
+        value,
+      })),
+      ...alternative.nonClaims.map((value, nonClaimIndex) => ({
+        path: ["alternatives", index, "nonClaims", nonClaimIndex] as const,
+        value,
+      })),
+    ]),
+  ];
+}
+
+export function prePredictionNarrativeIssues(
+  beliefSpec: BeliefSpecV2,
+): PrePredictionNarrativeIssue[] {
+  const allowedNumberKeys = new Set(
+    [
+      beliefSpec.claim,
+      ...beliefSpec.evidenceRefs.map(({ excerpt }) => excerpt),
+    ].flatMap(narrativeNumberKeys),
+  );
+  const normalizedClaim = normalizeNarrativeText(beliefSpec.claim);
+  const issues: PrePredictionNarrativeIssue[] = [];
+
+  for (const field of prePredictionNarrativeFields(beliefSpec)) {
+    const normalized = normalizeNarrativeText(field.value);
+    const copiedLearnerClaim = normalized === normalizedClaim;
+    if (
+      !copiedLearnerClaim &&
+      narrativeNumberKeys(field.value).some(
+        (key) => !allowedNumberKeys.has(key),
+      )
+    ) {
+      issues.push({ code: "UNSOURCED_RESULT_LITERAL", path: field.path });
+    }
+    if (
+      !copiedLearnerClaim &&
+      RetrospectiveVerdictPatterns.some((pattern) => pattern.test(normalized))
+    ) {
+      issues.push({ code: "VERDICT_LANGUAGE", path: field.path });
+    }
+    if (
+      !copiedLearnerClaim &&
+      RepairDirectivePatterns.some((pattern) => pattern.test(normalized))
+    ) {
+      issues.push({ code: "REPAIR_DIRECTIVE", path: field.path });
+    }
+  }
+  return issues;
+}
+
+export const PrePredictionBeliefSpecV2Schema = BeliefSpecV2Schema.superRefine(
+  (beliefSpec, context) => {
+    for (const issue of prePredictionNarrativeIssues(beliefSpec)) {
+      context.addIssue({
+        code: "custom",
+        message: `pre-Prediction narrative rejected: ${issue.code}`,
+        path: [...issue.path],
+      });
+    }
+  },
+);
+
 export const BeliefSpecSchema = z.union([BeliefTestSchema, BeliefSpecV2Schema]);
 
 export type BeliefSpec = z.infer<typeof BeliefSpecSchema>;
@@ -2026,12 +2188,12 @@ export function migrateBeliefTestV1ToV2(input: unknown): BeliefSpecV2 {
           "This replay predates explicit hypothesis conditions and does not establish conclusions outside its recorded intervention.",
         ]
       : [...beliefTest.uncertainty.limitations];
-  const conditions = [
-    beliefTest.decisiveIntervention.description,
-    ...beliefTest.decisiveIntervention.controlledVariables.map(
-      (variable) => `${variable} remains controlled.`,
-    ),
-  ];
+  const controlledConditions =
+    beliefTest.decisiveIntervention.controlledVariables.length === 0
+      ? ["This historical record predates explicit applicability conditions."]
+      : beliefTest.decisiveIntervention.controlledVariables.map(
+          (variable) => `${variable} remains controlled.`,
+        );
   const candidateExperimentIds = [beliefTest.decisiveIntervention.id];
 
   return BeliefSpecV2Schema.parse({
@@ -2044,7 +2206,7 @@ export function migrateBeliefTestV1ToV2(input: unknown): BeliefSpecV2 {
       {
         id: "current",
         statement: beliefTest.currentHypothesis.statement,
-        conditions,
+        conditions: controlledConditions,
         nonClaims: limitations,
         evidence: structuredClone(beliefTest.evidenceRefs),
         supportedCandidateExperimentIds: candidateExperimentIds,
@@ -2052,7 +2214,7 @@ export function migrateBeliefTestV1ToV2(input: unknown): BeliefSpecV2 {
       {
         id: "competing",
         statement: beliefTest.competingHypothesis.statement,
-        conditions,
+        conditions: controlledConditions,
         nonClaims: limitations,
         evidence: structuredClone(beliefTest.evidenceRefs),
         supportedCandidateExperimentIds: candidateExperimentIds,
@@ -2063,7 +2225,9 @@ export function migrateBeliefTestV1ToV2(input: unknown): BeliefSpecV2 {
       label: alternative.label,
       statement: alternative.label,
       rationale: alternative.rationale,
-      conditions: [beliefTest.decisiveIntervention.description],
+      conditions: [
+        "This historical alternative predates explicit applicability conditions.",
+      ],
       nonClaims: limitations,
       evidence: structuredClone(beliefTest.evidenceRefs),
       supportedCandidateExperimentIds: [],
@@ -2075,6 +2239,45 @@ export function migrateBeliefTestV1ToV2(input: unknown): BeliefSpecV2 {
     learnerDecision: "UNDECIDED",
   });
 }
+
+export function prePredictionBeliefTestNarrativeIssues(
+  input: unknown,
+): PrePredictionNarrativeIssue[] {
+  const beliefTest = BeliefTestSchema.parse(input);
+  const compatibilityView = migrateBeliefTestV1ToV2(beliefTest);
+  const [current, competing] = compatibilityView.hypotheses;
+  return prePredictionNarrativeIssues({
+    ...compatibilityView,
+    hypotheses: [
+      {
+        ...current,
+        conditions: [
+          ...current.conditions,
+          beliefTest.currentHypothesis.predictedOutcome,
+        ],
+      },
+      {
+        ...competing,
+        conditions: [
+          ...competing.conditions,
+          beliefTest.competingHypothesis.predictedOutcome,
+        ],
+      },
+    ],
+  });
+}
+
+export const PrePredictionBeliefTestV1Schema = BeliefTestSchema.superRefine(
+  (beliefTest, context) => {
+    for (const issue of prePredictionBeliefTestNarrativeIssues(beliefTest)) {
+      context.addIssue({
+        code: "custom",
+        message: `pre-Prediction narrative rejected: ${issue.code}`,
+        path: [...issue.path],
+      });
+    }
+  },
+);
 
 export const PredictionContractSchema = z
   .object({

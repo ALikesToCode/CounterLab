@@ -25,6 +25,9 @@ import {
   PatchResultSchema,
   PatchPlanV1Schema,
   PredictionContractSchema,
+  PrePredictionBeliefSpecV2Schema,
+  PrePredictionBeliefTestV1Schema,
+  prePredictionNarrativeIssues,
   ProofBundleSchema,
   ProofCapsuleRefV2Schema,
   ProofCapsuleReplayReceiptV2Schema,
@@ -1034,6 +1037,117 @@ describe("session transitions", () => {
 const hash = (character: string) => character.repeat(64);
 
 describe("learning-loop contracts", () => {
+  it("fails closed on unsourced pre-Prediction results, verdicts, and repairs", () => {
+    const evidence = {
+      cellIndex: 3,
+      outputIndex: 0,
+      kind: "metric" as const,
+      hash: hash("d"),
+      excerpt: "Notebook accuracy: 0.985",
+      relevance: "The notebook-reported score frames the learner's question.",
+    };
+    const safe = BeliefSpecV2Schema.parse({
+      schemaVersion: "2",
+      id: "belief_pre_prediction_guard",
+      concept: "entity_leakage",
+      claim: "Does the notebook's 98.5% accuracy generalize to new customers?",
+      evidenceRefs: [evidence],
+      hypotheses: [
+        {
+          id: "current",
+          statement: "The pattern may generalize to new customers.",
+          conditions: ["The evaluation represents unseen customers."],
+          nonClaims: ["This does not prove performance for every cohort."],
+          evidence: [evidence],
+          supportedCandidateExperimentIds: ["group-holdout"],
+        },
+        {
+          id: "competing",
+          statement: "Repeated identity may explain the familiar-row score.",
+          conditions: ["Customers repeat across observations."],
+          nonClaims: ["This does not establish which explanation will win."],
+          evidence: [evidence],
+          supportedCandidateExperimentIds: ["group-holdout"],
+        },
+      ],
+      alternatives: [],
+      uncertainty: 0.4,
+      supportState: "SUPPORTED",
+      learnerDecision: "UNDECIDED",
+    });
+
+    expect(() => PrePredictionBeliefSpecV2Schema.parse(safe)).not.toThrow();
+
+    const issueCases = [
+      [
+        "UNSOURCED_RESULT_LITERAL",
+        "The verified test found 59.4 percent for new customers.",
+      ],
+      [
+        "UNSOURCED_RESULT_LITERAL",
+        "The unseen-entity score became ０．５９４４４４.",
+      ],
+      ["VERDICT_LANGUAGE", "The evidence supports the competing hypothesis."],
+      [
+        "VERDICT_LANGUAGE",
+        "Accuracy collapsed on unseen customers under the whole-customer test.",
+      ],
+      [
+        "VERDICT_LANGUAGE",
+        "The competing explanation won and fits the evidence better.",
+      ],
+      [
+        "VERDICT_LANGUAGE",
+        "Only the repeated-identity explanation remains compatible with the observations.",
+      ],
+      [
+        "VERDICT_LANGUAGE",
+        "The observations leave the competing hypothesis as the sole compatible model.",
+      ],
+      ["VERDICT_LANGUAGE", "The later observations eliminate the first model."],
+      ["REPAIR_DIRECTIVE", "The fix is to remove customer_id."],
+      [
+        "REPAIR_DIRECTIVE",
+        "Use grouped evaluation and omit the identity field.",
+      ],
+      [
+        "REPAIR_DIRECTIVE",
+        "Adopt a whole-entity holdout and exclude customer ID.",
+      ],
+      [
+        "REPAIR_DIRECTIVE",
+        "Separate customers across folds and discard identifier columns.",
+      ],
+    ] as const;
+    for (const [code, statement] of issueCases) {
+      const candidate: typeof safe = {
+        ...safe,
+        hypotheses: [safe.hypotheses[0], { ...safe.hypotheses[1], statement }],
+      };
+      expect(prePredictionNarrativeIssues(candidate)).toContainEqual({
+        code,
+        path: ["hypotheses", 1, "statement"],
+      });
+      expect(() => PrePredictionBeliefSpecV2Schema.parse(candidate)).toThrow(
+        new RegExp(code, "u"),
+      );
+    }
+
+    const sourceBoundMetric: typeof safe = {
+      ...safe,
+      hypotheses: [
+        {
+          ...safe.hypotheses[0],
+          conditions: ["The notebook reports 98.5% before any new test."],
+        },
+        safe.hypotheses[1],
+      ],
+    };
+    expect(() =>
+      PrePredictionBeliefSpecV2Schema.parse(sourceBoundMetric),
+    ).not.toThrow();
+  });
+
   it("validates a learner-decidable Belief Spec v2 with explicit scope", () => {
     const evidence = {
       cellIndex: 3,
@@ -1203,8 +1317,26 @@ describe("learning-loop contracts", () => {
     expect(migrated.hypotheses[0].nonClaims).toContain(
       "The old replay did not encode hypothesis conditions.",
     );
+    expect(prePredictionNarrativeIssues(migrated)).toEqual([]);
+    expect(migrated.hypotheses[0].conditions).not.toContain(
+      v1.decisiveIntervention.description,
+    );
+    expect(
+      migrated.alternatives.flatMap(({ conditions }) => conditions),
+    ).not.toContain(v1.decisiveIntervention.description);
     expect(JSON.stringify(v1)).toBe(before);
     expect(v1.schemaVersion).toBe("1");
+    expect(() => PrePredictionBeliefTestV1Schema.parse(v1)).not.toThrow();
+    expect(() =>
+      PrePredictionBeliefTestV1Schema.parse({
+        ...v1,
+        currentHypothesis: {
+          ...v1.currentHypothesis,
+          predictedOutcome:
+            "The verified result is 59.4%; the fix is to remove customer_id.",
+        },
+      }),
+    ).toThrow(/pre-Prediction narrative rejected/u);
   });
 
   it("accepts the exact Belief Test shape and attaches schema version 1", () => {
