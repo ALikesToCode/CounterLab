@@ -14,18 +14,27 @@ export type ProofCapsuleReplayRecordV2 = {
   projectionHash: string;
   projectionBytesHash: string;
   recordedAt: string;
+  publishedAt: string;
+  expiresAt: string;
   metadata: ProofCapsuleReplayReceiptV2;
 };
 
 export interface ProofCapsuleReplayRepository {
   createOrReuse(
     record: ProofCapsuleReplayRecordV2,
+    now: string,
   ): Promise<{ record: ProofCapsuleReplayRecordV2; reused: boolean }>;
-  find(replayId: string): Promise<ProofCapsuleReplayRecordV2 | undefined>;
-  statusBySourceSession(sourceSessionId: string): Promise<
+  find(
+    replayId: string,
+    now: string,
+  ): Promise<ProofCapsuleReplayRecordV2 | undefined>;
+  statusBySourceSession(
+    sourceSessionId: string,
+    now: string,
+  ): Promise<
     | {
         record: ProofCapsuleReplayRecordV2;
-        status: "active" | "revoked";
+        status: "active" | "revoked" | "expired";
       }
     | undefined
   >;
@@ -50,6 +59,13 @@ export class ReplayPublicationRevokedError extends Error {
   }
 }
 
+export class ReplayPublicationExpiredError extends Error {
+  constructor(sourceSessionId: string) {
+    super(`The public replay for ${sourceSessionId} has expired`);
+    this.name = "ReplayPublicationExpiredError";
+  }
+}
+
 type ReplayRow = {
   replay_id: string;
   source_session_id: string;
@@ -60,6 +76,8 @@ type ReplayRow = {
   projection_hash: string;
   projection_bytes_hash: string;
   recorded_at: string;
+  published_at: string;
+  expires_at: string;
 };
 
 type ReplayStatusRow = ReplayRow & { revoked_at: string | null };
@@ -88,8 +106,29 @@ function recordFromRow(row: ReplayRow): ProofCapsuleReplayRecordV2 {
     projectionHash: row.projection_hash,
     projectionBytesHash: row.projection_bytes_hash,
     recordedAt: row.recorded_at,
+    publishedAt: row.published_at,
+    expiresAt: row.expires_at,
     metadata,
   };
+}
+
+function timestamp(value: string, label: string): number {
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) throw new Error(`${label} is not a timestamp`);
+  return parsed;
+}
+
+function isExpired(record: ProofCapsuleReplayRecordV2, now: string): boolean {
+  return timestamp(record.expiresAt, "expiresAt") <= timestamp(now, "now");
+}
+
+function validateLifecycle(record: ProofCapsuleReplayRecordV2): void {
+  if (
+    timestamp(record.expiresAt, "expiresAt") <=
+    timestamp(record.publishedAt, "publishedAt")
+  ) {
+    throw new Error("Replay expiry must be later than publication");
+  }
 }
 
 function samePublication(
@@ -113,11 +152,16 @@ export class D1ProofCapsuleReplayRepository implements ProofCapsuleReplayReposit
 
   async createOrReuse(
     record: ProofCapsuleReplayRecordV2,
+    now: string,
   ): Promise<{ record: ProofCapsuleReplayRecordV2; reused: boolean }> {
+    validateLifecycle(record);
     const existing = await this.findBySourceSession(record.sourceSessionId);
     if (existing !== undefined) {
       if (await this.isRevoked(existing.replayId)) {
         throw new ReplayPublicationRevokedError(record.sourceSessionId);
+      }
+      if (isExpired(existing, now)) {
+        throw new ReplayPublicationExpiredError(record.sourceSessionId);
       }
       if (!samePublication(existing, record)) {
         throw new ReplayPublicationConflictError(record.sourceSessionId);
@@ -140,6 +184,13 @@ export class D1ProofCapsuleReplayRepository implements ProofCapsuleReplayReposit
             record.objectKey,
             record.recordedAt,
           ),
+        this.database
+          .prepare(
+            `INSERT INTO public_replay_lifecycles
+              (replay_id, published_at, expires_at, policy_version)
+             VALUES (?, ?, ?, 'public-replay-expiry-v1')`,
+          )
+          .bind(record.replayId, record.publishedAt, record.expiresAt),
         this.database
           .prepare(
             `INSERT INTO public_replay_projections
@@ -168,6 +219,9 @@ export class D1ProofCapsuleReplayRepository implements ProofCapsuleReplayReposit
       if (raced !== undefined && (await this.isRevoked(raced.replayId))) {
         throw new ReplayPublicationRevokedError(record.sourceSessionId);
       }
+      if (raced !== undefined && isExpired(raced, now)) {
+        throw new ReplayPublicationExpiredError(record.sourceSessionId);
+      }
       if (raced !== undefined && samePublication(raced, record)) {
         return { record: raced, reused: true };
       }
@@ -177,6 +231,7 @@ export class D1ProofCapsuleReplayRepository implements ProofCapsuleReplayReposit
 
   async find(
     replayId: string,
+    now: string,
   ): Promise<ProofCapsuleReplayRecordV2 | undefined> {
     const row = await this.database
       .prepare(
@@ -185,17 +240,22 @@ export class D1ProofCapsuleReplayRepository implements ProofCapsuleReplayReposit
                 replays.object_key, replays.recorded_at,
                 public_replay_projections.object_key AS projection_object_key,
                 public_replay_projections.projection_hash,
-                public_replay_projections.bytes_hash AS projection_bytes_hash
+                public_replay_projections.bytes_hash AS projection_bytes_hash,
+                public_replay_lifecycles.published_at,
+                public_replay_lifecycles.expires_at
          FROM replays
          INNER JOIN public_replay_projections
            ON public_replay_projections.replay_id = replays.replay_id
+         INNER JOIN public_replay_lifecycles
+           ON public_replay_lifecycles.replay_id = replays.replay_id
          WHERE replays.replay_id = ?
+           AND public_replay_lifecycles.expires_at > ?
            AND NOT EXISTS (
              SELECT 1 FROM replay_revocations
              WHERE replay_revocations.replay_id = replays.replay_id
            )`,
       )
-      .bind(replayId)
+      .bind(replayId, now)
       .first<ReplayRow>();
     return row === null ? undefined : recordFromRow(row);
   }
@@ -228,10 +288,13 @@ export class D1ProofCapsuleReplayRepository implements ProofCapsuleReplayReposit
     };
   }
 
-  async statusBySourceSession(sourceSessionId: string): Promise<
+  async statusBySourceSession(
+    sourceSessionId: string,
+    now: string,
+  ): Promise<
     | {
         record: ProofCapsuleReplayRecordV2;
-        status: "active" | "revoked";
+        status: "active" | "revoked" | "expired";
       }
     | undefined
   > {
@@ -243,10 +306,14 @@ export class D1ProofCapsuleReplayRepository implements ProofCapsuleReplayReposit
                 public_replay_projections.object_key AS projection_object_key,
                 public_replay_projections.projection_hash,
                 public_replay_projections.bytes_hash AS projection_bytes_hash,
+                public_replay_lifecycles.published_at,
+                public_replay_lifecycles.expires_at,
                 replay_revocations.revoked_at
          FROM replays
          INNER JOIN public_replay_projections
            ON public_replay_projections.replay_id = replays.replay_id
+         INNER JOIN public_replay_lifecycles
+           ON public_replay_lifecycles.replay_id = replays.replay_id
          LEFT JOIN replay_revocations
            ON replay_revocations.replay_id = replays.replay_id
          WHERE replays.source_session_id = ?`,
@@ -256,7 +323,12 @@ export class D1ProofCapsuleReplayRepository implements ProofCapsuleReplayReposit
     if (row === null) return undefined;
     return {
       record: recordFromRow(row),
-      status: row.revoked_at === null ? "active" : "revoked",
+      status:
+        row.revoked_at !== null
+          ? "revoked"
+          : row.expires_at <= now
+            ? "expired"
+            : "active",
     };
   }
 
@@ -270,10 +342,14 @@ export class D1ProofCapsuleReplayRepository implements ProofCapsuleReplayReposit
                 replays.object_key, replays.recorded_at,
                 public_replay_projections.object_key AS projection_object_key,
                 public_replay_projections.projection_hash,
-                public_replay_projections.bytes_hash AS projection_bytes_hash
+                public_replay_projections.bytes_hash AS projection_bytes_hash,
+                public_replay_lifecycles.published_at,
+                public_replay_lifecycles.expires_at
          FROM replays
          INNER JOIN public_replay_projections
            ON public_replay_projections.replay_id = replays.replay_id
+         INNER JOIN public_replay_lifecycles
+           ON public_replay_lifecycles.replay_id = replays.replay_id
          WHERE replays.source_session_id = ?`,
       )
       .bind(sourceSessionId)

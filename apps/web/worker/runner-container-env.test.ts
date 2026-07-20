@@ -15,6 +15,8 @@ describe("runner Container environment", () => {
       CODEX_AUTH_JSON: '{"auth_mode":"chatgpt"}',
       CODEX_MODEL: "gpt-5.6-codex",
       COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY: signingKeys.privateKey,
+      COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
+      COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
     });
 
     expect(environment).toEqual({
@@ -31,6 +33,8 @@ describe("runner Container environment", () => {
       COUNTERLAB_CODEX_UID: "10001",
       COUNTERLAB_CODEX_GID: "10001",
       COUNTERLAB_RUNNER_ONE_SHOT: "1",
+      COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
+      COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
     });
   });
 

@@ -3,6 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { EvidenceEvent, PublicCompilerEvent } from "../../api";
 import { CapabilityLinkDisclosure } from "../learner/CapabilityLinkDisclosure";
 import { GeneratedProofView } from "./GeneratedProofView";
+import { ProvenanceLedger } from "./ProvenanceLedger";
 import type { StudioContext } from "./types";
 
 export type ProofTab =
@@ -300,39 +301,7 @@ export function ProofConsole({
             ) : null}
             {activeTab === "Provenance" ? (
               <>
-                <dl className="console-provenance">
-                  <div>
-                    <dt>Artifact</dt>
-                    <dd>
-                      {context.artifact?.fileSha256 ?? "Not available yet"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Session</dt>
-                    <dd>{context.session?.sessionId ?? "Not created yet"}</dd>
-                  </div>
-                  <div>
-                    <dt>Result</dt>
-                    <dd>
-                      {context.session?.verifiedResult?.resultHash ??
-                        "Locked until verification"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Boundary</dt>
-                    <dd>
-                      {context.session?.boundaryMapAuthority?.resultHash ??
-                        "Locked until verification"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Capsule</dt>
-                    <dd>
-                      {context.session?.proofCapsule?.rootHash ??
-                        "Issued after verified repair"}
-                    </dd>
-                  </div>
-                </dl>
+                <ProvenanceLedger context={context} />
                 {onRevokeSessionAccess === undefined ? null : (
                   <CapabilityLinkDisclosure
                     variant="private-session"

@@ -12,6 +12,7 @@ const configuredHealth: CapabilityHealth = {
   liveGpt: "configured",
   liveCodex: "configured",
   liveKernel: "configured",
+  readiness: "ready",
   sandbox: "credential-and-privilege-boundary",
   generationFilesystemReadIsolation: "PARTIAL",
   release: {
@@ -21,6 +22,19 @@ const configuredHealth: CapabilityHealth = {
     workerEvidenceCommit: "a".repeat(40),
     runnerSourceCommit: "b".repeat(40),
     runnerImageDigest: `sha256:${"c".repeat(64)}`,
+    timeoutCleanupReceiptSha256: "d".repeat(64),
+    aggregateLimitEvidenceSha256: "9".repeat(64),
+    runtimePolicySha256: "e".repeat(64),
+    proofDependencyManifestSha256: "f".repeat(64),
+    workerArtifactClassification: "PROCESS_BOUND_PARTIAL",
+    workerArtifactManifestSha256: "1".repeat(64),
+    workerBundleSha256: "2".repeat(64),
+    clientAssetsSha256: "3".repeat(64),
+    clientAssetCount: 27,
+    clientPublicAssetsSha256: "4".repeat(64),
+    clientPublicAssetCount: 25,
+    viteVersion: "8.1.4",
+    wranglerVersion: "4.110.0",
   },
   requestId: "request_judge_1",
 };
@@ -52,15 +66,35 @@ describe("JudgeModeView", () => {
       /no gpt-5\.6, codex, or runner call occurs/i,
     );
     expect(await screen.findByText("98.5%")).toBeInTheDocument();
-    expect(
-      screen.getByLabelText(/verified sample belief-break mechanism/i),
-    ).toHaveTextContent("98.5%");
+    const mechanism = screen.getByLabelText(
+      /verified sample belief-break mechanism/i,
+    );
+    expect(mechanism).toHaveAttribute("data-presentation", "compact");
+    expect(mechanism).toHaveTextContent("98.5%");
     expect(proof).toHaveTextContent("59.4%");
     expect(proof).toHaveTextContent("Boundary consequence");
     expect(proof).toHaveTextContent("Learner benefit");
+    expect(screen.getByText("PROCESS_BOUND_PARTIAL")).toBeInTheDocument();
+    expect(document.body).toHaveTextContent(
+      /frozen client deploy tree files\s*27/i,
+    );
+    expect(document.body).toHaveTextContent(
+      /fetchable public client files\s*25/i,
+    );
+    expect(document.body).toHaveTextContent(
+      /vite\s*8\.1\.4.*wrangler\s*4\.110\.0/i,
+    );
+    expect(
+      screen.getByRole("link", {
+        name: /inspect exact values and integrity/i,
+      }),
+    ).toHaveAttribute("href", "#sample-evidence");
     expect(screen.getByText("Sample lesson")).toBeInTheDocument();
     expect(screen.getByText("Live notebook analysis")).toBeInTheDocument();
     expect(screen.getByText("Verified replay")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /run an unprimed live test/i }),
+    ).toHaveAttribute("href", "/new");
     expect(screen.getByRole("link", { name: /run live/i })).toHaveAttribute(
       "href",
       "/new",
@@ -77,6 +111,39 @@ describe("JudgeModeView", () => {
     expect(screen.getByText("Runtime Codex")).toBeInTheDocument();
     expect(screen.getByText("Fixed kernel")).toBeInTheDocument();
     expect(screen.getByText("Frozen verifier")).toBeInTheDocument();
+    expect(document.body).toHaveTextContent(
+      /evidence-first learning for notebook users/i,
+    );
+    expect(document.body).toHaveTextContent(
+      /seal a Prediction.*fixed evidence.*not AI prose/i,
+    );
+    expect(
+      screen.getByRole("heading", {
+        name: /what CounterLab builds on—and adds/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: /Predict–Observe–Explain and Peer Instruction/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: /LAMS Predict–Observe–Explain/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /NBLyzer and sklearn-diagnose/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /LAMS POE overview/i }),
+    ).toHaveAttribute("href", "https://teach.lams.es/pedagogies/poe");
+    expect(
+      screen.getByRole("link", { name: /NBLyzer paper/i }),
+    ).toHaveAttribute("href", "https://arxiv.org/html/2603.10742v3");
+    expect(
+      screen.getByRole("link", { name: /sklearn-diagnose repository/i }),
+    ).toHaveAttribute("href", "https://github.com/leockl/sklearn-diagnose");
     expect(
       screen.getByRole("heading", { name: "Exact public build" }),
     ).toBeInTheDocument();
@@ -86,7 +153,7 @@ describe("JudgeModeView", () => {
     );
   });
 
-  it("starts the sample only after an explicit action", async () => {
+  it("labels the primed sample as a disclosed walkthrough", async () => {
     const user = userEvent.setup();
     const onStartSample = vi.fn();
     render(
@@ -100,8 +167,11 @@ describe("JudgeModeView", () => {
     );
 
     expect(onStartSample).not.toHaveBeenCalled();
+    expect(document.body).toHaveTextContent(
+      /not counted as an unassisted Prediction/i,
+    );
     await user.click(
-      screen.getAllByRole("button", { name: /start sample/i })[0]!,
+      screen.getByRole("button", { name: /open disclosed walkthrough/i }),
     );
     expect(onStartSample).toHaveBeenCalledTimes(1);
   });
@@ -120,8 +190,14 @@ describe("JudgeModeView", () => {
     );
 
     expect(
+      screen.queryByRole("link", { name: /unprimed live/i }),
+    ).not.toBeInTheDocument();
+    expect(
       screen.queryByRole("link", { name: /run live/i }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /check live readiness/i }),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(/live authority is unavailable/i),
     ).toBeInTheDocument();
@@ -148,5 +224,43 @@ describe("JudgeModeView", () => {
     expect(document.body).toHaveTextContent(
       /release identity is unbound.*live qualification as unproven/i,
     );
+  });
+
+  it("does not equate configured services with observed readiness", () => {
+    render(
+      <JudgeModeView
+        health={{ ...configuredHealth, readiness: "not-ready" }}
+        healthPending={false}
+        healthError={null}
+        onRetryHealth={vi.fn()}
+        onStartSample={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("link", { name: /run live/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/did not pass the latest readiness check/i),
+    ).toBeInTheDocument();
+  });
+
+  it("does not deep-probe or expose live entry before readiness is checked", () => {
+    render(
+      <JudgeModeView
+        health={{ ...configuredHealth, readiness: "not-checked" }}
+        healthPending={false}
+        healthError={null}
+        onRetryHealth={vi.fn()}
+        onStartSample={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("link", { name: /run live/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/live readiness has not been checked/i),
+    ).toBeInTheDocument();
   });
 });

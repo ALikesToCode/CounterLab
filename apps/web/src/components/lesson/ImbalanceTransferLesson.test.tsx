@@ -61,23 +61,20 @@ describe("ImbalanceTransferLesson", () => {
       />,
     );
     fireEvent.click(
-      screen.getByLabelText(/lower threshold based on missed-defect cost/i),
+      screen.getByLabelText(/reject the accuracy-only conclusion/i),
     );
+    fireEvent.click(screen.getByLabelText(/defect recall and pr-auc/i));
     fireEvent.click(
-      screen.getByLabelText(/missing a defect is the costly error/i),
+      screen.getByLabelText(/confusion matrix has zero true positives/i),
     );
-    fireEvent.click(screen.getByLabelText(/confusion matrix shows misses/i));
-    fireEvent.click(screen.getByLabelText(/prevalence changes precision/i));
+    fireEvent.click(screen.getByLabelText(/defects are only 1%/i));
     fireEvent.click(screen.getByRole("button", { name: /check transfer/i }));
 
     await waitFor(() =>
       expect(api.submitTransfer).toHaveBeenCalledWith("session_1", {
-        strategyChoice: "cost_aware_threshold",
-        riskChoice: "minority_false_negative_cost",
-        evidenceChoices: [
-          "confusion_matrix_exposes_misses",
-          "prevalence_shift_changes_precision",
-        ],
+        decisionChoice: "reject_accuracy_only",
+        metricChoice: "recall_and_pr_auc",
+        evidenceChoices: ["zero_true_positives", "rare_base_rate"],
       }),
     );
     expect(updateSession).toHaveBeenLastCalledWith(
@@ -181,5 +178,66 @@ describe("ImbalanceTransferLesson", () => {
     expect(
       screen.queryByRole("button", { name: /verify notebook repair/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it("restores a failed canonical answer and can resubmit it unchanged", async () => {
+    api.submitTransfer.mockResolvedValue({
+      state: "TRANSFER_FAILED",
+      transferResult: { outcome: "FAILED" },
+    });
+
+    render(
+      <ImbalanceTransferLesson
+        sessionId="session_failed"
+        state="TRANSFER_FAILED"
+        revision="For rare events, inspect class-specific errors before trusting accuracy."
+        initialDecisionChoice="approve_high_accuracy"
+        initialMetricChoice="accuracy"
+        initialEvidenceChoices={["many_true_negatives"]}
+        transferOutcome="FAILED"
+        updateSession={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByLabelText(/approve because accuracy is 99%/i),
+    ).toBeChecked();
+    expect(screen.getByLabelText(/accuracy only/i)).toBeChecked();
+    expect(
+      screen.getByLabelText(
+        /19,800 acceptable parts were classified correctly/i,
+      ),
+    ).toBeChecked();
+    expect(
+      screen.getByLabelText(/confusion matrix has zero true positives/i),
+    ).not.toBeChecked();
+    expect(
+      screen.getByRole("button", { name: /check transfer/i }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole("group", {
+        name: /which deployment conclusion does this evidence support/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("group", {
+        name: /which minority-sensitive metric should guide the evaluation/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("group", {
+        name: /which evidence supports the deployment conclusion/i,
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /check transfer/i }));
+
+    await waitFor(() =>
+      expect(api.submitTransfer).toHaveBeenLastCalledWith("session_failed", {
+        decisionChoice: "approve_high_accuracy",
+        metricChoice: "accuracy",
+        evidenceChoices: ["many_true_negatives"],
+      }),
+    );
   });
 });

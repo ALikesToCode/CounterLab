@@ -12,12 +12,15 @@ import imbalanceResultText from "../../../fixtures/held-out/imbalance_epistemic_
 import { SAMPLE_LEAKAGE_QUESTION } from "../shared/sample-authority";
 
 import { App } from "./App";
+import { SessionViewSchema } from "./api";
 import {
   publicReplayFixture,
   replayFixture,
 } from "./components/replay/ProofCapsuleReplayView.fixture";
 import { activeRunnerRegistryKey } from "./features/learner/activeRunnerRegistry";
-import { sampleArtifact, sampleResult } from "./sample";
+import { requireBundledSampleResult, sampleArtifact } from "./sample";
+
+const sampleResult = requireBundledSampleResult();
 
 const verifiedImbalanceResult = VerifiedResultSetSchema.parse(
   JSON.parse(imbalanceResultText),
@@ -93,7 +96,8 @@ const liveBeliefTest = {
   ],
   decisiveIntervention: {
     id: "live-group-split",
-    description: "Hold out complete customers.",
+    description:
+      "Compare the registered evaluation boundary while keeping the model fixed.",
     controlledVariables: ["model", "metric", "seed"],
     changedVariables: ["split boundary"],
     discriminatesBecause: "The hypotheses predict different held-out accuracy.",
@@ -199,6 +203,57 @@ const liveResult = {
   })),
 };
 
+const liveLabSceneView = {
+  schemaVersion: "1" as const,
+  scene: {
+    schemaVersion: "2" as const,
+    sceneId: "scene_live_ui",
+    sessionId: "session_ui",
+    concept: "entity_leakage" as const,
+    supportLabel: "GUIDED_VISUAL" as const,
+    title: "See the verified test as a bounded scene",
+    blocks: [
+      {
+        id: "unseen_accuracy",
+        type: "Metric" as const,
+        label: "Whole-customer accuracy",
+        resultBinding: "/runs/byId/customer_group_split/metrics/accuracy",
+        unit: "proportion",
+      },
+      {
+        id: "familiar_accuracy",
+        type: "Metric" as const,
+        label: "Familiar-row accuracy",
+        resultBinding: "/runs/byId/random_row_split/metrics/accuracy",
+        unit: "proportion",
+      },
+    ],
+    assumptions: ["The model and preprocessing remain fixed."],
+    limitations: ["This result is bounded to the submitted notebook."],
+    provenance: {
+      experimentIrHash: "b".repeat(64),
+      discriminationContractHash: "c".repeat(64),
+    },
+  },
+  verifiedSceneHash: "d".repeat(64),
+  signedResult: {
+    schemaVersion: "1" as const,
+    verificationStatus: "VERIFIED" as const,
+    sceneHash: "d".repeat(64),
+    sceneId: "scene_live_ui",
+    sessionId: "session_ui",
+    concept: "entity_leakage" as const,
+    experimentIrHash: "b".repeat(64),
+    discriminationContractHash: "c".repeat(64),
+    resultHash: liveResult.resultHash,
+    integrity: {
+      mode: "integrity-hashed" as const,
+      contentHash: liveResult.resultHash,
+    },
+    result: liveResult,
+  },
+};
+
 const committedPrediction = {
   schemaVersion: "1" as const,
   id: "prediction_ui",
@@ -208,6 +263,55 @@ const committedPrediction = {
   confidence: 88,
   committedAt: "2026-07-14T09:03:00.000Z",
   immutableHash: "f".repeat(64),
+};
+
+const failedLeakageTransfer = {
+  schemaVersion: "1" as const,
+  id: "transfer_failed_ui",
+  sessionId: "session_ui",
+  taskId: "forecasting-future-leakage-01",
+  outcome: "FAILED" as const,
+  selectedStrategy: "random_row_holdout",
+  identifiedRisks: ["model_is_too_simple"],
+  evidenceChoices: ["metric_is_mae"],
+  checks: [
+    {
+      invariant: "TIME_AWARE_EVALUATION",
+      passed: false,
+      evidence: "The submitted evaluation did not match deployment time.",
+    },
+  ],
+  evaluatorVersion: "counterlab-transfer-v1",
+  evaluatedAt: "2026-07-14T09:05:00.000Z",
+  resultHash: "e".repeat(64),
+};
+
+const committedImbalancePrediction = {
+  ...committedPrediction,
+  id: "prediction_imbalance_ui",
+  beliefTestId: liveImbalanceBeliefSpec.id,
+  choice: "Minority metrics expose a serious evaluation problem",
+};
+
+const failedImbalanceTransfer = {
+  schemaVersion: "1" as const,
+  id: "transfer_failed_imbalance_ui",
+  sessionId: "session_ui",
+  taskId: "manufacturing-defect-transfer-01",
+  outcome: "FAILED" as const,
+  selectedStrategy: "approve_high_accuracy",
+  identifiedRisks: ["accuracy"],
+  evidenceChoices: ["many_true_negatives"],
+  checks: [
+    {
+      invariant: "ACCURACY_CLAIM_REJECTED",
+      passed: false,
+      evidence: "Overall accuracy does not establish rare-class utility.",
+    },
+  ],
+  evaluatorVersion: "counterlab-imbalance-transfer-v1",
+  evaluatedAt: "2026-07-14T09:05:00.000Z",
+  resultHash: "d".repeat(64),
 };
 
 const liveRunnerJob = {
@@ -302,6 +406,14 @@ function errorResponse(
   );
 }
 
+function deferredResponse() {
+  let resolve!: (value: Response) => void;
+  const promise = new Promise<Response>((fulfilled) => {
+    resolve = fulfilled;
+  });
+  return { promise, resolve };
+}
+
 function installApi(
   options: {
     liveGpt?: "configured" | "server-key-required";
@@ -325,6 +437,9 @@ function installApi(
       | "LAB_COMPILING"
       | "LAB_VERIFIED"
       | "EXPERIMENT_COMPLETED"
+      | "REVISION_RECORDED"
+      | "TRANSFER_FAILED"
+      | "TRANSFER_PASSED"
       | "REASONING_DIFF_ISSUED"
       | "PROOF_CAPSULE_ISSUED";
     restoredSessionExtra?: Record<string, unknown>;
@@ -334,6 +449,7 @@ function installApi(
       | "BELIEF_TEST_CONFIRMED"
       | "PREDICTION_COMMITTED";
     restartSessionExtra?: Record<string, unknown>;
+    omitRestoredPrediction?: boolean;
     replay?: ReturnType<typeof publicReplayFixture>;
     eventsHandler?: (
       sessionId: string,
@@ -350,12 +466,14 @@ function installApi(
     sampleId: "leakage-01",
   };
   let activeArtifactId = artifact.artifactId;
+  let activePrediction: Record<string, unknown> | null = null;
   let eventRequestIndex = 0;
   const fetcher = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
       const routedSessionId = /^\/api\/sessions\/([^/]+)/u.exec(path)?.[1];
-      if (path === "/api/health") {
+      if (path === "/api/health" || path === "/api/health?readiness=probe") {
+        const deepReadiness = path.endsWith("?readiness=probe");
         return response({
           platform: "cloudflare-workers",
           sample: "available",
@@ -363,6 +481,12 @@ function installApi(
           liveGpt: options.liveGpt ?? "server-key-required",
           liveCodex: options.runner ?? "local-runner-required",
           liveKernel: options.runner ?? "local-runner-required",
+          readiness: deepReadiness
+            ? options.liveGpt === "configured" &&
+              options.runner === "configured"
+              ? "ready"
+              : "not-ready"
+            : "not-checked",
           sandbox:
             options.runner === "configured"
               ? "credential-and-privilege-boundary"
@@ -377,6 +501,19 @@ function installApi(
                   workerEvidenceCommit: "a".repeat(40),
                   runnerSourceCommit: "b".repeat(40),
                   runnerImageDigest: `sha256:${"c".repeat(64)}`,
+                  timeoutCleanupReceiptSha256: "d".repeat(64),
+                  aggregateLimitEvidenceSha256: "9".repeat(64),
+                  runtimePolicySha256: "e".repeat(64),
+                  proofDependencyManifestSha256: "f".repeat(64),
+                  workerArtifactClassification: "PROCESS_BOUND_PARTIAL",
+                  workerArtifactManifestSha256: "1".repeat(64),
+                  workerBundleSha256: "2".repeat(64),
+                  clientAssetsSha256: "3".repeat(64),
+                  clientAssetCount: 27,
+                  clientPublicAssetsSha256: "4".repeat(64),
+                  clientPublicAssetCount: 25,
+                  viteVersion: "8.1.4",
+                  wranglerVersion: "4.110.0",
                 },
               }
             : {}),
@@ -449,6 +586,9 @@ function installApi(
       if (path === "/api/sessions/session_ui/artifact") {
         return response(uploadedArtifact);
       }
+      if (path === "/api/sessions/session_ui/lab-scene") {
+        return response(liveLabSceneView);
+      }
       if (path === "/api/sessions/session_revision/artifact") {
         return response(uploadedArtifact);
       }
@@ -464,11 +604,31 @@ function installApi(
       }
       if (path === "/api/sessions/session_ui") {
         activeMode = { kind: "live_notebook" };
+        activeArtifactId = uploadedArtifact.artifactId;
+        const restoredExtra = options.restoredSessionExtra ?? {};
+        const restoredState = options.restoredSessionState ?? "LAB_COMPILING";
+        const restoredStateRequiresPrediction = ![
+          "INGESTED",
+          "INSUFFICIENT_EVIDENCE",
+          "REJECTED_BY_LEARNER",
+          "BELIEF_TEST_PROPOSED",
+          "BELIEF_TEST_CONFIRMED",
+        ].includes(restoredState);
+        activePrediction =
+          restoredExtra.prediction === undefined
+            ? restoredStateRequiresPrediction &&
+              options.omitRestoredPrediction !== true
+              ? committedPrediction
+              : null
+            : (restoredExtra.prediction as Record<string, unknown>);
         return response(
-          session(options.restoredSessionState ?? "LAB_COMPILING", 5, {
+          session(restoredState, 5, {
             artifactId: uploadedArtifact.artifactId,
             mode: { kind: "live_notebook" },
-            ...options.restoredSessionExtra,
+            ...(activePrediction === null
+              ? {}
+              : { prediction: activePrediction }),
+            ...restoredExtra,
           }),
         );
       }
@@ -574,6 +734,19 @@ function installApi(
         );
       }
       if (path.endsWith("/prediction")) {
+        const input = JSON.parse(String(init?.body)) as {
+          choice: string;
+          confidence: number;
+        };
+        activePrediction = {
+          ...committedPrediction,
+          sessionId:
+            routedSessionId === undefined
+              ? committedPrediction.sessionId
+              : decodeURIComponent(routedSessionId),
+          choice: input.choice,
+          confidence: input.confidence,
+        };
         return response(
           session("PREDICTION_COMMITTED", 4, {
             ...(routedSessionId === undefined
@@ -581,6 +754,7 @@ function installApi(
               : { sessionId: decodeURIComponent(routedSessionId) }),
             artifactId: activeArtifactId,
             mode: activeMode,
+            prediction: activePrediction,
           }),
           201,
         );
@@ -603,6 +777,9 @@ function installApi(
         if (options.stallRunner) {
           return response({
             ...session("LAB_COMPILING", 5, {
+              ...(routedSessionId === undefined
+                ? {}
+                : { sessionId: decodeURIComponent(routedSessionId) }),
               artifactId: activeArtifactId,
               mode: activeMode,
             }),
@@ -611,18 +788,96 @@ function installApi(
         }
         return response(
           session("LAB_VERIFIED", 6, {
+            ...(routedSessionId === undefined
+              ? {}
+              : { sessionId: decodeURIComponent(routedSessionId) }),
             artifactId: activeArtifactId,
             mode: activeMode,
+            ...(activePrediction === null
+              ? {}
+              : { prediction: activePrediction }),
           }),
         );
       }
       if (path.endsWith("/lab/run")) {
+        const completed = session("EXPERIMENT_COMPLETED", 7, {
+          ...(routedSessionId === undefined
+            ? {}
+            : { sessionId: decodeURIComponent(routedSessionId) }),
+          artifactId: activeArtifactId,
+          mode: activeMode,
+          ...(activePrediction === null
+            ? {}
+            : { prediction: activePrediction }),
+          verifiedResult:
+            activeMode.kind === "live_notebook" ? liveResult : sampleResult,
+        });
+        SessionViewSchema.parse(completed);
+        return response(completed);
+      }
+      if (path.endsWith("/revision")) {
+        const input = JSON.parse(String(init?.body)) as { revision: string };
         return response(
-          session("EXPERIMENT_COMPLETED", 7, {
+          session("REVISION_RECORDED", 8, {
+            ...(routedSessionId === undefined
+              ? {}
+              : { sessionId: decodeURIComponent(routedSessionId) }),
             artifactId: activeArtifactId,
             mode: activeMode,
+            ...(activePrediction === null
+              ? {}
+              : { prediction: activePrediction }),
             verifiedResult:
               activeMode.kind === "live_notebook" ? liveResult : sampleResult,
+            revision: input.revision,
+          }),
+        );
+      }
+      if (path.endsWith("/transfer")) {
+        const input = JSON.parse(String(init?.body)) as {
+          strategyChoice: string;
+          riskChoice: string;
+          evidenceChoices: string[];
+        };
+        const passed =
+          input.strategyChoice === "time_ordered_holdout" &&
+          input.riskChoice === "centered_window_reads_future" &&
+          input.evidenceChoices.includes("center_true_uses_later_targets") &&
+          input.evidenceChoices.includes("random_split_mixes_dates");
+        return response(
+          session(passed ? "TRANSFER_PASSED" : "TRANSFER_FAILED", 9, {
+            ...(routedSessionId === undefined
+              ? {}
+              : { sessionId: decodeURIComponent(routedSessionId) }),
+            artifactId: activeArtifactId,
+            mode: activeMode,
+            ...(activePrediction === null
+              ? {}
+              : { prediction: activePrediction }),
+            verifiedResult:
+              activeMode.kind === "live_notebook" ? liveResult : sampleResult,
+            revision:
+              "Evaluation must match deployment timing and use exact code evidence.",
+            transferResult: {
+              ...failedLeakageTransfer,
+              sessionId:
+                routedSessionId === undefined
+                  ? "session_ui"
+                  : decodeURIComponent(routedSessionId),
+              id: passed ? "transfer_passed_ui" : "transfer_failed_ui",
+              outcome: passed ? "PASSED" : "FAILED",
+              selectedStrategy: input.strategyChoice,
+              identifiedRisks: [input.riskChoice],
+              evidenceChoices: input.evidenceChoices,
+              checks: [
+                {
+                  invariant: "FIXED_TRANSFER",
+                  passed,
+                  evidence:
+                    "The fixed transfer evaluator checked the submission.",
+                },
+              ],
+            },
           }),
         );
       }
@@ -642,9 +897,33 @@ function installApi(
           templateCommit: "4f2f647228304d63ac8b9cba8cdca1dc7a07e192",
           compilerTrace: {
             schemaVersion: "1",
-            replayId: "leakage-01",
+            replayId,
             label: "Verified replay",
-            trace: [{ stage: "external_verifier", status: "VERIFIED" }],
+            modelId: "gpt-5.6-sol",
+            codexVersion: "codex-cli 0.144.4",
+            repositoryCommitAtRun: "4f2f647228304d63ac8b9cba8cdca1dc7a07e192",
+            publicSdkDocumentationHash: "a".repeat(64),
+            recordedAt: "2026-07-14T11:50:37.947Z",
+            generationIsolation: {
+              status: "PARTIAL",
+              limitation:
+                "Generation-time hidden-verifier isolation is partial.",
+            },
+            candidateExecutionIsolation: {
+              status: "VERIFIED",
+              properties: ["hidden verifier not mounted"],
+            },
+            trace: [
+              {
+                stage: "external_verifier",
+                status: "VERIFIED",
+                run: "verified-live-run",
+                invariants: 18,
+                mutationsDetected: 12,
+                mutationsTotal: 12,
+                resultHash: sampleResult.resultHash,
+              },
+            ],
           },
           result: sampleResult,
           patch: { status: "VERIFIED" },
@@ -735,6 +1014,11 @@ async function openSampleModelDuel(user: ReturnType<typeof userEvent.setup>) {
 
 describe("CounterLab judged flow", () => {
   it("keeps Judge Mode on its own refresh-safe route", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi({
+      liveGpt: "configured",
+      runner: "configured",
+    });
     window.localStorage.setItem("counterlab.mode", "live");
     window.localStorage.setItem("counterlab.sessionId", "stale_session");
     window.history.replaceState({}, "", "/judge");
@@ -748,8 +1032,31 @@ describe("CounterLab judged flow", () => {
     ).toBeInTheDocument();
     expect(window.location.pathname).toBe("/judge");
     expect(
-      screen.getByRole("link", { name: /watch verified replay/i }),
+      screen.getByRole("link", { name: /inspect stored evidence/i }),
     ).toHaveAttribute("href", "/replay/leakage-01");
+    expect(
+      await screen.findByText(/live readiness has not been checked/i),
+    ).toBeInTheDocument();
+    expect(
+      fetcher.mock.calls.filter(([path]) => String(path) === "/api/health"),
+    ).toHaveLength(1);
+    expect(
+      fetcher.mock.calls.some(
+        ([path]) => String(path) === "/api/health?readiness=probe",
+      ),
+    ).toBe(false);
+
+    await user.click(
+      screen.getByRole("button", { name: /check live readiness/i }),
+    );
+    expect(
+      await screen.findByRole("link", { name: /run an unprimed live test/i }),
+    ).toHaveAttribute("href", "/new");
+    expect(
+      fetcher.mock.calls.some(
+        ([path]) => String(path) === "/api/health?readiness=probe",
+      ),
+    ).toBe(true);
   });
 
   it("starts with a question and keeps every honest path available", async () => {
@@ -760,6 +1067,16 @@ describe("CounterLab judged flow", () => {
       screen.getByRole("heading", {
         name: "What result are you trying to understand?",
       }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /for learners testing whether a notebook result means what they think it means/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /evidence-first learning.*seal a Prediction.*fixed evidence.*not AI prose/i,
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /skip to main content/i }),
@@ -784,6 +1101,9 @@ describe("CounterLab judged flow", () => {
     );
     expect(screen.getByText(/no account needed/i)).toBeInTheDocument();
     expect(
+      document.querySelector(".landing-trust-line .landing-trust-line"),
+    ).toBeNull();
+    expect(
       screen.getByText(/fixed kernels calculate the result/i),
     ).toBeInTheDocument();
     expect(
@@ -804,14 +1124,20 @@ describe("CounterLab judged flow", () => {
       screen.getByRole("button", { name: /test this claim/i }),
     ).toBeDisabled();
     expect(
-      screen.getByText(/completed fixed sample preview/i),
+      screen.getByText(/result hidden until your Prediction is sealed/i),
     ).toBeInTheDocument();
-    expect(await screen.findByText("98.5%")).toBeInTheDocument();
     expect(
-      screen.getByLabelText(/verified sample belief-break mechanism/i),
-    ).toHaveTextContent("59.4%");
-    expect(screen.getByText("Boundary consequence")).toBeInTheDocument();
-    expect(screen.getByText("Learner benefit")).toBeInTheDocument();
+      screen.getByText(
+        /name the claim.*lock your expectation.*change one thing/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/fair-test mechanism with result locked/i),
+    ).toHaveTextContent(/familiar-row test.*unseen-entity test/i);
+    expect(document.body).not.toHaveTextContent(/98\.5%|59\.4%/i);
+    expect(
+      screen.getByLabelText(/fair-test mechanism with result locked/i),
+    ).toHaveAttribute("data-result-visibility", "locked");
     const proofSummary = screen.getByText("Evidence & proof");
     await user.click(screen.getByRole("link", { name: /how proof works/i }));
     expect(proofSummary.closest("details")).toHaveAttribute("open");
@@ -980,7 +1306,7 @@ describe("CounterLab judged flow", () => {
     await openLiveSetup(user);
 
     await user.upload(
-      await screen.findByLabelText(/attach a supported notebook/i),
+      screen.getByLabelText(/attach a supported notebook/i),
       new File(["not-json"], "broken.ipynb", {
         type: "application/json",
       }),
@@ -1011,7 +1337,7 @@ describe("CounterLab judged flow", () => {
     await openLiveSetup(user);
 
     await user.upload(
-      await screen.findByLabelText(/attach a supported notebook/i),
+      screen.getByLabelText(/attach a supported notebook/i),
       new File(["{}"], unsupportedArtifact.fileName, {
         type: "application/json",
       }),
@@ -1054,7 +1380,7 @@ describe("CounterLab judged flow", () => {
       /could not reach the api/i,
     );
     await user.upload(
-      screen.getByLabelText(/attach a supported notebook/i),
+      await screen.findByLabelText(/attach a supported notebook/i),
       file,
     );
 
@@ -1266,7 +1592,7 @@ describe("CounterLab judged flow", () => {
       screen.getByText(/hosted notebook runner is ready/i),
     ).toBeInTheDocument();
     await user.upload(
-      screen.getByLabelText(/attach a supported notebook/i),
+      await screen.findByLabelText(/attach a supported notebook/i),
       new File(["{}"], uploadedArtifact.fileName, {
         type: "application/json",
       }),
@@ -1322,7 +1648,10 @@ describe("CounterLab judged flow", () => {
         name: /does your current explanation capture what you mean/i,
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/live competing hypothesis/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/partly remembers customers it already saw/i),
+    ).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/live competing hypothesis/i);
     expect(
       screen.getByText(/notebook schema selected as evidence/i),
     ).toBeInTheDocument();
@@ -1342,6 +1671,14 @@ describe("CounterLab judged flow", () => {
 
     expect(
       await screen.findByRole("heading", { name: /the result is ready/i }),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: /show me what happened/i }),
+    );
+    expect(
+      await screen.findByRole("heading", {
+        name: /see the verified test as a bounded scene/i,
+      }),
     ).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(/local runner required/i);
     expect(
@@ -1402,6 +1739,27 @@ describe("CounterLab judged flow", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("withholds a restored result that has no immutable Prediction", async () => {
+    installApi({
+      restoredSessionState: "EXPERIMENT_COMPLETED",
+      restoredSessionExtra: { verifiedResult: liveResult },
+      omitRestoredPrediction: true,
+    });
+    window.history.replaceState({}, "", "/session/session_ui");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /this session could not be restored/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /compare the verified result/i }),
+    ).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/98\.5%|59\.4%/i);
+  });
+
   it("reviews a completed stage and restores focus to canonical progress", async () => {
     const user = userEvent.setup();
     installApi({
@@ -1415,12 +1773,14 @@ describe("CounterLab judged flow", () => {
       await screen.findByTestId("learner-progress-desktop"),
     );
     await user.click(
-      desktopProgress.getByRole("button", { name: /review prediction/i }),
+      desktopProgress.getByRole("button", { name: /review test/i }),
     );
     const reviewTitle = await screen.findByRole("heading", {
-      name: /review your prediction/i,
+      name: /review the fair test/i,
     });
     expect(reviewTitle).toHaveFocus();
+    expect(screen.getByText("Verified Test")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("Verified Lab");
 
     await user.click(
       screen.getByRole("button", { name: /return to current step/i }),
@@ -1448,11 +1808,15 @@ describe("CounterLab judged flow", () => {
       await screen.findByTestId("learner-progress-desktop"),
     );
     await user.click(
-      desktopProgress.getByRole("button", { name: /review prediction/i }),
+      desktopProgress.getByRole("button", { name: /review test/i }),
     );
     expect(
-      await screen.findByRole("heading", { name: /review your prediction/i }),
+      await screen.findByRole("heading", {
+        name: /review the rare-event test/i,
+      }),
     ).toHaveFocus();
+    expect(screen.getByText("Verified Test")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("Verified Lab");
   });
 
   it("keeps the two models equal and lets the learner edit their meaning", async () => {
@@ -1672,6 +2036,124 @@ describe("CounterLab judged flow", () => {
     expect(window.location.pathname).toBe("/session/session_revision");
   });
 
+  it("withholds adversarial live explanation prose before Prediction", async () => {
+    const maliciousBeliefSpec = {
+      ...liveBeliefSpec,
+      hypotheses: [
+        liveBeliefSpec.hypotheses[0],
+        {
+          ...liveBeliefSpec.hypotheses[1],
+          statement:
+            "The verified result supports this hypothesis at 59.4%; the fix is to remove customer_id.",
+        },
+      ],
+    };
+    installApi({
+      restoredSessionState: "BELIEF_TEST_PROPOSED",
+      restoredSessionExtra: { beliefSpec: maliciousBeliefSpec },
+    });
+    window.history.replaceState({}, "", "/session/session_ui");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /refused unsafe pre-result wording/i,
+      }),
+    ).toBeInTheDocument();
+    expect(document.body).toHaveTextContent(liveBeliefSpec.claim);
+    expect(document.body).not.toHaveTextContent(
+      /59\.4%|supports this hypothesis|remove customer_id/i,
+    );
+    expect(
+      screen.queryByRole("button", { name: /yes, this captures my view/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /start a fresh investigation/i }),
+    ).toBeEnabled();
+  });
+
+  it("withholds adversarial historical v1 prose before Prediction", async () => {
+    const historicalLearnerClaim =
+      "Does this familiar-row notebook score extend to unseen accounts?";
+    const maliciousBeliefTest = {
+      ...liveBeliefTest,
+      learnerClaim: historicalLearnerClaim,
+      currentHypothesis: {
+        ...liveBeliefTest.currentHypothesis,
+        predictedOutcome:
+          "The verified result is 59.4%; the fix is to remove customer_id.",
+      },
+    };
+    installApi({
+      restoredSessionState: "BELIEF_TEST_PROPOSED",
+      restoredSessionExtra: {
+        beliefTest: maliciousBeliefTest,
+        beliefSpec: undefined,
+      },
+    });
+    window.history.replaceState({}, "", "/session/session_ui");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /refused unsafe pre-result wording/i,
+      }),
+    ).toBeInTheDocument();
+    expect(document.body).toHaveTextContent(historicalLearnerClaim);
+    expect(document.body).not.toHaveTextContent(
+      /59\.4%|verified result|remove customer_id/i,
+    );
+    expect(
+      screen.queryByRole("button", { name: /yes, this captures my view/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders only closed Subject Pack framing before Prediction", async () => {
+    const modelAuthoredSentinel = "A bespoke analyst phrase for cohort omega.";
+    const proposed = {
+      ...liveBeliefSpec,
+      hypotheses: [
+        {
+          ...liveBeliefSpec.hypotheses[0],
+          statement: modelAuthoredSentinel,
+          conditions: ["Bespoke analyst condition omega."],
+          nonClaims: ["Bespoke analyst limitation omega."],
+        },
+        liveBeliefSpec.hypotheses[1],
+      ],
+      alternatives: [
+        {
+          ...liveBeliefSpec.alternatives[0],
+          rationale: "Bespoke analyst alternative omega.",
+        },
+      ],
+    };
+    installApi({
+      restoredSessionState: "BELIEF_TEST_PROPOSED",
+      restoredSessionExtra: { beliefSpec: proposed },
+    });
+    window.history.replaceState({}, "", "/session/session_ui");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /does your current explanation capture what you mean/i,
+      }),
+    ).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/bespoke analyst/i);
+    expect(
+      screen.getByText(
+        /The model learned a useful pattern that will work for new customers/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Pre-result explanation wording comes from/i),
+    ).toBeInTheDocument();
+  });
+
   it.each([
     ["rejected", "REJECTED_BY_LEARNER"],
     ["insufficient", "INSUFFICIENT_EVIDENCE"],
@@ -1694,7 +2176,10 @@ describe("CounterLab judged flow", () => {
       };
       window.localStorage.setItem("counterlab.sessionId", "session_ui");
       window.localStorage.setItem("counterlab.claim", learnerClaim);
-      window.localStorage.setItem("counterlab.claimSessionId", "session_ui");
+      window.localStorage.setItem(
+        "counterlab.claimSessionId",
+        "session_ui",
+      );
       window.localStorage.setItem("counterlab.mode", "live");
       window.history.replaceState({}, "", "/session/session_ui");
       const fetcher = installApi({
@@ -1860,6 +2345,66 @@ describe("CounterLab judged flow", () => {
     ).toBe(true);
   });
 
+  it("ignores a late cancel response after browser navigation", async () => {
+    const user = userEvent.setup();
+    const normalFetch = installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      stallRunner: true,
+    });
+    const cancellationResponse = await normalFetch(
+      "/api/sessions/session_ui/jobs/runner_job_ui/cancel",
+      { method: "POST" },
+    );
+    const pending = deferredResponse();
+    const fetcher = vi.fn<typeof fetch>((input, init) =>
+      String(input).endsWith("/jobs/runner_job_ui/cancel")
+        ? pending.promise
+        : normalFetch(input, init),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem("counterlab.mode", "live");
+    window.history.replaceState({}, "", "/session/session_ui");
+    window.localStorage.setItem(
+      "counterlab.activeRunnerJobId",
+      liveRunnerJob.jobId,
+    );
+    window.localStorage.setItem(
+      "counterlab.activeRunnerJobKind",
+      liveRunnerJob.kind,
+    );
+
+    render(<App />);
+    await user.click(
+      await screen.findByRole("button", { name: /cancel this test/i }),
+    );
+    await vi.waitFor(() =>
+      expect(
+        fetcher.mock.calls.some(([path]) =>
+          String(path).endsWith("/jobs/runner_job_ui/cancel"),
+        ),
+      ).toBe(true),
+    );
+
+    act(() => {
+      window.history.pushState({}, "", "/judge");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await screen.findByRole("heading", {
+      name: /see a verified belief break in ten seconds/i,
+    });
+    await act(async () => {
+      pending.resolve(cancellationResponse);
+      await pending.promise;
+    });
+
+    expect(window.location.pathname).toBe("/judge");
+    expect(document.body).not.toHaveTextContent(
+      /You cancelled this test before it could release a result/i,
+    );
+  });
+
   it("confirms Start over, cancels every registered live job, and then returns home", async () => {
     const user = userEvent.setup();
     const fetcher = installApi({
@@ -1908,6 +2453,71 @@ describe("CounterLab judged flow", () => {
       window.sessionStorage.getItem(activeRunnerRegistryKey("session_ui")),
     ).toBeNull();
     expect(window.location.pathname).toBe("/");
+  });
+
+  it("does not let a late Start over cancellation replace a newer route", async () => {
+    const user = userEvent.setup();
+    const normalFetch = installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      stallRunner: true,
+    });
+    const cancellationResponse = await normalFetch(
+      "/api/sessions/session_ui/jobs/runner_job_ui/cancel",
+      { method: "POST" },
+    );
+    const pending = deferredResponse();
+    const fetcher = vi.fn<typeof fetch>((input, init) =>
+      String(input).endsWith("/jobs/runner_job_ui/cancel")
+        ? pending.promise
+        : normalFetch(input, init),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem("counterlab.mode", "live");
+    window.history.replaceState({}, "", "/session/session_ui");
+    window.localStorage.setItem(
+      "counterlab.activeRunnerJob.session_ui",
+      JSON.stringify({
+        schemaVersion: "1",
+        sessionId: "session_ui",
+        jobId: liveRunnerJob.jobId,
+        kind: liveRunnerJob.kind,
+      }),
+    );
+
+    render(<App />);
+    await screen.findByRole("button", { name: /cancel this test/i });
+    await user.click(screen.getByRole("button", { name: /^start over$/i }));
+    await user.click(
+      screen.getByRole("button", { name: /stop jobs and start over/i }),
+    );
+    await vi.waitFor(() =>
+      expect(
+        fetcher.mock.calls.some(([path]) =>
+          String(path).endsWith("/jobs/runner_job_ui/cancel"),
+        ),
+      ).toBe(true),
+    );
+
+    act(() => {
+      window.history.pushState({}, "", "/judge");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await screen.findByRole("heading", {
+      name: /see a verified belief break in ten seconds/i,
+    });
+    await act(async () => {
+      pending.resolve(cancellationResponse);
+      await pending.promise;
+    });
+
+    expect(window.location.pathname).toBe("/judge");
+    expect(
+      screen.getByRole("heading", {
+        name: /see a verified belief break in ten seconds/i,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("keeps an unreachable live job registered when Start over detaches offline", async () => {
@@ -2038,6 +2648,28 @@ describe("CounterLab judged flow", () => {
       storedEvidenceEvent("session_ui", 2, "prediction.committed", "learner"),
       storedEvidenceEvent("session_ui", 3, "experiment.completed", "kernel"),
     ];
+    const storedCompilerEvents = [
+      {
+        schemaVersion: "1" as const,
+        eventId: "compiler_plan_1",
+        jobId: "job_compile_history",
+        cursor: 1,
+        at: "2026-07-19T10:01:00.000Z",
+        kind: "plan.summary" as const,
+        title: "Stored bounded compile plan",
+        steps: ["Read approved evidence", "Emit typed experiment IR"],
+      },
+      {
+        schemaVersion: "1" as const,
+        eventId: "compiler_verifier_2",
+        jobId: "job_compile_history",
+        cursor: 2,
+        at: "2026-07-19T10:01:01.000Z",
+        kind: "verifier.verified" as const,
+        invariantCount: 12,
+        mutationCount: 8,
+      },
+    ];
     const fetcher = installApi({
       restoredSessionState: "EXPERIMENT_COMPLETED",
       restoredSessionExtra: {
@@ -2045,7 +2677,18 @@ describe("CounterLab judged flow", () => {
         prediction: committedPrediction,
         verifiedResult: liveResult,
       },
-      eventsHandler: () => response({ events: storedEvents }),
+      eventsHandler: () =>
+        response({
+          events: storedEvents,
+          compilerEvents: storedCompilerEvents,
+          compilerActivity: {
+            schemaVersion: "1",
+            status: "RECORDED",
+            ordering: "job-created-at-job-id-then-cursor",
+            jobCount: 1,
+            eventCount: 2,
+          },
+        }),
     });
     window.history.replaceState({}, "", "/session/session_ui");
 
@@ -2062,6 +2705,15 @@ describe("CounterLab judged flow", () => {
       /session\.created[\s\S]*prediction\.committed[\s\S]*experiment\.completed/,
     );
     expect(chain).toHaveTextContent(/Sequence 2 · learner/);
+    await user.click(screen.getByRole("tab", { name: "Plan" }));
+    expect(
+      (await screen.findAllByText(/stored bounded compile plan/i)).length,
+    ).toBeGreaterThan(0);
+    await user.click(screen.getByRole("tab", { name: "Verifier" }));
+    expect(
+      (await screen.findAllByText(/12 invariants and 8 mutations passed/i))
+        .length,
+    ).toBeGreaterThan(0);
     expect(
       fetcher.mock.calls.some(
         ([path]) => String(path) === "/api/sessions/session_ui/events",
@@ -2155,6 +2807,44 @@ describe("CounterLab judged flow", () => {
     expect(screen.getByText(/0 chain events/)).toBeInTheDocument();
   });
 
+  it("clears an earlier same-session chain when a later integrity fetch fails", async () => {
+    const user = userEvent.setup();
+    installApi({
+      eventsHandler: (_sessionId, requestIndex) =>
+        requestIndex === 0
+          ? response({
+              events: [storedEvidenceEvent("session_ui", 1, "session.created")],
+            })
+          : errorResponse(
+              "EVIDENCE_CHAIN_INVALID",
+              "Stored evidence failed integrity validation",
+              409,
+            ),
+    });
+    render(<App />);
+
+    await user.click(
+      screen.getByRole("button", { name: /try verified sample/i }),
+    );
+    await screen.findByRole("heading", {
+      name: /what do you think the score means/i,
+    });
+    await user.click(screen.getByRole("button", { name: /evidence & proof/i }));
+    expect(
+      await screen.findByRole("region", { name: /session event chain/i }),
+    ).toHaveTextContent("session.created");
+
+    await user.click(
+      screen.getByRole("button", { name: /compare two explanations/i }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /stored session event chain is unavailable/i,
+    );
+    expect(document.body).not.toHaveTextContent("session.created");
+    expect(screen.getByText(/0 chain events/)).toBeInTheDocument();
+  });
+
   it("keeps URL synchronization active when a restored runner resume fails", async () => {
     installApi({
       restoredSessionState: "LAB_COMPILING",
@@ -2212,7 +2902,7 @@ describe("CounterLab judged flow", () => {
     ).toBe(false);
   });
 
-  it("renders the exact Belief Spec v2 after a live session refresh", async () => {
+  it("restores exact claim evidence with closed framing after a live session refresh", async () => {
     installApi({
       restoredSessionState: "BELIEF_TEST_PROPOSED",
       restoredSessionExtra: { beliefSpec: liveBeliefSpec },
@@ -2224,11 +2914,19 @@ describe("CounterLab judged flow", () => {
     render(<App />);
 
     expect(
-      await screen.findByText(liveBeliefSpec.hypotheses[0].statement),
+      await screen.findByText(
+        /The model learned a useful pattern that will work for new customers/i,
+      ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(liveBeliefSpec.hypotheses[1].statement),
+      screen.getByText(/The model partly remembers customers it already saw/i),
     ).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(
+      liveBeliefSpec.hypotheses[0].statement,
+    );
+    expect(document.body).not.toHaveTextContent(
+      liveBeliefSpec.hypotheses[1].statement,
+    );
     expect(
       screen.getByText(/notebook schema selected as evidence/i),
     ).toBeInTheDocument();
@@ -2265,6 +2963,114 @@ describe("CounterLab judged flow", () => {
     expect(
       screen.getByRole("heading", { name: /the result is ready/i }),
     ).toBeInTheDocument();
+  });
+
+  it("restores a failed transfer and submits only learner-selected canonical evidence", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi({
+      restoredSessionState: "TRANSFER_FAILED",
+      restoredSessionExtra: {
+        beliefSpec: liveBeliefSpec,
+        prediction: committedPrediction,
+        verifiedResult: liveResult,
+        revision:
+          "Evaluation must match deployment timing and use exact code evidence.",
+        transferResult: failedLeakageTransfer,
+      },
+    });
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem("counterlab.mode", "live");
+    window.history.replaceState({}, "", "/session/session_ui");
+
+    render(<App />);
+
+    expect(
+      await screen.findByText(/transfer not yet passed/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("radio", { name: /random daily rows/i }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("radio", { name: /model complexity/i }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: /metric definition/i }),
+    ).toBeChecked();
+    expect(
+      screen.queryByRole("button", { name: /verify notebook patch/i }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("radio", { name: /time-ordered holdout/i }),
+    );
+    await user.click(
+      screen.getByRole("radio", { name: /centered rolling target/i }),
+    );
+    await user.click(
+      screen.getByRole("checkbox", { name: /metric definition/i }),
+    );
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: /centered-window definition/i,
+      }),
+    );
+    await user.click(
+      screen.getByRole("checkbox", { name: /shuffled-split definition/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /check transfer/i }));
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /this fixed forecasting transfer passed/i,
+      }),
+    ).toBeInTheDocument();
+    const transferRequest = fetcher.mock.calls.find(([path]) =>
+      String(path).endsWith("/transfer"),
+    );
+    expect(JSON.parse(String(transferRequest?.[1]?.body))).toEqual({
+      strategyChoice: "time_ordered_holdout",
+      riskChoice: "centered_window_reads_future",
+      evidenceChoices: [
+        "center_true_uses_later_targets",
+        "random_split_mixes_dates",
+      ],
+    });
+  });
+
+  it("restores failed class-imbalance v1 choices after refresh", async () => {
+    installApi({
+      restoredSessionState: "TRANSFER_FAILED",
+      restoredSessionExtra: {
+        beliefSpec: liveImbalanceBeliefSpec,
+        prediction: committedImbalancePrediction,
+        verifiedResult: verifiedImbalanceResult,
+        revision:
+          "Overall accuracy needs minority-sensitive metrics and direct rare-class evidence.",
+        transferResult: failedImbalanceTransfer,
+      },
+    });
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem("counterlab.mode", "live");
+    window.history.replaceState({}, "", "/session/session_ui");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("radio", {
+        name: /approve because accuracy is 99%/i,
+      }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("radio", { name: /^accuracy only/i }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", {
+        name: /19,800 acceptable parts were classified correctly/i,
+      }),
+    ).toBeChecked();
+    expect(
+      screen.queryByRole("button", { name: /verify notebook patch/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("commits class-imbalance prediction wording from Belief Spec v2", async () => {
@@ -2454,15 +3260,12 @@ describe("CounterLab judged flow", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getByText("Verified result")).toBeInTheDocument();
-    expect(
-      await screen.findByLabelText(/verified sample belief-break mechanism/i),
-    ).toHaveTextContent("98.5%");
-    expect(
-      screen.getByLabelText(/verified sample belief-break mechanism/i),
-    ).toHaveTextContent("59.4%");
-    expect(
-      screen.getByLabelText(/verified sample belief-break mechanism/i),
-    ).toHaveTextContent(/record your interpretation/i);
+    const mechanism = await screen.findByLabelText(
+      /verified sample belief-break mechanism/i,
+    );
+    expect(await within(mechanism).findByText("98.5%")).toBeVisible();
+    expect(within(mechanism).getByText("59.4%")).toBeVisible();
+    expect(mechanism).toHaveTextContent(/record your interpretation/i);
     expect(document.body).not.toHaveTextContent(
       /a high score on familiar customers did not mean/i,
     );
@@ -2579,7 +3382,7 @@ describe("CounterLab judged flow", () => {
   });
 
   it("restores the exact replay URL instead of substituting the bundled replay", async () => {
-    const replayId = "replay/dynamic one";
+    const replayId = "replay:dynamic.one";
     window.localStorage.setItem("counterlab.mode", "replay");
     window.localStorage.setItem("counterlab.replayId", "stale-replay");
     window.history.replaceState(
@@ -2591,9 +3394,9 @@ describe("CounterLab judged flow", () => {
 
     render(<App />);
 
-    expect((await screen.findAllByText(replayId, { exact: true })).length).toBe(
-      2,
-    );
+    expect(
+      (await screen.findAllByText(replayId, { exact: true })).length,
+    ).toBeGreaterThan(0);
     expect(window.location.pathname).toBe(
       `/replay/${encodeURIComponent(replayId)}`,
     );
@@ -2691,7 +3494,9 @@ describe("CounterLab judged flow", () => {
 
     await user.click(screen.getByText("Recent work from this browser"));
     await user.click(
-      screen.getByRole("button", { name: /live notebook session.*ingested/i }),
+      screen.getByRole("button", {
+        name: /live notebook session.*question ready/i,
+      }),
     );
 
     expect(window.location.pathname).toBe("/session/session_ui");
@@ -2729,6 +3534,205 @@ describe("CounterLab judged flow", () => {
     expect(
       screen.queryByLabelText("Verified replay mode"),
     ).not.toBeInTheDocument();
+  });
+
+  it("ignores a deferred sample session after browser Back returns home", async () => {
+    const user = userEvent.setup();
+    const normalFetch = installApi();
+    const pending = deferredResponse();
+    const fetcher = vi.fn<typeof fetch>((input, init) =>
+      String(input) === "/api/sample/sessions"
+        ? pending.promise
+        : normalFetch(input, init),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    render(<App />);
+
+    await user.click(
+      screen.getByRole("button", { name: /try verified sample/i }),
+    );
+    await vi.waitFor(() =>
+      expect(
+        fetcher.mock.calls.some(
+          ([path]) => String(path) === "/api/sample/sessions",
+        ),
+      ).toBe(true),
+    );
+
+    act(() => {
+      window.history.pushState({}, "", "/");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(
+      await screen.findByRole("heading", {
+        name: /what result are you trying to understand/i,
+      }),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      pending.resolve(
+        response(
+          session("INGESTED", 1, {
+            mode: { kind: "sample_lesson", sampleId: "leakage-01" },
+          }),
+          201,
+        ),
+      );
+      await pending.promise;
+    });
+
+    expect(window.location.pathname).toBe("/");
+    expect(window.localStorage.getItem("counterlab.sessionId")).toBeNull();
+    expect(window.localStorage.getItem("counterlab.mode")).toBeNull();
+    expect(
+      screen.queryByRole("heading", {
+        name: /what do you think the score means/i,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("ignores a deferred replay after browser Back returns home", async () => {
+    const user = userEvent.setup();
+    const normalFetch = installApi();
+    const replayResponse = await normalFetch("/api/replays/leakage-01");
+    const pending = deferredResponse();
+    const fetcher = vi.fn<typeof fetch>((input, init) =>
+      String(input) === "/api/replays/leakage-01"
+        ? pending.promise
+        : normalFetch(input, init),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    render(<App />);
+
+    await user.click(
+      screen.getByRole("button", { name: /watch verified replay/i }),
+    );
+    await vi.waitFor(() =>
+      expect(
+        fetcher.mock.calls.some(
+          ([path]) => String(path) === "/api/replays/leakage-01",
+        ),
+      ).toBe(true),
+    );
+
+    act(() => {
+      window.history.pushState({}, "", "/");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await screen.findByRole("heading", {
+      name: /what result are you trying to understand/i,
+    });
+    await act(async () => {
+      pending.resolve(replayResponse);
+      await pending.promise;
+    });
+
+    expect(window.location.pathname).toBe("/");
+    expect(window.localStorage.getItem("counterlab.replayId")).toBeNull();
+    expect(screen.queryByLabelText("Replay status")).not.toBeInTheDocument();
+  });
+
+  it("ignores a deferred notebook upload after browser Back returns home", async () => {
+    const user = userEvent.setup();
+    const normalFetch = installApi({
+      liveGpt: "configured",
+      runner: "configured",
+    });
+    const pending = deferredResponse();
+    const fetcher = vi.fn<typeof fetch>((input, init) =>
+      String(input) === "/api/artifacts" && init?.body instanceof FormData
+        ? pending.promise
+        : normalFetch(input, init),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    render(<App />);
+    await openLiveSetup(user);
+
+    await user.upload(
+      await screen.findByLabelText(/attach a supported notebook/i),
+      new File(["{}"], uploadedArtifact.fileName, {
+        type: "application/x-ipynb+json",
+      }),
+    );
+    await vi.waitFor(() =>
+      expect(
+        fetcher.mock.calls.some(
+          ([path, init]) =>
+            String(path) === "/api/artifacts" && init?.body instanceof FormData,
+        ),
+      ).toBe(true),
+    );
+
+    act(() => {
+      window.history.pushState({}, "", "/");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await screen.findByRole("heading", {
+      name: /what result are you trying to understand/i,
+    });
+    await act(async () => {
+      pending.resolve(response(uploadedArtifact, 201));
+      await pending.promise;
+    });
+
+    expect(window.location.pathname).toBe("/");
+    expect(window.localStorage.getItem("counterlab.sessionId")).toBeNull();
+    expect(document.body).not.toHaveTextContent(uploadedArtifact.fileName);
+  });
+
+  it("ignores a deferred live-session creation after browser Back returns home", async () => {
+    const user = userEvent.setup();
+    const normalFetch = installApi({
+      liveGpt: "configured",
+      runner: "configured",
+    });
+    const pending = deferredResponse();
+    const fetcher = vi.fn<typeof fetch>((input, init) =>
+      String(input) === "/api/live/sessions"
+        ? pending.promise
+        : normalFetch(input, init),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    render(<App />);
+    await openLiveSetup(user);
+
+    await user.upload(
+      await screen.findByLabelText(/attach a supported notebook/i),
+      new File(["{}"], uploadedArtifact.fileName, {
+        type: "application/x-ipynb+json",
+      }),
+    );
+    await vi.waitFor(() =>
+      expect(
+        fetcher.mock.calls.some(
+          ([path]) => String(path) === "/api/live/sessions",
+        ),
+      ).toBe(true),
+    );
+
+    act(() => {
+      window.history.pushState({}, "", "/");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await screen.findByRole("heading", {
+      name: /what result are you trying to understand/i,
+    });
+    await act(async () => {
+      pending.resolve(
+        response(
+          session("INGESTED", 1, {
+            artifactId: uploadedArtifact.artifactId,
+            mode: { kind: "live_notebook" },
+          }),
+          201,
+        ),
+      );
+      await pending.promise;
+    });
+
+    expect(window.location.pathname).toBe("/");
+    expect(window.localStorage.getItem("counterlab.sessionId")).toBeNull();
+    expect(document.body).not.toHaveTextContent(uploadedArtifact.fileName);
   });
 
   it("renders a hosted Capsule replay as read-only artifact-specific evidence", async () => {
@@ -2811,6 +3815,29 @@ describe("CounterLab judged flow", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /replay was not found/i,
     );
+    expect(screen.queryByLabelText(/replay status/i)).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/verified replay/i);
+  });
+
+  it("does not misreport a replay integrity failure as a missing link", async () => {
+    window.history.replaceState({}, "", "/replay/replay-integrity-failed");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () =>
+        errorResponse(
+          "REPLAY_AUTHORITY_MISMATCH",
+          "Replay authority did not verify",
+          409,
+        ),
+      ),
+    );
+
+    render(<App />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /replay could not be verified/i,
+    );
+    expect(document.body).not.toHaveTextContent(/replay was not found/i);
     expect(screen.queryByLabelText(/replay status/i)).not.toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(/verified replay/i);
   });

@@ -5,10 +5,10 @@ import { describe, expect, it, vi } from "vitest";
 import { LearnerCompletion } from "./LearnerCompletion";
 
 const capability = Object.freeze({
-  intro: "You can now distinguish:",
+  intro: "You completed one verified comparison.",
   first: "good on familiar rows",
-  connector: "from",
-  second: "generalizes to new entities",
+  connector: "was compared with",
+  second: "performance on new entities in this fixed task",
 });
 
 describe("LearnerCompletion", () => {
@@ -106,6 +106,13 @@ describe("LearnerCompletion", () => {
         .getByRole("heading", { name: capability.intro })
         .closest("section"),
     ).toHaveAttribute("data-motion", "reduced-safe");
+    expect(
+      screen
+        .getByRole("heading", { name: capability.intro })
+        .closest("section"),
+    ).not.toHaveTextContent(
+      /you can now distinguish|mastered|mastery achieved/i,
+    );
 
     fetchSpy.mockRestore();
   });

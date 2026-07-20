@@ -1,7 +1,8 @@
 import type { CapabilityHealth } from "../../api";
 import { VerifiedBeliefBreakMechanism } from "../../components/learner/VerifiedBeliefBreakTheater";
-import { verifiedReplay } from "../../sample";
+import { verifiedReplay } from "../../sampleReplayMetadata";
 import styles from "./JudgeModeView.module.css";
+import { SampleEvidencePack } from "./SampleEvidencePack";
 
 const learnerStages = [
   ["01", "Question", "Name the claim and bind it to exact evidence."],
@@ -14,7 +15,8 @@ const learnerStages = [
 
 function liveAuthorityReady(health: CapabilityHealth | null): boolean {
   return (
-    health?.liveGpt === "configured" &&
+    health?.readiness === "ready" &&
+    health.liveGpt === "configured" &&
     health.liveCodex === "configured" &&
     health.liveKernel === "configured" &&
     health.sandbox === "credential-and-privilege-boundary" &&
@@ -60,14 +62,17 @@ export function JudgeModeView({
 
       <section className={styles.hero} aria-labelledby="judge-title">
         <div className={styles.heroCopy}>
-          <p className={styles.kicker}>Ask like chat. Prove it like science.</p>
+          <p className={styles.kicker}>
+            Evidence-first learning for notebook users
+          </p>
           <h1 id="judge-title" tabIndex={-1}>
             See a verified belief break in ten seconds.
           </h1>
           <p className={styles.lede}>
-            CounterLab turns a notebook claim into two competing models, locks
-            the learner&apos;s prediction, and lets fixed computation—not fluent
-            prose—decide what the evidence supports.
+            Seal a Prediction, change one condition, and let fixed evidence—not
+            AI prose—release the bounded result. CounterLab turns the
+            learner&apos;s notebook claim into a checkable Question → Prediction
+            → Test → Boundary → Apply → Repair record.
           </p>
         </div>
 
@@ -86,15 +91,28 @@ export function JudgeModeView({
             Approved fixed sample framing. No GPT-5.6, Codex, or runner call
             occurs in this preview.
           </p>
-          <VerifiedBeliefBreakMechanism presentation="preview" />
+          <VerifiedBeliefBreakMechanism presentation="compact" />
+          <a className={styles.previewProofLink} href="#sample-evidence">
+            Inspect exact values and integrity
+          </a>
         </aside>
 
         <div className={styles.heroAfter}>
           <div className={styles.heroActions}>
-            <button type="button" onClick={onStartSample}>
-              Start sample <span aria-hidden="true">→</span>
-            </button>
-            <a href="/replay/leakage-01">Watch verified replay</a>
+            {liveReady ? (
+              <a href="/new">
+                Run an unprimed live test <span aria-hidden="true">→</span>
+              </a>
+            ) : (
+              <button
+                type="button"
+                onClick={onRetryHealth}
+                disabled={healthPending}
+              >
+                Check live readiness
+              </button>
+            )}
+            <a href="/replay/leakage-01">Inspect stored evidence</a>
           </div>
           <p className={styles.scopeLine}>
             Released notebook support: entity leakage and class imbalance in
@@ -110,12 +128,17 @@ export function JudgeModeView({
         <header>
           <p>Generated vs. computed vs. verified</p>
           <h2 id="authority-title">Four authorities. No blurred hand-offs.</h2>
+          <p>
+            These roles describe supported live notebook runs. The disclosed
+            sample above uses checked-in fixed evidence; replay shows stored
+            historical evidence and makes no new calls.
+          </p>
         </header>
         <div className={styles.authorityGrid}>
           <article>
             <span className={styles.authorityIndex}>A</span>
             <h3>GPT-5.6</h3>
-            <strong>Frames the belief</strong>
+            <strong>Frames a supported live belief</strong>
             <p>
               Reads only approved, sanitized evidence and proposes competing
               hypotheses. It cannot execute the notebook or invent results.
@@ -124,7 +147,7 @@ export function JudgeModeView({
           <article>
             <span className={styles.authorityIndex}>B</span>
             <h3>Runtime Codex</h3>
-            <strong>Compiles the test plan</strong>
+            <strong>Compiles a supported live test plan</strong>
             <p>
               Produces bounded operation IDs and repairs structured plans. It
               cannot author formulas, metrics, or unrestricted code.
@@ -133,10 +156,11 @@ export function JudgeModeView({
           <article>
             <span className={styles.authorityIndex}>C</span>
             <h3>Fixed kernel</h3>
-            <strong>Computes every number</strong>
+            <strong>Computes live result values</strong>
             <p>
-              Runs registered split, metric, Boundary Map, and transfer
-              operations deterministically from versioned inputs.
+              In a live run, it executes registered split, metric, Boundary Map,
+              and transfer operations deterministically. Sample and replay
+              surfaces disclose stored evidence instead.
             </p>
           </article>
           <article>
@@ -159,13 +183,14 @@ export function JudgeModeView({
         <div className={styles.pathGrid}>
           <article>
             <span className={styles.modeTag}>Sample lesson</span>
-            <h3>Try the complete learning loop.</h3>
+            <h3>Open the disclosed sample walkthrough.</h3>
             <p>
               Bundled approved evidence. Fast, deterministic, no account or
-              model credential. Always labelled as a sample.
+              model credential. Because its answer is visible above, this path
+              is not counted as an unassisted Prediction.
             </p>
             <button type="button" onClick={onStartSample}>
-              Start sample <span aria-hidden="true">→</span>
+              Open disclosed walkthrough <span aria-hidden="true">→</span>
             </button>
           </article>
 
@@ -183,8 +208,12 @@ export function JudgeModeView({
               {healthPending
                 ? "Checking deployed authority…"
                 : liveReady
-                  ? "Deployed live authority is configured"
-                  : "Live authority is unavailable"}
+                  ? "Exact runner readiness was observed; model credentials are exercised only by a live run"
+                  : healthError !== null
+                    ? "Live authority is unavailable; readiness could not be checked"
+                    : health?.readiness === "not-checked"
+                      ? "Live readiness has not been checked"
+                      : "Live authority did not pass the latest readiness check"}
             </div>
             {liveReady ? (
               <a href="/new">
@@ -224,6 +253,93 @@ export function JudgeModeView({
           </article>
         </div>
       </section>
+
+      <section
+        className={styles.lineageSection}
+        aria-labelledby="lineage-title"
+      >
+        <header>
+          <p>Established pedagogy, a different evidence layer</p>
+          <h2 id="lineage-title">What CounterLab builds on—and adds.</h2>
+          <p>
+            CounterLab does not claim to invent predict-before-reveal. Its
+            narrower contribution is binding that learning loop to a supported
+            artifact, fixed computation, frozen verification, deterministic
+            transfer, and a portable evidence record.
+          </p>
+        </header>
+        <div className={styles.contrastGrid}>
+          <article>
+            <span>Learning-science lineage</span>
+            <h3>Predict–Observe–Explain and Peer Instruction</h3>
+            <p>
+              These approaches establish prediction and commitment before the
+              reveal. CounterLab carries that lineage into a machine-checked,
+              artifact-bound loop; the pedagogy itself is not new.
+            </p>
+            <div className={styles.sourceLinks}>
+              <a
+                href="https://teach.lams.es/pedagogies/poe"
+                rel="noreferrer"
+                target="_blank"
+              >
+                LAMS POE overview
+              </a>
+              <a
+                href="https://www.frontiersin.org/journals/education/articles/10.3389/feduc.2018.00033/full"
+                rel="noreferrer"
+                target="_blank"
+              >
+                Peer Instruction review
+              </a>
+            </div>
+          </article>
+          <article>
+            <span>Closest lesson pattern</span>
+            <h3>LAMS Predict–Observe–Explain</h3>
+            <p>
+              LAMS already pairs prediction, confidence, explanation, and
+              reflection. CounterLab adds a fixed transfer gate and separates
+              learner-facing Reasoning Diff from machine-facing Proof Capsule.
+            </p>
+            <a
+              href="https://teach.lams.es/pedagogies/poe"
+              rel="noreferrer"
+              target="_blank"
+            >
+              Inspect the prior-art template
+            </a>
+          </article>
+          <article>
+            <span>Closest notebook tooling</span>
+            <h3>NBLyzer and sklearn-diagnose</h3>
+            <p>
+              These tools detect or diagnose notebook and model problems.
+              CounterLab&apos;s scoped difference is learner action: predict,
+              inspect one controlled test, map a Boundary, and pass transfer
+              before Repair unlocks.
+            </p>
+            <div className={styles.sourceLinks}>
+              <a
+                href="https://arxiv.org/html/2603.10742v3"
+                rel="noreferrer"
+                target="_blank"
+              >
+                NBLyzer paper
+              </a>
+              <a
+                href="https://github.com/leockl/sklearn-diagnose"
+                rel="noreferrer"
+                target="_blank"
+              >
+                sklearn-diagnose repository
+              </a>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <SampleEvidencePack />
 
       <section className={styles.methodSection} aria-labelledby="method-title">
         <div className={styles.methodIntro}>
@@ -310,6 +426,75 @@ export function JudgeModeView({
                   <dt>Container digest</dt>
                   <dd>
                     <code>{release.runnerImageDigest}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Timeout cleanup proof</dt>
+                  <dd>
+                    <code>{release.timeoutCleanupReceiptSha256}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Aggregate limit evidence</dt>
+                  <dd>
+                    <code>{release.aggregateLimitEvidenceSha256}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Qualification runtime policy</dt>
+                  <dd>
+                    <code>{release.runtimePolicySha256}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Qualification proof dependency manifest</dt>
+                  <dd>
+                    <code>{release.proofDependencyManifestSha256}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Frozen Worker artifact manifest SHA-256</dt>
+                  <dd>
+                    <code>{release.workerArtifactManifestSha256}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Frozen Worker bundle SHA-256</dt>
+                  <dd>
+                    <code>{release.workerBundleSha256}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Worker artifact evidence class</dt>
+                  <dd>
+                    <code>{release.workerArtifactClassification}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Frozen client deploy tree SHA-256</dt>
+                  <dd>
+                    <code>{release.clientAssetsSha256}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Frozen client deploy tree files</dt>
+                  <dd>{release.clientAssetCount}</dd>
+                </div>
+                <div>
+                  <dt>Fetchable public client subset SHA-256</dt>
+                  <dd>
+                    <code>{release.clientPublicAssetsSha256}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Fetchable public client files</dt>
+                  <dd>{release.clientPublicAssetCount}</dd>
+                </div>
+                <div>
+                  <dt>Frozen build tools</dt>
+                  <dd>
+                    Vite <code>{release.viteVersion}</code>; Wrangler{" "}
+                    <code>{release.wranglerVersion}</code>
                   </dd>
                 </div>
               </dl>

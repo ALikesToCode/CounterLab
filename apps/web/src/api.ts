@@ -16,7 +16,7 @@ import {
   PredictionContractSchema,
   ProofBundleSchema,
   PublicReplayProjectionV1Schema,
-  PublicReplayPublicationReceiptV1Schema,
+  PublicReplayPublicationReceiptSchema,
   PublicProofCapsuleRefV2Schema,
   PublicCompilerEventSchema,
   ReasoningDiffSchema,
@@ -26,6 +26,7 @@ import {
   RunnerJobStatusSchema,
   SessionModeSchema,
   SessionStateSchema,
+  TransferSubmissionSchema,
   TransferResultSchema,
   VerifiedResultSetSchema,
   apiSuccessSchema,
@@ -49,7 +50,7 @@ import {
   type PredictionContract,
   type ProofBundle,
   type PublicReplayProjectionV1,
-  type PublicReplayPublicationReceiptV1,
+  type PublicReplayPublicationReceipt,
   type PublicProofCapsuleRefV2,
   type ReasoningDiff,
   type ReasoningDiffV2,
@@ -59,6 +60,10 @@ import {
   type TransferResult,
   type VerifiedResultSet,
 } from "@counterlab/contracts";
+import {
+  VerifiedLabSceneViewV1Schema,
+  type VerifiedLabSceneViewV1,
+} from "@counterlab/generative-ui-contracts";
 import { z } from "zod";
 
 import { canonicalUploadRequestBinding } from "../shared/upload-operation";
@@ -68,26 +73,54 @@ const Sha256Digest = z
   .string()
   .regex(/^[a-f0-9]{64}$/, "expected a lowercase SHA-256 digest");
 const DEFAULT_REQUEST_TIMEOUT_MS = 210_000;
+const HEALTH_REQUEST_TIMEOUT_MS = 10_000;
 const UPLOAD_REQUEST_TIMEOUT_MS = 60_000;
+const DOWNLOAD_REQUEST_TIMEOUT_MS = 60_000;
 const RESTART_IDEMPOTENCY_KEY = "counterlab.restart.v1";
 
-const ReleaseIdentitySchema = z.discriminatedUnion("status", [
-  z.object({ status: z.literal("unbound") }).strict(),
-  z
-    .object({
-      status: z.literal("bound"),
-      workerVersionId: z
-        .string()
-        .regex(
-          /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/,
-        ),
-      workerVersionTag: z.string().regex(/^git-[a-f0-9]{40}$/),
-      workerEvidenceCommit: z.string().regex(/^[a-f0-9]{40}$/),
-      runnerSourceCommit: z.string().regex(/^[a-f0-9]{40}$/),
-      runnerImageDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
-    })
-    .strict(),
-]);
+const ReleaseIdentitySchema = z
+  .discriminatedUnion("status", [
+    z.object({ status: z.literal("unbound") }).strict(),
+    z
+      .object({
+        status: z.literal("bound"),
+        workerVersionId: z
+          .string()
+          .regex(
+            /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/,
+          ),
+        workerVersionTag: z.string().regex(/^git-[a-f0-9]{40}$/),
+        workerEvidenceCommit: z.string().regex(/^[a-f0-9]{40}$/),
+        runnerSourceCommit: z.string().regex(/^[a-f0-9]{40}$/),
+        runnerImageDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+        timeoutCleanupReceiptSha256: z.string().regex(/^[a-f0-9]{64}$/),
+        aggregateLimitEvidenceSha256: z.string().regex(/^[a-f0-9]{64}$/),
+        runtimePolicySha256: z.string().regex(/^[a-f0-9]{64}$/),
+        proofDependencyManifestSha256: z.string().regex(/^[a-f0-9]{64}$/),
+        workerArtifactClassification: z.literal("PROCESS_BOUND_PARTIAL"),
+        workerArtifactManifestSha256: z.string().regex(/^[a-f0-9]{64}$/),
+        workerBundleSha256: z.string().regex(/^[a-f0-9]{64}$/),
+        clientAssetsSha256: z.string().regex(/^[a-f0-9]{64}$/),
+        clientAssetCount: z.number().int().positive(),
+        clientPublicAssetsSha256: z.string().regex(/^[a-f0-9]{64}$/),
+        clientPublicAssetCount: z.number().int().positive(),
+        viteVersion: z.literal("8.1.4"),
+        wranglerVersion: z.literal("4.110.0"),
+      })
+      .strict(),
+  ])
+  .superRefine((release, context) => {
+    if (
+      release.status === "bound" &&
+      release.clientPublicAssetCount > release.clientAssetCount
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["clientPublicAssetCount"],
+        message: "public client asset count exceeds the full deploy tree",
+      });
+    }
+  });
 
 export const CapabilityHealthSchema = z
   .object({
@@ -98,6 +131,7 @@ export const CapabilityHealthSchema = z
     liveCodex: z.enum(["configured", "local-runner-required"]),
     liveKernel: z.enum(["configured", "local-runner-required"]),
     maintenance: z.boolean().optional(),
+    readiness: z.enum(["not-checked", "ready", "not-ready"]).optional(),
     release: ReleaseIdentitySchema.optional(),
     sandbox: z.enum([
       "credential-and-privilege-boundary",
@@ -158,6 +192,8 @@ function requireExclusiveBeliefAuthority(
   value: {
     beliefTest?: unknown;
     beliefSpec?: unknown;
+    prediction?: unknown;
+    verifiedResult?: unknown;
     evidenceVerdict?: unknown;
     epistemicReportHash?: unknown;
   },
@@ -185,6 +221,13 @@ function requireExclusiveBeliefAuthority(
       code: "custom",
       message: "epistemic evidence requires Belief Spec v2 authority",
       path: ["evidenceVerdict"],
+    });
+  }
+  if (value.verifiedResult !== undefined && value.prediction === undefined) {
+    context.addIssue({
+      code: "custom",
+      message: "a verified result requires an immutable Prediction",
+      path: ["prediction"],
     });
   }
 }
@@ -315,6 +358,7 @@ const BoundaryResponseSchema = z
     }
   });
 export type BoundaryResponse = z.infer<typeof BoundaryResponseSchema>;
+export type VerifiedLabSceneView = VerifiedLabSceneViewV1;
 
 const ReasoningDiffResponseSchema = z.union([
   ReasoningDiffV2Schema,
@@ -334,8 +378,109 @@ const RunnerEventsResponseSchema = z
 export type RunnerEventsResponse = z.infer<typeof RunnerEventsResponseSchema>;
 
 const EventsResponseSchema = z
-  .object({ events: z.array(EvidenceEventSchema) })
-  .strict();
+  .object({
+    events: z.array(EvidenceEventSchema),
+    compilerEvents: z.array(PublicCompilerEventSchema).max(512).optional(),
+    compilerActivity: z
+      .object({
+        schemaVersion: z.literal("1"),
+        status: z.literal("RECORDED"),
+        ordering: z.literal("job-created-at-job-id-then-cursor"),
+        jobCount: z.number().int().nonnegative().max(32),
+        eventCount: z.number().int().nonnegative().max(512),
+      })
+      .strict()
+      .optional(),
+    integrity: z
+      .object({
+        schemaVersion: z.literal("1"),
+        status: z.literal("VERIFIED"),
+        eventChainHead: Sha256Digest,
+        eventCount: z.number().int().positive(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .superRefine((response, context) => {
+    if (
+      (response.compilerEvents === undefined) !==
+      (response.compilerActivity === undefined)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["compilerActivity"],
+        message:
+          "compiler events and their recorded-stream receipt must appear together",
+      });
+    }
+    if (
+      response.compilerEvents !== undefined &&
+      response.compilerActivity !== undefined
+    ) {
+      if (
+        response.compilerActivity.eventCount !== response.compilerEvents.length
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["compilerActivity", "eventCount"],
+          message:
+            "compiler activity receipt count does not match returned events",
+        });
+      }
+      const eventIds = new Set<string>();
+      const seenJobs = new Set<string>();
+      const lastCursorByJob = new Map<string, number>();
+      let activeJobId: string | undefined;
+      for (const [index, event] of response.compilerEvents.entries()) {
+        if (
+          eventIds.has(event.eventId) ||
+          (activeJobId !== undefined &&
+            event.jobId !== activeJobId &&
+            seenJobs.has(event.jobId)) ||
+          event.cursor !== (lastCursorByJob.get(event.jobId) ?? 0) + 1
+        ) {
+          context.addIssue({
+            code: "custom",
+            path: ["compilerEvents", index],
+            message:
+              "compiler activity is not unique and contiguous in recorded order",
+          });
+          break;
+        }
+        eventIds.add(event.eventId);
+        seenJobs.add(event.jobId);
+        activeJobId = event.jobId;
+        lastCursorByJob.set(event.jobId, event.cursor);
+      }
+      if (seenJobs.size > response.compilerActivity.jobCount) {
+        context.addIssue({
+          code: "custom",
+          path: ["compilerActivity", "jobCount"],
+          message: "compiler activity receipt omits a returned job stream",
+        });
+      }
+    }
+    if (response.integrity === undefined) return;
+    if (response.integrity.eventCount !== response.events.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["integrity", "eventCount"],
+        message: "evidence receipt count does not match returned events",
+      });
+    }
+    if (
+      response.events.at(-1)?.eventHash !== response.integrity.eventChainHead
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["integrity", "eventChainHead"],
+        message: "evidence receipt head does not match returned events",
+      });
+    }
+  });
+
+export type SessionEventsSnapshot = z.infer<typeof EventsResponseSchema>;
 
 const PatchCompileResponseSchema = z
   .object({
@@ -355,6 +500,95 @@ const PatchCompileResponseSchema = z
     }
   });
 
+const LegacyReplayTraceEntrySchema = z.union([
+  z
+    .object({
+      stage: z.literal("generate"),
+      status: z.literal("COMPLETED"),
+      run: NonEmptyString,
+      durationMs: z.number().int().nonnegative(),
+      files: z
+        .array(
+          z.enum([
+            "experiment-plan.json",
+            "artifact-adapter.py",
+            "public_tests.py",
+          ]),
+        )
+        .min(1),
+    })
+    .strict(),
+  z
+    .object({
+      stage: z.literal("external_verifier"),
+      status: z.literal("REJECTED"),
+      run: NonEmptyString,
+      invariant: NonEmptyString,
+      counterexample: NonEmptyString.max(500),
+    })
+    .strict(),
+  z
+    .object({
+      stage: z.enum(["repair_1", "repair_2"]),
+      status: z.literal("REJECTED"),
+      run: NonEmptyString,
+      durationMs: z.number().int().nonnegative(),
+      invariant: NonEmptyString,
+      counterexample: NonEmptyString.max(500),
+    })
+    .strict(),
+  z
+    .object({
+      stage: z.literal("later_generate"),
+      status: z.literal("COMPLETED"),
+      run: NonEmptyString,
+      durationMs: z.number().int().nonnegative(),
+      note: NonEmptyString.max(500),
+    })
+    .strict(),
+  z
+    .object({
+      stage: z.literal("external_verifier"),
+      status: z.literal("VERIFIED"),
+      run: NonEmptyString,
+      invariants: z.number().int().positive(),
+      mutationsDetected: z.number().int().nonnegative(),
+      mutationsTotal: z.number().int().positive(),
+      resultHash: Sha256Digest,
+    })
+    .strict()
+    .refine((entry) => entry.mutationsDetected <= entry.mutationsTotal, {
+      message: "detected mutations cannot exceed the total",
+      path: ["mutationsDetected"],
+    }),
+]);
+
+const LegacyReplayCompilerTraceSchema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    replayId: NonEmptyString,
+    label: z.literal("Verified replay"),
+    modelId: NonEmptyString,
+    codexVersion: NonEmptyString,
+    repositoryCommitAtRun: NonEmptyString,
+    publicSdkDocumentationHash: Sha256Digest,
+    recordedAt: z.iso.datetime({ offset: true }),
+    generationIsolation: z
+      .object({
+        status: z.literal("PARTIAL"),
+        limitation: NonEmptyString.max(500),
+      })
+      .strict(),
+    candidateExecutionIsolation: z
+      .object({
+        status: z.literal("VERIFIED"),
+        properties: z.array(NonEmptyString.max(120)).min(1).max(12),
+      })
+      .strict(),
+    trace: z.array(LegacyReplayTraceEntrySchema).min(1).max(20),
+  })
+  .strict();
+
 const LegacyReplaySchema = z
   .object({
     schemaVersion: z.literal("1"),
@@ -365,18 +599,37 @@ const LegacyReplaySchema = z
     fixtureId: NonEmptyString,
     verifierVersion: NonEmptyString,
     templateCommit: NonEmptyString,
-    compilerTrace: z
-      .object({
-        schemaVersion: z.literal("1"),
-        replayId: NonEmptyString,
-        label: z.literal("Verified replay"),
-        trace: z.array(z.record(z.string(), z.unknown())).min(1),
-      })
-      .passthrough(),
+    compilerTrace: LegacyReplayCompilerTraceSchema,
     result: VerifiedResultSetSchema,
     patch: z.record(z.string(), z.unknown()),
   })
-  .strict();
+  .strict()
+  .superRefine((replay, context) => {
+    const trace = replay.compilerTrace;
+    if (
+      trace.replayId !== replay.replayId ||
+      trace.modelId !== replay.modelId ||
+      trace.recordedAt !== replay.recordedAt ||
+      trace.repositoryCommitAtRun !== replay.templateCommit
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["compilerTrace"],
+        message: "legacy compiler trace provenance does not match the replay",
+      });
+    }
+    const verified = trace.trace.find(
+      (entry) =>
+        entry.stage === "external_verifier" && entry.status === "VERIFIED",
+    );
+    if (verified?.resultHash !== replay.result.resultHash) {
+      context.addIssue({
+        code: "custom",
+        path: ["compilerTrace", "trace"],
+        message: "legacy compiler trace result does not match the replay",
+      });
+    }
+  });
 
 const ReplaySchema = z.union([
   LegacyReplaySchema,
@@ -389,13 +642,13 @@ export type VerifiedReplay =
 const PublishReplayResponseSchema = z
   .object({
     reused: z.boolean(),
-    replay: PublicReplayPublicationReceiptV1Schema,
+    replay: PublicReplayPublicationReceiptSchema,
   })
   .strict();
 
 export type PublishReplayResponse = {
   reused: boolean;
-  replay: PublicReplayPublicationReceiptV1;
+  replay: PublicReplayPublicationReceipt;
 };
 
 const RevokeReplayResponseSchema = z
@@ -412,8 +665,8 @@ const ReplayPublicationStatusSchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("never_published") }).strict(),
   z
     .object({
-      status: z.enum(["active", "revoked"]),
-      replay: PublicReplayPublicationReceiptV1Schema,
+      status: z.enum(["active", "revoked", "expired"]),
+      replay: PublicReplayPublicationReceiptSchema,
     })
     .strict(),
 ]);
@@ -495,13 +748,7 @@ const RevisionInputSchema = z
   .object({ revision: z.string().trim().min(20).max(4_000) })
   .strict();
 
-const TransferInputSchema = z
-  .object({
-    strategyChoice: NonEmptyString,
-    riskChoice: NonEmptyString,
-    evidenceChoices: z.array(NonEmptyString).max(3),
-  })
-  .strict();
+const TransferInputSchema = TransferSubmissionSchema;
 
 export type CreateSampleSessionInput = z.input<
   typeof CreateSampleSessionInputSchema
@@ -520,6 +767,10 @@ export type RevisionInput = z.input<typeof RevisionInputSchema>;
 export type TransferInput = z.input<typeof TransferInputSchema>;
 
 export type PatchCompileResponse = z.infer<typeof PatchCompileResponseSchema>;
+export type AuthenticatedDownload = Readonly<{
+  blob: Blob;
+  fileName: string;
+}>;
 
 export class ApiClientError extends Error {
   readonly code: string;
@@ -696,8 +947,15 @@ export class CounterLabApiClient {
     return this.sessionOwnerCapability(sessionId) !== undefined;
   }
 
-  getHealth(): Promise<CapabilityHealth> {
-    return this.request("/api/health", CapabilityHealthSchema);
+  getHealth(
+    options: { probeReadiness?: boolean } = {},
+  ): Promise<CapabilityHealth> {
+    return this.request(
+      options.probeReadiness ? "/api/health?readiness=probe" : "/api/health",
+      CapabilityHealthSchema,
+      { method: "GET" },
+      Math.min(this.requestTimeoutMs, HEALTH_REQUEST_TIMEOUT_MS),
+    );
   }
 
   createSampleArtifact(): Promise<ArtifactManifest> {
@@ -952,6 +1210,17 @@ export class CounterLabApiClient {
     );
   }
 
+  getLabScene(
+    sessionId: string,
+    signal?: AbortSignal,
+  ): Promise<VerifiedLabSceneView> {
+    return this.request(
+      `/api/sessions/${encodedId(sessionId)}/lab-scene`,
+      VerifiedLabSceneViewV1Schema,
+      signal === undefined ? {} : { signal },
+    );
+  }
+
   runInteractiveLeakage(
     sessionId: string,
     input: InteractiveLeakageRunRequest,
@@ -1049,15 +1318,35 @@ export class CounterLabApiClient {
     return `${this.baseUrl}/api/sessions/${encodedId(sessionId)}/patch/download`;
   }
 
+  downloadPatch(sessionId: string): Promise<AuthenticatedDownload> {
+    return this.downloadSessionArtifact(
+      sessionId,
+      `/api/sessions/${encodedId(sessionId)}/patch/download`,
+      "application/x-ipynb+json",
+      `counterlab-${sessionId}.patched.ipynb`,
+      ".ipynb",
+    );
+  }
+
   proofCapsuleDownloadUrl(sessionId: string): string {
     return `${this.baseUrl}/api/sessions/${encodedId(sessionId)}/proof-capsule`;
   }
 
-  getEvents(sessionId: string): Promise<EvidenceEvent[]> {
+  downloadProofCapsule(sessionId: string): Promise<AuthenticatedDownload> {
+    return this.downloadSessionArtifact(
+      sessionId,
+      `/api/sessions/${encodedId(sessionId)}/proof-capsule`,
+      "application/vnd.counterlab.capsule+json",
+      `counterlab-${sessionId}.counterlab`,
+      ".counterlab",
+    );
+  }
+
+  getEvents(sessionId: string): Promise<SessionEventsSnapshot> {
     return this.request(
       `/api/sessions/${encodedId(sessionId)}/events`,
       EventsResponseSchema,
-    ).then((response) => response.events);
+    );
   }
 
   getReasoningDiff(sessionId: string): Promise<ReasoningDiffResponse> {
@@ -1175,6 +1464,110 @@ export class CounterLabApiClient {
       method: "POST",
       body: JSON.stringify({}),
     });
+  }
+
+  private async downloadSessionArtifact(
+    sessionId: string,
+    path: string,
+    expectedMediaType: string,
+    fallbackFileName: string,
+    expectedFileSuffix: string,
+  ): Promise<AuthenticatedDownload> {
+    const headers: Record<string, string> = { accept: expectedMediaType };
+    const capability = this.sessionOwnerCapability(sessionId);
+    if (capability !== undefined) {
+      headers.authorization = `Bearer ${capability}`;
+    }
+    const controller = new AbortController();
+    let timedOut = false;
+    const timeout = globalThis.setTimeout(
+      () => {
+        timedOut = true;
+        controller.abort();
+      },
+      Math.min(this.requestTimeoutMs, DOWNLOAD_REQUEST_TIMEOUT_MS),
+    );
+    let response: Response;
+    try {
+      const fetcher = this.fetcher ?? globalThis.fetch.bind(globalThis);
+      response = await fetcher(`${this.baseUrl}${path}`, {
+        method: "GET",
+        headers,
+        credentials: "same-origin",
+        signal: controller.signal,
+      });
+    } catch (cause) {
+      throw new ApiClientError({
+        code: timedOut ? "REQUEST_TIMEOUT" : "NETWORK_ERROR",
+        message: timedOut
+          ? "CounterLab stopped waiting for the download"
+          : "CounterLab could not retrieve the download",
+        status: 0,
+        retryable: true,
+        cause,
+      });
+    } finally {
+      globalThis.clearTimeout(timeout);
+    }
+    if (!response.ok) {
+      let parsedError: z.infer<typeof ApiErrorEnvelopeSchema> | undefined;
+      try {
+        const parsed = ApiErrorEnvelopeSchema.safeParse(await response.json());
+        if (parsed.success) parsedError = parsed.data;
+      } catch {
+        // A malformed failure body is reported as a generic download failure.
+      }
+      throw new ApiClientError({
+        code: parsedError?.error.code ?? "DOWNLOAD_FAILED",
+        message:
+          parsedError?.error.message ??
+          "CounterLab could not retrieve the download",
+        status: parsedError?.error.status ?? response.status,
+        retryable: parsedError?.error.retryable ?? false,
+      });
+    }
+    const contentType = response.headers.get("content-type") ?? "";
+    const mediaType = contentType.split(";", 1)[0]?.trim().toLowerCase();
+    if (mediaType !== expectedMediaType.toLowerCase()) {
+      throw new ApiClientError({
+        code: "INVALID_API_RESPONSE",
+        message: "CounterLab received an unexpected download media type",
+        status: response.status,
+      });
+    }
+    let blob: Blob;
+    try {
+      blob = await response.blob();
+    } catch (cause) {
+      throw new ApiClientError({
+        code: "INVALID_API_RESPONSE",
+        message: "CounterLab could not read the complete download",
+        status: response.status,
+        retryable: true,
+        cause,
+      });
+    }
+    if (blob.size === 0) {
+      throw new ApiClientError({
+        code: "INVALID_API_RESPONSE",
+        message: "CounterLab received an empty download",
+        status: response.status,
+      });
+    }
+    const disposition = response.headers.get("content-disposition") ?? "";
+    const proposedFileName =
+      /(?:^|;)\s*filename="([A-Za-z0-9._-]{1,180})"(?:;|$)/iu.exec(
+        disposition,
+      )?.[1];
+    const safeFallback = fallbackFileName.replace(/[^A-Za-z0-9._-]+/gu, "-");
+    const fileName =
+      proposedFileName !== undefined &&
+      proposedFileName !== "." &&
+      proposedFileName !== ".." &&
+      proposedFileName.toLowerCase().endsWith(expectedFileSuffix)
+        ? proposedFileName
+        : safeFallback;
+    return { blob, fileName };
   }
 
   private postRunnerActionWithoutInput<T>(

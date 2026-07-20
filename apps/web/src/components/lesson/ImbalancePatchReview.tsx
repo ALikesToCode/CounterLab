@@ -10,6 +10,7 @@ import {
 } from "../../api";
 import { useRunnerEvents } from "../../hooks/useRunnerEvents";
 import { recordLearnerInteraction } from "../../features/learner/interactionEvidence";
+import { saveAuthenticatedDownload } from "../../features/learner/saveDownload";
 import { LearnerCompletion } from "../learner/LearnerCompletion";
 import { RepairPreview } from "../learner/RepairPreview";
 import { DeferredReasoningDiffView } from "../proof/DeferredReasoningDiffView";
@@ -179,26 +180,48 @@ export function ImbalancePatchReview({
 
   const downloadPatch = () => {
     if (patch === null) return;
-    const anchor = document.createElement("a");
-    anchor.href = counterLabApi.patchDownloadUrl(session.sessionId);
-    anchor.download = "";
-    anchor.click();
-    void recordLearnerInteraction(session.sessionId, {
-      kind: "patch.downloaded",
-      stage: "repair",
-    });
+    setBusy(true);
+    setError(null);
+    void counterLabApi
+      .downloadPatch(session.sessionId)
+      .then((download) => {
+        saveAuthenticatedDownload(download);
+        void recordLearnerInteraction(session.sessionId, {
+          kind: "patch.downloaded",
+          stage: "repair",
+        });
+      })
+      .catch((caught: unknown) => {
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "CounterLab could not retrieve the repaired notebook.",
+        );
+      })
+      .finally(() => setBusy(false));
   };
 
   const exportCompletionProof = () => {
     if (session.proofCapsule !== undefined) {
-      const anchor = document.createElement("a");
-      anchor.href = counterLabApi.proofCapsuleDownloadUrl(session.sessionId);
-      anchor.download = "";
-      anchor.click();
-      void recordLearnerInteraction(session.sessionId, {
-        kind: "proof_capsule.downloaded",
-        stage: "repair",
-      });
+      setBusy(true);
+      setError(null);
+      void counterLabApi
+        .downloadProofCapsule(session.sessionId)
+        .then((download) => {
+          saveAuthenticatedDownload(download);
+          void recordLearnerInteraction(session.sessionId, {
+            kind: "proof_capsule.downloaded",
+            stage: "repair",
+          });
+        })
+        .catch((caught: unknown) => {
+          setError(
+            caught instanceof Error
+              ? caught.message
+              : "CounterLab could not retrieve the Proof Capsule.",
+          );
+        })
+        .finally(() => setBusy(false));
       return;
     }
     exportProof();
@@ -228,74 +251,90 @@ export function ImbalancePatchReview({
           }
         : null;
     const completion = (
-      <LearnerCompletion
-        titleId="imbalance-completion-title"
-        capability={{
-          intro: "You completed one verified rare-event loop.",
-          first: "high overall accuracy",
-          connector: "was compared with",
-          second: "rare-event performance in this fixed task",
-        }}
-        beforeReasoning={
-          session.beliefSpec?.claim ??
-          session.beliefTest?.learnerClaim ??
-          "A high overall score proves the model catches rare events."
-        }
-        afterReasoning={
-          session.revision ??
-          "Inspect class-specific errors, deployment prevalence, and asymmetric costs."
-        }
-        transferStatus={{
-          label: "Fixed transfer task passed",
-          detail:
-            "Your submitted choices matched the fixed manufacturing-defect evaluator. This records one task outcome; it does not establish mastery.",
-        }}
-        repairedNotebookAction={{
-          label: "Download repaired notebook",
-          onActivate: downloadPatch,
-        }}
-        proofCapsuleAction={{
-          label:
-            session.proofCapsule === undefined
-              ? "Download proof record"
-              : "Export Proof Capsule",
-          onActivate: exportCompletionProof,
-          disabled: session.proofCapsule === undefined && proof === null,
-        }}
-        evidenceAndProof={
-          liveCompletionProof === null ? (
-            <>
-              <p>Patched artifact {patch.patchedArtifactHash}</p>
-              <p>
-                The verified conclusion is bounded to the supported notebook,
-                fixed rare-event fixture, registered metrics, and transfer
-                scenario. It does not establish global model quality.
-              </p>
-            </>
-          ) : (
-            <DeferredReasoningDiffView
-              presentation="completion-evidence"
-              diff={liveCompletionProof.diff}
-              capsule={liveCompletionProof.capsule}
-              patch={patch}
-              patchDownloadUrl={counterLabApi.patchDownloadUrl(
-                session.sessionId,
-              )}
-              proofCapsuleDownloadUrl={counterLabApi.proofCapsuleDownloadUrl(
-                session.sessionId,
-              )}
-              publishReplay={() =>
-                counterLabApi.publishReplay(session.sessionId)
-              }
-              revokeReplay={() => counterLabApi.revokeReplay(session.sessionId)}
-              loadReplayStatus={() =>
-                counterLabApi.getReplayPublicationStatus(session.sessionId)
-              }
-              publicTextPreview={liveCompletionProof.publicTextPreview}
-            />
-          )
-        }
-      />
+      <>
+        {busy && (
+          <p className="transfer-feedback" role="status">
+            Retrieving verified download…
+          </p>
+        )}
+        {error !== null && (
+          <p className="transfer-feedback fail" role="alert">
+            {error}
+          </p>
+        )}
+        <LearnerCompletion
+          titleId="imbalance-completion-title"
+          capability={{
+            intro: "You completed one verified rare-event loop.",
+            first: "high overall accuracy",
+            connector: "was compared with",
+            second: "rare-event performance in this fixed task",
+          }}
+          beforeReasoning={
+            session.beliefSpec?.claim ??
+            session.beliefTest?.learnerClaim ??
+            "A high overall score proves the model catches rare events."
+          }
+          afterReasoning={
+            session.revision ??
+            "Inspect class-specific errors, deployment prevalence, and asymmetric costs."
+          }
+          transferStatus={{
+            label: "Fixed transfer task passed",
+            detail:
+              "Your submitted choices matched the fixed manufacturing-defect evaluator. This records one task outcome; it does not establish mastery.",
+          }}
+          repairedNotebookAction={{
+            label: "Download repaired notebook",
+            onActivate: downloadPatch,
+            disabled: busy,
+          }}
+          proofCapsuleAction={{
+            label:
+              session.proofCapsule === undefined
+                ? "Download proof record"
+                : "Export Proof Capsule",
+            onActivate: exportCompletionProof,
+            disabled:
+              busy || (session.proofCapsule === undefined && proof === null),
+          }}
+          evidenceAndProof={
+            liveCompletionProof === null ? (
+              <>
+                <p>Patched artifact {patch.patchedArtifactHash}</p>
+                <p>
+                  The verified conclusion is bounded to the supported notebook,
+                  fixed rare-event fixture, registered metrics, and transfer
+                  scenario. It does not establish global model quality.
+                </p>
+              </>
+            ) : (
+              <DeferredReasoningDiffView
+                presentation="completion-evidence"
+                diff={liveCompletionProof.diff}
+                capsule={liveCompletionProof.capsule}
+                patch={patch}
+                patchDownloadUrl={counterLabApi.patchDownloadUrl(
+                  session.sessionId,
+                )}
+                proofCapsuleDownloadUrl={counterLabApi.proofCapsuleDownloadUrl(
+                  session.sessionId,
+                )}
+                publishReplay={() =>
+                  counterLabApi.publishReplay(session.sessionId)
+                }
+                revokeReplay={() =>
+                  counterLabApi.revokeReplay(session.sessionId)
+                }
+                loadReplayStatus={() =>
+                  counterLabApi.getReplayPublicationStatus(session.sessionId)
+                }
+                publicTextPreview={liveCompletionProof.publicTextPreview}
+              />
+            )
+          }
+        />
+      </>
     );
     if (liveCompletionProof !== null) {
       return (

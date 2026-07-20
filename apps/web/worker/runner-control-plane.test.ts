@@ -30,18 +30,105 @@ const job: RunnerJob = {
   outputHashes: [],
   eventCursor: 0,
 };
+const runnerImageDigest = `sha256:${"c".repeat(64)}`;
+const runnerSourceCommit = "b".repeat(40);
+const runnerReleaseIdentity = { runnerSourceCommit, runnerImageDigest };
 
 describe("HttpRunnerDispatcher", () => {
-  it("checks a Container binding without cold-starting a readiness instance", async () => {
-    const getByName = vi.fn(() => {
-      throw new Error("readiness must not cold-start a Container");
-    });
+  it("starts and probes the digest-bound Container readiness instance", async () => {
+    const startAndWaitForPorts = vi.fn(async () => undefined);
+    const readyResponse = new Response(
+      JSON.stringify({
+        status: "ready",
+        service: "counterlab-hosted-runner",
+        runnerSourceCommit,
+        runnerImageDigest,
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+    const fetch = vi.fn(async () => readyResponse);
+    const getByName = vi.fn(() => ({ startAndWaitForPorts, fetch }));
     const dispatcher = new CloudflareContainerRunnerDispatcher(
       { getByName },
       {},
+      runnerReleaseIdentity,
     );
 
     await expect(dispatcher.ready()).resolves.toBe(true);
+    expect(getByName).toHaveBeenCalledWith(
+      `counterlab-readiness-${"c".repeat(64)}`,
+    );
+    expect(startAndWaitForPorts).toHaveBeenCalledWith({
+      ports: [8080],
+      cancellationOptions: {
+        instanceGetTimeoutMS: 10_000,
+        portReadyTimeoutMS: 30_000,
+      },
+      startOptions: {
+        envVars: {},
+        entrypoint: ["/usr/local/bin/node", "/app/runner.mjs"],
+      },
+    });
+    expect(fetch).toHaveBeenCalledWith("http://runner.internal/ready", {
+      method: "GET",
+      headers: { accept: "application/json" },
+      signal: expect.any(AbortSignal),
+    });
+    expect(readyResponse.bodyUsed).toBe(true);
+  });
+
+  it.each([
+    ["startup failure", "startup"],
+    ["unhealthy status", "status"],
+    ["invalid response", "schema"],
+    ["stale source identity", "source"],
+    ["stale image identity", "image"],
+  ])("fails Container readiness closed on %s", async (_label, failure) => {
+    const startAndWaitForPorts = vi.fn(async () => {
+      if (failure === "startup") throw new Error("image did not start");
+    });
+    const fetch = vi.fn(async () => {
+      if (failure === "status") {
+        return new Response(JSON.stringify({ status: "not-ready" }), {
+          status: 503,
+        });
+      }
+      const payload = {
+        status: "ready",
+        service:
+          failure === "schema" ? "wrong-runner" : "counterlab-hosted-runner",
+        runnerSourceCommit:
+          failure === "source" ? "d".repeat(40) : runnerSourceCommit,
+        runnerImageDigest:
+          failure === "image" ? `sha256:${"e".repeat(64)}` : runnerImageDigest,
+      };
+      return new Response(JSON.stringify(payload), { status: 200 });
+    });
+    const dispatcher = new CloudflareContainerRunnerDispatcher(
+      { getByName: () => ({ startAndWaitForPorts, fetch }) },
+      {},
+      runnerReleaseIdentity,
+    );
+
+    await expect(dispatcher.ready()).resolves.toBe(false);
+  });
+
+  it.each([
+    [
+      "invalid source commit",
+      { runnerSourceCommit: "main", runnerImageDigest },
+    ],
+    [
+      "invalid image digest",
+      { runnerSourceCommit, runnerImageDigest: "counterlab-runner:latest" },
+    ],
+  ])("rejects %s before acquiring a Container", (_label, identity) => {
+    const getByName = vi.fn();
+
+    expect(
+      () =>
+        new CloudflareContainerRunnerDispatcher({ getByName }, {}, identity),
+    ).toThrow(/must be exact for readiness/u);
     expect(getByName).not.toHaveBeenCalled();
   });
 
@@ -52,6 +139,7 @@ describe("HttpRunnerDispatcher", () => {
     );
     const dispatcher = new HttpRunnerDispatcher({
       baseURL: "http://127.0.0.1:8788/",
+      releaseIdentity: runnerReleaseIdentity,
       fetch: fetcher,
     });
 
@@ -94,6 +182,7 @@ describe("HttpRunnerDispatcher", () => {
     const dispatcher = new CloudflareContainerRunnerDispatcher(
       { getByName },
       {},
+      runnerReleaseIdentity,
     );
 
     await expect(
@@ -122,6 +211,7 @@ describe("HttpRunnerDispatcher", () => {
     const dispatcher = new CloudflareContainerRunnerDispatcher(
       { getByName: () => ({ startAndWaitForPorts, fetch }) },
       {},
+      runnerReleaseIdentity,
     );
 
     await expect(
@@ -150,6 +240,7 @@ describe("HttpRunnerDispatcher", () => {
     const dispatcher = new CloudflareContainerRunnerDispatcher(
       { getByName: () => ({ startAndWaitForPorts, fetch }) },
       environment,
+      runnerReleaseIdentity,
     );
 
     await dispatcher.dispatch({
@@ -189,6 +280,7 @@ describe("HttpRunnerDispatcher", () => {
         }),
       },
       {},
+      runnerReleaseIdentity,
     );
 
     await dispatcher.cancel({
@@ -208,6 +300,7 @@ describe("HttpRunnerDispatcher", () => {
         getByName: () => ({ fetch, startAndWaitForPorts }),
       },
       {},
+      runnerReleaseIdentity,
     );
 
     await expect(
@@ -224,10 +317,19 @@ describe("HttpRunnerDispatcher", () => {
     const fetcher = vi.fn<typeof fetch>(async (_input, init) =>
       init?.method === "DELETE"
         ? new Response(JSON.stringify({ cancelled: true }), { status: 202 })
-        : new Response(JSON.stringify({ status: "ready" }), { status: 200 }),
+        : new Response(
+            JSON.stringify({
+              status: "ready",
+              service: "counterlab-hosted-runner",
+              runnerSourceCommit,
+              runnerImageDigest,
+            }),
+            { status: 200 },
+          ),
     );
     const dispatcher = new HttpRunnerDispatcher({
       baseURL: "https://runner.example.test",
+      releaseIdentity: runnerReleaseIdentity,
       fetch: fetcher,
     });
     const request = {
@@ -259,12 +361,17 @@ describe("HttpRunnerDispatcher", () => {
 
   it("rejects insecure non-loopback runners and credential-bearing URLs", () => {
     expect(
-      () => new HttpRunnerDispatcher({ baseURL: "http://runner.example.test" }),
+      () =>
+        new HttpRunnerDispatcher({
+          baseURL: "http://runner.example.test",
+          releaseIdentity: runnerReleaseIdentity,
+        }),
     ).toThrow(/HTTPS/i);
     expect(
       () =>
         new HttpRunnerDispatcher({
           baseURL: "https://user:pass@runner.example.test",
+          releaseIdentity: runnerReleaseIdentity,
         }),
     ).toThrow(/credentials/i);
   });
@@ -272,6 +379,7 @@ describe("HttpRunnerDispatcher", () => {
   it("fails dispatch when the process service does not accept the job", async () => {
     const dispatcher = new HttpRunnerDispatcher({
       baseURL: "https://runner.example.test",
+      releaseIdentity: runnerReleaseIdentity,
       fetch: vi.fn<typeof fetch>(
         async () => new Response(null, { status: 503 }),
       ),
@@ -284,5 +392,42 @@ describe("HttpRunnerDispatcher", () => {
         controlPlaneUrl: "https://studio.example.test",
       }),
     ).rejects.toThrow(/status 503/i);
+  });
+
+  it.each([
+    ["stale source", "d".repeat(40), runnerImageDigest],
+    ["stale image", runnerSourceCommit, `sha256:${"e".repeat(64)}`],
+  ])("fails HTTP readiness closed for %s", async (_label, source, image) => {
+    const dispatcher = new HttpRunnerDispatcher({
+      baseURL: "https://runner.example.test",
+      releaseIdentity: runnerReleaseIdentity,
+      fetch: vi.fn<typeof fetch>(
+        async () =>
+          new Response(
+            JSON.stringify({
+              status: "ready",
+              service: "counterlab-hosted-runner",
+              runnerSourceCommit: source,
+              runnerImageDigest: image,
+            }),
+            { status: 200 },
+          ),
+      ),
+    });
+
+    await expect(dispatcher.ready()).resolves.toBe(false);
+  });
+
+  it("requires an exact expected identity for an HTTP runner", () => {
+    expect(
+      () =>
+        new HttpRunnerDispatcher({
+          baseURL: "https://runner.example.test",
+          releaseIdentity: {
+            runnerSourceCommit: "main",
+            runnerImageDigest,
+          },
+        }),
+    ).toThrow(/source commit must be exact/i);
   });
 });

@@ -1,21 +1,30 @@
 import {
+  currentBrowserAuthorityLabel,
   ensureRuntimeParent,
   expect,
+  requiredRuntimeRoot,
   test,
   type Locator,
   type Page,
 } from "./cloak-test";
 import {
   ArtifactManifestSchema,
-  ProofBundleSchema,
   PublicProofCapsuleRefV2Schema,
   PublicReplayProjectionV1Schema,
-  PublicReplayPublicationReceiptV1Schema,
+  PublicReplayPublicationReceiptV2Schema,
   ReasoningDiffV2Schema,
 } from "@counterlab/contracts";
 import { createHash } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { lstat, readFile, realpath, writeFile } from "node:fs/promises";
+import { isAbsolute, relative, resolve } from "node:path";
+
+import { FrozenWorkerReleaseManifestSchema } from "../../../scripts/frozen-worker-release.js";
+import { validateSampleProofCapsuleV1 } from "@counterlab/proof-capsule/sample";
+import {
+  installBrowserPerformanceEvidence,
+  snapshotBrowserPerformanceEvidence,
+  type BrowserPerformanceEvidence,
+} from "./performance-evidence";
 
 const claim =
   "The 98 percent random split accuracy proves this model generalizes to customers it has never seen.";
@@ -32,6 +41,62 @@ const leakageNotebookPath = new URL(
 
 function sha256(value: Uint8Array | string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function requiredEnvironment(name: string): string {
+  const value = process.env[name];
+  if (value === undefined || value.length === 0) {
+    throw new Error(`Public release evidence requires ${name}`);
+  }
+  return value;
+}
+
+async function frozenPublicReleaseManifest() {
+  const root = await realpath(resolve(import.meta.dirname, "../../.."));
+  const requested = requiredEnvironment(
+    "COUNTERLAB_E2E_FROZEN_WORKER_MANIFEST_PATH",
+  );
+  const candidate = resolve(root, requested);
+  const fromRoot = relative(root, candidate);
+  if (
+    fromRoot.startsWith("..") ||
+    isAbsolute(fromRoot) ||
+    (await lstat(candidate)).isSymbolicLink()
+  ) {
+    throw new Error("Frozen Worker manifest escaped the repository");
+  }
+  const physical = await realpath(candidate);
+  const physicalFromRoot = relative(root, physical);
+  if (physicalFromRoot.startsWith("..") || isAbsolute(physicalFromRoot)) {
+    throw new Error("Frozen Worker manifest resolved outside the repository");
+  }
+  const bytes = await readFile(physical);
+  const expectedManifestSha256 = requiredEnvironment(
+    "COUNTERLAB_E2E_WORKER_ARTIFACT_MANIFEST_SHA256",
+  );
+  if (sha256(bytes) !== expectedManifestSha256) {
+    throw new Error("Frozen Worker manifest bytes do not match the receipt");
+  }
+  const manifest = FrozenWorkerReleaseManifestSchema.parse(
+    JSON.parse(bytes.toString("utf8")) as unknown,
+  );
+  const expectedClientAssetCount = Number(
+    requiredEnvironment("COUNTERLAB_E2E_CLIENT_ASSET_COUNT"),
+  );
+  const expectedPublicAssetCount = Number(
+    requiredEnvironment("COUNTERLAB_E2E_CLIENT_PUBLIC_ASSET_COUNT"),
+  );
+  if (
+    manifest.clientAssetsSha256 !==
+      requiredEnvironment("COUNTERLAB_E2E_CLIENT_ASSETS_SHA256") ||
+    manifest.clientAssetCount !== expectedClientAssetCount ||
+    manifest.clientPublicAssetsSha256 !==
+      requiredEnvironment("COUNTERLAB_E2E_CLIENT_PUBLIC_ASSETS_SHA256") ||
+    manifest.clientPublicAssetCount !== expectedPublicAssetCount
+  ) {
+    throw new Error("Frozen client manifest does not match the receipt");
+  }
+  return { manifest, manifestSha256: expectedManifestSha256 };
 }
 
 function recursiveObjectKeys(value: unknown, keys = new Set<string>()) {
@@ -180,10 +245,13 @@ async function writeLiveSmokeEvidence(
   const publicationPayload = (await publicationResponse.json()) as {
     data?: { replay?: unknown };
   };
-  const receipt = PublicReplayPublicationReceiptV1Schema.parse(
+  const receipt = PublicReplayPublicationReceiptV2Schema.parse(
     publicationPayload.data?.replay,
   );
   expect(receipt.concept).toBe(concept);
+  expect(Date.parse(receipt.retention.expiresAt)).toBeGreaterThan(
+    Date.parse(receipt.retention.publishedAt),
+  );
   for (const privatePublicationKey of [
     "objectKey",
     "sourceSessionId",
@@ -209,7 +277,7 @@ async function writeLiveSmokeEvidence(
     (await duplicatePublicationResponse.json()) as {
       data?: { reused?: unknown; replay?: unknown };
     };
-  const duplicateReceipt = PublicReplayPublicationReceiptV1Schema.parse(
+  const duplicateReceipt = PublicReplayPublicationReceiptV2Schema.parse(
     duplicatePublicationPayload.data?.replay,
   );
   expect(duplicatePublicationPayload.data?.reused).toBe(true);
@@ -224,7 +292,7 @@ async function writeLiveSmokeEvidence(
   };
   expect(activeStatusPayload.data?.status).toBe("active");
   expect(
-    PublicReplayPublicationReceiptV1Schema.parse(
+    PublicReplayPublicationReceiptV2Schema.parse(
       activeStatusPayload.data?.replay,
     ).replayId,
   ).toBe(receipt.replayId);
@@ -517,8 +585,10 @@ async function browserRunnerCheckpoint(
 
 async function reset(page: Page) {
   await page.goto("/");
+  await page.waitForLoadState("networkidle");
   await page.evaluate(() => window.localStorage.clear());
   await page.reload();
+  await page.waitForLoadState("networkidle");
 }
 
 async function revealLandingNavigation(page: Page) {
@@ -549,6 +619,7 @@ type BrowserFailureLog = {
   consoleErrors: string[];
   failedRequests: string[];
   failedResponses: string[];
+  pageErrors: string[];
 };
 
 function observeBrowserFailures(page: Page): BrowserFailureLog {
@@ -556,6 +627,7 @@ function observeBrowserFailures(page: Page): BrowserFailureLog {
     consoleErrors: [],
     failedRequests: [],
     failedResponses: [],
+    pageErrors: [],
   };
   page.on("console", (message) => {
     if (message.type() === "error") failures.consoleErrors.push(message.text());
@@ -564,6 +636,9 @@ function observeBrowserFailures(page: Page): BrowserFailureLog {
     failures.failedRequests.push(
       `${request.method()} ${request.url()} ${request.failure()?.errorText ?? "unknown failure"}`,
     );
+  });
+  page.on("pageerror", (error) => {
+    failures.pageErrors.push(error.message);
   });
   page.on("response", (response) => {
     if (response.status() >= 400) {
@@ -579,6 +654,7 @@ async function resetWithBrowserFailureObservation(
   page: Page,
 ): Promise<BrowserFailureLog> {
   const failures = observeBrowserFailures(page);
+  await installBrowserPerformanceEvidence(page);
   await reset(page);
   await page.waitForLoadState("networkidle");
   return failures;
@@ -593,11 +669,15 @@ function expectWithinComprehensionBudget(
 }
 
 function expectNoBrowserFailures(failures: BrowserFailureLog) {
-  expect(failures.consoleErrors, "browser console errors").toEqual([]);
-  expect(failures.failedRequests, "failed browser requests").toEqual([]);
-  expect(failures.failedResponses, "HTTP responses with error status").toEqual(
-    [],
-  );
+  expect(
+    failures,
+    "browser console, page, request, and response failures",
+  ).toEqual({
+    consoleErrors: [],
+    failedRequests: [],
+    failedResponses: [],
+    pageErrors: [],
+  });
 }
 
 async function expectEntirelyInFirstViewport(
@@ -624,90 +704,152 @@ async function expectBeliefBreakInFirstViewport(
   page: Page,
   surface: Locator,
   modeLabel: RegExp,
+  startedAt: number,
 ) {
   const mechanism = surface.getByRole("region", {
     name: "Verified sample belief-break mechanism",
   });
-  const requiredFirstFoldContent = [
+  const comprehensionStages = [
     {
-      label: "fixed-sample authority label",
-      locator: surface.getByText(modeLabel),
+      budgetMs: 10_000,
+      label: "claim and numerical belief break",
+      required: [
+        {
+          label: "learner claim",
+          locator: surface.getByText(
+            /This score proves the model works for customers it has never seen/i,
+          ),
+        },
+        {
+          label: "familiar-row score",
+          locator: mechanism.getByText("98.5%", { exact: true }),
+        },
+        {
+          label: "familiar-row evaluation",
+          locator: mechanism.getByText("Random-row test", { exact: true }),
+        },
+        {
+          label: "unseen-customer score",
+          locator: mechanism.getByText("59.4%", { exact: true }),
+        },
+        {
+          label: "unseen-customer evaluation",
+          locator: mechanism.getByText("New-customer test", { exact: true }),
+        },
+      ],
     },
     {
-      label: "learner claim",
-      locator: surface.getByText(
-        /This score proves the model works for customers it has never seen/i,
-      ),
+      budgetMs: 20_000,
+      label: "changed variable and held controls",
+      required: [
+        {
+          label: "one changed evaluation unit",
+          locator: mechanism.getByText("Only the evaluation unit changed", {
+            exact: true,
+          }),
+        },
+        {
+          label: "held-fixed controls",
+          locator: mechanism.getByText(
+            /Model, features, preprocessing, sample sizes, and seed stayed fixed/i,
+          ),
+        },
+      ],
     },
     {
-      label: "one changed evaluation unit",
-      locator: mechanism.getByText("Only the evaluation unit changed", {
-        exact: true,
-      }),
+      budgetMs: 30_000,
+      label: "bounded consequence, benefit, and sample authority",
+      required: [
+        {
+          label: "fixed-sample authority label",
+          locator: surface.getByText(modeLabel),
+        },
+        {
+          label: "Boundary consequence",
+          locator: mechanism.getByText("Boundary consequence", {
+            exact: true,
+          }),
+        },
+        {
+          label: "bounded conclusion",
+          locator: mechanism.getByText(
+            /The conclusion changes when the test contains only unseen customer identities/i,
+          ),
+        },
+        {
+          label: "learner benefit",
+          locator: mechanism.getByText("Learner benefit", { exact: true }),
+        },
+        {
+          label: "deployment benefit",
+          locator: mechanism.getByText(
+            /Choose an evaluation that matches who will be new at deployment time/i,
+          ),
+        },
+      ],
     },
-    {
-      label: "familiar-row score",
-      locator: mechanism.getByText("98.5%", { exact: true }),
-    },
-    {
-      label: "familiar-row evaluation",
-      locator: mechanism.getByText("Random-row test", { exact: true }),
-    },
-    {
-      label: "unseen-customer score",
-      locator: mechanism.getByText("59.4%", { exact: true }),
-    },
-    {
-      label: "unseen-customer evaluation",
-      locator: mechanism.getByText("New-customer test", { exact: true }),
-    },
-    {
-      label: "held-fixed controls",
-      locator: mechanism.getByText(
-        /Model, features, preprocessing, sample sizes, and seed stayed fixed/i,
-      ),
-    },
-    {
-      label: "Boundary consequence",
-      locator: mechanism.getByText("Boundary consequence", { exact: true }),
-    },
-    {
-      label: "bounded conclusion",
-      locator: mechanism.getByText(
-        /The conclusion changes when the test contains only unseen customer identities/i,
-      ),
-    },
-    {
-      label: "learner benefit",
-      locator: mechanism.getByText("Learner benefit", { exact: true }),
-    },
-    {
-      label: "deployment benefit",
-      locator: mechanism.getByText(
-        /Choose an evaluation that matches who will be new at deployment time/i,
-      ),
-    },
-  ];
+  ] as const;
 
   await expect(mechanism).toBeVisible();
-  for (const required of requiredFirstFoldContent) {
-    await expectEntirelyInFirstViewport(page, required.locator, required.label);
+  for (const stage of comprehensionStages) {
+    for (const required of stage.required) {
+      await expectEntirelyInFirstViewport(
+        page,
+        required.locator,
+        required.label,
+      );
+    }
+    expectWithinComprehensionBudget(
+      startedAt,
+      stage.budgetMs,
+      `Judge ${stage.label} must be inspectable within ${stage.budgetMs / 1_000} seconds`,
+    );
   }
 }
 
 async function captureBeliefBreakScreenshot(page: Page, fileName: string) {
   const configuredDirectory =
-    process.env.COUNTERLAB_E2E_BELIEF_BREAK_EVIDENCE_DIR;
-  if (
-    configuredDirectory === undefined ||
-    configuredDirectory.trim().length === 0
-  ) {
-    return;
-  }
+    process.env.COUNTERLAB_E2E_BELIEF_BREAK_EVIDENCE_DIR ??
+    resolve(requiredRuntimeRoot(), "evidence", "belief-break");
   const destination = await ensureRuntimeParent(
     resolve(configuredDirectory, fileName),
   );
   await page.screenshot({ path: destination, fullPage: false });
+  const performance = await snapshotBrowserPerformanceEvidence(page);
+  expectFirstFoldPerformanceBudgets(performance);
+  const evidenceDestination = await ensureRuntimeParent(
+    resolve(configuredDirectory, fileName.replace(/\.png$/u, ".json")),
+  );
+  await writeFile(
+    evidenceDestination,
+    `${JSON.stringify(
+      {
+        browserAuthority: currentBrowserAuthorityLabel(),
+        capturedAt: new Date().toISOString(),
+        performance,
+        screenshot: fileName,
+      },
+      null,
+      2,
+    )}\n`,
+    { encoding: "utf8", mode: 0o600 },
+  );
+}
+
+function expectFirstFoldPerformanceBudgets(
+  performance: BrowserPerformanceEvidence,
+): void {
+  expect(performance.support.largestContentfulPaint).toBe(true);
+  expect(performance.support.cumulativeLayoutShift).toBe(true);
+  expect(performance.support.firstContentfulPaint).toBe(true);
+  expect(performance.support.navigationTiming).toBe(true);
+  expect(performance.largestContentfulPaintMs).not.toBeNull();
+  expect(performance.cumulativeLayoutShift).not.toBeNull();
+  expect(performance.firstContentfulPaintMs).not.toBeNull();
+  expect(performance.navigationTtfbMs).not.toBeNull();
+  expect(performance.largestContentfulPaintMs!).toBeLessThanOrEqual(2_500);
+  expect(performance.cumulativeLayoutShift!).toBeLessThanOrEqual(0.1);
+  expect(performance.navigationTtfbMs!).toBeLessThanOrEqual(800);
 }
 
 async function openLiveSetup(page: Page, question = claim) {
@@ -734,7 +876,6 @@ async function startInstant(page: Page) {
   await expect(
     page.getByRole("heading", { name: /What do you think the score means/i }),
   ).toBeVisible();
-  await page.getByLabel("Your claim").fill(claim);
   await page.getByRole("button", { name: /Compare two explanations/i }).click();
   await expect(
     page.getByRole("heading", {
@@ -754,16 +895,30 @@ async function startInstant(page: Page) {
 async function commitAndOpenResult(page: Page) {
   await page.getByLabel(/Remain near 98%/i).check();
   await page.getByRole("button", { name: /Seal my prediction/i }).click();
+  await page.getByRole("button", { name: /Run the fair test/i }).click();
   await expect(
-    page.getByRole("heading", { name: /The result is ready/i }),
+    page.getByRole("heading", { name: /Compare the verified result/i }),
   ).toBeVisible();
-  await page.getByRole("button", { name: /Show me what happened/i }).click();
-  await expect(
-    page.getByRole("heading", { name: /Here.s what changed/i }),
-  ).toBeVisible();
+  await authorResultInterpretation(page);
   await expect(
     page.getByRole("region", { name: /Let the verified test answer/i }),
   ).toBeVisible();
+}
+
+async function authorResultInterpretation(page: Page) {
+  await page
+    .getByRole("textbox", { name: /What do you notice in this comparison/i })
+    .fill("The score falls when the test contains only unseen customers.");
+  await expect(
+    page.getByText(/Interpretation recorded locally/i),
+  ).toBeVisible();
+  await expect(page.getByRole("tab", { name: /Explore/i })).toBeEnabled();
+  await expect(page.getByRole("tab", { name: /Boundary/i })).toBeEnabled();
+}
+
+async function selectLeakageTransferEvidence(page: Page) {
+  await page.getByLabel(/Centered-window definition/i).check();
+  await page.getByLabel(/Shuffled-split definition/i).check();
 }
 
 async function openTheaterView(
@@ -801,7 +956,9 @@ async function recordRevision(page: Page) {
 
 async function waitForSamplePatch(page: Page) {
   await expect(
-    page.getByRole("heading", { name: /You can now distinguish/i }),
+    page.getByRole("heading", {
+      name: /You completed one verified entity-leakage loop/i,
+    }),
   ).toBeVisible({ timeout: 30_000 });
   await expect(
     page.getByRole("heading", { name: /Your learning, before and after/i }),
@@ -925,6 +1082,11 @@ test.describe("production release transport", () => {
       throw new Error("Public asset evidence requires COUNTERLAB_E2E_BASE_URL");
     }
     const baseURL = new URL(configuredBaseURL);
+    const { manifest, manifestSha256 } = await frozenPublicReleaseManifest();
+    const publicManifestAssets = manifest.clientAssets.filter(
+      (asset) => asset.publicPath !== null,
+    );
+    expect(publicManifestAssets).toHaveLength(manifest.clientPublicAssetCount);
     const assetResponses = new Map<
       string,
       {
@@ -1010,6 +1172,89 @@ test.describe("production release transport", () => {
       }
     }
 
+    const exactPublicAssets = [] as Array<{
+      path: string;
+      publicPath: string;
+      sha256: string;
+      size: number;
+      cacheControl: string;
+    }>;
+    for (const asset of publicManifestAssets) {
+      const publicPath = asset.publicPath;
+      if (publicPath === null) {
+        throw new Error("Public client manifest contains an unfetchable entry");
+      }
+      const observed = await page.evaluate(async (path) => {
+        const response = await fetch(path, {
+          cache: "reload",
+          credentials: "omit",
+          redirect: "manual",
+        });
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const digest = [
+          ...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
+        ]
+          .map((byte) => byte.toString(16).padStart(2, "0"))
+          .join("");
+        const text = new TextDecoder().decode(bytes);
+        const secretFindings = [
+          /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/u.test(text)
+            ? "private key"
+            : null,
+          /\bsk-[A-Za-z0-9_-]{24,}\b/u.test(text) ? "API credential" : null,
+          /CODEX_AUTH_JSON\s*[:=]\s*["']?\{/u.test(text)
+            ? "Codex credential bundle"
+            : null,
+          /COUNTERLAB_RUNNER_SIGNING_(?:PRIVATE_)?KEY\s*[:=]\s*["'][A-Za-z0-9_-]{32,}/u.test(
+            text,
+          )
+            ? "runner signing value"
+            : null,
+        ].filter((finding): finding is string => finding !== null);
+        return {
+          cacheControl: response.headers.get("cache-control") ?? "",
+          redirected: response.redirected,
+          secretFindings,
+          sha256: digest,
+          size: bytes.byteLength,
+          status: response.status,
+          url: response.url,
+        };
+      }, publicPath);
+      expect(observed.status, publicPath).toBe(200);
+      expect(observed.redirected, publicPath).toBe(false);
+      expect(new URL(observed.url).origin, publicPath).toBe(baseURL.origin);
+      expect(new URL(observed.url).pathname, publicPath).toBe(publicPath);
+      expect(observed.sha256, publicPath).toBe(asset.sha256);
+      expect(observed.size, publicPath).toBe(asset.size);
+      expect(observed.secretFindings, publicPath).toEqual([]);
+      if (publicPath.startsWith("/assets/")) {
+        for (const directive of ["public", "max-age=31536000", "immutable"]) {
+          expect(observed.cacheControl, publicPath).toContain(directive);
+        }
+      }
+      exactPublicAssets.push({
+        path: asset.path,
+        publicPath,
+        sha256: observed.sha256,
+        size: observed.size,
+        cacheControl: observed.cacheControl,
+      });
+    }
+    expect(exactPublicAssets).toHaveLength(manifest.clientPublicAssetCount);
+    expect(
+      sha256(
+        JSON.stringify(
+          exactPublicAssets.map(({ path, publicPath, sha256, size }) => ({
+            path,
+            publicPath,
+            sha256,
+            size,
+          })),
+        ),
+      ),
+    ).toBe(manifest.clientPublicAssetsSha256);
+
     const publicText = new TextDecoder().decode(
       Buffer.concat([
         ...routeBodies.map((body) => Buffer.from(body)),
@@ -1035,8 +1280,14 @@ test.describe("production release transport", () => {
         destination,
         `${JSON.stringify(
           {
-            schemaVersion: "1",
+            schemaVersion: "2",
             origin: baseURL.origin,
+            workerArtifactManifestSha256: manifestSha256,
+            clientDeployTreeSha256: manifest.clientAssetsSha256,
+            clientDeployTreeCount: manifest.clientAssetCount,
+            clientPublicAssetsSha256: manifest.clientPublicAssetsSha256,
+            clientPublicAssetCount: manifest.clientPublicAssetCount,
+            exactPublicAssets,
             routeHashes,
             assetCount: assetResponses.size,
             assetHashes: [...assetResponses.entries()]
@@ -1044,7 +1295,7 @@ test.describe("production release transport", () => {
               .map(([url, asset]) => ({ url, sha256: sha256(asset.body) })),
             securityHeadersVerified: Object.keys(requiredHeaders),
             publicSecretScan: "PASSED",
-            browserAuthority: "CLOAK_CDP_ENDPOINT",
+            browserAuthority: currentBrowserAuthorityLabel(),
           },
           null,
           2,
@@ -1061,17 +1312,18 @@ const beliefBreakViewports = [
 ] as const;
 
 for (const viewport of beliefBreakViewports) {
-  test(`${viewport.name} Landing shows the verified fixed-sample belief break in the first viewport`, async ({
+  test(`${viewport.name} Landing keeps the unprimed Question and fair-test promise in the first viewport`, async ({
     page,
   }) => {
     const navigationStartedAt = Date.now();
     await page.setViewportSize(viewport);
     const failures = await resetWithBrowserFailureObservation(page);
 
-    await page.keyboard.press("Tab");
-    await expect(
-      page.getByRole("link", { name: /Skip to main content/i }),
-    ).toBeFocused();
+    const skipLink = page.getByRole("link", {
+      name: /Skip to main content/i,
+    });
+    await skipLink.focus();
+    await expect(skipLink).toBeFocused();
     await page.keyboard.press("Tab");
     const composer = page.getByLabel("Your question or claim");
     await expect(composer).toBeFocused();
@@ -1080,19 +1332,38 @@ for (const viewport of beliefBreakViewports) {
       composer,
       "question composer before secondary paths",
     );
+    await expectEntirelyInFirstViewport(
+      page,
+      page.getByText(
+        /For learners testing whether a notebook result means what they think it means/i,
+      ),
+      "learner audience statement",
+    );
 
     const preview = page.getByRole("complementary", {
-      name: /Can a familiar-row score support a new-customer claim/i,
+      name: /One changed variable.*Everything else held fixed/i,
     });
-    await expectBeliefBreakInFirstViewport(
+    await expectEntirelyInFirstViewport(
       page,
       preview,
-      /Completed fixed sample preview.*not your current result/i,
+      "pre-Prediction fair-test promise",
     );
+    await expect(preview).toContainText(
+      /Result hidden until your Prediction is sealed/i,
+    );
+    await expect(preview).toContainText(
+      /Name the claim.*Lock your expectation.*Change one thing/i,
+    );
+    await expect(page.locator("body")).not.toContainText("59.4%");
+    await expect(
+      page.getByRole("region", {
+        name: "Verified sample belief-break mechanism",
+      }),
+    ).toHaveCount(0);
     expectWithinComprehensionBudget(
       navigationStartedAt,
       10_000,
-      "Landing fixed-sample belief break must become inspectable within ten seconds",
+      "Landing Question and fair-test promise must become inspectable within ten seconds",
     );
     await expectNoHorizontalOverflow(page);
     await captureBeliefBreakScreenshot(
@@ -1108,6 +1379,7 @@ for (const viewport of beliefBreakViewports) {
   }) => {
     const navigationStartedAt = Date.now();
     const failures = observeBrowserFailures(page);
+    await installBrowserPerformanceEvidence(page);
     await page.setViewportSize(viewport);
     await page.goto("/judge", { waitUntil: "networkidle" });
     await expect(page).toHaveURL(/\/judge$/);
@@ -1119,17 +1391,13 @@ for (const viewport of beliefBreakViewports) {
       page,
       preview,
       /Completed fixed sample.*not a live result/i,
+      navigationStartedAt,
     );
     await expect(
       preview.getByText(
         /Approved fixed sample framing.*No GPT-5\.6, Codex, or runner call occurs/i,
       ),
     ).toBeVisible();
-    expectWithinComprehensionBudget(
-      navigationStartedAt,
-      10_000,
-      "Judge fixed-sample belief break must become inspectable within ten seconds",
-    );
     await expectNoHorizontalOverflow(page);
     await captureBeliefBreakScreenshot(
       page,
@@ -1139,7 +1407,7 @@ for (const viewport of beliefBreakViewports) {
     expectNoBrowserFailures(failures);
   });
 
-  test(`${viewport.name} sample removes the preview before Prediction and mounts the trusted mechanism only after sealing`, async ({
+  test(`${viewport.name} sample remains unprimed before Prediction and mounts the trusted mechanism only after sealing`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport);
@@ -1148,7 +1416,8 @@ for (const viewport of beliefBreakViewports) {
       page.getByRole("region", {
         name: "Verified sample belief-break mechanism",
       }),
-    ).toBeVisible();
+    ).toHaveCount(0);
+    await expect(page.locator("body")).not.toContainText("59.4%");
 
     const startSample =
       viewport.width <= 700
@@ -1188,15 +1457,12 @@ for (const viewport of beliefBreakViewports) {
     await page.getByLabel(/Fall materially/i).check();
     await page.getByRole("button", { name: /Seal my prediction/i }).click();
     await expect(
-      page.getByRole("heading", { name: /The result is ready/i }),
+      page.getByRole("heading", { name: /The fair test is ready/i }),
     ).toBeVisible();
+    await page.getByRole("button", { name: /Run the fair test/i }).click();
     await expect(
-      page.getByRole("region", {
-        name: "Verified sample belief-break mechanism",
-      }),
-    ).toHaveCount(0);
-
-    await page.getByRole("button", { name: /Show me what happened/i }).click();
+      page.getByRole("heading", { name: /Compare the verified result/i }),
+    ).toBeVisible();
     const trustedVisual = page.locator(
       '[data-trusted-visual-id="verified_sample_belief_break_v1"]',
     );
@@ -1233,13 +1499,15 @@ test("Judge Mode distinguishes every authority path", async ({ page }) => {
       liveGpt?: unknown;
       liveCodex?: unknown;
       liveKernel?: unknown;
+      readiness?: unknown;
       sandbox?: unknown;
       generationFilesystemReadIsolation?: unknown;
       release?: { status?: unknown };
     };
   };
   const liveReady =
-    health.data?.liveGpt === "configured" &&
+    health.data?.readiness === "ready" &&
+    health.data.liveGpt === "configured" &&
     health.data.liveCodex === "configured" &&
     health.data.liveKernel === "configured" &&
     health.data.sandbox === "credential-and-privilege-boundary" &&
@@ -1404,14 +1672,11 @@ for (const viewport of [
 test("Try Instantly persists the verified learning loop and exports a valid proof", async ({
   page,
 }) => {
-  const consoleErrors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
+  const failures = observeBrowserFailures(page);
 
   await startInstant(page);
   await expect(
-    page.getByRole("heading", { name: /Here.s what changed/i }),
+    page.getByRole("heading", { name: /Compare the verified result/i }),
   ).toHaveCount(0);
 
   const sessionId = await page.evaluate(() =>
@@ -1431,6 +1696,7 @@ test("Try Instantly persists the verified learning loop and exports a valid proo
   await recordRevision(page);
   await page.getByLabel(/Time-ordered holdout/i).check();
   await page.getByLabel(/Centered rolling target/i).check();
+  await selectLeakageTransferEvidence(page);
   await page.getByRole("button", { name: /Check transfer/i }).click();
   await expect(
     page.locator(".eyebrow", { hasText: "Transfer passed" }),
@@ -1446,27 +1712,42 @@ test("Try Instantly persists the verified learning loop and exports a valid proo
   expect(patchDownload.suggestedFilename()).toMatch(/\.ipynb$/i);
   expect(await patchDownload.path()).not.toBeNull();
 
-  const downloadPromise = page.waitForEvent("download");
-  await page
-    .getByRole("button", { name: "Download proof record", exact: true })
-    .click();
-  const download = await downloadPromise;
-  const downloadPath = await download.path();
-  expect(downloadPath).not.toBeNull();
-  const proof = ProofBundleSchema.parse(
-    JSON.parse(await readFile(downloadPath!, "utf8")),
-  );
-  expect(proof.sessionId).toBe(sessionId);
-  expect(proof.events).toHaveLength(12);
-
   await page.reload();
   await expect(
     page.getByRole("heading", { name: /Your learning, before and after/i }),
   ).toBeVisible();
   await expect(
-    page.locator(".eyebrow", { hasText: "Transfer passed" }),
+    page
+      .getByRole("status", { name: /Transfer status/i })
+      .getByText(/Fixed transfer task passed/i),
   ).toBeVisible();
-  expect(consoleErrors).toEqual([]);
+
+  await page
+    .getByRole("button", { name: /Inspect fixed sample evidence/i })
+    .click();
+  await expect(page).toHaveURL(/\/judge#sample-evidence$/u);
+  await expect(
+    page.getByRole("heading", { name: /Sample Proof Capsule v1/i }),
+  ).toBeVisible();
+  const proofDownloadPromise = page.waitForEvent("download");
+  await page
+    .getByRole("link", { name: /Download Sample Proof Capsule/i })
+    .click();
+  const proofDownloadPath = await (await proofDownloadPromise).path();
+  expect(proofDownloadPath).not.toBeNull();
+  const sampleProof = await validateSampleProofCapsuleV1(
+    await readFile(proofDownloadPath!),
+  );
+  expect(sampleProof.manifest.mode).toEqual({
+    kind: "sample_lesson",
+    sampleId: "leakage-01",
+  });
+  expect(sampleProof.manifest.calls).toEqual({
+    gpt56: "not-called",
+    runtimeCodex: "not-called",
+    runner: "not-called",
+  });
+  expectNoBrowserFailures(failures);
 });
 
 test("the lesson keeps one learner decision in focus at a time", async ({
@@ -1476,7 +1757,7 @@ test("the lesson keeps one learner decision in focus at a time", async ({
   await commitAndOpenResult(page);
 
   await expect(
-    page.getByRole("heading", { name: /Here.s what changed/i }),
+    page.getByRole("heading", { name: /Compare the verified result/i }),
   ).toBeVisible();
   await expect(
     page.getByText(/Which evaluation design matches deployment/i),
@@ -1499,6 +1780,7 @@ test("the lesson keeps one learner decision in focus at a time", async ({
 
   await page.getByLabel(/Time-ordered holdout/i).check();
   await page.getByLabel(/Centered rolling target/i).check();
+  await selectLeakageTransferEvidence(page);
   await page.getByRole("button", { name: /Check transfer/i }).click();
 
   await expect(
@@ -1536,7 +1818,7 @@ test("prediction is immutable and results do not exist before commitment", async
   await expect(page.getByText("88%", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Seal my prediction/i }).click();
   await expect(
-    page.getByRole("heading", { name: /The result is ready/i }),
+    page.getByRole("heading", { name: /The fair test is ready/i }),
   ).toBeVisible();
   const overwrite = await page.request.post(
     `/api/sessions/${sessionId}/prediction`,
@@ -1549,15 +1831,19 @@ test("prediction is immutable and results do not exist before commitment", async
 
   const committed = await page.request.get(`/api/sessions/${sessionId}`);
   expect(committed.ok()).toBe(true);
-  expect((await committed.json()).data.prediction.confidence).toBe(88);
+  const committedPayload = await committed.json();
+  expect(committedPayload.data.prediction.confidence).toBe(88);
+  expect(committedPayload.data.verifiedResult).toBeUndefined();
 });
 
-test("a learner can use a claim starter and return home", async ({ page }) => {
+test("the fixed sample keeps approved framing and can return home", async ({
+  page,
+}) => {
   await reset(page);
   await page.getByRole("button", { name: /Try verified sample/i }).click();
 
-  await page.getByRole("button", { name: /Use a starter claim/i }).click();
-  await expect(page.getByLabel("Your claim")).toHaveValue(/new customers/i);
+  await expect(page.getByText(/Approved sample framing/i)).toBeVisible();
+  await expect(page.getByLabel("Your claim")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: /Compare two explanations/i }),
   ).toBeEnabled();
@@ -1585,7 +1871,6 @@ test("refresh restores the question and confirmed Prediction phases", async ({
     page.getByRole("heading", { name: /What do you think the score means/i }),
   ).toBeVisible();
 
-  await page.getByLabel("Your claim").fill(claim);
   await page.getByRole("button", { name: /Compare two explanations/i }).click();
   await page.reload();
   await expect(
@@ -1619,17 +1904,18 @@ test("refresh restores the current lesson and the committed prediction", async (
   await page.getByRole("button", { name: /Seal my prediction/i }).click();
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: /The result is ready/i }),
+    page.getByRole("heading", { name: /The fair test is ready/i }),
   ).toBeVisible();
-  await page.getByRole("button", { name: /Show me what happened/i }).click();
+  await page.getByRole("button", { name: /Run the fair test/i }).click();
   await expect(
-    page.getByRole("heading", { name: /Here.s what changed/i }),
+    page.getByRole("heading", { name: /Compare the verified result/i }),
   ).toBeVisible();
+  await authorResultInterpretation(page);
 
   await page.reload();
 
   await expect(
-    page.getByRole("heading", { name: /Here.s what changed/i }),
+    page.getByRole("heading", { name: /Compare the verified result/i }),
   ).toBeVisible();
   await expect(page.getByLabel("Pinned prediction")).toContainText(
     /Accuracy falls materially/i,
@@ -1637,6 +1923,7 @@ test("refresh restores the current lesson and the committed prediction", async (
   await expect(
     page.getByRole("region", { name: /Let the verified test answer/i }),
   ).toBeVisible();
+  await authorResultInterpretation(page);
 
   await recordRevision(page);
   await page.reload();
@@ -1645,6 +1932,7 @@ test("refresh restores the current lesson and the committed prediction", async (
   ).toBeVisible();
   await page.getByLabel(/Time-ordered holdout/i).check();
   await page.getByLabel(/Centered rolling target/i).check();
+  await selectLeakageTransferEvidence(page);
   await page.getByRole("button", { name: /Check transfer/i }).click();
   await expect(
     page.locator(".eyebrow", { hasText: "Transfer passed" }),
@@ -1657,7 +1945,9 @@ test("refresh restores the current lesson and the committed prediction", async (
   await waitForSamplePatch(page);
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: /You can now distinguish/i }),
+    page.getByRole("heading", {
+      name: /You completed one verified entity-leakage loop/i,
+    }),
   ).toBeVisible();
 });
 
@@ -1689,7 +1979,7 @@ test("a rejected test releases no result and remains recoverable after refresh",
     /No result was released/i,
   );
   await expect(
-    page.getByRole("heading", { name: /Here.s what changed/i }),
+    page.getByRole("heading", { name: /Compare the verified result/i }),
   ).toHaveCount(0);
 
   const sessionId = await page.evaluate(() =>
@@ -1760,7 +2050,7 @@ test("completed lesson steps open as read-only pages", async ({ page }) => {
 
   await page.getByRole("button", { name: /Return to current step/i }).click();
   await expect(
-    page.getByRole("heading", { name: /Here.s what changed/i }),
+    page.getByRole("heading", { name: /Compare the verified result/i }),
   ).toBeVisible();
   await expect(page.locator("#learner-progress")).toBeFocused();
 });
@@ -1773,7 +2063,8 @@ test("failed transfer keeps the patch locked and a corrected answer unlocks it",
   await recordRevision(page);
 
   await page.getByLabel(/Random daily rows/i).check();
-  await page.getByLabel(/Known item price/i).check();
+  await page.getByLabel(/Model complexity/i).check();
+  await page.getByLabel(/Metric definition/i).check();
   await page.getByRole("button", { name: /Check transfer/i }).click();
   await expect(page.getByText(/Transfer not yet passed/i)).toBeVisible();
   await expect(
@@ -1782,6 +2073,8 @@ test("failed transfer keeps the patch locked and a corrected answer unlocks it",
 
   await page.getByLabel(/Time-ordered holdout/i).check();
   await page.getByLabel(/Centered rolling target/i).check();
+  await page.getByLabel(/Metric definition/i).uncheck();
+  await selectLeakageTransferEvidence(page);
   await page.getByRole("button", { name: /Check transfer/i }).click();
   await expect(
     page.locator(".eyebrow", { hasText: "Transfer passed" }),
@@ -1978,9 +2271,6 @@ test("the judged path is keyboard operable with reduced motion", async ({
     page.getByLabel("Contextual help").getByRole("link"),
   ).toBeVisible();
 
-  const claimInput = page.getByLabel("Your claim");
-  await claimInput.focus();
-  await page.keyboard.type(claim);
   await page.getByRole("button", { name: /Compare two explanations/i }).focus();
   await page.keyboard.press("Enter");
   await page
@@ -1993,10 +2283,23 @@ test("the judged path is keyboard operable with reduced motion", async ({
   await page.getByRole("button", { name: /Seal my prediction/i }).focus();
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("heading", { name: /The result is ready/i }),
+    page.getByRole("heading", { name: /The fair test is ready/i }),
   ).toBeVisible();
-  await page.getByRole("button", { name: /Show me what happened/i }).focus();
+  await page.getByRole("button", { name: /Run the fair test/i }).focus();
   await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("heading", { name: /Compare the verified result/i }),
+  ).toBeVisible();
+  const interpretation = page.getByRole("textbox", {
+    name: /What do you notice in this comparison/i,
+  });
+  await interpretation.focus();
+  await page.keyboard.type(
+    "The score falls when the test contains only unseen customers.",
+  );
+  await expect(
+    page.getByText(/Interpretation recorded locally/i),
+  ).toBeVisible();
 
   const comparison = page.getByRole("img", {
     name: /Verified accuracy comparison.*familiar rows.*new customers/i,
@@ -2031,6 +2334,10 @@ test("the judged path is keyboard operable with reduced motion", async ({
   await page.getByLabel(/Time-ordered holdout/i).focus();
   await page.keyboard.press("Space");
   await page.getByLabel(/Centered rolling target/i).focus();
+  await page.keyboard.press("Space");
+  await page.getByLabel(/Centered-window definition/i).focus();
+  await page.keyboard.press("Space");
+  await page.getByLabel(/Shuffled-split definition/i).focus();
   await page.keyboard.press("Space");
   await page.getByRole("button", { name: /Check transfer/i }).focus();
   await page.keyboard.press("Enter");
@@ -2070,6 +2377,7 @@ test("a configured hosted runner completes an untouched leakage notebook", async
   const health = await page.request.get("/api/health");
   expect(health.ok()).toBe(true);
   expect((await health.json()).data).toMatchObject({
+    readiness: "ready",
     liveGpt: "configured",
     liveCodex: "configured",
     liveKernel: "configured",
@@ -2226,10 +2534,12 @@ test("a configured hosted runner completes an untouched leakage notebook", async
   await waitForVerifiedLiveCompile(page);
   await page.getByRole("button", { name: /Show me what happened/i }).click();
   await expect(
-    page.getByRole("heading", { name: /Here.s what changed/i }),
+    page.getByRole("heading", { name: /Compare the verified result/i }),
   ).toBeVisible();
+  await authorResultInterpretation(page);
   await expect(page.getByText(/0 shared customers/i).first()).toBeVisible();
 
+  await openTheaterView(page, "Explore");
   await page.getByLabel(/Whole entities/i).check();
   await page.getByLabel(/Remove identity feature/i).check();
   await page.getByLabel(/Test size/i).fill("0.3");
@@ -2237,14 +2547,17 @@ test("a configured hosted runner completes an untouched leakage notebook", async
   await expect(page.getByText(/Verified exploratory result/i)).toBeVisible({
     timeout: 180_000,
   });
+  await openTheaterView(page, "Boundary");
   await revealVerifiedBoundary(page);
 
+  await openTheaterView(page, "Apply");
   await page.getByLabel("Your revised mental model").fill(revision);
   await page
     .getByRole("button", { name: /Try the rule on a new problem/i })
     .click();
   await page.getByLabel(/Time-ordered holdout/i).check();
   await page.getByLabel(/Centered rolling target/i).check();
+  await selectLeakageTransferEvidence(page);
   await page.getByRole("button", { name: /Check transfer/i }).click();
   await expect(
     page.locator(".eyebrow", { hasText: "Transfer passed" }),
@@ -2252,7 +2565,7 @@ test("a configured hosted runner completes an untouched leakage notebook", async
 
   await page.getByRole("button", { name: /Verify notebook patch/i }).click();
   await waitForVerifiedPatch({
-    success: page.getByRole("link", {
+    success: page.getByRole("button", {
       name: /Download repaired notebook/i,
     }),
     failure: page.locator(
@@ -2263,14 +2576,16 @@ test("a configured hosted runner completes an untouched leakage notebook", async
   await expect(page).toHaveURL(/\/proof\//);
 
   const patchDownload = page.waitForEvent("download");
-  await page.getByRole("link", { name: /Download repaired notebook/i }).click();
+  await page
+    .getByRole("button", { name: /Download repaired notebook/i })
+    .click();
   const patch = await patchDownload;
   expect(patch.suggestedFilename()).toMatch(/\.counterlab-patched\.ipynb$/i);
   const patchedNotebookPath = await patch.path();
   expect(patchedNotebookPath).not.toBeNull();
 
   const capsuleDownload = page.waitForEvent("download");
-  await page.getByRole("link", { name: /Export Proof Capsule/i }).click();
+  await page.getByRole("button", { name: /Export Proof Capsule/i }).click();
   const capsulePath = await (await capsuleDownload).path();
   expect(capsulePath).not.toBeNull();
   await writeLiveSmokeEvidence(
@@ -2301,6 +2616,7 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
   expect(health.ok()).toBe(true);
   const capability = (await health.json()).data;
   expect(capability).toMatchObject({
+    readiness: "ready",
     liveGpt: "configured",
     liveCodex: "configured",
     liveKernel: "configured",
@@ -2360,13 +2676,13 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
   await page.getByRole("button", { name: /Show me what happened/i }).click();
   await expect(
     page.getByRole("heading", {
-      name: /A high accuracy can still miss every rare event/i,
+      name: /Compare the verified rare-event result/i,
     }),
   ).toBeVisible();
-  await expect(
-    page.getByText(/Verified Lab · rare-event evaluation/i),
-  ).toBeVisible();
+  await authorResultInterpretation(page);
+  await expect(page.getByText(/Boundary · Verified result/i)).toBeVisible();
 
+  await openTheaterView(page, "Explore");
   await page.getByLabel("Decision threshold").fill("0.2");
   await page.getByLabel("Prevalence scenario").selectOption("rarer");
   await page.getByLabel("Metric focus").selectOption("recall");
@@ -2374,8 +2690,10 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
   await expect(page.getByText(/Verified exploratory result/i)).toBeVisible({
     timeout: 180_000,
   });
+  await openTheaterView(page, "Boundary");
   await revealVerifiedBoundary(page);
 
+  await openTheaterView(page, "Apply");
   await page
     .getByLabel("Your revised mental model")
     .fill(
@@ -2393,7 +2711,7 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
 
   await page.getByRole("button", { name: /Verify notebook repair/i }).click();
   await waitForVerifiedPatch({
-    success: page.getByRole("link", {
+    success: page.getByRole("button", {
       name: /Download repaired notebook/i,
     }),
     failure: page.locator(".imbalance-patch-gate [role='alert']"),
@@ -2402,14 +2720,16 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
   await expect(page).toHaveURL(/\/proof\//);
 
   const patchDownload = page.waitForEvent("download");
-  await page.getByRole("link", { name: /Download repaired notebook/i }).click();
+  await page
+    .getByRole("button", { name: /Download repaired notebook/i })
+    .click();
   const patch = await patchDownload;
   expect(patch.suggestedFilename()).toMatch(/\.counterlab-patched\.ipynb$/i);
   const patchedNotebookPath = await patch.path();
   expect(patchedNotebookPath).not.toBeNull();
 
   const capsuleDownload = page.waitForEvent("download");
-  await page.getByRole("link", { name: /Export Proof Capsule/i }).click();
+  await page.getByRole("button", { name: /Export Proof Capsule/i }).click();
   const capsulePath = await (await capsuleDownload).path();
   expect(capsulePath).not.toBeNull();
   await writeLiveSmokeEvidence(

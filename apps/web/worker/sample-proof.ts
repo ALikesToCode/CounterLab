@@ -1,5 +1,6 @@
 import {
   ExperimentPlanSchema,
+  VerifiedOperationSummaryV1Schema,
   type ArtifactManifest,
   type EvidenceEvent,
   type ProofBundle,
@@ -14,6 +15,8 @@ import experimentPlanValue from "../../../replays/leakage-01/experiment-plan.jso
 import externalVerifierValue from "../../../replays/leakage-01/external-verifier-report.json";
 import labVerificationValue from "../../../replays/leakage-01/lab-verification.json";
 import publicTestsValue from "../../../replays/leakage-01/public-tests-report.json";
+
+const sampleExperimentPlan = ExperimentPlanSchema.parse(experimentPlanValue);
 
 const SHA256 = /^[a-f0-9]{64}$/;
 const GIT_OBJECT = /^[a-f0-9]{40,64}$/;
@@ -130,7 +133,6 @@ export function createSampleReasoningProof(input: {
     "externalVerifier.reportHash",
   );
   const modelEvent = event("belief_test.proposed");
-  const experimentPlan = ExperimentPlanSchema.parse(experimentPlanValue);
   const proofBundle = createProofBundle(
     {
       schemaVersion: "1",
@@ -142,7 +144,7 @@ export function createSampleReasoningProof(input: {
       artifactManifest: input.manifest,
       beliefTest: evidence.beliefTest,
       predictionContract: evidence.prediction,
-      experimentPlan,
+      experimentPlan: sampleExperimentPlan,
       generatedAdapter: {
         sha256: requiredHash(labVerificationValue.adapterHash, "adapterHash"),
         commitHash: requiredGitObject(labVerificationValue.commitHash),
@@ -213,3 +215,21 @@ export const sampleLabEvidenceHashes = {
 } as const;
 
 export const sampleLabVerification = labVerificationValue;
+
+const sampleOperationIds = sampleExperimentPlan.runs.map((run) => {
+  if (run.dropFeatures?.includes("customer_id") === true) {
+    return "leakage.identity_ablation" as const;
+  }
+  if (run.split === "group") return "leakage.group_holdout" as const;
+  if (run.split === "random") return "leakage.random_row_split" as const;
+  throw new Error("Stored approved sample contains an unknown fixed operation");
+});
+
+export const sampleVerifiedOperationSummary =
+  VerifiedOperationSummaryV1Schema.parse({
+    schemaVersion: "1",
+    authority: "fixed-approved-sample",
+    authorityHash: requiredHash(labVerificationValue.planHash, "planHash"),
+    selectionRef: requiredString(labVerificationValue.source, "source"),
+    operationIds: sampleOperationIds,
+  });

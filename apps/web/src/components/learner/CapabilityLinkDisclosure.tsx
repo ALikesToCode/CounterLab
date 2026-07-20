@@ -92,10 +92,10 @@ export function CapabilityLinkDisclosure(props: CapabilityLinkDisclosureProps) {
         person who receives the address.
       </p>
       <p className={styles.supportingCopy}>
-        The replay remains available until you revoke it. Revocation disables
-        public playback; it does not delete the private session or its immutable
-        audit record, and it cannot retract copies or screenshots someone
-        already made.
+        The replay remains available for 30 days from publication or until you
+        revoke it. Expiry or revocation disables public playback; neither
+        deletes the private session or its immutable audit record. They cannot
+        retract copies or screenshots someone already made.
       </p>
       <p className={styles.supportingCopy}>
         If the approved claim or hypotheses name a field, that exact statement

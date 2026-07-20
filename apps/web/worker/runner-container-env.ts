@@ -4,6 +4,8 @@ export type RunnerContainerSecretBindings = {
   CODEX_AUTH_JSON?: string;
   CODEX_MODEL?: string;
   COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY?: string;
+  COUNTERLAB_RUNNER_SOURCE_COMMIT?: string;
+  COUNTERLAB_RUNNER_IMAGE_DIGEST?: string;
 };
 
 export function createRunnerContainerEnvVars(
@@ -29,5 +31,9 @@ export function createRunnerContainerEnvVars(
     COUNTERLAB_CODEX_UID: "10001",
     COUNTERLAB_CODEX_GID: "10001",
     COUNTERLAB_RUNNER_ONE_SHOT: "1",
+    COUNTERLAB_RUNNER_SOURCE_COMMIT:
+      bindings.COUNTERLAB_RUNNER_SOURCE_COMMIT ?? "",
+    COUNTERLAB_RUNNER_IMAGE_DIGEST:
+      bindings.COUNTERLAB_RUNNER_IMAGE_DIGEST ?? "",
   };
 }

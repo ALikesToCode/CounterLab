@@ -2,13 +2,14 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { sampleResult } from "../../sample";
+import { requireBundledSampleResult } from "../../sample";
 import {
   VerifiedBeliefBreakMechanism,
   VerifiedBeliefBreakTheater,
 } from "./VerifiedBeliefBreakTheater";
 
 const verifier = vi.hoisted(() => vi.fn());
+const sampleResult = requireBundledSampleResult();
 
 vi.mock("../../features/boundary/sampleBoundaryFixture", () => ({
   sampleBoundaryFixture: { fixtureId: "test-boundary-fixture" },
@@ -48,6 +49,11 @@ describe("VerifiedBeliefBreakTheater", () => {
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(screen.queryByText("98.5%")).not.toBeInTheDocument();
     expect(screen.queryByText("389")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("group", {
+        name: /changed variable: evaluation unit/i,
+      }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Boundary consequence")).not.toBeInTheDocument();
     expect(screen.queryByText("Learner benefit")).not.toBeInTheDocument();
   });
@@ -193,6 +199,81 @@ describe("VerifiedBeliefBreakTheater", () => {
         name: /customer overlap falls from 389 to 0/i,
       }),
     ).toHaveAccessibleName(/98.5% to 59.4%/i);
+  });
+
+  it("keeps the compact causal mechanism explicit without relying on color", async () => {
+    render(<VerifiedBeliefBreakMechanism presentation="compact" />);
+
+    const mechanism = screen.getByRole("region", {
+      name: /verified sample belief-break mechanism/i,
+    });
+    expect(mechanism).toHaveAttribute("data-presentation", "compact");
+
+    const causalDesign = await within(mechanism).findByRole("group", {
+      name: /changed variable: evaluation unit/i,
+    });
+    expect(causalDesign).toHaveAccessibleName(/familiar-row test/i);
+    expect(causalDesign).toHaveAccessibleName(/whole-customer holdout/i);
+    expect(causalDesign).toHaveAccessibleName(/every test identity unseen/i);
+    expect(causalDesign).toHaveAccessibleName(
+      /sample sizes, and seed stay fixed/i,
+    );
+    expect(
+      within(causalDesign).getByText(/Familiar rows · identities repeat/i),
+    ).toBeVisible();
+    expect(within(causalDesign).getByText("Evaluation unit")).toBeVisible();
+    expect(
+      within(causalDesign).getByText(
+        /Unseen customers · identities stay apart/i,
+      ),
+    ).toBeVisible();
+
+    expect(
+      within(mechanism).getByText(
+        "Model, features, preprocessing, sample sizes, and seed stayed fixed.",
+      ),
+    ).toBeVisible();
+    expect(
+      within(mechanism).getByText(
+        /98\.5% became 59\.4% when test identities were new/i,
+      ),
+    ).toBeVisible();
+    expect(within(mechanism).getByText("Boundary consequence")).toBeVisible();
+    expect(within(mechanism).getByText("Learner benefit")).toBeVisible();
+    expect(
+      within(mechanism).queryByText("Exact values and integrity"),
+    ).not.toBeInTheDocument();
+    expect(within(mechanism).queryByRole("table")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("status", {
+        name: /fixed sample evidence integrity verified/i,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("reuses the compact mechanism without loading or revealing result values before Prediction", () => {
+    render(
+      <VerifiedBeliefBreakMechanism
+        presentation="compact"
+        resultVisibility="locked"
+      />,
+    );
+
+    const mechanism = screen.getByRole("region", {
+      name: /fair-test mechanism with result locked/i,
+    });
+    expect(mechanism).toHaveAttribute("data-result-visibility", "locked");
+    expect(mechanism).toHaveTextContent(
+      /familiar-row test.*unseen-entity test/i,
+    );
+    expect(mechanism).toHaveTextContent(/result locked until Prediction/i);
+    expect(mechanism).toHaveTextContent(/model.*metric.*seed stay fixed/i);
+    expect(mechanism).toHaveTextContent(
+      /stays similar when only the evaluation unit changes/i,
+    );
+    expect(mechanism).not.toHaveTextContent(/fairer|proves|verified result/i);
+    expect(within(mechanism).queryByText(/98\.5%|59\.4%/i)).toBeNull();
+    expect(verifier).not.toHaveBeenCalled();
   });
 
   it("fails closed when the Boundary fixture points at a different primary result", async () => {

@@ -37,8 +37,14 @@ export type RunnerContainerBinding = {
   getByName(name: string): RunnerInstance;
 };
 
+export type RunnerReleaseIdentity = {
+  runnerSourceCommit: string;
+  runnerImageDigest: string;
+};
+
 export type HttpRunnerDispatcherOptions = {
   baseURL: string;
+  releaseIdentity: RunnerReleaseIdentity;
   fetch?: typeof globalThis.fetch;
 };
 
@@ -75,13 +81,53 @@ function normalizeRunnerBaseURL(configured: string): string {
   return url.origin;
 }
 
+function assertExactRunnerReleaseIdentity(
+  releaseIdentity: RunnerReleaseIdentity,
+): void {
+  if (!/^[a-f0-9]{40}$/u.test(releaseIdentity.runnerSourceCommit)) {
+    throw new Error("Runner source commit must be exact for readiness");
+  }
+  if (!/^sha256:[a-f0-9]{64}$/u.test(releaseIdentity.runnerImageDigest)) {
+    throw new Error("Runner image digest must be exact for readiness");
+  }
+}
+
+async function runnerReadinessMatches(
+  response: Response,
+  releaseIdentity: RunnerReleaseIdentity,
+): Promise<boolean> {
+  const source = await response.text();
+  if (response.status !== 200 || source.length > 1_024) return false;
+  const payload: unknown = JSON.parse(source);
+  return (
+    typeof payload === "object" &&
+    payload !== null &&
+    !Array.isArray(payload) &&
+    JSON.stringify(Object.keys(payload).sort()) ===
+      JSON.stringify(
+        ["runnerImageDigest", "runnerSourceCommit", "service", "status"].sort(),
+      ) &&
+    "status" in payload &&
+    payload.status === "ready" &&
+    "service" in payload &&
+    payload.service === "counterlab-hosted-runner" &&
+    "runnerSourceCommit" in payload &&
+    payload.runnerSourceCommit === releaseIdentity.runnerSourceCommit &&
+    "runnerImageDigest" in payload &&
+    payload.runnerImageDigest === releaseIdentity.runnerImageDigest
+  );
+}
+
 export class HttpRunnerDispatcher implements RunnerDispatcher {
   readonly identity = "counterlab-process-runner-v1";
   private readonly baseURL: string;
   private readonly fetcher: typeof globalThis.fetch;
+  private readonly releaseIdentity: RunnerReleaseIdentity;
 
   constructor(options: HttpRunnerDispatcherOptions) {
     this.baseURL = normalizeRunnerBaseURL(options.baseURL);
+    assertExactRunnerReleaseIdentity(options.releaseIdentity);
+    this.releaseIdentity = options.releaseIdentity;
     this.fetcher = options.fetch ?? globalThis.fetch;
   }
 
@@ -92,7 +138,7 @@ export class HttpRunnerDispatcher implements RunnerDispatcher {
         headers: { accept: "application/json" },
         signal: AbortSignal.timeout(10_000),
       });
-      return response.ok;
+      return runnerReadinessMatches(response, this.releaseIdentity);
     } catch {
       return false;
     }
@@ -147,14 +193,40 @@ export function isRunnerContainerBinding(
 
 export class CloudflareContainerRunnerDispatcher implements RunnerDispatcher {
   readonly identity = "cloudflare-container-runner-v1";
+  private readonly readinessInstanceName: string;
 
   constructor(
     private readonly binding: RunnerContainerBinding,
     private readonly containerEnvironment: Record<string, string>,
-  ) {}
+    private readonly releaseIdentity: RunnerReleaseIdentity,
+  ) {
+    assertExactRunnerReleaseIdentity(releaseIdentity);
+    this.readinessInstanceName = `counterlab-readiness-${releaseIdentity.runnerImageDigest.slice("sha256:".length)}`;
+  }
 
   async ready(): Promise<boolean> {
-    return Promise.resolve(true);
+    try {
+      const instance = this.binding.getByName(this.readinessInstanceName);
+      await instance.startAndWaitForPorts({
+        ports: [8080],
+        cancellationOptions: {
+          instanceGetTimeoutMS: 10_000,
+          portReadyTimeoutMS: 30_000,
+        },
+        startOptions: {
+          envVars: this.containerEnvironment,
+          entrypoint: ["/usr/local/bin/node", "/app/runner.mjs"],
+        },
+      });
+      const response = await instance.fetch("http://runner.internal/ready", {
+        method: "GET",
+        headers: { accept: "application/json" },
+        signal: AbortSignal.timeout(10_000),
+      });
+      return runnerReadinessMatches(response, this.releaseIdentity);
+    } catch {
+      return false;
+    }
   }
 
   async dispatch(request: RunnerDispatchRequest): Promise<void> {

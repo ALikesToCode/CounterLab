@@ -6618,9 +6618,11 @@ body {
 }
 
 .question-first-layout {
-  width: min(1220px, 100%);
+  width: 100%;
+  max-width: 1220px;
+  min-width: 0;
   display: grid;
-  grid-template-columns: minmax(440px, 0.84fr) minmax(560px, 1.16fr);
+  grid-template-columns: minmax(520px, 1.08fr) minmax(480px, 0.92fr);
   grid-template-areas:
     "question belief-break"
     "support support"
@@ -6650,6 +6652,23 @@ body {
   font-weight: 520;
   line-height: 1.2;
   letter-spacing: -0.025em;
+}
+
+.landing-audience {
+  max-width: 560px;
+  margin: 10px auto 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.landing-category {
+  max-width: 610px;
+  margin: 8px auto 0;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.45;
 }
 
 .landing-intro > h1:focus-visible {
@@ -6691,6 +6710,49 @@ body {
   color: var(--ink-soft);
   font-size: 15px;
   line-height: 1.5;
+}
+
+.landing-comparison-preview {
+  display: grid;
+  gap: 10px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.landing-comparison-preview li {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.landing-comparison-preview li > span {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--aqua) 48%, var(--line));
+  border-radius: 50%;
+  color: var(--aqua-bright);
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.landing-comparison-preview strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.landing-comparison-preview p {
+  margin: 3px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .landing-proof-note {
@@ -6894,13 +6956,15 @@ body {
   margin: 0;
 }
 
-@media (max-width: 1040px) {
+@media (max-width: 1240px) {
   .topbar-context {
     display: none;
   }
 
   .question-first-layout {
-    width: min(780px, 100%);
+    width: 100%;
+    max-width: 780px;
+    min-width: 0;
     grid-template-columns: 1fr;
     grid-template-areas:
       "question"
@@ -7051,11 +7115,11 @@ body {
 @media (max-width: 560px) {
   .landing-canvas {
     place-items: start center;
-    padding: 18px 12px 38px;
+    padding: 12px 12px 38px;
   }
 
   .question-first-layout {
-    gap: 18px;
+    gap: 16px;
   }
 
   .landing-question-column {
@@ -7064,6 +7128,16 @@ body {
 
   .landing-intro > h1 {
     font-size: 24px;
+  }
+
+  .landing-audience {
+    margin-top: 8px;
+    font-size: 15px;
+  }
+
+  .landing-category {
+    margin-top: 6px;
+    font-size: 14px;
   }
 
   .landing-belief-break {
@@ -7081,7 +7155,15 @@ body {
   }
 
   .landing-belief-break blockquote {
-    margin-top: 8px;
-    font-size: 13px;
+    display: none;
+  }
+
+  .landing-comparison-preview {
+    gap: 8px;
+    margin-top: 13px;
+  }
+
+  .landing-comparison-preview li {
+    padding: 10px;
   }
 }

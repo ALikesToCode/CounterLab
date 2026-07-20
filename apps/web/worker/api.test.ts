@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   BoundaryMapResultV1Schema,
   DiscriminationContractV1Schema,
+  HostedExperimentLineageV5Schema,
   type ArtifactManifest,
   type BeliefTest,
   type ExperimentPlanV2,
@@ -61,7 +62,7 @@ import {
 import sourceNotebookText from "../../../fixtures/notebooks/customer_churn_leakage.ipynb?raw";
 import imbalanceNotebookText from "../../../fixtures/notebooks/fraud_class_imbalance.ipynb?raw";
 import imbalanceResultText from "../../../fixtures/public/imbalance_verified_result.json?raw";
-import patchedNotebookText from "../../../replays/leakage-01/patch/customer_churn_leakage.patched.ipynb?raw";
+import patchedNotebookText from "../../../fixtures/public/leakage_sample_patch_v1/customer_churn_leakage.patched.ipynb?raw";
 import scientificEngineSnapshotValue from "../../../scientific-engines/snapshot-hash.json";
 
 import { api, createApi } from "./api";
@@ -80,6 +81,7 @@ import type { ArtifactStore, StoredArtifact } from "./artifact-store";
 import { ConcurrentD1SessionUpdateError } from "./d1-session-repository";
 import type { LearnerInteractionRepository } from "./learner-interaction-repository";
 import {
+  ReplayPublicationExpiredError,
   ReplayPublicationRevokedError,
   type ProofCapsuleReplayRecordV2,
 } from "./replay-repository";
@@ -159,6 +161,13 @@ class MemorySessionRepository implements SessionRepository {
     return structuredClone(this.eventLog.get(sessionId)?.at(-1));
   }
 
+  replaceEventsForIntegrityTest(
+    sessionId: string,
+    events: readonly EvidenceEvent[],
+  ): void {
+    this.eventLog.set(sessionId, structuredClone([...events]));
+  }
+
   close(): void {}
 }
 
@@ -226,6 +235,7 @@ class MemoryProofCapsuleReplayRepository {
 
   async createOrReuse(
     record: ProofCapsuleReplayRecordV2,
+    now: string,
   ): Promise<{ record: ProofCapsuleReplayRecordV2; reused: boolean }> {
     const existing = [...this.records.values()].find(
       (candidate) => candidate.sourceSessionId === record.sourceSessionId,
@@ -233,6 +243,9 @@ class MemoryProofCapsuleReplayRepository {
     if (existing !== undefined) {
       if (this.revoked.has(existing.replayId)) {
         throw new ReplayPublicationRevokedError(record.sourceSessionId);
+      }
+      if (existing.expiresAt <= now) {
+        throw new ReplayPublicationExpiredError(record.sourceSessionId);
       }
       if (
         existing.capsuleId !== record.capsuleId ||
@@ -248,17 +261,23 @@ class MemoryProofCapsuleReplayRepository {
 
   async find(
     replayId: string,
+    now: string,
   ): Promise<ProofCapsuleReplayRecordV2 | undefined> {
     const record = this.records.get(replayId);
-    return record === undefined || this.revoked.has(replayId)
+    return record === undefined ||
+      this.revoked.has(replayId) ||
+      record.expiresAt <= now
       ? undefined
       : structuredClone(record);
   }
 
-  async statusBySourceSession(sourceSessionId: string): Promise<
+  async statusBySourceSession(
+    sourceSessionId: string,
+    now: string,
+  ): Promise<
     | {
         record: ProofCapsuleReplayRecordV2;
-        status: "active" | "revoked";
+        status: "active" | "revoked" | "expired";
       }
     | undefined
   > {
@@ -269,7 +288,11 @@ class MemoryProofCapsuleReplayRepository {
       ? undefined
       : {
           record: structuredClone(record),
-          status: this.revoked.has(record.replayId) ? "revoked" : "active",
+          status: this.revoked.has(record.replayId)
+            ? "revoked"
+            : record.expiresAt <= now
+              ? "expired"
+              : "active",
         };
   }
 
@@ -385,6 +408,8 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
   private readonly jobs = new Map<string, RunnerJob>();
   private readonly events = new Map<string, PublicCompilerEvent[]>();
   private readonly callbacks = new Map<string, RunnerCallback>();
+  private mutateHistoryAtSnapshotEnd = false;
+  private historyReads = 0;
 
   async create(job: RunnerJob): Promise<void> {
     this.jobs.set(job.jobId, structuredClone(job));
@@ -441,6 +466,30 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
     );
   }
 
+  async findForSession(sessionId: string): Promise<RunnerJob[]> {
+    this.historyReads += 1;
+    if (this.mutateHistoryAtSnapshotEnd && this.historyReads % 2 === 0) {
+      const current = [...this.jobs.values()].find(
+        (job) => job.sessionId === sessionId,
+      );
+      if (current !== undefined) {
+        this.jobs.set(current.jobId, {
+          ...current,
+          jobVersion: current.jobVersion + 1,
+          updatedAt: new Date(Date.parse(current.updatedAt) + 1).toISOString(),
+        });
+      }
+    }
+    return structuredClone(
+      [...this.jobs.values()].filter((job) => job.sessionId === sessionId),
+    );
+  }
+
+  mutateEveryHistorySnapshotEnd(): void {
+    this.mutateHistoryAtSnapshotEnd = true;
+    this.historyReads = 0;
+  }
+
   async findForState(input: {
     sessionId: string;
     kind: RunnerJobKind;
@@ -486,6 +535,13 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
         (event) => event.cursor > afterCursor,
       ),
     );
+  }
+
+  replaceEventsForIntegrityTest(
+    jobId: string,
+    events: readonly PublicCompilerEvent[],
+  ): void {
+    this.events.set(jobId, structuredClone([...events]));
   }
 
   async findCallback(
@@ -608,10 +664,12 @@ async function sessionHarness(
   sessionRepository: MemorySessionRepository = new MemorySessionRepository(),
 ) {
   const artifactStore = new MemoryArtifactStore();
+  const runnerJobs = new MemoryRunnerJobRepository();
   let idSequence = 0;
   const app = createApi({
     sessionRepository,
     artifactStore,
+    runnerJobRepository: runnerJobs,
     now: () => new Date("2026-07-14T10:00:00.000Z"),
     id: (prefix) => `${prefix}_${++idSequence}`,
   });
@@ -643,6 +701,7 @@ async function sessionHarness(
   return {
     app,
     artifactStore,
+    runnerJobs,
     sessionRepository,
     artifactId: artifactBody.data.artifactId,
     sessionId: sessionBody.data.sessionId,
@@ -753,8 +812,7 @@ async function preparedHostedRunner(
   const harness = await sessionHarness("sample");
   const sampleRoute = `/api/sessions/${harness.sessionId}`;
   await postJson(harness.app, `${sampleRoute}/belief-test`, {
-    learnerClaim:
-      "The high row-split score proves this model generalizes to new accounts.",
+    learnerClaim: SAMPLE_LEAKAGE_QUESTION,
   });
   await postJson(harness.app, `${sampleRoute}/belief-test/confirm`, {
     action: "confirm",
@@ -1425,6 +1483,20 @@ async function scientificCandidateArtifacts(bundle: RunnerLabCompileBundleV5) {
         type: "WhyThisTest",
         text: discriminationContract.whyThisTest,
       },
+      {
+        id: "familiar-accuracy",
+        type: "Metric",
+        label: "Familiar-row accuracy",
+        resultBinding: "/runs/byId/random_rows/metrics/accuracy",
+        unit: "proportion",
+      },
+      {
+        id: "unseen-accuracy",
+        type: "Metric",
+        label: "Unseen-customer accuracy",
+        resultBinding: "/runs/byId/unseen_customers/metrics/accuracy",
+        unit: "proportion",
+      },
     ],
     assumptions: ["The fixed kernel executes only registered operations."],
     limitations: ["No result is shown before external verification."],
@@ -1646,6 +1718,20 @@ async function scientificImbalanceCandidateArtifacts(
         id: "why",
         type: "WhyThisTest",
         text: discriminationContract.whyThisTest,
+      },
+      {
+        id: "headline-accuracy",
+        type: "Metric",
+        label: "Majority-baseline accuracy",
+        resultBinding: "/runs/byId/majority_baseline/metrics/accuracy",
+        unit: "proportion",
+      },
+      {
+        id: "rare-recall",
+        type: "Metric",
+        label: "Rare-class recall",
+        resultBinding: "/runs/byId/stratified_model/metrics/recall",
+        unit: "proportion",
       },
     ],
     assumptions: ["The fixed kernel computes every class-specific metric."],
@@ -3442,6 +3528,98 @@ describe("Cloudflare Worker API", () => {
       };
     }
 
+    it("fails closed instead of exposing a corrupted stored evidence chain", async () => {
+      const { app, sessionRepository } = protectedApi();
+      const createdResponse = await postJson(app, "/api/sample/sessions", {
+        sampleId: "leakage-01",
+      });
+      const created = (await createdResponse.json()) as {
+        data: { sessionId: string; ownerCapability: string };
+      };
+      const authorization = `Bearer ${created.data.ownerCapability}`;
+      const events = await sessionRepository.listEvents(created.data.sessionId);
+      const first = events[0];
+      if (first === undefined) throw new Error("missing creation evidence");
+      sessionRepository.replaceEventsForIntegrityTest(created.data.sessionId, [
+        {
+          ...first,
+          payload: { ...first.payload, tampered: true },
+        },
+      ]);
+
+      const response = await app.request(
+        `/api/sessions/${created.data.sessionId}/events`,
+        { headers: { authorization } },
+      );
+
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({
+        error: {
+          code: "EVIDENCE_CHAIN_INVALID",
+          message: "Stored evidence failed integrity validation",
+        },
+      });
+    });
+
+    it("returns a verified chain receipt and rejects a self-consistent truncated chain", async () => {
+      const { app, sessionRepository } = protectedApi();
+      const createdResponse = await postJson(app, "/api/sample/sessions", {
+        sampleId: "leakage-01",
+      });
+      const created = (await createdResponse.json()) as {
+        data: { sessionId: string; ownerCapability: string };
+      };
+      const authorization = `Bearer ${created.data.ownerCapability}`;
+      const eventsPath = `/api/sessions/${created.data.sessionId}/events`;
+      const firstResponse = await app.request(eventsPath, {
+        headers: { authorization },
+      });
+      expect(firstResponse.status).toBe(200);
+      const firstPayload = (await firstResponse.json()) as {
+        data: {
+          events: EvidenceEvent[];
+          integrity: {
+            status: string;
+            eventChainHead: string;
+            eventCount: number;
+          };
+        };
+      };
+      expect(firstPayload.data.integrity).toEqual({
+        schemaVersion: "1",
+        status: "VERIFIED",
+        eventChainHead: firstPayload.data.events[0]?.eventHash,
+        eventCount: 1,
+      });
+
+      expect(
+        (
+          await postJson(
+            app,
+            `/api/sessions/${created.data.sessionId}/belief-test`,
+            {
+              learnerClaim: SAMPLE_LEAKAGE_QUESTION,
+            },
+            { authorization },
+          )
+        ).status,
+      ).toBe(200);
+      const complete = await sessionRepository.listEvents(
+        created.data.sessionId,
+      );
+      sessionRepository.replaceEventsForIntegrityTest(created.data.sessionId, [
+        complete[0]!,
+      ]);
+
+      const truncated = await app.request(eventsPath, {
+        headers: { authorization },
+      });
+      expect(truncated.status).toBe(409);
+      await expect(truncated.json()).resolves.toMatchObject({
+        error: { code: "EVIDENCE_CHAIN_INVALID" },
+      });
+    });
+
     it("treats a session ID as a locator and requires its separate owner key", async () => {
       const { app } = protectedApi();
       const createdResponse = await postJson(app, "/api/sample/sessions", {
@@ -4002,7 +4180,7 @@ describe("Cloudflare Worker API", () => {
     });
   });
 
-  it("creates sample, live, and replay sessions only through mode-specific routes", async () => {
+  it("creates mutable modes only through mode-specific routes and keeps replay static", async () => {
     const harness = await sessionHarness("sample");
     const uploaded = await saveUploadedArtifact(
       harness.artifactStore,
@@ -4036,13 +4214,10 @@ describe("Cloudflare Worker API", () => {
     const replay = await postJson(harness.app, "/api/replay/sessions", {
       replayId: "leakage-01",
     });
-    expect(replay.status).toBe(201);
+    expect(replay.status).toBe(409);
     await expect(replay.json()).resolves.toMatchObject({
-      ok: true,
-      data: {
-        artifactId: harness.artifactId,
-        mode: { kind: "verified_replay", replayId: "leakage-01" },
-      },
+      ok: false,
+      error: { code: "REPLAY_SESSION_UNAVAILABLE" },
     });
   });
 
@@ -4550,12 +4725,9 @@ describe("Cloudflare Worker API", () => {
       harness.app,
       `/api/sessions/${harness.sessionId}/transfer`,
       {
-        strategyChoice: "cost_aware_threshold",
-        riskChoice: "minority_false_negative_cost",
-        evidenceChoices: [
-          "confusion_matrix_exposes_misses",
-          "prevalence_shift_changes_precision",
-        ],
+        decisionChoice: "reject_accuracy_only",
+        metricChoice: "recall_and_pr_auc",
+        evidenceChoices: ["zero_true_positives", "rare_base_rate"],
       },
     );
 
@@ -4838,12 +5010,9 @@ describe("Cloudflare Worker API", () => {
           harness.app,
           `/api/sessions/${harness.sessionId}/transfer`,
           {
-            strategyChoice: "cost_aware_threshold",
-            riskChoice: "minority_false_negative_cost",
-            evidenceChoices: [
-              "confusion_matrix_exposes_misses",
-              "prevalence_shift_changes_precision",
-            ],
+            decisionChoice: "reject_accuracy_only",
+            metricChoice: "recall_and_pr_auc",
+            evidenceChoices: ["zero_true_positives", "rare_base_rate"],
           },
         )
       ).status,
@@ -5289,8 +5458,7 @@ describe("Cloudflare Worker API", () => {
     const harness = await sessionHarness("sample");
     const sampleRoute = `/api/sessions/${harness.sessionId}`;
     await postJson(harness.app, `${sampleRoute}/belief-test`, {
-      learnerClaim:
-        "The high row-split score proves this model generalizes to new accounts.",
+      learnerClaim: SAMPLE_LEAKAGE_QUESTION,
     });
     await postJson(harness.app, `${sampleRoute}/belief-test/confirm`, {
       action: "confirm",
@@ -5591,6 +5759,29 @@ describe("Cloudflare Worker API", () => {
       labVerification: { status: "VERIFIED" },
     });
     expect(stored).not.toHaveProperty("verifiedResult");
+
+    const compileEvidence =
+      await harness.sessionRepository.listEvents(sessionId);
+    expect(
+      compileEvidence.find((event) => event.kind === "lab.compilation_started"),
+    ).toMatchObject({
+      actor: "system",
+      payload: { authority: "runtime-codex-requested" },
+    });
+    expect(
+      compileEvidence.find((event) => event.kind === "lab.verified"),
+    ).toMatchObject({
+      actor: "verifier",
+      payload: {
+        status: "VERIFIED",
+        source: "hosted-plan-v2",
+        jobId: dispatch.job.jobId,
+        planHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      },
+    });
+    expect(compileEvidence.some((event) => event.actor === "codex")).toBe(
+      false,
+    );
 
     const eventCount = (await harness.sessionRepository.listEvents(sessionId))
       .length;
@@ -6182,6 +6373,8 @@ describe("Cloudflare Worker API", () => {
     expect(download.headers.get("content-disposition")).toContain(
       "uploaded_customer_model.counterlab-patched.ipynb",
     );
+    expect(download.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(download.headers.get("cache-control")).toBe("private, no-store");
     await expect(download.text()).resolves.toBe(patchedNotebookText);
   });
 
@@ -6428,7 +6621,7 @@ describe("Cloudflare Worker API", () => {
         verification: {
           status: "VERIFIED",
           reasonCode: "SELECTED",
-          verifierVersion: "scientific-candidate-verifier-v3",
+          verifierVersion: "scientific-candidate-verifier-v4",
         },
       },
     });
@@ -6444,6 +6637,23 @@ describe("Cloudflare Worker API", () => {
       projectedPlanHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
     });
     expect(storedSession?.beliefTest).toBeUndefined();
+    expect(
+      (
+        await harness.sessionRepository.listEvents(harness.bundle.sessionId)
+      ).find((event) => event.kind === "lab.verified")?.payload,
+    ).toMatchObject({
+      verifiedOperationSummary: {
+        schemaVersion: "1",
+        authority: "verified-selected-experiment-ir",
+        authorityHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        selectionRef: "group-holdout-plus-ablation",
+        operationIds: [
+          "leakage.random_row_split",
+          "leakage.group_holdout",
+          "leakage.identity_ablation",
+        ],
+      },
+    });
 
     const queuedRun = await postJson(
       harness.app,
@@ -6479,7 +6689,7 @@ describe("Cloudflare Worker API", () => {
       },
       provenance: {
         compileJobId: jobId,
-        scientificVerifierVersion: "scientific-candidate-verifier-v3",
+        scientificVerifierVersion: "scientific-candidate-verifier-v4",
         scorerVersion: "experiment-scorer-v1",
       },
       permittedOutputs: ["verified-result.json"],
@@ -6921,6 +7131,124 @@ describe("Cloudflare Worker API", () => {
           evaluatorVersion: "counterlab-transfer-v1",
         },
       },
+    });
+  });
+
+  it("withholds, binds, and revalidates the generated Lab Scene against the verified live result", async () => {
+    const harness = await preparedScientificHostedRunner();
+    const run = await completeScientificCompileAndQueueRun(harness);
+    const sessionId = harness.bundle.sessionId;
+
+    const withheld = await harness.app.request(
+      `/api/sessions/${sessionId}/lab-scene`,
+    );
+    expect(withheld.status).toBe(409);
+    await expect(withheld.json()).resolves.toMatchObject({
+      error: { code: "LAB_SCENE_RESULT_REQUIRED" },
+    });
+
+    const runJobId = run.dispatch.job.jobId;
+    expect(
+      (
+        await harness.app.request(`/api/runner/jobs/${runJobId}/start`, {
+          method: "POST",
+          headers: run.authorization,
+        })
+      ).status,
+    ).toBe(200);
+    const result = await scientificLeakageResult(run.bundle);
+    const resultText = JSON.stringify(result);
+    expect(
+      (
+        await harness.app.request(
+          `/api/runner/jobs/${runJobId}/outputs/verified-result.json`,
+          {
+            method: "PUT",
+            headers: {
+              ...run.authorization,
+              "content-type": "application/json",
+            },
+            body: resultText,
+          },
+        )
+      ).status,
+    ).toBe(201);
+    expect(
+      (
+        await postJson(
+          harness.app,
+          `/api/runner/jobs/${runJobId}/callback`,
+          {
+            schemaVersion: "1",
+            callbackId: "callback_lab_scene_result",
+            idempotencyKey: "lab-scene-result-complete",
+            jobId: runJobId,
+            stateVersion: run.dispatch.job.stateVersion,
+            status: "VERIFIED",
+            outputHashes: [await sha256Text(resultText)],
+            finalEventCursor: 0,
+            occurredAt: "2026-07-14T10:00:04.000Z",
+          },
+          run.authorization,
+        )
+      ).status,
+    ).toBe(200);
+
+    const completedSession = await harness.sessionRepository.find(sessionId);
+    const lineage = HostedExperimentLineageV5Schema.parse(
+      completedSession?.labVerification,
+    );
+
+    const response = await harness.app.request(
+      `/api/sessions/${sessionId}/lab-scene`,
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    const expectedScene = LabSceneV2Schema.parse(
+      JSON.parse(run.staged.artifacts["lab-scene.json"]),
+    );
+    expect(
+      expectedScene.blocks.filter((block) => block.type === "Metric"),
+    ).toHaveLength(2);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        schemaVersion: "1",
+        scene: expectedScene,
+        verifiedSceneHash: lineage.labSceneHash,
+        signedResult: {
+          verificationStatus: "VERIFIED",
+          sceneHash: lineage.labSceneHash,
+          sessionId,
+          resultHash: result.resultHash,
+          integrity: {
+            mode: "integrity-hashed",
+            contentHash: result.resultHash,
+          },
+          result: { resultHash: result.resultHash },
+        },
+      },
+    });
+
+    const frozenSceneKey = `runner-authority/${run.staged.jobId}/compiler-output/lab-scene.json`;
+    const frozenScene = harness.runnerObjects.objects.get(frozenSceneKey);
+    if (frozenScene === undefined) {
+      throw new Error("frozen Lab Scene bytes are missing");
+    }
+    const mutatedScene = {
+      ...(JSON.parse(frozenScene.body) as Record<string, unknown>),
+      title: "A stale result-bearing presentation",
+    };
+    harness.runnerObjects.objects.set(frozenSceneKey, {
+      ...frozenScene,
+      body: JSON.stringify(mutatedScene),
+    });
+    const drifted = await harness.app.request(
+      `/api/sessions/${sessionId}/lab-scene`,
+    );
+    expect(drifted.status).toBe(409);
+    await expect(drifted.json()).resolves.toMatchObject({
+      error: { code: "SCIENTIFIC_VERIFIER_REJECTED" },
     });
   });
 
@@ -8025,14 +8353,16 @@ describe("Cloudflare Worker API", () => {
       data: {
         reused: false,
         replay: {
-          schemaVersion: "1",
+          schemaVersion: "2",
           replay: true,
           label: "Verified replay",
           concept: "entity_leakage",
           recordedAt: storedProofCapsule.createdAt,
           retention: {
-            policy: "available_until_revoked",
+            policy: "expires_or_revoked",
             revocable: true,
+            publishedAt: "2026-07-14T10:00:00.000Z",
+            expiresAt: "2026-08-13T10:00:00.000Z",
           },
         },
       },
@@ -8166,6 +8496,43 @@ describe("Cloudflare Worker API", () => {
     ]) {
       expect(serializedHostedReplay).not.toContain(forbiddenValue);
     }
+
+    const expiredApp = createApi({
+      sessionRepository: harness.sessionRepository,
+      artifactStore: harness.artifactStore,
+      runnerJobRepository: harness.runnerJobs,
+      runnerObjectStore: harness.runnerObjects,
+      replayRepository: harness.replayRepository,
+      runnerSigningPrivateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
+      now: () => new Date("2026-08-13T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_expired_replay_probe`,
+    });
+    const expiredHostedReplay = await expiredApp.request(
+      `/api/replays/${publishedReplayPayload.data.replay.replayId}`,
+      undefined,
+      capsuleSigningEnv,
+    );
+    expect(expiredHostedReplay.status).toBe(404);
+    await expect(expiredHostedReplay.json()).resolves.toMatchObject({
+      error: { code: "REPLAY_NOT_FOUND" },
+    });
+    const expiredPublicationStatus = await expiredApp.request(
+      `/api/sessions/${bundle.sessionId}/replays/status`,
+      undefined,
+      capsuleSigningEnv,
+    );
+    expect(expiredPublicationStatus.status).toBe(200);
+    await expect(expiredPublicationStatus.json()).resolves.toMatchObject({
+      data: {
+        status: "expired",
+        replay: {
+          replayId: publishedReplayPayload.data.replay.replayId,
+          retention: {
+            expiresAt: "2026-08-13T10:00:00.000Z",
+          },
+        },
+      },
+    });
 
     const frozenPrivateCapsule = harness.runnerObjects.objects.get(
       storedProofCapsule.objectKey,
@@ -8756,12 +9123,9 @@ describe("Cloudflare Worker API", () => {
       harness.app,
       `/api/sessions/${harness.sessionId}/transfer`,
       {
-        strategyChoice: "cost_aware_threshold",
-        riskChoice: "minority_false_negative_cost",
-        evidenceChoices: [
-          "confusion_matrix_exposes_misses",
-          "prevalence_shift_changes_precision",
-        ],
+        decisionChoice: "reject_accuracy_only",
+        metricChoice: "recall_and_pr_auc",
+        evidenceChoices: ["zero_true_positives", "rare_base_rate"],
       },
     );
     expect(transfer.status).toBe(200);
@@ -8833,7 +9197,7 @@ describe("Cloudflare Worker API", () => {
 
     expect(verification).toMatchObject({
       disposition: "REPAIRABLE_REJECTION",
-      report: { verifierVersion: "scientific-candidate-verifier-v3" },
+      report: { verifierVersion: "scientific-candidate-verifier-v4" },
     });
     expect(seedFinding).toMatchObject({
       passed: false,
@@ -9858,14 +10222,18 @@ describe("Cloudflare Worker API", () => {
 
   it("keeps verified replay sessions read-only", async () => {
     const harness = await sessionHarness("sample");
-    const created = await postJson(harness.app, "/api/replay/sessions", {
-      replayId: "leakage-01",
+    const replaySessionId = "session_static_replay";
+    await seedSession(harness.sessionRepository, {
+      id: replaySessionId,
+      artifactId: harness.artifactId,
+      mode: { kind: "verified_replay", replayId: "leakage-01" },
+      state: "INGESTED",
+      version: 1,
     });
-    const body = (await created.json()) as { data: { sessionId: string } };
 
     const response = await postJson(
       harness.app,
-      `/api/sessions/${body.data.sessionId}/belief-test`,
+      `/api/sessions/${replaySessionId}/belief-test`,
       {
         learnerClaim:
           "The notebook accuracy proves generalization to new customers.",
@@ -9877,10 +10245,10 @@ describe("Cloudflare Worker API", () => {
       ok: false,
       error: { code: "REPLAY_READ_ONLY" },
     });
-    const stored = await harness.sessionRepository.find(body.data.sessionId);
+    const stored = await harness.sessionRepository.find(replaySessionId);
     expect(stored?.state).toBe("INGESTED");
     expect(
-      await harness.sessionRepository.listEvents(body.data.sessionId),
+      await harness.sessionRepository.listEvents(replaySessionId),
     ).toHaveLength(1);
   });
 
@@ -9897,8 +10265,97 @@ describe("Cloudflare Worker API", () => {
         liveCodex: "local-runner-required",
         liveKernel: "local-runner-required",
         maintenance: false,
+        readiness: "not-checked",
       },
     });
+  });
+
+  it("keeps ordinary health shallow and performs storage and runner work only for an explicit probe", async () => {
+    const first = vi.fn().mockResolvedValue({ ready: 1 });
+    const prepare = vi.fn(() => ({ first }));
+    const head = vi.fn().mockResolvedValue(undefined);
+    const dispatcher = new CapturingRunnerDispatcher();
+    const ready = vi.spyOn(dispatcher, "ready");
+    const probeApi = createApi({
+      runnerDispatcher: dispatcher,
+      runnerSigningPrivateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
+    });
+    const environment = {
+      DB: { prepare },
+      ARTIFACTS: { head },
+      OPENAI_API_KEY: "configured-server-key",
+    } as unknown as Env;
+
+    const shallow = await probeApi.request(
+      "/api/health",
+      undefined,
+      environment,
+    );
+    expect(shallow.status).toBe(200);
+    await expect(shallow.json()).resolves.toMatchObject({
+      ok: true,
+      data: { readiness: "not-checked" },
+    });
+    expect(prepare).not.toHaveBeenCalled();
+    expect(first).not.toHaveBeenCalled();
+    expect(head).not.toHaveBeenCalled();
+    expect(ready).not.toHaveBeenCalled();
+
+    const deep = await probeApi.request(
+      "/api/health?readiness=probe",
+      undefined,
+      environment,
+    );
+    expect(deep.status).toBe(200);
+    expect(prepare).toHaveBeenCalledOnce();
+    expect(first).toHaveBeenCalledOnce();
+    expect(head).toHaveBeenCalledOnce();
+    expect(ready).toHaveBeenCalledOnce();
+
+    const invalid = await probeApi.request(
+      "/api/health?readiness=always",
+      undefined,
+      environment,
+    );
+    expect(invalid.status).toBe(400);
+    await expect(invalid.json()).resolves.toMatchObject({
+      error: { code: "INVALID_READINESS_QUERY" },
+    });
+  });
+
+  it("coalesces simultaneous deep readiness probes without caching their result", async () => {
+    const dispatcher = new CapturingRunnerDispatcher();
+    let releaseProbe: ((ready: boolean) => void) | undefined;
+    const probeGate = new Promise<boolean>((resolve) => {
+      releaseProbe = resolve;
+    });
+    const ready = vi.spyOn(dispatcher, "ready").mockReturnValue(probeGate);
+    const probeApi = createApi({
+      sessionRepository: new MemorySessionRepository(),
+      artifactStore: new MemoryArtifactStore(),
+      runnerJobRepository: new MemoryRunnerJobRepository(),
+      runnerObjectStore: new MemoryRunnerObjectStore(),
+      runnerDispatcher: dispatcher,
+      runnerSigningPrivateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
+    });
+    const environment = {
+      OPENAI_API_KEY: "configured-server-key",
+    } as unknown as Env;
+
+    const readinessRequest = probeApi.request("/ready", undefined, environment);
+    await vi.waitFor(() => expect(ready).toHaveBeenCalledOnce());
+    const healthRequest = probeApi.request(
+      "/api/health?readiness=probe",
+      undefined,
+      environment,
+    );
+    await Promise.resolve();
+    expect(ready).toHaveBeenCalledOnce();
+    releaseProbe?.(true);
+    await Promise.all([readinessRequest, healthRequest]);
+
+    await probeApi.request("/ready", undefined, environment);
+    expect(ready).toHaveBeenCalledTimes(2);
   });
 
   it("fails closed on readiness until the analyst and process runner are usable", async () => {
@@ -9938,6 +10395,55 @@ describe("Cloudflare Worker API", () => {
       },
       maintenance: false,
       release: { status: "unbound" },
+    });
+
+    const health = await readyApi.request("/api/health", undefined, {
+      OPENAI_API_KEY: "configured-server-key",
+    } as unknown as Env);
+    expect(health.status).toBe(200);
+    await expect(health.json()).resolves.toMatchObject({
+      ok: true,
+      data: { readiness: "not-checked" },
+    });
+    const probedHealth = await readyApi.request(
+      "/api/health?readiness=probe",
+      undefined,
+      { OPENAI_API_KEY: "configured-server-key" } as unknown as Env,
+    );
+    await expect(probedHealth.json()).resolves.toMatchObject({
+      ok: true,
+      data: { readiness: "ready" },
+    });
+  });
+
+  it("does not advertise live readiness when the runner probe fails", async () => {
+    const dispatcher = new CapturingRunnerDispatcher();
+    vi.spyOn(dispatcher, "ready").mockRejectedValue(
+      new Error("runner probe unavailable"),
+    );
+    const unavailableApi = createApi({
+      sessionRepository: new MemorySessionRepository(),
+      artifactStore: new MemoryArtifactStore(),
+      runnerJobRepository: new MemoryRunnerJobRepository(),
+      runnerObjectStore: new MemoryRunnerObjectStore(),
+      runnerDispatcher: dispatcher,
+      runnerSigningPrivateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
+    });
+
+    const health = await unavailableApi.request(
+      "/api/health?readiness=probe",
+      undefined,
+      { OPENAI_API_KEY: "configured-server-key" } as unknown as Env,
+    );
+
+    expect(health.status).toBe(200);
+    await expect(health.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        liveCodex: "configured",
+        liveKernel: "configured",
+        readiness: "not-ready",
+      },
     });
   });
 
@@ -9983,6 +10489,19 @@ describe("Cloudflare Worker API", () => {
       COUNTERLAB_WORKER_EVIDENCE_COMMIT: workerEvidenceCommit,
       COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
       COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+      COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256: "d".repeat(64),
+      COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256: "9".repeat(64),
+      COUNTERLAB_RUNTIME_POLICY_SHA256: "e".repeat(64),
+      COUNTERLAB_PROOF_DEPENDENCY_MANIFEST_SHA256: "f".repeat(64),
+      COUNTERLAB_WORKER_ARTIFACT_CLASSIFICATION: "PROCESS_BOUND_PARTIAL",
+      COUNTERLAB_WORKER_ARTIFACT_MANIFEST_SHA256: "1".repeat(64),
+      COUNTERLAB_WORKER_BUNDLE_SHA256: "2".repeat(64),
+      COUNTERLAB_CLIENT_ASSETS_SHA256: "3".repeat(64),
+      COUNTERLAB_CLIENT_ASSET_COUNT: "27",
+      COUNTERLAB_CLIENT_PUBLIC_ASSETS_SHA256: "4".repeat(64),
+      COUNTERLAB_CLIENT_PUBLIC_ASSET_COUNT: "25",
+      COUNTERLAB_VITE_VERSION: "8.1.4",
+      COUNTERLAB_WRANGLER_VERSION: "4.110.0",
       CF_VERSION_METADATA: {
         id: workerVersionId,
         tag: `git-${workerEvidenceCommit}`,
@@ -9999,6 +10518,19 @@ describe("Cloudflare Worker API", () => {
           workerEvidenceCommit,
           runnerSourceCommit: "b".repeat(40),
           runnerImageDigest: `sha256:${"c".repeat(64)}`,
+          timeoutCleanupReceiptSha256: "d".repeat(64),
+          aggregateLimitEvidenceSha256: "9".repeat(64),
+          runtimePolicySha256: "e".repeat(64),
+          proofDependencyManifestSha256: "f".repeat(64),
+          workerArtifactClassification: "PROCESS_BOUND_PARTIAL",
+          workerArtifactManifestSha256: "1".repeat(64),
+          workerBundleSha256: "2".repeat(64),
+          clientAssetsSha256: "3".repeat(64),
+          clientAssetCount: 27,
+          clientPublicAssetsSha256: "4".repeat(64),
+          clientPublicAssetCount: 25,
+          viteVersion: "8.1.4",
+          wranglerVersion: "4.110.0",
         },
       },
     });
@@ -10007,6 +10539,19 @@ describe("Cloudflare Worker API", () => {
       COUNTERLAB_WORKER_EVIDENCE_COMMIT: workerEvidenceCommit,
       COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
       COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+      COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256: "d".repeat(64),
+      COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256: "9".repeat(64),
+      COUNTERLAB_RUNTIME_POLICY_SHA256: "e".repeat(64),
+      COUNTERLAB_PROOF_DEPENDENCY_MANIFEST_SHA256: "f".repeat(64),
+      COUNTERLAB_WORKER_ARTIFACT_CLASSIFICATION: "PROCESS_BOUND_PARTIAL",
+      COUNTERLAB_WORKER_ARTIFACT_MANIFEST_SHA256: "1".repeat(64),
+      COUNTERLAB_WORKER_BUNDLE_SHA256: "2".repeat(64),
+      COUNTERLAB_CLIENT_ASSETS_SHA256: "3".repeat(64),
+      COUNTERLAB_CLIENT_ASSET_COUNT: "27",
+      COUNTERLAB_CLIENT_PUBLIC_ASSETS_SHA256: "4".repeat(64),
+      COUNTERLAB_CLIENT_PUBLIC_ASSET_COUNT: "25",
+      COUNTERLAB_VITE_VERSION: "8.1.4",
+      COUNTERLAB_WRANGLER_VERSION: "4.110.0",
       CF_VERSION_METADATA: {
         id: workerVersionId,
         tag: `git-${"d".repeat(40)}`,
@@ -10016,6 +10561,85 @@ describe("Cloudflare Worker API", () => {
     await expect(mismatchedTag.json()).resolves.toMatchObject({
       data: { release: { status: "unbound" } },
     });
+
+    const missingTimeoutProof = await api.request("/api/health", undefined, {
+      COUNTERLAB_WORKER_EVIDENCE_COMMIT: workerEvidenceCommit,
+      COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
+      COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+      CF_VERSION_METADATA: {
+        id: workerVersionId,
+        tag: `git-${workerEvidenceCommit}`,
+        timestamp: "2026-07-19T00:00:00.000Z",
+      },
+    } as unknown as Env);
+    await expect(missingTimeoutProof.json()).resolves.toMatchObject({
+      data: { release: { status: "unbound" } },
+    });
+
+    for (const invalidQualificationBinding of [
+      { COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256: undefined },
+      { COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256: "0".repeat(63) },
+      { COUNTERLAB_RUNTIME_POLICY_SHA256: undefined },
+      { COUNTERLAB_RUNTIME_POLICY_SHA256: "0".repeat(63) },
+      { COUNTERLAB_PROOF_DEPENDENCY_MANIFEST_SHA256: undefined },
+      { COUNTERLAB_PROOF_DEPENDENCY_MANIFEST_SHA256: "0".repeat(63) },
+      { COUNTERLAB_WORKER_ARTIFACT_CLASSIFICATION: undefined },
+      { COUNTERLAB_WORKER_ARTIFACT_CLASSIFICATION: "OS_ENFORCED" },
+      { COUNTERLAB_WORKER_ARTIFACT_MANIFEST_SHA256: undefined },
+      { COUNTERLAB_WORKER_ARTIFACT_MANIFEST_SHA256: "0".repeat(63) },
+      { COUNTERLAB_WORKER_BUNDLE_SHA256: undefined },
+      { COUNTERLAB_WORKER_BUNDLE_SHA256: "0".repeat(63) },
+      { COUNTERLAB_CLIENT_ASSETS_SHA256: undefined },
+      { COUNTERLAB_CLIENT_ASSETS_SHA256: "0".repeat(63) },
+      { COUNTERLAB_CLIENT_ASSET_COUNT: undefined },
+      { COUNTERLAB_CLIENT_ASSET_COUNT: "0" },
+      { COUNTERLAB_CLIENT_PUBLIC_ASSETS_SHA256: undefined },
+      { COUNTERLAB_CLIENT_PUBLIC_ASSETS_SHA256: "0".repeat(63) },
+      { COUNTERLAB_CLIENT_PUBLIC_ASSET_COUNT: undefined },
+      { COUNTERLAB_CLIENT_PUBLIC_ASSET_COUNT: "28" },
+      { COUNTERLAB_VITE_VERSION: undefined },
+      { COUNTERLAB_VITE_VERSION: "8.1.5" },
+      { COUNTERLAB_WRANGLER_VERSION: undefined },
+      { COUNTERLAB_WRANGLER_VERSION: "4.111.0" },
+    ]) {
+      const environment = {
+        COUNTERLAB_WORKER_EVIDENCE_COMMIT: workerEvidenceCommit,
+        COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
+        COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+        COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256: "d".repeat(64),
+        COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256: "9".repeat(64),
+        COUNTERLAB_RUNTIME_POLICY_SHA256: "e".repeat(64),
+        COUNTERLAB_PROOF_DEPENDENCY_MANIFEST_SHA256: "f".repeat(64),
+        COUNTERLAB_WORKER_ARTIFACT_CLASSIFICATION: "PROCESS_BOUND_PARTIAL",
+        COUNTERLAB_WORKER_ARTIFACT_MANIFEST_SHA256: "1".repeat(64),
+        COUNTERLAB_WORKER_BUNDLE_SHA256: "2".repeat(64),
+        COUNTERLAB_CLIENT_ASSETS_SHA256: "3".repeat(64),
+        COUNTERLAB_CLIENT_ASSET_COUNT: "27",
+        COUNTERLAB_CLIENT_PUBLIC_ASSETS_SHA256: "4".repeat(64),
+        COUNTERLAB_CLIENT_PUBLIC_ASSET_COUNT: "25",
+        COUNTERLAB_VITE_VERSION: "8.1.4",
+        COUNTERLAB_WRANGLER_VERSION: "4.110.0",
+        CF_VERSION_METADATA: {
+          id: workerVersionId,
+          tag: `git-${workerEvidenceCommit}`,
+          timestamp: "2026-07-19T00:00:00.000Z",
+        },
+        ...invalidQualificationBinding,
+      } as unknown as Env;
+      const invalidQualification = await api.request(
+        "/api/health",
+        undefined,
+        environment,
+      );
+      await expect(invalidQualification.json()).resolves.toMatchObject({
+        data: { release: { status: "unbound" } },
+      });
+      const readiness = await api.request("/ready", undefined, environment);
+      expect(readiness.status).toBe(503);
+      await expect(readiness.json()).resolves.toMatchObject({
+        checks: { releaseIdentity: false },
+      });
+    }
   });
 
   it("reuses an active compile submission and cancels the process job once", async () => {
@@ -10300,6 +10924,8 @@ describe("Cloudflare Worker API", () => {
     const response = await api.request("/api/health", undefined, {
       COUNTERLAB_RUNNER_BASE_URL: "http://127.0.0.1:8788",
       COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY: TEST_RUNNER_SIGNING_PRIVATE_KEY,
+      COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
+      COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
     } as unknown as Env & Record<string, string>);
 
     expect(response.status).toBe(200);
@@ -10315,9 +10941,26 @@ describe("Cloudflare Worker API", () => {
 
     const unsigned = await api.request("/api/health", undefined, {
       COUNTERLAB_RUNNER_BASE_URL: "http://127.0.0.1:8788",
+      COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
+      COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
     } as unknown as Env & Record<string, string>);
     await expect(unsigned.json()).resolves.toMatchObject({
       data: { liveCodex: "local-runner-required" },
+    });
+  });
+
+  it("does not advertise an HTTP runner without an exact release identity", async () => {
+    const response = await api.request("/api/health", undefined, {
+      COUNTERLAB_RUNNER_BASE_URL: "http://127.0.0.1:8788",
+      COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY: TEST_RUNNER_SIGNING_PRIVATE_KEY,
+    } as unknown as Env & Record<string, string>);
+
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        liveCodex: "local-runner-required",
+        liveKernel: "local-runner-required",
+        readiness: "not-checked",
+      },
     });
   });
 
@@ -10360,6 +11003,7 @@ describe("Cloudflare Worker API", () => {
         modelId: string;
         compilerTrace: { trace: Array<{ status: string }> };
         result: { resultHash: string; runs: unknown[] };
+        patch: { originalSha256: string; patchedSha256: string };
       };
     };
     expect(body.data.replayId).toBe("leakage-01");
@@ -10374,6 +11018,12 @@ describe("Cloudflare Worker API", () => {
       ),
     ).toBe(true);
     expect(body.data.compilerTrace.trace.at(-1)?.status).toBe("VERIFIED");
+    expect(body.data.patch).toMatchObject({
+      originalSha256:
+        "92ba63894d3c2ffd64ba76324bb7bb2b3afeb0310883a33ed140faf058d03024",
+      patchedSha256:
+        "eb20dc7e71431ad5b4a57437d740a1c8844cd335bf3a3d54db48e23dfbd3a034",
+    });
   });
 
   it("returns a typed error for an unknown replay", async () => {
@@ -10384,7 +11034,18 @@ describe("Cloudflare Worker API", () => {
       ok: false,
       error: {
         code: "REPLAY_NOT_FOUND",
-        message: "Replay missing was not found",
+        message: "The requested replay was not found",
+        status: 404,
+      },
+    });
+
+    const overlong = await api.request(`/api/replays/${"a".repeat(129)}`);
+    expect(overlong.status).toBe(404);
+    await expect(overlong.json()).resolves.toEqual({
+      ok: false,
+      error: {
+        code: "REPLAY_NOT_FOUND",
+        message: "The requested replay was not found",
         status: 404,
       },
     });
@@ -10400,8 +11061,7 @@ describe("Cloudflare Worker API", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          learnerClaim:
-            "The notebook accuracy proves generalization to new customers.",
+          learnerClaim: SAMPLE_LEAKAGE_QUESTION,
         }),
       },
     );
@@ -10428,8 +11088,9 @@ describe("Cloudflare Worker API", () => {
     expect(events[1]).not.toHaveProperty("promptHash");
   });
 
-  it("keeps unrelated learner prose outside the fixed sample claim authority", async () => {
-    const { app, sessionId } = await sessionHarness("sample");
+  it("rejects unrelated learner prose outside the fixed sample claim authority", async () => {
+    const { app, sessionId, sessionRepository } =
+      await sessionHarness("sample");
     const unrelatedThought =
       "Purple bananas taste better on Tuesdays, so this score is meaningless.";
 
@@ -10439,14 +11100,258 @@ describe("Cloudflare Worker API", () => {
       { learnerClaim: unrelatedThought },
     );
 
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      error: {
+        code: "SAMPLE_CLAIM_MISMATCH",
+        message:
+          "This fixed sample supports only its disclosed customer-generalization question. Start a live investigation for a custom claim.",
+        status: 400,
+      },
+    });
+    await expect(sessionRepository.find(sessionId)).resolves.toMatchObject({
+      state: "INGESTED",
+      version: 1,
+    });
+    const events = await sessionRepository.listEvents(sessionId);
+    expect(events).toHaveLength(1);
+    expect(JSON.stringify(events)).not.toContain(unrelatedThought);
+  });
+
+  it("fails closed when restoring or exporting a historical out-of-scope sample", async () => {
+    const { app, sessionId, sessionRepository } =
+      await sessionHarness("sample");
+    const route = `/api/sessions/${sessionId}`;
+    expect(
+      (
+        await postJson(app, `${route}/belief-test`, {
+          learnerClaim: SAMPLE_LEAKAGE_QUESTION,
+        })
+      ).status,
+    ).toBe(200);
+    const current = await sessionRepository.find(sessionId);
+    const previous = await sessionRepository.lastEvent(sessionId);
+    if (current?.beliefTest === undefined || previous === undefined) {
+      throw new Error("sample belief fixture was not created");
+    }
+    const outOfScopeClaim =
+      "Purple bananas taste better on Tuesdays, so this score is meaningless.";
+    const historical: CounterLabSession = {
+      ...current,
+      state: "BELIEF_TEST_PROPOSED",
+      version: current.version + 1,
+      beliefTest: {
+        ...current.beliefTest,
+        learnerClaim: outOfScopeClaim,
+      },
+    };
+    const historicalEvent = await createEvidenceEvent({
+      sessionId,
+      sequence: previous.sequence + 1,
+      timestamp: historical.updatedAt,
+      eventId: `event_${sessionId}_historical_scope`,
+      previousEventHash: previous.eventHash,
+      draft: {
+        actor: "learner",
+        kind: "belief_test.edited",
+        payload: { beliefTestId: current.beliefTest.id },
+      },
+    });
+    await sessionRepository.save(historical, current.version, historicalEvent);
+
+    for (const endpoint of [
+      route,
+      `${route}/events`,
+      `${route}/reasoning-diff`,
+      `${route}/patch/download`,
+      `${route}/proof-bundle`,
+      `${route}/proof-capsule`,
+    ]) {
+      const response = await app.request(endpoint);
+      expect(response.status, endpoint).toBe(409);
+      await expect(response.json()).resolves.toEqual({
+        ok: false,
+        error: {
+          code: "SAMPLE_SCOPE_RESTART_REQUIRED",
+          message:
+            "This historical sample used custom claim framing outside the fixed evidence scope. Start a new fixed sample to inspect verified conclusions.",
+          status: 409,
+        },
+      });
+    }
+
+    const beforeAdvance = await sessionRepository.find(sessionId);
+    const advance = await postJson(app, `${route}/belief-test/confirm`, {
+      action: "confirm",
+    });
+    expect(advance.status).toBe(409);
+    await expect(advance.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "SAMPLE_SCOPE_RESTART_REQUIRED", status: 409 },
+    });
+    await expect(sessionRepository.find(sessionId)).resolves.toEqual(
+      beforeAdvance,
+    );
+  });
+
+  it("returns bounded all-status compiler history and rejects a missing cursor", async () => {
+    const { app, artifactId, sessionId, runnerJobs } =
+      await sessionHarness("sample");
+    const runnerJob = (
+      jobId: string,
+      status: "REJECTED" | "FAILED",
+      createdAt: string,
+    ): RunnerJob =>
+      RunnerJobSchema.parse({
+        schemaVersion: "1",
+        jobId,
+        kind: "LAB_COMPILE",
+        status,
+        sessionId,
+        artifactId,
+        artifactManifestHash: "a".repeat(64),
+        conceptPack: { id: "entity_leakage", version: "2.0.0" },
+        inputHashes: ["b".repeat(64)],
+        stateVersion: 1,
+        jobVersion: 2,
+        createdAt,
+        updatedAt: createdAt,
+        completedAt: createdAt,
+        attempt: 1,
+        maxAttempts: 2,
+        runnerIdentity: "bounded-runner-history-test",
+        timeoutSeconds: 90,
+        outputHashes: [],
+        error: {
+          code: status === "REJECTED" ? "PLAN_REJECTED" : "RUNNER_FAILED",
+          message: "The bounded runner attempt released no result.",
+          retryable: true,
+        },
+        eventCursor: 1,
+      });
+    const firstJob = runnerJob(
+      "job_rejected_history",
+      "REJECTED",
+      "2026-07-14T10:01:00.000Z",
+    );
+    const secondJob = runnerJob(
+      "job_failed_history",
+      "FAILED",
+      "2026-07-14T10:02:00.000Z",
+    );
+    const compilerEvent = (
+      jobId: string,
+      eventId: string,
+      at: string,
+    ): PublicCompilerEvent => ({
+      schemaVersion: "1",
+      eventId,
+      jobId,
+      cursor: 1,
+      at,
+      kind: "job.started",
+    });
+    const firstEvent = compilerEvent(
+      firstJob.jobId,
+      "compiler_rejected_1",
+      firstJob.createdAt,
+    );
+    const secondEvent = compilerEvent(
+      secondJob.jobId,
+      "compiler_failed_1",
+      secondJob.createdAt,
+    );
+    await runnerJobs.create(firstJob);
+    await runnerJobs.create(secondJob);
+    runnerJobs.replaceEventsForIntegrityTest(firstJob.jobId, [firstEvent]);
+    runnerJobs.replaceEventsForIntegrityTest(secondJob.jobId, [secondEvent]);
+
+    const response = await app.request(`/api/sessions/${sessionId}/events`);
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       ok: true,
       data: {
-        beliefTest: {
-          learnerClaim:
-            "Does the notebook's random-row accuracy generalize to completely new customers?",
+        compilerEvents: [firstEvent, secondEvent],
+        compilerActivity: {
+          schemaVersion: "1",
+          status: "RECORDED",
+          ordering: "job-created-at-job-id-then-cursor",
+          jobCount: 2,
+          eventCount: 2,
         },
+      },
+    });
+
+    runnerJobs.replaceEventsForIntegrityTest(secondJob.jobId, [
+      { ...secondEvent, eventId: firstEvent.eventId },
+    ]);
+    const duplicateIdentity = await app.request(
+      `/api/sessions/${sessionId}/events`,
+    );
+    expect(duplicateIdentity.status).toBe(409);
+    await expect(duplicateIdentity.json()).resolves.toMatchObject({
+      error: { code: "COMPILER_ACTIVITY_INVALID" },
+    });
+
+    runnerJobs.replaceEventsForIntegrityTest(secondJob.jobId, [
+      { ...secondEvent, jobId: firstJob.jobId },
+    ]);
+    const foreignStream = await app.request(
+      `/api/sessions/${sessionId}/events`,
+    );
+    expect(foreignStream.status).toBe(409);
+    await expect(foreignStream.json()).resolves.toMatchObject({
+      error: { code: "COMPILER_ACTIVITY_INVALID" },
+    });
+
+    runnerJobs.replaceEventsForIntegrityTest(secondJob.jobId, [secondEvent]);
+    runnerJobs.replaceEventsForIntegrityTest(firstJob.jobId, []);
+    const corrupted = await app.request(`/api/sessions/${sessionId}/events`);
+    expect(corrupted.status).toBe(409);
+    await expect(corrupted.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "COMPILER_ACTIVITY_INVALID", status: 409 },
+    });
+  });
+
+  it("returns a retryable busy response when runner history keeps changing", async () => {
+    const { app, artifactId, sessionId, runnerJobs } =
+      await sessionHarness("sample");
+    await runnerJobs.create(
+      RunnerJobSchema.parse({
+        schemaVersion: "1",
+        jobId: "job_snapshot_race",
+        kind: "LAB_COMPILE",
+        status: "QUEUED",
+        sessionId,
+        artifactId,
+        artifactManifestHash: "a".repeat(64),
+        conceptPack: { id: "entity_leakage", version: "2.0.0" },
+        inputHashes: ["b".repeat(64)],
+        stateVersion: 1,
+        jobVersion: 1,
+        createdAt: "2026-07-14T10:01:00.000Z",
+        updatedAt: "2026-07-14T10:01:00.000Z",
+        attempt: 0,
+        maxAttempts: 2,
+        runnerIdentity: null,
+        timeoutSeconds: 90,
+        outputHashes: [],
+        eventCursor: 0,
+      }),
+    );
+    runnerJobs.mutateEveryHistorySnapshotEnd();
+
+    const response = await app.request(`/api/sessions/${sessionId}/events`);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: {
+        code: "EVIDENCE_SNAPSHOT_BUSY",
+        status: 503,
+        retryable: true,
       },
     });
   });
@@ -10777,6 +11682,88 @@ describe("Cloudflare Worker API", () => {
     expect(events.at(-1)).not.toHaveProperty("promptHash");
   });
 
+  it("rejects an inapplicable live claim before preview, admission, or model work", async () => {
+    const { app, sessionId, sessionRepository } = await sessionHarness("live");
+    const learnerClaim = "Purple bananas sing together at midnight.";
+
+    const preview = await postJson(
+      app,
+      `/api/sessions/${sessionId}/belief-test/preview`,
+      { learnerClaim },
+    );
+    expect(preview.status).toBe(422);
+    const previewBody = await preview.json();
+    expect(previewBody).toEqual({
+      ok: false,
+      error: {
+        code: "CLAIM_NOT_APPLICABLE",
+        message:
+          "Ask how the notebook evaluates generalization across distinct entities, such as customers, patients, or accounts.",
+        status: 422,
+      },
+    });
+
+    const submit = await postJson(
+      app,
+      `/api/sessions/${sessionId}/belief-test`,
+      { learnerClaim, previewHash: "0".repeat(64) },
+    );
+    expect(submit.status).toBe(422);
+    const submitBody = await submit.json();
+    expect(submitBody).toMatchObject({
+      ok: false,
+      error: { code: "CLAIM_NOT_APPLICABLE", status: 422 },
+    });
+    await expect(sessionRepository.find(sessionId)).resolves.toMatchObject({
+      state: "INGESTED",
+      version: 1,
+    });
+    const events = await sessionRepository.listEvents(sessionId);
+    expect(events).toHaveLength(1);
+    expect(JSON.stringify({ previewBody, submitBody, events })).not.toContain(
+      learnerClaim,
+    );
+  });
+
+  it("does not store an inapplicable claim when artifact evidence is insufficient", async () => {
+    const harness = await sessionHarness("sample");
+    const sample = await harness.artifactStore.find(harness.artifactId);
+    if (sample === undefined) throw new Error("sample artifact is missing");
+    const sparseManifest = {
+      ...sample.manifest,
+      artifactId: "artifact_sparse_off_topic",
+      fileName: "sparse-off-topic.ipynb",
+      fileSha256: "d".repeat(64),
+      cells: [],
+    } satisfies ArtifactManifest;
+    await harness.artifactStore.save(
+      sparseManifest,
+      "uploads/artifact_sparse_off_topic.ipynb",
+    );
+    const created = await postJson(harness.app, "/api/live/sessions", {
+      artifactId: sparseManifest.artifactId,
+    });
+    const body = (await created.json()) as { data: { sessionId: string } };
+
+    const response = await postJson(
+      harness.app,
+      `/api/sessions/${body.data.sessionId}/belief-test`,
+      { learnerClaim: "Purple bananas sing together at midnight." },
+    );
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "CLAIM_NOT_APPLICABLE", status: 422 },
+    });
+    await expect(
+      harness.sessionRepository.find(body.data.sessionId),
+    ).resolves.toMatchObject({ state: "INGESTED", version: 1 });
+    expect(
+      await harness.sessionRepository.listEvents(body.data.sessionId),
+    ).toHaveLength(1);
+  });
+
   it("returns a neutral typed setup error when the first live request rejects authentication", async () => {
     const { app, sessionId, sessionRepository } = await sessionHarness("live");
     const learnerClaim =
@@ -10861,6 +11848,253 @@ describe("Cloudflare Worker API", () => {
     expect(await sessionRepository.listEvents(sessionId)).toHaveLength(1);
   });
 
+  it("keeps Repair locked after a failed leakage transfer", async () => {
+    const { app, sessionId, sessionRepository } =
+      await sessionHarness("sample");
+    const route = `/api/sessions/${sessionId}`;
+
+    await postJson(app, `${route}/belief-test`, {
+      learnerClaim: SAMPLE_LEAKAGE_QUESTION,
+    });
+    await postJson(app, `${route}/belief-test/confirm`, { action: "confirm" });
+    await postJson(app, `${route}/prediction`, {
+      choice: "Accuracy remains near 98%",
+      confidence: 72,
+    });
+    await postJson(app, `${route}/lab/compile`);
+    await postJson(app, `${route}/lab/run`);
+    await postJson(app, `${route}/revision`, {
+      revision:
+        "Hold out complete entities and remove identity shortcuts before claiming generalization.",
+    });
+    const transfer = await postJson(app, `${route}/transfer`, {
+      strategyChoice: "time_ordered_holdout",
+      riskChoice: "model_is_too_simple",
+      evidenceChoices: [
+        "center_true_uses_later_targets",
+        "random_split_mixes_dates",
+      ],
+    });
+    expect(transfer.status).toBe(200);
+    await expect(transfer.json()).resolves.toMatchObject({
+      data: {
+        state: "TRANSFER_FAILED",
+        transferResult: { outcome: "FAILED" },
+      },
+    });
+
+    const patch = await postJson(app, `${route}/patch/compile`);
+    expect(patch.status).toBe(409);
+    await expect(patch.json()).resolves.toMatchObject({
+      error: { code: "PATCH_LOCKED_TRANSFER" },
+    });
+    await expect(sessionRepository.find(sessionId)).resolves.toMatchObject({
+      state: "TRANSFER_FAILED",
+      transferResult: { outcome: "FAILED" },
+    });
+    expect(
+      (await sessionRepository.find(sessionId))?.patchResult,
+    ).toBeUndefined();
+  });
+
+  it("recovers a persisted in-progress transfer without duplicating the start transition", async () => {
+    const { app, sessionId, sessionRepository } =
+      await sessionHarness("sample");
+    const route = `/api/sessions/${sessionId}`;
+
+    await postJson(app, `${route}/belief-test`, {
+      learnerClaim: SAMPLE_LEAKAGE_QUESTION,
+    });
+    await postJson(app, `${route}/belief-test/confirm`, { action: "confirm" });
+    await postJson(app, `${route}/prediction`, {
+      choice: "Accuracy remains near 98%",
+      confidence: 72,
+    });
+    await postJson(app, `${route}/lab/compile`);
+    await postJson(app, `${route}/lab/run`);
+    await postJson(app, `${route}/revision`, {
+      revision:
+        "Evaluation must follow the deployment boundary and use the recorded code evidence.",
+    });
+
+    const interruptedService = new SessionService(sessionRepository, {
+      id: (prefix) => `${prefix}_interrupted_transfer`,
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+    });
+    await interruptedService.startTransfer(sessionId);
+    await expect(sessionRepository.find(sessionId)).resolves.toMatchObject({
+      state: "TRANSFER_IN_PROGRESS",
+    });
+    const restored = await app.request(route);
+    expect(restored.status).toBe(200);
+    await expect(restored.json()).resolves.toMatchObject({
+      data: { state: "TRANSFER_IN_PROGRESS" },
+    });
+
+    const failed = await postJson(app, `${route}/transfer`, {
+      strategyChoice: "time_ordered_holdout",
+      riskChoice: "model_is_too_simple",
+      evidenceChoices: [
+        "center_true_uses_later_targets",
+        "random_split_mixes_dates",
+      ],
+    });
+    expect(failed.status).toBe(200);
+    await expect(failed.json()).resolves.toMatchObject({
+      data: {
+        state: "TRANSFER_FAILED",
+        transferResult: { outcome: "FAILED" },
+      },
+    });
+    expect((await postJson(app, `${route}/patch/compile`)).status).toBe(409);
+
+    const passed = await postJson(app, `${route}/transfer`, {
+      strategyChoice: "time_ordered_holdout",
+      riskChoice: "centered_window_reads_future",
+      evidenceChoices: [
+        "center_true_uses_later_targets",
+        "random_split_mixes_dates",
+      ],
+    });
+    expect(passed.status).toBe(200);
+    await expect(passed.json()).resolves.toMatchObject({
+      data: {
+        state: "TRANSFER_PASSED",
+        transferResult: { outcome: "PASSED" },
+      },
+    });
+
+    const eventKinds = (await sessionRepository.listEvents(sessionId)).map(
+      (event) => event.kind,
+    );
+    expect(
+      eventKinds.filter((kind) => kind === "transfer.started"),
+    ).toHaveLength(2);
+    expect(
+      eventKinds.filter((kind) => kind === "transfer.failed"),
+    ).toHaveLength(1);
+    expect(
+      eventKinds.filter((kind) => kind === "transfer.passed"),
+    ).toHaveLength(1);
+  });
+
+  it("rejects unknown or duplicate leakage transfer IDs before mutation", async () => {
+    const { app, sessionId, sessionRepository } =
+      await sessionHarness("sample");
+    const route = `/api/sessions/${sessionId}`;
+
+    await postJson(app, `${route}/belief-test`, {
+      learnerClaim: SAMPLE_LEAKAGE_QUESTION,
+    });
+    await postJson(app, `${route}/belief-test/confirm`, { action: "confirm" });
+    await postJson(app, `${route}/prediction`, {
+      choice: "Accuracy remains near 98%",
+      confidence: 72,
+    });
+    await postJson(app, `${route}/lab/compile`);
+    await postJson(app, `${route}/lab/run`);
+    await postJson(app, `${route}/revision`, {
+      revision:
+        "Evaluation must follow the deployment boundary and use the recorded code evidence.",
+    });
+
+    const before = await sessionRepository.find(sessionId);
+    const eventsBefore = await sessionRepository.listEvents(sessionId);
+    const invalidSubmissions = [
+      {
+        strategyChoice: "invented_strategy",
+        riskChoice: "centered_window_reads_future",
+        evidenceChoices: ["center_true_uses_later_targets"],
+      },
+      {
+        strategyChoice: "time_ordered_holdout",
+        riskChoice: "invented_risk",
+        evidenceChoices: ["center_true_uses_later_targets"],
+      },
+      {
+        strategyChoice: "time_ordered_holdout",
+        riskChoice: "centered_window_reads_future",
+        evidenceChoices: ["invented_evidence"],
+      },
+      {
+        strategyChoice: "time_ordered_holdout",
+        riskChoice: "centered_window_reads_future",
+        evidenceChoices: [
+          "center_true_uses_later_targets",
+          "center_true_uses_later_targets",
+        ],
+      },
+    ];
+
+    for (const submission of invalidSubmissions) {
+      const response = await postJson(app, `${route}/transfer`, submission);
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "VALIDATION_ERROR" },
+      });
+      await expect(sessionRepository.find(sessionId)).resolves.toEqual(before);
+      await expect(sessionRepository.listEvents(sessionId)).resolves.toEqual(
+        eventsBefore,
+      );
+    }
+  });
+
+  it("rejects leakage, obsolete cost, and duplicate tuples for an imbalance session before mutation", async () => {
+    const harness = await preparedImbalanceInteractiveSession();
+    const route = `/api/sessions/${harness.sessionId}`;
+    expect(
+      (
+        await postJson(harness.app, `${route}/revision`, {
+          revision:
+            "Rare events require class-specific evidence and deployment-cost reasoning.",
+        })
+      ).status,
+    ).toBe(200);
+    const before = await harness.sessionRepository.find(harness.sessionId);
+    const eventsBefore = await harness.sessionRepository.listEvents(
+      harness.sessionId,
+    );
+
+    const invalidSubmissions = [
+      {
+        strategyChoice: "time_ordered_holdout",
+        riskChoice: "centered_window_reads_future",
+        evidenceChoices: ["center_true_uses_later_targets"],
+      },
+      {
+        strategyChoice: "cost_aware_threshold",
+        riskChoice: "minority_false_negative_cost",
+        evidenceChoices: [
+          "confusion_matrix_exposes_misses",
+          "prevalence_shift_changes_precision",
+        ],
+      },
+      {
+        decisionChoice: "reject_accuracy_only",
+        metricChoice: "recall_and_pr_auc",
+        evidenceChoices: ["zero_true_positives", "zero_true_positives"],
+      },
+    ];
+
+    for (const submission of invalidSubmissions) {
+      const response = await postJson(
+        harness.app,
+        `${route}/transfer`,
+        submission,
+      );
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "VALIDATION_ERROR" },
+      });
+      await expect(
+        harness.sessionRepository.find(harness.sessionId),
+      ).resolves.toEqual(before);
+      await expect(
+        harness.sessionRepository.listEvents(harness.sessionId),
+      ).resolves.toEqual(eventsBefore);
+    }
+  });
+
   it("persists the evidence-gated instant path through a verified patch", async () => {
     const { app, sessionId, sessionRepository } =
       await sessionHarness("sample");
@@ -10869,8 +12103,7 @@ describe("Cloudflare Worker API", () => {
     expect(
       (
         await postJson(app, `${route}/belief-test`, {
-          learnerClaim:
-            "The 98.5% test accuracy proves generalization to new customers.",
+          learnerClaim: SAMPLE_LEAKAGE_QUESTION,
         })
       ).status,
     ).toBe(200);
@@ -10920,31 +12153,46 @@ describe("Cloudflare Worker API", () => {
     ).toBe(200);
     const patch = await postJson(app, `${route}/patch/compile`);
     expect(patch.status).toBe(200);
-    await expect(patch.json()).resolves.toMatchObject({
+    const patchBody = (await patch.json()) as {
+      data: {
+        patch: {
+          sourceArtifactHash: string;
+          patchedArtifactHash: string;
+        };
+      };
+    };
+    expect(patchBody).toMatchObject({
       ok: true,
       data: {
-        state: "REASONING_DIFF_ISSUED",
+        state: "PATCH_VERIFIED",
         patch: {
           status: "VERIFIED",
           modifiedCells: [3],
           verification: { passed: true },
         },
-        reasoningDiff: {
-          schemaVersion: "1",
-          sessionId,
-        },
-        proofBundle: {
-          schemaVersion: "1",
-          sessionId,
-          replayId: "leakage-01",
-          integrity: { mode: "integrity-hashed" },
-        },
       },
     });
+    expect(patchBody.data).not.toHaveProperty("reasoningDiff");
+    expect(patchBody.data).not.toHaveProperty("proofBundle");
+    expect(patchBody.data.patch).toMatchObject({
+      sourceArtifactHash:
+        "d0e9f3238753f1ca55534446d83e36041590f31c607a011def3f1d0db3a5bbc9",
+      patchedArtifactHash:
+        "6aee552e94f2dfbad8366cdd2435dcc5aa0c3c6cd45798a924779ae5008561fc",
+    });
+
+    const download = await app.request(`${route}/patch/download`);
+    expect(download.status).toBe(200);
+    expect(download.headers.get("content-type")).toContain(
+      "application/x-ipynb+json",
+    );
+    expect(await sha256Text(await download.text())).toBe(
+      "6aee552e94f2dfbad8366cdd2435dcc5aa0c3c6cd45798a924779ae5008561fc",
+    );
 
     const session = await sessionRepository.find(sessionId);
     expect(session).toMatchObject({
-      state: "REASONING_DIFF_ISSUED",
+      state: "PATCH_VERIFIED",
       verifiedResult: {
         resultHash:
           "a6ae7652e04e4d70196f991c63b8f7bcb3b76f8c4ab833d3ce2b626df0ab6c94",
@@ -10953,7 +12201,7 @@ describe("Cloudflare Worker API", () => {
       patchResult: { status: "VERIFIED" },
     });
     const events = await sessionRepository.listEvents(sessionId);
-    expect(events).toHaveLength(13);
+    expect(events).toHaveLength(12);
     expect(events.map((event) => event.kind)).toEqual([
       "session.created",
       "belief_test.proposed",
@@ -10967,8 +12215,45 @@ describe("Cloudflare Worker API", () => {
       "transfer.passed",
       "patch.compilation_started",
       "patch.verified",
-      "reasoning_diff.issued",
     ]);
+    expect(
+      events.filter((event) =>
+        ["lab.compilation_started", "patch.compilation_started"].includes(
+          event.kind,
+        ),
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        kind: "lab.compilation_started",
+        actor: "system",
+        payload: { authority: "fixed-approved-sample" },
+      }),
+      expect.objectContaining({
+        kind: "patch.compilation_started",
+        actor: "system",
+        payload: { authority: "fixed-approved-sample" },
+      }),
+    ]);
+    expect(
+      events.some(
+        (event) => event.actor === "gpt-5.6" || event.actor === "codex",
+      ),
+    ).toBe(false);
+    expect(
+      events.find((event) => event.kind === "lab.verified")?.payload,
+    ).toMatchObject({
+      planHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      verifiedOperationSummary: {
+        schemaVersion: "1",
+        authority: "fixed-approved-sample",
+        selectionRef: "whole-customer-holdout",
+        operationIds: [
+          "leakage.random_row_split",
+          "leakage.group_holdout",
+          "leakage.entity_overlap",
+        ],
+      },
+    });
     expect(events.at(-1)?.previousEventHash).toBe(events.at(-2)?.eventHash);
 
     const refreshed = await app.request(route);
@@ -10977,35 +12262,29 @@ describe("Cloudflare Worker API", () => {
       ok: true,
       data: {
         sessionId,
-        state: "REASONING_DIFF_ISSUED",
+        state: "PATCH_VERIFIED",
         revision:
           "Hold out complete entities and remove identity shortcuts before claiming generalization.",
       },
     });
 
     const proof = await app.request(`${route}/proof-bundle`);
-    expect(proof.status).toBe(200);
-    const proofBody = (await proof.json()) as {
-      data: { limitations: string[] };
-    };
-    expect(proofBody).toMatchObject({
-      ok: true,
-      data: {
-        sessionId,
-        replayId: "leakage-01",
-        beliefTest: { learnerClaim: SAMPLE_LEAKAGE_QUESTION },
-        integrity: {
-          mode: "integrity-hashed",
-          eventChainHead: events[11]?.eventHash,
-        },
-      },
+    expect(proof.status).toBe(409);
+    await expect(proof.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "PROOF_BUNDLE_NOT_READY" },
     });
-    expect(proofBody.data.limitations).toContain(
-      "This fixed sample answered only its pre-authored customer-generalization question; it did not analyze a custom learner claim.",
-    );
-    expect(JSON.stringify(proofBody)).not.toContain(
-      "The 98.5% test accuracy proves generalization to new customers.",
-    );
+
+    const serializedAuthority = JSON.stringify({ patchBody, session, events });
+    for (const legacyHash of [
+      "2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0",
+      "92ba63894d3c2ffd64ba76324bb7bb2b3afeb0310883a33ed140faf058d03024",
+      "eb20dc7e71431ad5b4a57437d740a1c8844cd335bf3a3d54db48e23dfbd3a034",
+      "9304e07716d6b5fec99b16916c2393bc371744faf0e403fb25278cb537214598",
+      "ed70072a62888e240e8b6e2fead54f3a08569e4186446aa5562540fa1745d786",
+    ]) {
+      expect(serializedAuthority).not.toContain(legacyHash);
+    }
   });
 
   it("maps a lost D1 optimistic update to a typed conflict", async () => {
@@ -11014,8 +12293,7 @@ describe("Cloudflare Worker API", () => {
     const route = `/api/sessions/${sessionId}`;
 
     await postJson(app, `${route}/belief-test`, {
-      learnerClaim:
-        "The notebook accuracy proves generalization to new customers.",
+      learnerClaim: SAMPLE_LEAKAGE_QUESTION,
     });
     await postJson(app, `${route}/belief-test/confirm`, { action: "confirm" });
     repository.enableConflict();

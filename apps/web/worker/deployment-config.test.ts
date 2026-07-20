@@ -4,13 +4,17 @@ import { relative, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { qualifiedDeployConfig } from "../../../scripts/prepare-qualified-deploy";
+import {
+  bindFrozenWorkerRelease,
+  qualifiedDeployConfig,
+} from "../../../scripts/prepare-qualified-deploy";
 
 function productionDeployConfig() {
   return {
     name: "counterlab",
     account_id: "account-1",
     main: "index.js",
+    no_bundle: true,
     compatibility_date: "2026-07-14",
     compatibility_flags: ["nodejs_compat"],
     assets: {
@@ -50,7 +54,6 @@ function productionDeployConfig() {
       {
         class_name: "CounterLabRunner",
         image: "/unqualified/Dockerfile.runner",
-        image_vars: { COUNTERLAB_SOURCE_COMMIT: "0".repeat(40) },
         image_build_context: "/unqualified",
         max_instances: 10,
         instance_type: "basic",
@@ -60,6 +63,82 @@ function productionDeployConfig() {
     ],
     observability: { enabled: true },
   };
+}
+
+function viteGeneratedDeployConfig() {
+  const repositoryRoot = "/home/counterlab/repository";
+  return {
+    configPath: `${repositoryRoot}/apps/web/wrangler.jsonc`,
+    userConfigPath: `${repositoryRoot}/apps/web/wrangler.jsonc`,
+    topLevelName: "counterlab",
+    definedEnvironments: [],
+    legacy_env: true,
+    jsx_factory: "React.createElement",
+    jsx_fragment: "React.Fragment",
+    rules: [{ type: "ESModule", globs: ["**/*.js", "**/*.mjs"] }],
+    triggers: {},
+    workflows: [],
+    exports: {},
+    kv_namespaces: [],
+    cloudchamber: {},
+    send_email: [],
+    queues: { producers: [], consumers: [] },
+    vectorize: [],
+    ai_search_namespaces: [],
+    ai_search: [],
+    agent_memory: [],
+    hyperdrive: [],
+    services: [],
+    analytics_engine_datasets: [],
+    dispatch_namespaces: [],
+    mtls_certificates: [],
+    pipelines: [],
+    secrets_store_secrets: [],
+    artifacts: [],
+    unsafe_hello_world: [],
+    flagship: [],
+    worker_loaders: [],
+    ratelimits: [],
+    vpc_services: [],
+    vpc_networks: [],
+    logfwdr: { bindings: [] },
+    python_modules: { exclude: ["**/*.pyc"] },
+    dev: {
+      ip: "localhost",
+      local_protocol: "http",
+      upstream_protocol: "http",
+      enable_containers: true,
+      generate_types: false,
+    },
+    ...productionDeployConfig(),
+    containers: [
+      {
+        class_name: "CounterLabRunner",
+        image: `${repositoryRoot}/Dockerfile.runner`,
+        image_build_context: repositoryRoot,
+        max_instances: 10,
+        instance_type: "basic",
+        name: "counterlab-counterlabrunner",
+        wrangler_ssh: { enabled: false },
+      },
+    ],
+    no_bundle: true,
+  };
+}
+
+function timeoutQualification(sourceCommit: string) {
+  return {
+    limitMode: "container-cgroup-and-process-rlimit",
+    aggregateLimitIntentEnforced: true,
+    aggregateLimitEvidenceSha256: "d".repeat(64),
+    timeoutCleanupReceipt: `node_modules/.cache/counterlab-v6.1/releases/timeout-cleanup-${sourceCommit}.json`,
+    timeoutCleanupReceiptSha256: "e".repeat(64),
+    timeoutCleanupPayloadSha256: "f".repeat(64),
+    timeoutRunControlReceiptSha256: "0".repeat(64),
+    timeoutRootlessReceiptSha256: "1".repeat(64),
+    timeoutRuntimeSessionId: "rt-v61-test1",
+    timeoutVerifiedAt: "2026-07-16T16:19:00.000Z",
+  } as const;
 }
 
 function luminance(color: string): number {
@@ -157,9 +236,15 @@ describe("Cloudflare static asset routing", () => {
     expect(script).toContain("d1 migrations apply DB");
     expect(script).toContain("existing_replay_count");
     expect(script.match(/query_legacy_replay_count/gu)).toHaveLength(3);
-    expect(script).toContain('rollback "${PREVIOUS_VERSION_ID}"');
+    expect(script).toContain('rollback "${recovery_version}"');
     expect(script).toContain("recover_previous_worker");
+    expect(script).toContain("scripts/deployment-recovery-target.ts");
+    expect(script).toContain('--migrations-started "${MIGRATIONS_STARTED}"');
     expect(script).toContain(
+      '--container-rollout-started "${CONTAINER_ROLLOUT_STARTED}"',
+    );
+    expect(script).toContain('MAINTENANCE_TAG="${WORKER_TAG}"');
+    expect(script).not.toContain(
       "Automatic Worker rollback was intentionally skipped",
     );
     expect(script).toContain("Prior Container evidence");
@@ -172,27 +257,111 @@ describe("Cloudflare static asset routing", () => {
     expect(script).not.toContain("--containers-rollout gradual");
 
     const maintenanceDeploy = script.indexOf("MAINTENANCE_TAG=");
-    const maintenanceObserved = script.lastIndexOf(
+    const maintenanceObserved = script.indexOf(
       "\nwait_for_maintenance_health\n",
+      maintenanceDeploy,
     );
     const postFreezeReplay = script.indexOf("POST_FREEZE_REPLAY_PREFLIGHT=");
     const migrations = script.indexOf('"${WRANGLER}" d1 migrations apply DB');
     const containerRollout = script.indexOf("CONTAINER_ROLLOUT_STARTED=1");
-    const finalDeploy = script.indexOf("WORKER_TAG=");
+    const finalDeploy = script.indexOf("WORKER_MESSAGE=");
+    const firstFinalReadiness = script.indexOf(
+      "\nwait_for_final_readiness\n",
+      finalDeploy,
+    );
+    const finalStatus = script.lastIndexOf(
+      'capture_active_worker \\\n  "${DEPLOYED_VERSION_ID}"',
+    );
+    const finalContainerStatus = script.indexOf(
+      'candidate="${RELEASE_DIR}/final-containers-${attempt}.json"',
+    );
     const finalReadiness = script.lastIndexOf("\nwait_for_final_readiness\n");
     const receipt = script.indexOf(
       "node --import tsx scripts/create-deployment-receipt.ts",
     );
+    const productionSmoke = script.indexOf(
+      'COUNTERLAB_DEPLOYMENT_RECEIPT="${DEPLOYMENT_RECEIPT}"',
+    );
+    const recoveryDisarmed = script.lastIndexOf("\nRECOVERY_ARMED=0\n");
     expect(maintenanceObserved).toBeGreaterThan(maintenanceDeploy);
     expect(postFreezeReplay).toBeGreaterThan(maintenanceObserved);
     expect(migrations).toBeGreaterThan(postFreezeReplay);
     expect(containerRollout).toBeGreaterThan(migrations);
     expect(finalDeploy).toBeGreaterThan(containerRollout);
-    expect(finalReadiness).toBeGreaterThan(finalDeploy);
+    expect(firstFinalReadiness).toBeGreaterThan(finalDeploy);
+    expect(finalStatus).toBeGreaterThan(firstFinalReadiness);
+    expect(finalContainerStatus).toBeGreaterThan(finalStatus);
+    expect(finalReadiness).toBeGreaterThan(finalContainerStatus);
+    expect(receipt).toBeGreaterThan(finalContainerStatus);
     expect(receipt).toBeGreaterThan(finalReadiness);
+    expect(productionSmoke).toBeGreaterThan(receipt);
+    expect(recoveryDisarmed).toBeGreaterThan(productionSmoke);
     expect(script.slice(finalDeploy, finalReadiness)).toContain(
       "--containers-rollout none",
     );
+    expect(script).toContain(
+      "data.release.workerVersionId !== expectedVersion",
+    );
+    expect(script).toContain(
+      "payload.release.workerVersionId !== expectedVersion",
+    );
+    expect(script).toContain(
+      'rollback "${recovery_version}" \\\n      --config "${RECOVERY_CONFIG}"',
+    );
+    const recoveryFunction = script.slice(
+      script.indexOf("recover_previous_worker()"),
+      script.indexOf("trap recover_previous_worker EXIT"),
+    );
+    expect(recoveryFunction).not.toContain("assert_release_authority");
+  });
+
+  it("uses one frozen no-bundle Worker for dry-run and every state-changing deploy", () => {
+    const script = readFileSync(
+      resolve(process.cwd(), "../../scripts/deploy-qualified.sh"),
+      "utf8",
+    );
+
+    expect(
+      script.match(/"\$\{WRANGLER\}" deploy \\\n  "\$\{WORKER_BUNDLE\}"/gu),
+    ).toHaveLength(4);
+    expect(script.match(/  --no-bundle \\/gu)).toHaveLength(4);
+    expect(
+      script.match(/assert_frozen_worker_release/gu)?.length,
+    ).toBeGreaterThanOrEqual(3);
+    expect(script.match(/assert_release_authority/gu)).toHaveLength(6);
+    expect(script).toContain("scripts/frozen-worker-release.ts");
+
+    const build = script.indexOf('"${PNPM}" --filter @counterlab/web build');
+    const finalSecretScan = script.indexOf("scripts/secret-scan.py");
+    const manifest = script.indexOf("scripts/frozen-worker-release.ts create");
+    const dryRun = script.indexOf("  --dry-run \\\n");
+    const strictDryRun = script.indexOf(
+      "scripts/frozen-worker-release.ts verify-dry-run",
+      dryRun,
+    );
+    const account = script.indexOf('"${WRANGLER}" whoami --json');
+    const secretList = script.indexOf('"${WRANGLER}" secret list');
+    expect(finalSecretScan).toBeGreaterThan(build);
+    expect(manifest).toBeGreaterThan(finalSecretScan);
+    expect(script.slice(manifest, dryRun)).toContain(
+      '--vite-version "${OBSERVED_VITE_VERSION}"',
+    );
+    expect(script.slice(manifest, dryRun)).toContain(
+      '--wrangler-version "${OBSERVED_WRANGLER_VERSION}"',
+    );
+    expect(strictDryRun).toBeGreaterThan(dryRun);
+    expect(account).toBeGreaterThan(strictDryRun);
+    expect(secretList).toBeGreaterThan(account);
+
+    const maintenance = script.indexOf("MAINTENANCE_TAG=");
+    const migration = script.indexOf('"${WRANGLER}" d1 migrations apply DB');
+    const container = script.indexOf("CONTAINER_ROLLOUT_STARTED=1");
+    const final = script.indexOf("WORKER_MESSAGE=");
+    for (const mutation of [maintenance, migration, container, final]) {
+      expect(
+        script.lastIndexOf("assert_release_authority", mutation),
+      ).toBeGreaterThan(strictDryRun);
+    }
   });
 
   it("builds a source-bound runner only from an exact Git archive", () => {
@@ -235,7 +404,7 @@ describe("Cloudflare static asset routing", () => {
     expect(script).toContain('flag: "wx"');
     expect(
       script.match(
-        /\["load", "--platform", "linux\/amd64", "--input", [^\]]+\]/gu,
+        /\[\s*"load",\s*"--platform",\s*"linux\/amd64",\s*"--input",\s*[^\]]+\]/gu,
       ),
     ).toHaveLength(2);
   });
@@ -247,11 +416,12 @@ describe("Cloudflare static asset routing", () => {
     );
 
     expect(script).toContain(
-      '"${DOCKER_BIN}" run --rm --name "${STARTUP_CONTAINER}"',
+      '"${DOCKER_COMMAND[@]}" run --rm --name "${STARTUP_CONTAINER}"',
     );
     expect(script).toContain(
-      '"${DOCKER_BIN}" run --rm --name "${RUNTIME_CONTAINER}"',
+      '"${DOCKER_COMMAND[@]}" run --rm --name "${RUNTIME_CONTAINER}"',
     );
+    expect(script).toContain('--session-id "${RUNTIME_SESSION_ID}"');
     expect(script).toContain("Ephemeral verification containers removed:");
     expect(script).toContain(
       "Docker-compatible adapter must be contained inside the repository.",
@@ -341,6 +511,13 @@ describe("Cloudflare static asset routing", () => {
     expect(dockerfile).toContain("chown -R root:root /app");
     expect(dockerfile).toContain("chmod -R a=rX /app");
     expect(dockerfile).toContain("chmod 555 /app/runner.mjs");
+    expect(dockerfile).toContain("/repo/fixtures/notebooks");
+    expect(dockerfile).toContain("/repo/requirements.runner.lock.txt");
+    expect(dockerfile).toContain("chmod -R a=rX /repo");
+    expect(dockerfile).toContain("chmod 0555 /usr/local/bin/node");
+    expect(dockerfile.indexOf("chmod 0555 /usr/local/bin/node")).toBeLessThan(
+      dockerfile.indexOf("USER 10001:10001"),
+    );
     expect(dockerfile).not.toContain(
       "chown -R counterlab-codex:counterlab-codex /app",
     );
@@ -353,7 +530,7 @@ describe("Cloudflare static asset routing", () => {
       "utf8",
     );
     const probeStart = verifier.indexOf(
-      'STARTUP_PROBE_OUTPUT="$("${DOCKER_BIN}" run',
+      'STARTUP_PROBE_OUTPUT="$("${DOCKER_COMMAND[@]}" run',
     );
     const probeEnd = verifier.indexOf("# The preceding probe", probeStart);
     const probe = verifier.slice(probeStart, probeEnd);
@@ -370,7 +547,7 @@ describe("Cloudflare static asset routing", () => {
     const evidenceCommit = "2".repeat(40);
     const image = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
     const receipt = {
-      schemaVersion: "3",
+      schemaVersion: "4",
       status: "VERIFIED",
       sourceCommit,
       sourceArchiveSha256: "b".repeat(64),
@@ -383,6 +560,8 @@ describe("Cloudflare static asset routing", () => {
       engineAuthorityHash: "f".repeat(64),
       runtimeManifestHash: "1".repeat(64),
       runtimeToolchainSha256: "4".repeat(64),
+      runtimePolicySha256: "0".repeat(64),
+      proofDependencyManifestSha256: "1".repeat(64),
       toolchainLockSha256: "5".repeat(64),
       runtimeAdapterSha256: "6".repeat(64),
       buildctlSha256: "7".repeat(64),
@@ -395,12 +574,13 @@ describe("Cloudflare static asset routing", () => {
       adapterOciArchiveSha256: "d".repeat(64),
       adapterOciRevision: sourceCommit,
       adapterOciSourceTreeSha256: "c".repeat(64),
+      ...timeoutQualification(sourceCommit),
       evidenceCommit,
       registryImage: image,
       registryDigest: `sha256:${"3".repeat(64)}`,
       registryResolvedAt: "2026-07-16T16:20:00.000Z",
       qualifiedAt: "2026-07-16T16:30:00.000Z",
-      verifierVersion: "counterlab-release-v3",
+      verifierVersion: "counterlab-release-v4",
     };
     const observation = {
       sourceCommit,
@@ -414,6 +594,8 @@ describe("Cloudflare static asset routing", () => {
       engineAuthorityHash: receipt.engineAuthorityHash,
       runtimeManifestHash: receipt.runtimeManifestHash,
       runtimeToolchainSha256: receipt.runtimeToolchainSha256,
+      runtimePolicySha256: receipt.runtimePolicySha256,
+      proofDependencyManifestSha256: receipt.proofDependencyManifestSha256,
       toolchainLockSha256: receipt.toolchainLockSha256,
       runtimeAdapterSha256: receipt.runtimeAdapterSha256,
       buildctlSha256: receipt.buildctlSha256,
@@ -426,6 +608,7 @@ describe("Cloudflare static asset routing", () => {
       adapterOciArchiveSha256: receipt.adapterOciArchiveSha256,
       adapterOciRevision: receipt.adapterOciRevision,
       adapterOciSourceTreeSha256: receipt.adapterOciSourceTreeSha256,
+      ...timeoutQualification(sourceCommit),
       registryImage: receipt.registryImage,
       registryDigest: receipt.registryDigest,
       registryResolvedAt: receipt.registryResolvedAt,
@@ -445,6 +628,7 @@ describe("Cloudflare static asset routing", () => {
       expect.objectContaining({
         class_name: "CounterLabRunner",
         image: `registry.cloudflare.com/account-1/counterlab-runner@${receipt.registryDigest}`,
+        ssh: { enabled: false },
       }),
     ]);
     expect(
@@ -453,6 +637,113 @@ describe("Cloudflare static asset routing", () => {
     expect(
       (generated.containers as Array<Record<string, unknown>>)[0],
     ).not.toHaveProperty("image_build_context");
+    expect(
+      (generated.containers as Array<Record<string, unknown>>)[0],
+    ).not.toHaveProperty("wrangler_ssh");
+    expect(generated.vars).toEqual(
+      expect.objectContaining({
+        COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256:
+          receipt.aggregateLimitEvidenceSha256,
+        COUNTERLAB_RUNTIME_POLICY_SHA256: receipt.runtimePolicySha256,
+        COUNTERLAB_PROOF_DEPENDENCY_MANIFEST_SHA256:
+          receipt.proofDependencyManifestSha256,
+      }),
+    );
+    const generatedFromVite = qualifiedDeployConfig({
+      config: viteGeneratedDeployConfig(),
+      receipt,
+      image,
+      observation,
+    });
+    expect(generatedFromVite).toEqual(
+      expect.objectContaining({
+        main: "index.js",
+        no_bundle: true,
+        assets: expect.objectContaining({ directory: "../client" }),
+      }),
+    );
+    expect(Object.keys(generatedFromVite).sort()).toEqual(
+      [
+        "account_id",
+        "assets",
+        "compatibility_date",
+        "compatibility_flags",
+        "containers",
+        "d1_databases",
+        "durable_objects",
+        "main",
+        "migrations",
+        "name",
+        "no_bundle",
+        "observability",
+        "r2_buckets",
+        "vars",
+        "version_metadata",
+      ].sort(),
+    );
+    expect(
+      bindFrozenWorkerRelease(generatedFromVite, {
+        schemaVersion: "1",
+        classification: "PROCESS_BOUND_PARTIAL",
+        sourceCommit: evidenceCommit,
+        manifestSha256: "4".repeat(64),
+        workerBundleSha256: "5".repeat(64),
+        clientAssetsSha256: "6".repeat(64),
+        clientAssetCount: 27,
+        clientPublicAssetsSha256: "7".repeat(64),
+        clientPublicAssetCount: 25,
+        viteVersion: "8.1.4",
+        wranglerVersion: "4.110.0",
+      }).vars,
+    ).toEqual(
+      expect.objectContaining({
+        COUNTERLAB_WORKER_ARTIFACT_CLASSIFICATION: "PROCESS_BOUND_PARTIAL",
+        COUNTERLAB_WORKER_ARTIFACT_MANIFEST_SHA256: "4".repeat(64),
+        COUNTERLAB_WORKER_BUNDLE_SHA256: "5".repeat(64),
+        COUNTERLAB_CLIENT_ASSETS_SHA256: "6".repeat(64),
+        COUNTERLAB_CLIENT_ASSET_COUNT: "27",
+        COUNTERLAB_CLIENT_PUBLIC_ASSETS_SHA256: "7".repeat(64),
+        COUNTERLAB_CLIENT_PUBLIC_ASSET_COUNT: "25",
+        COUNTERLAB_VITE_VERSION: "8.1.4",
+        COUNTERLAB_WRANGLER_VERSION: "4.110.0",
+      }),
+    );
+    const withUnexpectedContainerAuthority = productionDeployConfig();
+    Object.assign(withUnexpectedContainerAuthority.containers[0]!, {
+      command: ["/bin/sh"],
+    });
+    expect(() =>
+      qualifiedDeployConfig({
+        config: withUnexpectedContainerAuthority,
+        receipt,
+        image,
+        observation,
+      }),
+    ).toThrow(/Container config contains missing or unknown fields/u);
+    const withUnexpectedTopLevelAuthority = productionDeployConfig();
+    Object.assign(withUnexpectedTopLevelAuthority, {
+      routes: [{ pattern: "example.com/*" }],
+    });
+    expect(() =>
+      qualifiedDeployConfig({
+        config: withUnexpectedTopLevelAuthority,
+        receipt,
+        image,
+        observation,
+      }),
+    ).toThrow(/Wrangler config contains missing or unknown fields/u);
+    const withUnexpectedBindingAuthority = productionDeployConfig();
+    Object.assign(withUnexpectedBindingAuthority.d1_databases[0]!, {
+      preview_database_id: "different-database",
+    });
+    expect(() =>
+      qualifiedDeployConfig({
+        config: withUnexpectedBindingAuthority,
+        receipt,
+        image,
+        observation,
+      }),
+    ).toThrow(/D1 database config contains missing or unknown fields/u);
     expect(() =>
       qualifiedDeployConfig({
         config: productionDeployConfig(),
@@ -461,6 +752,25 @@ describe("Cloudflare static asset routing", () => {
         observation,
       }),
     ).toThrow(/runtime toolchain/u);
+    expect(() =>
+      qualifiedDeployConfig({
+        config: productionDeployConfig(),
+        receipt: { ...receipt, runtimePolicySha256: "f".repeat(64) },
+        image,
+        observation,
+      }),
+    ).toThrow(/runtime policy/u);
+    expect(() =>
+      qualifiedDeployConfig({
+        config: productionDeployConfig(),
+        receipt: {
+          ...receipt,
+          proofDependencyManifestSha256: "f".repeat(64),
+        },
+        image,
+        observation,
+      }),
+    ).toThrow(/proof dependency manifest/u);
     expect(() =>
       qualifiedDeployConfig({
         config: productionDeployConfig(),
@@ -479,7 +789,7 @@ describe("Cloudflare static asset routing", () => {
     const evidenceCommit = "2".repeat(40);
     const image = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
     const receipt = {
-      schemaVersion: "3",
+      schemaVersion: "4",
       status: "VERIFIED",
       sourceCommit,
       sourceArchiveSha256: "b".repeat(64),
@@ -492,6 +802,8 @@ describe("Cloudflare static asset routing", () => {
       engineAuthorityHash: "f".repeat(64),
       runtimeManifestHash: "1".repeat(64),
       runtimeToolchainSha256: "4".repeat(64),
+      runtimePolicySha256: "0".repeat(64),
+      proofDependencyManifestSha256: "1".repeat(64),
       toolchainLockSha256: "5".repeat(64),
       runtimeAdapterSha256: "6".repeat(64),
       buildctlSha256: "7".repeat(64),
@@ -504,12 +816,13 @@ describe("Cloudflare static asset routing", () => {
       adapterOciArchiveSha256: "d".repeat(64),
       adapterOciRevision: sourceCommit,
       adapterOciSourceTreeSha256: "c".repeat(64),
+      ...timeoutQualification(sourceCommit),
       evidenceCommit,
       registryImage: image,
       registryDigest: `sha256:${"3".repeat(64)}`,
       registryResolvedAt: "2026-07-16T16:20:00.000Z",
       qualifiedAt: "2026-07-16T16:30:00.000Z",
-      verifierVersion: "counterlab-release-v3",
+      verifierVersion: "counterlab-release-v4",
     };
     const config = productionDeployConfig();
     config.durable_objects.bindings = [
@@ -533,6 +846,8 @@ describe("Cloudflare static asset routing", () => {
           engineAuthorityHash: receipt.engineAuthorityHash,
           runtimeManifestHash: receipt.runtimeManifestHash,
           runtimeToolchainSha256: receipt.runtimeToolchainSha256,
+          runtimePolicySha256: receipt.runtimePolicySha256,
+          proofDependencyManifestSha256: receipt.proofDependencyManifestSha256,
           toolchainLockSha256: receipt.toolchainLockSha256,
           runtimeAdapterSha256: receipt.runtimeAdapterSha256,
           buildctlSha256: receipt.buildctlSha256,
@@ -545,6 +860,7 @@ describe("Cloudflare static asset routing", () => {
           adapterOciArchiveSha256: receipt.adapterOciArchiveSha256,
           adapterOciRevision: receipt.adapterOciRevision,
           adapterOciSourceTreeSha256: receipt.adapterOciSourceTreeSha256,
+          ...timeoutQualification(sourceCommit),
           registryImage: receipt.registryImage,
           registryDigest: receipt.registryDigest,
           registryResolvedAt: receipt.registryResolvedAt,
@@ -561,7 +877,7 @@ describe("Cloudflare static asset routing", () => {
     const sourceCommit = "a".repeat(40);
     const image = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
     const receipt = {
-      schemaVersion: "3",
+      schemaVersion: "4",
       status: "VERIFIED",
       sourceCommit,
       sourceArchiveSha256: "b".repeat(64),
@@ -574,6 +890,8 @@ describe("Cloudflare static asset routing", () => {
       engineAuthorityHash: "f".repeat(64),
       runtimeManifestHash: "1".repeat(64),
       runtimeToolchainSha256: "4".repeat(64),
+      runtimePolicySha256: "0".repeat(64),
+      proofDependencyManifestSha256: "1".repeat(64),
       toolchainLockSha256: "5".repeat(64),
       runtimeAdapterSha256: "6".repeat(64),
       buildctlSha256: "7".repeat(64),
@@ -586,12 +904,13 @@ describe("Cloudflare static asset routing", () => {
       adapterOciArchiveSha256: "d".repeat(64),
       adapterOciRevision: sourceCommit,
       adapterOciSourceTreeSha256: "c".repeat(64),
+      ...timeoutQualification(sourceCommit),
       evidenceCommit: "2".repeat(40),
       registryImage: image,
       registryDigest: `sha256:${"3".repeat(64)}`,
       registryResolvedAt: "2026-07-16T15:55:00.000Z",
-      qualifiedAt: "2026-07-16T16:00:00.000Z",
-      verifierVersion: "counterlab-release-v3",
+      qualifiedAt: "2026-07-16T16:30:00.000Z",
+      verifierVersion: "counterlab-release-v4",
     };
 
     expect(() =>
@@ -614,6 +933,8 @@ describe("Cloudflare static asset routing", () => {
           engineAuthorityHash: receipt.engineAuthorityHash,
           runtimeManifestHash: receipt.runtimeManifestHash,
           runtimeToolchainSha256: receipt.runtimeToolchainSha256,
+          runtimePolicySha256: receipt.runtimePolicySha256,
+          proofDependencyManifestSha256: receipt.proofDependencyManifestSha256,
           toolchainLockSha256: receipt.toolchainLockSha256,
           runtimeAdapterSha256: receipt.runtimeAdapterSha256,
           buildctlSha256: receipt.buildctlSha256,
@@ -626,6 +947,7 @@ describe("Cloudflare static asset routing", () => {
           adapterOciArchiveSha256: receipt.adapterOciArchiveSha256,
           adapterOciRevision: receipt.adapterOciRevision,
           adapterOciSourceTreeSha256: receipt.adapterOciSourceTreeSha256,
+          ...timeoutQualification(sourceCommit),
           registryImage: receipt.registryImage,
           registryDigest: receipt.registryDigest,
           registryResolvedAt: receipt.registryResolvedAt,

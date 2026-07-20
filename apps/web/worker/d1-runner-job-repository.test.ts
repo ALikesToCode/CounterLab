@@ -113,6 +113,36 @@ class SqliteD1Database {
 }
 
 describe("D1RunnerJobRepository", () => {
+  it("returns every session job in stable creation and ID order", async () => {
+    const database = new SqliteD1Database();
+    database.migrate();
+    const repository = new D1RunnerJobRepository(
+      database as unknown as D1Database,
+    );
+    const service = new RunnerJobService(repository, {
+      now: () => new Date("2026-07-15T00:00:00.000Z"),
+    });
+    const base = {
+      kind: "LAB_COMPILE" as const,
+      sessionId: "session_live_1",
+      artifactId: "artifact_live_1",
+      artifactManifestHash: "a".repeat(64),
+      conceptPack: { id: "entity_leakage" as const, version: "2.0.0" },
+      inputHashes: ["b".repeat(64)],
+      stateVersion: 4,
+      maxAttempts: 2,
+      timeoutSeconds: 90,
+    };
+
+    await service.createJob({ ...base, jobId: "job_z" });
+    await service.createJob({ ...base, jobId: "job_a" });
+
+    await expect(repository.findForSession("session_live_1")).resolves.toEqual([
+      expect.objectContaining({ jobId: "job_a" }),
+      expect.objectContaining({ jobId: "job_z" }),
+    ]);
+  });
+
   it("preserves valid request purposes while widening the Boundary Map constraint", () => {
     const database = new SqliteD1Database();
     const migrationDirectory = resolve(

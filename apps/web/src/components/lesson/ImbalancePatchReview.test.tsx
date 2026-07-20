@@ -9,6 +9,8 @@ import { ImbalancePatchReview } from "./ImbalancePatchReview";
 const api = vi.hoisted(() => ({
   compilePatch: vi.fn(),
   getProofBundle: vi.fn(),
+  downloadPatch: vi.fn(),
+  downloadProofCapsule: vi.fn(),
   patchDownloadUrl: vi.fn(() => "/api/sessions/session_1/patch/download"),
   proofCapsuleDownloadUrl: vi.fn(() => "/api/sessions/session_1/proof-capsule"),
   publishReplay: vi.fn(),
@@ -21,6 +23,7 @@ const runner = vi.hoisted(() => ({
   waitForJob: vi.fn(),
 }));
 const recordLearnerInteraction = vi.hoisted(() => vi.fn());
+const saveAuthenticatedDownload = vi.hoisted(() => vi.fn());
 
 vi.mock("../../api", () => ({
   ApiClientError: class ApiClientError extends Error {},
@@ -32,10 +35,26 @@ vi.mock("../../hooks/useRunnerEvents", () => ({
 vi.mock("../../features/learner/interactionEvidence", () => ({
   recordLearnerInteraction,
 }));
+vi.mock("../../features/learner/saveDownload", () => ({
+  saveAuthenticatedDownload,
+}));
 
 describe("ImbalancePatchReview", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    api.downloadPatch.mockResolvedValue({
+      blob: new Blob(["patched notebook"], {
+        type: "application/x-ipynb+json",
+      }),
+      fileName: "customer-model.counterlab-patched.ipynb",
+    });
+    api.downloadProofCapsule.mockResolvedValue({
+      blob: new Blob(["proof capsule"], {
+        type: "application/vnd.counterlab.capsule+json",
+      }),
+      fileName: "counterlab-session_1.counterlab",
+    });
+    recordLearnerInteraction.mockResolvedValue(true);
     api.getReplayPublicationStatus.mockResolvedValue({
       status: "never_published",
     });
@@ -129,21 +148,23 @@ describe("ImbalancePatchReview", () => {
     expect(
       screen.getByText(/confusion matrix and PR-AUC/i),
     ).toBeInTheDocument();
-    const anchorClick = vi
-      .spyOn(HTMLAnchorElement.prototype, "click")
-      .mockImplementation(() => undefined);
     fireEvent.click(
       screen.getByRole("button", { name: /download repaired notebook/i }),
     );
-    expect(anchorClick).toHaveBeenCalledOnce();
-    expect(
-      (anchorClick.mock.contexts[0] as HTMLAnchorElement | undefined)?.href,
-    ).toContain("/api/sessions/session_1/patch/download");
-    expect(recordLearnerInteraction).toHaveBeenCalledWith("session_1", {
-      kind: "patch.downloaded",
-      stage: "repair",
-    });
-    anchorClick.mockRestore();
+    await waitFor(() =>
+      expect(api.downloadPatch).toHaveBeenCalledWith("session_1"),
+    );
+    expect(saveAuthenticatedDownload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fileName: "customer-model.counterlab-patched.ipynb",
+      }),
+    );
+    await waitFor(() =>
+      expect(recordLearnerInteraction).toHaveBeenCalledWith("session_1", {
+        kind: "patch.downloaded",
+        stage: "repair",
+      }),
+    );
   });
 
   it("offers explicit replay publication for a completed live Proof Capsule", async () => {
@@ -152,8 +173,18 @@ describe("ImbalancePatchReview", () => {
     api.publishReplay.mockResolvedValue({
       reused: false,
       replay: {
-        ...replay,
-        proofCapsule: replay.proofCapsule,
+        schemaVersion: "2",
+        replayId: replay.replayId,
+        replay: true,
+        label: "Verified replay",
+        concept: replay.concept,
+        recordedAt: replay.recordedAt,
+        retention: {
+          policy: "expires_or_revoked",
+          revocable: true,
+          publishedAt: "2026-07-19T10:00:00.000Z",
+          expiresAt: "2026-08-18T10:00:00.000Z",
+        },
       },
     });
     const completedSession = {
@@ -184,21 +215,28 @@ describe("ImbalancePatchReview", () => {
     ).not.toBeInTheDocument();
     expect(screen.getAllByText("Evidence & proof")).toHaveLength(1);
 
-    const capsuleAnchorClick = vi
-      .spyOn(HTMLAnchorElement.prototype, "click")
-      .mockImplementation(() => undefined);
     await user.click(
       screen.getByRole("button", { name: /export proof capsule/i }),
     );
-    expect(capsuleAnchorClick).toHaveBeenCalledOnce();
-    expect(recordLearnerInteraction).toHaveBeenCalledWith(
-      replay.sourceSessionId,
-      {
-        kind: "proof_capsule.downloaded",
-        stage: "repair",
-      },
+    await waitFor(() =>
+      expect(api.downloadProofCapsule).toHaveBeenCalledWith(
+        replay.sourceSessionId,
+      ),
     );
-    capsuleAnchorClick.mockRestore();
+    expect(saveAuthenticatedDownload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fileName: "counterlab-session_1.counterlab",
+      }),
+    );
+    await waitFor(() =>
+      expect(recordLearnerInteraction).toHaveBeenCalledWith(
+        replay.sourceSessionId,
+        {
+          kind: "proof_capsule.downloaded",
+          stage: "repair",
+        },
+      ),
+    );
 
     expect(api.publishReplay).not.toHaveBeenCalled();
     await user.click(screen.getByText("Evidence & proof"));
@@ -218,6 +256,123 @@ describe("ImbalancePatchReview", () => {
     expect(
       await screen.findByRole("link", { name: /open verified replay/i }),
     ).toHaveAttribute("href", `/replay/${replay.replayId}`);
+  });
+
+  it("records no download interaction when authenticated bytes cannot be retrieved", async () => {
+    api.downloadPatch.mockRejectedValue(
+      new Error("The private notebook download is unavailable."),
+    );
+    const completedSession = {
+      sessionId: "session_1",
+      state: "PROOF_CAPSULE_ISSUED",
+      mode: { kind: "live_notebook" },
+      transferResult: { outcome: "PASSED" },
+      patchResult: {
+        status: "VERIFIED",
+        modifiedCells: [3],
+        sourceArtifactHash: "a".repeat(64),
+        patchedArtifactHash: "b".repeat(64),
+        diff: "- accuracy only\n+ confusion matrix",
+        verification: {
+          passed: true,
+          invariants: ["MINORITY_METRICS_RECOMPUTED"],
+          unchangedCellHashes: ["c".repeat(64)],
+        },
+      },
+    } as SessionView;
+
+    render(
+      <ImbalancePatchReview
+        session={completedSession}
+        updateSession={vi.fn()}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /download repaired notebook/i }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The private notebook download is unavailable.",
+    );
+    expect(saveAuthenticatedDownload).not.toHaveBeenCalled();
+    expect(recordLearnerInteraction).not.toHaveBeenCalledWith(
+      "session_1",
+      expect.objectContaining({ kind: "patch.downloaded" }),
+    );
+  });
+
+  it("records no Capsule interaction when authenticated proof bytes cannot be retrieved", async () => {
+    const replay = replayFixture("class_imbalance");
+    api.downloadProofCapsule.mockRejectedValue(
+      new Error("The private Proof Capsule is unavailable."),
+    );
+    const completedSession = {
+      sessionId: replay.sourceSessionId,
+      state: "PROOF_CAPSULE_ISSUED",
+      mode: { kind: "live_notebook" },
+      transferResult: replay.transferResult,
+      patchResult: replay.patchResult,
+      reasoningDiffV2: replay.reasoningDiff,
+      proofCapsule: replay.proofCapsule,
+      beliefSpec: replay.beliefSpec,
+      prediction: replay.prediction,
+      revision: replay.revision.statement,
+    } as SessionView;
+
+    render(
+      <ImbalancePatchReview
+        session={completedSession}
+        updateSession={vi.fn()}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /export proof capsule/i }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The private Proof Capsule is unavailable.",
+    );
+    expect(saveAuthenticatedDownload).not.toHaveBeenCalled();
+    expect(recordLearnerInteraction).not.toHaveBeenCalledWith(
+      replay.sourceSessionId,
+      expect.objectContaining({ kind: "proof_capsule.downloaded" }),
+    );
+  });
+
+  it("does not keep download controls busy while best-effort telemetry is pending", async () => {
+    recordLearnerInteraction.mockReturnValue(new Promise(() => undefined));
+    const completedSession = {
+      sessionId: "session_1",
+      state: "PROOF_CAPSULE_ISSUED",
+      mode: { kind: "live_notebook" },
+      transferResult: { outcome: "PASSED" },
+      patchResult: {
+        status: "VERIFIED",
+        modifiedCells: [3],
+        sourceArtifactHash: "a".repeat(64),
+        patchedArtifactHash: "b".repeat(64),
+        diff: "- accuracy only\n+ confusion matrix",
+        verification: {
+          passed: true,
+          invariants: ["MINORITY_METRICS_RECOMPUTED"],
+          unchangedCellHashes: ["c".repeat(64)],
+        },
+      },
+    } as SessionView;
+
+    render(
+      <ImbalancePatchReview
+        session={completedSession}
+        updateSession={vi.fn()}
+      />,
+    );
+    const downloadButton = screen.getByRole("button", {
+      name: /download repaired notebook/i,
+    });
+    fireEvent.click(downloadButton);
+
+    await waitFor(() => expect(saveAuthenticatedDownload).toHaveBeenCalled());
+    await waitFor(() => expect(downloadButton).toBeEnabled());
   });
 
   it("does not offer replay publication before the live Capsule is issued", () => {

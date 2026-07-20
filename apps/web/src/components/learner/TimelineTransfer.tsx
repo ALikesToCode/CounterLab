@@ -16,21 +16,16 @@ export type TimelineFeatureOption<Value extends string = string> = Readonly<{
   crossesNow: boolean;
 }>;
 
-function featureOptionClassification(crossesNow: boolean): string {
-  return crossesNow
-    ? "Future-leaking risk. Reads outcomes from after NOW."
-    : "Safe at prediction time. Not the future-leaking risk.";
-}
-
-function selectedFeatureClassification(crossesNow: boolean): string {
-  return crossesNow
-    ? "Selected feature classification: future-leaking risk. This identifies the risk requested by the fixed transfer task."
-    : "Selected feature classification: safe at prediction time. This does not identify the requested future-leaking risk.";
-}
+export type TimelineEvidenceOption<Value extends string = string> = Readonly<{
+  value: Value;
+  label: string;
+  description: string;
+}>;
 
 export function TimelineTransfer<
   SplitValue extends string,
   FeatureValue extends string,
+  EvidenceValue extends string,
 >({
   heading,
   scenario,
@@ -42,6 +37,9 @@ export function TimelineTransfer<
   featureValue,
   featureOptions,
   onFeatureChange,
+  evidenceValues,
+  evidenceOptions,
+  onEvidenceChange,
   disabled = false,
 }: {
   heading: string;
@@ -54,6 +52,9 @@ export function TimelineTransfer<
   featureValue: FeatureValue;
   featureOptions: readonly TimelineFeatureOption<FeatureValue>[];
   onFeatureChange: (value: FeatureValue) => void;
+  evidenceValues: readonly EvidenceValue[];
+  evidenceOptions: readonly TimelineEvidenceOption<EvidenceValue>[];
+  onEvidenceChange: (values: EvidenceValue[]) => void;
   disabled?: boolean;
 }) {
   const instanceId = useId();
@@ -63,6 +64,13 @@ export function TimelineTransfer<
   const selectedFeature = featureOptions.find(
     (option) => option.value === featureValue,
   );
+  const toggleEvidence = (value: EvidenceValue, checked: boolean) => {
+    onEvidenceChange(
+      checked
+        ? [...evidenceValues.filter((item) => item !== value), value]
+        : evidenceValues.filter((item) => item !== value),
+    );
+  };
 
   return (
     <section
@@ -94,19 +102,13 @@ export function TimelineTransfer<
           <i />
           <span>{testRange}</span>
         </div>
-        <div
-          className={styles.feature}
-          data-crosses-now={selectedFeature?.crossesNow ?? false}
-          aria-hidden="true"
-        >
+        <div className={styles.feature} aria-hidden="true">
           <span>{selectedFeature?.label ?? "Select a feature"}</span>
           <i />
           <strong>
             {selectedFeature === undefined
               ? "Choose where its information comes from"
-              : selectedFeature.crossesNow
-                ? "future-leaking risk identified ✓"
-                : "safe comparison — risk not identified ×"}
+              : "Compare its definition with the NOW boundary"}
           </strong>
         </div>
         <figcaption id={`${instanceId}-timeline-summary`}>
@@ -116,7 +118,7 @@ export function TimelineTransfer<
             : `Selected split: ${selectedSplit.label}. ${selectedSplit.description}`}{" "}
           {selectedFeature === undefined
             ? "No feature selected."
-            : `Selected feature: ${selectedFeature.label}. ${selectedFeature.description} ${selectedFeatureClassification(selectedFeature.crossesNow)}`}
+            : `Selected feature: ${selectedFeature.label}. ${selectedFeature.description}`}
         </figcaption>
       </figure>
 
@@ -149,8 +151,8 @@ export function TimelineTransfer<
             className={styles.taskInstruction}
             id={`${instanceId}-feature-task`}
           >
-            Identify the future-leaking feature. The safe feature is a
-            comparison, not the answer to this question.
+            Use the NOW line to decide which feature would be available when a
+            real prediction is made.
           </p>
           {featureOptions.map((option) => (
             <label key={option.value}>
@@ -164,9 +166,26 @@ export function TimelineTransfer<
               <span>
                 <strong>{option.label}</strong>
                 <small>{option.description}</small>
-                <small className={styles.classification}>
-                  {featureOptionClassification(option.crossesNow)}
-                </small>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+
+        <fieldset className={styles.evidenceChoices} disabled={disabled}>
+          <legend>Select the evidence that supports your decision</legend>
+          {evidenceOptions.map((option) => (
+            <label key={option.value}>
+              <input
+                type="checkbox"
+                value={option.value}
+                checked={evidenceValues.includes(option.value)}
+                onChange={(event) =>
+                  toggleEvidence(option.value, event.target.checked)
+                }
+              />
+              <span>
+                <strong>{option.label}</strong>
+                <small>{option.description}</small>
               </span>
             </label>
           ))}

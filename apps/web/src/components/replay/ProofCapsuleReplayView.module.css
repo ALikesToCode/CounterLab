@@ -770,6 +770,64 @@
   font-size: 16px;
 }
 
+.activityEvidence {
+  grid-column: 1 / -1;
+}
+
+.activityPrivacy {
+  max-width: 76ch;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.activityGroups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.activityGroup {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.activityGroup h3 {
+  margin: 0 0 10px;
+  color: var(--aqua);
+  font-size: 14px;
+}
+
+.activityGroup ol {
+  padding-left: 18px;
+}
+
+.activityGroup li span {
+  display: block;
+  margin-top: 3px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.activityGroup code {
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.emptyActivity {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .provenance ol {
   display: grid;
   gap: 8px;

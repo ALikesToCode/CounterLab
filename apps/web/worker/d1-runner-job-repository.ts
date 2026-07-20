@@ -116,6 +116,20 @@ export class D1RunnerJobRepository implements RunnerJobRepository {
     );
   }
 
+  async findForSession(sessionId: string): Promise<RunnerJob[]> {
+    const rows = await this.database
+      .prepare(
+        `SELECT job_json FROM runner_jobs
+         WHERE session_id = ?
+         ORDER BY created_at ASC, id ASC`,
+      )
+      .bind(sessionId)
+      .all<{ job_json: string }>();
+    return rows.results.map((row) =>
+      RunnerJobSchema.parse(JSON.parse(row.job_json)),
+    );
+  }
+
   async find(jobId: string): Promise<RunnerJob | undefined> {
     const row = await this.database
       .prepare("SELECT job_json FROM runner_jobs WHERE id = ?")

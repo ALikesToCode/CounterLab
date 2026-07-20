@@ -8,13 +8,15 @@ import {
   HostedVerifiedResultSetV2Schema,
   InteractiveImbalanceRunRequestSchema,
   InteractiveLeakageRunRequestSchema,
+  ImbalanceTransferSubmissionSchema,
   LearnerInteractionInputSchema,
   LearnerInteractionReceiptSchema,
   LearnerInteractionRecordSchema,
+  LeakageTransferSubmissionSchema,
   PatchPlanV1Schema,
   PatchResultSchema,
   PublicReplayProjectionV1Schema,
-  PublicReplayPublicationReceiptV1Schema,
+  PublicReplayPublicationReceiptV2Schema,
   ProofCapsuleRefV2Schema,
   ProofCapsuleReplayReceiptV2Schema,
   PublicCompilerEventSchema,
@@ -24,6 +26,7 @@ import {
   RunnerOutputPathSchema,
   RunnerPatchCompileBundleSchema,
   RunnerRequestIdentityV1Schema,
+  VerifiedOperationSummaryV1Schema,
   type BeliefSpecV2,
   type BeliefTest,
   type ArtifactManifest,
@@ -72,11 +75,16 @@ import {
   BeliefAnalystError,
   buildSanitizedAnalystContext,
   createLiveBeliefAnalystFromEnv,
+  requireApplicableClaim,
 } from "@counterlab/belief-analyst";
 import {
   getConceptPack,
   routeArtifactConcept,
 } from "@counterlab/concept-registry";
+import {
+  LabSceneV2Schema,
+  VerifiedLabSceneViewV1Schema,
+} from "@counterlab/generative-ui-contracts";
 import { NotebookParseError, parseNotebook } from "@counterlab/notebook-parser";
 import {
   EpistemicVerificationReportV1Schema,
@@ -119,12 +127,14 @@ import {
   validateProofCapsulePayloadAuthorityV2,
   validateProofCapsuleV2,
 } from "@counterlab/proof-capsule";
+import { verifyEvidenceChain } from "@counterlab/proof-bundle";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { z, ZodError } from "zod";
 
-import patchedNotebookText from "../../../replays/leakage-01/patch/customer_churn_leakage.patched.ipynb?raw";
-import patchKernelResult from "../../../replays/leakage-01/patch-kernel-result.json";
+import samplePatchedNotebookText from "../../../fixtures/public/leakage_sample_patch_v1/customer_churn_leakage.patched.ipynb?raw";
+import samplePatchKernelResult from "../../../fixtures/public/leakage_sample_patch_v1/patch-kernel-result.json";
+import replayPatchKernelResult from "../../../replays/leakage-01/patch-kernel-result.json";
 import compilerReplaySummary from "../../../replays/leakage-01/compiler/replay-summary.json";
 import replayVerifiedResult from "../../../replays/leakage-01/compiler/verified-live-run/verified-result.json";
 import experimentPlanSchema from "../../../packages/contracts/schemas/experiment-plan-v2.schema.json";
@@ -187,16 +197,15 @@ import {
 } from "./runner-token";
 import { sampleManifest, sampleResult } from "./sample-evidence";
 import {
+  assertPassedTransferMatchesFixedPolicy,
   createSamplePatchResult,
   evaluateImbalanceTransfer,
   evaluateLeakageTransfer,
 } from "./sample-learning-loop";
 import {
   assertSampleProofClaimScope,
-  createSampleReasoningProof,
-  sampleLabEvidenceHashes,
-  sampleLabVerification,
-} from "./sample-proof";
+  loadVerifiedSampleLabAuthority,
+} from "./sample-authority";
 import { createLiveReasoningProof } from "./live-proof";
 import {
   createNativeProofCapsuleV2,
@@ -210,6 +219,7 @@ import {
 import {
   D1ProofCapsuleReplayRepository,
   ReplayPublicationConflictError,
+  ReplayPublicationExpiredError,
   ReplayPublicationRevokedError,
   type ProofCapsuleReplayRepository,
 } from "./replay-repository";
@@ -233,6 +243,19 @@ type WorkerBindings = Omit<Env, "COUNTERLAB_MAINTENANCE_MODE"> & {
   COUNTERLAB_WORKER_EVIDENCE_COMMIT?: string;
   COUNTERLAB_RUNNER_SOURCE_COMMIT?: string;
   COUNTERLAB_RUNNER_IMAGE_DIGEST?: string;
+  COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256?: string;
+  COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256?: string;
+  COUNTERLAB_RUNTIME_POLICY_SHA256?: string;
+  COUNTERLAB_PROOF_DEPENDENCY_MANIFEST_SHA256?: string;
+  COUNTERLAB_WORKER_ARTIFACT_CLASSIFICATION?: string;
+  COUNTERLAB_WORKER_ARTIFACT_MANIFEST_SHA256?: string;
+  COUNTERLAB_WORKER_BUNDLE_SHA256?: string;
+  COUNTERLAB_CLIENT_ASSETS_SHA256?: string;
+  COUNTERLAB_CLIENT_ASSET_COUNT?: string;
+  COUNTERLAB_CLIENT_PUBLIC_ASSETS_SHA256?: string;
+  COUNTERLAB_CLIENT_PUBLIC_ASSET_COUNT?: string;
+  COUNTERLAB_VITE_VERSION?: string;
+  COUNTERLAB_WRANGLER_VERSION?: string;
   CF_VERSION_METADATA?: {
     id: string;
     tag: string;
@@ -276,6 +299,8 @@ const SCIENTIFIC_COMPILER_JOB_TIMEOUT_SECONDS =
   SCIENTIFIC_COMPILER_CONTROL_PLANE_RESERVE_SECONDS;
 const RUNNER_JOB_TOKEN_GRACE_SECONDS = 120;
 const MAX_RUNNER_JOB_TOKEN_TTL_SECONDS = 900;
+const MAX_SESSION_RUNNER_HISTORY_JOBS = 32;
+const MAX_SESSION_COMPILER_HISTORY_EVENTS = 512;
 
 const JsonObjectSchema = z.record(z.string(), z.unknown());
 const HostedPlanLineageSchema = z
@@ -304,6 +329,10 @@ const CreateReplaySessionSchema = z
   .strict();
 const RestartSessionSchema = z.object({}).strict();
 const PublishReplaySchema = z.object({}).strict();
+const PublicReplayLocatorSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u);
+const PUBLIC_REPLAY_TTL_MS = 30 * 24 * 60 * 60 * 1_000;
 const BeliefRequestSchema = z
   .object({
     learnerClaim: z.string().trim().min(12).max(2000),
@@ -350,13 +379,6 @@ const PredictionRequestSchema = z
   .strict();
 const RevisionSchema = z
   .object({ revision: z.string().trim().min(20).max(4000) })
-  .strict();
-const TransferSubmissionSchema = z
-  .object({
-    strategyChoice: z.string().trim().min(1),
-    riskChoice: z.string().trim().min(1),
-    evidenceChoices: z.array(z.string().trim().min(1)).max(3),
-  })
   .strict();
 const LegacyRunnerCandidateSchema = z
   .object({
@@ -874,15 +896,18 @@ async function loadHostedPublicReplayProjection(
   if (options.replayRepository === undefined && context.env?.DB === undefined) {
     throw new ApiInputError(
       "REPLAY_NOT_FOUND",
-      `Replay ${replayId} was not found`,
+      "The requested replay was not found",
       404,
     );
   }
-  const record = await proofCapsuleReplays(context, options).find(replayId);
+  const record = await proofCapsuleReplays(context, options).find(
+    replayId,
+    requestNow(options).toISOString(),
+  );
   if (record === undefined) {
     throw new ApiInputError(
       "REPLAY_NOT_FOUND",
-      `Replay ${replayId} was not found`,
+      "The requested replay was not found",
       404,
     );
   }
@@ -943,19 +968,35 @@ function runnerDispatcher(
   options: ApiOptions,
 ): RunnerDispatcher | undefined {
   if (options.runnerDispatcher !== undefined) return options.runnerDispatcher;
+  const runnerSourceCommit =
+    context.env?.COUNTERLAB_RUNNER_SOURCE_COMMIT?.trim() ?? "";
+  const runnerImageDigest =
+    context.env?.COUNTERLAB_RUNNER_IMAGE_DIGEST?.trim() ?? "";
+  const exactRunnerIdentity =
+    /^[a-f0-9]{40}$/u.test(runnerSourceCommit) &&
+    /^sha256:[a-f0-9]{64}$/u.test(runnerImageDigest);
   const processRunnerURL = context.env?.COUNTERLAB_RUNNER_BASE_URL?.trim();
-  if (processRunnerURL !== undefined && processRunnerURL.length > 0) {
+  if (
+    processRunnerURL !== undefined &&
+    processRunnerURL.length > 0 &&
+    exactRunnerIdentity
+  ) {
     try {
-      return new HttpRunnerDispatcher({ baseURL: processRunnerURL });
+      return new HttpRunnerDispatcher({
+        baseURL: processRunnerURL,
+        releaseIdentity: { runnerSourceCommit, runnerImageDigest },
+      });
     } catch {
       return undefined;
     }
   }
   return isRunnerContainerBinding(context.env?.RUNNER) &&
-    (context.env?.CODEX_AUTH_JSON?.trim().length ?? 0) > 0
+    (context.env?.CODEX_AUTH_JSON?.trim().length ?? 0) > 0 &&
+    exactRunnerIdentity
     ? new CloudflareContainerRunnerDispatcher(
         context.env.RUNNER,
         createRunnerContainerEnvVars(context.env),
+        { runnerSourceCommit, runnerImageDigest },
       )
     : undefined;
 }
@@ -1007,12 +1048,48 @@ function releaseIdentity(context: Context<AppBindings>):
       workerEvidenceCommit: string;
       runnerSourceCommit: string;
       runnerImageDigest: string;
+      timeoutCleanupReceiptSha256: string;
+      aggregateLimitEvidenceSha256: string;
+      runtimePolicySha256: string;
+      proofDependencyManifestSha256: string;
+      workerArtifactClassification: "PROCESS_BOUND_PARTIAL";
+      workerArtifactManifestSha256: string;
+      workerBundleSha256: string;
+      clientAssetsSha256: string;
+      clientAssetCount: number;
+      clientPublicAssetsSha256: string;
+      clientPublicAssetCount: number;
+      viteVersion: "8.1.4";
+      wranglerVersion: "4.110.0";
     }
   | { status: "unbound" } {
   const workerEvidenceCommit =
     context.env?.COUNTERLAB_WORKER_EVIDENCE_COMMIT ?? "";
   const runnerSourceCommit = context.env?.COUNTERLAB_RUNNER_SOURCE_COMMIT ?? "";
   const runnerImageDigest = context.env?.COUNTERLAB_RUNNER_IMAGE_DIGEST ?? "";
+  const timeoutCleanupReceiptSha256 =
+    context.env?.COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256 ?? "";
+  const aggregateLimitEvidenceSha256 =
+    context.env?.COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256 ?? "";
+  const runtimePolicySha256 =
+    context.env?.COUNTERLAB_RUNTIME_POLICY_SHA256 ?? "";
+  const proofDependencyManifestSha256 =
+    context.env?.COUNTERLAB_PROOF_DEPENDENCY_MANIFEST_SHA256 ?? "";
+  const workerArtifactClassification =
+    context.env?.COUNTERLAB_WORKER_ARTIFACT_CLASSIFICATION ?? "";
+  const workerArtifactManifestSha256 =
+    context.env?.COUNTERLAB_WORKER_ARTIFACT_MANIFEST_SHA256 ?? "";
+  const workerBundleSha256 = context.env?.COUNTERLAB_WORKER_BUNDLE_SHA256 ?? "";
+  const clientAssetsSha256 = context.env?.COUNTERLAB_CLIENT_ASSETS_SHA256 ?? "";
+  const clientAssetCountText = context.env?.COUNTERLAB_CLIENT_ASSET_COUNT ?? "";
+  const clientPublicAssetsSha256 =
+    context.env?.COUNTERLAB_CLIENT_PUBLIC_ASSETS_SHA256 ?? "";
+  const clientPublicAssetCountText =
+    context.env?.COUNTERLAB_CLIENT_PUBLIC_ASSET_COUNT ?? "";
+  const viteVersion = context.env?.COUNTERLAB_VITE_VERSION ?? "";
+  const wranglerVersion = context.env?.COUNTERLAB_WRANGLER_VERSION ?? "";
+  const clientAssetCount = Number(clientAssetCountText);
+  const clientPublicAssetCount = Number(clientPublicAssetCountText);
   const workerVersionId = context.env?.CF_VERSION_METADATA?.id ?? "";
   const workerVersionTag = context.env?.CF_VERSION_METADATA?.tag ?? "";
   if (
@@ -1022,6 +1099,22 @@ function releaseIdentity(context: Context<AppBindings>):
     !/^[a-f0-9]{40}$/u.test(workerEvidenceCommit) ||
     !/^[a-f0-9]{40}$/u.test(runnerSourceCommit) ||
     !/^sha256:[a-f0-9]{64}$/u.test(runnerImageDigest) ||
+    !/^[a-f0-9]{64}$/u.test(timeoutCleanupReceiptSha256) ||
+    !/^[a-f0-9]{64}$/u.test(aggregateLimitEvidenceSha256) ||
+    !/^[a-f0-9]{64}$/u.test(runtimePolicySha256) ||
+    !/^[a-f0-9]{64}$/u.test(proofDependencyManifestSha256) ||
+    workerArtifactClassification !== "PROCESS_BOUND_PARTIAL" ||
+    !/^[a-f0-9]{64}$/u.test(workerArtifactManifestSha256) ||
+    !/^[a-f0-9]{64}$/u.test(workerBundleSha256) ||
+    !/^[a-f0-9]{64}$/u.test(clientAssetsSha256) ||
+    !/^[1-9][0-9]*$/u.test(clientAssetCountText) ||
+    !Number.isSafeInteger(clientAssetCount) ||
+    !/^[a-f0-9]{64}$/u.test(clientPublicAssetsSha256) ||
+    !/^[1-9][0-9]*$/u.test(clientPublicAssetCountText) ||
+    !Number.isSafeInteger(clientPublicAssetCount) ||
+    clientPublicAssetCount > clientAssetCount ||
+    viteVersion !== "8.1.4" ||
+    wranglerVersion !== "4.110.0" ||
     workerVersionTag !== `git-${workerEvidenceCommit}`
   ) {
     return { status: "unbound" };
@@ -1033,11 +1126,82 @@ function releaseIdentity(context: Context<AppBindings>):
     workerEvidenceCommit,
     runnerSourceCommit,
     runnerImageDigest,
+    timeoutCleanupReceiptSha256,
+    aggregateLimitEvidenceSha256,
+    runtimePolicySha256,
+    proofDependencyManifestSha256,
+    workerArtifactClassification,
+    workerArtifactManifestSha256,
+    workerBundleSha256,
+    clientAssetsSha256,
+    clientAssetCount,
+    clientPublicAssetsSha256,
+    clientPublicAssetCount,
+    viteVersion,
+    wranglerVersion,
   };
 }
 
 function maintenanceEnabled(context: Context<AppBindings>): boolean {
   return context.env?.COUNTERLAB_MAINTENANCE_MODE === "true";
+}
+
+async function readinessSnapshot(
+  context: Context<AppBindings>,
+  options: ApiOptions,
+) {
+  const dispatcher = runnerDispatcher(context, options);
+  let signing = false;
+  try {
+    runnerSigningPrivateKey(context, options);
+    signing = true;
+  } catch {
+    signing = false;
+  }
+  let persistence =
+    options.sessionRepository !== undefined &&
+    options.runnerJobRepository !== undefined;
+  if (!persistence && context.env?.DB !== undefined) {
+    try {
+      await context.env.DB.prepare("SELECT 1 AS ready").first();
+      persistence = true;
+    } catch {
+      persistence = false;
+    }
+  }
+  let privateStorage = options.runnerObjectStore !== undefined;
+  if (!privateStorage && context.env?.ARTIFACTS !== undefined) {
+    try {
+      await context.env.ARTIFACTS.head("health/counterlab-readiness-probe");
+      privateStorage = true;
+    } catch {
+      privateStorage = false;
+    }
+  }
+  let runner = false;
+  if (dispatcher !== undefined) {
+    try {
+      runner = await dispatcher.ready();
+    } catch {
+      runner = false;
+    }
+  }
+  const release = releaseIdentity(context);
+  const checks = {
+    admission: admissionConfigured(context, options),
+    analyst: (context.env?.OPENAI_API_KEY?.trim().length ?? 0) > 0,
+    maintenance: !maintenanceEnabled(context),
+    persistence,
+    privateStorage,
+    releaseIdentity: release.status === "bound" || !admissionEnabled(options),
+    runner,
+    signing,
+  };
+  return {
+    checks,
+    ready: Object.values(checks).every(Boolean),
+    release,
+  };
 }
 
 function requestId(options: ApiOptions, prefix: string): string {
@@ -1546,7 +1710,7 @@ async function reconstructScientificCompileAuthority(input: {
   let bundle: z.infer<typeof RunnerLabCompileBundleV5Schema>;
   let contract: unknown;
   let rawIr: unknown;
-  let scene: unknown;
+  let scene: z.infer<typeof LabSceneV2Schema>;
   let storedReport: unknown;
   let storedSelection: unknown;
   let storedSelectedIr: z.infer<typeof ExperimentIRV5Schema>;
@@ -1555,7 +1719,7 @@ async function reconstructScientificCompileAuthority(input: {
     bundle = RunnerLabCompileBundleV5Schema.parse(JSON.parse(inputObject.body));
     contract = JSON.parse(contractObject.body) as unknown;
     rawIr = JSON.parse(rawIrObject.body) as unknown;
-    scene = JSON.parse(sceneObject.body) as unknown;
+    scene = LabSceneV2Schema.parse(JSON.parse(sceneObject.body));
     storedReport = JSON.parse(storedReportObject.body) as unknown;
     storedSelection = JSON.parse(storedSelectionObject.body) as unknown;
     storedSelectedIr = ExperimentIRV5Schema.parse(
@@ -1726,11 +1890,36 @@ async function reconstructScientificCompileAuthority(input: {
   return {
     bundle,
     compilerOutputFileHashes,
+    labScene: scene,
     lineage,
     outcome,
     projectedPlan: storedPlan,
     selectedExperimentIr: storedSelectedIr,
   };
+}
+
+function verifiedScientificOperationSummary(
+  authority: Awaited<ReturnType<typeof reconstructScientificCompileAuthority>>,
+) {
+  const selectionRef = authority.outcome.selection.selectedCandidateId;
+  const selectedCandidate =
+    authority.selectedExperimentIr.candidateExperiments.find(
+      (candidate) => candidate.id === selectionRef,
+    );
+  if (selectionRef === null || selectedCandidate === undefined) {
+    throw new ApiInputError(
+      "SCIENTIFIC_AUTHORITY_DERIVATION_MISMATCH",
+      "The verified Experiment IR has no fixed-selected operation set",
+      409,
+    );
+  }
+  return VerifiedOperationSummaryV1Schema.parse({
+    schemaVersion: "1",
+    authority: "verified-selected-experiment-ir",
+    authorityHash: authority.lineage.selectedExperimentIrHash,
+    selectionRef,
+    operationIds: selectedCandidate.operationIds,
+  });
 }
 
 async function loadFrozenScientificCompileAuthority(input: {
@@ -1806,6 +1995,18 @@ async function resolveRunnerPatchAuthorityV5(input: {
     );
   }
   const pack = getConceptPack(evidenceAuthority.concept);
+  try {
+    assertPassedTransferMatchesFixedPolicy(
+      evidenceAuthority.concept,
+      input.session.transferResult,
+    );
+  } catch {
+    throw new ApiInputError(
+      "RUNNER_INPUT_LINEAGE_MISMATCH",
+      "The passed transfer does not match frozen Subject Pack semantics",
+      409,
+    );
+  }
   const frozenCompile = await loadFrozenScientificCompileAuthority({
     store: input.store,
     jobs: input.jobs,
@@ -3814,7 +4015,7 @@ function requireApprovedSampleArtifact(
     | "ARTIFACT_RESULT_MISMATCH"
     | "ARTIFACT_TRANSFER_MISMATCH"
     | "ARTIFACT_PATCH_MISMATCH",
-): void {
+): asserts artifact is StoredArtifact {
   if (
     artifact?.manifest.artifactId !== sampleManifest.artifactId ||
     artifact.manifest.fileSha256 !== sampleManifest.fileSha256
@@ -3827,6 +4028,28 @@ function requireApprovedSampleArtifact(
   }
 }
 
+async function requireApprovedSampleAuthority(
+  artifact: Awaited<ReturnType<ArtifactStore["find"]>>,
+  errorCode:
+    | "MODE_ARTIFACT_MISMATCH"
+    | "ARTIFACT_RESULT_MISMATCH"
+    | "ARTIFACT_TRANSFER_MISMATCH"
+    | "ARTIFACT_PATCH_MISMATCH",
+) {
+  requireApprovedSampleArtifact(artifact, errorCode);
+  try {
+    return await loadVerifiedSampleLabAuthority({
+      manifest: artifact.manifest,
+    });
+  } catch {
+    throw new ApiInputError(
+      "SAMPLE_AUTHORITY_MISMATCH",
+      "The checked-in fixed sample evidence no longer resolves to one authority tuple",
+      503,
+    );
+  }
+}
+
 function requireMutableSession(
   session: Awaited<ReturnType<SessionService["getSession"]>>,
 ): void {
@@ -3834,6 +4057,31 @@ function requireMutableSession(
     throw new ApiInputError(
       "REPLAY_READ_ONLY",
       "Verified replay sessions are reconstructed from stored evidence and cannot be mutated",
+      409,
+    );
+  }
+  requireStoredSampleClaimScope(session);
+}
+
+function requireStoredSampleClaimScope(
+  session: Awaited<ReturnType<SessionService["getSession"]>>,
+): void {
+  if (session.mode.kind !== "sample_lesson") {
+    return;
+  }
+  if (
+    session.state === "INGESTED" &&
+    session.beliefTest === undefined &&
+    session.beliefSpec === undefined
+  ) {
+    return;
+  }
+  try {
+    assertSampleProofClaimScope(session);
+  } catch {
+    throw new ApiInputError(
+      "SAMPLE_SCOPE_RESTART_REQUIRED",
+      "This historical sample used custom claim framing outside the fixed evidence scope. Start a new fixed sample to inspect verified conclusions.",
       409,
     );
   }
@@ -3905,59 +4153,29 @@ function statePayload(
 
 export function createApi(options: ApiOptions = {}) {
   const app = new Hono<AppBindings>();
+  let activeReadinessProbe: ReturnType<typeof readinessSnapshot> | null = null;
+  const observeReadiness = (context: Context<AppBindings>) => {
+    if (activeReadinessProbe !== null) return activeReadinessProbe;
+    const probe = readinessSnapshot(context, options).finally(() => {
+      if (activeReadinessProbe === probe) activeReadinessProbe = null;
+    });
+    activeReadinessProbe = probe;
+    return probe;
+  };
 
   app.get("/ready", async (context) => {
-    const dispatcher = runnerDispatcher(context, options);
-    let signing = false;
-    try {
-      runnerSigningPrivateKey(context, options);
-      signing = true;
-    } catch {
-      signing = false;
-    }
-    let persistence =
-      options.sessionRepository !== undefined &&
-      options.runnerJobRepository !== undefined;
-    if (!persistence && context.env?.DB !== undefined) {
-      try {
-        await context.env.DB.prepare("SELECT 1 AS ready").first();
-        persistence = true;
-      } catch {
-        persistence = false;
-      }
-    }
-    let privateStorage = options.runnerObjectStore !== undefined;
-    if (!privateStorage && context.env?.ARTIFACTS !== undefined) {
-      try {
-        await context.env.ARTIFACTS.head("health/counterlab-readiness-probe");
-        privateStorage = true;
-      } catch {
-        privateStorage = false;
-      }
-    }
-    const release = releaseIdentity(context);
-    const checks = {
-      admission: admissionConfigured(context, options),
-      analyst: (context.env?.OPENAI_API_KEY?.trim().length ?? 0) > 0,
-      maintenance: !maintenanceEnabled(context),
-      persistence,
-      privateStorage,
-      releaseIdentity: release.status === "bound" || !admissionEnabled(options),
-      runner: dispatcher === undefined ? false : await dispatcher.ready(),
-      signing,
-    };
-    const ready = Object.values(checks).every(Boolean);
+    const snapshot = await observeReadiness(context);
     context.header("cache-control", "no-store");
     context.header("x-content-type-options", "nosniff");
     return context.json(
       {
-        status: ready ? ("ready" as const) : ("not-ready" as const),
+        status: snapshot.ready ? ("ready" as const) : ("not-ready" as const),
         service: "counterlab-control-plane" as const,
-        checks,
+        checks: snapshot.checks,
         maintenance: maintenanceEnabled(context),
-        release,
+        release: snapshot.release,
       },
-      ready ? 200 : 503,
+      snapshot.ready ? 200 : 503,
     );
   });
 
@@ -3999,9 +4217,21 @@ export function createApi(options: ApiOptions = {}) {
     await next();
   });
 
-  app.get("/api/health", (context) => {
+  app.get("/api/health", async (context) => {
+    const readinessQuery = new URL(context.req.url).searchParams.get(
+      "readiness",
+    );
+    if (readinessQuery !== null && readinessQuery !== "probe") {
+      throw new ApiInputError(
+        "INVALID_READINESS_QUERY",
+        "readiness must be omitted or set to probe",
+        400,
+      );
+    }
     const runner = runnerCapability(context, options);
-    const release = releaseIdentity(context);
+    const readiness =
+      readinessQuery === "probe" ? await observeReadiness(context) : null;
+    const release = readiness?.release ?? releaseIdentity(context);
     return context.json(
       jsonSuccess({
         platform: "cloudflare-workers" as const,
@@ -4013,6 +4243,12 @@ export function createApi(options: ApiOptions = {}) {
         liveCodex: runner,
         liveKernel: runner,
         maintenance: maintenanceEnabled(context),
+        readiness:
+          readiness === null
+            ? ("not-checked" as const)
+            : readiness.ready
+              ? ("ready" as const)
+              : ("not-ready" as const),
         release,
         sandbox:
           runner === "configured"
@@ -4423,27 +4659,11 @@ export function createApi(options: ApiOptions = {}) {
   });
 
   app.post("/api/replay/sessions", async (context) => {
-    const input = CreateReplaySessionSchema.parse(await readJson(context));
-    const artifact = await artifacts(context, options).save(sampleManifest);
-    const session = await sessionService(context, options).createSession({
-      artifactId: artifact.manifest.artifactId,
-      mode: { kind: "verified_replay", replayId: input.replayId },
-    });
-    const ownerCapability = await issueSessionOwnerCapability(
-      context,
-      options,
-      session.id,
-      session.createdAt,
-    );
-    if (ownerCapability !== undefined) {
-      setSessionOwnerCookie(context, session.id, ownerCapability);
-    }
-    return context.json(
-      jsonSuccess({
-        ...statePayload(session),
-        ...(ownerCapability === undefined ? {} : { ownerCapability }),
-      }),
-      201,
+    CreateReplaySessionSchema.parse(await readJson(context));
+    throw new ApiInputError(
+      "REPLAY_SESSION_UNAVAILABLE",
+      "Verified replay is served from its immutable stored evidence and cannot be converted into a mutable session",
+      409,
     );
   });
 
@@ -4451,6 +4671,7 @@ export function createApi(options: ApiOptions = {}) {
     const session = await sessionService(context, options).getSession(
       context.req.param("sessionId"),
     );
+    requireStoredSampleClaimScope(session);
     return context.json(jsonSuccess(statePayload(session)));
   });
 
@@ -4467,6 +4688,80 @@ export function createApi(options: ApiOptions = {}) {
       );
     }
     return context.json(jsonSuccess(artifact.manifest));
+  });
+
+  app.get("/api/sessions/:sessionId/lab-scene", async (context) => {
+    const service = sessionService(context, options);
+    const session = await service.getSession(context.req.param("sessionId"));
+    if (session.mode.kind !== "live_notebook") {
+      throw new ApiInputError(
+        "LIVE_LAB_SCENE_REQUIRED",
+        "A generated Lab Scene is available only for a verified live notebook session",
+        409,
+      );
+    }
+    const artifact = await artifacts(context, options).find(session.artifactId);
+    if (artifact === undefined) {
+      throw new ApiInputError(
+        "ARTIFACT_NOT_FOUND",
+        "The live notebook artifact could not be resolved",
+        404,
+      );
+    }
+    const evidenceAuthority = await resolveSessionEvidenceAuthority(
+      session,
+    ).catch(() => {
+      throw new ApiInputError(
+        "LAB_SCENE_RESULT_REQUIRED",
+        "The trusted Lab Scene remains withheld until a fixed result passes verification",
+        409,
+      );
+    });
+    if (
+      evidenceAuthority.protocol !== "v5" ||
+      evidenceAuthority.verdict === "REJECTED" ||
+      evidenceAuthority.resultAuthority === undefined
+    ) {
+      throw new ApiInputError(
+        "LAB_SCENE_RESULT_REQUIRED",
+        "The trusted Lab Scene remains withheld until a fixed result passes verification",
+        409,
+      );
+    }
+    const lineage = HostedExperimentLineageV5Schema.parse(
+      session.labVerification,
+    );
+    const frozenCompile = await loadFrozenScientificCompileAuthority({
+      store: runnerObjectStore(context, options),
+      jobs: runnerJobService(context, options),
+      session,
+      manifest: artifact.manifest,
+      lineage,
+    });
+    const result = evidenceAuthority.result;
+    const view = VerifiedLabSceneViewV1Schema.parse({
+      schemaVersion: "1",
+      scene: frozenCompile.labScene,
+      verifiedSceneHash: lineage.labSceneHash,
+      signedResult: {
+        schemaVersion: "1",
+        verificationStatus: "VERIFIED",
+        sceneHash: lineage.labSceneHash,
+        sceneId: frozenCompile.labScene.sceneId,
+        sessionId: session.id,
+        concept: result.concept,
+        experimentIrHash: lineage.rawExperimentIrCanonicalHash,
+        discriminationContractHash: lineage.discriminationContractHash,
+        resultHash: result.resultHash,
+        integrity: {
+          mode: "integrity-hashed",
+          contentHash: result.resultHash,
+        },
+        result,
+      },
+    });
+    context.header("cache-control", "private, no-store");
+    return context.json(jsonSuccess(view));
   });
 
   app.post("/api/sessions/:sessionId/restart", async (context) => {
@@ -4632,6 +4927,7 @@ export function createApi(options: ApiOptions = {}) {
         routing.kind === "choice_required" ? 409 : 422,
       );
     }
+    requireApplicableClaim(routing.concept, learnerClaim);
     const sanitizedContent = buildSanitizedAnalystContext({
       sessionId: session.id,
       learnerClaim,
@@ -4666,6 +4962,17 @@ export function createApi(options: ApiOptions = {}) {
       );
     }
 
+    if (
+      session.mode.kind === "sample_lesson" &&
+      learnerClaim !== SAMPLE_LEAKAGE_QUESTION
+    ) {
+      throw new ApiInputError(
+        "SAMPLE_CLAIM_MISMATCH",
+        "This fixed sample supports only its disclosed customer-generalization question. Start a live investigation for a custom claim.",
+        400,
+      );
+    }
+
     const routing = routeArtifactConcept(artifact.manifest);
     if (routing.kind === "unsupported_artifact") {
       throw new ApiInputError(
@@ -4684,6 +4991,9 @@ export function createApi(options: ApiOptions = {}) {
     }
     if (routing.kind === "insufficient_evidence") {
       const concept = routing.candidates[0] ?? "entity_leakage";
+      if (session.mode.kind === "live_notebook") {
+        requireApplicableClaim(concept, learnerClaim);
+      }
       const insufficient: BeliefSpecV2 = {
         schemaVersion: "2",
         id: `belief_insufficient_${session.id}`,
@@ -4731,6 +5041,7 @@ export function createApi(options: ApiOptions = {}) {
     }
 
     if (session.mode.kind === "live_notebook") {
+      requireApplicableClaim(routing.concept, learnerClaim);
       const sanitizedContent = buildSanitizedAnalystContext({
         sessionId: session.id,
         learnerClaim,
@@ -5101,7 +5412,10 @@ export function createApi(options: ApiOptions = {}) {
       const started =
         current.state === "LAB_COMPILING"
           ? current
-          : await service.startLabCompilation(sessionId);
+          : await service.startLabCompilation(sessionId, {
+              actor: "system",
+              authority: "runtime-codex-requested",
+            });
       const jobId = requestId(options, "runner_job");
       const bundle =
         current.beliefSpec === undefined
@@ -5230,18 +5544,22 @@ export function createApi(options: ApiOptions = {}) {
         202,
       );
     }
-    await service.startLabCompilation(sessionId);
+    const sampleArtifact = await artifacts(context, options).find(
+      current.artifactId,
+    );
+    const sampleAuthority = await requireApprovedSampleAuthority(
+      sampleArtifact,
+      "MODE_ARTIFACT_MISMATCH",
+    );
+    await service.startLabCompilation(sessionId, {
+      actor: "system",
+      authority: "fixed-approved-sample",
+    });
     const verified = await service.verifyLab(
       sessionId,
-      {
-        ...sampleLabVerification,
-        source: "stored-approved-leakage-v1",
-      },
-      [
-        sampleLabEvidenceHashes.adapter,
-        sampleLabEvidenceHashes.publicTests,
-        sampleLabEvidenceHashes.externalVerifier,
-      ],
+      sampleAuthority.verification,
+      [...sampleAuthority.evidenceHashes],
+      sampleAuthority.operationSummary,
     );
     return context.json(jsonSuccess(statePayload(verified)));
   });
@@ -7262,6 +7580,7 @@ export function createApi(options: ApiOptions = {}) {
             scientificAuthority.lineage.selectedExperimentIrHash,
             scientificAuthority.lineage.projectedPlanHash,
           ],
+          verifiedScientificOperationSummary(scientificAuthority),
         );
       } else {
         const existing = HostedExperimentLineageV5Schema.safeParse(
@@ -7620,10 +7939,126 @@ export function createApi(options: ApiOptions = {}) {
   });
 
   app.get("/api/sessions/:sessionId/events", async (context) => {
-    const events = await sessionService(context, options).listEvents(
-      context.req.param("sessionId"),
+    const service = sessionService(context, options);
+    const jobs = runnerJobService(context, options);
+    const sessionId = context.req.param("sessionId");
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const sessionBefore = await service.getSession(sessionId);
+      requireStoredSampleClaimScope(sessionBefore);
+      const jobsBefore = await jobs.listForSession(sessionId);
+      if (jobsBefore.length > MAX_SESSION_RUNNER_HISTORY_JOBS) {
+        throw new ApiInputError(
+          "COMPILER_ACTIVITY_LIMIT_EXCEEDED",
+          "Stored compiler activity exceeds the bounded proof-history limit",
+          409,
+        );
+      }
+      const expectedCompilerEventCount = jobsBefore.reduce(
+        (count, job) => count + job.eventCursor,
+        0,
+      );
+      if (expectedCompilerEventCount > MAX_SESSION_COMPILER_HISTORY_EVENTS) {
+        throw new ApiInputError(
+          "COMPILER_ACTIVITY_LIMIT_EXCEEDED",
+          "Stored compiler activity exceeds the bounded proof-history limit",
+          409,
+        );
+      }
+      const events = await service.listEvents(sessionId);
+      const compilerEvents = (
+        await Promise.all(
+          jobsBefore.map((job) => jobs.listEvents(job.jobId, 0)),
+        )
+      ).flat();
+      let verified: ReturnType<typeof verifyEvidenceChain>;
+      try {
+        verified = verifyEvidenceChain(events);
+      } catch {
+        throw new ApiInputError(
+          "EVIDENCE_CHAIN_INVALID",
+          "Stored evidence failed integrity validation",
+          409,
+        );
+      }
+      if (verified.sessionId !== sessionId) {
+        throw new ApiInputError(
+          "EVIDENCE_CHAIN_INVALID",
+          "Stored evidence failed integrity validation",
+          409,
+        );
+      }
+      const sessionAfter = await service.getSession(sessionId);
+      const jobsAfter = await jobs.listForSession(sessionId);
+      if (
+        sessionBefore.version !== sessionAfter.version ||
+        canonicalJsonV1(jobsBefore) !== canonicalJsonV1(jobsAfter)
+      ) {
+        continue;
+      }
+      if (verified.length !== sessionAfter.version) {
+        throw new ApiInputError(
+          "EVIDENCE_CHAIN_INVALID",
+          "Stored evidence failed integrity validation",
+          409,
+        );
+      }
+      const compilerEventIds = new Set<string>();
+      let compilerEventIndex = 0;
+      for (const job of jobsAfter) {
+        for (let cursor = 1; cursor <= job.eventCursor; cursor += 1) {
+          const event = compilerEvents[compilerEventIndex];
+          if (
+            event === undefined ||
+            event.jobId !== job.jobId ||
+            event.cursor !== cursor ||
+            compilerEventIds.has(event.eventId)
+          ) {
+            throw new ApiInputError(
+              "COMPILER_ACTIVITY_INVALID",
+              "Stored compiler activity failed cursor and identity validation",
+              409,
+            );
+          }
+          compilerEventIds.add(event.eventId);
+          compilerEventIndex += 1;
+        }
+      }
+      if (
+        compilerEventIndex !== compilerEvents.length ||
+        compilerEvents.length !== expectedCompilerEventCount
+      ) {
+        throw new ApiInputError(
+          "COMPILER_ACTIVITY_INVALID",
+          "Stored compiler activity failed cursor and identity validation",
+          409,
+        );
+      }
+      return context.json(
+        jsonSuccess({
+          events: verified.events,
+          integrity: {
+            schemaVersion: "1" as const,
+            status: "VERIFIED" as const,
+            eventChainHead: verified.headHash,
+            eventCount: verified.length,
+          },
+          compilerEvents,
+          compilerActivity: {
+            schemaVersion: "1" as const,
+            status: "RECORDED" as const,
+            ordering: "job-created-at-job-id-then-cursor" as const,
+            jobCount: jobsAfter.length,
+            eventCount: compilerEvents.length,
+          },
+        }),
+      );
+    }
+    throw new ApiInputError(
+      "EVIDENCE_SNAPSHOT_BUSY",
+      "Stored evidence changed while it was being read. Retry the request.",
+      503,
+      true,
     );
-    return context.json(jsonSuccess({ events }));
   });
 
   app.post("/api/sessions/:sessionId/interactions", async (context) => {
@@ -7996,7 +8431,7 @@ export function createApi(options: ApiOptions = {}) {
         409,
       );
     }
-    requireApprovedSampleArtifact(artifact, "ARTIFACT_RESULT_MISMATCH");
+    await requireApprovedSampleAuthority(artifact, "ARTIFACT_RESULT_MISMATCH");
     const completed = await service.recordExperimentResult(
       sessionId,
       sampleResult,
@@ -9011,7 +9446,7 @@ export function createApi(options: ApiOptions = {}) {
   });
 
   app.post("/api/sessions/:sessionId/transfer", async (context) => {
-    const submission = TransferSubmissionSchema.parse(await readJson(context));
+    const rawSubmission = await readJson(context);
     const service = sessionService(context, options);
     const sessionId = context.req.param("sessionId");
     const current = await service.getSession(sessionId);
@@ -9035,6 +9470,20 @@ export function createApi(options: ApiOptions = {}) {
         409,
       );
     }
+    const evaluateSubmission =
+      evidenceAuthority.concept === "class_imbalance"
+        ? (() => {
+            const submission =
+              ImbalanceTransferSubmissionSchema.parse(rawSubmission);
+            return (evaluatedAt: string) =>
+              evaluateImbalanceTransfer(sessionId, submission, evaluatedAt);
+          })()
+        : (() => {
+            const submission =
+              LeakageTransferSubmissionSchema.parse(rawSubmission);
+            return (evaluatedAt: string) =>
+              evaluateLeakageTransfer(sessionId, submission, evaluatedAt);
+          })();
     const artifact = await artifacts(context, options).find(current.artifactId);
     if (current.mode.kind === "verified_replay") {
       throw new ApiInputError(
@@ -9044,7 +9493,10 @@ export function createApi(options: ApiOptions = {}) {
       );
     }
     if (current.mode.kind === "sample_lesson") {
-      requireApprovedSampleArtifact(artifact, "ARTIFACT_TRANSFER_MISMATCH");
+      await requireApprovedSampleAuthority(
+        artifact,
+        "ARTIFACT_TRANSFER_MISMATCH",
+      );
     } else {
       const manifestHash =
         artifact === undefined ? null : await hashCanonical(artifact.manifest);
@@ -9061,10 +9513,7 @@ export function createApi(options: ApiOptions = {}) {
     }
     await service.startTransfer(sessionId);
     const evaluatedAt = (options.now?.() ?? new Date()).toISOString();
-    const result =
-      evidenceAuthority.concept === "class_imbalance"
-        ? await evaluateImbalanceTransfer(sessionId, submission, evaluatedAt)
-        : await evaluateLeakageTransfer(sessionId, submission, evaluatedAt);
+    const result = await evaluateSubmission(evaluatedAt);
     const updated = await service.recordTransferResult(sessionId, result);
     return context.json(jsonSuccess(statePayload(updated)));
   });
@@ -9149,6 +9598,18 @@ export function createApi(options: ApiOptions = {}) {
           throw new ApiInputError(
             "LIVE_PATCH_TRANSFER_MISMATCH",
             "The passed transfer does not match the selected Subject Pack",
+            409,
+          );
+        }
+        try {
+          assertPassedTransferMatchesFixedPolicy(
+            evidenceAuthority.concept,
+            current.transferResult,
+          );
+        } catch {
+          throw new ApiInputError(
+            "LIVE_PATCH_TRANSFER_MISMATCH",
+            "The passed transfer does not match the fixed Subject Pack evaluator",
             409,
           );
         }
@@ -9261,7 +9722,10 @@ export function createApi(options: ApiOptions = {}) {
         const started =
           current.state === "PATCH_COMPILING"
             ? current
-            : await service.startPatchCompilation(sessionId);
+            : await service.startPatchCompilation(sessionId, {
+                actor: "system",
+                authority: "runtime-codex-requested",
+              });
         const jobId = requestId(options, "runner_job");
         const bundle = RunnerPatchCompileBundleV5Schema.parse({
           schemaVersion: "5",
@@ -9441,7 +9905,10 @@ export function createApi(options: ApiOptions = {}) {
       const started =
         current.state === "PATCH_COMPILING"
           ? current
-          : await service.startPatchCompilation(sessionId);
+          : await service.startPatchCompilation(sessionId, {
+              actor: "system",
+              authority: "runtime-codex-requested",
+            });
       const jobId = requestId(options, "runner_job");
       const bundle = RunnerPatchCompileBundleSchema.parse({
         schemaVersion: "1",
@@ -9522,7 +9989,17 @@ export function createApi(options: ApiOptions = {}) {
         409,
       );
     }
-    requireApprovedSampleArtifact(sourceArtifact, "ARTIFACT_PATCH_MISMATCH");
+    if (current.transferResult?.outcome !== "PASSED") {
+      throw new ApiInputError(
+        "PATCH_LOCKED_TRANSFER",
+        "Repair remains locked until the deterministic transfer task passes",
+        409,
+      );
+    }
+    await requireApprovedSampleAuthority(
+      sourceArtifact,
+      "ARTIFACT_PATCH_MISMATCH",
+    );
     try {
       assertSampleProofClaimScope(current);
     } catch {
@@ -9532,16 +10009,29 @@ export function createApi(options: ApiOptions = {}) {
         409,
       );
     }
-    await service.startPatchCompilation(sessionId);
+    await service.startPatchCompilation(sessionId, {
+      actor: "system",
+      authority: "fixed-approved-sample",
+    });
     const patchResult = await createSamplePatchResult(
       sessionId,
       sampleManifest.fileSha256,
       (options.now?.() ?? new Date()).toISOString(),
     );
+    if (
+      (await sha256Text(samplePatchedNotebookText)) !==
+      patchResult.patchedArtifactHash
+    ) {
+      throw new ApiInputError(
+        "SAMPLE_PATCH_FIXTURE_INVALID",
+        "The fixed sample patch bytes do not match their verified authority record",
+        500,
+      );
+    }
     if (context.env?.ARTIFACTS !== undefined) {
       await context.env.ARTIFACTS.put(
         `patches/${sessionId}/customer_churn_leakage.patched.ipynb`,
-        patchedNotebookText,
+        samplePatchedNotebookText,
         {
           httpMetadata: { contentType: "application/x-ipynb+json" },
           customMetadata: {
@@ -9552,34 +10042,11 @@ export function createApi(options: ApiOptions = {}) {
       );
     }
     const updated = await service.verifyPatch(sessionId, patchResult);
-    const artifact = await artifacts(context, options).find(updated.artifactId);
-    if (artifact === undefined) {
-      throw new ApiInputError(
-        "ARTIFACT_NOT_FOUND",
-        "Session artifact was not found while issuing proof",
-        404,
-      );
-    }
-    const events = await service.listEvents(sessionId);
-    const proof = createSampleReasoningProof({
-      session: updated,
-      manifest: artifact.manifest,
-      events,
-      issuedAt: (options.now?.() ?? new Date()).toISOString(),
-      ...(context.env?.COUNTERLAB_SIGNING_KEY === undefined
-        ? {}
-        : { signingKey: context.env.COUNTERLAB_SIGNING_KEY }),
-    });
-    const issued = await service.issueReasoningDiff(
-      sessionId,
-      proof.reasoningDiff,
-      proof.proofBundle,
-    );
     return context.json(
       jsonSuccess({
-        ...statePayload(issued),
+        ...statePayload(updated),
         patch: patchResult,
-        kernelVerification: patchKernelResult,
+        kernelVerification: samplePatchKernelResult,
       }),
     );
   });
@@ -9588,6 +10055,7 @@ export function createApi(options: ApiOptions = {}) {
     const session = await sessionService(context, options).getSession(
       context.req.param("sessionId"),
     );
+    requireStoredSampleClaimScope(session);
     const reasoningDiff = session.reasoningDiffV2 ?? session.reasoningDiff;
     if (reasoningDiff === undefined) {
       throw new ApiInputError(
@@ -9604,6 +10072,7 @@ export function createApi(options: ApiOptions = {}) {
     const session = await sessionService(context, options).getSession(
       sessionId,
     );
+    requireStoredSampleClaimScope(session);
     if (session.patchResult?.status !== "VERIFIED") {
       throw new ApiInputError(
         "PATCH_NOT_READY",
@@ -9621,7 +10090,7 @@ export function createApi(options: ApiOptions = {}) {
     }
     const body =
       session.mode.kind === "sample_lesson"
-        ? patchedNotebookText
+        ? samplePatchedNotebookText
         : (
             await runnerObjectStore(context, options).get(
               `patches/${sessionId}/patched-notebook.ipynb`,
@@ -9646,6 +10115,7 @@ export function createApi(options: ApiOptions = {}) {
         "content-type": "application/x-ipynb+json; charset=utf-8",
         "content-disposition": `attachment; filename="${stem || "notebook"}.counterlab-patched.ipynb"`,
         "cache-control": "private, no-store",
+        "x-content-type-options": "nosniff",
       },
     });
   });
@@ -9654,6 +10124,7 @@ export function createApi(options: ApiOptions = {}) {
     const session = await sessionService(context, options).getSession(
       context.req.param("sessionId"),
     );
+    requireStoredSampleClaimScope(session);
     if (session.proofBundle === undefined) {
       throw new ApiInputError(
         "PROOF_BUNDLE_NOT_READY",
@@ -9750,31 +10221,40 @@ export function createApi(options: ApiOptions = {}) {
       body: projectionBody,
       contentType: "application/vnd.counterlab.public-replay+json",
     });
+    const publishedAt = requestNow(options);
+    const expiresAt = new Date(publishedAt.getTime() + PUBLIC_REPLAY_TTL_MS);
     const publication = await proofCapsuleReplays(
       context,
       options,
-    ).createOrReuse({
+    ).createOrReuse(
+      {
+        schemaVersion: "2",
+        replayId,
+        sourceSessionId: session.id,
+        capsuleId: session.proofCapsule.capsuleId,
+        objectKey,
+        projectionObjectKey,
+        projectionHash: publicReplay.authority.projectionHash,
+        projectionBytesHash,
+        recordedAt: session.proofCapsule.createdAt,
+        publishedAt: publishedAt.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+        metadata: receipt,
+      },
+      publishedAt.toISOString(),
+    );
+    const publicReceipt = PublicReplayPublicationReceiptV2Schema.parse({
       schemaVersion: "2",
-      replayId,
-      sourceSessionId: session.id,
-      capsuleId: session.proofCapsule.capsuleId,
-      objectKey,
-      projectionObjectKey,
-      projectionHash: publicReplay.authority.projectionHash,
-      projectionBytesHash,
-      recordedAt: session.proofCapsule.createdAt,
-      metadata: receipt,
-    });
-    const publicReceipt = PublicReplayPublicationReceiptV1Schema.parse({
-      schemaVersion: "1",
       replayId: publicReplay.replayId,
       replay: true,
       label: "Verified replay",
       concept: publicReplay.concept,
       recordedAt: publicReplay.recordedAt,
       retention: {
-        policy: "available_until_revoked",
+        policy: "expires_or_revoked",
         revocable: true,
+        publishedAt: publication.record.publishedAt,
+        expiresAt: publication.record.expiresAt,
       },
     });
     return context.json(
@@ -9790,20 +10270,25 @@ export function createApi(options: ApiOptions = {}) {
     const publication = await proofCapsuleReplays(
       context,
       options,
-    ).statusBySourceSession(context.req.param("sessionId"));
+    ).statusBySourceSession(
+      context.req.param("sessionId"),
+      requestNow(options).toISOString(),
+    );
     if (publication === undefined) {
       return context.json(jsonSuccess({ status: "never_published" as const }));
     }
-    const replay = PublicReplayPublicationReceiptV1Schema.parse({
-      schemaVersion: "1",
+    const replay = PublicReplayPublicationReceiptV2Schema.parse({
+      schemaVersion: "2",
       replayId: publication.record.replayId,
       replay: true,
       label: "Verified replay",
       concept: publication.record.metadata.concept,
       recordedAt: publication.record.recordedAt,
       retention: {
-        policy: "available_until_revoked",
+        policy: "expires_or_revoked",
         revocable: true,
+        publishedAt: publication.record.publishedAt,
+        expiresAt: publication.record.expiresAt,
       },
     });
     return context.json(jsonSuccess({ status: publication.status, replay }));
@@ -9839,6 +10324,7 @@ export function createApi(options: ApiOptions = {}) {
     const session = await sessionService(context, options).getSession(
       context.req.param("sessionId"),
     );
+    requireStoredSampleClaimScope(session);
     if (session.proofCapsule === undefined) {
       throw new ApiInputError(
         "PROOF_CAPSULE_NOT_READY",
@@ -9874,6 +10360,13 @@ export function createApi(options: ApiOptions = {}) {
 
   app.get("/api/replays/:replayId", async (context) => {
     const replayId = context.req.param("replayId");
+    if (!PublicReplayLocatorSchema.safeParse(replayId).success) {
+      throw new ApiInputError(
+        "REPLAY_NOT_FOUND",
+        "The requested replay was not found",
+        404,
+      );
+    }
     if (replayId === "leakage-01") {
       return context.json(
         jsonSuccess({
@@ -9887,7 +10380,7 @@ export function createApi(options: ApiOptions = {}) {
           templateCommit: compilerReplaySummary.repositoryCommitAtRun,
           compilerTrace: compilerReplaySummary,
           result: replayVerifiedResult,
-          patch: patchKernelResult,
+          patch: replayPatchKernelResult,
         }),
       );
     }
@@ -9980,6 +10473,7 @@ export function createApi(options: ApiOptions = {}) {
       error instanceof ConcurrentD1SessionUpdateError ||
       error instanceof ConcurrentRunnerJobUpdateError ||
       error instanceof ReplayPublicationConflictError ||
+      error instanceof ReplayPublicationExpiredError ||
       error instanceof ReplayPublicationRevokedError ||
       error instanceof RunnerCallbackConflictError ||
       error instanceof RunnerEventCursorError
@@ -10021,6 +10515,7 @@ export function createApi(options: ApiOptions = {}) {
       const status =
         error.code === "UNSUPPORTED_ARTIFACT" ||
         error.code === "UNRESOLVED_EVIDENCE" ||
+        error.code === "CLAIM_NOT_APPLICABLE" ||
         error.code === "INVALID_RESPONSE"
           ? 422
           : error.code === "INVALID_INPUT"

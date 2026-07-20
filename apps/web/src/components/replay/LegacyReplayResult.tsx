@@ -31,6 +31,58 @@ function humanize(value: string): string {
     .replace(/\b\w/gu, (character) => character.toUpperCase());
 }
 
+type LegacyTraceEntry = LegacyVerifiedReplay["compilerTrace"]["trace"][number];
+
+function TraceEntry({ entry }: { entry: LegacyTraceEntry }) {
+  if (entry.stage === "generate") {
+    return (
+      <li className={styles.traceItem}>
+        <strong>Bounded generation completed</strong>
+        <span>
+          {entry.run} · {(entry.durationMs / 1_000).toFixed(1)} seconds
+        </span>
+        <p>Allowed files: {entry.files.join(" · ")}</p>
+      </li>
+    );
+  }
+  if (entry.stage === "later_generate") {
+    return (
+      <li className={styles.traceItem}>
+        <strong>Separate later generation completed</strong>
+        <span>
+          {entry.run} · {(entry.durationMs / 1_000).toFixed(1)} seconds
+        </span>
+        <p>{entry.note}</p>
+      </li>
+    );
+  }
+  if (entry.status === "REJECTED") {
+    return (
+      <li className={styles.traceItem}>
+        <strong>
+          {entry.stage === "external_verifier"
+            ? "External verifier rejected the candidate"
+            : `${humanize(entry.stage)} rejected`}
+        </strong>
+        <span>{entry.invariant}</span>
+        <p>{entry.counterexample}</p>
+      </li>
+    );
+  }
+  return (
+    <li className={styles.traceItem}>
+      <strong>External verifier verified the later run</strong>
+      <span>
+        {entry.invariants} invariants · {entry.mutationsDetected}/
+        {entry.mutationsTotal} mutations detected
+      </span>
+      <p>
+        Bound legacy result <code>{entry.resultHash}</code>
+      </p>
+    </li>
+  );
+}
+
 function StoredResultTable({ replay }: { replay: LegacyVerifiedReplay }) {
   const result = replay.result;
 
@@ -156,6 +208,10 @@ export function LegacyReplayResult({
               <dd>{replay.modelId}</dd>
             </div>
             <div>
+              <dt>Codex runtime</dt>
+              <dd>{replay.compilerTrace.codexVersion}</dd>
+            </div>
+            <div>
               <dt>Verifier</dt>
               <dd>{replay.verifierVersion}</dd>
             </div>
@@ -167,7 +223,46 @@ export function LegacyReplayResult({
               <dt>Fixture</dt>
               <dd>{replay.fixtureId}</dd>
             </div>
+            <div>
+              <dt>Generation boundary</dt>
+              <dd>
+                Partial · {replay.compilerTrace.generationIsolation.limitation}
+              </dd>
+            </div>
+            <div>
+              <dt>Candidate execution</dt>
+              <dd>
+                Verified ·{" "}
+                {replay.compilerTrace.candidateExecutionIsolation.properties.join(
+                  " · ",
+                )}
+              </dd>
+            </div>
           </dl>
+        </section>
+
+        <section
+          className={styles.provenance}
+          aria-labelledby={`${titleId}-trace`}
+        >
+          <div className={styles.sectionHeading}>
+            <p>Recorded bounded trace</p>
+            <h2 id={`${titleId}-trace`}>
+              What Codex proposed and the verifier decided
+            </h2>
+          </div>
+          <p className={styles.traceIntro}>
+            This checked-in replay makes no new model or Codex call. It shows
+            the recorded public trace without exposing private reasoning.
+          </p>
+          <ol className={styles.traceList}>
+            {replay.compilerTrace.trace.map((entry, index) => (
+              <TraceEntry
+                key={`${entry.run}:${entry.stage}:${index}`}
+                entry={entry}
+              />
+            ))}
+          </ol>
         </section>
 
         <section
@@ -181,7 +276,7 @@ export function LegacyReplayResult({
           <StoredResultTable replay={replay} />
           <dl className={styles.integrity}>
             <div>
-              <dt>Result hash</dt>
+              <dt>Legacy v1 fixed-kernel result hash</dt>
               <dd>
                 <code>{replay.result.resultHash}</code>
               </dd>

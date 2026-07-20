@@ -5,10 +5,12 @@ import {
   migrateBeliefTestV1ToV2,
   type ArtifactManifest,
   type BeliefTest,
+  VerifiedResultSetSchema,
 } from "@counterlab/contracts";
 
 import { ApiClientError, CounterLabApiClient, SessionViewSchema } from "./api";
 import { publicReplayFixture } from "./components/replay/ProofCapsuleReplayView.fixture";
+import rawSampleResult from "../../../fixtures/public/leakage_verified_result.json";
 
 const digest = (character: string) => character.repeat(64);
 
@@ -117,6 +119,59 @@ const boundaryAuthority = {
   cellCount: 4,
 };
 
+const verifiedLabSceneView = {
+  schemaVersion: "1" as const,
+  scene: {
+    schemaVersion: "2" as const,
+    sceneId: "scene_live_leakage",
+    sessionId: "session/with space",
+    concept: "entity_leakage" as const,
+    supportLabel: "VERIFIED_TEST" as const,
+    title: "Test the familiar-row score on unseen customers",
+    blocks: [
+      {
+        id: "verified_metric",
+        type: "Metric" as const,
+        label: "Unseen-customer accuracy",
+        resultBinding: "/metrics/unseenAccuracy",
+        unit: "percent",
+      },
+      {
+        id: "proof_badge",
+        type: "ProofBadge" as const,
+        label: "Fixed result verified",
+        proofBinding: "/resultHash",
+      },
+    ],
+    assumptions: ["The model and preprocessing remain fixed."],
+    limitations: ["This result is bounded to the supplied notebook."],
+    provenance: {
+      experimentIrHash: digest("3"),
+      discriminationContractHash: digest("4"),
+    },
+  },
+  verifiedSceneHash: digest("8"),
+  signedResult: {
+    schemaVersion: "1" as const,
+    verificationStatus: "VERIFIED" as const,
+    sceneHash: digest("8"),
+    sceneId: "scene_live_leakage",
+    sessionId: "session/with space",
+    concept: "entity_leakage" as const,
+    experimentIrHash: digest("3"),
+    discriminationContractHash: digest("4"),
+    resultHash: digest("9"),
+    integrity: {
+      mode: "integrity-hashed" as const,
+      contentHash: digest("9"),
+    },
+    result: {
+      resultHash: digest("9"),
+      metrics: { unseenAccuracy: 0.594 },
+    },
+  },
+};
+
 const reasoningDiffV2 = {
   schemaVersion: "2" as const,
   id: "reasoning_diff_v2",
@@ -206,6 +261,29 @@ function jsonResponse(payload: unknown, status = 200): Response {
 }
 
 describe("CounterLabApiClient", () => {
+  it("rejects a session result that has no immutable Prediction", async () => {
+    const verifiedResult = VerifiedResultSetSchema.parse(rawSampleResult);
+    const malformedSession = {
+      ...session,
+      state: "EXPERIMENT_COMPLETED" as const,
+      verifiedResult,
+    };
+
+    expect(() => SessionViewSchema.parse(malformedSession)).toThrow(
+      /requires an immutable Prediction/i,
+    );
+
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({ ok: true, data: malformedSession }),
+    );
+    await expect(
+      new CounterLabApiClient({ fetch: fetcher }).getSession(session.sessionId),
+    ).rejects.toMatchObject({
+      code: "INVALID_API_RESPONSE",
+      status: 200,
+    });
+  });
+
   it("accepts exactly one versioned belief authority in a session view", () => {
     const beliefSpec = migrateBeliefTestV1ToV2(beliefTest);
 
@@ -537,6 +615,7 @@ describe("CounterLabApiClient", () => {
       liveGpt: "configured",
       liveCodex: "local-runner-required",
       liveKernel: "local-runner-required",
+      readiness: "not-checked",
       maintenance: false,
       release: {
         status: "bound",
@@ -545,6 +624,19 @@ describe("CounterLabApiClient", () => {
         workerEvidenceCommit: "a".repeat(40),
         runnerSourceCommit: "b".repeat(40),
         runnerImageDigest: `sha256:${"c".repeat(64)}`,
+        timeoutCleanupReceiptSha256: "d".repeat(64),
+        aggregateLimitEvidenceSha256: "9".repeat(64),
+        runtimePolicySha256: "e".repeat(64),
+        proofDependencyManifestSha256: "f".repeat(64),
+        workerArtifactClassification: "PROCESS_BOUND_PARTIAL",
+        workerArtifactManifestSha256: "1".repeat(64),
+        workerBundleSha256: "2".repeat(64),
+        clientAssetsSha256: "3".repeat(64),
+        clientAssetCount: 27,
+        clientPublicAssetsSha256: "4".repeat(64),
+        clientPublicAssetCount: 25,
+        viteVersion: "8.1.4",
+        wranglerVersion: "4.110.0",
       },
       sandbox: "local-runner-required",
       generationFilesystemReadIsolation: "PARTIAL",
@@ -558,6 +650,14 @@ describe("CounterLabApiClient", () => {
     await expect(client.getHealth()).resolves.toEqual(health);
     expect(fetcher).toHaveBeenCalledWith(
       "/api/health",
+      expect.objectContaining({ method: "GET" }),
+    );
+
+    await expect(client.getHealth({ probeReadiness: true })).resolves.toEqual(
+      health,
+    );
+    expect(fetcher).toHaveBeenLastCalledWith(
+      "/api/health?readiness=probe",
       expect.objectContaining({ method: "GET" }),
     );
   });
@@ -724,6 +824,36 @@ describe("CounterLabApiClient", () => {
       "idempotency-key",
     );
     expect(second).not.toBe(first);
+  });
+
+  it("bounds a stalled capability request", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn<typeof fetch>(
+        (_input, init) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener(
+              "abort",
+              () => reject(new DOMException("Aborted", "AbortError")),
+              { once: true },
+            );
+          }),
+      );
+      const client = new CounterLabApiClient({
+        fetch: fetcher,
+        requestTimeoutMs: 25,
+      });
+
+      const assertion = expect(client.getHealth()).rejects.toMatchObject({
+        code: "REQUEST_TIMEOUT",
+        retryable: true,
+      });
+      await vi.advanceTimersByTimeAsync(25);
+      await assertion;
+      expect(fetcher.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("creates mode-specific typed session views and retrieves a session", async () => {
@@ -1083,6 +1213,11 @@ describe("CounterLabApiClient", () => {
         invoke: () => client.runLab(sessionId),
       },
       {
+        expectedPath: `/api/sessions/${encoded}/lab-scene`,
+        expectedMethod: "GET",
+        invoke: () => client.getLabScene(sessionId),
+      },
+      {
         expectedPath: `/api/sessions/${encoded}/lab/interactive`,
         expectedMethod: "POST",
         invoke: () =>
@@ -1125,9 +1260,9 @@ describe("CounterLabApiClient", () => {
         expectedMethod: "POST",
         invoke: () =>
           client.submitTransfer(sessionId, {
-            strategyChoice: "time-ordered-split",
-            riskChoice: "future-information",
-            evidenceChoices: ["feature-created-after-forecast"],
+            strategyChoice: "time_ordered_holdout",
+            riskChoice: "centered_window_reads_future",
+            evidenceChoices: ["center_true_uses_later_targets"],
           }),
       },
       {
@@ -1190,6 +1325,125 @@ describe("CounterLabApiClient", () => {
         expect.objectContaining({ method: call.expectedMethod }),
       );
     }
+  });
+
+  it("accepts only a fully bound verified Lab Scene response", async () => {
+    const validFetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({ ok: true, data: verifiedLabSceneView }),
+    );
+    await expect(
+      new CounterLabApiClient({ fetch: validFetcher }).getLabScene(
+        "session/with space",
+      ),
+    ).resolves.toMatchObject({
+      verifiedSceneHash: digest("8"),
+      signedResult: { resultHash: digest("9") },
+    });
+    expect(validFetcher).toHaveBeenCalledWith(
+      "/api/sessions/session%2Fwith%20space/lab-scene",
+      expect.objectContaining({ method: "GET" }),
+    );
+
+    const forgedFetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({
+        ok: true,
+        data: {
+          ...verifiedLabSceneView,
+          signedResult: {
+            ...verifiedLabSceneView.signedResult,
+            integrity: {
+              mode: "integrity-hashed",
+              contentHash: digest("a"),
+            },
+          },
+        },
+      }),
+    );
+    await expect(
+      new CounterLabApiClient({ fetch: forgedFetcher }).getLabScene(
+        "session/with space",
+      ),
+    ).rejects.toMatchObject({
+      code: "INVALID_API_RESPONSE",
+      status: 200,
+      details: {
+        issues: expect.arrayContaining([
+          expect.objectContaining({
+            message:
+              "scene result integrity must bind the authoritative result",
+          }),
+        ]),
+      },
+    });
+  });
+
+  it("rejects an evidence response whose integrity receipt does not match its events", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({
+        ok: true,
+        data: {
+          events: [],
+          integrity: {
+            schemaVersion: "1",
+            status: "VERIFIED",
+            eventChainHead: digest("a"),
+            eventCount: 1,
+          },
+        },
+      }),
+    );
+    const client = new CounterLabApiClient({ fetch: fetcher });
+
+    await expect(client.getEvents("session_1")).rejects.toMatchObject({
+      code: "INVALID_API_RESPONSE",
+      details: {
+        issues: expect.arrayContaining([
+          expect.objectContaining({
+            message: "evidence receipt count does not match returned events",
+          }),
+        ]),
+      },
+    });
+  });
+
+  it("rejects compiler history that disagrees with its recorded-stream receipt", async () => {
+    const compilerEvent = {
+      schemaVersion: "1",
+      eventId: "compiler_event_1",
+      jobId: "job_1",
+      cursor: 1,
+      at: "2026-07-14T10:02:00.000Z",
+      kind: "job.started",
+    } as const;
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({
+        ok: true,
+        data: {
+          events: [],
+          compilerEvents: [compilerEvent],
+          compilerActivity: {
+            schemaVersion: "1",
+            status: "RECORDED",
+            ordering: "job-created-at-job-id-then-cursor",
+            jobCount: 1,
+            eventCount: 2,
+          },
+        },
+      }),
+    );
+    const client = new CounterLabApiClient({ fetch: fetcher });
+
+    await expect(client.getEvents("session_1")).rejects.toMatchObject({
+      code: "INVALID_API_RESPONSE",
+      details: {
+        issues: expect.arrayContaining([
+          expect.objectContaining({
+            message:
+              "compiler activity receipt count does not match returned events",
+          }),
+        ]),
+      },
+    });
   });
 
   it("rejects invalid compiler event cursors before making a request", async () => {
@@ -1296,6 +1550,145 @@ describe("CounterLabApiClient", () => {
     expect(client.proofCapsuleDownloadUrl("session/with space")).toBe(
       "https://studio.test/api/sessions/session%2Fwith%20space/proof-capsule",
     );
+  });
+
+  it("retrieves private downloads with the owner capability and validates their bytes", async () => {
+    const sessionId = "session_download_test";
+    const ownerCapability = `cl_owner_${"d".repeat(43)}`;
+    const privateSession = {
+      ...session,
+      sessionId,
+      mode: { kind: "live_notebook" as const },
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const path = String(input);
+      if (path === "/api/sample/sessions") {
+        return jsonResponse({
+          ok: true,
+          data: { ...privateSession, ownerCapability },
+        });
+      }
+      if (path === `/api/sessions/${sessionId}/patch/download`) {
+        return new Response("patched notebook bytes", {
+          headers: {
+            "content-type": "application/x-ipynb+json; charset=utf-8",
+            "content-disposition":
+              'attachment; filename="customer-model.counterlab-patched.ipynb"',
+          },
+        });
+      }
+      if (path === `/api/sessions/${sessionId}/proof-capsule`) {
+        return new Response("proof capsule bytes", {
+          headers: {
+            "content-type": "application/vnd.counterlab.capsule+json",
+            "content-disposition":
+              'attachment; filename="counterlab-session_download_test.counterlab"',
+          },
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = new CounterLabApiClient({ fetch: fetcher });
+    await client.createSampleSession({ sampleId: "leakage-01" });
+
+    const patch = await client.downloadPatch(sessionId);
+    const capsule = await client.downloadProofCapsule(sessionId);
+
+    expect(patch.fileName).toBe("customer-model.counterlab-patched.ipynb");
+    await expect(patch.blob.text()).resolves.toBe("patched notebook bytes");
+    expect(capsule.fileName).toBe(
+      "counterlab-session_download_test.counterlab",
+    );
+    await expect(capsule.blob.text()).resolves.toBe("proof capsule bytes");
+    for (const [path, init] of fetcher.mock.calls.slice(1)) {
+      expect(String(path)).not.toContain(ownerCapability);
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe(`Bearer ${ownerCapability}`);
+      expect(init?.credentials).toBe("same-origin");
+    }
+  });
+
+  it("rejects failed, empty, and incorrectly typed download responses", async () => {
+    const failedClient = new CounterLabApiClient({
+      fetch: vi.fn(async () =>
+        jsonResponse(
+          {
+            ok: false,
+            error: {
+              code: "PATCH_NOT_READY",
+              message: "A verified patch is required before download",
+              status: 409,
+            },
+          },
+          409,
+        ),
+      ),
+    });
+    await expect(failedClient.downloadPatch("session_1")).rejects.toMatchObject(
+      {
+        code: "PATCH_NOT_READY",
+        status: 409,
+      },
+    );
+
+    const wrongTypeClient = new CounterLabApiClient({
+      fetch: vi.fn(
+        async () =>
+          new Response("<html>not a notebook</html>", {
+            headers: { "content-type": "text/html" },
+          }),
+      ),
+    });
+    await expect(
+      wrongTypeClient.downloadPatch("session_1"),
+    ).rejects.toMatchObject({ code: "INVALID_API_RESPONSE" });
+
+    const emptyClient = new CounterLabApiClient({
+      fetch: vi.fn(
+        async () =>
+          new Response("", {
+            headers: { "content-type": "application/x-ipynb+json" },
+          }),
+      ),
+    });
+    await expect(emptyClient.downloadPatch("session_1")).rejects.toMatchObject({
+      code: "INVALID_API_RESPONSE",
+    });
+
+    const unsafeNameClient = new CounterLabApiClient({
+      fetch: vi.fn(
+        async () =>
+          new Response("patched notebook bytes", {
+            headers: {
+              "content-type": "application/x-ipynb+json",
+              "content-disposition": 'attachment; filename="report.exe"',
+            },
+          }),
+      ),
+    });
+    await expect(unsafeNameClient.downloadPatch("session/1")).resolves.toEqual(
+      expect.objectContaining({
+        fileName: "counterlab-session-1.patched.ipynb",
+      }),
+    );
+
+    const interruptedClient = new CounterLabApiClient({
+      fetch: vi.fn(async () => {
+        const response = new Response("partial notebook", {
+          headers: { "content-type": "application/x-ipynb+json" },
+        });
+        vi.spyOn(response, "blob").mockRejectedValue(
+          new TypeError("body stream interrupted"),
+        );
+        return response;
+      }),
+    });
+    await expect(
+      interruptedClient.downloadPatch("session_1"),
+    ).rejects.toMatchObject({
+      code: "INVALID_API_RESPONSE",
+      retryable: true,
+    });
   });
 
   it("keeps owner capabilities out of URLs and attaches them only to private requests", async () => {

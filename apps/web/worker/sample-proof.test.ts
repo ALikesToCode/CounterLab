@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { SAMPLE_LEAKAGE_QUESTION } from "../shared/sample-authority";
-import { assertSampleProofClaimScope } from "./sample-proof";
+import { assertSampleProofClaimScope } from "./sample-authority";
 
 describe("sample proof claim scope", () => {
   it("accepts only the canonical fixed sample question", () => {
@@ -20,6 +20,6 @@ describe("sample proof claim scope", () => {
             "Purple bananas taste better on Tuesdays, so this score is meaningless.",
         },
       } as Parameters<typeof assertSampleProofClaimScope>[0]),
-    ).toThrow(/outside the fixed sample proof scope/i);
+    ).toThrow(/outside the fixed sample evidence scope/i);
   });
 });

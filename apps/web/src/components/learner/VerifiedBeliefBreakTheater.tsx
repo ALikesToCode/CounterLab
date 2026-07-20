@@ -4,13 +4,14 @@ import {
   sampleBoundaryFixture,
   verifySampleBoundaryFixtureIntegrity,
 } from "../../features/boundary/sampleBoundaryFixture";
-import { getRun, sampleResult, type VerifiedRun } from "../../sample";
+import { bundledSampleEvidence, type VerifiedRun } from "../../sample";
 import sampleResultBytes from "../../../../../fixtures/public/leakage_verified_result.json?raw";
 import styles from "./VerifiedBeliefBreakTheater.module.css";
 
 const MODE_LABEL = "Verified sample exploration";
 
 export type VerifiedBeliefBreakPresentation = "full" | "preview" | "compact";
+export type VerifiedBeliefBreakResultVisibility = "verified" | "locked";
 
 type VerifiedBeliefBreakEvidence = Readonly<{
   randomRows: VerifiedRun;
@@ -72,12 +73,16 @@ function runsKeepTheQuestionFair(
 async function verifyBundledEvidence(
   expectedResultHash?: string,
 ): Promise<VerifiedBeliefBreakEvidence> {
+  if (bundledSampleEvidence.status !== "available") {
+    throw new Error("Verified sample evidence is unavailable");
+  }
+  const { result: sampleResult, runs } = bundledSampleEvidence;
   const boundary = await verifySampleBoundaryFixtureIntegrity(
     sampleBoundaryFixture,
   );
   const resultFileHash = await sha256Text(sampleResultBytes);
-  const randomRows = getRun("random_row_split");
-  const wholeCustomers = getRun("customer_group_split");
+  const randomRows = runs.randomRows;
+  const wholeCustomers = runs.wholeCustomers;
 
   if (
     sampleResult.concept !== "entity_leakage" ||
@@ -270,6 +275,28 @@ function PreviewComparison({
       </div>
 
       <div
+        className={styles.causalStrip}
+        role="group"
+        aria-label="Changed variable: evaluation unit. The familiar-row test allows customer identities to repeat across training and test. The whole-customer holdout keeps every test identity unseen. The model, features, preprocessing, sample sizes, and seed stay fixed."
+      >
+        <div className={styles.causalState}>
+          <span>Familiar rows</span>
+          <strong>Identities cross the split</strong>
+        </div>
+
+        <div className={styles.causalChange}>
+          <span aria-hidden="true">→</span>
+          <small>Changed variable</small>
+          <b>Evaluation unit</b>
+        </div>
+
+        <div className={styles.causalState}>
+          <span>Unseen customers</span>
+          <strong>No identity crosses</strong>
+        </div>
+      </div>
+
+      <div
         className={styles.previewScoreShift}
         role="group"
         aria-label={`Customer overlap falls from ${randomRows.entityOverlap.count} to ${wholeCustomers.entityOverlap.count}; accuracy falls from ${asPercent(randomRows.metrics.accuracy)} to ${asPercent(wholeCustomers.metrics.accuracy)}.`}
@@ -304,6 +331,154 @@ function PreviewComparison({
   );
 }
 
+function FoldEvidence({ evidence }: { evidence: VerifiedBeliefBreakEvidence }) {
+  const { randomRows, wholeCustomers } = evidence;
+
+  return (
+    <div
+      className={`${styles.verifiedEvidence} ${styles.previewEvidence} ${styles.foldEvidence}`}
+      data-motion="verified-only"
+    >
+      <figure className={styles.foldComparison}>
+        <figcaption>
+          <span>Fixed-kernel evidence</span>
+          <strong>Only the evaluation unit changed</strong>
+        </figcaption>
+
+        <div
+          className={styles.foldCausalRow}
+          role="group"
+          aria-label="Changed variable: evaluation unit. Familiar-row testing lets identities cross the split; whole-customer holdout keeps every test identity unseen. The model, features, preprocessing, sample sizes, and seed stay fixed."
+        >
+          <span>Familiar rows · identities repeat</span>
+          <b>Evaluation unit</b>
+          <span>Unseen customers · identities stay apart</span>
+        </div>
+
+        <div
+          className={styles.previewScoreShift}
+          role="group"
+          aria-label={`Customer overlap falls from ${randomRows.entityOverlap.count} to ${wholeCustomers.entityOverlap.count}; accuracy falls from ${asPercent(randomRows.metrics.accuracy)} to ${asPercent(wholeCustomers.metrics.accuracy)}.`}
+        >
+          <div className={styles.previewScoreState}>
+            <span>Random-row test</span>
+            <strong>{asPercent(randomRows.metrics.accuracy)}</strong>
+            <small>{randomRows.entityOverlap.count} customers overlap</small>
+          </div>
+          <div className={styles.previewTransition} aria-hidden="true">
+            <span>→</span>
+            <small>same model</small>
+          </div>
+          <div className={styles.previewScoreState}>
+            <span>New-customer test</span>
+            <strong>{asPercent(wholeCustomers.metrics.accuracy)}</strong>
+            <small>
+              {wholeCustomers.entityOverlap.count} customers overlap
+            </small>
+          </div>
+        </div>
+
+        <p className={styles.previewControlNote}>
+          <span aria-hidden="true">✓</span>
+          Model, features, preprocessing, sample sizes, and seed stayed fixed.
+        </p>
+      </figure>
+
+      <p className={styles.foldFinding}>
+        {asPercent(randomRows.metrics.accuracy)} became{" "}
+        {asPercent(wholeCustomers.metrics.accuracy)} when test identities were
+        new.
+      </p>
+
+      <dl className={styles.foldTakeaway}>
+        <div>
+          <dt>Boundary consequence</dt>
+          <dd>
+            The conclusion changes when the test contains only unseen customer
+            identities.
+          </dd>
+        </div>
+        <div>
+          <dt>Learner benefit</dt>
+          <dd>
+            Choose an evaluation that matches who will be new at deployment
+            time.
+          </dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
+function LockedFoldEvidence() {
+  return (
+    <div
+      className={`${styles.verifiedEvidence} ${styles.previewEvidence} ${styles.foldEvidence}`}
+      data-motion="none"
+    >
+      <figure className={styles.foldComparison}>
+        <figcaption>
+          <span>Fair-test mechanism</span>
+          <strong>Result locked until Prediction</strong>
+        </figcaption>
+
+        <div
+          className={styles.foldCausalRow}
+          role="group"
+          aria-label="Changed variable: evaluation unit. The fair test compares familiar-row evaluation with whole-entity holdout. The model, features, preprocessing, sample sizes, metric, and seed stay fixed. Result values remain hidden until Prediction is sealed."
+        >
+          <span>Familiar rows · identities may repeat</span>
+          <b>Evaluation unit</b>
+          <span>Unseen entities · identities stay apart</span>
+        </div>
+
+        <div
+          className={styles.previewScoreShift}
+          role="group"
+          aria-label="The familiar-row and unseen-entity scores are hidden until the learner seals a Prediction."
+        >
+          <div className={styles.previewScoreState}>
+            <span>Familiar-row test</span>
+            <strong aria-label="result hidden">—</strong>
+            <small>identity may cross the split</small>
+          </div>
+          <div className={styles.previewTransition} aria-hidden="true">
+            <span>→</span>
+            <small>same model</small>
+          </div>
+          <div className={styles.previewScoreState}>
+            <span>Unseen-entity test</span>
+            <strong aria-label="result hidden">—</strong>
+            <small>test identities stay new</small>
+          </div>
+        </div>
+
+        <p className={styles.previewControlNote}>
+          <span aria-hidden="true">✓</span>
+          Model, features, preprocessing, sample sizes, metric, and seed stay
+          fixed.
+        </p>
+      </figure>
+
+      <p className={styles.foldFinding}>
+        Seal what you expect before CounterLab reveals whether the conclusion
+        stays similar when only the evaluation unit changes.
+      </p>
+
+      <dl className={styles.foldTakeaway}>
+        <div>
+          <dt>Boundary question</dt>
+          <dd>Where does the conclusion change or stop applying?</dd>
+        </div>
+        <div>
+          <dt>Learner action</dt>
+          <dd>Predict first, then let verified evidence answer.</dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
 function VerifiedEvidence({
   evidence,
   presentation,
@@ -315,6 +490,10 @@ function VerifiedEvidence({
 }) {
   const { randomRows, wholeCustomers } = evidence;
   const isPreview = presentation !== "full";
+
+  if (presentation === "compact") {
+    return <FoldEvidence evidence={evidence} />;
+  }
 
   return (
     <div
@@ -526,11 +705,21 @@ function IntegrityBoundMechanism({
       ) : null}
 
       {currentIntegrity.status === "verified" ? (
-        <VerifiedEvidence
-          evidence={currentIntegrity.evidence}
-          presentation={presentation}
-          revealFinding={revealFinding}
-        />
+        <>
+          <span
+            className={styles.visuallyHidden}
+            role="status"
+            aria-label="Fixed sample evidence integrity verified"
+            aria-live="polite"
+          >
+            Fixed sample evidence integrity verified.
+          </span>
+          <VerifiedEvidence
+            evidence={currentIntegrity.evidence}
+            presentation={presentation}
+            revealFinding={revealFinding}
+          />
+        </>
       ) : null}
     </div>
   );
@@ -540,23 +729,39 @@ export function VerifiedBeliefBreakMechanism({
   presentation = "full",
   expectedResultHash,
   revealFinding = true,
+  resultVisibility = "verified",
 }: {
   presentation?: VerifiedBeliefBreakPresentation;
   expectedResultHash?: string;
   revealFinding?: boolean;
+  resultVisibility?: VerifiedBeliefBreakResultVisibility;
 }) {
   return (
     <section
       className={`${styles.embeddedMechanism} ${presentation !== "full" ? styles.preview : ""} ${presentation === "compact" ? styles.compact : ""}`}
-      aria-label="Verified sample belief-break mechanism"
+      aria-label={
+        resultVisibility === "locked"
+          ? "Belief-break fair-test mechanism with result locked"
+          : "Verified sample belief-break mechanism"
+      }
       data-presentation={presentation}
+      data-result-visibility={resultVisibility}
     >
-      <IntegrityBoundMechanism
-        presentation={presentation}
-        showModeLabel={true}
-        revealFinding={revealFinding}
-        {...(expectedResultHash === undefined ? {} : { expectedResultHash })}
-      />
+      {resultVisibility === "locked" ? (
+        <div
+          className={`${styles.mechanismBody} ${presentation !== "full" ? styles.previewBody : ""} ${presentation === "compact" ? styles.compactBody : ""}`}
+          data-layout={presentation !== "full" ? "stable-preview" : "flow"}
+        >
+          <LockedFoldEvidence />
+        </div>
+      ) : (
+        <IntegrityBoundMechanism
+          presentation={presentation}
+          showModeLabel={presentation !== "compact"}
+          revealFinding={revealFinding}
+          {...(expectedResultHash === undefined ? {} : { expectedResultHash })}
+        />
+      )}
     </section>
   );
 }

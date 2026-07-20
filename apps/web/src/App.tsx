@@ -10,6 +10,12 @@ import {
 } from "react";
 
 import {
+  migrateBeliefTestV1ToV2,
+  prePredictionBeliefTestNarrativeIssues,
+  prePredictionNarrativeIssues,
+} from "@counterlab/contracts";
+
+import {
   ApiClientError,
   counterLabApi,
   getSessionBeliefAuthority,
@@ -37,7 +43,6 @@ import {
 } from "./hooks/runnerCheckpoint";
 import { parseStudioLocation, studioPath } from "./app/AppRouter";
 import { ClaimPathChooser } from "./components/learner/ClaimPathChooser";
-import { DeferredVerifiedBeliefBreak } from "./components/learner/DeferredVerifiedBeliefBreak";
 import { LearnerCompletion } from "./components/learner/LearnerCompletion";
 import { LearnerCoach } from "./components/learner/LearnerCoach";
 import { NeedAHint } from "./components/learner/NeedAHint";
@@ -52,6 +57,7 @@ import {
 import { StartOverDialog } from "./components/learner/StartOverDialog";
 import {
   TimelineTransfer,
+  type TimelineEvidenceOption,
   type TimelineFeatureOption,
   type TimelineSplitOption,
 } from "./components/learner/TimelineTransfer";
@@ -76,11 +82,18 @@ import {
 } from "./components/learner/PredictionSeal";
 import { PrivacyPacketSummary } from "./components/learner/PrivacyPacketSummary";
 import { QuestionComposer } from "./components/learner/QuestionComposer";
+import { VerifiedBeliefBreakMechanism } from "./components/learner/VerifiedBeliefBreakTheater";
 import {
   currentLearnerStage,
+  learnerSessionStatusLabel,
   type LearnerStageId,
 } from "./components/learner/learnerStages";
 import { DeferredReasoningDiffView } from "./components/proof/DeferredReasoningDiffView";
+import type {
+  ImbalanceTransferDecision,
+  ImbalanceTransferEvidence,
+  ImbalanceTransferMetric,
+} from "./components/lesson/ImbalanceTransferLesson";
 import { LegacyReplayResult } from "./components/replay/LegacyReplayResult";
 import type {
   ProofEventLoadStatus,
@@ -89,6 +102,7 @@ import type {
 } from "./components/studio/types";
 import { BoundaryStage } from "./features/boundary/BoundaryStage";
 import { recordLearnerInteraction } from "./features/learner/interactionEvidence";
+import { saveAuthenticatedDownload } from "./features/learner/saveDownload";
 import { mergeProofEventSources } from "./features/proof/mergeProofEvents";
 import {
   listActiveRunnerJobs,
@@ -105,7 +119,8 @@ import {
 import { subjectPackHint } from "./features/learner/subjectPackHints";
 import { useLearnerStageTiming } from "./hooks/useLearnerStageTiming";
 
-import { getRun, sampleArtifact, sampleResult, verifiedReplay } from "./sample";
+import { bundledSampleEvidence, sampleArtifact } from "./sample";
+import { verifiedReplay } from "./sampleReplayMetadata";
 import { SAMPLE_LEAKAGE_QUESTION } from "../shared/sample-authority";
 
 const LazySampleBoundaryPanel = lazy(async () => {
@@ -141,6 +156,12 @@ const LazyImbalanceTransferLesson = lazy(async () => {
 const LazyImbalancePatchReview = lazy(async () => {
   const module = await import("./components/lesson/ImbalancePatchReview");
   return { default: module.ImbalancePatchReview };
+});
+
+const LazyVerifiedLabScenePanel = lazy(async () => {
+  const module =
+    await import("./components/generative-ui/VerifiedLabScenePanel");
+  return { default: module.VerifiedLabScenePanel };
 });
 
 function DeferredSurfaceFallback({ label }: { label: string }) {
@@ -192,12 +213,62 @@ const predictionReceiptChoices: Readonly<Record<string, PredictionChoice>> = {
 function predictionChoiceFromReceipt(choice: string): PredictionChoice | null {
   return predictionReceiptChoices[choice] ?? null;
 }
-
-type LeakageTransferSplit = "" | "random" | "time";
-type LeakageTransferRisk = "" | "price" | "future";
+type LeakageTransferSplit =
+  "" | "random_row_holdout" | "time_ordered_holdout" | "grouped_store_holdout";
+type LeakageTransferRisk =
+  | ""
+  | "centered_window_reads_future"
+  | "model_is_too_simple"
+  | "stores_have_different_scales";
+type LeakageTransferEvidence =
+  | "center_true_uses_later_targets"
+  | "random_split_mixes_dates"
+  | "metric_is_mae";
 type TransferState =
   "locked" | "ready" | "failed" | "passed" | "patching" | "patched";
 type ReviewStep = LearnerStageId;
+
+const imbalanceTransferDecisions = new Set<ImbalanceTransferDecision>([
+  "approve_high_accuracy",
+  "reject_accuracy_only",
+  "collect_more_negatives",
+]);
+const imbalanceTransferMetrics = new Set<ImbalanceTransferMetric>([
+  "accuracy",
+  "recall_and_pr_auc",
+  "negative_specificity",
+]);
+const imbalanceTransferEvidence = new Set<ImbalanceTransferEvidence>([
+  "zero_true_positives",
+  "rare_base_rate",
+  "many_true_negatives",
+]);
+
+function restoredImbalanceDecision(
+  value: string | undefined,
+): ImbalanceTransferDecision | undefined {
+  return value !== undefined &&
+    imbalanceTransferDecisions.has(value as ImbalanceTransferDecision)
+    ? (value as ImbalanceTransferDecision)
+    : undefined;
+}
+
+function restoredImbalanceMetric(
+  value: string | undefined,
+): ImbalanceTransferMetric | undefined {
+  return value !== undefined &&
+    imbalanceTransferMetrics.has(value as ImbalanceTransferMetric)
+    ? (value as ImbalanceTransferMetric)
+    : undefined;
+}
+
+function restoredImbalanceEvidence(
+  values: readonly string[] | undefined,
+): ImbalanceTransferEvidence[] {
+  return (values ?? []).filter((value): value is ImbalanceTransferEvidence =>
+    imbalanceTransferEvidence.has(value as ImbalanceTransferEvidence),
+  );
+}
 
 const leakageReflectionWhen = [
   {
@@ -246,33 +317,63 @@ const leakageReflectionReasons = [
 
 const leakageTimelineSplits = [
   {
-    value: "random",
+    value: "random_row_holdout",
     label: "Random daily rows",
-    description: "Mix observations from all dates.",
+    description: "Evaluate rows drawn across the recorded date range.",
     visual: "mixed",
   },
   {
-    value: "time",
+    value: "time_ordered_holdout",
     label: "Time-ordered holdout",
-    description: "Train on earlier dates and test on later dates.",
+    description: "Train on earlier dates, then evaluate later dates.",
     visual: "ordered",
+  },
+  {
+    value: "grouped_store_holdout",
+    label: "Whole-store holdout",
+    description: "Evaluate new stores while dates may remain mixed.",
+    visual: "mixed",
   },
 ] as const satisfies readonly TimelineSplitOption<LeakageTransferSplit>[];
 
 const leakageTimelineFeatures = [
   {
-    value: "price",
-    label: "Known item price",
-    description: "Known when the prediction is made.",
+    value: "model_is_too_simple",
+    label: "Model complexity",
+    description: "The estimator may underfit nonlinear demand patterns.",
     crossesNow: false,
   },
   {
-    value: "future",
+    value: "centered_window_reads_future",
     label: "Centered rolling target",
-    description: "Reads outcomes from later days.",
+    description: "Uses a seven-day window centered on each date.",
     crossesNow: true,
   },
+  {
+    value: "stores_have_different_scales",
+    label: "Store volume scale",
+    description: "Records how demand magnitudes differ across stores.",
+    crossesNow: false,
+  },
 ] as const satisfies readonly TimelineFeatureOption<LeakageTransferRisk>[];
+
+const leakageTimelineEvidence = [
+  {
+    value: "center_true_uses_later_targets",
+    label: "Centered-window definition",
+    description: "The target feature uses a centered seven-day window.",
+  },
+  {
+    value: "random_split_mixes_dates",
+    label: "Shuffled-split definition",
+    description: "Training and test rows are sampled across dates.",
+  },
+  {
+    value: "metric_is_mae",
+    label: "Metric definition",
+    description: "The report uses mean absolute error.",
+  },
+] as const satisfies readonly TimelineEvidenceOption<LeakageTransferEvidence>[];
 
 const leakageRepairChanges = [
   "random rows → whole-customer holdout",
@@ -359,31 +460,51 @@ function uniqueStrings(values: readonly string[]): string[] {
   return [...new Set(values)];
 }
 
+function sessionBeliefNarrativeIssues(
+  session: Pick<SessionView, "beliefTest" | "beliefSpec"> | null,
+) {
+  if (session === null) return [];
+  const authority = getSessionBeliefAuthority(session);
+  if (authority === undefined) return [];
+  if (authority.schemaVersion === "2") {
+    return prePredictionNarrativeIssues(authority.beliefSpec);
+  }
+  return prePredictionBeliefTestNarrativeIssues(authority.beliefTest);
+}
+
 function sessionBeliefPresentation(
   session: Pick<SessionView, "beliefTest" | "beliefSpec"> | null,
 ): BeliefPresentation | undefined {
   if (session === null) return undefined;
   const authority = getSessionBeliefAuthority(session);
   if (authority === undefined) return undefined;
+  if (sessionBeliefNarrativeIssues(session).length > 0) return undefined;
   if (authority.schemaVersion === "1") {
     const { beliefTest } = authority;
+    const compatibilityView = migrateBeliefTestV1ToV2(beliefTest);
+    const [current, competing] = compatibilityView.hypotheses;
     return {
       schemaVersion: "1",
       concept: beliefTest.concept,
       claim: beliefTest.learnerClaim,
       current: {
         ...beliefTest.currentHypothesis,
-        conditions: [],
-        nonClaims: beliefTest.uncertainty.limitations,
+        conditions: current.conditions,
+        nonClaims: current.nonClaims,
       },
       competing: {
         ...beliefTest.competingHypothesis,
-        conditions: [],
-        nonClaims: beliefTest.uncertainty.limitations,
+        conditions: competing.conditions,
+        nonClaims: competing.nonClaims,
       },
-      evidenceRefs: beliefTest.evidenceRefs,
-      alternatives: beliefTest.alternatives,
-      limitations: beliefTest.uncertainty.limitations,
+      evidenceRefs: compatibilityView.evidenceRefs,
+      alternatives: compatibilityView.alternatives.map(
+        ({ label, rationale }) => ({ label, rationale }),
+      ),
+      limitations: uniqueStrings([
+        ...current.nonClaims,
+        ...competing.nonClaims,
+      ]),
     };
   }
 
@@ -558,9 +679,17 @@ function notebookScoreDisplay(
   artifact: ArtifactView | null,
 ): PredictionDisplay {
   if (artifact?.fileSha256 === sampleArtifact.fileSha256) {
+    if (bundledSampleEvidence.status !== "available") {
+      return {
+        label: "Score shown in the notebook",
+        value: "Verified sample unavailable",
+      };
+    }
     return {
       label: "Score shown in the notebook",
-      value: percent.format(getRun("random_row_split").metrics.accuracy),
+      value: percent.format(
+        bundledSampleEvidence.runs.randomRows.metrics.accuracy,
+      ),
     };
   }
   const metric = artifact?.cells.flatMap((cell) => cell.metricCandidates).at(0);
@@ -576,12 +705,13 @@ function notebookEvidenceReferences(
   artifact: ArtifactView | null,
 ): readonly NotebookEvidenceReference[] {
   if (artifact?.fileSha256 === sampleArtifact.fileSha256) {
+    if (bundledSampleEvidence.status !== "available") return [];
     return [
       {
         id: "sample-cell-3-output-0",
         reference: "Cell 3 · output 0",
         relevance: "This is the notebook score behind your question.",
-        excerpt: `accuracy: ${getRun("random_row_split").metrics.accuracy}`,
+        excerpt: `accuracy: ${bundledSampleEvidence.runs.randomRows.metrics.accuracy}`,
       },
       {
         id: "sample-cell-3-source",
@@ -968,6 +1098,15 @@ function Landing({
               <h1 id="landing-title" tabIndex={-1}>
                 What result are you trying to understand?
               </h1>
+              <p className="landing-audience">
+                For learners testing whether a notebook result means what they
+                think it means.
+              </p>
+              <p className="landing-category">
+                Evidence-first learning: seal a Prediction, change one
+                condition, and let fixed evidence—not AI prose—release the
+                bounded result.
+              </p>
             </div>
 
             <QuestionComposer
@@ -994,16 +1133,19 @@ function Landing({
             aria-labelledby="landing-belief-break-title"
           >
             <header>
-              <p>Completed fixed sample preview · not your current result</p>
+              <p>Result hidden until your Prediction is sealed</p>
               <h2 id="landing-belief-break-title">
-                Can a familiar-row score support a new-customer claim?
+                One changed variable. Everything else held fixed.
               </h2>
               <blockquote>
-                “This score proves the model works for customers it has never
-                seen.”
+                Name the claim. Lock your expectation. Change one thing, then
+                let fixed evidence answer.
               </blockquote>
             </header>
-            <DeferredVerifiedBeliefBreak presentation="compact" />
+            <VerifiedBeliefBreakMechanism
+              presentation="compact"
+              resultVisibility="locked"
+            />
           </aside>
 
           <div
@@ -1053,7 +1195,7 @@ function Landing({
                       onClick={session.onOpen}
                     >
                       <strong>{session.title}</strong>
-                      <span>{session.status.replaceAll("_", " ")}</span>
+                      <span>{learnerSessionStatusLabel(session.status)}</span>
                     </button>
                   </li>
                 ))}
@@ -1472,51 +1614,67 @@ function BeliefScreen({
   editClaim: () => void;
   stop: (reason: "rejected" | "insufficient") => void;
 }) {
-  const isImbalance = belief?.concept === "class_imbalance";
-  const copy = isImbalance
-    ? {
-        currentHypothesis:
-          "The high overall score means the model catches the rare cases that matter.",
-        currentPrediction:
-          "Minority recall should also be strong and clearly beat a majority-only baseline.",
-        competingHypothesis:
-          "The common class makes accuracy look excellent even when rare cases are missed.",
-        competingPrediction:
-          "A majority baseline will look similar while recall and PR-AUC expose the misses.",
-        fairTest:
-          "Compare the same predictions with overall and class-specific measures.",
-        intervention:
-          "The proposed comparison keeps the data and model fixed while changing only what is measured. Exact operations appear after your Prediction is sealed.",
-        help: "If accuracy reflects useful rare-event detection, recall should stay strong and beat the majority baseline. If overall accuracy obscures rare-case behavior, class-specific measures will differ.",
-      }
-    : {
-        currentHypothesis:
-          "The model learned a useful pattern that will work for new customers.",
-        currentPrediction: "The score stays close to 98% for new customers.",
-        competingHypothesis:
-          "The model partly remembers customers it already saw.",
-        competingPrediction:
-          "The score changes when the test contains only new customers.",
-        fairTest: "Compare the same model across two evaluation boundaries.",
-        intervention:
-          "The proposed comparison keeps the model fixed while changing only who appears in the test. Exact operations appear after your Prediction is sealed.",
-        help: "If the model learned a reusable pattern, the score should stay high. If it remembers customers, the score should fall. The two ideas now predict different outcomes.",
-      };
+  const copy =
+    belief?.concept === "class_imbalance"
+      ? {
+          currentHypothesis:
+            "The high overall score means the model catches the rare cases that matter.",
+          currentPrediction:
+            "Minority recall should also be strong and clearly beat a majority-only baseline.",
+          competingHypothesis:
+            "The common class makes accuracy look excellent even when rare cases are missed.",
+          competingPrediction:
+            "A majority baseline will look similar while recall and PR-AUC expose the misses.",
+          fairTest:
+            "Compare the same predictions with overall and class-specific measures.",
+          intervention:
+            "The proposed comparison keeps the data and model fixed while changing only what is measured. Exact operations appear after your Prediction is sealed.",
+          help: "If accuracy reflects useful rare-event detection, recall should stay strong and beat the majority baseline. If overall accuracy obscures rare-case behavior, class-specific measures will differ.",
+          conditions:
+            "This comparison applies to the supplied rare-event notebook and its registered evaluation pattern.",
+          currentNonClaim:
+            "It does not establish performance for every rare event, threshold, or deployment prevalence.",
+          competingNonClaim:
+            "It does not establish that every high-accuracy classifier ignores the rare class.",
+          alternativesAndLimits:
+            "Threshold choice, prevalence shift, and asymmetric error costs remain open considerations. This bounded comparison does not establish production quality or causality.",
+        }
+      : {
+          currentHypothesis:
+            "The model learned a useful pattern that will work for new customers.",
+          currentPrediction:
+            "The score should remain close to the notebook's familiar-row score for new customers.",
+          competingHypothesis:
+            "The model partly remembers customers it already saw.",
+          competingPrediction:
+            "The score changes when the test contains only new customers.",
+          fairTest: "Compare the same model across two evaluation boundaries.",
+          intervention:
+            "The proposed comparison keeps the model fixed while changing only who appears in the test. Exact operations appear after your Prediction is sealed.",
+          help: "If the model learned a reusable pattern, the score should stay high. If it remembers customers, the score should fall. The two ideas now predict different outcomes.",
+          conditions:
+            "This comparison applies to the supplied notebook and its question about unseen customers.",
+          currentNonClaim:
+            "It does not establish performance for every customer population or future deployment.",
+          competingNonClaim:
+            "It does not establish that every repeated-entity dataset contains identity leakage.",
+          alternativesAndLimits:
+            "Class balance and temporal drift remain open alternatives. This bounded comparison does not establish production performance or causality.",
+        };
+  // Before Prediction, learner-facing hypotheses come only from this closed
+  // Subject Pack framing. Model-authored prose remains evidence, never UI
+  // authority for a retrospective verdict, result value, or repair directive.
   const currentModel: DuelModel = {
-    statement: belief?.current.statement ?? copy.currentHypothesis,
-    prediction: belief?.current.predictedOutcome ?? copy.currentPrediction,
-    conditions: belief?.current.conditions ?? [],
-    nonClaims: belief?.current.nonClaims ?? [
-      "This explanation does not establish performance outside the supplied notebook evidence.",
-    ],
+    statement: copy.currentHypothesis,
+    prediction: copy.currentPrediction,
+    conditions: [copy.conditions],
+    nonClaims: [copy.currentNonClaim],
   };
   const alternativeModel: DuelModel = {
-    statement: belief?.competing.statement ?? copy.competingHypothesis,
-    prediction: belief?.competing.predictedOutcome ?? copy.competingPrediction,
-    conditions: belief?.competing.conditions ?? [],
-    nonClaims: belief?.competing.nonClaims ?? [
-      "This explanation is limited to the supplied notebook pattern.",
-    ],
+    statement: copy.competingHypothesis,
+    prediction: copy.competingPrediction,
+    conditions: [copy.conditions],
+    nonClaims: [copy.competingNonClaim],
   };
   const predictionOptions = predictionOptionsFor(belief?.concept);
 
@@ -1614,15 +1772,11 @@ function BeliefScreen({
             </div>
             <details>
               <summary>Alternatives, limitations, and uncertainty</summary>
+              <p>{copy.alternativesAndLimits}</p>
               <p>
-                {belief === undefined
-                  ? "Class balance and temporal drift remain alternatives. The available notebook evidence supports this bounded comparison, but it does not establish production performance or causality."
-                  : `${belief.alternatives
-                      .map(
-                        (alternative) =>
-                          `${alternative.label}: ${alternative.rationale}`,
-                      )
-                      .join(" ")} ${belief.limitations.join(" ")}`}
+                Pre-result explanation wording comes from the reviewed Subject
+                Pack. Model proposals cannot supply result, verdict, or repair
+                copy on this screen.
               </p>
             </details>
           </section>
@@ -1658,6 +1812,40 @@ function BeliefScreen({
           onCommit={commitPrediction}
         />
       )}
+    </main>
+  );
+}
+
+function WithheldBeliefScreen({
+  claim,
+  restart,
+}: {
+  claim: string;
+  restart: () => void;
+}) {
+  return (
+    <main
+      className="workspace shell narrow"
+      id="main-content"
+      tabIndex={-1}
+      role="alert"
+    >
+      <div className="screen-intro">
+        <p className="eyebrow">Prediction · Explanation withheld</p>
+        <h1>CounterLab refused unsafe pre-result wording.</h1>
+        <p>
+          The proposed explanation contained an unbound result, verdict, or
+          repair instruction. No Prediction was sealed and no test result was
+          released.
+        </p>
+      </div>
+      <section className="claim-quote" aria-label="Investigation question">
+        <span>Your claim</span>
+        <blockquote>{claim}</blockquote>
+      </section>
+      <button className="button button-primary" type="button" onClick={restart}>
+        Start a fresh investigation <Mark name="arrow" />
+      </button>
     </main>
   );
 }
@@ -1911,7 +2099,7 @@ function ImbalanceReviewScreen({
         )}
         {step === "test" && (
           <>
-            <p className="eyebrow aqua">Verified Lab</p>
+            <p className="eyebrow aqua">Verified Test</p>
             <h2>
               CounterLab measured the minority class, not only the headline.
             </h2>
@@ -2115,7 +2303,7 @@ function ReviewScreen({
 
       {step === "test" && (
         <section className="review-card panel">
-          <p className="eyebrow aqua">Verified Lab</p>
+          <p className="eyebrow aqua">Verified Test</p>
           <h2>CounterLab changed the customer boundary—not the answer.</h2>
           <ul className="review-checks">
             <li>
@@ -2201,10 +2389,15 @@ function InteractiveLeakageLab({
   session,
   artifact,
   authoritativeResult,
+  recordCompilerEvents,
 }: {
   session: SessionView | null;
   artifact: ArtifactView | null;
   authoritativeResult: LeakageVerifiedResultSet;
+  recordCompilerEvents: (
+    sessionId: string,
+    events: readonly PublicCompilerEvent[],
+  ) => void;
 }) {
   const isLive = session?.mode.kind === "live_notebook";
   const entityCandidates = artifact?.schemaSummary.entityCandidates ?? [];
@@ -2225,6 +2418,11 @@ function InteractiveLeakageLab({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const runner = useRunnerEvents();
+
+  useEffect(() => {
+    if (session === null || runner.events.length === 0) return;
+    recordCompilerEvents(session.sessionId, runner.events);
+  }, [recordCompilerEvents, runner.events, session]);
 
   useEffect(() => {
     if (
@@ -2528,6 +2726,7 @@ function LeakageRealityScreen({
   session,
   artifact,
   updateSession,
+  recordCompilerEvents,
 }: {
   claim: string;
   prediction: PredictionChoice;
@@ -2535,6 +2734,10 @@ function LeakageRealityScreen({
   session: SessionView | null;
   artifact: ArtifactView | null;
   updateSession: (session: SessionView) => void;
+  recordCompilerEvents: (
+    sessionId: string,
+    events: readonly PublicCompilerEvent[],
+  ) => void;
 }) {
   const random = resultRun(result, "random_row_split");
   const group = resultRun(result, "customer_group_split");
@@ -2558,15 +2761,35 @@ function LeakageRealityScreen({
     ? "patched"
     : session?.transferResult?.outcome === "PASSED"
       ? "passed"
-      : session?.revision
-        ? "ready"
-        : session === null
-          ? storedReplayTransferState()
-          : "locked";
+      : session?.transferResult?.outcome === "FAILED"
+        ? "failed"
+        : session?.revision
+          ? "ready"
+          : session === null
+            ? storedReplayTransferState()
+            : "locked";
   const [transferState, setTransferState] =
     useState<TransferState>(initialTransferState);
-  const [splitChoice, setSplitChoice] = useState<LeakageTransferSplit>("");
-  const [riskChoice, setRiskChoice] = useState<LeakageTransferRisk>("");
+  const [splitChoice, setSplitChoice] = useState<LeakageTransferSplit>(() => {
+    const stored = session?.transferResult?.selectedStrategy;
+    return leakageTimelineSplits.some((option) => option.value === stored)
+      ? (stored as LeakageTransferSplit)
+      : "";
+  });
+  const [riskChoice, setRiskChoice] = useState<LeakageTransferRisk>(() => {
+    const stored = session?.transferResult?.identifiedRisks[0];
+    return leakageTimelineFeatures.some((option) => option.value === stored)
+      ? (stored as LeakageTransferRisk)
+      : "";
+  });
+  const [transferEvidence, setTransferEvidence] = useState<
+    LeakageTransferEvidence[]
+  >(() =>
+    (session?.transferResult?.evidenceChoices ?? []).filter(
+      (value): value is LeakageTransferEvidence =>
+        leakageTimelineEvidence.some((option) => option.value === value),
+    ),
+  );
   const [patch, setPatch] = useState<PatchResult | null>(
     session?.patchResult ?? null,
   );
@@ -2575,6 +2798,7 @@ function LeakageRealityScreen({
   );
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const actionInFlight = useRef(false);
   const sampleSessionId =
     session?.mode.kind === "sample_lesson" ? session.sessionId : null;
   const [sampleBoundaryComplete, setSampleBoundaryComplete] = useState(
@@ -2593,12 +2817,19 @@ function LeakageRealityScreen({
   }, [transferState]);
 
   useEffect(() => {
+    if (session === null || patchRunner.events.length === 0) return;
+    recordCompilerEvents(session.sessionId, patchRunner.events);
+  }, [patchRunner.events, recordCompilerEvents, session]);
+
+  useEffect(() => {
     if (session !== null) return;
     window.localStorage.setItem(storageKeys.replayTransferState, transferState);
     window.localStorage.setItem(storageKeys.replayRevision, revision);
   }, [revision, session, transferState]);
 
   const runAction = async (operation: () => Promise<void>) => {
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
     setActionBusy(true);
     setActionError(null);
     try {
@@ -2610,6 +2841,7 @@ function LeakageRealityScreen({
           : "CounterLab could not record this evidence.",
       );
     } finally {
+      actionInFlight.current = false;
       setActionBusy(false);
     }
   };
@@ -2684,24 +2916,29 @@ function LeakageRealityScreen({
   };
 
   const checkTransfer = () => {
+    if (
+      splitChoice === "" ||
+      riskChoice === "" ||
+      transferEvidence.length === 0
+    ) {
+      return;
+    }
     if (session === null) {
       setTransferState(
-        splitChoice === "time" && riskChoice === "future" ? "passed" : "failed",
+        splitChoice === "time_ordered_holdout" &&
+          riskChoice === "centered_window_reads_future" &&
+          transferEvidence.includes("center_true_uses_later_targets") &&
+          transferEvidence.includes("random_split_mixes_dates")
+          ? "passed"
+          : "failed",
       );
       return;
     }
     void runAction(async () => {
       const updated = await counterLabApi.submitTransfer(session.sessionId, {
-        strategyChoice:
-          splitChoice === "time" ? "time_ordered_holdout" : "random_rows",
-        riskChoice:
-          riskChoice === "future"
-            ? "centered_window_reads_future"
-            : "known_price_is_safe",
-        evidenceChoices:
-          splitChoice === "time" && riskChoice === "future"
-            ? ["center_true_uses_later_targets", "random_split_mixes_dates"]
-            : ["chosen_evidence_does_not_establish_time_boundary"],
+        strategyChoice: splitChoice,
+        riskChoice,
+        evidenceChoices: transferEvidence,
       });
       updateSession(updated);
       const outcome =
@@ -2739,9 +2976,15 @@ function LeakageRealityScreen({
           status: 409,
         });
       }
-      if (updated.patch !== undefined) {
+      if (
+        updated.patch !== undefined &&
+        updated.state === "PROOF_CAPSULE_ISSUED"
+      ) {
         try {
-          setProofBundle(await counterLabApi.getProofBundle(session.sessionId));
+          setProofBundle(
+            updated.proofBundle ??
+              (await counterLabApi.getProofBundle(session.sessionId)),
+          );
         } catch (caught) {
           if (!(caught instanceof ApiClientError && caught.status === 409)) {
             throw caught;
@@ -2767,29 +3010,35 @@ function LeakageRealityScreen({
 
   const downloadCompletionPatch = () => {
     if (session === null || patch === null) return;
-    const anchor = document.createElement("a");
-    anchor.href = counterLabApi.patchDownloadUrl(session.sessionId);
-    anchor.download = "";
-    anchor.click();
-    void recordLearnerInteraction(session.sessionId, {
-      kind: "patch.downloaded",
-      stage: "repair",
+    void runAction(async () => {
+      saveAuthenticatedDownload(
+        await counterLabApi.downloadPatch(session.sessionId),
+      );
+      void recordLearnerInteraction(session.sessionId, {
+        kind: "patch.downloaded",
+        stage: "repair",
+      });
     });
   };
 
   const exportCompletionProof = () => {
     if (session?.proofCapsule !== undefined) {
-      const anchor = document.createElement("a");
-      anchor.href = counterLabApi.proofCapsuleDownloadUrl(session.sessionId);
-      anchor.download = "";
-      anchor.click();
-      void recordLearnerInteraction(session.sessionId, {
-        kind: "proof_capsule.downloaded",
-        stage: "repair",
+      void runAction(async () => {
+        saveAuthenticatedDownload(
+          await counterLabApi.downloadProofCapsule(session.sessionId),
+        );
+        void recordLearnerInteraction(session.sessionId, {
+          kind: "proof_capsule.downloaded",
+          stage: "repair",
+        });
       });
       return;
     }
     exportProof();
+  };
+
+  const inspectFixedSampleEvidence = () => {
+    window.location.assign("/judge#sample-evidence");
   };
 
   const actionErrorNotice =
@@ -2954,16 +3203,26 @@ function LeakageRealityScreen({
           repairedNotebookAction={{
             label: "Download repaired notebook",
             onActivate: downloadCompletionPatch,
-            disabled: session === null || patch === null,
+            disabled: actionBusy || session === null || patch === null,
           }}
           proofCapsuleAction={{
-            label:
-              session?.proofCapsule === undefined
-                ? "Download proof record"
-                : "Export Proof Capsule",
-            onActivate: exportCompletionProof,
-            disabled:
-              session?.proofCapsule === undefined && proofBundle === null,
+            ...(session?.mode.kind === "live_notebook"
+              ? {
+                  label:
+                    session.proofCapsule === undefined
+                      ? "Download proof record"
+                      : "Export Proof Capsule",
+                  onActivate: exportCompletionProof,
+                  disabled:
+                    actionBusy ||
+                    (session.proofCapsule === undefined &&
+                      proofBundle === null),
+                }
+              : {
+                  label: "Inspect fixed sample evidence",
+                  onActivate: inspectFixedSampleEvidence,
+                  disabled: actionBusy,
+                }),
           }}
           evidenceAndProof={
             liveCompletionProof === null ? (
@@ -3023,19 +3282,14 @@ function LeakageRealityScreen({
               </div>
               <div className="completion-actions">
                 {session?.mode.kind === "live_notebook" && patch !== null && (
-                  <a
+                  <button
                     className="button button-gold patch-download"
-                    href={counterLabApi.patchDownloadUrl(session.sessionId)}
-                    download
-                    onClick={() => {
-                      void recordLearnerInteraction(session.sessionId, {
-                        kind: "patch.downloaded",
-                        stage: "repair",
-                      });
-                    }}
+                    type="button"
+                    disabled={actionBusy}
+                    onClick={downloadCompletionPatch}
                   >
                     Download verified notebook copy <Mark name="arrow" />
-                  </a>
+                  </button>
                 )}
                 <button
                   className="button button-quiet"
@@ -3253,12 +3507,20 @@ function LeakageRealityScreen({
             featureValue={riskChoice}
             featureOptions={leakageTimelineFeatures}
             onFeatureChange={setRiskChoice}
+            evidenceValues={transferEvidence}
+            evidenceOptions={leakageTimelineEvidence}
+            onEvidenceChange={setTransferEvidence}
             disabled={actionBusy}
           />
           <button
             className="button button-primary"
             type="button"
-            disabled={!splitChoice || !riskChoice || actionBusy}
+            disabled={
+              !splitChoice ||
+              !riskChoice ||
+              transferEvidence.length === 0 ||
+              actionBusy
+            }
             onClick={checkTransfer}
           >
             Check transfer
@@ -3287,13 +3549,15 @@ function LeakageRealityScreen({
         ? "Accuracy falls materially on unseen customers."
         : "The unseen-customer result is uncertain.");
   const applyAvailable =
-    session?.mode.kind === "sample_lesson"
+    interpretationComplete &&
+    (session?.mode.kind === "sample_lesson"
       ? sampleBoundaryComplete
       : session?.mode.kind !== "live_notebook" ||
-        session.boundaryMapAuthority !== undefined;
+        session.boundaryMapAuthority !== undefined);
   const theaterPayload: ExperimentTheaterVerifiedPayload = {
     ...(session?.mode.kind === "sample_lesson" &&
-    result.resultHash === sampleResult.resultHash
+    bundledSampleEvidence.status === "available" &&
+    result.resultHash === bundledSampleEvidence.result.resultHash
       ? {
           trustedVisual: {
             id: "verified_sample_belief_break_v1" as const,
@@ -3327,6 +3591,15 @@ function LeakageRealityScreen({
         completed: interpretationComplete,
         content: (
           <>
+            {session?.mode.kind === "live_notebook" ? (
+              <Suspense
+                fallback={
+                  <DeferredPanelFallback label="Loading trusted Lab Scene…" />
+                }
+              >
+                <LazyVerifiedLabScenePanel sessionId={session.sessionId} />
+              </Suspense>
+            ) : null}
             <details id="leakage-verified-evidence" className="exact-results">
               <summary>Show exact values and run details</summary>
               <ResultTable result={result} />
@@ -3357,6 +3630,7 @@ function LeakageRealityScreen({
             session={session}
             artifact={artifact}
             authoritativeResult={result}
+            recordCompilerEvents={recordCompilerEvents}
           />
         ),
       },
@@ -3545,6 +3819,15 @@ function ImbalanceRealityScreen({
     session?.state === "PATCH_VERIFIED" ||
     session?.state === "REASONING_DIFF_ISSUED" ||
     session?.state === "PROOF_CAPSULE_ISSUED";
+  const restoredTransferDecision = restoredImbalanceDecision(
+    session?.transferResult?.selectedStrategy,
+  );
+  const restoredTransferMetric = restoredImbalanceMetric(
+    session?.transferResult?.identifiedRisks[0],
+  );
+  const restoredTransferEvidence = restoredImbalanceEvidence(
+    session?.transferResult?.evidenceChoices,
+  );
   const theaterPayload: ExperimentTheaterVerifiedPayload = {
     comparison: {
       title: "Headline accuracy versus rare-class recall",
@@ -3572,6 +3855,15 @@ function ImbalanceRealityScreen({
         completed: interpretationComplete,
         content: (
           <>
+            {session?.mode.kind === "live_notebook" ? (
+              <Suspense
+                fallback={
+                  <DeferredPanelFallback label="Loading trusted Lab Scene…" />
+                }
+              >
+                <LazyVerifiedLabScenePanel sessionId={session.sessionId} />
+              </Suspense>
+            ) : null}
             <blockquote>{claim}</blockquote>
             <details className="exact-results">
               <summary>Show exact values and run details</summary>
@@ -3689,6 +3981,15 @@ function ImbalanceRealityScreen({
                   {...(session.transferResult === undefined
                     ? {}
                     : { transferOutcome: session.transferResult.outcome })}
+                  {...(restoredTransferDecision === undefined
+                    ? {}
+                    : { initialDecisionChoice: restoredTransferDecision })}
+                  {...(restoredTransferMetric === undefined
+                    ? {}
+                    : { initialMetricChoice: restoredTransferMetric })}
+                  {...(restoredTransferEvidence.length === 0
+                    ? {}
+                    : { initialEvidenceChoices: restoredTransferEvidence })}
                   updateSession={updateSession}
                 />
               </Suspense>
@@ -3755,6 +4056,10 @@ function RealityScreen(props: {
   session: SessionView | null;
   artifact: ArtifactView | null;
   updateSession: (session: SessionView) => void;
+  recordCompilerEvents: (
+    sessionId: string,
+    events: readonly PublicCompilerEvent[],
+  ) => void;
 }) {
   if (props.result.concept === "class_imbalance") {
     return (
@@ -3798,6 +4103,7 @@ function LiveSetup({
 }) {
   const configured = health?.liveGpt === "configured";
   const runnerConfigured =
+    health?.readiness === "ready" &&
     health?.liveCodex === "configured" &&
     health.liveKernel === "configured" &&
     health.sandbox === "credential-and-privilege-boundary" &&
@@ -4150,7 +4456,8 @@ export function App() {
   const [storedProofSnapshot, setStoredProofSnapshot] = useState<{
     sessionId: string;
     sessionVersion: number;
-    events: readonly EvidenceEvent[];
+    evidenceEvents: readonly EvidenceEvent[];
+    compilerEvents: readonly PublicCompilerEvent[];
   } | null>(null);
   const [proofEventRequest, setProofEventRequest] = useState<{
     sessionId: string;
@@ -4173,10 +4480,41 @@ export function App() {
   const [sensitiveContentApproved, setSensitiveContentApproved] =
     useState(false);
   const [runnerJob, setRunnerJob] = useState<RunnerJob | null>(null);
+  const [transientCompilerEvents, setTransientCompilerEvents] = useState<{
+    sessionId: string;
+    events: readonly PublicCompilerEvent[];
+  } | null>(null);
   const runner = useRunnerEvents();
   const proofEventRequestGeneration = useRef(0);
+  const userRequestGeneration = useRef(0);
+  const downloadRequestInFlight = useRef(false);
   const activeSessionId = session?.sessionId ?? null;
   const activeSessionVersion = session?.version ?? null;
+  const recordTransientCompilerEvents = useCallback(
+    (sessionId: string, events: readonly PublicCompilerEvent[]) => {
+      setTransientCompilerEvents((current) => {
+        const existing = current?.sessionId === sessionId ? current.events : [];
+        const additions = events.filter(
+          (candidate) =>
+            !existing.some(
+              (recorded) =>
+                recorded.eventId === candidate.eventId &&
+                JSON.stringify(recorded) === JSON.stringify(candidate),
+            ),
+        );
+        if (additions.length === 0 && current?.sessionId === sessionId) {
+          return current;
+        }
+        return { sessionId, events: [...existing, ...additions] };
+      });
+    },
+    [],
+  );
+  useEffect(() => {
+    setTransientCompilerEvents((current) =>
+      current?.sessionId === activeSessionId ? current : null,
+    );
+  }, [activeSessionId]);
   const mergedProofEvents = useMemo(() => {
     const proofBundle = session?.proofBundle;
     return mergeProofEventSources({
@@ -4185,17 +4523,30 @@ export function App() {
         : { expectedSessionId: activeSessionId }),
       storedEvidenceEvents:
         storedProofSnapshot?.sessionId === activeSessionId
-          ? storedProofSnapshot.events
+          ? storedProofSnapshot.evidenceEvents
           : [],
       recordedCompilerEvents:
-        proofBundle?.schemaVersion === "2"
-          ? proofBundle.publicCompilerEvents
-          : [],
+        activeSessionId === null
+          ? []
+          : [
+              ...(storedProofSnapshot?.sessionId === activeSessionId
+                ? storedProofSnapshot.compilerEvents
+                : []),
+              ...(proofBundle?.schemaVersion === "2"
+                ? proofBundle.publicCompilerEvents
+                : []),
+            ],
       streamedCompilerEvents:
-        activeSessionId !== null &&
-        (runnerJob === null || runnerJob.sessionId === activeSessionId)
-          ? runner.events
-          : [],
+        activeSessionId === null
+          ? []
+          : [
+              ...(runnerJob === null || runnerJob.sessionId === activeSessionId
+                ? runner.events
+                : []),
+              ...(transientCompilerEvents?.sessionId === activeSessionId
+                ? transientCompilerEvents.events
+                : []),
+            ],
     });
   }, [
     activeSessionId,
@@ -4203,6 +4554,7 @@ export function App() {
     runnerJob,
     session?.proofBundle,
     storedProofSnapshot,
+    transientCompilerEvents,
   ]);
   const proofEventStatus: ProofEventLoadStatus =
     activeSessionId === null
@@ -4221,10 +4573,19 @@ export function App() {
       ? activeReplay
       : null;
   const legacyReplayResult = legacyReplay?.result;
-  const verifiedResult = session?.verifiedResult ?? legacyReplayResult;
+  const verifiedResult =
+    session === null
+      ? legacyReplayResult
+      : session.prediction === undefined
+        ? undefined
+        : session.verifiedResult;
+  const beliefNarrativeWithheld =
+    sessionBeliefNarrativeIssues(session).length > 0;
   const belief = sessionBeliefPresentation(session);
   const effectiveClaim =
     belief?.claim ||
+    session?.beliefSpec?.claim ||
+    session?.beliefTest?.learnerClaim ||
     hostedReplay?.question.claim ||
     claim ||
     "The notebook accuracy proves generalization to new customers.";
@@ -4268,15 +4629,28 @@ export function App() {
     );
   };
 
-  const withRequest = async (operation: () => Promise<void>) => {
+  const withRequest = async (
+    operation: (request: { assertCurrent: () => void }) => Promise<void>,
+  ) => {
+    const generation = userRequestGeneration.current + 1;
+    userRequestGeneration.current = generation;
+    const assertCurrent = () => {
+      if (userRequestGeneration.current !== generation) {
+        throw new DOMException(
+          "Request superseded by navigation",
+          "AbortError",
+        );
+      }
+    };
     setBusy(true);
     setError(null);
     try {
-      await operation();
+      await operation({ assertCurrent });
+      assertCurrent();
     } catch (caught) {
-      reportError(caught);
+      if (userRequestGeneration.current === generation) reportError(caught);
     } finally {
-      setBusy(false);
+      if (userRequestGeneration.current === generation) setBusy(false);
     }
   };
 
@@ -4310,7 +4684,10 @@ export function App() {
     }
   };
 
-  const advanceLiveLab = async (startingSession: SessionView) => {
+  const advanceLiveLab = async (
+    startingSession: SessionView,
+    request: { assertCurrent: () => void } = { assertCurrent: () => undefined },
+  ) => {
     const sessionId = startingSession.sessionId;
     let current: SessionView & { runnerJob?: RunnerJob | undefined } =
       startingSession;
@@ -4323,6 +4700,7 @@ export function App() {
       runner.clear();
       forgetRunnerJob(sessionId);
       const compiled = await counterLabApi.compileLab(sessionId);
+      request.assertCurrent();
       setSession(compiled);
       current = compiled;
       if (compiled.runnerJob !== undefined)
@@ -4334,6 +4712,7 @@ export function App() {
       let jobId = current.runnerJob?.jobId ?? checkpoint?.jobId ?? null;
       if (jobId === null || jobId === undefined) {
         const recovered = await counterLabApi.compileLab(sessionId);
+        request.assertCurrent();
         setSession(recovered);
         current = recovered;
         if (recovered.runnerJob !== undefined) {
@@ -4355,8 +4734,12 @@ export function App() {
         jobId,
         jobKind: "LAB_COMPILE",
         terminalStates: ["LAB_VERIFIED", "LAB_REJECTED"],
-        onSession: setSession,
+        onSession: (updated) => {
+          request.assertCurrent();
+          setSession(updated);
+        },
       });
+      request.assertCurrent();
     }
 
     if (current.state === "LAB_REJECTED") {
@@ -4373,6 +4756,7 @@ export function App() {
       current.verifiedResult === undefined
     ) {
       const run = await counterLabApi.runLab(sessionId);
+      request.assertCurrent();
       setSession(run);
       current = run;
       if (run.runnerJob !== undefined) rememberRunnerJob(run.runnerJob);
@@ -4398,8 +4782,12 @@ export function App() {
         jobId,
         jobKind: "LAB_RUN",
         terminalStates: ["EXPERIMENT_COMPLETED", "LAB_REJECTED"],
-        onSession: setSession,
+        onSession: (updated) => {
+          request.assertCurrent();
+          setSession(updated);
+        },
       });
+      request.assertCurrent();
     }
 
     if (
@@ -4413,6 +4801,7 @@ export function App() {
         status: 409,
       });
     }
+    request.assertCurrent();
     forgetRunnerJob(sessionId);
     setSession(current);
     setStage("build");
@@ -4420,10 +4809,11 @@ export function App() {
 
   const retryLiveLab = () => {
     if (session === null) return;
-    void withRequest(async () => {
+    void withRequest(async (request) => {
       const restored = await counterLabApi.getSession(session.sessionId);
+      request.assertCurrent();
       setSession(restored);
-      await advanceLiveLab(restored);
+      await advanceLiveLab(restored, request);
     });
   };
 
@@ -4432,23 +4822,34 @@ export function App() {
       session === null ? null : storedRunnerCheckpoint(session.sessionId);
     const jobId = runnerJob?.jobId ?? checkpoint?.jobId ?? null;
     if (session === null || jobId === null || cancellingRunner) return;
+    const generation = userRequestGeneration.current + 1;
+    userRequestGeneration.current = generation;
+    const sessionId = session.sessionId;
     setCancellingRunner(true);
     runner.cancel();
     void counterLabApi
-      .cancelRunnerJob(session.sessionId, jobId)
+      .cancelRunnerJob(sessionId, jobId)
       .then((updated) => {
+        if (userRequestGeneration.current !== generation) return;
         setSession(updated);
         setRunnerJob(updated.runnerJob);
-        forgetRunnerJob(session.sessionId, jobId);
+        forgetRunnerJob(sessionId, jobId);
         setError(
           "You cancelled this test before it could release a result. Your notebook, claim, and locked prediction are preserved.",
         );
       })
-      .catch(reportError)
-      .finally(() => setCancellingRunner(false));
+      .catch((caught: unknown) => {
+        if (userRequestGeneration.current === generation) reportError(caught);
+      })
+      .finally(() => {
+        if (userRequestGeneration.current === generation) {
+          setCancellingRunner(false);
+        }
+      });
   };
 
   const resetJourney = (notice?: string) => {
+    userRequestGeneration.current += 1;
     Object.values(storageKeys).forEach((key) =>
       window.localStorage.removeItem(key),
     );
@@ -4469,6 +4870,7 @@ export function App() {
     setSession(null);
     setError(notice ?? null);
     setBusy(false);
+    setCancellingRunner(false);
     setAnalysisPreview(null);
     setSensitiveContentApproved(false);
     setRunnerJob(null);
@@ -4503,8 +4905,9 @@ export function App() {
     }
     const sessionId = session.sessionId;
     const sessionMode = presentationMode(session.mode);
-    void withRequest(async () => {
+    void withRequest(async (request) => {
       await counterLabApi.revokeSessionAccess(sessionId);
+      request.assertCurrent();
       removeRecentWork(sessionId, sessionMode, window.localStorage);
       resetJourney(
         "Private session access was revoked. Stored immutable evidence was not deleted.",
@@ -4518,10 +4921,13 @@ export function App() {
 
   const confirmRestart = async () => {
     if (restartRequest === null || restartBusy) return;
+    const generation = userRequestGeneration.current + 1;
+    userRequestGeneration.current = generation;
+    const request = restartRequest;
     setRestartBusy(true);
     runner.cancel();
     const confirmedTerminal = await Promise.all(
-      restartRequest.jobs.map(async (job) => {
+      request.jobs.map(async (job) => {
         const controller = new AbortController();
         const timeout = window.setTimeout(
           () =>
@@ -4532,7 +4938,7 @@ export function App() {
         );
         try {
           await counterLabApi.cancelRunnerJob(
-            restartRequest.sessionId,
+            request.sessionId,
             job.jobId,
             controller.signal,
           );
@@ -4547,12 +4953,13 @@ export function App() {
         }
       }),
     );
+    if (userRequestGeneration.current !== generation) return;
     let unresolved = 0;
-    for (const [index, job] of restartRequest.jobs.entries()) {
+    for (const [index, job] of request.jobs.entries()) {
       if (confirmedTerminal[index] === true) {
         try {
           markActiveRunnerJobTerminal(
-            restartRequest.sessionId,
+            request.sessionId,
             job.jobId,
             window.sessionStorage,
           );
@@ -4573,11 +4980,18 @@ export function App() {
 
   useEffect(() => {
     const handlePopState = () => {
+      userRequestGeneration.current += 1;
+      setBusy(false);
+      setCancellingRunner(false);
+      setRestartBusy(false);
       setRouteHydrated(false);
       setLocationRevision((current) => current + 1);
     };
     window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
+    return () => {
+      userRequestGeneration.current += 1;
+      window.removeEventListener("popstate", handlePopState);
+    };
   }, []);
 
   useEffect(() => {
@@ -4627,7 +5041,7 @@ export function App() {
     });
     void counterLabApi
       .getEvents(activeSessionId)
-      .then((events) => {
+      .then((snapshot) => {
         if (
           !active ||
           proofEventRequestGeneration.current !== requestGeneration
@@ -4636,7 +5050,8 @@ export function App() {
         setStoredProofSnapshot({
           sessionId: activeSessionId,
           sessionVersion: activeSessionVersion,
-          events,
+          evidenceEvents: snapshot.events,
+          compilerEvents: snapshot.compilerEvents ?? [],
         });
         setProofEventRequest({
           sessionId: activeSessionId,
@@ -4650,6 +5065,9 @@ export function App() {
           proofEventRequestGeneration.current !== requestGeneration
         )
           return;
+        setStoredProofSnapshot((current) =>
+          current?.sessionId === activeSessionId ? null : current,
+        );
         setProofEventRequest({
           sessionId: activeSessionId,
           sessionVersion: activeSessionVersion,
@@ -4696,7 +5114,7 @@ export function App() {
       setArtifact(null);
       setError(null);
       setRouteHydrated(true);
-      void checkLiveCapabilities();
+      void checkLiveCapabilities(false);
       return;
     }
 
@@ -4740,12 +5158,17 @@ export function App() {
         })
         .catch((caught: unknown) => {
           if (active) {
-            if (caught instanceof ApiClientError && caught.status === 404) {
+            const missing =
+              caught instanceof ApiClientError && caught.status === 404;
+            if (missing) {
               removeRecentWork(replayId, "replay", window.localStorage);
             }
             setError(null);
             setRouteHydrated(false);
-            setRouteRecovery({ reason: "missing-replay", attemptedPath });
+            setRouteRecovery({
+              reason: missing ? "missing-replay" : "unverified-replay",
+              attemptedPath,
+            });
           }
         })
         .finally(() => {
@@ -4772,7 +5195,7 @@ export function App() {
       setError(null);
       window.localStorage.setItem(storageKeys.mode, "live");
       setRouteHydrated(true);
-      if (storedClaim.length === 0) void checkLiveCapabilities();
+      if (storedClaim.length === 0) void checkLiveCapabilities(true);
       return;
     }
 
@@ -4827,7 +5250,13 @@ export function App() {
         }
         if (!active) return;
         const restoredBelief = sessionBeliefPresentation(restored);
-        setClaim(restoredBelief?.claim ?? storedClaim ?? "");
+        setClaim(
+          restoredBelief?.claim ??
+            restored.beliefSpec?.claim ??
+            restored.beliefTest?.learnerClaim ??
+            storedClaim ??
+            "",
+        );
         setArtifact(restoredArtifact);
         setSession(restored);
         setMode(presentationMode(restored.mode));
@@ -4837,13 +5266,8 @@ export function App() {
           presentationMode(restored.mode),
         );
         if (restored.prediction !== undefined) {
-          const savedChoice = restored.prediction.choice.toLowerCase();
           setPrediction(
-            savedChoice.includes("fall") || savedChoice.includes("minority")
-              ? "falls"
-              : savedChoice.includes("unsure")
-                ? "unsure"
-                : "stays-high",
+            predictionChoiceFromReceipt(restored.prediction.choice),
           );
           setConfidence(restored.prediction.confidence);
         }
@@ -4887,7 +5311,16 @@ export function App() {
             restored.mode.kind === "live_notebook" &&
             restored.verifiedResult === undefined
           ) {
-            await advanceLiveLab(restored);
+            await advanceLiveLab(restored, {
+              assertCurrent: () => {
+                if (!active) {
+                  throw new DOMException(
+                    "Route restoration superseded",
+                    "AbortError",
+                  );
+                }
+              },
+            });
           } else {
             setStage("build");
           }
@@ -4943,24 +5376,39 @@ export function App() {
     stage,
   ]);
 
-  const checkLiveCapabilities = async () => {
+  const checkLiveCapabilities = async (probeReadiness: boolean) => {
+    const generation = userRequestGeneration.current;
     setCheckingLiveHealth(true);
     setLiveHealthError(null);
     setLiveHealth(null);
     try {
-      setLiveHealth(await counterLabApi.getHealth());
+      const health = await counterLabApi.getHealth({ probeReadiness });
+      if (userRequestGeneration.current !== generation) return;
+      setLiveHealth(health);
     } catch (caught) {
+      if (userRequestGeneration.current !== generation) return;
       setLiveHealthError(
         caught instanceof ApiClientError
           ? "CounterLab could not verify the capability response."
           : "CounterLab could not reach the capability service.",
       );
     } finally {
-      setCheckingLiveHealth(false);
+      if (userRequestGeneration.current === generation) {
+        setCheckingLiveHealth(false);
+      }
     }
   };
 
   const chooseMode = (nextMode: Mode) => {
+    if (
+      nextMode === "instant" &&
+      bundledSampleEvidence.status !== "available"
+    ) {
+      setError(
+        "The verified sample is unavailable because its bundled evidence did not pass local integrity checks.",
+      );
+      return;
+    }
     setJudgeMode(false);
     setMode(nextMode);
     setReviewStep(null);
@@ -4974,15 +5422,16 @@ export function App() {
     }
     if (nextMode === "live") {
       setStage("live-setup");
-      void checkLiveCapabilities();
+      void checkLiveCapabilities(true);
       return;
     }
     if (nextMode === "replay") {
       const replayId = "leakage-01";
       setActiveReplayId(replayId);
       window.localStorage.setItem(storageKeys.replayId, replayId);
-      void withRequest(async () => {
+      void withRequest(async (request) => {
         const loaded = await counterLabApi.getReplay(replayId);
+        request.assertCurrent();
         setActiveReplay(loaded);
         setSession(null);
         setArtifact(null);
@@ -4995,11 +5444,13 @@ export function App() {
       });
       return;
     }
-    void withRequest(async () => {
+    void withRequest(async (request) => {
       const sample = await counterLabApi.createSampleArtifact();
+      request.assertCurrent();
       const created = await counterLabApi.createSampleSession({
         sampleId: "leakage-01",
       });
+      request.assertCurrent();
       setArtifact(sample);
       setSession(created);
       window.localStorage.setItem(storageKeys.sessionId, created.sessionId);
@@ -5034,32 +5485,51 @@ export function App() {
   };
 
   const downloadCurrentPatch = () => {
-    if (session?.patchResult === undefined) return;
-    const anchor = document.createElement("a");
-    anchor.href = counterLabApi.patchDownloadUrl(session.sessionId);
-    anchor.download = "";
-    anchor.click();
-    void recordLearnerInteraction(session.sessionId, {
-      kind: "patch.downloaded",
-      stage: "repair",
+    if (session?.patchResult === undefined || downloadRequestInFlight.current) {
+      return;
+    }
+    downloadRequestInFlight.current = true;
+    void withRequest(async (request) => {
+      const download = await counterLabApi.downloadPatch(session.sessionId);
+      request.assertCurrent();
+      saveAuthenticatedDownload(download);
+      void recordLearnerInteraction(session.sessionId, {
+        kind: "patch.downloaded",
+        stage: "repair",
+      });
+    }).finally(() => {
+      downloadRequestInFlight.current = false;
     });
   };
 
   const exportCurrentProof = () => {
-    if (session === null || !sessionProofReady(session)) return;
+    if (
+      session === null ||
+      !sessionProofReady(session) ||
+      downloadRequestInFlight.current
+    ) {
+      return;
+    }
+    downloadRequestInFlight.current = true;
     if (session.proofCapsule !== undefined) {
-      const anchor = document.createElement("a");
-      anchor.href = counterLabApi.proofCapsuleDownloadUrl(session.sessionId);
-      anchor.download = "";
-      anchor.click();
-      void recordLearnerInteraction(session.sessionId, {
-        kind: "proof_capsule.downloaded",
-        stage: "repair",
+      void withRequest(async (request) => {
+        const download = await counterLabApi.downloadProofCapsule(
+          session.sessionId,
+        );
+        request.assertCurrent();
+        saveAuthenticatedDownload(download);
+        void recordLearnerInteraction(session.sessionId, {
+          kind: "proof_capsule.downloaded",
+          stage: "repair",
+        });
+      }).finally(() => {
+        downloadRequestInFlight.current = false;
       });
       return;
     }
-    void withRequest(async () => {
+    void withRequest(async (request) => {
       const proof = await counterLabApi.getProofBundle(session.sessionId);
+      request.assertCurrent();
       const url = URL.createObjectURL(
         new Blob([JSON.stringify(proof, null, 2)], {
           type: "application/json",
@@ -5070,16 +5540,22 @@ export function App() {
       anchor.download = `counterlab-${session.sessionId}-proof-bundle.json`;
       anchor.click();
       URL.revokeObjectURL(url);
+    }).finally(() => {
+      downloadRequestInFlight.current = false;
     });
   };
 
-  const createLiveArtifactSession = async (uploaded: ArtifactView) => {
+  const createLiveArtifactSession = async (
+    uploaded: ArtifactView,
+    request: { assertCurrent: () => void },
+  ) => {
     setMode("live");
     setStage("live-setup");
     window.localStorage.setItem(storageKeys.mode, "live");
     const created = await counterLabApi.createLiveSession({
       artifactId: uploaded.artifactId,
     });
+    request.assertCurrent();
     setSession(created);
     window.localStorage.setItem(storageKeys.sessionId, created.sessionId);
     if (claim.trim().length > 0) {
@@ -5093,10 +5569,11 @@ export function App() {
   };
 
   const uploadNotebook = (file: File) => {
-    void withRequest(async () => {
+    void withRequest(async (request) => {
       setAnalysisPreview(null);
       setSensitiveContentApproved(false);
       const uploaded = await counterLabApi.uploadArtifact(file);
+      request.assertCurrent();
       setArtifact(uploaded);
       setSession(null);
       window.localStorage.removeItem(storageKeys.sessionId);
@@ -5110,20 +5587,21 @@ export function App() {
         );
         return;
       }
-      await createLiveArtifactSession(uploaded);
+      await createLiveArtifactSession(uploaded, request);
     });
   };
 
   const retryLiveSessionSetup = () => {
     if (artifact?.support.status !== "SUPPORTED" || session !== null) return;
-    void withRequest(() => createLiveArtifactSession(artifact));
+    void withRequest((request) => createLiveArtifactSession(artifact, request));
   };
 
   const restartClosedBeliefResponse = () => {
     if (session === null || !beliefResponseClosed(session)) return;
     const sourceClaim = claim.trim();
-    void withRequest(async () => {
+    void withRequest(async (request) => {
       const restarted = await counterLabApi.restartSession(session.sessionId);
+      request.assertCurrent();
       const restartedClaim =
         sessionBeliefPresentation(restarted)?.claim ?? sourceClaim;
       setSession(restarted);
@@ -5171,12 +5649,13 @@ export function App() {
       session.mode.kind === "sample_lesson" ? SAMPLE_LEAKAGE_QUESTION : claim;
     window.localStorage.setItem(storageKeys.claim, submittedClaim);
     window.localStorage.setItem(storageKeys.claimSessionId, session.sessionId);
-    void withRequest(async () => {
+    void withRequest(async (request) => {
       if (mode === "live" && analysisPreview === null) {
         const preview = await counterLabApi.previewBeliefAnalysis(
           session.sessionId,
           claim,
         );
+        request.assertCurrent();
         setAnalysisPreview(preview);
         setSensitiveContentApproved(false);
         return;
@@ -5193,6 +5672,7 @@ export function App() {
                   : false,
             }),
       });
+      request.assertCurrent();
       setSession(updated);
       const authoritativeClaim =
         sessionBeliefPresentation(updated)?.claim ?? submittedClaim;
@@ -5212,8 +5692,9 @@ export function App() {
 
   const confirmBeliefTest = () => {
     if (session === null) return;
-    void withRequest(async () => {
+    void withRequest(async (request) => {
       const updated = await counterLabApi.confirmBeliefTest(session.sessionId);
+      request.assertCurrent();
       setSession(updated);
       setConfirmed(true);
     });
@@ -5221,7 +5702,7 @@ export function App() {
 
   const stopBeliefTest = (reason: "rejected" | "insufficient") => {
     if (session === null) return;
-    void withRequest(async () => {
+    void withRequest(async (request) => {
       const stopped = await counterLabApi.respondToBeliefTest(
         session.sessionId,
         reason === "rejected"
@@ -5234,6 +5715,7 @@ export function App() {
               reason: "Learner marked the available evidence insufficient.",
             },
       );
+      request.assertCurrent();
       setSession(stopped);
       setConfirmed(false);
       setPrediction(null);
@@ -5257,7 +5739,7 @@ export function App() {
             falls: "Accuracy falls materially",
             unsure: "I am unsure",
           };
-    void withRequest(async () => {
+    void withRequest(async (request) => {
       const committed = await counterLabApi.commitPrediction(
         session.sessionId,
         {
@@ -5265,6 +5747,7 @@ export function App() {
           confidence,
         },
       );
+      request.assertCurrent();
       setSession(committed);
       void recordLearnerInteraction(session.sessionId, {
         kind: "prediction.recorded",
@@ -5278,10 +5761,11 @@ export function App() {
         confidence,
       });
       if (mode === "live") {
-        await advanceLiveLab(committed);
+        await advanceLiveLab(committed, request);
         return;
       }
       const compiled = await counterLabApi.compileLab(session.sessionId);
+      request.assertCurrent();
       setSession(compiled);
       setStage("build");
     });
@@ -5303,8 +5787,9 @@ export function App() {
       setStage("reality");
       return;
     }
-    void withRequest(async () => {
+    void withRequest(async (request) => {
       const completed = await counterLabApi.runLab(session.sessionId);
+      request.assertCurrent();
       if (completed.verifiedResult === undefined) {
         throw new ApiClientError({
           code: "RESULT_NOT_AUTHORIZED",
@@ -5388,7 +5873,7 @@ export function App() {
           health={liveHealth}
           healthPending={checkingLiveHealth}
           healthError={liveHealthError}
-          onRetryHealth={() => void checkLiveCapabilities()}
+          onRetryHealth={() => void checkLiveCapabilities(true)}
           onStartSample={() => chooseMode("instant")}
         />
       </Suspense>
@@ -5548,9 +6033,9 @@ export function App() {
                 ? {}
                 : {
                     reviewPatch: () => setStage("reality"),
-                    downloadPatch: downloadCurrentPatch,
+                    ...(busy ? {} : { downloadPatch: downloadCurrentPatch }),
                   }),
-              ...(sessionProofReady(session)
+              ...(sessionProofReady(session) && !busy
                 ? { exportProof: exportCurrentProof }
                 : {}),
               ...(session !== null
@@ -5637,23 +6122,33 @@ export function App() {
                 </button>
               </main>
             )}
-            {reviewStep === null && stage === "belief" && (
-              <BeliefScreen
-                claim={effectiveClaim}
-                belief={belief}
-                fixedSampleFraming={mode === "instant"}
-                notebookScore={notebookScoreDisplay(artifact)}
-                confirmed={confirmed}
-                confirm={confirmBeliefTest}
-                prediction={prediction}
-                setPrediction={setPrediction}
-                confidence={confidence}
-                setConfidence={setConfidence}
-                commitPrediction={commitPrediction}
-                editClaim={() => setStage("claim")}
-                stop={stopBeliefTest}
-              />
-            )}
+            {reviewStep === null &&
+              stage === "belief" &&
+              beliefNarrativeWithheld && (
+                <WithheldBeliefScreen
+                  claim={effectiveClaim}
+                  restart={restart}
+                />
+              )}
+            {reviewStep === null &&
+              stage === "belief" &&
+              !beliefNarrativeWithheld && (
+                <BeliefScreen
+                  claim={effectiveClaim}
+                  belief={belief}
+                  fixedSampleFraming={mode === "instant"}
+                  notebookScore={notebookScoreDisplay(artifact)}
+                  confirmed={confirmed}
+                  confirm={confirmBeliefTest}
+                  prediction={prediction}
+                  setPrediction={setPrediction}
+                  confidence={confidence}
+                  setConfidence={setConfidence}
+                  commitPrediction={commitPrediction}
+                  editClaim={() => setStage("claim")}
+                  stop={stopBeliefTest}
+                />
+              )}
             {reviewStep === null &&
               stage === "build" &&
               mode !== null &&
@@ -5752,19 +6247,21 @@ export function App() {
               ))}
             {reviewStep === null &&
               stage === "reality" &&
-              verifiedResult !== undefined && (
+              verifiedResult !== undefined &&
+              prediction !== null && (
                 <RealityScreen
                   claim={effectiveClaim}
-                  prediction={prediction ?? "stays-high"}
+                  prediction={prediction}
                   result={verifiedResult}
                   session={session}
                   artifact={artifact}
                   updateSession={setSession}
+                  recordCompilerEvents={recordTransientCompilerEvents}
                 />
               )}
             {reviewStep === null &&
               stage === "reality" &&
-              verifiedResult === undefined && (
+              (verifiedResult === undefined || prediction === null) && (
                 <main
                   className="workspace shell narrow"
                   id="main-content"
@@ -5775,8 +6272,9 @@ export function App() {
                     <p className="eyebrow">Result withheld</p>
                     <h1>No verified result was released.</h1>
                     <p>
-                      CounterLab will not substitute bundled sample evidence for
-                      this session. Return to the test and try again.
+                      {verifiedResult === undefined
+                        ? "CounterLab will not substitute bundled sample evidence for this session. Return to the test and try again."
+                        : "The immutable Prediction receipt could not be mapped to this learner view. CounterLab withheld the result instead of inventing a Prediction."}
                     </p>
                   </div>
                 </main>
@@ -5789,7 +6287,7 @@ export function App() {
                 uploadNotebook={uploadNotebook}
                 pendingArtifact={session === null ? artifact : null}
                 retrySessionSetup={retryLiveSessionSetup}
-                retry={() => void checkLiveCapabilities()}
+                retry={() => void checkLiveCapabilities(true)}
                 fallBack={chooseMode}
                 busy={busy}
               />

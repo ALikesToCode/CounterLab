@@ -37,6 +37,7 @@ export function ReplayPublicationPanel({
   const [publicationConfirmed, setPublicationConfirmed] = useState(false);
   const [revoking, setRevoking] = useState(false);
   const [revoked, setRevoked] = useState(false);
+  const [expired, setExpired] = useState(false);
   const [statusLoading, setStatusLoading] = useState(
     loadReplayStatus !== undefined,
   );
@@ -53,9 +54,11 @@ export function ReplayPublicationPanel({
       if (status.status === "never_published") {
         setPublication(null);
         setRevoked(false);
+        setExpired(false);
       } else {
         setPublication({ reused: true, replay: status.replay });
         setRevoked(status.status === "revoked");
+        setExpired(status.status === "expired");
       }
       setStatusChecked(true);
     } catch (caught) {
@@ -80,6 +83,7 @@ export function ReplayPublicationPanel({
     setError(null);
     try {
       setPublication(await publishReplay());
+      setExpired(false);
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -92,9 +96,13 @@ export function ReplayPublicationPanel({
   };
 
   const replayPath =
-    publication === null || revoked
+    publication === null || revoked || expired
       ? null
       : `/replay/${encodeURIComponent(publication.replay.replayId)}`;
+  const expiration =
+    publication?.replay.schemaVersion === "2"
+      ? publication.replay.retention.expiresAt
+      : null;
 
   const revoke = async () => {
     if (publication === null || revokeReplay === undefined || revoking) return;
@@ -139,7 +147,9 @@ export function ReplayPublicationPanel({
             ? "Publish a read-only verified replay"
             : revoked
               ? "This public replay is revoked"
-              : "Your verified replay is ready"}
+              : expired
+                ? "This public replay has expired"
+                : "Your verified replay is ready"}
         </h3>
         {publication === null ? (
           <p>
@@ -152,12 +162,30 @@ export function ReplayPublicationPanel({
             Public playback is disabled. Your private session and immutable
             evidence remain unchanged.
           </p>
-        ) : (
-          <p aria-live="polite">
-            {publication.reused
-              ? "Your existing verified replay was returned; no duplicate was created."
-              : "Published from this Proof Capsule. Anyone with the link can inspect the read-only evidence."}
+        ) : expired ? (
+          <p role="status">
+            The 30-day public playback window ended. Your private session and
+            immutable evidence remain unchanged.
           </p>
+        ) : (
+          <>
+            <p aria-live="polite">
+              {publication.reused
+                ? "Your existing verified replay was returned; no duplicate was created."
+                : "Published from this Proof Capsule. Anyone with the link can inspect the read-only evidence."}
+            </p>
+            {expiration === null ? (
+              <p>This legacy link remains available until revoked.</p>
+            ) : (
+              <p>
+                Public playback expires on{" "}
+                <time dateTime={expiration}>
+                  {new Date(expiration).toLocaleString()}
+                </time>
+                , or sooner if you revoke it.
+              </p>
+            )}
+          </>
         )}
         {error !== null && (
           <p className={styles.error} role="alert">
@@ -231,7 +259,7 @@ export function ReplayPublicationPanel({
                   ? "Confirm and publish read-only replay"
                   : "Retry replay publication"}
         </button>
-      ) : revoked ? null : (
+      ) : revoked || expired ? null : (
         <div className={styles.actions}>
           {replayPath === null ? null : (
             <a className={styles.replayAction} href={replayPath}>

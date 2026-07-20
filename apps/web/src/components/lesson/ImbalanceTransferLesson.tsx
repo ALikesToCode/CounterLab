@@ -14,10 +14,16 @@ import {
 import { ReflectionBuilder } from "../learner/ReflectionBuilder";
 import { recordLearnerInteraction } from "../../features/learner/interactionEvidence";
 
-type StrategyChoice = "" | "highest_accuracy" | "cost_aware_threshold";
-type RiskChoice = "" | "overall_error_rate" | "minority_false_negative_cost";
-type EvidenceChoice =
-  "confusion_matrix_exposes_misses" | "prevalence_shift_changes_precision";
+export type ImbalanceTransferDecision =
+  "approve_high_accuracy" | "reject_accuracy_only" | "collect_more_negatives";
+export type ImbalanceTransferMetric =
+  "accuracy" | "recall_and_pr_auc" | "negative_specificity";
+export type ImbalanceTransferEvidence =
+  "zero_true_positives" | "rare_base_rate" | "many_true_negatives";
+
+type DecisionChoice = "" | ImbalanceTransferDecision;
+type MetricChoice = "" | ImbalanceTransferMetric;
+type EvidenceChoice = ImbalanceTransferEvidence;
 
 const reflectionWhen = [
   {
@@ -64,42 +70,59 @@ const reflectionReasons = [
   },
 ] as const;
 
-const strategyOptions = [
+const decisionOptions = [
   {
-    value: "highest_accuracy",
-    label: "Keep the threshold with the highest overall accuracy",
-    description: "Optimize the overall correct count.",
+    value: "approve_high_accuracy",
+    label: "Approve because accuracy is 99%",
+    description: "Treat overall correctness as sufficient evidence.",
   },
   {
-    value: "cost_aware_threshold",
-    label: "Lower threshold based on missed-defect cost",
-    description: "Include the deployment cost of missing a defect.",
+    value: "reject_accuracy_only",
+    label: "Reject the accuracy-only conclusion",
+    description:
+      "Check performance on defective parts and account for the cost of missed defects.",
   },
-] as const satisfies readonly CostTransferChoice<StrategyChoice>[];
+  {
+    value: "collect_more_negatives",
+    label: "Collect only more acceptable parts",
+    description: "Increase the already dominant negative class.",
+  },
+] as const satisfies readonly CostTransferChoice<DecisionChoice>[];
 
-const riskOptions = [
+const metricOptions = [
   {
-    value: "overall_error_rate",
-    label: "Only the total error rate matters",
-    description: "Treat both error types as interchangeable.",
+    value: "accuracy",
+    label: "Accuracy only",
+    description: "Report the fraction of all parts classified correctly.",
   },
   {
-    value: "minority_false_negative_cost",
-    label: "Missing a defect is the costly error",
-    description: "Give missed defects their supplied deployment weight.",
+    value: "recall_and_pr_auc",
+    label: "Defect recall and PR-AUC",
+    description:
+      "Measure recovered defects and ranking quality relative to the rare-class base rate.",
   },
-] as const satisfies readonly CostTransferChoice<RiskChoice>[];
+  {
+    value: "negative_specificity",
+    label: "Acceptable-part specificity",
+    description: "Measure only performance on the dominant class.",
+  },
+] as const satisfies readonly CostTransferChoice<MetricChoice>[];
 
 const evidenceOptions = [
   {
-    value: "confusion_matrix_exposes_misses",
-    label: "Confusion matrix shows misses",
-    description: "Separates missed defects from false alarms.",
+    value: "zero_true_positives",
+    label: "The confusion matrix has zero true positives",
+    description: "The model missed 200 defects and caught none.",
   },
   {
-    value: "prevalence_shift_changes_precision",
-    label: "Prevalence changes precision",
-    description: "Uses the fixed lower-prevalence deployment scenario.",
+    value: "rare_base_rate",
+    label: "Defects are only 1% of evaluated parts",
+    description: "There were 200 defective parts among 20,000 parts.",
+  },
+  {
+    value: "many_true_negatives",
+    label: "19,800 acceptable parts were classified correctly",
+    description: "The dominant class accounts for nearly all correct counts.",
   },
 ] as const satisfies readonly CostTransferChoice<EvidenceChoice>[];
 
@@ -108,10 +131,10 @@ const defectMatrix = {
   noAlertLabel: "No alert",
   actualPositiveLabel: "Actual defect",
   actualNegativeLabel: "Actual clear",
-  caughtLabel: "caught",
-  falseAlarmLabel: "false alarm",
-  missedLabel: "missed",
-  correctClearLabel: "correct clear",
+  caughtLabel: "0 caught",
+  falseAlarmLabel: "0 false alarms",
+  missedLabel: "200 missed",
+  correctClearLabel: "19,800 correct clear",
 } as const satisfies CostMatrixCopy;
 
 export function ImbalanceTransferLesson({
@@ -119,6 +142,9 @@ export function ImbalanceTransferLesson({
   state,
   revision,
   initialInterpretation,
+  initialDecisionChoice,
+  initialMetricChoice,
+  initialEvidenceChoices,
   transferOutcome,
   updateSession,
 }: {
@@ -126,6 +152,9 @@ export function ImbalanceTransferLesson({
   state: SessionState;
   revision?: string;
   initialInterpretation?: string;
+  initialDecisionChoice?: ImbalanceTransferDecision;
+  initialMetricChoice?: ImbalanceTransferMetric;
+  initialEvidenceChoices?: readonly ImbalanceTransferEvidence[];
   transferOutcome?: "PASSED" | "FAILED";
   updateSession: (session: SessionView) => void;
 }) {
@@ -138,9 +167,15 @@ export function ImbalanceTransferLesson({
   const [revisionMode, setRevisionMode] = useState<"clauses" | "free_text">(
     "clauses",
   );
-  const [strategyChoice, setStrategyChoice] = useState<StrategyChoice>("");
-  const [riskChoice, setRiskChoice] = useState<RiskChoice>("");
-  const [evidenceChoices, setEvidenceChoices] = useState<EvidenceChoice[]>([]);
+  const [decisionChoice, setDecisionChoice] = useState<DecisionChoice>(
+    initialDecisionChoice ?? "",
+  );
+  const [metricChoice, setMetricChoice] = useState<MetricChoice>(
+    initialMetricChoice ?? "",
+  );
+  const [evidenceChoices, setEvidenceChoices] = useState<EvidenceChoice[]>(
+    () => [...(initialEvidenceChoices ?? [])],
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -169,13 +204,13 @@ export function ImbalanceTransferLesson({
   };
 
   const submitTransfer = async () => {
-    if (strategyChoice === "" || riskChoice === "") return;
+    if (decisionChoice === "" || metricChoice === "") return;
     setBusy(true);
     setError(null);
     try {
       const updated = await counterLabApi.submitTransfer(sessionId, {
-        strategyChoice,
-        riskChoice,
+        decisionChoice,
+        metricChoice,
         evidenceChoices,
       });
       updateSession(updated);
@@ -261,20 +296,23 @@ export function ImbalanceTransferLesson({
         <span className="patch-lock">Patch locked until this passes</span>
       </div>
       <CostTransfer
-        heading="Which mistakes matter at deployment?"
-        scenario="Defects are rarer next month, and shipping one missed defect costs far more than manually inspecting a false alarm. The model score distribution is otherwise unchanged."
+        heading="Does 99% accuracy support deployment?"
+        scenario="A factory evaluated 20,000 parts, including 200 defective parts. The model predicted every part as acceptable. Decide whether that evidence supports deployment."
         matrix={defectMatrix}
         missedCost="Far higher than manual inspection"
-        deploymentPrevalence="Rarer next month (fixed scenario)"
-        strategyValue={strategyChoice}
-        strategyOptions={strategyOptions}
-        onStrategyChange={setStrategyChoice}
-        riskValue={riskChoice}
-        riskOptions={riskOptions}
-        onRiskChange={setRiskChoice}
+        deploymentPrevalence="1% defects (200 of 20,000)"
+        strategyValue={decisionChoice}
+        strategyOptions={decisionOptions}
+        onStrategyChange={setDecisionChoice}
+        riskValue={metricChoice}
+        riskOptions={metricOptions}
+        onRiskChange={setMetricChoice}
         evidenceValues={evidenceChoices}
         evidenceOptions={evidenceOptions}
         onEvidenceChange={setEvidenceChoices}
+        firstFieldsetLegend="Which deployment conclusion does this evidence support?"
+        secondFieldsetLegend="Which minority-sensitive metric should guide the evaluation?"
+        evidenceFieldsetLegend="Which evidence supports the deployment conclusion?"
         disabled={busy}
       />
 
@@ -289,8 +327,8 @@ export function ImbalanceTransferLesson({
         className="button button-primary"
         type="button"
         disabled={
-          strategyChoice === "" ||
-          riskChoice === "" ||
+          decisionChoice === "" ||
+          metricChoice === "" ||
           evidenceChoices.length === 0 ||
           busy
         }

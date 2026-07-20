@@ -15,6 +15,7 @@ import {
 import {
   D1ProofCapsuleReplayRepository,
   ReplayPublicationConflictError,
+  ReplayPublicationExpiredError,
   ReplayPublicationRevokedError,
   type ProofCapsuleReplayRecordV2,
 } from "./replay-repository";
@@ -130,9 +131,23 @@ class SqliteD1Database {
     }
   }
 
+  migrateReplayExpiry(): void {
+    const migrationDirectory = resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      "../migrations",
+    );
+    this.sqlite.exec(
+      readFileSync(
+        resolve(migrationDirectory, "0009_public_replay_expiry.sql"),
+        "utf8",
+      ),
+    );
+  }
+
   migrate(): void {
     this.migrateBase();
     this.migrateReplayRevocations();
+    this.migrateReplayExpiry();
   }
 }
 
@@ -190,6 +205,8 @@ function replayRecord(
     projectionHash: "e".repeat(64),
     projectionBytesHash: "f".repeat(64),
     recordedAt,
+    publishedAt: recordedAt,
+    expiresAt: "2026-08-15T00:00:00.000Z",
     metadata,
   };
 }
@@ -231,6 +248,104 @@ describe("D1ProofCapsuleReplayRepository", () => {
     ).toBeUndefined();
   });
 
+  it("gives existing projections a 30-day migration grace window", async () => {
+    const database = new SqliteD1Database();
+    database.migrateBase();
+    database.migrateReplayRevocations();
+    const privateReplay = replayRecord(
+      "replay_private_before_expiry",
+      "session_live_2",
+    );
+    database.sqlite
+      .prepare(
+        `INSERT INTO replays
+          (replay_id, source_session_id, metadata_json, event_chain_head, object_key, recorded_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        privateReplay.replayId,
+        privateReplay.sourceSessionId,
+        JSON.stringify(privateReplay.metadata),
+        privateReplay.metadata.eventChainHead,
+        privateReplay.objectKey,
+        privateReplay.recordedAt,
+      );
+    const existing = replayRecord(
+      "replay_existing_before_expiry",
+      "session_live_1",
+    );
+    database.sqlite
+      .prepare(
+        `INSERT INTO replays
+          (replay_id, source_session_id, metadata_json, event_chain_head, object_key, recorded_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        existing.replayId,
+        existing.sourceSessionId,
+        JSON.stringify(existing.metadata),
+        existing.metadata.eventChainHead,
+        existing.objectKey,
+        existing.recordedAt,
+      );
+    database.sqlite
+      .prepare(
+        `INSERT INTO public_replay_projections
+          (replay_id, projection_hash, bytes_hash, object_key, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(
+        existing.replayId,
+        existing.projectionHash,
+        existing.projectionBytesHash,
+        existing.projectionObjectKey,
+        existing.recordedAt,
+      );
+    database.sqlite
+      .prepare(
+        `INSERT INTO replay_revocations (event_id, replay_id, revoked_at, reason)
+         VALUES (?, ?, ?, 'owner_requested')`,
+      )
+      .run(
+        "replay_revocation_before_expiry",
+        existing.replayId,
+        "2026-07-17T00:00:00.000Z",
+      );
+
+    database.migrateReplayExpiry();
+    const lifecycle = database.sqlite
+      .prepare(
+        `SELECT published_at, expires_at, policy_version
+         FROM public_replay_lifecycles WHERE replay_id = ?`,
+      )
+      .get(existing.replayId) as {
+      published_at: string;
+      expires_at: string;
+      policy_version: string;
+    };
+    expect(lifecycle.policy_version).toBe("public-replay-expiry-v1");
+    expect(
+      Date.parse(lifecycle.expires_at) - Date.parse(lifecycle.published_at),
+    ).toBe(30 * 24 * 60 * 60 * 1_000);
+    expect(
+      database.sqlite
+        .prepare(
+          "SELECT replay_id FROM public_replay_lifecycles WHERE replay_id = ?",
+        )
+        .get(privateReplay.replayId),
+    ).toBeUndefined();
+
+    const repository = new D1ProofCapsuleReplayRepository(
+      database as unknown as D1Database,
+    );
+    await expect(
+      repository.statusBySourceSession(
+        existing.sourceSessionId,
+        lifecycle.published_at,
+      ),
+    ).resolves.toMatchObject({ status: "revoked" });
+  });
+
   it("persists one immutable replay and reuses an identical publication", async () => {
     const database = new SqliteD1Database();
     database.migrate();
@@ -239,21 +354,28 @@ describe("D1ProofCapsuleReplayRepository", () => {
     );
     const first = replayRecord();
 
-    await expect(repository.createOrReuse(first)).resolves.toEqual({
+    await expect(
+      repository.createOrReuse(first, first.publishedAt),
+    ).resolves.toEqual({
       record: first,
       reused: false,
     });
     await expect(
-      repository.createOrReuse({
-        ...first,
-        replayId: "replay_duplicate_request",
-        metadata: {
-          ...first.metadata,
+      repository.createOrReuse(
+        {
+          ...first,
           replayId: "replay_duplicate_request",
+          metadata: {
+            ...first.metadata,
+            replayId: "replay_duplicate_request",
+          },
         },
-      }),
+        first.publishedAt,
+      ),
     ).resolves.toEqual({ record: first, reused: true });
-    await expect(repository.find(first.replayId)).resolves.toEqual(first);
+    await expect(
+      repository.find(first.replayId, first.publishedAt),
+    ).resolves.toEqual(first);
     expect(() =>
       database.sqlite
         .prepare("UPDATE replays SET recorded_at = ? WHERE replay_id = ?")
@@ -272,17 +394,18 @@ describe("D1ProofCapsuleReplayRepository", () => {
     const repository = new D1ProofCapsuleReplayRepository(
       database as unknown as D1Database,
     );
-    await repository.createOrReuse(replayRecord());
+    await repository.createOrReuse(replayRecord(), "2026-07-16T00:00:00.000Z");
 
     await expect(
       repository.createOrReuse(
         replayRecord("replay_2", "session_live_1", "e".repeat(64)),
+        "2026-07-16T00:00:00.000Z",
       ),
     ).rejects.toBeInstanceOf(ReplayPublicationConflictError);
     const reusedObjectKey = replayRecord("replay_3", "session_live_2");
     reusedObjectKey.objectKey = replayRecord().objectKey;
     await expect(
-      repository.createOrReuse(reusedObjectKey),
+      repository.createOrReuse(reusedObjectKey, "2026-07-16T00:00:00.000Z"),
     ).rejects.toBeInstanceOf(ReplayPublicationConflictError);
 
     const reusedProjectionObjectKey = replayRecord(
@@ -293,7 +416,10 @@ describe("D1ProofCapsuleReplayRepository", () => {
     reusedProjectionObjectKey.projectionObjectKey =
       replayRecord().projectionObjectKey;
     await expect(
-      repository.createOrReuse(reusedProjectionObjectKey),
+      repository.createOrReuse(
+        reusedProjectionObjectKey,
+        "2026-07-16T00:00:00.000Z",
+      ),
     ).rejects.toBeInstanceOf(ReplayPublicationConflictError);
     expect(
       database.sqlite
@@ -309,9 +435,12 @@ describe("D1ProofCapsuleReplayRepository", () => {
       database as unknown as D1Database,
     );
     const record = replayRecord();
-    await repository.createOrReuse(record);
+    await repository.createOrReuse(record, record.publishedAt);
     await expect(
-      repository.statusBySourceSession(record.sourceSessionId),
+      repository.statusBySourceSession(
+        record.sourceSessionId,
+        record.publishedAt,
+      ),
     ).resolves.toEqual({ record, status: "active" });
 
     await expect(
@@ -321,9 +450,14 @@ describe("D1ProofCapsuleReplayRepository", () => {
         "2026-07-16T01:00:00.000Z",
       ),
     ).resolves.toEqual({ replayId: record.replayId, revoked: true });
-    await expect(repository.find(record.replayId)).resolves.toBeUndefined();
     await expect(
-      repository.statusBySourceSession(record.sourceSessionId),
+      repository.find(record.replayId, record.publishedAt),
+    ).resolves.toBeUndefined();
+    await expect(
+      repository.statusBySourceSession(
+        record.sourceSessionId,
+        record.publishedAt,
+      ),
     ).resolves.toEqual({ record, status: "revoked" });
     await expect(
       repository.revokeBySourceSession(
@@ -332,9 +466,9 @@ describe("D1ProofCapsuleReplayRepository", () => {
         "2026-07-16T01:01:00.000Z",
       ),
     ).resolves.toEqual({ replayId: record.replayId, revoked: false });
-    await expect(repository.createOrReuse(record)).rejects.toBeInstanceOf(
-      ReplayPublicationRevokedError,
-    );
+    await expect(
+      repository.createOrReuse(record, record.publishedAt),
+    ).rejects.toBeInstanceOf(ReplayPublicationRevokedError);
 
     expect(() =>
       database.sqlite
@@ -348,5 +482,35 @@ describe("D1ProofCapsuleReplayRepository", () => {
         .prepare("DELETE FROM replay_revocations WHERE replay_id = ?")
         .run(record.replayId),
     ).toThrow(/replay revocations are append-only/u);
+  });
+
+  it("stops public playback exactly at the server-owned expiry boundary", async () => {
+    const database = new SqliteD1Database();
+    database.migrate();
+    const repository = new D1ProofCapsuleReplayRepository(
+      database as unknown as D1Database,
+    );
+    const record = {
+      ...replayRecord("replay_expiring"),
+      publishedAt: "2026-07-16T00:00:00.000Z",
+      expiresAt: "2026-08-15T00:00:00.000Z",
+    };
+    await repository.createOrReuse(record, record.publishedAt);
+
+    await expect(
+      repository.find(record.replayId, "2026-08-14T23:59:59.999Z"),
+    ).resolves.toBeDefined();
+    await expect(
+      repository.find(record.replayId, "2026-08-15T00:00:00.000Z"),
+    ).resolves.toBeUndefined();
+    await expect(
+      repository.statusBySourceSession(
+        record.sourceSessionId,
+        "2026-08-15T00:00:00.000Z",
+      ),
+    ).resolves.toMatchObject({ status: "expired" });
+    await expect(
+      repository.createOrReuse(record, "2026-08-15T00:00:00.000Z"),
+    ).rejects.toBeInstanceOf(ReplayPublicationExpiredError);
   });
 });

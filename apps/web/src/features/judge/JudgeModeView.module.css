@@ -8,7 +8,9 @@
   --judge-panel: var(--paper-raised);
   --judge-panel-ink: var(--ink);
   --judge-panel-muted: var(--muted-on-dark);
+  max-width: 100%;
   min-height: 100vh;
+  overflow-x: clip;
   color: var(--judge-ink);
   background:
     linear-gradient(
@@ -39,6 +41,7 @@
 .hero,
 .authoritySection,
 .pathsSection,
+.lineageSection,
 .methodSection,
 .proofSection,
 .reproduceSection,
@@ -123,14 +126,17 @@
 
 .heroCopy {
   grid-area: copy;
+  min-width: 0;
 }
 
 .twentySecondProof {
   grid-area: proof;
+  min-width: 0;
 }
 
 .heroAfter {
   grid-area: after;
+  min-width: 0;
   align-self: start;
 }
 
@@ -260,12 +266,24 @@
 .previewAuthority {
   margin: 0 0 14px;
   color: var(--judge-panel-muted);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.45;
+}
+
+.previewProofLink {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  margin-top: 8px;
+  color: var(--judge-panel-ink);
+  font-size: 13px;
+  font-weight: 720;
+  text-underline-offset: 4px;
 }
 
 .authoritySection,
 .pathsSection,
+.lineageSection,
 .methodSection,
 .proofSection,
 .reproduceSection {
@@ -274,7 +292,8 @@
 }
 
 .authoritySection > header,
-.pathsSection > header {
+.pathsSection > header,
+.lineageSection > header {
   display: grid;
   grid-template-columns: 1fr 2fr;
   gap: 40px;
@@ -284,6 +303,7 @@
 
 .authoritySection h2,
 .pathsSection h2,
+.lineageSection h2,
 .methodSection h2,
 .proofSection h2,
 .reproduceSection h2 {
@@ -303,6 +323,7 @@
 }
 
 .authorityGrid article {
+  min-width: 0;
   min-height: 320px;
   padding: 24px;
   border-right: 1px solid var(--judge-line);
@@ -340,6 +361,8 @@
 
 .authorityGrid p,
 .pathGrid p,
+.lineageSection > header > p:last-child,
+.contrastGrid p,
 .methodIntro > p:last-child,
 .proofSection p {
   color: var(--judge-muted);
@@ -353,9 +376,73 @@
   gap: 14px;
 }
 
+.lineageSection > header {
+  margin-bottom: 52px;
+}
+
+.lineageSection > header > p:first-child,
+.contrastGrid article > span {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.contrastGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid var(--judge-ink);
+  border-bottom: 1px solid var(--judge-ink);
+}
+
+.contrastGrid article {
+  display: flex;
+  min-width: 0;
+  min-height: 350px;
+  flex-direction: column;
+  padding: clamp(24px, 3vw, 34px);
+  border-right: 1px solid var(--judge-line);
+}
+
+.contrastGrid article:last-child {
+  border-right: 0;
+}
+
+.contrastGrid h3 {
+  margin: 42px 0 0;
+  font-family: var(--display);
+  font-size: 31px;
+  font-weight: 540;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.contrastGrid article > a,
+.sourceLinks {
+  margin-top: auto;
+}
+
+.sourceLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+}
+
+.contrastGrid a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--judge-ink);
+  font-size: 13px;
+  font-weight: 760;
+  text-underline-offset: 4px;
+}
+
 .pathGrid article {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 440px;
   padding: clamp(24px, 3vw, 34px);
   border: 1px solid var(--judge-line);
@@ -485,8 +572,8 @@
 .methodRail p {
   margin: 7px 0 0;
   color: var(--judge-muted);
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 .proofSection {
@@ -572,7 +659,7 @@
 
 .releaseIdentity code {
   overflow-wrap: anywhere;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .reproduceSection {
@@ -583,6 +670,7 @@
 }
 
 .reproduceSection pre {
+  max-width: 100%;
   overflow-x: auto;
   margin: 0;
   padding: 28px;
@@ -648,6 +736,20 @@
     grid-template-columns: 1fr;
   }
 
+  .contrastGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .contrastGrid article {
+    min-height: 300px;
+    border-right: 0;
+    border-bottom: 1px solid var(--judge-line);
+  }
+
+  .contrastGrid article:last-child {
+    border-bottom: 0;
+  }
+
   .pathGrid article {
     min-height: 360px;
   }
@@ -662,6 +764,7 @@
   .hero,
   .authoritySection,
   .pathsSection,
+  .lineageSection,
   .methodSection,
   .proofSection,
   .reproduceSection,
@@ -678,17 +781,17 @@
   }
 
   .hero {
-    gap: 42px;
-    padding-block: 36px 64px;
+    gap: 20px;
+    padding-block: 20px 52px;
   }
 
   .hero h1 {
-    font-size: clamp(40px, 12vw, 58px);
+    font-size: clamp(34px, 10vw, 46px);
   }
 
+  .hero .kicker,
   .lede {
-    margin-top: 18px;
-    font-size: 15px;
+    display: none;
   }
 
   .heroActions {
@@ -718,7 +821,8 @@
   }
 
   .authoritySection > header,
-  .pathsSection > header {
+  .pathsSection > header,
+  .lineageSection > header {
     grid-template-columns: 1fr;
     gap: 10px;
   }
@@ -756,6 +860,11 @@
   .page *::before,
   .page *::after {
     scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
+    transition: none !important;
+  }
+
+  .heroActions :where(a, button):hover,
+  .pathGrid article > :where(a, button):hover {
+    transform: none;
   }
 }

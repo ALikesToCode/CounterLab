@@ -6,46 +6,119 @@ import {
 
 export type VerifiedRun = LeakageVerifiedResultSet["runs"][number];
 
-const parsedSampleResult = VerifiedResultSetSchema.parse(rawResult);
-if (parsedSampleResult.concept !== "entity_leakage") {
-  throw new Error("The bundled lesson must contain entity-leakage evidence");
-}
-export const sampleResult = parsedSampleResult as LeakageVerifiedResultSet;
+export type BundledSampleEvidence =
+  | Readonly<{
+      status: "available";
+      result: LeakageVerifiedResultSet;
+      runs: Readonly<{
+        randomRows: VerifiedRun;
+        wholeCustomers: VerifiedRun;
+        identityAblation: VerifiedRun;
+      }>;
+    }>
+  | Readonly<{
+      status: "unavailable";
+      reason: "INVALID_SCHEMA" | "WRONG_CONCEPT" | "MISSING_REQUIRED_RUN";
+    }>;
 
-export function getRun(id: string): LeakageVerifiedResultSet["runs"][number] {
-  const run = sampleResult.runs.find((candidate) => candidate.id === id);
-  if (run === undefined) {
-    throw new Error(`Verified fixture is missing run ${id}`);
+export function parseBundledSampleEvidence(
+  value: unknown,
+): BundledSampleEvidence {
+  if (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    "concept" in value &&
+    value.concept !== "entity_leakage"
+  ) {
+    return { status: "unavailable", reason: "WRONG_CONCEPT" };
   }
-  return run;
+  if (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    "concept" in value &&
+    value.concept === "entity_leakage" &&
+    "runs" in value &&
+    Array.isArray(value.runs)
+  ) {
+    const runIds = new Set(
+      value.runs.flatMap((run) =>
+        run !== null && typeof run === "object" && "id" in run ? [run.id] : [],
+      ),
+    );
+    if (
+      !runIds.has("random_row_split") ||
+      !runIds.has("customer_group_split") ||
+      !runIds.has("identity_ablation")
+    ) {
+      return { status: "unavailable", reason: "MISSING_REQUIRED_RUN" };
+    }
+  }
+  const parsed = VerifiedResultSetSchema.safeParse(value);
+  if (!parsed.success) {
+    return { status: "unavailable", reason: "INVALID_SCHEMA" };
+  }
+  if (parsed.data.concept !== "entity_leakage")
+    return { status: "unavailable", reason: "WRONG_CONCEPT" };
+  const result = parsed.data as LeakageVerifiedResultSet;
+  const randomRows = result.runs.find(
+    (candidate) => candidate.id === "random_row_split",
+  );
+  const wholeCustomers = result.runs.find(
+    (candidate) => candidate.id === "customer_group_split",
+  );
+  const identityAblation = result.runs.find(
+    (candidate) => candidate.id === "identity_ablation",
+  );
+  if (
+    randomRows === undefined ||
+    wholeCustomers === undefined ||
+    identityAblation === undefined
+  ) {
+    return { status: "unavailable", reason: "MISSING_REQUIRED_RUN" };
+  }
+  return {
+    status: "available",
+    result,
+    runs: { randomRows, wholeCustomers, identityAblation },
+  };
 }
+
+export const bundledSampleEvidence = parseBundledSampleEvidence(rawResult);
+
+export function requireBundledSampleResult(): LeakageVerifiedResultSet {
+  if (bundledSampleEvidence.status !== "available") {
+    throw new Error("The bundled verified sample is unavailable");
+  }
+  return bundledSampleEvidence.result;
+}
+
+const randomRows =
+  bundledSampleEvidence.status === "available"
+    ? bundledSampleEvidence.runs.randomRows
+    : null;
 
 export const sampleArtifact = {
   title: "Customer churn evaluation",
   fileName: "customer_churn_leakage.ipynb",
   fileSha256:
-    "92ba63894d3c2ffd64ba76324bb7bb2b3afeb0310883a33ed140faf058d03024",
+    "d0e9f3238753f1ca55534446d83e36041590f31c607a011def3f1d0db3a5bbc9",
   rows: 2880,
   customers: 480,
-  evidence: [
-    {
-      ref: "Cell 3 · output 0",
-      label: "Random row-split accuracy",
-      value: getRun("random_row_split").metrics.accuracy,
-    },
-    {
-      ref: "Cell 3 · output 0",
-      label: "Train/test customer overlap",
-      value: getRun("random_row_split").entityOverlap.rate,
-    },
-  ],
-} as const;
-
-export const verifiedReplay = {
-  id: "leakage-01",
-  recordedAt: "2026-07-14T11:50:37.947Z",
-  model: "gpt-5.6-sol · authenticated App Server replay",
-  fixture: "customer-churn-public-v1",
-  verifier: "leakage-verifier-v1",
-  commit: "4f2f647228304d63ac8b9cba8cdca1dc7a07e192",
+  evidence:
+    randomRows === null
+      ? []
+      : [
+          {
+            ref: "Cell 3 · output 0",
+            label: "Random row-split accuracy",
+            value: randomRows.metrics.accuracy,
+          },
+          {
+            ref: "Cell 3 · output 0",
+            label: "Train/test customer overlap",
+            value: randomRows.entityOverlap.rate,
+          },
+        ],
 } as const;

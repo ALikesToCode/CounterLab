@@ -25,6 +25,48 @@ const replayStages = [
 type PublicBoundaryCell =
   PublicReplayProjectionV1["boundary"]["result"]["cells"][number];
 
+type ReplayActivityEvent = PublicReplayProjectionV1["activity"][number];
+type ReplayActivityGroup = "activity" | "plan" | "diff" | "tests" | "verifier";
+
+const replayActivityGroups = [
+  { key: "activity", label: "Activity" },
+  { key: "plan", label: "Plan" },
+  { key: "diff", label: "Diff" },
+  { key: "tests", label: "Tests" },
+  { key: "verifier", label: "Verifier" },
+] as const satisfies ReadonlyArray<{
+  key: ReplayActivityGroup;
+  label: string;
+}>;
+
+function groupReplayActivity(
+  kind: ReplayActivityEvent["kind"],
+): ReplayActivityGroup {
+  switch (kind) {
+    case "lab.compilation_started":
+      return "plan";
+    case "patch.compilation_started":
+    case "patch.rejected":
+    case "patch.verified":
+    case "reasoning_diff_v2.issued":
+      return "diff";
+    case "experiment.completed":
+    case "boundary_map.verified":
+    case "transfer.started":
+    case "transfer.failed":
+    case "transfer.passed":
+      return "tests";
+    case "lab.rejected":
+    case "lab.verified":
+    case "experiment.evidence_rejected":
+    case "experiment.evidence_verified":
+    case "proof_capsule.issued":
+      return "verifier";
+    default:
+      return "activity";
+  }
+}
+
 function humanize(value: string): string {
   return value
     .replace(/^(?:leakage|imbalance)\./u, "")
@@ -823,18 +865,44 @@ export function ProofCapsuleReplayView({
                 </div>
               </dl>
             </section>
-            <section>
+            <section className={styles.activityEvidence}>
               <h2>Allowlisted activity</h2>
-              <ol>
-                {replay.activity.map((event, index) => (
-                  <li key={`${event.kind}:${event.sequence}:${index}`}>
-                    <span>Step {event.sequence}</span>
-                    <span>
-                      {event.actor} · {humanize(event.kind)}
-                    </span>
-                  </li>
-                ))}
-              </ol>
+              <p className={styles.activityPrivacy}>
+                This public replay publishes sequence, actor, and allowlisted
+                event kind only. Job IDs, event IDs, timestamps, source
+                excerpts, and patch diffs are not published.
+              </p>
+              <div className={styles.activityGroups}>
+                {replayActivityGroups.map((group) => {
+                  const events = replay.activity.filter(
+                    (event) => groupReplayActivity(event.kind) === group.key,
+                  );
+
+                  return (
+                    <section className={styles.activityGroup} key={group.key}>
+                      <h3>{group.label}</h3>
+                      {events.length === 0 ? (
+                        <p className={styles.emptyActivity}>
+                          No share-safe events are published in this group.
+                        </p>
+                      ) : (
+                        <ol aria-label={`${group.label} replay activity`}>
+                          {events.map((event, index) => (
+                            <li
+                              key={`${event.kind}:${event.sequence}:${index}`}
+                            >
+                              <span>Step {event.sequence}</span>
+                              <span>
+                                {event.actor} · <code>{event.kind}</code>
+                              </span>
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </section>
+                  );
+                })}
+              </div>
             </section>
             <section>
               <h2>Excluded from the public replay</h2>

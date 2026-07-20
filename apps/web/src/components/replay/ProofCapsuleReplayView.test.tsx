@@ -139,6 +139,68 @@ describe("ProofCapsuleReplayView", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("groups share-safe replay activity without publishing private event detail", () => {
+    const replay = structuredClone(publicReplayFixture("entity_leakage"));
+    const view = render(<ProofCapsuleReplayView replay={replay} />);
+
+    const disclosure = screen
+      .getByText("Evidence & proof · provenance, activity, and limitations")
+      .closest("details");
+    expect(disclosure).not.toBeNull();
+
+    for (const group of ["Activity", "Plan", "Diff", "Tests", "Verifier"]) {
+      expect(
+        within(disclosure!).getByRole("heading", { name: group, level: 3 }),
+      ).toBeInTheDocument();
+    }
+    expect(
+      within(disclosure!).getAllByText(
+        "No share-safe events are published in this group.",
+      ),
+    ).toHaveLength(3);
+
+    const baseEvent = replay.activity[0]!;
+    replay.activity = [
+      { ...baseEvent, sequence: 1, kind: "session.created" },
+      { ...baseEvent, sequence: 2, kind: "lab.compilation_started" },
+      { ...baseEvent, sequence: 3, kind: "patch.verified" },
+      { ...baseEvent, sequence: 4, kind: "transfer.passed" },
+      {
+        ...baseEvent,
+        sequence: 5,
+        actor: "verifier",
+        kind: "experiment.evidence_verified",
+      },
+    ];
+    view.rerender(<ProofCapsuleReplayView replay={replay} />);
+
+    const expectedKinds = [
+      ["Activity", "session.created"],
+      ["Plan", "lab.compilation_started"],
+      ["Diff", "patch.verified"],
+      ["Tests", "transfer.passed"],
+      ["Verifier", "experiment.evidence_verified"],
+    ] as const;
+    for (const [group, kind] of expectedKinds) {
+      const groupSection = within(disclosure!)
+        .getByRole("heading", { name: group, level: 3 })
+        .closest("section");
+      expect(groupSection).not.toBeNull();
+      expect(within(groupSection!).getByText(kind)).toBeInTheDocument();
+    }
+
+    expect(disclosure).toHaveTextContent(
+      "This public replay publishes sequence, actor, and allowlisted event kind only.",
+    );
+    expect(disclosure).toHaveTextContent(
+      "Job IDs, event IDs, timestamps, source excerpts, and patch diffs are not published.",
+    );
+    expect(disclosure).not.toHaveTextContent("job_live_1");
+    expect(disclosure).not.toHaveTextContent("compiler_event_1");
+    expect(disclosure).not.toHaveTextContent("2026-07-16T12:45:00.000Z");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
   it("produces a deterministic, tamper-evident projection with forbidden fields absent", () => {
     const source = replayFixture("entity_leakage");
     const first = createPublicReplayProjectionV1(source, {

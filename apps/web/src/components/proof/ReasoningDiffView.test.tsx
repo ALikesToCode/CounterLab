@@ -120,15 +120,17 @@ function replayPublication(
   return {
     reused,
     replay: {
-      schemaVersion: "1",
+      schemaVersion: "2",
       replayId,
       replay: true,
       label: "Verified replay",
       concept: "entity_leakage",
       recordedAt: capsule.createdAt,
       retention: {
-        policy: "available_until_revoked",
+        policy: "expires_or_revoked",
         revocable: true,
+        publishedAt: "2026-07-19T10:00:00.000Z",
+        expiresAt: "2026-08-18T10:00:00.000Z",
       },
     },
   };
@@ -400,6 +402,40 @@ describe("ReasoningDiffView", () => {
       screen.queryByRole("button", {
         name: /confirm and publish read-only replay/i,
       }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("restores expiry without offering public replay actions", async () => {
+    const restored = replayPublication("replay_expired_1", true);
+
+    render(
+      <ReasoningDiffView
+        diff={diff}
+        capsule={capsule}
+        patch={patch}
+        patchDownloadUrl="/patch.ipynb"
+        proofCapsuleDownloadUrl="/proof.counterlab"
+        publishReplay={() => Promise.resolve(restored)}
+        loadReplayStatus={() =>
+          Promise.resolve({ status: "expired", replay: restored.replay })
+        }
+        publicTextPreview={publicTextPreview}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /this public replay has expired/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /30-day public playback window ended/i,
+    );
+    expect(
+      screen.queryByRole("link", { name: /open verified replay/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /copy replay link/i }),
     ).not.toBeInTheDocument();
   });
 

@@ -79,7 +79,9 @@ describe("CapabilityLinkDisclosure", () => {
     expect(included).toHaveTextContent(
       "Recorded replay time and ordered activity names",
     );
-    expect(disclosure).toHaveTextContent(/available until you revoke it/i);
+    expect(disclosure).toHaveTextContent(
+      /available for 30 days from publication or until you revoke it/i,
+    );
     expect(disclosure).toHaveTextContent(
       /cannot retract copies or screenshots/i,
     );

@@ -120,11 +120,6 @@
   background: var(--accent);
 }
 
-.feature[data-crosses-now="true"] i {
-  width: 88px;
-  background: var(--gold-soft);
-}
-
 .timeline figcaption {
   padding-top: 12px;
   margin-top: 10px;
@@ -150,6 +145,10 @@
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--paper);
+}
+
+.questions .evidenceChoices {
+  grid-column: 1 / -1;
 }
 
 .questions legend {
@@ -209,11 +208,6 @@
   color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.4;
-}
-
-.questions label .classification {
-  color: var(--ink);
-  font-weight: 700;
 }
 
 .questions :disabled {
