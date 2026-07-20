@@ -37,6 +37,8 @@ const BubblewrapReadIsolationOutputSchema = z.strictObject({
   workspaceWritable: z.literal(true),
 });
 
+const EXPECTED_BUBBLEWRAP_VERSION = "bubblewrap 0.11.0" as const;
+
 export const GENERATION_ISOLATION_PROBE_VERSION =
   "counterlab-generation-isolation-v1" as const;
 
@@ -47,6 +49,7 @@ export type GenerationIsolationProbePayload = {
   probe: "non-root-startup";
   checks: typeof STARTUP_CHECKS;
   generationFilesystemReadIsolation: "OS_ENFORCED";
+  bubblewrapVersion: "0.11.0";
   bubblewrap: z.infer<typeof BubblewrapReadIsolationOutputSchema>;
 };
 
@@ -66,7 +69,13 @@ function readExecutionStdout(result: unknown): string {
 
 export function createGenerationIsolationProbePayload(
   bubblewrapOutput: unknown,
+  bubblewrapVersionOutput: string,
 ): GenerationIsolationProbePayload {
+  if (bubblewrapVersionOutput.trim() !== EXPECTED_BUBBLEWRAP_VERSION) {
+    throw new Error(
+      `Hosted runner requires ${EXPECTED_BUBBLEWRAP_VERSION}; observed ${bubblewrapVersionOutput.trim() || "no version"}`,
+    );
+  }
   return {
     schemaVersion: "1",
     probeVersion: GENERATION_ISOLATION_PROBE_VERSION,
@@ -74,6 +83,7 @@ export function createGenerationIsolationProbePayload(
     probe: "non-root-startup",
     checks: STARTUP_CHECKS,
     generationFilesystemReadIsolation: "OS_ENFORCED",
+    bubblewrapVersion: "0.11.0",
     bubblewrap: BubblewrapReadIsolationOutputSchema.parse(bubblewrapOutput),
   };
 }
@@ -215,6 +225,14 @@ export async function runHostedRunnerStartupProbe(
     env: childEnvironment,
     timeout: 30_000,
   });
+  const bubblewrapVersionExecution = await execute(
+    bwrapExecutable,
+    ["--version"],
+    {
+      env: childEnvironment,
+      timeout: 30_000,
+    },
+  );
   const isolationProbe = buildContainerBubblewrapProbe({
     bwrapExecutable,
     codexRoot,
@@ -239,8 +257,10 @@ export async function runHostedRunnerStartupProbe(
       { cause: error },
     );
   }
-  const generationIsolationProbe =
-    createGenerationIsolationProbePayload(bubblewrapOutput);
+  const generationIsolationProbe = createGenerationIsolationProbePayload(
+    bubblewrapOutput,
+    readExecutionStdout(bubblewrapVersionExecution),
+  );
 
   return {
     status: "ready",

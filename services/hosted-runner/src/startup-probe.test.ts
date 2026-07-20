@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  createGenerationIsolationProbePayload,
   hashGenerationIsolationProbe,
   runHostedRunnerStartupProbe,
 } from "./startup-probe.js";
@@ -25,9 +26,11 @@ describe("hosted runner startup probe", () => {
         _args: string[],
         _options: { env: NodeJS.ProcessEnv; timeout: number },
       ) =>
-        _executable === "/runtime/bwrap"
-          ? { stdout: `${JSON.stringify(BUBBLEWRAP_OUTPUT)}\n` }
-          : { stdout: "" },
+        _executable === "/runtime/bwrap" && _args[0] === "--version"
+          ? { stdout: "bubblewrap 0.11.0\n" }
+          : _executable === "/runtime/bwrap"
+            ? { stdout: `${JSON.stringify(BUBBLEWRAP_OUTPUT)}\n` }
+            : { stdout: "" },
     );
     const writeFile = vi.fn(async () => undefined);
     const stat = vi.fn(async (path: string) => ({
@@ -97,6 +100,7 @@ describe("hosted runner startup probe", () => {
           "writable-roots",
         ],
         generationFilesystemReadIsolation: "OS_ENFORCED",
+        bubblewrapVersion: "0.11.0",
         bubblewrap: BUBBLEWRAP_OUTPUT,
       },
       generationIsolationProbeSha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
@@ -105,7 +109,7 @@ describe("hosted runner startup probe", () => {
       hashGenerationIsolationProbe(result.generationIsolationProbe),
     );
     expect(result.generationIsolationProbeSha256).toBe(
-      "cc950c368771f715d7b8807b20c91a04b53065d0ad64ba51024b638f7da329ea",
+      "700cc58bedc163846e3854415170f49f55da9fd3ba316cc4967747d5268199dc",
     );
     expect(stat.mock.calls.map(([path]) => path)).toEqual([
       "/runtime/app",
@@ -137,13 +141,17 @@ describe("hosted runner startup probe", () => {
       "approved\n",
       { encoding: "utf8", flag: "w", mode: 0o600 },
     );
-    expect(execute).toHaveBeenCalledTimes(4);
+    expect(execute).toHaveBeenCalledTimes(5);
     for (const [, , options] of execute.mock.calls) {
       expect(options.env).not.toHaveProperty("CODEX_AUTH_JSON");
       expect(options.env).not.toHaveProperty("OPENAI_API_KEY");
     }
+    expect(execute.mock.calls[3]?.slice(0, 2)).toEqual([
+      "/runtime/bwrap",
+      ["--version"],
+    ]);
     const [probeExecutable, probeArgs, probeOptions] =
-      execute.mock.calls[3] ?? [];
+      execute.mock.calls[4] ?? [];
     expect(probeExecutable).toBe("/runtime/bwrap");
     expect(probeArgs).toContain("--unshare-user");
     expect(probeArgs).toContain("--unshare-pid");
@@ -228,10 +236,20 @@ describe("hosted runner startup probe", () => {
         getGid: () => 10001,
         execute: async () => {
           invocation += 1;
-          return invocation === 4 ? probeResult : { stdout: "" };
+          if (invocation === 4) return { stdout: "bubblewrap 0.11.0\n" };
+          return invocation === 5 ? probeResult : { stdout: "" };
         },
       }),
     ).rejects.toThrow();
+  });
+
+  it("rejects a Bubblewrap version that differs from the pinned image", () => {
+    expect(() =>
+      createGenerationIsolationProbePayload(
+        BUBBLEWRAP_OUTPUT,
+        "bubblewrap 0.11.1",
+      ),
+    ).toThrow("requires bubblewrap 0.11.0; observed bubblewrap 0.11.1");
   });
 
   it("fails closed when PID 1 is not the declared non-root identity", async () => {
