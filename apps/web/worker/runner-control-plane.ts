@@ -105,12 +105,20 @@ async function runnerReadinessMatches(
     !Array.isArray(payload) &&
     JSON.stringify(Object.keys(payload).sort()) ===
       JSON.stringify(
-        ["runnerImageDigest", "runnerSourceCommit", "service", "status"].sort(),
+        [
+          "generationFilesystemReadIsolation",
+          "runnerImageDigest",
+          "runnerSourceCommit",
+          "service",
+          "status",
+        ].sort(),
       ) &&
     "status" in payload &&
     payload.status === "ready" &&
     "service" in payload &&
     payload.service === "counterlab-hosted-runner" &&
+    "generationFilesystemReadIsolation" in payload &&
+    payload.generationFilesystemReadIsolation === "OS_ENFORCED" &&
     "runnerSourceCommit" in payload &&
     payload.runnerSourceCommit === releaseIdentity.runnerSourceCommit &&
     "runnerImageDigest" in payload &&

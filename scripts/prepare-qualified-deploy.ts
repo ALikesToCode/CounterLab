@@ -68,6 +68,7 @@ export type RunnerReleaseObservation = {
 };
 
 export type QualifiedReleaseObservation = RunnerReleaseObservation & {
+  generationFilesystemReadIsolation: "OS_ENFORCED";
   limitMode: "container-cgroup-and-process-rlimit";
   aggregateLimitIntentEnforced: true;
   aggregateLimitEvidenceSha256: string;
@@ -648,6 +649,8 @@ export async function collectQualifiedReleaseObservation(input: {
   return {
     ...observation,
     ...timeout,
+    generationFilesystemReadIsolation:
+      receipt.generationFilesystemReadIsolation,
   };
 }
 
@@ -657,8 +660,10 @@ export function createQualifiedRunnerRelease(
 ): unknown {
   assertQualifiedObservation(observation);
   return QualifiedRunnerReleaseSchema.parse({
-    schemaVersion: "4",
+    schemaVersion: "5",
     status: "VERIFIED",
+    generationFilesystemReadIsolation:
+      observation.generationFilesystemReadIsolation,
     sourceCommit: observation.sourceCommit,
     sourceArchiveSha256: observation.sourceArchiveSha256,
     sourceTreeSha256: observation.sourceTreeSha256,
@@ -699,7 +704,7 @@ export function createQualifiedRunnerRelease(
     registryDigest: observation.registryDigest,
     registryResolvedAt: observation.registryResolvedAt,
     qualifiedAt,
-    verifierVersion: "counterlab-release-v4",
+    verifierVersion: "counterlab-release-v5",
   });
 }
 

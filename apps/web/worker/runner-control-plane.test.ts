@@ -41,6 +41,7 @@ describe("HttpRunnerDispatcher", () => {
       JSON.stringify({
         status: "ready",
         service: "counterlab-hosted-runner",
+        generationFilesystemReadIsolation: "OS_ENFORCED",
         runnerSourceCommit,
         runnerImageDigest,
       }),
@@ -83,6 +84,7 @@ describe("HttpRunnerDispatcher", () => {
     ["invalid response", "schema"],
     ["stale source identity", "source"],
     ["stale image identity", "image"],
+    ["partial filesystem isolation", "isolation"],
   ])("fails Container readiness closed on %s", async (_label, failure) => {
     const startAndWaitForPorts = vi.fn(async () => {
       if (failure === "startup") throw new Error("image did not start");
@@ -97,6 +99,8 @@ describe("HttpRunnerDispatcher", () => {
         status: "ready",
         service:
           failure === "schema" ? "wrong-runner" : "counterlab-hosted-runner",
+        generationFilesystemReadIsolation:
+          failure === "isolation" ? "PARTIAL" : "OS_ENFORCED",
         runnerSourceCommit:
           failure === "source" ? "d".repeat(40) : runnerSourceCommit,
         runnerImageDigest:
@@ -321,6 +325,7 @@ describe("HttpRunnerDispatcher", () => {
             JSON.stringify({
               status: "ready",
               service: "counterlab-hosted-runner",
+              generationFilesystemReadIsolation: "OS_ENFORCED",
               runnerSourceCommit,
               runnerImageDigest,
             }),
@@ -407,6 +412,7 @@ describe("HttpRunnerDispatcher", () => {
             JSON.stringify({
               status: "ready",
               service: "counterlab-hosted-runner",
+              generationFilesystemReadIsolation: "OS_ENFORCED",
               runnerSourceCommit: source,
               runnerImageDigest: image,
             }),

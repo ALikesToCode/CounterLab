@@ -481,7 +481,7 @@ stage_started="$(timestamp)"
 "${CURL_BIN}" --fail --silent --show-error \
   --proto '=https' --proto-redir '=https' --max-redirs 0 \
   --max-time 30 \
-  "${BASE_URL}/api/health" \
+  "${BASE_URL}/api/health?readiness=probe" \
   >"${WORK_DIR}/health.json"
 python3 - "${WORK_DIR}/health.json" "${WORKER_VERSION_ID}" "${WORKER_EVIDENCE_COMMIT}" "${RUNNER_SOURCE_COMMIT}" "${CONTAINER_IMAGE_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" <<'PY'
 import json
@@ -500,7 +500,7 @@ required = {
     "liveCodex": "configured",
     "liveKernel": "configured",
     "sandbox": "credential-and-privilege-boundary",
-    "generationFilesystemReadIsolation": "PARTIAL",
+    "generationFilesystemReadIsolation": "OS_ENFORCED",
 }
 for key, expected in required.items():
     if health.get(key) != expected:
@@ -509,8 +509,8 @@ for key, expected in required.items():
         )
 if health.get("maintenance") is not False:
     raise SystemExit("production health reports maintenance mode")
-if health.get("readiness") != "not-checked":
-    raise SystemExit("ordinary production health must not perform a deep readiness probe")
+if health.get("readiness") != "ready":
+    raise SystemExit("production health deep readiness probe did not pass")
 expected_release = {
     "status": "bound",
     "workerVersionId": sys.argv[2],

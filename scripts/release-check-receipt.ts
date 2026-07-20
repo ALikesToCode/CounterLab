@@ -188,8 +188,10 @@ export function createReleaseCheckReceipt(input: {
   );
   const checkedAt = input.checkedAt ?? new Date().toISOString();
   const receipt = ReleaseCheckReceiptSchema.parse({
-    schemaVersion: "2",
+    schemaVersion: "3",
     status: "PASSED",
+    generationFilesystemReadIsolation:
+      qualified.generationFilesystemReadIsolation,
     evidenceCommit: qualified.evidenceCommit,
     sourceCommit: qualified.sourceCommit,
     qualifiedRunnerReceiptSha256: sha256(input.qualifiedReceiptBytes),
@@ -206,7 +208,7 @@ export function createReleaseCheckReceipt(input: {
     runtimeAdapterSha256: qualified.runtimeAdapterSha256,
     checks: RELEASE_CHECK_IDS.map((id) => ({ id, status: "PASSED" })),
     checkedAt,
-    verifierVersion: "counterlab-release-check-v2",
+    verifierVersion: "counterlab-release-check-v3",
   });
   return assertReleaseCheckBinding({
     qualifiedReceipt: qualified,

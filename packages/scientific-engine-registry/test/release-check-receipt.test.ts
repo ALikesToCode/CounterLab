@@ -1,7 +1,13 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
+
+import {
+  ReleaseCheckReceiptSchema,
+  ReleaseCheckReceiptV2Schema,
+} from "../src/index";
 
 import {
   assertReleaseCheckBinding,
@@ -15,8 +21,9 @@ const evidenceCommit = "b".repeat(40);
 
 function qualifiedReceipt() {
   return {
-    schemaVersion: "4",
+    schemaVersion: "5",
     status: "VERIFIED",
+    generationFilesystemReadIsolation: "OS_ENFORCED",
     sourceCommit,
     sourceArchiveSha256: "1".repeat(64),
     sourceTreeSha256: "2".repeat(64),
@@ -57,7 +64,7 @@ function qualifiedReceipt() {
     registryDigest: `sha256:${"1".repeat(64)}`,
     registryResolvedAt: "2026-07-19T00:00:00.000Z",
     qualifiedAt: "2026-07-19T00:01:00.000Z",
-    verifierVersion: "counterlab-release-v4",
+    verifierVersion: "counterlab-release-v5",
   } as const;
 }
 
@@ -103,11 +110,11 @@ function deploymentReceipt() {
   const runner = "d".repeat(40);
   const digest = `sha256:${"a".repeat(64)}`;
   return {
-    schemaVersion: "4",
+    schemaVersion: "5",
     status: "DEPLOYED",
     workerName: "counterlab",
     productionOrigin: "https://counterlab.cserules.workers.dev",
-    generationFilesystemReadIsolation: "PARTIAL",
+    generationFilesystemReadIsolation: "OS_ENFORCED",
     workerEvidenceCommit: worker,
     runnerSourceCommit: runner,
     qualifiedRunnerReceiptSha256: "1".repeat(64),
@@ -144,7 +151,7 @@ function deploymentReceipt() {
     workerVersionSha256: "c".repeat(64),
     containerStatusSha256: "d".repeat(64),
     deployedAt: "2026-07-19T00:00:00.000Z",
-    verifierVersion: "counterlab-deployment-v4",
+    verifierVersion: "counterlab-deployment-v5",
   } as const;
 }
 
@@ -263,11 +270,73 @@ describe("release-check receipt", () => {
     });
 
     expect(receipt).toMatchObject({
+      schemaVersion: "3",
       status: "PASSED",
+      generationFilesystemReadIsolation: "OS_ENFORCED",
       evidenceCommit,
-      verifierVersion: "counterlab-release-check-v2",
+      verifierVersion: "counterlab-release-check-v3",
     });
     expect(receipt.checks).toHaveLength(11);
+  });
+
+  it("preserves v2 receipts while requiring OS isolation in v3", () => {
+    const current = createReleaseCheckReceipt({
+      qualifiedReceipt: qualifiedReceipt(),
+      qualifiedReceiptBytes: qualifiedBytes(),
+      runtimeAttestation: runtimeAttestation(),
+      currentCommit: evidenceCommit,
+      worktreeClean: true,
+      runnerImageDigest: qualifiedReceipt().localImageDigest,
+      adapterImageDigest: qualifiedReceipt().adapterImageDigest,
+      checkedAt: "2026-07-19T00:02:00.000Z",
+    });
+    const {
+      generationFilesystemReadIsolation: _generationFilesystemReadIsolation,
+      ...legacy
+    } = current;
+
+    expect(
+      ReleaseCheckReceiptV2Schema.parse({
+        ...legacy,
+        schemaVersion: "2",
+        verifierVersion: "counterlab-release-check-v2",
+      }),
+    ).toMatchObject({ schemaVersion: "2" });
+    expect(() =>
+      ReleaseCheckReceiptSchema.parse({
+        ...current,
+        generationFilesystemReadIsolation: "PARTIAL",
+      }),
+    ).toThrow();
+  });
+
+  it("publishes distinct historical v2 and isolation-enforced v3 schemas", () => {
+    const v2Path = resolve(
+      process.cwd(),
+      "scientific-engines/schemas/release-check-receipt-v2.schema.json",
+    );
+    const v3Path = resolve(
+      process.cwd(),
+      "scientific-engines/schemas/release-check-receipt-v3.schema.json",
+    );
+    expect(existsSync(v2Path)).toBe(true);
+    expect(existsSync(v3Path)).toBe(true);
+    const v2 = JSON.parse(readFileSync(v2Path, "utf8")) as {
+      properties?: Record<string, { const?: string }>;
+      required?: string[];
+    };
+    const v3 = JSON.parse(readFileSync(v3Path, "utf8")) as typeof v2;
+
+    expect(v2.properties?.schemaVersion?.const).toBe("2");
+    expect(v2.properties).not.toHaveProperty(
+      "generationFilesystemReadIsolation",
+    );
+    expect(v2.required).not.toContain("generationFilesystemReadIsolation");
+    expect(v3.properties?.schemaVersion?.const).toBe("3");
+    expect(v3.properties?.generationFilesystemReadIsolation?.const).toBe(
+      "OS_ENFORCED",
+    );
+    expect(v3.required).toContain("generationFilesystemReadIsolation");
   });
 
   it("rejects a different qualified receipt or live runtime", () => {

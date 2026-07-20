@@ -838,7 +838,7 @@ export const QualifiedRunnerReleaseV3Schema = z
 export const QUALIFIED_AGGREGATE_LIMIT_MODE =
   "container-cgroup-and-process-rlimit" as const;
 
-export const QualifiedRunnerReleaseSchema = z
+export const QualifiedRunnerReleaseV4Schema = z
   .strictObject({
     schemaVersion: z.literal("4"),
     status: z.literal("VERIFIED"),
@@ -966,6 +966,34 @@ export const QualifiedRunnerReleaseSchema = z
     }
   });
 
+export const QualifiedRunnerReleaseSchema = z
+  .strictObject({
+    ...QualifiedRunnerReleaseV4Schema.shape,
+    schemaVersion: z.literal("5"),
+    generationFilesystemReadIsolation: z.literal("OS_ENFORCED"),
+    verifierVersion: z.literal("counterlab-release-v5"),
+  })
+  .superRefine((release, context) => {
+    const {
+      generationFilesystemReadIsolation: _generationFilesystemReadIsolation,
+      ...legacyRelease
+    } = release;
+    const result = QualifiedRunnerReleaseV4Schema.safeParse({
+      ...legacyRelease,
+      schemaVersion: "4",
+      verifierVersion: "counterlab-release-v4",
+    });
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        context.addIssue({
+          code: "custom",
+          path: issue.path,
+          message: issue.message,
+        });
+      }
+    }
+  });
+
 export const RELEASE_CHECK_IDS = [
   "test-all",
   "leakage-mutations",
@@ -1045,7 +1073,7 @@ export const ReleaseCheckReceiptV1Schema = z
     }
   });
 
-export const ReleaseCheckReceiptSchema = z
+export const ReleaseCheckReceiptV2Schema = z
   .strictObject({
     schemaVersion: z.literal("2"),
     status: z.literal("PASSED"),
@@ -1110,6 +1138,34 @@ export const ReleaseCheckReceiptSchema = z
         path: ["qualifiedAt"],
         message: "runner qualification must precede the release check",
       });
+    }
+  });
+
+export const ReleaseCheckReceiptSchema = z
+  .strictObject({
+    ...ReleaseCheckReceiptV2Schema.shape,
+    schemaVersion: z.literal("3"),
+    generationFilesystemReadIsolation: z.literal("OS_ENFORCED"),
+    verifierVersion: z.literal("counterlab-release-check-v3"),
+  })
+  .superRefine((receipt, context) => {
+    const {
+      generationFilesystemReadIsolation: _generationFilesystemReadIsolation,
+      ...legacyReceipt
+    } = receipt;
+    const result = ReleaseCheckReceiptV2Schema.safeParse({
+      ...legacyReceipt,
+      schemaVersion: "2",
+      verifierVersion: "counterlab-release-check-v2",
+    });
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        context.addIssue({
+          code: "custom",
+          path: issue.path,
+          message: issue.message,
+        });
+      }
     }
   });
 
@@ -1203,7 +1259,7 @@ export const DeploymentReceiptV3Schema = z
     }
   });
 
-export const DeploymentReceiptSchema = z
+export const DeploymentReceiptV4Schema = z
   .strictObject({
     schemaVersion: z.literal("4"),
     status: z.literal("DEPLOYED"),
@@ -1304,5 +1360,30 @@ export const DeploymentReceiptSchema = z
         path: ["clientPublicAssetCount"],
         message: "public client asset count exceeds the full deploy tree",
       });
+    }
+  });
+
+export const DeploymentReceiptSchema = z
+  .strictObject({
+    ...DeploymentReceiptV4Schema.shape,
+    schemaVersion: z.literal("5"),
+    generationFilesystemReadIsolation: z.literal("OS_ENFORCED"),
+    verifierVersion: z.literal("counterlab-deployment-v5"),
+  })
+  .superRefine((receipt, context) => {
+    const result = DeploymentReceiptV4Schema.safeParse({
+      ...receipt,
+      schemaVersion: "4",
+      generationFilesystemReadIsolation: "PARTIAL",
+      verifierVersion: "counterlab-deployment-v4",
+    });
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        context.addIssue({
+          code: "custom",
+          path: issue.path,
+          message: issue.message,
+        });
+      }
     }
   });

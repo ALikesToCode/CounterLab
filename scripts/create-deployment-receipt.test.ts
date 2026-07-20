@@ -194,6 +194,7 @@ describe("deployment receipt Worker identity", () => {
 describe("deployment receipt qualification binding", () => {
   const qualifiedReceiptBytes = Buffer.from("qualified-receipt\n");
   const qualified = {
+    generationFilesystemReadIsolation: "OS_ENFORCED",
     evidenceCommit: "a".repeat(40),
     sourceCommit: "b".repeat(40),
     registryDigest: `sha256:${"c".repeat(64)}`,
@@ -209,6 +210,8 @@ describe("deployment receipt qualification binding", () => {
     aggregateLimitEvidenceSha256: "5".repeat(64),
   } as const;
   const releaseCheck = {
+    generationFilesystemReadIsolation:
+      qualified.generationFilesystemReadIsolation,
     evidenceCommit: qualified.evidenceCommit,
     sourceCommit: qualified.sourceCommit,
     qualifiedRunnerReceiptSha256: createHash("sha256")

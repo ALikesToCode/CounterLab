@@ -733,7 +733,11 @@ async function main(): Promise<void> {
     adapterManifestDigest: buildReceipt.adapterManifestDigest,
     adapterOciArchiveSha256: buildReceipt.adapterOciArchiveSha256,
   });
-  const observation = { ...releaseObservation, ...timeoutProof };
+  const observation = {
+    ...releaseObservation,
+    ...timeoutProof,
+    generationFilesystemReadIsolation: "OS_ENFORCED" as const,
+  };
   for (const [label, built, observed] of [
     [
       "source archive",

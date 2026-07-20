@@ -515,6 +515,13 @@ describe("Cloudflare static asset routing", () => {
     expect(dockerfile).toContain("/repo/requirements.runner.lock.txt");
     expect(dockerfile).toContain("chmod -R a=rX /repo");
     expect(dockerfile).toContain("chmod 0555 /usr/local/bin/node");
+    expect(dockerfile).toContain("bubblewrap=0.11.0-2+deb13u1");
+    expect(dockerfile).toContain(
+      'test "$(/usr/bin/bwrap --version)" = "bubblewrap 0.11.0"',
+    );
+    expect(dockerfile.indexOf("bubblewrap=0.11.0-2+deb13u1")).toBeLessThan(
+      dockerfile.indexOf("USER 10001:10001"),
+    );
     expect(dockerfile.indexOf("chmod 0555 /usr/local/bin/node")).toBeLessThan(
       dockerfile.indexOf("USER 10001:10001"),
     );
@@ -547,8 +554,9 @@ describe("Cloudflare static asset routing", () => {
     const evidenceCommit = "2".repeat(40);
     const image = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
     const receipt = {
-      schemaVersion: "4",
+      schemaVersion: "5",
       status: "VERIFIED",
+      generationFilesystemReadIsolation: "OS_ENFORCED",
       sourceCommit,
       sourceArchiveSha256: "b".repeat(64),
       sourceTreeSha256: "c".repeat(64),
@@ -580,9 +588,10 @@ describe("Cloudflare static asset routing", () => {
       registryDigest: `sha256:${"3".repeat(64)}`,
       registryResolvedAt: "2026-07-16T16:20:00.000Z",
       qualifiedAt: "2026-07-16T16:30:00.000Z",
-      verifierVersion: "counterlab-release-v4",
+      verifierVersion: "counterlab-release-v5",
     };
     const observation = {
+      generationFilesystemReadIsolation: "OS_ENFORCED" as const,
       sourceCommit,
       sourceArchiveSha256: receipt.sourceArchiveSha256,
       sourceTreeSha256: receipt.sourceTreeSha256,
@@ -789,8 +798,9 @@ describe("Cloudflare static asset routing", () => {
     const evidenceCommit = "2".repeat(40);
     const image = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
     const receipt = {
-      schemaVersion: "4",
+      schemaVersion: "5",
       status: "VERIFIED",
+      generationFilesystemReadIsolation: "OS_ENFORCED",
       sourceCommit,
       sourceArchiveSha256: "b".repeat(64),
       sourceTreeSha256: "c".repeat(64),
@@ -822,7 +832,7 @@ describe("Cloudflare static asset routing", () => {
       registryDigest: `sha256:${"3".repeat(64)}`,
       registryResolvedAt: "2026-07-16T16:20:00.000Z",
       qualifiedAt: "2026-07-16T16:30:00.000Z",
-      verifierVersion: "counterlab-release-v4",
+      verifierVersion: "counterlab-release-v5",
     };
     const config = productionDeployConfig();
     config.durable_objects.bindings = [
@@ -835,6 +845,7 @@ describe("Cloudflare static asset routing", () => {
         receipt,
         image,
         observation: {
+          generationFilesystemReadIsolation: "OS_ENFORCED",
           sourceCommit,
           sourceArchiveSha256: receipt.sourceArchiveSha256,
           sourceTreeSha256: receipt.sourceTreeSha256,
@@ -877,8 +888,9 @@ describe("Cloudflare static asset routing", () => {
     const sourceCommit = "a".repeat(40);
     const image = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
     const receipt = {
-      schemaVersion: "4",
+      schemaVersion: "5",
       status: "VERIFIED",
+      generationFilesystemReadIsolation: "OS_ENFORCED",
       sourceCommit,
       sourceArchiveSha256: "b".repeat(64),
       sourceTreeSha256: "c".repeat(64),
@@ -910,7 +922,7 @@ describe("Cloudflare static asset routing", () => {
       registryDigest: `sha256:${"3".repeat(64)}`,
       registryResolvedAt: "2026-07-16T15:55:00.000Z",
       qualifiedAt: "2026-07-16T16:30:00.000Z",
-      verifierVersion: "counterlab-release-v4",
+      verifierVersion: "counterlab-release-v5",
     };
 
     expect(() =>
@@ -922,6 +934,7 @@ describe("Cloudflare static asset routing", () => {
         receipt,
         image,
         observation: {
+          generationFilesystemReadIsolation: "OS_ENFORCED",
           sourceCommit,
           sourceArchiveSha256: "9".repeat(64),
           sourceTreeSha256: receipt.sourceTreeSha256,

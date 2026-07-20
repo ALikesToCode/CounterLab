@@ -196,8 +196,9 @@ node -e '
     value.status !== "ready" ||
     value.service !== "counterlab-hosted-runner" ||
     value.probe !== "non-root-startup" ||
+    value.generationFilesystemReadIsolation !== "OS_ENFORCED" ||
     JSON.stringify(value.checks) !==
-      JSON.stringify(["entrypoint", "non-root-user", "immutable-paths", "codex", "python", "setpriv", "writable-roots"])
+      JSON.stringify(["entrypoint", "non-root-user", "immutable-paths", "codex", "python", "bubblewrap", "bubblewrap-read-isolation", "setpriv", "writable-roots"])
   ) {
     throw new Error("Runner non-root startup probe returned an invalid sentinel");
   }

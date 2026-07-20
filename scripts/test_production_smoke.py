@@ -146,11 +146,11 @@ def _deployment_receipt() -> dict[str, object]:
     runner = "b" * 40
     digest = "sha256:" + "c" * 64
     return {
-        "schemaVersion": "4",
+        "schemaVersion": "5",
         "status": "DEPLOYED",
         "workerName": "counterlab",
         "productionOrigin": "https://counterlab.cserules.workers.dev",
-        "generationFilesystemReadIsolation": "PARTIAL",
+        "generationFilesystemReadIsolation": "OS_ENFORCED",
         "workerEvidenceCommit": worker,
         "runnerSourceCommit": runner,
         "qualifiedRunnerReceiptSha256": "1" * 64,
@@ -189,7 +189,7 @@ def _deployment_receipt() -> dict[str, object]:
         "workerVersionSha256": "a" * 64,
         "containerStatusSha256": "b" * 64,
         "deployedAt": "2026-07-19T00:00:00.000Z",
-        "verifierVersion": "counterlab-deployment-v4",
+        "verifierVersion": "counterlab-deployment-v5",
     }
 
 
@@ -314,8 +314,8 @@ def test_control_plane_validators_bind_exact_release_and_maintenance_state() -> 
             "liveCodex": "configured",
             "liveKernel": "configured",
             "sandbox": "credential-and-privilege-boundary",
-            "generationFilesystemReadIsolation": "PARTIAL",
-            "readiness": "not-checked",
+            "generationFilesystemReadIsolation": "OS_ENFORCED",
+            "readiness": "ready",
             "maintenance": False,
             "release": release,
         },

@@ -5,9 +5,11 @@ import { describe, expect, it } from "vitest";
 import {
   DeploymentReceiptSchema,
   DeploymentReceiptV3Schema,
+  DeploymentReceiptV4Schema,
   QualifiedRunnerReleaseSchema,
   QualifiedRunnerReleaseV2Schema,
   QualifiedRunnerReleaseV3Schema,
+  QualifiedRunnerReleaseV4Schema,
 } from "../src/index";
 import * as releaseTools from "../../../scripts/prepare-qualified-deploy";
 
@@ -37,7 +39,7 @@ describe("qualified runner release schema", () => {
     expect(() => QualifiedRunnerReleaseSchema.parse(legacyReceipt())).toThrow();
   });
 
-  it("creates a runtime-bound promoted v4 receipt from recomputed evidence", () => {
+  it("creates a runtime-bound promoted v5 receipt from recomputed evidence", () => {
     const sourceCommit = "a".repeat(40);
     const evidenceCommit = "2".repeat(40);
     const registryImage = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
@@ -88,6 +90,7 @@ describe("qualified runner release schema", () => {
         timeoutRuntimeSessionId: "rt-v61-test1",
         timeoutVerifiedAt: "2026-07-16T16:24:00.000Z",
         currentCommit: evidenceCommit,
+        generationFilesystemReadIsolation: "OS_ENFORCED",
         sourceIsAncestor: true,
         changedPaths: ["scientific-engines/snapshot.json"],
         registryImage,
@@ -99,7 +102,8 @@ describe("qualified runner release schema", () => {
     );
 
     expect(QualifiedRunnerReleaseSchema.parse(receipt)).toMatchObject({
-      schemaVersion: "4",
+      schemaVersion: "5",
+      generationFilesystemReadIsolation: "OS_ENFORCED",
       evidenceCommit,
       registryImage,
       registryDigest: `sha256:${"3".repeat(64)}`,
@@ -113,6 +117,79 @@ describe("qualified runner release schema", () => {
         aggregateLimitIntentEnforced: false,
       }),
     ).toThrow();
+  });
+
+  it("retains the exact historical v4 receipt contract", () => {
+    const sourceCommit = "a".repeat(40);
+    const evidenceCommit = "2".repeat(40);
+    const current = (
+      releaseTools as unknown as {
+        createQualifiedRunnerRelease: (
+          observation: Record<string, unknown>,
+          qualifiedAt: string,
+        ) => Record<string, unknown>;
+      }
+    ).createQualifiedRunnerRelease(
+      {
+        sourceCommit,
+        sourceArchiveSha256: "b".repeat(64),
+        sourceTreeSha256: "c".repeat(64),
+        dockerfileSha256: "d".repeat(64),
+        localImageTag: `counterlab-runner:git-${sourceCommit}`,
+        localImageDigest: `sha256:${"e".repeat(64)}`,
+        ociRevision: sourceCommit,
+        ociSourceTreeSha256: "c".repeat(64),
+        engineAuthorityHash: "f".repeat(64),
+        runtimeManifestHash: "1".repeat(64),
+        runtimeToolchainSha256: "4".repeat(64),
+        runtimePolicySha256: "0".repeat(64),
+        proofDependencyManifestSha256: "1".repeat(64),
+        toolchainLockSha256: "5".repeat(64),
+        runtimeAdapterSha256: "6".repeat(64),
+        buildctlSha256: "7".repeat(64),
+        buildkitdSha256: "8".repeat(64),
+        buildkitConfigSha256: "9".repeat(64),
+        adapterDockerfileSha256: "a".repeat(64),
+        adapterImageTag: `counterlab-adapter:git-${sourceCommit}`,
+        adapterImageDigest: `sha256:${"b".repeat(64)}`,
+        adapterManifestDigest: `sha256:${"c".repeat(64)}`,
+        adapterOciArchiveSha256: "d".repeat(64),
+        adapterOciRevision: sourceCommit,
+        adapterOciSourceTreeSha256: "c".repeat(64),
+        limitMode: "container-cgroup-and-process-rlimit",
+        aggregateLimitIntentEnforced: true,
+        aggregateLimitEvidenceSha256: "e".repeat(64),
+        timeoutCleanupReceipt: `node_modules/.cache/counterlab-v6.1/releases/timeout-cleanup-${sourceCommit}.json`,
+        timeoutCleanupReceiptSha256: "e".repeat(64),
+        timeoutCleanupPayloadSha256: "f".repeat(64),
+        timeoutRunControlReceiptSha256: "0".repeat(64),
+        timeoutRootlessReceiptSha256: "1".repeat(64),
+        timeoutRuntimeSessionId: "rt-v61-test1",
+        timeoutVerifiedAt: "2026-07-16T16:24:00.000Z",
+        currentCommit: evidenceCommit,
+        generationFilesystemReadIsolation: "OS_ENFORCED",
+        sourceIsAncestor: true,
+        changedPaths: ["scientific-engines/snapshot.json"],
+        registryImage: `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`,
+        registryDigest: `sha256:${"3".repeat(64)}`,
+        registryResolvedAt: "2026-07-16T16:25:00.000Z",
+        observedAt: "2026-07-16T16:30:00.000Z",
+      },
+      "2026-07-16T16:30:00.000Z",
+    );
+    const {
+      generationFilesystemReadIsolation: _generationFilesystemReadIsolation,
+      ...legacyV4
+    } = current;
+
+    expect(
+      QualifiedRunnerReleaseV4Schema.parse({
+        ...legacyV4,
+        schemaVersion: "4",
+        verifierVersion: "counterlab-release-v4",
+      }),
+    ).toMatchObject({ schemaVersion: "4" });
+    expect(() => QualifiedRunnerReleaseSchema.parse(legacyV4)).toThrow();
   });
 
   it("retains strict parsing for historical v3 receipts", () => {
@@ -179,18 +256,31 @@ describe("qualified runner release schema", () => {
     );
   });
 
-  it("publishes the timeout-bound v4 receipt as generated JSON Schema", () => {
-    const path = resolve(
+  it("publishes distinct historical v4 and isolation-enforced v5 schemas", () => {
+    const v4Path = resolve(
       process.cwd(),
       "scientific-engines/schemas/qualified-runner-release-v4.schema.json",
     );
-    expect(existsSync(path)).toBe(true);
-    const schema = JSON.parse(readFileSync(path, "utf8")) as {
-      properties?: { schemaVersion?: { const?: string } };
+    const v5Path = resolve(
+      process.cwd(),
+      "scientific-engines/schemas/qualified-runner-release-v5.schema.json",
+    );
+    expect(existsSync(v4Path)).toBe(true);
+    expect(existsSync(v5Path)).toBe(true);
+    const v4 = JSON.parse(readFileSync(v4Path, "utf8")) as {
+      properties?: Record<string, { const?: string }>;
       required?: string[];
     };
-    expect(schema.properties?.schemaVersion?.const).toBe("4");
-    expect(schema.required).toEqual(
+    const v5 = JSON.parse(readFileSync(v5Path, "utf8")) as {
+      properties?: Record<string, { const?: string }>;
+      required?: string[];
+    };
+    expect(v4.properties?.schemaVersion?.const).toBe("4");
+    expect(v4.properties).not.toHaveProperty(
+      "generationFilesystemReadIsolation",
+    );
+    expect(v4.required).not.toContain("generationFilesystemReadIsolation");
+    expect(v4.required).toEqual(
       expect.arrayContaining([
         "timeoutCleanupReceipt",
         "timeoutCleanupReceiptSha256",
@@ -203,6 +293,11 @@ describe("qualified runner release schema", () => {
         "proofDependencyManifestSha256",
       ]),
     );
+    expect(v5.properties?.schemaVersion?.const).toBe("5");
+    expect(v5.properties?.generationFilesystemReadIsolation?.const).toBe(
+      "OS_ENFORCED",
+    );
+    expect(v5.required).toContain("generationFilesystemReadIsolation");
   });
 });
 
@@ -212,11 +307,11 @@ describe("deployment receipt schema", () => {
     const runner = "b".repeat(40);
     const digest = `sha256:${"c".repeat(64)}`;
     return {
-      schemaVersion: "4",
+      schemaVersion: "5",
       status: "DEPLOYED",
       workerName: "counterlab",
       productionOrigin: "https://counterlab.cserules.workers.dev",
-      generationFilesystemReadIsolation: "PARTIAL",
+      generationFilesystemReadIsolation: "OS_ENFORCED",
       workerEvidenceCommit: worker,
       runnerSourceCommit: runner,
       qualifiedRunnerReceiptSha256: "1".repeat(64),
@@ -253,13 +348,13 @@ describe("deployment receipt schema", () => {
       workerVersionSha256: "b".repeat(64),
       containerStatusSha256: "c".repeat(64),
       deployedAt: "2026-07-19T00:03:00.000Z",
-      verifierVersion: "counterlab-deployment-v4",
+      verifierVersion: "counterlab-deployment-v5",
     } as const;
   }
 
   it("binds the deployed Worker, Container, release checks, and exact artifacts", () => {
     expect(DeploymentReceiptSchema.parse(receipt())).toMatchObject({
-      schemaVersion: "4",
+      schemaVersion: "5",
       status: "DEPLOYED",
       workerName: "counterlab",
     });
@@ -278,9 +373,23 @@ describe("deployment receipt schema", () => {
     expect(() =>
       DeploymentReceiptSchema.parse({
         ...receipt(),
-        generationFilesystemReadIsolation: "OS_ENFORCED",
+        generationFilesystemReadIsolation: "PARTIAL",
       }),
     ).toThrow();
+  });
+
+  it("retains the historical v4 PARTIAL isolation contract", () => {
+    expect(
+      DeploymentReceiptV4Schema.parse({
+        ...receipt(),
+        schemaVersion: "4",
+        generationFilesystemReadIsolation: "PARTIAL",
+        verifierVersion: "counterlab-deployment-v4",
+      }),
+    ).toMatchObject({
+      schemaVersion: "4",
+      generationFilesystemReadIsolation: "PARTIAL",
+    });
   });
 
   it("rejects a dry-run projection that changes bytes or contains another file", () => {
@@ -316,6 +425,7 @@ describe("deployment receipt schema", () => {
       DeploymentReceiptV3Schema.parse({
         ...historical,
         schemaVersion: "3",
+        generationFilesystemReadIsolation: "PARTIAL",
         verifierVersion: "counterlab-deployment-v3",
       }),
     ).toMatchObject({ schemaVersion: "3" });
@@ -347,22 +457,32 @@ describe("deployment receipt schema", () => {
     );
   });
 
-  it("publishes the timeout-bound v4 deployment receipt as generated JSON Schema", () => {
-    const path = resolve(
+  it("publishes distinct historical v4 and isolation-enforced v5 deployment schemas", () => {
+    const v4Path = resolve(
       process.cwd(),
       "scientific-engines/schemas/deployment-receipt-v4.schema.json",
     );
-    expect(existsSync(path)).toBe(true);
-    const schema = JSON.parse(readFileSync(path, "utf8")) as {
+    const v5Path = resolve(
+      process.cwd(),
+      "scientific-engines/schemas/deployment-receipt-v5.schema.json",
+    );
+    expect(existsSync(v4Path)).toBe(true);
+    expect(existsSync(v5Path)).toBe(true);
+    const v4 = JSON.parse(readFileSync(v4Path, "utf8")) as {
       properties?: {
         schemaVersion?: { const?: string };
+        generationFilesystemReadIsolation?: { const?: string };
         dryRunFileCount?: { const?: number };
       };
       required?: string[];
     };
-    expect(schema.properties?.schemaVersion?.const).toBe("4");
-    expect(schema.properties?.dryRunFileCount?.const).toBe(1);
-    expect(schema.required).toEqual(
+    const v5 = JSON.parse(readFileSync(v5Path, "utf8")) as typeof v4;
+    expect(v4.properties?.schemaVersion?.const).toBe("4");
+    expect(v4.properties?.generationFilesystemReadIsolation?.const).toBe(
+      "PARTIAL",
+    );
+    expect(v4.properties?.dryRunFileCount?.const).toBe(1);
+    expect(v4.required).toEqual(
       expect.arrayContaining([
         "timeoutCleanupReceiptSha256",
         "aggregateLimitEvidenceSha256",
@@ -375,6 +495,10 @@ describe("deployment receipt schema", () => {
         "viteVersion",
         "wranglerVersion",
       ]),
+    );
+    expect(v5.properties?.schemaVersion?.const).toBe("5");
+    expect(v5.properties?.generationFilesystemReadIsolation?.const).toBe(
+      "OS_ENFORCED",
     );
   });
 });

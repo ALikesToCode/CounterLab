@@ -482,8 +482,7 @@ async function main(): Promise<void> {
     runnerSourceCommit: args["--source-commit"],
     runnerImageDigest: args["--registry-digest"],
     timeoutCleanupReceiptSha256: qualified.timeoutCleanupReceiptSha256,
-    aggregateLimitEvidenceSha256:
-      qualified.aggregateLimitEvidenceSha256,
+    aggregateLimitEvidenceSha256: qualified.aggregateLimitEvidenceSha256,
     runtimePolicySha256: qualified.runtimePolicySha256,
     proofDependencyManifestSha256: qualified.proofDependencyManifestSha256,
     workerArtifactClassification: frozenWorkerRelease.identity.classification,
@@ -560,19 +559,19 @@ async function main(): Promise<void> {
   const dryRun = dryRunWorkerHash(root, paths.dryRun, workerBundleSha256);
   const configBytes = readFileSync(paths.config);
   const receipt = DeploymentReceiptSchema.parse({
-    schemaVersion: "4",
+    schemaVersion: "5",
     status: "DEPLOYED",
     workerName: "counterlab",
     productionOrigin: "https://counterlab.cserules.workers.dev",
-    generationFilesystemReadIsolation: "PARTIAL",
+    generationFilesystemReadIsolation:
+      releaseCheck.generationFilesystemReadIsolation,
     workerEvidenceCommit: args["--evidence-commit"],
     runnerSourceCommit: args["--source-commit"],
     qualifiedRunnerReceiptSha256: sha256(qualifiedBytes),
     releaseCheckReceiptSha256: sha256(releaseCheckBytes),
     releaseCheckCheckedAt: releaseCheck.checkedAt,
     timeoutCleanupReceiptSha256: qualified.timeoutCleanupReceiptSha256,
-    aggregateLimitEvidenceSha256:
-      qualified.aggregateLimitEvidenceSha256,
+    aggregateLimitEvidenceSha256: qualified.aggregateLimitEvidenceSha256,
     runtimeToolchainSha256: releaseCheck.runtimeToolchainSha256,
     runtimePolicySha256: releaseCheck.runtimePolicySha256,
     proofDependencyManifestSha256: releaseCheck.proofDependencyManifestSha256,
@@ -602,7 +601,7 @@ async function main(): Promise<void> {
     workerVersionSha256: sha256(versionBytes),
     containerStatusSha256: sha256(containersBytes),
     deployedAt: new Date().toISOString(),
-    verifierVersion: "counterlab-deployment-v4",
+    verifierVersion: "counterlab-deployment-v5",
   });
   await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, {
     encoding: "utf8",

@@ -10412,7 +10412,10 @@ describe("Cloudflare Worker API", () => {
     );
     await expect(probedHealth.json()).resolves.toMatchObject({
       ok: true,
-      data: { readiness: "ready" },
+      data: {
+        readiness: "ready",
+        generationFilesystemReadIsolation: "OS_ENFORCED",
+      },
     });
   });
 
@@ -10443,6 +10446,7 @@ describe("Cloudflare Worker API", () => {
         liveCodex: "configured",
         liveKernel: "configured",
         readiness: "not-ready",
+        generationFilesystemReadIsolation: "PARTIAL",
       },
     });
   });

@@ -4254,7 +4254,10 @@ export function createApi(options: ApiOptions = {}) {
           runner === "configured"
             ? ("credential-and-privilege-boundary" as const)
             : ("local-runner-required" as const),
-        generationFilesystemReadIsolation: "PARTIAL" as const,
+        generationFilesystemReadIsolation:
+          readiness?.checks.runner === true
+            ? ("OS_ENFORCED" as const)
+            : ("PARTIAL" as const),
         requestId: context.get("requestId"),
       }),
     );
