@@ -82,7 +82,7 @@ import {
 } from "./components/learner/PredictionSeal";
 import { PrivacyPacketSummary } from "./components/learner/PrivacyPacketSummary";
 import { QuestionComposer } from "./components/learner/QuestionComposer";
-import { VerifiedBeliefBreakMechanism } from "./components/learner/VerifiedBeliefBreakTheater";
+import { LockedBeliefBreakPreview } from "./components/learner/LockedBeliefBreakPreview";
 import {
   currentLearnerStage,
   learnerSessionStatusLabel,
@@ -1142,10 +1142,7 @@ function Landing({
                 let fixed evidence answer.
               </blockquote>
             </header>
-            <VerifiedBeliefBreakMechanism
-              presentation="compact"
-              resultVisibility="locked"
-            />
+            <LockedBeliefBreakPreview />
           </aside>
 
           <div
