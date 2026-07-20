@@ -123,6 +123,35 @@ describe("mergeProofEventSources", () => {
     ]);
   });
 
+  it("keeps failed multi-job history while deduplicating a live overlap", () => {
+    const rejected = compilerEvent("job_compile_first", 1, {
+      kind: "verifier.rejected",
+      invariant: "one_variable_changed",
+      observed: { split: "rows", model: "changed" },
+      expected: { split: "entities", model: "same" },
+      counterexample: "The first plan changed two variables.",
+    });
+    const replacementStarted = compilerEvent("job_compile_second", 1);
+    const replacementVerified = compilerEvent("job_compile_second", 2, {
+      kind: "verifier.verified",
+      invariantCount: 12,
+      mutationCount: 8,
+    });
+
+    const result = mergeProofEventSources({
+      recordedCompilerEvents: [rejected, replacementStarted],
+      streamedCompilerEvents: [replacementStarted, replacementVerified],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.duplicatesRemoved).toBe(1);
+    expect(result.compilerEvents.map(({ eventId }) => eventId)).toEqual([
+      rejected.eventId,
+      replacementStarted.eventId,
+      replacementVerified.eventId,
+    ]);
+  });
+
   it("allows independent job cursors and preserves their server arrival order", () => {
     const result = mergeProofEventSources({
       recordedCompilerEvents: [
