@@ -166,6 +166,88 @@ _V5_TRANSFER_KEYS = frozenset({
     "resultHash",
 })
 _V5_TRANSFER_CHECK_KEYS = frozenset({"invariant", "passed", "evidence"})
+_V5_TRANSFER_POLICIES: dict[str, dict[str, Any]] = {
+    "entity_leakage": {
+        "taskId": "forecasting-future-leakage-01",
+        "evaluatorVersion": "counterlab-transfer-v1",
+        "selectedStrategy": "time_ordered_holdout",
+        "identifiedRisks": ["centered_window_reads_future"],
+        "requiredEvidence": frozenset(
+            {"center_true_uses_later_targets", "random_split_mixes_dates"}
+        ),
+        "allowedEvidence": frozenset(
+            {
+                "center_true_uses_later_targets",
+                "random_split_mixes_dates",
+                "metric_is_mae",
+            }
+        ),
+        "checks": [
+            {
+                "invariant": "TIME_AWARE_EVALUATION",
+                "passed": True,
+                "evidence": (
+                    "A deployment-aligned forecast trains on earlier dates and "
+                    "evaluates later dates."
+                ),
+            },
+            {
+                "invariant": "FUTURE_INFORMATION_RISK",
+                "passed": True,
+                "evidence": (
+                    "A centered target window reads observations that do not "
+                    "exist at prediction time."
+                ),
+            },
+            {
+                "invariant": "EVIDENCE_GROUNDED",
+                "passed": True,
+                "evidence": (
+                    "Both center=True and the shuffled date split must be "
+                    "selected as code evidence."
+                ),
+            },
+        ],
+    },
+    "class_imbalance": {
+        "taskId": "manufacturing-defect-transfer-01",
+        "evaluatorVersion": "counterlab-imbalance-transfer-v1",
+        "selectedStrategy": "reject_accuracy_only",
+        "identifiedRisks": ["recall_and_pr_auc"],
+        "requiredEvidence": frozenset(
+            {"zero_true_positives", "rare_base_rate"}
+        ),
+        "allowedEvidence": frozenset(
+            {"zero_true_positives", "rare_base_rate", "many_true_negatives"}
+        ),
+        "checks": [
+            {
+                "invariant": "ACCURACY_CLAIM_REJECTED",
+                "passed": True,
+                "evidence": (
+                    "Overall accuracy cannot support deployment when the "
+                    "classifier misses every rare defective part."
+                ),
+            },
+            {
+                "invariant": "MINORITY_METRICS_SELECTED",
+                "passed": True,
+                "evidence": (
+                    "Defect recall and PR-AUC expose performance on the rare "
+                    "class and relative to its base rate."
+                ),
+            },
+            {
+                "invariant": "EVIDENCE_GROUNDED",
+                "passed": True,
+                "evidence": (
+                    "Use both the zero true-positive count and the 1% base rate "
+                    "as evidence."
+                ),
+            },
+        ],
+    },
+}
 
 
 class HostedPatchError(ValueError):
@@ -197,6 +279,56 @@ def _strict_fields(
             f"{name} fields are invalid: "
             f"missing={sorted(expected.difference(actual))}, "
             f"extra={sorted(actual.difference(expected))}"
+        )
+
+
+def _validate_v5_transfer_semantics(
+    concept: str, transfer: Mapping[str, Any]
+) -> None:
+    policy = _V5_TRANSFER_POLICIES.get(concept)
+    if policy is None:
+        raise HostedPatchError("v5 patch transfer Subject Pack is not registered")
+    evidence = _sequence(
+        transfer.get("evidenceChoices"), "transferResult.evidenceChoices"
+    )
+    evidence_set = set(evidence)
+    required_evidence = policy["requiredEvidence"]
+    allowed_evidence = policy["allowedEvidence"]
+    checks = [
+        dict(_mapping(check, "transfer check"))
+        for check in _sequence(transfer.get("checks"), "transferResult.checks")
+    ]
+    if (
+        transfer.get("taskId") != policy["taskId"]
+        or transfer.get("evaluatorVersion") != policy["evaluatorVersion"]
+        or transfer.get("selectedStrategy") != policy["selectedStrategy"]
+        or transfer.get("identifiedRisks") != policy["identifiedRisks"]
+        or len(evidence) != len(evidence_set)
+        or evidence != sorted(evidence)
+        or not required_evidence.issubset(evidence_set)
+        or not evidence_set.issubset(allowed_evidence)
+        or any(
+            not isinstance(check.get("evidence"), str)
+            or not check["evidence"].strip()
+            for check in checks
+        )
+        or [
+            {
+                "invariant": check.get("invariant"),
+                "passed": check.get("passed"),
+            }
+            for check in checks
+        ]
+        != [
+            {
+                "invariant": check["invariant"],
+                "passed": check["passed"],
+            }
+            for check in policy["checks"]
+        ]
+    ):
+        raise HostedPatchError(
+            "v5 patch transfer does not match the fixed evaluator semantics"
         )
 
 
@@ -267,6 +399,7 @@ def _validate_v5_patch_bundle(bundle: Mapping[str, Any]) -> None:
     concept = belief.get("concept")
     if concept not in _PATCH_OPERATIONS:
         raise HostedPatchError("v5 patch Subject Pack is not registered")
+    _validate_v5_transfer_semantics(str(concept), transfer)
     if (
         manifest.get("support", {}).get("status") != "SUPPORTED"
         or belief.get("supportState") != "SUPPORTED"

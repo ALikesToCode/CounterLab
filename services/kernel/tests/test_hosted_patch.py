@@ -8,7 +8,11 @@ import nbformat
 import pytest
 
 from counterlab_kernel.canonical import sha256_json, sha256_json_browser
-from counterlab_kernel.hosted_patch import HostedPatchError, execute_hosted_patch
+from counterlab_kernel.hosted_patch import (
+    HostedPatchError,
+    _validate_v5_transfer_semantics,
+    execute_hosted_patch,
+)
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -179,13 +183,35 @@ def _v5_leakage_patch_case() -> tuple[bytes, dict[str, object], dict[str, object
         "outcome": "PASSED",
         "selectedStrategy": "time_ordered_holdout",
         "identifiedRisks": ["centered_window_reads_future"],
-        "evidenceChoices": ["random_split_mixes_dates"],
+        "evidenceChoices": [
+            "center_true_uses_later_targets",
+            "random_split_mixes_dates",
+        ],
         "checks": [
             {
                 "invariant": "TIME_AWARE_EVALUATION",
                 "passed": True,
-                "evidence": "Future rows remain outside training.",
-            }
+                "evidence": (
+                    "A deployment-aligned forecast trains on earlier dates and "
+                    "evaluates later dates."
+                ),
+            },
+            {
+                "invariant": "FUTURE_INFORMATION_RISK",
+                "passed": True,
+                "evidence": (
+                    "A centered target window reads observations that do not "
+                    "exist at prediction time."
+                ),
+            },
+            {
+                "invariant": "EVIDENCE_GROUNDED",
+                "passed": True,
+                "evidence": (
+                    "Both center=True and the shuffled date split must be "
+                    "selected as code evidence."
+                ),
+            },
         ],
         "evaluatorVersion": "counterlab-transfer-v1",
         "evaluatedAt": "2026-07-16T09:59:00.000Z",
@@ -312,6 +338,33 @@ def _mutate_v5_transfer_semantics(bundle: dict[str, object]) -> None:
     release["evidenceVerdictHash"] = sha256_json_browser(verdict)
 
 
+def _rehash_v5_transfer(transfer: dict[str, object]) -> None:
+    transfer_base = dict(transfer)
+    transfer_base.pop("resultHash", None)
+    transfer["resultHash"] = sha256_json_browser(transfer_base)
+
+
+def _mutate_rehashed_transfer_strategy(bundle: dict[str, object]) -> None:
+    transfer = bundle["transferResult"]
+    assert isinstance(transfer, dict)
+    transfer["selectedStrategy"] = "random_row_holdout"
+    _rehash_v5_transfer(transfer)
+
+
+def _mutate_rehashed_transfer_evidence(bundle: dict[str, object]) -> None:
+    transfer = bundle["transferResult"]
+    assert isinstance(transfer, dict)
+    transfer["evidenceChoices"] = ["random_split_mixes_dates"]
+    _rehash_v5_transfer(transfer)
+
+
+def _mutate_rehashed_transfer_evaluator(bundle: dict[str, object]) -> None:
+    transfer = bundle["transferResult"]
+    assert isinstance(transfer, dict)
+    transfer["evaluatorVersion"] = "foreign-evaluator-v1"
+    _rehash_v5_transfer(transfer)
+
+
 def test_hosted_v5_patch_requires_scientific_and_transfer_authority(
     tmp_path: Path,
 ) -> None:
@@ -327,6 +380,66 @@ def test_hosted_v5_patch_requires_scientific_and_transfer_authority(
 
     assert executed["patchResult"]["status"] == "VERIFIED"
     assert executed["patchResult"]["modifiedCells"] == [3]
+
+
+def test_v5_imbalance_transfer_matches_the_fixed_evaluator_semantics() -> None:
+    transfer = {
+        "schemaVersion": "1",
+        "id": "transfer_imbalance_v5",
+        "sessionId": "session_imbalance_v5",
+        "taskId": "manufacturing-defect-transfer-01",
+        "outcome": "PASSED",
+        "selectedStrategy": "reject_accuracy_only",
+        "identifiedRisks": ["recall_and_pr_auc"],
+        "evidenceChoices": [
+            "rare_base_rate",
+            "zero_true_positives",
+        ],
+        "checks": [
+            {
+                "invariant": "ACCURACY_CLAIM_REJECTED",
+                "passed": True,
+                "evidence": (
+                    "Overall accuracy cannot support deployment when the "
+                    "classifier misses every rare defective part."
+                ),
+            },
+            {
+                "invariant": "MINORITY_METRICS_SELECTED",
+                "passed": True,
+                "evidence": (
+                    "Defect recall and PR-AUC expose performance on the rare "
+                    "class and relative to its base rate."
+                ),
+            },
+            {
+                "invariant": "EVIDENCE_GROUNDED",
+                "passed": True,
+                "evidence": (
+                    "Use both the zero true-positive count and the 1% base rate "
+                    "as evidence."
+                ),
+            },
+        ],
+        "evaluatorVersion": "counterlab-imbalance-transfer-v1",
+        "evaluatedAt": "2026-07-16T09:59:00.000Z",
+        "resultHash": "a" * 64,
+    }
+
+    _validate_v5_transfer_semantics("class_imbalance", transfer)
+    copy_edited = deepcopy(transfer)
+    copy_edited["checks"][0]["evidence"] = "Equivalent public explanation."
+    _validate_v5_transfer_semantics("class_imbalance", copy_edited)
+    for field, value in (
+        ("selectedStrategy", "approve_high_accuracy"),
+        ("identifiedRisks", ["accuracy"]),
+        ("evidenceChoices", ["zero_true_positives"]),
+        ("evaluatorVersion", "foreign-evaluator-v1"),
+    ):
+        mutated = deepcopy(transfer)
+        mutated[field] = value
+        with pytest.raises(HostedPatchError, match="fixed evaluator semantics"):
+            _validate_v5_transfer_semantics("class_imbalance", mutated)
 
 
 @pytest.mark.parametrize(
@@ -351,6 +464,9 @@ def test_hosted_v5_patch_requires_scientific_and_transfer_authority(
             ),
             "transfer",
         ),
+        (_mutate_rehashed_transfer_strategy, "fixed evaluator semantics"),
+        (_mutate_rehashed_transfer_evidence, "fixed evaluator semantics"),
+        (_mutate_rehashed_transfer_evaluator, "fixed evaluator semantics"),
         (_mutate_v5_transfer_semantics, "transfer"),
         (
             lambda bundle: bundle["fixedSelection"].update(  # type: ignore[union-attr]
@@ -622,8 +738,8 @@ def test_hosted_imbalance_patch_adds_stratified_class_specific_evaluation(
         "transferSummary": {
             "outcome": "PASSED",
             "resultHash": "b" * 64,
-            "selectedStrategy": "cost_aware_threshold",
-            "identifiedRisks": ["minority_false_negative_cost"],
+            "selectedStrategy": "reject_accuracy_only",
+            "identifiedRisks": ["recall_and_pr_auc"],
         },
         "patchContract": {
             "id": "imbalance-notebook-patch-v1",

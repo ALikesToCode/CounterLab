@@ -124,6 +124,8 @@ def evaluate_forecasting_transfer(
         raise ValueError(f"unknown strategy choice: {strategy_choice}")
     if risk_choice not in risk_ids:
         raise ValueError(f"unknown risk choice: {risk_choice}")
+    if len(set(evidence_choices)) != len(evidence_choices):
+        raise ValueError("duplicate evidence choice")
     unknown_evidence = sorted(set(evidence_choices).difference(evidence_ids))
     if unknown_evidence:
         raise ValueError(
@@ -178,4 +180,3 @@ def evaluate_forecasting_transfer(
     }
     result["resultHash"] = sha256_json(result)
     return result
-

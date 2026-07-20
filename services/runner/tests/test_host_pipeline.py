@@ -78,6 +78,55 @@ def build_experiment():
     (workspace / "public_tests.py").write_text("assert True\n", encoding="utf-8")
 
 
+def _resource_evidence(*, network_denied: bool = True) -> dict[str, object]:
+    return {
+        "networkDenied": network_denied,
+        "hiddenReadAttemptsDenied": True,
+        "containerUser": "65532:65532",
+        "mountedTargets": [
+            "/workspace",
+            "/fixtures/customer_churn.csv",
+            "/output",
+        ],
+        "limits": {
+            "wallSeconds": True,
+            "memoryMb": True,
+            "maxProcesses": True,
+            "maxFiles": True,
+            "maxOutputBytes": True,
+        },
+        "limitMode": "container-cgroup-and-process-rlimit",
+        "aggregateLimitIntentEnforced": True,
+        "intendedAggregateLimits": {
+            "cpuCount": 2.0,
+            "maxProcesses": 16,
+            "memoryBytes": 536870912,
+        },
+        "limitAuthority": {
+            "wallSeconds": {
+                "enforced": True,
+                "scope": "request-deadline-and-process-cpu-rlimit",
+            },
+            "memoryMb": {
+                "enforced": True,
+                "scope": "container-cgroup-and-process-address-space-rlimit",
+            },
+            "maxProcesses": {
+                "enforced": True,
+                "scope": "container-cgroup-and-process-count-rlimit",
+            },
+            "maxFiles": {
+                "enforced": True,
+                "scope": "host-output-postcondition",
+            },
+            "maxOutputBytes": {
+                "enforced": True,
+                "scope": "process-file-rlimit-and-host-output-postcondition",
+            },
+        },
+    }
+
+
 class _Executor:
     def __init__(self, contract: dict[str, object]) -> None:
         self.contract = contract
@@ -89,23 +138,7 @@ class _Executor:
             exit_code=0,
             duration_ms=17,
             adapter_contract=self.contract,
-            evidence={
-                "networkDenied": True,
-                "hiddenReadAttemptsDenied": True,
-                "containerUser": "65532:65532",
-                "mountedTargets": [
-                    "/workspace",
-                    "/fixtures/customer_churn.csv",
-                    "/output",
-                ],
-                "limits": {
-                    "wallSeconds": True,
-                    "memoryMb": True,
-                    "maxProcesses": True,
-                    "maxFiles": True,
-                    "maxOutputBytes": True,
-                },
-            },
+            evidence=_resource_evidence(),
         )
 
 
@@ -267,23 +300,7 @@ def test_host_pipeline_rejects_false_isolation_probe_without_computed_result(
                 exit_code=0,
                 duration_ms=5,
                 adapter_contract=self.contract,
-                evidence={
-                    "networkDenied": False,
-                    "hiddenReadAttemptsDenied": True,
-                    "containerUser": "65532:65532",
-                    "mountedTargets": [
-                        "/workspace",
-                        "/fixtures/customer_churn.csv",
-                        "/output",
-                    ],
-                    "limits": {
-                        "wallSeconds": True,
-                        "memoryMb": True,
-                        "maxProcesses": True,
-                        "maxFiles": True,
-                        "maxOutputBytes": True,
-                    },
-                },
+                evidence=_resource_evidence(network_denied=False),
             )
 
     root = Path(__file__).resolve().parents[3]
@@ -297,3 +314,48 @@ def test_host_pipeline_rejects_false_isolation_probe_without_computed_result(
     assert outcome.status == "REJECTED"
     assert outcome.result is None
     assert "network_isolation" in {failure.invariant for failure in outcome.failures}
+
+
+def test_host_pipeline_rejects_forged_limit_authority(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = create_fresh_workspace(tmp_path / "generated", "session-01")
+    _write_workspace(workspace)
+    kernel_calls = 0
+
+    def unexpected_kernel_call(*_: object, **__: object) -> object:
+        nonlocal kernel_calls
+        kernel_calls += 1
+        raise AssertionError("fixed kernel ran without aggregate resource authority")
+
+    monkeypatch.setattr(
+        "counterlab_runner.pipeline.run_leakage_experiment",
+        unexpected_kernel_call,
+    )
+
+    class ForgedExecutor(_Executor):
+        def execute(self, **_: object) -> DockerExecutionRecord:
+            evidence = _resource_evidence()
+            evidence["aggregateLimitIntentEnforced"] = False
+            return DockerExecutionRecord(
+                exit_code=0,
+                duration_ms=5,
+                adapter_contract=self.contract,
+                evidence=evidence,
+            )
+
+    root = Path(__file__).resolve().parents[3]
+    outcome = HostCompileVerifyPipeline(
+        generated_root=tmp_path / "generated",
+        fixture_path=root / "fixtures/public/customer_churn.csv",
+        executor=ForgedExecutor(_contract()),
+        run_root=tmp_path / "runs",
+    )(workspace)
+
+    assert outcome.status == "REJECTED"
+    assert outcome.result is None
+    assert kernel_calls == 0
+    assert "runner_enforcement" in {
+        failure.invariant for failure in outcome.failures
+    }

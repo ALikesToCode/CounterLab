@@ -33,11 +33,13 @@ async function start(
   authorizeToken: HostedRunnerServerOptions["authorizeToken"] = (token) =>
     Promise.resolve(token === "scoped-token"),
   onJobSettled?: HostedRunnerServerOptions["onJobSettled"],
+  releaseIdentity?: HostedRunnerServerOptions["releaseIdentity"],
 ) {
   const server = createHostedRunnerServer({
     authorizeToken,
     processJob,
     ...(onJobSettled === undefined ? {} : { onJobSettled }),
+    ...(releaseIdentity === undefined ? {} : { releaseIdentity }),
   });
   servers.push(server);
   server.listen(0, "127.0.0.1");
@@ -103,13 +105,20 @@ describe("hosted runner HTTP service", () => {
 
   it("accepts one authenticated job and reports readiness without exposing inputs", async () => {
     const processJob = vi.fn(async () => undefined);
-    const baseUrl = await start(processJob);
+    const runnerSourceCommit = "b".repeat(40);
+    const runnerImageDigest = `sha256:${"c".repeat(64)}`;
+    const baseUrl = await start(processJob, undefined, undefined, {
+      runnerSourceCommit,
+      runnerImageDigest,
+    });
 
     const ready = await fetch(`${baseUrl}/ready`);
     expect(ready.status).toBe(200);
     await expect(ready.json()).resolves.toEqual({
       status: "ready",
       service: "counterlab-hosted-runner",
+      runnerSourceCommit,
+      runnerImageDigest,
     });
 
     const accepted = await fetch(`${baseUrl}/jobs`, {

@@ -116,3 +116,15 @@ def test_transfer_rejects_ids_outside_the_fixed_choices() -> None:
                 "random_split_mixes_dates",
             ],
         )
+
+
+def test_transfer_rejects_duplicate_evidence_choices() -> None:
+    with pytest.raises(ValueError, match="duplicate evidence"):
+        evaluate_forecasting_transfer(
+            strategy_choice="time_ordered_holdout",
+            risk_choice="centered_window_reads_future",
+            evidence_choices=[
+                "center_true_uses_later_targets",
+                "center_true_uses_later_targets",
+            ],
+        )

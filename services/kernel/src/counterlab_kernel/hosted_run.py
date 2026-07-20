@@ -647,6 +647,7 @@ def _execute_v5_interactive(bundle: Mapping[str, Any]) -> dict[str, Any]:
             "scientific-candidate-verifier-v1",
             "scientific-candidate-verifier-v2",
             "scientific-candidate-verifier-v3",
+            "scientific-candidate-verifier-v4",
         }
         or compile_authority.get("projectionAdapterVersion")
         != "experiment-ir-v5-to-plan-v2-v1"
@@ -1094,6 +1095,7 @@ def _execute_v5(bundle: Mapping[str, Any]) -> dict[str, Any]:
             "scientific-candidate-verifier-v1",
             "scientific-candidate-verifier-v2",
             "scientific-candidate-verifier-v3",
+            "scientific-candidate-verifier-v4",
         }
         or provenance.get("scorerVersion") != selection.get("scorerVersion")
         or provenance.get("projectionAdapterVersion")

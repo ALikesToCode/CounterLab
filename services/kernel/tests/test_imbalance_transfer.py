@@ -33,7 +33,7 @@ def test_transfer_passes_only_with_minority_aware_metric_and_evidence() -> None:
     failed = evaluate_manufacturing_transfer(
         decision_choice="approve_high_accuracy",
         metric_choice="accuracy",
-        evidence_choices=["rare_base_rate"],
+        evidence_choices=["many_true_negatives"],
     )
 
     assert passed["outcome"] == "TRANSFER_PASSED"
@@ -48,5 +48,17 @@ def test_transfer_rejects_unknown_choice_ids() -> None:
         evaluate_manufacturing_transfer(
             decision_choice="reject_accuracy_only",
             metric_choice="made_up_metric",
-            evidence_choices=["zero_true_positives", "rare_base_rate"],
+            evidence_choices=["zero_true_positives"],
+        )
+
+
+def test_transfer_rejects_duplicate_evidence_ids() -> None:
+    with pytest.raises(ValueError, match="duplicate evidence"):
+        evaluate_manufacturing_transfer(
+            decision_choice="reject_accuracy_only",
+            metric_choice="recall_and_pr_auc",
+            evidence_choices=[
+                "zero_true_positives",
+                "zero_true_positives",
+            ],
         )

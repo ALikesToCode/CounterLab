@@ -10,7 +10,7 @@ from .canonical import sha256_json
 
 _TASK: dict[str, Any] = {
     "schemaVersion": "1",
-    "id": "manufacturing-defect-imbalance-01",
+    "id": "manufacturing-defect-transfer-01",
     "concept": "class_imbalance_transfer",
     "title": "Would this inspection model catch rare defects?",
     "scenario": (
@@ -108,6 +108,8 @@ def evaluate_manufacturing_transfer(
         raise ValueError(f"unknown decision choice: {decision_choice}")
     if metric_choice not in _choice_ids("metricChoices"):
         raise ValueError(f"unknown metric choice: {metric_choice}")
+    if len(set(evidence_choices)) != len(evidence_choices):
+        raise ValueError("duplicate evidence choice")
     unknown_evidence = sorted(
         set(evidence_choices).difference(_choice_ids("evidenceChips"))
     )
@@ -129,8 +131,8 @@ def evaluate_manufacturing_transfer(
             "id": "MINORITY_METRICS_SELECTED",
             "passed": metric_choice == _CORRECT_METRIC,
             "feedback": (
-                "Defect recall and PR-AUC expose performance on the rare class and "
-                "relative to its base rate."
+                "Defect recall and PR-AUC expose performance on the rare class "
+                "and relative to its base rate."
             ),
         },
         {

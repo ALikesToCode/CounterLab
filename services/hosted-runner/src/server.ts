@@ -30,6 +30,10 @@ const DispatchSchema = z
   .strict();
 
 export type HostedRunnerServerOptions = {
+  releaseIdentity?: {
+    runnerSourceCommit: string;
+    runnerImageDigest: string;
+  };
   authorizeToken(
     token: string,
     jobId: string,
@@ -100,6 +104,7 @@ export function createHostedRunnerServer(options: HostedRunnerServerOptions) {
       respond(response, 200, {
         status: "ready",
         service: "counterlab-hosted-runner",
+        ...(options.releaseIdentity ?? {}),
       });
       return;
     }
@@ -217,6 +222,10 @@ async function startProductionServer(): Promise<void> {
   const authJson = process.env.CODEX_AUTH_JSON;
   const runnerVerifyingPublicKey =
     process.env.COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY;
+  const runnerSourceCommit =
+    process.env.COUNTERLAB_RUNNER_SOURCE_COMMIT?.trim() ?? "";
+  const runnerImageDigest =
+    process.env.COUNTERLAB_RUNNER_IMAGE_DIGEST?.trim() ?? "";
   delete process.env.CODEX_AUTH_JSON;
   delete process.env.COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY;
   if (authJson === undefined || authJson.trim().length === 0) {
@@ -228,6 +237,17 @@ async function startProductionServer(): Promise<void> {
   ) {
     throw new Error(
       "COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY is required by the hosted runner",
+    );
+  }
+  const releaseIdentityMissing =
+    runnerSourceCommit.length === 0 && runnerImageDigest.length === 0;
+  if (
+    !releaseIdentityMissing &&
+    (!/^[a-f0-9]{40}$/u.test(runnerSourceCommit) ||
+      !/^sha256:[a-f0-9]{64}$/u.test(runnerImageDigest))
+  ) {
+    throw new Error(
+      "Runner release identity must contain an exact source commit and image digest",
     );
   }
   const workspaceRoot = process.env.COUNTERLAB_RUNNER_WORK_ROOT ?? "/work/jobs";
@@ -260,6 +280,9 @@ async function startProductionServer(): Promise<void> {
     current?: ReturnType<typeof createHostedRunnerServer>;
   } = {};
   const server = createHostedRunnerServer({
+    ...(releaseIdentityMissing
+      ? {}
+      : { releaseIdentity: { runnerSourceCommit, runnerImageDigest } }),
     async authorizeToken(scopedToken, jobId, purpose, controlPlaneOrigin) {
       try {
         await verifyRunnerJobToken(scopedToken, runnerVerifyingPublicKey, {

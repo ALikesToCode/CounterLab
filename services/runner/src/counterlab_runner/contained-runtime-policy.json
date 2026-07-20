@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "1",
+  "shortCommandTimeoutMs": 5000,
+  "executionControlOverheadMs": 300000,
+  "cleanupReserveMs": 120000,
+  "callerGraceMs": 5000
+}

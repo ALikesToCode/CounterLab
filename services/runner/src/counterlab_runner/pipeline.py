@@ -186,14 +186,26 @@ class HostCompileVerifyPipeline:
         limits_enforced = isinstance(limits, dict) and all(
             limits.get(name) is True for name in required_limits
         )
-        if not mounts_are_public or not limits_enforced:
+        aggregate_limits_enforced = (
+            evidence.get("aggregateLimitIntentEnforced") is True
+        )
+        if (
+            not mounts_are_public
+            or not limits_enforced
+            or not aggregate_limits_enforced
+        ):
             return _rejected(
                 "runner_enforcement",
                 {
                     "publicMountsOnly": mounts_are_public,
                     "limitsEnforced": limits_enforced,
+                    "aggregateLimitsEnforced": aggregate_limits_enforced,
                 },
-                {"publicMountsOnly": True, "limitsEnforced": True},
+                {
+                    "publicMountsOnly": True,
+                    "limitsEnforced": True,
+                    "aggregateLimitsEnforced": True,
+                },
                 "The execution record did not establish the required runner controls.",
             )
 
@@ -209,6 +221,13 @@ class HostCompileVerifyPipeline:
         candidate["resourceEnforcement"] = {
             "networkDenied": evidence.get("networkDenied") is True,
             "limits": limits,
+            "limitMode": evidence.get("limitMode"),
+            "aggregateLimitIntentEnforced": evidence.get(
+                "aggregateLimitIntentEnforced"
+            ),
+            "intendedAggregateLimits": evidence.get("intendedAggregateLimits"),
+            "limitAuthority": evidence.get("limitAuthority"),
+            "timeoutAuthority": evidence.get("timeoutAuthority"),
         }
         candidate["isolation"] = {
             "hiddenVerifierMounted": not mounts_are_public,
