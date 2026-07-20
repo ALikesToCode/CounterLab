@@ -13,23 +13,23 @@ pass is never presented as a browser or production pass.
 
 - **Branch:** `feat/learner-ux-v6.1`
 - **Current product checkpoint:**
-  `134c22ff21afefb82c4e1bf0a51357254ca9a306`. The owner partitioned the
+  `5259a495948a68024702ba5239bf8057d1785f08`. The owner partitioned the
   preserved integration delta into nine commits and fast-forwarded both
-  `feat/learner-ux-v6.1` and `main` to this candidate before qualification. The
-  lead switched back to the feature branch for small independent fix-forward
-  commits; the existing `main` ref is an unqualified candidate, not release
-  evidence. At `2026-07-20T19:33:40Z`, 28 hours, 26 minutes, and 20 seconds
-  remained. Current local source verification passes web Vitest **605/605**,
-  repository/web/Worker strict TypeScript, and the expanded Python matrix
-  **323/324**; the sole Python failure is denied localhost socket creation in
-  the managed sandbox. Root Vitest passes **619/646**; 24 failures are denied
-  process/socket/sandbox capabilities and three are stale scientific-evidence
-  expectations. The source-bound SBOM and scientific manifests still name
-  source `6f551367`, not this checkpoint, so qualification and deployment are
-  prohibited until the final source freezes and all evidence is regenerated.
-  No current CloakBrowser journey, exact image, qualification receipt,
-  deployment, production smoke, learner observation, Devpost publication, or
-  submission receipt is inferred.
+  `feat/learner-ux-v6.1` and `main` to `134c22f` before qualification. The lead
+  switched back to the feature branch and added seven independent fix-forward
+  commits through `5259a49`; the existing `main` ref remains an unqualified
+  earlier candidate, not release evidence. At `2026-07-20T19:33:40Z`, 28
+  hours, 26 minutes, and 20 seconds remained. Current local source verification
+  passes web Vitest **608/608**, repository/web/Worker/E2E strict TypeScript,
+  and the expanded Python product matrix **324/324** when the one localhost
+  socket test runs with the required socket permission. Elevated root Vitest
+  passes **643/646**; its remaining three failures are stale
+  scientific-evidence expectations. The source-bound SBOM and scientific
+  manifests still name source `6f551367`, not this checkpoint, so
+  qualification and deployment are prohibited until the final source freezes
+  and all evidence is regenerated. No current CloakBrowser journey, exact
+  image, qualification receipt, deployment, production smoke, learner
+  observation, Devpost publication, or submission receipt is inferred.
 - **Finish-command starting checkpoint:** committed `HEAD`
   `24262ea6f40e988d7be054bdba6f531531b1679f` plus the explicitly preserved
   dirty slices listed by `git status`. At `2026-07-19T15:18:04Z`, the
@@ -2851,3 +2851,48 @@ cgroup-v2 enforcement receipt exists; and public browser, impact, video, and
 submission evidence have not occurred. Audit-agent attribution and a residual
 `Ctrl K` accessible-name defect are publication/accessibility repairs, not
 release proof. No blocker is closed by source code alone.
+
+## Finish Commander browser and authority checkpoint — 2026-07-20
+
+### Newly frozen independent commits
+
+- `6d8d9c6 fix(learner): require enforced live isolation` makes Live visible
+  and selectable only when health reports `OS_ENFORCED` generation-filesystem
+  isolation. The current Worker truthfully reports `PARTIAL`, so its Live path
+  is intentionally unavailable instead of being advertised as production
+  ready. Focused App/API/Judge coverage passed **117/117** and the complete web
+  suite passed **608/608**.
+- `5259a49 fix(a11y): simplify command trigger name` keeps the visible
+  `Ctrl K` shortcut while exposing the stable accessible name `Open commands`.
+  Its focused component test passed **1/1**.
+
+### Labelled design-review evidence
+
+The checked-in Playwright authority guard was used with the explicit
+`stock-chromium-design-review` mode because this session has no
+`CLOAK_CDP_ENDPOINT`. Desktop `1440x900` and mobile `390x844` Landing and Judge
+first-fold checks passed **4/4** in **16.0 seconds**, including first-viewport
+visibility, pre-Prediction value hiding, horizontal-overflow checks, and zero
+console, page, request, or HTTP-response failures. Captures are retained under
+`apps/web/test-results/runtime/design-review-20260720/evidence/belief-break/`.
+They are design-review artifacts only and are not CloakBrowser or release
+qualification evidence.
+
+### Current remaining gates
+
+1. Finish the deduplicated P0/P1 source review and any small independent
+   repairs, while keeping Live disabled unless a genuine OS-enforced boundary
+   is proved.
+2. Resolve the untracked in-repository FUSE placeholder through the required
+   immediate deletion approval so the source can become clean.
+3. Freeze one exact source, rebuild once, regenerate all source/image-bound
+   scientific and supply-chain evidence, and pass the real containment and
+   negative-control gates.
+4. Deploy only a qualified tuple, then run the public sample/replay and any
+   genuinely ready Live journey through CloakBrowser. The labelled Chrome
+   captures above cannot close this gate.
+5. Keep learner impact `NO_DATA` until consented observations exist; align the
+   exact app, repository, video, Devpost entry, feedback identifier, and
+   submission receipt before final publication.
+6. Push the finished feature branch and fast-forward its verified tip into
+   `main` only after the preceding gates are truthfully recorded.
