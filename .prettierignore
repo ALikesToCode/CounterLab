@@ -6,6 +6,10 @@ progress.md
 task_plan.md
 scripts/runtime-bin/runc
 
+# Preserved audit evidence and generated review databases are immutable inputs.
+counterlab-black-box-audit/**
+.code-review-graph/**
+
 # Browser profiles and state are opaque runtime artifacts, never source input.
 docs/a/**
 docs/audits/**/browser-state/**
@@ -14,6 +18,8 @@ docs/audits/**/browser-state/**
 replays/**
 fixtures/public/*_verified_result.json
 fixtures/public/leakage_sample_boundary_v1.json
+fixtures/public/leakage_sample_patch_v1/**
+fixtures/public/leakage_sample_proof_sources_v1/**
 
 # Generated JSON Schemas are emitted by the contract generator.
 concept-packs/*/public/*.schema.json
