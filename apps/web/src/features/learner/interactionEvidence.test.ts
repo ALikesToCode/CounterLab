@@ -54,4 +54,46 @@ describe("privacy-safe learner interaction recording", () => {
       }),
     ).resolves.toBe(false);
   });
+
+  it("uses a stable opaque ID to deduplicate each session-stage event", async () => {
+    const record = vi
+      .spyOn(counterLabApi, "recordLearnerInteraction")
+      .mockResolvedValue({
+        schemaVersion: "1",
+        eventId: "interaction_server",
+        accepted: true,
+        duplicate: false,
+      });
+    const draft = {
+      kind: "stage.entered" as const,
+      stage: "question" as const,
+    };
+
+    await recordLearnerInteraction("session_1", draft, {
+      deduplicate: "session-stage",
+    });
+    await recordLearnerInteraction("session_1", draft, {
+      deduplicate: "session-stage",
+    });
+
+    const firstEventId = record.mock.calls[0]?.[1].eventId;
+    expect(firstEventId).toMatch(/^interaction_[0-9a-f]{32}$/u);
+    expect(record.mock.calls[1]?.[1].eventId).toBe(firstEventId);
+  });
+
+  it("refuses session-stage deduplication for non-stage interactions", async () => {
+    const record = vi.spyOn(counterLabApi, "recordLearnerInteraction");
+
+    await expect(
+      recordLearnerInteraction(
+        "session_1",
+        {
+          kind: "patch.downloaded",
+          stage: "repair",
+        },
+        { deduplicate: "session-stage" },
+      ),
+    ).resolves.toBe(false);
+    expect(record).not.toHaveBeenCalled();
+  });
 });

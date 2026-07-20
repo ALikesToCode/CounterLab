@@ -18,15 +18,41 @@ function interactionId(): string {
   return `interaction_${suffix}`;
 }
 
+async function stageInteractionId(
+  sessionId: string,
+  draft: LearnerInteractionDraft,
+): Promise<string> {
+  if (draft.kind !== "stage.entered" && draft.kind !== "stage.completed") {
+    throw new Error(
+      "Only stage interactions can use session-stage deduplication",
+    );
+  }
+  const input = new TextEncoder().encode(
+    `counterlab:learner-interaction:v1:${sessionId}:${draft.kind}:${draft.stage}`,
+  );
+  const digest = new Uint8Array(
+    await globalThis.crypto.subtle.digest("SHA-256", input),
+  );
+  const suffix = Array.from(digest.slice(0, 16), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+  return `interaction_${suffix}`;
+}
+
 export async function recordLearnerInteraction(
   sessionId: string,
   draft: LearnerInteractionDraft,
+  options: Readonly<{ deduplicate?: "session-stage" }> = {},
 ): Promise<boolean> {
   try {
+    const eventId =
+      options.deduplicate === "session-stage"
+        ? await stageInteractionId(sessionId, draft)
+        : interactionId();
     await counterLabApi.recordLearnerInteraction(sessionId, {
       ...draft,
       schemaVersion: "1",
-      eventId: interactionId(),
+      eventId,
     } as LearnerInteractionInput);
     return true;
   } catch {
