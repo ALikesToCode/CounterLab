@@ -195,6 +195,94 @@ describe("CounterLab admission policy", () => {
     });
   });
 
+  it("fences reacquired upload leases from stale and generation-less releases", () => {
+    const input = request("upload", 1);
+    const first = admit(emptyAdmissionSnapshot(), input);
+    expect(first.decision).toMatchObject({
+      admitted: true,
+      reused: false,
+      leaseStatus: "acquired",
+      leaseGeneration: 1,
+    });
+    const firstGeneration = first.decision.admitted
+      ? first.decision.leaseGeneration
+      : undefined;
+    if (firstGeneration === undefined) {
+      throw new Error("upload admission did not issue a fenced lease");
+    }
+
+    const released = evaluateAdmissionRelease(
+      first.snapshot,
+      {
+        policyVersion: ADMISSION_POLICY_VERSION,
+        kind: "upload",
+        operationKey: input.operationKey,
+        leaseGeneration: firstGeneration,
+      },
+      1_000_010,
+    );
+    const reacquired = admit(released, input, 1_000_020);
+    expect(reacquired.decision).toMatchObject({
+      admitted: true,
+      reused: true,
+      leaseStatus: "reacquired",
+      leaseGeneration: 2,
+    });
+
+    const staleRelease = evaluateAdmissionRelease(
+      reacquired.snapshot,
+      {
+        policyVersion: ADMISSION_POLICY_VERSION,
+        kind: "upload",
+        operationKey: input.operationKey,
+        leaseGeneration: firstGeneration,
+      },
+      1_000_030,
+    );
+    const stillActive = admit(staleRelease, input, 1_000_040);
+    expect(stillActive.decision).toMatchObject({
+      admitted: true,
+      reused: true,
+      leaseStatus: "already-active",
+      leaseGeneration: 2,
+    });
+    expect(staleRelease.metrics.upload.released).toBe(1);
+
+    const generationlessRelease = evaluateAdmissionRelease(
+      staleRelease,
+      {
+        policyVersion: ADMISSION_POLICY_VERSION,
+        kind: "upload",
+        operationKey: input.operationKey,
+      },
+      1_000_050,
+    );
+    expect(
+      admit(generationlessRelease, input, 1_000_060).decision,
+    ).toMatchObject({
+      admitted: true,
+      reused: true,
+      leaseStatus: "already-active",
+      leaseGeneration: 2,
+    });
+    expect(generationlessRelease.metrics.upload.released).toBe(1);
+
+    const currentRelease = evaluateAdmissionRelease(
+      generationlessRelease,
+      {
+        policyVersion: ADMISSION_POLICY_VERSION,
+        kind: "upload",
+        operationKey: input.operationKey,
+        leaseGeneration: 2,
+      },
+      1_000_070,
+    );
+    expect(currentRelease.operations[input.operationKey]).not.toHaveProperty(
+      "leaseExpiresAt",
+    );
+    expect(currentRelease.metrics.upload.released).toBe(2);
+  });
+
   it("reclaims expired leases even if an alarm was delayed", () => {
     const input = request("analyst", 1);
     const first = admit(emptyAdmissionSnapshot(), input);

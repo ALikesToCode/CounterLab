@@ -21,6 +21,7 @@ export type AdmissionDecision =
       reused: boolean;
       leaseStatus: AdmissionLeaseStatus;
       leaseExpiresAt?: number | undefined;
+      leaseGeneration?: number | undefined;
     }
   | {
       admitted: false;
@@ -40,6 +41,7 @@ export interface AdmissionRelease {
   policyVersion: typeof ADMISSION_POLICY_VERSION;
   kind: AdmissionKind;
   operationKey: string;
+  leaseGeneration?: number | undefined;
 }
 
 export interface AdmissionControl {
@@ -70,6 +72,7 @@ export const ADMISSION_POLICIES: Readonly<
     windowMs: 10 * MINUTE_MS,
     callerLimit: 6,
     globalLimit: 240,
+    leaseTtlMs: 2 * MINUTE_MS,
   },
   analyst: {
     windowMs: HOUR_MS,
@@ -103,7 +106,9 @@ const AdmissionReleaseSchema = AdmissionRequestSchema.pick({
   policyVersion: true,
   kind: true,
   operationKey: true,
-}).strict();
+})
+  .extend({ leaseGeneration: z.number().int().positive().optional() })
+  .strict();
 
 const AdmissionOperationSchema = z
   .object({
@@ -112,6 +117,7 @@ const AdmissionOperationSchema = z
     sessionKey: OpaqueKeySchema.optional(),
     admittedAt: z.number().int().nonnegative(),
     leaseExpiresAt: z.number().int().positive().optional(),
+    leaseGeneration: z.number().int().positive().optional(),
   })
   .strict();
 
@@ -305,6 +311,7 @@ export function evaluateAdmissionRequest(
       existing.leaseExpiresAt !== undefined &&
       existing.leaseExpiresAt > now
     ) {
+      const leaseGeneration = existing.leaseGeneration ?? 1;
       return {
         snapshot,
         decision: {
@@ -312,6 +319,7 @@ export function evaluateAdmissionRequest(
           reused: true,
           leaseStatus: "already-active",
           leaseExpiresAt: existing.leaseExpiresAt,
+          leaseGeneration,
         },
       };
     }
@@ -331,11 +339,16 @@ export function evaluateAdmissionRequest(
       );
     }
     const leaseExpiresAt = now + policy.leaseTtlMs;
+    const leaseGeneration = (existing.leaseGeneration ?? 0) + 1;
     snapshot = {
       ...snapshot,
       operations: {
         ...snapshot.operations,
-        [input.operationKey]: { ...existing, leaseExpiresAt },
+        [input.operationKey]: {
+          ...existing,
+          leaseExpiresAt,
+          leaseGeneration,
+        },
       },
     };
     return {
@@ -345,6 +358,7 @@ export function evaluateAdmissionRequest(
         reused: true,
         leaseStatus: "reacquired",
         leaseExpiresAt,
+        leaseGeneration,
       },
     };
   }
@@ -397,6 +411,7 @@ export function evaluateAdmissionRequest(
 
   const leaseExpiresAt =
     policy.leaseTtlMs === undefined ? undefined : now + policy.leaseTtlMs;
+  const leaseGeneration = leaseExpiresAt === undefined ? undefined : 1;
   snapshot = {
     ...snapshot,
     operations: {
@@ -409,6 +424,7 @@ export function evaluateAdmissionRequest(
           : { sessionKey: input.sessionKey }),
         admittedAt: now,
         ...(leaseExpiresAt === undefined ? {} : { leaseExpiresAt }),
+        ...(leaseGeneration === undefined ? {} : { leaseGeneration }),
       },
     },
   };
@@ -420,6 +436,7 @@ export function evaluateAdmissionRequest(
       reused: false,
       leaseStatus: leaseExpiresAt === undefined ? "none" : "acquired",
       ...(leaseExpiresAt === undefined ? {} : { leaseExpiresAt }),
+      ...(leaseGeneration === undefined ? {} : { leaseGeneration }),
     },
   };
 }
@@ -435,10 +452,13 @@ export function evaluateAdmissionRelease(
     now,
   );
   const existing = snapshot.operations[input.operationKey];
+  const existingGeneration = existing?.leaseGeneration ?? 1;
+  const releaseGeneration = input.leaseGeneration ?? 1;
   if (
     existing === undefined ||
     existing.kind !== input.kind ||
-    existing.leaseExpiresAt === undefined
+    existing.leaseExpiresAt === undefined ||
+    existingGeneration !== releaseGeneration
   ) {
     return snapshot;
   }
@@ -549,6 +569,7 @@ const AdmissionDecisionSchema = z.union([
       reused: z.boolean(),
       leaseStatus: z.enum(["none", "acquired", "already-active", "reacquired"]),
       leaseExpiresAt: z.number().int().positive().optional(),
+      leaseGeneration: z.number().int().positive().optional(),
     })
     .strict(),
   z
