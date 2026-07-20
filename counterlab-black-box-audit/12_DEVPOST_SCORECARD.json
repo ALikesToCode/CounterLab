@@ -1,0 +1,150 @@
+{
+ "audit_date": "2026-07-19",
+ "target": "https://counterlab.cserules.workers.dev/",
+ "deadline_verified": "2026-07-21T17:00:00-07:00 (2026-07-22T00:00Z), OpenAI Build Week, Devpost",
+ "states": {
+  "current_public_application": {
+   "total": 73,
+   "range": [
+    70,
+    75
+   ],
+   "criteria": {
+    "technological_implementation": {
+     "score": 17,
+     "range": [
+      15,
+      19
+     ],
+     "supporting": [
+      "Complete 6-step sample loop in production on Cloudflare Workers",
+      "Hash-chained event log with actor attribution; all 20 chain links re-validated",
+      "Deterministic artifacts: repaired .ipynb SHA-256 recomputed = patchedArtifactHash",
+      "Fail-closed withholding on unknown IDs",
+      "Unauthenticated JSON API with consistent envelope; ~12.8s kernel compute"
+     ],
+     "preventing_higher": [
+      "MB-004: Runtime Codex decorative in every reachable path (empty events, 360ms compile-verify, stored fixture)",
+      "MB-003: GPT-5.6 framing byte-identical template",
+      "MB-002: live leg dead-ends",
+      "MB-001: refusal paths brick with raw state errors",
+      "MB-009: dual result hashes, unexplained",
+      "MB-005: transparency drawer empty"
+     ],
+     "strongest_judge_objection": "'The criterion is how thoroughly the project uses Codex \u2014 show me Codex doing anything in the product.'",
+     "highest_leverage_action": "Ship verifiable Codex proof: surface real codex payloads/plan-diff events in the drawer and link build-time Codex evidence (Session ID, README) from /judge",
+     "unverifiable_without_repo": [
+      "build-time Codex usage (required by rules)",
+      "HMAC key separation",
+      "Docker sandbox enforcement",
+      "live-path GPT-5.6/Codex behaviour"
+     ]
+    },
+    "design": {
+     "score": 18,
+     "range": [
+      16,
+      20
+     ],
+     "supporting": [
+      "Editorial /judge dossier with four-authority story",
+      "Experiment-Theater reveal and prediction-seal ritual",
+      "SAMPLE/LIVE/REPLAY badges + persistent replay banner",
+      "Honest limitation microcopy",
+      "Strong native semantics (fieldset/radios/selects/details)"
+     ],
+     "preventing_higher": [
+      "MB-005: drawer '0 events' after completed session",
+      "MB-006: transfer \u2713/\u00d7 inversion",
+      "MB-011: 1.8:1 payoff text",
+      "MB-008: eternal replay spinner",
+      "MB-018: dead links",
+      "MB-030: split dark/light identity, unstaged reveal",
+      "MB-032/033: mobile risk + a11y barriers"
+     ],
+     "strongest_judge_objection": "'The flagship transparency surface is empty and the one scored interaction contradicts itself.'",
+     "highest_leverage_action": "Fix MB-005 (data already server-side), MB-006 (copy/glyph swap), MB-011 (token change) \u2014 XS\u2013S effort, immediate Design recovery",
+     "unverifiable_without_repo": [
+      "nothing material \u2014 design is fully observable"
+     ]
+    },
+    "potential_impact": {
+     "score": 17,
+     "range": [
+      15,
+      19
+     ],
+     "supporting": [
+      "Real, common learning problem (leakage-driven overconfidence)",
+      "Genuine falsification experience (sealed belief contradicted by evidence)",
+      "Honest scope disclosures",
+      "Fixed-code-scored transfer exists"
+     ],
+     "preventing_higher": [
+      "Zero learner-outcome evidence anywhere",
+      "MB-013: system does the generative thinking; learner confirms",
+      "MB-007: pre-seal verdict leak defeats the prediction contract",
+      "MB-012: mastery overclaim from one 2-item gate",
+      "Single subject pack publicly reachable"
+     ],
+     "strongest_judge_objection": "'Show me one learner whose behaviour changed.'",
+     "highest_leverage_action": "Run a minimum credible 6\u201312-person pre/post unassisted-transfer study before submission and publish the protocol + results on the project page",
+     "unverifiable_without_repo": [
+      "none \u2014 outcome evidence is simply absent"
+     ]
+    },
+    "quality_of_the_idea": {
+     "score": 21,
+     "range": [
+      19,
+      23
+     ],
+     "supporting": [
+      "Novel composition with no public equivalent found (independent scan + red-team concur)",
+      "Memorable ownable line: 'Ask like chat. Prove it like science.'",
+      "Bounded, self-aware claim scoping",
+      "Mechanizes established pedagogy (POE / Peer Instruction) with proof artifacts"
+     ],
+     "preventing_higher": [
+      "MB-014: one-sentence novelty never stated; 'CI for understanding' reads dev-tools not Education",
+      "MB-037: no framing vs leakage linters / Socratic incumbents",
+      "MB-038: no visible refusal/inconclusive states on claims"
+     ],
+     "strongest_judge_objection": "'Isn't this a linter plus a quiz?'",
+     "highest_leverage_action": "Add the one-sentence delta ('The first evidence-first learning tool: your notebook's reality grades your belief, and proof is a signed artifact') + prior-art framing to /judge hero and Devpost page",
+     "unverifiable_without_repo": [
+      "originality vs the full Build Week field (gallery not public at audit date)"
+     ]
+    }
+   }
+  },
+  "after_confirmed_p0_p1_corrections": {
+   "total_estimate": 85,
+   "range": [
+    83,
+    87
+   ],
+   "note": "Contingent on verified fixes to MB-001..MB-017 and compliance items MB-C01..C11; requires re-audit. Assumes live leg either works with a real notebook or is honestly gated.",
+   "criteria": {
+    "technological_implementation": 21,
+    "design": 22,
+    "potential_impact": 19,
+    "quality_of_the_idea": 23
+   }
+  },
+  "realistic_prize_one_ceiling": {
+   "total_estimate": 89,
+   "range": [
+    88,
+    90
+   ],
+   "note": "Ceiling without a visibly working live leg + learner-outcome evidence (per independent red team); reaching >90 additionally requires live-mode proof judges can run and measured impact.",
+   "criteria": {
+    "technological_implementation": 23,
+    "design": 22,
+    "potential_impact": 22,
+    "quality_of_the_idea": 23
+   }
+  }
+ }
+}

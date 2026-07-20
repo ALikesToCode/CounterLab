@@ -1,0 +1,862 @@
+[
+  {
+    "id": "A8-01",
+    "title": "Key learning payoff text on Boundary card renders at ~1.8:1 contrast",
+    "severity": "P1",
+    "confidence": "High (measured)",
+    "reproducibility": "Always",
+    "category": "Visual / contrast (WCAG 1.4.3)",
+    "route": "/session/<uuid> step 4 - Experiment Theater - Boundary tab",
+    "journey": "Sample lesson, step 4 (Boundary) - the core 'where the conclusion changes' insight",
+    "user": "Low-vision learner; any learner in bright light; aging judges",
+    "devpost_criterion": "Educational value / Accessibility & inclusion",
+    "environment": "Chrome via browser automation, 1920x1080 fixed viewport, no assistive technology, black-box (rendered DOM text + interactive-element list + screenshots)",
+    "prerequisites": "Start 'Try verified sample'; complete steps 1-3; on step 4 open the Boundary tab of the Experiment Theater",
+    "steps": [
+      "Open Boundary tab in Experiment Theater",
+      "Read 'Verified sample boundary' card text"
+    ],
+    "expected": "Body text >= 4.5:1 against card background",
+    "actual": "'The conclusion changes at the entity boundary.' and 'The verified whole-customer run has 0 shared customers; the random-row run has 389.' measure ~1.8:1 (text rgb(167-169,183-184,201-202) on rgb(240,242,243))",
+    "evidence": [
+      {
+        "label": "Directly observed",
+        "detail": "Text visibly faint gray-on-light-gray; hardest-to-read element on the page",
+        "ref": "shots/step4b.png"
+      },
+      {
+        "label": "Directly observed (measured)",
+        "detail": "PIL color sampling: dominant text cluster rgb(167,183,201) vs bg rgb(240,242,243) = 1.82:1; second line 1.80:1",
+        "ref": "PIL quantization of step4b.png regions (600,875)-(1250,945)"
+      },
+      {
+        "label": "Inferred from behaviour",
+        "detail": "Matches independent measurements by other swarm agents (~1.6-1.8:1)",
+        "ref": "cross-agent note"
+      }
+    ],
+    "likely_cause": "Muted 'secondary text' token applied to the highest-value sentence; token likely intended for captions on dark surfaces",
+    "unverified": false,
+    "learner_impact": "The single most important sentence of the lesson (the boundary insight) is illegible for many low-vision learners",
+    "judge_impact": "Judges with vision impairments or on projectors cannot read the payoff; looks unpolished in the exact moment the product proves its thesis",
+    "trust_impact": "Core claim 'conclusion changes at the entity boundary' undermined when it is physically hard to read",
+    "recommended_correction": "Use the default body-text color token (>= 4.5:1) for payoff sentences; reserve muted tokens for captions/metadata",
+    "smallest_correction": "Change the two <p> elements in the Verified-sample-boundary card from the muted gray to the standard body color (one class/token swap)",
+    "acceptance_criteria": [
+      "Payoff text measures >= 4.5:1",
+      "Re-check with contrast tool on Boundary tab"
+    ],
+    "regression_test": "Automated contrast snapshot test on the Boundary card computed colors (fail if ratio < 4.5)",
+    "dependencies": [],
+    "effort": "XS",
+    "score_leverage": "High - fixes the demo's money-shot moment",
+    "related": [
+      "A8-10"
+    ]
+  },
+  {
+    "id": "A8-02",
+    "title": "Transfer exercise check/cross glyphs conflict with answer framing: wrong option gets check mark, correct identification gets cross",
+    "severity": "P1",
+    "confidence": "High (directly observed both states)",
+    "reproducibility": "Always",
+    "category": "Meaning conveyed by ambiguous non-text glyph (WCAG 1.1.1 / 1.3.3; pedagogy)",
+    "route": "/session/<uuid> step 5 (Apply - Timeline transfer)",
+    "journey": "Sample lesson, step 5 transfer challenge",
+    "user": "All learners; screen-reader learners hear bare 'cross'/'check' with inverted-feeling semantics",
+    "devpost_criterion": "Educational value / pedagogy soundness",
+    "environment": "Chrome via browser automation, 1920x1080 fixed viewport, no assistive technology, black-box (rendered DOM text + interactive-element list + screenshots)",
+    "prerequisites": "Reach step 5 of the sample lesson",
+    "steps": [
+      "Select 'Known item price' (feature that does NOT cross NOW) - timeline shows 'uses available information + check glyph'",
+      "Select 'Centered rolling target' (feature that DOES cross NOW - the correct answer to the question asked) - timeline shows 'reads later outcomes + cross glyph'",
+      "Click Check transfer with the safe-but-wrong option selected"
+    ],
+    "expected": "Glyphs next to the learner's selection communicate answer correctness, or are replaced by unambiguous words ('safe'/'leaky'); the question's correct answer must never be marked with a cross in an answer-checking context",
+    "actual": "Glyphs encode feature safety (safe=check, leaky=cross) but are rendered beside the learner's selected answer inside a quiz interaction. The wrong answer to 'Which feature crosses NOW?' displays a check mark; the correct answer displays a cross. Verdict text ('Transfer not yet passed' / 'Transfer passed') is separate, so learners can be reinforced by a check mark on a wrong choice before being told they failed",
+    "evidence": [
+      {
+        "label": "Directly observed",
+        "detail": "Selected 'Known item price' -> timeline caption 'uses available information' with check glyph, screenshots step5_wrong.png; earlier run: 'Centered rolling target' -> 'reads later outcomes' with cross glyph",
+        "ref": "shots/step5_wrong.png, step5_fail2.png"
+      },
+      {
+        "label": "Directly observed",
+        "detail": "Check-transfer verdict itself is textual ('Transfer not yet passed... The patch remains locked'), so the failure IS communicated in words - but after the misleading glyph cue",
+        "ref": "shots/step5_fail2.png"
+      },
+      {
+        "label": "Inferred from behaviour",
+        "detail": "Screen readers announce isolated times/check glyphs inconsistently ('multiplication sign', 'check mark') without the safe/leaky meaning",
+        "ref": "glyph text content"
+      }
+    ],
+    "likely_cause": "Feature-safety indicator (safe vs leaky) reused in the answer-feedback slot; two different semantics (property of feature vs correctness of answer) share one glyph slot",
+    "unverified": false,
+    "learner_impact": "Actively teaches the wrong association at the exact misconception the lesson targets (a 'safe' feature is the wrong answer to 'what crosses NOW?'); glyph-only meaning is lost or reversed for AT users",
+    "judge_impact": "A judge probing the transfer step sees a check mark beside the wrong answer - reads as a correctness bug in the education core",
+    "trust_impact": "Perceived inverted feedback erodes trust in all other check marks in the app",
+    "recommended_correction": "Remove right/wrong-ambiguous glyphs from the selection echo; label feature properties with words: 'Safe: uses only information available at prediction time' / 'Leaky: reads values after NOW'. Add explicit per-option correctness text after Check transfer ('Correct - this feature reads later outcomes')",
+    "smallest_correction": "Replace the standalone check/cross characters in the timeline echo with the words 'safe'/'leaky' (or add them), and state answer correctness in the verdict line",
+    "acceptance_criteria": [
+      "No check/cross glyph appears adjacent to a selected answer as the sole indicator",
+      "Words 'safe'/'leaky' (or equivalent) present in selection echo",
+      "SR announcement of selection echo contains the property word, not a bare glyph"
+    ],
+    "regression_test": "DOM test: after selecting each transfer option, assert selection echo contains 'safe' or 'leaky' text and no bare check/times-only indicator",
+    "dependencies": [],
+    "effort": "S",
+    "score_leverage": "High - protects the pedagogical core claim of the submission",
+    "related": [
+      "A8-14"
+    ]
+  },
+  {
+    "id": "A8-03",
+    "title": "Command palette action buttons expose only the shortcut-letter badge as accessible name (or no name at all)",
+    "severity": "P1",
+    "confidence": "High (element list)",
+    "reproducibility": "Always",
+    "category": "Name/role/value (WCAG 4.1.2, 2.4.6)",
+    "route": "/session/<uuid> - Command palette (opened via Studio drawer > Commands or Ctrl+K)",
+    "journey": "Any journey using the command palette",
+    "user": "Screen-reader learner/judge",
+    "devpost_criterion": "Quality & polish / Accessibility & inclusion",
+    "environment": "Chrome via browser automation, 1920x1080 fixed viewport, no assistive technology, black-box (rendered DOM text + interactive-element list + screenshots)",
+    "prerequisites": "Open Studio drawer (Project & evidence) then 'Commands', or press Ctrl+K",
+    "steps": [
+      "Open palette",
+      "Inspect interactive elements"
+    ],
+    "expected": "Each command is a single control whose accessible name is its descriptive label (e.g. 'Analyze notebook')",
+    "actual": "Commands render as button+span siblings: button names are 'N', 'E', 'V' (the keyboard-badge letters); 'Review patch' and 'Download patched notebook' buttons have empty names; the descriptive text sits in a separate non-focusable span. SR users hear 'N button, E button, V button, button, button'",
+    "evidence": [
+      {
+        "label": "Directly observed",
+        "detail": "Element list: [2]<button N/>, [3]<span Analyze notebook Start a new live notebook session./>, [4]<button E/>, [6]<button V/>, [8]<button /> ('Review patch'), [10]<button /> ('Download patched notebook')",
+        "ref": "palette element dump; shots/palette.png"
+      },
+      {
+        "label": "Directly observed",
+        "detail": "Typing 'proof' filters correctly to 'Export proof', so palette works for sighted mouse/keyboard users",
+        "ref": "shots/palette2.png"
+      },
+      {
+        "label": "Directly observed",
+        "detail": "Palette footer states 'All commands also have visible controls in the workspace' - a real mitigation",
+        "ref": "shots/palette.png"
+      }
+    ],
+    "likely_cause": "Card layout splits kbd badge (inside <button>) from label (sibling <span>); accessible name computed from badge text only; missing aria-label/aria-labelledby",
+    "unverified": false,
+    "learner_impact": "Palette unusable non-visually: commands indistinguishable",
+    "judge_impact": "A judge testing with a SR or inspecting the a11y tree finds broken naming in a signature power-feature",
+    "trust_impact": "Signals a11y was not tree-checked; undermines 'proof' positioning",
+    "recommended_correction": "Wrap badge+label in one <button> and put the description inside it (or aria-labelledby to the label span); hide kbd badge with aria-hidden=true",
+    "smallest_correction": "Add aria-label='Analyze notebook' etc. to each palette command button and aria-hidden to the letter badges",
+    "acceptance_criteria": [
+      "Every palette command has a non-empty accessible name equal to its visible label",
+      "Letter badges not exposed to AT"
+    ],
+    "regression_test": "Accessibility-tree snapshot test: assert each palette item's name matches its visible label",
+    "dependencies": [],
+    "effort": "XS",
+    "score_leverage": "Medium-High",
+    "related": [
+      "A8-04",
+      "A8-13",
+      "A8-17"
+    ]
+  },
+  {
+    "id": "A8-04",
+    "title": "Unnamed buttons in Studio drawer (scrim button and recent-session card)",
+    "severity": "P2",
+    "confidence": "High (element list)",
+    "reproducibility": "Always",
+    "category": "Name/role/value (WCAG 4.1.2)",
+    "route": "/session/<uuid> - Studio drawer ('Project & evidence')",
+    "journey": "Any; opening project tools",
+    "user": "Screen-reader learner",
+    "devpost_criterion": "Quality & polish",
+    "environment": "Chrome via browser automation, 1920x1080 fixed viewport, no assistive technology, black-box (rendered DOM text + interactive-element list + screenshots)",
+    "prerequisites": "Open Studio drawer",
+    "steps": [
+      "Open 'Project & evidence'",
+      "Inspect elements"
+    ],
+    "expected": "All buttons have discernible text",
+    "actual": "An empty <button> (likely the backdrop/scrim) precedes the drawer content; the recent-session card is an empty-named button whose text ('customer_churn_leakage.ipynb REASONING DIFF ISSUED') lives in a sibling span",
+    "evidence": [
+      {
+        "label": "Directly observed",
+        "detail": "Element list shows [8]<button /> and [15]<button /> with empty names; [16]<span customer_churn_leakage.ipynb REASONING DIFF ISSUED/> separate",
+        "ref": "studio drawer element dump; shots/studio_drawer.png"
+      }
+    ],
+    "likely_cause": "Same split-markup pattern as palette; backdrop implemented as <button> without aria-label or aria-hidden",
+    "unverified": false,
+    "learner_impact": "'Button' with no name announced; card action undiscoverable",
+    "judge_impact": "Minor but easily spotted polish issue",
+    "trust_impact": "Low",
+    "recommended_correction": "Give the session card button an aria-label ('Open recent session customer_churn_leakage.ipynb, reasoning diff issued'); make the backdrop non-interactive or aria-label='Close drawer'",
+    "smallest_correction": "Two aria-labels / one aria-hidden",
+    "acceptance_criteria": [
+      "No empty-name buttons in drawer"
+    ],
+    "regression_test": "A11y-tree test: zero unnamed buttons",
+    "dependencies": [],
+    "effort": "XS",
+    "score_leverage": "Medium",
+    "related": [
+      "A8-03",
+      "A8-15"
+    ]
+  },
+  {
+    "id": "A8-05",
+    "title": "No skip-navigation link on any route",
+    "severity": "P2",
+    "confidence": "High (absence observed across routes)",
+    "reproducibility": "Always",
+    "category": "Bypass blocks (WCAG 2.4.1)",
+    "route": "All (/, /judge, /new, /session/<uuid>, /proof/<uuid>, /replay/*)",
+    "journey": "All keyboard journeys",
+    "user": "Keyboard-only and switch-device learners",
+    "devpost_criterion": "Accessibility & inclusion",
+    "environment": "Chrome via browser automation, 1920x1080 fixed viewport, no assistive technology, black-box (rendered DOM text + interactive-element list + screenshots)",
+    "prerequisites": "None",
+    "steps": [
+      "Load any route",
+      "Inspect first interactive elements"
+    ],
+    "expected": "A 'Skip to main content' link as the first focusable element",
+    "actual": "First focusable elements are header/sidebar controls (logo 'C', New question, nav buttons); on wizard steps the learner tabs through logo, stepper buttons (Question..Boundary), Start over, Project & evidence, hint disclosure before reaching the step's content; no skip link observed on any route",
+    "evidence": [
+      {
+        "label": "Directly observed",
+        "detail": "Element lists for all 6+ routes begin with chrome controls; no skip link anywhere",
+        "ref": "element dumps all routes"
+      },
+      {
+        "label": "Inferred from behaviour",
+        "detail": "DOM order matches visual order (header -> stepper -> content -> bottom evidence bar), so tab order is plausible but long",
+        "ref": "element list ordering"
+      }
+    ],
+    "likely_cause": "Not implemented",
+    "unverified": false,
+    "learner_impact": "~8-12 extra tab stops per step, repeated across 6 steps and every drawer open",
+    "judge_impact": "Slow, annoying keyboard demo if a judge navigates by keyboard",
+    "trust_impact": "Low-Medium",
+    "recommended_correction": "Add skip link targeting <main id=main>; consider making the stepper one composite control",
+    "smallest_correction": "One <a href='#main' class='skip-link'>Skip to content</a> + id on main",
+    "acceptance_criteria": [
+      "Skip link appears on first Tab on every route and moves focus to main content"
+    ],
+    "regression_test": "E2E keyboard test: first Tab reveals skip link; Enter lands focus in main",
+    "dependencies": [],
+    "effort": "XS",
+    "score_leverage": "Medium",
+    "related": [
+      "A8-16"
+    ]
+  },
+  {
+    "id": "A8-06",
+    "title": "Homepage claim textarea has no accessible name (placeholder-only labeling)",
+    "severity": "P2",
+    "confidence": "Medium-High (element list; association unverifiable black-box)",
+    "reproducibility": "Always",
+    "category": "Labels or instructions (WCAG 3.3.2 / 1.3.1 / 4.1.2)",
+    "route": "/",
+    "journey": "Start a new question (live path)",
+    "user": "Screen-reader learner",
+    "devpost_criterion": "Accessibility & inclusion",
+    "environment": "Chrome via browser automation, 1920x1080 fixed viewport, no assistive technology, black-box (rendered DOM text + interactive-element list + screenshots)",
+    "prerequisites": "Load /",
+    "steps": [
+      "Inspect the claim textarea's accessible name"
+    ],
+    "expected": "A persistent visible label associated with the textarea (wizard step 1 does this well: 'Your claim')",
+    "actual": "Textarea exposes an empty accessible name; the only cue is placeholder text ('State a claim you want to test...' / 'What claim should this notebook help test?'), which also fails contrast at 3.59:1 and disappears on input. Note: wizard step 1 textarea has visible label 'Your claim' - homepage is inconsistent",
+    "evidence": [
+      {
+        "label": "Directly observed",
+        "detail": "Element list shows [8]<textarea /> with no name; no visible label rendered above the field",
+        "ref": "home element dump; shots/home.png"
+      },
+      {
+        "label": "Directly observed (measured)",
+        "detail": "Placeholder contrast 3.59:1 (rgb(124,134,148) on rgb(251,252,254))",
+        "ref": "PIL sampling step1b.png - same placeholder style"
+      },
+      {
+        "label": "Unverified",
+        "detail": "A visually-hidden label or aria-label could exist without surfacing in the tool's element list; probability low given empty name",
+        "ref": "-"
+      }
+    ],
+    "likely_cause": "Chat-style composer pattern relying on placeholder",
+    "unverified": true,
+    "learner_impact": "Purpose of the primary input on the homepage must be guessed",
+    "judge_impact": "First-impression page fails a basic SR check",
+    "trust_impact": "Low-Medium",
+    "recommended_correction": "Add a visible or visually-hidden <label for> (e.g. 'Your question or claim') to the homepage composer",
+    "smallest_correction": "One aria-label on the textarea",
+    "acceptance_criteria": [
+      "Textarea accessible name non-empty and meaningful"
+    ],
+    "regression_test": "A11y-tree test on /",
+    "dependencies": [],
+    "effort": "XS",
+    "score_leverage": "Medium",
+    "related": [
+      "A8-10"
+    ]
+  },
+  {
+    "id": "A8-07",
+    "title": "Homepage notebook upload is a <label> trigger with no focusable input - likely keyboard-inaccessible",
+    "severity": "P2",
+    "confidence": "Medium (strongly inferred)",
+    "reproducibility": "Always",
+    "category": "Keyboard (WCAG 2.1.1)",
+    "route": "/",
+    "journey": "Start with evidence (upload .ipynb)",
+    "user": "Keyboard-only learner",
+    "devpost_criterion": "Accessibility & inclusion",
+    "environment": "Chrome via browser automation, 1920x1080 fixed viewport, no assistive technology, black-box (rendered DOM text + interactive-element list + screenshots)",
+    "prerequisites": "Load /",
+    "steps": [
+      "Inspect interactive elements around '+ Attach notebook' / '+ Attach supported .ipynb'"
+    ],
+    "expected": "A focusable file input or button opens the file picker (the wizard does this correctly with a native visible input)",
+    "actual": "The only exposed control is a <label> element; no <input type=file> appears in the interactive element list, implying a hidden (display:none) input. Labels are not keyboard-focusable, so the upload affordance is reachable by mouse only on the homepage",
+    "evidence": [
+      {
+        "label": "Directly observed",
+        "detail": "Element list: [9]<label + Attach notebook/> and no file input; contrast wizard step 1 which exposes [9]<input /> natively with visible 'Choose File'",
+        "ref": "home + step1 element dumps; shots/step1b.png"
+      },
+      {
+        "label": "Inferred from behaviour",
+        "detail": "Standard pattern: label[for] + visually hidden input; keyboard focus cannot reach display:none inputs",
+        "ref": "-"
+      },
+      {
+        "label": "Could not test",
+        "detail": "No keyboard-event tool to attempt focus/activation",
+        "ref": "-"
+      }
+    ],
+    "likely_cause": "Styled-upload pattern hiding the native input instead of making it focusable (opacity-0 overlay or sr-only-but-focusable)",
+    "unverified": true,
+    "learner_impact": "Keyboard-only learners cannot start the 'evidence-first' journey from the homepage; must detour through /new",
+    "judge_impact": "Keyboard walkthrough of the homepage hits a dead end on a headline feature",
+    "trust_impact": "Medium",
+    "recommended_correction": "Use the wizard's native visible file input (or a real <button> triggering the picker) on the homepage composer",
+    "smallest_correction": "Replace hidden-input pattern with the same native input used in the wizard",
+    "acceptance_criteria": [
+      "File upload reachable and operable by keyboard alone on /"
+    ],
+    "regression_test": "E2E keyboard test: Tab to upload, Enter opens picker",
+    "dependencies": [],
+    "effort": "XS",
+    "score_leverage": "Medium-High",
+    "related": [
+      "A8-06"
+    ]
+  },
+  {
+    "id": "A8-08",
+    "title": "Homepage sidebar section labels and reassurance text fail contrast (2.1-2.5:1)",
+    "severity": "P2",
+    "confidence": "High (measured)",
+    "reproducibility": "Always",
+    "category": "Visual / contrast (WCAG 1.4.3)",
+    "route": "/ (dark sidebar)",
+    "journey": "All (persistent navigation)",
+    "user": "Low-vision learner/judge",
+    "devpost_criterion": "Accessibility & inclusion",
+    "environment": "Chrome via browser automation, 1920x1080 fixed viewport, no assistive technology, black-box (rendered DOM text + interactive-element list + screenshots)",
+    "prerequisites": "Load /",
+    "steps": [
+      "Measure 'Start with evidence' section label and 'No account needed' footer text"
+    ],
+    "expected": ">= 4.5:1",
+    "actual": "'Start with evidence' label rgb(78,78,84) on rgb(5,5,6) = 2.47:1; 'No account needed' rgb(67,67,73) = 2.07:1 ('Explore' label same style). Nav links themselves pass (8.2-8.6:1)",
+    "evidence": [
+      {
+        "label": "Directly observed (measured)",
+        "detail": "PIL sampling of home.png sidebar regions",
+        "ref": "shots/home.png"
+      },
+      {
+        "label": "Inferred from behaviour",
+        "detail": "Matches other agents' sidebar measurements (2.1-3.1:1)",
+        "ref": "cross-agent note"
+      }
+    ],
+    "likely_cause": "Over-muted caption tokens on near-black",
+    "unverified": false,
+    "learner_impact": "Navigation orientation text invisible to low-vision users",
+    "judge_impact": "Dim, hard-to-read sidebar in first impression",
+    "trust_impact": "Low",
+    "recommended_correction": "Raise caption tokens to >= 4.5:1 (e.g. #a8a8b0 range)",
+    "smallest_correction": "Token value change",
+    "acceptance_criteria": [
+      "All sidebar text >= 4.5:1"
+    ],
+    "regression_test": "Contrast snapshot test on sidebar tokens",
+    "dependencies": [],
+    "effort": "XS",
+    "score_leverage": "Medium",
+    "related": [
+      "A8-10"
+    ]
+  },
+  {
+    "id": "A8-09",
+    "title": "Bogus replay URL: page stays in perpetual 'loading' state; error exists only as a toast; no recovery path in content",
+    "severity": "P2",
+    "confidence": "High (directly observed)",
+    "reproducibility": "Always",
+    "category": "Status messages / error recovery (WCAG 4.1.3 + UX)",
+    "route": "/replay/<unknown-id> (tested /replay/bogus-id)",
+    "journey": "Replay / judge deep-link error handling",
+    "user": "Any learner following a bad link; SR users in particular",
+    "devpost_criterion": "Quality & polish / robustness",
+    "environment": "Chrome via browser automation, 1920x1080 fixed viewport, no assistive technology, black-box (rendered DOM text + interactive-element list + screenshots)",
+    "prerequisites": "Visit /replay/bogus-id",
+    "steps": [
+      "Load URL",
+      "Wait",
+      "Re-check content"
+    ],
+    "expected": "Main content switches to a clear error state (heading + message + link to a valid replay or /judge); error announced via role=status/alert",
+    "actual": "Toast 'Replay bogus-id was not found' appears top-right (and persists - good), but the main region keeps showing 'Opening this replay...' / 'CHECKING STORED EVIDENCE' indefinitely. The visible page state contradicts the error and offers no recovery link; only header 'Start over' remains. Live-region semantics of the toast unverifiable black-box",
+    "evidence": [
+      {
+        "label": "Directly observed",
+        "detail": "Two consecutive loads show unchanged loading UI with toast present",
+        "ref": "shots/error.png, error2.png"
+      },
+      {
+        "label": "Unverified",
+        "detail": "Whether the toast is role=status/alert (SR-announced) cannot be confirmed without DOM access",
+        "ref": "-"
+      }
+    ],
+    "likely_cause": "Async fetch failure sets a toast but the route's loading branch never resolves; no error branch in the route component",
+    "unverified": true,
+    "learner_impact": "Screen-reader users may wait indefinitely on a page that claims to be loading; sighted users see a stuck loader",
+    "judge_impact": "A judge typo-ing or guessing a replay id sees an apparently hung app",
+    "trust_impact": "Medium-High (a broken deep-link is likely during judging)",
+    "recommended_correction": "Add an error branch: replace loader with 'Replay not found' heading, explanation, and links to the verified replay and judge dossier; give the toast role=alert",
+    "smallest_correction": "After fetch failure, render an error view with one recovery link",
+    "acceptance_criteria": [
+      "Bad replay id shows persistent in-content error within ~2s",
+      "At least one recovery link present",
+      "Error text announced by SR (role=alert/status)"
+    ],
+    "regression_test": "E2E: visit /replay/bogus-id, assert error heading visible and loader removed",
+    "dependencies": [],
+    "effort": "S",
+    "score_leverage": "High - error states are exactly what judges probe",
+    "related": [
+      "A8-14"
+    ]
+  },
+  {
+    "id": "A8-10",
+    "title": "Cluster of small-text contrast failures/borderline cases across app (placeholders, stepper, palette descriptions, caption labels)",
+    "severity": "P3",
+    "confidence": "High (measured)",
+    "reproducibility": "Always",
+    "category": "Visual / contrast (WCAG 1.4.3)",
+    "route": "Multiple",
+    "journey": "All",
+    "user": "Low-vision learner",
+    "devpost_criterion": "Quality & polish",
+    "environment": "Chrome via browser automation, 1920x1080 fixed viewport, no assistive technology, black-box (rendered DOM text + interactive-element list + screenshots)",
+    "prerequisites": "None",
+    "steps": [
+      "Measure small secondary text across routes"
+    ],
+    "expected": ">= 4.5:1 for small text",
+    "actual": "Measured: wizard stepper upcoming steps 3.71:1; textarea placeholder 3.59:1; palette command descriptions 3.59:1; palette unavailable commands ~1.4-3.1:1 (dimmed; partially exempt as inactive); 'VERIFIED SAMPLE BOUNDARY' teal caps 4.48:1 (borderline); '389 shared customers' on judge dark card 4.18:1; reasoning-diff table cell text 4.46:1; 'How proof works' footer paragraph dips to 3.65:1; disabled CTA buttons ~2.1-3.2:1 (exempt as inactive but low)",
+    "evidence": [
+      {
+        "label": "Directly observed (measured)",
+        "detail": "PIL quantization values listed in audit markdown contrast table",
+        "ref": "shots/step1b.png, palette.png, step4b.png, judge.png, diff.png, home.png"
+      }
+    ],
+    "likely_cause": "Muted/secondary text tokens set just under 4.5:1; dimming via opacity for disabled items",
+    "unverified": false,
+    "learner_impact": "Secondary-but-real information (hints, descriptions, step names) hard to read",
+    "judge_impact": "General 'gray-on-gray' feel in places",
+    "trust_impact": "Low",
+    "recommended_correction": "Audit the muted token scale; raise to >= 4.5:1 for informational text; use > 3:1 only for truly decorative/disabled content",
+    "smallest_correction": "Adjust 2-3 color tokens",
+    "acceptance_criteria": [
+      "No informational text < 4.5:1"
+    ],
+    "regression_test": "Contrast token lint in CI",
+    "dependencies": [],
+    "effort": "S",
+    "score_leverage": "Medium",
+    "related": [
+      "A8-01",
+      "A8-08"
+    ]
+  },
+  {
+    "id": "A8-11",
+    "title": "Progress gating via disabled buttons with required fields never programmatically indicated",
+    "severity": "P3",
+    "confidence": "High (behaviour observed; SR impact inferred)",
+    "reproducibility": "Always",
+    "category": "Labels/instructions + name/role/value (WCAG 3.3.2, 4.1.2)",
+    "route": "/ composer; /session step 1 (claim), step 2 (prediction radios), step 5 (transfer)",
+    "journey": "Whole wizard",
+    "user": "Screen-reader learner",
+    "devpost_criterion": "Accessibility & inclusion",
+    "environment": "Chrome via browser automation, 1920x1080 fixed viewport, no assistive technology, black-box (rendered DOM text + interactive-element list + screenshots)",
+    "prerequisites": "Start sample lesson",
+    "steps": [
+      "Observe primary CTA before completing required input ('Test this claim', 'Compare two explanations', 'Seal my prediction', 'Check transfer')"
+    ],
+    "expected": "Required inputs carry required/aria-required and/or instructions state what is needed to continue; if a CTA is disabled, the reason is discoverable (aria-disabled + description) rather than the control vanishing from the tab order",
+    "actual": "CTAs are hard-disabled until input is provided (they disappear from the interactive-element list entirely, so SR users may never encounter them and get no explanation of what blocks progress); no 'required' indication on claim textarea, prediction fieldset, or transfer groups. Instructions do exist as prose ('Write one sentence...', 'Choose an expectation'), which partially mitigates",
+    "evidence": [
+      {
+        "label": "Directly observed",
+        "detail": "Disabled CTAs absent from element list until inputs filled; appear as <button> immediately after input (e.g. 'Compare two explanations' became element [11] only after typing)",
+        "ref": "session element dumps"
+      },
+      {
+        "label": "Directly observed (measured)",
+        "detail": "Disabled CTA contrast ~2.06-2.32:1 (exempt from 1.4.3 but nearly invisible)",
+        "ref": "shots/step1b.png, step2d.png"
+      },
+      {
+        "label": "Inferred from behaviour",
+        "detail": "SR users tabbing past find no CTA and no stated reason",
+        "ref": "-"
+      }
+    ],
+    "likely_cause": "Disabled-attribute gating chosen over aria-disabled + validation messaging",
+    "unverified": true,
+    "learner_impact": "Non-visual learners may not discover how to advance on first encounter",
+    "judge_impact": "Low",
+    "trust_impact": "Low",
+    "recommended_correction": "Keep CTA focusable with aria-disabled='true' + short reason ('Enter a claim to continue'), or mark inputs required and validate on submit with an error summary",
+    "smallest_correction": "Add aria-required to the claim textarea and a one-line instruction near each disabled CTA",
+    "acceptance_criteria": [
+      "Required fields programmatically indicated",
+      "Blocking reason available to AT before submit"
+    ],
+    "regression_test": "A11y-tree test for required state; SR smoke script",
+    "dependencies": [],
+    "effort": "S",
+    "score_leverage": "Medium",
+    "related": [
+      "A8-06"
+    ]
+  },
+  {
+    "id": "A8-12",
+    "title": "Identical <title> on every route ('CounterLab - CI for understanding')",
+    "severity": "P3",
+    "confidence": "High",
+    "reproducibility": "Always",
+    "category": "Page titled (WCAG 2.4.2)",
+    "route": "All routes",
+    "journey": "All",
+    "user": "SR users, users with many tabs",
+    "devpost_criterion": "Quality & polish",
+    "environment": "Chrome via browser automation, 1920x1080 fixed viewport, no assistive technology, black-box (rendered DOM text + interactive-element list + screenshots)",
+    "prerequisites": "Open multiple routes",
+    "steps": [
+      "Compare browser tab titles"
+    ],
+    "expected": "Unique descriptive titles per route/step (e.g. 'Step 2 Prediction - CounterLab', 'Judge dossier - CounterLab')",
+    "actual": "All observed tabs (/ , /judge, /session/<uuid>, /replay/leakage-01, /replay/bogus-id) share the same title",
+    "evidence": [
+      {
+        "label": "Directly observed",
+        "detail": "Browser tab list in automation shows identical title across routes",
+        "ref": "browser tabs list"
+      }
+    ],
+    "likely_cause": "SPA never updates document.title on route change",
+    "unverified": false,
+    "learner_impact": "SR users cannot orient by title when switching routes/tabs",
+    "judge_impact": "Low",
+    "trust_impact": "Low",
+    "recommended_correction": "Set document.title per route and per wizard step",
+    "smallest_correction": "Router-level title map",
+    "acceptance_criteria": [
+      "Distinct titles per route"
+    ],
+    "regression_test": "E2E title assertion per route",
+    "dependencies": [],
+    "effort": "XS",
+    "score_leverage": "Low-Medium",
+    "related": []
+  },
+  {
+    "id": "A8-13",
+    "title": "Weak or confusing accessible names on several controls ('C', 'NB', '0 events Open', palette input labelled 'search Esc')",
+    "severity": "P3",
+    "confidence": "High",
+    "reproducibility": "Always",
+    "category": "Headings/labels + name/role/value (WCAG 2.4.6, 4.1.2)",
+    "route": "/session chrome, Studio drawer, palette",
+    "journey": "All",
+    "user": "SR users",
+    "devpost_criterion": "Quality & polish",
+    "environment": "Chrome via browser automation, 1920x1080 fixed viewport, no assistive technology, black-box (rendered DOM text + interactive-element list + screenshots)",
+    "prerequisites": "None",
+    "steps": [
+      "Inspect accessible names of chrome controls"
+    ],
+    "expected": "Names describe purpose ('CounterLab home', 'Notebook: customer_churn_leakage.ipynb', 'Evidence and proof: 0 events. Open drawer', 'Search commands')",
+    "actual": "Header logo button name is just 'C'; notebook card button in Studio drawer is 'NB'; evidence drawer trigger name mashes state and action ('0 events Open'); palette search input's label text is the search glyph plus 'Esc' hint, so its name may announce as 'Esc' rather than its purpose",
+    "evidence": [
+      {
+        "label": "Directly observed",
+        "detail": "Element lists: [1]<button C/>, [11]<button NB/>, [16]<button 0 events Open/>, palette [0]<label (search glyph) Esc/>",
+        "ref": "session/studio/palette dumps"
+      },
+      {
+        "label": "Unverified",
+        "detail": "Exact computed name of palette input (label may wrap input; placeholder 'What do you want to do?' present)",
+        "ref": "shots/palette.png"
+      }
+    ],
+    "likely_cause": "Visual-first naming; kbd hints and state badges leaking into names",
+    "unverified": true,
+    "learner_impact": "Orientation friction; purpose of several controls must be guessed",
+    "judge_impact": "Low",
+    "trust_impact": "Low",
+    "recommended_correction": "Set explicit accessible names; keep state ('0 events') as separate described-by text; give palette input aria-label='Search commands'",
+    "smallest_correction": "4 aria-labels",
+    "acceptance_criteria": [
+      "All chrome controls have purpose-names"
+    ],
+    "regression_test": "A11y-tree name assertions",
+    "dependencies": [],
+    "effort": "XS",
+    "score_leverage": "Medium",
+    "related": [
+      "A8-03",
+      "A8-04"
+    ]
+  },
+  {
+    "id": "A8-14",
+    "title": "Live-region/status announcements unverifiable and at risk: step changes, selection echoes, verdict banners, toasts appear as generic text",
+    "severity": "P2",
+    "confidence": "Low (unverified; risk-based)",
+    "reproducibility": "Unknown",
+    "category": "Status messages (WCAG 4.1.3)",
+    "route": "/session (all steps), /replay/<bad-id>, global toasts",
+    "journey": "Whole wizard",
+    "user": "Screen-reader learner",
+    "devpost_criterion": "Accessibility & inclusion",
+    "environment": "Chrome via browser automation, 1920x1080 fixed viewport, no assistive technology, black-box (rendered DOM text + interactive-element list + screenshots)",
+    "prerequisites": "None",
+    "steps": [
+      "Trigger status updates: select transfer options ('Selected split: ...'), fail Check transfer ('Transfer not yet passed'), receive toast ('Replay ... not found'), character counter updates"
+    ],
+    "expected": "Dynamic status updates are announced without focus moves (role=status/aria-live; role=alert for errors)",
+    "actual": "All observed status text renders as ordinary div/span content; black-box tooling cannot confirm any live region. If absent, SR users must manually hunt for feedback after every action; route changes show no evidence of announcement either (identical <title>, heading-level focus unverified)",
+    "evidence": [
+      {
+        "label": "Directly observed",
+        "detail": "Status texts exist and update (good content): 'Selected split: Random daily rows...', verdict banners, toast, '0 characters' counter",
+        "ref": "session dumps; shots/step5_fail2.png, error.png"
+      },
+      {
+        "label": "Unverified",
+        "detail": "Presence of role=status/aria-live/role=alert cannot be confirmed without DOM inspection or a screen reader",
+        "ref": "-"
+      },
+      {
+        "label": "Could not test",
+        "detail": "Screen reader not available in this environment",
+        "ref": "-"
+      }
+    ],
+    "likely_cause": "If missing: framework renders text without live-region roles",
+    "unverified": true,
+    "learner_impact": "Potentially the difference between a usable and unusable wizard for SR learners (feedback exists but may never be announced)",
+    "judge_impact": "Untestable in demo; risk if judged with AT",
+    "trust_impact": "Medium",
+    "recommended_correction": "Add a single polite live region for selection echoes/counters; role=alert for verdicts and toasts; announce route/step changes via heading focus or live region",
+    "smallest_correction": "role='status' on the selection-echo + verdict containers; role='alert' on toast",
+    "acceptance_criteria": [
+      "SR announces transfer verdict and selection echo without manual navigation",
+      "Toast announced on appearance"
+    ],
+    "regression_test": "Playwright a11y test asserting live-region attributes on status containers",
+    "dependencies": [],
+    "effort": "S",
+    "score_leverage": "High if absent (unknown)",
+    "related": [
+      "A8-09",
+      "A8-02"
+    ]
+  },
+  {
+    "id": "A8-15",
+    "title": "Modal focus management unverified for command palette and Studio drawer (trap, initial focus, Esc, focus return)",
+    "severity": "P2",
+    "confidence": "Low (unverified; partial positive evidence)",
+    "reproducibility": "Unknown",
+    "category": "Keyboard/focus order (WCAG 2.1.1, 2.1.2, 2.4.3)",
+    "route": "/session - palette + Studio drawer + Evidence drawer",
+    "journey": "Overlays",
+    "user": "Keyboard-only and SR learners",
+    "devpost_criterion": "Accessibility & inclusion",
+    "environment": "Chrome via browser automation, 1920x1080 fixed viewport, no assistive technology, black-box (rendered DOM text + interactive-element list + screenshots)",
+    "prerequisites": "Open each overlay",
+    "steps": [
+      "Attempt to determine focus trap, Esc behaviour, focus return"
+    ],
+    "expected": "Focus moves into overlay on open, is trapped while open, Esc closes, focus returns to trigger; background inert",
+    "actual": "Positive: palette shows an 'Esc' hint chip; Studio drawer has visible 'Close project tools'; Evidence drawer has a visible 'Close'; scrim-click closes Studio drawer (observed via unnamed backdrop button); palette filters on input. Negative/unverified: no keyboard-event tooling to test Tab cycling, Esc, or focus return; backdrop-as-button suggests background is NOT inert to AT (it is exposed as an empty button); Evidence drawer leaves page fully interactive (non-modal pattern - acceptable)",
+    "evidence": [
+      {
+        "label": "Directly observed",
+        "detail": "Esc hint, close controls, scrim-close, filter behaviour",
+        "ref": "shots/palette.png, studio_drawer.png, drawer_evidence.png"
+      },
+      {
+        "label": "Directly observed",
+        "detail": "Backdrop exposed as empty <button> (A8-04) implies background remains in the a11y tree",
+        "ref": "studio drawer dump"
+      },
+      {
+        "label": "Could not test",
+        "detail": "Tab trap, Esc key, focus return",
+        "ref": "-"
+      }
+    ],
+    "likely_cause": "Custom overlay implementation; inert/aria-modal handling unknown",
+    "unverified": true,
+    "learner_impact": "If untrapped, SR/keyboard users can tab into the dimmed background and lose place",
+    "judge_impact": "Unknown",
+    "trust_impact": "Medium",
+    "recommended_correction": "Use a dialog pattern: role=dialog aria-modal=true on palette, focus first control on open, trap focus, Esc closes, return focus to trigger; hide background (inert)",
+    "smallest_correction": "Verify/implement focus trap + return on the two modal overlays",
+    "acceptance_criteria": [
+      "Keyboard-only user can open, operate, close each overlay and lands back on the trigger"
+    ],
+    "regression_test": "E2E keyboard overlay test",
+    "dependencies": [],
+    "effort": "M",
+    "score_leverage": "Medium",
+    "related": [
+      "A8-04",
+      "A8-03"
+    ]
+  },
+  {
+    "id": "A8-16",
+    "title": "Scrollable code/diff regions may not be keyboard-scrollable (focusable container unverified)",
+    "severity": "P3",
+    "confidence": "Low (unverified)",
+    "reproducibility": "Unknown",
+    "category": "Keyboard (WCAG 2.1.1)",
+    "route": "/proof/<uuid> (unified diff), palette (command list), judge (code block)",
+    "journey": "Proof review",
+    "user": "Keyboard-only learner",
+    "devpost_criterion": "Quality & polish",
+    "environment": "Chrome via browser automation, 1920x1080 fixed viewport, no assistive technology, black-box (rendered DOM text + interactive-element list + screenshots)",
+    "prerequisites": "Open /proof/<uuid>, expand 'See the verified notebook change'",
+    "steps": [
+      "Inspect diff region scrollability"
+    ],
+    "expected": "Scrollable regions have tabindex=0 (or content fully visible) so keyboard users can scroll",
+    "actual": "Unified diff renders in a fixed-height region with its own scrollbar (palette list similar); whether the container is focusable is unverifiable black-box; mouse wheel works",
+    "evidence": [
+      {
+        "label": "Directly observed",
+        "detail": "Custom scrollbar inside diff container; content clipped",
+        "ref": "shots/diff.png"
+      },
+      {
+        "label": "Could not test",
+        "detail": "Keyboard focus/scroll of the region",
+        "ref": "-"
+      }
+    ],
+    "likely_cause": "overflow:auto div without tabindex",
+    "unverified": true,
+    "learner_impact": "Keyboard users may be unable to read the full verified diff - the central proof artifact",
+    "judge_impact": "Medium (diff is a judge focal point)",
+    "trust_impact": "Medium",
+    "recommended_correction": "tabindex=0 + aria-label on scroll regions, or expand diff fully",
+    "smallest_correction": "Add tabindex='0' role='region' aria-label='Notebook diff' to the scroll container",
+    "acceptance_criteria": [
+      "Diff region focusable and scrollable by keyboard"
+    ],
+    "regression_test": "E2E keyboard scroll test",
+    "dependencies": [],
+    "effort": "XS",
+    "score_leverage": "Medium",
+    "related": []
+  },
+  {
+    "id": "A8-17",
+    "title": "Single-character shortcut risk (palette shows N/E/V accelerators) - 2.1.4 unverifiable",
+    "severity": "P3",
+    "confidence": "Low (unverified)",
+    "reproducibility": "Unknown",
+    "category": "Character key shortcuts (WCAG 2.1.4)",
+    "route": "/session - palette",
+    "journey": "Palette use",
+    "user": "Speech-input and keyboard users",
+    "devpost_criterion": "Accessibility & inclusion",
+    "environment": "Chrome via browser automation, 1920x1080 fixed viewport, no assistive technology, black-box (rendered DOM text + interactive-element list + screenshots)",
+    "prerequisites": "Open palette",
+    "steps": [
+      "Observe N/E/V badges on commands"
+    ],
+    "expected": "Single-character shortcuts are inactive while a text field has focus, or can be turned off/remapped",
+    "actual": "Commands display single-letter accelerators; typing in the palette search filters (observed typing 'proof' filters, does not trigger commands - good); whether letters trigger commands when focus is elsewhere is unverifiable",
+    "evidence": [
+      {
+        "label": "Directly observed",
+        "detail": "Typing in search filters rather than triggers",
+        "ref": "shots/palette2.png"
+      },
+      {
+        "label": "Could not test",
+        "detail": "Shortcut behaviour outside search; remapping",
+        "ref": "-"
+      }
+    ],
+    "likely_cause": "Accelerator badges",
+    "unverified": true,
+    "learner_impact": "Accidental activation risk for speech-input users if shortcuts are global",
+    "judge_impact": "Low",
+    "trust_impact": "Low",
+    "recommended_correction": "Scope letter shortcuts to palette-open state only (likely already the case); document or allow disabling",
+    "smallest_correction": "Confirm scoping; add note in palette footer",
+    "acceptance_criteria": [
+      "Letters never trigger actions while typing in any field"
+    ],
+    "regression_test": "E2E: type in claim textarea, assert no command fires",
+    "dependencies": [],
+    "effort": "XS",
+    "score_leverage": "Low",
+    "related": [
+      "A8-03"
+    ]
+  }
+]

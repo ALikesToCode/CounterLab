@@ -1,0 +1,650 @@
+[
+  {
+    "id": "A15-01",
+    "title": "Novelty delta is never stated in one sentence; judge must reconstruct it",
+    "severity": "P1",
+    "confidence": "high",
+    "reproducibility": "stable — verifiable on public pages / and /judge (2026-07-19); cross-checked against 6 named prior-art families",
+    "category": "novelty-positioning",
+    "route": "/, /judge",
+    "journey": "judge-first-20-seconds / judge-3-minute",
+    "user": "judge",
+    "devpost_criterion": "Quality of the Idea ('How creative and novel is the concept and does the project differ from existing concepts?')",
+    "environment": "Web-research seat: web_search + web_open_url only; direct fetch of counterlab.cserules.workers.dev egress-blocked ('audit rejected' x5). Product-surface facts via Agent 1 browser route map (02_PUBLIC_ROUTE_AND_STATE_MAP.md, observed 2026-07-19); rules facts via Agent 14 (work/agent14_devpost_rules.md). Audit date 2026-07-19.",
+    "prerequisites": "Open / and /judge; read hero, 4-authority diagram, claims/limits; compare with the pedagogy and tooling landscape",
+    "steps": [
+      "1. Read home hero and sidebar copy",
+      "2. Read /judge dossier (hero, authorities, modes, limits)",
+      "3. Search either page for: (a) any acknowledgment of Predict-Observe-Explain / Peer Instruction lineage, (b) any one-sentence invariant of the form 'no number here was written by an AI', (c) any explicit contrast vs chat tutors / Kaggle lesson / leakage linters",
+      "4. Compare findings to prior art: POE (White & Gunstone 1992), Peer Instruction (Mazur 1997), LAMS POE confidence step, sklearn-diagnose, NBLyzer, OpenAI Evals, zkML verifiable evals"
+    ],
+    "expected": "A judge can repeat the product's distinctive claim verbatim after 20 seconds: e.g. 'Commitment pedagogy (POE/Mazur), but the reveal is computed by a pinned kernel from your notebook, your prediction is sealed first, and the belief change ships as a checkable signed artifact.'",
+    "actual": "Strong tagline exists ('Ask like chat. Prove it like science.') and /judge has 'Generated vs. computed vs. verified', but nowhere is the delta stated in one sentence, no lineage is cited, and no named contrast is made. A judge with education background sees Mazur 1997; a technical judge sees a leakage linter with chat; the distinctive composition (sealed prediction + fixed-kernel computed evidence + frozen verifier + signed artifact + transfer-gated repair on the learner's own notebook) must be self-assembled.",
+    "evidence": [
+      {
+        "label": "Inferred from behaviour",
+        "detail": "Home + /judge copy as mapped: tagline, 4 authorities (GPT-5.6 frames / Codex compiles / fixed kernel computes / frozen verifier decides), 3 modes, limits; no lineage or vs-comparison text observed",
+        "ref": "02_PUBLIC_ROUTE_AND_STATE_MAP.md §R1, §R2"
+      },
+      {
+        "label": "Documented publicly",
+        "detail": "POE pedagogy since White & Gunstone 1992 (from Champagne et al. 1979): predict-observe-explain discrepancy loop",
+        "ref": "https://bioresscientia.com/article/the-taxonomy-of-predict-observe-explain-poe-as-a-teaching-strategy-and-thinking-process-of-chemistry-stakeholders (accessed 2026-07-19)"
+      },
+      {
+        "label": "Documented publicly",
+        "detail": "Peer Instruction: students commit to an answer before reveal/discussion (Mazur 1997); commitment is the active ingredient",
+        "ref": "https://www.frontiersin.org/journals/education/articles/10.3389/feduc.2018.00033/full (accessed 2026-07-19)"
+      },
+      {
+        "label": "Documented publicly",
+        "detail": "LAMS POE template already includes prediction + confidence level + explanation + reflection",
+        "ref": "https://teach.lams.es/pedagogies/poe (accessed 2026-07-19)"
+      },
+      {
+        "label": "Documented publicly",
+        "detail": "sklearn-diagnose: LLM diagnosis of sklearn models for overfitting, data leakage, class imbalance + chatbot",
+        "ref": "https://github.com/leockl/sklearn-diagnose (accessed 2026-07-19)"
+      }
+    ],
+    "likely_cause": "Team built the mechanism but wrote the surface copy for mechanism appreciation, not for 20-second novelty comprehension; no lineage/competitive section was produced",
+    "unverified": "Whether the Devpost submission text or demo video states the delta (not publicly observable at audit date)",
+    "learner_impact": "low — learners feel the loop even if they can't name it",
+    "judge_impact": "critical — 'Quality of the Idea' is scored on perceived novelty vs existing concepts; a judge who files CounterLab as 'Socratic tutor #47' or 'leakage linter with chat' scores it down",
+    "trust_impact": "medium — unclaimed lineage can read as unawareness of the literature once noticed",
+    "recommended_correction": "Add a 'Why this is new' block to /judge and the Devpost page: one sentence of invariant ('No number on this page was written by an AI — every number is recomputed by a pinned kernel from downloadable evidence'), one line of lineage ('POE gave science class the loop; CounterLab makes it machine-checked'), three named contrasts (Study Mode/Khanmigo explain; Kaggle teaches leakage as content; NBLyzer/sklearn-diagnose lint code — none seal a prediction and issue a checkable learning artifact)",
+    "smallest_correction": "One sentence under the /judge hero: 'Chatbots explain your notebook. CounterLab seals your prediction, recomputes the answer with a pinned kernel, and signs the belief change. Predict-Observe-Explain, machine-checked.'",
+    "acceptance_criteria": [
+      "A first-time visitor can find and quote the novelty sentence within 20 s on / and /judge",
+      "Lineage (POE and/or Peer Instruction) explicitly cited on a public surface",
+      "At least 3 named competitor/prior-art contrasts present on /judge"
+    ],
+    "regression_test": "Greppable marker text on / and /judge (e.g. the invariant sentence); re-audit: new judge persona can state the delta unprompted after reading the hero",
+    "dependencies": [],
+    "effort": "S (copy-only)",
+    "score_leverage": "high",
+    "related": [
+      "A15-03",
+      "A15-05",
+      "A15-06",
+      "A15-07"
+    ]
+  },
+  {
+    "id": "A15-02",
+    "title": "Category-owning proof exists only in live mode — the one path a judge may be unable to run",
+    "severity": "P1",
+    "confidence": "medium-high",
+    "reproducibility": "reproduced 2x by Agent 1 (dead end without upload); upload untestable from black-box seats (browser tools cannot set file inputs)",
+    "category": "novelty-positioning / evidence-integrity",
+    "route": "/new, /session/<uuid>",
+    "journey": "judge-10-minute deep dive; judge live verification",
+    "user": "judge",
+    "devpost_criterion": "Design (working, coherent product experience) + Quality of the Idea",
+    "environment": "Web-research seat: web_search + web_open_url only; direct fetch of counterlab.cserules.workers.dev egress-blocked ('audit rejected' x5). Product-surface facts via Agent 1 browser route map (02_PUBLIC_ROUTE_AND_STATE_MAP.md, observed 2026-07-19); rules facts via Agent 14 (work/agent14_devpost_rules.md). Audit date 2026-07-19.",
+    "prerequisites": "Attempt the live path: /new -> 'Continue with my notebook' without attaching a supported .ipynb",
+    "steps": [
+      "1. From /judge choose 'Run live' (/new)",
+      "2. Click 'Continue with my notebook' without an upload",
+      "3. Observe step-1 state",
+      "4. Attempt to find any public end-to-end live trace on a non-sample notebook"
+    ],
+    "expected": "The mode that proves the headline claim ('reality answers about YOUR notebook') is runnable by a judge end-to-end, or a public live trace on a reviewer-visible notebook exists",
+    "actual": "Without an upload the live path dead-ends in perpetual 'Preparing artifact...' labelled 'Uploaded notebook evidence' with no prompt to upload (Agent 1, Reproduced 2x). Upload itself is untestable from black-box seats. All publicly reachable evidence (sample session, replay leakage-01) is canned on a seeded lesson. No public live trace on a non-sample notebook was found.",
+    "evidence": [
+      {
+        "label": "Inferred from behaviour",
+        "detail": "R3: dead end, misleading 'Uploaded notebook evidence' label, only escape is 'Use a different notebook' file input",
+        "ref": "02_PUBLIC_ROUTE_AND_STATE_MAP.md §R3"
+      },
+      {
+        "label": "Could not test",
+        "detail": "File upload end-to-end from either audit seat",
+        "ref": "02_PUBLIC_ROUTE_AND_STATE_MAP.md §4"
+      },
+      {
+        "label": "Documented publicly",
+        "detail": "Judges 'may, but are not required to' test; they may judge solely on description/images/video",
+        "ref": "https://openai.devpost.com/details/faqs via work/agent14_devpost_rules.md §2.5 (accessed 2026-07-19)"
+      }
+    ],
+    "likely_cause": "Live mode depends on upload + configured live authority; demo effort concentrated on the deterministic sample/replay paths; no fallback 'cannot attach? watch this live trace' path",
+    "unverified": "Whether live mode works for a judge with a supported notebook and a real browser (no black-box seat could attach a file)",
+    "learner_impact": "medium — first-time learners hitting /new from the home claim submit land in the same dead end",
+    "judge_impact": "critical — a skeptical judge can dismiss the category claim as one scripted lesson; the strongest evidence mode is exactly the one that may not demo",
+    "trust_impact": "high — 'unsupported evidence is refused, not guessed' promise is undermined if supported evidence can't be tried",
+    "recommended_correction": "Ship (a) a public 'verified live trace' on a reviewer-visible non-sample notebook (replay-style, clearly labelled), and (b) fix the /new dead end: detect no-artifact and route to an explicit upload prompt or the sample, never a perpetual 'Preparing artifact'",
+    "smallest_correction": "Record one live session on a fresh sklearn notebook (not the sample), publish it as /replay/live-01 labelled 'live capture', and link it from /new's failure state",
+    "acceptance_criteria": [
+      "A judge can reach a complete computed-evidence trace without uploading anything",
+      "No path shows 'Uploaded notebook evidence' when no artifact exists",
+      "/new without an artifact offers explicit upload affordance + sample fallback"
+    ],
+    "regression_test": "Fresh-session walk of /new with no upload terminates in an actionable state within 2 clicks; public live trace id resolves",
+    "dependencies": [
+      "Agent 1 issue A1-03 (live-mode dead end)"
+    ],
+    "effort": "M",
+    "score_leverage": "high",
+    "related": [
+      "A1-03",
+      "A15-11"
+    ]
+  },
+  {
+    "id": "A15-03",
+    "title": "Category manifesto links ('How proof works', 'supported evidence boundary') are dead on the home surface",
+    "severity": "P2",
+    "confidence": "high (existence); medium (novelty attribution)",
+    "reproducibility": "reproduced 2x by Agent 1 (both links, no effect)",
+    "category": "novelty-positioning / content",
+    "route": "/",
+    "journey": "learner-first-60-seconds; judge curiosity click",
+    "user": "learner + judge",
+    "devpost_criterion": "Design (complete, coherent experience) + Quality of the Idea",
+    "environment": "Web-research seat: web_search + web_open_url only; direct fetch of counterlab.cserules.workers.dev egress-blocked ('audit rejected' x5). Product-surface facts via Agent 1 browser route map (02_PUBLIC_ROUTE_AND_STATE_MAP.md, observed 2026-07-19); rules facts via Agent 14 (work/agent14_devpost_rules.md). Audit date 2026-07-19.",
+    "prerequisites": "Home page sidebar 'How proof works' link; 'Need a hint?' details -> 'Review the supported evidence boundary' link",
+    "steps": [
+      "1. Click 'How proof works' in sidebar",
+      "2. Expand 'Need a hint?' and click 'Review the supported evidence boundary'"
+    ],
+    "expected": "Both links open the explainer that defines the category (generated vs computed vs verified; what is supported and refused)",
+    "actual": "Both links are dead (no effect), so the only plain-language explanation of the mechanism and evidence boundary is unreachable from the learner surface; the dossier on /judge carries all of it",
+    "evidence": [
+      {
+        "label": "Inferred from behaviour",
+        "detail": "R1: 'How proof works' dead — no effect, Reproduced 2x; 'Review the supported evidence boundary' dead — no effect, Reproduced",
+        "ref": "02_PUBLIC_ROUTE_AND_STATE_MAP.md §R1"
+      },
+      {
+        "label": "Documented publicly",
+        "detail": "Judges may judge solely on text/images/video — surfaces that explain the idea carry outsized weight",
+        "ref": "https://openai.devpost.com/details/faqs via work/agent14_devpost_rules.md §2.5 (accessed 2026-07-19)"
+      }
+    ],
+    "likely_cause": "Broken anchors/hrefs; the explainer page/section was planned but not shipped or not wired",
+    "unverified": "Whether the intended content exists elsewhere",
+    "learner_impact": "medium — learners cannot self-serve the 'what counts as evidence' contract",
+    "judge_impact": "high — the category's defining document is missing where a judge first looks",
+    "trust_impact": "high — a proof-themed product with dead proof-explainer links reads as unfinished",
+    "recommended_correction": "Wire both links to a real 'How proof works' page containing the one-sentence invariant, the 4-authority diagram, supported/unsupported evidence boundary, and the lineage+contrast block from A15-01",
+    "smallest_correction": "Point both links at the existing /judge sections (anchor hrefs) until a dedicated page ships",
+    "acceptance_criteria": [
+      "Both links navigate to substantive proof-explainer content",
+      "Explainer contains the invariant sentence and evidence boundary list"
+    ],
+    "regression_test": "Click-through test of both links in a fresh profile; content snapshot diff on deploy",
+    "dependencies": [
+      "Agent 1 dead-link issue(s) on /"
+    ],
+    "effort": "S",
+    "score_leverage": "high",
+    "related": [
+      "A15-01"
+    ]
+  },
+  {
+    "id": "A15-04",
+    "title": "'Proof Capsule' is self-signed HMAC with no independent verification path; 'proof' overclaims vs verifiable-computation prior art",
+    "severity": "P2",
+    "confidence": "medium",
+    "reproducibility": "stable artifact inspection by Agent 1 (downloaded 34 KB record); cryptographic independence unverifiable from public surface",
+    "category": "novelty-positioning / trust",
+    "route": "/proof/<uuid>, /judge",
+    "journey": "judge-10-minute verification dive",
+    "user": "judge (technical)",
+    "devpost_criterion": "Technological Implementation",
+    "environment": "Web-research seat: web_search + web_open_url only; direct fetch of counterlab.cserules.workers.dev egress-blocked ('audit rejected' x5). Product-surface facts via Agent 1 browser route map (02_PUBLIC_ROUTE_AND_STATE_MAP.md, observed 2026-07-19); rules facts via Agent 14 (work/agent14_devpost_rules.md). Audit date 2026-07-19.",
+    "prerequisites": "Complete a sample session; download proof record; look for public verifier spec/endpoint/key provenance",
+    "steps": [
+      "1. Inspect downloaded proof record (12 hash-chained events, integrity hmac-sha256, externalVerifier.status VERIFIED)",
+      "2. Search public surfaces for: verifier software id/hash, public verification endpoint, key management statement, reproduce script outputs",
+      "3. Compare claim strength to zkML verifiable-evaluation prior art"
+    ],
+    "expected": "Either 'proof' is independently checkable (public verifier spec/endpoint/reproduce script a third party can run and match), or the surface uses a calibrated word ('signed record', 'attested trace')",
+    "actual": "The capsule's integrity rests on an HMAC whose key independence is not established anywhere public; externalVerifier.status VERIFIED is self-reported inside the same bundle; /judge lists reproduce scripts but they are not fetchable/executable from the public page. Against public zkML work (proofs that an evaluation was computed as claimed), 'proof' is the strong word for a weak (though honest) construction.",
+    "evidence": [
+      {
+        "label": "Observed in generated artifact",
+        "detail": "proof record: 12 hash-chained events, integrity hmac-signed/hmac-sha256, externalVerifier.status VERIFIED",
+        "ref": "02_PUBLIC_ROUTE_AND_STATE_MAP.md §R5 (evidence/agent1_download_proof_record.bin)"
+      },
+      {
+        "label": "Documented publicly",
+        "detail": "Verifiable evaluations of ML models using zkSNARKs (proof of correct evaluation)",
+        "ref": "https://pdf.arxiv.org/pdf/2402.02675 (accessed 2026-07-19)"
+      },
+      {
+        "label": "Documented publicly",
+        "detail": "zkML landscape (EZKL, zkLLM, Modulus; verifiable inference/eval claims)",
+        "ref": "https://kudelskisecurity.com/modern-ciso-blog/zkml-verifiable-machine-learning-using-zero-knowledge-proof (accessed 2026-07-19)"
+      },
+      {
+        "label": "Unverified",
+        "detail": "HMAC key custody, existence of a runnable public verifier, reproduce-script contents",
+        "ref": "no public surface found (2026-07-19)"
+      }
+    ],
+    "likely_cause": "Hackathon-scope honest logging graduated to the word 'proof' without a third-party check path",
+    "unverified": "Key independence; verifier determinism; whether scripts reproduce bit-identical results",
+    "learner_impact": "low",
+    "judge_impact": "high for technical judges — 'proof' invites scrutiny; a self-signed bundle can flip the impression from rigorous to theatrical",
+    "trust_impact": "high — the product's core promise is checkability",
+    "recommended_correction": "Publish a verifier: capsule JSON schema + verifier id/hash + one public 'verify this capsule' endpoint or a single command in the repo; state key custody; soften surface language to 'signed, reproducible evidence record' wherever full independent verification is not yet offered",
+    "smallest_correction": "Add to /judge: the capsule schema, the HMAC key-custody statement, and the exact command that recomputes result_hash from the published sample artifact; rename UI copy 'Proof Capsule' -> 'Signed Evidence Capsule (proof of integrity, scoped)'",
+    "acceptance_criteria": [
+      "A third party can recompute and match at least result_hash for the public sample using published artifacts",
+      "Every surface using the word 'proof' carries the scoped-verification clause",
+      "Verifier id and hash are displayed next to each capsule"
+    ],
+    "regression_test": "CI-style check: recompute sample result_hash from published artifact on each deploy; fail on mismatch",
+    "dependencies": [
+      "R2 in 13_NOVELTY_AND_COMPETITIVE_POSITION.md §11"
+    ],
+    "effort": "M",
+    "score_leverage": "high",
+    "related": [
+      "A15-08",
+      "A1-10"
+    ]
+  },
+  {
+    "id": "A15-05",
+    "title": "No plain-language category name; 'CI for understanding' is unownable jargon and 'notebook' collides with Google's renamed Gemini Notebook",
+    "severity": "P2",
+    "confidence": "high",
+    "reproducibility": "stable — search-verified 2026-07-19",
+    "category": "novelty-positioning / naming",
+    "route": "/, /judge, Devpost text",
+    "journey": "judge-first-20-seconds; post-hackathon recall",
+    "user": "judge",
+    "devpost_criterion": "Quality of the Idea",
+    "environment": "Web-research seat: web_search + web_open_url only; direct fetch of counterlab.cserules.workers.dev egress-blocked ('audit rejected' x5). Product-surface facts via Agent 1 browser route map (02_PUBLIC_ROUTE_AND_STATE_MAP.md, observed 2026-07-19); rules facts via Agent 14 (work/agent14_devpost_rules.md). Audit date 2026-07-19.",
+    "prerequisites": "Search the exact phrase 'CI for understanding'; review category vocabulary used on the surface; check current 'notebook' product landscape",
+    "steps": [
+      "1. web_search the exact phrase 'CI for understanding'",
+      "2. List category labels the surface offers to a non-developer judge",
+      "3. Check name-collision risk for 'notebook' in AI-education (Google NotebookLM rename)"
+    ],
+    "expected": "A plain-language category the judge can repeat ('evidence-first learning/tutoring'), with 'CI for understanding' as an engineer's subtitle",
+    "actual": "The only category phrase is the CI metaphor (zero public search presence — ownable but unexplained, and it puns on 'CI for ML' tooling like CML, which technical judges may read first). Meanwhile Google's NotebookLM was renamed 'Gemini Notebook' on 2026-07-16 and gained code execution — the noun 'notebook' + learning + AI is increasingly crowded, diluting CounterLab's surface vocabulary.",
+    "evidence": [
+      {
+        "label": "Documented publicly",
+        "detail": "Exact-phrase search 'CI for understanding' returned no relevant results (only generic CI/CD and unrelated 'CI' expansions)",
+        "ref": "web_search 2026-07-19"
+      },
+      {
+        "label": "Documented publicly",
+        "detail": "CML = 'Continuous Machine Learning', CI/CD for ML projects — the literal referent of the pun",
+        "ref": "https://mlops-guide.github.io/CICD/cml_testing/ (accessed 2026-07-19)"
+      },
+      {
+        "label": "Documented publicly",
+        "detail": "Google renamed NotebookLM to 'Gemini Notebook' (2026-07-16) and added code execution per notebook",
+        "ref": "https://www.dawan.africa/news/google-renames-notebooklm-to-gemini-notebook (accessed 2026-07-19)"
+      }
+    ],
+    "likely_cause": "Developer-authored naming; no education-audience naming pass",
+    "unverified": "Devpost tagline/video wording (not publicly observable)",
+    "learner_impact": "low",
+    "judge_impact": "medium-high — Education-track judges (incl. an education VP) may not parse the CI metaphor; unmemorable category = unmemorable entry",
+    "trust_impact": "low",
+    "recommended_correction": "Adopt a plain-language category on all surfaces: 'evidence-first learning' (or 'evidence-first tutoring'); retain 'CI for understanding' as a subtitle for developer audiences",
+    "smallest_correction": "Add a one-line gloss under the tagline: 'CounterLab is evidence-first learning: your claim, your sealed prediction, a recomputed answer, a signed record.'",
+    "acceptance_criteria": [
+      "Category phrase a non-developer can repeat appears on / and /judge",
+      "Tagline + category + invariant are consistent across home, /judge, and Devpost text"
+    ],
+    "regression_test": "Copy snapshot test: category phrase present in <title>/<h1> of / and /judge",
+    "dependencies": [
+      "A15-01"
+    ],
+    "effort": "S",
+    "score_leverage": "medium-high",
+    "related": [
+      "A15-01"
+    ]
+  },
+  {
+    "id": "A15-06",
+    "title": "No public framing separating CounterLab from leakage-detection dev tools (NBLyzer, LeakageDetector, sklearn-diagnose)",
+    "severity": "P2",
+    "confidence": "high",
+    "reproducibility": "stable — prior art publicly documented; absence of contrast text verifiable on public surfaces",
+    "category": "novelty-positioning",
+    "route": "/judge",
+    "journey": "technical-judge comparison pass",
+    "user": "judge (technical)",
+    "devpost_criterion": "Quality of the Idea ('differ from existing concepts')",
+    "environment": "Web-research seat: web_search + web_open_url only; direct fetch of counterlab.cserules.workers.dev egress-blocked ('audit rejected' x5). Product-surface facts via Agent 1 browser route map (02_PUBLIC_ROUTE_AND_STATE_MAP.md, observed 2026-07-19); rules facts via Agent 14 (work/agent14_devpost_rules.md). Audit date 2026-07-19.",
+    "prerequisites": "Review /judge for any dev-tool contrast; review public leakage-tooling landscape",
+    "steps": [
+      "1. Read /judge claims and limits",
+      "2. Check for any statement distinguishing a learning instrument from a linter/static analyzer",
+      "3. Compare to NBLyzer (93% precision on 2,111 Kaggle notebooks), LeakageDetector (PyCharm plugin with plain-language fixes), sklearn-diagnose (leakage + class imbalance + chatbot)"
+    ],
+    "expected": "One explicit paragraph: linters detect and tell practitioners; CounterLab withholds the answer until the learner predicts, computes the boundary, scores transfer, and only then unlocks the fix — the artifact is the belief change, not the bug report",
+    "actual": "No such framing found on public surfaces. Overlap is real: sklearn-diagnose covers the same two pathologies with an LLM chatbot; NBLyzer statically finds leakage in notebooks. The differentiator is the pedagogy-plus-proof loop, but it is unstated where a technical judge looks.",
+    "evidence": [
+      {
+        "label": "Documented publicly",
+        "detail": "NBLyzer: abstract-interpretation leakage detection in Jupyter notebooks, 93% precision on 2,111 Kaggle notebooks",
+        "ref": "https://arxiv.org/html/2603.10742v3 (accessed 2026-07-19)"
+      },
+      {
+        "label": "Documented publicly",
+        "detail": "LeakageDetector: PyCharm plugin; plain-language leakage descriptions, causes, fixes",
+        "ref": "https://arxiv.org/html/2503.14723v1 (accessed 2026-07-19)"
+      },
+      {
+        "label": "Documented publicly",
+        "detail": "sklearn-diagnose: overfitting, data leakage, class imbalance diagnosis + confidence-scored hypotheses + chatbot",
+        "ref": "https://github.com/leockl/sklearn-diagnose (accessed 2026-07-19)"
+      },
+      {
+        "label": "Inferred from behaviour",
+        "detail": "/judge dossier contains no linter/dev-tool contrast text",
+        "ref": "02_PUBLIC_ROUTE_AND_STATE_MAP.md §R2"
+      }
+    ],
+    "likely_cause": "Competitive scan focused on tutors, not dev tools",
+    "unverified": "Devpost text contents",
+    "learner_impact": "none",
+    "judge_impact": "high for dev-tools-literate judges — 'already exists' is the default verdict without the contrast",
+    "trust_impact": "medium",
+    "recommended_correction": "Add a 'Not a linter' block: name the three tools, state the loop they don't have (sealed prediction -> computed boundary -> transfer gate -> repair unlock -> signed Reasoning Diff)",
+    "smallest_correction": "One sentence on /judge: 'Leakage linters (NBLyzer, LeakageDetector, sklearn-diagnose) tell you the answer; CounterLab makes you predict it, then proves what changed in your reasoning.'",
+    "acceptance_criteria": [
+      "Named dev-tool contrast present on /judge",
+      "Statement identifies the learning artifact (Reasoning Diff) as the differentiator"
+    ],
+    "regression_test": "Greppable contrast text on /judge; refresh when new linters ship",
+    "dependencies": [
+      "A15-01"
+    ],
+    "effort": "S",
+    "score_leverage": "high",
+    "related": [
+      "A15-01",
+      "A15-07"
+    ]
+  },
+  {
+    "id": "A15-07",
+    "title": "Subject matter overlaps Kaggle's canonical leakage lesson; only one subject pack publicly visible, so the 'category' reads as one lesson",
+    "severity": "P2",
+    "confidence": "high",
+    "reproducibility": "stable — public surfaces + public curriculum",
+    "category": "novelty-positioning / scope",
+    "route": "/session/<uuid>, /replay/leakage-01, /judge",
+    "journey": "judge-3-minute sample walkthrough",
+    "user": "judge",
+    "devpost_criterion": "Potential Impact + Quality of the Idea",
+    "environment": "Web-research seat: web_search + web_open_url only; direct fetch of counterlab.cserules.workers.dev egress-blocked ('audit rejected' x5). Product-surface facts via Agent 1 browser route map (02_PUBLIC_ROUTE_AND_STATE_MAP.md, observed 2026-07-19); rules facts via Agent 14 (work/agent14_devpost_rules.md). Audit date 2026-07-19.",
+    "prerequisites": "Walk the sample session; note the learning objective and dataset framing; compare with Kaggle Learn curriculum",
+    "steps": [
+      "1. Complete the sample lesson (entity leakage; 98.5 -> 59.4 at the entity boundary)",
+      "2. Check public surfaces for a second pack (class imbalance is in the stated scope)",
+      "3. Compare learning objective to Kaggle Learn 'Data Leakage' lesson (target leakage, train-test contamination)"
+    ],
+    "expected": "At least two publicly visible subject packs demonstrating the kernel+verifier method generalises; explicit positioning vs the canonical Kaggle lesson",
+    "actual": "Only the leakage pack is publicly reachable (sample + sole replay id leakage-01). Class imbalance appears in scope text without a public pack. The leakage lesson's objective and framing ('looks accurate until deployed') mirror Kaggle Learn's established free lesson, so visible scope = one canonical lesson re-skinned, however superior the mechanism.",
+    "evidence": [
+      {
+        "label": "Inferred from behaviour",
+        "detail": "Sample + replay both cover entity leakage only; 'two reviewed ML Subject Packs' mentioned in /judge limits",
+        "ref": "02_PUBLIC_ROUTE_AND_STATE_MAP.md §R2, §R4, §R6"
+      },
+      {
+        "label": "Documented publicly",
+        "detail": "Kaggle Learn Intermediate ML 'Data Leakage' lesson: target leakage + train-test contamination, 'looks accurate until you start making decisions with the model'",
+        "ref": "https://github.com/gabboraron/Intermediate-Machine-Learning-Kaggle (accessed 2026-07-19)"
+      },
+      {
+        "label": "Documented publicly",
+        "detail": "Kaggle community framing of leakage causes/prevention (same canonical content)",
+        "ref": "https://www.kaggle.com/discussions/general/532001 (accessed 2026-07-19)"
+      }
+    ],
+    "likely_cause": "One pack polished for demo; second pack not publicly exposed yet",
+    "unverified": "Whether the imbalance pack exists behind live mode",
+    "learner_impact": "medium — one lesson limits transfer claims",
+    "judge_impact": "high — 'one lesson' caps Potential Impact scoring; two packs would reframe as 'a method'",
+    "trust_impact": "low-medium",
+    "recommended_correction": "Expose the class-imbalance pack publicly (sample + replay), and add a line distinguishing CounterLab from content lessons: 'Kaggle teaches leakage as content; CounterLab makes you stake a prediction on your own pipeline and proves the boundary'",
+    "smallest_correction": "Publish the imbalance replay (id discoverable from /judge) even if its live pack lags",
+    "acceptance_criteria": [
+      "Two subject packs publicly walkable",
+      "Each pack has sample + replay evidence",
+      "Contrast vs content-lesson format stated on /judge"
+    ],
+    "regression_test": "Route check: /replay/<pack-02-id> resolves with full theater + quiz",
+    "dependencies": [
+      "A15-11"
+    ],
+    "effort": "M",
+    "score_leverage": "high",
+    "related": [
+      "A15-06",
+      "A15-11"
+    ]
+  },
+  {
+    "id": "A15-08",
+    "title": "'Reality answers' / 98.5->59.4 hero claims lack an attached scope clause on learner-facing surfaces",
+    "severity": "P3",
+    "confidence": "medium",
+    "reproducibility": "stable on public surfaces; phrasing risk is judgement",
+    "category": "novelty-positioning / overclaim-risk",
+    "route": "/, /judge",
+    "journey": "judge-first-20-seconds; epistemic red-team pass",
+    "user": "judge + learner",
+    "devpost_criterion": "Quality of the Idea + Potential Impact (credibility)",
+    "environment": "Web-research seat: web_search + web_open_url only; direct fetch of counterlab.cserules.workers.dev egress-blocked ('audit rejected' x5). Product-surface facts via Agent 1 browser route map (02_PUBLIC_ROUTE_AND_STATE_MAP.md, observed 2026-07-19); rules facts via Agent 14 (work/agent14_devpost_rules.md). Audit date 2026-07-19.",
+    "prerequisites": "Read hero claims on / and /judge; locate scope/limit text",
+    "steps": [
+      "1. Note hero claims (98.5 -> 59.4; 'prove it like science')",
+      "2. Check whether the scoped-verification clause travels with the claim on each surface"
+    ],
+    "expected": "Every strong claim carries its scope ('bounded re-computation on reviewed subject packs; proves integrity and scoped verification — not global mastery')",
+    "actual": "The honest limits exist on /judge ('scoped verification — not global mastery') but the learner-facing hero and claim surfaces present the numbers and the science metaphor without the clause; an epistemically literate judge can frame the hero as a rigged-seed synthetic demo if the scope is one click away",
+    "evidence": [
+      {
+        "label": "Inferred from behaviour",
+        "detail": "Limits text present on /judge; hero stat presented without adjacent scope clause on home",
+        "ref": "02_PUBLIC_ROUTE_AND_STATE_MAP.md §R1, §R2"
+      },
+      {
+        "label": "Inferred from behaviour",
+        "detail": "Sample numbers are seeded (seed 1729) on a synthetic churn lesson",
+        "ref": "02_PUBLIC_ROUTE_AND_STATE_MAP.md §R4"
+      }
+    ],
+    "likely_cause": "Marketing-style hero separated from legal-style limits block",
+    "unverified": "Final copy state after any post-audit edits",
+    "learner_impact": "low-medium — learners may overgeneralise what the sample proved",
+    "judge_impact": "medium — overclaim read erodes the credibility premium the honest limits otherwise earn",
+    "trust_impact": "medium-high",
+    "recommended_correction": "Attach a one-line scope clause directly beneath every hero claim ('Computed by a pinned kernel on a reviewed subject pack — scoped verification, not global mastery')",
+    "smallest_correction": "Add the clause as a sub-caption under the 98.5->59.4 comparison on /judge and under the home hero",
+    "acceptance_criteria": [
+      "Each surface with a strong claim shows the scope clause in the same viewport",
+      "No surface states or implies global/general proof"
+    ],
+    "regression_test": "Viewport snapshot test of / and /judge heroes containing the clause",
+    "dependencies": [],
+    "effort": "S",
+    "score_leverage": "medium",
+    "related": [
+      "A15-04",
+      "A1-10"
+    ]
+  },
+  {
+    "id": "A15-09",
+    "title": "No visible learning-outcome metric (calibration of sealed predictions, aggregate transfer rates) — the number that would prove the category's value is computed nowhere",
+    "severity": "P3",
+    "confidence": "medium",
+    "reproducibility": "stable absence on public surfaces",
+    "category": "novelty-positioning / impact-evidence",
+    "route": "/proof/<uuid>, /judge",
+    "journey": "judge-10-minute impact assessment",
+    "user": "judge",
+    "devpost_criterion": "Potential Impact ('credible, specific case ... based on what's demonstrated')",
+    "environment": "Web-research seat: web_search + web_open_url only; direct fetch of counterlab.cserules.workers.dev egress-blocked ('audit rejected' x5). Product-surface facts via Agent 1 browser route map (02_PUBLIC_ROUTE_AND_STATE_MAP.md, observed 2026-07-19); rules facts via Agent 14 (work/agent14_devpost_rules.md). Audit date 2026-07-19.",
+    "prerequisites": "Inspect Reasoning Diff outputs and /judge for any measured learning effect",
+    "steps": [
+      "1. Check Reasoning Diff contents (before/after belief)",
+      "2. Look for calibration scoring (confidence vs outcome) and any aggregate stats across sessions"
+    ],
+    "expected": "At minimum per-session calibration feedback (sealed confidence vs actual); ideally an aggregate counter ('learners overconfident by X% before the test; transfer pass rate Y%') to evidence the learning claim",
+    "actual": "Confidence is captured at seal time (slider, default 72%) but no calibration score appears in the Reasoning Diff; no aggregate learning-outcome statistic is public. Impact rests on the mechanism's plausibility, not measured effect.",
+    "evidence": [
+      {
+        "label": "Inferred from behaviour",
+        "detail": "Seal form captures expectation + confidence slider 72%; Reasoning Diff shows belief before/after without calibration metric",
+        "ref": "02_PUBLIC_ROUTE_AND_STATE_MAP.md §R4, §R5"
+      },
+      {
+        "label": "Documented publicly",
+        "detail": "Eedi's RCT positions measured learning outcomes as the education-field credibility standard",
+        "ref": "https://arxiv.org/html/2512.23633v1 (accessed 2026-07-19)"
+      }
+    ],
+    "likely_cause": "Outcome measurement deferred; demo prioritised mechanism over metrics",
+    "unverified": "Any private analytics",
+    "learner_impact": "medium — calibration feedback is itself a strong metacognition feature learners currently don't get",
+    "judge_impact": "medium — 'credible case ... based on what's demonstrated' is weaker without any measured effect",
+    "trust_impact": "low-medium",
+    "recommended_correction": "Add per-session calibration (Brier-style or overconfidence delta) into the Reasoning Diff; later aggregate anonymised stats on /judge",
+    "smallest_correction": "Display 'You sealed 72% confidence; the computed result moved the metric 39.1 points — calibration note' line in the Reasoning Diff",
+    "acceptance_criteria": [
+      "Reasoning Diff contains a calibration indicator derived from the sealed confidence",
+      "/judge shows at least one aggregate learning statistic or a dated plan to measure"
+    ],
+    "regression_test": "Diff render test: calibration line present for both correct and incorrect sealed predictions",
+    "dependencies": [
+      "A15-01"
+    ],
+    "effort": "M",
+    "score_leverage": "medium",
+    "related": [
+      "A15-01"
+    ]
+  },
+  {
+    "id": "A15-10",
+    "title": "Build Week gallery not yet public (verified); same-sponsor 2025 gallery shows 'Socratic-withholding' is a known hackathon pattern — expect copy-pattern Education entries",
+    "severity": "P3",
+    "confidence": "high (gallery staleness verified by two agents); medium (pattern prediction)",
+    "reproducibility": "stable — fetchable gallery shows 2025 Open Model Hackathon (488 projects)",
+    "category": "novelty-positioning / field-scan",
+    "route": "n/a (external: openai.devpost.com/project-gallery)",
+    "journey": "post-submission competitive framing",
+    "user": "team (strategy) + judge context",
+    "devpost_criterion": "Quality of the Idea",
+    "environment": "Web-research seat: web_search + web_open_url only; direct fetch of counterlab.cserules.workers.dev egress-blocked ('audit rejected' x5). Product-surface facts via Agent 1 browser route map (02_PUBLIC_ROUTE_AND_STATE_MAP.md, observed 2026-07-19); rules facts via Agent 14 (work/agent14_devpost_rules.md). Audit date 2026-07-19.",
+    "prerequisites": "Fetch openai.devpost.com/project-gallery; search for Build Week-specific galleries and CounterLab's Devpost page",
+    "steps": [
+      "1. Fetch project-gallery; note it serves the 2025 gpt-oss hackathon (e.g. 'RoboChef: GPT-OSS...')",
+      "2. Note overlapping 2025 entries: RefactorAI ('asks better questions instead of giving easy answers'), canvasTutor, ALAIN ('AI manuals for AI models')",
+      "3. Confirm no Build Week gallery / no indexed CounterLab Devpost page"
+    ],
+    "expected": "Awareness that Build Week entries aren't publicly comparable yet, and that 'asks questions not answers' is a seen-before hackathon pattern, so differentiation must be carried by computed evidence + signed artifacts, not Socratic framing",
+    "actual": "No Build Week submission (including CounterLab's own page) is publicly observable at audit date; the only same-sponsor public gallery (2025 gpt-oss, 488 projects) already contains Socratic-withholding and AI-notebook-education patterns",
+    "evidence": [
+      {
+        "label": "Documented publicly",
+        "detail": "project-gallery serves 'OpenAI Open Model Hackathon' 488 projects incl. RefactorAI, canvasTutor, ALAIN — not Build Week",
+        "ref": "https://openai.devpost.com/project-gallery (accessed 2026-07-19)"
+      },
+      {
+        "label": "Documented publicly",
+        "detail": "Build Week submission window still open (deadline 2026-07-21 17:00 PT); galleries typically publish after judging starts",
+        "ref": "https://openai.devpost.com/ via work/agent14_devpost_rules.md §2.2 (accessed 2026-07-19)"
+      },
+      {
+        "label": "Could not test",
+        "detail": "CounterLab Devpost page (0 indexed results)",
+        "ref": "web_search 2026-07-19"
+      }
+    ],
+    "likely_cause": "Timing (gallery publishes post-deadline); hackathon pattern convergence on Socratic tutors",
+    "unverified": "Actual Build Week Education-track field composition",
+    "learner_impact": "none",
+    "judge_impact": "indirect — if multiple 'Socratic X' entries exist, judges will pattern-match; the entries that compute and sign evidence will stand out",
+    "trust_impact": "none",
+    "recommended_correction": "Ensure every surface leads with computed/sealed/signed evidence (not 'asks better questions'); after the gallery opens (post Jul 21), do one differentiation pass vs actual Education-track peers and tune the Devpost text",
+    "smallest_correction": "Swap any 'asks questions instead of answering' lead copy for 'seals your prediction, recomputes the answer, signs the belief change'",
+    "acceptance_criteria": [
+      "Lead copy on all surfaces centers computed/sealed/signed evidence",
+      "Post-gallery differentiation memo exists (dated after 2026-07-21)"
+    ],
+    "regression_test": "Post-deadline gallery review checklist executed once; copy snapshot contains the differentiating verbs",
+    "dependencies": [],
+    "effort": "S",
+    "score_leverage": "medium",
+    "related": [
+      "A15-01",
+      "A15-06"
+    ]
+  },
+  {
+    "id": "A15-11",
+    "title": "Strongest trust artifact (Proof Capsule) is unavailable on the only deterministic judge path (single 'legacy v1' replay)",
+    "severity": "P3",
+    "confidence": "high (facts); medium (impact)",
+    "reproducibility": "stable — replay page states legacy v1, no capsule download; only known replay id leakage-01",
+    "category": "novelty-positioning / evidence-integrity",
+    "route": "/replay/leakage-01, /judge",
+    "journey": "judge-3-minute replay verification",
+    "user": "judge",
+    "devpost_criterion": "Technological Implementation + Design",
+    "environment": "Web-research seat: web_search + web_open_url only; direct fetch of counterlab.cserules.workers.dev egress-blocked ('audit rejected' x5). Product-surface facts via Agent 1 browser route map (02_PUBLIC_ROUTE_AND_STATE_MAP.md, observed 2026-07-19); rules facts via Agent 14 (work/agent14_devpost_rules.md). Audit date 2026-07-19.",
+    "prerequisites": "Open the verified replay; attempt capsule download; compare with live sample proof page",
+    "steps": [
+      "1. Walk /replay/leakage-01 to final state",
+      "2. Attempt 'Download proof record' / 'Download repaired notebook'",
+      "3. Note disabled buttons + 'legacy v1 replay ... does not offer a Proof Capsule download' notice"
+    ],
+    "expected": "The deterministic path a judge can re-walk any time also yields the signature artifact, so 'replay verifies' is checkable end-to-end",
+    "actual": "Replay is honest about its limits but the capsule — the product's signature object — is precisely what the replay cannot produce; replay result hash differs from live sample hash without UI disambiguation (Agent 1 A1-10), compounding confusion about which artifact proves what",
+    "evidence": [
+      {
+        "label": "Inferred from behaviour",
+        "detail": "Replay final buttons disabled; 'legacy v1 replay is genuine but does not offer a Proof Capsule download'; only replay id is leakage-01 (Recorded 2026/7/14)",
+        "ref": "02_PUBLIC_ROUTE_AND_STATE_MAP.md §R2, §R6"
+      },
+      {
+        "label": "Inferred from behaviour",
+        "detail": "Four distinct hash values presented as 'the' result hash across sample/replay/notebook metadata (A1-10)",
+        "ref": "02_PUBLIC_ROUTE_AND_STATE_MAP.md §3"
+      }
+    ],
+    "likely_cause": "Replay format predates capsule issuance (v1), no v2 replay recorded",
+    "unverified": "Whether a v2 replay with capsule is planned",
+    "learner_impact": "low",
+    "judge_impact": "medium — the fully deterministic verification path ends one step short of the flagship artifact",
+    "trust_impact": "medium — honest labelling mitigates, but the asymmetry is noticeable",
+    "recommended_correction": "Record a v2 replay whose final state includes a downloadable capsule; disambiguate hash terminology (plan hash / result hash / patch hash) in UI",
+    "smallest_correction": "Add one line on the replay final state: 'Capsule issuance was added after this recording; start the sample to receive one.'",
+    "acceptance_criteria": [
+      "At least one public replay ends with a downloadable capsule",
+      "Hash terminology disambiguated wherever shown"
+    ],
+    "regression_test": "Replay walkthrough test asserts capsule download enabled at final state for v2 replay id",
+    "dependencies": [
+      "A1-10",
+      "A1-07"
+    ],
+    "effort": "M",
+    "score_leverage": "medium",
+    "related": [
+      "A15-02",
+      "A15-04",
+      "A1-07",
+      "A1-10"
+    ]
+  }
+]

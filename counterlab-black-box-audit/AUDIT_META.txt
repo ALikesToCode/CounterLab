@@ -1,0 +1,6 @@
+Audit target: https://counterlab.cserules.workers.dev/
+Judge Mode:   https://counterlab.cserules.workers.dev/judge
+Devpost:      https://openai.devpost.com/
+Audit date:   2026-07-19 (UTC)
+Commander:    Agent 0 (Orchestrator)
+Mode:         Strict black-box; no source/repo/log access
