@@ -111,9 +111,11 @@ export function ProjectSidebar({
       <button
         className="studio-command-trigger"
         type="button"
+        aria-label="Open commands"
         onClick={onOpenCommands}
       >
-        <span>⌘</span> Commands <kbd>Ctrl K</kbd>
+        <span aria-hidden="true">⌘</span> Commands{" "}
+        <kbd aria-hidden="true">Ctrl K</kbd>
       </button>
     </aside>
   );
