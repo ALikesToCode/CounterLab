@@ -12,7 +12,18 @@ pass is never presented as a browser or production pass.
 ### Current checkpoint
 
 - **Branch:** `feat/learner-ux-v6.1`
-- **Current product checkpoint:**
+- **Latest committed checkpoint:** `9348093a15942e7fb59c2755d3e080a20785b5c0`.
+  The fresh exact-image isolation rerun is independently hash-bound through
+  release-check receipt v5, deployment receipt v7, Worker release identity,
+  exact public response validation, and production-smoke report v6. Historical
+  receipt readers remain compatible. The worktree contains only the preserved,
+  untracked `scripts/.fuse_hidden0000a9600000801f`, which remains unopened,
+  unstaged, and undeleted. The complete web suite passes **616/616**; the
+  correctly contained and socket-enabled root suite passes **667/670** with
+  **2 skipped**, leaving exactly three stale scientific-evidence failures.
+  Qualification, deployment, browser qualification, learner evidence, and
+  submission remain unclaimed.
+- **Earlier product checkpoint:**
   `5259a495948a68024702ba5239bf8057d1785f08`. The owner partitioned the
   preserved integration delta into nine commits and fast-forwarded both
   `feat/learner-ux-v6.1` and `main` to `134c22f` before qualification. The lead
@@ -3034,3 +3045,61 @@ undeleted.
 5. Align and verify Devpost, public video, repository, feedback ID, and
    submission receipt; push the feature branch and fast-forward its verified
    tip into `main` only after the recorded gates are truthful.
+
+## Finish Commander fresh release-chain checkpoint — 2026-07-20T22:50:08Z
+
+Deadline: `2026-07-22T00:00:00Z`; **25 hours 9 minutes 52 seconds remained at
+this checkpoint**. The feature branch is at committed HEAD
+`9348093a15942e7fb59c2755d3e080a20785b5c0`; the only worktree entry besides
+this progress update is the preserved untracked
+`scripts/.fuse_hidden0000a9600000801f`.
+
+### Newly frozen independent commits
+
+- `e8ae61f fix(release): bind qualified isolation identity` carries the
+  qualification-time isolation evidence and exact probe through qualified
+  receipts, runtime readiness, Worker bindings, deployment receipts, and
+  public release identity. Active Worker bindings now reject duplicates.
+- `9348093 fix(release): bind fresh isolation recheck` separately embeds and
+  hashes the release-time rerun, introduces release-check receipt v5,
+  deployment receipt v7, and smoke report v6, validates exact public response
+  shapes, preserves historical readers, rejects future/reversed/stale proof,
+  and requires the rerun within 30 minutes of receipt issuance.
+
+### Exact verification at this checkpoint
+
+- Fresh receipt/deployment contract Vitest: **4 files, 35/35 passed**.
+- Worker API/deployment-config Vitest: **2 files, 123/123 passed**.
+- Production-smoke Pytest: **19/19 passed**.
+- Complete web Vitest: **78 files, 616/616 passed**.
+- Complete root Vitest with an absolute repository-contained temp root and
+  loopback permission: **58/60 files passed; 667 passed, 3 failed, 2 skipped**.
+  All three failures are current source-bound scientific-evidence drift in the
+  release verifier; the earlier relative-temp and socket-denied run is not
+  treated as product evidence.
+- Repository, web, and Worker strict TypeScript: **passed**.
+- Production Vite/Worker build: **passed**. The main client remains
+  **552.03 kB** minified and above the 500 kB warning threshold; Worker output
+  is **1,862.23 kB**.
+- Scoped Prettier, Bash syntax, Git whitespace, generated contract schemas,
+  and a 19-file secret scan: **passed**.
+
+### Ordered remaining gates
+
+1. Refresh the exact source-bound scientific integrity, SBOM tool-lock, VEX,
+   and vulnerability evidence without weakening the three failing tests.
+2. Resolve the named FUSE artifact only under the repository destructive-action
+   rule; until then, clean-tree release checks remain blocked.
+3. Freeze one source commit, build and exercise one exact runner image, prove
+   the generation-isolation sentinel and real aggregate containment, regenerate
+   all source/image-bound evidence, and issue qualification/release receipts.
+4. Verify repository-contained Wrangler authentication, deploy only the
+   qualified tuple, and run production smoke against the exact public identity.
+5. Run the full desktop/mobile/accessibility/error-path matrix through
+   CloakBrowser. Stock Chromium remains design-review evidence only.
+6. Keep learner evidence `NO_DATA` unless real consented participants are
+   observed; align Devpost, video, public repository, feedback ID, and every
+   claim before authorized submission.
+7. Push the completed feature branch, verify its remote tip, fast-forward the
+   exact verified commit into `main`, and push `main` only after the release and
+   submission records are truthful.
