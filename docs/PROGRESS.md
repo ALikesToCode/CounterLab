@@ -3103,3 +3103,45 @@ this progress update is the preserved untracked
 7. Push the completed feature branch, verify its remote tip, fast-forward the
    exact verified commit into `main`, and push `main` only after the release and
    submission records are truthful.
+
+## Finish Commander runtime-start checkpoint — 2026-07-20T23:06:21Z
+
+Deadline: `2026-07-22T00:00:00Z`; **24 hours 53 minutes 39 seconds remained at
+this checkpoint**. The feature branch is at committed HEAD
+`85c5652afc75230a28209883153814ca6cb64c36`; the only visible worktree entry is
+the preserved untracked `scripts/.fuse_hidden0000a9600000801f`.
+
+### Newly frozen independent commits
+
+- `de21f14 fix(release): verify refreshed image digest` passes the build
+  receipt's exact image digest into the final scientific verifier instead of
+  relying on the mutable local tag until later receipt validation. The focused
+  source-bound evidence suite passed **11/11**; shell syntax, formatting,
+  whitespace, and the two-file secret scan passed.
+- `85c5652 fix(runtime): preserve supervisor response channel` configures the
+  Unix control server for request half-close semantics. Before the repair, a
+  real fresh runtime reached its sockets but the attestation request received
+  an empty response; the added characterization failed **1/5**. After repair,
+  supervisor, attestation, entry, and contained-runtime suites passed **52/52**,
+  and a second fresh session reached `Contained runtime session ready`.
+
+### Current external and release truth
+
+- The repository-contained Wrangler `4.110.0` identity check failed closed
+  because its isolated profile reported `loggedIn: false`. A fresh manual OAuth
+  flow was started with `--browser=false` and timed out without a callback. No
+  normal-home credential was read or copied, and no Cloudflare resource was
+  mutated.
+- The current shell exposes no `CLOAK_CDP_ENDPOINT`; no CloakBrowser result is
+  claimed.
+- Read-only source audit confirms that the contained rootless OCI path still
+  removes cgroup resources and records aggregate enforcement as false. The
+  strict timeout and qualification contracts correctly require genuine,
+  source-bound Linux cgroup v2 negative-control evidence, so no qualified
+  receipt can be issued from the current producer. This gate will not be
+  weakened or replaced with a fabricated receipt.
+- The FUSE artifact still blocks the exact build's clean-tree gate. Its removal
+  remains pending the constitution's immediate explicit approval.
+- The three scientific release-verifier failures remain the expected stale
+  exact-image evidence and can be resolved only after a clean source build and
+  authoritative full refresh.
