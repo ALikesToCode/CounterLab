@@ -1,6 +1,5 @@
 import {
   BeliefSpecV2Schema,
-  BeliefTestSchema,
   BoundaryMapAuthorityRefV1Schema,
   EvidenceVerdictSchema,
   HostedVerifiedResultSetV2Schema,
@@ -8,6 +7,8 @@ import {
   HostedResultAuthorityRefV5Schema,
   PatchResultSchema,
   PredictionContractSchema,
+  PrePredictionBeliefSpecV2Schema,
+  PrePredictionBeliefTestV1Schema,
   ProofBundleSchema,
   ProofCapsuleRefV2Schema,
   ReasoningDiffSchema,
@@ -110,7 +111,7 @@ export class SessionService {
       promptHash?: string;
     } = {},
   ): Promise<CounterLabSession> {
-    const parsed = BeliefTestSchema.parse(beliefTest);
+    const parsed = PrePredictionBeliefTestV1Schema.parse(beliefTest);
     return this.transition(
       sessionId,
       "BELIEF_TEST_PROPOSED",
@@ -139,7 +140,7 @@ export class SessionService {
       promptHash?: string;
     } = {},
   ): Promise<CounterLabSession> {
-    const parsed = BeliefSpecV2Schema.parse(beliefSpec);
+    const parsed = PrePredictionBeliefSpecV2Schema.parse(beliefSpec);
     return this.transition(
       sessionId,
       "BELIEF_TEST_PROPOSED",
@@ -178,7 +179,7 @@ export class SessionService {
         "A v1 Belief Test edit cannot replace a v2 Belief Spec",
       );
     }
-    const parsed = BeliefTestSchema.parse(beliefTest);
+    const parsed = PrePredictionBeliefTestV1Schema.parse(beliefTest);
     return this.revise(
       current,
       { beliefTest: parsed },

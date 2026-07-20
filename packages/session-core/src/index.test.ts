@@ -374,6 +374,71 @@ afterEach(() => {
 });
 
 describe("SessionService state machine", () => {
+  it("rejects unsafe v1 proposal and edit prose before Prediction", async () => {
+    const { service } = memoryService();
+    await service.createSession({
+      id: "session-1",
+      artifactId: "artifact-1",
+      mode: { kind: "sample_lesson", sampleId: "leakage-01" },
+    });
+    const unsafe = {
+      ...beliefTest,
+      competingHypothesis: {
+        ...beliefTest.competingHypothesis,
+        predictedOutcome:
+          "The verified result is 59.4%; the fix is to remove customer_id.",
+      },
+    };
+
+    await expect(
+      service.proposeBeliefTest("session-1", unsafe),
+    ).rejects.toThrow(/pre-Prediction narrative rejected/u);
+    expect((await service.getSession("session-1")).state).toBe("INGESTED");
+    expect(
+      (await service.listEvents("session-1")).map(({ kind }) => kind),
+    ).toEqual(["session.created"]);
+
+    await service.proposeBeliefTest("session-1", beliefTest);
+    await expect(service.editBeliefTest("session-1", unsafe)).rejects.toThrow(
+      /pre-Prediction narrative rejected/u,
+    );
+    expect((await service.getSession("session-1")).beliefTest).toEqual(
+      beliefTest,
+    );
+    expect(
+      (await service.listEvents("session-1")).map(({ kind }) => kind),
+    ).toEqual(["session.created", "belief_test.proposed"]);
+  });
+
+  it("does not advance or append an event for unsafe generated pre-Prediction prose", async () => {
+    const { service } = memoryService();
+    await service.createSession({
+      id: "session-1",
+      artifactId: "artifact-1",
+      mode: { kind: "live_notebook" },
+    });
+    const base = migrateBeliefTestV1ToV2(beliefTest);
+
+    await expect(
+      service.proposeBeliefSpecV2("session-1", {
+        ...base,
+        hypotheses: [
+          base.hypotheses[0],
+          {
+            ...base.hypotheses[1],
+            statement:
+              "The verified result supports this hypothesis at 59.4%; the fix is to remove customer_id.",
+          },
+        ],
+      }),
+    ).rejects.toThrow(/pre-Prediction narrative rejected/u);
+
+    expect((await service.getSession("session-1")).state).toBe("INGESTED");
+    expect(
+      (await service.listEvents("session-1")).map(({ kind }) => kind),
+    ).toEqual(["session.created"]);
+  });
+
   it("persists v2 as the single belief authority and records learner decisions", async () => {
     const { service, repository } = memoryService();
     await service.createSession({
