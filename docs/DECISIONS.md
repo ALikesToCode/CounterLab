@@ -771,3 +771,16 @@ New sessions receive a separate 256-bit owner key.
 - Rehash the manifest, qualification receipt, and release-check receipt before
   every state-changing deployment step. Any byte drift stops before maintenance
   mode, migrations, Container rollout, or final Worker upload.
+
+## 2026-07-20 — Version stronger isolation evidence instead of rewriting receipts
+
+- Preserve qualified-runner v4 and release-check v2 without a generation
+  isolation field, and preserve deployment v4 with its exact `PARTIAL`
+  isolation meaning.
+- Use qualified-runner v5, release-check v3, and deployment v5 only for the
+  strict `OS_ENFORCED` status contract. Never reinterpret historical bytes.
+- Treat the status field as necessary but insufficient release proof. A later
+  version must bind a persisted canonical exact-image isolation sentinel and
+  its hash through qualification, deployment, production readiness, and smoke.
+- Keep `PROCESS_BOUND_PARTIAL` separate: it describes Worker/client artifact
+  attestation, not the hosted generation filesystem boundary.

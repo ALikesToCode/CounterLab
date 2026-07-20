@@ -357,3 +357,9 @@ after the final source freeze.
       the qualified deployed tuple.
 - [ ] Review and commit each logical slice with the configured user identity,
       then fast-forward merge `feat/learner-ux-v6.1` into `main`.
+- [x] Preserve historical qualified v4/release-check v2/deployment v4 receipt
+      semantics and introduce strict v5/v3/v5 contracts for `OS_ENFORCED`
+      generation-filesystem isolation.
+- [ ] Persist and hash-bind the exact-image generation-isolation sentinel,
+      require its exact probe hash from the production runner, and propagate it
+      through new receipt versions without rewriting v5/v3/v5.

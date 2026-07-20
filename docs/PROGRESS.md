@@ -2896,3 +2896,67 @@ qualification evidence.
    submission receipt before final publication.
 6. Push the finished feature branch and fast-forward its verified tip into
    `main` only after the preceding gates are truthfully recorded.
+
+## Finish Commander isolation checkpoint — 2026-07-20T21:08:25Z
+
+Deadline: `2026-07-22T00:00:00Z`; **26 hours 51 minutes 35 seconds remained at
+this checkpoint**. The feature branch is at committed HEAD `f365132`; the only
+worktree entry is the preserved, untracked
+`scripts/.fuse_hidden0000a9600000801f`, which was not opened, staged, or
+deleted.
+
+### Newly frozen independent commits
+
+- `2b94c9d feat(runner): enforce Bubblewrap generation boundary` pins and
+  verifies Bubblewrap in the runner image, hides non-allowlisted host roots,
+  keeps only the job workspace writable, validates command/root containment,
+  and waits for the Codex child to exit before final credential cleanup.
+- `f365132 fix(release): version enforced isolation receipts` makes deep runner
+  readiness require `OS_ENFORCED`, requires that state in production smoke,
+  preserves historical qualified v4/release-check v2/deployment v4 receipt
+  semantics byte-for-byte, and introduces strict v5/v3/v5 receipts for the new
+  isolation claim.
+
+### Exact local verification
+
+- Release/schema/contained-runtime focused Vitest: **65/65 passed**.
+- Worker/API/client focused Vitest: **186/186 passed**.
+- Production-smoke Pytest: **19/19 passed**.
+- Reproduction tooling Pytest: **12/12 passed** with both repository Python
+  source roots supplied explicitly.
+- Repository, web, Worker, and hosted-runner TypeScript: **passed**.
+- Scoped Prettier, Git whitespace, generated-schema byte comparison, and the
+  explicit 21-file secret scan: **passed**.
+- Broader scientific release-verifier run: **76/79 passed**. The three failures
+  are expected stale source-bound integrity evidence and remain an explicit
+  regeneration gate after the final source freeze; they are not relabelled as
+  passing.
+- The first isolated Python commands omitted repository import roots and
+  failed collection; the correctly scoped invocations above are the recorded
+  results.
+
+### Current release truth and ordered queue
+
+1. Persist a canonical source/tree/image-bound generation-isolation sentinel,
+   carry its evidence and probe hashes through new receipt versions, and
+   require the exact probe hash from production runner readiness. The current
+   v5/v3/v5 status literal is necessary but not yet independently auditable.
+2. Obtain immediate owner approval before removing the named FUSE artifact, or
+   keep release qualification blocked on a non-clean tree.
+3. Freeze source, build one exact image, and prove both the new isolation
+   sentinel and aggregate cgroup-v2 containment. This host still has no
+   delegated writable aggregate-cgroup subtree, so that gate remains
+   fail-closed.
+4. Regenerate source/image-bound scientific, SBOM, VEX, health, held-out, and
+   negative-control evidence; issue qualification and release-check receipts
+   only from that tuple.
+5. Verify repository-contained Wrangler identity, deploy only the qualified
+   tuple, and run public production smoke. No deployment is claimed here.
+6. Run the full desktop/mobile/accessibility journey matrix through
+   CloakBrowser. The current session still has no `CLOAK_CDP_ENDPOINT`; prior
+   stock-Chromium captures remain design-review evidence only.
+7. Keep learner impact `NO_DATA` without consented observations, then align the
+   exact app, repository, video, Devpost entry, feedback ID, and submission
+   receipt before publication.
+8. Push the completed feature branch, review its exact tip, fast-forward it
+   into `main`, and push `main` only after the release state is truthful.
