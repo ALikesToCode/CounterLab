@@ -3208,3 +3208,76 @@ not removed.
 6. Keep learner evidence `NO_DATA` without consented participants; align and
    verify the exact public app, repository, video, Devpost, feedback ID, and
    submission receipt before the final feature push and fast-forward merge.
+
+## Finish Commander consolidated source-gate checkpoint — 2026-07-20T23:43:12Z
+
+Deadline: `2026-07-22T00:00:00Z`; **24 hours 16 minutes 48 seconds remained at
+this checkpoint**. The feature branch is at committed HEAD `cd58f3c`; the only
+visible worktree entry besides this progress update is the preserved,
+already-unlinked FUSE tombstone `scripts/.fuse_hidden0000a9600000801f`. It was
+not staged or modified.
+
+### Newly frozen independent commits
+
+- `fac223f docs(release): align isolation and completion claims` aligns the
+  public documentation with the exact-image isolation contract and bounded
+  learner-completion language without claiming production qualification.
+- `cd58f3c test(release): accept wrapped engine verification command` repairs a
+  brittle reproduction-tooling guard so it verifies the exact engine-image
+  argument across ordinary shell line wrapping. The focused file passes
+  **12/12**.
+
+### Exact verification at this checkpoint
+
+- Complete web Vitest: **78 files, 617/617 tests passed**.
+- Web client TypeScript, generated Worker types, and Worker TypeScript:
+  **passed**.
+- Production Vite/Worker build: **passed**. Worker output is **1,863.39 kB /
+  359.59 kB gzip**; main client JavaScript is **552.03 kB / 148.06 kB gzip**;
+  main CSS is **200.01 kB / 34.61 kB gzip**. The main JavaScript warning and
+  mixed static/dynamic `VerifiedBeliefBreakTheater` import remain open
+  performance observations.
+- Complete kernel and runner Pytest: **297/297 passed**.
+- Focused scientific-engine, reachability, and held-out-generator Pytest:
+  **12/12 passed**.
+- Held-out evidence check: **10/10 intake/routing**, **7/8 fixed full-loop
+  completion**, tracked evidence matched, exit `0`. The 7/8 is the existing
+  bounded result, not a new regression.
+- Complete root Vitest: **58/60 files passed; 668 passed, 3 failed, 2 skipped**.
+  The three failures are the intentional fail-closed response to stale
+  source/image-bound scientific evidence. No test was weakened.
+- Focused Git whitespace and secret scans for the release-test change:
+  **passed**.
+
+### Current production and external truth
+
+- The public `/api/health` endpoint returned HTTP success and reported the
+  configured sample, replay, GPT, Codex, kernel, and sandbox capabilities, but
+  it did **not** expose an exact source, image, or release identity. It is not
+  treated as the branch tip or as a qualified tuple.
+- Repository-contained Wrangler still reported `loggedIn: false` immediately
+  before a new manual OAuth flow was opened. No deployment mutation has
+  occurred in this checkpoint.
+- The aggregate cgroup-v2 producer and CloakBrowser endpoint gates remain
+  unresolved. The scientific-evidence failures cannot be repaired honestly
+  until one exact image is built and exercised under the required containment
+  contract.
+
+### Ordered remaining gates
+
+1. Complete repository-contained Wrangler OAuth and verify the intended
+   account without printing credentials.
+2. Produce genuine aggregate cgroup-v2 evidence on an authorized capable host;
+   keep qualification fail-closed if the host cannot provide it.
+3. Use an exact clean committed source checkout for one runner build, refresh
+   the complete source/image-bound scientific and supply-chain evidence, and
+   rerun the three currently stale verifier cases.
+4. Run the complete release gate, deploy only the qualified tuple, and prove
+   the public identity plus supported live and failure-path journeys.
+5. Run the full desktop/mobile/accessibility/performance matrix through the
+   injected safe CloakBrowser surface. No stock-browser result closes this
+   gate.
+6. Keep learner impact `NO_DATA` without consented participants; align and
+   verify Devpost, public video, repository, feedback ID, and submission receipt
+   before pushing the feature branch and fast-forwarding its verified tip into
+   `main`.
