@@ -4940,3 +4940,82 @@ No repaired image, containment pass, refreshed release evidence, registry
 promotion, Cloudflare deployment, public browser qualification, learner
 outcome, Devpost submission, push, or merge is claimed. Release remains
 **NO-GO**.
+
+## Candidate-deadline repair checkpoint — 2026-07-21T17:25:32Z
+
+Deadline: `2026-07-22T00:00:00Z`; **6 hours 34 minutes 28 seconds remained at
+this checkpoint**. Source HEAD is
+`552a1eb693cad364f28c6b004e4318d0d55f52e0` on
+`feat/learner-ux-v6.1`. The tracked worktree was clean immediately after the
+runtime repair commit.
+
+### Exact build and genuine sentinel result
+
+Fresh runtime session `rt-prize721c` attested `VERIFIED` with runtime-policy
+hash `f330a93a90d9b58e1fc7338f363cf4c9a7fdab36d88b42208bded5987f675aac`,
+toolchain hash
+`89e10c42043f4921739d2cc8a70cf2b94fdbc1afb89bb5116a4f01c89318553a`,
+and adapter hash
+`f368efecf9ad10bd47a0d9a5366454f24a1f30efdff8eafe96fa41d5943cc202`.
+It built the runner and adapter from clean source
+`3c50ebf1afc293fcac8a053f838e71c564943511`:
+
+- runner config digest:
+  `sha256:125582f4487c3d0c569d2f1de11f876093c37a0674a7a90abde4930dd3fb9e8e`;
+- runner manifest digest:
+  `sha256:bffdc8a35a3f61c8c266f8f466094b618299ca3d8e10c9801ec546c9c06bcccf`;
+- adapter config digest:
+  `sha256:a6f00ca6de20354f93dda068af3b5162ef6ed2bc02d6a260f64bbaa9e882fce7`;
+- adapter manifest digest:
+  `sha256:1dd385902cb30353adb3a3c54232fe2818dfec9dddf481d2c9bb0b1d304bccae`.
+
+The single authorized genuine sentinel invocation failed closed before the
+candidate and aggregate observer started. A non-qualifying diagnostic, with
+aggregate observation disabled, recovered the swallowed error:
+`nerdctl create` exited with `ETIMEDOUT`. The sentinel's one-second candidate
+wall-clock budget had been applied to container staging. No rootless-spec,
+cgroup-observation, timeout-control, timeout-cleanup, or qualification receipt
+was created; the output directory remained empty and no result was released.
+The failed `3c50ebf…` build is therefore not eligible for release.
+
+### Minimal repair committed
+
+Commit `552a1eb fix(runtime): separate setup and candidate deadlines` reserves
+the candidate wall-clock budget for `ctr run` and gives `nerdctl create` the
+existing bounded control-plane budget. The absolute execution deadline still
+bounds setup, cleanup retains its separate reserve, and resource limits,
+canonical command hashing, OCI authority, and result-release rules are
+unchanged.
+
+Verification:
+
+- the new characterization failed before the repair with create timeout
+  `20,000ms`, then passed with create greater than the candidate budget and
+  candidate run exactly `20,000ms`;
+- runtime Vitest: **9 files, 86 tests passed**;
+- root TypeScript: passed;
+- Prettier on the two changed files: passed;
+- Git whitespace check: passed;
+- secret scan: passed across both changed files;
+- independent read-only review found no authority or deadline regression.
+
+### Immediate release chain
+
+1. Commit this factual checkpoint and freeze the resulting clean source `S3`.
+2. Build one fresh exact runner/adapter tuple from `S3`; no earlier image may be
+   promoted.
+3. Re-attest the runtime and run one genuine aggregate-containment sentinel
+   against that exact tuple. All process limits, cgroup membership, memory,
+   PID, CPU, freshness, negative controls, cleanup, and result withholding must
+   pass together.
+4. Refresh, review, test, and commit the exact source/image-bound evidence.
+5. Qualify and registry-promote only that tuple, run the complete release gate,
+   deploy with Wrangler, and verify public source/image/Worker identity.
+6. Execute the public CloakBrowser release matrix, fix only release-blocking
+   defects, complete non-video submission evidence, then push the feature
+   branch and fast-forward `main`.
+
+No containment pass, new exact image, refreshed evidence, registry promotion,
+Cloudflare deployment, public browser qualification, learner outcome, Devpost
+submission, push, or merge is claimed at this checkpoint. Release remains
+**NO-GO**.
