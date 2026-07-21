@@ -4387,3 +4387,99 @@ No clean source, exact image, aggregate containment pass, Cloudflare identity,
 deployment, CloakBrowser journey, learner outcome, submission, push, or merge
 is claimed at this checkpoint. Release remains **NO-GO** until the ordered
 dependencies above are closed with direct evidence.
+
+## CloakBrowser recovery and HTTP telemetry checkpoint — 2026-07-21T12:21:37Z
+
+Deadline: `2026-07-22T00:00:00Z`; **11 hours 38 minutes 23 seconds remained at
+this checkpoint**. Committed HEAD is
+`99e9741e71e8fd2955543f729a11f02c18fcebf0`, 21 commits ahead of
+`origin/feat/learner-ux-v6.1` and 103 commits ahead of local `main`, with no
+reverse divergence. The worktree has two untracked paths: the untouched FUSE
+tombstone `scripts/.fuse_hidden0000a9600000801f` and the agent-owned active
+CloakBrowser runtime `.runtime/`. Neither is staged. The browser runtime will
+be stopped and moved into ignored repository-local cache state without
+deleting the tombstone or any user file.
+
+### Completed and committed
+
+| Commit | Result | Exact verification |
+| --- | --- | --- |
+| `faa2c2a test(browser): require exact live intake authority` | Three result-bearing live-intake journeys now require explicit live authority instead of treating mocked readiness as a live run. | Focused telemetry diagnosis **3/3 passed**. |
+| `9ee49ee test(browser): await verified action responses` | Refresh-sensitive journeys await the exact successful action response and a fresh network-quiescent interval before reloading. | Focused action-wait checks **2/2 passed**; E2E TypeScript passed. |
+| `99e9741 test(browser): reconcile expected HTTP failures` | Raw schema v4 and report schema v3 retain intentional `409` compile rejection and `422` malformed-upload responses as visible, journey-bound evidence while failing closed on every unexpected console, HTTP, page, or transport failure. Response and Chromium resource errors correlate one-to-one by an exact ephemeral URL before only normalized route tokens are persisted. | Reporter **36/36 passed**; finalizer/submission **48/48 passed**; repository, web, and E2E TypeScript passed; draft submission preflight, scoped Prettier, Git whitespace, and the explicit 11-file secret scan passed. Independent review found no remaining P0/P1 in the slice. |
+
+The final pre-commit stock-Chromium design-review matrix completed **40 tests:
+32 passed, 8 exact live/public skips, 0 failed**. It recorded two intentional
+resource-console errors bound to the exact two intentional HTTP responses and
+zero unexpected console, HTTP, or request failures. It remains explicitly
+non-qualifying.
+
+### CloakBrowser and real local Worker evidence
+
+- The repository-mandated CloakBrowser executable is available and reports
+  Chromium `146.0.7680.177`. It was launched headlessly with profile, cache,
+  temporary files, and FFmpeg wholly inside the repository and exposed only on
+  loopback CDP. Playwright connected through that endpoint and recorded real
+  video artifacts.
+- The first local Vite/Worker attempt stopped before browser execution because
+  this host cannot create Docker bridge interfaces. A second static-client run
+  correctly demonstrated that a static server cannot satisfy Worker API POSTs;
+  it was stopped and is not product evidence.
+- The built Worker then started through Wrangler 4.110.0 with Containers
+  explicitly disabled, all nine local D1 migrations applied, and local D1,
+  R2, and Durable Object bindings active. The full CloakBrowser matrix ran
+  **40 tests: 26 passed, 8 failed, 6 exact deployment/live skips**.
+- Three failures expose a real transient `503 EVIDENCE_SNAPSHOT_BUSY` race on
+  `GET /api/sessions/:id/events` while Sample compile advances the evidence
+  chain twice. The immediate retry returns the complete six-event chain. This
+  response is not allowlisted and must be repaired.
+- Three intake failures are local-launch configuration, not parser/UI drift:
+  the externally started Worker omitted the required 32-byte test-only
+  `COUNTERLAB_ADMISSION_KEY`, so admission failed closed before malformed or
+  unsupported notebook parsing. Existing parser and UI tests still verify the
+  exact reason codes and no-session behavior. The Worker will be restarted
+  with the contained test binding and those journeys rerun.
+- Two mobile replay failures expose a current contract mismatch: the real
+  local legacy replay renders `Replay status`, `Replay verified session`, and
+  a read-only `Continue replay` presentation, while the public-mobile spec
+  accepts only the newer Capsule banner/heading and forbids that control. This
+  remains open pending a source contract decision and exact-public replay
+  validation.
+
+This is the first current-source rendered run through the actual
+CloakBrowser binary, but it targets a local Worker without a qualified
+deployment receipt. The qualifying public count therefore remains **0**.
+
+### Next actions in strict order
+
+1. Repair the bounded evidence-snapshot race without weakening chain or
+   compiler-event validation; add finite-race and perpetual-mutation tests,
+   then rerun the Sample Cloak journeys.
+2. Restart the contained local Worker with its test-only admission binding and
+   rerun malformed, unsupported, and supported intake journeys.
+3. Resolve the public-mobile replay contract against the intended read-only
+   experience and rerun both mobile history/deep-link journeys.
+4. Stop agent-owned browser/Worker services, move `.runtime/` into ignored
+   repository cache state, and confirm that the FUSE tombstone is the only
+   remaining worktree entry.
+5. Have the owning process release the FUSE handle naturally; freeze a truly
+   clean source `S`. Do not delete, hide, stage, ignore, or rewrite it.
+6. Obtain constitution-compatible aggregate-cgroup/owned-process observation,
+   build one exact image, run the real sentinel and negative controls, refresh
+   all scientific/SBOM/VEX/license/health evidence once, and pass the full
+   deterministic release gate.
+7. Authenticate repository-contained Wrangler, qualify and deploy only the
+   exact `S`/image/evidence tuple, and prove public release identity and
+   readiness.
+8. Run all 40 public CloakBrowser journeys and the ten factual manual
+   accessibility/performance observations with no skips, retries, or
+   unexpected failures. Capture exact-release screenshots and video.
+9. Keep learner impact `NO_DATA` unless real consented observations occur;
+   complete logged-out repo/app/video/feedback/Devpost verification and capture
+   the submission receipt.
+10. Push the feature branch and fast-forward-only merge and push `main` only
+    after every upstream release and submission gate is factual.
+
+No exact image, aggregate-containment pass, Cloudflare identity, deployment,
+public qualification, learner outcome, Devpost submission, push, or merge is
+claimed. Release remains **NO-GO** while those dependencies are red.
