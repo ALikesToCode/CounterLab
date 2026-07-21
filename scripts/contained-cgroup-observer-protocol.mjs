@@ -232,6 +232,10 @@ export function validateContainedCgroupObserverFinalization(
     finalization.cleanupVerified === true &&
     everyCleanupCheckPassed;
   const abortsQualification = finalization.status === "ABORT";
+  const draftBindingIsValid = finalizesQualification
+    ? sha256Pattern.test(finalization.observerDraftPayloadSha256 ?? "")
+    : finalization.observerDraftPayloadSha256 === null ||
+      sha256Pattern.test(finalization.observerDraftPayloadSha256 ?? "");
   if (
     finalization.schemaVersion !== "1" ||
     (!finalizesQualification && !abortsQualification) ||
@@ -240,7 +244,7 @@ export function validateContainedCgroupObserverFinalization(
       ? finalization.abortCode !== null
       : !allowedAbortCodes.has(finalization.abortCode)) ||
     finalization.manifestPayloadSha256 !== manifest?.receiptPayloadSha256 ||
-    !sha256Pattern.test(finalization.observerDraftPayloadSha256 ?? "") ||
+    !draftBindingIsValid ||
     finalization.invocationId !== manifest?.invocationId ||
     finalization.finalContainerId !== manifest?.finalContainerId ||
     typeof finalization.timeoutObserved !== "boolean" ||

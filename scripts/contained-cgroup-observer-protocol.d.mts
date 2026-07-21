@@ -67,7 +67,7 @@ export interface ContainedCgroupObserverFinalization {
     imageRootfsUnchanged: boolean;
   };
   manifestPayloadSha256: string;
-  observerDraftPayloadSha256: string;
+  observerDraftPayloadSha256: string | null;
   invocationId: string;
   finalContainerId: string;
   timeoutObserved: boolean;
@@ -86,18 +86,26 @@ export function validateContainedCgroupObserverFinalization(
 export function createContainedCgroupObserverFinalization(
   manifest: ContainedCgroupObserverManifest,
   input: {
-    abortCode?: Exclude<
-      ContainedCgroupObserverFinalization["abortCode"],
-      null
-    > | null;
     cleanup: ContainedCgroupObserverFinalization["cleanup"];
     cleanupVerified: boolean;
     decisionAt?: Date;
-    observerDraftPayloadSha256: string;
     resultReleased: boolean;
-    status: "FINALIZE" | "ABORT";
     timeoutObserved: boolean;
-  },
+  } & (
+    | {
+        abortCode?: null;
+        observerDraftPayloadSha256: string;
+        status: "FINALIZE";
+      }
+    | {
+        abortCode: Exclude<
+          ContainedCgroupObserverFinalization["abortCode"],
+          null
+        >;
+        observerDraftPayloadSha256: string | null;
+        status: "ABORT";
+      }
+  ),
 ): ContainedCgroupObserverFinalization;
 
 export function containedCgroupQualificationPaths(input: {

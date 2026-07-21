@@ -155,6 +155,22 @@ describe("contained cgroup observer protocol", () => {
       }),
     ).toEqual(failClosedAbort);
 
+    const preDraftAbort = createContainedCgroupObserverFinalization(input, {
+      abortCode: "OBSERVER_FAILED",
+      cleanup: verifiedCleanup,
+      cleanupVerified: true,
+      decisionAt: finalizedAt,
+      observerDraftPayloadSha256: null,
+      resultReleased: false,
+      status: "ABORT",
+      timeoutObserved: false,
+    });
+    expect(
+      validateContainedCgroupObserverFinalization(preDraftAbort, input, {
+        observedAtMs: finalizedAt.getTime(),
+      }),
+    ).toEqual(preDraftAbort);
+
     const mutations = [
       { ...finalized, resultReleased: true },
       { ...finalized, cleanupVerified: false },
@@ -165,6 +181,8 @@ describe("contained cgroup observer protocol", () => {
       },
       { ...finalized, receiptPayloadSha256: "0".repeat(64) },
       { ...finalized, observerDraftPayloadSha256: "0" },
+      { ...finalized, observerDraftPayloadSha256: null },
+      { ...aborted, observerDraftPayloadSha256: "0" },
       { ...aborted, status: "FINALIZE" },
       { ...aborted, abortCode: "UNKNOWN" },
     ];
