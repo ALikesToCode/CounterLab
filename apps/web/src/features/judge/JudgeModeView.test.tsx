@@ -219,6 +219,15 @@ describe("JudgeModeView", () => {
     expect(document.body).toHaveTextContent(
       "11111111-2222-3333-4444-555555555555",
     );
+    expect(
+      screen.getByRole("heading", { name: /source reproduction is gated/i }),
+    ).toBeInTheDocument();
+    expect(document.body).toHaveTextContent(
+      /commands are withheld until the repository and MIT license are anonymously accessible/i,
+    );
+    expect(
+      screen.queryByLabelText("CounterLab reproduction commands"),
+    ).not.toBeInTheDocument();
   });
 
   it("does not offer live authority for partial generation read isolation", () => {

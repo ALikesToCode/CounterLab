@@ -676,16 +676,15 @@
   align-items: end;
 }
 
-.reproduceSection pre {
+.reproductionGate {
   max-width: 100%;
-  overflow-x: auto;
   margin: 0;
   padding: 28px;
-  color: var(--aqua-bright);
+  color: var(--judge-panel-ink);
   background: var(--judge-panel);
   border-radius: 2px;
-  font-size: 13px;
-  line-height: 1.9;
+  font-size: 15px;
+  line-height: 1.65;
 }
 
 .footer {

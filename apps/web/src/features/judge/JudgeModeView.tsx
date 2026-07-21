@@ -529,12 +529,14 @@ export function JudgeModeView({
         aria-labelledby="reproduce-title"
       >
         <div>
-          <p>Reproduce locally</p>
-          <h2 id="reproduce-title">The demo has commands, not hand-waving.</h2>
+          <p>Source &amp; license</p>
+          <h2 id="reproduce-title">Source reproduction is gated.</h2>
         </div>
-        <pre aria-label="CounterLab reproduction commands">
-          <code>{`./scripts/test-all.sh\n./scripts/run-mutations.sh leakage\n./scripts/reproduce-session.sh leakage-01\n./scripts/replay-patch.sh leakage-01`}</code>
-        </pre>
+        <p className={styles.reproductionGate}>
+          Local reproduction commands are withheld until the repository and MIT
+          License are anonymously accessible. CounterLab will not present
+          unactionable source instructions as public evidence.
+        </p>
       </section>
 
       <footer className={styles.footer}>
