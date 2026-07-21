@@ -1650,6 +1650,7 @@ test("the first visit explains the lesson before asking for technical knowledge"
   await page.setViewportSize({ width: 768, height: 1024 });
   expect(page.viewportSize()).toEqual({ width: 768, height: 1024 });
   await reset(page);
+  await revealLandingNavigation(page);
   await expect(
     page.getByRole("heading", {
       name: "What result are you trying to understand?",
