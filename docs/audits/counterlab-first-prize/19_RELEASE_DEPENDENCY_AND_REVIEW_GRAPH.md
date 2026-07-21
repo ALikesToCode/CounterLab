@@ -286,9 +286,11 @@ repository constitution as the governing product and filesystem authority.
    D1, and Container mutations before invoking the smoke script, while
    `production-smoke.sh` requires CloakBrowser. CloakBrowser must therefore be
    preflighted before deployment starts.
-7. The checked-in browser evidence path still needs the remaining three
-   required viewport labels, INP capture, and deterministic 40-journey/manual
-   evidence receipts before it can satisfy the publication schema.
+7. Commit `0ee8934` closes the checked-in browser finalizer source path: seven
+   ID-bound viewports, privacy-safe INP, schema-v3 raw evidence, deterministic
+   40-journey receipts, ten honestly labelled human-observation receipts, and
+   cross-bound report/index/qualification evidence. Exact public CloakBrowser
+   execution and manual observation remain open at **0 qualifying journeys**.
 8. Learner evidence remains `NO_DATA`; public repository, video, feedback ID,
    Devpost publication, and submission receipt remain externally unverified.
 
@@ -347,3 +349,28 @@ failures, symlink traversal, and evidence overwrite. This closes the browser
 instrumentation source gaps identified at `7e25a09`; it does **not** close the
 finalizer, live Cloak execution, exact release, deployment, or submission
 nodes. Current qualifying journey count remains **0**.
+
+## Browser evidence graph addendum — `0ee8934`
+
+```mermaid
+flowchart LR
+  Registry["Exact 40 journey registry"] --> Fixture["Automatic Playwright fixture"]
+  Viewports["7 ID-bound viewports"] --> Fixture
+  Cloak["Loopback Cloak CDP authority"] --> Fixture
+  Deploy["Exact deployment receipt"] --> Raw["Schema-v3 raw run"]
+  Fixture --> Raw
+  Raw --> Finalizer["Release-bound finalizer — source complete"]
+  Human["10 HUMAN_OBSERVATION records on CloakBrowser"] --> Finalizer
+  Finalizer --> Receipts["40 journeys + report + 10 manual + index + qualification"]
+  Receipts --> PublicRun["Exact public Cloak execution — open"]
+  PublicRun --> Submission["Submission evidence — open"]
+```
+
+The finalizer is byte- and release-bound, stages only in ignored
+repository-local state, uses an exclusive receipt-hash reservation, refuses
+replacement, and publishes only after every staged hash passes. Independent
+review passed its concurrent-publication probe and all focused gates. Manual
+checks are labelled human observations; their integrity receipts do not claim
+automated accessibility judgment. Current public qualification remains **0
+journeys**, so no production, accessibility, performance, or comprehension
+result is closed by this source commit alone.

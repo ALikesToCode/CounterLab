@@ -296,6 +296,13 @@ after the final source freeze.
 - [x] Playwright collection fails closed without CloakBrowser. Rerun and execute
       the complete final statically collected suite after source freeze; a
       static count is not rendered-browser evidence.
+- [x] Release-bound browser evidence finalization is source-complete at
+      `0ee8934`: schema-v3 raw evidence binds the exact deployed tuple and
+      journey telemetry; 40 journey receipts, ten `HUMAN_OBSERVATION` receipts,
+      the execution report, index, and qualification receipt are cross-bound;
+      bounded no-follow inputs, ignored staging, exclusive reservation, staged
+      hash verification, and no-replacement behavior are independently tested.
+      Public CloakBrowser execution remains 0 journeys and is not checked off.
 - [ ] Regenerate current scientific integrity bindings, source/image-bound
       engine evidence, and the normalized pnpm 11.13.1 production Node SBOM
       after the final source freeze. Current generated evidence is deliberately
@@ -320,15 +327,17 @@ after the final source freeze.
       requires two distinct fixed-result Metric bindings. Source-owned oracle,
       renderer, mutation, signed-binding, and Subject Pack scopes are covered;
       production and rendered-browser proof remain open.
-- [x] Dirty-tree broad verification: web Vitest 72/72 files and 558/558 tests;
-      root Vitest 615/642 across 52/58 files with 27 classified
+- [x] Dirty-tree broad verification: web Vitest 80/80 files and 656/656 tests;
+      root Vitest 740 passed, 27 failed, and 2 skipped across 67/73 files, with
+      the same 27 classified
       capability/stale-evidence failures; kernel Pytest 220/221 with one denied
       localhost-socket test; runner Pytest 75/75; repository, web, and Worker
       TypeScript passed; production build passed. The deterministic Sample
       Boundary and fixed Sample Proof Capsule checks pass, focused sample
       authority/UI tests pass 18/18, the repository secret scan passes across
-      1,384 files, and whitespace passes. Final scoped changed-file Prettier is
-      still pending. These are not frozen-release results.
+      1,384 files, and whitespace passes. Final scoped browser-finalizer
+      Prettier, 11-file secret scan, and whitespace checks pass. These are not
+      frozen-release results.
 - [x] Private patch/Capsule downloads now use authenticated fetch, strict byte
       and filename validation, bounded timeouts, browser-save initiation after
       validation, failure-without-telemetry semantics, and duplicate-action

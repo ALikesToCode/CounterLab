@@ -4237,3 +4237,85 @@ a product or browser-qualification pass.
 Release remains **NO-GO** at clean source, real containment, exact image,
 contained Wrangler authentication, qualifying CloakBrowser execution,
 deployment, publication, submission, and final merge.
+
+## Release-bound browser finalizer checkpoint — 2026-07-21T10:35:08Z
+
+Deadline: `2026-07-22T00:00:00Z`; **13 hours 24 minutes 52 seconds remained at
+this checkpoint**. Committed HEAD is
+`0ee8934bbfbfff85c20a2b72748332354b134dbc`, sixteen commits ahead of
+`origin/feat/learner-ux-v6.1` and 98 commits ahead of local `main`, with no
+reverse divergence. The only worktree entry is the preserved, untracked FUSE
+tombstone `scripts/.fuse_hidden0000a9600000801f`; it remains untouched.
+
+### Completed and independently reviewed
+
+- Commit `0ee8934 feat(release): finalize browser qualification evidence`
+  closes the source implementation for release-bound browser evidence. The raw
+  run is schema v3, binds the exact deployment receipt/source/image/Worker
+  tuple, records exact expected and observed allowlisted request failures, and
+  fails closed on registry, viewport, retry, assertion, browser, console,
+  network, chronology, or authority drift.
+- The finalizer deterministically builds **53 browser evidence artifacts**:
+  40 journey receipts, one execution report, ten manual-observation receipts,
+  one evidence index, and one qualification receipt. The copied deployment
+  receipt and publication reservation are infrastructure files, not additional
+  browser claims.
+- Manual keyboard, screen-reader-name, reduced-motion, overflow, zoom,
+  long-content, narrow-visualization, touch-target, console/network, and Web
+  Vitals checks are explicitly labelled `HUMAN_OBSERVATION` on a
+  `CLOAKBROWSER` session. Their criteria, timestamps, browser version, raw-run
+  hash, exact release, and LCP/CLS/INP values are cross-bound; schema validation
+  does not pretend the observations were automated.
+- Inputs use bounded descriptor reads with `O_NOFOLLOW`; staging and
+  reservations live under ignored repository-local `.counterlab/` state on the
+  same filesystem. Publication uses an exclusive release-hash reservation,
+  verifies every staged byte, refuses replacement, and moves the complete
+  directory into its final receipt-hash path.
+- Independent review returned **safe to commit**. Its concurrent same-release
+  probe observed exactly **one successful publisher and one atomic refusal**,
+  with intact final bytes. No reviewer edited files or touched the FUSE entry.
+
+### Exact verification at this checkpoint
+
+- Finalizer/path/submission focused Vitest: **3 files, 50/50 passed**.
+- Browser reporter/authority focused Vitest: **2 files, 25/25 passed**.
+- Complete web Vitest: **80 files, 656/656 passed**.
+- Complete root Vitest: **67 files passed, 6 failed; 740 passed, 27 failed,
+  2 skipped across 73 files**. The red files remain the known environment and
+  stale-evidence gates: denied loopback/bubblewrap capabilities, Codex test
+  subprocess exits, and scientific integrity/source bindings that must be
+  regenerated only after source freeze. No affected finalizer test failed.
+- Repository, web, generated Worker, and E2E strict TypeScript: **passed**.
+- Playwright static collection: exactly **40 tests in 3 files**. A qualifying
+  configuration without `COUNTERLAB_E2E_DEPLOYMENT_RECEIPT` exited **1** before
+  execution, as required.
+- Focused Prettier, Git whitespace, and a secret scan across all **11 committed
+  files**: **passed**.
+
+### Still open, in strict dependency order
+
+1. Resolve the existing FUSE handle through its owner without deleting,
+   hiding, staging, or rewriting the tombstone; then freeze clean source `S`.
+2. Establish constitution-compatible read-only cgroup/owned-process
+   observation, build one exact image, run the genuine aggregate sentinel and
+   negative controls, refresh all source/image evidence once, and commit
+   evidence `E`.
+3. Rerun the complete deterministic release gate until the 27 current
+   capability/stale-binding failures are green from real evidence.
+4. Authenticate the repository-contained Wrangler identity and preflight a
+   fresh CloakBrowser-capable session before any cloud mutation.
+5. Qualify and deploy only the exact tuple, prove public release identity, run
+   production smoke, then execute all 40 public CloakBrowser journeys and the
+   ten factual human accessibility/performance observations. Current qualifying
+   count remains **0 journeys**.
+6. Produce exact-tuple screenshots and video; verify repository, feedback,
+   public links, and Devpost; keep learner evidence `NO_DATA` unless real
+   consented observations exist; capture the submission receipt.
+7. Push the feature branch before logged-out repository/submission validation,
+   then commit final evidence and fast-forward-only merge and push `main` after
+   all upstream gates are factual.
+
+No Cloudflare mutation, deployment, qualifying browser run, learner outcome,
+Devpost submission, push, or merge is claimed. Release remains **NO-GO** at
+clean source, real containment, exact image/evidence, contained Wrangler
+authentication, CloakBrowser execution, deployment, and submission.
