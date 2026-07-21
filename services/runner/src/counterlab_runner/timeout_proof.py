@@ -408,9 +408,9 @@ def validate_rootless_receipt(
 def _validate_enforced_rlimits(value: object) -> bool:
     required = {
         "RLIMIT_AS",
-        "RLIMIT_CORE",
         "RLIMIT_CPU",
         "RLIMIT_FSIZE",
+        "RLIMIT_NOFILE",
         "RLIMIT_NPROC",
     }
     if not isinstance(value, list) or len(value) != len(required):

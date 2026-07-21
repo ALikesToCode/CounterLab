@@ -6,6 +6,7 @@ import { canonicalJson } from "../packages/session-core/src/index.js";
 
 import {
   QUALIFIED_AGGREGATE_LIMIT_MODE,
+  TIMEOUT_ROOTLESS_RLIMIT_TYPES,
   assertQualifiedAggregateRuntimeLimits,
 } from "./timeout-cleanup-receipt.js";
 
@@ -98,6 +99,17 @@ function aggregateInput() {
 }
 
 describe("timeout cleanup aggregate resource authority", () => {
+  it("matches the five rlimits emitted by the contained runtime", () => {
+    expect(TIMEOUT_ROOTLESS_RLIMIT_TYPES).toEqual([
+      "RLIMIT_AS",
+      "RLIMIT_CPU",
+      "RLIMIT_FSIZE",
+      "RLIMIT_NOFILE",
+      "RLIMIT_NPROC",
+    ]);
+    expect(TIMEOUT_ROOTLESS_RLIMIT_TYPES).not.toContain("RLIMIT_CORE");
+  });
+
   it("rejects process-only or merely declared aggregate limits", () => {
     expect(() =>
       assertQualifiedAggregateRuntimeLimits({

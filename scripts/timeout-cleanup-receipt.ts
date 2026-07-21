@@ -164,15 +164,17 @@ const AggregateLimitEvidenceSchema = z
     }
   });
 
+export const TIMEOUT_ROOTLESS_RLIMIT_TYPES = [
+  "RLIMIT_AS",
+  "RLIMIT_CPU",
+  "RLIMIT_FSIZE",
+  "RLIMIT_NOFILE",
+  "RLIMIT_NPROC",
+] as const;
+
 const RlimitSchema = z
   .strictObject({
-    type: z.enum([
-      "RLIMIT_AS",
-      "RLIMIT_CORE",
-      "RLIMIT_CPU",
-      "RLIMIT_FSIZE",
-      "RLIMIT_NPROC",
-    ]),
+    type: z.enum(TIMEOUT_ROOTLESS_RLIMIT_TYPES),
     soft: PositiveSafeIntegerSchema,
     hard: PositiveSafeIntegerSchema,
   })

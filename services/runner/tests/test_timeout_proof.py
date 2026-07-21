@@ -171,9 +171,9 @@ def _rootless(control: dict[str, object], build: dict[str, object]) -> dict[str,
             {"type": name, "soft": 1, "hard": 1}
             for name in (
                 "RLIMIT_AS",
-                "RLIMIT_CORE",
                 "RLIMIT_CPU",
                 "RLIMIT_FSIZE",
+                "RLIMIT_NOFILE",
                 "RLIMIT_NPROC",
             )
         ],
@@ -219,6 +219,29 @@ def test_control_receipt_rejects_result_release_and_hash_mutation() -> None:
         validate_control_receipt({**control, "resultReleased": True})
     with pytest.raises(RuntimeError, match="not clean"):
         validate_control_receipt({**control, "receiptPayloadSha256": "f" * 64})
+
+
+def test_rootless_rlimit_validator_matches_the_runtime_contract() -> None:
+    runtime_limits = [
+        {"type": name, "soft": 1, "hard": 1}
+        for name in (
+            "RLIMIT_AS",
+            "RLIMIT_CPU",
+            "RLIMIT_FSIZE",
+            "RLIMIT_NOFILE",
+            "RLIMIT_NPROC",
+        )
+    ]
+
+    assert timeout_proof_module._validate_enforced_rlimits(runtime_limits)
+    assert not timeout_proof_module._validate_enforced_rlimits(
+        [
+            {**entry, "type": "RLIMIT_CORE"}
+            if entry["type"] == "RLIMIT_NOFILE"
+            else entry
+            for entry in runtime_limits
+        ]
+    )
 
 
 def test_rootless_receipt_binds_control_and_exact_adapter_authority() -> None:
