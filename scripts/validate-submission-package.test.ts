@@ -4,6 +4,9 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { RELEASE_CHECK_IDS } from "../packages/scientific-engine-registry/src/schema.js";
+import { canonicalJson } from "../packages/session-core/src/index.js";
+import { createGenerationIsolationEvidence } from "./generation-isolation-evidence.js";
 import {
   SubmissionPackageSchema,
   type EvidenceReader,
@@ -35,42 +38,200 @@ async function draftInput(): Promise<unknown> {
 const repositoryReader: EvidenceReader = async (entry) =>
   new Uint8Array(await readFile(resolve(root, entry.path)));
 
-function deploymentReceipt() {
+function isolationEvidence(input: {
+  sourceCommit: string;
+  sourceTreeSha256: string;
+  localImageTag: string;
+  localImageDigest: string;
+  verifiedAt: string;
+}) {
+  const probePayload = {
+    schemaVersion: "1",
+    probeVersion: "counterlab-generation-isolation-v1",
+    service: "counterlab-hosted-runner",
+    probe: "non-root-startup",
+    checks: [
+      "entrypoint",
+      "non-root-user",
+      "immutable-paths",
+      "codex",
+      "python",
+      "bubblewrap",
+      "bubblewrap-read-isolation",
+      "setpriv",
+      "writable-roots",
+    ],
+    generationFilesystemReadIsolation: "OS_ENFORCED",
+    bubblewrapVersion: "0.11.0",
+    bubblewrap: {
+      forbiddenHostPathsHidden: true,
+      parentEnvironmentHidden: true,
+      workspaceVisible: true,
+      workspaceWritable: true,
+    },
+  } as const;
+  return createGenerationIsolationEvidence({
+    ...input,
+    imageUser: "10001:10001",
+    startupProbe: {
+      status: "ready",
+      service: probePayload.service,
+      probe: probePayload.probe,
+      checks: probePayload.checks,
+      generationFilesystemReadIsolation:
+        probePayload.generationFilesystemReadIsolation,
+      generationIsolationProbe: probePayload,
+      generationIsolationProbeSha256: hash(bytes(canonicalJson(probePayload))),
+    },
+  });
+}
+
+function releaseEvidenceChain(
+  options: Readonly<{ qualificationDay?: "2026-07-18" | "2026-07-19" }> = {},
+) {
+  const qualificationDay = options.qualificationDay ?? "2026-07-19";
   const worker = "a".repeat(40);
   const runner = "b".repeat(40);
-  const digest = `sha256:${"c".repeat(64)}`;
-  return {
+  const sourceTreeSha256 = "8".repeat(64);
+  const localImageDigest = `sha256:${"d".repeat(64)}`;
+  const registryDigest = `sha256:${"c".repeat(64)}`;
+  const adapterImageDigest = `sha256:${"5".repeat(64)}`;
+  const localImageTag = `counterlab-runner:git-${runner}`;
+  const adapterImageTag = `counterlab-adapter:git-${runner}`;
+  const qualifiedIsolation = isolationEvidence({
+    sourceCommit: runner,
+    sourceTreeSha256,
+    localImageTag,
+    localImageDigest,
+    verifiedAt: `${qualificationDay}T00:00:10.000Z`,
+  });
+  const qualified = {
+    schemaVersion: "6",
+    status: "VERIFIED",
+    sourceCommit: runner,
+    sourceArchiveSha256: "0".repeat(64),
+    sourceTreeSha256,
+    dockerfileSha256: "1".repeat(64),
+    localImageTag,
+    localImageDigest,
+    ociRevision: runner,
+    ociSourceTreeSha256: sourceTreeSha256,
+    engineAuthorityHash: "2".repeat(64),
+    runtimeManifestHash: "3".repeat(64),
+    runtimeToolchainSha256: "4".repeat(64),
+    runtimePolicySha256: "5".repeat(64),
+    proofDependencyManifestSha256: "6".repeat(64),
+    toolchainLockSha256: "7".repeat(64),
+    runtimeAdapterSha256: "8".repeat(64),
+    buildctlSha256: "9".repeat(64),
+    buildkitdSha256: "a".repeat(64),
+    buildkitConfigSha256: "b".repeat(64),
+    adapterDockerfileSha256: "c".repeat(64),
+    adapterImageTag,
+    adapterImageDigest,
+    adapterManifestDigest: `sha256:${"6".repeat(64)}`,
+    adapterOciArchiveSha256: "d".repeat(64),
+    adapterOciRevision: runner,
+    adapterOciSourceTreeSha256: sourceTreeSha256,
+    limitMode: "container-cgroup-and-process-rlimit",
+    aggregateLimitIntentEnforced: true,
+    aggregateLimitEvidenceSha256: "e".repeat(64),
+    timeoutCleanupReceipt: "evidence/timeout-cleanup-receipt.json",
+    timeoutCleanupReceiptSha256: "f".repeat(64),
+    timeoutCleanupPayloadSha256: "0".repeat(64),
+    timeoutRunControlReceiptSha256: "1".repeat(64),
+    timeoutRootlessReceiptSha256: "2".repeat(64),
+    timeoutRuntimeSessionId: "rt-12345678",
+    timeoutVerifiedAt: `${qualificationDay}T00:00:20.000Z`,
+    evidenceCommit: worker,
+    registryImage: `registry.cloudflare.com/account/counterlab-runner:git-${runner}`,
+    registryDigest,
+    registryResolvedAt: `${qualificationDay}T00:00:30.000Z`,
+    qualifiedAt: `${qualificationDay}T00:01:00.000Z`,
+    generationFilesystemReadIsolation: "OS_ENFORCED",
+    generationIsolationEvidence: qualifiedIsolation.evidence,
+    generationIsolationEvidenceSha256: qualifiedIsolation.evidenceSha256,
+    generationIsolationProbeSha256: qualifiedIsolation.probeSha256,
+    generationIsolationVerifiedAt: qualifiedIsolation.evidence.verifiedAt,
+    verifierVersion: "counterlab-release-v6",
+  } as const;
+  const qualifiedBytes = bytes(qualified);
+  const freshIsolation = isolationEvidence({
+    sourceCommit: runner,
+    sourceTreeSha256,
+    localImageTag,
+    localImageDigest,
+    verifiedAt: "2026-07-19T00:01:30.000Z",
+  });
+  const releaseCheck = {
+    schemaVersion: "5",
+    status: "PASSED",
+    evidenceCommit: worker,
+    sourceCommit: runner,
+    qualifiedRunnerReceiptSha256: hash(qualifiedBytes),
+    qualifiedAt: qualified.qualifiedAt,
+    runnerImageTag: localImageTag,
+    runnerImageDigest: localImageDigest,
+    adapterImageTag,
+    adapterImageDigest,
+    registryDigest,
+    runtimeToolchainSha256: qualified.runtimeToolchainSha256,
+    runtimePolicySha256: qualified.runtimePolicySha256,
+    proofDependencyManifestSha256: qualified.proofDependencyManifestSha256,
+    aggregateLimitEvidenceSha256: qualified.aggregateLimitEvidenceSha256,
+    runtimeAdapterSha256: qualified.runtimeAdapterSha256,
+    checks: RELEASE_CHECK_IDS.map((id) => ({ id, status: "PASSED" as const })),
+    checkedAt: "2026-07-19T00:02:00.000Z",
+    generationFilesystemReadIsolation: "OS_ENFORCED",
+    generationIsolationEvidenceSha256:
+      qualified.generationIsolationEvidenceSha256,
+    generationIsolationProbeSha256: qualified.generationIsolationProbeSha256,
+    generationIsolationVerifiedAt: qualified.generationIsolationVerifiedAt,
+    releaseCheckGenerationIsolationEvidence: freshIsolation.evidence,
+    releaseCheckGenerationIsolationEvidenceSha256:
+      freshIsolation.evidenceSha256,
+    releaseCheckGenerationIsolationProbeSha256: freshIsolation.probeSha256,
+    releaseCheckGenerationIsolationVerifiedAt:
+      freshIsolation.evidence.verifiedAt,
+    verifierVersion: "counterlab-release-check-v5",
+  } as const;
+  const releaseCheckBytes = bytes(releaseCheck);
+  const receipt = {
     schemaVersion: "7",
     status: "DEPLOYED",
     workerName: "counterlab",
     productionOrigin: "https://counterlab.cserules.workers.dev",
     generationFilesystemReadIsolation: "OS_ENFORCED",
-    generationIsolationEvidenceSha256: "0".repeat(64),
-    generationIsolationProbeSha256: "1".repeat(64),
-    generationIsolationVerifiedAt: "2026-07-19T00:01:00.000Z",
-    releaseCheckGenerationIsolationEvidenceSha256: "2".repeat(64),
-    releaseCheckGenerationIsolationProbeSha256: "1".repeat(64),
-    releaseCheckGenerationIsolationVerifiedAt: "2026-07-19T00:01:30.000Z",
+    generationIsolationEvidenceSha256:
+      qualified.generationIsolationEvidenceSha256,
+    generationIsolationProbeSha256: qualified.generationIsolationProbeSha256,
+    generationIsolationVerifiedAt: qualified.generationIsolationVerifiedAt,
+    releaseCheckGenerationIsolationEvidenceSha256:
+      releaseCheck.releaseCheckGenerationIsolationEvidenceSha256,
+    releaseCheckGenerationIsolationProbeSha256:
+      releaseCheck.releaseCheckGenerationIsolationProbeSha256,
+    releaseCheckGenerationIsolationVerifiedAt:
+      releaseCheck.releaseCheckGenerationIsolationVerifiedAt,
     workerEvidenceCommit: worker,
     runnerSourceCommit: runner,
-    qualifiedRunnerReceiptSha256: "1".repeat(64),
-    releaseCheckReceiptSha256: "2".repeat(64),
-    releaseCheckCheckedAt: "2026-07-19T00:02:00.000Z",
-    timeoutCleanupReceiptSha256: "d".repeat(64),
-    aggregateLimitEvidenceSha256: "6".repeat(64),
-    runtimeToolchainSha256: "3".repeat(64),
-    runtimePolicySha256: "d".repeat(64),
-    proofDependencyManifestSha256: "e".repeat(64),
-    runtimeAdapterSha256: "4".repeat(64),
-    adapterImageDigest: `sha256:${"5".repeat(64)}`,
+    qualifiedRunnerReceiptSha256: hash(qualifiedBytes),
+    releaseCheckReceiptSha256: hash(releaseCheckBytes),
+    releaseCheckCheckedAt: releaseCheck.checkedAt,
+    timeoutCleanupReceiptSha256: qualified.timeoutCleanupReceiptSha256,
+    aggregateLimitEvidenceSha256: qualified.aggregateLimitEvidenceSha256,
+    runtimeToolchainSha256: qualified.runtimeToolchainSha256,
+    runtimePolicySha256: qualified.runtimePolicySha256,
+    proofDependencyManifestSha256: qualified.proofDependencyManifestSha256,
+    runtimeAdapterSha256: qualified.runtimeAdapterSha256,
+    adapterImageDigest,
     workerVersionId: "11111111-2222-3333-4444-555555555555",
     workerTag: `git-${worker}`,
     workerMessage: `CounterLab Worker ${worker}; runner ${runner}`,
     containerApplicationId: "container-app-1",
     containerApplicationVersion: "3",
-    containerImage: `registry.cloudflare.com/account/counterlab-runner@${digest}`,
+    containerImage: `registry.cloudflare.com/account/counterlab-runner@${registryDigest}`,
     containerState: "active",
-    containerImageDigest: digest,
+    containerImageDigest: registryDigest,
     workerArtifactClassification: "PROCESS_BOUND_PARTIAL",
     workerArtifactManifestSha256: "f".repeat(64),
     deployConfigSha256: "6".repeat(64),
@@ -89,10 +250,17 @@ function deploymentReceipt() {
     deployedAt: "2026-07-19T00:03:00.000Z",
     verifierVersion: "counterlab-deployment-v7",
   } as const;
+  return {
+    qualified,
+    qualifiedBytes,
+    releaseCheck,
+    releaseCheckBytes,
+    receipt,
+  };
 }
 
 function productionSmoke(
-  receipt: ReturnType<typeof deploymentReceipt>,
+  receipt: ReturnType<typeof releaseEvidenceChain>["receipt"],
   deploymentReceiptSha256: string,
 ) {
   const stages = [
@@ -159,7 +327,9 @@ function productionSmoke(
   } as const;
 }
 
-async function readyPackage() {
+async function readyPackage(
+  options: Parameters<typeof releaseEvidenceChain>[0] = {},
+) {
   const input = SubmissionPackageSchema.parse(await draftInput());
   const evidence = new Map<string, Uint8Array>();
   for (const entry of [
@@ -177,7 +347,16 @@ async function readyPackage() {
     evidence.set(path, content);
     return reference(path, content);
   };
-  const receipt = deploymentReceipt();
+  const chain = releaseEvidenceChain(options);
+  const { receipt } = chain;
+  const qualifiedRef = addEvidence(
+    "evidence/qualified-runner-release.json",
+    chain.qualifiedBytes,
+  );
+  const releaseCheckRef = addEvidence(
+    "evidence/release-check-receipt.json",
+    chain.releaseCheckBytes,
+  );
   const receiptBytes = bytes(receipt);
   const receiptRef = addEvidence(
     "evidence/deployment-receipt.json",
@@ -220,6 +399,8 @@ async function readyPackage() {
       runnerSourceCommit: receipt.runnerSourceCommit,
       containerImageDigest: receipt.containerImageDigest,
       workerVersionId: receipt.workerVersionId,
+      qualifiedRunnerReceipt: qualifiedRef,
+      releaseCheckReceipt: releaseCheckRef,
       deploymentReceipt: receiptRef,
       productionSmoke: smokeRef,
     },
@@ -289,7 +470,7 @@ describe("submission package validator", () => {
     ).rejects.toThrow(/failed \d+ gate/iu);
   });
 
-  it("accepts a complete, tuple-consistent ready package", async () => {
+  it("accepts a tuple-consistent release fixture", async () => {
     const { ready, reader } = await readyPackage();
 
     await expect(
@@ -297,6 +478,218 @@ describe("submission package validator", () => {
         now: new Date("2026-07-21T12:00:00.000Z"),
       }),
     ).resolves.toMatchObject({ submissionState: "READY_TO_SUBMIT" });
+  });
+
+  it("rejects a qualification older than 24 hours at deployment", async () => {
+    const { ready, reader } = await readyPackage({
+      qualificationDay: "2026-07-18",
+    });
+
+    await expect(
+      validateSubmissionPackage(ready, "ready", reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        "qualified runner evidence is stale at deployment",
+      ]),
+    });
+  });
+
+  it("rejects individually valid receipts with a broken qualified hash edge", async () => {
+    const { ready, reader, evidence } = await readyPackage();
+    const releaseCheckBytes = evidence.get(
+      ready.release.releaseCheckReceipt!.path,
+    );
+    if (releaseCheckBytes === undefined) {
+      throw new Error("missing release-check fixture");
+    }
+    const releaseCheck = JSON.parse(
+      new TextDecoder().decode(releaseCheckBytes),
+    ) as { qualifiedRunnerReceiptSha256: string };
+    releaseCheck.qualifiedRunnerReceiptSha256 = "f".repeat(64);
+    const changedReleaseCheck = bytes(releaseCheck);
+    const changedReleaseCheckPath = "evidence/drifted-release-check.json";
+    evidence.set(changedReleaseCheckPath, changedReleaseCheck);
+    ready.release.releaseCheckReceipt = reference(
+      changedReleaseCheckPath,
+      changedReleaseCheck,
+    );
+
+    const deploymentBytes = evidence.get(ready.release.deploymentReceipt!.path);
+    if (deploymentBytes === undefined) {
+      throw new Error("missing deployment fixture");
+    }
+    const deployment = JSON.parse(
+      new TextDecoder().decode(deploymentBytes),
+    ) as { releaseCheckReceiptSha256: string };
+    deployment.releaseCheckReceiptSha256 =
+      ready.release.releaseCheckReceipt.sha256;
+    const changedDeployment = bytes(deployment);
+    const changedDeploymentPath = "evidence/drifted-deployment.json";
+    evidence.set(changedDeploymentPath, changedDeployment);
+    ready.release.deploymentReceipt = reference(
+      changedDeploymentPath,
+      changedDeployment,
+    );
+
+    const smokeBytes = evidence.get(ready.release.productionSmoke!.path);
+    if (smokeBytes === undefined) throw new Error("missing smoke fixture");
+    const smoke = JSON.parse(new TextDecoder().decode(smokeBytes)) as {
+      deployment: { deploymentReceiptSha256: string };
+    };
+    smoke.deployment.deploymentReceiptSha256 =
+      ready.release.deploymentReceipt.sha256;
+    const changedSmoke = bytes(smoke);
+    const changedSmokePath = "evidence/drifted-smoke.json";
+    evidence.set(changedSmokePath, changedSmoke);
+    ready.release.productionSmoke = reference(changedSmokePath, changedSmoke);
+
+    await expect(
+      validateSubmissionPackage(ready, "ready", reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        "release chain qualified receipt hash in release check does not match",
+      ]),
+    });
+  });
+
+  it("rejects deployment timeout evidence that drifts from qualification", async () => {
+    const { ready, reader, evidence } = await readyPackage();
+    const deploymentBytes = evidence.get(ready.release.deploymentReceipt!.path);
+    if (deploymentBytes === undefined) {
+      throw new Error("missing deployment fixture");
+    }
+    const deployment = JSON.parse(
+      new TextDecoder().decode(deploymentBytes),
+    ) as { timeoutCleanupReceiptSha256: string };
+    deployment.timeoutCleanupReceiptSha256 = "0".repeat(64);
+    const changedDeployment = bytes(deployment);
+    const changedDeploymentPath = "evidence/timeout-drift-deployment.json";
+    evidence.set(changedDeploymentPath, changedDeployment);
+    ready.release.deploymentReceipt = reference(
+      changedDeploymentPath,
+      changedDeployment,
+    );
+
+    const smokeBytes = evidence.get(ready.release.productionSmoke!.path);
+    if (smokeBytes === undefined) throw new Error("missing smoke fixture");
+    const smoke = JSON.parse(new TextDecoder().decode(smokeBytes)) as {
+      deployment: {
+        deploymentReceiptSha256: string;
+        timeoutCleanupReceiptSha256: string;
+      };
+    };
+    smoke.deployment.deploymentReceiptSha256 =
+      ready.release.deploymentReceipt.sha256;
+    smoke.deployment.timeoutCleanupReceiptSha256 =
+      deployment.timeoutCleanupReceiptSha256;
+    const changedSmoke = bytes(smoke);
+    const changedSmokePath = "evidence/timeout-drift-smoke.json";
+    evidence.set(changedSmokePath, changedSmoke);
+    ready.release.productionSmoke = reference(changedSmokePath, changedSmoke);
+
+    await expect(
+      validateSubmissionPackage(ready, "ready", reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        "release chain deployed timeout-cleanup receipt does not match",
+      ]),
+    });
+  });
+
+  it("rejects fresh isolation evidence for a different source tree", async () => {
+    const { ready, reader, evidence } = await readyPackage();
+    const releaseCheckBytes = evidence.get(
+      ready.release.releaseCheckReceipt!.path,
+    );
+    if (releaseCheckBytes === undefined) {
+      throw new Error("missing release-check fixture");
+    }
+    const releaseCheck = JSON.parse(
+      new TextDecoder().decode(releaseCheckBytes),
+    ) as {
+      sourceCommit: string;
+      runnerImageTag: string;
+      runnerImageDigest: string;
+      releaseCheckGenerationIsolationEvidence: unknown;
+      releaseCheckGenerationIsolationEvidenceSha256: string;
+      releaseCheckGenerationIsolationProbeSha256: string;
+      releaseCheckGenerationIsolationVerifiedAt: string;
+    };
+    const wrongTreeIsolation = isolationEvidence({
+      sourceCommit: releaseCheck.sourceCommit,
+      sourceTreeSha256: "7".repeat(64),
+      localImageTag: releaseCheck.runnerImageTag,
+      localImageDigest: releaseCheck.runnerImageDigest,
+      verifiedAt: releaseCheck.releaseCheckGenerationIsolationVerifiedAt,
+    });
+    releaseCheck.releaseCheckGenerationIsolationEvidence =
+      wrongTreeIsolation.evidence;
+    releaseCheck.releaseCheckGenerationIsolationEvidenceSha256 =
+      wrongTreeIsolation.evidenceSha256;
+    releaseCheck.releaseCheckGenerationIsolationProbeSha256 =
+      wrongTreeIsolation.probeSha256;
+    const changedReleaseCheck = bytes(releaseCheck);
+    const changedReleaseCheckPath = "evidence/wrong-tree-release-check.json";
+    evidence.set(changedReleaseCheckPath, changedReleaseCheck);
+    ready.release.releaseCheckReceipt = reference(
+      changedReleaseCheckPath,
+      changedReleaseCheck,
+    );
+
+    const deploymentBytes = evidence.get(ready.release.deploymentReceipt!.path);
+    if (deploymentBytes === undefined) {
+      throw new Error("missing deployment fixture");
+    }
+    const deployment = JSON.parse(
+      new TextDecoder().decode(deploymentBytes),
+    ) as {
+      releaseCheckReceiptSha256: string;
+      releaseCheckGenerationIsolationEvidenceSha256: string;
+    };
+    deployment.releaseCheckReceiptSha256 =
+      ready.release.releaseCheckReceipt.sha256;
+    deployment.releaseCheckGenerationIsolationEvidenceSha256 =
+      wrongTreeIsolation.evidenceSha256;
+    const changedDeployment = bytes(deployment);
+    const changedDeploymentPath = "evidence/wrong-tree-deployment.json";
+    evidence.set(changedDeploymentPath, changedDeployment);
+    ready.release.deploymentReceipt = reference(
+      changedDeploymentPath,
+      changedDeployment,
+    );
+
+    const smokeBytes = evidence.get(ready.release.productionSmoke!.path);
+    if (smokeBytes === undefined) throw new Error("missing smoke fixture");
+    const smoke = JSON.parse(new TextDecoder().decode(smokeBytes)) as {
+      deployment: {
+        deploymentReceiptSha256: string;
+        releaseCheckGenerationIsolationEvidenceSha256: string;
+      };
+    };
+    smoke.deployment.deploymentReceiptSha256 =
+      ready.release.deploymentReceipt.sha256;
+    smoke.deployment.releaseCheckGenerationIsolationEvidenceSha256 =
+      wrongTreeIsolation.evidenceSha256;
+    const changedSmoke = bytes(smoke);
+    const changedSmokePath = "evidence/wrong-tree-smoke.json";
+    evidence.set(changedSmokePath, changedSmoke);
+    ready.release.productionSmoke = reference(changedSmokePath, changedSmoke);
+
+    await expect(
+      validateSubmissionPackage(ready, "ready", reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        "release chain release-check isolation source tree does not match",
+      ]),
+    });
   });
 
   it("rejects the former minimal synthetic production smoke", async () => {
@@ -323,7 +716,7 @@ describe("submission package validator", () => {
       }),
     ).rejects.toMatchObject({
       issues: expect.arrayContaining([
-        expect.stringMatching(/schema-v6 smoke/iu),
+        expect.stringMatching(/valid qualified.*smoke chain/iu),
       ]),
     });
   });
@@ -347,7 +740,33 @@ describe("submission package validator", () => {
       }),
     ).rejects.toMatchObject({
       issues: expect.arrayContaining([
-        expect.stringMatching(/schema-v6 smoke/iu),
+        expect.stringMatching(/valid qualified.*smoke chain/iu),
+      ]),
+    });
+  });
+
+  it("rejects prefixed serialized raw-notebook content in smoke evidence", async () => {
+    const { ready, reader, evidence } = await readyPackage();
+    const current = evidence.get(ready.release.productionSmoke!.path);
+    if (current === undefined) throw new Error("missing strict smoke fixture");
+    const smoke = JSON.parse(new TextDecoder().decode(current)) as {
+      stages: Array<{ evidence: Record<string, unknown> }>;
+    };
+    smoke.stages[0]!.evidence = {
+      note: 'captured: {"nbformat":4,"cells":[]}',
+    };
+    const privateSmoke = bytes(smoke);
+    const path = "evidence/raw-notebook-production-smoke.json";
+    evidence.set(path, privateSmoke);
+    ready.release.productionSmoke = reference(path, privateSmoke);
+
+    await expect(
+      validateSubmissionPackage(ready, "ready", reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        expect.stringMatching(/valid qualified.*smoke chain/iu),
       ]),
     });
   });

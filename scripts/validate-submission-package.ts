@@ -6,6 +6,8 @@ import { z } from "zod";
 
 import { PilotAnalysisSchema } from "../evals/learner-pilot/src/pilot.js";
 import { DeploymentReceiptV7Schema } from "../packages/scientific-engine-registry/src/schema.js";
+import { parseQualifiedRunnerReleaseV6 } from "./generation-isolation-evidence.js";
+import { parseReleaseCheckReceiptV5 } from "./release-check-receipt.js";
 import { containedInputFile } from "./repository-cli-paths.js";
 
 const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);
@@ -47,6 +49,8 @@ const ReleaseSchema = z
     runnerSourceCommit: GitCommitSchema.nullable(),
     containerImageDigest: ImageDigestSchema.nullable(),
     workerVersionId: WorkerVersionSchema.nullable(),
+    qualifiedRunnerReceipt: NullableEvidence,
+    releaseCheckReceipt: NullableEvidence,
     deploymentReceipt: NullableEvidence,
     productionSmoke: NullableEvidence,
   })
@@ -417,6 +421,12 @@ function assertPrivacySafeEvidence(value: unknown, label: string): void {
       }
       return;
     }
+    if (
+      typeof current === "string" &&
+      /"nbformat"\s*:\s*4.+"cells"\s*:/su.test(current)
+    ) {
+      throw new Error(`${label} contains raw notebook content`);
+    }
     if (typeof current === "string" && /^[\s]*[\[{]/u.test(current)) {
       try {
         inspect(JSON.parse(current));
@@ -432,7 +442,8 @@ function assertPrivacySafeEvidence(value: unknown, label: string): void {
     /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/u.test(serialized) ||
     /\bsk-[A-Za-z0-9_-]{24,}\b/u.test(serialized) ||
     /CODEX_AUTH_JSON\s*[:=]/u.test(serialized) ||
-    /COUNTERLAB_RUNNER_SIGNING_(?:PRIVATE_)?KEY\s*[:=]/u.test(serialized)
+    /COUNTERLAB_RUNNER_SIGNING_(?:PRIVATE_)?KEY\s*[:=]/u.test(serialized) ||
+    /"nbformat"\s*:\s*4.+"cells"\s*:/su.test(serialized)
   ) {
     throw new Error(`${label} contains secret or private content`);
   }
@@ -456,6 +467,8 @@ function collectEvidenceReferences(
   submission: SubmissionPackage,
 ): readonly z.infer<typeof EvidenceReferenceSchema>[] {
   const optional = [
+    submission.release.qualifiedRunnerReceipt,
+    submission.release.releaseCheckReceipt,
     submission.release.deploymentReceipt,
     submission.release.productionSmoke,
     submission.repository.accessEvidence,
@@ -511,6 +524,11 @@ function requireReadyFields(
     ["release.runnerSourceCommit", submission.release.runnerSourceCommit],
     ["release.containerImageDigest", submission.release.containerImageDigest],
     ["release.workerVersionId", submission.release.workerVersionId],
+    [
+      "release.qualifiedRunnerReceipt",
+      submission.release.qualifiedRunnerReceipt,
+    ],
+    ["release.releaseCheckReceipt", submission.release.releaseCheckReceipt],
     ["release.deploymentReceipt", submission.release.deploymentReceipt],
     ["release.productionSmoke", submission.release.productionSmoke],
     ["repository.accessEvidence", submission.repository.accessEvidence],
@@ -600,10 +618,27 @@ async function assertReleaseEvidence(
   issues: string[],
   now: Date,
 ): Promise<string | null> {
+  const qualifiedRef = submission.release.qualifiedRunnerReceipt;
+  const releaseCheckRef = submission.release.releaseCheckReceipt;
   const receiptRef = submission.release.deploymentReceipt;
   const smokeRef = submission.release.productionSmoke;
-  if (receiptRef === null || smokeRef === null) return null;
+  if (
+    qualifiedRef === null ||
+    releaseCheckRef === null ||
+    receiptRef === null ||
+    smokeRef === null
+  ) {
+    return null;
+  }
   try {
+    const qualifiedValue = parseJson(
+      cachedEvidence(evidence, qualifiedRef, "qualified runner receipt"),
+      "qualified runner receipt",
+    );
+    const releaseCheckValue = parseJson(
+      cachedEvidence(evidence, releaseCheckRef, "release-check receipt"),
+      "release-check receipt",
+    );
     const receiptValue = parseJson(
       cachedEvidence(evidence, receiptRef, "deployment receipt"),
       "deployment receipt",
@@ -612,11 +647,218 @@ async function assertReleaseEvidence(
       cachedEvidence(evidence, smokeRef, "production smoke"),
       "production smoke",
     );
+    assertPrivacySafeEvidence(qualifiedValue, "qualified runner receipt");
+    assertPrivacySafeEvidence(releaseCheckValue, "release-check receipt");
     assertPrivacySafeEvidence(receiptValue, "deployment receipt");
     assertPrivacySafeEvidence(smokeValue, "production smoke");
+    const qualified = parseQualifiedRunnerReleaseV6(qualifiedValue);
+    const releaseCheck = parseReleaseCheckReceiptV5(releaseCheckValue);
     const receipt = DeploymentReceiptV7Schema.parse(receiptValue);
     const smoke = ProductionSmokeV6Schema.parse(smokeValue);
     const expectedOrigin = new URL(submission.publicProduct.judgeUrl).origin;
+    const expectedContainerImage = `${qualified.registryImage.replace(
+      /:git-[a-f0-9]{40}$/u,
+      "",
+    )}@${qualified.registryDigest}`;
+    const releaseBindings: ReadonlyArray<readonly [string, unknown, unknown]> =
+      [
+        [
+          "qualified evidence commit",
+          qualified.evidenceCommit,
+          submission.release.workerEvidenceCommit,
+        ],
+        [
+          "qualified source commit",
+          qualified.sourceCommit,
+          submission.release.runnerSourceCommit,
+        ],
+        [
+          "qualified registry digest",
+          qualified.registryDigest,
+          submission.release.containerImageDigest,
+        ],
+        [
+          "release-check evidence commit",
+          releaseCheck.evidenceCommit,
+          qualified.evidenceCommit,
+        ],
+        [
+          "release-check source commit",
+          releaseCheck.sourceCommit,
+          qualified.sourceCommit,
+        ],
+        [
+          "qualified receipt hash in release check",
+          releaseCheck.qualifiedRunnerReceiptSha256,
+          qualifiedRef.sha256,
+        ],
+        [
+          "qualified receipt hash in deployment",
+          receipt.qualifiedRunnerReceiptSha256,
+          qualifiedRef.sha256,
+        ],
+        [
+          "release-check receipt hash in deployment",
+          receipt.releaseCheckReceiptSha256,
+          releaseCheckRef.sha256,
+        ],
+        ["qualification time", releaseCheck.qualifiedAt, qualified.qualifiedAt],
+        [
+          "release-check time",
+          receipt.releaseCheckCheckedAt,
+          releaseCheck.checkedAt,
+        ],
+        [
+          "qualified local runner tag",
+          releaseCheck.runnerImageTag,
+          qualified.localImageTag,
+        ],
+        [
+          "qualified local runner digest",
+          releaseCheck.runnerImageDigest,
+          qualified.localImageDigest,
+        ],
+        [
+          "qualified adapter tag",
+          releaseCheck.adapterImageTag,
+          qualified.adapterImageTag,
+        ],
+        [
+          "qualified adapter digest",
+          releaseCheck.adapterImageDigest,
+          qualified.adapterImageDigest,
+        ],
+        [
+          "release-check registry digest",
+          releaseCheck.registryDigest,
+          qualified.registryDigest,
+        ],
+        [
+          "deployed registry digest",
+          receipt.containerImageDigest,
+          qualified.registryDigest,
+        ],
+        [
+          "deployed image reference",
+          receipt.containerImage,
+          expectedContainerImage,
+        ],
+        [
+          "runtime toolchain",
+          releaseCheck.runtimeToolchainSha256,
+          qualified.runtimeToolchainSha256,
+        ],
+        [
+          "deployed runtime toolchain",
+          receipt.runtimeToolchainSha256,
+          qualified.runtimeToolchainSha256,
+        ],
+        [
+          "runtime policy",
+          releaseCheck.runtimePolicySha256,
+          qualified.runtimePolicySha256,
+        ],
+        [
+          "deployed runtime policy",
+          receipt.runtimePolicySha256,
+          qualified.runtimePolicySha256,
+        ],
+        [
+          "proof dependency manifest",
+          releaseCheck.proofDependencyManifestSha256,
+          qualified.proofDependencyManifestSha256,
+        ],
+        [
+          "deployed proof dependency manifest",
+          receipt.proofDependencyManifestSha256,
+          qualified.proofDependencyManifestSha256,
+        ],
+        [
+          "aggregate-limit evidence",
+          releaseCheck.aggregateLimitEvidenceSha256,
+          qualified.aggregateLimitEvidenceSha256,
+        ],
+        [
+          "deployed aggregate-limit evidence",
+          receipt.aggregateLimitEvidenceSha256,
+          qualified.aggregateLimitEvidenceSha256,
+        ],
+        [
+          "deployed timeout-cleanup receipt",
+          receipt.timeoutCleanupReceiptSha256,
+          qualified.timeoutCleanupReceiptSha256,
+        ],
+        [
+          "runtime adapter",
+          releaseCheck.runtimeAdapterSha256,
+          qualified.runtimeAdapterSha256,
+        ],
+        [
+          "deployed runtime adapter",
+          receipt.runtimeAdapterSha256,
+          qualified.runtimeAdapterSha256,
+        ],
+        [
+          "deployed adapter digest",
+          receipt.adapterImageDigest,
+          qualified.adapterImageDigest,
+        ],
+        [
+          "qualified isolation evidence",
+          releaseCheck.generationIsolationEvidenceSha256,
+          qualified.generationIsolationEvidenceSha256,
+        ],
+        [
+          "qualified isolation probe",
+          releaseCheck.generationIsolationProbeSha256,
+          qualified.generationIsolationProbeSha256,
+        ],
+        [
+          "qualified isolation time",
+          releaseCheck.generationIsolationVerifiedAt,
+          qualified.generationIsolationVerifiedAt,
+        ],
+        [
+          "deployed qualified isolation evidence",
+          receipt.generationIsolationEvidenceSha256,
+          qualified.generationIsolationEvidenceSha256,
+        ],
+        [
+          "deployed qualified isolation probe",
+          receipt.generationIsolationProbeSha256,
+          qualified.generationIsolationProbeSha256,
+        ],
+        [
+          "deployed qualified isolation time",
+          receipt.generationIsolationVerifiedAt,
+          qualified.generationIsolationVerifiedAt,
+        ],
+        [
+          "deployed release-check isolation evidence",
+          receipt.releaseCheckGenerationIsolationEvidenceSha256,
+          releaseCheck.releaseCheckGenerationIsolationEvidenceSha256,
+        ],
+        [
+          "release-check isolation source tree",
+          releaseCheck.releaseCheckGenerationIsolationEvidence.sourceTreeSha256,
+          qualified.sourceTreeSha256,
+        ],
+        [
+          "deployed release-check isolation probe",
+          receipt.releaseCheckGenerationIsolationProbeSha256,
+          releaseCheck.releaseCheckGenerationIsolationProbeSha256,
+        ],
+        [
+          "deployed release-check isolation time",
+          receipt.releaseCheckGenerationIsolationVerifiedAt,
+          releaseCheck.releaseCheckGenerationIsolationVerifiedAt,
+        ],
+      ];
+    for (const [label, observed, expected] of releaseBindings) {
+      if (observed !== expected) {
+        issues.push(`release chain ${label} does not match`);
+      }
+    }
     if (
       receipt.productionOrigin !== expectedOrigin ||
       receipt.workerEvidenceCommit !==
@@ -746,6 +988,12 @@ async function assertReleaseEvidence(
     if (Date.parse(receipt.deployedAt) > Date.parse(smoke.startedAt)) {
       issues.push("production smoke started before the recorded deployment");
     }
+    if (
+      Date.parse(receipt.deployedAt) - Date.parse(qualified.qualifiedAt) >
+      86_400_000
+    ) {
+      issues.push("qualified runner evidence is stale at deployment");
+    }
     const smokeCompletedAt = Date.parse(smoke.completedAt);
     if (
       Date.parse(receipt.deployedAt) > now.getTime() ||
@@ -762,10 +1010,10 @@ async function assertReleaseEvidence(
     ) {
       issues.push("production smoke completed after the official submission");
     }
-    return receipt.qualifiedRunnerReceiptSha256;
+    return qualifiedRef.sha256;
   } catch {
     issues.push(
-      "release evidence is not a valid schema-v7 receipt and schema-v6 smoke",
+      "release evidence is not a valid qualified, checked, deployed, and smoke chain",
     );
     return null;
   }

@@ -42,6 +42,8 @@
     "runnerSourceCommit": null,
     "containerImageDigest": null,
     "workerVersionId": null,
+    "qualifiedRunnerReceipt": null,
+    "releaseCheckReceipt": null,
     "deploymentReceipt": null,
     "productionSmoke": null
   },
