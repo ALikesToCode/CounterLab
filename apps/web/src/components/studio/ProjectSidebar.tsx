@@ -28,6 +28,7 @@ export function ProjectSidebar({
   const modeMatchesSession =
     context.session === null ||
     context.session.mode.kind === expectedSessionMode;
+  const visibleArtifact = modeMatchesSession ? context.artifact : null;
   const artifactCopy = !modeMatchesSession
     ? {
         heading: "Evidence context",
@@ -52,7 +53,7 @@ export function ProjectSidebar({
             empty: "No notebook uploaded",
           };
   const evidenceCells =
-    context.artifact?.cells
+    visibleArtifact?.cells
       .filter(
         (cell) =>
           cell.metricCandidates.length > 0 ||
@@ -105,12 +106,12 @@ export function ProjectSidebar({
           </span>
           <span>
             <strong>
-              {context.artifact?.fileName ?? artifactCopy.fallbackName}
+              {visibleArtifact?.fileName ?? artifactCopy.fallbackName}
             </strong>
             <small>
-              {context.artifact === null
+              {visibleArtifact === null
                 ? artifactCopy.empty
-                : `${context.artifact.cells.length} cells · ${context.artifact.support.status.toLowerCase()}`}
+                : `${visibleArtifact.cells.length} cells · ${visibleArtifact.support.status.toLowerCase()}`}
             </small>
           </span>
         </button>

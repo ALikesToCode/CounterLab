@@ -44,6 +44,19 @@ describe("ProjectSidebar", () => {
         context={{
           ...context,
           mode: "live",
+          artifact: {
+            fileName: "private-sample.ipynb",
+            support: { status: "SUPPORTED" },
+            cells: [
+              {
+                index: 7,
+                sourceExcerpt: "private customer_id evidence",
+                metricCandidates: ["accuracy"],
+                outputHashes: [],
+                symbols: ["customer_id"],
+              },
+            ],
+          } as unknown as NonNullable<StudioContext["artifact"]>,
           session: {
             sessionId: "session_sample_1",
             artifactId: "artifact_sample_1",
@@ -67,6 +80,8 @@ describe("ProjectSidebar", () => {
     expect(
       screen.getByRole("button", { name: /mode mismatch/i }),
     ).toBeDisabled();
+    expect(screen.queryByText("private-sample.ipynb")).toBeNull();
+    expect(screen.queryByText(/private customer_id evidence/i)).toBeNull();
   });
 
   it("keeps the keyboard shortcut visible without adding it to the command name", async () => {
