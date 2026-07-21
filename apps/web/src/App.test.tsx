@@ -2508,6 +2508,12 @@ describe("CounterLab judged flow", () => {
     );
 
     render(<App />);
+    const planningPhase = (
+      await screen.findByText(/Generated planning · In progress/i)
+    ).closest("li");
+    expect(planningPhase).toHaveAttribute("data-state", "active");
+    expect(screen.getByText(/Fixed testing · Waiting/i)).toBeInTheDocument();
+    expect(screen.getByText(/Verified result · Waiting/i)).toBeInTheDocument();
     await user.click(
       await screen.findByRole("button", { name: /cancel this test/i }),
     );
@@ -2517,6 +2523,9 @@ describe("CounterLab judged flow", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(/cancelled this test before it could release a result/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Generated planning · Stopped safely/i),
     ).toBeInTheDocument();
     expect(
       fetcher.mock.calls.some(

@@ -71,6 +71,7 @@ import {
   type FairTestRepairStory,
   type PublicTechnicalDetail,
 } from "./components/learner/FairTestBuilder";
+import { CompileAuthorityPhase } from "./components/learner/CompileAuthorityPhase";
 import { ModelDuel, type DuelModel } from "./components/learner/ModelDuel";
 import {
   NotebookEvidenceStory,
@@ -4371,6 +4372,7 @@ function LiveCompileScreen({
   onRetry: () => void;
   onCancel: () => void;
 }) {
+  const resultReady = events.some((event) => event.kind === "result.ready");
   const verified = events.some(
     (event) =>
       event.kind === "verifier.verified" || event.kind === "result.ready",
@@ -4438,6 +4440,11 @@ function LiveCompileScreen({
           </button>
         </section>
       )}
+      <CompileAuthorityPhase
+        jobKind={job?.kind}
+        resultReady={resultReady}
+        failed={failed}
+      />
       <FairTestBuilder
         {...fairTestExplanationFor(concept)}
         events={events}
