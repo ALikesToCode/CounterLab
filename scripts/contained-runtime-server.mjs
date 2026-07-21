@@ -390,7 +390,7 @@ await new Promise((accept, reject) => {
   });
 });
 
-const server = createServer((socket) => {
+const server = createServer({ allowHalfOpen: true }, (socket) => {
   const chunks = [];
   let total = 0;
   socket.setTimeout(1_800_000);
