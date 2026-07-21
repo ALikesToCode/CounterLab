@@ -1,4 +1,5 @@
 import styles from "./VerifiedBeliefBreakTheater.module.css";
+import previewStyles from "./LockedBeliefBreakPreview.module.css";
 
 export function LockedBeliefBreakEvidence() {
   return (
@@ -69,7 +70,43 @@ export function LockedBeliefBreakEvidence() {
   );
 }
 
-export function LockedBeliefBreakPreview() {
+export function LockedBeliefBreakPreview({
+  density = "full",
+}: {
+  density?: "full" | "strip";
+}) {
+  if (density === "strip") {
+    return (
+      <section
+        className={previewStyles.strip}
+        aria-label="Fair-test preview with result locked"
+        data-motion="none"
+        data-presentation="strip"
+        data-result-visibility="locked"
+      >
+        <p className={previewStyles.status}>
+          <span>Fair-test preview</span>
+          <strong>Result locked until Prediction</strong>
+        </p>
+        <p
+          className={previewStyles.sequence}
+          aria-label="The fair test changes who counts as new: familiar rows become unseen customers."
+        >
+          <span>Familiar rows</span>
+          <span className={previewStyles.change}>
+            <span aria-hidden="true">→</span>
+            change who counts as new
+          </span>
+          <span>Unseen customers</span>
+        </p>
+        <p className={previewStyles.heldFixed}>
+          <span aria-hidden="true">✓</span>
+          Same model, features, preprocessing, sample size, metric, and seed.
+        </p>
+      </section>
+    );
+  }
+
   return (
     <section
       className={`${styles.embeddedMechanism} ${styles.preview} ${styles.compact}`}

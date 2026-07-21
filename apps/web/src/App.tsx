@@ -1098,14 +1098,9 @@ function Landing({
               <h1 id="landing-title" tabIndex={-1}>
                 What result are you trying to understand?
               </h1>
-              <p className="landing-audience">
-                For learners testing whether a notebook result means what they
-                think it means.
-              </p>
-              <p className="landing-category">
-                Evidence-first learning: seal a Prediction, change one
-                condition, and let fixed evidence—not AI prose—release the
-                bounded result.
+              <p className="landing-trust-summary">
+                Ask a question or attach a supported notebook. CounterLab reads
+                the evidence and never runs its cells.
               </p>
             </div>
 
@@ -1130,19 +1125,9 @@ function Landing({
 
           <aside
             className="landing-belief-break"
-            aria-labelledby="landing-belief-break-title"
+            aria-label="Locked fair-test preview"
           >
-            <header>
-              <p>Result hidden until your Prediction is sealed</p>
-              <h2 id="landing-belief-break-title">
-                One changed variable. Everything else held fixed.
-              </h2>
-              <blockquote>
-                Name the claim. Lock your expectation. Change one thing, then
-                let fixed evidence answer.
-              </blockquote>
-            </header>
-            <LockedBeliefBreakPreview />
+            <LockedBeliefBreakPreview density="strip" />
           </aside>
 
           <div
@@ -1151,9 +1136,8 @@ function Landing({
             tabIndex={-1}
           >
             <p className="landing-trust-line">
-              No account needed <span aria-hidden="true">·</span> Supported
-              Python/scikit-learn notebooks <span aria-hidden="true">·</span>
-              We read the evidence and never run the cells
+              No account needed <span aria-hidden="true">·</span> Sample, live,
+              and replay stay clearly labelled
             </p>
             <details
               ref={proofDetailsRef}

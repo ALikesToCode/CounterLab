@@ -111,16 +111,16 @@ describe("learner-facing responsive style safeguards", () => {
     expect(theaterStyles).toContain("animation: none");
   });
 
-  it("keeps the composer dominant and collapses the landing before fixed tracks overflow", () => {
-    expect(globalStyles).toContain(
+  it("keeps the composer dominant in one centered responsive column", () => {
+    expect(globalStyles).not.toContain(
       "grid-template-columns: minmax(520px, 1.08fr) minmax(480px, 0.92fr)",
     );
     expect(globalStyles).toContain("@media (max-width: 1240px)");
     expect(globalStyles).toContain(
-      ".question-first-layout {\n  width: 100%;\n  max-width: 1220px;\n  min-width: 0;",
+      ".question-first-layout {\n  width: 100%;\n  max-width: 820px;\n  min-width: 0;",
     );
     expect(globalStyles).toContain(
-      ".question-first-layout {\n    width: 100%;\n    max-width: 780px;\n    min-width: 0;",
+      ".question-first-layout {\n    width: 100%;\n    max-width: 820px;\n    min-width: 0;",
     );
     expect(questionComposerStyles).toContain(
       ".composer {\n  width: 100%;\n  max-width: 780px;\n  min-width: 0;",
@@ -128,11 +128,15 @@ describe("learner-facing responsive style safeguards", () => {
     expect(questionComposerStyles).toContain(
       ".promptGroup {\n  width: 100%;\n  max-width: 640px;\n  min-width: 0;",
     );
-    expect(globalStyles).toContain(
-      ".landing-belief-break blockquote {\n    display: none;",
+    expect(globalStyles).toContain("grid-template-columns: minmax(0, 1fr)");
+    expect(questionComposerStyles).toContain(
+      ".form {\n    min-height: 122px;\n    padding-bottom: 58px;",
     );
     expect(questionComposerStyles).toContain(
-      "@media (max-width: 560px) {\n  .promptGroup {\n    display: none;",
+      ".submitText {\n    position: static;",
+    );
+    expect(questionComposerStyles).not.toContain(
+      ".promptGroup {\n    display: none;",
     );
   });
 });

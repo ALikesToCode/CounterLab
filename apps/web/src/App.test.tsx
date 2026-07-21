@@ -21,6 +21,9 @@ import { activeRunnerRegistryKey } from "./features/learner/activeRunnerRegistry
 import { requireBundledSampleResult, sampleArtifact } from "./sample";
 
 const sampleResult = requireBundledSampleResult();
+const PRE_PREDICTION_RESULT_LANGUAGE =
+  /59\.4%|\bdeceptive\b|\bfairer test\b|\bverified result\b|\bevidence verdict\b|\bsupported hypothesis\b|\bthe fix\b|\bremove customer(?:_| )id\b|\bkeep each customer's rows together\b|\bproves?\b/i;
+const LANDING_FIXED_SAMPLE_VALUES = /98\.5%|59\.4%/i;
 
 const verifiedImbalanceResult = VerifiedResultSetSchema.parse(
   JSON.parse(imbalanceResultText),
@@ -1073,12 +1076,7 @@ describe("CounterLab judged flow", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        /for learners testing whether a notebook result means what they think it means/i,
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /evidence-first learning.*seal a Prediction.*fixed evidence.*not AI prose/i,
+        /ask a question or attach a supported notebook.*reads the evidence and never runs its cells/i,
       ),
     ).toBeInTheDocument();
     expect(
@@ -1110,7 +1108,7 @@ describe("CounterLab judged flow", () => {
       screen.getByText(/fixed kernels calculate the result/i),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/read the evidence and never run the cells/i),
+      screen.getByText(/reads the evidence and never runs its cells/i),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("navigation", {
@@ -1126,21 +1124,16 @@ describe("CounterLab judged flow", () => {
     expect(
       screen.getByRole("button", { name: /test this claim/i }),
     ).toBeDisabled();
-    expect(
-      screen.getByText(/result hidden until your Prediction is sealed/i),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /name the claim.*lock your expectation.*change one thing/i,
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByLabelText(/fair-test mechanism with result locked/i),
-    ).toHaveTextContent(/familiar-row test.*unseen-entity test/i);
-    expect(document.body).not.toHaveTextContent(/98\.5%|59\.4%/i);
-    expect(
-      screen.getByLabelText(/fair-test mechanism with result locked/i),
-    ).toHaveAttribute("data-result-visibility", "locked");
+    const lockedPreview = screen.getByLabelText(
+      /fair-test preview with result locked/i,
+    );
+    expect(lockedPreview).toHaveTextContent(
+      /familiar rows.*change who counts as new.*unseen customers/i,
+    );
+    expect(lockedPreview).toHaveAttribute("data-presentation", "strip");
+    expect(lockedPreview).toHaveAttribute("data-result-visibility", "locked");
+    expect(document.body).not.toHaveTextContent(LANDING_FIXED_SAMPLE_VALUES);
+    expect(document.body).not.toHaveTextContent(PRE_PREDICTION_RESULT_LANGUAGE);
     const proofSummary = screen.getByText("Evidence & proof");
     await user.click(screen.getByRole("link", { name: /how proof works/i }));
     expect(proofSummary.closest("details")).toHaveAttribute("open");
