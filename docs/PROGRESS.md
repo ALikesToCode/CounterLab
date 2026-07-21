@@ -12,17 +12,16 @@ pass is never presented as a browser or production pass.
 ### Current checkpoint
 
 - **Branch:** `feat/learner-ux-v6.1`
-- **Latest committed checkpoint:** `f0c9f7bfcca474ed700b51975f03246df9f5158d`.
+- **Latest committed checkpoint:** `f19387b1ab214571ea27022efdc0b9432655cc9f`.
   The worktree contains only the preserved, untracked
   `scripts/.fuse_hidden0000a9600000801f`. The source now has a self-hashed
   cgroup request, observer, FINALIZE/ABORT protocol, fixed negative controls,
-  fail-closed evidence validation, qualified-receipt derivation/store, and 40
-  statically collected Playwright journeys. The production runtime still does
-  not start the observer, write the runtime-owned decision, bind the complete
-  invocation artifact chain, or select the qualified receipt for timeout
-  proof. No exact image, real cgroup sentinel, qualification, deployment,
-  rendered browser journey, learner observation, video, Devpost publication,
-  or submission receipt is claimed.
+  fail-closed evidence validation, qualified-receipt derivation/store, runtime
+  observer orchestration, serialized run/drain handling, exact v2/v3 Python
+  consumers, and 40 statically collected Playwright journeys. Source tests do
+  not constitute a real cgroup sentinel: no exact image, aggregate host proof,
+  qualification, deployment, rendered browser journey, learner observation,
+  video, Devpost publication, or submission receipt is claimed.
 - **Earlier product checkpoint:**
   `5259a495948a68024702ba5239bf8057d1785f08`. The owner partitioned the
   preserved integration delta into nine commits and fast-forwarded both
@@ -3463,3 +3462,71 @@ worktree entry besides this progress update is the preserved FUSE tombstone
 6. Keep learner evidence honest, finish and verify the public submission
    package, then push the feature branch, verify the remote tip, fast-forward
    `main`, and push/verify `main` only after every ship gate is factual.
+
+## Finish Commander aggregate integration checkpoint — 2026-07-21T03:04:15Z
+
+Deadline: `2026-07-22T00:00:00Z`; **20 hours 55 minutes 45 seconds remained at
+this checkpoint**. The feature branch is at committed HEAD `f19387b`; the only
+worktree entry besides this progress update is the preserved FUSE tombstone
+`scripts/.fuse_hidden0000a9600000801f`. It remains unchanged and unstaged.
+
+### Independently committed source slices
+
+- `3cdf38b fix(runtime): verify qualification artifact chain` verifies the
+  manifest, readiness, draft, finalization, and exclusive evidence chain before
+  deriving a qualified receipt.
+- `1ea2ed8 fix(runtime): permit honest pre-draft aborts` permits only the
+  explicit null-draft ABORT case while retaining a mandatory draft hash for
+  FINALIZE.
+- `40db9bc feat(runtime): coordinate aggregate qualification` owns observer
+  startup, readiness/draft chronology, FINALIZE/ABORT emission, observer exit,
+  and qualified-receipt persistence.
+- `eaf4a60 feat(runtime): wire aggregate qualification` connects the release-only
+  qualification mode to the runtime, binds control-receipt v3 to the qualified
+  receipt, serializes run and drain requests, and restores `ACTIVE` after a
+  failed drain.
+- `75dfb65 fix(runner): consume qualified timeout receipts` preserves legacy v2
+  replay while requiring the exact qualification mode and
+  `.qualified-receipt.json` path for v3 in both Python consumers.
+- `f19387b test(learner): align live journey selectors` updates the two live
+  upload journeys and imbalance transfer choices to current accessible names.
+
+### Exact verification in these slices
+
+- Runtime, request, observer, coordinator, and qualified-receipt Vitest:
+  **7 files, 68/68 passed**.
+- Complete runner Pytest with kernel and runner source roots: **82/82 passed**.
+  One preceding command omitted the kernel source root and failed collection;
+  it executed no product tests and was corrected before this reported pass.
+- Repository, web client, generated Worker, and Worker TypeScript: **passed**.
+- E2E strict TypeScript: **passed**.
+- Playwright static collection under the explicit non-rendering design-review
+  authority: **40 tests in 3 files**. No browser launched and no rendered
+  qualification is claimed.
+- Scoped Prettier, Python compilation, Node syntax, Git whitespace, and secret
+  scans: **passed**.
+- Independent runtime integration review: **GO** after the initial review found
+  and the implementation repaired the async run/drain race and missing positive
+  qualification-path coverage.
+
+### Current remaining gates
+
+1. The source-level observer/runtime/consumer chain is complete, but no real
+   delegated-cgroup sentinel or exact-image qualification has run. The current
+   repository-only filesystem constitution prohibits the required `/sys` and
+   `/proc` reads, so this gate remains honestly blocked unless the checked-in
+   constitution changes.
+2. The preserved FUSE tombstone prevents a clean physical checkout. It is not
+   deleted, hidden, staged, or modified. A separately contained clean checkout
+   or the natural exit of its proven owner remains required.
+3. Prompt-first Landing and Judge hierarchy, mobile textual controls, and the
+   shared pre-seal forbidden-text regression remain the next source slice.
+4. Final source freeze, one exact image, refreshed source/image-bound evidence,
+   qualification, the complete deterministic release gate, contained Wrangler
+   identity, and Cloudflare deployment remain **not run**.
+5. This session still has no `CLOAK_CDP_ENDPOINT`; rendered desktop/mobile,
+   accessibility, console/network, reconnect, download, and Web Vitals
+   qualification remain **0 current journeys**.
+6. Learner evidence remains **`NO_DATA`**. Devpost, video, public-repository
+   verification, feedback Session ID, logged-out link audit, publication, and
+   submission receipt remain externally unverified.
