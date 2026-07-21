@@ -45,6 +45,37 @@ export function createContainedCgroupObserverManifest(input: {
   sanitizedSpecSha256: string;
 }): ContainedCgroupObserverManifest;
 
+export interface ContainedCgroupObserverFinalization {
+  schemaVersion: "1";
+  status: "FINALIZE" | "ABORT";
+  reason: "AGGREGATE_TIMEOUT_CONFIRMED" | "QUALIFICATION_ABORTED";
+  manifestPayloadSha256: string;
+  invocationId: string;
+  finalContainerId: string;
+  timeoutObserved: boolean;
+  resultReleased: boolean;
+  cleanupVerified: boolean;
+  decisionAt: string;
+  receiptPayloadSha256: string;
+}
+
+export function validateContainedCgroupObserverFinalization(
+  value: unknown,
+  manifest: ContainedCgroupObserverManifest,
+  options?: { observedAtMs?: number },
+): ContainedCgroupObserverFinalization;
+
+export function createContainedCgroupObserverFinalization(
+  manifest: ContainedCgroupObserverManifest,
+  input: {
+    cleanupVerified: boolean;
+    decisionAt?: Date;
+    resultReleased: boolean;
+    status: "FINALIZE" | "ABORT";
+    timeoutObserved: boolean;
+  },
+): ContainedCgroupObserverFinalization;
+
 export function containedCgroupQualificationPaths(input: {
   repositoryRoot: string;
   runtimeSessionId: string;
@@ -52,6 +83,7 @@ export function containedCgroupQualificationPaths(input: {
 }): Readonly<{
   evidencePath: string;
   failurePath: string;
+  finalizationPath: string;
   invocationRoot: string;
   manifestPath: string;
   observerDraftPath: string;

@@ -4,7 +4,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   containedCgroupQualificationPaths,
+  createContainedCgroupObserverFinalization,
   createContainedCgroupObserverManifest,
+  validateContainedCgroupObserverFinalization,
   validateContainedCgroupObserverManifest,
 } from "./contained-cgroup-observer-protocol.mjs";
 
@@ -93,6 +95,59 @@ describe("contained cgroup observer protocol", () => {
     ).toThrow(/binding/u);
   });
 
+  it("accepts only self-bound runtime finalization or an explicit abort", () => {
+    const input = manifest();
+    const finalizedAt = new Date(requestedAt.getTime() + 30_000);
+    const finalized = createContainedCgroupObserverFinalization(input, {
+      cleanupVerified: true,
+      decisionAt: finalizedAt,
+      resultReleased: false,
+      status: "FINALIZE",
+      timeoutObserved: true,
+    });
+    expect(
+      validateContainedCgroupObserverFinalization(finalized, input, {
+        observedAtMs: finalizedAt.getTime(),
+      }),
+    ).toEqual(finalized);
+
+    const aborted = createContainedCgroupObserverFinalization(input, {
+      cleanupVerified: false,
+      decisionAt: finalizedAt,
+      resultReleased: false,
+      status: "ABORT",
+      timeoutObserved: false,
+    });
+    expect(
+      validateContainedCgroupObserverFinalization(aborted, input, {
+        observedAtMs: finalizedAt.getTime(),
+      }),
+    ).toEqual(aborted);
+
+    const mutations = [
+      { ...finalized, resultReleased: true },
+      { ...finalized, cleanupVerified: false },
+      { ...finalized, timeoutObserved: false },
+      { ...finalized, receiptPayloadSha256: "0".repeat(64) },
+      { ...aborted, status: "FINALIZE" },
+      { ...aborted, timeoutObserved: true, cleanupVerified: true },
+    ];
+    for (const changed of mutations) {
+      expect(() =>
+        validateContainedCgroupObserverFinalization(changed, input, {
+          observedAtMs: finalizedAt.getTime(),
+        }),
+      ).toThrow(/finalization binding/u);
+    }
+    expect(() =>
+      validateContainedCgroupObserverFinalization(
+        finalized,
+        { ...input, invocationId: "9".repeat(64) },
+        { observedAtMs: finalizedAt.getTime() },
+      ),
+    ).toThrow(/finalization binding/u);
+  });
+
   it("derives only exact repository-contained handshake paths", () => {
     expect(
       containedCgroupQualificationPaths({
@@ -138,6 +193,14 @@ describe("contained cgroup observer protocol", () => {
         "run/cgroup-qualification",
         invocationId,
         "observer-draft.json",
+      ),
+      finalizationPath: resolve(
+        root,
+        ".rt",
+        runtimeSessionId,
+        "run/cgroup-qualification",
+        invocationId,
+        "finalization.json",
       ),
       evidencePath: resolve(
         root,

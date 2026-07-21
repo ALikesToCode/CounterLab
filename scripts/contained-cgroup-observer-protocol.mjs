@@ -10,6 +10,10 @@ import {
 const sha256Pattern = /^[a-f0-9]{64}$/u;
 const sessionPattern = /^rt-[a-z0-9][a-z0-9-]{7,13}$/u;
 const maximumAgeMs = 5 * 60_000;
+const finalizationReasonByStatus = Object.freeze({
+  ABORT: "QUALIFICATION_ABORTED",
+  FINALIZE: "AGGREGATE_TIMEOUT_CONFIRMED",
+});
 
 const manifestKeys = [
   "baseReceiptFileSha256",
@@ -167,6 +171,104 @@ export function createContainedCgroupObserverManifest({
   );
 }
 
+export function validateContainedCgroupObserverFinalization(
+  value,
+  manifest,
+  { observedAtMs = Date.now() } = {},
+) {
+  const finalization = object(value, "finalization");
+  exactKeys(
+    finalization,
+    [
+      "cleanupVerified",
+      "decisionAt",
+      "finalContainerId",
+      "invocationId",
+      "manifestPayloadSha256",
+      "reason",
+      "receiptPayloadSha256",
+      "resultReleased",
+      "schemaVersion",
+      "status",
+      "timeoutObserved",
+    ],
+    "finalization",
+  );
+  const { receiptPayloadSha256, ...payload } = finalization;
+  const requestedAtMs = Date.parse(manifest?.requestedAt);
+  const decisionAtMs = Date.parse(finalization.decisionAt);
+  const finalizesQualification =
+    finalization.status === "FINALIZE" &&
+    finalization.timeoutObserved === true &&
+    finalization.resultReleased === false &&
+    finalization.cleanupVerified === true;
+  const abortsQualification =
+    finalization.status === "ABORT" &&
+    !(
+      finalization.timeoutObserved === true &&
+      finalization.resultReleased === false &&
+      finalization.cleanupVerified === true
+    );
+  if (
+    finalization.schemaVersion !== "1" ||
+    (!finalizesQualification && !abortsQualification) ||
+    finalization.reason !== finalizationReasonByStatus[finalization.status] ||
+    finalization.manifestPayloadSha256 !== manifest?.receiptPayloadSha256 ||
+    finalization.invocationId !== manifest?.invocationId ||
+    finalization.finalContainerId !== manifest?.finalContainerId ||
+    typeof finalization.timeoutObserved !== "boolean" ||
+    typeof finalization.resultReleased !== "boolean" ||
+    typeof finalization.cleanupVerified !== "boolean" ||
+    !validTimestamp(finalization.decisionAt, observedAtMs) ||
+    !Number.isFinite(requestedAtMs) ||
+    !Number.isFinite(decisionAtMs) ||
+    decisionAtMs < requestedAtMs ||
+    decisionAtMs - requestedAtMs > maximumAgeMs ||
+    !sha256Pattern.test(receiptPayloadSha256 ?? "") ||
+    sha256CgroupBytes(canonicalCgroupJson(payload)) !== receiptPayloadSha256
+  ) {
+    throw new Error(
+      "contained cgroup observer finalization binding is invalid",
+    );
+  }
+  return finalization;
+}
+
+export function createContainedCgroupObserverFinalization(
+  manifest,
+  {
+    cleanupVerified,
+    decisionAt = new Date(),
+    resultReleased,
+    status,
+    timeoutObserved,
+  },
+) {
+  if (!(decisionAt instanceof Date) || !Number.isFinite(decisionAt.getTime())) {
+    throw new Error("contained cgroup observer decision time is invalid");
+  }
+  const payload = {
+    schemaVersion: "1",
+    status,
+    reason: finalizationReasonByStatus[status],
+    manifestPayloadSha256: manifest?.receiptPayloadSha256,
+    invocationId: manifest?.invocationId,
+    finalContainerId: manifest?.finalContainerId,
+    timeoutObserved,
+    resultReleased,
+    cleanupVerified,
+    decisionAt: decisionAt.toISOString(),
+  };
+  return validateContainedCgroupObserverFinalization(
+    {
+      ...payload,
+      receiptPayloadSha256: sha256CgroupBytes(canonicalCgroupJson(payload)),
+    },
+    manifest,
+    { observedAtMs: decisionAt.getTime() },
+  );
+}
+
 export function containedCgroupQualificationPaths({
   repositoryRoot,
   runtimeSessionId,
@@ -191,6 +293,7 @@ export function containedCgroupQualificationPaths({
   return Object.freeze({
     evidencePath: resolve(invocationRoot, "aggregate-evidence.json"),
     failurePath: resolve(invocationRoot, "failure.json"),
+    finalizationPath: resolve(invocationRoot, "finalization.json"),
     invocationRoot,
     manifestPath: resolve(invocationRoot, "manifest.json"),
     observerDraftPath: resolve(invocationRoot, "observer-draft.json"),
