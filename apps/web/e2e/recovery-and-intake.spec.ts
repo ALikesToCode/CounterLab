@@ -9,6 +9,7 @@ const supportedNotebookPath = new URL(
   import.meta.url,
 ).pathname;
 const supportedNotebookName = "leakage-rows-pipeline.ipynb";
+const exactLiveJourney = process.env.COUNTERLAB_E2E_LIVE === "1";
 
 const readyHealth = {
   ok: true,
@@ -97,8 +98,13 @@ async function installReadyHealth(page: Page): Promise<void> {
   });
 }
 
-async function openReadyLiveIntake(page: Page): Promise<void> {
-  await installReadyHealth(page);
+async function openReadyLiveIntake(
+  page: Page,
+  options: { requireExactLiveRelease?: boolean } = {},
+): Promise<void> {
+  if (options.requireExactLiveRelease !== true) {
+    await installReadyHealth(page);
+  }
   await reset(page);
   await page.getByLabel("Your question or claim").fill(liveQuestion);
   await page.getByRole("button", { name: /Test this claim/i }).click();
@@ -342,6 +348,10 @@ test("unsupported live upload is refused without creating a session", async ({
 test("a supported live upload creates one source-bound session", async ({
   page,
 }) => {
+  test.skip(
+    !exactLiveJourney,
+    "Set COUNTERLAB_E2E_LIVE=1 only against an exact release-ready live API.",
+  );
   let uploadRequests = 0;
   let sessionCreationRequests = 0;
   const duplicateKeyWarnings: string[] = [];
@@ -361,7 +371,7 @@ test("a supported live upload creates one source-bound session", async ({
       sessionCreationRequests += 1;
     }
   });
-  await openReadyLiveIntake(page);
+  await openReadyLiveIntake(page, { requireExactLiveRelease: true });
 
   await page
     .getByLabel(/Attach a supported notebook/i)
@@ -383,6 +393,10 @@ test("a supported live upload creates one source-bound session", async ({
 test("an interrupted upload accepts the same file on retry", async ({
   page,
 }, testInfo) => {
+  test.skip(
+    !exactLiveJourney,
+    "Set COUNTERLAB_E2E_LIVE=1 only against an exact release-ready live API.",
+  );
   testInfo.annotations.push({
     type: "counterlab-expected-request-failures",
     description: "POST /api/artifacts",
@@ -400,7 +414,7 @@ test("an interrupted upload accepts the same file on retry", async ({
     }
     await route.continue();
   });
-  await openReadyLiveIntake(page);
+  await openReadyLiveIntake(page, { requireExactLiveRelease: true });
   const upload = page.getByLabel(/Attach a supported notebook/i);
 
   await upload.setInputFiles(supportedNotebookPath);
@@ -420,6 +434,10 @@ test("an interrupted upload accepts the same file on retry", async ({
 test("a lost private-session response retries without re-uploading", async ({
   page,
 }, testInfo) => {
+  test.skip(
+    !exactLiveJourney,
+    "Set COUNTERLAB_E2E_LIVE=1 only against an exact release-ready live API.",
+  );
   testInfo.annotations.push({
     type: "counterlab-expected-request-failures",
     description: "POST /api/live/sessions",
@@ -439,7 +457,7 @@ test("a lost private-session response retries without re-uploading", async ({
     }
     await route.continue();
   });
-  await openReadyLiveIntake(page);
+  await openReadyLiveIntake(page, { requireExactLiveRelease: true });
 
   await page
     .getByLabel(/Attach a supported notebook/i)
