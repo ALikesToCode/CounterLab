@@ -3281,3 +3281,103 @@ not staged or modified.
    verify Devpost, public video, repository, feedback ID, and submission receipt
    before pushing the feature branch and fast-forwarding its verified tip into
    `main`.
+
+## Finish Commander cgroup-source checkpoint — 2026-07-21T00:34:56Z
+
+Deadline: `2026-07-22T00:00:00Z`; **23 hours 25 minutes 04 seconds remained at
+this checkpoint**. The feature branch is at committed HEAD `79d25ba`; the only
+worktree entry besides this progress update is the preserved, already-unlinked
+FUSE tombstone `scripts/.fuse_hidden0000a9600000801f`. It was inspected
+read-only during ownership diagnosis, remains byte-identical to
+`scripts/start-contained-runtime.sh`, and remains unchanged and unstaged.
+
+### Independently committed work since the consolidated checkpoint
+
+- `1f3067c perf(learner): defer verified theater payload` replaces the eager
+  landing import with a locked lightweight preview and a genuine lazy verified
+  Theater. The main client fell from **552.03 kB to 446.77 kB** minified; the
+  lazy Theater chunk is **20.78 kB**, and the mixed-import build warning is
+  gone.
+- `6b0bf01 fix(judge): bind isolation copy to release health` makes Judge copy
+  distinguish release-bound `OS_ENFORCED`, release-bound `PARTIAL`, and
+  unavailable evidence instead of presenting a fixed isolation claim.
+- `0621b79`, `55788ef`, `eafd867`, and `45038ce` make the Devpost fields
+  paste-ready, move the verified belief break into the demo's opening seconds,
+  add word-for-word captions, separate build-time Codex from Runtime Codex,
+  and document both sample notebooks without inventing repository, video,
+  feedback, release, learner, or submission evidence.
+- `94a5d51 fix(runtime): align timeout rlimit authority` aligns TypeScript and
+  Python on the five limits actually emitted: `RLIMIT_AS`, `RLIMIT_CPU`,
+  `RLIMIT_FSIZE`, `RLIMIT_NOFILE`, and `RLIMIT_NPROC`.
+- `b7c54fe fix(runtime): retain deterministic cgroup limits` preserves the
+  validated OCI CPU, memory, swap, and PID intent, normalizes the cgroup to
+  `counterlab-v6.1/<invocation-id>`, and stops passing `--cgroup ""`. The
+  receipt deliberately remains `aggregateLimitIntentEnforced: false` with
+  `aggregateLimitEvidence: null`.
+- `fa4261d test(runtime): harden cgroup intent bindings` adds seven fail-closed
+  resource mutations, exact non-empty cgroup argument assertions, and explicit
+  config/base/sanitized hash bindings.
+- `22e489f fix(runtime): request delegated cgroup namespace` launches the
+  pinned RootlessKit with `--pidns`, `--cgroupns`, and
+  `--evacuate-cgroup2=containerd` before the runtime server.
+- `d797b4c feat(runtime): bind aggregate qualification requests` introduces a
+  strict source-bound request protocol. Only an explicit, already path-checked
+  timeout control-receipt request may select `aggregate-timeout-proof-v1`;
+  normal learner calls carry `null`, unknown fields fail, and non-run commands
+  cannot select qualification.
+- `79d25ba feat(runtime): validate aggregate cgroup evidence` adds a pure
+  runtime validator for exact limits, member identity, memory/PID/CPU counter
+  deltas, cleanup absence, observer/source identity, timestamp, and self-hash.
+  It does not observe the host or issue a qualified receipt.
+
+### Exact verification in these slices
+
+- Complete web Vitest after the learner performance change: **78 files,
+  617/617 passed**.
+- Cgroup/runtime adjacent suites: **52/52**, then **39/39**, **46/46**,
+  **50/50**, and the validator cross-boundary suite **12/12**, all passed at
+  their respective committed slices.
+- Runtime/Python rlimit parity: TypeScript **4/4** and Python **7/7**, passed.
+- Repository, web client, generated Worker, and Worker TypeScript: **passed**
+  after each current runtime slice.
+- Production Vite/Worker build: **passed** at the learner-performance slice;
+  main client **446.77 kB / 128.55 kB gzip**, CSS **200.01 kB / 34.61 kB
+  gzip**, Worker **1,863.39 kB / 359.59 kB gzip**.
+- Scoped Prettier, Git whitespace, and explicit secret scans: **passed** for
+  every committed slice.
+
+### Live issue matrix
+
+| Gate | Source mechanism | Acceptance evidence | Current production proof |
+| --- | --- | --- | --- |
+| Aggregate containment | Retained OCI limits, delegated RootlessKit request, strict qualification protocol and evidence validator | Real exact-image memory OOM, PID denial, CPU throttling, genuine membership, and post-timeout cgroup absence | **not run**; observer/final receipt and real host proof remain open |
+| Clean exact source | Nested ignored worktree under `.rt/` avoids the unlinked FUSE tombstone without deleting it | Completely clean physical checkout at frozen source `S` | **not run** |
+| Exact image/evidence | Build receipt, timeout proof, SBOM/VEX/scientific refresh, evidence commit `E` | All source/image/hash-bound receipts verify | **not run** |
+| Cloudflare release | Repository-contained Wrangler identity, qualified deploy, public identity, smoke | Exact account, Worker version, Container digest, source `S`, evidence `E` | **not run**; contained Wrangler is not authenticated |
+| Browser qualification | CloakBrowser Playwright harness | 32 current tests plus required manual semantic/visual matrix on the exact public tuple | **0 current rendered journeys**; this session has no injected `playwright_safe` tools or `CLOAK_CDP_ENDPOINT` |
+| Submission/impact | Paste-ready copy, first-12-second demo script, captions, `NO_DATA` guard | Public repo/video/feedback links, Devpost submission receipt, real consented learner rows or honest `NO_DATA` | **externally unverified** |
+
+### Ordered remaining work
+
+1. Add the independent cgroup observer, release-only negative controls, and a
+   create-once post-cleanup qualified receipt without changing normal learner
+   execution.
+2. Obtain a constitution-compatible way to execute the real cgroup proof. The
+   runtime necessarily reads its delegated `/sys/fs/cgroup` subtree and owned
+   `/proc/<pid>/stat`; the current repository-only filesystem rule does not
+   authorize the lead to execute that proof, so this gate remains fail-closed.
+3. Freeze source `S` in a clean repository-contained nested worktree, build the
+   runner once, run the timeout and scientific evidence proofs while
+   `HEAD == S`, commit only allowlisted evidence as `E`, then qualify.
+4. Complete repository-contained Wrangler authentication, deploy only the
+   qualified tuple, and run public identity/smoke without overstating the
+   currently deployed Worker.
+5. Start a fresh Codex session with injected `playwright_safe`; registration
+   alone is insufficient. Run all **32** current tests and the missing
+   responsive, semantic, screen-reader, network, console, and Web Vitals
+   review. Historical stock-Chromium and outside-root runtime metadata do not
+   qualify this release.
+6. Keep learner impact `NO_DATA` without real consented participants; verify
+   and align the public repository, video, `/feedback` ID, Devpost fields, and
+   submission receipt before the authorized feature push and fast-forward
+   merge to `main`.
