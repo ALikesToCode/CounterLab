@@ -69,6 +69,7 @@ export function InteractiveImbalanceLab({
       const verified = await counterLabApi.getInteractiveResult(
         sessionId,
         queued.runnerJob.jobId,
+        queued,
       );
       if (verified.result.concept !== "class_imbalance") {
         throw new Error("The verified result did not match this lab.");

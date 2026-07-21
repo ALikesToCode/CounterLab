@@ -86,4 +86,33 @@ describe("PredictionSeal", () => {
       screen.queryByRole("button", { name: "Seal my prediction" }),
     ).not.toBeInTheDocument();
   });
+
+  it("disables every mutable prediction control while sealing is in flight", async () => {
+    const user = userEvent.setup();
+    const commit = vi.fn();
+    render(
+      <PredictionSeal
+        {...displays}
+        options={options}
+        choice="falls"
+        confidence={63}
+        committed={false}
+        disabled
+        onChoiceChange={vi.fn()}
+        onConfidenceChange={vi.fn()}
+        onCommit={commit}
+      />,
+    );
+
+    expect(
+      screen.getByRole("radio", { name: /fall materially/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("slider", { name: "Prediction confidence" }),
+    ).toBeDisabled();
+    const button = screen.getByRole("button", { name: "Seal my prediction" });
+    expect(button).toBeDisabled();
+    await user.click(button);
+    expect(commit).not.toHaveBeenCalled();
+  });
 });

@@ -259,7 +259,39 @@ async function canonicalHash(value: unknown): Promise<string> {
 
 async function nativeProofSession() {
   const replay = replayFixture("entity_leakage");
-  const evidenceVerdictHash = await canonicalHash(replay.evidenceVerdict);
+  const { immutableHash: _immutableHash, ...predictionContent } =
+    replay.prediction;
+  const prediction = {
+    ...predictionContent,
+    immutableHash: await canonicalHash(predictionContent),
+  };
+  const { resultHash: _verifiedResultHash, ...verifiedResultContent } =
+    replay.verifiedResult;
+  const verifiedResult = {
+    ...verifiedResultContent,
+    resultHash: await canonicalHash(verifiedResultContent),
+  };
+  const evidenceVerdict = {
+    ...replay.evidenceVerdict,
+    resultHash: verifiedResult.resultHash,
+  };
+  const evidenceVerdictHash = await canonicalHash(evidenceVerdict);
+  const { resultHash: _transferResultHash, ...transferResultContent } =
+    replay.transferResult;
+  const transferResult = {
+    ...transferResultContent,
+    resultHash: await canonicalHash(transferResultContent),
+  };
+  const patchWithContentHash = {
+    ...replay.patchResult,
+    patchHash: await canonicalHash(replay.patchResult.diff),
+  };
+  const { resultHash: _patchResultHash, ...patchResultContent } =
+    patchWithContentHash;
+  const patchResult = {
+    ...patchResultContent,
+    resultHash: await canonicalHash(patchResultContent),
+  };
   const {
     integrity: _receiptIntegrity,
     receiptHash: _receiptHash,
@@ -268,6 +300,7 @@ async function nativeProofSession() {
   const receiptContent = {
     ...storedReceiptContent,
     evidenceVerdictHash,
+    authoritativeResultHash: verifiedResult.resultHash,
   };
   const receiptIntegrity = {
     mode: "integrity-hashed" as const,
@@ -296,15 +329,15 @@ async function nativeProofSession() {
       ...replay.reasoningDiff.authority,
       artifactManifestHash: replay.boundary.result.artifactManifestHash,
       beliefSpecHash: await canonicalHash(replay.beliefSpec),
-      predictionHash: await canonicalHash(replay.prediction),
+      predictionHash: prediction.immutableHash,
       experimentIrHash: replay.evidenceVerdict.irHash,
-      authoritativeResultHash: replay.verifiedResult.resultHash,
+      authoritativeResultHash: verifiedResult.resultHash,
       evidenceVerdictHash,
       boundaryMapHash: boundaryMapAuthority.resultHash,
       boundaryReceiptHash: boundaryMapAuthority.receipt.receiptHash,
-      transferResultHash: replay.transferResult.resultHash,
-      patchResultHash: replay.patchResult.resultHash,
-      patchedArtifactHash: replay.patchResult.patchedArtifactHash,
+      transferResultHash: transferResult.resultHash,
+      patchResultHash: patchResult.resultHash,
+      patchedArtifactHash: patchResult.patchedArtifactHash,
     },
   };
 
@@ -317,13 +350,13 @@ async function nativeProofSession() {
     createdAt: "2026-07-16T12:40:00.000Z",
     updatedAt: "2026-07-16T13:00:00.000Z",
     beliefSpec: replay.beliefSpec,
-    prediction: replay.prediction,
-    verifiedResult: replay.verifiedResult,
-    evidenceVerdict: replay.evidenceVerdict,
+    prediction,
+    verifiedResult,
+    evidenceVerdict,
     epistemicReportHash: reasoningDiff.authority.epistemicReportHash,
     boundaryMapAuthority,
-    transferResult: replay.transferResult,
-    patchResult: replay.patchResult,
+    transferResult,
+    patchResult,
     revision: replay.revision.statement,
     reasoningDiffV2: reasoningDiff,
     proofCapsule: {
@@ -383,6 +416,15 @@ describe("CounterLabApiClient", () => {
         },
       }),
     ).toThrow(/verifiedResult authority/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...valid,
+        reasoningDiff: {
+          ...valid.reasoningDiff,
+          sessionId: "session_other",
+        },
+      }),
+    ).toThrow(/legacy Reasoning Diff belongs to a different session/i);
 
     const fetcher = vi.fn<typeof fetch>(async () =>
       jsonResponse({
@@ -436,49 +478,53 @@ describe("CounterLabApiClient", () => {
     ).toThrow(/belief authority/i);
   });
 
+  it("requires every immutable Prediction to retain its belief authority", async () => {
+    const nativeSession = await nativeProofSession();
+
+    expect(() =>
+      SessionViewSchema.parse({
+        ...session,
+        state: "PREDICTION_COMMITTED",
+        prediction: {
+          ...nativeSession.prediction,
+          sessionId: session.sessionId,
+        },
+      }),
+    ).toThrow(/Prediction requires belief authority/i);
+  });
+
   it("accepts Worker-owned v5 evidence authority in resumable session responses", async () => {
-    const beliefSpec = migrateBeliefTestV1ToV2(beliefTest);
-    const verifiedResult = VerifiedResultSetSchema.parse(rawSampleResult);
-    const prediction = {
-      schemaVersion: "1" as const,
-      id: "prediction_1",
-      sessionId: session.sessionId,
-      beliefTestId: beliefSpec.id,
-      choice: "Group-holdout accuracy falls.",
-      confidence: 80,
-      committedAt: "2026-07-14T10:02:00.000Z",
-      immutableHash: digest("8"),
-    };
-    const evidenceVerdict = {
-      schemaVersion: "1" as const,
-      kind: "SUPPORTS" as const,
-      hypothesisId: "competing" as const,
-      scope: "unseen customers in the documented fixture",
-      resultHash: verifiedResult.resultHash,
-      irHash: digest("f"),
-      technicalReportHash: digest("1"),
-      verifierVersion: "epistemic-verifier-v1",
-    };
+    const nativeSession = await nativeProofSession();
+    const beliefSpec = nativeSession.beliefSpec;
+    const verifiedResult = nativeSession.verifiedResult;
+    const prediction = nativeSession.prediction;
+    const evidenceVerdict = nativeSession.evidenceVerdict;
     const v5Session = {
-      ...session,
+      sessionId: nativeSession.sessionId,
+      artifactId: nativeSession.artifactId,
+      mode: nativeSession.mode,
       state: "EXPERIMENT_COMPLETED" as const,
       version: 7,
+      createdAt: nativeSession.createdAt,
+      updatedAt: nativeSession.updatedAt,
       beliefSpec,
       prediction,
       verifiedResult,
       evidenceVerdict,
-      epistemicReportHash: digest("2"),
+      epistemicReportHash: nativeSession.epistemicReportHash,
     };
     const fetcher = vi.fn<typeof fetch>(async () =>
       jsonResponse({ ok: true, data: v5Session }),
     );
     const client = new CounterLabApiClient({ fetch: fetcher });
 
-    await expect(client.getSession(session.sessionId)).resolves.toMatchObject({
-      beliefSpec: { id: beliefSpec.id },
-      evidenceVerdict,
-      epistemicReportHash: digest("2"),
-    });
+    await expect(client.getSession(v5Session.sessionId)).resolves.toMatchObject(
+      {
+        beliefSpec: { id: beliefSpec.id },
+        evidenceVerdict,
+        epistemicReportHash: nativeSession.epistemicReportHash,
+      },
+    );
     expect(() =>
       SessionViewSchema.parse({
         ...session,
@@ -549,14 +595,188 @@ describe("CounterLabApiClient", () => {
       SessionViewSchema.parse({
         ...v5Session,
         state: "PATCH_VERIFIED",
-        patchResult: {
-          ...proofBoundSession().patchResult,
-          sessionId: v5Session.sessionId,
-        },
+        patchResult: nativeSession.patchResult,
         evidenceVerdict: undefined,
         epistemicReportHash: undefined,
       }),
     ).toThrow(/Belief Spec v2 repair requires a supporting evidence verdict/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...v5Session,
+        beliefSpec: { ...beliefSpec, learnerDecision: "UNDECIDED" },
+      }),
+    ).toThrow(/learner-confirmed/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...v5Session,
+        beliefSpec: { ...beliefSpec, supportState: "PARTIAL" },
+      }),
+    ).toThrow(/supported Belief Spec/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...v5Session,
+        state: "INGESTED",
+        beliefSpec: { ...beliefSpec, learnerDecision: "UNDECIDED" },
+      }),
+    ).toThrow(/learner-confirmed/i);
+    const legacyResult = VerifiedResultSetSchema.parse(rawSampleResult);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...v5Session,
+        verifiedResult: legacyResult,
+        evidenceVerdict: {
+          ...evidenceVerdict,
+          resultHash: legacyResult.resultHash,
+        },
+      }),
+    ).toThrow(/hosted v2 result/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...v5Session,
+        prediction: { ...prediction, sessionId: "session_other" },
+      }),
+    ).toThrow(/Prediction.*session/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...v5Session,
+        prediction: { ...prediction, beliefTestId: "belief_other" },
+      }),
+    ).toThrow(/Prediction.*Belief Spec/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...v5Session,
+        verifiedResult: { ...verifiedResult, sessionId: "session_other" },
+      }),
+    ).toThrow(/result session/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...nativeSession,
+        transferResult: {
+          ...nativeSession.transferResult,
+          sessionId: "session_other",
+        },
+      }),
+    ).toThrow(/transfer result belongs to a different session/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...nativeSession,
+        patchResult: {
+          ...nativeSession.patchResult,
+          sessionId: "session_other",
+        },
+      }),
+    ).toThrow(/patch result belongs to a different session/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...nativeSession,
+        state: "PATCH_VERIFIED",
+        transferResult: undefined,
+        reasoningDiffV2: undefined,
+        proofCapsule: undefined,
+      }),
+    ).toThrow(/verified patch requires passed transfer/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...nativeSession,
+        state: "PATCH_VERIFIED",
+        transferResult: {
+          ...nativeSession.transferResult,
+          outcome: "FAILED",
+          checks: nativeSession.transferResult.checks.map((check) => ({
+            ...check,
+            passed: false,
+          })),
+        },
+        reasoningDiffV2: undefined,
+        proofCapsule: undefined,
+      }),
+    ).toThrow(/verified patch requires passed transfer/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...nativeSession,
+        boundaryMapAuthority: {
+          ...nativeSession.boundaryMapAuthority,
+          receipt: {
+            ...nativeSession.boundaryMapAuthority.receipt,
+            sessionId: "session_other",
+          },
+        },
+      }),
+    ).toThrow(/Boundary receipt belongs to a different session/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...v5Session,
+        verifiedResult: {
+          ...replayFixture("class_imbalance").verifiedResult,
+          sessionId: v5Session.sessionId,
+        },
+      }),
+    ).toThrow(/result concept/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...v5Session,
+        beliefSpec: undefined,
+        evidenceVerdict: undefined,
+        epistemicReportHash: undefined,
+      }),
+    ).toThrow(/verified result requires belief authority/i);
+
+    const preCapsuleReasoningDiff = {
+      ...nativeSession,
+      state: "REASONING_DIFF_ISSUED" as const,
+      proofCapsule: undefined,
+    };
+    expect(SessionViewSchema.parse(preCapsuleReasoningDiff)).toMatchObject({
+      reasoningDiffV2: { id: nativeSession.reasoningDiffV2.id },
+    });
+    expect(() =>
+      SessionViewSchema.parse({
+        ...preCapsuleReasoningDiff,
+        reasoningDiffV2: {
+          ...nativeSession.reasoningDiffV2,
+          authority: {
+            ...nativeSession.reasoningDiffV2.authority,
+            authoritativeResultHash: digest("0"),
+          },
+        },
+      }),
+    ).toThrow(/Reasoning Diff authority does not match the session/i);
+
+    expect(() =>
+      SessionViewSchema.parse({
+        ...nativeSession,
+        state: "BOUNDARY_VERIFIED",
+        transferResult: undefined,
+        patchResult: undefined,
+        reasoningDiffV2: undefined,
+        proofCapsule: undefined,
+        boundaryMapAuthority: {
+          ...nativeSession.boundaryMapAuthority,
+          receipt: {
+            ...nativeSession.boundaryMapAuthority.receipt,
+            authoritativeResultHash: digest("0"),
+          },
+        },
+      }),
+    ).toThrow(/Boundary receipt does not match the verified result/i);
+
+    const legacySession = {
+      ...v5Session,
+      beliefSpec: undefined,
+      beliefTest: { ...beliefTest, id: beliefSpec.id },
+      evidenceVerdict: undefined,
+      epistemicReportHash: undefined,
+    };
+    await expect(
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({ ok: true, data: legacySession }),
+        ),
+      }).getSession(legacySession.sessionId),
+    ).resolves.toMatchObject({
+      beliefTest: { id: beliefSpec.id },
+      verifiedResult: { schemaVersion: "2" },
+    });
   });
 
   it("accepts only browser-safe, cross-bound native proof authority", async () => {
@@ -631,6 +851,68 @@ describe("CounterLabApiClient", () => {
       new CounterLabApiClient({ fetch: fetcher }).getSession(
         nativeSession.sessionId,
       ),
+    ).rejects.toMatchObject({ code: "NATIVE_PROOF_LINEAGE_INVALID" });
+
+    const authorityMutations = [
+      (candidate: typeof nativeSession) => {
+        candidate.verifiedResult.planId += "_tampered";
+      },
+      (candidate: typeof nativeSession) => {
+        candidate.prediction.confidence -= 1;
+      },
+      (candidate: typeof nativeSession) => {
+        candidate.transferResult.selectedStrategy = "random_row_holdout";
+      },
+      (candidate: typeof nativeSession) => {
+        candidate.patchResult.diff += "\n+ unverified change";
+      },
+      (candidate: typeof nativeSession) => {
+        candidate.boundaryMapAuthority.receipt.issuedAt =
+          "2026-07-14T10:04:01.000Z";
+      },
+    ];
+    for (const mutate of authorityMutations) {
+      const candidate = structuredClone(nativeSession);
+      mutate(candidate);
+      const tamperedFetcher = vi.fn<typeof fetch>(async () =>
+        jsonResponse({ ok: true, data: candidate }),
+      );
+      await expect(
+        new CounterLabApiClient({ fetch: tamperedFetcher }).getSession(
+          candidate.sessionId,
+        ),
+      ).rejects.toMatchObject({ code: "SESSION_AUTHORITY_HASH_INVALID" });
+    }
+
+    const preCapsuleReasoning = {
+      ...structuredClone(nativeSession),
+      state: "REASONING_DIFF_ISSUED" as const,
+      proofCapsule: undefined,
+    };
+    preCapsuleReasoning.beliefSpec.claim += " Tampered after issuance.";
+    await expect(
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({ ok: true, data: preCapsuleReasoning }),
+        ),
+      }).getSession(preCapsuleReasoning.sessionId),
+    ).rejects.toMatchObject({ code: "NATIVE_PROOF_LINEAGE_INVALID" });
+
+    const boundaryOnly = {
+      ...structuredClone(nativeSession),
+      state: "BOUNDARY_VERIFIED" as const,
+      transferResult: undefined,
+      patchResult: undefined,
+      reasoningDiffV2: undefined,
+      proofCapsule: undefined,
+    };
+    boundaryOnly.evidenceVerdict.technicalReportHash = digest("0");
+    await expect(
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({ ok: true, data: boundaryOnly }),
+        ),
+      }).getSession(boundaryOnly.sessionId),
     ).rejects.toMatchObject({ code: "NATIVE_PROOF_LINEAGE_INVALID" });
   });
 
@@ -741,25 +1023,60 @@ describe("CounterLabApiClient", () => {
       ],
       reportHash: boundaryReceipt.verificationReportHash,
     };
+    const { resultHash: _boundaryResultHash, ...boundaryResultContent } =
+      boundaryResult;
+    boundaryResult.resultHash = await canonicalHash(boundaryResultContent);
+    boundaryReport.resultHash = boundaryResult.resultHash;
+    const { reportHash: _boundaryReportHash, ...boundaryReportContent } =
+      boundaryReport;
+    boundaryReport.reportHash = await canonicalHash(boundaryReportContent);
+    const {
+      integrity: _boundaryReceiptIntegrity,
+      receiptHash: _boundaryReceiptHash,
+      ...boundaryReceiptBase
+    } = boundaryReceipt;
+    const boundaryReceiptContent = {
+      ...boundaryReceiptBase,
+      resultHash: boundaryResult.resultHash,
+      verificationReportHash: boundaryReport.reportHash,
+    };
+    const boundaryReceiptIntegrity = {
+      mode: "integrity-hashed" as const,
+      algorithm: "sha256" as const,
+      contentHash: await canonicalHash(boundaryReceiptContent),
+    };
+    const canonicalBoundaryReceipt = {
+      ...boundaryReceiptContent,
+      integrity: boundaryReceiptIntegrity,
+      receiptHash: await canonicalHash({
+        ...boundaryReceiptContent,
+        integrity: boundaryReceiptIntegrity,
+      }),
+    };
+    const canonicalBoundaryAuthority = {
+      ...boundaryAuthority,
+      resultHash: boundaryResult.resultHash,
+      verificationReportHash: boundaryReport.reportHash,
+      receipt: canonicalBoundaryReceipt,
+    };
+    const boundaryPayload = {
+      result: boundaryResult,
+      report: boundaryReport,
+      receipt: canonicalBoundaryReceipt,
+      authority: canonicalBoundaryAuthority,
+    };
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(
         jsonResponse({
           ok: true,
-          data: {
-            result: boundaryResult,
-            report: boundaryReport,
-            receipt: boundaryReceipt,
-            authority: boundaryAuthority,
-          },
+          data: boundaryPayload,
         }),
       )
       .mockResolvedValueOnce(jsonResponse({ ok: true, data: reasoningDiffV2 }));
     const client = new CounterLabApiClient({ fetch: fetcher });
 
-    await expect(
-      client.getBoundary("session/with space"),
-    ).resolves.toMatchObject({
+    await expect(client.getBoundary(session.sessionId)).resolves.toMatchObject({
       report: { status: "VERIFIED" },
       authority: { cellCount: 4 },
     });
@@ -767,8 +1084,196 @@ describe("CounterLabApiClient", () => {
       reasoningDiffV2,
     );
     expect(fetcher.mock.calls[0]?.[0]).toBe(
-      "/api/sessions/session%2Fwith%20space/boundary",
+      `/api/sessions/${session.sessionId}/boundary`,
     );
+
+    await expect(
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({ ok: true, data: boundaryPayload }),
+        ),
+      }).getBoundary("session_other"),
+    ).rejects.toMatchObject({ code: "BOUNDARY_AUTHORITY_LINEAGE_INVALID" });
+
+    const rejectedBoundary = structuredClone({
+      ...boundaryPayload,
+      report: {
+        ...boundaryPayload.report,
+        status: "REJECTED" as const,
+        invariants: boundaryPayload.report.invariants.map(
+          (invariant, index) => ({
+            ...invariant,
+            passed: index === 0 ? false : invariant.passed,
+          }),
+        ),
+      },
+    });
+    const { reportHash: _rejectedReportHash, ...rejectedReportContent } =
+      rejectedBoundary.report;
+    rejectedBoundary.report.reportHash = await canonicalHash(
+      rejectedReportContent,
+    );
+    const {
+      integrity: _rejectedReceiptIntegrity,
+      receiptHash: _rejectedReceiptHash,
+      ...rejectedReceiptContent
+    } = rejectedBoundary.receipt;
+    rejectedReceiptContent.verificationReportHash =
+      rejectedBoundary.report.reportHash;
+    const rejectedReceiptIntegrity = {
+      ...rejectedBoundary.receipt.integrity,
+      contentHash: await canonicalHash(rejectedReceiptContent),
+    };
+    rejectedBoundary.receipt = {
+      ...rejectedReceiptContent,
+      integrity: rejectedReceiptIntegrity,
+      receiptHash: await canonicalHash({
+        ...rejectedReceiptContent,
+        integrity: rejectedReceiptIntegrity,
+      }),
+    };
+    rejectedBoundary.authority = {
+      ...rejectedBoundary.authority,
+      verificationReportHash: rejectedBoundary.report.reportHash,
+      receipt: rejectedBoundary.receipt,
+    };
+    await expect(
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({ ok: true, data: rejectedBoundary }),
+        ),
+      }).getBoundary(session.sessionId),
+    ).rejects.toMatchObject({ code: "INVALID_API_RESPONSE" });
+
+    const foreignLineage = structuredClone(boundaryPayload);
+    foreignLineage.receipt.authoritativeResultHash = digest("f");
+    foreignLineage.authority.receipt.authoritativeResultHash = digest("f");
+    await expect(
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({ ok: true, data: foreignLineage }),
+        ),
+      }).getBoundary(session.sessionId),
+    ).rejects.toMatchObject({ code: "INVALID_API_RESPONSE" });
+
+    const boundaryMutations = [
+      (candidate: typeof boundaryPayload) => {
+        candidate.result.assumptions.push("Unverified assumption.");
+      },
+      (candidate: typeof boundaryPayload) => {
+        candidate.report.invariants[0]!.observed[0] = "tampered";
+      },
+      (candidate: typeof boundaryPayload) => {
+        candidate.receipt.issuedAt = "2026-07-14T10:04:01.000Z";
+        candidate.authority.receipt.issuedAt = "2026-07-14T10:04:01.000Z";
+      },
+    ];
+    for (const mutate of boundaryMutations) {
+      const candidate = structuredClone(boundaryPayload);
+      mutate(candidate);
+      const tamperedFetcher = vi.fn<typeof fetch>(async () =>
+        jsonResponse({ ok: true, data: candidate }),
+      );
+      await expect(
+        new CounterLabApiClient({ fetch: tamperedFetcher }).getBoundary(
+          session.sessionId,
+        ),
+      ).rejects.toMatchObject({ code: "BOUNDARY_AUTHORITY_HASH_INVALID" });
+    }
+
+    await expect(
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({
+            ok: true,
+            data: { ...reasoningDiffV2, sessionId: "session_other" },
+          }),
+        ),
+      }).getReasoningDiff(session.sessionId),
+    ).rejects.toMatchObject({ code: "REASONING_DIFF_LINEAGE_INVALID" });
+  });
+
+  it("binds interactive results to their queued request and canonical result", async () => {
+    const nativeSession = await nativeProofSession();
+    const selectedRunId = nativeSession.verifiedResult.runs[0]!.id;
+    const expected = {
+      selectedRunId,
+      configurationHash: digest("d"),
+    };
+    const payload = {
+      result: nativeSession.verifiedResult,
+      ...expected,
+      verification: {
+        schemaVersion: "1",
+        status: "VERIFIED",
+        verifierVersion: "hosted-result-verifier-v1",
+        resultHash: nativeSession.verifiedResult.resultHash,
+        invariantCount: 1,
+        invariants: [],
+      },
+    };
+    const clientFor = (value: unknown) =>
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({ ok: true, data: value }),
+        ),
+      });
+
+    await expect(
+      clientFor(payload).getInteractiveResult(
+        nativeSession.sessionId,
+        "job_interactive_1",
+        expected,
+      ),
+    ).resolves.toMatchObject(expected);
+
+    const tampered = structuredClone(payload);
+    tampered.result.planId += "_tampered";
+    await expect(
+      clientFor(tampered).getInteractiveResult(
+        nativeSession.sessionId,
+        "job_interactive_1",
+        expected,
+      ),
+    ).rejects.toMatchObject({ code: "INTERACTIVE_RESULT_AUTHORITY_INVALID" });
+
+    const foreign = structuredClone(payload);
+    const { resultHash: _foreignResultHash, ...foreignResultContent } =
+      foreign.result;
+    foreignResultContent.sessionId = "session_other";
+    foreign.result = {
+      ...foreignResultContent,
+      resultHash: await canonicalHash(foreignResultContent),
+    };
+    foreign.verification.resultHash = foreign.result.resultHash;
+    await expect(
+      clientFor(foreign).getInteractiveResult(
+        nativeSession.sessionId,
+        "job_interactive_1",
+        expected,
+      ),
+    ).rejects.toMatchObject({ code: "INTERACTIVE_RESULT_AUTHORITY_INVALID" });
+
+    await expect(
+      clientFor({
+        ...payload,
+        selectedRunId: nativeSession.verifiedResult.runs[1]!.id,
+      }).getInteractiveResult(
+        nativeSession.sessionId,
+        "job_interactive_1",
+        expected,
+      ),
+    ).rejects.toMatchObject({ code: "INTERACTIVE_RESULT_AUTHORITY_INVALID" });
+    await expect(
+      clientFor({
+        ...payload,
+        configurationHash: digest("e"),
+      }).getInteractiveResult(
+        nativeSession.sessionId,
+        "job_interactive_1",
+        expected,
+      ),
+    ).rejects.toMatchObject({ code: "INTERACTIVE_RESULT_AUTHORITY_INVALID" });
   });
 
   it("sends a locally validated v2 Belief Spec edit without a v1 shadow", async () => {
@@ -1553,7 +2058,11 @@ describe("CounterLabApiClient", () => {
       {
         expectedPath: `/api/sessions/${encoded}/jobs/job%2Fone/result`,
         expectedMethod: "GET",
-        invoke: () => client.getInteractiveResult(sessionId, "job/one"),
+        invoke: () =>
+          client.getInteractiveResult(sessionId, "job/one", {
+            selectedRunId: "interactive_abc",
+            configurationHash: digest("d"),
+          }),
       },
       {
         expectedPath: `/api/sessions/${encoded}/revision`,

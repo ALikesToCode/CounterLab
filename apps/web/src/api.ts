@@ -254,6 +254,121 @@ function requireExclusiveBeliefAuthority(
       path: ["beliefSpec"],
     });
   }
+  if (
+    value.verifiedResult !== undefined &&
+    value.beliefTest === undefined &&
+    value.beliefSpec === undefined
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "a verified result requires belief authority",
+      path: ["verifiedResult"],
+    });
+  }
+  if (value.prediction !== undefined) {
+    if (value.beliefTest === undefined && value.beliefSpec === undefined) {
+      context.addIssue({
+        code: "custom",
+        message: "the Prediction requires belief authority",
+        path: ["prediction"],
+      });
+    }
+    if (value.prediction.sessionId !== value.sessionId) {
+      context.addIssue({
+        code: "custom",
+        message: "the Prediction belongs to a different session",
+        path: ["prediction", "sessionId"],
+      });
+    }
+    const beliefId = value.beliefSpec?.id ?? value.beliefTest?.id;
+    if (beliefId !== undefined && value.prediction.beliefTestId !== beliefId) {
+      context.addIssue({
+        code: "custom",
+        message:
+          value.beliefSpec === undefined
+            ? "the Prediction does not resolve to this Belief Test"
+            : "the Prediction does not resolve to this Belief Spec",
+        path: ["prediction", "beliefTestId"],
+      });
+    }
+  }
+  if (value.beliefSpec !== undefined) {
+    const hasDownstreamAuthority =
+      value.prediction !== undefined ||
+      value.verifiedResult !== undefined ||
+      value.evidenceVerdict !== undefined ||
+      value.boundaryMapAuthority !== undefined ||
+      value.transferResult !== undefined ||
+      value.patchResult !== undefined ||
+      value.reasoningDiffV2 !== undefined ||
+      value.proofCapsule !== undefined;
+    const permitsUnconfirmedBelief =
+      !hasDownstreamAuthority &&
+      (value.state === "INGESTED" ||
+        value.state === "BELIEF_TEST_PROPOSED" ||
+        value.state === "INSUFFICIENT_EVIDENCE" ||
+        value.state === "REJECTED_BY_LEARNER");
+    if (
+      !permitsUnconfirmedBelief &&
+      value.beliefSpec.learnerDecision !== "CONFIRMED" &&
+      value.beliefSpec.learnerDecision !== "ALTERNATIVE_SELECTED"
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "native v5 evidence requires a learner-confirmed Belief Spec",
+        path: ["beliefSpec", "learnerDecision"],
+      });
+    }
+    if (
+      !permitsUnconfirmedBelief &&
+      value.beliefSpec.supportState !== "SUPPORTED"
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "native v5 evidence requires a supported Belief Spec",
+        path: ["beliefSpec", "supportState"],
+      });
+    }
+  }
+  if (value.verifiedResult !== undefined && value.beliefTest !== undefined) {
+    if (value.verifiedResult.concept !== value.beliefTest.concept) {
+      context.addIssue({
+        code: "custom",
+        message: "the legacy result concept does not match the Belief Test",
+        path: ["verifiedResult", "concept"],
+      });
+    }
+  }
+  if (
+    value.verifiedResult?.schemaVersion === "2" &&
+    value.verifiedResult.sessionId !== value.sessionId
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "the hosted result session does not match the session view",
+      path: ["verifiedResult", "sessionId"],
+    });
+  }
+  if (value.verifiedResult !== undefined && value.beliefSpec !== undefined) {
+    const hostedResult = HostedVerifiedResultSetV2Schema.safeParse(
+      value.verifiedResult,
+    );
+    if (!hostedResult.success) {
+      context.addIssue({
+        code: "custom",
+        message: "a Belief Spec v2 result requires a hosted v2 result",
+        path: ["verifiedResult"],
+      });
+    } else {
+      if (hostedResult.data.concept !== value.beliefSpec.concept) {
+        context.addIssue({
+          code: "custom",
+          message: "the v5 result concept does not match the Belief Spec",
+          path: ["verifiedResult", "concept"],
+        });
+      }
+    }
+  }
   const hasVerdict = value.evidenceVerdict !== undefined;
   const hasReport = value.epistemicReportHash !== undefined;
   if (hasVerdict !== hasReport) {
@@ -340,6 +455,143 @@ function requireExclusiveBeliefAuthority(
       message: "the Reasoning Diff belongs to a different session",
       path: ["reasoningDiffV2", "sessionId"],
     });
+  }
+  if (
+    value.reasoningDiff !== undefined &&
+    value.reasoningDiff.sessionId !== value.sessionId
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "the legacy Reasoning Diff belongs to a different session",
+      path: ["reasoningDiff", "sessionId"],
+    });
+  }
+  if (
+    value.boundaryMapAuthority !== undefined &&
+    value.boundaryMapAuthority.receipt.sessionId !== value.sessionId
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "the Boundary receipt belongs to a different session",
+      path: ["boundaryMapAuthority", "receipt", "sessionId"],
+    });
+  }
+  if (value.boundaryMapAuthority !== undefined) {
+    if (value.verifiedResult === undefined) {
+      context.addIssue({
+        code: "custom",
+        message: "Boundary authority requires a verified result",
+        path: ["verifiedResult"],
+      });
+    } else if (
+      value.boundaryMapAuthority.receipt.authoritativeResultHash !==
+      value.verifiedResult.resultHash
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "the Boundary receipt does not match the verified result",
+        path: ["boundaryMapAuthority", "receipt", "authoritativeResultHash"],
+      });
+    }
+    if (
+      value.beliefSpec !== undefined &&
+      value.evidenceVerdict !== undefined &&
+      value.boundaryMapAuthority.receipt.experimentIrHash !==
+        value.evidenceVerdict.irHash
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "the Boundary receipt does not match the Evidence Verdict",
+        path: ["boundaryMapAuthority", "receipt", "experimentIrHash"],
+      });
+    }
+  }
+  if (
+    value.transferResult !== undefined &&
+    value.transferResult.sessionId !== value.sessionId
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "the transfer result belongs to a different session",
+      path: ["transferResult", "sessionId"],
+    });
+  }
+  if (
+    value.patchResult !== undefined &&
+    value.patchResult.sessionId !== value.sessionId
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "the patch result belongs to a different session",
+      path: ["patchResult", "sessionId"],
+    });
+  }
+  if (
+    value.patchResult?.status === "VERIFIED" &&
+    value.transferResult?.outcome !== "PASSED"
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "a verified patch requires passed transfer authority",
+      path: ["transferResult"],
+    });
+  }
+  if (value.reasoningDiffV2 !== undefined) {
+    const hostedResult = HostedVerifiedResultSetV2Schema.safeParse(
+      value.verifiedResult,
+    );
+    const completeAuthority =
+      value.beliefSpec !== undefined &&
+      value.prediction !== undefined &&
+      hostedResult.success &&
+      value.evidenceVerdict?.kind === "SUPPORTS" &&
+      value.epistemicReportHash !== undefined &&
+      value.boundaryMapAuthority !== undefined &&
+      value.transferResult?.outcome === "PASSED" &&
+      value.patchResult?.status === "VERIFIED";
+    if (!completeAuthority) {
+      context.addIssue({
+        code: "custom",
+        message: "Reasoning Diff v2 requires complete native session authority",
+        path: ["reasoningDiffV2"],
+      });
+    } else if (
+      hostedResult.success &&
+      value.beliefSpec !== undefined &&
+      value.prediction !== undefined &&
+      value.evidenceVerdict !== undefined &&
+      value.epistemicReportHash !== undefined &&
+      value.boundaryMapAuthority !== undefined &&
+      value.transferResult !== undefined &&
+      value.patchResult !== undefined &&
+      (value.reasoningDiffV2.concept !== value.beliefSpec.concept ||
+        value.reasoningDiffV2.authority.artifactManifestHash !==
+          hostedResult.data.artifactManifestHash ||
+        value.reasoningDiffV2.authority.predictionHash !==
+          value.prediction.immutableHash ||
+        value.reasoningDiffV2.authority.experimentIrHash !==
+          value.evidenceVerdict.irHash ||
+        value.reasoningDiffV2.authority.authoritativeResultHash !==
+          hostedResult.data.resultHash ||
+        value.reasoningDiffV2.authority.epistemicReportHash !==
+          value.epistemicReportHash ||
+        value.reasoningDiffV2.authority.boundaryMapHash !==
+          value.boundaryMapAuthority.resultHash ||
+        value.reasoningDiffV2.authority.boundaryReceiptHash !==
+          value.boundaryMapAuthority.receipt.receiptHash ||
+        value.reasoningDiffV2.authority.transferResultHash !==
+          value.transferResult.resultHash ||
+        value.reasoningDiffV2.authority.patchResultHash !==
+          value.patchResult.resultHash ||
+        value.reasoningDiffV2.authority.patchedArtifactHash !==
+          value.patchResult.patchedArtifactHash)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "the Reasoning Diff authority does not match the session",
+        path: ["reasoningDiffV2", "authority"],
+      });
+    }
   }
   if (value.proofCapsule !== undefined) {
     const hostedResult = HostedVerifiedResultSetV2Schema.safeParse(
@@ -607,12 +859,35 @@ export type InteractiveRunResponse = z.infer<
 
 const InteractiveResultResponseSchema = z
   .object({
-    result: VerifiedResultSetSchema,
+    result: HostedVerifiedResultSetV2Schema,
     selectedRunId: NonEmptyString,
     configurationHash: Sha256Digest,
-    verification: z.object({ status: z.literal("VERIFIED") }).passthrough(),
+    verification: z
+      .object({
+        status: z.literal("VERIFIED"),
+        resultHash: Sha256Digest,
+      })
+      .passthrough(),
   })
-  .strict();
+  .strict()
+  .superRefine((response, context) => {
+    if (response.verification.resultHash !== response.result.resultHash) {
+      context.addIssue({
+        code: "custom",
+        message: "interactive verification does not match the result",
+        path: ["verification", "resultHash"],
+      });
+    }
+    if (
+      !response.result.runs.some((run) => run.id === response.selectedRunId)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "the selected interactive run is absent from the result",
+        path: ["selectedRunId"],
+      });
+    }
+  });
 export type InteractiveResultResponse = z.infer<
   typeof InteractiveResultResponseSchema
 >;
@@ -636,9 +911,23 @@ const BoundaryResponseSchema = z
   })
   .strict()
   .superRefine((response, context) => {
+    if (response.report.status !== "VERIFIED") {
+      context.addIssue({
+        code: "custom",
+        message: "a rejected Boundary report cannot release result values",
+        path: ["report", "status"],
+      });
+    }
     if (
       response.result.resultHash !== response.receipt.resultHash ||
+      response.report.resultHash !== response.result.resultHash ||
       response.report.reportHash !== response.receipt.verificationReportHash ||
+      response.receipt.sessionId !== response.result.sessionId ||
+      response.receipt.experimentIrHash !== response.result.experimentIrHash ||
+      response.receipt.authoritativeResultHash !==
+        response.result.authoritativeResultHash ||
+      response.receipt.evidenceVerdictHash !==
+        response.result.evidenceVerdictHash ||
       response.authority.resultHash !== response.result.resultHash ||
       response.authority.verificationReportHash !==
         response.report.reportHash ||
@@ -1138,8 +1427,8 @@ function validatedInput<T extends z.ZodType>(
 async function canonicalSha256(value: unknown): Promise<string> {
   if (globalThis.crypto?.subtle === undefined) {
     throw new ApiClientError({
-      code: "NATIVE_PROOF_INTEGRITY_UNAVAILABLE",
-      message: "This browser cannot verify native proof authority hashes",
+      code: "AUTHORITY_INTEGRITY_UNAVAILABLE",
+      message: "This browser cannot verify scientific authority hashes",
       status: 0,
     });
   }
@@ -1152,42 +1441,216 @@ async function canonicalSha256(value: unknown): Promise<string> {
     .join("");
 }
 
+function authorityHashError(
+  code:
+    | "SESSION_AUTHORITY_HASH_INVALID"
+    | "BOUNDARY_AUTHORITY_HASH_INVALID"
+    | "INTERACTIVE_RESULT_AUTHORITY_INVALID",
+  message: string,
+  status: number,
+): never {
+  throw new ApiClientError({ code, message, status });
+}
+
+async function validateBoundaryReceiptHashes(
+  receipt: BoundaryMapReceiptV1,
+  status: number,
+  code: "SESSION_AUTHORITY_HASH_INVALID" | "BOUNDARY_AUTHORITY_HASH_INVALID",
+): Promise<void> {
+  const { integrity, receiptHash: _receiptHash, ...receiptContent } = receipt;
+  const contentHash = await canonicalSha256(receiptContent);
+  const receiptHash = await canonicalSha256({ ...receiptContent, integrity });
+  if (
+    integrity.contentHash !== contentHash ||
+    receipt.receiptHash !== receiptHash
+  ) {
+    authorityHashError(
+      code,
+      "The Boundary receipt content does not match its authority hashes",
+      status,
+    );
+  }
+}
+
+async function validateSessionAuthorityHashes(
+  value: unknown,
+  status: number,
+): Promise<void> {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    !("sessionId" in value) ||
+    !("state" in value) ||
+    !("version" in value)
+  ) {
+    return;
+  }
+  const session = value as Partial<SessionView>;
+  if (session.prediction !== undefined) {
+    const { immutableHash, ...predictionContent } = session.prediction;
+    if ((await canonicalSha256(predictionContent)) !== immutableHash) {
+      authorityHashError(
+        "SESSION_AUTHORITY_HASH_INVALID",
+        "The Prediction content does not match its immutable hash",
+        status,
+      );
+    }
+  }
+  if (session.verifiedResult?.schemaVersion === "2") {
+    const { resultHash, ...resultContent } = session.verifiedResult;
+    if ((await canonicalSha256(resultContent)) !== resultHash) {
+      authorityHashError(
+        "SESSION_AUTHORITY_HASH_INVALID",
+        "The verified result content does not match its result hash",
+        status,
+      );
+    }
+  }
+  if (session.transferResult !== undefined) {
+    const { resultHash, ...transferContent } = session.transferResult;
+    if ((await canonicalSha256(transferContent)) !== resultHash) {
+      authorityHashError(
+        "SESSION_AUTHORITY_HASH_INVALID",
+        "The transfer result content does not match its result hash",
+        status,
+      );
+    }
+  }
+  if (session.patchResult !== undefined) {
+    const { resultHash, ...patchContent } = session.patchResult;
+    const [patchHash, diffHash] = await Promise.all([
+      canonicalSha256(patchContent),
+      canonicalSha256(session.patchResult.diff),
+    ]);
+    if (
+      patchHash !== resultHash ||
+      diffHash !== session.patchResult.patchHash
+    ) {
+      authorityHashError(
+        "SESSION_AUTHORITY_HASH_INVALID",
+        "The patch result content does not match its authority hashes",
+        status,
+      );
+    }
+  }
+  if (session.boundaryMapAuthority !== undefined) {
+    await validateBoundaryReceiptHashes(
+      session.boundaryMapAuthority.receipt,
+      status,
+      "SESSION_AUTHORITY_HASH_INVALID",
+    );
+  }
+}
+
+async function validateBoundaryResponseHashes(
+  value: unknown,
+  status: number,
+): Promise<void> {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    !("result" in value) ||
+    !("report" in value) ||
+    !("receipt" in value) ||
+    !("authority" in value)
+  ) {
+    return;
+  }
+  const boundary = value as BoundaryResponse;
+  const { resultHash, ...resultContent } = boundary.result;
+  const { reportHash, ...reportContent } = boundary.report;
+  const [computedResultHash, computedReportHash] = await Promise.all([
+    canonicalSha256(resultContent),
+    canonicalSha256(reportContent),
+  ]);
+  if (computedResultHash !== resultHash || computedReportHash !== reportHash) {
+    authorityHashError(
+      "BOUNDARY_AUTHORITY_HASH_INVALID",
+      "The Boundary result or report does not match its authority hash",
+      status,
+    );
+  }
+  await validateBoundaryReceiptHashes(
+    boundary.receipt,
+    status,
+    "BOUNDARY_AUTHORITY_HASH_INVALID",
+  );
+}
+
+async function validateInteractiveResultHashes(
+  value: unknown,
+  status: number,
+): Promise<void> {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    !("result" in value) ||
+    !("selectedRunId" in value) ||
+    !("configurationHash" in value) ||
+    !("verification" in value)
+  ) {
+    return;
+  }
+  const response = value as InteractiveResultResponse;
+  if (response.result.schemaVersion !== "2") return;
+  const { resultHash, ...resultContent } = response.result;
+  if ((await canonicalSha256(resultContent)) !== resultHash) {
+    authorityHashError(
+      "INTERACTIVE_RESULT_AUTHORITY_INVALID",
+      "The interactive result content does not match its result hash",
+      status,
+    );
+  }
+}
+
 async function validateNativeProofLineage(
   value: unknown,
   status: number,
 ): Promise<void> {
   if (value === null || typeof value !== "object") return;
   const session = value as Partial<SessionView>;
-  if (session.proofCapsule === undefined) return;
+  if (
+    session.boundaryMapAuthority !== undefined &&
+    session.evidenceVerdict !== undefined
+  ) {
+    const evidenceVerdictHash = await canonicalSha256(session.evidenceVerdict);
+    if (
+      session.boundaryMapAuthority.receipt.evidenceVerdictHash !==
+      evidenceVerdictHash
+    ) {
+      throw new ApiClientError({
+        code: "NATIVE_PROOF_LINEAGE_INVALID",
+        message: "The native Boundary authority does not match the verdict",
+        status,
+      });
+    }
+  }
+  if (session.reasoningDiffV2 === undefined) return;
   if (
     session.beliefSpec === undefined ||
     session.prediction === undefined ||
-    session.evidenceVerdict === undefined ||
-    session.reasoningDiffV2 === undefined
+    session.evidenceVerdict === undefined
   ) {
     return;
   }
-  const [
-    beliefSpecHash,
-    predictionHash,
-    evidenceVerdictHash,
-    reasoningDiffHash,
-  ] = await Promise.all([
-    canonicalSha256(session.beliefSpec),
-    canonicalSha256(session.prediction),
-    canonicalSha256(session.evidenceVerdict),
-    canonicalSha256(session.reasoningDiffV2),
-  ]);
+  const [beliefSpecHash, evidenceVerdictHash, reasoningDiffHash] =
+    await Promise.all([
+      canonicalSha256(session.beliefSpec),
+      canonicalSha256(session.evidenceVerdict),
+      canonicalSha256(session.reasoningDiffV2),
+    ]);
   if (
     session.reasoningDiffV2.authority.beliefSpecHash !== beliefSpecHash ||
-    session.reasoningDiffV2.authority.predictionHash !== predictionHash ||
+    session.reasoningDiffV2.authority.predictionHash !==
+      session.prediction.immutableHash ||
     session.reasoningDiffV2.authority.evidenceVerdictHash !==
       evidenceVerdictHash ||
-    session.proofCapsule.reasoningDiffHash !== reasoningDiffHash
+    (session.proofCapsule !== undefined &&
+      session.proofCapsule.reasoningDiffHash !== reasoningDiffHash)
   ) {
     throw new ApiClientError({
       code: "NATIVE_PROOF_LINEAGE_INVALID",
-      message: "The native proof hashes do not match the session authority",
+      message: "The native authority hashes do not match the session",
       status,
     });
   }
@@ -1578,11 +2041,22 @@ export class CounterLabApiClient {
     );
   }
 
-  getBoundary(sessionId: string): Promise<BoundaryResponse> {
-    return this.request(
+  async getBoundary(sessionId: string): Promise<BoundaryResponse> {
+    const boundary = await this.request(
       `/api/sessions/${encodedId(sessionId)}/boundary`,
       BoundaryResponseSchema,
     );
+    if (
+      boundary.result.sessionId !== sessionId ||
+      boundary.receipt.sessionId !== sessionId
+    ) {
+      throw new ApiClientError({
+        code: "BOUNDARY_AUTHORITY_LINEAGE_INVALID",
+        message: "The Boundary authority belongs to a different session",
+        status: 0,
+      });
+    }
+    return boundary;
   }
 
   getLabScene(
@@ -1628,14 +2102,31 @@ export class CounterLabApiClient {
     );
   }
 
-  getInteractiveResult(
+  async getInteractiveResult(
     sessionId: string,
     jobId: string,
+    expected: Pick<
+      InteractiveRunResponse,
+      "selectedRunId" | "configurationHash"
+    >,
   ): Promise<InteractiveResultResponse> {
-    return this.request(
+    const response = await this.request(
       `/api/sessions/${encodedId(sessionId)}/jobs/${encodedId(jobId)}/result`,
       InteractiveResultResponseSchema,
     );
+    if (
+      response.result.sessionId !== sessionId ||
+      response.selectedRunId !== expected.selectedRunId ||
+      response.configurationHash !== expected.configurationHash
+    ) {
+      throw new ApiClientError({
+        code: "INTERACTIVE_RESULT_AUTHORITY_INVALID",
+        message:
+          "The interactive result does not match its queued session and configuration",
+        status: 0,
+      });
+    }
+    return response;
   }
 
   recordRevision(
@@ -1724,11 +2215,19 @@ export class CounterLabApiClient {
     );
   }
 
-  getReasoningDiff(sessionId: string): Promise<ReasoningDiffResponse> {
-    return this.request(
+  async getReasoningDiff(sessionId: string): Promise<ReasoningDiffResponse> {
+    const reasoningDiff = await this.request(
       `/api/sessions/${encodedId(sessionId)}/reasoning-diff`,
       ReasoningDiffResponseSchema,
     );
+    if (reasoningDiff.sessionId !== sessionId) {
+      throw new ApiClientError({
+        code: "REASONING_DIFF_LINEAGE_INVALID",
+        message: "The Reasoning Diff belongs to a different session",
+        status: 0,
+      });
+    }
+    return reasoningDiff;
   }
 
   getProofBundle(sessionId: string): Promise<ProofBundle> {
@@ -2116,6 +2615,9 @@ export class CounterLabApiClient {
         status: response.status,
       });
     }
+    await validateSessionAuthorityHashes(parsed.data.data, response.status);
+    await validateBoundaryResponseHashes(parsed.data.data, response.status);
+    await validateInteractiveResultHashes(parsed.data.data, response.status);
     await validateNativeProofLineage(parsed.data.data, response.status);
     return parsed.data.data;
   }

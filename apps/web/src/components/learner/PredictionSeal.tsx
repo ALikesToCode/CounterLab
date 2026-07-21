@@ -44,6 +44,7 @@ export function PredictionSeal({
   choice,
   confidence,
   committed,
+  disabled = false,
   onChoiceChange,
   onConfidenceChange,
   onCommit,
@@ -54,6 +55,7 @@ export function PredictionSeal({
   choice: string | null;
   confidence: number;
   committed: boolean;
+  disabled?: boolean;
   onChoiceChange: (choice: string) => void;
   onConfidenceChange: (confidence: number) => void;
   onCommit: () => void;
@@ -111,7 +113,7 @@ export function PredictionSeal({
         notebookScore={notebookScore}
         interventionExpectation={interventionExpectation}
       />
-      <fieldset className={styles.options}>
+      <fieldset className={styles.options} disabled={disabled}>
         <legend>What do you expect?</legend>
         {options.map((option) => (
           <label key={option.value}>
@@ -141,6 +143,7 @@ export function PredictionSeal({
           max="100"
           step="1"
           value={confidence}
+          disabled={disabled}
           aria-label="Prediction confidence"
           onChange={(event) => onConfidenceChange(Number(event.target.value))}
         />
@@ -148,7 +151,7 @@ export function PredictionSeal({
       <button
         className={styles.commit}
         type="button"
-        disabled={choice === null}
+        disabled={disabled || choice === null}
         onClick={onCommit}
       >
         Seal my prediction

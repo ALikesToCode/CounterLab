@@ -8,6 +8,7 @@ import {
   VerifiedResultSetSchema,
   type EvidenceEvent,
 } from "@counterlab/contracts";
+import { hashCanonicalJson } from "@counterlab/proof-bundle";
 
 import imbalanceResultText from "../../../fixtures/held-out/imbalance_epistemic_competing_v2.json?raw";
 import { SAMPLE_LEAKAGE_QUESTION } from "../shared/sample-authority";
@@ -22,13 +23,27 @@ import { activeRunnerRegistryKey } from "./features/learner/activeRunnerRegistry
 import { requireBundledSampleResult, sampleArtifact } from "./sample";
 
 const sampleResult = requireBundledSampleResult();
+
+function withCanonicalPredictionHash<
+  T extends { readonly immutableHash: string },
+>(prediction: T): T {
+  const { immutableHash: _immutableHash, ...content } = prediction;
+  return {
+    ...content,
+    immutableHash: hashCanonicalJson(content),
+  } as T;
+}
+
+function withCanonicalResultHash<T extends { readonly resultHash: string }>(
+  result: T,
+): T {
+  const { resultHash: _resultHash, ...content } = result;
+  return { ...content, resultHash: hashCanonicalJson(content) } as T;
+}
+
 const PRE_PREDICTION_RESULT_LANGUAGE =
   /59\.4%|\bdeceptive\b|\bfairer test\b|\bverified result\b|\bevidence verdict\b|\bsupported hypothesis\b|\bthe fix\b|\bremove customer(?:_| )id\b|\bkeep each customer's rows together\b|\bproves?\b/i;
 const LANDING_FIXED_SAMPLE_VALUES = /98\.5%|59\.4%/i;
-
-const verifiedImbalanceResult = VerifiedResultSetSchema.parse(
-  JSON.parse(imbalanceResultText),
-);
 
 const artifact = {
   artifactId: "artifact_sample",
@@ -53,6 +68,12 @@ const uploadedArtifact = {
   fileName: "uploaded_customer_model.ipynb",
   fileSha256: "a".repeat(64),
 };
+
+const verifiedImbalanceResult = withCanonicalResultHash({
+  ...VerifiedResultSetSchema.parse(JSON.parse(imbalanceResultText)),
+  sessionId: "session_ui",
+  artifactManifestHash: hashCanonicalJson(uploadedArtifact),
+});
 
 const unsupportedArtifact = {
   ...uploadedArtifact,
@@ -146,8 +167,15 @@ const liveBeliefSpec = {
   learnerDecision: "UNDECIDED" as const,
 };
 
+const confirmedLiveBeliefSpec = {
+  ...liveBeliefSpec,
+  supportState: "SUPPORTED" as const,
+  learnerDecision: "CONFIRMED" as const,
+};
+
 const liveImbalanceBeliefSpec = {
   ...migrateBeliefTestV1ToV2(imbalanceBeliefTest),
+  supportState: "SUPPORTED" as const,
   learnerDecision: "CONFIRMED" as const,
 };
 
@@ -193,12 +221,13 @@ const operationByRun = {
   identity_ablation: "leakage.identity_ablation",
 } as const;
 
-const liveResult = {
-  ...sampleResult,
+const { resultHash: _sampleResultHash, ...sampleResultContent } = sampleResult;
+const liveResult = withCanonicalResultHash({
+  ...sampleResultContent,
   schemaVersion: "2" as const,
   planId: "plan_live_ui",
   sessionId: "session_ui",
-  artifactManifestHash: uploadedArtifact.fileSha256,
+  artifactManifestHash: hashCanonicalJson(uploadedArtifact),
   conceptPackVersion: "1.0.0",
   runs: sampleResult.runs.map((run) => ({
     ...run,
@@ -206,7 +235,8 @@ const liveResult = {
       operationByRun[run.id as keyof typeof operationByRun] ??
       "leakage.random_row_split",
   })),
-};
+  resultHash: sampleResult.resultHash,
+});
 
 const epistemicReportHash = "9".repeat(64);
 const evidenceVerdictBase = {
@@ -294,7 +324,7 @@ const liveLabSceneView = {
   },
 };
 
-const committedPrediction = {
+const committedPrediction = withCanonicalPredictionHash({
   schemaVersion: "1" as const,
   id: "prediction_ui",
   sessionId: "session_ui",
@@ -303,9 +333,9 @@ const committedPrediction = {
   confidence: 88,
   committedAt: "2026-07-14T09:03:00.000Z",
   immutableHash: "f".repeat(64),
-};
+});
 
-const failedLeakageTransfer = {
+const failedLeakageTransfer = withCanonicalResultHash({
   schemaVersion: "1" as const,
   id: "transfer_failed_ui",
   sessionId: "session_ui",
@@ -324,16 +354,16 @@ const failedLeakageTransfer = {
   evaluatorVersion: "counterlab-transfer-v1",
   evaluatedAt: "2026-07-14T09:05:00.000Z",
   resultHash: "e".repeat(64),
-};
+});
 
-const committedImbalancePrediction = {
+const committedImbalancePrediction = withCanonicalPredictionHash({
   ...committedPrediction,
   id: "prediction_imbalance_ui",
   beliefTestId: liveImbalanceBeliefSpec.id,
   choice: "Minority metrics expose a serious evaluation problem",
-};
+});
 
-const failedImbalanceTransfer = {
+const failedImbalanceTransfer = withCanonicalResultHash({
   schemaVersion: "1" as const,
   id: "transfer_failed_imbalance_ui",
   sessionId: "session_ui",
@@ -352,7 +382,28 @@ const failedImbalanceTransfer = {
   evaluatorVersion: "counterlab-imbalance-transfer-v1",
   evaluatedAt: "2026-07-14T09:05:00.000Z",
   resultHash: "d".repeat(64),
-};
+});
+
+const passedLeakageTransfer = withCanonicalResultHash({
+  ...failedLeakageTransfer,
+  id: "transfer_passed_ui",
+  outcome: "PASSED" as const,
+  selectedStrategy: "time_ordered_holdout",
+  identifiedRisks: ["centered_window_reads_future"],
+  evidenceChoices: [
+    "center_true_uses_later_targets",
+    "random_split_mixes_dates",
+  ],
+  checks: failedLeakageTransfer.checks.map((check) => ({
+    ...check,
+    passed: true,
+  })),
+});
+
+const latePassedLeakageTransfer = withCanonicalResultHash({
+  ...passedLeakageTransfer,
+  id: "transfer_passed_late_ui",
+});
 
 const liveRunnerJob = {
   schemaVersion: "1" as const,
@@ -361,7 +412,7 @@ const liveRunnerJob = {
   status: "STARTING" as const,
   sessionId: "session_ui",
   artifactId: uploadedArtifact.artifactId,
-  artifactManifestHash: uploadedArtifact.fileSha256,
+  artifactManifestHash: hashCanonicalJson(uploadedArtifact),
   conceptPack: { id: "entity_leakage" as const, version: "1.0.0" },
   inputHashes: ["b".repeat(64)],
   stateVersion: 5,
@@ -497,6 +548,7 @@ function installApi(
       sessionId: string,
       requestIndex: number,
     ) => Response | Promise<Response>;
+    predictionCommitResponseLost?: boolean;
   } = {},
 ) {
   const uploadOutcomes = [...(options.uploadOutcomes ?? [])];
@@ -509,6 +561,36 @@ function installApi(
   };
   let activeArtifactId = artifact.artifactId;
   let activePrediction: Record<string, unknown> | null = null;
+  let predictionCommitResponseLost =
+    options.predictionCommitResponseLost ?? false;
+  const restoredBeliefSpec = options.restoredSessionExtra?.beliefSpec as
+    { concept?: string } | undefined;
+  const predictionTemplate =
+    options.beliefTest?.concept === "class_imbalance" ||
+    restoredBeliefSpec?.concept === "class_imbalance"
+      ? committedImbalancePrediction
+      : committedPrediction;
+  const activeConcept =
+    options.beliefTest?.concept ?? restoredBeliefSpec?.concept;
+  const activeVerifiedResult =
+    activeConcept === "class_imbalance" ? verifiedImbalanceResult : liveResult;
+  const activeBeliefAuthority =
+    restoredBeliefSpec === undefined
+      ? { beliefTest: options.beliefTest ?? liveBeliefTest }
+      : { beliefSpec: options.restoredSessionExtra?.beliefSpec };
+  const activeNativeEvidenceAuthority =
+    restoredBeliefSpec === undefined
+      ? {}
+      : {
+          evidenceVerdict:
+            options.restoredSessionExtra?.evidenceVerdict ??
+            (activeConcept === "class_imbalance"
+              ? supportingImbalanceEvidenceVerdict
+              : supportingEvidenceVerdict),
+          epistemicReportHash:
+            options.restoredSessionExtra?.epistemicReportHash ??
+            epistemicReportHash,
+        };
   let eventRequestIndex = 0;
   const fetcher = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -653,27 +735,23 @@ function installApi(
         );
       }
       if (path === "/api/sessions/session_ui") {
+        if (
+          options.predictionCommitResponseLost === true &&
+          activePrediction !== null
+        ) {
+          return response(
+            session("PREDICTION_COMMITTED", 4, {
+              artifactId: activeArtifactId,
+              mode: activeMode,
+              ...activeBeliefAuthority,
+              prediction: activePrediction,
+            }),
+          );
+        }
         activeMode = { kind: "live_notebook" };
         activeArtifactId = uploadedArtifact.artifactId;
         const restoredExtra = options.restoredSessionExtra ?? {};
         const restoredState = options.restoredSessionState ?? "LAB_COMPILING";
-        const restoredResult = restoredExtra.verifiedResult as
-          { resultHash?: unknown } | undefined;
-        const inferredV2Evidence =
-          restoredExtra.beliefSpec !== undefined &&
-          typeof restoredResult?.resultHash === "string" &&
-          restoredExtra.evidenceVerdict === undefined
-            ? {
-                evidenceVerdict: {
-                  ...evidenceVerdictBase,
-                  kind: "SUPPORTS" as const,
-                  hypothesisId: "competing" as const,
-                  scope: "The restored fixture's bounded evaluation scope.",
-                  resultHash: restoredResult.resultHash,
-                },
-                epistemicReportHash,
-              }
-            : {};
         const restoredStateRequiresPrediction = ![
           "INGESTED",
           "INSUFFICIENT_EVIDENCE",
@@ -685,9 +763,16 @@ function installApi(
           restoredExtra.prediction === undefined
             ? restoredStateRequiresPrediction &&
               options.omitRestoredPrediction !== true
-              ? committedPrediction
+              ? predictionTemplate
               : null
             : (restoredExtra.prediction as Record<string, unknown>);
+        const restoredBeliefAuthority =
+          (activePrediction !== null ||
+            restoredExtra.verifiedResult !== undefined) &&
+          restoredExtra.beliefSpec === undefined &&
+          restoredExtra.beliefTest === undefined
+            ? { beliefTest: options.beliefTest ?? liveBeliefTest }
+            : {};
         return response(
           session(restoredState, 5, {
             artifactId: uploadedArtifact.artifactId,
@@ -695,7 +780,7 @@ function installApi(
             ...(activePrediction === null
               ? {}
               : { prediction: activePrediction }),
-            ...inferredV2Evidence,
+            ...restoredBeliefAuthority,
             ...restoredExtra,
           }),
         );
@@ -806,15 +891,23 @@ function installApi(
           choice: string;
           confidence: number;
         };
-        activePrediction = {
-          ...committedPrediction,
+        activePrediction = withCanonicalPredictionHash({
+          ...predictionTemplate,
           sessionId:
             routedSessionId === undefined
-              ? committedPrediction.sessionId
+              ? predictionTemplate.sessionId
               : decodeURIComponent(routedSessionId),
           choice: input.choice,
           confidence: input.confidence,
-        };
+        });
+        if (predictionCommitResponseLost) {
+          predictionCommitResponseLost = false;
+          return errorResponse(
+            "ILLEGAL_TRANSITION",
+            `Prediction is already committed for session ${routedSessionId ?? "session_ui"}`,
+            409,
+          );
+        }
         return response(
           session("PREDICTION_COMMITTED", 4, {
             ...(routedSessionId === undefined
@@ -822,6 +915,7 @@ function installApi(
               : { sessionId: decodeURIComponent(routedSessionId) }),
             artifactId: activeArtifactId,
             mode: activeMode,
+            ...activeBeliefAuthority,
             prediction: activePrediction,
           }),
           201,
@@ -864,6 +958,7 @@ function installApi(
             ...(activePrediction === null
               ? {}
               : { prediction: activePrediction }),
+            ...(activePrediction === null ? {} : activeBeliefAuthority),
           }),
         );
       }
@@ -877,8 +972,12 @@ function installApi(
           ...(activePrediction === null
             ? {}
             : { prediction: activePrediction }),
+          ...activeBeliefAuthority,
           verifiedResult:
-            activeMode.kind === "live_notebook" ? liveResult : sampleResult,
+            activeMode.kind === "live_notebook"
+              ? activeVerifiedResult
+              : sampleResult,
+          ...activeNativeEvidenceAuthority,
         });
         SessionViewSchema.parse(completed);
         return response(completed);
@@ -895,8 +994,12 @@ function installApi(
             ...(activePrediction === null
               ? {}
               : { prediction: activePrediction }),
+            ...activeBeliefAuthority,
             verifiedResult:
-              activeMode.kind === "live_notebook" ? liveResult : sampleResult,
+              activeMode.kind === "live_notebook"
+                ? activeVerifiedResult
+                : sampleResult,
+            ...activeNativeEvidenceAuthority,
             revision: input.revision,
           }),
         );
@@ -912,6 +1015,25 @@ function installApi(
           input.riskChoice === "centered_window_reads_future" &&
           input.evidenceChoices.includes("center_true_uses_later_targets") &&
           input.evidenceChoices.includes("random_split_mixes_dates");
+        const transferResult = withCanonicalResultHash({
+          ...failedLeakageTransfer,
+          sessionId:
+            routedSessionId === undefined
+              ? "session_ui"
+              : decodeURIComponent(routedSessionId),
+          id: passed ? "transfer_passed_ui" : "transfer_failed_ui",
+          outcome: passed ? ("PASSED" as const) : ("FAILED" as const),
+          selectedStrategy: input.strategyChoice,
+          identifiedRisks: [input.riskChoice],
+          evidenceChoices: input.evidenceChoices,
+          checks: [
+            {
+              invariant: "FIXED_TRANSFER",
+              passed,
+              evidence: "The fixed transfer evaluator checked the submission.",
+            },
+          ],
+        });
         return response(
           session(passed ? "TRANSFER_PASSED" : "TRANSFER_FAILED", 9, {
             ...(routedSessionId === undefined
@@ -922,30 +1044,15 @@ function installApi(
             ...(activePrediction === null
               ? {}
               : { prediction: activePrediction }),
+            ...activeBeliefAuthority,
             verifiedResult:
-              activeMode.kind === "live_notebook" ? liveResult : sampleResult,
+              activeMode.kind === "live_notebook"
+                ? activeVerifiedResult
+                : sampleResult,
+            ...activeNativeEvidenceAuthority,
             revision:
               "Evaluation must match deployment timing and use exact code evidence.",
-            transferResult: {
-              ...failedLeakageTransfer,
-              sessionId:
-                routedSessionId === undefined
-                  ? "session_ui"
-                  : decodeURIComponent(routedSessionId),
-              id: passed ? "transfer_passed_ui" : "transfer_failed_ui",
-              outcome: passed ? "PASSED" : "FAILED",
-              selectedStrategy: input.strategyChoice,
-              identifiedRisks: [input.riskChoice],
-              evidenceChoices: input.evidenceChoices,
-              checks: [
-                {
-                  invariant: "FIXED_TRANSFER",
-                  passed,
-                  evidence:
-                    "The fixed transfer evaluator checked the submission.",
-                },
-              ],
-            },
+            transferResult,
           }),
         );
       }
@@ -1689,6 +1796,42 @@ describe("CounterLab judged flow", () => {
     ).toHaveLength(2);
   });
 
+  it("keeps pending live evidence under its live label when replay loading fails", async () => {
+    const user = userEvent.setup();
+    installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      liveSessionFailures: 1,
+      replayFailure: true,
+    });
+    render(<App />);
+    await openLiveSetup(user);
+    await user.upload(
+      await screen.findByLabelText(/attach a supported notebook/i),
+      new File(["{}"], uploadedArtifact.fileName, {
+        type: "application/json",
+      }),
+    );
+    await screen.findByRole("button", { name: /retry private session setup/i });
+    expect(document.body).toHaveTextContent(uploadedArtifact.fileName);
+    await user.click(
+      screen.getByRole("button", { name: /watch the verified replay/i }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /could not reach the api/i,
+    );
+    expect(
+      screen.getByRole("heading", { name: /test my notebook/i }),
+    ).toBeInTheDocument();
+    expect(document.body).toHaveTextContent(uploadedArtifact.fileName);
+    await user.click(
+      screen.getByRole("button", { name: /project & evidence/i }),
+    );
+    expect(screen.getByText("Uploaded notebook")).toBeInTheDocument();
+    expect(screen.queryByText("Replay artifact")).toBeNull();
+  });
+
   it("accepts a notebook from the question-first landing without running it", async () => {
     const user = userEvent.setup();
     const fetcher = installApi({ liveGpt: "configured", runner: "configured" });
@@ -2097,11 +2240,10 @@ describe("CounterLab judged flow", () => {
     await user.click(
       desktopProgress.getByRole("button", { name: /review test/i }),
     );
-    expect(
-      await screen.findByRole("heading", {
-        name: /review the rare-event test/i,
-      }),
-    ).toHaveFocus();
+    const reviewTitle = await screen.findByRole("heading", {
+      name: /review the rare-event test/i,
+    });
+    await vi.waitFor(() => expect(reviewTitle).toHaveFocus());
     expect(screen.getByText("Verified Test")).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent("Verified Lab");
   });
@@ -2718,6 +2860,10 @@ describe("CounterLab judged flow", () => {
     expect(
       screen.getByText(/Generated planning · Stopped safely/i),
     ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: /project & evidence/i }),
+    );
+    expect(screen.getByRole("button", { name: /new analysis/i })).toBeEnabled();
     expect(
       fetcher.mock.calls.some(
         ([path, init]) =>
@@ -2941,6 +3087,12 @@ describe("CounterLab judged flow", () => {
     expect(
       window.sessionStorage.getItem(activeRunnerRegistryKey("session_ui")),
     ).not.toBeNull();
+    expect(window.localStorage.getItem("counterlab.sessionId")).toBe(
+      "session_ui",
+    );
+    expect(
+      window.localStorage.getItem("counterlab.activeRunnerJob.session_ui"),
+    ).not.toBeNull();
   });
 
   it("reacquires an idempotent compile job when refresh lost the local job checkpoint", async () => {
@@ -3032,6 +3184,23 @@ describe("CounterLab judged flow", () => {
     expect(screen.getByText(/live notebook analysis/i)).toBeInTheDocument();
   });
 
+  it("hydrates the new-analysis route without flashing the landing page", async () => {
+    installApi();
+    window.history.pushState({}, "", "/new");
+
+    render(<App />);
+
+    expect(
+      screen.queryByRole("heading", {
+        name: /what result are you trying to understand/i,
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: /test my notebook/i }),
+    ).toBeInTheDocument();
+    await screen.findByText(/live notebook lessons are not set up/i);
+  });
+
   it("clears private session state before opening a new analysis", async () => {
     const user = userEvent.setup();
     installApi({ restoredSessionState: "INGESTED" });
@@ -3050,6 +3219,7 @@ describe("CounterLab judged flow", () => {
     expect(
       await screen.findByRole("heading", { name: /test my notebook/i }),
     ).toBeInTheDocument();
+    await screen.findByText(/live notebook lessons are not set up/i);
     expect(window.location.pathname).toBe("/new");
     expect(window.localStorage.getItem("counterlab.sessionId")).toBeNull();
     expect(document.body).not.toHaveTextContent(uploadedArtifact.fileName);
@@ -3088,6 +3258,7 @@ describe("CounterLab judged flow", () => {
     expect(
       await screen.findByRole("heading", { name: /test my notebook/i }),
     ).toBeInTheDocument();
+    await screen.findByText(/live notebook lessons are not set up/i);
     expect(window.location.pathname).toBe("/new");
   });
 
@@ -3111,7 +3282,8 @@ describe("CounterLab judged flow", () => {
 
     render(<App />);
     await screen.findByRole("button", { name: /cancel this test/i });
-    act(() => {
+    await act(async () => undefined);
+    await act(async () => {
       window.history.pushState({}, "", "/");
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
@@ -3162,7 +3334,7 @@ describe("CounterLab judged flow", () => {
     const fetcher = installApi({
       restoredSessionState: "EXPERIMENT_COMPLETED",
       restoredSessionExtra: {
-        beliefSpec: liveBeliefSpec,
+        beliefSpec: confirmedLiveBeliefSpec,
         prediction: committedPrediction,
         verifiedResult: liveResult,
         evidenceVerdict: supportingEvidenceVerdict,
@@ -3357,7 +3529,7 @@ describe("CounterLab judged flow", () => {
     const fetcher = installApi({
       restoredSessionState: "REASONING_DIFF_ISSUED",
       restoredSessionExtra: {
-        beliefSpec: liveBeliefSpec,
+        beliefSpec: confirmedLiveBeliefSpec,
         prediction: committedPrediction,
         verifiedResult: liveResult,
         evidenceVerdict: supportingEvidenceVerdict,
@@ -3428,7 +3600,7 @@ describe("CounterLab judged flow", () => {
     const fetcher = installApi({
       restoredSessionState: "LAB_VERIFIED",
       restoredSessionExtra: {
-        beliefSpec: liveBeliefSpec,
+        beliefSpec: confirmedLiveBeliefSpec,
         prediction: committedPrediction,
         evidenceVerdict: rejectedEvidenceVerdict,
         epistemicReportHash,
@@ -3454,28 +3626,14 @@ describe("CounterLab judged flow", () => {
     installApi({
       restoredSessionState: "TRANSFER_PASSED",
       restoredSessionExtra: {
-        beliefSpec: liveBeliefSpec,
+        beliefSpec: confirmedLiveBeliefSpec,
         prediction: committedPrediction,
         verifiedResult: liveResult,
         evidenceVerdict: inconclusiveEvidenceVerdict,
         epistemicReportHash,
         revision:
           "Evaluation must match deployment timing and use exact code evidence.",
-        transferResult: {
-          ...failedLeakageTransfer,
-          id: "transfer_passed_ui",
-          outcome: "PASSED",
-          selectedStrategy: "time_ordered_holdout",
-          identifiedRisks: ["centered_window_reads_future"],
-          evidenceChoices: [
-            "center_true_uses_later_targets",
-            "random_split_mixes_dates",
-          ],
-          checks: failedLeakageTransfer.checks.map((check) => ({
-            ...check,
-            passed: true,
-          })),
-        },
+        transferResult: passedLeakageTransfer,
       },
     });
     window.history.replaceState({}, "", "/session/session_ui");
@@ -3500,7 +3658,7 @@ describe("CounterLab judged flow", () => {
     installApi({
       restoredSessionState: "LAB_VERIFIED",
       restoredSessionExtra: {
-        beliefSpec: liveBeliefSpec,
+        beliefSpec: confirmedLiveBeliefSpec,
         prediction: committedPrediction,
         verifiedResult: liveResult,
         evidenceVerdict: supportingEvidenceVerdict,
@@ -3529,7 +3687,7 @@ describe("CounterLab judged flow", () => {
     const fetcher = installApi({
       restoredSessionState: "TRANSFER_FAILED",
       restoredSessionExtra: {
-        beliefSpec: liveBeliefSpec,
+        beliefSpec: confirmedLiveBeliefSpec,
         prediction: committedPrediction,
         verifiedResult: liveResult,
         evidenceVerdict: supportingEvidenceVerdict,
@@ -3596,6 +3754,79 @@ describe("CounterLab judged flow", () => {
         "random_split_mixes_dates",
       ],
     });
+  });
+
+  it("ignores a late child transfer response after starting a new analysis", async () => {
+    const user = userEvent.setup();
+    const normalFetch = installApi({
+      restoredSessionState: "TRANSFER_FAILED",
+      restoredSessionExtra: {
+        beliefSpec: confirmedLiveBeliefSpec,
+        prediction: committedPrediction,
+        verifiedResult: liveResult,
+        evidenceVerdict: supportingEvidenceVerdict,
+        epistemicReportHash,
+        revision:
+          "Evaluation must match deployment timing and use exact code evidence.",
+        transferResult: failedLeakageTransfer,
+      },
+    });
+    const pending = deferredResponse();
+    const fetcher = vi.fn<typeof fetch>((input, init) =>
+      String(input).endsWith("/transfer")
+        ? pending.promise
+        : normalFetch(input, init),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem("counterlab.mode", "live");
+    window.history.replaceState({}, "", "/session/session_ui");
+
+    render(<App />);
+    await screen.findByText(/transfer not yet passed/i);
+    await user.click(screen.getByRole("button", { name: /check transfer/i }));
+    await vi.waitFor(() =>
+      expect(
+        fetcher.mock.calls.some(([path]) => String(path).endsWith("/transfer")),
+      ).toBe(true),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /project & evidence/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /new analysis/i }));
+    expect(
+      await screen.findByRole("heading", { name: /test my notebook/i }),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      pending.resolve(
+        response(
+          session("TRANSFER_PASSED", 9, {
+            artifactId: uploadedArtifact.artifactId,
+            mode: { kind: "live_notebook" },
+            beliefSpec: confirmedLiveBeliefSpec,
+            prediction: committedPrediction,
+            verifiedResult: liveResult,
+            evidenceVerdict: supportingEvidenceVerdict,
+            epistemicReportHash,
+            revision:
+              "Evaluation must match deployment timing and use exact code evidence.",
+            transferResult: latePassedLeakageTransfer,
+          }),
+        ),
+      );
+      await pending.promise;
+    });
+
+    expect(window.location.pathname).toBe("/new");
+    expect(
+      screen.getByRole("heading", { name: /test my notebook/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", {
+        name: /fixed forecasting transfer passed/i,
+      }),
+    ).toBeNull();
   });
 
   it("restores failed class-imbalance v1 choices after refresh", async () => {
@@ -3681,6 +3912,83 @@ describe("CounterLab judged flow", () => {
         confidence: 72,
       });
     });
+  });
+
+  it("submits an immutable Prediction only once while the request is pending", async () => {
+    const user = userEvent.setup();
+    const normalFetch = installApi({
+      restoredSessionState: "BELIEF_TEST_CONFIRMED",
+      restoredSessionExtra: { beliefSpec: confirmedLiveBeliefSpec },
+    });
+    const pending = deferredResponse();
+    const fetcher = vi.fn<typeof fetch>((input, init) =>
+      String(input).endsWith("/prediction")
+        ? pending.promise
+        : normalFetch(input, init),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    window.history.replaceState({}, "", "/session/session_ui");
+
+    render(<App />);
+    await user.click(
+      await screen.findByRole("radio", { name: /fall materially/i }),
+    );
+    const seal = screen.getByRole("button", { name: /seal my prediction/i });
+    await user.dblClick(seal);
+
+    const predictionCalls = fetcher.mock.calls.filter(([path]) =>
+      String(path).endsWith("/prediction"),
+    );
+    expect(predictionCalls).toHaveLength(1);
+    expect(seal).toBeDisabled();
+    const predictionCall = predictionCalls[0];
+    if (predictionCall === undefined)
+      throw new Error("Prediction request missing");
+    await act(async () => {
+      pending.resolve(await normalFetch(predictionCall[0], predictionCall[1]));
+      await pending.promise;
+    });
+    await screen.findByRole("heading", { name: /the result is ready/i });
+  });
+
+  it("recovers an already-committed Prediction after its response is lost", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi({ predictionCommitResponseLost: true });
+    render(<App />);
+
+    await openSampleModelDuel(user);
+    await user.click(
+      screen.getByRole("button", { name: /yes, this captures my view/i }),
+    );
+    await user.click(screen.getByRole("radio", { name: /remain near 98/i }));
+    await user.click(
+      screen.getByRole("button", { name: /seal my prediction/i }),
+    );
+
+    expect(
+      await screen.findByRole("region", { name: /sealed prediction/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /the fair test is ready/i }),
+    ).toBeInTheDocument();
+    expect(
+      fetcher.mock.calls.filter(([path]) =>
+        String(path).endsWith("/prediction"),
+      ),
+    ).toHaveLength(1);
+    expect(
+      fetcher.mock.calls.some(
+        ([path]) => String(path) === "/api/sessions/session_ui",
+      ),
+    ).toBe(true);
+    expect(
+      fetcher.mock.calls.some(([path]) =>
+        String(path).endsWith("/lab/compile"),
+      ),
+    ).toBe(true);
+    expect(document.body).not.toHaveTextContent(
+      /prediction is already committed/i,
+    );
   });
 
   it("uses class-imbalance language when the analyst routes a rare-event notebook", async () => {
@@ -3780,6 +4088,50 @@ describe("CounterLab judged flow", () => {
       screen.getByRole("button", { name: /reveal verified sample result/i }),
     ).toBeEnabled();
     expect(screen.queryByText(/new customers 59\.4%/i)).not.toBeInTheDocument();
+  });
+
+  it("runs the fair test only once while its result request is pending", async () => {
+    const user = userEvent.setup();
+    const normalFetch = installApi();
+    const pending = deferredResponse();
+    const fetcher = vi.fn<typeof fetch>((input, init) =>
+      String(input).endsWith("/lab/run")
+        ? pending.promise
+        : normalFetch(input, init),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    render(<App />);
+
+    await openSampleModelDuel(user);
+    await user.click(
+      screen.getByRole("button", { name: /yes, this captures my view/i }),
+    );
+    await user.click(screen.getByRole("radio", { name: /remain near 98/i }));
+    await user.click(
+      screen.getByRole("button", { name: /seal my prediction/i }),
+    );
+    const runButton = await screen.findByRole("button", {
+      name: /reveal verified sample result/i,
+    });
+    await user.click(runButton);
+    await user.click(runButton);
+
+    const runCalls = fetcher.mock.calls.filter(([path]) =>
+      String(path).endsWith("/lab/run"),
+    );
+    expect(runCalls).toHaveLength(1);
+    expect(runButton).toBeDisabled();
+    const runCall = runCalls[0];
+    if (runCall === undefined) throw new Error("Fair-test request missing");
+    await act(async () => {
+      pending.resolve(await normalFetch(runCall[0], runCall[1]));
+      await pending.promise;
+    });
+    expect(
+      await screen.findByRole("heading", {
+        name: /let the verified test answer/i,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("explains the fair test before revealing one verified Theater view", async () => {
@@ -3989,6 +4341,32 @@ describe("CounterLab judged flow", () => {
     ).toBe(true);
   });
 
+  it("shows the cancellation confirmation when replay returns home with registered live work", async () => {
+    const user = userEvent.setup();
+    installApi();
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem(
+      "counterlab.activeRunnerJob.session_ui",
+      JSON.stringify({
+        schemaVersion: "1",
+        sessionId: "session_ui",
+        jobId: liveRunnerJob.jobId,
+        kind: liveRunnerJob.kind,
+      }),
+    );
+    window.history.replaceState({}, "", "/replay/leakage-01");
+
+    render(<App />);
+    await screen.findByRole("heading", { name: /replay verified session/i });
+    await user.click(
+      screen.getByRole("button", { name: /return to counterlab home/i }),
+    );
+
+    expect(
+      screen.getByRole("heading", { name: /stop live work and start over/i }),
+    ).toBeInTheDocument();
+  });
+
   it("restores the exact replay URL instead of substituting the bundled replay", async () => {
     const replayId = "replay:dynamic.one";
     window.localStorage.setItem("counterlab.mode", "replay");
@@ -4041,6 +4419,8 @@ describe("CounterLab judged flow", () => {
     expect(
       screen.queryByRole("heading", { name: /opening this replay/i }),
     ).not.toBeInTheDocument();
+    expect(window.localStorage.getItem("counterlab.mode")).toBeNull();
+    expect(window.localStorage.getItem("counterlab.replayId")).toBeNull();
   });
 
   it("canonicalizes a stored replay session route to its read-only replay URL", async () => {
