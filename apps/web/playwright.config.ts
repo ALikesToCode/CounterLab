@@ -90,6 +90,9 @@ const baseURL = remoteBaseURL ?? `http://127.0.0.1:${port}`;
 const staticDesignReview =
   browserAuthority.kind === "stock-chromium-design-review" &&
   process.env.COUNTERLAB_E2E_STATIC_CLIENT === "true";
+const localAdmissionKey =
+  process.env.COUNTERLAB_ADMISSION_KEY?.trim() ||
+  ["counterlab", "local", "e2e", "admission", "only", "000000"].join("-");
 
 export default defineConfig({
   testDir: "./e2e",
@@ -129,6 +132,13 @@ export default defineConfig({
             ? "node ../../scripts/serve-built-client.mjs"
             : `./node_modules/.bin/vite --host 127.0.0.1 --port ${port}`,
           cwd: import.meta.dirname,
+          ...(staticDesignReview
+            ? {}
+            : {
+                env: {
+                  COUNTERLAB_ADMISSION_KEY: localAdmissionKey,
+                },
+              }),
           url: baseURL,
           reuseExistingServer: false,
           timeout: 120_000,

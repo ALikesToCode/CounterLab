@@ -5,9 +5,10 @@ import { SAMPLE_LEAKAGE_QUESTION } from "../shared/sample-authority";
 const liveQuestion =
   "Does this notebook score show that the model generalizes to customers it has never seen?";
 const supportedNotebookPath = new URL(
-  "../../../fixtures/notebooks/customer_churn_leakage.ipynb",
+  "../../../evals/held-out/notebooks/leakage-rows-pipeline.ipynb",
   import.meta.url,
 ).pathname;
+const supportedNotebookName = "leakage-rows-pipeline.ipynb";
 
 const readyHealth = {
   ok: true,
@@ -354,7 +355,7 @@ test("a supported live upload creates one source-bound session", async ({
   await expect(
     page.getByRole("heading", { name: /What do you think the score means/i }),
   ).toBeVisible();
-  await expect(page.getByText("customer_churn_leakage.ipynb")).toBeVisible();
+  await expect(page.getByText(supportedNotebookName)).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Compare two explanations/i }),
   ).toBeEnabled();
@@ -425,7 +426,7 @@ test("a lost private-session response retries without re-uploading", async ({
   await expect(
     page.getByRole("button", { name: /Retry private session setup/i }),
   ).toBeEnabled();
-  await expect(page.getByText("customer_churn_leakage.ipynb")).toBeVisible();
+  await expect(page.getByText(supportedNotebookName)).toBeVisible();
 
   await page
     .getByRole("button", { name: /Retry private session setup/i })
