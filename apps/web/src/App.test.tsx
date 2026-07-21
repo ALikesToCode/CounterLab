@@ -497,6 +497,7 @@ function installApi(
       sessionId: string,
       requestIndex: number,
     ) => Response | Promise<Response>;
+    predictionCommitResponseLost?: boolean;
   } = {},
 ) {
   const uploadOutcomes = [...(options.uploadOutcomes ?? [])];
@@ -509,6 +510,8 @@ function installApi(
   };
   let activeArtifactId = artifact.artifactId;
   let activePrediction: Record<string, unknown> | null = null;
+  let predictionCommitResponseLost =
+    options.predictionCommitResponseLost ?? false;
   let eventRequestIndex = 0;
   const fetcher = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -653,6 +656,18 @@ function installApi(
         );
       }
       if (path === "/api/sessions/session_ui") {
+        if (
+          options.predictionCommitResponseLost === true &&
+          activePrediction !== null
+        ) {
+          return response(
+            session("PREDICTION_COMMITTED", 4, {
+              artifactId: activeArtifactId,
+              mode: activeMode,
+              prediction: activePrediction,
+            }),
+          );
+        }
         activeMode = { kind: "live_notebook" };
         activeArtifactId = uploadedArtifact.artifactId;
         const restoredExtra = options.restoredSessionExtra ?? {};
@@ -815,6 +830,14 @@ function installApi(
           choice: input.choice,
           confidence: input.confidence,
         };
+        if (predictionCommitResponseLost) {
+          predictionCommitResponseLost = false;
+          return errorResponse(
+            "ILLEGAL_TRANSITION",
+            `Prediction is already committed for session ${routedSessionId ?? "session_ui"}`,
+            409,
+          );
+        }
         return response(
           session("PREDICTION_COMMITTED", 4, {
             ...(routedSessionId === undefined
@@ -3780,6 +3803,46 @@ describe("CounterLab judged flow", () => {
       screen.getByRole("button", { name: /reveal verified sample result/i }),
     ).toBeEnabled();
     expect(screen.queryByText(/new customers 59\.4%/i)).not.toBeInTheDocument();
+  });
+
+  it("recovers an already-committed Prediction after its response is lost", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi({ predictionCommitResponseLost: true });
+    render(<App />);
+
+    await openSampleModelDuel(user);
+    await user.click(
+      screen.getByRole("button", { name: /yes, this captures my view/i }),
+    );
+    await user.click(screen.getByRole("radio", { name: /remain near 98/i }));
+    await user.click(
+      screen.getByRole("button", { name: /seal my prediction/i }),
+    );
+
+    expect(
+      await screen.findByRole("region", { name: /sealed prediction/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /the fair test is ready/i }),
+    ).toBeInTheDocument();
+    expect(
+      fetcher.mock.calls.filter(([path]) =>
+        String(path).endsWith("/prediction"),
+      ),
+    ).toHaveLength(1);
+    expect(
+      fetcher.mock.calls.some(
+        ([path]) => String(path) === "/api/sessions/session_ui",
+      ),
+    ).toBe(true);
+    expect(
+      fetcher.mock.calls.some(([path]) =>
+        String(path).endsWith("/lab/compile"),
+      ),
+    ).toBe(true);
+    expect(document.body).not.toHaveTextContent(
+      /prediction is already committed/i,
+    );
   });
 
   it("explains the fair test before revealing one verified Theater view", async () => {

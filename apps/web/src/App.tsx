@@ -6256,28 +6256,54 @@ export function App() {
             unsure: "I am unsure",
           };
     void withRequest(async (request) => {
-      const committed = await counterLabApi.commitPrediction(
-        session.sessionId,
-        {
+      let predictionWasCreated = true;
+      let committed: SessionView;
+      try {
+        committed = await counterLabApi.commitPrediction(session.sessionId, {
           choice: labels[prediction],
           confidence,
-        },
-      );
+        });
+      } catch (caught) {
+        if (
+          !(caught instanceof ApiClientError) ||
+          caught.code !== "ILLEGAL_TRANSITION" ||
+          caught.status !== 409
+        ) {
+          throw caught;
+        }
+        const restored = await counterLabApi.getSession(session.sessionId);
+        request.assertCurrent();
+        if (restored.prediction === undefined) throw caught;
+        committed = restored;
+        predictionWasCreated = false;
+      }
       request.assertCurrent();
       setSession(committed);
-      void recordLearnerInteraction(session.sessionId, {
-        kind: "prediction.recorded",
-        stage: "prediction",
-        choice:
-          prediction === "stays-high"
-            ? "current_explanation"
-            : prediction === "falls"
-              ? "alternative_explanation"
-              : "unsure",
-        confidence,
-      });
-      if (mode === "live") {
+      setPrediction(
+        predictionChoiceFromReceipt(committed.prediction?.choice ?? ""),
+      );
+      if (committed.prediction !== undefined) {
+        setConfidence(committed.prediction.confidence);
+      }
+      if (predictionWasCreated) {
+        void recordLearnerInteraction(session.sessionId, {
+          kind: "prediction.recorded",
+          stage: "prediction",
+          choice:
+            prediction === "stays-high"
+              ? "current_explanation"
+              : prediction === "falls"
+                ? "alternative_explanation"
+                : "unsure",
+          confidence,
+        });
+      }
+      if (committed.mode.kind === "live_notebook") {
         await advanceLiveLab(committed, request);
+        return;
+      }
+      if (committed.state !== "PREDICTION_COMMITTED") {
+        setStage(committed.verifiedResult === undefined ? "build" : "reality");
         return;
       }
       const compiled = await counterLabApi.compileLab(session.sessionId);
