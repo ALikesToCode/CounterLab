@@ -4319,3 +4319,71 @@ No Cloudflare mutation, deployment, qualifying browser run, learner outcome,
 Devpost submission, push, or merge is claimed. Release remains **NO-GO** at
 clean source, real containment, exact image/evidence, contained Wrangler
 authentication, CloakBrowser execution, deployment, and submission.
+
+## Release-blocker reconciliation checkpoint — 2026-07-21T10:44:08Z
+
+Deadline: `2026-07-22T00:00:00Z`; **13 hours 15 minutes 52 seconds remained at
+this checkpoint**. Committed HEAD is
+`19d8967d8db69207de149a690f54433170dd419e`, seventeen commits ahead of
+`origin/feat/learner-ux-v6.1` and 99 commits ahead of local `main`, with no
+reverse divergence. The only worktree entry remains the preserved, untracked
+FUSE tombstone `scripts/.fuse_hidden0000a9600000801f`; it has not been read,
+changed, staged, hidden, ignored, renamed, or deleted.
+
+### Done since the browser-finalizer checkpoint
+
+- Commit `19d8967 docs(progress): record browser finalizer gate` records the
+  reviewed finalizer implementation and its exact verification.
+- The four capability-sensitive root test files that had failed in the
+  restricted sandbox were rerun with their required loopback, process, and
+  bubblewrap access: **4 files, 51/51 tests passed**. Those failures are no
+  longer product regressions. The only remaining full-root failures are the
+  three stale scientific source/image evidence files, which must not be
+  regenerated before the exact source and image are frozen.
+- A fresh repository-contained Wrangler OAuth attempt was started and reached
+  the local callback listener, but the approval window timed out. Wrangler
+  remains unauthenticated and no Cloudflare mutation occurred.
+- The previously attested `rt-mainrel04` runtime is stale rather than safely
+  controllable: the non-destructive attested stop helper refused to proceed,
+  the required runtime root is absent, and the supervisor socket is absent.
+  No PID was killed and no attestation check was bypassed.
+- Independent architecture review confirmed that the existing exact
+  `git archive HEAD` build context does **not** satisfy the separately declared
+  clean-worktree gate while the tombstone exists. Build, qualification,
+  release-check, deployment, and production-smoke all independently require no
+  tracked or untracked drift. Exempting this path would weaken and split the
+  receipt chain and is rejected.
+
+### What remains, in dependency order
+
+1. The owner must close the process retaining the FUSE handle so the tombstone
+   disappears naturally. Do not delete, hide, ignore, stage, rename, or
+   overwrite it. Confirm an empty `git status`, then freeze source `S`.
+2. Start a fresh contained runtime; build exactly one source-bound runner
+   image; run the genuine aggregate-cgroup sentinel and its negative controls;
+   regenerate the scientific-engine, SBOM, VEX, license, held-out, health, and
+   source/image evidence together; commit reviewed evidence `E`.
+3. Rerun the full deterministic release gate, including TypeScript, Vitest,
+   Pytest, mutation, held-out, formatting, secret, build, replay, reproduction,
+   and exact-image qualification. The three stale scientific-binding files are
+   expected to stay red until step 2 completes.
+4. Complete a fresh repository-contained Wrangler login and verify the intended
+   account, required secrets, D1 target, Container image target, and recovery
+   deployment before the first cloud mutation.
+5. Preflight a live CloakBrowser CDP endpoint, then deploy only the qualified
+   tuple. Prove the public source/image/Worker identity and run production
+   smoke, all 40 public journeys, seven viewports, ten manual accessibility and
+   performance observations, downloads, reconnect/history, and Web Vitals.
+   Stock Chromium may supply clearly labelled design-review evidence only.
+6. Capture screenshots and a <=3:00 video from the exact qualified public
+   tuple; verify the app, public repository, feedback ID, setup path, and all
+   Devpost fields while logged out. Keep learner evidence `NO_DATA` unless real
+   consented observations occur.
+7. Push the reviewed feature branch before final logged-out source validation;
+   capture the submission receipt; commit and push final evidence; then
+   fast-forward-only merge and push `main` after every upstream gate is factual.
+
+No clean source, exact image, aggregate containment pass, Cloudflare identity,
+deployment, CloakBrowser journey, learner outcome, submission, push, or merge
+is claimed at this checkpoint. Release remains **NO-GO** until the ordered
+dependencies above are closed with direct evidence.
