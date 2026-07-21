@@ -1229,7 +1229,7 @@ export async function executeContainedRun(
   }
 
   const created = executeSpawn(plan.create.program, plan.create.args, {
-    ...runtimeOptions,
+    ...controlOptions,
     input: Buffer.alloc(0),
   });
   if (created.status !== 0) {

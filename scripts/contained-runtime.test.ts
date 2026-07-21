@@ -806,6 +806,7 @@ function qualifiedRuntimeHarness() {
     `run/rootless-specs/${invocationId}.image-rootfs`,
   );
   const events: string[] = [];
+  const commandTimeouts: { create?: number; run?: number } = {};
   let aliasPresent = false;
   let imageRootfsMounted = false;
   let stagingPresent = true;
@@ -858,6 +859,7 @@ function qualifiedRuntimeHarness() {
       return successful(`${imageRootfsPath}\n`);
     }
     if (joined.includes(" create ")) {
+      commandTimeouts.create = _options.timeout;
       return successful(`${stagingContainerId}\n`);
     }
     if (args.includes("--spec")) {
@@ -906,6 +908,7 @@ function qualifiedRuntimeHarness() {
       return successful();
     }
     if (joined.includes(" run ")) {
+      commandTimeouts.run = _options.timeout;
       events.push("candidate-started");
       taskPresent = true;
       containerPresent = true;
@@ -949,6 +952,7 @@ function qualifiedRuntimeHarness() {
       sessionRoot,
       stdin: Buffer.alloc(0),
     },
+    commandTimeouts,
     events,
     fakeSpawn,
     get finalContainerId() {
@@ -1158,6 +1162,43 @@ describe("contained runtime command policy", () => {
       "qualification mode is invalid",
     );
     expect(spawned).toBe(false);
+  });
+
+  it("reserves the candidate wall-clock limit for the candidate process", async () => {
+    const harness = qualifiedRuntimeHarness();
+    const coordinator = {
+      async begin(input: { finalContainerId: string; invocationId: string }) {
+        return input;
+      },
+      async waitForDraft() {
+        return { receiptPayloadSha256: "6".repeat(64) };
+      },
+      async complete() {
+        return {
+          qualificationArtifacts: {},
+          qualifiedReceipt: {},
+          qualifiedReceiptFileSha256: "7".repeat(64),
+          qualifiedReceiptPath: resolve(
+            harness.context.sessionRoot,
+            `run/rootless-specs/${harness.finalContainerId}.qualified-receipt.json`,
+          ),
+          qualifiedReceiptPayloadSha256: "8".repeat(64),
+        };
+      },
+    };
+
+    await executeContainedRun(
+      harness.context,
+      harness.fakeSpawn,
+      harness.persistSpec,
+      () => undefined,
+      () => invocationId,
+      undefined,
+      coordinator,
+    );
+
+    expect(harness.commandTimeouts.create).toBeGreaterThan(20_000);
+    expect(harness.commandTimeouts.run).toBe(20_000);
   });
 
   it("binds a clean timed-out run to the aggregate-qualified receipt", async () => {
