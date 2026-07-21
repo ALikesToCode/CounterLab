@@ -13,22 +13,18 @@ pass is never presented as a browser or production pass.
 
 - **Branch:** `feat/learner-ux-v6.1`
 - **Latest committed checkpoint:**
-  `eee333a9522a8efad8134fa543137c8f4691860e`; latest product and release-safety
-  code checkpoint `8e33154b2b130fbdb635cf7a91ed75dc9357741f`. Before this ledger update, the
-  branch is two commits ahead of `origin/feat/learner-ux-v6.1` and the worktree
-  contains only the preserved, untracked
-  `scripts/.fuse_hidden0000a9600000801f`. Fresh verification on this tip passes
-  web Vitest **79 files and 626/626 tests**, repository/web/Worker/E2E strict
-  TypeScript, the production build, Python behavior **331/331** when its one
-  localhost test receives loopback permission, leakage mutations **14/14**,
-  imbalance mutations **19/19**, held-out and generated Sample fixture checks,
-  repository-wide Prettier, Git whitespace, and a 31-file built-artifact secret
-  scan. Root Vitest is **750 passed, 3 stale exact-image/scientific-evidence
-  failures, 2 skipped**. A fresh explicit stock-Chromium design review is **35
-  passed, 5 exact-public/live skips, 0 failed across 40 tests in 3.9 minutes**.
-  These local results do not constitute a real cgroup sentinel, refreshed
-  scientific evidence, CloakBrowser execution, Cloudflare deployment, learner
-  observation, Devpost publication, or a submission receipt.
+  `b37f7d962e53dbfd7f511746e97ba364fe465d34`, four commits ahead of
+  `origin/feat/learner-ux-v6.1`. The only worktree entry is the preserved,
+  unstaged `scripts/.fuse_hidden0000a9600000801f`. The broad deterministic and
+  stock-browser matrix was last completed at parent checkpoint `8e9e336`; the
+  current runtime response-channel change passes its focused **7-file, 65-test**
+  suite, Node syntax, scoped Prettier, repository TypeScript, a two-file secret
+  scan, and Git whitespace checks. Fresh runtime `rt-mainrel04` returns a
+  schema-v2 `VERIFIED` response and live pinned version data. These results prove
+  the local command channel only; they do not constitute a clean source, exact
+  image, real cgroup sentinel, refreshed scientific evidence, CloakBrowser
+  execution, Cloudflare deployment, learner observation, Devpost publication,
+  or a submission receipt.
 - **Earlier product checkpoint:**
   `5259a495948a68024702ba5239bf8057d1785f08`. The owner partitioned the
   preserved integration delta into nine commits and fast-forwarded both
@@ -4011,3 +4007,91 @@ repository-contained.
 
 The release remains **NO-GO** at the real-sentinel, authentication,
 exact-image, CloakBrowser, deployment, and submission gates.
+
+## Contained runtime command-channel checkpoint — 2026-07-21T08:22:38Z
+
+Deadline: `2026-07-22T00:00:00Z`; **15 hours 37 minutes 22 seconds remained at
+this checkpoint**. Committed HEAD is
+`b37f7d962e53dbfd7f511746e97ba364fe465d34`, four commits ahead of
+`origin/feat/learner-ux-v6.1`. The only visible worktree entry is the preserved,
+unstaged FUSE tombstone `scripts/.fuse_hidden0000a9600000801f`; it remains
+untouched.
+
+### Completed in this slice
+
+- Commit `b37f7d9 fix(runtime): preserve command response channel` repairs a
+  deterministic Unix-socket half-close defect in the contained runtime command
+  server. The client finishes its request with `socket.end(request)`; the server
+  now keeps its response side open while the serialized asynchronous handler
+  produces the reply. A source-level characterization failed **1/1** before the
+  repair and passed **1/1** afterward.
+- The complete contained-runtime protocol/entry/attestation/supervisor group
+  passed **7 files, 65/65 tests**. Node syntax, scoped Prettier, repository
+  TypeScript, a two-file secret scan, and Git whitespace checks passed.
+- A fresh primary-root runtime, `rt-mainrel04`, started successfully and stayed
+  active. The repaired command channel returned a schema-v2 attestation with
+  status `VERIFIED`, then returned live BuildKit client **v0.30.0**, containerd
+  **v2.3.1**, and runc **1.4.2** version data. This closes the local zero-byte
+  response regression; it is not an image qualification or deployment receipt.
+- The code-review graph is current at `b37f7d9`: **531 files, 5,515 nodes, and
+  93,346 edges** across SQL, TypeScript, TSX, Python, JavaScript, and Bash. Its
+  branch-delta scan covers **140 changed files** and reports heuristic medium
+  structural risk **0.60**; independent standards and specification reviews are
+  in progress.
+
+### Corrected release-path finding
+
+The linked-worktree approach described in the previous checkpoint is not a
+viable contained-runtime release path. Two clean retained attempts were made:
+
+- `.cache/counterlab-release-worktrees/8e9e336` failed because its Unix socket
+  path exceeded the kernel limit;
+- `.cache/r/e` then failed the runtime's reviewed physical-root length bound of
+  **42 characters**, which reserves room for containerd shim sockets.
+
+Every descendant worktree is physically longer than the verified repository
+root. The primary physical root is exactly 42 characters and is therefore the
+only currently proven location that can host this contained runtime. Neither
+retained worktree was deleted. The primary root cannot become a clean frozen
+release source until the pre-existing FUSE tombstone is resolved without
+staging, hiding, overwriting, or deleting it.
+
+### Gates still open
+
+1. **Clean source:** blocked by the preserved FUSE tombstone. No current clean
+   source `S` exists.
+2. **Real aggregate containment:** not run. The genuine sentinel still needs a
+   narrowly authorized read-only observation of `/sys/fs/cgroup` and the owned
+   test processes' `/proc/<pid>/stat`; no such read or pass is claimed.
+3. **Exact image and evidence:** not run for `b37f7d9`. The three stale
+   source/image scientific bindings remain red until one exact image, genuine
+   sentinel, and complete evidence refresh are produced together.
+4. **Cloudflare:** repository-contained Wrangler remains unauthenticated after
+   the last failed `whoami` and timed-out OAuth window. No qualification,
+   migration, deployment, or cloud mutation occurred.
+5. **Browser and submission:** CloakBrowser remains unavailable, so qualifying
+   execution remains **0 journeys**. Stock Chromium evidence remains explicitly
+   non-qualifying. Learner evidence remains `NO_DATA`; Devpost publication,
+   video, submission receipt, push, and merge remain unverified or not run.
+
+### Next executable sequence
+
+1. Resolve the named FUSE tombstone by closing its pre-existing owner without
+   deleting or altering the entry, then verify an empty primary worktree.
+2. Obtain the narrow read-only cgroup/process observation authority and complete
+   a fresh repository-contained Wrangler OAuth flow.
+3. Freeze the resulting primary-root source commit, start a fresh contained
+   runtime there, build one exact image, and execute the real sentinel and all
+   negative controls.
+4. Regenerate and review the complete SBOM, VEX, scientific-engine, license,
+   health, held-out, and source/image binding set once; commit evidence alone;
+   rerun every deterministic release gate until all three stale bindings pass.
+5. Preflight CloakBrowser before cloud mutation, qualify and deploy only the
+   exact tuple, prove public identity and both supported live flows, then run the
+   complete public browser/accessibility matrix.
+6. Finalize only exact-tuple screenshots, video, repository, feedback, Devpost,
+   and learner-evidence claims; push the feature branch and fast-forward `main`
+   only after every publication gate is factual.
+
+The release remains **NO-GO** at clean-source, real-sentinel, exact-image,
+authentication, CloakBrowser, deployment, and submission gates.

@@ -1,10 +1,10 @@
 # Release dependency and review graph
 
-- Checkpoint: `2026-07-21T07:56:31Z`
+- Checkpoint: `2026-07-21T08:22:38Z`
 - Branch: `feat/learner-ux-v6.1`
-- Committed HEAD: `eee333a9522a8efad8134fa543137c8f4691860e`
+- Committed HEAD: `b37f7d962e53dbfd7f511746e97ba364fe465d34`
 - Deadline: `2026-07-22T00:00:00Z`
-- Time remaining at this checkpoint: **16 hours 3 minutes 29 seconds**
+- Time remaining at this checkpoint: **15 hours 37 minutes 22 seconds**
 
 ## Purpose and evidence boundary
 
@@ -34,7 +34,8 @@ useful source/design evidence; it is not public or CloakBrowser qualification.
 flowchart TD
   A["Source slices<br/>atomic commits + focused tests<br/>SOURCE COMPLETE for aggregate runtime chain"]
   B["Review gate<br/>independent review + lead diff review<br/>PASS for aggregate runtime integration"]
-  C["Clean source freeze S<br/>reviewed linked-worktree path<br/>NOT CREATED"]
+  R["Contained runtime command channel<br/>rt-mainrel04 READY / VERIFIED<br/>PASS"]
+  C["Clean source freeze S<br/>primary root blocked by FUSE tombstone;<br/>linked roots exceed runtime maximum"]
   D["Exact runner and adapter image<br/>build receipt v4 bound to S<br/>NOT RUN for current source"]
   E["Real aggregate timeout sentinel<br/>observer + controls + FINALIZE + cleanup<br/>BLOCKED by /sys and /proc authority"]
   F["Source/image evidence refresh<br/>SBOM + VEX + engine evidence<br/>NOT RUN"]
@@ -47,36 +48,36 @@ flowchart TD
   M["Submission package<br/>public app + repo + video + feedback + honest NO_DATA<br/>EXTERNALLY UNVERIFIED"]
   N["Git publication<br/>push feature -> verify remote -> fast-forward main -> push main<br/>NOT RUN"]
 
-  A --> B --> C --> D --> E --> F --> G --> H --> I --> J --> K --> L --> M --> N
+  A --> B --> R --> C --> D --> E --> F --> G --> H --> I --> J --> K --> L --> M --> N
 
   classDef pass fill:#d9f3ee,stroke:#176b5b,color:#123b34;
   classDef blocked fill:#fff0d0,stroke:#9a6500,color:#4c3500;
   classDef pending fill:#eef2f7,stroke:#596579,color:#252b36;
   classDef external fill:#f7e8ef,stroke:#95506d,color:#482636;
-  class A,B pass;
-  class E blocked;
-  class C,D,F,G,H,I,J,K,L pending;
+  class A,B,R pass;
+  class C,E blocked;
+  class D,F,G,H,I,J,K,L pending;
   class M,N external;
 ```
 
 ## Gate ledger
 
-| Gate                      | Required inputs                                                                                                            | Required evidence                                                                                                                                                                 | Current status                                                                                                                                                                  | Failure rule                                                                                                                 |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Source slices             | Reviewed implementation and tests                                                                                          | Atomic commits, focused tests, type checks, formatting, secret scan, whitespace check                                                                                             | Aggregate observer/runtime/consumer chain is source-complete                                                                                                                    | Repair in a new independent commit; do not weaken tests                                                                      |
-| Review                    | Complete source slice and focused evidence                                                                                 | Independent review plus lead inspection of complete diff                                                                                                                          | Aggregate runtime review is `GO`; its initial async run/drain race and missing positive path were repaired                                                                      | Review findings remain open until implementation and regression tests pass                                                   |
-| Clean source `S`          | Final intended source and no tracked or untracked drift                                                                    | `git status` empty and exact source commit recorded                                                                                                                               | **Path reviewed, not created**: a separate linked worktree under ignored in-repository `.cache/` avoids the primary FUSE entry but needs its own contained dependencies/runtime | Do not hide, delete, or sweep the entry; use the reviewed separately contained clean checkout                                |
-| Exact image               | Clean `S`, source-matching contained runtime, pinned BuildKit                                                              | Build receipt v4, source/tree labels, exact runner and adapter digests                                                                                                            | **Not run** for current source; cached receipts belong to older commits                                                                                                         | Never reuse or retag an earlier image as current                                                                             |
-| Real sentinel             | Exact image, source-matching runtime, release-only qualification mode                                                      | Genuine memory OOM, PID denial, CPU throttling, exact membership, FINALIZE, eight cleanup facts, cgroup absence, exclusive evidence artifact                                      | **Blocked** by the checked-in repository-only filesystem rule, which does not permit required `/sys/fs/cgroup` and owned `/proc/<pid>/stat` reads                               | Preserve `NO-GO`; never synthesize or inject aggregate evidence                                                              |
-| Evidence refresh          | Exact image and successful real sentinel while `HEAD == S`                                                                 | Fresh normalized SBOM, VEX and negative control, scientific-engine bindings, runtime and isolation reports                                                                        | **Not run**                                                                                                                                                                     | Any image/source mismatch or stale binding fails closed                                                                      |
-| Evidence commit `E`       | Reviewed allowlisted evidence delta                                                                                        | One clean commit containing only regenerated evidence                                                                                                                             | **Not created**                                                                                                                                                                 | Do not include unrelated source or cache artifacts                                                                           |
-| Qualification             | Clean `HEAD == E`, build receipt, timeout receipt, source-matching runtime, authenticated Cloudflare account               | Qualified runner receipt v6 and exact registry manifest/config digest                                                                                                             | **Not run**; contained Wrangler is logged out and one fresh OAuth window timed out without consent                                                                              | Do not promote when account, source, image, timeout, runtime, or evidence differs                                            |
-| Release check             | Clean `E`, qualified receipt, exact local images and runtime                                                               | Release-check receipt v5 after formatting, tests, mutations, held-out, sandbox, scientific, build, reproduction, patch replay, and secret gates                                   | **Not run**                                                                                                                                                                     | Any failure blocks deployment                                                                                                |
-| Cloudflare deployment     | Qualified receipt, release-check receipt, registry image, required secrets, recovery target, working CloakBrowser endpoint | Exact maintenance/final Worker versions, D1 migration log, exact Container digest, deployment receipt v7                                                                          | **Not run**                                                                                                                                                                     | Stop before mutation when preflight is red; after mutation, automated Worker recovery does not reverse D1 or Container state |
-| Public identity and smoke | Active exact Worker/Container tuple                                                                                        | `/ready`, `/api/health?readiness=probe`, Worker 100% traffic, Container identity, public asset scan, Sample, Replay, leakage and imbalance live evidence, Capsule/replay evidence | **Not run**                                                                                                                                                                     | Source, image, Worker, client, receipt, or capability mismatch is a release failure                                          |
-| CloakBrowser              | Exact public tuple and injected `CLOAK_CDP_ENDPOINT`                                                                       | All 40 current tests plus responsive, keyboard, screen-reader, 200% zoom, reduced-motion, console/network, downloads, reconnect, and Web Vitals evidence                          | Fresh local stock design review: **35 passed, 5 public/live skips, 0 failed in 3.9 minutes**; public CloakBrowser: **0 journeys**                                               | Stock Chromium is design-review evidence only and cannot close this gate                                                     |
-| Devpost and impact        | Qualified public tuple, public repo/video/feedback links, factual copy                                                     | Logged-out link audit, public video from exact tuple, Devpost receipt, real consented learner aggregates or explicit `NO_DATA`                                                    | **Externally unverified; learner evidence remains `NO_DATA`**                                                                                                                   | Never infer a submission or learner result                                                                                   |
-| Push and merge            | Every ship gate factual and final source reviewed                                                                          | Verified feature remote tip, fast-forward-only `main`, verified main remote tip                                                                                                   | **Not run**                                                                                                                                                                     | Do not push or merge a `NO-GO` release                                                                                       |
+| Gate                      | Required inputs                                                                                                            | Required evidence                                                                                                                                                                 | Current status                                                                                                                                                                                                               | Failure rule                                                                                                                 |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Source slices             | Reviewed implementation and tests                                                                                          | Atomic commits, focused tests, type checks, formatting, secret scan, whitespace check                                                                                             | Aggregate observer/runtime/consumer chain is source-complete                                                                                                                                                                 | Repair in a new independent commit; do not weaken tests                                                                      |
+| Review                    | Complete source slice and focused evidence                                                                                 | Independent review plus lead inspection of complete diff                                                                                                                          | Aggregate runtime review is `GO`; its initial async run/drain race and missing positive path were repaired                                                                                                                   | Review findings remain open until implementation and regression tests pass                                                   |
+| Clean source `S`          | Final intended source and no tracked or untracked drift                                                                    | `git status` empty and exact source commit recorded                                                                                                                               | **Blocked**: the 42-character primary root is the only runtime-capable location and remains unclean because of the preserved FUSE tombstone. Both retained linked worktrees exceed the enforced containerd shim-root maximum | Do not hide, delete, stage, or sweep the entry; no descendant worktree is a proven substitute                                |
+| Exact image               | Clean `S`, source-matching contained runtime, pinned BuildKit                                                              | Build receipt v4, source/tree labels, exact runner and adapter digests                                                                                                            | **Not run** for current source; cached receipts belong to older commits                                                                                                                                                      | Never reuse or retag an earlier image as current                                                                             |
+| Real sentinel             | Exact image, source-matching runtime, release-only qualification mode                                                      | Genuine memory OOM, PID denial, CPU throttling, exact membership, FINALIZE, eight cleanup facts, cgroup absence, exclusive evidence artifact                                      | **Blocked** by the checked-in repository-only filesystem rule, which does not permit required `/sys/fs/cgroup` and owned `/proc/<pid>/stat` reads                                                                            | Preserve `NO-GO`; never synthesize or inject aggregate evidence                                                              |
+| Evidence refresh          | Exact image and successful real sentinel while `HEAD == S`                                                                 | Fresh normalized SBOM, VEX and negative control, scientific-engine bindings, runtime and isolation reports                                                                        | **Not run**                                                                                                                                                                                                                  | Any image/source mismatch or stale binding fails closed                                                                      |
+| Evidence commit `E`       | Reviewed allowlisted evidence delta                                                                                        | One clean commit containing only regenerated evidence                                                                                                                             | **Not created**                                                                                                                                                                                                              | Do not include unrelated source or cache artifacts                                                                           |
+| Qualification             | Clean `HEAD == E`, build receipt, timeout receipt, source-matching runtime, authenticated Cloudflare account               | Qualified runner receipt v6 and exact registry manifest/config digest                                                                                                             | **Not run**; contained Wrangler is logged out and one fresh OAuth window timed out without consent                                                                                                                           | Do not promote when account, source, image, timeout, runtime, or evidence differs                                            |
+| Release check             | Clean `E`, qualified receipt, exact local images and runtime                                                               | Release-check receipt v5 after formatting, tests, mutations, held-out, sandbox, scientific, build, reproduction, patch replay, and secret gates                                   | **Not run**                                                                                                                                                                                                                  | Any failure blocks deployment                                                                                                |
+| Cloudflare deployment     | Qualified receipt, release-check receipt, registry image, required secrets, recovery target, working CloakBrowser endpoint | Exact maintenance/final Worker versions, D1 migration log, exact Container digest, deployment receipt v7                                                                          | **Not run**                                                                                                                                                                                                                  | Stop before mutation when preflight is red; after mutation, automated Worker recovery does not reverse D1 or Container state |
+| Public identity and smoke | Active exact Worker/Container tuple                                                                                        | `/ready`, `/api/health?readiness=probe`, Worker 100% traffic, Container identity, public asset scan, Sample, Replay, leakage and imbalance live evidence, Capsule/replay evidence | **Not run**                                                                                                                                                                                                                  | Source, image, Worker, client, receipt, or capability mismatch is a release failure                                          |
+| CloakBrowser              | Exact public tuple and injected `CLOAK_CDP_ENDPOINT`                                                                       | All 40 current tests plus responsive, keyboard, screen-reader, 200% zoom, reduced-motion, console/network, downloads, reconnect, and Web Vitals evidence                          | Fresh local stock design review: **35 passed, 5 public/live skips, 0 failed in 3.9 minutes**; public CloakBrowser: **0 journeys**                                                                                            | Stock Chromium is design-review evidence only and cannot close this gate                                                     |
+| Devpost and impact        | Qualified public tuple, public repo/video/feedback links, factual copy                                                     | Logged-out link audit, public video from exact tuple, Devpost receipt, real consented learner aggregates or explicit `NO_DATA`                                                    | **Externally unverified; learner evidence remains `NO_DATA`**                                                                                                                                                                | Never infer a submission or learner result                                                                                   |
+| Push and merge            | Every ship gate factual and final source reviewed                                                                          | Verified feature remote tip, fast-forward-only `main`, verified main remote tip                                                                                                   | **Not run**                                                                                                                                                                                                                  | Do not push or merge a `NO-GO` release                                                                                       |
 
 ## Code-to-evidence graph
 
@@ -144,7 +145,9 @@ The current aggregate release chain is split into independent commits:
 - `75dfb65` — Python v3 qualified-receipt consumption with v2 replay
   compatibility;
 - `f19387b` — current live-browser selector alignment;
-- `e4dc33e` — factual progress checkpoint.
+- `e4dc33e` — factual progress checkpoint;
+- `b37f7d9` — preserves the runtime command response after the client
+  half-closes its request and adds the focused regression.
 
 Reported verification for the integrated aggregate slice is:
 
@@ -165,12 +168,21 @@ Reported verification for the integrated aggregate slice is:
 - critical mutations: leakage **14/14** and imbalance **19/19 detected**;
 - scoped Prettier, Python compilation, Node syntax, Git whitespace, and secret
   scans: **passed**;
+- current contained-runtime command-channel suite: **7 files, 65/65 passed**;
+- current Node syntax, scoped Prettier, repository TypeScript, two-file secret
+  scan, and Git whitespace: **passed**;
+- fresh primary runtime `rt-mainrel04`: schema-v2 response status **VERIFIED**;
+  session attestation **READY**; live BuildKit client **v0.30.0**, containerd
+  **v2.3.1**, and runc **1.4.2** version response confirmed;
 - independent runtime integration review: **GO** after the implementation
   repaired its initial async run/drain race and missing positive
   qualification-path coverage.
 
-These results are source evidence only. The real sentinel and every downstream
-release node remain open.
+The broad web/root/Python/build/browser matrix predates `b37f7d9` and must be
+rerun on the final frozen source. The current focused results are source and
+runtime command-channel evidence only. They are not exact-image, aggregate
+containment, qualification, or deployment evidence; every downstream release
+node remains open.
 
 ## File ownership and reviewer graph
 
@@ -211,11 +223,11 @@ flowchart TD
 No two writers may own the same shared file or receipt registry concurrently.
 Only the lead stages, commits, deploys, pushes, or fast-forwards `main`.
 
-## Disciplines applied directly
+## Disciplines and skills applied
 
-The following disciplines are applied directly from the checked-in repository
-constitution, code, tests, and release scripts. This document does **not** claim
-that home-directory skill files were read.
+The owner explicitly authorized the installed skill instructions for this pass.
+The lead read and applied the following skills while preserving the checked-in
+repository constitution as the governing product and filesystem authority.
 
 | Discipline                  | Direct application in this graph                                                                                                                                                                                                                         |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -226,6 +238,12 @@ that home-directory skill files were read.
 | Playwright and CloakBrowser | Static collection is not browser evidence; release qualification requires the injected CloakBrowser CDP authority, accessibility snapshots, screenshots where visual judgment matters, and console/network review. Stock Chromium cannot close the gate. |
 | Cloudflare and Wrangler     | The repository-pinned Wrangler, contained account identity, exact registry digest, maintenance freeze, remote D1 migration, Container rollout, final Worker, recovery target, and public identity receipt form one ordered gate.                         |
 | Delivery gate               | Clean `S` -> exact image -> real sentinel -> evidence `E` -> qualification -> release check -> deployment -> public smoke -> full browser matrix -> submission -> push/fast-forward merge. No later node may compensate for an earlier red node.         |
+| Diagnosing bugs             | Required the red command-server characterization before the one-line half-close repair, followed by focused and original-path runtime proof.                                                                                                             |
+| Git workflow                | Required selective staging, non-executable test mode, staged-diff review, configured owner identity, and the independent `b37f7d9` commit.                                                                                                               |
+| Build graph                 | Refreshed the graph at `b37f7d9` to 531 files, 5,515 nodes, and 93,346 edges, then used the 140-file branch delta to prioritize review.                                                                                                                  |
+| Code review                 | Runs standards and specification reviews as separate read-only axes against `main`; findings do not become closed until accepted tests and public evidence pass.                                                                                         |
+| Browser QA and Playwright   | Keeps the stock matrix explicitly non-qualifying and requires the registered CloakBrowser authority, semantic snapshots, screenshots, console/network inspection, accessibility, and responsive evidence.                                                |
+| Wrangler                    | Requires current documentation, repository-contained CLI state, authenticated-account proof, dry-run/preflight, exact version/digest capture, and qualified-only deployment.                                                                             |
 
 ## Current blockers and shortest honest path
 
@@ -235,10 +253,11 @@ that home-directory skill files were read.
    and owned `/proc/<pid>/stat` reads. The release must remain `NO-GO` unless the
    checked-in authority changes or another constitution-compatible evidence
    path is established.
-3. The preserved FUSE entry blocks the primary tree, but a reviewed linked
-   worktree under ignored in-repository `.cache/` can provide a clean exact
-   source without touching it. That worktree and its independent contained
-   dependencies/runtime have not yet been created.
+3. Both retained linked-worktree candidates were attempted and disproved as
+   runtime release roots: their physical paths exceed the 42-character
+   containerd shim limit. The primary physical root is exactly 42 characters
+   and successfully hosts `rt-mainrel04`, but its preserved FUSE tombstone
+   prevents a clean frozen source.
 4. No current-source image, scientific-evidence refresh, evidence commit,
    qualified receipt, or release-check receipt exists.
 5. Contained Wrangler authentication is explicitly red: `whoami` returned
@@ -251,11 +270,13 @@ that home-directory skill files were read.
 7. Learner evidence remains `NO_DATA`; public repository, video, feedback ID,
    Devpost publication, and submission receipt remain externally unverified.
 
-The shortest honest path is to resolve the real-sentinel authority and clean
-source blockers, freeze `S`, build once, produce the genuine sentinel, refresh
-and commit evidence as `E`, qualify, release-check, preflight CloakBrowser and
-Wrangler, deploy once, verify the exact public tuple, execute the full browser
-matrix, finalize the factual submission, then push and fast-forward merge.
+The shortest honest path is to resolve the clean-source condition at the primary
+physical root without hiding or deleting the protected tombstone; obtain narrow
+read-only cgroup-observation authority; freeze `S`; build one exact image; run
+the genuine sentinel; refresh and commit evidence as `E`; authenticate contained
+Wrangler; qualify and release-check; preflight CloakBrowser; deploy once; verify
+the exact public tuple and browser matrix; finalize the factual submission; then
+push and fast-forward merge.
 
 ## Final release review questions
 
