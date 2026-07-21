@@ -42,6 +42,14 @@ export function JudgeModeView({
 }) {
   const liveReady = liveAuthorityReady(health);
   const release = health?.release?.status === "bound" ? health.release : null;
+  const generationIsolationBoundary =
+    release !== null &&
+    health?.generationFilesystemReadIsolation === "OS_ENFORCED"
+      ? "Filesystem generation read isolation is OS-enforced for the exact released live runtime."
+      : release !== null &&
+          health?.generationFilesystemReadIsolation === "PARTIAL"
+        ? "Filesystem generation read isolation is explicitly PARTIAL, so live authority remains unavailable."
+        : "No exact released filesystem generation read-isolation status is available, so live authority remains unproven.";
   const [sampleEvidenceInspectionRequest, setSampleEvidenceInspectionRequest] =
     useState(0);
 
@@ -401,8 +409,8 @@ export function JudgeModeView({
             packages, arbitrary code execution, unsupported patch shapes, and
             insufficient evidence. A Proof Capsule proves integrity and scoped
             verification—not global mastery or formal sandbox security. The
-            hosted Codex launch has a credential-and-privilege boundary;
-            filesystem generation read isolation is explicitly PARTIAL.
+            hosted Codex launch has a credential-and-privilege boundary.{" "}
+            {generationIsolationBoundary}
           </p>
           <section
             className={styles.releaseIdentity}

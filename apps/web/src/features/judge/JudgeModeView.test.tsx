@@ -126,6 +126,12 @@ describe("JudgeModeView", () => {
     expect(screen.getByText("Fixed kernel")).toBeInTheDocument();
     expect(screen.getByText("Frozen verifier")).toBeInTheDocument();
     expect(document.body).toHaveTextContent(
+      /filesystem generation read isolation is OS-enforced/i,
+    );
+    expect(document.body).not.toHaveTextContent(
+      /filesystem generation read isolation is explicitly PARTIAL/i,
+    );
+    expect(document.body).toHaveTextContent(
       /evidence-first learning for notebook users/i,
     );
     expect(document.body).toHaveTextContent(
@@ -296,6 +302,12 @@ describe("JudgeModeView", () => {
     ).not.toBeInTheDocument();
     expect(document.body).toHaveTextContent(
       /release identity is unbound.*live qualification as unproven/i,
+    );
+    expect(document.body).toHaveTextContent(
+      /no exact released filesystem generation read-isolation status is available/i,
+    );
+    expect(document.body).not.toHaveTextContent(
+      /filesystem generation read isolation is OS-enforced/i,
     );
   });
 
