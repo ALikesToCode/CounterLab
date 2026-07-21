@@ -4144,14 +4144,43 @@ function requireStoredSampleClaimScope(
   }
 }
 
-function requireStoredProofBundleIntegrity(
+async function requireStoredProofBundleIntegrity(
   session: Awaited<ReturnType<SessionService["getSession"]>>,
+  service: SessionService,
   signingKey: string | undefined,
-): void {
+): Promise<void> {
   if (session.proofBundle === undefined) return;
+
+  try {
+    const chain = verifyEvidenceChain(await service.listEvents(session.id));
+    const proofBundleHash = await hashCanonical(session.proofBundle);
+    const issuanceEvents = chain.events.filter(
+      (event) => event.kind === "reasoning_diff.issued",
+    );
+    if (
+      chain.sessionId !== session.id ||
+      issuanceEvents.length !== 1 ||
+      !issuanceEvents[0]?.outputHashes.includes(proofBundleHash)
+    ) {
+      throw new Error(
+        "stored Proof Bundle is not bound to its issuance evidence",
+      );
+    }
+  } catch {
+    throw new ApiInputError(
+      "PROOF_BUNDLE_INVALID",
+      "The stored Proof Bundle failed integrity or lineage validation",
+      409,
+    );
+  }
+
+  const usableSigningKey =
+    signingKey === undefined || signingKey.trim().length === 0
+      ? undefined
+      : signingKey;
   if (
     session.proofBundle.integrity.mode === "hmac-signed" &&
-    signingKey === undefined
+    usableSigningKey === undefined
   ) {
     throw new ApiInputError(
       "PROOF_SIGNING_KEY_REQUIRED",
@@ -4160,8 +4189,6 @@ function requireStoredProofBundleIntegrity(
     );
   }
   try {
-    const requiresConfiguredSigning =
-      session.proofBundle.schemaVersion === "2" && signingKey !== undefined;
     const proofBundle = validateProofBundle(session.proofBundle, {
       ...(session.proofBundle.schemaVersion === "2"
         ? {
@@ -4169,10 +4196,9 @@ function requireStoredProofBundleIntegrity(
               scientificEngineSnapshotValue.authorityHash,
           }
         : {}),
-      ...((session.proofBundle.integrity.mode === "hmac-signed" ||
-        requiresConfiguredSigning) &&
-      signingKey !== undefined
-        ? { signingKey }
+      ...(session.proofBundle.integrity.mode === "hmac-signed" &&
+      usableSigningKey !== undefined
+        ? { signingKey: usableSigningKey }
         : {}),
     });
     const modeMatches =
@@ -4210,12 +4236,14 @@ function isFile(value: string | File | null): value is File {
   return value !== null && typeof value !== "string";
 }
 
-function statePayload(
+async function statePayload(
   context: Context<AppBindings>,
   session: Awaited<ReturnType<SessionService["getSession"]>>,
+  options: ApiOptions,
 ) {
-  requireStoredProofBundleIntegrity(
+  await requireStoredProofBundleIntegrity(
     session,
+    sessionService(context, options),
     context.env?.COUNTERLAB_SIGNING_KEY,
   );
   const publicProofCapsule =
@@ -4726,7 +4754,7 @@ export function createApi(options: ApiOptions = {}) {
     }
     return context.json(
       jsonSuccess({
-        ...statePayload(context, session),
+        ...(await statePayload(context, session, options)),
         ...(ownerCapability === undefined ? {} : { ownerCapability }),
       }),
       201,
@@ -4778,7 +4806,7 @@ export function createApi(options: ApiOptions = {}) {
     }
     return context.json(
       jsonSuccess({
-        ...statePayload(context, session),
+        ...(await statePayload(context, session, options)),
         ...(ownerCapability === undefined ? {} : { ownerCapability }),
       }),
       201,
@@ -4799,7 +4827,9 @@ export function createApi(options: ApiOptions = {}) {
       context.req.param("sessionId"),
     );
     requireStoredSampleClaimScope(session);
-    return context.json(jsonSuccess(statePayload(context, session)));
+    return context.json(
+      jsonSuccess(await statePayload(context, session, options)),
+    );
   });
 
   app.get("/api/sessions/:sessionId/artifact", async (context) => {
@@ -4957,7 +4987,7 @@ export function createApi(options: ApiOptions = {}) {
     }
     return context.json(
       jsonSuccess({
-        ...statePayload(context, restarted),
+        ...(await statePayload(context, restarted, options)),
         ...(ownerCapability === undefined ? {} : { ownerCapability }),
       }),
       created ? 201 : 200,
@@ -5164,7 +5194,9 @@ export function createApi(options: ApiOptions = {}) {
         insufficient,
         { actor: "system", modelId: "concept-router-v1" },
       );
-      return context.json(jsonSuccess(statePayload(context, proposed)));
+      return context.json(
+        jsonSuccess(await statePayload(context, proposed, options)),
+      );
     }
 
     if (session.mode.kind === "live_notebook") {
@@ -5243,7 +5275,9 @@ export function createApi(options: ApiOptions = {}) {
             promptHash: result.provenance.promptHash,
           },
         );
-        return context.json(jsonSuccess(statePayload(context, proposed)));
+        return context.json(
+          jsonSuccess(await statePayload(context, proposed, options)),
+        );
       } finally {
         await releaseAdmissionBestEffort(
           context,
@@ -5272,7 +5306,9 @@ export function createApi(options: ApiOptions = {}) {
       actor: "system",
       modelId: result.provenance.approvalId,
     });
-    return context.json(jsonSuccess(statePayload(context, proposed)));
+    return context.json(
+      jsonSuccess(await statePayload(context, proposed, options)),
+    );
   });
 
   app.post("/api/sessions/:sessionId/belief-test/confirm", async (context) => {
@@ -5284,7 +5320,11 @@ export function createApi(options: ApiOptions = {}) {
     if (input.action === "confirm") {
       return context.json(
         jsonSuccess(
-          statePayload(context, await service.confirmBeliefTest(sessionId)),
+          await statePayload(
+            context,
+            await service.confirmBeliefTest(sessionId),
+            options,
+          ),
         ),
       );
     }
@@ -5297,9 +5337,10 @@ export function createApi(options: ApiOptions = {}) {
         }
         return context.json(
           jsonSuccess(
-            statePayload(
+            await statePayload(
               context,
               await service.editBeliefSpecV2(sessionId, input.beliefSpec),
+              options,
             ),
           ),
         );
@@ -5311,9 +5352,10 @@ export function createApi(options: ApiOptions = {}) {
       }
       return context.json(
         jsonSuccess(
-          statePayload(
+          await statePayload(
             context,
             await service.editBeliefTest(sessionId, input.beliefTest),
+            options,
           ),
         ),
       );
@@ -5321,18 +5363,20 @@ export function createApi(options: ApiOptions = {}) {
     if (input.action === "reject") {
       return context.json(
         jsonSuccess(
-          statePayload(
+          await statePayload(
             context,
             await service.rejectBeliefTest(sessionId, input.reason),
+            options,
           ),
         ),
       );
     }
     return context.json(
       jsonSuccess(
-        statePayload(
+        await statePayload(
           context,
           await service.markInsufficientEvidence(sessionId, input.reason),
+          options,
         ),
       ),
     );
@@ -5369,9 +5413,10 @@ export function createApi(options: ApiOptions = {}) {
     };
     return context.json(
       jsonSuccess(
-        statePayload(
+        await statePayload(
           context,
           await service.commitPrediction(sessionId, prediction),
+          options,
         ),
       ),
       201,
@@ -5540,7 +5585,7 @@ export function createApi(options: ApiOptions = {}) {
         });
         return context.json(
           jsonSuccess({
-            ...statePayload(context, current),
+            ...(await statePayload(context, current, options)),
             runnerJob,
             reused: true as const,
           }),
@@ -5675,7 +5720,7 @@ export function createApi(options: ApiOptions = {}) {
       });
       return context.json(
         jsonSuccess({
-          ...statePayload(context, started),
+          ...(await statePayload(context, started, options)),
           runnerJob: starting,
           ...(claimed.reused ? { reused: true as const } : {}),
         }),
@@ -5699,7 +5744,9 @@ export function createApi(options: ApiOptions = {}) {
       [...sampleAuthority.evidenceHashes],
       sampleAuthority.operationSummary,
     );
-    return context.json(jsonSuccess(statePayload(context, verified)));
+    return context.json(
+      jsonSuccess(await statePayload(context, verified, options)),
+    );
   });
 
   app.get("/api/runner/jobs/:jobId/input", async (context) => {
@@ -6729,7 +6776,7 @@ export function createApi(options: ApiOptions = {}) {
       const projectedSession = await projectCancellation();
       return context.json(
         jsonSuccess({
-          ...statePayload(context, projectedSession),
+          ...(await statePayload(context, projectedSession, options)),
           runnerJob: job,
           reused: true as const,
           runnerAcknowledged: true,
@@ -6798,7 +6845,7 @@ export function createApi(options: ApiOptions = {}) {
     }
     return context.json(
       jsonSuccess({
-        ...statePayload(context, updatedSession),
+        ...(await statePayload(context, updatedSession, options)),
         runnerJob: cancelled,
         reused: false as const,
         runnerAcknowledged,
@@ -8070,7 +8117,7 @@ export function createApi(options: ApiOptions = {}) {
       jsonSuccess({
         duplicate: completed.duplicate,
         runnerJob: completed.job,
-        session: statePayload(context, updatedSession),
+        session: await statePayload(context, updatedSession, options),
         verification,
       }),
     );
@@ -8336,7 +8383,7 @@ export function createApi(options: ApiOptions = {}) {
           });
           return context.json(
             jsonSuccess({
-              ...statePayload(context, current),
+              ...(await statePayload(context, current, options)),
               runnerJob,
               reused: true as const,
             }),
@@ -8413,7 +8460,7 @@ export function createApi(options: ApiOptions = {}) {
         });
         return context.json(
           jsonSuccess({
-            ...statePayload(context, current),
+            ...(await statePayload(context, current, options)),
             runnerJob: starting,
             ...(claimed.reused ? { reused: true as const } : {}),
           }),
@@ -8555,7 +8602,7 @@ export function createApi(options: ApiOptions = {}) {
       });
       return context.json(
         jsonSuccess({
-          ...statePayload(context, current),
+          ...(await statePayload(context, current, options)),
           runnerJob: starting,
           ...(claimed.reused ? { reused: true as const } : {}),
         }),
@@ -8574,7 +8621,9 @@ export function createApi(options: ApiOptions = {}) {
       sessionId,
       sampleResult,
     );
-    return context.json(jsonSuccess(statePayload(context, completed)));
+    return context.json(
+      jsonSuccess(await statePayload(context, completed, options)),
+    );
   });
 
   app.post("/api/sessions/:sessionId/boundary/run", async (context) => {
@@ -8734,7 +8783,7 @@ export function createApi(options: ApiOptions = {}) {
       });
       return context.json(
         jsonSuccess({
-          ...statePayload(context, current),
+          ...(await statePayload(context, current, options)),
           runnerJob,
           reused: true as const,
         }),
@@ -8787,7 +8836,7 @@ export function createApi(options: ApiOptions = {}) {
     });
     return context.json(
       jsonSuccess({
-        ...statePayload(context, current),
+        ...(await statePayload(context, current, options)),
         runnerJob: starting,
         ...(claimed.reused ? { reused: true as const } : {}),
       }),
@@ -9019,7 +9068,7 @@ export function createApi(options: ApiOptions = {}) {
       });
       return context.json(
         jsonSuccess({
-          ...statePayload(context, current),
+          ...(await statePayload(context, current, options)),
           runnerJob: starting,
           selectedRunId: derived.selectedRunId,
           configurationHash,
@@ -9292,7 +9341,7 @@ export function createApi(options: ApiOptions = {}) {
     });
     return context.json(
       jsonSuccess({
-        ...statePayload(context, current),
+        ...(await statePayload(context, current, options)),
         runnerJob: starting,
         selectedRunId,
         configurationHash,
@@ -9580,7 +9629,9 @@ export function createApi(options: ApiOptions = {}) {
     const sessionId = context.req.param("sessionId");
     requireMutableSession(await service.getSession(sessionId));
     const updated = await service.recordRevision(sessionId, revision);
-    return context.json(jsonSuccess(statePayload(context, updated)));
+    return context.json(
+      jsonSuccess(await statePayload(context, updated, options)),
+    );
   });
 
   app.post("/api/sessions/:sessionId/transfer", async (context) => {
@@ -9653,7 +9704,9 @@ export function createApi(options: ApiOptions = {}) {
     const evaluatedAt = (options.now?.() ?? new Date()).toISOString();
     const result = await evaluateSubmission(evaluatedAt);
     const updated = await service.recordTransferResult(sessionId, result);
-    return context.json(jsonSuccess(statePayload(context, updated)));
+    return context.json(
+      jsonSuccess(await statePayload(context, updated, options)),
+    );
   });
 
   app.post("/api/sessions/:sessionId/patch/compile", async (context) => {
@@ -9850,7 +9903,7 @@ export function createApi(options: ApiOptions = {}) {
           });
           return context.json(
             jsonSuccess({
-              ...statePayload(context, current),
+              ...(await statePayload(context, current, options)),
               runnerJob,
               reused: true as const,
             }),
@@ -9935,7 +9988,7 @@ export function createApi(options: ApiOptions = {}) {
         });
         return context.json(
           jsonSuccess({
-            ...statePayload(context, started),
+            ...(await statePayload(context, started, options)),
             runnerJob: starting,
             ...(claimed.reused ? { reused: true as const } : {}),
           }),
@@ -10033,7 +10086,7 @@ export function createApi(options: ApiOptions = {}) {
         });
         return context.json(
           jsonSuccess({
-            ...statePayload(context, current),
+            ...(await statePayload(context, current, options)),
             runnerJob,
             reused: true as const,
           }),
@@ -10113,7 +10166,7 @@ export function createApi(options: ApiOptions = {}) {
       });
       return context.json(
         jsonSuccess({
-          ...statePayload(context, started),
+          ...(await statePayload(context, started, options)),
           runnerJob: starting,
           ...(claimed.reused ? { reused: true as const } : {}),
         }),
@@ -10182,7 +10235,7 @@ export function createApi(options: ApiOptions = {}) {
     const updated = await service.verifyPatch(sessionId, patchResult);
     return context.json(
       jsonSuccess({
-        ...statePayload(context, updated),
+        ...(await statePayload(context, updated, options)),
         patch: patchResult,
         kernelVerification: samplePatchKernelResult,
       }),
@@ -10259,9 +10312,8 @@ export function createApi(options: ApiOptions = {}) {
   });
 
   app.get("/api/sessions/:sessionId/proof-bundle", async (context) => {
-    const session = await sessionService(context, options).getSession(
-      context.req.param("sessionId"),
-    );
+    const service = sessionService(context, options);
+    const session = await service.getSession(context.req.param("sessionId"));
     requireStoredSampleClaimScope(session);
     if (session.proofBundle === undefined) {
       throw new ApiInputError(
@@ -10270,8 +10322,9 @@ export function createApi(options: ApiOptions = {}) {
         409,
       );
     }
-    requireStoredProofBundleIntegrity(
+    await requireStoredProofBundleIntegrity(
       session,
+      service,
       context.env?.COUNTERLAB_SIGNING_KEY,
     );
     context.header(

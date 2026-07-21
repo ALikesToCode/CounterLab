@@ -4912,9 +4912,22 @@ describe("Cloudflare Worker API", () => {
     const patchCallbackBody = (await callback.json()) as {
       data: { verification?: unknown; session: unknown };
     };
-    expect({ status: callback.status }).toEqual({
-      status: 200,
-    });
+    const completedSession = await harness.sessionRepository.find(
+      harness.sessionId,
+    );
+    const completedEvents = await harness.sessionRepository.listEvents(
+      harness.sessionId,
+    );
+    const completedBundleHash =
+      completedSession?.proofBundle === undefined
+        ? undefined
+        : await hashCanonical(completedSession.proofBundle);
+    expect(
+      completedEvents
+        .filter((event) => event.kind === "reasoning_diff.issued")
+        .map((event) => event.outputHashes.includes(completedBundleHash ?? "")),
+    ).toEqual([true]);
+    expect(callback.status, JSON.stringify(patchCallbackBody)).toBe(200);
     expect(patchCallbackBody.data.verification).toMatchObject({
       status: "VERIFIED",
     });
@@ -6398,25 +6411,75 @@ describe("Cloudflare Worker API", () => {
     );
     expect(proofDownload.status).toBe(200);
 
+    const proofSigningKey =
+      "counterlab-test-proof-signing-key-with-sufficient-entropy";
+    const proofSigningEnv = {
+      COUNTERLAB_SIGNING_KEY: proofSigningKey,
+    } as unknown as Env & Record<string, string>;
+    for (const path of [
+      `/api/sessions/${sessionId}`,
+      `/api/sessions/${sessionId}/proof-bundle`,
+    ]) {
+      const historicalUnsigned = await app.request(
+        path,
+        undefined,
+        proofSigningEnv,
+      );
+      expect(historicalUnsigned.status).toBe(200);
+      const historicalPayload = (await historicalUnsigned.json()) as {
+        data: {
+          integrity?: { mode: string };
+          proofBundle?: { integrity: { mode: string } };
+        };
+      };
+      expect(
+        historicalPayload.data.proofBundle?.integrity ??
+          historicalPayload.data.integrity,
+      ).toMatchObject({ mode: "integrity-hashed" });
+    }
+
     const storedProofSession = await harness.sessionRepository.find(sessionId);
     if (storedProofSession?.proofBundle === undefined) {
       throw new Error("hosted proof bundle was not persisted");
     }
+    const replaceIssuedProofBundle = async (
+      proofBundle: NonNullable<CounterLabSession["proofBundle"]>,
+    ) => {
+      const events = await harness.sessionRepository.listEvents(sessionId);
+      const issuanceIndex = events.findIndex(
+        (event) => event.kind === "reasoning_diff.issued",
+      );
+      if (issuanceIndex !== events.length - 1) {
+        throw new Error("Proof Bundle issuance must be the final test event");
+      }
+      const issuance = events[issuanceIndex];
+      if (issuance === undefined || issuance.outputHashes.length < 2) {
+        throw new Error("Proof Bundle issuance hash is unavailable");
+      }
+      const outputHashes = [...issuance.outputHashes];
+      outputHashes[outputHashes.length - 1] = await hashCanonical(proofBundle);
+      const { eventHash: _eventHash, ...unsignedIssuance } = issuance;
+      const reboundIssuance = { ...unsignedIssuance, outputHashes };
+      events[issuanceIndex] = {
+        ...reboundIssuance,
+        eventHash: await hashCanonical(reboundIssuance),
+      };
+      storedProofSession.proofBundle = structuredClone(proofBundle);
+      harness.sessionRepository.replaceEventsForIntegrityTest(
+        sessionId,
+        events,
+      );
+      harness.sessionRepository.replaceSessionForIntegrityTest(
+        storedProofSession,
+      );
+    };
     const { integrity: _integrity, ...proofDraft } =
       storedProofSession.proofBundle;
-    const proofSigningKey =
-      "counterlab-test-proof-signing-key-with-sufficient-entropy";
-    storedProofSession.proofBundle = createProofBundle(proofDraft, {
+    const signedProofBundle = createProofBundle(proofDraft, {
       signingKey: proofSigningKey,
       scientificEngineSnapshotHash: scientificEngineSnapshotValue.authorityHash,
     });
-    const signedProofBundle = structuredClone(storedProofSession.proofBundle);
-    harness.sessionRepository.replaceSessionForIntegrityTest(
-      storedProofSession,
-    );
-    const proofSigningEnv = {
-      COUNTERLAB_SIGNING_KEY: proofSigningKey,
-    } as unknown as Env & Record<string, string>;
+    await replaceIssuedProofBundle(signedProofBundle);
     for (const path of [
       `/api/sessions/${sessionId}`,
       `/api/sessions/${sessionId}/proof-bundle`,
@@ -6437,6 +6500,13 @@ describe("Cloudflare Worker API", () => {
       expect((await app.request(path, undefined, proofSigningEnv)).status).toBe(
         200,
       );
+      const blankKey = await app.request(path, undefined, {
+        COUNTERLAB_SIGNING_KEY: "   ",
+      } as unknown as Env & Record<string, string>);
+      expect(blankKey.status).toBe(503);
+      await expect(blankKey.json()).resolves.toMatchObject({
+        error: { code: "PROOF_SIGNING_KEY_REQUIRED" },
+      });
     }
 
     if (signedProofBundle.integrity.mode !== "hmac-signed") {
@@ -6458,11 +6528,13 @@ describe("Cloudflare Worker API", () => {
       `/api/sessions/${sessionId}`,
       `/api/sessions/${sessionId}/proof-bundle`,
     ]) {
-      const downgraded = await app.request(path, undefined, proofSigningEnv);
-      expect(downgraded.status).toBe(409);
-      await expect(downgraded.json()).resolves.toMatchObject({
-        error: { code: "PROOF_BUNDLE_INVALID" },
-      });
+      for (const env of [undefined, proofSigningEnv]) {
+        const downgraded = await app.request(path, undefined, env);
+        expect(downgraded.status).toBe(409);
+        await expect(downgraded.json()).resolves.toMatchObject({
+          error: { code: "PROOF_BUNDLE_INVALID" },
+        });
+      }
     }
 
     storedProofSession.proofBundle = structuredClone(signedProofBundle);
@@ -6494,6 +6566,46 @@ describe("Cloudflare Worker API", () => {
       const tampered = await app.request(path, undefined, proofSigningEnv);
       expect(tampered.status).toBe(409);
       await expect(tampered.json()).resolves.toMatchObject({
+        error: { code: "PROOF_BUNDLE_INVALID" },
+      });
+    }
+
+    storedProofSession.proofBundle = structuredClone(signedProofBundle);
+    harness.sessionRepository.replaceSessionForIntegrityTest(
+      storedProofSession,
+    );
+    const issuanceEvents =
+      await harness.sessionRepository.listEvents(sessionId);
+    const issuanceIndex = issuanceEvents.findIndex(
+      (event) => event.kind === "reasoning_diff.issued",
+    );
+    const issuance = issuanceEvents[issuanceIndex];
+    if (issuance === undefined) {
+      throw new Error("Proof Bundle issuance event is unavailable");
+    }
+    const { eventHash: _issuanceHash, ...unsignedIssuance } = issuance;
+    const mismatchedIssuance = {
+      ...unsignedIssuance,
+      outputHashes: [
+        ...unsignedIssuance.outputHashes.slice(0, -1),
+        "f".repeat(64),
+      ],
+    };
+    issuanceEvents[issuanceIndex] = {
+      ...mismatchedIssuance,
+      eventHash: await hashCanonical(mismatchedIssuance),
+    };
+    harness.sessionRepository.replaceEventsForIntegrityTest(
+      sessionId,
+      issuanceEvents,
+    );
+    for (const path of [
+      `/api/sessions/${sessionId}`,
+      `/api/sessions/${sessionId}/proof-bundle`,
+    ]) {
+      const detached = await app.request(path, undefined, proofSigningEnv);
+      expect(detached.status).toBe(409);
+      await expect(detached.json()).resolves.toMatchObject({
         error: { code: "PROOF_BUNDLE_INVALID" },
       });
     }
