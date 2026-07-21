@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  ArtifactManifestSchema,
   migrateBeliefTestV1ToV2,
   VerifiedResultSetSchema,
   type EvidenceEvent,
@@ -11,7 +12,7 @@ import {
 import imbalanceResultText from "../../../fixtures/held-out/imbalance_epistemic_competing_v2.json?raw";
 import { SAMPLE_LEAKAGE_QUESTION } from "../shared/sample-authority";
 
-import { App } from "./App";
+import { App, notebookEvidenceReferences } from "./App";
 import { SessionViewSchema } from "./api";
 import {
   publicReplayFixture,
@@ -1019,6 +1020,38 @@ async function openSampleModelDuel(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("CounterLab judged flow", () => {
+  it("assigns distinct evidence identities to metrics from one output", () => {
+    const outputHash = "d".repeat(64);
+    const references = notebookEvidenceReferences(
+      ArtifactManifestSchema.parse({
+        ...uploadedArtifact,
+        cells: [
+          {
+            index: 1,
+            type: "code",
+            sourceSha256: "b".repeat(64),
+            sourceExcerpt: "accuracy and roc_auc",
+            executionCount: 1,
+            outputHashes: [outputHash],
+            symbols: [],
+            metricCandidates: [
+              { name: "accuracy", value: 0.98, outputIndex: 0 },
+              { name: "roc_auc", value: 0.97, outputIndex: 0 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    expect(references.map(({ id }) => id)).toEqual([
+      `${outputHash}-0-accuracy`,
+      `${outputHash}-0-roc_auc`,
+    ]);
+    expect(new Set(references.map(({ id }) => id)).size).toBe(
+      references.length,
+    );
+  });
+
   it("keeps Judge Mode on its own refresh-safe route", async () => {
     const user = userEvent.setup();
     const fetcher = installApi({

@@ -338,6 +338,15 @@ test("a supported live upload creates one source-bound session", async ({
 }) => {
   let uploadRequests = 0;
   let sessionCreationRequests = 0;
+  const duplicateKeyWarnings: string[] = [];
+  page.on("console", (message) => {
+    if (
+      message.type() === "error" &&
+      /same key|keys should be unique/i.test(message.text())
+    ) {
+      duplicateKeyWarnings.push(message.text());
+    }
+  });
   page.on("request", (request) => {
     if (isPostTo(request.url(), request.method(), "/api/artifacts")) {
       uploadRequests += 1;
@@ -362,6 +371,7 @@ test("a supported live upload creates one source-bound session", async ({
   expect(await storedSessionId(page)).toMatch(/^session_/u);
   expect(uploadRequests).toBe(1);
   expect(sessionCreationRequests).toBe(1);
+  expect(duplicateKeyWarnings).toEqual([]);
 });
 
 test("an interrupted upload accepts the same file on retry", async ({

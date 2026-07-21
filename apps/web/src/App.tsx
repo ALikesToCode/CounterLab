@@ -708,7 +708,7 @@ function notebookScoreDisplay(
       };
 }
 
-function notebookEvidenceReferences(
+export function notebookEvidenceReferences(
   artifact: ArtifactView | null,
 ): readonly NotebookEvidenceReference[] {
   if (artifact?.fileSha256 === sampleArtifact.fileSha256) {
@@ -733,9 +733,7 @@ function notebookEvidenceReferences(
   if (artifact === null) return [];
   const metricReferences = artifact.cells.flatMap((cell) =>
     cell.metricCandidates.map((metric) => ({
-      id:
-        cell.outputHashes[metric.outputIndex] ??
-        `${cell.sourceSha256}-${metric.outputIndex}-${metric.name}`,
+      id: `${cell.outputHashes[metric.outputIndex] ?? cell.sourceSha256}-${metric.outputIndex}-${metric.name}`,
       reference: `Cell ${cell.index} · output ${metric.outputIndex}`,
       relevance: `${metric.name} is displayed notebook evidence attached to this question.`,
       excerpt: `${metric.name}: ${metric.value.toLocaleString()}`,
