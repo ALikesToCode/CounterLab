@@ -52,6 +52,70 @@ function context(overrides: Partial<StudioContext> = {}): StudioContext {
 }
 
 describe("ProofConsole", () => {
+  it("derives mode, session, and proof chips from authoritative state", () => {
+    render(
+      <ProofConsole
+        context={context({
+          mode: "instant",
+          session: {
+            sessionId: "session_sample_1",
+            artifactId: "artifact_sample_1",
+            mode: { kind: "sample_lesson", sampleId: "leakage-01" },
+            state: "PREDICTION_COMMITTED",
+            version: 1,
+            createdAt: "2026-07-21T10:00:00.000Z",
+            updatedAt: "2026-07-21T10:00:00.000Z",
+          },
+          proofEventStatus: "ready",
+        })}
+        open
+        activeTab="Activity"
+        onToggle={vi.fn()}
+        onTab={vi.fn()}
+      />,
+    );
+
+    const state = screen.getByLabelText("Proof state");
+    expect(state).toHaveTextContent("Verified sample");
+    expect(state).toHaveTextContent("Prediction sealed");
+    expect(state).toHaveTextContent("Stored chain loaded");
+  });
+
+  it("withholds proof surfaces when route and stored modes disagree", () => {
+    render(
+      <ProofConsole
+        context={context({
+          mode: "live",
+          session: {
+            sessionId: "session_sample_1",
+            artifactId: "artifact_sample_1",
+            mode: { kind: "sample_lesson", sampleId: "leakage-01" },
+            state: "PREDICTION_COMMITTED",
+            version: 1,
+            createdAt: "2026-07-21T10:00:00.000Z",
+            updatedAt: "2026-07-21T10:00:00.000Z",
+          },
+          evidenceEvents: [evidenceEvent(1, "session.created")],
+          proofEventStatus: "ready",
+        })}
+        open
+        activeTab="Activity"
+        onToggle={vi.fn()}
+        onTab={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("Proof state")).toHaveTextContent(
+      "Mode mismatch",
+    );
+    expect(screen.getByText("Evidence withheld")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("1 chain event");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /proof context does not match this learner mode/i,
+    );
+    expect(document.body).not.toHaveTextContent("session.created");
+  });
+
   it("characterizes the existing browser-safe compiler activity view", () => {
     render(
       <ProofConsole

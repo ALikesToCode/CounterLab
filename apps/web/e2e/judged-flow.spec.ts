@@ -956,7 +956,11 @@ async function commitAndOpenResult(page: Page) {
   await page.getByRole("button", { name: /Seal my prediction/i }).click();
   expect((await compileFinished).ok()).toBe(true);
   const runFinished = waitForPostResponse(page, "/lab/run");
-  await page.getByRole("button", { name: /Run the fair test/i }).click();
+  await page
+    .getByRole("button", {
+      name: /Run the fair test|Reveal verified sample result/i,
+    })
+    .click();
   expect((await runFinished).ok()).toBe(true);
   await expect(
     page.getByRole("heading", { name: /Compare the verified result/i }),
@@ -1567,7 +1571,11 @@ for (const viewport of beliefBreakViewports) {
     await expect(
       page.getByRole("heading", { name: /The fair test is ready/i }),
     ).toBeVisible();
-    await page.getByRole("button", { name: /Run the fair test/i }).click();
+    await page
+      .getByRole("button", {
+        name: /Run the fair test|Reveal verified sample result/i,
+      })
+      .click();
     await expect(
       page.getByRole("heading", { name: /Compare the verified result/i }),
     ).toBeVisible();
@@ -2068,7 +2076,11 @@ test("refresh restores the current lesson and the committed prediction", async (
     page.getByRole("heading", { name: /The fair test is ready/i }),
   ).toBeVisible();
   const runFinished = waitForPostResponse(page, "/lab/run");
-  await page.getByRole("button", { name: /Run the fair test/i }).click();
+  await page
+    .getByRole("button", {
+      name: /Run the fair test|Reveal verified sample result/i,
+    })
+    .click();
   expect((await runFinished).ok()).toBe(true);
   await expect(
     page.getByRole("heading", { name: /Compare the verified result/i }),
@@ -2510,7 +2522,11 @@ test("the judged path is keyboard operable with reduced motion", async ({
   await expect(
     page.getByRole("heading", { name: /The fair test is ready/i }),
   ).toBeVisible();
-  await page.getByRole("button", { name: /Run the fair test/i }).focus();
+  await page
+    .getByRole("button", {
+      name: /Run the fair test|Reveal verified sample result/i,
+    })
+    .focus();
   await page.keyboard.press("Enter");
   await expect(
     page.getByRole("heading", { name: /Compare the verified result/i }),

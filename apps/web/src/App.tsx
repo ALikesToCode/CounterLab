@@ -542,6 +542,35 @@ function presentationMode(mode: SessionView["mode"]): Mode {
   return "live";
 }
 
+function patchSourceCopy(mode: SessionView["mode"] | undefined) {
+  if (mode?.kind === "live_notebook") {
+    return {
+      activity: "The uploaded notebook remains read-only.",
+      source: "Original upload is never overwritten",
+      unlock: "The original upload will not be overwritten.",
+    } as const;
+  }
+  if (mode?.kind === "sample_lesson") {
+    return {
+      activity: "The bundled sample artifact remains read-only.",
+      source: "Bundled sample source is never overwritten",
+      unlock: "The bundled sample source will not be overwritten.",
+    } as const;
+  }
+  if (mode?.kind === "verified_replay") {
+    return {
+      activity: "The stored replay artifact remains read-only.",
+      source: "Stored replay source is never overwritten",
+      unlock: "The stored replay source will not be overwritten.",
+    } as const;
+  }
+  return {
+    activity: "The source artifact remains read-only.",
+    source: "Source artifact is never overwritten",
+    unlock: "The source artifact will not be overwritten.",
+  } as const;
+}
+
 const storageKeys = {
   sessionId: "counterlab.sessionId",
   mode: "counterlab.mode",
@@ -1916,7 +1945,11 @@ function BuildScreen({
           type="button"
           onClick={openResult}
         >
-          {resultReady ? "Show me what happened" : "Run the fair test"}{" "}
+          {mode === "instant"
+            ? "Reveal verified sample result"
+            : resultReady
+              ? "Show me what happened"
+              : "Run the fair test"}{" "}
           <Mark name="arrow" />
         </button>
       </div>
@@ -2806,6 +2839,7 @@ function LeakageRealityScreen({
   );
   const [patchJob, setPatchJob] = useState<RunnerJob | null>(null);
   const patchRunner = useRunnerEvents();
+  const sourceCopy = patchSourceCopy(session?.mode);
   const accuracyGapPoints =
     (random.metrics.accuracy - group.metrics.accuracy) * 100;
 
@@ -3086,7 +3120,7 @@ function LeakageRealityScreen({
                   <span className="event-mark" />
                   <div>
                     <strong>Preparing separate patch job</strong>
-                    <p>The uploaded notebook remains read-only.</p>
+                    <p>{sourceCopy.activity}</p>
                   </div>
                 </li>
               )}
@@ -3108,7 +3142,7 @@ function LeakageRealityScreen({
             <p className="eyebrow aqua">Patch safety</p>
             <div>
               <span>Source</span>
-              <strong>Original upload is never overwritten</strong>
+              <strong>{sourceCopy.source}</strong>
             </div>
             <div>
               <span>Scope</span>
@@ -3415,7 +3449,7 @@ function LeakageRealityScreen({
             <div>
               <span>What the patch will change</span>
               <strong>Random rows → whole-customer holdout</strong>
-              <small>The original upload will not be overwritten.</small>
+              <small>{sourceCopy.unlock}</small>
             </div>
             <button
               className="button button-gold"

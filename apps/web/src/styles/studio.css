@@ -464,6 +464,37 @@ kbd {
   font-weight: 600;
 }
 
+.proof-console-context {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.proof-console-context em {
+  min-height: 24px;
+  padding: 4px 7px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  background: var(--paper);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.proof-console[data-proof-context="mismatch"]
+  .proof-console-context
+  em:first-child {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 55%, var(--line));
+}
+
 .proof-console-handle kbd {
   margin-left: auto;
 }
@@ -472,6 +503,12 @@ kbd {
   height: 290px;
   border-top: 1px solid var(--line);
   background: var(--paper);
+}
+
+.proof-context-blocked {
+  height: auto;
+  min-height: 120px;
+  padding: 16px;
 }
 
 .proof-tabs {

@@ -6,6 +6,7 @@ import type {
   PublicCompilerEvent,
 } from "../../api";
 import { CapabilityLinkDisclosure } from "../learner/CapabilityLinkDisclosure";
+import { learnerSessionStatusLabel } from "../learner/learnerStages";
 import { GeneratedProofView } from "./GeneratedProofView";
 import { ProvenanceLedger } from "./ProvenanceLedger";
 import type { StudioContext } from "./types";
@@ -21,6 +22,27 @@ const tabs: readonly ProofTab[] = [
   "Verifier",
   "Provenance",
 ];
+
+const studioModeLabels = {
+  instant: "Verified sample",
+  live: "Live notebook",
+  replay: "Verified replay",
+} as const;
+
+const proofStatusLabels = {
+  idle: "Stored chain not loaded",
+  loading: "Loading stored chain",
+  ready: "Stored chain loaded",
+  failed: "Stored chain unavailable",
+} as const;
+
+function sessionStudioMode(
+  kind: NonNullable<StudioContext["session"]>["mode"]["kind"],
+): StudioContext["mode"] {
+  if (kind === "sample_lesson") return "instant";
+  if (kind === "verified_replay") return "replay";
+  return "live";
+}
 
 function eventSummary(event: PublicCompilerEvent): string {
   switch (event.kind) {
@@ -370,6 +392,17 @@ export function ProofConsole({
   const evidenceEvents = context.evidenceEvents ?? [];
   const proofEventIssues = context.proofEventIssues ?? [];
   const proofEventStatus = context.proofEventStatus ?? "idle";
+  const proofContextMismatch =
+    context.session !== null &&
+    sessionStudioMode(context.session.mode.kind) !== context.mode;
+  const modeLabel =
+    context.session === null
+      ? studioModeLabels[context.mode]
+      : studioModeLabels[sessionStudioMode(context.session.mode.kind)];
+  const sessionLabel =
+    context.session === null
+      ? "No session bound"
+      : learnerSessionStatusLabel(context.session.state);
   const proofBundle = context.session?.proofBundle;
   const filteredCompilerEvents = compilerEventsForTab(
     context.events,
@@ -403,7 +436,10 @@ export function ProofConsole({
     document.getElementById(`proof-tab-${nextTab.toLowerCase()}`)?.focus();
   };
   return (
-    <section className={`proof-console ${open ? "open" : ""}`}>
+    <section
+      className={`proof-console ${open ? "open" : ""}`}
+      data-proof-context={proofContextMismatch ? "mismatch" : "aligned"}
+    >
       <button
         className="proof-console-handle"
         type="button"
@@ -413,126 +449,148 @@ export function ProofConsole({
         <span>
           <i /> Evidence &amp; proof
         </span>
+        <span className="proof-console-context" aria-label="Proof state">
+          <em>{proofContextMismatch ? "Mode mismatch" : modeLabel}</em>
+          <em>{sessionLabel}</em>
+          <em>{proofStatusLabels[proofEventStatus]}</em>
+        </span>
         <strong>
-          {evidenceEvents.length} chain event
-          {evidenceEvents.length === 1 ? "" : "s"} · {context.events.length}{" "}
-          runner event{context.events.length === 1 ? "" : "s"}
+          {proofContextMismatch ? (
+            "Evidence withheld"
+          ) : (
+            <>
+              {evidenceEvents.length} chain event
+              {evidenceEvents.length === 1 ? "" : "s"} · {context.events.length}{" "}
+              runner event{context.events.length === 1 ? "" : "s"}
+            </>
+          )}
         </strong>
         <kbd>{open ? "Close" : "Open"}</kbd>
       </button>
-      {open && (
-        <div className="proof-console-body">
-          <div className="proof-tabs" role="tablist" aria-label="Proof views">
-            {tabs.map((tab, index) => (
-              <button
-                id={`proof-tab-${tab.toLowerCase()}`}
-                role="tab"
-                aria-selected={activeTab === tab}
-                aria-controls="proof-tabpanel"
-                tabIndex={activeTab === tab ? 0 : -1}
-                type="button"
-                key={tab}
-                onClick={() => onTab(tab)}
-                onKeyDown={(event) => moveTab(event, index)}
-              >
-                {tab}
-              </button>
-            ))}
+      {open &&
+        (proofContextMismatch ? (
+          <div className="proof-console-body proof-context-blocked">
+            <div className="console-empty" role="alert">
+              <strong>Proof context does not match this learner mode.</strong>
+              <span>
+                Evidence stays withheld until the route and stored session mode
+                agree.
+              </span>
+            </div>
           </div>
-          <div
-            id="proof-tabpanel"
-            className="proof-console-content"
-            role="tabpanel"
-            aria-labelledby={`proof-tab-${activeTab.toLowerCase()}`}
-            tabIndex={0}
-          >
-            {proofEventStatus === "loading" ? (
-              <div className="console-empty" role="status" aria-live="polite">
-                <strong>Loading the stored session event chain…</strong>
-                <span>Runner activity remains a separate event domain.</span>
-              </div>
-            ) : null}
-            {proofEventStatus === "failed" ? (
-              <div className="console-empty" role="alert">
-                <strong>Stored session event chain is unavailable.</strong>
-                <span>
-                  No missing lifecycle evidence was inferred from runner
-                  activity.
-                </span>
-              </div>
-            ) : null}
-            {proofEventStatus === "idle" && evidenceEvents.length === 0 ? (
-              <div className="console-empty">
-                <strong>Stored session event chain not loaded.</strong>
-                <span>
-                  Any runner activity shown below remains a separate
-                  browser-safe stream.
-                </span>
-              </div>
-            ) : null}
-            {proofEventIssues.length > 0 ? (
-              <div className="console-empty" role="alert">
-                <strong>Conflicting proof activity was excluded.</strong>
-                <span>
-                  Validated records remain visible; the conflicting records do
-                  not contribute to the counts above.
-                </span>
-                <ul>
-                  {proofEventIssues.map((issue) => (
-                    <li
-                      key={`${issue.source}:${issue.index}:${issue.code}:${issue.cursor ?? issue.identity ?? "unknown"}`}
-                    >
-                      <code>{issue.code}</code> · {issue.message}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {activeTab === "Provenance" ? (
-              <>
-                <ProvenanceLedger context={context} />
-                {onRevokeSessionAccess === undefined ? null : (
-                  <CapabilityLinkDisclosure
-                    variant="private-session"
-                    onRevoke={onRevokeSessionAccess}
-                    revokeDisabled={revokeSessionAccessDisabled}
-                  />
-                )}
-              </>
-            ) : !hasTabEvents &&
-              proofEventStatus !== "loading" &&
-              proofEventStatus !== "failed" ? (
-              <div className="console-empty">
-                <strong>
-                  No recorded {activeTab.toLowerCase()} evidence is available.
-                </strong>
-                <span>
-                  Nothing was inferred or reconstructed for this surface.
-                </span>
-              </div>
-            ) : (
-              <>
-                {proofBundle !== undefined &&
-                proofBundleHasTab(proofBundle, activeTab) ? (
-                  <ProofBundleEvidence
-                    proofBundle={proofBundle}
-                    tab={activeTab}
-                  />
-                ) : null}
-                {filteredEvidenceEvents.length > 0 ? (
-                  <EvidenceEventList events={filteredEvidenceEvents} />
-                ) : null}
-                {filteredCompilerEvents.length > 0 ? (
-                  <CompilerEventList
-                    events={filteredCompilerEvents}
-                    tab={activeTab}
-                  />
-                ) : null}
-              </>
-            )}
+        ) : (
+          <div className="proof-console-body">
+            <div className="proof-tabs" role="tablist" aria-label="Proof views">
+              {tabs.map((tab, index) => (
+                <button
+                  id={`proof-tab-${tab.toLowerCase()}`}
+                  role="tab"
+                  aria-selected={activeTab === tab}
+                  aria-controls="proof-tabpanel"
+                  tabIndex={activeTab === tab ? 0 : -1}
+                  type="button"
+                  key={tab}
+                  onClick={() => onTab(tab)}
+                  onKeyDown={(event) => moveTab(event, index)}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+            <div
+              id="proof-tabpanel"
+              className="proof-console-content"
+              role="tabpanel"
+              aria-labelledby={`proof-tab-${activeTab.toLowerCase()}`}
+              tabIndex={0}
+            >
+              {proofEventStatus === "loading" ? (
+                <div className="console-empty" role="status" aria-live="polite">
+                  <strong>Loading the stored session event chain…</strong>
+                  <span>Runner activity remains a separate event domain.</span>
+                </div>
+              ) : null}
+              {proofEventStatus === "failed" ? (
+                <div className="console-empty" role="alert">
+                  <strong>Stored session event chain is unavailable.</strong>
+                  <span>
+                    No missing lifecycle evidence was inferred from runner
+                    activity.
+                  </span>
+                </div>
+              ) : null}
+              {proofEventStatus === "idle" && evidenceEvents.length === 0 ? (
+                <div className="console-empty">
+                  <strong>Stored session event chain not loaded.</strong>
+                  <span>
+                    Any runner activity shown below remains a separate
+                    browser-safe stream.
+                  </span>
+                </div>
+              ) : null}
+              {proofEventIssues.length > 0 ? (
+                <div className="console-empty" role="alert">
+                  <strong>Conflicting proof activity was excluded.</strong>
+                  <span>
+                    Validated records remain visible; the conflicting records do
+                    not contribute to the counts above.
+                  </span>
+                  <ul>
+                    {proofEventIssues.map((issue) => (
+                      <li
+                        key={`${issue.source}:${issue.index}:${issue.code}:${issue.cursor ?? issue.identity ?? "unknown"}`}
+                      >
+                        <code>{issue.code}</code> · {issue.message}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {activeTab === "Provenance" ? (
+                <>
+                  <ProvenanceLedger context={context} />
+                  {onRevokeSessionAccess === undefined ? null : (
+                    <CapabilityLinkDisclosure
+                      variant="private-session"
+                      onRevoke={onRevokeSessionAccess}
+                      revokeDisabled={revokeSessionAccessDisabled}
+                    />
+                  )}
+                </>
+              ) : !hasTabEvents &&
+                proofEventStatus !== "loading" &&
+                proofEventStatus !== "failed" ? (
+                <div className="console-empty">
+                  <strong>
+                    No recorded {activeTab.toLowerCase()} evidence is available.
+                  </strong>
+                  <span>
+                    Nothing was inferred or reconstructed for this surface.
+                  </span>
+                </div>
+              ) : (
+                <>
+                  {proofBundle !== undefined &&
+                  proofBundleHasTab(proofBundle, activeTab) ? (
+                    <ProofBundleEvidence
+                      proofBundle={proofBundle}
+                      tab={activeTab}
+                    />
+                  ) : null}
+                  {filteredEvidenceEvents.length > 0 ? (
+                    <EvidenceEventList events={filteredEvidenceEvents} />
+                  ) : null}
+                  {filteredCompilerEvents.length > 0 ? (
+                    <CompilerEventList
+                      events={filteredCompilerEvents}
+                      tab={activeTab}
+                    />
+                  ) : null}
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        ))}
     </section>
   );
 }

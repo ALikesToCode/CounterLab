@@ -3397,7 +3397,7 @@ describe("CounterLab judged flow", () => {
       screen.getByRole("heading", { name: /the fair test is ready/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /run the fair test/i }),
+      screen.getByRole("button", { name: /reveal verified sample result/i }),
     ).toBeEnabled();
     expect(screen.queryByText(/new customers 59\.4%/i)).not.toBeInTheDocument();
   });
@@ -3433,7 +3433,7 @@ describe("CounterLab judged flow", () => {
     expect(document.body).not.toHaveTextContent(/new customers 59\.4%/i);
 
     await user.click(
-      screen.getByRole("button", { name: /run the fair test/i }),
+      screen.getByRole("button", { name: /reveal verified sample result/i }),
     );
 
     expect(
