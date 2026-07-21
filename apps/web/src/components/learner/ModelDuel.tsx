@@ -9,7 +9,22 @@ export type DuelModel = Readonly<{
   nonClaims: readonly string[];
 }>;
 
-function ModelCard({ label, model }: { label: string; model: DuelModel }) {
+export type ModelDuelDraftSource = "subject_pack" | "ai_suggested";
+
+const ALTERNATIVE_SOURCE_LABELS: Record<ModelDuelDraftSource, string> = {
+  subject_pack: "Reviewed Subject Pack draft",
+  ai_suggested: "AI-suggested draft",
+};
+
+function ModelCard({
+  label,
+  model,
+  sourceLabel,
+}: {
+  label: string;
+  model: DuelModel;
+  sourceLabel: string;
+}) {
   return (
     <article
       className={styles.model}
@@ -17,6 +32,7 @@ function ModelCard({ label, model }: { label: string; model: DuelModel }) {
       aria-label={label}
     >
       <h3 className={styles.modelLabel}>{label}</h3>
+      <p className={styles.sourceLabel}>{sourceLabel}</p>
       <p className={styles.modelStatement}>{model.statement}</p>
       <p className={styles.prediction}>
         <strong>Predicts</strong>
@@ -55,6 +71,7 @@ export function ModelDuel({
   onInsufficientEvidence,
   onReject,
   confirmed = false,
+  alternativeSource = "subject_pack",
 }: {
   current: DuelModel;
   alternative: DuelModel;
@@ -63,15 +80,24 @@ export function ModelDuel({
   onInsufficientEvidence: () => void;
   onReject: () => void;
   confirmed?: boolean;
+  alternativeSource?: ModelDuelDraftSource;
 }) {
   const titleId = useId();
   const comparison = (
     <div className={styles.models}>
-      <ModelCard label="Your current explanation" model={current} />
+      <ModelCard
+        label="Your current explanation"
+        model={current}
+        sourceLabel="Your input"
+      />
       <span className={styles.versus} aria-hidden="true">
         versus
       </span>
-      <ModelCard label="Alternative CounterLab will test" model={alternative} />
+      <ModelCard
+        label="Alternative CounterLab will test"
+        model={alternative}
+        sourceLabel={ALTERNATIVE_SOURCE_LABELS[alternativeSource]}
+      />
     </div>
   );
 
