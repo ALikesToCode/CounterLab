@@ -132,6 +132,10 @@ export declare function validateContainedImageRootfsSnapshot(
   expectedParentChainId: string,
 ): Record<string, unknown>;
 
+export declare function validateContainedRunnerRootfsPermissions(
+  entries: unknown,
+): unknown[];
+
 export declare function validateContainedRunControlReceipt(
   value: unknown,
 ): ContainedRunControlReceipt;
@@ -174,6 +178,15 @@ export declare function executeContainedRun(
   createInvocationId?: () => string,
   now?: () => number,
   qualificationCoordinator?: ContainedCgroupQualificationCoordinator,
+  verifyRunnerRootfs?: (
+    plan: ContainedRuntimeRunPlan,
+    imageRootfsPath: string,
+  ) => void,
+  setRootfsMountpointMode?: (
+    plan: ContainedRuntimeRunPlan,
+    imageRootfsPath: string,
+    mode: 0o700 | 0o755,
+  ) => void,
 ): Promise<{
   status: number;
   stdout: Buffer;

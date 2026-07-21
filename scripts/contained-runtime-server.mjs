@@ -9,6 +9,7 @@ import {
   readFileSync,
   readdirSync,
   realpathSync,
+  statfsSync,
   statSync,
 } from "node:fs";
 import { createServer } from "node:net";
@@ -20,6 +21,7 @@ import {
   executeContainedRun,
 } from "./contained-runtime-run.mjs";
 import {
+  CONTAINED_RUNTIME_SNAPSHOTTER,
   createContainedContainerdConfig,
   probeContainedShimSocketDirectory,
 } from "./contained-containerd-config.mjs";
@@ -47,11 +49,20 @@ const installRoot = resolve(
 const binRoot = resolve(installRoot, "bin");
 const runtimeWrapperRoot = resolve(root, "scripts/runtime-bin");
 const runcWrapper = resolve(runtimeWrapperRoot, "runc");
+const fuseMountWrapper = resolve(runtimeWrapperRoot, "mount.fuse3");
 const runcBinary = resolve(binRoot, "runc");
 const runcStateRoot = resolve(sessionRoot, "run/runc");
 const containerdSocket = resolve(sessionRoot, "run/containerd.sock");
 const commandSocket = resolve(sessionRoot, "run/runtime-command.sock");
 const clientFifoRoot = resolve(sessionRoot, "run/client-fifo");
+const snapshotterSocket = resolve(sessionRoot, "run/inner/fuse-overlayfs.sock");
+const snapshotterRoot = resolve(sessionRoot, "data/fuse-overlayfs");
+const rootlessSpecRoot = resolve(sessionRoot, "run/rootless-specs");
+const tmpfsMagic = 0x01021994;
+
+// RootlessKit's private copy-up mount may normalize the mountpoint mode.
+// Restore the exact private state-root mode before admitting runc.
+chmodSync(runcStateRoot, 0o700);
 
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
@@ -69,11 +80,13 @@ function sha256(value) {
 }
 
 const runcWrapperMetadata = statSync(runcWrapper);
+const fuseMountWrapperMetadata = statSync(fuseMountWrapper);
 const runtimeWrapperMetadata = statSync(runtimeWrapperRoot);
 const runcStateMetadata = statSync(runcStateRoot);
 const runtimeWrapperEntries = readdirSync(runtimeWrapperRoot).sort();
 if (
-  JSON.stringify(runtimeWrapperEntries) !== JSON.stringify(["runc"]) ||
+  JSON.stringify(runtimeWrapperEntries) !==
+    JSON.stringify(["mount.fuse3", "runc"]) ||
   !runtimeWrapperMetadata.isDirectory() ||
   runtimeWrapperMetadata.uid !== process.getuid() ||
   (runtimeWrapperMetadata.mode & 0o022) !== 0 ||
@@ -83,6 +96,12 @@ if (
   runcWrapperMetadata.uid !== process.getuid() ||
   (runcWrapperMetadata.mode & 0o100) === 0 ||
   (runcWrapperMetadata.mode & 0o022) !== 0 ||
+  lstatSync(fuseMountWrapper).isSymbolicLink() ||
+  realpathSync(fuseMountWrapper) !== fuseMountWrapper ||
+  !fuseMountWrapperMetadata.isFile() ||
+  fuseMountWrapperMetadata.uid !== process.getuid() ||
+  (fuseMountWrapperMetadata.mode & 0o100) === 0 ||
+  (fuseMountWrapperMetadata.mode & 0o022) !== 0 ||
   realpathSync(runcStateRoot) !== runcStateRoot ||
   !runcStateMetadata.isDirectory() ||
   runcStateMetadata.uid !== process.getuid() ||
@@ -216,7 +235,14 @@ function createDrainReceipt(args, stdin) {
   );
   const snapshots = spawnSync(
     ctr,
-    [...base, "snapshots", "--snapshotter", "native", "list", "--quiet"],
+    [
+      ...base,
+      "snapshots",
+      "--snapshotter",
+      CONTAINED_RUNTIME_SNAPSHOTTER,
+      "list",
+      "--quiet",
+    ],
     options,
   );
   const images = spawnSync(
@@ -280,7 +306,7 @@ function createDrainReceipt(args, stdin) {
             ...base,
             "snapshots",
             "--snapshotter",
-            "native",
+            CONTAINED_RUNTIME_SNAPSHOTTER,
             "info",
             snapshotIdentity,
           ],
@@ -338,8 +364,90 @@ const shimSocketBinding = createContainedContainerdConfig({
   configPath: resolve(sessionRoot, "config/containerd.toml"),
   repositoryRoot: root,
   shimSocketRoot: root,
+  snapshotterSocket,
 });
 await probeContainedShimSocketDirectory(shimSocketBinding);
+
+const snapshotterBinary = resolve(binRoot, "containerd-fuse-overlayfs-grpc");
+const fuseOverlayfsBinary = resolve(binRoot, "fuse-overlayfs");
+const snapshotterRootFilesystem = statfsSync(snapshotterRoot);
+const rootlessSpecFilesystem = statfsSync(rootlessSpecRoot);
+const runcStateFilesystem = statfsSync(runcStateRoot);
+if (
+  snapshotterRootFilesystem.type !== tmpfsMagic ||
+  rootlessSpecFilesystem.type !== tmpfsMagic ||
+  runcStateFilesystem.type !== tmpfsMagic
+) {
+  throw new Error("contained runtime private backing filesystem is invalid");
+}
+chmodSync(snapshotterRoot, 0o700);
+chmodSync(rootlessSpecRoot, 0o700);
+const snapshotterRootMetadata = statSync(snapshotterRoot);
+const rootlessSpecMetadata = statSync(rootlessSpecRoot);
+for (const [path, label] of [
+  [snapshotterBinary, "snapshotter"],
+  [fuseOverlayfsBinary, "fuse-overlayfs"],
+]) {
+  const metadata = lstatSync(path);
+  if (
+    metadata.isSymbolicLink() ||
+    !metadata.isFile() ||
+    metadata.uid !== process.getuid() ||
+    (metadata.mode & 0o100) === 0 ||
+    (metadata.mode & 0o022) !== 0 ||
+    realpathSync(path) !== path
+  ) {
+    throw new Error(`contained ${label} binary is invalid`);
+  }
+}
+if (
+  !snapshotterRootMetadata.isDirectory() ||
+  snapshotterRootMetadata.uid !== process.getuid() ||
+  (snapshotterRootMetadata.mode & 0o777) !== 0o700 ||
+  !rootlessSpecMetadata.isDirectory() ||
+  rootlessSpecMetadata.uid !== process.getuid() ||
+  (rootlessSpecMetadata.mode & 0o777) !== 0o700
+) {
+  throw new Error("contained snapshotter root is invalid");
+}
+
+const snapshotter = spawn(
+  snapshotterBinary,
+  [snapshotterSocket, snapshotterRoot],
+  {
+    cwd: root,
+    env: environment,
+    stdio: ["ignore", "inherit", "inherit"],
+  },
+);
+
+await new Promise((accept, reject) => {
+  let attempts = 0;
+  const timer = setInterval(() => {
+    attempts += 1;
+    try {
+      if (statSync(snapshotterSocket).isSocket()) {
+        clearInterval(timer);
+        accept();
+        return;
+      }
+    } catch {
+      // The snapshotter is still starting.
+    }
+    if (attempts >= 300) {
+      clearInterval(timer);
+      reject(new Error("contained snapshotter socket did not become ready"));
+    }
+  }, 100);
+  snapshotter.once("exit", (code, signal) => {
+    clearInterval(timer);
+    reject(
+      new Error(
+        `contained snapshotter exited during startup (${String(code ?? signal)})`,
+      ),
+    );
+  });
+});
 
 const containerd = spawn(
   resolve(binRoot, "containerd"),
@@ -480,7 +588,7 @@ const server = createServer({ allowHalfOpen: true }, (socket) => {
                     "--namespace",
                     "counterlab-v6.1",
                     "--snapshotter",
-                    "native",
+                    CONTAINED_RUNTIME_SNAPSHOTTER,
                     "--data-root",
                     resolve(sessionRoot, "data/nerdctl"),
                     "--cgroup-manager",
@@ -542,11 +650,21 @@ await new Promise((accept, reject) => {
 const shutdown = () => {
   server.close();
   containerd.kill("SIGTERM");
+  snapshotter.kill("SIGTERM");
 };
 process.once("SIGINT", shutdown);
 process.once("SIGTERM", shutdown);
 containerd.once("exit", (code) => {
+  if (snapshotter.exitCode === null && snapshotter.signalCode === null) {
+    snapshotter.kill("SIGTERM");
+  }
   server.close(() => {
     process.exitCode = code ?? 1;
   });
+});
+snapshotter.once("exit", (code) => {
+  if (containerd.exitCode === null && containerd.signalCode === null) {
+    containerd.kill("SIGTERM");
+    process.exitCode = code ?? 1;
+  }
 });

@@ -3,7 +3,9 @@
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import {
+  chmodSync,
   existsSync,
+  lstatSync,
   readFileSync,
   readdirSync,
   realpathSync,
@@ -30,6 +32,7 @@ import {
   verifyContainedReadOnlyMounts,
 } from "./contained-image-authority.mjs";
 import { AGGREGATE_TIMEOUT_QUALIFICATION_MODE } from "./contained-runtime-request.mjs";
+import { CONTAINED_RUNTIME_SNAPSHOTTER } from "./contained-containerd-config.mjs";
 
 const repositoryRoot = realpathSync(
   resolve(fileURLToPath(import.meta.url), "../.."),
@@ -75,6 +78,11 @@ if (
 const shortCommandTimeoutMs = runtimePolicy.shortCommandTimeoutMs;
 const executionControlOverheadMs = runtimePolicy.executionControlOverheadMs;
 const cleanupReserveMs = runtimePolicy.cleanupReserveMs;
+// runc 1.4.x is a Go program and cannot reliably initialize its seccomp
+// filter under a 1 GiB virtual-address ceiling. Keep resident memory bounded
+// independently by the stricter container cgroup while retaining a finite
+// per-process address-space ceiling.
+export const CONTAINED_PROCESS_ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024;
 export const CONTAINED_RUNTIME_CONTROL_BUDGET_SECONDS =
   (executionControlOverheadMs + cleanupReserveMs) / 1_000;
 export const CONTAINED_RUNTIME_CALLER_GRACE_SECONDS =
@@ -282,7 +290,7 @@ function resourceIntent(args) {
     memoryBytes > 1024 * 1024 * 1024 ||
     byType.get("RLIMIT_CPU") < 1 ||
     byType.get("RLIMIT_CPU") > 300 ||
-    byType.get("RLIMIT_AS") !== memoryBytes ||
+    byType.get("RLIMIT_AS") !== CONTAINED_PROCESS_ADDRESS_SPACE_BYTES ||
     byType.get("RLIMIT_FSIZE") > 1_048_576 ||
     byType.get("RLIMIT_NOFILE") !== 64 ||
     byType.get("RLIMIT_NPROC") !== maxProcesses
@@ -425,7 +433,7 @@ export function containedRunPlan({
     "--namespace",
     namespace,
     "--snapshotter",
-    "native",
+    CONTAINED_RUNTIME_SNAPSHOTTER,
     "--data-root",
     resolve(sessionRoot, "data/nerdctl"),
     "--cgroup-manager",
@@ -476,7 +484,7 @@ export function containedRunPlan({
         "images",
         "mount",
         "--snapshotter",
-        "native",
+        CONTAINED_RUNTIME_SNAPSHOTTER,
         "--platform",
         "linux/amd64",
         "--rw",
@@ -489,7 +497,7 @@ export function containedRunPlan({
         "images",
         "unmount",
         "--snapshotter",
-        "native",
+        CONTAINED_RUNTIME_SNAPSHOTTER,
         "--rm",
       ],
     },
@@ -523,11 +531,23 @@ export function containedRunPlan({
     },
     inspectSnapshot: {
       program: ctr,
-      args: [...ctrGlobalArgs, "snapshots", "--snapshotter", "native", "info"],
+      args: [
+        ...ctrGlobalArgs,
+        "snapshots",
+        "--snapshotter",
+        CONTAINED_RUNTIME_SNAPSHOTTER,
+        "info",
+      ],
     },
     inspectSnapshotDiff: {
       program: ctr,
-      args: [...ctrGlobalArgs, "snapshots", "--snapshotter", "native", "diff"],
+      args: [
+        ...ctrGlobalArgs,
+        "snapshots",
+        "--snapshotter",
+        CONTAINED_RUNTIME_SNAPSHOTTER,
+        "diff",
+      ],
     },
     cleanupStaging: {
       program: resolve(binRoot, "nerdctl"),
@@ -547,7 +567,7 @@ export function containedRunPlan({
         ...ctrGlobalArgs,
         "snapshots",
         "--snapshotter",
-        "native",
+        CONTAINED_RUNTIME_SNAPSHOTTER,
         "delete",
       ],
     },
@@ -560,7 +580,7 @@ export function containedRunPlan({
         "--fifo-dir",
         clientFifoRoot,
         "--snapshotter",
-        "native",
+        CONTAINED_RUNTIME_SNAPSHOTTER,
         "--runtime",
         "io.containerd.runc.v2",
         "--runc-binary",
@@ -825,6 +845,109 @@ function validateMountedImageRootfs(
   return lines[0];
 }
 
+const runnerRootfsPermissionContract = Object.freeze([
+  // The session parent remains private. The mounted root itself must be
+  // traversable by the image's non-root process, while all image-owned
+  // descendants retain their exact OCI ownership and executable modes.
+  { path: "/", kind: "directory", mode: 0o755 },
+  { path: "/usr", kind: "directory", mode: 0o755 },
+  { path: "/usr/local", kind: "directory", mode: 0o755 },
+  { path: "/usr/local/bin", kind: "directory", mode: 0o755 },
+  { path: "/usr/local/bin/node", kind: "file", mode: 0o555 },
+  { path: "/usr/bin", kind: "directory", mode: 0o755 },
+  { path: "/usr/bin/bwrap", kind: "file", mode: 0o555 },
+  { path: "/usr/bin/setpriv", kind: "file", mode: 0o555 },
+  { path: "/usr/bin/bash", kind: "file", mode: 0o555 },
+  { path: "/usr/lib", kind: "directory", mode: 0o755 },
+  { path: "/usr/lib64", kind: "directory", mode: 0o755 },
+  { path: "/usr/lib/x86_64-linux-gnu", kind: "directory", mode: 0o755 },
+  {
+    path: "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
+    kind: "file",
+    mode: 0o755,
+  },
+  { path: "/app", kind: "directory", mode: 0o555 },
+  { path: "/app/runner.mjs", kind: "file", mode: 0o555 },
+  { path: "/etc", kind: "directory", mode: 0o755 },
+  { path: "/etc/passwd", kind: "file", mode: 0o444 },
+  { path: "/etc/group", kind: "file", mode: 0o444 },
+  { path: "/etc/hosts", kind: "file", mode: 0o644 },
+  { path: "/repo", kind: "directory", mode: 0o555 },
+  { path: "/repo/scripts", kind: "directory", mode: 0o555 },
+  {
+    path: "/repo/scripts/verify_scientific_runtime.py",
+    kind: "file",
+    mode: 0o444,
+  },
+  { path: "/dev/pts", kind: "directory", mode: 0o755 },
+  { path: "/dev/shm", kind: "directory", mode: 0o755 },
+  { path: "/dev/mqueue", kind: "directory", mode: 0o755 },
+  { path: "/sys/fs/cgroup", kind: "directory", mode: 0o755 },
+  { path: "/counterlab-runtime", kind: "directory", mode: 0o755 },
+]);
+
+export function validateContainedRunnerRootfsPermissions(entries) {
+  if (
+    !Array.isArray(entries) ||
+    entries.length !== runnerRootfsPermissionContract.length
+  ) {
+    throw new Error("contained runner rootfs permission evidence is invalid");
+  }
+  for (
+    let index = 0;
+    index < runnerRootfsPermissionContract.length;
+    index += 1
+  ) {
+    const expected = runnerRootfsPermissionContract[index];
+    const observed = entries[index];
+    if (
+      observed === null ||
+      typeof observed !== "object" ||
+      Array.isArray(observed) ||
+      JSON.stringify(Object.keys(observed).sort()) !==
+        JSON.stringify(["gid", "kind", "mode", "path", "uid"].sort())
+    ) {
+      throw new Error("contained runner rootfs permissions are unsafe");
+    }
+    if (
+      observed.path !== expected.path ||
+      observed.kind !== expected.kind ||
+      observed.mode !== expected.mode ||
+      observed.uid !== 0 ||
+      observed.gid !== 0
+    ) {
+      throw new Error(
+        `contained runner rootfs permissions are unsafe at ${expected.path}: expected ${expected.kind} ${expected.mode.toString(8)} 0:0, observed ${observed.kind} ${Number.isSafeInteger(observed.mode) ? observed.mode.toString(8) : "invalid"} ${Number.isSafeInteger(observed.uid) ? observed.uid : "invalid"}:${Number.isSafeInteger(observed.gid) ? observed.gid : "invalid"}`,
+      );
+    }
+  }
+  return entries;
+}
+
+function verifyContainedRunnerRootfsPermissions(plan, imageRootfsPath) {
+  if (!plan.image.startsWith("counterlab-runner:git-")) return;
+  validateContainedRunnerRootfsPermissions(
+    runnerRootfsPermissionContract.map((expected) => {
+      const metadata = statSync(
+        expected.path === "/"
+          ? imageRootfsPath
+          : resolve(imageRootfsPath, expected.path.slice(1)),
+      );
+      return {
+        path: expected.path,
+        kind: metadata.isDirectory()
+          ? "directory"
+          : metadata.isFile()
+            ? "file"
+            : "other",
+        mode: metadata.mode & 0o777,
+        uid: metadata.uid,
+        gid: metadata.gid,
+      };
+    }),
+  );
+}
+
 export function validateContainedImageRootfsSnapshot(
   source,
   imageRootfsPath,
@@ -863,9 +986,48 @@ function snapshotDiffSha256(result) {
     result.stdout.byteLength === 0 ||
     result.stdout.byteLength > 4 * 1024 * 1024
   ) {
-    throw new Error("contained runtime image rootfs diff failed");
+    const detail = Buffer.from(result.stderr ?? "")
+      .toString("utf8")
+      .trim()
+      .slice(0, 4_096);
+    throw new Error(
+      detail.length === 0
+        ? "contained runtime image rootfs diff failed"
+        : `contained runtime image rootfs diff failed: ${detail}`,
+    );
   }
   return sha256(result.stdout);
+}
+
+function setImageRootfsMountpointMode(plan, imageRootfsPath, mode) {
+  if (
+    ![0o700, 0o755].includes(mode) ||
+    typeof imageRootfsPath !== "string" ||
+    !isAbsolute(imageRootfsPath) ||
+    !contained(plan.expected.sessionRoot, imageRootfsPath)
+  ) {
+    throw new Error("contained runtime image rootfs mount point is invalid");
+  }
+  const before = lstatSync(imageRootfsPath);
+  if (
+    before.isSymbolicLink() ||
+    !before.isDirectory() ||
+    before.uid !== process.getuid()
+  ) {
+    throw new Error("contained runtime image rootfs mount point is invalid");
+  }
+  chmodSync(imageRootfsPath, mode);
+  const after = lstatSync(imageRootfsPath);
+  if (
+    after.isSymbolicLink() ||
+    !after.isDirectory() ||
+    after.uid !== process.getuid() ||
+    (after.mode & 0o777) !== mode
+  ) {
+    throw new Error(
+      "contained runtime image rootfs mount point mode is invalid",
+    );
+  }
 }
 
 function cleanupImageRootfs(
@@ -874,6 +1036,7 @@ function cleanupImageRootfs(
   expectedParentChainId,
   spawn,
   options,
+  setMountpointMode,
 ) {
   if (
     typeof imageRootfsPath !== "string" ||
@@ -895,6 +1058,17 @@ function cleanupImageRootfs(
   );
   if (before.status !== 0) {
     const absent = containedRuntimeResourceAbsent(before);
+    try {
+      if (absent) setMountpointMode(plan, imageRootfsPath, 0o700);
+    } catch (error) {
+      return {
+        ok: false,
+        absent,
+        diagnostics: Buffer.from(
+          `${error instanceof Error ? error.message : "contained runtime image rootfs mount point restoration failed"}\n`,
+        ),
+      };
+    }
     return {
       ok: absent,
       absent,
@@ -930,14 +1104,27 @@ function cleanupImageRootfs(
   );
   const absent = after.status !== 0 && containedRuntimeResourceAbsent(after);
   const unmountAccepted = unmounted.status === 0;
+  let mountpointRestored = false;
+  let mountpointDiagnostics = Buffer.alloc(0);
+  if (unmountAccepted && absent) {
+    try {
+      setMountpointMode(plan, imageRootfsPath, 0o700);
+      mountpointRestored = true;
+    } catch (error) {
+      mountpointDiagnostics = Buffer.from(
+        `${error instanceof Error ? error.message : "contained runtime image rootfs mount point restoration failed"}\n`,
+      );
+    }
+  }
   return {
-    ok: unmountAccepted && absent,
+    ok: unmountAccepted && absent && mountpointRestored,
     absent,
     diagnostics: appendBuffers(
       unmountAccepted ? Buffer.alloc(0) : unmounted.stderr,
       unmountAccepted ? Buffer.alloc(0) : resultError(unmounted),
       absent ? Buffer.alloc(0) : after.stderr,
       absent ? Buffer.alloc(0) : resultError(after),
+      mountpointDiagnostics,
     ),
   };
 }
@@ -1043,6 +1230,8 @@ export async function executeContainedRun(
   createInvocationId = () => randomBytes(32).toString("hex"),
   now = () => performance.now(),
   qualificationCoordinator = containedCgroupQualificationCoordinator,
+  verifyRunnerRootfs = verifyContainedRunnerRootfsPermissions,
+  setRootfsMountpointMode = setImageRootfsMountpointMode,
 ) {
   if (
     context.qualificationMode !== null &&
@@ -1088,6 +1277,7 @@ export async function executeContainedRun(
         imageAuthority.rootfsChainId,
         cleanupSpawn,
         cleanupOptions,
+        setRootfsMountpointMode,
       );
       lastRootfsCleanup = rootfsCleanup;
       if (rootfsCleanup.ok) imageRootfsOwned = false;
@@ -1385,6 +1575,17 @@ export async function executeContainedRun(
     );
   }
   imageRootfsOwned = true;
+  try {
+    setRootfsMountpointMode(plan, imageRootfsPath, 0o755);
+  } catch (error) {
+    return finish(
+      failedResult(
+        error instanceof Error
+          ? error.message
+          : "contained runtime image rootfs mount point preparation failed",
+      ),
+    );
+  }
   const mountedImageRootfs = executeSpawn(
     plan.mountImageRootfs.program,
     [...plan.mountImageRootfs.args, plan.imageAlias, imageRootfsPath],
@@ -1412,6 +1613,11 @@ export async function executeContainedRun(
       imageRootfsPath,
       imageAuthority.rootfsChainId,
     );
+    // fuse-overlayfs derives the merged-root mode from its private active
+    // snapshot directory. Normalize only that disposable active root before
+    // taking the immutable baseline; the session parent remains mode 0700.
+    setRootfsMountpointMode(plan, imageRootfsPath, 0o755);
+    verifyRunnerRootfs(plan, imageRootfsPath);
     imageRootfsBaselineSha256 = snapshotDiffSha256(
       executeSpawn(
         plan.inspectSnapshotDiff.program,
@@ -1572,6 +1778,7 @@ export async function executeContainedRun(
     imageAuthority.rootfsChainId,
     cleanupSpawn,
     cleanupOptions,
+    setRootfsMountpointMode,
   );
   lastRootfsCleanup = rootfsCleaned;
   if (rootfsCleaned.ok) imageRootfsOwned = false;

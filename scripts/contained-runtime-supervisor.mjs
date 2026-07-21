@@ -59,6 +59,7 @@ const buildkitProxySocket = resolve(runRoot, "buildkitd.sock");
 const buildkitInnerSocket = resolve(innerRunRoot, "buildkitd.sock");
 const runtimeCommandSocket = resolve(runRoot, "runtime-command.sock");
 const containerdSocket = resolve(runRoot, "containerd.sock");
+const runcStateRoot = resolve(runRoot, "runc");
 const containerdRootlesskitApi = resolve(
   runRoot,
   "containerd-rootless/api.sock",
@@ -72,7 +73,7 @@ const environment = createContainedRuntimeEnvironment({
   buildkitSocket: buildkitProxySocket,
   home: resolve(sessionRoot, "home"),
   runcBinary: resolve(binRoot, "runc"),
-  runcStateRoot: resolve(runRoot, "runc"),
+  runcStateRoot,
   runtimeWrapperRoot: resolve(root, "scripts/runtime-bin"),
   tmp: resolve(sessionRoot, "tmp"),
   xdgCache: resolve(sessionRoot, "xdg-cache"),
@@ -142,11 +143,16 @@ await waitForInitialSocket(
 );
 
 const containerdLog = openPrivateLog("containerd.log");
+const snapshotterRoot = resolve(sessionRoot, "data/fuse-overlayfs");
+const rootlessSpecRoot = resolve(runRoot, "rootless-specs");
 const containerdRootlesskit = spawn(
   resolve(binRoot, "rootlesskit"),
   [
     `--state-dir=${resolve(runRoot, "containerd-rootless")}`,
     "--net=host",
+    `--copy-up=${snapshotterRoot}`,
+    `--copy-up=${rootlessSpecRoot}`,
+    `--copy-up=${runcStateRoot}`,
     "--pidns",
     "--cgroupns",
     "--evacuate-cgroup2=containerd",

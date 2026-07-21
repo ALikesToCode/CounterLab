@@ -114,10 +114,7 @@ def test_docker_command_applies_fixed_isolation_and_only_public_mounts(
     assert (
         f"--ulimit=cpu={limits.wall_seconds}:{limits.wall_seconds}" in command
     )
-    assert (
-        f"--ulimit=as={limits.memory_mb * 1024 * 1024}:"
-        f"{limits.memory_mb * 1024 * 1024}" in command
-    )
+    assert "--ulimit=as=2147483648:2147483648" in command
     assert (
         f"--ulimit=fsize={limits.max_output_bytes}:{limits.max_output_bytes}"
         in command

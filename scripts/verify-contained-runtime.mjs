@@ -19,6 +19,7 @@ import {
   createRuntimeToolchainFingerprint,
 } from "./contained-runtime-attestation.mjs";
 import { createContainedRuntimeEnvironment } from "./contained-runtime-environment.mjs";
+import { CONTAINED_RUNTIME_SNAPSHOTTER } from "./contained-containerd-config.mjs";
 import {
   sendSupervisorRequest,
   validateSupervisorReadyReceipt,
@@ -128,6 +129,7 @@ const expectedPaths = {
   sessionRoot: sessionPrefix,
   containerdRootlesskitApiSocket: `${sessionPrefix}/run/containerd-rootless/api.sock`,
   containerdSocket: `${sessionPrefix}/run/containerd.sock`,
+  snapshotterSocket: `${sessionPrefix}/run/inner/fuse-overlayfs.sock`,
   runtimeCommandSocket: `${sessionPrefix}/run/runtime-command.sock`,
   clientFifoRoot: `${sessionPrefix}/run/client-fifo`,
   runcStateRoot: `${sessionPrefix}/run/runc`,
@@ -137,6 +139,7 @@ const expectedPaths = {
   runtimeSupervisorSocket: `${sessionPrefix}/run/runtime-supervisor.sock`,
   runtimeSupervisorReady: `${sessionPrefix}/run/runtime-supervisor-ready.json`,
   containerdRoot: `${sessionPrefix}/data/containerd`,
+  snapshotterRoot: `${sessionPrefix}/data/fuse-overlayfs`,
   containerdState: `${sessionPrefix}/state/containerd`,
   buildkitRoot: `${sessionPrefix}/data/buildkit`,
   nerdctlData: `${sessionPrefix}/data/nerdctl`,
@@ -238,8 +241,11 @@ if (sha256File(adapter) !== attestation.adapterSha256) {
 for (const [key, helperPath] of Object.entries(RUNTIME_HELPER_PATHS)) {
   const helper = repositoryPath(helperPath, "file", `runtime helper ${key}`);
   secureFile(helper, `runtime helper ${key}`);
-  if (key === "runcWrapper" && (statSync(helper).mode & 0o111) === 0) {
-    throw new Error("contained runc wrapper is not executable");
+  if (
+    ["fuseMountWrapper", "runcWrapper"].includes(key) &&
+    (statSync(helper).mode & 0o111) === 0
+  ) {
+    throw new Error(`contained ${key} is not executable`);
   }
   if (sha256File(helper) !== attestation.helperSha256[key]) {
     throw new Error(`runtime helper changed after session launch: ${key}`);
@@ -254,7 +260,7 @@ const runtimeWrapperRoot = repositoryPath(
 secureFile(runtimeWrapperRoot, "runtime wrapper directory");
 if (
   JSON.stringify(readdirSync(runtimeWrapperRoot).sort()) !==
-  JSON.stringify(["runc"])
+  JSON.stringify(["mount.fuse3", "runc"])
 ) {
   throw new Error("runtime wrapper directory contains an unknown entry");
 }
@@ -304,8 +310,10 @@ const expectedComponentVersions = {
   buildctl: "0.30.0",
   buildkitd: "0.30.0",
   containerd: "2.3.1",
+  "containerd-fuse-overlayfs-grpc": "2.1.7",
   "containerd-shim-runc-v2": "2.3.1",
   ctr: "2.3.1",
+  "fuse-overlayfs": "1.16",
   nerdctl: "2.3.1",
   rootlesskit: "3.0.0",
   runc: "1.4.2",
@@ -339,6 +347,7 @@ const pathKinds = {
   sessionRoot: "directory",
   containerdRootlesskitApiSocket: "socket",
   containerdSocket: "socket",
+  snapshotterSocket: "socket",
   runtimeCommandSocket: "socket",
   clientFifoRoot: "directory",
   runcStateRoot: "directory",
@@ -348,6 +357,7 @@ const pathKinds = {
   runtimeSupervisorSocket: "socket",
   runtimeSupervisorReady: "file",
   containerdRoot: "directory",
+  snapshotterRoot: "directory",
   containerdState: "directory",
   buildkitRoot: "directory",
   nerdctlData: "directory",
@@ -472,13 +482,24 @@ const containerdConfigText = readFileSync(
 const shimSocketMatches = [
   ...containerdConfigText.matchAll(/^\s*socket_dir = '([^']+)'\s*$/gmu),
 ];
+const snapshotterSocketMatches = [
+  ...containerdConfigText.matchAll(/^\s*address = '([^']+)'\s*$/gmu),
+];
 if (
   shimSocketMatches.length !== 1 ||
   shimSocketMatches[0][1].length > 42 ||
   shimSocketMatches[0][1] !== root ||
-  realpathSync(shimSocketMatches[0][1]) !== root
+  realpathSync(shimSocketMatches[0][1]) !== root ||
+  snapshotterSocketMatches.length !== 1 ||
+  snapshotterSocketMatches[0][1] !== resolvedPaths.snapshotterSocket ||
+  !containerdConfigText.includes(
+    `[proxy_plugins.'${CONTAINED_RUNTIME_SNAPSHOTTER}']`,
+  ) ||
+  !containerdConfigText.includes(
+    `snapshotter = "${CONTAINED_RUNTIME_SNAPSHOTTER}"`,
+  )
 ) {
-  throw new Error("runtime shim socket directory is not repository-contained");
+  throw new Error("runtime containerd binding is not repository-contained");
 }
 
 const material = createRuntimeToolchainFingerprint({

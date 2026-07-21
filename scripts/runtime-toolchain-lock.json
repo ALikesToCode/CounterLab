@@ -20,6 +20,10 @@
       "version": "2.3.1",
       "sha256": "1419e955fe919dcbc9c0bc813852d0e75b61a04d3a60da02c145214fbf96c281"
     },
+    "containerd-fuse-overlayfs-grpc": {
+      "version": "2.1.7",
+      "sha256": "e048f9cc616299544fcdcd647cfecba10f60169537721c57e3628ac6c8a0c5c7"
+    },
     "containerd-shim-runc-v2": {
       "version": "2.3.1",
       "sha256": "3d07a9da185c493f87dc72f88f8a90b71a2fdb7707588c060cc10cbe5a3bae89"
@@ -27,6 +31,10 @@
     "ctr": {
       "version": "2.3.1",
       "sha256": "ae1b50af36651b995e0affc500fefd90ae9c085d9e69f7f617eb766d9b7d36ed"
+    },
+    "fuse-overlayfs": {
+      "version": "1.16",
+      "sha256": "30c6b9e192600d6854e13397974c709d7cabd980b7d1a4d67defd8eb69677e91"
     },
     "nerdctl": {
       "version": "2.3.1",

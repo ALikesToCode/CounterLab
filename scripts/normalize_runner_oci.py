@@ -22,7 +22,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO, Mapping, Sequence
 
 
-POLICY_VERSION = "counterlab-runner-nonroot-v2"
+POLICY_VERSION = "counterlab-runner-nonroot-v3"
 RUNNER_UID = 10001
 RUNNER_GID = 10001
 
@@ -143,6 +143,70 @@ def _normalized_identity(
 
     if path == "usr/local/bin/codex":
         return (0, 0, 0o777, "root", "root")
+
+    if _under(path, "usr/bin"):
+        return (
+            0,
+            0,
+            _mode_for(member, directory=0o755, regular=0o555),
+            "root",
+            "root",
+        )
+
+    if path == "usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2":
+        return (0, 0, 0o755, "root", "root")
+
+    if _under(path, "usr/lib"):
+        return (
+            0,
+            0,
+            _mode_for(member, directory=0o755, regular=0o444),
+            "root",
+            "root",
+        )
+
+    if _under(path, "usr/share") or _under(path, "repo") or _under(path, "etc/ssl"):
+        return (
+            0,
+            0,
+            _mode_for(member, directory=0o555, regular=0o444),
+            "root",
+            "root",
+        )
+
+    if path in {
+        "usr/lib64",
+        "dev",
+        "dev/pts",
+        "dev/shm",
+        "dev/mqueue",
+        "sys",
+        "sys/fs",
+        "sys/fs/cgroup",
+        "counterlab-runtime",
+        "etc",
+    }:
+        return (
+            0,
+            0,
+            _mode_for(member, directory=0o755, regular=0o755),
+            "root",
+            "root",
+        )
+
+    if path == "etc/hosts":
+        return (0, 0, 0o644, "root", "root")
+
+    if path in {
+        "etc/passwd",
+        "etc/group",
+        "etc/nsswitch.conf",
+        "etc/hostname",
+        "etc/resolv.conf",
+        "etc/ld.so.cache",
+        "etc/ca-certificates.conf",
+    }:
+        return (0, 0, 0o444, "root", "root")
 
     if path in {
         "usr",

@@ -15,10 +15,13 @@ import {
 import { isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { CONTAINED_RUNTIME_SNAPSHOTTER } from "./contained-containerd-config.mjs";
+
 const repositoryRoot = realpathSync(
   resolve(fileURLToPath(import.meta.url), "../.."),
 );
 const namespace = "counterlab-v6.1";
+const containedProcessAddressSpaceBytes = 2 * 1024 * 1024 * 1024;
 const containerIdPattern = /^[a-f0-9]{64}$/;
 const supportedRlimits = new Set([
   "RLIMIT_AS",
@@ -174,8 +177,8 @@ function assertNerdctlHooks(parsed, expected) {
     `--hosts-dir=[${resolve(expected.sessionRoot, "config/certs.d")}]`,
     `--n=${namespace}`,
     `--namespace=${namespace}`,
-    "--snapshotter=native",
-    "--storage-driver=native",
+    `--snapshotter=${CONTAINED_RUNTIME_SNAPSHOTTER}`,
+    `--storage-driver=${CONTAINED_RUNTIME_SNAPSHOTTER}`,
   ];
   for (const [name, event] of [
     ["createRuntime", "createRuntime"],
@@ -424,7 +427,7 @@ function validateReceiptResourceBindings(receipt) {
     receipt.enforcedRlimits.map((entry) => [entry.type, entry.soft]),
   );
   if (
-    byType.get("RLIMIT_AS") !== aggregate.memoryBytes ||
+    byType.get("RLIMIT_AS") !== containedProcessAddressSpaceBytes ||
     byType.get("RLIMIT_NPROC") !== aggregate.maxProcesses ||
     byType.get("RLIMIT_NOFILE") !== 64 ||
     (byType.get("RLIMIT_CPU") ?? 0) < 1 ||
@@ -1597,7 +1600,7 @@ export function sanitizeContainedRootlessSpec({
       mode: "containerd-ephemeral-writable-snapshot-readonly-runtime",
       mountPath: imageRootfsPath,
       parentChainId: expected.imageAuthority.rootfsChainId,
-      snapshotter: "native",
+      snapshotter: CONTAINED_RUNTIME_SNAPSHOTTER,
     },
     removedFields: [
       ...(hasNerdctlHooks ? ["hooks"] : []),
@@ -1691,7 +1694,7 @@ export function validateContainedContainerInfo({
       "contained rootless container metadata snapshot key changed",
     );
   }
-  if (metadata.Snapshotter !== "native") {
+  if (metadata.Snapshotter !== CONTAINED_RUNTIME_SNAPSHOTTER) {
     throw new Error(
       "contained rootless container metadata snapshotter changed",
     );
@@ -2025,7 +2028,7 @@ function assertConfigImageRootfs(config, specRoot, receipt) {
     binding.mountPath !== expectedPath ||
     !/^sha256:[a-f0-9]{64}$/.test(binding.parentChainId ?? "") ||
     binding.parentChainId !== imageAuthority.rootfsChainId ||
-    binding.snapshotter !== "native" ||
+    binding.snapshotter !== CONTAINED_RUNTIME_SNAPSHOTTER ||
     Object.keys(imageAuthority).length !== 9 ||
     !Array.isArray(imageAuthority.layerDigests) ||
     imageAuthority.layerDigests.length < 1 ||

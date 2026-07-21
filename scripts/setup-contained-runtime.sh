@@ -97,8 +97,10 @@ required = {
     "bin/buildctl",
     "bin/buildkitd",
     "bin/containerd",
+    "bin/containerd-fuse-overlayfs-grpc",
     "bin/containerd-shim-runc-v2",
     "bin/ctr",
+    "bin/fuse-overlayfs",
     "bin/nerdctl",
     "bin/rootlesskit",
     "bin/runc",
@@ -148,8 +150,10 @@ PY
     buildctl \
     buildkitd \
     containerd \
+    containerd-fuse-overlayfs-grpc \
     containerd-shim-runc-v2 \
     ctr \
+    fuse-overlayfs \
     nerdctl \
     rootlesskit \
     runc; do
@@ -168,8 +172,10 @@ const executableNames = [
   "buildctl",
   "buildkitd",
   "containerd",
+  "containerd-fuse-overlayfs-grpc",
   "containerd-shim-runc-v2",
   "ctr",
+  "fuse-overlayfs",
   "nerdctl",
   "rootlesskit",
   "runc",
@@ -220,8 +226,10 @@ const componentVersions = {
   buildctl: "0.30.0",
   buildkitd: "0.30.0",
   containerd: "2.3.1",
+  "containerd-fuse-overlayfs-grpc": "2.1.7",
   "containerd-shim-runc-v2": "2.3.1",
   ctr: "2.3.1",
+  "fuse-overlayfs": "1.16",
   nerdctl: "2.3.1",
   rootlesskit: "3.0.0",
   runc: "1.4.2",
@@ -235,7 +243,10 @@ exactKeys(attestation, [
   "executableSha256",
 ], "runtime installation attestation");
 const componentNames = Object.keys(componentVersions);
-const legacyAttestedNames = componentNames.filter((name) => name !== "ctr");
+const legacyAttestedNames = componentNames.filter(
+  (name) =>
+    !["ctr", "containerd-fuse-overlayfs-grpc", "fuse-overlayfs"].includes(name),
+);
 const attestedNames = Object.keys(attestation.executableSha256).sort();
 if (
   JSON.stringify(attestedNames) !== JSON.stringify(componentNames.sort()) &&

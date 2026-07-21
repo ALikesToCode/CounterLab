@@ -173,6 +173,8 @@ export const TIMEOUT_ROOTLESS_RLIMIT_TYPES = [
   "RLIMIT_NPROC",
 ] as const;
 
+export const TIMEOUT_PROCESS_ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024;
+
 const RlimitSchema = z
   .strictObject({
     type: z.enum(TIMEOUT_ROOTLESS_RLIMIT_TYPES),
@@ -200,7 +202,7 @@ export function assertRootlessRlimitBindings(input: {
     .parse(input.enforcedRlimits);
   const byType = new Map(limits.map((limit) => [limit.type, limit.soft]));
   if (
-    byType.get("RLIMIT_AS") !== intent.memoryBytes ||
+    byType.get("RLIMIT_AS") !== TIMEOUT_PROCESS_ADDRESS_SPACE_BYTES ||
     byType.get("RLIMIT_NPROC") !== intent.maxProcesses ||
     byType.get("RLIMIT_NOFILE") !== 64 ||
     (byType.get("RLIMIT_CPU") ?? 0) < 1 ||

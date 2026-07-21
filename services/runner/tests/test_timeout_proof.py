@@ -173,8 +173,8 @@ def _rootless(control: dict[str, object], build: dict[str, object]) -> dict[str,
         "enforcedRlimits": [
             {
                 "type": "RLIMIT_AS",
-                "soft": intended_limits["memoryBytes"],
-                "hard": intended_limits["memoryBytes"],
+                "soft": timeout_proof_module.CONTAINED_PROCESS_ADDRESS_SPACE_BYTES,
+                "hard": timeout_proof_module.CONTAINED_PROCESS_ADDRESS_SPACE_BYTES,
             },
             {"type": "RLIMIT_CPU", "soft": 20, "hard": 20},
             {"type": "RLIMIT_FSIZE", "soft": 262_144, "hard": 262_144},
@@ -276,8 +276,8 @@ def test_rootless_rlimit_validator_matches_the_runtime_contract() -> None:
     runtime_limits = [
         {
             "type": "RLIMIT_AS",
-            "soft": intended["memoryBytes"],
-            "hard": intended["memoryBytes"],
+            "soft": timeout_proof_module.CONTAINED_PROCESS_ADDRESS_SPACE_BYTES,
+            "hard": timeout_proof_module.CONTAINED_PROCESS_ADDRESS_SPACE_BYTES,
         },
         {"type": "RLIMIT_CPU", "soft": 20, "hard": 20},
         {"type": "RLIMIT_FSIZE", "soft": 262_144, "hard": 262_144},

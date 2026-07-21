@@ -97,6 +97,14 @@ describe("contained runtime supervisor protocol", () => {
     expect(launch).toContain('"--pidns"');
     expect(launch).toContain('"--cgroupns"');
     expect(launch).toContain('"--evacuate-cgroup2=containerd"');
+    expect(launch).toContain("`--copy-up=${snapshotterRoot}`");
+    expect(launch).toContain("`--copy-up=${rootlessSpecRoot}`");
+    expect(launch.indexOf("`--copy-up=${snapshotterRoot}`")).toBeLessThan(
+      launch.indexOf("scripts/contained-runtime-server.mjs"),
+    );
+    expect(launch.indexOf("`--copy-up=${rootlessSpecRoot}`")).toBeLessThan(
+      launch.indexOf("scripts/contained-runtime-server.mjs"),
+    );
     expect(launch.indexOf('"--pidns"')).toBeLessThan(
       launch.indexOf("scripts/contained-runtime-server.mjs"),
     );
@@ -131,6 +139,12 @@ describe("contained runtime supervisor protocol", () => {
         source.indexOf("closeSync(containerdLog)"),
       ),
     ).toContain('"--evacuate-cgroup2=containerd"');
+    expect(
+      source.slice(
+        containerdLaunch,
+        source.indexOf("closeSync(containerdLog)"),
+      ),
+    ).toContain("`--copy-up=${runcStateRoot}`");
   });
 
   it("accepts only exact hash-bound status, drain, and shutdown requests", () => {

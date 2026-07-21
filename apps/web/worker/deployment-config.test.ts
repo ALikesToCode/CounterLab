@@ -676,6 +676,13 @@ describe("Cloudflare static asset routing", () => {
     expect(dockerfile).toContain("/repo/requirements.runner.lock.txt");
     expect(dockerfile).toContain("chmod -R a=rX /repo");
     expect(dockerfile).toContain("chmod 0555 /usr/local/bin/node");
+    expect(dockerfile).toContain(
+      "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
+    );
+    expect(dockerfile).toContain("/out/runtime-rootfs/dev/pts");
+    expect(dockerfile).toContain("/out/runtime-rootfs/sys/fs/cgroup");
+    expect(dockerfile).toContain("/out/runtime-rootfs/counterlab-runtime");
+    expect(dockerfile).toContain("/out/runtime-rootfs/etc/hosts");
     expect(dockerfile).toContain("bubblewrap=0.11.0-2+deb13u1");
     expect(dockerfile).toContain(
       'test "$(/usr/bin/bwrap --version)" = "bubblewrap 0.11.0"',

@@ -1,0 +1,122 @@
+#!/bin/bash -p
+set -euo pipefail
+umask 077
+
+fail() {
+  echo "contained FUSE mount wrapper rejected the invocation: $1" >&2
+  exit 2
+}
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+[[ -f "${ROOT_DIR}/COUNTERLAB_REPO_ROOT" ]] || fail "repository marker is missing"
+
+FUSE_OVERLAYFS_BINARY="${ROOT_DIR}/node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1/bin/fuse-overlayfs"
+[[ -f "${FUSE_OVERLAYFS_BINARY}" && -x "${FUSE_OVERLAYFS_BINARY}" && ! -L "${FUSE_OVERLAYFS_BINARY}" ]] || fail "fuse-overlayfs binary is not pinned"
+(( $# >= 6 )) || fail "arguments are incomplete"
+[[ "$1" == "overlay" ]] || fail "source is not the snapshotter overlay"
+TARGET="$2"
+shift 2
+
+SESSION_SEGMENT="${TARGET#"${ROOT_DIR}/.rt/"}"
+SESSION_SEGMENT="${SESSION_SEGMENT%%/*}"
+[[ "${SESSION_SEGMENT}" =~ ^rt-[a-z0-9][a-z0-9-]{7,13}$ ]] || fail "runtime session ID is invalid"
+SNAPSHOT_ROOT="${ROOT_DIR}/.rt/${SESSION_SEGMENT}/data/fuse-overlayfs/snapshots"
+CHECK_ROOT=""
+case "${TARGET}" in
+  "${ROOT_DIR}/.rt/${SESSION_SEGMENT}"/run/rootless-specs/*.image-rootfs)
+    MOUNT_MODE="runtime"
+    ;;
+  "${ROOT_DIR}/.rt/${SESSION_SEGMENT}"/data/containerd/tmpmounts/containerd-mount*)
+    MOUNT_MODE="unpack"
+    [[ "${TARGET}" =~ ^${ROOT_DIR}/\.rt/${SESSION_SEGMENT}/data/containerd/tmpmounts/containerd-mount[0-9]+$ ]] || fail "unpack target is invalid"
+    ;;
+  "${ROOT_DIR}/.rt/${SESSION_SEGMENT}"/tmp/initialC*)
+    MOUNT_MODE="view"
+    [[ "${TARGET}" =~ ^${ROOT_DIR}/\.rt/${SESSION_SEGMENT}/tmp/initialC[0-9]+$ ]] || fail "image view target is invalid"
+    ;;
+  "${ROOT_DIR}/.rt/${SESSION_SEGMENT}"/run/inner/containerd-mount*)
+    MOUNT_MODE="containerd"
+    [[ "${TARGET}" =~ ^${ROOT_DIR}/\.rt/${SESSION_SEGMENT}/run/inner/containerd-mount[0-9]+$ ]] || fail "containerd target is invalid"
+    ;;
+  "${ROOT_DIR}/.rt/${SESSION_SEGMENT}"/state/containerd/io.containerd.mount-manager.v1.bolt/t/*/*)
+    MOUNT_MODE="mount-manager"
+    [[ "${TARGET}" =~ ^${ROOT_DIR}/\.rt/${SESSION_SEGMENT}/state/containerd/io\.containerd\.mount-manager\.v1\.bolt/t/[0-9]+/[0-9]+$ ]] || fail "mount-manager target is invalid"
+    ;;
+  "${ROOT_DIR}/.rt/${SESSION_SEGMENT}"/data/fuse-overlayfs/fuseoverlayfs-check*/merged)
+    MOUNT_MODE="check"
+    CHECK_ROOT="${TARGET%/merged}"
+    [[ "${CHECK_ROOT}" =~ ^${ROOT_DIR}/\.rt/${SESSION_SEGMENT}/data/fuse-overlayfs/fuseoverlayfs-check[0-9]+$ ]] || fail "check target is invalid"
+    ;;
+  *) fail "target escaped the runtime session" ;;
+esac
+
+OPTIONS=("allow_other")
+LOWER_SEEN=0
+UPPER_SEEN=0
+WORK_SEEN=0
+TYPE_SEEN=0
+READ_ONLY_SEEN=0
+while (( $# > 0 )); do
+  case "$1" in
+    -o)
+      (( $# >= 2 )) || fail "mount option is missing"
+      case "$2" in
+        lowerdir=*)
+          (( LOWER_SEEN == 0 )) || fail "lowerdir is duplicated"
+          LOWER_SEEN=1
+          LOWER_PATHS="${2#lowerdir=}"
+          IFS=':' read -r -a LOWER_ENTRIES <<<"${LOWER_PATHS}"
+          (( ${#LOWER_ENTRIES[@]} >= 1 )) || fail "lowerdir is empty"
+          for ENTRY in "${LOWER_ENTRIES[@]}"; do
+            if [[ "${MOUNT_MODE}" != "check" ]]; then
+              [[ "${ENTRY}" =~ ^${SNAPSHOT_ROOT}/[0-9]+/fs$ ]] || fail "lowerdir escaped the snapshotter root"
+            else
+              [[ "${ENTRY}" == "${CHECK_ROOT}/lower1" || "${ENTRY}" == "${CHECK_ROOT}/lower2" ]] || fail "check lowerdir escaped its root"
+            fi
+          done
+          ;;
+        upperdir=*)
+          [[ "${MOUNT_MODE}" == "runtime" || "${MOUNT_MODE}" == "unpack" || "${MOUNT_MODE}" == "containerd" || "${MOUNT_MODE}" == "mount-manager" ]] || fail "read-only mount has an upperdir"
+          (( UPPER_SEEN == 0 )) || fail "upperdir is duplicated"
+          UPPER_SEEN=1
+          [[ "${2#upperdir=}" =~ ^${SNAPSHOT_ROOT}/[0-9]+/fs$ ]] || fail "upperdir escaped the snapshotter root"
+          ;;
+        workdir=*)
+          [[ "${MOUNT_MODE}" == "runtime" || "${MOUNT_MODE}" == "unpack" || "${MOUNT_MODE}" == "containerd" || "${MOUNT_MODE}" == "mount-manager" ]] || fail "read-only mount has a workdir"
+          (( WORK_SEEN == 0 )) || fail "workdir is duplicated"
+          WORK_SEEN=1
+          [[ "${2#workdir=}" =~ ^${SNAPSHOT_ROOT}/[0-9]+/work$ ]] || fail "workdir escaped the snapshotter root"
+          ;;
+        ro)
+          [[ ( "${MOUNT_MODE}" == "containerd" || "${MOUNT_MODE}" == "unpack" ) && "${READ_ONLY_SEEN}" == 0 ]] || fail "read-only option is not approved"
+          READ_ONLY_SEEN=1
+          ;;
+        *) fail "mount option is not approved" ;;
+      esac
+      OPTIONS+=("$2")
+      shift 2
+      ;;
+    -t)
+      (( $# == 2 && TYPE_SEEN == 0 )) || fail "filesystem type position is invalid"
+      [[ "$2" == "fuse-overlayfs" ]] || fail "filesystem type is not approved"
+      TYPE_SEEN=1
+      shift 2
+      ;;
+    *) fail "argument is not approved" ;;
+  esac
+done
+
+if [[ "${MOUNT_MODE}" == "runtime" || "${MOUNT_MODE}" == "mount-manager" ]]; then
+  (( LOWER_SEEN == 1 && UPPER_SEEN == 1 && WORK_SEEN == 1 && TYPE_SEEN == 1 && READ_ONLY_SEEN == 0 )) || fail "snapshot mount contract is incomplete"
+elif [[ "${MOUNT_MODE}" == "unpack" ]]; then
+  (( LOWER_SEEN == 1 && TYPE_SEEN == 1 && (( UPPER_SEEN == 1 && WORK_SEEN == 1 ) || ( UPPER_SEEN == 0 && WORK_SEEN == 0 && READ_ONLY_SEEN == 0 )) )) || fail "temporary snapshot mount contract is incomplete"
+elif [[ "${MOUNT_MODE}" == "containerd" ]]; then
+  (( LOWER_SEEN == 1 && UPPER_SEEN == 1 && WORK_SEEN == 1 && TYPE_SEEN == 1 && READ_ONLY_SEEN == 1 )) || fail "containerd mount contract is incomplete"
+elif [[ "${MOUNT_MODE}" == "view" ]]; then
+  (( LOWER_SEEN == 1 && UPPER_SEEN == 0 && WORK_SEEN == 0 && TYPE_SEEN == 1 )) || fail "image view mount contract is incomplete"
+else
+  (( LOWER_SEEN == 1 && ${#LOWER_ENTRIES[@]} == 2 && UPPER_SEEN == 0 && WORK_SEEN == 0 && TYPE_SEEN == 1 )) || fail "snapshotter check mount contract is incomplete"
+fi
+printf -v OPTION_STRING '%s,' "${OPTIONS[@]}"
+OPTION_STRING="${OPTION_STRING%,}"
+exec -- "${FUSE_OVERLAYFS_BINARY}" -o "${OPTION_STRING}" "${TARGET}"

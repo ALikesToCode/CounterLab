@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { canonicalJson } from "../packages/session-core/src/index.js";
 
 import {
+  TIMEOUT_PROCESS_ADDRESS_SPACE_BYTES,
   QUALIFIED_AGGREGATE_LIMIT_MODE,
   TIMEOUT_ROOTLESS_RLIMIT_TYPES,
   assertQualifiedAggregateRuntimeLimits,
@@ -116,8 +117,8 @@ describe("timeout cleanup aggregate resource authority", () => {
     const enforcedRlimits = [
       {
         type: "RLIMIT_AS" as const,
-        soft: intendedAggregateLimits.memoryBytes,
-        hard: intendedAggregateLimits.memoryBytes,
+        soft: TIMEOUT_PROCESS_ADDRESS_SPACE_BYTES,
+        hard: TIMEOUT_PROCESS_ADDRESS_SPACE_BYTES,
       },
       { type: "RLIMIT_CPU" as const, soft: 20, hard: 20 },
       { type: "RLIMIT_FSIZE" as const, soft: 262_144, hard: 262_144 },

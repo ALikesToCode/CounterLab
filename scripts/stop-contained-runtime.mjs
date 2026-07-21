@@ -374,6 +374,7 @@ if (
 const endpoints = [
   resolve(sessionRoot, "run/runtime-command.sock"),
   resolve(sessionRoot, "run/buildkitd.sock"),
+  resolve(sessionRoot, "run/inner/fuse-overlayfs.sock"),
   supervisorSocket,
 ];
 if (!(await waitForSocketClosure(endpoints))) {

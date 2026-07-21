@@ -30,6 +30,7 @@ export const RUNTIME_HELPER_PATHS = Object.freeze({
   attestationWriter: "scripts/write-contained-runtime-attestation.mjs",
   runtimeSupervisor: "scripts/contained-runtime-supervisor.mjs",
   supervisorProtocol: "scripts/contained-runtime-supervisor-protocol.mjs",
+  fuseMountWrapper: "scripts/runtime-bin/mount.fuse3",
   runcWrapper: "scripts/runtime-bin/runc",
   containerdConfigWriter: "scripts/contained-containerd-config.mjs",
   runtimeServer: "scripts/contained-runtime-server.mjs",
@@ -82,6 +83,19 @@ export function createPublicContainedRuntimeAttestation({
   attestation,
   componentSha256,
 }) {
+  const publicComponentNames = [
+    "buildctl",
+    "buildkitd",
+    "containerd",
+    "containerd-shim-runc-v2",
+    "ctr",
+    "nerdctl",
+    "rootlesskit",
+    "runc",
+  ];
+  const publicComponentSha256 = Object.fromEntries(
+    publicComponentNames.map((name) => [name, componentSha256[name]]),
+  );
   return {
     schemaVersion: "2",
     status: "VERIFIED",
@@ -92,7 +106,7 @@ export function createPublicContainedRuntimeAttestation({
     adapterSha256: attestation.adapterSha256,
     runtimePolicySha256: attestation.runtimePolicySha256,
     proofDependencyManifestSha256: attestation.proofDependencyManifestSha256,
-    componentSha256,
+    componentSha256: publicComponentSha256,
     fileSha256: {
       containerdConfig: attestation.fileSha256.containerdConfig,
       buildkitConfig: attestation.fileSha256.buildkitConfig,

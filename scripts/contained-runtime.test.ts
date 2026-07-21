@@ -6,6 +6,7 @@ import {
   readFileSync,
   readdirSync,
   realpathSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -21,6 +22,7 @@ import {
   containedRunPlan,
   executeContainedRun,
   validateContainedImageRootfsSnapshot,
+  validateContainedRunnerRootfsPermissions,
   validateContainedRunControlReceipt,
 } from "./contained-runtime-run.mjs";
 import {
@@ -40,6 +42,7 @@ import {
 } from "./contained-rootless-spec.mjs";
 import {
   CONTAINERD_SHIM_SOCKET_DIR_MAX_LENGTH,
+  CONTAINED_RUNTIME_SNAPSHOTTER,
   createContainedContainerdConfig,
   renderContainedContainerdConfig,
 } from "./contained-containerd-config.mjs";
@@ -103,7 +106,7 @@ function startupCommand(): string[] {
     "--memory-swap=1024m",
     "--cpus=2.0",
     "--ulimit=cpu=300:300",
-    "--ulimit=as=1073741824:1073741824",
+    "--ulimit=as=2147483648:2147483648",
     "--ulimit=fsize=1048576:1048576",
     "--ulimit=nofile=64:64",
     "--ulimit=nproc=32:32",
@@ -141,7 +144,7 @@ function scientificRuntimeCommand(): string[] {
     "--memory-swap=1024m",
     "--cpus=2.0",
     "--ulimit=cpu=300:300",
-    "--ulimit=as=1073741824:1073741824",
+    "--ulimit=as=2147483648:2147483648",
     "--ulimit=fsize=1048576:1048576",
     "--ulimit=nofile=64:64",
     "--ulimit=nproc=32:32",
@@ -187,7 +190,7 @@ function reachabilityCommand(): string[] {
     "--memory-swap=1024m",
     "--cpus=2.0",
     "--ulimit=cpu=300:300",
-    "--ulimit=as=1073741824:1073741824",
+    "--ulimit=as=2147483648:2147483648",
     "--ulimit=fsize=1048576:1048576",
     "--ulimit=nofile=64:64",
     "--ulimit=nproc=32:32",
@@ -235,7 +238,7 @@ function boundedAdapterCommand(): string[] {
     "--memory-swap=512m",
     "--cpus=1.0",
     "--ulimit=cpu=20:20",
-    "--ulimit=as=536870912:536870912",
+    "--ulimit=as=2147483648:2147483648",
     "--ulimit=fsize=262144:262144",
     "--ulimit=nofile=64:64",
     "--ulimit=nproc=16:16",
@@ -553,8 +556,8 @@ function rootlessSpec(
     `--hosts-dir=[${resolve(expected.sessionRoot, "config/certs.d")}]`,
     "--n=counterlab-v6.1",
     "--namespace=counterlab-v6.1",
-    "--snapshotter=native",
-    "--storage-driver=native",
+    `--snapshotter=${CONTAINED_RUNTIME_SNAPSHOTTER}`,
+    `--storage-driver=${CONTAINED_RUNTIME_SNAPSHOTTER}`,
     "internal",
     "oci-hook",
   ];
@@ -745,7 +748,7 @@ function containerMetadata(
     Labels: labels,
     Runtime: { Name: "io.containerd.runc.v2" },
     SnapshotKey: containerId,
-    Snapshotter: "native",
+    Snapshotter: CONTAINED_RUNTIME_SNAPSHOTTER,
   });
 }
 
@@ -988,7 +991,8 @@ function qualifiedRuntimeHarness() {
 
 describe("contained runtime command policy", () => {
   it("renders a bounded containerd shim manager configuration", () => {
-    const config = renderContainedContainerdConfig(root);
+    const snapshotterSocket = resolve(root, ".rt/runtime-snapshotter.sock");
+    const config = renderContainedContainerdConfig(root, snapshotterSocket);
 
     expect(root.length).toBeLessThanOrEqual(
       CONTAINERD_SHIM_SOCKET_DIR_MAX_LENGTH,
@@ -997,11 +1001,21 @@ describe("contained runtime command policy", () => {
     expect(config).toContain("imports = []");
     expect(config).toContain("[plugins.'io.containerd.shim.v1.manager']");
     expect(config).toContain(`socket_dir = '${root}'`);
+    expect(config).toContain(
+      `[proxy_plugins.'${CONTAINED_RUNTIME_SNAPSHOTTER}']`,
+    );
+    expect(config).toContain(`address = '${snapshotterSocket}'`);
+    expect(config).toContain(
+      `snapshotter = "${CONTAINED_RUNTIME_SNAPSHOTTER}"`,
+    );
     expect(config).toContain("'io.containerd.grpc.v1.cri'");
     expect(config).toContain("'io.containerd.nri.v1.nri'");
     expect(() =>
-      renderContainedContainerdConfig(resolve(root, "shim-sockets")),
-    ).toThrow(/directory is invalid/u);
+      renderContainedContainerdConfig(
+        resolve(root, "shim-sockets"),
+        snapshotterSocket,
+      ),
+    ).toThrow(/socket configuration is invalid/u);
   });
 
   it("configures the full Linux shim socket path in the repository", () => {
@@ -1015,6 +1029,7 @@ describe("contained runtime command policy", () => {
       configPath: resolve(fixtureRoot, "containerd.toml"),
       repositoryRoot: root,
       shimSocketRoot: root,
+      snapshotterSocket: resolve(fixtureRoot, "fuse-overlayfs.sock"),
     });
     expect(binding.shimSocketDirectory.length).toBeLessThanOrEqual(42);
     expect(realpathSync(binding.shimSocketDirectory)).toBe(realpathSync(root));
@@ -1037,6 +1052,7 @@ describe("contained runtime command policy", () => {
         configPath: resolve(sourceRoot, "containerd.toml"),
         repositoryRoot: sourceRoot,
         shimSocketRoot: shimHostRoot,
+        snapshotterSocket: resolve(sourceRoot, "fuse-overlayfs.sock"),
       }),
     ).toThrow(/configuration escaped the repository/u);
   });
@@ -1166,6 +1182,7 @@ describe("contained runtime command policy", () => {
 
   it("reserves the candidate wall-clock limit for the candidate process", async () => {
     const harness = qualifiedRuntimeHarness();
+    const rootfsModes: number[] = [];
     const coordinator = {
       async begin(input: { finalContainerId: string; invocationId: string }) {
         return input;
@@ -1195,10 +1212,13 @@ describe("contained runtime command policy", () => {
       () => invocationId,
       undefined,
       coordinator,
+      () => undefined,
+      (_plan, _path, mode) => rootfsModes.push(mode),
     );
 
     expect(harness.commandTimeouts.create).toBeGreaterThan(20_000);
     expect(harness.commandTimeouts.run).toBe(20_000);
+    expect(rootfsModes).toEqual([0o755, 0o755, 0o700]);
   });
 
   it("binds a clean timed-out run to the aggregate-qualified receipt", async () => {
@@ -1246,6 +1266,8 @@ describe("contained runtime command policy", () => {
       () => invocationId,
       undefined,
       coordinator,
+      () => undefined,
+      () => undefined,
     );
 
     expect(result.status).toBe(1);
@@ -1327,6 +1349,8 @@ describe("contained runtime command policy", () => {
         () => invocationId,
         undefined,
         coordinator,
+        () => undefined,
+        () => undefined,
       );
 
       expect(result.status).toBe(1);
@@ -1434,7 +1458,24 @@ describe("contained runtime command policy", () => {
   });
 
   it("uses one exact wrapper and scrubs inherited runtime injection", () => {
-    expect(readdirSync(runtimeWrapperRoot).sort()).toEqual(["runc"]);
+    expect(readdirSync(runtimeWrapperRoot).sort()).toEqual([
+      "mount.fuse3",
+      "runc",
+    ]);
+    const fuseMountWrapper = readFileSync(
+      resolve(runtimeWrapperRoot, "mount.fuse3"),
+      "utf8",
+    );
+    expect(fuseMountWrapper).toContain('OPTIONS=("allow_other")');
+    expect(fuseMountWrapper).toContain(
+      "rootless-tools/install-v2.3.1/bin/fuse-overlayfs",
+    );
+    expect(fuseMountWrapper).toContain(
+      '"${MOUNT_MODE}" == "containerd" || "${MOUNT_MODE}" == "unpack"',
+    );
+    expect(fuseMountWrapper).toContain(
+      "UPPER_SEEN == 0 && WORK_SEEN == 0 && READ_ONLY_SEEN == 0",
+    );
 
     const environment = createContainedRuntimeEnvironment({
       auth: resolve(root, ".rt/rt-runc-test/auth"),
@@ -1570,7 +1611,7 @@ describe("contained runtime command policy", () => {
 
     expect(plan.create.args).toContain("create");
     expect(plan.create.args).not.toContain("run");
-    expect(plan.create.args).not.toContain("--ulimit=as=1073741824:1073741824");
+    expect(plan.create.args).not.toContain("--ulimit=as=2147483648:2147483648");
     expect(
       plan.create.args.filter((argument) => argument.startsWith("--ulimit=")),
     ).toHaveLength(4);
@@ -1581,7 +1622,7 @@ describe("contained runtime command policy", () => {
     ).toEqual(
       startupCommand()
         .slice(1, -1)
-        .filter((argument) => argument !== "--ulimit=as=1073741824:1073741824"),
+        .filter((argument) => argument !== "--ulimit=as=2147483648:2147483648"),
     );
     expect(plan.start.program).toBe(resolve(installRoot, "bin/ctr"));
     const cgroupIndex = plan.start.args.indexOf("--cgroup");
@@ -1613,7 +1654,7 @@ describe("contained runtime command policy", () => {
         "images",
         "mount",
         "--snapshotter",
-        "native",
+        CONTAINED_RUNTIME_SNAPSHOTTER,
         "--platform",
         "linux/amd64",
         "--rw",
@@ -1625,7 +1666,7 @@ describe("contained runtime command policy", () => {
         "images",
         "unmount",
         "--snapshotter",
-        "native",
+        CONTAINED_RUNTIME_SNAPSHOTTER,
         "--rm",
       ]),
     });
@@ -1640,7 +1681,7 @@ describe("contained runtime command policy", () => {
       .update(
         canonicalJson(
           startupCommand().filter(
-            (argument) => argument !== "--ulimit=as=1073741824:1073741824",
+            (argument) => argument !== "--ulimit=as=2147483648:2147483648",
           ),
         ),
       )
@@ -1649,13 +1690,13 @@ describe("contained runtime command policy", () => {
     expect(fullCommandAuthority.commandSha256).not.toBe(stagingCommandSha256);
     const splitUlimitCommand = startupCommand();
     const addressSpaceIndex = splitUlimitCommand.indexOf(
-      "--ulimit=as=1073741824:1073741824",
+      "--ulimit=as=2147483648:2147483648",
     );
     splitUlimitCommand.splice(
       addressSpaceIndex,
       1,
       "--ulimit",
-      "as=1073741824:1073741824",
+      "as=2147483648:2147483648",
     );
     const splitUlimitPlan = containedRunPlan({
       args: splitUlimitCommand,
@@ -1667,15 +1708,15 @@ describe("contained runtime command policy", () => {
       sessionRoot,
     });
     expect(splitUlimitPlan.create.args).not.toContain(
-      "as=1073741824:1073741824",
+      "as=2147483648:2147483648",
     );
     expect(splitUlimitPlan.expected.rlimits).toHaveLength(5);
     const invalidAddressSpaceCommands = [
       startupCommand().filter(
-        (argument) => argument !== "--ulimit=as=1073741824:1073741824",
+        (argument) => argument !== "--ulimit=as=2147483648:2147483648",
       ),
       startupCommand().map((argument) =>
-        argument === "--ulimit=as=1073741824:1073741824"
+        argument === "--ulimit=as=2147483648:2147483648"
           ? "--ulimit=as=536870912:536870912"
           : argument,
       ),
@@ -1684,7 +1725,7 @@ describe("contained runtime command policy", () => {
         command.splice(
           command.length - 1,
           0,
-          "--ulimit=as=1073741824:1073741824",
+          "--ulimit=as=2147483648:2147483648",
         );
         return command;
       })(),
@@ -1734,10 +1775,127 @@ describe("contained runtime command policy", () => {
       containedRuntimeResourceAbsent({
         status: 1,
         stdout: Buffer.alloc(0),
-        stderr: Buffer.from("snapshotter native not found\n"),
+        stderr: Buffer.from("snapshotter fuse-overlayfs not found\n"),
       }),
     ).toBe(false);
     expect(containedRuntimeResourceAbsent(missing())).toBe(true);
+  });
+
+  it("fails closed when the imported runner loses non-root executable modes", () => {
+    const safe = [
+      { path: "/", kind: "directory", mode: 0o755, uid: 0, gid: 0 },
+      { path: "/usr", kind: "directory", mode: 0o755, uid: 0, gid: 0 },
+      {
+        path: "/usr/local",
+        kind: "directory",
+        mode: 0o755,
+        uid: 0,
+        gid: 0,
+      },
+      {
+        path: "/usr/local/bin",
+        kind: "directory",
+        mode: 0o755,
+        uid: 0,
+        gid: 0,
+      },
+      {
+        path: "/usr/local/bin/node",
+        kind: "file",
+        mode: 0o555,
+        uid: 0,
+        gid: 0,
+      },
+      { path: "/usr/bin", kind: "directory", mode: 0o755, uid: 0, gid: 0 },
+      { path: "/usr/bin/bwrap", kind: "file", mode: 0o555, uid: 0, gid: 0 },
+      { path: "/usr/bin/setpriv", kind: "file", mode: 0o555, uid: 0, gid: 0 },
+      { path: "/usr/bin/bash", kind: "file", mode: 0o555, uid: 0, gid: 0 },
+      { path: "/usr/lib", kind: "directory", mode: 0o755, uid: 0, gid: 0 },
+      {
+        path: "/usr/lib64",
+        kind: "directory",
+        mode: 0o755,
+        uid: 0,
+        gid: 0,
+      },
+      {
+        path: "/usr/lib/x86_64-linux-gnu",
+        kind: "directory",
+        mode: 0o755,
+        uid: 0,
+        gid: 0,
+      },
+      {
+        path: "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
+        kind: "file",
+        mode: 0o755,
+        uid: 0,
+        gid: 0,
+      },
+      { path: "/app", kind: "directory", mode: 0o555, uid: 0, gid: 0 },
+      {
+        path: "/app/runner.mjs",
+        kind: "file",
+        mode: 0o555,
+        uid: 0,
+        gid: 0,
+      },
+      { path: "/etc", kind: "directory", mode: 0o755, uid: 0, gid: 0 },
+      { path: "/etc/passwd", kind: "file", mode: 0o444, uid: 0, gid: 0 },
+      { path: "/etc/group", kind: "file", mode: 0o444, uid: 0, gid: 0 },
+      { path: "/etc/hosts", kind: "file", mode: 0o644, uid: 0, gid: 0 },
+      { path: "/repo", kind: "directory", mode: 0o555, uid: 0, gid: 0 },
+      {
+        path: "/repo/scripts",
+        kind: "directory",
+        mode: 0o555,
+        uid: 0,
+        gid: 0,
+      },
+      {
+        path: "/repo/scripts/verify_scientific_runtime.py",
+        kind: "file",
+        mode: 0o444,
+        uid: 0,
+        gid: 0,
+      },
+      { path: "/dev/pts", kind: "directory", mode: 0o755, uid: 0, gid: 0 },
+      { path: "/dev/shm", kind: "directory", mode: 0o755, uid: 0, gid: 0 },
+      {
+        path: "/dev/mqueue",
+        kind: "directory",
+        mode: 0o755,
+        uid: 0,
+        gid: 0,
+      },
+      {
+        path: "/sys/fs/cgroup",
+        kind: "directory",
+        mode: 0o755,
+        uid: 0,
+        gid: 0,
+      },
+      {
+        path: "/counterlab-runtime",
+        kind: "directory",
+        mode: 0o755,
+        uid: 0,
+        gid: 0,
+      },
+    ];
+
+    expect(validateContainedRunnerRootfsPermissions(safe)).toEqual(safe);
+    expect(() =>
+      validateContainedRunnerRootfsPermissions(
+        safe.map((entry) =>
+          entry.path === "/usr/local/bin/node"
+            ? { ...entry, mode: 0o700, uid: 1000, gid: 1000 }
+            : entry,
+        ),
+      ),
+    ).toThrow(
+      "contained runner rootfs permissions are unsafe at /usr/local/bin/node: expected file 555 0:0, observed file 700 1000:1000",
+    );
   });
 
   it("retains bounded cgroup intent without claiming observed enforcement", () => {
@@ -1857,7 +2015,7 @@ describe("contained runtime command policy", () => {
           `run/rootless-specs/${invocationId}.image-rootfs`,
         ),
         parentChainId: fixture.authority.rootfsChainId,
-        snapshotter: "native",
+        snapshotter: CONTAINED_RUNTIME_SNAPSHOTTER,
       },
       removedFields: [
         "hooks",
@@ -1912,8 +2070,8 @@ describe("contained runtime command policy", () => {
       (spec) => {
         spec.process.rlimits.push({
           type: "RLIMIT_AS",
-          soft: plan.expected.memoryBytes,
-          hard: plan.expected.memoryBytes,
+          soft: 2 * 1024 * 1024 * 1024,
+          hard: 2 * 1024 * 1024 * 1024,
         });
       },
       (spec) => {
@@ -2699,7 +2857,7 @@ describe("contained runtime command policy", () => {
         addressSpace.hard -= 1;
       },
       (receipt) => {
-        receipt.intendedAggregateLimits.memoryBytes -= 1;
+        receipt.intendedAggregateLimits.memoryBytes = 2 * 1024 * 1024 * 1024;
       },
       (receipt) => {
         receipt.normalizedFields = receipt.normalizedFields.filter(
@@ -2774,13 +2932,19 @@ describe("contained runtime command policy", () => {
         sessionRoot,
       }),
     ).toThrow(/rlimit/u);
-    const persisted = persistContainedRootlessSpec({
-      config: prepared.config,
-      finalContainerId: prepared.finalContainerId,
-      internalMounts: prepared.internalMounts,
-      receipt: prepared.receipt,
-      sessionRoot,
-    });
+    const previousUmask = process.umask(0o077);
+    let persisted: ReturnType<typeof persistContainedRootlessSpec>;
+    try {
+      persisted = persistContainedRootlessSpec({
+        config: prepared.config,
+        finalContainerId: prepared.finalContainerId,
+        internalMounts: prepared.internalMounts,
+        receipt: prepared.receipt,
+        sessionRoot,
+      });
+    } finally {
+      process.umask(previousUmask);
+    }
     const binding = {
       ...persisted,
       finalContainerId: prepared.finalContainerId,
@@ -2799,6 +2963,7 @@ describe("contained runtime command policy", () => {
       )
       .map((mount) => mount.source);
     expect(internalSources).toEqual([]);
+    expect(statSync(persisted.imageRootfsPath).mode & 0o777).toBe(0o700);
     expect(() => verifyPersistedContainedRootlessSpec(binding)).not.toThrow();
     expect(() =>
       verifyPersistedContainedRootlessSpec({
@@ -2901,7 +3066,7 @@ describe("contained runtime command policy", () => {
               memoryBytes: 1024 * 1024 * 1024,
               rlimits: [
                 { type: "RLIMIT_CPU", soft: 300, hard: 300 },
-                { type: "RLIMIT_AS", soft: 1073741824, hard: 1073741824 },
+                { type: "RLIMIT_AS", soft: 2147483648, hard: 2147483648 },
                 { type: "RLIMIT_FSIZE", soft: 1048576, hard: 1048576 },
                 { type: "RLIMIT_NOFILE", soft: 64, hard: 64 },
                 { type: "RLIMIT_NPROC", soft: 32, hard: 32 },
@@ -3021,6 +3186,8 @@ describe("contained runtime command policy", () => {
       () => invocationId,
       undefined,
       qualificationCoordinator,
+      () => undefined,
+      () => undefined,
     );
 
     expect(result.status).toBe(1);
@@ -3315,7 +3482,12 @@ describe("contained runtime command policy", () => {
       "[[plugins.'io.containerd.transfer.v1.local'.unpack_config]]",
     );
     expect(containerdConfigWriter).toContain('platform = "linux/amd64"');
-    expect(containerdConfigWriter).toContain('snapshotter = "native"');
+    expect(containerdConfigWriter).toContain(
+      'CONTAINED_RUNTIME_SNAPSHOTTER = "fuse-overlayfs"',
+    );
+    expect(containerdConfigWriter).toContain(
+      'snapshotter = "${CONTAINED_RUNTIME_SNAPSHOTTER}"',
+    );
     expect(containerdConfigWriter).toContain(
       "[plugins.'io.containerd.shim.v1.manager']",
     );

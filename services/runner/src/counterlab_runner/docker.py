@@ -31,6 +31,7 @@ _SHA256 = re.compile(r"^[a-f0-9]{64}$")
 _CONTAINED_RUNTIME_SESSION_ID = re.compile(r"^rt-[a-z0-9][a-z0-9-]{7,13}$")
 _CONTAINED_RUNTIME_SUBPROCESS_ENVIRONMENT = {"PATH": "/usr/bin:/bin"}
 _AGGREGATE_TIMEOUT_QUALIFICATION_MODE = "aggregate-timeout-proof-v1"
+CONTAINED_PROCESS_ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024
 _CONTROL_RECEIPT_V2_KEYS = frozenset(
     {
         "schemaVersion",
@@ -404,6 +405,7 @@ def build_docker_command(
     """Build a list-form Docker command with no inherited credentials."""
 
     memory_bytes = limits.memory_mb * 1024 * 1024
+    address_space_bytes = max(memory_bytes, CONTAINED_PROCESS_ADDRESS_SPACE_BYTES)
     return (
         docker_bin,
         "run",
@@ -421,7 +423,7 @@ def build_docker_command(
         f"--memory-swap={limits.memory_mb}m",
         f"--cpus={limits.cpu_count}",
         f"--ulimit=cpu={limits.wall_seconds}:{limits.wall_seconds}",
-        f"--ulimit=as={memory_bytes}:{memory_bytes}",
+        f"--ulimit=as={address_space_bytes}:{address_space_bytes}",
         f"--ulimit=fsize={limits.max_output_bytes}:{limits.max_output_bytes}",
         "--ulimit=nofile=64:64",
         f"--ulimit=nproc={limits.max_processes}:{limits.max_processes}",

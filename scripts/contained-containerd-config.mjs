@@ -5,6 +5,7 @@ import { createServer } from "node:net";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 
 export const CONTAINERD_SHIM_SOCKET_DIR_MAX_LENGTH = 42;
+export const CONTAINED_RUNTIME_SNAPSHOTTER = "fuse-overlayfs";
 
 function isContained(root, candidate) {
   const fromRoot = relative(root, candidate);
@@ -13,15 +14,22 @@ function isContained(root, candidate) {
   );
 }
 
-export function renderContainedContainerdConfig(shimSocketDirectory) {
+export function renderContainedContainerdConfig(
+  shimSocketDirectory,
+  snapshotterSocket,
+) {
   if (
     typeof shimSocketDirectory !== "string" ||
     !isAbsolute(shimSocketDirectory) ||
     resolve(shimSocketDirectory) !== shimSocketDirectory ||
     shimSocketDirectory.includes("'") ||
-    shimSocketDirectory.length > CONTAINERD_SHIM_SOCKET_DIR_MAX_LENGTH
+    shimSocketDirectory.length > CONTAINERD_SHIM_SOCKET_DIR_MAX_LENGTH ||
+    typeof snapshotterSocket !== "string" ||
+    !isAbsolute(snapshotterSocket) ||
+    resolve(snapshotterSocket) !== snapshotterSocket ||
+    snapshotterSocket.includes("'")
   ) {
-    throw new Error("containerd shim socket directory is invalid");
+    throw new Error("containerd socket configuration is invalid");
   }
 
   return [
@@ -38,10 +46,14 @@ export function renderContainedContainerdConfig(shimSocketDirectory) {
     "  env = []",
     `  socket_dir = '${shimSocketDirectory}'`,
     "",
+    `[proxy_plugins.'${CONTAINED_RUNTIME_SNAPSHOTTER}']`,
+    '  type = "snapshot"',
+    `  address = '${snapshotterSocket}'`,
+    "",
     "[plugins.'io.containerd.transfer.v1.local']",
     "  [[plugins.'io.containerd.transfer.v1.local'.unpack_config]]",
     '    platform = "linux/amd64"',
-    '    snapshotter = "native"',
+    `    snapshotter = "${CONTAINED_RUNTIME_SNAPSHOTTER}"`,
     "",
   ].join("\n");
 }
@@ -50,6 +62,7 @@ export function createContainedContainerdConfig({
   configPath,
   repositoryRoot,
   shimSocketRoot,
+  snapshotterSocket,
 }) {
   const physicalRepositoryRoot = realpathSync(repositoryRoot);
   const physicalShimSocketRoot = realpathSync(shimSocketRoot);
@@ -58,10 +71,12 @@ export function createContainedContainerdConfig({
     physicalConfigParent,
     basename(configPath),
   );
+  const resolvedSnapshotterSocket = resolve(snapshotterSocket);
 
   if (
     physicalShimSocketRoot !== physicalRepositoryRoot ||
-    !isContained(physicalRepositoryRoot, resolvedConfigPath)
+    !isContained(physicalRepositoryRoot, resolvedConfigPath) ||
+    !isContained(physicalRepositoryRoot, resolvedSnapshotterSocket)
   ) {
     throw new Error("containerd configuration escaped the repository");
   }
@@ -80,7 +95,10 @@ export function createContainedContainerdConfig({
   }
   writeFileSync(
     resolvedConfigPath,
-    renderContainedContainerdConfig(physicalShimSocketRoot),
+    renderContainedContainerdConfig(
+      physicalShimSocketRoot,
+      resolvedSnapshotterSocket,
+    ),
     {
       encoding: "utf8",
       flag: "wx",
@@ -91,6 +109,7 @@ export function createContainedContainerdConfig({
   return {
     shimSocketDirectory: physicalShimSocketRoot,
     shimSocketRoot: physicalShimSocketRoot,
+    snapshotterSocket: resolvedSnapshotterSocket,
   };
 }
 

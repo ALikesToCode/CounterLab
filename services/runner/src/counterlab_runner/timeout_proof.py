@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from .docker import (
+    CONTAINED_PROCESS_ADDRESS_SPACE_BYTES,
     CONTAINED_RUNTIME_POLICY_SHA256,
     DockerAdapterExecutor,
     DockerExecutionError,
@@ -492,7 +493,7 @@ def _validate_enforced_rlimits(value: object, intended: object) -> bool:
         by_type[entry["type"]] = entry["soft"]
     return (
         observed == required
-        and by_type["RLIMIT_AS"] == intended["memoryBytes"]
+        and by_type["RLIMIT_AS"] == CONTAINED_PROCESS_ADDRESS_SPACE_BYTES
         and by_type["RLIMIT_NPROC"] == intended["maxProcesses"]
         and by_type["RLIMIT_NOFILE"] == 64
         and 1 <= by_type["RLIMIT_CPU"] <= 300
@@ -895,7 +896,7 @@ def run_timeout_cleanup_proof(
     _write_new(workspace / "artifact-adapter.py", adapter_source)
     _write_new(
         workspace / "public_tests.py",
-        _timeout_public_test(memory_mb * 1024 * 1024),
+        _timeout_public_test(CONTAINED_PROCESS_ADDRESS_SPACE_BYTES),
     )
     artifacts = validate_generated_workspace(workspace, generated_root)
 
