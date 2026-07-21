@@ -88,7 +88,12 @@ function StoredResultTable({ replay }: { replay: LegacyVerifiedReplay }) {
 
   if (result.concept === "class_imbalance") {
     return (
-      <div className={styles.tableWrap}>
+      <div
+        className={styles.tableWrap}
+        role="region"
+        aria-label="Stored fixed-kernel comparison values"
+        tabIndex={0}
+      >
         <table>
           <caption>
             Stored fixed-kernel comparison. These values are replayed exactly;
@@ -122,7 +127,12 @@ function StoredResultTable({ replay }: { replay: LegacyVerifiedReplay }) {
   }
 
   return (
-    <div className={styles.tableWrap}>
+    <div
+      className={styles.tableWrap}
+      role="region"
+      aria-label="Stored fixed-kernel comparison values"
+      tabIndex={0}
+    >
       <table>
         <caption>
           Stored fixed-kernel comparison. Accuracy is shown beside entity

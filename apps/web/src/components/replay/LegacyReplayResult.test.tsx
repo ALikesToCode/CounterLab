@@ -199,6 +199,11 @@ describe("LegacyReplayResult", () => {
     const table = screen.getByRole("table", {
       name: /stored fixed-kernel comparison/i,
     });
+    expect(
+      screen.getByRole("region", {
+        name: "Stored fixed-kernel comparison values",
+      }),
+    ).toHaveAttribute("tabindex", "0");
     expect(within(table).getByText("Random Rows")).toBeInTheDocument();
     expect(within(table).getByText("Whole Customers")).toBeInTheDocument();
     expect(within(table).getByText("96.0%")).toBeInTheDocument();
