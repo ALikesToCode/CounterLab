@@ -14,6 +14,7 @@ export const RUNTIME_POLICY_PATH =
 export const RUNTIME_HELPER_PATHS = Object.freeze({
   cgroupControlHelper: "scripts/contained-cgroup-control-helper.mjs",
   cgroupEvidence: "scripts/contained-cgroup-evidence.mjs",
+  cgroupObserverBindings: "scripts/contained-cgroup-observer-bindings.mjs",
   qualifiedRootlessReceiptStore:
     "scripts/contained-qualified-receipt-store.mjs",
   qualifiedRootlessReceipt: "scripts/contained-qualified-rootless-receipt.mjs",
