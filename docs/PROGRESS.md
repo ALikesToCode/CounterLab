@@ -1,6 +1,6 @@
 # Progress
 
-Updated: 2026-07-20
+Updated: 2026-07-21
 
 ## Active v6.1 release board
 
@@ -12,17 +12,17 @@ pass is never presented as a browser or production pass.
 ### Current checkpoint
 
 - **Branch:** `feat/learner-ux-v6.1`
-- **Latest committed checkpoint:** `9348093a15942e7fb59c2755d3e080a20785b5c0`.
-  The fresh exact-image isolation rerun is independently hash-bound through
-  release-check receipt v5, deployment receipt v7, Worker release identity,
-  exact public response validation, and production-smoke report v6. Historical
-  receipt readers remain compatible. The worktree contains only the preserved,
-  untracked `scripts/.fuse_hidden0000a9600000801f`, which remains unopened,
-  unstaged, and undeleted. The complete web suite passes **616/616**; the
-  correctly contained and socket-enabled root suite passes **667/670** with
-  **2 skipped**, leaving exactly three stale scientific-evidence failures.
-  Qualification, deployment, browser qualification, learner evidence, and
-  submission remain unclaimed.
+- **Latest committed checkpoint:** `f0c9f7bfcca474ed700b51975f03246df9f5158d`.
+  The worktree contains only the preserved, untracked
+  `scripts/.fuse_hidden0000a9600000801f`. The source now has a self-hashed
+  cgroup request, observer, FINALIZE/ABORT protocol, fixed negative controls,
+  fail-closed evidence validation, qualified-receipt derivation/store, and 40
+  statically collected Playwright journeys. The production runtime still does
+  not start the observer, write the runtime-owned decision, bind the complete
+  invocation artifact chain, or select the qualified receipt for timeout
+  proof. No exact image, real cgroup sentinel, qualification, deployment,
+  rendered browser journey, learner observation, video, Devpost publication,
+  or submission receipt is claimed.
 - **Earlier product checkpoint:**
   `5259a495948a68024702ba5239bf8057d1785f08`. The owner partitioned the
   preserved integration delta into nine commits and fast-forwarded both
@@ -3381,3 +3381,85 @@ read-only during ownership diagnosis, remains byte-identical to
    and align the public repository, video, `/feedback` ID, Devpost fields, and
    submission receipt before the authorized feature push and fast-forward
    merge to `main`.
+
+## Finish Commander observer and recovery checkpoint — 2026-07-21T01:51:33Z
+
+Deadline: `2026-07-22T00:00:00Z`; **22 hours 08 minutes 27 seconds remained at
+this checkpoint**. The feature branch is at committed HEAD `f0c9f7b`; the only
+worktree entry besides this progress update is the preserved FUSE tombstone
+`scripts/.fuse_hidden0000a9600000801f`. It remains unchanged and unstaged.
+
+### Independently committed source slices
+
+- `0077f1a feat(runtime): add fixed cgroup controls` adds the release-only
+  READY-to-GO memory, process, and CPU control helper.
+- `fbc5ba9 feat(runtime): bind cgroup observer identity` and `37684dd
+  feat(runtime): define cgroup observer protocol` bind the observer to the
+  exact runtime session, attestation, drivers, base receipt, invocation, and
+  repository-contained handshake paths.
+- `771d8bf feat(runtime): observe aggregate cgroup controls` adds the actual
+  source-attested cgroup-v2 observer and its synthetic characterization tests.
+- `317ba44 fix(runtime): bind qualified receipts to live sessions` makes the
+  receipt store resolve live observer bindings itself, require the exact
+  `.rt/<session>` path, reject stale observations, and persist once.
+- `c2c1817 feat(runtime): define cgroup finalization signal` introduces an
+  exact self-hashed runtime FINALIZE/ABORT decision.
+- `cf90647 fix(runtime): fail closed on cgroup qualification` binds FINALIZE to
+  the exact draft and eight cleanup facts, keeps ABORT unconditionally
+  fail-closed, treats only `ENOENT` as absence, pins parent/child cgroup
+  identities with bigint device/inode values, double-checks limits and
+  membership, requires exact candidate restoration after each helper, requires
+  memory `SIGKILL` plus an exact one-event OOM delta, bounds descendant reaping,
+  minimizes helper environments, handles observer termination, and prevents
+  evidence/failure coexistence at the observer output boundary.
+- `f0c9f7b test(learner): cover recovery and notebook intake` adds eight
+  Playwright acceptance journeys for Reject and Not enough evidence recovery,
+  fresh-session resubmission, refresh/back/forward, absent/malformed/
+  unsupported/supported upload, same-file retry, and lost-session-response
+  retry without re-upload.
+
+### Exact verification in these slices
+
+- Complete cgroup observer/protocol/helper/evidence/qualified-receipt Vitest:
+  **7 files, 22/22 passed**.
+- Complete Python timeout-proof file: **7/7 passed**.
+- Repository, web client, generated Worker, and Worker TypeScript: **passed**.
+- Recovery/intake E2E TypeScript: **passed**.
+- Playwright static collection with an inert Cloak endpoint: **40 tests in 3
+  files**. The endpoint was not contacted, no browser launched, and this is not
+  rendered qualification evidence.
+- Scoped Prettier, Python compilation, Node syntax, Git whitespace, and secret
+  scan across the 11 runtime files plus the isolated E2E file: **passed**.
+
+### Live issue matrix
+
+| Gate | Current source status | Required production evidence |
+| --- | --- | --- |
+| Observer semantics | **source implemented and locally tested** | Real delegated cgroup-v2 memory OOM, PID denial, CPU throttling, exact membership, identity, limit, FINALIZE, and cleanup observations |
+| Runtime integration | **open** | Runtime starts observer before the candidate, waits ARMED/draft, writes FINALIZE only after timeout/no-result/complete cleanup and ABORT otherwise, then waits for the exclusive terminal artifact |
+| Qualified receipt chain | **partial** | Store reads and validates exact manifest/draft/finalization/evidence files, requires `failure.json` to be absent, binds finalization into evidence, and supplies the qualified receipt hashes to TypeScript and Python timeout proof |
+| Exact release | **not run** | Clean source `S`, one exact image, real sentinel, refreshed SBOM/VEX/scientific evidence `E`, qualification and release-check receipts |
+| Cloudflare | **not run** | Contained Wrangler account verification, qualified Worker/Container deployment, exact public identity, D1 migrations, production smoke |
+| Browser and accessibility | **40 tests statically collected; 0 rendered** | All tests plus the manual responsive, keyboard, screen-reader, reduced-motion, console/network, download, reconnect, and Web Vitals matrix through CloakBrowser on the exact public tuple |
+| Learner impact and submission | **`NO_DATA`; externally unverified** | Real consented aggregates or unchanged `NO_DATA`, public repo/video/feedback ID, aligned Devpost entry, logged-out link audit, and submission receipt |
+
+### Ordered remaining work
+
+1. Bind finalization into aggregate evidence and make the qualified store verify
+   the complete exclusive invocation artifact chain.
+2. Wire qualification mode through `executeContainedRun`, observer startup,
+   ARMED/draft waits, runtime FINALIZE/ABORT creation, qualified receipt
+   persistence, control-receipt hashes, and Python consumers. Ordinary learner
+   execution must remain unchanged.
+3. Execute the real sentinel only if the repository constitution permits the
+   required delegated `/sys/fs/cgroup` and owned `/proc/<pid>/stat` reads;
+   otherwise preserve an explicit no-go instead of synthesizing evidence.
+4. Freeze clean source `S`, build once, regenerate exact evidence, qualify, run
+   every deterministic gate, verify contained Wrangler identity, and deploy
+   only the qualified tuple.
+5. Execute all 40 current journeys and the manual accessibility/performance
+   matrix through an injected CloakBrowser endpoint against the exact public
+   release.
+6. Keep learner evidence honest, finish and verify the public submission
+   package, then push the feature branch, verify the remote tip, fast-forward
+   `main`, and push/verify `main` only after every ship gate is factual.

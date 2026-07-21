@@ -348,7 +348,7 @@ after the final source freeze.
       no normal-home credential read is permitted.
 - [ ] Deploy the exact qualified Container/Worker tuple and bind the active
       version to the release source, image, Worker, client, and receipt domains.
-- [ ] Execute production smoke plus all 31 CloakBrowser journeys, including
+- [ ] Execute production smoke plus all 40 CloakBrowser journeys, including
       desktop/mobile sample, replay, supported live, malformed/unsupported,
       refusal, transfer fail/pass, patch, Capsule, refresh/reconnect,
       back/forward, accessibility, console/network, and Web Vitals checks.

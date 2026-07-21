@@ -103,11 +103,14 @@ They are not browser evidence for branch `feat/learner-ux-v6.1`.
 
 ### Current v6.1 local specification
 
-The Cloak-only Playwright suite collected 22 tests from one spec file covering
-1440 × 900, 1280 × 720, 390 × 844, keyboard/focus, reduced motion, refresh
-phases, sample, replay, mocked live, unsupported intake, rejected verification,
-failed transfer, successful patch, downloads, Boundary Hunt, exact tables, no
-horizontal overflow, and no model call from local controls.
+The current Cloak-only Playwright suite statically collects 40 tests from three
+spec files. It covers the desktop/mobile viewports, keyboard/focus, reduced
+motion, refresh phases, sample, replay, mocked live, unsupported intake,
+rejected verification, failed transfer, successful patch, downloads, Boundary
+Hunt, exact tables, no horizontal overflow, no model call from local controls,
+fresh-session recovery after both learner terminal responses, browser
+back/forward, absent and malformed upload, same-file retry, and lost private
+session response recovery without re-upload.
 
 Zero of those tests ran in this pass because `CLOAK_CDP_ENDPOINT` was absent.
 The harness exited with status 1 and refused to launch stock Chromium. No
