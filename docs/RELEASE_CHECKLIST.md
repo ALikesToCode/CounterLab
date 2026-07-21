@@ -349,7 +349,38 @@ after the final source freeze.
       015/016/017/048. Every item still needs exact public acceptance evidence.
       CL-023 remains partial because landing withholds result values while Judge
       shows the full fixed break and rendered comprehension is unmeasured.
-      CL-001, CL-006 (`NO_DATA`), and CL-024 remain open.
+      CL-024's bounded inquiry/presentation core is source-implemented with four
+      tools, three turns, and one persisted clarification. Signed-outcome
+      explanation and production/CloakBrowser execution remain open, so CL-024
+      is still partial. CL-001 and CL-006 (`NO_DATA`) remain open.
+- [x] Learning Director source gates: strict tools/output, registered references,
+      stateless continuation, `store:false`, hashed safety identifier, compact
+      provenance without provider response IDs, one optional clarification,
+      fixed UI labels, approval-envelope/Belief-Spec/Subject-Pack binding, edit
+      invalidation, and fail-open deterministic continuation pass focused and
+      full web tests. Production invocation remains unverified.
+- [x] Callback/privacy hardening: complete-field privacy inventory precedes the
+      64-field projection; Unicode canonical alias variants apply before
+      truncation; callback claims race cancellation before R2/verifier work;
+      cancelled callbacks perform zero object-store reads/writes in the
+      regression. Generated-output writes have an exact owner/path claim,
+      abandoned claims expire only after the bounded job deadline, and terminal
+      dispatch failure plus its evidence event commit atomically. Worker-owned
+      result, interactive, and Boundary Map authority events require the exact
+      active callback claim; ordinary event appends remain fenced. The complete
+      Worker API passes 110/110.
+- [x] Current dirty-tree learner source verification: App tests pass 87/87; the
+      API/repair/Boundary slice passes 57/57; complete web Vitest passes 84/84
+      files and 723/723 tests; repository, web client, generated Worker binding,
+      and Worker TypeScript pass; the production Vite/Worker build passes;
+      kernel Pytest passes 222/222; and the scientific vulnerability edge/unit
+      slice passes 16/16.
+- [ ] Current repository-wide gate: root TypeScript now passes. Root Vitest
+      reports 787 passed, 36 failed, and 2 skipped; every failure is confined to
+      two stale submission/scientific release-evidence files. Root Prettier is
+      blocked only by two unrelated untracked files, while targeted formatting
+      and `git diff --check` pass. Do not refresh source-bound evidence hashes
+      until the final clean source freezes.
 - [ ] Freeze one clean source commit, build one exact runner image, run startup,
       timeout-cleanup, no-secret, refusal, held-out, and negative-control gates,
       and issue one qualified receipt.

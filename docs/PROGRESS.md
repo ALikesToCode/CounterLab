@@ -1,6 +1,6 @@
 # Progress
 
-Updated: 2026-07-21
+Updated: 2026-07-22
 
 ## Active v6.1 release board
 
@@ -12,7 +12,20 @@ pass is never presented as a browser or production pass.
 ### Current checkpoint
 
 - **Branch:** `feat/learner-ux-v6.1`
-- **Latest committed checkpoint:**
+- **Current pre-release checkpoint:** authority commit `6006bcd` and learner UI
+  commit `ea352cb`, followed by release-hygiene commit `767d757`. The complete
+  web suite passes **84 files, 726 tests**; repository, web-client, generated
+  Worker-binding, and Worker strict TypeScript pass; the production Vite/Worker
+  build passes; focused Learning Director/session tests pass **75/75**; focused
+  Worker callback/D1 tests pass **115/115**; and the Boundary recovery slice
+  passes **19/19**. The repository secret scan passes across **1,513 files**.
+  Root Vitest still reports **787 passed, 36 failed, 2 skipped** because two
+  source-bound submission/scientific-evidence suites intentionally retain the
+  earlier immutable hashes until the final source commit is frozen and evidence
+  is regenerated. Stale local gallery and test-report artifacts remain on disk
+  but are ignored and are not release evidence. No deployment, public browser,
+  learner, model-call, or submission pass is inferred.
+- **Previous committed checkpoint:**
   `b37f7d962e53dbfd7f511746e97ba364fe465d34`, four commits ahead of
   `origin/feat/learner-ux-v6.1`. The only worktree entry is the preserved,
   unstaged `scripts/.fuse_hidden0000a9600000801f`. The broad deterministic and
@@ -5198,3 +5211,226 @@ Remaining order:
 No aggregate-containment pass, qualified tuple, evidence refresh, registry
 promotion, final deployment, public browser qualification, submission, push,
 or merge is claimed. Release remains **NO-GO**.
+
+## Learning Director, learner-gate, and callback/privacy checkpoint — 2026-07-21T19:30:28Z
+
+### Implemented in current source
+
+- Added a GPT-5.6 Learning Director with four strict read-only tools, at most
+  three stateless Responses turns, one fixed-choice clarification, `store:false`,
+  a hashed safety identifier, local closed-registry validation, and compact
+  model/prompt/tool/usage provenance. It cannot select the final experiment,
+  compute results, verify evidence, grade transfer, unlock Repair, or issue
+  proof.
+- Persisted the bounded decision in live session state. A requested
+  clarification blocks Belief Spec confirmation, survives refresh, cannot be
+  reset, and must resolve to READY on the next call. React renders only fixed
+  labels for registered IDs and does not expose evidence hashes or result
+  authority.
+- Preserved a learner's original Question outside fixed Sample proof authority;
+  removed replay controls that implied a new run; made reveal/skip insufficient
+  to complete Boundary; required meaningful learner-authored reflection; and
+  separated not-found recovery from temporary session/proof/artifact failures.
+- Privacy policy v3 inventories every declared field before the 64-field display
+  cap, applies NFKC/case-insensitive sensitive aliases to every outbound string
+  before truncation, and requires approval whenever fields are suppressed. The
+  disclosure remains explicit that heuristic redaction cannot guarantee full
+  de-identification.
+- Added an optimistic callback claim before session/R2/verifier work. Callback,
+  cancellation, and timeout now race on one job version; terminal jobs reject
+  callbacks and public events; failed claims retain exact recovery lineage for
+  idempotent partial-event replay.
+
+### Verification actually run
+
+- Complete web Vitest: **84 files, 706/706 tests passed**.
+- Root Vitest excluding the three known release/runtime files below: **72 files,
+  758 passed, 2 skipped**.
+- Complete Worker API: **109/109 passed**; D1 runner repository: **5/5 passed**;
+  session callback service: **12/12 passed**; belief analyst/director: **83/83
+  passed**.
+- Web client and Worker strict TypeScript: **passed**. Production Vite/Worker
+  build: **passed**. Submission draft preflight:
+  `SUBMISSION_PACKAGE_DRAFT_VALID`.
+
+### Honest open gates
+
+- The full root TypeScript/test command is currently blocked by concurrent,
+  unrelated contained-runtime snapshotter edits whose implementation and tests
+  are temporarily out of sync. Those files were not reverted or modified by
+  this slice.
+- Scientific release-verifier tests correctly report stale source-bound hashes
+  after current UI/registry changes and other concurrent source drift. No
+  integrity manifest was rewritten to manufacture a pass; refresh remains a
+  final clean-source release step.
+- No live GPT-5.6 Learning Director call, deployment, production smoke,
+  CloakBrowser journey, learner study, Devpost submission, push, or merge is
+  claimed. CL-001 and CL-006 remain open; CL-023 remains source-partial under
+  the no-result-before-Prediction rule; CL-024 now has its bounded
+  inquiry/presentation core but remains partial because no signed-outcome
+  explanation or production invocation was verified. Release remains
+  **NO-GO**.
+
+## Learner authority and callback integration checkpoint — 2026-07-21T20:28:48Z
+
+### Implemented in the current dirty tree
+
+- Live session/result parsing now binds `SUPPORTS` and `INCONCLUSIVE` to a
+  matching verified result, forbids a result for `REJECTED`, and requires
+  `SUPPORTS` before repair authority. The learner surface can show a valid
+  inconclusive result and Boundary/Apply path without unlocking Repair.
+- Live completion waits for native Reasoning Diff v2 and Proof Capsule v2
+  authority. A client lesson recap is labelled as recap and cannot substitute
+  for either artifact. Repair download and proof actions remain unavailable
+  while native authority is incomplete.
+- Reviewed Belief Spec hypotheses, applicability conditions, non-claims,
+  evidence relevance/excerpts, alternatives, and limitations remain visible
+  together. Subject Pack-authored test patterns are labelled as such rather
+  than attributed to the reasoning analyst.
+- Private session/proof recovery now explains browser-bound owner capability
+  without revealing whether an inaccessible identifier exists. It directs
+  learners to publish a verified replay when they need a shareable link.
+- Restored routes render a stable loading surface instead of flashing landing
+  content. Modal focus, Boundary Map pressed state, notebook-diff keyboard
+  scrolling, proof-value wrapping, and short-viewport proof reflow have focused
+  regression coverage.
+- Callback claims now authorize only the Worker-owned authority events appended
+  by that exact callback. Ordinary event upload, cancellation, timeout, and
+  unrelated claims remain fenced. This closes the integration gap where the
+  new callback lock rejected its own verified result, interactive, and Boundary
+  Map authority events.
+
+### Verification actually run
+
+- Scoped learner/API/route/a11y suite: **13 files, 200/200 passed**.
+- Imbalance repair completion/download suite: **6/6 passed**.
+- Runner-job claim and callback service suite: **14/14 passed**.
+- Complete Worker API suite: **110/110 passed**.
+- Complete web Vitest suite: **84 files, 716/716 passed**.
+- Web client TypeScript, generated Wrangler runtime bindings, and Worker
+  TypeScript: **passed**.
+- Production Vite/Worker build: **passed**.
+- Root Vitest: **782 passed, 37 failed, 2 skipped** across 75 files. All 37
+  failures are in `validate-submission-package.test.ts` and the two
+  scientific-engine release-verifier files; current source and documentation
+  no longer match their frozen release hashes, and one vulnerability edge
+  expectation also predates the concurrent evidence shape.
+- Repository-wide TypeScript: **failed** on four calls in
+  `scripts/contained-runtime.test.ts` that pass nine arguments to an API now
+  accepting at most eight. Web/Worker TypeScript is independently green.
+
+### Honest open gates
+
+- The worktree is not a frozen source candidate. Source-bound scientific,
+  submission, SBOM, and integrity evidence must remain stale until all
+  concurrent source work is reviewed and committed; no dirty-tree evidence
+  refresh is a release pass.
+- No CloakBrowser journey, deployment, production smoke, live model invocation,
+  learner study, Devpost publication, push, or merge was performed in this
+  checkpoint. Learner evidence remains `NO_DATA`; release remains **NO-GO**.
+
+## Optional Director and recovery-fence checkpoint — 2026-07-22T02:06:00Z
+
+### Implemented in the current dirty tree
+
+- The Learning Director now returns only a fixed `learning-emphasis` question
+  ID and registered answer IDs. Its optional presentation preference cannot
+  block learner-owned Belief Spec confirmation, and a bounded Director failure
+  leaves the deterministic learner flow available without inventing a fallback
+  plan.
+- The approved preview hash now covers the exact Belief Analyst and Learning
+  Director packet envelope. Persisted presentation state binds that hash to the
+  current Belief Spec hash and Subject Pack version, excludes provider response
+  IDs, and is invalidated by a Belief Spec edit.
+- Generated runner outputs now require an exact owner/path write claim before R2
+  mutation. Callback, event, cancellation, timeout, and competing write paths
+  respect live claims; abandoned non-terminal claims expire only after the
+  bounded job deadline. Dispatch failure and its sanitized failure event commit
+  atomically.
+- Privacy alias matching covers Unicode canonical case variants before any
+  string truncation.
+- Returning home invalidates direct Replay intent; inaccessible private routes
+  retain browser recovery metadata; unopened history remains labelled `Stored
+  replay`; custom Questions are bound only to the Sample session that captured
+  them; filler reflections such as `Not sure` cannot advance; and a successful
+  Boundary classification disables contradictory reveal/skip actions.
+
+### Verification actually run
+
+- Complete web Vitest: **84 files, 716/716 passed**.
+- Focused recovery/reflection/Boundary UI suite: **6 files, 125/125 passed**.
+- Belief analyst, Learning Director, session service, and runner-job suites:
+  **4 files, 130/130 passed**.
+- Web client and Worker strict TypeScript: **passed**.
+- Production Vite/Worker build: **passed**.
+- Git whitespace validation: **passed**.
+- Repository-wide TypeScript remains blocked by seven diagnostics in concurrent
+  `scripts/contained-runtime.test.ts` edits: four obsolete ninth arguments and
+  three implicit-`any` callback parameters.
+- Repository-wide Prettier reports four unrelated files after formatting this
+  slice: `apps/web/.vitest-app-baseline.json`,
+  `docs/submission-assets/public-2026-07-22/README.md`,
+  `scripts/contained-runtime-run.mjs`, and
+  `scripts/contained-runtime-supervisor.test.ts`.
+
+### Honest open gates
+
+- No release-bound hash, SBOM, scientific-engine receipt, submission artifact,
+  or deployment receipt was refreshed from this dirty tree.
+- No live GPT-5.6 call, CloakBrowser journey, deployment, production smoke,
+  learner study, Devpost publication, commit, push, or merge was performed in
+  this checkpoint. CL-001, CL-002, and CL-006 remain externally blocked;
+  CL-023 and CL-024 remain partial. Learner evidence remains `NO_DATA`; release
+  remains **NO-GO**.
+
+## Source freeze integration checkpoint — 2026-07-21T21:35:02Z
+
+### Completed
+
+- Committed bounded Learning Director, callback/output-write fencing, genuine
+  returned-model provenance, live-mode enforcement, and callback duplicate
+  projection handling in `6006bcd`.
+- Committed the reviewed learner journey, route recovery, strict replay/live
+  authority rendering, proof validation, accessible Boundary recovery, and
+  in-flight navigation fencing in `ea352cb`.
+- Kept stale unbound screenshots and a failed-test JSON report out of release
+  source without deleting the owner's local files in `767d757`.
+- Preserved the original scientific verifier expectation rather than weakening
+  it to hide stale pre-freeze evidence.
+- Recorded Devpost submitter type `Student` and country `India`. Video,
+  `/feedback` Session ID, exact release receipt, and submission receipt remain
+  honestly pending.
+
+### Verification actually run
+
+- Complete web Vitest: **84 files, 726/726 passed**.
+- Learning Director/session/callback focused suite: **3 files, 75/75 passed**.
+- Worker API and D1 runner repository: **2 files, 115/115 passed**.
+- Boundary recovery: **3 files, 19/19 passed**.
+- Repository, web, generated Worker binding, and Worker TypeScript: **passed**.
+- Production Vite/Worker build: **passed**.
+- Secret scan: **1,513 repository files passed**.
+- Git whitespace and scoped Prettier checks: **passed**.
+- Root Vitest before evidence refresh: **787 passed, 36 failed, 2 skipped**;
+  failures are limited to stale immutable submission/scientific evidence.
+
+### Immediate remaining release order
+
+1. Commit this factual documentation slice and verify a clean source tree.
+2. Build the exact source-bound runner once in `rt-prize721ab`.
+3. Run the genuine aggregate containment/timeout sentinel and refresh all
+   source/image-bound scientific, SBOM, VEX, and held-out evidence together.
+4. Qualify and promote the exact image; run the full release gate.
+5. Deploy the qualified tuple through `deploy-qualified.sh`, which owns the
+   maintenance window and pending D1 migrations.
+6. Execute clean CloakBrowser desktop/mobile sample, replay, supported live,
+   refusal, transfer, patch, proof, refresh, console/network, accessibility,
+   and Web Vitals journeys against the public deployment.
+7. Push the feature branch, fast-forward `main`, push `main`, and leave video
+   and final Devpost publication to the owner unless explicit publication
+   evidence becomes available.
+
+No exact image, refreshed evidence, Cloudflare mutation, production smoke,
+public browser qualification, push, merge, video, learner observation, or
+submission is claimed at this checkpoint. Release remains **NO-GO** until those
+gates occur.

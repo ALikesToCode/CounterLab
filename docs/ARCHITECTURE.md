@@ -4,10 +4,10 @@
 
 | Component                  | Runtime                        | Responsibility                                                                           |
 | -------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------- |
-| `apps/web`                 | Cloudflare Vite Worker + React | UI, typed routes, D1 state, R2 private objects, optional GPT analyst                     |
+| `apps/web`                 | Cloudflare Vite Worker + React | UI, typed routes, D1 state, R2 private objects, optional GPT analyst/director            |
 | `packages/contracts`       | TypeScript                     | Zod contracts, JSON Schema, shared result/state types                                    |
 | `packages/notebook-parser` | TypeScript                     | Non-executing intake and Artifact Manifest                                               |
-| `packages/belief-analyst`  | TypeScript/server              | Responses API structured Belief Spec and deterministic approved fallback                 |
+| `packages/belief-analyst`  | TypeScript/server              | Structured Belief Spec plus bounded read-only Learning Director and approved fallback    |
 | `packages/session-core`    | TypeScript                     | Legal transitions, immutable prediction, event chain                                     |
 | `packages/codex-client`    | Container/local Node           | App Server stdio, bounded scientific compiler, replay/disabled clients, sanitizer        |
 | `services/hosted-runner`   | Cloudflare Container           | Scoped jobs, bounded artifacts, repairs, fixed-kernel/patch process bridge               |
@@ -27,6 +27,7 @@ no transition, verifier, kernel, or patch authority.
 ```text
 Notebook -> parser -> Artifact Manifest -> D1/R2
 Question + manifest -> GPT/approved analyst -> Belief Spec
+approved refs + closed registries -> Learning Director -> presentation plan/one clarification
 Learner confirmation -> immutable Prediction
 Belief Spec -> Codex -> Discrimination Contract + Experiment IR + scene/rationale
 bounded candidates -> fixed scorer -> selected Experiment IR
@@ -58,6 +59,13 @@ manifest/input object, purpose, origin, output prefix, callback, state version,
 and expiration. The Worker retains the private key; the Container receives only
 the public verification key. Sanitized public events are append-only and
 reconnect from a persisted browser cursor.
+
+Before callback verification or object-store access, the Worker acquires an
+optimistic callback claim on the same versioned job aggregate used by
+cancellation and timeout. A terminal job therefore rejects a late callback
+before R2 reads/writes or verifier work; if callback processing fails, the claim
+is released with a recovery hash so an exact retry can resume partial
+Worker-owned authority events. Terminal jobs reject later public event appends.
 
 The Container starts Codex App Server over stable stdio JSONL. The scientific
 compile may write only `discrimination-contract.json`, `experiment-ir.json`,

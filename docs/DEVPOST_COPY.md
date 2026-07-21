@@ -15,8 +15,8 @@ Ask like chat. Prove it like science.
 ## Submission fields
 
 - **Category:** Education
-- **Submitter type:** **PENDING** owner confirmation in the official form
-- **Country:** **PENDING** owner confirmation in the official form
+- **Submitter type:** Student
+- **Country:** India
 - **Primary audience:** ML learners and instructors who need to test what a
   notebook result actually supports
 - **Live judge URL:** <https://counterlab.cserules.workers.dev/judge>
@@ -110,6 +110,10 @@ and approve its own answer:
 - **GPT-5.6 reasoning analyst** proposes an evidence-linked Belief Spec from the
   learner-approved sanitized packet. It cannot run cells or produce result
   authority.
+- **GPT-5.6 Learning Director** may inspect four read-only approved-evidence and
+  Subject Pack registries, ask one fixed-choice clarification, and select only
+  registered presentation IDs. It cannot select the final experiment, compute,
+  verify, grade, unlock Repair, or issue proof.
 - **Runtime Codex compiler** emits a bounded Discrimination Contract,
   CounterLab Experiment IR, scene description, rationale, or separate Patch
   Plan. It can compose registered operation IDs but cannot author hosted code,

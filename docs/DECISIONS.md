@@ -784,3 +784,74 @@ New sessions receive a separate 256-bit owner key.
   its hash through qualification, deployment, production readiness, and smoke.
 - Keep `PROCESS_BOUND_PARTIAL` separate: it describes Worker/client artifact
   attestation, not the hosted generation filesystem boundary.
+
+## 2026-07-21 — Bound GPT-5.6 to presentation-only inquiry
+
+- Keep the existing one-shot Belief Spec proposal, then permit a separate
+  Learning Director to inspect only approved evidence hashes and closed Subject
+  Pack registries through four read-only tools across at most three Responses
+  turns.
+- Permit at most one optional fixed-choice clarification. The model returns only
+  the fixed `learning-emphasis` question ID and registered answer IDs; local UI
+  copy owns the learner-facing text. Persist its consumption so refresh,
+  retries, and direct API calls cannot request a second one, but never make the
+  presentation preference a veto over learner-owned Belief Spec confirmation.
+- Hash the exact approved Belief Analyst and Learning Director packet envelope
+  together. Bind a persisted Director decision to that approval hash, the
+  current Belief Spec hash, and the Subject Pack version; clear it when the
+  learner edits the Belief Spec.
+- Continue statelessly with locally retained validated output items and
+  `store: false`; persist only the strict decision, model/prompt identifiers,
+  usage totals, and tool argument/output hashes and durations. Do not retain a
+  provider response ID. Never persist or publish private reasoning.
+- Fail open to the deterministic learner flow when the optional Director
+  returns an invalid bounded response. Do not substitute a fallback Director
+  plan or weaken Belief Spec validation.
+- Treat selected scaffold, scene, Boundary-view, and candidate IDs as
+  presentation references only. The fixed scorer alone selects the experiment;
+  kernels, verifiers, transfer, repair, and Proof Capsule issuance ignore the
+  presentation plan as scientific authority.
+
+## 2026-07-21 — Make privacy and callbacks fail closed before expensive work
+
+- Build the declared-field privacy inventory from the complete schema, then cap
+  only the displayed projection. Normalize aliases with NFKC and
+  case-insensitive matching, apply them to every outbound string before
+  truncation, and retain the explicit non-guarantee for heuristic PII detection.
+- Claim a runner callback through the same optimistic job version used by
+  cancellation and timeout before reading session or R2 state. Whichever write
+  wins becomes authoritative; a late callback cannot perform verifier or object
+  side effects after cancellation.
+- Release failed callback claims with an exact recovery hash so idempotent
+  retries can resume partial Worker-owned authority events. Terminal jobs reject
+  subsequent event appends.
+- Permit Worker-owned result, interactive, and Boundary Map authority events
+  during callback processing only when `appendEvent` receives the exact active
+  callback-claim token. Public runner event uploads receive no such token and
+  remain blocked, so callback recovery does not weaken the terminal-mutation
+  fence.
+- Fence each generated-output upload with an exact owner/path write claim before
+  R2 mutation, and block callback, event, cancellation, timeout, or competing
+  output writes while a live claim exists. Expire abandoned non-terminal claims
+  only after the bounded job deadline so a crashed Worker cannot lock the job
+  forever.
+- Persist a terminal dispatch failure and its sanitized evidence event in one D1
+  batch. A failed event append must not leave the job terminal without its
+  append-only failure evidence.
+
+## 2026-07-22 — Validate browser proof authority before rendering completion
+
+- Treat every API response as untrusted even after its structural envelope
+  parses. A Belief Spec v2 result requires the matching Evidence Verdict and
+  epistemic report; a rejected verdict releases no result, and repair requires
+  `SUPPORTS`.
+- Accept a native Proof Capsule only with a hosted v2 result and a complete,
+  same-session result/Boundary/transfer/patch/Reasoning Diff authority tuple.
+  Recompute the canonical Belief Spec, Prediction, Evidence Verdict, and
+  Reasoning Diff hashes in the browser before exposing completion.
+- Keep legacy Belief Test and replay compatibility explicit. Never fill missing
+  live authority with sample or replay objects, and make test fixtures provide
+  the same coherent authority expected from production responses.
+- Revealing the fixed Sample Boundary Map does not count as the learner's
+  classification, but it must not make classification impossible. Keep the map
+  visible and allow a later verified-cell classification to unlock Apply.

@@ -104,15 +104,36 @@ The server defaults to `OPENAI_MODEL=gpt-5.6` and
 safety identifier, and resolves every evidence reference locally. Invalid,
 unsupported, or unresolved output cannot advance state.
 
+For supported live Belief Specs, the current source then runs a bounded
+Learning Director over the same approved evidence. It may make at most four
+read-only tool calls across three stateless Responses turns, ask at most one
+optional fixed-choice clarification, and select only registered presentation
+scaffolds, scene recipes, Boundary views, and candidate references. The fixed
+question and answer labels are local UI copy; the model cannot author them or
+veto learner-owned Belief Spec confirmation. Invalid Director output is omitted
+while the deterministic learner flow remains available. It uses `store: false`
+and the same hashed safety identifier. CounterLab persists only the validated
+decision, tool hashes/durations, configured model and prompt identifiers, and
+token totals; it does not persist provider response IDs or private reasoning.
+The Learning Director cannot select the final experiment, compute values,
+verify evidence, grade transfer, unlock Repair, or issue proof.
+
 `OPENAI_BASE_URL` optionally selects a compatible Responses API endpoint. It is
 server-only and may be configured as an HTTPS host root, a `/v1` base, or the
 full `/v1/responses` endpoint; CounterLab normalizes all three to the SDK base
 and never returns the endpoint in health, events, evidence, or browser state.
 
-Before a live call, Studio shows the exact sanitized packet: concept routing,
-claim, schema summary, support state, and bounded evidence excerpts. The learner
-must approve that packet; sensitive-looking excerpts require a second explicit
-confirmation. Editing the claim or artifact invalidates the approval.
+Before a live call, Studio shows the exact sanitized packet envelope for both
+the Belief Analyst and Learning Director: concept routing, claim, schema
+summary, support state, bounded evidence excerpts, Subject Pack version, and
+registered candidate references. One approval hash binds that envelope to the
+resulting Belief Spec and any persisted presentation decision. Privacy
+inventory covers every declared schema field before the visible 64-field cap;
+declared-sensitive names and common identifier patterns are normalized and
+redacted before truncation. The learner must approve that packet;
+sensitive-looking or suppressed fields require a second explicit confirmation.
+Editing the claim or artifact invalidates the approval. This remains heuristic
+redaction, not a guarantee of complete de-identification.
 
 ### Runtime Codex generates
 
@@ -176,7 +197,7 @@ Evidence release follows one bounded authority chain:
 Question / supported artifact
           │
           ▼
-sanitized packet ──► GPT-5.6 proposal
+sanitized packet ──► GPT-5.6 Belief Spec + bounded presentation plan
           │
           ▼
 Runtime Codex typed plan ──► fixed candidate scorer
@@ -197,7 +218,7 @@ Vite React Studio
     │ typed requests + reconnectable public events
 Cloudflare Worker ── D1 sessions/jobs/event chain
     │              └─ R2 private inputs/artifacts/results/patches/proofs
-    ├─ Responses API (optional live analyst)
+    ├─ Responses API (optional live analyst + Learning Director)
     ├─ stored sample/replay path
     └─ Container-backed Durable Object
           ├─ Codex App Server over stdio JSONL

@@ -7,7 +7,7 @@ CounterLab separates proposal, computation, verification, and learner judgment. 
 | Authority                 | Owns                                                                                                       | May produce                                                                                                   | Must not decide or access                                                                                                        |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | Learner                   | Question, Belief Spec confirmation or rejection, immutable Prediction, revision, transfer, repair approval | Claim, confirmation, confidence, reusable rule, fixed transfer choices, patch approval                        | Experimental metrics before Prediction, verifier outcome, hidden answers                                                         |
-| GPT-5.6 reasoning analyst | Evidence-linked hypothesis formalization                                                                   | Schema-valid Belief Spec, alternatives, uncertainty, candidate interventions                                  | Cell execution, experimental results, experiment selection, validity, mastery, patch unlock                                      |
+| GPT-5.6 analyst/director  | Evidence-linked hypothesis formalization and registered presentation emphasis                              | Schema-valid Belief Spec; one fixed-choice clarification; bounded scaffold, scene, and Boundary-view IDs      | Cell execution, experimental results, final experiment selection, validity, grading, mastery, repair/proof unlock                |
 | Runtime Codex compiler    | Bounded compilation of an approved contract                                                                | Discrimination Contract, Experiment IR, scene/rationale, or separate Patch Plan; advanced local adapter/tests | Metric formulas, executable hosted code, transfer scoring, final validity, hidden verifier, held-out data, secrets, upload bytes |
 | Fixed Subject Pack scorer | Candidate eligibility, fixed score, deterministic selection                                                | Selected registered experiment and score breakdown                                                            | Hidden outcomes, model confidence as numeric truth, result verification                                                          |
 | Fixed Python kernel       | Numeric and canonical truth for the documented Subject Pack                                                | Splits, models, metrics, overlap, Boundary cells, chart data, transfer result                                 | Learner-model diagnosis, compiler validity, prose grading                                                                        |
@@ -23,7 +23,8 @@ CounterLab separates proposal, computation, verification, and learner judgment. 
 untrusted notebook
   -> safe parser (no execution)
   -> Artifact Manifest + learner claim
-  -> GPT-5.6 proposal
+  -> GPT-5.6 Belief Spec proposal
+  -> bounded Learning Director presentation plan or one clarification
   -> learner-confirmed Belief Spec
   -> immutable Prediction
   -> Runtime Codex bounded Discrimination Contract + Experiment IR proposal
@@ -61,6 +62,15 @@ base URL. Endpoint identity and credentials remain server-only configuration;
 they are not part of prompts, provenance, event payloads, health responses, or
 product branding. The same schema, evidence resolution, refusal handling, and
 state-transition checks apply regardless of endpoint configuration.
+
+For a supported live Belief Spec, the Learning Director may inspect only exact
+approved evidence hashes and closed Subject Pack registries through four
+read-only tools. It has at most three Responses turns and one fixed-choice
+clarification. READY output contains only registered presentation and candidate
+reference IDs in canonical learner-stage order. The Worker persists the strict
+decision plus compact model/prompt/tool provenance, never private reasoning.
+The fixed scorer still selects the experiment; kernels, verifiers, transfer,
+repair, and proof code ignore the presentation plan for authority decisions.
 
 Its output is locally validated against the Belief Spec schema and every
 evidence reference must resolve to the Artifact Manifest.

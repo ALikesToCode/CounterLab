@@ -28,6 +28,12 @@ canonical results, patches, event chain, and Proof Bundles.
 - Zod validation and evidence-reference resolution for model output.
 - Hash-bound learner preview/approval before a live analyst call, with an extra
   confirmation for sensitive-looking excerpts.
+- Full-schema privacy inventory before the 64-field display cap; declared
+  sensitive names are NFKC-normalized, case-insensitively aliased across every
+  outbound string, and replaced before truncation. Common PII detection remains
+  an explicitly disclosed heuristic.
+- A versioned callback claim races atomically with cancellation/timeout before
+  session or R2 access; terminal jobs reject callbacks and public events.
 - Legal server-side state transitions and immutable prediction hash.
 - Exact generated file set, regular-file/symlink checks, JSON depth/size limits.
 - Adapter AST denial of filesystem/environment/dynamic import/eval/exec,
