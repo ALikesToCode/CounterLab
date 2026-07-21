@@ -12,18 +12,22 @@ pass is never presented as a browser or production pass.
 ### Current checkpoint
 
 - **Branch:** `feat/learner-ux-v6.1`
-- **Latest committed checkpoint:** `3174a1f997a40f471ed9b8a20e147a0ce279ee15`.
-  The worktree contains only the preserved, untracked
-  `scripts/.fuse_hidden0000a9600000801f`. The branch now includes the
-  prompt-first Landing and Judge hierarchy, source-covered P0/P1 learner
-  mechanisms, exact runtime qualification contracts, a fail-closed submission
-  preflight foundation, and stored Proof Bundle validation bound to the
-  session, artifact, mode, state, HMAC policy, and v2 scientific snapshot.
-  The latest complete web run passes **79 files and 626/626 tests**; focused
-  proof tests, web and Worker TypeScript, the production build, scoped
-  formatting, and whitespace checks also pass at this checkpoint. These local
-  results do not constitute a real cgroup sentinel, a refreshed scientific
-  release, CloakBrowser qualification, deployment, learner observation,
+- **Latest product and release-safety checkpoint:**
+  `8e33154b2b130fbdb635cf7a91ed75dc9357741f`. The worktree contains only the
+  preserved, untracked `scripts/.fuse_hidden0000a9600000801f` before this
+  documentation-only ledger update. The branch is one local commit ahead of
+  `origin/feat/learner-ux-v6.1`. In addition to the prompt-first learner flow,
+  source-covered P0/P1 mechanisms, exact runtime contracts, and stored Proof
+  Bundle validation, the branch now has a strict fail-closed submission chain:
+  immutable evidence bytes, qualified-runner -> release-check -> deployment ->
+  production-smoke bindings, typed publication receipts, exact browser journey
+  and manual evidence references, structural PNG decoding, canonical public
+  link checks, and submitted-state verification. Focused submission validation
+  passes **34/34 tests**; repository TypeScript, scoped Prettier, Git whitespace,
+  the four-file secret scan, and the real checked-in `DRAFT` preflight pass.
+  The latest complete web run remains **79 files and 626/626 tests**. These
+  local results do not constitute a real cgroup sentinel, refreshed scientific
+  evidence, CloakBrowser execution, Cloudflare deployment, learner observation,
   Devpost publication, or a submission receipt.
 - **Earlier product checkpoint:**
   `5259a495948a68024702ba5239bf8057d1785f08`. The owner partitioned the
@@ -3839,3 +3843,80 @@ feature push and verified fast-forward merge to main        NOT RUN
 The release remains **NO-GO**. The next locally actionable slice is the strict
 submission-evidence validator; it can be completed without pretending that any
 external deployment or submission evidence exists.
+
+## Publication-evidence validation checkpoint — 2026-07-21T07:25:42Z
+
+Deadline: `2026-07-22T00:00:00Z`; **16 hours 34 minutes 18 seconds remained at
+this checkpoint**. The feature branch is at committed product and release-safety
+checkpoint `8e33154b2b130fbdb635cf7a91ed75dc9357741f`. It was one commit ahead of
+`origin/feat/learner-ux-v6.1` before this documentation-only ledger update. The
+only other worktree entry is the preserved, unstaged FUSE tombstone
+`scripts/.fuse_hidden0000a9600000801f`; it remains untouched.
+
+### Completed since the previous reconciliation
+
+| Slice | Status | Exact evidence |
+| --- | --- | --- |
+| Verified submission bytes | **DONE** | `9ea8484` verifies referenced evidence bytes before accepting their claims. |
+| Exact release-evidence chain | **DONE** | `07c9091` binds qualified runner, release check, deployment, production smoke, and publication evidence to one source/image/Worker tuple. |
+| Stored Proof Bundle authority | **DONE** | `3174a1f` validates stored Proof Bundles at Worker and client boundaries and prevents cross-session, cross-artifact, mode, state, and signing-policy substitution. |
+| Publication-evidence validator | **DONE** | `8e33154` adds strict typed receipts for repository access, video, feedback, browser qualification, all current Playwright journeys, seven required viewports, ten manual checks, public links, screenshots, Devpost submission, and post-submit audit. It validates evidence paths before reads, hashes every referenced byte once, structurally decodes PNGs, and rejects missing, reused, stale, oversized, malformed, or tuple-mismatched evidence. |
+| Focused publication verification | **PASS** | Vitest **1 file, 34/34 tests passed**; repository TypeScript passed; scoped Prettier passed; Git whitespace passed; secret scan passed across the four explicit files; the checked-in real package passed only the `DRAFT` preflight. |
+| Complete web regression | **PASS at latest complete run** | Web Vitest **79 files, 626/626 tests passed**. No newer product code changed after that complete run. |
+| Real publication and submission | **NOT DONE** | `docs/SUBMISSION_PACKAGE.json` remains `DRAFT`; no deployment, browser, video, learner, Devpost, or submission receipt is inferred from validator fixtures. |
+
+### Exact work left, in release order
+
+1. **Clean and freeze source.** Resolve the preserved FUSE tombstone without
+   deleting it, obtain a genuinely clean physical tree, and freeze one exact
+   source commit. The tombstone is not release evidence and must not be staged.
+2. **Qualify one exact runner image.** Execute the real aggregate-cgroup
+   sentinel and all containment/negative controls, build the image once, and
+   record the immutable image digest. The current repository-only filesystem
+   constitution blocks the sentinel's required `/sys/fs/cgroup` and owned
+   `/proc/<pid>/stat` reads; this is unresolved authority, not a passing test.
+3. **Regenerate deterministic release evidence.** From only that frozen
+   source/image tuple, regenerate SBOM, VEX, scientific-engine, license,
+   health, held-out, Sample Capsule, and qualification evidence. Repair the
+   three stale root Vitest binding failures by updating genuine evidence, never
+   by weakening their assertions.
+4. **Authenticate and deploy through the contained Cloudflare path.** Verify
+   the intended account, run migrations and the full release gate, deploy only
+   the qualified tuple, and record exact source commit, runner image digest,
+   Worker version/deployment ID, public identity, and production-smoke receipt.
+   The last contained Wrangler check was logged out; deployment has not run.
+5. **Qualify the public browser experience.** Run the exact current **40-test**
+   public Playwright registry plus the manual accessibility matrix through
+   CloakBrowser at **375x812, 390x844, 768x1024, 1280x720, 1366x768,
+   1440x900, and 1920x1080**. Include keyboard, focus restoration, screen-reader
+   names, 200% zoom, reduced motion, long content, narrow visualizations,
+   44-pixel targets, console/network failures, downloads, reconnect/history,
+   and Web Vitals. Current qualifying execution remains **0 journeys** because
+   no `CLOAK_CDP_ENDPOINT` is available.
+6. **Finish truthful submission evidence.** Capture screenshots and the public
+   video only from the exact qualified tuple; verify repository, Judge,
+   feedback, video, and Devpost links logged out; populate the Devpost draft;
+   retain the public slug and `submitted_at` receipt. Learner evidence remains
+   `NO_DATA` unless real consented observations occur.
+7. **Publish and integrate only after the gates pass.** Push the reviewed
+   feature tip, verify the remote, then fast-forward-only merge and push
+   `main`. No current deployment, submission, feature push, or final merge is
+   claimed.
+
+### Current release verdict
+
+```text
+learner product source + focused regressions                PASS
+submission/publication validator source                     PASS
+complete deterministic release evidence                    FAIL (3 stale bindings)
+clean source + exact image + real containment sentinel      BLOCKED
+qualified Cloudflare deployment                             NOT RUN
+CloakBrowser public qualification                           NOT RUN (0 journeys)
+screenshots/video/learner evidence/Devpost receipt          NOT READY
+feature push and verified fast-forward merge to main        NOT RUN
+```
+
+The release remains **NO-GO**. The validator is ready to reject invented or
+misbound publication evidence; the evidence itself must now be produced by a
+clean exact-image qualification, qualified deployment, public CloakBrowser
+run, and real submission workflow.
