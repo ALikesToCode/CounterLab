@@ -3388,6 +3388,10 @@ describe("contained runtime command policy", () => {
       resolve(root, "scripts/build-source-bound-runner.sh"),
       "utf8",
     );
+    const adapterDockerfile = readFileSync(
+      resolve(root, "services/runner/Dockerfile"),
+      "utf8",
+    );
 
     expect(dockerIgnore).toContain("!services/runner/Dockerfile");
     expect(dockerIgnore).toContain("!services/runner/image");
@@ -3397,6 +3401,18 @@ describe("contained runtime command policy", () => {
     );
     expect(sourceBuild).not.toContain(
       'tar -C "${NORMALIZED_OCI_LAYOUT}" -cf "${NORMALIZED_OCI_TAR}" .',
+    );
+    // Restricted rootless build filesystems can collapse explicit modes to
+    // 0700. Keep the read-only adapter rootfs traversable by its declared
+    // non-root user even when that occurs.
+    expect(adapterDockerfile).toContain(
+      "chown 65532:65532 /opt /opt/counterlab /workspace /fixtures /output /tmp",
+    );
+    expect(adapterDockerfile).toContain(
+      "COPY --chown=65532:65532 --chmod=0444 concept-packs/leakage/public/counterlab_sdk.py",
+    );
+    expect(adapterDockerfile).toContain(
+      "COPY --chown=65532:65532 --chmod=0555 services/runner/image/harness.py",
     );
   });
 
