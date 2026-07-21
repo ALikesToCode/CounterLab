@@ -1647,6 +1647,8 @@ test("Judge Mode distinguishes every authority path", async ({ page }) => {
 test("the first visit explains the lesson before asking for technical knowledge", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  expect(page.viewportSize()).toEqual({ width: 768, height: 1024 });
   await reset(page);
   await expect(
     page.getByRole("heading", {
@@ -1692,7 +1694,7 @@ test("the first visit explains the lesson before asking for technical knowledge"
 });
 
 for (const viewport of [
-  { name: "wide desktop", width: 1440, height: 900 },
+  { name: "wide desktop", width: 1920, height: 1080 },
   { name: "compact desktop", width: 1280, height: 720 },
   { name: "mobile", width: 390, height: 844 },
 ] as const) {
@@ -1700,6 +1702,10 @@ for (const viewport of [
     page,
   }) => {
     await page.setViewportSize(viewport);
+    expect(page.viewportSize()).toEqual({
+      width: viewport.width,
+      height: viewport.height,
+    });
     await reset(page);
     await revealLandingNavigation(page);
 
@@ -1833,6 +1839,8 @@ test("Try Instantly persists the verified learning loop and exports a valid proo
 test("the lesson keeps one learner decision in focus at a time", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  expect(page.viewportSize()).toEqual({ width: 1366, height: 768 });
   await startInstant(page);
   await commitAndOpenResult(page);
 
