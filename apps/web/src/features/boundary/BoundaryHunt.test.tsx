@@ -175,7 +175,7 @@ describe("BoundaryHunt", () => {
     );
   });
 
-  it("supports an explicit reveal without selecting or classifying a cell", async () => {
+  it("keeps classification available after an explicit reveal", async () => {
     const user = userEvent.setup();
     const { onRevealMap, onClassify } = renderHunt();
 
