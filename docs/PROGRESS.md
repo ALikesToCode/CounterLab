@@ -12,14 +12,15 @@ pass is never presented as a browser or production pass.
 ### Current checkpoint
 
 - **Branch:** `feat/learner-ux-v6.1`
-- **Latest committed checkpoint:** `f19387b1ab214571ea27022efdc0b9432655cc9f`.
+- **Latest committed checkpoint:** `dd7b372fb15048e11224979157d3bf29f9beedc9`.
   The worktree contains only the preserved, untracked
   `scripts/.fuse_hidden0000a9600000801f`. The source now has a self-hashed
   cgroup request, observer, FINALIZE/ABORT protocol, fixed negative controls,
   fail-closed evidence validation, qualified-receipt derivation/store, runtime
   observer orchestration, serialized run/drain handling, exact v2/v3 Python
-  consumers, and 40 statically collected Playwright journeys. Source tests do
-  not constitute a real cgroup sentinel: no exact image, aggregate host proof,
+  consumers, a tightened Judge first fold, a centered prompt-first Landing,
+  and 40 statically collected Playwright journeys. Source tests do not
+  constitute a real cgroup sentinel: no exact image, aggregate host proof,
   qualification, deployment, rendered browser journey, learner observation,
   video, Devpost publication, or submission receipt is claimed.
 - **Earlier product checkpoint:**
@@ -3530,3 +3531,70 @@ worktree entry besides this progress update is the preserved FUSE tombstone
 6. Learner evidence remains **`NO_DATA`**. Devpost, video, public-repository
    verification, feedback Session ID, logged-out link audit, publication, and
    submission receipt remain externally unverified.
+
+## Prompt-first release-presentation checkpoint — 2026-07-21T03:20:32Z
+
+Deadline: `2026-07-22T00:00:00Z`; **20 hours 39 minutes 28 seconds remained at
+this checkpoint**. The feature branch is at committed HEAD `dd7b372`; the only
+worktree entry besides this progress update is the preserved FUSE tombstone
+`scripts/.fuse_hidden0000a9600000801f`. It remains unchanged and unstaged.
+
+### Independently committed slices
+
+- `bd6e5c3 docs(release): map qualification dependencies` records the source,
+  release, reviewer, browser, Cloudflare, submission, and merge dependency
+  graph without representing local source checks as production closure.
+- `e80b390 fix(judge): tighten first-fold belief break` reduces Judge first-fold
+  copy and visual density, preserves the completed-fixed-sample authority
+  label, and keeps proof one action away before the verified mechanism.
+- `830d61b fix(learner): restore prompt-first landing hierarchy` makes the
+  Question composer the centered dominant action, keeps prompt starters and
+  textual mobile actions visible, and replaces the large pre-result card with
+  a compact locked fair-test strip. The Landing strip contains no fixed sample
+  values or verdict/fix language.
+- `dd7b372 test(learner): guard prompt-first landing fold` updates the
+  desktop/mobile Playwright contract for the new locked strip, visible primary
+  action and prompts, first-viewport containment, mobile action width,
+  horizontal overflow, and the shared pre-Prediction forbidden-text corpus.
+
+### Exact verification in these slices
+
+- Focused Landing component and integration Vitest: **4 files, 85/85 passed**.
+- Complete web Vitest: **79 files, 620/620 passed**.
+- Web client TypeScript and E2E TypeScript: **passed**.
+- Production Vite/Worker build: **passed**. Main client
+  **447.26 kB / 128.68 kB gzip**, client CSS
+  **200.63 kB / 34.69 kB gzip**, Worker
+  **1,863.39 kB / 359.59 kB gzip**.
+- Playwright static collection under the explicit non-rendering design-review
+  authority: **40 tests in 3 files**. No browser launched and no rendered
+  qualification is claimed.
+- Scoped Prettier, Git whitespace, and explicit secret scans: **passed**.
+- One package-manager wrapper retry stopped before test collection with
+  `unable to open database file`; the same checks passed through the
+  repository-local Vitest and TypeScript binaries. One initial Playwright
+  collection command used the wrong repo-local binary path, and one correctly
+  located command failed closed because no browser authority was supplied;
+  explicit non-rendering design-review collection then passed. None of these
+  setup attempts executed product tests or a browser before their corrected
+  passes.
+
+### Current remaining gates
+
+1. The source-level aggregate-cgroup chain remains locally tested but has no
+   real delegated-cgroup sentinel. The checked-in repository-only filesystem
+   constitution prohibits the necessary `/sys` and `/proc` reads, so exact
+   image qualification remains fail-closed.
+2. The preserved FUSE tombstone still prevents a clean physical worktree and
+   is not deleted, hidden, staged, or modified.
+3. Final source freeze, one exact runner image, refreshed source/image-bound
+   evidence, qualification, release checks, contained Wrangler identity, and
+   Cloudflare deployment remain **not run**.
+4. This session still has no `CLOAK_CDP_ENDPOINT`; desktop/mobile rendering,
+   keyboard, screen-reader, reduced-motion, console/network, reconnect,
+   downloads, screenshots, and Web Vitals remain **0 current journeys**.
+5. Learner evidence remains **`NO_DATA`**. Public repository/video/feedback
+   alignment, Devpost completion, logged-out verification, publication, and a
+   submission receipt remain externally unverified.
+6. The feature branch has not been pushed and has not been merged into `main`.
+   Push and fast-forward merge remain downstream of factual release gates.
