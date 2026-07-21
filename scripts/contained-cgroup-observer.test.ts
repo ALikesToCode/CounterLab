@@ -18,13 +18,26 @@ import {
   validateContainedCgroupObserverFailure,
   validateContainedCgroupObserverReady,
 } from "./contained-cgroup-observer.mjs";
-import { createContainedCgroupObserverManifest } from "./contained-cgroup-observer-protocol.mjs";
+import {
+  createContainedCgroupObserverFinalization,
+  createContainedCgroupObserverManifest,
+} from "./contained-cgroup-observer-protocol.mjs";
 
 const runtimeSessionId = "rt-v61-test1";
 const invocationId = "1".repeat(64);
 const finalContainerId = "2".repeat(64);
 const sanitizedSpecSha256 = "3".repeat(64);
 const now = new Date("2026-07-20T01:02:03.000Z");
+const verifiedCleanup = {
+  taskAbsent: true,
+  containerAbsent: true,
+  snapshotAbsent: true,
+  invocationAliasAbsent: true,
+  imageRootfsAbsent: true,
+  persistedAuthorityVerified: true,
+  readOnlyMountsUnchanged: true,
+  imageRootfsUnchanged: true,
+};
 
 function manifest() {
   return createContainedCgroupObserverManifest({
@@ -56,6 +69,14 @@ function processStat(pid: number, parentPid: number, startTime: number) {
     String(startTime),
   ];
   return `${pid} (counterlab worker) ${fields.join(" ")}\n`;
+}
+
+function latestDraftHash(drafts: Array<Record<string, unknown>>) {
+  const value = drafts.at(-1)?.receiptPayloadSha256;
+  if (typeof value !== "string") {
+    throw new Error("test observer draft hash is unavailable");
+  }
+  return value;
 }
 
 function adapter(overrides: Record<string, unknown> = {}) {
@@ -106,6 +127,16 @@ function adapter(overrides: Record<string, unknown> = {}) {
     async publishDraft(draft: Record<string, unknown>) {
       drafts.push(draft);
     },
+    waitForFinalization: async () =>
+      createContainedCgroupObserverFinalization(manifest(), {
+        cleanup: verifiedCleanup,
+        cleanupVerified: true,
+        decisionAt: now,
+        observerDraftPayloadSha256: latestDraftHash(drafts),
+        resultReleased: false,
+        status: "FINALIZE",
+        timeoutObserved: true,
+      }),
     waitForCgroupAbsent: async () => undefined,
     ...overrides,
   };
@@ -187,6 +218,92 @@ describe("contained cgroup observer", () => {
     await expect(observeContainedCgroup(manifest(), reused)).rejects.toThrow(
       /reused/u,
     );
+  });
+
+  it("rejects aborts, unstable membership and limits, and ambiguous OOM kills", async () => {
+    const aborted = adapter({
+      waitForFinalization: async () =>
+        createContainedCgroupObserverFinalization(manifest(), {
+          abortCode: "TIMEOUT_NOT_OBSERVED",
+          cleanupVerified: false,
+          cleanup: { ...verifiedCleanup, taskAbsent: false },
+          decisionAt: now,
+          observerDraftPayloadSha256: latestDraftHash(aborted.drafts),
+          resultReleased: false,
+          status: "ABORT",
+          timeoutObserved: false,
+        }),
+    });
+    await expect(observeContainedCgroup(manifest(), aborted)).rejects.toThrow(
+      /aborted/u,
+    );
+
+    const wrongDraft = adapter({
+      waitForFinalization: async () =>
+        createContainedCgroupObserverFinalization(manifest(), {
+          cleanup: verifiedCleanup,
+          cleanupVerified: true,
+          decisionAt: now,
+          observerDraftPayloadSha256: "f".repeat(64),
+          resultReleased: false,
+          status: "FINALIZE",
+          timeoutObserved: true,
+        }),
+    });
+    await expect(
+      observeContainedCgroup(manifest(), wrongDraft),
+    ).rejects.toThrow(/draft changed/u);
+
+    let membershipReads = 0;
+    const unstableMembership = adapter({
+      readCgroupFile(name: string) {
+        if (name === "cgroup.procs") {
+          membershipReads += 1;
+          return membershipReads === 1 ? "100\n101\n" : "100\n101\n102\n";
+        }
+        return adapter().readCgroupFile(name);
+      },
+      readProcessStat(pid: number) {
+        if (pid === 100) return processStat(100, 1, 12345);
+        if (pid === 101) return processStat(101, 100, 12346);
+        return processStat(102, 100, 12347);
+      },
+    });
+    await expect(
+      observeContainedCgroup(manifest(), unstableMembership),
+    ).rejects.toThrow(/stabilize/u);
+
+    const stable = adapter();
+    let memoryLimitReads = 0;
+    const changedLimits = {
+      ...stable,
+      readCgroupFile(name: string) {
+        if (name === "memory.max") {
+          memoryLimitReads += 1;
+          return String(
+            memoryLimitReads === 1 ? 512 * 1024 * 1024 : 512 * 1024 * 1024 + 1,
+          );
+        }
+        return stable.readCgroupFile(name);
+      },
+    };
+    await expect(
+      observeContainedCgroup(manifest(), changedLimits),
+    ).rejects.toThrow(/limits changed/u);
+
+    const ambiguousOomBase = adapter();
+    const ambiguousOom = {
+      ...ambiguousOomBase,
+      async runControl(control: Record<string, unknown>) {
+        await ambiguousOomBase.runControl(control);
+        if (control.mode === "memory") {
+          await ambiguousOomBase.runControl(control);
+        }
+      },
+    };
+    await expect(
+      observeContainedCgroup(manifest(), ambiguousOom),
+    ).rejects.toThrow(/evidence binding/u);
   });
 
   it("binds ready and draft receipts and rejects mutation", () => {

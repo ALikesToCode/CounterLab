@@ -297,7 +297,15 @@ def test_rootless_receipt_binds_control_and_exact_adapter_authority() -> None:
     broken_counter = json.loads(json.dumps(rootless))
     broken_counter["aggregateLimitEvidence"]["negativeControls"]["memory"][
         "oomKillAfter"
-    ] = 0
+    ] = 2
+    evidence_payload = {
+        key: value
+        for key, value in broken_counter["aggregateLimitEvidence"].items()
+        if key != "receiptPayloadSha256"
+    }
+    broken_counter["aggregateLimitEvidence"]["receiptPayloadSha256"] = _hash(
+        evidence_payload
+    )
     payload = {
         key: value
         for key, value in broken_counter.items()

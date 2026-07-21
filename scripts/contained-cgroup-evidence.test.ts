@@ -162,4 +162,16 @@ describe("contained cgroup evidence", () => {
       }),
     ).toThrow(/binding/u);
   });
+
+  it("rejects a self-consistent receipt with an ambiguous OOM delta", () => {
+    const changed = evidence();
+    changed.negativeControls.memory.oomKillAfter = 2;
+    const { receiptPayloadSha256: _ignored, ...payload } = changed;
+    changed.receiptPayloadSha256 = sha256CgroupBytes(
+      canonicalCgroupJson(payload),
+    );
+    expect(() => validateContainedCgroupEvidence(changed, expected())).toThrow(
+      /binding/u,
+    );
+  });
 });

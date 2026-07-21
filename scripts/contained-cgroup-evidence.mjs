@@ -240,7 +240,7 @@ export function validateContainedCgroupEvidence(value, expectedValue) {
     memoryControl.requestedBytes <= intended.memoryBytes ||
     !safeInteger(memoryControl.oomKillBefore) ||
     !safeInteger(memoryControl.oomKillAfter, { positive: true }) ||
-    memoryControl.oomKillAfter <= memoryControl.oomKillBefore ||
+    memoryControl.oomKillAfter !== memoryControl.oomKillBefore + 1 ||
     memoryControl.enforced !== true ||
     !safeInteger(processControl.attemptedProcesses, { positive: true }) ||
     processControl.attemptedProcesses <= intended.maxProcesses ||

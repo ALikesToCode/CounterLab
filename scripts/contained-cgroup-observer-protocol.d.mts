@@ -49,7 +49,25 @@ export interface ContainedCgroupObserverFinalization {
   schemaVersion: "1";
   status: "FINALIZE" | "ABORT";
   reason: "AGGREGATE_TIMEOUT_CONFIRMED" | "QUALIFICATION_ABORTED";
+  abortCode:
+    | "CLEANUP_UNVERIFIED"
+    | "OBSERVER_FAILED"
+    | "RESULT_RELEASED"
+    | "RUNTIME_FAILED"
+    | "TIMEOUT_NOT_OBSERVED"
+    | null;
+  cleanup: {
+    taskAbsent: boolean;
+    containerAbsent: boolean;
+    snapshotAbsent: boolean;
+    invocationAliasAbsent: boolean;
+    imageRootfsAbsent: boolean;
+    persistedAuthorityVerified: boolean;
+    readOnlyMountsUnchanged: boolean;
+    imageRootfsUnchanged: boolean;
+  };
   manifestPayloadSha256: string;
+  observerDraftPayloadSha256: string;
   invocationId: string;
   finalContainerId: string;
   timeoutObserved: boolean;
@@ -68,8 +86,14 @@ export function validateContainedCgroupObserverFinalization(
 export function createContainedCgroupObserverFinalization(
   manifest: ContainedCgroupObserverManifest,
   input: {
+    abortCode?: Exclude<
+      ContainedCgroupObserverFinalization["abortCode"],
+      null
+    > | null;
+    cleanup: ContainedCgroupObserverFinalization["cleanup"];
     cleanupVerified: boolean;
     decisionAt?: Date;
+    observerDraftPayloadSha256: string;
     resultReleased: boolean;
     status: "FINALIZE" | "ABORT";
     timeoutObserved: boolean;

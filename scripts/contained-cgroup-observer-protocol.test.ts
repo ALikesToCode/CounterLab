@@ -16,6 +16,16 @@ const invocationId = "1".repeat(64);
 const finalContainerId = "2".repeat(64);
 const sanitizedSpecSha256 = "3".repeat(64);
 const requestedAt = new Date("2026-07-20T01:02:03.000Z");
+const verifiedCleanup = {
+  taskAbsent: true,
+  containerAbsent: true,
+  snapshotAbsent: true,
+  invocationAliasAbsent: true,
+  imageRootfsAbsent: true,
+  persistedAuthorityVerified: true,
+  readOnlyMountsUnchanged: true,
+  imageRootfsUnchanged: true,
+};
 
 function manifest() {
   return createContainedCgroupObserverManifest({
@@ -99,8 +109,10 @@ describe("contained cgroup observer protocol", () => {
     const input = manifest();
     const finalizedAt = new Date(requestedAt.getTime() + 30_000);
     const finalized = createContainedCgroupObserverFinalization(input, {
+      cleanup: verifiedCleanup,
       cleanupVerified: true,
       decisionAt: finalizedAt,
+      observerDraftPayloadSha256: "a".repeat(64),
       resultReleased: false,
       status: "FINALIZE",
       timeoutObserved: true,
@@ -112,8 +124,11 @@ describe("contained cgroup observer protocol", () => {
     ).toEqual(finalized);
 
     const aborted = createContainedCgroupObserverFinalization(input, {
+      abortCode: "TIMEOUT_NOT_OBSERVED",
+      cleanup: { ...verifiedCleanup, taskAbsent: false },
       cleanupVerified: false,
       decisionAt: finalizedAt,
+      observerDraftPayloadSha256: "a".repeat(64),
       resultReleased: false,
       status: "ABORT",
       timeoutObserved: false,
@@ -124,13 +139,34 @@ describe("contained cgroup observer protocol", () => {
       }),
     ).toEqual(aborted);
 
+    const failClosedAbort = createContainedCgroupObserverFinalization(input, {
+      abortCode: "RUNTIME_FAILED",
+      cleanup: verifiedCleanup,
+      cleanupVerified: true,
+      decisionAt: finalizedAt,
+      observerDraftPayloadSha256: "a".repeat(64),
+      resultReleased: false,
+      status: "ABORT",
+      timeoutObserved: true,
+    });
+    expect(
+      validateContainedCgroupObserverFinalization(failClosedAbort, input, {
+        observedAtMs: finalizedAt.getTime(),
+      }),
+    ).toEqual(failClosedAbort);
+
     const mutations = [
       { ...finalized, resultReleased: true },
       { ...finalized, cleanupVerified: false },
       { ...finalized, timeoutObserved: false },
+      {
+        ...finalized,
+        cleanup: { ...finalized.cleanup, snapshotAbsent: false },
+      },
       { ...finalized, receiptPayloadSha256: "0".repeat(64) },
+      { ...finalized, observerDraftPayloadSha256: "0" },
       { ...aborted, status: "FINALIZE" },
-      { ...aborted, timeoutObserved: true, cleanupVerified: true },
+      { ...aborted, abortCode: "UNKNOWN" },
     ];
     for (const changed of mutations) {
       expect(() =>

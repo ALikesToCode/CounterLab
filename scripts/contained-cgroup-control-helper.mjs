@@ -96,6 +96,71 @@ function childCompletion(child) {
   });
 }
 
+function childRunning(child) {
+  return child.exitCode === null && child.signalCode === null;
+}
+
+async function bounded(promise, timeoutMs, label) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`contained cgroup ${label} timed out`)),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function reapChildren(children, completions) {
+  for (const child of children) {
+    if (childRunning(child)) child.kill("SIGTERM");
+  }
+  try {
+    await bounded(Promise.all(completions), 2_000, "child reap");
+  } catch {
+    for (const child of children) {
+      if (childRunning(child)) child.kill("SIGKILL");
+    }
+    await bounded(Promise.all(completions), 2_000, "forced child reap");
+  }
+}
+
+function terminationController(activeChildren) {
+  let requestedSignal;
+  const handlers = new Map(
+    ["SIGINT", "SIGTERM"].map((signal) => {
+      const handler = () => {
+        requestedSignal ??= signal;
+        for (const child of activeChildren) {
+          if (childRunning(child)) child.kill("SIGTERM");
+        }
+      };
+      process.on(signal, handler);
+      return [signal, handler];
+    }),
+  );
+  return {
+    assertActive() {
+      if (requestedSignal !== undefined) {
+        throw new Error(
+          `contained cgroup control interrupted by ${requestedSignal}`,
+        );
+      }
+    },
+    dispose() {
+      for (const [signal, handler] of handlers) {
+        process.off(signal, handler);
+      }
+    },
+  };
+}
+
 async function memoryControl(requestedBytes) {
   writeFileSync("/proc/self/oom_score_adj", "1000\n", "utf8");
   const retained = [];
@@ -117,36 +182,48 @@ async function memoryControl(requestedBytes) {
   );
 }
 
-async function processControl(attemptedProcesses, scriptPath) {
+async function processControl(
+  attemptedProcesses,
+  scriptPath,
+  activeChildren,
+  controller,
+) {
   const children = [];
   const completions = [];
   let denied = false;
-  for (let index = 0; index < attemptedProcesses; index += 1) {
-    const child = spawn(
-      process.execPath,
-      [scriptPath, "--internal-hold", "5000"],
-      { stdio: "ignore" },
-    );
-    children.push(child);
-    const completion = childCompletion(child);
-    completions.push(completion);
-    const state = await Promise.race([
-      completion,
-      new Promise((accept) =>
-        child.once("spawn", () => accept({ started: true })),
-      ),
-    ]);
-    if (!state.started) {
-      denied = true;
-      break;
+  try {
+    for (let index = 0; index < attemptedProcesses; index += 1) {
+      controller.assertActive();
+      const child = spawn(
+        process.execPath,
+        [scriptPath, "--internal-hold", "5000"],
+        {
+          env: { LANG: "C", LC_ALL: "C", TZ: "UTC" },
+          stdio: "ignore",
+        },
+      );
+      children.push(child);
+      activeChildren.add(child);
+      const completion = childCompletion(child);
+      completions.push(completion);
+      const state = await Promise.race([
+        completion,
+        new Promise((accept) =>
+          child.once("spawn", () => accept({ started: true })),
+        ),
+      ]);
+      if (!state.started) {
+        denied = true;
+        break;
+      }
+    }
+  } finally {
+    await reapChildren(children, completions);
+    for (const child of children) {
+      activeChildren.delete(child);
     }
   }
-  for (const child of children) {
-    if (child.exitCode === null && child.signalCode === null) {
-      child.kill("SIGTERM");
-    }
-  }
-  await Promise.all(completions);
+  controller.assertActive();
   if (!denied) {
     throw new Error("contained cgroup process control escaped its limit");
   }
@@ -155,15 +232,37 @@ async function processControl(attemptedProcesses, scriptPath) {
   );
 }
 
-async function cpuControl(busyWindowMs, workers, scriptPath) {
+async function cpuControl(
+  busyWindowMs,
+  workers,
+  scriptPath,
+  activeChildren,
+  controller,
+) {
   const children = Array.from({ length: workers }, () =>
     spawn(
       process.execPath,
       [scriptPath, "--internal-busy", String(busyWindowMs)],
-      { stdio: "ignore" },
+      {
+        env: { LANG: "C", LC_ALL: "C", TZ: "UTC" },
+        stdio: "ignore",
+      },
     ),
   );
-  const results = await Promise.all(children.map(childCompletion));
+  children.forEach((child) => activeChildren.add(child));
+  const completions = children.map(childCompletion);
+  let results;
+  try {
+    results = await bounded(
+      Promise.all(completions),
+      busyWindowMs + 2_000,
+      "CPU worker completion",
+    );
+  } finally {
+    await reapChildren(children, completions);
+    children.forEach((child) => activeChildren.delete(child));
+  }
+  controller.assertActive();
   if (results.some((result) => !result.started || result.code !== 0)) {
     throw new Error("contained cgroup CPU control worker failed");
   }
@@ -192,16 +291,34 @@ async function main() {
     return;
   }
   const control = parseContainedCgroupControl(process.argv.slice(2));
-  await waitForGo();
-  if (control.mode === "memory") {
-    await memoryControl(control.requestedBytes);
-    return;
+  const activeChildren = new Set();
+  const controller = terminationController(activeChildren);
+  try {
+    await waitForGo();
+    controller.assertActive();
+    if (control.mode === "memory") {
+      await memoryControl(control.requestedBytes);
+      return;
+    }
+    if (control.mode === "processes") {
+      await processControl(
+        control.attemptedProcesses,
+        scriptPath,
+        activeChildren,
+        controller,
+      );
+      return;
+    }
+    await cpuControl(
+      control.busyWindowMs,
+      control.workers,
+      scriptPath,
+      activeChildren,
+      controller,
+    );
+  } finally {
+    controller.dispose();
   }
-  if (control.mode === "processes") {
-    await processControl(control.attemptedProcesses, scriptPath);
-    return;
-  }
-  await cpuControl(control.busyWindowMs, control.workers, scriptPath);
 }
 
 if (

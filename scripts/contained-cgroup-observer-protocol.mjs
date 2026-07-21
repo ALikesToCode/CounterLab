@@ -14,6 +14,23 @@ const finalizationReasonByStatus = Object.freeze({
   ABORT: "QUALIFICATION_ABORTED",
   FINALIZE: "AGGREGATE_TIMEOUT_CONFIRMED",
 });
+const allowedAbortCodes = new Set([
+  "CLEANUP_UNVERIFIED",
+  "OBSERVER_FAILED",
+  "RESULT_RELEASED",
+  "RUNTIME_FAILED",
+  "TIMEOUT_NOT_OBSERVED",
+]);
+const cleanupKeys = [
+  "containerAbsent",
+  "imageRootfsAbsent",
+  "imageRootfsUnchanged",
+  "invocationAliasAbsent",
+  "persistedAuthorityVerified",
+  "readOnlyMountsUnchanged",
+  "snapshotAbsent",
+  "taskAbsent",
+];
 
 const manifestKeys = [
   "baseReceiptFileSha256",
@@ -180,11 +197,14 @@ export function validateContainedCgroupObserverFinalization(
   exactKeys(
     finalization,
     [
+      "abortCode",
+      "cleanup",
       "cleanupVerified",
       "decisionAt",
       "finalContainerId",
       "invocationId",
       "manifestPayloadSha256",
+      "observerDraftPayloadSha256",
       "reason",
       "receiptPayloadSha256",
       "resultReleased",
@@ -197,28 +217,36 @@ export function validateContainedCgroupObserverFinalization(
   const { receiptPayloadSha256, ...payload } = finalization;
   const requestedAtMs = Date.parse(manifest?.requestedAt);
   const decisionAtMs = Date.parse(finalization.decisionAt);
+  const cleanup = object(finalization.cleanup, "finalization cleanup");
+  exactKeys(cleanup, cleanupKeys, "finalization cleanup");
+  const cleanupValuesAreBoolean = cleanupKeys.every(
+    (key) => typeof cleanup[key] === "boolean",
+  );
+  const everyCleanupCheckPassed = cleanupKeys.every(
+    (key) => cleanup[key] === true,
+  );
   const finalizesQualification =
     finalization.status === "FINALIZE" &&
     finalization.timeoutObserved === true &&
     finalization.resultReleased === false &&
-    finalization.cleanupVerified === true;
-  const abortsQualification =
-    finalization.status === "ABORT" &&
-    !(
-      finalization.timeoutObserved === true &&
-      finalization.resultReleased === false &&
-      finalization.cleanupVerified === true
-    );
+    finalization.cleanupVerified === true &&
+    everyCleanupCheckPassed;
+  const abortsQualification = finalization.status === "ABORT";
   if (
     finalization.schemaVersion !== "1" ||
     (!finalizesQualification && !abortsQualification) ||
     finalization.reason !== finalizationReasonByStatus[finalization.status] ||
+    (finalizesQualification
+      ? finalization.abortCode !== null
+      : !allowedAbortCodes.has(finalization.abortCode)) ||
     finalization.manifestPayloadSha256 !== manifest?.receiptPayloadSha256 ||
+    !sha256Pattern.test(finalization.observerDraftPayloadSha256 ?? "") ||
     finalization.invocationId !== manifest?.invocationId ||
     finalization.finalContainerId !== manifest?.finalContainerId ||
     typeof finalization.timeoutObserved !== "boolean" ||
     typeof finalization.resultReleased !== "boolean" ||
     typeof finalization.cleanupVerified !== "boolean" ||
+    !cleanupValuesAreBoolean ||
     !validTimestamp(finalization.decisionAt, observedAtMs) ||
     !Number.isFinite(requestedAtMs) ||
     !Number.isFinite(decisionAtMs) ||
@@ -237,8 +265,11 @@ export function validateContainedCgroupObserverFinalization(
 export function createContainedCgroupObserverFinalization(
   manifest,
   {
+    abortCode = null,
+    cleanup,
     cleanupVerified,
     decisionAt = new Date(),
+    observerDraftPayloadSha256,
     resultReleased,
     status,
     timeoutObserved,
@@ -251,7 +282,10 @@ export function createContainedCgroupObserverFinalization(
     schemaVersion: "1",
     status,
     reason: finalizationReasonByStatus[status],
+    abortCode,
+    cleanup,
     manifestPayloadSha256: manifest?.receiptPayloadSha256,
+    observerDraftPayloadSha256,
     invocationId: manifest?.invocationId,
     finalContainerId: manifest?.finalContainerId,
     timeoutObserved,

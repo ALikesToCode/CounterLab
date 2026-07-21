@@ -2,7 +2,6 @@
 
 import { spawn } from "node:child_process";
 import {
-  existsSync,
   lstatSync,
   readFileSync,
   realpathSync,
@@ -20,6 +19,7 @@ import {
 import { resolveContainedCgroupObserverBindings } from "./contained-cgroup-observer-bindings.mjs";
 import {
   containedCgroupQualificationPaths,
+  validateContainedCgroupObserverFinalization,
   validateContainedCgroupObserverManifest,
 } from "./contained-cgroup-observer-protocol.mjs";
 
@@ -444,6 +444,20 @@ function cpuLimit(source) {
   };
 }
 
+async function observedAggregateLimits(adapter) {
+  return {
+    memoryMaxBytes: scalar(
+      await adapter.readCgroupFile("memory.max"),
+      "memory limit",
+    ),
+    memorySwapMaxBytes: swapScalar(
+      await adapter.readCgroupFile("memory.swap.max"),
+    ),
+    pidsMax: scalar(await adapter.readCgroupFile("pids.max"), "PID limit"),
+    ...cpuLimit(await adapter.readCgroupFile("cpu.max")),
+  };
+}
+
 async function stableMembership(adapter) {
   const memberPids = parseContainedCgroupMembers(
     await adapter.readCgroupFile("cgroup.procs"),
@@ -455,18 +469,28 @@ async function stableMembership(adapter) {
       parseContainedProcessStat(await adapter.readProcessStat(pid), pid),
     );
   }
+  const confirmedMemberPids = parseContainedCgroupMembers(
+    await adapter.readCgroupFile("cgroup.procs"),
+  );
+  if (
+    canonicalCgroupJson(confirmedMemberPids) !== canonicalCgroupJson(memberPids)
+  ) {
+    throw new Error("contained cgroup observer membership did not stabilize");
+  }
   const membership = selectContainedCgroupMembership(memberPids, processStats);
   return { memberPids, membership, processStats };
 }
 
 async function assertCandidateSurvived(adapter, initial) {
-  const current = new Set(
-    parseContainedCgroupMembers(await adapter.readCgroupFile("cgroup.procs")),
+  const current = parseContainedCgroupMembers(
+    await adapter.readCgroupFile("cgroup.procs"),
   );
+  if (
+    canonicalCgroupJson(current) !== canonicalCgroupJson(initial.memberPids)
+  ) {
+    throw new Error("contained cgroup observer candidate membership changed");
+  }
   for (const pid of initial.memberPids) {
-    if (!current.has(pid)) {
-      throw new Error("contained cgroup observer candidate membership changed");
-    }
     const observed = parseContainedProcessStat(
       await adapter.readProcessStat(pid),
       pid,
@@ -477,27 +501,28 @@ async function assertCandidateSurvived(adapter, initial) {
       throw new Error("contained cgroup observer candidate PID was reused");
     }
   }
+  const confirmed = parseContainedCgroupMembers(
+    await adapter.readCgroupFile("cgroup.procs"),
+  );
+  if (
+    canonicalCgroupJson(confirmed) !== canonicalCgroupJson(initial.memberPids)
+  ) {
+    throw new Error("contained cgroup observer membership did not stabilize");
+  }
 }
 
 export async function observeContainedCgroup(manifest, adapter) {
   await adapter.waitForCgroup();
-  const observedLimits = {
-    memoryMaxBytes: scalar(
-      await adapter.readCgroupFile("memory.max"),
-      "memory limit",
-    ),
-    memorySwapMaxBytes: swapScalar(
-      await adapter.readCgroupFile("memory.swap.max"),
-    ),
-    pidsMax: scalar(await adapter.readCgroupFile("pids.max"), "PID limit"),
-    ...cpuLimit(await adapter.readCgroupFile("cpu.max")),
-  };
+  const observedLimits = await observedAggregateLimits(adapter);
   const initial = await stableMembership(adapter);
 
   const cpuBefore = parseContainedCgroupKeyValues(
     await adapter.readCgroupFile("cpu.stat"),
   );
-  await adapter.runControl({ mode: "cpu", busyWindowMs: 500, workers: 4 });
+  await adapter.runControl(
+    { mode: "cpu", busyWindowMs: 500, workers: 4 },
+    initial.memberPids,
+  );
   const cpuAfter = parseContainedCgroupKeyValues(
     await adapter.readCgroupFile("cpu.stat"),
   );
@@ -506,7 +531,10 @@ export async function observeContainedCgroup(manifest, adapter) {
     await adapter.readCgroupFile("pids.events"),
   );
   const attemptedProcesses = observedLimits.pidsMax + 1;
-  await adapter.runControl({ mode: "processes", attemptedProcesses });
+  await adapter.runControl(
+    { mode: "processes", attemptedProcesses },
+    initial.memberPids,
+  );
   const processesAfter = parseContainedCgroupKeyValues(
     await adapter.readCgroupFile("pids.events"),
   );
@@ -515,12 +543,21 @@ export async function observeContainedCgroup(manifest, adapter) {
     await adapter.readCgroupFile("memory.events"),
   );
   const requestedBytes = observedLimits.memoryMaxBytes + 64 * 1024 * 1024;
-  await adapter.runControl({ mode: "memory", requestedBytes });
+  await adapter.runControl(
+    { mode: "memory", requestedBytes },
+    initial.memberPids,
+  );
   const memoryAfter = parseContainedCgroupKeyValues(
     await adapter.readCgroupFile("memory.events"),
   );
 
   await assertCandidateSurvived(adapter, initial);
+  const confirmedLimits = await observedAggregateLimits(adapter);
+  if (
+    canonicalCgroupJson(confirmedLimits) !== canonicalCgroupJson(observedLimits)
+  ) {
+    throw new Error("contained cgroup observer aggregate limits changed");
+  }
   const observedAt = adapter.now().toISOString();
   const observation = {
     observedLimits,
@@ -530,7 +567,7 @@ export async function observeContainedCgroup(manifest, adapter) {
         requestedBytes,
         oomKillBefore: memoryBefore.oom_kill,
         oomKillAfter: memoryAfter.oom_kill,
-        enforced: memoryAfter.oom_kill > memoryBefore.oom_kill,
+        enforced: memoryAfter.oom_kill === memoryBefore.oom_kill + 1,
       },
       processes: {
         attemptedProcesses,
@@ -553,6 +590,17 @@ export async function observeContainedCgroup(manifest, adapter) {
   };
   const draft = createContainedCgroupObserverDraft(manifest, observation);
   await adapter.publishDraft(draft);
+  const finalization = validateContainedCgroupObserverFinalization(
+    await adapter.waitForFinalization(),
+    manifest,
+    { observedAtMs: adapter.now().getTime() },
+  );
+  if (finalization.status !== "FINALIZE") {
+    throw new Error("contained cgroup observer qualification was aborted");
+  }
+  if (finalization.observerDraftPayloadSha256 !== draft.receiptPayloadSha256) {
+    throw new Error("contained cgroup observer finalization draft changed");
+  }
   await adapter.waitForCgroupAbsent();
   return validateContainedCgroupEvidence(
     hashedArtifact(evidencePayload(manifest, observation)),
@@ -581,7 +629,8 @@ function privateFile(path, label) {
     realpathSync(path) !== path ||
     metadata.uid !== process.getuid() ||
     metadata.nlink !== 1 ||
-    (metadata.mode & 0o777) !== 0o600 ||
+    (metadata.mode & 0o600) !== 0o600 ||
+    (metadata.mode & 0o077) !== 0 ||
     metadata.size < 1 ||
     metadata.size > maximumArtifactBytes
   ) {
@@ -602,6 +651,19 @@ function sleep(milliseconds) {
   return new Promise((accept) => setTimeout(accept, milliseconds));
 }
 
+function lstatOrAbsent(path, options) {
+  try {
+    return lstatSync(path, options);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+function artifactExists(path) {
+  return lstatOrAbsent(path) !== null;
+}
+
 async function waitUntil(predicate, label, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() <= deadline) {
@@ -613,6 +675,7 @@ async function waitUntil(predicate, label, timeoutMs) {
 
 function actualCgroupAdapter(manifest, paths) {
   const cgroupRoot = resolve(cgroupFilesystemRoot, manifest.cgroupPath);
+  const cgroupParentRoot = resolve(cgroupFilesystemRoot, "counterlab-v6.1");
   if (
     resolve(
       cgroupFilesystemRoot,
@@ -626,6 +689,78 @@ function actualCgroupAdapter(manifest, paths) {
     repositoryRoot,
     "scripts/contained-cgroup-control-helper.mjs",
   );
+  let expectedCgroupIdentity;
+  let expectedParentIdentity;
+  let terminationSignal;
+  const activeHelpers = new Set();
+
+  function handleTermination(signal) {
+    terminationSignal ??= signal;
+    for (const helper of activeHelpers) {
+      if (helper.exitCode === null && helper.signalCode === null) {
+        helper.kill("SIGTERM");
+      }
+    }
+  }
+
+  const signalHandlers = new Map(
+    ["SIGINT", "SIGTERM"].map((signal) => {
+      const handler = () => handleTermination(signal);
+      process.on(signal, handler);
+      return [signal, handler];
+    }),
+  );
+
+  function assertNotTerminated() {
+    if (terminationSignal !== undefined) {
+      throw new Error(
+        `contained cgroup observer interrupted by ${terminationSignal}`,
+      );
+    }
+  }
+
+  function directoryIdentity(path, label) {
+    const metadata = lstatOrAbsent(path, { bigint: true });
+    if (metadata === null) return null;
+    if (
+      metadata.isSymbolicLink() ||
+      !metadata.isDirectory() ||
+      realpathSync(path) !== path ||
+      statfsSync(path).type !== cgroup2Magic
+    ) {
+      throw new Error(`contained cgroup observer ${label} is invalid`);
+    }
+    return `${metadata.dev}:${metadata.ino}`;
+  }
+
+  function assertCgroupParent({ allowAbsent = false } = {}) {
+    const identity = directoryIdentity(cgroupParentRoot, "cgroup parent");
+    if (identity === null) {
+      if (allowAbsent && expectedParentIdentity === undefined) return false;
+      throw new Error("contained cgroup observer cgroup parent is absent");
+    }
+    if (
+      expectedParentIdentity !== undefined &&
+      identity !== expectedParentIdentity
+    ) {
+      throw new Error("contained cgroup observer cgroup parent changed");
+    }
+    expectedParentIdentity ??= identity;
+    return true;
+  }
+
+  function currentCgroupIdentity({ allowParentAbsent = false } = {}) {
+    if (!assertCgroupParent({ allowAbsent: allowParentAbsent })) return null;
+    const identity = directoryIdentity(cgroupRoot, "cgroup path");
+    if (
+      identity !== null &&
+      expectedCgroupIdentity !== undefined &&
+      identity !== expectedCgroupIdentity
+    ) {
+      throw new Error("contained cgroup observer cgroup identity changed");
+    }
+    return identity;
+  }
 
   function cgroupFile(name) {
     if (!allowedCgroupFiles.has(name)) {
@@ -634,6 +769,9 @@ function actualCgroupAdapter(manifest, paths) {
     const path = resolve(cgroupRoot, name);
     if (resolve(cgroupRoot, name) !== path) {
       throw new Error("contained cgroup observer file path is invalid");
+    }
+    if (currentCgroupIdentity() !== expectedCgroupIdentity) {
+      throw new Error("contained cgroup observer cgroup identity changed");
     }
     const metadata = lstatSync(path);
     if (
@@ -646,7 +784,8 @@ function actualCgroupAdapter(manifest, paths) {
     return path;
   }
 
-  async function runControl(control) {
+  async function runControl(control, baselineMemberPids) {
+    assertNotTerminated();
     const args =
       control.mode === "memory"
         ? [
@@ -672,9 +811,10 @@ function actualCgroupAdapter(manifest, paths) {
             ];
     const child = spawn(process.execPath, [helperPath, ...args], {
       cwd: repositoryRoot,
-      env: process.env,
+      env: { LANG: "C", LC_ALL: "C", TZ: "UTC" },
       stdio: ["pipe", "pipe", "pipe"],
     });
+    activeHelpers.add(child);
     let stdout = "";
     let stderr = "";
     let outputInvalid = false;
@@ -729,14 +869,32 @@ function actualCgroupAdapter(manifest, paths) {
       if (!Number.isSafeInteger(child.pid) || child.pid < 1 || outputInvalid) {
         throw new Error("contained cgroup observer helper PID is invalid");
       }
+      const helperIdentity = parseContainedProcessStat(
+        readFileSync(`/proc/${child.pid}/stat`, "utf8"),
+        child.pid,
+      );
       writeFileSync(cgroupFile("cgroup.procs"), `${child.pid}\n`, "utf8");
+      const membersAfterMove = parseContainedCgroupMembers(
+        readFileSync(cgroupFile("cgroup.procs"), "utf8"),
+      );
+      const movedIdentity = parseContainedProcessStat(
+        readFileSync(`/proc/${child.pid}/stat`, "utf8"),
+        child.pid,
+      );
+      if (
+        !membersAfterMove.includes(child.pid) ||
+        movedIdentity.startTimeTicks !== helperIdentity.startTimeTicks
+      ) {
+        throw new Error("contained cgroup observer helper identity changed");
+      }
       child.stdin.end("GO\n");
       const result = await bounded(completion, 15_000, "helper completion");
       if (
         result.error !== undefined ||
         outputInvalid ||
         (control.mode !== "memory" && result.code !== 0) ||
-        (control.mode === "memory" && result.code === 0)
+        (control.mode === "memory" &&
+          (result.code !== null || result.signal !== "SIGKILL"))
       ) {
         throw new Error("contained cgroup observer helper result is invalid");
       }
@@ -762,6 +920,23 @@ function actualCgroupAdapter(manifest, paths) {
           );
         }
       }
+      await waitUntil(
+        () =>
+          !parseContainedCgroupMembers(
+            readFileSync(cgroupFile("cgroup.procs"), "utf8"),
+          ).includes(child.pid),
+        "helper membership cleanup",
+        2_000,
+      );
+      const remainingMembers = parseContainedCgroupMembers(
+        readFileSync(cgroupFile("cgroup.procs"), "utf8"),
+      );
+      if (
+        canonicalCgroupJson(remainingMembers) !==
+        canonicalCgroupJson(baselineMemberPids)
+      ) {
+        throw new Error("contained cgroup observer helper descendants remain");
+      }
     } finally {
       if (child.exitCode === null && child.signalCode === null) {
         child.kill("SIGTERM");
@@ -775,19 +950,30 @@ function actualCgroupAdapter(manifest, paths) {
         }
         await bounded(completion, 2_000, "forced helper reap");
       }
+      activeHelpers.delete(child);
+      assertNotTerminated();
     }
   }
 
   return {
+    dispose() {
+      for (const [signal, handler] of signalHandlers) {
+        process.off(signal, handler);
+      }
+    },
     now: () => new Date(),
     async waitForCgroup() {
-      await waitUntil(() => existsSync(cgroupRoot), "cgroup creation", 10_000);
-      if (
-        lstatSync(cgroupRoot).isSymbolicLink() ||
-        !lstatSync(cgroupRoot).isDirectory() ||
-        realpathSync(cgroupRoot) !== cgroupRoot
-      ) {
-        throw new Error("contained cgroup observer cgroup path is invalid");
+      await waitUntil(
+        () => {
+          assertNotTerminated();
+          return currentCgroupIdentity({ allowParentAbsent: true }) !== null;
+        },
+        "cgroup creation",
+        10_000,
+      );
+      expectedCgroupIdentity = currentCgroupIdentity();
+      if (expectedCgroupIdentity === null) {
+        throw new Error("contained cgroup observer cgroup path disappeared");
       }
       await waitUntil(
         () => {
@@ -806,6 +992,7 @@ function actualCgroupAdapter(manifest, paths) {
       );
     },
     readCgroupFile(name) {
+      assertNotTerminated();
       const path = cgroupFile(name);
       const source = readFileSync(path, "utf8");
       if (source.length === 0 || source.length > 8_192) {
@@ -814,14 +1001,42 @@ function actualCgroupAdapter(manifest, paths) {
       return source;
     },
     readProcessStat(pid) {
+      assertNotTerminated();
       return readFileSync(`/proc/${pid}/stat`, "utf8");
     },
     runControl,
     publishDraft(draft) {
       writeArtifact(paths.observerDraftPath, draft);
     },
+    async waitForFinalization() {
+      await waitUntil(
+        () => {
+          assertNotTerminated();
+          return artifactExists(paths.finalizationPath);
+        },
+        "runtime finalization",
+        30_000,
+      );
+      privateFile(paths.finalizationPath, "finalization");
+      return validateContainedCgroupObserverFinalization(
+        JSON.parse(readFileSync(paths.finalizationPath, "utf8")),
+        manifest,
+      );
+    },
     async waitForCgroupAbsent() {
-      await waitUntil(() => !existsSync(cgroupRoot), "cgroup cleanup", 30_000);
+      await waitUntil(
+        () => {
+          assertNotTerminated();
+          return currentCgroupIdentity() === null;
+        },
+        "cgroup cleanup",
+        30_000,
+      );
+      assertCgroupParent();
+      await sleep(20);
+      if (currentCgroupIdentity() !== null) {
+        throw new Error("contained cgroup observer cgroup path reappeared");
+      }
     },
   };
 }
@@ -908,14 +1123,24 @@ async function main() {
       throw new Error("contained cgroup observer base receipt changed");
     }
     const adapter = actualCgroupAdapter(manifest, paths);
-    writeArtifact(
-      paths.observerReadyPath,
-      createContainedCgroupObserverReady(manifest),
-    );
-    const evidence = await observeContainedCgroup(manifest, adapter);
-    writeArtifact(paths.evidencePath, evidence);
+    try {
+      writeArtifact(
+        paths.observerReadyPath,
+        createContainedCgroupObserverReady(manifest),
+      );
+      const evidence = await observeContainedCgroup(manifest, adapter);
+      if (artifactExists(paths.failurePath)) {
+        throw new Error("contained cgroup observer outcome already failed");
+      }
+      writeArtifact(paths.evidencePath, evidence);
+    } finally {
+      adapter.dispose();
+    }
   } catch (error) {
-    if (!existsSync(paths.failurePath)) {
+    if (
+      !artifactExists(paths.evidencePath) &&
+      !artifactExists(paths.failurePath)
+    ) {
       try {
         writeArtifact(
           paths.failurePath,

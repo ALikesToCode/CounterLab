@@ -1,4 +1,5 @@
 import type { ContainedCgroupObserverManifest } from "./contained-cgroup-observer-protocol.mjs";
+import type { ContainedCgroupObserverFinalization } from "./contained-cgroup-observer-protocol.mjs";
 
 export function createContainedCgroupObserverReady(
   manifest: ContainedCgroupObserverManifest,
@@ -53,8 +54,12 @@ export function observeContainedCgroup(
     waitForCgroup(): Promise<void>;
     readCgroupFile(name: string): string | Promise<string>;
     readProcessStat(pid: number): string | Promise<string>;
-    runControl(control: Record<string, unknown>): Promise<void>;
+    runControl(
+      control: Record<string, unknown>,
+      baselineMemberPids: number[],
+    ): Promise<void>;
     publishDraft(draft: Record<string, unknown>): Promise<void>;
+    waitForFinalization(): Promise<ContainedCgroupObserverFinalization>;
     waitForCgroupAbsent(): Promise<void>;
   },
 ): Promise<Record<string, unknown>>;

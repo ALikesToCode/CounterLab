@@ -579,7 +579,8 @@ def _validate_aggregate_limit_evidence(
             for field in ("requestedBytes", "oomKillBefore", "oomKillAfter")
         )
         or memory_control.get("requestedBytes") <= intended["memoryBytes"]
-        or memory_control.get("oomKillAfter") <= memory_control.get("oomKillBefore")
+        or memory_control.get("oomKillAfter")
+        != memory_control.get("oomKillBefore") + 1
         or memory_control.get("enforced") is not True
         or not all(
             _safe_integer(
