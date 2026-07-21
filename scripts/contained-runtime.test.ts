@@ -1116,6 +1116,10 @@ describe("contained runtime command policy", () => {
         "linux/amd64",
       ]),
     );
+    expect(
+      plan.start.args.filter((argument) => argument === "--cgroup"),
+    ).toHaveLength(1);
+    expect(plan.start.args).not.toContain("");
     expect(plan.containerName).toBe("counterlab-startup-validator");
     expect(plan.start.args).not.toContain("counterlab-startup-validator");
     expect(plan.mountImageRootfs).toEqual({
@@ -1217,6 +1221,17 @@ describe("contained runtime command policy", () => {
 
     expect(sanitized.linux.cgroupsPath).toBe(`counterlab-v6.1/${invocationId}`);
     expect(sanitized.linux.resources).toEqual(original.linux.resources);
+    const canonicalBase = structuredClone(sanitized);
+    delete canonicalBase.annotations;
+    expect(prepared.receipt.baseSpecSha256).toBe(
+      createHash("sha256").update(canonicalJson(canonicalBase)).digest("hex"),
+    );
+    expect(prepared.receipt.sanitizedSpecSha256).toBe(
+      createHash("sha256").update(canonicalJson(sanitized)).digest("hex"),
+    );
+    expect(prepared.receipt.configFileSha256).toBe(
+      createHash("sha256").update(prepared.config).digest("hex"),
+    );
     expect(sanitized.process.rlimits).toEqual(plan.expected.rlimits);
     expect(sanitized.process.noNewPrivileges).toBe(true);
     expect(sanitized.process.terminal).toBe(false);
@@ -1295,6 +1310,42 @@ describe("contained runtime command policy", () => {
       removedMounts: ["/etc/hostname", "/etc/hosts", "/etc/resolv.conf"],
     });
     expect(prepared.receipt.normalizedFields).toContain("linux.cgroupsPath");
+
+    const resourceMutations: Array<(spec: typeof original) => void> = [
+      (spec) => {
+        spec.linux.resources.memory.limit += 1;
+      },
+      (spec) => {
+        spec.linux.resources.memory.swap = -1;
+      },
+      (spec) => {
+        spec.linux.resources.pids.limit += 1;
+      },
+      (spec) => {
+        spec.linux.resources.cpu.quota -= 1;
+      },
+      (spec) => {
+        spec.linux.resources.devices[1].major = 2;
+      },
+      (spec) => {
+        spec.linux.resources.io = {};
+      },
+      (spec) => {
+        spec.linux.cgroupsPath = "/escaped";
+      },
+    ];
+    for (const mutate of resourceMutations) {
+      const changed = structuredClone(original);
+      mutate(changed);
+      expect(() =>
+        sanitizeContainedRootlessSpec({
+          containerId,
+          expected,
+          metadataSha256: "3".repeat(64),
+          source: JSON.stringify(changed),
+        }),
+      ).toThrow(/cgroup path|resource/u);
+    }
 
     const missingHookSource = JSON.parse(source);
     missingHookSource.hooks = null;
