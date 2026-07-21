@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiClientError,
   counterLabApi,
+  type BoundaryMapAuthorityRefV1,
   type BoundaryResponse,
   type SessionView,
 } from "../../api";
@@ -80,21 +81,27 @@ export function BoundaryStage({
   const activeJobId = useRef<string | null>(null);
   const loadedReceiptHash = useRef<string | null>(null);
 
-  const loadBoundary = useCallback(async () => {
-    const response = await counterLabApi.getBoundary(session.sessionId);
-    setBoundary(response);
-    const alreadyRevealed = huntWasRevealed(response.result.resultHash);
-    setRevealedBoundaryHash(
-      alreadyRevealed ? response.result.resultHash : null,
-    );
-    loadedReceiptHash.current = response.receipt.receiptHash;
-    if (alreadyRevealed) {
-      window.requestAnimationFrame(() => {
-        document.getElementById("boundary-map-title")?.focus();
-      });
-    }
-    return response;
-  }, [session.sessionId]);
+  const loadBoundary = useCallback(
+    async (expectedAuthority: BoundaryMapAuthorityRefV1) => {
+      const response = await counterLabApi.getBoundary(
+        session.sessionId,
+        expectedAuthority,
+      );
+      setBoundary(response);
+      const alreadyRevealed = huntWasRevealed(response.result.resultHash);
+      setRevealedBoundaryHash(
+        alreadyRevealed ? response.result.resultHash : null,
+      );
+      loadedReceiptHash.current = response.receipt.receiptHash;
+      if (alreadyRevealed) {
+        window.requestAnimationFrame(() => {
+          document.getElementById("boundary-map-title")?.focus();
+        });
+      }
+      return response;
+    },
+    [session.sessionId],
+  );
 
   const finishJob = useCallback(
     async (jobId: string) => {
@@ -121,7 +128,7 @@ export function BoundaryStage({
           });
         }
         updateSession(completed);
-        await loadBoundary();
+        await loadBoundary(completed.boundaryMapAuthority);
         const localStorage = storage();
         if (localStorage !== undefined) {
           clearActiveRunnerCheckpoint(session.sessionId, jobId, localStorage);
@@ -174,12 +181,14 @@ export function BoundaryStage({
   };
 
   useEffect(() => {
-    const receiptHash = session.boundaryMapAuthority?.receipt.receiptHash;
+    const boundaryAuthority = session.boundaryMapAuthority;
+    const receiptHash = boundaryAuthority?.receipt.receiptHash;
     if (
+      boundaryAuthority !== undefined &&
       receiptHash !== undefined &&
       loadedReceiptHash.current !== receiptHash
     ) {
-      void loadBoundary().catch((caught: unknown) => {
+      void loadBoundary(boundaryAuthority).catch((caught: unknown) => {
         setError(
           caught instanceof Error
             ? caught.message

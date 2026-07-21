@@ -857,17 +857,44 @@ export type InteractiveRunResponse = z.infer<
   typeof InteractiveRunResponseSchema
 >;
 
+const InteractiveResultVerificationSchema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    status: z.literal("VERIFIED"),
+    verifierVersion: z.literal("hosted-result-verifier-v1"),
+    resultHash: Sha256Digest,
+    invariantCount: z.number().int().positive(),
+    invariants: z
+      .array(
+        z
+          .object({
+            name: NonEmptyString,
+            passed: z.literal(true),
+            observed: z.unknown(),
+            expected: z.unknown(),
+            counterexample: NonEmptyString.optional(),
+          })
+          .strict(),
+      )
+      .min(1),
+  })
+  .strict()
+  .superRefine((report, context) => {
+    if (report.invariantCount !== report.invariants.length) {
+      context.addIssue({
+        code: "custom",
+        message: "interactive verifier invariant count must resolve",
+        path: ["invariantCount"],
+      });
+    }
+  });
+
 const InteractiveResultResponseSchema = z
   .object({
     result: HostedVerifiedResultSetV2Schema,
     selectedRunId: NonEmptyString,
     configurationHash: Sha256Digest,
-    verification: z
-      .object({
-        status: z.literal("VERIFIED"),
-        resultHash: Sha256Digest,
-      })
-      .passthrough(),
+    verification: InteractiveResultVerificationSchema,
   })
   .strict()
   .superRefine((response, context) => {
@@ -1082,6 +1109,22 @@ const PatchCompileResponseSchema = z
       context.addIssue({
         code: "custom",
         message: "patch compilation must queue a runner job or return a patch",
+      });
+    }
+    if (
+      response.patch !== undefined &&
+      (response.patch.status !== "VERIFIED" ||
+        response.patch.sessionId !== response.sessionId ||
+        response.transferResult?.outcome !== "PASSED" ||
+        response.patchResult?.status !== "VERIFIED" ||
+        canonicalJsonV1(response.patch) !==
+          canonicalJsonV1(response.patchResult))
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "a returned patch must be verified and match the passed-transfer session authority",
+        path: ["patch"],
       });
     }
   });
@@ -2041,14 +2084,18 @@ export class CounterLabApiClient {
     );
   }
 
-  async getBoundary(sessionId: string): Promise<BoundaryResponse> {
+  async getBoundary(
+    sessionId: string,
+    expectedAuthority: BoundaryMapAuthorityRefV1,
+  ): Promise<BoundaryResponse> {
     const boundary = await this.request(
       `/api/sessions/${encodedId(sessionId)}/boundary`,
       BoundaryResponseSchema,
     );
     if (
       boundary.result.sessionId !== sessionId ||
-      boundary.receipt.sessionId !== sessionId
+      boundary.receipt.sessionId !== sessionId ||
+      canonicalJsonV1(boundary.authority) !== canonicalJsonV1(expectedAuthority)
     ) {
       throw new ApiClientError({
         code: "BOUNDARY_AUTHORITY_LINEAGE_INVALID",
@@ -2215,15 +2262,21 @@ export class CounterLabApiClient {
     );
   }
 
-  async getReasoningDiff(sessionId: string): Promise<ReasoningDiffResponse> {
+  async getReasoningDiff(
+    sessionId: string,
+    expected: ReasoningDiffResponse,
+  ): Promise<ReasoningDiffResponse> {
     const reasoningDiff = await this.request(
       `/api/sessions/${encodedId(sessionId)}/reasoning-diff`,
       ReasoningDiffResponseSchema,
     );
-    if (reasoningDiff.sessionId !== sessionId) {
+    if (
+      reasoningDiff.sessionId !== sessionId ||
+      canonicalJsonV1(reasoningDiff) !== canonicalJsonV1(expected)
+    ) {
       throw new ApiClientError({
         code: "REASONING_DIFF_LINEAGE_INVALID",
-        message: "The Reasoning Diff belongs to a different session",
+        message: "The Reasoning Diff does not match stored session authority",
         status: 0,
       });
     }

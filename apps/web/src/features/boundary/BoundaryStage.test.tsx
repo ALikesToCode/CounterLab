@@ -240,7 +240,7 @@ describe("BoundaryStage", () => {
     expect(await screen.findByTestId("boundary-map")).toHaveTextContent(
       authority.resultHash,
     );
-    expect(api.getBoundary).toHaveBeenCalledWith("session_1");
+    expect(api.getBoundary).toHaveBeenCalledWith("session_1", authority);
     expect(updateSession).toHaveBeenCalledWith(
       expect.objectContaining({ state: "BOUNDARY_VERIFIED" }),
     );

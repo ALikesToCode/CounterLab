@@ -480,6 +480,37 @@ describe("ImbalancePatchReview", () => {
     expect(document.body).not.toHaveTextContent(replay.patchResult.diff);
   });
 
+  it("withholds a persisted patch that did not pass verification", () => {
+    const replay = replayFixture("class_imbalance");
+    const rejectedPatch = {
+      ...replay.patchResult,
+      status: "REJECTED" as const,
+      verification: { ...replay.patchResult.verification, passed: false },
+    };
+    const rejectedSession = {
+      sessionId: replay.sourceSessionId,
+      state: "PATCH_REJECTED",
+      mode: { kind: "live_notebook" },
+      transferResult: replay.transferResult,
+      patchResult: rejectedPatch,
+      beliefSpec: replay.beliefSpec,
+      prediction: replay.prediction,
+      evidenceVerdict: replay.evidenceVerdict,
+    } as SessionView;
+
+    render(
+      <ImbalancePatchReview
+        session={rejectedSession}
+        updateSession={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /download repaired notebook/i }),
+    ).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(rejectedPatch.diff);
+  });
+
   it("offers an authenticated retry when native proof finalization is incomplete", async () => {
     const user = userEvent.setup();
     const replay = replayFixture("class_imbalance");

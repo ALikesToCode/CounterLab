@@ -59,7 +59,7 @@ export function ImbalancePatchReview({
 }) {
   const runner = useRunnerEvents();
   const [patch, setPatch] = useState<PatchResult | null>(
-    session.patchResult ?? null,
+    session.patchResult?.status === "VERIFIED" ? session.patchResult : null,
   );
   const [proof, setProof] = useState<ProofBundle | null>(
     session.proofBundle ?? null,
@@ -100,7 +100,7 @@ export function ImbalancePatchReview({
     if (
       completed.state !==
         (nativeAuthority ? "PROOF_CAPSULE_ISSUED" : "REASONING_DIFF_ISSUED") ||
-      completed.patchResult === undefined
+      completed.patchResult?.status !== "VERIFIED"
     ) {
       throw new ApiClientError({
         code: "PATCH_REJECTED",
@@ -135,7 +135,7 @@ export function ImbalancePatchReview({
     try {
       const started = await counterLabApi.compilePatch(session.sessionId);
       updateSession(started);
-      if (started.patch !== undefined) {
+      if (started.patch?.status === "VERIFIED") {
         setPatch(started.patch);
         setProof(await counterLabApi.getProofBundle(session.sessionId));
         return;
@@ -252,7 +252,13 @@ export function ImbalancePatchReview({
     try {
       const refreshed = await counterLabApi.getSession(session.sessionId);
       updateSession(refreshed);
-      setPatch(refreshed.patchResult ?? patch);
+      setPatch(
+        refreshed.patchResult === undefined
+          ? patch
+          : refreshed.patchResult.status === "VERIFIED"
+            ? refreshed.patchResult
+            : null,
+      );
       setProof(refreshed.proofBundle ?? null);
       if (
         refreshed.state !== "PROOF_CAPSULE_ISSUED" ||

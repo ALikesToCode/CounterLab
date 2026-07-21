@@ -1065,6 +1065,37 @@ describe("CounterLabApiClient", () => {
       receipt: canonicalBoundaryReceipt,
       authority: canonicalBoundaryAuthority,
     };
+    const rehashBoundaryPayload = async (
+      candidate: typeof boundaryPayload,
+    ): Promise<void> => {
+      const { resultHash: _resultHash, ...resultContent } = candidate.result;
+      candidate.result.resultHash = await canonicalHash(resultContent);
+      candidate.report.resultHash = candidate.result.resultHash;
+      const { reportHash: _reportHash, ...reportContent } = candidate.report;
+      candidate.report.reportHash = await canonicalHash(reportContent);
+      const {
+        integrity: _integrity,
+        receiptHash: _receiptHash,
+        ...receiptContent
+      } = candidate.receipt;
+      receiptContent.resultHash = candidate.result.resultHash;
+      receiptContent.verificationReportHash = candidate.report.reportHash;
+      const integrity = {
+        ...candidate.receipt.integrity,
+        contentHash: await canonicalHash(receiptContent),
+      };
+      candidate.receipt = {
+        ...receiptContent,
+        integrity,
+        receiptHash: await canonicalHash({ ...receiptContent, integrity }),
+      };
+      candidate.authority = {
+        ...candidate.authority,
+        resultHash: candidate.result.resultHash,
+        verificationReportHash: candidate.report.reportHash,
+        receipt: candidate.receipt,
+      };
+    };
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(
@@ -1076,13 +1107,15 @@ describe("CounterLabApiClient", () => {
       .mockResolvedValueOnce(jsonResponse({ ok: true, data: reasoningDiffV2 }));
     const client = new CounterLabApiClient({ fetch: fetcher });
 
-    await expect(client.getBoundary(session.sessionId)).resolves.toMatchObject({
+    await expect(
+      client.getBoundary(session.sessionId, canonicalBoundaryAuthority),
+    ).resolves.toMatchObject({
       report: { status: "VERIFIED" },
       authority: { cellCount: 4 },
     });
-    await expect(client.getReasoningDiff(session.sessionId)).resolves.toEqual(
-      reasoningDiffV2,
-    );
+    await expect(
+      client.getReasoningDiff(session.sessionId, reasoningDiffV2),
+    ).resolves.toEqual(reasoningDiffV2);
     expect(fetcher.mock.calls[0]?.[0]).toBe(
       `/api/sessions/${session.sessionId}/boundary`,
     );
@@ -1092,7 +1125,20 @@ describe("CounterLabApiClient", () => {
         fetch: vi.fn<typeof fetch>(async () =>
           jsonResponse({ ok: true, data: boundaryPayload }),
         ),
-      }).getBoundary("session_other"),
+      }).getBoundary("session_other", canonicalBoundaryAuthority),
+    ).rejects.toMatchObject({ code: "BOUNDARY_AUTHORITY_LINEAGE_INVALID" });
+
+    const coherentStaleBoundary = structuredClone(boundaryPayload);
+    coherentStaleBoundary.result.assumptions.push(
+      "A stale but internally consistent assumption.",
+    );
+    await rehashBoundaryPayload(coherentStaleBoundary);
+    await expect(
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({ ok: true, data: coherentStaleBoundary }),
+        ),
+      }).getBoundary(session.sessionId, canonicalBoundaryAuthority),
     ).rejects.toMatchObject({ code: "BOUNDARY_AUTHORITY_LINEAGE_INVALID" });
 
     const rejectedBoundary = structuredClone({
@@ -1142,7 +1188,7 @@ describe("CounterLabApiClient", () => {
         fetch: vi.fn<typeof fetch>(async () =>
           jsonResponse({ ok: true, data: rejectedBoundary }),
         ),
-      }).getBoundary(session.sessionId),
+      }).getBoundary(session.sessionId, canonicalBoundaryAuthority),
     ).rejects.toMatchObject({ code: "INVALID_API_RESPONSE" });
 
     const foreignLineage = structuredClone(boundaryPayload);
@@ -1153,7 +1199,7 @@ describe("CounterLabApiClient", () => {
         fetch: vi.fn<typeof fetch>(async () =>
           jsonResponse({ ok: true, data: foreignLineage }),
         ),
-      }).getBoundary(session.sessionId),
+      }).getBoundary(session.sessionId, canonicalBoundaryAuthority),
     ).rejects.toMatchObject({ code: "INVALID_API_RESPONSE" });
 
     const boundaryMutations = [
@@ -1177,6 +1223,7 @@ describe("CounterLabApiClient", () => {
       await expect(
         new CounterLabApiClient({ fetch: tamperedFetcher }).getBoundary(
           session.sessionId,
+          canonicalBoundaryAuthority,
         ),
       ).rejects.toMatchObject({ code: "BOUNDARY_AUTHORITY_HASH_INVALID" });
     }
@@ -1189,7 +1236,24 @@ describe("CounterLabApiClient", () => {
             data: { ...reasoningDiffV2, sessionId: "session_other" },
           }),
         ),
-      }).getReasoningDiff(session.sessionId),
+      }).getReasoningDiff(session.sessionId, reasoningDiffV2),
+    ).rejects.toMatchObject({ code: "REASONING_DIFF_LINEAGE_INVALID" });
+
+    await expect(
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({
+            ok: true,
+            data: {
+              ...reasoningDiffV2,
+              authority: {
+                ...reasoningDiffV2.authority,
+                authoritativeResultHash: digest("f"),
+              },
+            },
+          }),
+        ),
+      }).getReasoningDiff(session.sessionId, reasoningDiffV2),
     ).rejects.toMatchObject({ code: "REASONING_DIFF_LINEAGE_INVALID" });
   });
 
@@ -1209,7 +1273,14 @@ describe("CounterLabApiClient", () => {
         verifierVersion: "hosted-result-verifier-v1",
         resultHash: nativeSession.verifiedResult.resultHash,
         invariantCount: 1,
-        invariants: [],
+        invariants: [
+          {
+            name: "canonical_result_hash",
+            passed: true,
+            observed: nativeSession.verifiedResult.resultHash,
+            expected: nativeSession.verifiedResult.resultHash,
+          },
+        ],
       },
     };
     const clientFor = (value: unknown) =>
@@ -1274,6 +1345,20 @@ describe("CounterLabApiClient", () => {
         expected,
       ),
     ).rejects.toMatchObject({ code: "INTERACTIVE_RESULT_AUTHORITY_INVALID" });
+
+    await expect(
+      clientFor({
+        ...payload,
+        verification: {
+          ...payload.verification,
+          invariantCount: 2,
+        },
+      }).getInteractiveResult(
+        nativeSession.sessionId,
+        "job_interactive_1",
+        expected,
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_API_RESPONSE" });
   });
 
   it("sends a locally validated v2 Belief Spec edit without a v1 shadow", async () => {
@@ -1861,6 +1946,56 @@ describe("CounterLabApiClient", () => {
     );
   });
 
+  it("accepts only a verified patch bound to the returned session authority", async () => {
+    const nativeSession = await nativeProofSession();
+    const validResponse = {
+      ...nativeSession,
+      patch: nativeSession.patchResult,
+    };
+    const clientFor = (value: unknown) =>
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({ ok: true, data: value }),
+        ),
+      });
+
+    await expect(
+      clientFor(validResponse).compilePatch(nativeSession.sessionId),
+    ).resolves.toMatchObject({
+      patch: {
+        status: "VERIFIED",
+        resultHash: nativeSession.patchResult.resultHash,
+      },
+    });
+
+    await expect(
+      clientFor({
+        ...validResponse,
+        patch: {
+          ...nativeSession.patchResult,
+          status: "REJECTED",
+          verification: {
+            ...nativeSession.patchResult.verification,
+            passed: false,
+          },
+        },
+      }).compilePatch(nativeSession.sessionId),
+    ).rejects.toMatchObject({ code: "INVALID_API_RESPONSE" });
+
+    const detachedPatch = {
+      ...nativeSession.patchResult,
+      diff: `${nativeSession.patchResult.diff}\n+ detached change`,
+    };
+    detachedPatch.patchHash = await canonicalHash(detachedPatch.diff);
+    const { resultHash: _detachedHash, ...detachedContent } = detachedPatch;
+    detachedPatch.resultHash = await canonicalHash(detachedContent);
+    await expect(
+      clientFor({ ...validResponse, patch: detachedPatch }).compilePatch(
+        nativeSession.sessionId,
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_API_RESPONSE" });
+  });
+
   it("redelivers the identical interactive request once after an ambiguous runner dispatch", async () => {
     const liveSession = {
       ...session,
@@ -2106,7 +2241,7 @@ describe("CounterLabApiClient", () => {
       {
         expectedPath: `/api/sessions/${encoded}/reasoning-diff`,
         expectedMethod: "GET",
-        invoke: () => client.getReasoningDiff(sessionId),
+        invoke: () => client.getReasoningDiff(sessionId, reasoningDiffV2),
       },
       {
         expectedPath: `/api/sessions/${encoded}/proof-bundle`,

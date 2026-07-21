@@ -2362,7 +2362,7 @@ function ImbalanceReviewScreen({
           <>
             <p className="eyebrow aqua">Verified repair</p>
             <h2>
-              {session?.patchResult === undefined
+              {session?.patchResult?.status !== "VERIFIED"
                 ? "Repair remains locked until transfer passes."
                 : "The repaired copy reports rare-class evidence beside accuracy."}
             </h2>
@@ -2576,7 +2576,7 @@ function ReviewScreen({
         <section className="review-card panel">
           <p className="eyebrow aqua">Verified repair</p>
           <h2>
-            {session?.patchResult === undefined
+            {session?.patchResult?.status !== "VERIFIED"
               ? "Repair remains locked until transfer passes."
               : "The repaired copy uses a whole-entity holdout."}
           </h2>
@@ -2979,7 +2979,7 @@ function LeakageRealityScreen({
   );
   const repairPermitted = sessionEvidencePermitsRepair(session);
   const initialTransferState: TransferState =
-    session?.patchResult && repairPermitted
+    session?.patchResult?.status === "VERIFIED" && repairPermitted
       ? "patched"
       : session?.transferResult?.outcome === "PASSED"
         ? "passed"
@@ -3013,7 +3013,7 @@ function LeakageRealityScreen({
     ),
   );
   const [patch, setPatch] = useState<PatchResult | null>(
-    session?.patchResult ?? null,
+    session?.patchResult?.status === "VERIFIED" ? session.patchResult : null,
   );
   const [proofBundle, setProofBundle] = useState<ProofBundle | null>(
     session?.proofBundle ?? null,
@@ -3081,7 +3081,7 @@ function LeakageRealityScreen({
     });
     if (
       completed.state !== "PROOF_CAPSULE_ISSUED" ||
-      completed.patchResult === undefined
+      completed.patchResult?.status !== "VERIFIED"
     ) {
       setTransferState("passed");
       throw new ApiClientError({
@@ -3191,7 +3191,7 @@ function LeakageRealityScreen({
     void runAction(async () => {
       const updated = await counterLabApi.compilePatch(session.sessionId);
       updateSession(updated);
-      if (updated.patch !== undefined) {
+      if (updated.patch?.status === "VERIFIED") {
         setPatch(updated.patch);
         setTransferState("patched");
       } else if (updated.runnerJob !== undefined) {
@@ -6054,7 +6054,10 @@ export function App() {
   };
 
   const downloadCurrentPatch = () => {
-    if (session?.patchResult === undefined || downloadRequestInFlight.current) {
+    if (
+      session?.patchResult?.status !== "VERIFIED" ||
+      downloadRequestInFlight.current
+    ) {
       return;
     }
     downloadRequestInFlight.current = true;
@@ -6822,7 +6825,7 @@ export function App() {
               ...(stage === "build" && !busy
                 ? { runFairTest: openResult }
                 : {}),
-              ...(session?.patchResult === undefined
+              ...(session?.patchResult?.status !== "VERIFIED"
                 ? {}
                 : {
                     reviewPatch: () => setStage("reality"),
