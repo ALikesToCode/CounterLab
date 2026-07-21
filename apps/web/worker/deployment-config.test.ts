@@ -683,6 +683,11 @@ describe("Cloudflare static asset routing", () => {
     expect(dockerfile).toContain("/out/runtime-rootfs/sys/fs/cgroup");
     expect(dockerfile).toContain("/out/runtime-rootfs/counterlab-runtime");
     expect(dockerfile).toContain("/out/runtime-rootfs/etc/hosts");
+    // BuildKit bind-mounts /etc/hosts read-only during RUN instructions. The
+    // copied placeholder is normalized to root:root 0644 in the final OCI
+    // archive, so the Dockerfile must not attempt to mutate the mounted path.
+    expect(dockerfile).not.toContain("chmod 0644 /etc/hosts");
+    expect(dockerfile).not.toMatch(/chown root:root[\s\S]*?\/etc\/hosts/);
     expect(dockerfile).toContain("bubblewrap=0.11.0-2+deb13u1");
     expect(dockerfile).toContain(
       'test "$(/usr/bin/bwrap --version)" = "bubblewrap 0.11.0"',

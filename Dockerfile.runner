@@ -127,7 +127,6 @@ RUN chmod -R a+rX /opt/codex \
         /dev/mqueue \
         /sys/fs/cgroup \
         /counterlab-runtime \
-        /etc/hosts \
     && chmod 0755 \
         /usr/lib \
         /usr/lib64 \
@@ -138,7 +137,6 @@ RUN chmod -R a+rX /opt/codex \
         /dev/mqueue \
         /sys/fs/cgroup \
         /counterlab-runtime \
-    && chmod 0644 /etc/hosts \
     && chown -R counterlab-codex:counterlab-codex /work/jobs /run/counterlab-codex \
     && chmod 700 /work/jobs /run/counterlab-codex
 
