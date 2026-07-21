@@ -30,6 +30,8 @@ const claim =
   "The 98 percent random split accuracy proves this model generalizes to customers it has never seen.";
 const revision =
   "When rows repeat an entity, hold out whole entities and remove identity-derived features before claiming generalization.";
+const prePredictionResultLanguage =
+  /59\.4%|\bdeceptive\b|\bfairer test\b|\bverified result\b|\bevidence verdict\b|\bsupported hypothesis\b|\bthe fix\b|\bremove customer(?:_| )id\b|\bkeep each customer's rows together\b|\bproves?\b/i;
 const imbalanceNotebookPath = new URL(
   "../../../fixtures/notebooks/fraud_class_imbalance.ipynb",
   import.meta.url,
@@ -1334,27 +1336,55 @@ for (const viewport of beliefBreakViewports) {
     );
     await expectEntirelyInFirstViewport(
       page,
+      page.getByRole("heading", {
+        name: /What result are you trying to understand/i,
+      }),
+      "Question-first heading",
+    );
+    await expectEntirelyInFirstViewport(
+      page,
       page.getByText(
-        /For learners testing whether a notebook result means what they think it means/i,
+        /Ask a question or attach a supported notebook.*never runs its cells/i,
       ),
-      "learner audience statement",
+      "artifact safety summary",
     );
 
-    const preview = page.getByRole("complementary", {
-      name: /One changed variable.*Everything else held fixed/i,
-    });
+    const submit = page.getByRole("button", { name: /Test this claim/i });
+    await expect(submit).toBeDisabled();
+    await expectEntirelyInFirstViewport(
+      page,
+      submit,
+      "primary Question action",
+    );
+    await expectEntirelyInFirstViewport(
+      page,
+      page.getByRole("group", { name: /Prompt starters/i }),
+      "learner prompt starters",
+    );
+    if (viewport.width <= 620) {
+      const submitBox = await submit.boundingBox();
+      expect(submitBox, "mobile primary Question action bounds").not.toBeNull();
+      expect(submitBox!.width).toBeGreaterThanOrEqual(130);
+    }
+
+    const preview = page.locator(
+      '[data-presentation="strip"][data-result-visibility="locked"]',
+    );
     await expectEntirelyInFirstViewport(
       page,
       preview,
       "pre-Prediction fair-test promise",
     );
+    await expect(preview).toContainText(/Result locked until Prediction/i);
     await expect(preview).toContainText(
-      /Result hidden until your Prediction is sealed/i,
+      /Familiar rows.*change who counts as new.*Unseen customers/i,
     );
     await expect(preview).toContainText(
-      /Name the claim.*Lock your expectation.*Change one thing/i,
+      /Same model, features, preprocessing, sample size, metric, and seed/i,
     );
-    await expect(page.locator("body")).not.toContainText("59.4%");
+    await expect(page.locator("body")).not.toContainText(
+      prePredictionResultLanguage,
+    );
     await expect(
       page.getByRole("region", {
         name: "Verified sample belief-break mechanism",
