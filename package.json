@@ -31,7 +31,8 @@
     "held-out:run": "node --import tsx scripts/run-held-out.ts",
     "held-out:check": "node --import tsx scripts/run-held-out.ts --check",
     "submission:preflight": "node --import tsx scripts/validate-submission-package.ts --draft",
-    "submission:verify": "node --import tsx scripts/validate-submission-package.ts --ready"
+    "submission:verify": "node --import tsx scripts/validate-submission-package.ts --ready",
+    "submission:verify:submitted": "node --import tsx scripts/validate-submission-package.ts --submitted"
   },
   "dependencies": {
     "openai": "6.46.0",

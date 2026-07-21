@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 
 import { z } from "zod";
 
+import { PilotAnalysisSchema } from "../evals/learner-pilot/src/pilot.js";
 import { DeploymentReceiptV7Schema } from "../packages/scientific-engine-registry/src/schema.js";
 import { containedInputFile } from "./repository-cli-paths.js";
 
@@ -21,7 +22,12 @@ const RepositoryPathSchema = z
     (value) =>
       !value.startsWith("/") &&
       !value.includes("\\") &&
-      !value.split("/").includes(".."),
+      value
+        .split("/")
+        .every(
+          (component) =>
+            component.length > 0 && component !== "." && component !== "..",
+        ),
     "evidence path must stay inside the repository",
   );
 
@@ -161,6 +167,9 @@ export const SubmissionPackageSchema = z
 
 export type SubmissionPackage = z.infer<typeof SubmissionPackageSchema>;
 export type SubmissionValidationMode = "draft" | "ready" | "submitted";
+export type SubmissionValidationOptions = Readonly<{
+  now?: Date;
+}>;
 export type EvidenceReader = (
   reference: z.infer<typeof EvidenceReferenceSchema>,
 ) => Promise<Uint8Array>;
@@ -173,22 +182,181 @@ const EXPECTED_ASSETS = [
   "thumbnail-judge-belief-break.png",
 ] as const;
 
+const SmokeDeploymentSchema = z
+  .object({
+    workerVersion: WorkerVersionSchema,
+    workerEvidenceCommit: GitCommitSchema,
+    runnerSourceCommit: GitCommitSchema,
+    containerImageDigest: ImageDigestSchema,
+    deploymentReceiptSha256: Sha256Schema,
+    timeoutCleanupReceiptSha256: Sha256Schema,
+    runtimePolicySha256: Sha256Schema,
+    proofDependencyManifestSha256: Sha256Schema,
+    aggregateLimitEvidenceSha256: Sha256Schema,
+    workerArtifactClassification: z.literal("PROCESS_BOUND_PARTIAL"),
+    workerArtifactManifestSha256: Sha256Schema,
+    workerBundleSha256: Sha256Schema,
+    clientAssetsSha256: Sha256Schema,
+    clientAssetCount: z.number().int().positive(),
+    clientPublicAssetsSha256: Sha256Schema,
+    clientPublicAssetCount: z.number().int().positive(),
+    viteVersion: z.literal("8.1.4"),
+    wranglerVersion: z.literal("4.110.0"),
+    generationIsolationEvidenceSha256: Sha256Schema,
+    generationIsolationProbeSha256: Sha256Schema,
+    generationIsolationVerifiedAt: z.iso.datetime({ offset: true }),
+    releaseCheckGenerationIsolationEvidenceSha256: Sha256Schema,
+    releaseCheckGenerationIsolationProbeSha256: Sha256Schema,
+    releaseCheckGenerationIsolationVerifiedAt: z.iso.datetime({ offset: true }),
+  })
+  .strict()
+  .superRefine((deployment, context) => {
+    if (deployment.clientPublicAssetCount > deployment.clientAssetCount) {
+      context.addIssue({
+        code: "custom",
+        path: ["clientPublicAssetCount"],
+        message: "public client asset count exceeds the full deploy tree",
+      });
+    }
+    if (
+      deployment.releaseCheckGenerationIsolationProbeSha256 !==
+      deployment.generationIsolationProbeSha256
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["releaseCheckGenerationIsolationProbeSha256"],
+        message: "release-check isolation probe must match qualification",
+      });
+    }
+  });
+
+const SmokeStageSchema = z
+  .object({
+    id: z.string().regex(/^[A-Za-z0-9_.:-]{1,256}$/u),
+    mode: z.enum(["control_plane", "sample", "replay", "live_notebook"]),
+    concept: z.enum(["entity_leakage", "class_imbalance"]).optional(),
+    status: z.literal("PASSED"),
+    startedAt: z.iso.datetime({ offset: true }),
+    completedAt: z.iso.datetime({ offset: true }),
+    evidence: z.record(z.string(), z.unknown()),
+  })
+  .strict();
+
+const REQUIRED_SMOKE_STAGES = new Map<
+  string,
+  readonly [
+    "control_plane" | "sample" | "replay" | "live_notebook",
+    "entity_leakage" | "class_imbalance" | undefined,
+  ]
+>([
+  ["public-readiness", ["control_plane", undefined]],
+  ["capability-health", ["control_plane", undefined]],
+  ["public-secret-scan", ["control_plane", undefined]],
+  ["judge-mode", ["control_plane", undefined]],
+  ["sample-lesson", ["sample", undefined]],
+  ["verified-replay", ["replay", undefined]],
+  ["hosted-capsule-replay", ["replay", "entity_leakage"]],
+  ["live-leakage", ["live_notebook", "entity_leakage"]],
+  ["live-imbalance", ["live_notebook", "class_imbalance"]],
+]);
+
 const ProductionSmokeV6Schema = z
   .object({
     schemaVersion: z.literal("6"),
     status: z.literal("PASSED"),
     baseUrl: z.literal("https://counterlab.cserules.workers.dev"),
-    deployment: z
+    startedAt: z.iso.datetime({ offset: true }),
+    completedAt: z.iso.datetime({ offset: true }),
+    deployment: SmokeDeploymentSchema,
+    stages: z.array(SmokeStageSchema).length(REQUIRED_SMOKE_STAGES.size),
+    privacy: z
       .object({
-        workerVersion: WorkerVersionSchema,
-        workerEvidenceCommit: GitCommitSchema,
-        runnerSourceCommit: GitCommitSchema,
-        containerImageDigest: ImageDigestSchema,
-        deploymentReceiptSha256: Sha256Schema,
+        containsSecrets: z.literal(false),
+        containsRawNotebookBytes: z.literal(false),
+        containsPrivateReasoning: z.literal(false),
       })
-      .passthrough(),
+      .strict(),
   })
-  .passthrough();
+  .strict()
+  .superRefine((report, context) => {
+    const startedAt = Date.parse(report.startedAt);
+    const completedAt = Date.parse(report.completedAt);
+    if (completedAt < startedAt) {
+      context.addIssue({
+        code: "custom",
+        path: ["completedAt"],
+        message: "smoke report completes before it starts",
+      });
+    }
+    const qualificationAt = Date.parse(
+      report.deployment.generationIsolationVerifiedAt,
+    );
+    const releaseCheckAt = Date.parse(
+      report.deployment.releaseCheckGenerationIsolationVerifiedAt,
+    );
+    if (qualificationAt > startedAt || releaseCheckAt > startedAt) {
+      context.addIssue({
+        code: "custom",
+        path: ["deployment"],
+        message: "isolation verification must precede production smoke",
+      });
+    }
+    if (
+      releaseCheckAt < qualificationAt ||
+      startedAt - releaseCheckAt > 86_400_000
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["deployment", "releaseCheckGenerationIsolationVerifiedAt"],
+        message: "release-check isolation evidence is stale or out of order",
+      });
+    }
+
+    const observed = new Set<string>();
+    let previousStartedAt = Number.NEGATIVE_INFINITY;
+    let previousCompletedAt = Number.NEGATIVE_INFINITY;
+    for (const [index, stage] of report.stages.entries()) {
+      const expected = REQUIRED_SMOKE_STAGES.get(stage.id);
+      if (
+        expected === undefined ||
+        expected[0] !== stage.mode ||
+        expected[1] !== stage.concept ||
+        observed.has(stage.id)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["stages", index],
+          message:
+            "smoke report does not contain the exact required stage matrix",
+        });
+      }
+      observed.add(stage.id);
+      const stageStartedAt = Date.parse(stage.startedAt);
+      const stageCompletedAt = Date.parse(stage.completedAt);
+      if (
+        stageStartedAt < startedAt ||
+        stageCompletedAt < stageStartedAt ||
+        stageStartedAt < previousStartedAt ||
+        stageCompletedAt < previousCompletedAt ||
+        stageCompletedAt > completedAt
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["stages", index],
+          message: "smoke stages must be complete and chronological",
+        });
+      }
+      previousStartedAt = stageStartedAt;
+      previousCompletedAt = stageCompletedAt;
+    }
+    if (observed.size !== REQUIRED_SMOKE_STAGES.size) {
+      context.addIssue({
+        code: "custom",
+        path: ["stages"],
+        message: "smoke report is missing a required stage",
+      });
+    }
+  });
 
 class SubmissionValidationError extends Error {
   readonly issues: readonly string[];
@@ -210,6 +378,78 @@ function parseJson(bytes: Uint8Array, label: string): unknown {
   } catch {
     throw new Error(`${label} is not valid UTF-8 JSON`);
   }
+}
+
+const FORBIDDEN_EVIDENCE_KEYS = new Set([
+  "authorization",
+  "apikey",
+  "credential",
+  "credentials",
+  "notebookbytes",
+  "privatereasoning",
+  "rawnotebook",
+  "secret",
+  "token",
+  "password",
+  "cookie",
+  "setcookie",
+  "codexauthjson",
+  "openaiapikey",
+]);
+
+function assertPrivacySafeEvidence(value: unknown, label: string): void {
+  const inspect = (current: unknown): void => {
+    if (Array.isArray(current)) {
+      current.forEach(inspect);
+      return;
+    }
+    if (current !== null && typeof current === "object") {
+      const record = current as Record<string, unknown>;
+      if (record.nbformat === 4 && Array.isArray(record.cells)) {
+        throw new Error(`${label} contains raw notebook content`);
+      }
+      for (const [key, child] of Object.entries(record)) {
+        const normalized = key.toLowerCase().replaceAll(/[^a-z0-9]/gu, "");
+        if (FORBIDDEN_EVIDENCE_KEYS.has(normalized)) {
+          throw new Error(`${label} contains forbidden private field ${key}`);
+        }
+        inspect(child);
+      }
+      return;
+    }
+    if (typeof current === "string" && /^[\s]*[\[{]/u.test(current)) {
+      try {
+        inspect(JSON.parse(current));
+      } catch (error) {
+        if (error instanceof SyntaxError) return;
+        throw error;
+      }
+    }
+  };
+  inspect(value);
+  const serialized = JSON.stringify(value);
+  if (
+    /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/u.test(serialized) ||
+    /\bsk-[A-Za-z0-9_-]{24,}\b/u.test(serialized) ||
+    /CODEX_AUTH_JSON\s*[:=]/u.test(serialized) ||
+    /COUNTERLAB_RUNNER_SIGNING_(?:PRIVATE_)?KEY\s*[:=]/u.test(serialized)
+  ) {
+    throw new Error(`${label} contains secret or private content`);
+  }
+}
+
+type EvidenceCache = ReadonlyMap<string, Uint8Array>;
+
+function cachedEvidence(
+  evidence: EvidenceCache,
+  reference: z.infer<typeof EvidenceReferenceSchema>,
+  label: string,
+): Uint8Array {
+  const value = evidence.get(reference.path);
+  if (value === undefined) {
+    throw new Error(`${label} was not loaded from verified evidence`);
+  }
+  return value;
 }
 
 function collectEvidenceReferences(
@@ -243,7 +483,10 @@ function collectEvidenceReferences(
 }
 
 function assertNoPlaceholderStrings(value: unknown, path = "package"): void {
-  if (typeof value === "string" && /^(?:PENDING|TBD|TODO)$/iu.test(value)) {
+  if (
+    typeof value === "string" &&
+    /^(?:PENDING|TBD|TODO)$/iu.test(value.trim())
+  ) {
     throw new Error(`${path} contains a placeholder value`);
   }
   if (Array.isArray(value)) {
@@ -353,19 +596,26 @@ function requireReadyFields(
 
 async function assertReleaseEvidence(
   submission: SubmissionPackage,
-  readEvidence: EvidenceReader,
+  evidence: EvidenceCache,
   issues: string[],
-): Promise<void> {
+  now: Date,
+): Promise<string | null> {
   const receiptRef = submission.release.deploymentReceipt;
   const smokeRef = submission.release.productionSmoke;
-  if (receiptRef === null || smokeRef === null) return;
+  if (receiptRef === null || smokeRef === null) return null;
   try {
-    const receipt = DeploymentReceiptV7Schema.parse(
-      parseJson(await readEvidence(receiptRef), "deployment receipt"),
+    const receiptValue = parseJson(
+      cachedEvidence(evidence, receiptRef, "deployment receipt"),
+      "deployment receipt",
     );
-    const smoke = ProductionSmokeV6Schema.parse(
-      parseJson(await readEvidence(smokeRef), "production smoke"),
+    const smokeValue = parseJson(
+      cachedEvidence(evidence, smokeRef, "production smoke"),
+      "production smoke",
     );
+    assertPrivacySafeEvidence(receiptValue, "deployment receipt");
+    assertPrivacySafeEvidence(smokeValue, "production smoke");
+    const receipt = DeploymentReceiptV7Schema.parse(receiptValue);
+    const smoke = ProductionSmokeV6Schema.parse(smokeValue);
     const expectedOrigin = new URL(submission.publicProduct.judgeUrl).origin;
     if (
       receipt.productionOrigin !== expectedOrigin ||
@@ -395,49 +645,184 @@ async function assertReleaseEvidence(
         "production smoke does not match the submission release tuple",
       );
     }
+    const smokeBindings: ReadonlyArray<readonly [string, unknown, unknown]> = [
+      [
+        "timeout cleanup receipt",
+        smoke.deployment.timeoutCleanupReceiptSha256,
+        receipt.timeoutCleanupReceiptSha256,
+      ],
+      [
+        "aggregate-limit evidence",
+        smoke.deployment.aggregateLimitEvidenceSha256,
+        receipt.aggregateLimitEvidenceSha256,
+      ],
+      [
+        "runtime policy",
+        smoke.deployment.runtimePolicySha256,
+        receipt.runtimePolicySha256,
+      ],
+      [
+        "proof dependency manifest",
+        smoke.deployment.proofDependencyManifestSha256,
+        receipt.proofDependencyManifestSha256,
+      ],
+      [
+        "Worker artifact classification",
+        smoke.deployment.workerArtifactClassification,
+        receipt.workerArtifactClassification,
+      ],
+      [
+        "Worker artifact manifest",
+        smoke.deployment.workerArtifactManifestSha256,
+        receipt.workerArtifactManifestSha256,
+      ],
+      [
+        "Worker bundle",
+        smoke.deployment.workerBundleSha256,
+        receipt.workerBundleSha256,
+      ],
+      [
+        "client assets",
+        smoke.deployment.clientAssetsSha256,
+        receipt.clientAssetsSha256,
+      ],
+      [
+        "client asset count",
+        smoke.deployment.clientAssetCount,
+        receipt.clientAssetCount,
+      ],
+      [
+        "public client assets",
+        smoke.deployment.clientPublicAssetsSha256,
+        receipt.clientPublicAssetsSha256,
+      ],
+      [
+        "public client asset count",
+        smoke.deployment.clientPublicAssetCount,
+        receipt.clientPublicAssetCount,
+      ],
+      ["Vite version", smoke.deployment.viteVersion, receipt.viteVersion],
+      [
+        "Wrangler version",
+        smoke.deployment.wranglerVersion,
+        receipt.wranglerVersion,
+      ],
+      [
+        "qualified isolation evidence",
+        smoke.deployment.generationIsolationEvidenceSha256,
+        receipt.generationIsolationEvidenceSha256,
+      ],
+      [
+        "qualified isolation probe",
+        smoke.deployment.generationIsolationProbeSha256,
+        receipt.generationIsolationProbeSha256,
+      ],
+      [
+        "qualified isolation time",
+        smoke.deployment.generationIsolationVerifiedAt,
+        receipt.generationIsolationVerifiedAt,
+      ],
+      [
+        "release-check isolation evidence",
+        smoke.deployment.releaseCheckGenerationIsolationEvidenceSha256,
+        receipt.releaseCheckGenerationIsolationEvidenceSha256,
+      ],
+      [
+        "release-check isolation probe",
+        smoke.deployment.releaseCheckGenerationIsolationProbeSha256,
+        receipt.releaseCheckGenerationIsolationProbeSha256,
+      ],
+      [
+        "release-check isolation time",
+        smoke.deployment.releaseCheckGenerationIsolationVerifiedAt,
+        receipt.releaseCheckGenerationIsolationVerifiedAt,
+      ],
+    ];
+    for (const [label, observed, expected] of smokeBindings) {
+      if (observed !== expected) {
+        issues.push(`production smoke ${label} does not match deployment`);
+      }
+    }
+    if (Date.parse(receipt.deployedAt) > Date.parse(smoke.startedAt)) {
+      issues.push("production smoke started before the recorded deployment");
+    }
+    const smokeCompletedAt = Date.parse(smoke.completedAt);
+    if (
+      Date.parse(receipt.deployedAt) > now.getTime() ||
+      smokeCompletedAt > now.getTime()
+    ) {
+      issues.push("release evidence is dated in the future");
+    }
+    if (smokeCompletedAt > Date.parse(submission.competition.deadline)) {
+      issues.push("production smoke completed after the competition deadline");
+    }
+    if (
+      submission.officialSubmission.submittedAt !== null &&
+      smokeCompletedAt > Date.parse(submission.officialSubmission.submittedAt)
+    ) {
+      issues.push("production smoke completed after the official submission");
+    }
+    return receipt.qualifiedRunnerReceiptSha256;
   } catch {
     issues.push(
       "release evidence is not a valid schema-v7 receipt and schema-v6 smoke",
     );
+    return null;
   }
 }
 
 async function assertImpactEvidence(
   submission: SubmissionPackage,
-  readEvidence: EvidenceReader,
+  evidence: EvidenceCache,
   issues: string[],
+  now: Date,
+  qualifiedReleaseReceiptSha256: string | null,
 ): Promise<void> {
   try {
-    const impact = z
-      .object({
-        schemaVersion: z.literal("2"),
-        status: z.enum(["NO_DATA", "DESCRIPTIVE_ONLY"]),
-        qualifiedReleaseReceiptSha256: Sha256Schema.nullable(),
-        participantCount: z.number().int().nonnegative(),
-        completedSessionCount: z.number().int().nonnegative(),
-        metrics: z.unknown().nullable(),
-        limitations: z.array(z.string().trim().min(1)).min(1),
-      })
-      .passthrough()
-      .parse(
-        parseJson(
-          await readEvidence(submission.impact.aggregate),
+    const impact = PilotAnalysisSchema.parse(
+      parseJson(
+        cachedEvidence(
+          evidence,
+          submission.impact.aggregate,
           "impact aggregate",
         ),
-      );
+        "impact aggregate",
+      ),
+    );
     if (impact.status !== submission.impact.status) {
       issues.push("impact status does not match its aggregate");
     }
+    if (impact.status === "NO_DATA") {
+      if (submission.impact.qualifiedReleaseReceiptSha256 !== null) {
+        issues.push("NO_DATA impact must not bind a qualified release");
+      }
+      if (
+        !impact.limitations.includes(
+          "No consented learner-pilot session records were supplied; no learner outcome is claimed.",
+        )
+      ) {
+        issues.push("NO_DATA impact must retain the canonical limitation");
+      }
+    } else {
+      if (
+        qualifiedReleaseReceiptSha256 === null ||
+        impact.qualifiedReleaseReceiptSha256 !==
+          qualifiedReleaseReceiptSha256 ||
+        submission.impact.qualifiedReleaseReceiptSha256 !==
+          qualifiedReleaseReceiptSha256
+      ) {
+        issues.push("impact aggregate does not match its qualified release");
+      }
+    }
+    const analyzedAt = Date.parse(impact.analyzedAt);
     if (
-      impact.status === "NO_DATA" &&
-      (impact.participantCount !== 0 ||
-        impact.completedSessionCount !== 0 ||
-        impact.metrics !== null ||
-        impact.qualifiedReleaseReceiptSha256 !== null ||
-        submission.impact.qualifiedReleaseReceiptSha256 !== null)
+      analyzedAt > now.getTime() ||
+      analyzedAt > Date.parse(submission.competition.deadline) ||
+      (submission.officialSubmission.submittedAt !== null &&
+        analyzedAt > Date.parse(submission.officialSubmission.submittedAt))
     ) {
       issues.push(
-        "NO_DATA impact must contain zero participants and no metrics",
+        "impact aggregate was analyzed after its allowed evidence window",
       );
     }
   } catch {
@@ -449,11 +834,13 @@ export async function validateSubmissionPackage(
   input: unknown,
   mode: SubmissionValidationMode,
   readEvidence: EvidenceReader,
+  options: SubmissionValidationOptions = {},
 ): Promise<SubmissionPackage> {
   assertNoPlaceholderStrings(input);
   const submission = SubmissionPackageSchema.parse(input);
   const references = collectEvidenceReferences(submission);
   const seen = new Map<string, string>();
+  const evidence = new Map<string, Uint8Array>();
   for (const reference of references) {
     const previous = seen.get(reference.path);
     if (previous !== undefined && previous !== reference.sha256) {
@@ -461,18 +848,65 @@ export async function validateSubmissionPackage(
         `evidence path has conflicting hashes: ${reference.path}`,
       );
     }
+    if (previous !== undefined) continue;
     seen.set(reference.path, reference.sha256);
-    const bytes = await readEvidence(reference);
-    if (sha256(bytes) !== reference.sha256) {
+    const value = new Uint8Array(await readEvidence(reference));
+    if (sha256(value) !== reference.sha256) {
       throw new Error(`evidence hash mismatch: ${reference.path}`);
     }
+    evidence.set(reference.path, value);
   }
 
+  const now = options.now ?? new Date();
+  if (Number.isNaN(now.getTime()))
+    throw new Error("validation time is invalid");
   const issues: string[] = [];
-  await assertImpactEvidence(submission, readEvidence, issues);
+  const expectedState = {
+    draft: "DRAFT",
+    ready: "READY_TO_SUBMIT",
+    submitted: "SUBMITTED",
+  } as const;
+  if (submission.submissionState !== expectedState[mode]) {
+    issues.push(
+      `${mode} validation requires submissionState ${expectedState[mode]}`,
+    );
+  }
+  if (mode !== "submitted") {
+    const official = submission.officialSubmission;
+    if (
+      official.state !== "NOT_SUBMITTED" ||
+      official.publicSlug !== null ||
+      official.submittedAt !== null ||
+      official.receipt !== null ||
+      official.postSubmitLoggedOutEvidence !== null
+    ) {
+      issues.push(
+        "draft and ready packages must not claim submission evidence",
+      );
+    }
+  }
+  let qualifiedReleaseReceiptSha256: string | null = null;
   if (mode !== "draft") {
     requireReadyFields(submission, issues);
-    await assertReleaseEvidence(submission, readEvidence, issues);
+    qualifiedReleaseReceiptSha256 = await assertReleaseEvidence(
+      submission,
+      evidence,
+      issues,
+      now,
+    );
+  }
+  await assertImpactEvidence(
+    submission,
+    evidence,
+    issues,
+    now,
+    qualifiedReleaseReceiptSha256,
+  );
+  if (
+    mode === "ready" &&
+    now.getTime() >= Date.parse(submission.competition.deadline)
+  ) {
+    issues.push("ready package cannot be verified at or after the deadline");
   }
   if (mode === "submitted") {
     const official = submission.officialSubmission;
@@ -492,6 +926,8 @@ export async function validateSubmissionPackage(
       Date.parse(submission.competition.deadline)
     ) {
       issues.push("official submission timestamp is after the deadline");
+    } else if (Date.parse(official.submittedAt) > now.getTime()) {
+      issues.push("official submission timestamp is in the future");
     }
   }
   if (issues.length > 0) throw new SubmissionValidationError(issues);

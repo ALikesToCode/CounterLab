@@ -91,6 +91,74 @@ function deploymentReceipt() {
   } as const;
 }
 
+function productionSmoke(
+  receipt: ReturnType<typeof deploymentReceipt>,
+  deploymentReceiptSha256: string,
+) {
+  const stages = [
+    ["public-readiness", "control_plane", undefined],
+    ["capability-health", "control_plane", undefined],
+    ["public-secret-scan", "control_plane", undefined],
+    ["judge-mode", "control_plane", undefined],
+    ["sample-lesson", "sample", undefined],
+    ["verified-replay", "replay", undefined],
+    ["hosted-capsule-replay", "replay", "entity_leakage"],
+    ["live-leakage", "live_notebook", "entity_leakage"],
+    ["live-imbalance", "live_notebook", "class_imbalance"],
+  ] as const;
+  return {
+    schemaVersion: "6",
+    status: "PASSED",
+    baseUrl: receipt.productionOrigin,
+    startedAt: "2026-07-19T00:04:00.000Z",
+    completedAt: "2026-07-19T00:14:00.000Z",
+    deployment: {
+      workerVersion: receipt.workerVersionId,
+      workerEvidenceCommit: receipt.workerEvidenceCommit,
+      runnerSourceCommit: receipt.runnerSourceCommit,
+      containerImageDigest: receipt.containerImageDigest,
+      deploymentReceiptSha256,
+      timeoutCleanupReceiptSha256: receipt.timeoutCleanupReceiptSha256,
+      runtimePolicySha256: receipt.runtimePolicySha256,
+      proofDependencyManifestSha256: receipt.proofDependencyManifestSha256,
+      aggregateLimitEvidenceSha256: receipt.aggregateLimitEvidenceSha256,
+      workerArtifactClassification: receipt.workerArtifactClassification,
+      workerArtifactManifestSha256: receipt.workerArtifactManifestSha256,
+      workerBundleSha256: receipt.workerBundleSha256,
+      clientAssetsSha256: receipt.clientAssetsSha256,
+      clientAssetCount: receipt.clientAssetCount,
+      clientPublicAssetsSha256: receipt.clientPublicAssetsSha256,
+      clientPublicAssetCount: receipt.clientPublicAssetCount,
+      viteVersion: receipt.viteVersion,
+      wranglerVersion: receipt.wranglerVersion,
+      generationIsolationEvidenceSha256:
+        receipt.generationIsolationEvidenceSha256,
+      generationIsolationProbeSha256: receipt.generationIsolationProbeSha256,
+      generationIsolationVerifiedAt: receipt.generationIsolationVerifiedAt,
+      releaseCheckGenerationIsolationEvidenceSha256:
+        receipt.releaseCheckGenerationIsolationEvidenceSha256,
+      releaseCheckGenerationIsolationProbeSha256:
+        receipt.releaseCheckGenerationIsolationProbeSha256,
+      releaseCheckGenerationIsolationVerifiedAt:
+        receipt.releaseCheckGenerationIsolationVerifiedAt,
+    },
+    stages: stages.map(([id, mode, concept], index) => ({
+      id,
+      mode,
+      ...(concept === undefined ? {} : { concept }),
+      status: "PASSED",
+      startedAt: `2026-07-19T00:${String(index + 4).padStart(2, "0")}:00.000Z`,
+      completedAt: `2026-07-19T00:${String(index + 5).padStart(2, "0")}:00.000Z`,
+      evidence: { verified: true },
+    })),
+    privacy: {
+      containsSecrets: false,
+      containsRawNotebookBytes: false,
+      containsPrivateReasoning: false,
+    },
+  } as const;
+}
+
 async function readyPackage() {
   const input = SubmissionPackageSchema.parse(await draftInput());
   const evidence = new Map<string, Uint8Array>();
@@ -117,18 +185,7 @@ async function readyPackage() {
   );
   const smokeRef = addEvidence(
     "evidence/production-smoke.json",
-    bytes({
-      schemaVersion: "6",
-      status: "PASSED",
-      baseUrl: receipt.productionOrigin,
-      deployment: {
-        workerVersion: receipt.workerVersionId,
-        workerEvidenceCommit: receipt.workerEvidenceCommit,
-        runnerSourceCommit: receipt.runnerSourceCommit,
-        containerImageDigest: receipt.containerImageDigest,
-        deploymentReceiptSha256: receiptRef.sha256,
-      },
-    }),
+    bytes(productionSmoke(receipt, receiptRef.sha256)),
   );
   const genericEvidence = (name: string) =>
     addEvidence(`evidence/${name}.json`, bytes({ status: "VERIFIED", name }));
@@ -204,6 +261,7 @@ async function readyPackage() {
   };
   return {
     ready,
+    evidence,
     reader: async (entry: { path: string }) => {
       const content = evidence.get(entry.path);
       if (content === undefined) throw new Error("missing test evidence");
@@ -235,8 +293,250 @@ describe("submission package validator", () => {
     const { ready, reader } = await readyPackage();
 
     await expect(
-      validateSubmissionPackage(ready, "ready", reader),
+      validateSubmissionPackage(ready, "ready", reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
     ).resolves.toMatchObject({ submissionState: "READY_TO_SUBMIT" });
+  });
+
+  it("rejects the former minimal synthetic production smoke", async () => {
+    const { ready, reader, evidence } = await readyPackage();
+    const minimal = bytes({
+      schemaVersion: "6",
+      status: "PASSED",
+      baseUrl: "https://counterlab.cserules.workers.dev",
+      deployment: {
+        workerVersion: ready.release.workerVersionId,
+        workerEvidenceCommit: ready.release.workerEvidenceCommit,
+        runnerSourceCommit: ready.release.runnerSourceCommit,
+        containerImageDigest: ready.release.containerImageDigest,
+        deploymentReceiptSha256: ready.release.deploymentReceipt!.sha256,
+      },
+    });
+    const path = "evidence/minimal-production-smoke.json";
+    evidence.set(path, minimal);
+    ready.release.productionSmoke = reference(path, minimal);
+
+    await expect(
+      validateSubmissionPackage(ready, "ready", reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        expect.stringMatching(/schema-v6 smoke/iu),
+      ]),
+    });
+  });
+
+  it("rejects private fields inside production-smoke evidence", async () => {
+    const { ready, reader, evidence } = await readyPackage();
+    const current = evidence.get(ready.release.productionSmoke!.path);
+    if (current === undefined) throw new Error("missing strict smoke fixture");
+    const smoke = JSON.parse(new TextDecoder().decode(current)) as {
+      stages: Array<{ evidence: Record<string, unknown> }>;
+    };
+    smoke.stages[0]!.evidence = { token: "redacted" };
+    const privateSmoke = bytes(smoke);
+    const path = "evidence/private-production-smoke.json";
+    evidence.set(path, privateSmoke);
+    ready.release.productionSmoke = reference(path, privateSmoke);
+
+    await expect(
+      validateSubmissionPackage(ready, "ready", reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        expect.stringMatching(/schema-v6 smoke/iu),
+      ]),
+    });
+  });
+
+  it("binds every validation mode to one exact package state", async () => {
+    const draft = await draftInput();
+    await expect(
+      validateSubmissionPackage(draft, "ready", repositoryReader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        "ready validation requires submissionState READY_TO_SUBMIT",
+      ]),
+    });
+
+    const { ready, reader } = await readyPackage();
+    await expect(
+      validateSubmissionPackage(ready, "draft", reader),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        "draft validation requires submissionState DRAFT",
+      ]),
+    });
+  });
+
+  it("rejects readiness at or after the competition deadline", async () => {
+    const { ready, reader } = await readyPackage();
+
+    await expect(
+      validateSubmissionPackage(ready, "ready", reader, {
+        now: new Date("2026-07-22T00:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        "ready package cannot be verified at or after the deadline",
+      ]),
+    });
+  });
+
+  it("rejects release evidence dated after the validation instant", async () => {
+    const { ready, reader } = await readyPackage();
+
+    await expect(
+      validateSubmissionPackage(ready, "ready", reader, {
+        now: new Date("2026-07-19T00:10:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        "release evidence is dated in the future",
+      ]),
+    });
+  });
+
+  it("hashes and parses each unique evidence file from one immutable read", async () => {
+    const calls = new Map<string, number>();
+    const reader: EvidenceReader = async (entry) => {
+      const count = (calls.get(entry.path) ?? 0) + 1;
+      calls.set(entry.path, count);
+      if (count > 1) return bytes({ replacedAfterHash: true });
+      return repositoryReader(entry);
+    };
+
+    await expect(
+      validateSubmissionPackage(await draftInput(), "draft", reader),
+    ).resolves.toMatchObject({ submissionState: "DRAFT" });
+    expect(Math.max(...calls.values())).toBe(1);
+  });
+
+  it("uses the canonical learner-pilot schema", async () => {
+    const input = SubmissionPackageSchema.parse(await draftInput());
+    const qualifiedReleaseReceiptSha256 = "a".repeat(64);
+    const invalidImpact = bytes({
+      schemaVersion: "2",
+      status: "DESCRIPTIVE_ONLY",
+      analyzedAt: "2026-07-21T10:00:00.000Z",
+      qualifiedReleaseReceiptSha256,
+      participantCount: 1,
+      completedSessionCount: 1,
+      metrics: {},
+      limitations: [
+        "Results are descriptive pilot observations, not causal estimates or proof of mastery.",
+      ],
+    });
+    input.impact = {
+      status: "DESCRIPTIVE_ONLY",
+      aggregate: reference("evidence/invalid-impact.json", invalidImpact),
+      qualifiedReleaseReceiptSha256,
+    };
+    const reader: EvidenceReader = async (entry) =>
+      entry.path === input.impact.aggregate.path
+        ? invalidImpact
+        : repositoryReader(entry);
+
+    await expect(
+      validateSubmissionPackage(input, "draft", reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining(["impact aggregate is invalid"]),
+    });
+  });
+
+  it("binds descriptive learner evidence to the deployed qualified receipt", async () => {
+    const { ready, reader, evidence } = await readyPackage();
+    const wrongQualifiedReceiptSha256 = "e".repeat(64);
+    const aggregate = bytes({
+      schemaVersion: "2",
+      status: "DESCRIPTIVE_ONLY",
+      analyzedAt: "2026-07-21T10:00:00.000Z",
+      qualifiedReleaseReceiptSha256: wrongQualifiedReceiptSha256,
+      participantCount: 1,
+      completedSessionCount: 1,
+      metrics: {
+        completionRate: 1,
+        taskCount: 1,
+        firstUnassistedTransferPassRate: 1,
+        predictionDifferenceRate: 0,
+        confusionObservedRate: 0,
+        confusionCategoryCounts: {
+          navigation: 0,
+          prediction_meaning: 0,
+          test_rationale: 0,
+          boundary_interpretation: 0,
+          transfer_choice: 0,
+          repair_scope: 0,
+          proof_interpretation: 0,
+          other_no_detail: 0,
+        },
+        abandonmentRate: 0,
+        medianTaskDurationSeconds: 120,
+        reactions: {
+          clarity: {
+            clearer: 1,
+            unchanged: 0,
+            less_clear: 0,
+            declined: 0,
+          },
+          usefulness: {
+            useful: 1,
+            neutral: 0,
+            not_useful: 0,
+            declined: 0,
+          },
+        },
+        abandonmentReasons: {
+          participant_withdrew: 0,
+          accessibility_barrier: 0,
+          technical_failure: 0,
+          time_limit: 0,
+          facilitator_stopped: 0,
+          other_no_detail: 0,
+        },
+        byConcept: {
+          entity_leakage: {
+            tasks: 1,
+            firstUnassistedTransferPassed: 1,
+            predictionDifferedFromResult: 0,
+            confusionObserved: 0,
+          },
+          class_imbalance: {
+            tasks: 0,
+            firstUnassistedTransferPassed: 0,
+            predictionDifferedFromResult: 0,
+            confusionObserved: 0,
+          },
+        },
+      },
+      limitations: [
+        "Results are descriptive pilot observations, not causal estimates or proof of mastery.",
+      ],
+    });
+    const path = "evidence/mismatched-impact.json";
+    evidence.set(path, aggregate);
+    ready.impact = {
+      status: "DESCRIPTIVE_ONLY",
+      aggregate: reference(path, aggregate),
+      qualifiedReleaseReceiptSha256: wrongQualifiedReceiptSha256,
+    };
+
+    await expect(
+      validateSubmissionPackage(ready, "ready", reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        "impact aggregate does not match its qualified release",
+      ]),
+    });
   });
 
   it("rejects evidence hash drift", async () => {
@@ -260,7 +560,7 @@ describe("submission package validator", () => {
     const placeholder = structuredClone(input) as {
       competition: { submitterType: string | null };
     };
-    placeholder.competition.submitterType = "PENDING";
+    placeholder.competition.submitterType = "  PENDING  ";
     await expect(
       validateSubmissionPackage(placeholder, "draft", repositoryReader),
     ).rejects.toThrow(/placeholder/iu);
@@ -270,6 +570,13 @@ describe("submission package validator", () => {
     escaped.copy.readme.path = "../README.md";
     await expect(
       validateSubmissionPackage(escaped, "draft", repositoryReader),
+    ).rejects.toThrow(/inside the repository/iu);
+    const aliased = structuredClone(input) as {
+      copy: { readme: { path: string } };
+    };
+    aliased.copy.readme.path = "./README.md";
+    await expect(
+      validateSubmissionPackage(aliased, "draft", repositoryReader),
     ).rejects.toThrow(/inside the repository/iu);
   });
 });
