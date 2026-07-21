@@ -6,9 +6,11 @@ import {
   countPlaywrightAssertions,
   journeyIdForTest,
   readJourneyObservation,
+  summarizeRequestFailures,
   type CapturedJourney,
 } from "../../e2e/qualification-reporter";
 import {
+  REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID,
   REQUIRED_CLOAK_JOURNEY_IDS,
   REQUIRED_CLOAK_VIEWPORTS,
 } from "../../../../scripts/submission-publication-evidence";
@@ -35,10 +37,11 @@ function capturedJourneys(): CapturedJourney[] {
     attempt: 0,
     durationMs: index + 1,
     assertionCount: 1,
-    viewport:
-      REQUIRED_CLOAK_VIEWPORTS[index % REQUIRED_CLOAK_VIEWPORTS.length]!,
+    viewport: REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID[id],
     consoleErrors: 0,
+    expectedFailedRequests: 0,
     failedRequests: 0,
+    observedFailedRequests: 0,
     browserVersion: "Chrome/140.0.0.0",
     browserAuthority: "CLOAK_CDP_ENDPOINT",
     telemetryValid: true,
@@ -70,17 +73,19 @@ describe("CloakBrowser qualification reporter", () => {
         step("expect"),
         step("test.step", [step("pw:api"), step("expect")]),
       ]),
-    ).toBe(3);
+    ).toBe(2);
   });
 
   it("accepts exactly one privacy-safe in-memory page observation", () => {
     const body = Buffer.from(
       JSON.stringify({
-        schemaVersion: "1",
+        schemaVersion: "2",
         authority: "CLOAK_CDP_ENDPOINT",
         viewport: { width: 1440, height: 900 },
         consoleErrors: 0,
+        expectedFailedRequests: 0,
         failedRequests: 0,
+        observedFailedRequests: 0,
         expectedRequestFailuresMatched: true,
         browserVersion: "Chrome/140.0.0.0",
       }),
@@ -96,24 +101,62 @@ describe("CloakBrowser qualification reporter", () => {
     } as TestResult;
 
     expect(readJourneyObservation(result)).toEqual({
-      schemaVersion: "1",
+      schemaVersion: "2",
       authority: "CLOAK_CDP_ENDPOINT",
       viewport: { width: 1440, height: 900 },
       consoleErrors: 0,
+      expectedFailedRequests: 0,
       failedRequests: 0,
+      observedFailedRequests: 0,
       expectedRequestFailuresMatched: true,
       browserVersion: "Chrome/140.0.0.0",
     });
   });
 
+  it("matches only the exact allowlisted intentional request failure", () => {
+    expect(
+      summarizeRequestFailures(
+        ["POST /api/artifacts"],
+        ["POST /api/artifacts"],
+      ),
+    ).toEqual({
+      expectedCount: 1,
+      matched: true,
+      observedCount: 1,
+      unexpectedCount: 0,
+    });
+    expect(
+      summarizeRequestFailures(["GET /unrelated.js"], ["POST /api/artifacts"]),
+    ).toEqual({
+      expectedCount: 1,
+      matched: false,
+      observedCount: 1,
+      unexpectedCount: 1,
+    });
+    expect(summarizeRequestFailures([], ["POST /api/live/sessions"])).toEqual({
+      expectedCount: 1,
+      matched: false,
+      observedCount: 0,
+      unexpectedCount: 0,
+    });
+    expect(
+      summarizeRequestFailures(
+        ["POST /api/artifacts"],
+        ["POST /not-allowlisted"],
+      ).matched,
+    ).toBe(false);
+  });
+
   it("rejects missing, path-based, duplicate, and over-disclosed observations", () => {
     const validBody = Buffer.from(
       JSON.stringify({
-        schemaVersion: "1",
+        schemaVersion: "2",
         authority: "CLOAK_CDP_ENDPOINT",
         viewport: { width: 1440, height: 900 },
         consoleErrors: 0,
+        expectedFailedRequests: 0,
         failedRequests: 0,
+        observedFailedRequests: 0,
         expectedRequestFailuresMatched: true,
         browserVersion: "Chrome/140.0.0.0",
       }),
@@ -220,6 +263,13 @@ describe("CloakBrowser qualification reporter", () => {
       ],
     },
     {
+      name: "inconsistent request failure counts",
+      mutate: (journeys: CapturedJourney[]) => [
+        { ...journeys[0]!, observedFailedRequests: 1 },
+        ...journeys.slice(1),
+      ],
+    },
+    {
       name: "missing required viewport",
       mutate: (journeys: CapturedJourney[]) =>
         journeys.map((journey) =>
@@ -227,6 +277,21 @@ describe("CloakBrowser qualification reporter", () => {
             ? { ...journey, viewport: "1440x900" as const }
             : journey,
         ),
+    },
+    {
+      name: "viewport swapped between registered journeys",
+      mutate: (journeys: CapturedJourney[]) => {
+        const desktop = journeys.findIndex(
+          (journey) => journey.viewport === "1440x900",
+        );
+        const mobile = journeys.findIndex(
+          (journey) => journey.viewport === "390x844",
+        );
+        const mutated = [...journeys];
+        mutated[desktop] = { ...mutated[desktop]!, viewport: "390x844" };
+        mutated[mobile] = { ...mutated[mobile]!, viewport: "1440x900" };
+        return mutated;
+      },
     },
   ])("fails closed for $name", ({ mutate }) => {
     const report = buildCloakBrowserRawRun({
@@ -254,5 +319,19 @@ describe("CloakBrowser qualification reporter", () => {
     });
 
     expect(report.status).toBe("NON_QUALIFYING");
+  });
+
+  it("rejects raw evidence whose completion predates its start", () => {
+    expect(() =>
+      buildCloakBrowserRawRun({
+        authority: "CLOAKBROWSER",
+        baseUrl: "https://counterlab.cserules.workers.dev",
+        completedAt: "2026-07-21T09:59:59.000Z",
+        journeys: capturedJourneys(),
+        playwrightStatus: "passed",
+        qualificationRequested: true,
+        startedAt: "2026-07-21T10:00:00.000Z",
+      }),
+    ).toThrow(/completion must not precede/i);
   });
 });

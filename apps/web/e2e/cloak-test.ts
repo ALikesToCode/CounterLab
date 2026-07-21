@@ -8,8 +8,14 @@ import { test as base } from "@playwright/test";
 import {
   currentBrowserAuthorityLabel,
   resolveBrowserAuthority,
+  validateCloakCdpEndpoint,
 } from "./browser-authority";
-import { JOURNEY_OBSERVATION_ATTACHMENT } from "./qualification-reporter";
+import {
+  JOURNEY_OBSERVATION_ATTACHMENT,
+  journeyIdForParts,
+  summarizeRequestFailures,
+} from "./qualification-reporter";
+import { REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID } from "../../../scripts/submission-publication-evidence";
 
 export { currentBrowserAuthorityLabel };
 
@@ -89,19 +95,6 @@ export function runtimeOutputPath(candidate: string, label: string): string {
   return resolved;
 }
 
-function validatedCloakEndpoint(configured: string): string {
-  const endpoint = new URL(configured);
-  if (!["http:", "https:", "ws:", "wss:"].includes(endpoint.protocol)) {
-    throw new Error(
-      "CLOAK_CDP_ENDPOINT must use an http(s) or ws(s) CDP endpoint",
-    );
-  }
-  if (endpoint.username !== "" || endpoint.password !== "") {
-    throw new Error("CLOAK_CDP_ENDPOINT must not contain URL credentials");
-  }
-  return endpoint.toString();
-}
-
 type CounterLabAutomaticFixtures = {
   counterlabJourneyObservation: void;
 };
@@ -118,7 +111,7 @@ export const test = base.extend<CounterLabAutomaticFixtures>({
       assertContainedPath(artifactsDir, "Playwright browser artifacts");
       if (authority.kind === "cloak") {
         const browser = await playwright.chromium.connectOverCDP(
-          validatedCloakEndpoint(authority.endpoint),
+          validateCloakCdpEndpoint(authority.endpoint),
           {
             artifactsDir,
             timeout: 30_000,
@@ -175,16 +168,33 @@ export const test = base.extend<CounterLabAutomaticFixtures>({
   ],
   counterlabJourneyObservation: [
     async ({ page }, use, testInfo) => {
+      const journeyId = journeyIdForParts(testInfo.file, testInfo.titlePath);
+      const expectedViewport =
+        REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID[
+          journeyId as keyof typeof REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID
+        ];
+      if (expectedViewport === undefined) {
+        throw new Error(
+          `Unregistered browser qualification journey: ${journeyId}`,
+        );
+      }
+      const [width, height] = expectedViewport
+        .split("x")
+        .map((part) => Number.parseInt(part, 10));
+      await page.setViewportSize({ width: width!, height: height! });
       let consoleErrors = 0;
-      let failedRequests = 0;
+      const failedRequests: string[] = [];
       page.on("console", (message) => {
         if (message.type() === "error") consoleErrors += 1;
       });
       page.on("pageerror", () => {
         consoleErrors += 1;
       });
-      page.on("requestfailed", () => {
-        failedRequests += 1;
+      page.on("requestfailed", (request) => {
+        const url = new URL(request.url());
+        failedRequests.push(
+          `${request.method().toUpperCase()} ${url.pathname}`,
+        );
       });
       const browserVersion =
         page.context().browser()?.version().trim() || "unavailable";
@@ -195,30 +205,25 @@ export const test = base.extend<CounterLabAutomaticFixtures>({
         (annotation) =>
           annotation.type === "counterlab-expected-request-failures",
       );
-      const expectedRequestFailures = Number.parseInt(
-        expectedFailureAnnotations[0]?.description ?? "0",
-        10,
+      const expectedRequestFailures = expectedFailureAnnotations.map(
+        (annotation) => annotation.description ?? "",
       );
-      const expectedRequestFailuresValid =
-        expectedFailureAnnotations.length <= 1 &&
-        Number.isSafeInteger(expectedRequestFailures) &&
-        expectedRequestFailures >= 0;
+      const requestFailureSummary = summarizeRequestFailures(
+        failedRequests,
+        expectedRequestFailures,
+      );
       const viewport = page.viewportSize();
       await testInfo.attach(JOURNEY_OBSERVATION_ATTACHMENT, {
         body: Buffer.from(
           JSON.stringify({
-            schemaVersion: "1",
+            schemaVersion: "2",
             authority: currentBrowserAuthorityLabel(),
             viewport: viewport ?? { width: 0, height: 0 },
             consoleErrors,
-            failedRequests: Math.max(
-              0,
-              failedRequests -
-                (expectedRequestFailuresValid ? expectedRequestFailures : 0),
-            ),
-            expectedRequestFailuresMatched:
-              expectedRequestFailuresValid &&
-              failedRequests === expectedRequestFailures,
+            expectedFailedRequests: requestFailureSummary.expectedCount,
+            failedRequests: requestFailureSummary.unexpectedCount,
+            observedFailedRequests: requestFailureSummary.observedCount,
+            expectedRequestFailuresMatched: requestFailureSummary.matched,
             browserVersion,
           }),
         ),

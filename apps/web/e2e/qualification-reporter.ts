@@ -19,16 +19,18 @@ import { z } from "zod";
 
 import {
   CloakBrowserRawRunSchema,
+  REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID,
   REQUIRED_CLOAK_JOURNEY_IDS,
   REQUIRED_CLOAK_VIEWPORTS,
 } from "../../../scripts/submission-publication-evidence";
+import { containedNewOutputFile } from "../../../scripts/repository-cli-paths";
 
 export const JOURNEY_OBSERVATION_ATTACHMENT =
   "counterlab-journey-observation" as const;
 
 const PageObservationSchema = z
   .object({
-    schemaVersion: z.literal("1"),
+    schemaVersion: z.literal("2"),
     authority: z.enum(["CLOAK_CDP_ENDPOINT", "stock-chromium-design-review"]),
     viewport: z
       .object({
@@ -37,7 +39,9 @@ const PageObservationSchema = z
       })
       .strict(),
     consoleErrors: z.number().int().nonnegative(),
+    expectedFailedRequests: z.number().int().nonnegative(),
     failedRequests: z.number().int().nonnegative(),
+    observedFailedRequests: z.number().int().nonnegative(),
     expectedRequestFailuresMatched: z.boolean(),
     browserVersion: z.string().trim().min(1).max(128),
   })
@@ -54,7 +58,9 @@ export interface CapturedJourney {
   assertionCount: number;
   viewport: string;
   consoleErrors: number;
+  expectedFailedRequests: number;
   failedRequests: number;
+  observedFailedRequests: number;
   browserVersion: string;
   browserAuthority:
     "CLOAK_CDP_ENDPOINT" | "stock-chromium-design-review" | "unavailable";
@@ -79,20 +85,60 @@ interface QualificationReporterOptions {
   baseUrl: string;
   outputFile: string;
   qualificationRequested: boolean;
+  repositoryRoot: string;
   runtimeRoot: string;
 }
 
 const expectedProductionOrigin =
   "https://counterlab.cserules.workers.dev" as const;
+const allowedExpectedRequestFailures = new Set([
+  "POST /api/artifacts",
+  "POST /api/live/sessions",
+]);
+
+export function summarizeRequestFailures(
+  observed: readonly string[],
+  expected: readonly string[],
+): {
+  expectedCount: number;
+  matched: boolean;
+  observedCount: number;
+  unexpectedCount: number;
+} {
+  const expectedValid =
+    expected.every((failure) => allowedExpectedRequestFailures.has(failure)) &&
+    new Set(expected).size === expected.length;
+  const remaining = [...observed];
+  for (const expectedFailure of expected) {
+    const index = remaining.indexOf(expectedFailure);
+    if (index >= 0) remaining.splice(index, 1);
+  }
+  return {
+    expectedCount: expected.length,
+    matched:
+      expectedValid &&
+      observed.length === expected.length &&
+      remaining.length === 0,
+    observedCount: observed.length,
+    unexpectedCount: remaining.length,
+  };
+}
 
 export function journeyIdForTest(
   test: Pick<TestCase, "location" | "titlePath">,
 ): string {
-  const fileName = basename(test.location.file);
+  return journeyIdForParts(test.location.file, test.titlePath());
+}
+
+export function journeyIdForParts(
+  file: string,
+  titlePath: readonly string[],
+): string {
+  const fileName = basename(file);
   const fileStem = fileName.replace(/\.spec\.[cm]?[jt]sx?$/u, "");
-  const titles = test
-    .titlePath()
-    .filter((title) => title !== "" && basename(title) !== fileName);
+  const titles = titlePath.filter(
+    (title) => title !== "" && basename(title) !== fileName,
+  );
   return [fileStem, ...titles].join("::");
 }
 
@@ -102,8 +148,10 @@ export function countPlaywrightAssertions(
   return steps.reduce(
     (count, step) =>
       count +
-      (step.category === "expect" ? 1 : 0) +
-      countPlaywrightAssertions(step.steps),
+      (step.category === "fixture" || step.category === "hook"
+        ? 0
+        : (step.category === "expect" ? 1 : 0) +
+          countPlaywrightAssertions(step.steps)),
     0,
   );
 }
@@ -155,7 +203,15 @@ function exactJourneyRegistry(journeys: readonly CapturedJourney[]): boolean {
 
 function exactViewportCoverage(journeys: readonly CapturedJourney[]): boolean {
   const observed = new Set(journeys.map((journey) => journey.viewport));
-  return REQUIRED_CLOAK_VIEWPORTS.every((viewport) => observed.has(viewport));
+  return (
+    REQUIRED_CLOAK_VIEWPORTS.every((viewport) => observed.has(viewport)) &&
+    journeys.every(
+      (journey) =>
+        REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID[
+          journey.id as keyof typeof REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID
+        ] === journey.viewport,
+    )
+  );
 }
 
 export function buildCloakBrowserRawRun(input: BuildRawRunInput) {
@@ -179,6 +235,7 @@ export function buildCloakBrowserRawRun(input: BuildRawRunInput) {
         journey.durationMs > 0 &&
         journey.assertionCount > 0 &&
         journey.consoleErrors === 0 &&
+        journey.observedFailedRequests === journey.expectedFailedRequests &&
         journey.failedRequests === 0 &&
         journey.browserVersion.trim() !== "" &&
         journey.browserVersion !== "unavailable" &&
@@ -188,7 +245,7 @@ export function buildCloakBrowserRawRun(input: BuildRawRunInput) {
     new Set(input.journeys.map((journey) => journey.browserVersion)).size === 1;
 
   return CloakBrowserRawRunSchema.parse({
-    schemaVersion: "1",
+    schemaVersion: "2",
     kind: "cloakbrowser-raw-run",
     status: input.qualificationRequested
       ? exactCleanRun
@@ -272,7 +329,9 @@ export default class CounterLabQualificationReporter implements Reporter {
           ? "0x0"
           : `${observation.viewport.width}x${observation.viewport.height}`,
       consoleErrors: observation?.consoleErrors ?? 1,
+      expectedFailedRequests: observation?.expectedFailedRequests ?? 0,
       failedRequests: observation?.failedRequests ?? 1,
+      observedFailedRequests: observation?.observedFailedRequests ?? 1,
       browserVersion: observation?.browserVersion ?? "unavailable",
       browserAuthority: observation?.authority ?? "unavailable",
       telemetryValid:
@@ -283,6 +342,12 @@ export default class CounterLabQualificationReporter implements Reporter {
   async onEnd(
     result: FullResult,
   ): Promise<{ status?: FullResult["status"] } | undefined> {
+    if (
+      this.capturedJourneys.length === 0 &&
+      !this.options.qualificationRequested
+    ) {
+      return undefined;
+    }
     try {
       const report = buildCloakBrowserRawRun({
         authority: this.options.authority,
@@ -299,8 +364,14 @@ export default class CounterLabQualificationReporter implements Reporter {
         this.options.runtimeRoot,
       );
       await mkdir(dirname(outputFile), { recursive: true });
+      await containedNewOutputFile(
+        this.options.repositoryRoot,
+        outputFile,
+        "CloakBrowser raw run evidence",
+      );
       await writeFile(outputFile, `${JSON.stringify(report, null, 2)}\n`, {
         encoding: "utf8",
+        flag: "wx",
         mode: 0o600,
       });
       if (this.options.qualificationRequested && report.status !== "PASSED") {

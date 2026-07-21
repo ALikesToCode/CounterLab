@@ -139,6 +139,7 @@ export default defineConfig({
         baseUrl: baseURL,
         outputFile: qualificationRunFile,
         qualificationRequested,
+        repositoryRoot,
         runtimeRoot,
       },
     ],

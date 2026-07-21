@@ -17,6 +17,27 @@ export type BrowserAuthority =
 
 type BrowserEnvironment = Readonly<Record<string, string | undefined>>;
 
+export function validateCloakCdpEndpoint(configured: string): string {
+  const endpoint = new URL(configured);
+  if (!["http:", "https:", "ws:", "wss:"].includes(endpoint.protocol)) {
+    throw new Error(
+      "CLOAK_CDP_ENDPOINT must use an http(s) or ws(s) CDP endpoint",
+    );
+  }
+  if (endpoint.username !== "" || endpoint.password !== "") {
+    throw new Error("CLOAK_CDP_ENDPOINT must not contain URL credentials");
+  }
+  if (
+    !new Set(["127.0.0.1", "localhost", "[::1]"]).has(endpoint.hostname) ||
+    endpoint.port === ""
+  ) {
+    throw new Error(
+      "CLOAK_CDP_ENDPOINT must use an explicit port on a loopback host",
+    );
+  }
+  return configured;
+}
+
 export function resolveBrowserAuthority(
   environment: BrowserEnvironment,
 ): BrowserAuthority {
@@ -34,7 +55,7 @@ export function resolveBrowserAuthority(
     return {
       kind: "cloak",
       evidenceLabel: "CLOAK_CDP_ENDPOINT",
-      endpoint,
+      endpoint: validateCloakCdpEndpoint(endpoint),
     };
   }
   if (requestedAuthority !== STOCK_CHROMIUM_DESIGN_REVIEW) {

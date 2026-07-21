@@ -385,7 +385,7 @@ test("an interrupted upload accepts the same file on retry", async ({
 }, testInfo) => {
   testInfo.annotations.push({
     type: "counterlab-expected-request-failures",
-    description: "1",
+    description: "POST /api/artifacts",
   });
   let uploadAttempts = 0;
   await page.route("**/api/artifacts", async (route) => {
@@ -422,7 +422,7 @@ test("a lost private-session response retries without re-uploading", async ({
 }, testInfo) => {
   testInfo.annotations.push({
     type: "counterlab-expected-request-failures",
-    description: "1",
+    description: "POST /api/live/sessions",
   });
   let uploadRequests = 0;
   let sessionCreationAttempts = 0;

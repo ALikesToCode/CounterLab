@@ -204,6 +204,47 @@ export const REQUIRED_CLOAK_JOURNEY_IDS = [
   "recovery-and-intake::a lost private-session response retries without re-uploading",
 ] as const;
 
+export type RequiredCloakJourneyId =
+  (typeof REQUIRED_CLOAK_JOURNEY_IDS)[number];
+export type RequiredCloakViewport = (typeof REQUIRED_CLOAK_VIEWPORTS)[number];
+
+const cloakJourneyViewportOverrides: Partial<
+  Record<RequiredCloakJourneyId, RequiredCloakViewport>
+> = {
+  "judged-flow::mobile Landing keeps the unprimed Question and fair-test promise in the first viewport":
+    "390x844",
+  "judged-flow::mobile Judge Mode shows the honest fixed-sample belief break in the first viewport":
+    "390x844",
+  "judged-flow::mobile sample remains unprimed before Prediction and mounts the trusted mechanism only after sealing":
+    "390x844",
+  "judged-flow::Judge Mode distinguishes every authority path": "390x844",
+  "judged-flow::the first visit explains the lesson before asking for technical knowledge":
+    "768x1024",
+  "judged-flow::wide desktop keeps the question and canonical progress accessible":
+    "1920x1080",
+  "judged-flow::compact desktop keeps the question and canonical progress accessible":
+    "1280x720",
+  "judged-flow::mobile keeps the question and canonical progress accessible":
+    "390x844",
+  "judged-flow::the lesson keeps one learner decision in focus at a time":
+    "1366x768",
+  "judged-flow::the judged path is keyboard operable with reduced motion":
+    "390x844",
+  "mobile-public-replay::public mobile replay routing::390x844 opens the replay deep link read-only without root overflow":
+    "390x844",
+  "mobile-public-replay::public mobile replay routing::375x812 preserves replay authority through browser back and forward":
+    "375x812",
+};
+
+export const REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID = Object.freeze(
+  Object.fromEntries(
+    REQUIRED_CLOAK_JOURNEY_IDS.map((id) => [
+      id,
+      cloakJourneyViewportOverrides[id] ?? "1440x900",
+    ]),
+  ) as Record<RequiredCloakJourneyId, RequiredCloakViewport>,
+);
+
 function addCloakJourneyIssues(
   journeys: readonly z.infer<typeof CloakJourneySchema>[],
   context: z.RefinementCtx,
@@ -266,7 +307,9 @@ export const CloakBrowserRawJourneySchema = z
     assertionCount: z.number().int().nonnegative(),
     viewport: z.string().regex(/^\d+x\d+$/u),
     consoleErrors: z.number().int().nonnegative(),
+    expectedFailedRequests: z.number().int().nonnegative(),
     failedRequests: z.number().int().nonnegative(),
+    observedFailedRequests: z.number().int().nonnegative(),
     browserVersion: z.string().trim().min(1).max(128),
     browserAuthority: z.enum([
       "CLOAK_CDP_ENDPOINT",
@@ -279,7 +322,7 @@ export const CloakBrowserRawJourneySchema = z
 
 export const CloakBrowserRawRunSchema = z
   .object({
-    schemaVersion: z.literal("1"),
+    schemaVersion: z.literal("2"),
     kind: z.literal("cloakbrowser-raw-run"),
     status: z.enum(["PASSED", "FAILED", "NON_QUALIFYING"]),
     authority: z.enum(["CLOAKBROWSER", "STOCK_CHROMIUM_DESIGN_REVIEW"]),
@@ -295,7 +338,16 @@ export const CloakBrowserRawRunSchema = z
     journeys: z.array(CloakBrowserRawJourneySchema).max(80),
     privacy: PublicationPrivacySchema,
   })
-  .strict();
+  .strict()
+  .superRefine((run, context) => {
+    if (Date.parse(run.completedAt) < Date.parse(run.startedAt)) {
+      context.addIssue({
+        code: "custom",
+        path: ["completedAt"],
+        message: "raw run completion must not precede its start",
+      });
+    }
+  });
 
 export const CloakBrowserExecutionReportSchema = z
   .object({
