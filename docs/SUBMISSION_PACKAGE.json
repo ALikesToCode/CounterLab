@@ -82,6 +82,21 @@
     "failures": 0,
     "consoleErrors": 0,
     "failedRequests": 0,
+    "playwrightReport": null,
+    "evidenceIndex": null,
+    "journeyEvidence": [],
+    "manualEvidence": {
+      "keyboard": null,
+      "screenReaderNames": null,
+      "reducedMotion": null,
+      "noHorizontalOverflow": null,
+      "zoom200": null,
+      "longContent": null,
+      "narrowVisualizations": null,
+      "touchTargets": null,
+      "consoleAndNetwork": null,
+      "webVitals": null
+    },
     "evidence": null
   },
   "assets": [],

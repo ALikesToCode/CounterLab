@@ -1,12 +1,17 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { deflateSync } from "node:zlib";
 
 import { describe, expect, it } from "vitest";
 
 import { RELEASE_CHECK_IDS } from "../packages/scientific-engine-registry/src/schema.js";
 import { canonicalJson } from "../packages/session-core/src/index.js";
 import { createGenerationIsolationEvidence } from "./generation-isolation-evidence.js";
+import {
+  REQUIRED_CLOAK_JOURNEY_IDS,
+  REQUIRED_CLOAK_MANUAL_EVIDENCE_KEYS,
+} from "./submission-publication-evidence.js";
 import {
   SubmissionPackageSchema,
   type EvidenceReader,
@@ -27,6 +32,90 @@ function bytes(value: unknown): Uint8Array {
 
 function reference(path: string, content: Uint8Array) {
   return { path, sha256: hash(content) };
+}
+
+function pngCrc32(bytes: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function joinBytes(parts: readonly Uint8Array[]): Uint8Array {
+  const output = new Uint8Array(
+    parts.reduce((total, part) => total + part.byteLength, 0),
+  );
+  let offset = 0;
+  for (const part of parts) {
+    output.set(part, offset);
+    offset += part.byteLength;
+  }
+  return output;
+}
+
+function pngChunk(type: string, data: Uint8Array): Uint8Array {
+  const typeBytes = new TextEncoder().encode(type);
+  const chunk = new Uint8Array(data.byteLength + 12);
+  const view = new DataView(chunk.buffer);
+  view.setUint32(0, data.byteLength, false);
+  chunk.set(typeBytes, 4);
+  chunk.set(data, 8);
+  view.setUint32(
+    8 + data.byteLength,
+    pngCrc32(joinBytes([typeBytes, data])),
+    false,
+  );
+  return chunk;
+}
+
+function pngFixture(
+  width: number,
+  height: number,
+  discriminator: number,
+): Uint8Array {
+  const header = new Uint8Array(13);
+  const headerView = new DataView(header.buffer);
+  headerView.setUint32(0, width, false);
+  headerView.setUint32(4, height, false);
+  header.set([8, 0, 0, 0, 0], 8);
+  const scanlines = new Uint8Array(height * (width + 1));
+  scanlines[1] = discriminator;
+  return joinBytes([
+    new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+    pngChunk("IHDR", header),
+    pngChunk("IDAT", new Uint8Array(deflateSync(scanlines))),
+    pngChunk("IEND", new Uint8Array()),
+  ]);
+}
+
+function pngHeaderOnlyFixture(width: number, height: number): Uint8Array {
+  const header = new Uint8Array(13);
+  const view = new DataView(header.buffer);
+  view.setUint32(0, width, false);
+  view.setUint32(4, height, false);
+  header.set([8, 0, 0, 0, 0], 8);
+  return joinBytes([
+    new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+    pngChunk("IHDR", header),
+  ]);
+}
+
+function undecodablePngFixture(width: number, height: number): Uint8Array {
+  const header = new Uint8Array(13);
+  const view = new DataView(header.buffer);
+  view.setUint32(0, width, false);
+  view.setUint32(4, height, false);
+  header.set([8, 0, 0, 0, 0], 8);
+  return joinBytes([
+    new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+    pngChunk("IHDR", header),
+    pngChunk("IDAT", new Uint8Array([1, 2, 3, 4])),
+    pngChunk("IEND", new Uint8Array()),
+  ]);
 }
 
 async function draftInput(): Promise<unknown> {
@@ -349,41 +438,293 @@ async function readyPackage(
   };
   const chain = releaseEvidenceChain(options);
   const { receipt } = chain;
+  const receiptBytes = bytes(receipt);
+  const deploymentReceiptSha256 = hash(receiptBytes);
+  const evidenceRoot = `docs/submission-evidence/${deploymentReceiptSha256}`;
+  const assetRoot = `docs/submission-assets/${deploymentReceiptSha256}`;
   const qualifiedRef = addEvidence(
-    "evidence/qualified-runner-release.json",
+    `${evidenceRoot}/qualified-runner-release.json`,
     chain.qualifiedBytes,
   );
   const releaseCheckRef = addEvidence(
-    "evidence/release-check-receipt.json",
+    `${evidenceRoot}/release-check-receipt.json`,
     chain.releaseCheckBytes,
   );
-  const receiptBytes = bytes(receipt);
   const receiptRef = addEvidence(
-    "evidence/deployment-receipt.json",
+    `${evidenceRoot}/deployment-receipt.json`,
     receiptBytes,
   );
   const smokeRef = addEvidence(
-    "evidence/production-smoke.json",
+    `${evidenceRoot}/production-smoke.json`,
     bytes(productionSmoke(receipt, receiptRef.sha256)),
   );
-  const genericEvidence = (name: string) =>
-    addEvidence(`evidence/${name}.json`, bytes({ status: "VERIFIED", name }));
+  const checkedAt = "2026-07-21T10:00:00.000Z";
+  const publicationRelease = {
+    deploymentReceiptSha256,
+    productionOrigin: receipt.productionOrigin,
+    workerEvidenceCommit: receipt.workerEvidenceCommit,
+    runnerSourceCommit: receipt.runnerSourceCommit,
+    containerImageDigest: receipt.containerImageDigest,
+    workerVersionId: receipt.workerVersionId,
+  } as const;
+  const publicationPrivacy = {
+    containsSecrets: false,
+    containsRawNotebook: false,
+    containsPersonalData: false,
+  } as const;
+  const receiptBase = {
+    schemaVersion: "1",
+    status: "VERIFIED",
+    checkedAt,
+    release: publicationRelease,
+    privacy: publicationPrivacy,
+  } as const;
+  const repositoryEvidence = addEvidence(
+    `${evidenceRoot}/repository-access.json`,
+    bytes({
+      ...receiptBase,
+      kind: "repository-access",
+      repositoryUrl: input.repository.url,
+      accessMode: "PUBLIC",
+      loggedOutChecked: true,
+      loggedOutStatusCode: 200,
+      authenticatedJudgeStatusCode: 200,
+      finalUrl: input.repository.url,
+      anonymousAccessible: true,
+      judgeAccessVerified: true,
+      sharedJudgeAddresses: [],
+    }),
+  );
+  const videoUrl = "https://youtu.be/CLabDemo123";
+  const videoEvidence = addEvidence(
+    `${evidenceRoot}/video-verification.json`,
+    bytes({
+      ...receiptBase,
+      kind: "video-verification",
+      publicUrl: videoUrl,
+      durationSeconds: 165,
+      audioPresent: true,
+      codexRoleCovered: true,
+      gpt56RoleCovered: true,
+      loggedOutPlayable: true,
+      statusCode: 200,
+      scriptSha256: input.video.script.sha256,
+      captionsSha256: input.video.captions.sha256,
+    }),
+  );
+  const feedbackSessionId = "019f6069-2af2-7132-8181-d313081884c8";
+  const feedbackEvidence = addEvidence(
+    `${evidenceRoot}/feedback-session.json`,
+    bytes({
+      ...receiptBase,
+      kind: "feedback-session",
+      sessionId: feedbackSessionId,
+      source: "codex-feedback",
+      verifiedByOwner: true,
+      contentCaptured: false,
+    }),
+  );
+  const browserViewports = [
+    "375x812",
+    "390x844",
+    "768x1024",
+    "1280x720",
+    "1366x768",
+    "1440x900",
+    "1920x1080",
+  ] as const;
+  const browserVersion = "CloakBrowser Chromium 140.0.0.0";
+  const journeyEvidence = REQUIRED_CLOAK_JOURNEY_IDS.map((id, index) => {
+    const viewport = browserViewports[index % browserViewports.length]!;
+    const durationMs = 1_000 + index;
+    const sequence = String(index + 1).padStart(2, "0");
+    const evidenceReference = addEvidence(
+      `${evidenceRoot}/cloakbrowser-journeys/${sequence}.json`,
+      bytes({
+        ...receiptBase,
+        kind: "cloakbrowser-journey-evidence",
+        authority: "CLOAKBROWSER",
+        id,
+        viewport,
+        journeyStatus: "PASSED",
+        attempt: 0,
+        durationMs,
+        assertionCount: 3,
+        consoleErrors: 0,
+        failedRequests: 0,
+      }),
+    );
+    return {
+      id,
+      evidence: evidenceReference,
+      journey: {
+        id,
+        status: "PASSED",
+        attempt: 0,
+        durationMs,
+        viewport,
+        evidenceSha256: evidenceReference.sha256,
+      },
+    };
+  });
+  const journeys = journeyEvidence.map((entry) => entry.journey);
+  const browserReport = addEvidence(
+    `${evidenceRoot}/cloakbrowser-playwright-report.json`,
+    bytes({
+      schemaVersion: "1",
+      kind: "cloakbrowser-execution-report",
+      status: "PASSED",
+      checkedAt,
+      authority: "CLOAKBROWSER",
+      baseUrl: receipt.productionOrigin,
+      release: publicationRelease,
+      privacy: publicationPrivacy,
+      browserVersion,
+      playwrightVersion: "1.61.1",
+      journeys,
+      failures: 0,
+      skips: 0,
+      retries: 0,
+      consoleErrors: 0,
+      failedRequests: 0,
+    }),
+  );
+  const manualEvidenceEntries = REQUIRED_CLOAK_MANUAL_EVIDENCE_KEYS.map(
+    (check) => {
+      const evidenceReference = addEvidence(
+        `${evidenceRoot}/cloakbrowser-manual/${check}.json`,
+        bytes({
+          ...receiptBase,
+          kind: "cloakbrowser-manual-evidence",
+          authority: "CLOAKBROWSER",
+          check,
+          observationCount: 3,
+          artifactSha256: hash(bytes(`manual-artifact-${check}`)),
+        }),
+      );
+      return [check, evidenceReference] as const;
+    },
+  );
+  const manualEvidenceReferences = Object.fromEntries(manualEvidenceEntries);
+  const manualEvidence = Object.fromEntries(
+    manualEvidenceEntries.map(([check, evidenceReference]) => [
+      check,
+      { status: "PASSED", evidenceSha256: evidenceReference.sha256 },
+    ]),
+  );
+  const browserEvidenceIndex = addEvidence(
+    `${evidenceRoot}/cloakbrowser-evidence-index.json`,
+    bytes({
+      ...receiptBase,
+      kind: "cloakbrowser-evidence-index",
+      executionReportSha256: browserReport.sha256,
+      manual: manualEvidence,
+    }),
+  );
+  const browserEvidence = addEvidence(
+    `${evidenceRoot}/cloakbrowser-qualification.json`,
+    bytes({
+      ...receiptBase,
+      kind: "cloakbrowser-qualification",
+      authority: "CLOAKBROWSER",
+      baseUrl: receipt.productionOrigin,
+      exactReleaseBound: true,
+      journeyCount: 40,
+      viewports: browserViewports,
+      browserVersion,
+      playwrightVersion: "1.61.1",
+      playwrightReportSha256: browserReport.sha256,
+      browserEvidenceIndexSha256: browserEvidenceIndex.sha256,
+      journeys,
+      desktopComplete: true,
+      mobileComplete: true,
+      keyboardComplete: true,
+      screenReaderNamesComplete: true,
+      reducedMotionComplete: true,
+      noHorizontalOverflow: true,
+      zoom200Complete: true,
+      longContentComplete: true,
+      narrowVisualizationsComplete: true,
+      touchTargetsComplete: true,
+      requiredSkips: 0,
+      failures: 0,
+      consoleErrors: 0,
+      failedRequests: 0,
+      webVitals: { lcpMs: 1_200, cls: 0.02, inpMs: 90 },
+    }),
+  );
+  const publicLinkEvidence = addEvidence(
+    `${evidenceRoot}/public-link-audit.json`,
+    bytes({
+      ...receiptBase,
+      kind: "public-link-audit",
+      loggedOut: true,
+      links: [
+        {
+          role: "judge",
+          url: input.publicProduct.judgeUrl,
+          statusCode: 200,
+          finalUrl: input.publicProduct.judgeUrl,
+        },
+        {
+          role: "repository",
+          url: input.repository.url,
+          statusCode: 200,
+          finalUrl: input.repository.url,
+        },
+        {
+          role: "video",
+          url: videoUrl,
+          statusCode: 200,
+          finalUrl: videoUrl,
+        },
+      ],
+    }),
+  );
   const assetNames = [
     "01-judge-belief-break-1440x900.png",
     "02-live-prediction-and-authority-1440x900.png",
     "03-theater-boundary-1440x900.png",
     "04-transfer-repair-proof-1440x900.png",
     "thumbnail-judge-belief-break.png",
-  ];
-  const assets = assetNames.map((fileName) => ({
+  ] as const;
+  const imageAssets = assetNames.map((fileName, index) => {
+    const viewport =
+      fileName === "thumbnail-judge-belief-break.png"
+        ? { width: 1_200, height: 675 }
+        : { width: 1_440, height: 900 };
+    return {
+      fileName,
+      viewport,
+      image: addEvidence(
+        `${assetRoot}/${fileName}`,
+        pngFixture(viewport.width, viewport.height, index + 1),
+      ),
+    };
+  });
+  const firstImageSha256 = imageAssets[0]!.image.sha256;
+  const assets = imageAssets.map(({ fileName, image, viewport }) => ({
     fileName,
-    image: addEvidence(
-      `docs/submission-assets/${fileName}`,
-      bytes(`png:${fileName}`),
-    ),
+    image,
     provenance: addEvidence(
-      `docs/submission-assets/${fileName}.json`,
-      bytes({ fileName, release: receipt.workerVersionId }),
+      `${assetRoot}/${fileName}.json`,
+      bytes({
+        ...receiptBase,
+        kind: "screenshot-provenance",
+        fileName,
+        imageSha256: image.sha256,
+        publicUrl: input.publicProduct.judgeUrl,
+        route: input.publicProduct.freeTestPath,
+        viewport,
+        capturedAt: "2026-07-21T09:55:00.000Z",
+        authority: "CLOAKBROWSER",
+        consoleErrors: 0,
+        failedRequests: 0,
+        derivedFromSha256:
+          fileName === "thumbnail-judge-belief-break.png"
+            ? firstImageSha256
+            : null,
+      }),
     ),
   }));
   const ready = {
@@ -407,20 +748,20 @@ async function readyPackage(
     repository: {
       ...input.repository,
       accessMode: "PUBLIC" as const,
-      accessEvidence: genericEvidence("repository-access"),
+      accessEvidence: repositoryEvidence,
     },
     video: {
       ...input.video,
-      publicUrl: "https://youtu.be/counterlab-demo",
+      publicUrl: videoUrl,
       durationSeconds: 165,
       audioPresent: true,
       codexRoleCovered: true,
       gpt56RoleCovered: true,
-      verificationEvidence: genericEvidence("video"),
+      verificationEvidence: videoEvidence,
     },
     feedback: {
-      sessionId: "019f6069-2af2-7132-8181-d313081884c8",
-      evidence: genericEvidence("feedback"),
+      sessionId: feedbackSessionId,
+      evidence: feedbackEvidence,
     },
     browserQualification: {
       authority: "CLOAKBROWSER" as const,
@@ -431,17 +772,132 @@ async function readyPackage(
       failures: 0,
       consoleErrors: 0,
       failedRequests: 0,
-      evidence: genericEvidence("browser"),
+      playwrightReport: browserReport,
+      evidenceIndex: browserEvidenceIndex,
+      journeyEvidence: journeyEvidence.map(({ id, evidence }) => ({
+        id,
+        evidence,
+      })),
+      manualEvidence: manualEvidenceReferences,
+      evidence: browserEvidence,
     },
     assets,
     publicLinkAudit: {
       loggedOut: true,
-      checkedAt: "2026-07-21T10:00:00.000Z",
-      evidence: genericEvidence("links"),
+      checkedAt,
+      evidence: publicLinkEvidence,
     },
   };
   return {
     ready,
+    evidence,
+    reader: async (entry: { path: string }) => {
+      const content = evidence.get(entry.path);
+      if (content === undefined) throw new Error("missing test evidence");
+      return content;
+    },
+  };
+}
+
+async function submittedPackage() {
+  const { ready, evidence } = await readyPackage();
+  const deploymentReceipt = ready.release.deploymentReceipt;
+  const deploymentReceiptSha256 = deploymentReceipt.sha256;
+  const evidenceRoot = `docs/submission-evidence/${deploymentReceiptSha256}`;
+  const release = {
+    deploymentReceiptSha256,
+    productionOrigin: "https://counterlab.cserules.workers.dev",
+    workerEvidenceCommit: ready.release.workerEvidenceCommit,
+    runnerSourceCommit: ready.release.runnerSourceCommit,
+    containerImageDigest: ready.release.containerImageDigest,
+    workerVersionId: ready.release.workerVersionId,
+  } as const;
+  const privacy = {
+    containsSecrets: false,
+    containsRawNotebook: false,
+    containsPersonalData: false,
+  } as const;
+  const publicSlug = "counterlab-scientific-debugger";
+  const publicUrl = `https://devpost.com/software/${publicSlug}`;
+  const submittedAt = "2026-07-21T23:30:00.000Z";
+  const addEvidence = (path: string, content: Uint8Array) => {
+    evidence.set(path, content);
+    return reference(path, content);
+  };
+  const receipt = addEvidence(
+    `${evidenceRoot}/devpost-submission.json`,
+    bytes({
+      schemaVersion: "1",
+      kind: "devpost-submission",
+      status: "SUBMITTED",
+      capturedAt: "2026-07-21T23:31:00.000Z",
+      hackathonId: ready.competition.hackathonId,
+      projectId: ready.competition.projectId,
+      category: ready.competition.category,
+      publicSlug,
+      publicUrl,
+      submittedAt,
+      release,
+      copy: {
+        devpostCopySha256: ready.copy.devpostCopy.sha256,
+        readmeSha256: ready.copy.readme.sha256,
+        videoScriptSha256: ready.video.script.sha256,
+        captionsSha256: ready.video.captions.sha256,
+      },
+      privacy,
+    }),
+  );
+  const postSubmitLoggedOutEvidence = addEvidence(
+    `${evidenceRoot}/post-submit-link-audit.json`,
+    bytes({
+      schemaVersion: "1",
+      kind: "post-submit-link-audit",
+      status: "VERIFIED",
+      checkedAt: "2026-07-21T23:32:00.000Z",
+      release,
+      privacy,
+      loggedOut: true,
+      links: [
+        {
+          role: "judge",
+          url: ready.publicProduct.judgeUrl,
+          statusCode: 200,
+          finalUrl: ready.publicProduct.judgeUrl,
+        },
+        {
+          role: "repository",
+          url: ready.repository.url,
+          statusCode: 200,
+          finalUrl: ready.repository.url,
+        },
+        {
+          role: "video",
+          url: ready.video.publicUrl,
+          statusCode: 200,
+          finalUrl: ready.video.publicUrl,
+        },
+        {
+          role: "devpost",
+          url: publicUrl,
+          statusCode: 200,
+          finalUrl: publicUrl,
+        },
+      ],
+    }),
+  );
+  const submitted = {
+    ...ready,
+    submissionState: "SUBMITTED" as const,
+    officialSubmission: {
+      state: "SUBMITTED" as const,
+      publicSlug,
+      submittedAt,
+      receipt,
+      postSubmitLoggedOutEvidence,
+    },
+  };
+  return {
+    submitted,
     evidence,
     reader: async (entry: { path: string }) => {
       const content = evidence.get(entry.path);
@@ -470,7 +926,7 @@ describe("submission package validator", () => {
     ).rejects.toThrow(/failed \d+ gate/iu);
   });
 
-  it("accepts a tuple-consistent release fixture", async () => {
+  it("accepts a fully typed publication-ready fixture", async () => {
     const { ready, reader } = await readyPackage();
 
     await expect(
@@ -478,6 +934,280 @@ describe("submission package validator", () => {
         now: new Date("2026-07-21T12:00:00.000Z"),
       }),
     ).resolves.toMatchObject({ submissionState: "READY_TO_SUBMIT" });
+  });
+
+  it("accepts a fully typed submitted fixture captured before the deadline", async () => {
+    const { submitted, reader } = await submittedPackage();
+
+    await expect(
+      validateSubmissionPackage(submitted, "submitted", reader, {
+        now: new Date("2026-07-22T01:00:00.000Z"),
+      }),
+    ).resolves.toMatchObject({
+      submissionState: "SUBMITTED",
+      officialSubmission: { state: "SUBMITTED" },
+    });
+  });
+
+  it("rejects generic JSON in place of a typed publication receipt", async () => {
+    const { ready, reader, evidence } = await readyPackage();
+    const generic = bytes({ status: "VERIFIED" });
+    const path = ready.repository.accessEvidence!.path;
+    evidence.set(path, generic);
+    ready.repository.accessEvidence = reference(path, generic);
+
+    await expect(
+      validateSubmissionPackage(ready, "ready", reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining(["repository access evidence is invalid"]),
+    });
+  });
+
+  it("rejects text bytes presented as a PNG screenshot", async () => {
+    const { ready, reader, evidence } = await readyPackage();
+    const asset = ready.assets[0]!;
+    const fakePng = bytes("not a screenshot");
+    evidence.set(asset.image.path, fakePng);
+    asset.image = reference(asset.image.path, fakePng);
+
+    await expect(
+      validateSubmissionPackage(ready, "ready", reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        `screenshot ${asset.fileName} is not a valid PNG`,
+      ]),
+    });
+  });
+
+  it("rejects a checksum-valid PNG header without image data or an end chunk", async () => {
+    const { ready, reader, evidence } = await readyPackage();
+    const asset = ready.assets[0]!;
+    const headerOnly = pngHeaderOnlyFixture(1_440, 900);
+    evidence.set(asset.image.path, headerOnly);
+    asset.image = reference(asset.image.path, headerOnly);
+    const provenanceBytes = evidence.get(asset.provenance.path);
+    if (provenanceBytes === undefined)
+      throw new Error("missing screenshot provenance");
+    const provenance = JSON.parse(
+      new TextDecoder().decode(provenanceBytes),
+    ) as { imageSha256: string };
+    provenance.imageSha256 = asset.image.sha256;
+    const changedProvenance = bytes(provenance);
+    evidence.set(asset.provenance.path, changedProvenance);
+    asset.provenance = reference(asset.provenance.path, changedProvenance);
+
+    await expect(
+      validateSubmissionPackage(ready, "ready", reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        `screenshot ${asset.fileName} is not a valid PNG`,
+      ]),
+    });
+  });
+
+  it("rejects checksum-valid PNG chunks with undecodable image data", async () => {
+    const { ready, reader, evidence } = await readyPackage();
+    const asset = ready.assets[0]!;
+    const undecodable = undecodablePngFixture(1_440, 900);
+    evidence.set(asset.image.path, undecodable);
+    asset.image = reference(asset.image.path, undecodable);
+    const provenanceBytes = evidence.get(asset.provenance.path);
+    if (provenanceBytes === undefined)
+      throw new Error("missing screenshot provenance");
+    const provenance = JSON.parse(
+      new TextDecoder().decode(provenanceBytes),
+    ) as { imageSha256: string };
+    provenance.imageSha256 = asset.image.sha256;
+    const changedProvenance = bytes(provenance);
+    evidence.set(asset.provenance.path, changedProvenance);
+    asset.provenance = reference(asset.provenance.path, changedProvenance);
+
+    await expect(
+      validateSubmissionPackage(ready, "ready", reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        `screenshot ${asset.fileName} is not a valid PNG`,
+      ]),
+    });
+  });
+
+  it("rejects a public link that redirects to an unrelated destination", async () => {
+    const { ready, reader, evidence } = await readyPackage();
+    const auditRef = ready.publicLinkAudit.evidence!;
+    const current = evidence.get(auditRef.path);
+    if (current === undefined) throw new Error("missing public-link audit");
+    const audit = JSON.parse(new TextDecoder().decode(current)) as {
+      links: Array<{ role: string; finalUrl: string }>;
+    };
+    audit.links[0]!.finalUrl = "https://example.com/unrelated";
+    const changed = bytes(audit);
+    evidence.set(auditRef.path, changed);
+    ready.publicLinkAudit.evidence = reference(auditRef.path, changed);
+
+    await expect(
+      validateSubmissionPackage(ready, "ready", reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        "public-link audit judge final destination does not match",
+      ]),
+    });
+  });
+
+  it("rejects publication evidence dated before production smoke completed", async () => {
+    const { ready, reader, evidence } = await readyPackage();
+    const accessRef = ready.repository.accessEvidence!;
+    const current = evidence.get(accessRef.path);
+    if (current === undefined) throw new Error("missing repository receipt");
+    const access = JSON.parse(new TextDecoder().decode(current)) as {
+      checkedAt: string;
+    };
+    access.checkedAt = "2026-07-18T10:00:00.000Z";
+    const changed = bytes(access);
+    evidence.set(accessRef.path, changed);
+    ready.repository.accessEvidence = reference(accessRef.path, changed);
+
+    await expect(
+      validateSubmissionPackage(ready, "ready", reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        "repository access predates production release completion",
+      ]),
+    });
+  });
+
+  it("rejects a non-success repository access receipt", async () => {
+    const { ready, reader, evidence } = await readyPackage();
+    const accessRef = ready.repository.accessEvidence!;
+    const current = evidence.get(accessRef.path);
+    if (current === undefined) throw new Error("missing repository receipt");
+    const access = JSON.parse(new TextDecoder().decode(current)) as {
+      authenticatedJudgeStatusCode: number;
+    };
+    access.authenticatedJudgeStatusCode = 599;
+    const changed = bytes(access);
+    evidence.set(accessRef.path, changed);
+    ready.repository.accessEvidence = reference(accessRef.path, changed);
+
+    await expect(
+      validateSubmissionPackage(ready, "ready", reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining(["repository access evidence is invalid"]),
+    });
+  });
+
+  it("rejects CloakBrowser evidence with duplicate journey identities", async () => {
+    const { ready, reader, evidence } = await readyPackage();
+    const browserRef = ready.browserQualification.evidence!;
+    const current = evidence.get(browserRef.path);
+    if (current === undefined) throw new Error("missing browser receipt");
+    const browser = JSON.parse(new TextDecoder().decode(current)) as {
+      journeys: Array<{ id: string }>;
+    };
+    browser.journeys[1]!.id = browser.journeys[0]!.id;
+    const changed = bytes(browser);
+    evidence.set(browserRef.path, changed);
+    ready.browserQualification.evidence = reference(browserRef.path, changed);
+
+    await expect(
+      validateSubmissionPackage(ready, "ready", reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        "CloakBrowser qualification evidence is invalid",
+      ]),
+    });
+  });
+
+  it("binds screenshot roles by file name instead of manifest order", async () => {
+    const { ready, reader } = await readyPackage();
+    ready.assets = [ready.assets[4]!, ...ready.assets.slice(0, 4)];
+
+    await expect(
+      validateSubmissionPackage(ready, "ready", reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).resolves.toMatchObject({ submissionState: "READY_TO_SUBMIT" });
+  });
+
+  it("rejects a Devpost receipt for a different public slug", async () => {
+    const { submitted, reader, evidence } = await submittedPackage();
+    const receiptRef = submitted.officialSubmission.receipt;
+    const current = evidence.get(receiptRef.path);
+    if (current === undefined) throw new Error("missing Devpost receipt");
+    const receipt = JSON.parse(new TextDecoder().decode(current)) as {
+      publicSlug: string;
+      publicUrl: string;
+    };
+    receipt.publicSlug = "different-counterlab-project";
+    receipt.publicUrl = `https://devpost.com/software/${receipt.publicSlug}`;
+    const changed = bytes(receipt);
+    evidence.set(receiptRef.path, changed);
+    submitted.officialSubmission.receipt = reference(receiptRef.path, changed);
+
+    await expect(
+      validateSubmissionPackage(submitted, "submitted", reader, {
+        now: new Date("2026-07-22T01:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        "Devpost submission receipt does not match the package",
+      ]),
+    });
+  });
+
+  it("rejects a noncanonical Devpost project URL", async () => {
+    const { submitted, reader, evidence } = await submittedPackage();
+    const receiptRef = submitted.officialSubmission.receipt;
+    const current = evidence.get(receiptRef.path);
+    if (current === undefined) throw new Error("missing Devpost receipt");
+    const receipt = JSON.parse(new TextDecoder().decode(current)) as {
+      publicSlug: string;
+      publicUrl: string;
+    };
+    receipt.publicUrl = `https://devpost.com/showcase/${receipt.publicSlug}`;
+    const changed = bytes(receipt);
+    evidence.set(receiptRef.path, changed);
+    submitted.officialSubmission.receipt = reference(receiptRef.path, changed);
+
+    await expect(
+      validateSubmissionPackage(submitted, "submitted", reader, {
+        now: new Date("2026-07-22T01:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        "Devpost submission receipt does not match the package",
+      ]),
+    });
+  });
+
+  it("rejects a submission timestamp equal to the deadline", async () => {
+    const { submitted, reader } = await submittedPackage();
+    submitted.officialSubmission.submittedAt = submitted.competition.deadline;
+
+    await expect(
+      validateSubmissionPackage(submitted, "submitted", reader, {
+        now: new Date("2026-07-22T01:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        "official submission timestamp is at or after the deadline",
+      ]),
+    });
   });
 
   it("rejects a qualification older than 24 hours at deployment", async () => {
@@ -509,41 +1239,12 @@ describe("submission package validator", () => {
     ) as { qualifiedRunnerReceiptSha256: string };
     releaseCheck.qualifiedRunnerReceiptSha256 = "f".repeat(64);
     const changedReleaseCheck = bytes(releaseCheck);
-    const changedReleaseCheckPath = "evidence/drifted-release-check.json";
+    const changedReleaseCheckPath = ready.release.releaseCheckReceipt!.path;
     evidence.set(changedReleaseCheckPath, changedReleaseCheck);
     ready.release.releaseCheckReceipt = reference(
       changedReleaseCheckPath,
       changedReleaseCheck,
     );
-
-    const deploymentBytes = evidence.get(ready.release.deploymentReceipt!.path);
-    if (deploymentBytes === undefined) {
-      throw new Error("missing deployment fixture");
-    }
-    const deployment = JSON.parse(
-      new TextDecoder().decode(deploymentBytes),
-    ) as { releaseCheckReceiptSha256: string };
-    deployment.releaseCheckReceiptSha256 =
-      ready.release.releaseCheckReceipt.sha256;
-    const changedDeployment = bytes(deployment);
-    const changedDeploymentPath = "evidence/drifted-deployment.json";
-    evidence.set(changedDeploymentPath, changedDeployment);
-    ready.release.deploymentReceipt = reference(
-      changedDeploymentPath,
-      changedDeployment,
-    );
-
-    const smokeBytes = evidence.get(ready.release.productionSmoke!.path);
-    if (smokeBytes === undefined) throw new Error("missing smoke fixture");
-    const smoke = JSON.parse(new TextDecoder().decode(smokeBytes)) as {
-      deployment: { deploymentReceiptSha256: string };
-    };
-    smoke.deployment.deploymentReceiptSha256 =
-      ready.release.deploymentReceipt.sha256;
-    const changedSmoke = bytes(smoke);
-    const changedSmokePath = "evidence/drifted-smoke.json";
-    evidence.set(changedSmokePath, changedSmoke);
-    ready.release.productionSmoke = reference(changedSmokePath, changedSmoke);
 
     await expect(
       validateSubmissionPackage(ready, "ready", reader, {
@@ -558,38 +1259,23 @@ describe("submission package validator", () => {
 
   it("rejects deployment timeout evidence that drifts from qualification", async () => {
     const { ready, reader, evidence } = await readyPackage();
-    const deploymentBytes = evidence.get(ready.release.deploymentReceipt!.path);
-    if (deploymentBytes === undefined) {
-      throw new Error("missing deployment fixture");
-    }
-    const deployment = JSON.parse(
-      new TextDecoder().decode(deploymentBytes),
-    ) as { timeoutCleanupReceiptSha256: string };
-    deployment.timeoutCleanupReceiptSha256 = "0".repeat(64);
-    const changedDeployment = bytes(deployment);
-    const changedDeploymentPath = "evidence/timeout-drift-deployment.json";
-    evidence.set(changedDeploymentPath, changedDeployment);
-    ready.release.deploymentReceipt = reference(
-      changedDeploymentPath,
-      changedDeployment,
+    const qualifiedBytes = evidence.get(
+      ready.release.qualifiedRunnerReceipt!.path,
     );
-
-    const smokeBytes = evidence.get(ready.release.productionSmoke!.path);
-    if (smokeBytes === undefined) throw new Error("missing smoke fixture");
-    const smoke = JSON.parse(new TextDecoder().decode(smokeBytes)) as {
-      deployment: {
-        deploymentReceiptSha256: string;
-        timeoutCleanupReceiptSha256: string;
-      };
+    if (qualifiedBytes === undefined) {
+      throw new Error("missing qualified runner fixture");
+    }
+    const qualified = JSON.parse(new TextDecoder().decode(qualifiedBytes)) as {
+      timeoutCleanupReceiptSha256: string;
     };
-    smoke.deployment.deploymentReceiptSha256 =
-      ready.release.deploymentReceipt.sha256;
-    smoke.deployment.timeoutCleanupReceiptSha256 =
-      deployment.timeoutCleanupReceiptSha256;
-    const changedSmoke = bytes(smoke);
-    const changedSmokePath = "evidence/timeout-drift-smoke.json";
-    evidence.set(changedSmokePath, changedSmoke);
-    ready.release.productionSmoke = reference(changedSmokePath, changedSmoke);
+    qualified.timeoutCleanupReceiptSha256 = "0".repeat(64);
+    const changedQualified = bytes(qualified);
+    const changedQualifiedPath = ready.release.qualifiedRunnerReceipt!.path;
+    evidence.set(changedQualifiedPath, changedQualified);
+    ready.release.qualifiedRunnerReceipt = reference(
+      changedQualifiedPath,
+      changedQualified,
+    );
 
     await expect(
       validateSubmissionPackage(ready, "ready", reader, {
@@ -635,51 +1321,12 @@ describe("submission package validator", () => {
     releaseCheck.releaseCheckGenerationIsolationProbeSha256 =
       wrongTreeIsolation.probeSha256;
     const changedReleaseCheck = bytes(releaseCheck);
-    const changedReleaseCheckPath = "evidence/wrong-tree-release-check.json";
+    const changedReleaseCheckPath = ready.release.releaseCheckReceipt!.path;
     evidence.set(changedReleaseCheckPath, changedReleaseCheck);
     ready.release.releaseCheckReceipt = reference(
       changedReleaseCheckPath,
       changedReleaseCheck,
     );
-
-    const deploymentBytes = evidence.get(ready.release.deploymentReceipt!.path);
-    if (deploymentBytes === undefined) {
-      throw new Error("missing deployment fixture");
-    }
-    const deployment = JSON.parse(
-      new TextDecoder().decode(deploymentBytes),
-    ) as {
-      releaseCheckReceiptSha256: string;
-      releaseCheckGenerationIsolationEvidenceSha256: string;
-    };
-    deployment.releaseCheckReceiptSha256 =
-      ready.release.releaseCheckReceipt.sha256;
-    deployment.releaseCheckGenerationIsolationEvidenceSha256 =
-      wrongTreeIsolation.evidenceSha256;
-    const changedDeployment = bytes(deployment);
-    const changedDeploymentPath = "evidence/wrong-tree-deployment.json";
-    evidence.set(changedDeploymentPath, changedDeployment);
-    ready.release.deploymentReceipt = reference(
-      changedDeploymentPath,
-      changedDeployment,
-    );
-
-    const smokeBytes = evidence.get(ready.release.productionSmoke!.path);
-    if (smokeBytes === undefined) throw new Error("missing smoke fixture");
-    const smoke = JSON.parse(new TextDecoder().decode(smokeBytes)) as {
-      deployment: {
-        deploymentReceiptSha256: string;
-        releaseCheckGenerationIsolationEvidenceSha256: string;
-      };
-    };
-    smoke.deployment.deploymentReceiptSha256 =
-      ready.release.deploymentReceipt.sha256;
-    smoke.deployment.releaseCheckGenerationIsolationEvidenceSha256 =
-      wrongTreeIsolation.evidenceSha256;
-    const changedSmoke = bytes(smoke);
-    const changedSmokePath = "evidence/wrong-tree-smoke.json";
-    evidence.set(changedSmokePath, changedSmoke);
-    ready.release.productionSmoke = reference(changedSmokePath, changedSmoke);
 
     await expect(
       validateSubmissionPackage(ready, "ready", reader, {
@@ -706,7 +1353,7 @@ describe("submission package validator", () => {
         deploymentReceiptSha256: ready.release.deploymentReceipt!.sha256,
       },
     });
-    const path = "evidence/minimal-production-smoke.json";
+    const path = ready.release.productionSmoke!.path;
     evidence.set(path, minimal);
     ready.release.productionSmoke = reference(path, minimal);
 
@@ -730,7 +1377,7 @@ describe("submission package validator", () => {
     };
     smoke.stages[0]!.evidence = { token: "redacted" };
     const privateSmoke = bytes(smoke);
-    const path = "evidence/private-production-smoke.json";
+    const path = ready.release.productionSmoke!.path;
     evidence.set(path, privateSmoke);
     ready.release.productionSmoke = reference(path, privateSmoke);
 
@@ -756,7 +1403,7 @@ describe("submission package validator", () => {
       note: 'captured: {"nbformat":4,"cells":[]}',
     };
     const privateSmoke = bytes(smoke);
-    const path = "evidence/raw-notebook-production-smoke.json";
+    const path = ready.release.productionSmoke!.path;
     evidence.set(path, privateSmoke);
     ready.release.productionSmoke = reference(path, privateSmoke);
 
@@ -836,6 +1483,25 @@ describe("submission package validator", () => {
     expect(Math.max(...calls.values())).toBe(1);
   });
 
+  it("loads every release and browser evidence role exactly once", async () => {
+    const { ready, reader } = await readyPackage();
+    const calls = new Map<string, number>();
+    const immutableReader: EvidenceReader = async (entry) => {
+      const count = (calls.get(entry.path) ?? 0) + 1;
+      calls.set(entry.path, count);
+      if (count > 1) return bytes({ replacedAfterHash: true });
+      return reader(entry);
+    };
+
+    await expect(
+      validateSubmissionPackage(ready, "ready", immutableReader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).resolves.toMatchObject({ submissionState: "READY_TO_SUBMIT" });
+    expect(calls.size).toBeGreaterThan(60);
+    expect(Math.max(...calls.values())).toBe(1);
+  });
+
   it("uses the canonical learner-pilot schema", async () => {
     const input = SubmissionPackageSchema.parse(await draftInput());
     const qualifiedReleaseReceiptSha256 = "a".repeat(64);
@@ -853,7 +1519,7 @@ describe("submission package validator", () => {
     });
     input.impact = {
       status: "DESCRIPTIVE_ONLY",
-      aggregate: reference("evidence/invalid-impact.json", invalidImpact),
+      aggregate: reference("docs/LEARNER_PILOT_RESULTS.json", invalidImpact),
       qualifiedReleaseReceiptSha256,
     };
     const reader: EvidenceReader = async (entry) =>
@@ -939,7 +1605,7 @@ describe("submission package validator", () => {
         "Results are descriptive pilot observations, not causal estimates or proof of mastery.",
       ],
     });
-    const path = "evidence/mismatched-impact.json";
+    const path = "docs/LEARNER_PILOT_RESULTS.json";
     evidence.set(path, aggregate);
     ready.impact = {
       status: "DESCRIPTIVE_ONLY",
@@ -997,5 +1663,44 @@ describe("submission package validator", () => {
     await expect(
       validateSubmissionPackage(aliased, "draft", repositoryReader),
     ).rejects.toThrow(/inside the repository/iu);
+  });
+
+  it("rejects a wrong evidence role path before invoking the reader", async () => {
+    const input = SubmissionPackageSchema.parse(await draftInput());
+    input.copy.readme.path = "docs/not-the-readme.md";
+    let reads = 0;
+    const reader: EvidenceReader = async () => {
+      reads += 1;
+      return bytes("unexpected read");
+    };
+
+    await expect(
+      validateSubmissionPackage(input, "draft", reader),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining(["evidence path must be README.md"]),
+    });
+    expect(reads).toBe(0);
+  });
+
+  it("rejects release-bound evidence without a deployment before invoking the reader", async () => {
+    const input = SubmissionPackageSchema.parse(await draftInput());
+    input.release.qualifiedRunnerReceipt = reference(
+      "docs/submission-evidence/unbound/qualified-runner-release.json",
+      bytes({ status: "VERIFIED" }),
+    );
+    let reads = 0;
+    const reader: EvidenceReader = async () => {
+      reads += 1;
+      return bytes("unexpected read");
+    };
+
+    await expect(
+      validateSubmissionPackage(input, "draft", reader),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        "release-bound evidence requires a deployment receipt before any read",
+      ]),
+    });
+    expect(reads).toBe(0);
   });
 });
