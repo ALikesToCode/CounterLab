@@ -1,10 +1,10 @@
 # Release dependency and review graph
 
-- Checkpoint: `2026-07-21T13:17:03Z`
+- Checkpoint: `2026-07-21T14:20:35Z`
 - Branch: `feat/learner-ux-v6.1`
-- Committed HEAD: `6b85f2a6b713cbc4172a574a0c3be3fa075e8744`
+- Committed HEAD: `17c1a5e00819c0d3b5cb0ab305fb9c16292cf7bc`
 - Deadline: `2026-07-22T00:00:00Z`
-- Time remaining at this checkpoint: **10 hours 42 minutes 57 seconds**
+- Time remaining at this checkpoint: **9 hours 39 minutes 25 seconds**
 
 ## Purpose and evidence boundary
 
@@ -25,12 +25,14 @@ video, Devpost submission, branch push, or merge is claimed here.
 The latest product-code commit, `29ea8c3`, passes every locally executable
 CloakBrowser journey: **34 passed, 6 exact public/live skips, 0 failed**. Its
 fresh replay accessibility follow-up passes **2/2** with 45 and 51 assertions.
-The intervening committed changes through this checkpoint (`b78632f` and
-`6b85f2a`) change documentation only; this graph refresh is also
-documentation-only. This is genuine CloakBrowser source/browser evidence, but
-it targets a local Worker without an exact public deployment receipt and is
-therefore explicitly non-qualifying. Public qualifying execution remains **0
-journeys**.
+Later UI-independent changes include documentation checkpoints and the
+target-locked historical runtime recovery helper at `6ee5954`. Its actual
+attempt failed closed because the preserved supervisor endpoint already
+refused connections. All three exact historical runtime endpoints now refuse
+connections, but no supervisor safe-stop receipt exists and the maintenance
+receipt is explicitly ineligible for qualification. The CloakBrowser evidence
+targets a local Worker without an exact public deployment receipt and remains
+explicitly non-qualifying. Public qualifying execution remains **0 journeys**.
 
 ## Release dependency graph
 
@@ -39,6 +41,7 @@ flowchart TD
   P["Product source at 29ea8c3<br/>17 of 18 black-box P0/P1 covered<br/>MB-014 comprehension partial"]
   T["Non-release deterministic core<br/>Web 674/674; Python 331/331 green<br/>3 exact-binding tests await evidence E"]
   B["Local CloakBrowser at 29ea8c3<br/>34 pass / 6 exact skips / 0 fail<br/>NON_QUALIFYING"]
+  R["Historical recovery at 6ee5954<br/>3 endpoints CLOSED; no stop receipt<br/>maintenance-only / NON_QUALIFYING"]
   S["Freeze clean source S<br/>BLOCKED by protected FUSE tombstone"]
   I["Build exact runner image<br/>receipt bound to S<br/>NOT RUN"]
   C["Genuine aggregate-cgroup sentinel<br/>and negative controls<br/>BLOCKED by sentinel-operations authority"]
@@ -55,6 +58,7 @@ flowchart TD
 
   P --> T
   P --> B
+  P --> R
   T --> S
   B --> S
   S --> I --> C --> E --> EC --> Q
@@ -65,7 +69,7 @@ flowchart TD
   classDef partial fill:#fff0d0,stroke:#9a6500,color:#4c3500;
   classDef red fill:#f7e8ef,stroke:#95506d,color:#482636;
   class B green;
-  class P,T,S,C,W partial;
+  class P,T,R,S,C,W partial;
   class I,E,EC,Q,D,H,PB,FP,M,GM red;
 ```
 
@@ -78,6 +82,7 @@ flowchart TD
 | Stored proof and Sample Capsule       | `7bf3c67`, `773e808`, `9441166`, `3174a1f`, `547cc0f`, `d7d23af`                        | Green                                    | Exact-deployed event, Capsule, and reconnect proof                 |
 | Belief-break experience               | `7bee809`, `0a39471`, `cc61917`, `e80b390`, `830d61b`                                   | Source green; MB-014 partial             | Public first-fold and genuine cold-user comprehension evidence     |
 | Runtime and release authority         | cgroup/runtime chain through `eaf4a60`, then `75dfb65`, `b37f7d9`, `84ef49d`, `7e25a09` | Source green                             | Clean source, exact image, and genuine sentinel                    |
+| Historical runtime maintenance        | `6ee5954`, `17c1a5e`                                                                    | Helper green; actual attempt fail-closed | Natural tombstone release; maintenance evidence cannot qualify     |
 | Submission evidence validation        | `d942c08`, `9ea8484`, `07c9091`, `8e33154`                                              | Green                                    | Real public repository, video, feedback, assets, and receipt bytes |
 | Browser qualification                 | `3e75281`, `3db3e52`, `adea1c9`, `a6f6d8d`, `0ee8934`, `99e9741`                        | Harness green                            | Exact-public 40/40 plus ten manual observations                    |
 | Local Cloak repairs                   | `d7d23af`, `ccb876b`, `29ea8c3`                                                         | Green locally; independent review passed | Public replay, intake, and live verification                       |
@@ -103,7 +108,7 @@ deferred until release and submission gates are green.
 | Real sentinel             | Exact image, source-matching runtime, release-only qualification mode                                                      | Genuine memory OOM, PID denial, CPU throttling, exact membership, FINALIZE, eight cleanup facts, cgroup absence, exclusive evidence artifact                                      | **Blocked** by the repository-only rule. The observer must read delegated `/sys/fs/cgroup` controls and owned `/proc/<pid>/stat`, write its owned helper PID to delegated `cgroup.procs`, and adjust only its helper's `/proc/self/oom_score_adj`.                                      | Preserve `NO-GO`; never synthesize or inject aggregate evidence                                                              |
 | Evidence refresh          | Exact image and successful real sentinel while `HEAD == S`                                                                 | Fresh normalized SBOM, VEX and negative control, scientific-engine bindings, runtime and isolation reports                                                                        | **Not run**                                                                                                                                                                                                                                                                             | Any image/source mismatch or stale binding fails closed                                                                      |
 | Evidence commit `E`       | Reviewed allowlisted evidence delta                                                                                        | One clean commit containing only regenerated evidence                                                                                                                             | **Not created**                                                                                                                                                                                                                                                                         | Do not include unrelated source or cache artifacts                                                                           |
-| Qualification             | Clean `HEAD == E`, build receipt, timeout receipt, source-matching runtime, authenticated Cloudflare account               | Qualified runner receipt v6 and exact registry manifest/config digest                                                                                                             | **Not run**; contained Wrangler remains logged out after two fresh OAuth callback windows expired without a returned authorization code                                                                                                                                                 | Do not promote when account, source, image, timeout, runtime, or evidence differs                                            |
+| Qualification             | Clean `HEAD == E`, build receipt, timeout receipt, source-matching runtime, authenticated Cloudflare account               | Qualified runner receipt v6 and exact registry manifest/config digest                                                                                                             | **Not run**; contained `wrangler whoami --json` remains `{"loggedIn":false}` and the latest fresh OAuth callback expired without a returned authorization code                                                                                                                          | Do not promote when account, source, image, timeout, runtime, or evidence differs                                            |
 | Release check             | Clean `E`, qualified receipt, exact local images and runtime                                                               | Release-check receipt v5 after formatting, tests, mutations, held-out, sandbox, scientific, build, reproduction, patch replay, and secret gates                                   | **Not run**                                                                                                                                                                                                                                                                             | Any failure blocks deployment                                                                                                |
 | Cloudflare deployment     | Qualified receipt, release-check receipt, registry image, required secrets, recovery target, working CloakBrowser endpoint | Exact maintenance/final Worker versions, D1 migration log, exact Container digest, deployment receipt v7                                                                          | **Not run**                                                                                                                                                                                                                                                                             | Stop before mutation when preflight is red; after mutation, automated Worker recovery does not reverse D1 or Container state |
 | Public identity and smoke | Active exact Worker/Container tuple                                                                                        | `/ready`, `/api/health?readiness=probe`, Worker 100% traffic, Container identity, public asset scan, Sample, Replay, leakage and imbalance live evidence, Capsule/replay evidence | **Not run**                                                                                                                                                                                                                                                                             | Source, image, Worker, client, receipt, or capability mismatch is a release failure                                          |
@@ -194,6 +199,12 @@ The current aggregate release chain is split into independent commits:
   downgrades, tampering, missing keys, and rotated keys.
 - `7e25a09` — requires exact release readiness before browser upload and again
   at authoritative Worker live-session admission.
+- `6ee5954` — adds a one-target historical runtime recovery path with exact
+  bundle/toolchain checks, legacy-v1 drain protocol, supervisor-owned shutdown,
+  executable failure tests, and an explicitly non-qualifying receipt.
+- `17c1a5e` — records that the committed recovery attempt issued no drain or
+  shutdown because the supervisor already refused connections; all three exact
+  endpoints subsequently refused read-only probes.
 
 Latest product-code verification at `29ea8c3` is:
 
@@ -222,11 +233,11 @@ Latest product-code verification at `29ea8c3` is:
   **449.90 kB / 129.30 kB gzip**, and CSS **201.45 kB / 34.83 kB gzip**.
 
 These results prove the latest product code and local browser behavior. The
-later committed checkpoint changes through `6b85f2a` and this graph refresh
-are documentation-only. The results do not manufacture a clean source, exact
-image, real aggregate containment observation, Cloudflare qualification,
-deployment, or public browser receipt; every downstream release node remains
-open.
+later committed changes through `17c1a5e` do not alter learner product
+behavior; `6ee5954` is maintenance-only and `17c1a5e` is documentation. These
+results do not manufacture a clean source, exact image, real aggregate
+containment observation, Cloudflare qualification, deployment, or public
+browser receipt; every downstream release node remains open.
 
 ## File ownership and reviewer graph
 
@@ -286,7 +297,7 @@ filesystem authority.
 | Delivery gate               | Clean `S` -> exact image -> real sentinel -> evidence `E` -> qualification -> release check -> deployment -> public smoke -> full browser matrix -> feature push/repo verification -> submission -> fast-forward main. No later node may compensate for an earlier red node. |
 | Diagnosing bugs             | Required the red command-server characterization before the one-line half-close repair, followed by focused and original-path runtime proof.                                                                                                                                 |
 | Git workflow                | Requires selective staging, staged-diff review, configured owner identity, independent logical commits, and no merge or publication before their factual gates.                                                                                                              |
-| Build graph                 | The last full structural graph remains the `b37f7d9` snapshot at 531 files, 5,515 nodes, and 93,346 edges. The operational release graph is current at `6b85f2a`; structural counts are not relabelled without rerunning their generator.                                    |
+| Build graph                 | The last full structural graph remains the `b37f7d9` snapshot at 531 files, 5,515 nodes, and 93,346 edges. The operational release graph is current at `17c1a5e`; structural counts are not relabelled without rerunning their generator.                                    |
 | Code review                 | Runs standards and specification reviews as separate read-only axes against `main`; findings do not become closed until accepted tests and public evidence pass.                                                                                                             |
 | Browser QA and Playwright   | Keeps local CloakBrowser evidence explicitly non-qualifying and requires exact-public CloakBrowser authority, semantic snapshots, screenshots, console/network inspection, accessibility, and responsive evidence.                                                           |
 | Wrangler                    | Requires current documentation, repository-contained CLI state, authenticated-account proof, dry-run/preflight, exact version/digest capture, and qualified-only deployment.                                                                                                 |
@@ -311,21 +322,26 @@ filesystem authority.
    qualified receipt, or release-check receipt exists.
 5. Contained Wrangler authentication is explicitly red: the current
    repository-contained `wrangler whoami --json` returned
-   `{"loggedIn":false}`, and two fresh OAuth callback windows expired without
-   a returned authorization code. The intended Cloudflare account has not been
-   authenticated inside the contained environment for this release.
-6. CloakBrowser is operational and the local latest-product-code matrix at
+   `{"loggedIn":false}`, and the latest fresh OAuth callback window expired
+   without a returned authorization code. The intended Cloudflare account has
+   not been authenticated inside the contained environment for this release.
+6. The committed one-target historical recovery path failed closed at the
+   already-unreachable supervisor. The runtime-command, BuildKit proxy, and
+   supervisor endpoints each returned `ECONNREFUSED`; no drain, signal,
+   shutdown, safe-stop receipt, or qualifying receipt occurred. This does not
+   release the FUSE handle or close the clean-source gate.
+7. CloakBrowser is operational and the local latest-product-code matrix at
    `29ea8c3` is green.
    `deploy-qualified.sh` performs remote Worker, D1, and Container mutations
    before invoking the smoke script, so the exact public origin and deployment
    receipt must still be supplied to the qualifying run. Local browser
    evidence cannot close that public gate.
-7. Commit `0ee8934` closes the checked-in browser finalizer source path: seven
+8. Commit `0ee8934` closes the checked-in browser finalizer source path: seven
    ID-bound viewports, privacy-safe INP, schema-v3 raw evidence, deterministic
    40-journey receipts, ten honestly labelled human-observation receipts, and
    cross-bound report/index/qualification evidence. Exact public CloakBrowser
    execution and manual observation remain open at **0 qualifying journeys**.
-8. Learner evidence remains `NO_DATA`; public repository, video, feedback ID,
+9. Learner evidence remains `NO_DATA`; public repository, video, feedback ID,
    Devpost publication, and submission receipt remain externally unverified.
 
 The shortest honest path is to resolve the clean-source condition at the primary
