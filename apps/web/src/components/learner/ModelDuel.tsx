@@ -20,10 +20,12 @@ function ModelCard({
   label,
   model,
   sourceLabel,
+  predictionLabel,
 }: {
   label: string;
   model: DuelModel;
   sourceLabel: string;
+  predictionLabel: string;
 }) {
   return (
     <article
@@ -35,7 +37,7 @@ function ModelCard({
       <p className={styles.sourceLabel}>{sourceLabel}</p>
       <p className={styles.modelStatement}>{model.statement}</p>
       <p className={styles.prediction}>
-        <strong>Subject Pack test pattern</strong>
+        <strong>{predictionLabel}</strong>
         {model.prediction}
       </p>
       <details className={styles.scope}>
@@ -93,6 +95,11 @@ export function ModelDuel({
         label="Your current explanation"
         model={current}
         sourceLabel={DRAFT_SOURCE_LABELS[currentSource]}
+        predictionLabel={
+          currentSource === "subject_pack"
+            ? "Subject Pack test pattern"
+            : "Predicted outcome"
+        }
       />
       <span className={styles.versus} aria-hidden="true">
         versus
@@ -101,6 +108,11 @@ export function ModelDuel({
         label="Alternative CounterLab will test"
         model={alternative}
         sourceLabel={DRAFT_SOURCE_LABELS[alternativeSource]}
+        predictionLabel={
+          alternativeSource === "subject_pack"
+            ? "Subject Pack test pattern"
+            : "Predicted outcome"
+        }
       />
     </div>
   );

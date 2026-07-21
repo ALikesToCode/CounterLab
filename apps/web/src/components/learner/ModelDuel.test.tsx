@@ -72,6 +72,8 @@ describe("ModelDuel", () => {
       "AI-suggested draft",
     );
     expect(screen.queryByText("Reviewed Subject Pack draft")).toBeNull();
+    expect(screen.getAllByText("Predicted outcome")).toHaveLength(2);
+    expect(screen.queryByText("Subject Pack test pattern")).toBeNull();
   });
 
   it("routes confirmation, editing, and tertiary decisions through callbacks", async () => {
