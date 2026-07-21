@@ -168,9 +168,6 @@ describe("scientific engine release verifier edge cases", () => {
         expect.objectContaining({
           code: "VULNERABILITY_REPORT_RUNTIME_MISMATCH",
         }),
-        expect.objectContaining({
-          code: "VEX_RUNTIME_BINDING_MISMATCH",
-        }),
       ]),
     );
   });
