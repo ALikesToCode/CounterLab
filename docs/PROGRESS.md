@@ -12,17 +12,19 @@ pass is never presented as a browser or production pass.
 ### Current checkpoint
 
 - **Branch:** `feat/learner-ux-v6.1`
-- **Latest committed checkpoint:** `dd7b372fb15048e11224979157d3bf29f9beedc9`.
+- **Latest committed checkpoint:** `3174a1f997a40f471ed9b8a20e147a0ce279ee15`.
   The worktree contains only the preserved, untracked
-  `scripts/.fuse_hidden0000a9600000801f`. The source now has a self-hashed
-  cgroup request, observer, FINALIZE/ABORT protocol, fixed negative controls,
-  fail-closed evidence validation, qualified-receipt derivation/store, runtime
-  observer orchestration, serialized run/drain handling, exact v2/v3 Python
-  consumers, a tightened Judge first fold, a centered prompt-first Landing,
-  and 40 statically collected Playwright journeys. Source tests do not
-  constitute a real cgroup sentinel: no exact image, aggregate host proof,
-  qualification, deployment, rendered browser journey, learner observation,
-  video, Devpost publication, or submission receipt is claimed.
+  `scripts/.fuse_hidden0000a9600000801f`. The branch now includes the
+  prompt-first Landing and Judge hierarchy, source-covered P0/P1 learner
+  mechanisms, exact runtime qualification contracts, a fail-closed submission
+  preflight foundation, and stored Proof Bundle validation bound to the
+  session, artifact, mode, state, HMAC policy, and v2 scientific snapshot.
+  The latest complete web run passes **79 files and 626/626 tests**; focused
+  proof tests, web and Worker TypeScript, the production build, scoped
+  formatting, and whitespace checks also pass at this checkpoint. These local
+  results do not constitute a real cgroup sentinel, a refreshed scientific
+  release, CloakBrowser qualification, deployment, learner observation,
+  Devpost publication, or a submission receipt.
 - **Earlier product checkpoint:**
   `5259a495948a68024702ba5239bf8057d1785f08`. The owner partitioned the
   preserved integration delta into nine commits and fast-forwarded both
@@ -3787,3 +3789,53 @@ this progress update is the preserved, unstaged FUSE tombstone.
    every link logged out.
 8. Push and verify the feature branch, then fast-forward-only merge and push
    `main` after every ship gate above is factual. No push or merge has occurred.
+
+## Current done / left reconciliation — 2026-07-21T06:04:25Z
+
+Deadline: `2026-07-22T00:00:00Z`; **17 hours 55 minutes 35 seconds remained at
+this checkpoint**. The feature branch is at committed HEAD
+`3174a1f997a40f471ed9b8a20e147a0ce279ee15`, one commit ahead of its remote
+tracking ref. The only worktree entry besides this progress update is the
+preserved, unstaged FUSE tombstone
+`scripts/.fuse_hidden0000a9600000801f`; it remains untouched.
+
+### Done and committed
+
+| Area | Current factual status | Evidence |
+| --- | --- | --- |
+| Learner journey and P0/P1 product repairs | **SOURCE PASS** | MB-001, MB-002, MB-003, MB-004, MB-005, MB-006, MB-007, MB-009, MB-010, MB-012, MB-013, MB-015, MB-016, MB-017, and MB-048 have source mechanisms and focused regressions. Their public acceptance journeys remain open. |
+| First-fold experience | **SOURCE PASS** | Prompt-first Landing, tightened Judge path, fixed-sample belief break, persistent Sample/Replay/Live authority labels, compact learner progress, post-seal trusted rendering, and the shared pre-Prediction forbidden-text regression are committed. |
+| Intake, recovery, and authority | **SOURCE PASS** | Upload admission is bounded and retry-safe; malformed, unsupported, interrupted, and ambiguous intake are explicit; terminal Reject and insufficient-evidence actions create or recover a source-bound child instead of resubmitting a terminal session; failed transfer keeps Repair locked. |
+| Evidence and Proof Bundle | **SOURCE PASS** | `3174a1f` validates stored Proof Bundles at Worker and client boundaries, binds session/artifact/mode/state, enforces v2 scientific snapshot and HMAC policy, prevents cross-artifact and signed-to-unsigned substitution, and renders only validated stored evidence. |
+| Local browser regression | **PASS, NON-QUALIFYING** | Stock-Chromium design review completed **35 passed, 5 exact-public/live skips, 0 failed** across 40 tests. This is local regression evidence only, not CloakBrowser or public-release qualification. |
+| Current web gate | **PASS** | Web Vitest **79 files, 626/626 tests passed**. Focused proof tests, web TypeScript, Worker TypeScript, production build, scoped Prettier, and Git whitespace checks passed after the latest proof slice. |
+| Broader deterministic gate | **PARTIAL** | The latest broader run passed **721** root Vitest tests with **3 failed and 2 skipped**; the failures are stale generated scientific-release bindings. Python passed **331/331** and critical mutations passed leakage **14/14** and imbalance **19/19**. |
+| Submission groundwork | **SOURCE PARTIAL** | `d942c08` added a fail-closed manifest/preflight and `74ff037` marked the old readiness snapshot historical. The package remains `DRAFT`; no publication or submission is claimed. |
+
+### What is left
+
+| Priority | Required work | Current gate |
+| --- | --- | --- |
+| 1 | Harden the submission validator so production smoke, repository/video/feedback/browser/link/screenshot evidence, learner-impact analysis, deadline state, and the official receipt are strict, tuple-bound, and read from verified bytes exactly once. Add a submitted-state command and adversarial tests. | **IN PROGRESS / NOT YET COMMITTED** |
+| 2 | Resolve the preserved FUSE tombstone without deleting it, obtain a genuinely clean frozen source, run the real aggregate-cgroup and negative-control sentinel, and build one exact runner image. | **BLOCKED on clean physical tree and real host capability** |
+| 3 | Regenerate the source/image-bound SBOM, VEX, scientific-engine, license, health, held-out, Sample Capsule, and qualification evidence from that one frozen tuple; repair the three stale root-test failures without weakening their checks. | **NOT RUN** |
+| 4 | Establish repository-contained Wrangler authentication, verify the intended account and release inputs, run migrations/release checks, and deploy only the qualified source/image tuple. Record exact source commit, image digest, Worker version, deployment ID, and public identity. | **BLOCKED / NOT RUN** |
+| 5 | Execute the exact public sample, replay, two supported live journeys, malformed/unsupported/refusal cases, reconnect/history, transfer fail/pass, patch, Capsule/download, responsive, keyboard, screen-reader, reduced-motion, console/network, and Web Vitals matrix through CloakBrowser. | **BLOCKED: no `CLOAK_CDP_ENDPOINT`; 0 qualifying journeys** |
+| 6 | Capture exact-tuple screenshots and the public <=3:00 video, verify the public repository and every link logged out, populate Devpost, record `/feedback` Session ID, submit, and retain the public slug and `submitted_at` receipt. Keep learner impact `NO_DATA` unless real consented observations occur. | **EXTERNAL EVIDENCE OPEN** |
+| 7 | Push the reviewed feature tip, then fast-forward-only merge and push `main` after the qualified deployment, public browser matrix, and submission facts are recorded. | **NOT RUN; merge remains gated** |
+
+### Current release verdict
+
+```text
+learner product source + focused regressions                PASS
+complete deterministic release evidence                    FAIL (3 stale bindings)
+clean source + exact image + real containment sentinel      BLOCKED
+qualified Cloudflare deployment                             NOT RUN
+CloakBrowser public qualification                           NOT RUN
+Devpost/video/learner evidence/submission receipt           NOT READY
+feature push and verified fast-forward merge to main        NOT RUN
+```
+
+The release remains **NO-GO**. The next locally actionable slice is the strict
+submission-evidence validator; it can be completed without pretending that any
+external deployment or submission evidence exists.
