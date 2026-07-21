@@ -186,6 +186,11 @@ for (const response of [
     await page
       .getByRole("button", { name: /Revise in a new investigation/i })
       .click();
+    await expect
+      .poll(() => storedSessionId(page), {
+        message: "the replacement investigation should install a fresh session",
+      })
+      .not.toBe(closedSessionId);
     await expect(
       page.getByRole("heading", { name: /What do you think the score means/i }),
     ).toBeVisible();
