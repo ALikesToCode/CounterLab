@@ -95,6 +95,92 @@ describe("ExperimentTheater", () => {
     expect(screen.getByRole("tablist")).toBeInTheDocument();
   });
 
+  it("shows a non-color downward cue for the verified unseen-customer result", () => {
+    const { rerender } = render(
+      <ExperimentTheater prediction="I expect the score to stay above 90%." />,
+    );
+
+    expect(screen.queryByRole("note", { name: /downward change/i })).toBeNull();
+    expect(
+      document.querySelector('[data-result-reveal="verified-payload"]'),
+    ).not.toBeInTheDocument();
+
+    rerender(
+      <ExperimentTheater
+        prediction="I expect the score to stay above 90%."
+        verifiedPayload={payload}
+      />,
+    );
+
+    const direction = screen.getByRole("note", {
+      name: /downward change.*lower on unseen customers/i,
+    });
+    expect(direction).toHaveAttribute("data-direction", "decrease");
+    expect(direction).toHaveTextContent("↓");
+    expect(direction).toHaveTextContent("Lower on unseen customers");
+    expect(
+      document.querySelector('[data-result-reveal="verified-payload"]'),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps incomparable imbalance measures neutral unless the payload supplies direction", () => {
+    const imbalancePayload: ExperimentTheaterVerifiedPayload = {
+      ...payload,
+      comparison: {
+        title: "Headline accuracy versus rare-class recall",
+        accessibleSummary:
+          "Verified comparison: majority baseline accuracy 98 percent; model rare-class recall 61 percent.",
+        first: {
+          label: "Majority baseline accuracy",
+          value: "98%",
+        },
+        second: {
+          label: "Model rare-class recall",
+          value: "61%",
+        },
+      },
+    };
+    const { rerender } = render(
+      <ExperimentTheater
+        prediction="I expect rare-class performance to stay strong."
+        verifiedPayload={imbalancePayload}
+      />,
+    );
+
+    const neutralDirection = screen.getByRole("note", {
+      name: /neutral comparison.*no increase or decrease is implied/i,
+    });
+    expect(neutralDirection).toHaveAttribute("data-direction", "neutral");
+    expect(neutralDirection).toHaveTextContent("↔");
+    expect(neutralDirection).toHaveTextContent("Compare");
+    expect(screen.queryByText(/lower on unseen customers/i)).toBeNull();
+
+    rerender(
+      <ExperimentTheater
+        prediction="I expect rare-class performance to stay strong."
+        verifiedPayload={{
+          ...imbalancePayload,
+          comparison: {
+            ...imbalancePayload.comparison,
+            direction: {
+              kind: "increase",
+              label: "Higher rare-class recall",
+              accessibleLabel:
+                "Upward change: rare-class recall is higher than the baseline recall.",
+            },
+          },
+        }}
+      />,
+    );
+
+    const suppliedDirection = screen.getByRole("note", {
+      name: /upward change.*rare-class recall is higher/i,
+    });
+    expect(suppliedDirection).toHaveAttribute("data-direction", "increase");
+    expect(suppliedDirection).toHaveTextContent("↑");
+    expect(suppliedDirection).toHaveTextContent("Higher rare-class recall");
+  });
+
   it("mounts only the registered visual after a verified payload", async () => {
     const visualPayload: ExperimentTheaterVerifiedPayload = {
       ...payload,

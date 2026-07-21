@@ -252,6 +252,28 @@
   line-height: 1.4;
 }
 
+.resultDirection {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 8px;
+  margin: 10px auto 0;
+  color: var(--aqua-bright);
+}
+
+.resultDirection > span {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.resultDirection > small {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 1.35;
+}
+
 .finding {
   max-width: 850px;
   margin: 16px 0 0;
@@ -959,8 +981,8 @@
   }
 
   .previewScoreShift {
-    grid-template-columns: minmax(0, 1fr) 46px minmax(0, 1fr);
-    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) 74px minmax(0, 1fr);
+    gap: 6px;
   }
 
   .embeddedMechanism.preview {

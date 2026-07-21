@@ -31,18 +31,101 @@ export type ExperimentTheaterTrustedVisual = Readonly<{
   revealFinding: boolean;
 }>;
 
+export type ExperimentTheaterComparisonDirection = Readonly<{
+  kind: "decrease" | "increase" | "neutral";
+  label: string;
+  accessibleLabel: string;
+}>;
+
+type ExperimentTheaterComparison = Readonly<{
+  title: string;
+  accessibleSummary: string;
+  first: Readonly<{ label: string; value: string; detail?: string }>;
+  second: Readonly<{ label: string; value: string; detail?: string }>;
+  direction?: ExperimentTheaterComparisonDirection;
+}>;
+
 export type ExperimentTheaterVerifiedPayload = Readonly<{
   trustedVisual?: ExperimentTheaterTrustedVisual;
-  comparison: Readonly<{
-    title: string;
-    accessibleSummary: string;
-    first: Readonly<{ label: string; value: string; detail?: string }>;
-    second: Readonly<{ label: string; value: string; detail?: string }>;
-  }>;
+  comparison: ExperimentTheaterComparison;
   finding: string;
   controlledVariables: string;
   views: Readonly<Record<TheaterViewId, TheaterView>>;
 }>;
+
+type ResolvedComparisonDirection = ExperimentTheaterComparisonDirection &
+  Readonly<{ symbol: "↓" | "↑" | "↔" }>;
+
+const directionSymbols = {
+  decrease: "↓",
+  increase: "↑",
+  neutral: "↔",
+} as const;
+
+function resolveComparisonDirection(
+  comparison: ExperimentTheaterComparison,
+): ResolvedComparisonDirection {
+  if (comparison.direction !== undefined) {
+    return {
+      ...comparison.direction,
+      symbol: directionSymbols[comparison.direction.kind],
+    };
+  }
+
+  const subjectCues = [
+    comparison.title,
+    comparison.first.label,
+    comparison.second.label,
+  ]
+    .join(" ")
+    .toLocaleLowerCase();
+  const comparesFamiliarRowsWithUnseenCustomers =
+    subjectCues.includes("familiar row") &&
+    (subjectCues.includes("unseen customer") ||
+      subjectCues.includes("new customer"));
+
+  if (comparesFamiliarRowsWithUnseenCustomers) {
+    return {
+      kind: "decrease",
+      symbol: directionSymbols.decrease,
+      label: "Lower on unseen customers",
+      accessibleLabel:
+        "Downward change: the verified result is lower on unseen customers.",
+    };
+  }
+
+  return {
+    kind: "neutral",
+    symbol: directionSymbols.neutral,
+    label: "Compare",
+    accessibleLabel:
+      "Neutral comparison: compare the two verified measures; no increase or decrease is implied.",
+  };
+}
+
+function ComparisonDirection({
+  comparison,
+}: {
+  comparison: ExperimentTheaterComparison;
+}) {
+  const direction = resolveComparisonDirection(comparison);
+
+  return (
+    <span
+      className={styles.direction}
+      role="note"
+      aria-label={direction.accessibleLabel}
+      data-direction={direction.kind}
+    >
+      <span className={styles.directionSymbol} aria-hidden="true">
+        {direction.symbol}
+      </span>
+      <small className={styles.directionLabel} aria-hidden="true">
+        {direction.label}
+      </small>
+    </span>
+  );
+}
 
 function TrustedVisual({ visual }: { visual: ExperimentTheaterTrustedVisual }) {
   if (visual.id !== "verified_sample_belief_break_v1") {
@@ -170,7 +253,14 @@ export function ExperimentTheater({
           </p>
         </div>
       ) : (
-        <div className={styles.verifiedContent}>
+        <div
+          className={`${styles.verifiedContent} ${
+            verifiedPayload.trustedVisual === undefined
+              ? styles.verifiedContentReveal
+              : ""
+          }`}
+          data-result-reveal="verified-payload"
+        >
           {verifiedPayload.trustedVisual === undefined ? (
             <section
               id="experiment-theater-comparison"
@@ -188,7 +278,7 @@ export function ExperimentTheater({
                     <small>{verifiedPayload.comparison.first.detail}</small>
                   )}
                 </article>
-                <span aria-hidden="true">→</span>
+                <ComparisonDirection comparison={verifiedPayload.comparison} />
                 <article>
                   <span>{verifiedPayload.comparison.second.label}</span>
                   <strong>{verifiedPayload.comparison.second.value}</strong>

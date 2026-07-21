@@ -192,6 +192,20 @@ function MechanismDiagram({
   );
 }
 
+function LeakageDirectionCue({ inline = false }: { inline?: boolean }) {
+  return (
+    <span
+      className={inline ? styles.resultDirection : styles.previewTransition}
+      role="note"
+      aria-label="Downward change: accuracy is lower on unseen customers."
+      data-direction="decrease"
+    >
+      <span aria-hidden="true">↓</span>
+      <small aria-hidden="true">Lower on unseen customers</small>
+    </span>
+  );
+}
+
 function PreviewComparison({
   randomRows,
   wholeCustomers,
@@ -310,10 +324,7 @@ function PreviewComparison({
           </small>
         </div>
 
-        <div className={styles.previewTransition} aria-hidden="true">
-          <span>→</span>
-          <small>same model</small>
-        </div>
+        <LeakageDirectionCue />
 
         <div className={styles.previewScoreState}>
           <span>New-customer test</span>
@@ -366,10 +377,7 @@ function FoldEvidence({ evidence }: { evidence: VerifiedBeliefBreakEvidence }) {
             <strong>{asPercent(randomRows.metrics.accuracy)}</strong>
             <small>{randomRows.entityOverlap.count} customers overlap</small>
           </div>
-          <div className={styles.previewTransition} aria-hidden="true">
-            <span>→</span>
-            <small>same model</small>
-          </div>
+          <LeakageDirectionCue />
           <div className={styles.previewScoreState}>
             <span>New-customer test</span>
             <strong>{asPercent(wholeCustomers.metrics.accuracy)}</strong>
@@ -442,30 +450,33 @@ function VerifiedEvidence({
       )}
 
       {isPreview ? null : (
-        <div
-          className={styles.resultPair}
-          role="group"
-          aria-label={`Customer overlap falls from ${randomRows.entityOverlap.count} to ${wholeCustomers.entityOverlap.count}; accuracy falls from ${asPercent(randomRows.metrics.accuracy)} to ${asPercent(wholeCustomers.metrics.accuracy)}.`}
-        >
-          <article aria-label="Customer overlap comparison">
-            <span>Overlapping customers</span>
-            <div>
-              <strong>{randomRows.entityOverlap.count}</strong>
-              <span aria-hidden="true">→</span>
-              <strong>{wholeCustomers.entityOverlap.count}</strong>
-            </div>
-            <small>familiar identities → unseen identities</small>
-          </article>
-          <article aria-label="Accuracy comparison">
-            <span>Accuracy</span>
-            <div>
-              <strong>{asPercent(randomRows.metrics.accuracy)}</strong>
-              <span aria-hidden="true">→</span>
-              <strong>{asPercent(wholeCustomers.metrics.accuracy)}</strong>
-            </div>
-            <small>random rows → whole-customer holdout</small>
-          </article>
-        </div>
+        <>
+          <div
+            className={styles.resultPair}
+            role="group"
+            aria-label={`Customer overlap falls from ${randomRows.entityOverlap.count} to ${wholeCustomers.entityOverlap.count}; accuracy falls from ${asPercent(randomRows.metrics.accuracy)} to ${asPercent(wholeCustomers.metrics.accuracy)}.`}
+          >
+            <article aria-label="Customer overlap comparison">
+              <span>Overlapping customers</span>
+              <div>
+                <strong>{randomRows.entityOverlap.count}</strong>
+                <span aria-hidden="true">→</span>
+                <strong>{wholeCustomers.entityOverlap.count}</strong>
+              </div>
+              <small>familiar identities → unseen identities</small>
+            </article>
+            <article aria-label="Accuracy comparison">
+              <span>Accuracy</span>
+              <div>
+                <strong>{asPercent(randomRows.metrics.accuracy)}</strong>
+                <span aria-hidden="true">↓</span>
+                <strong>{asPercent(wholeCustomers.metrics.accuracy)}</strong>
+              </div>
+              <small>random rows → whole-customer holdout</small>
+            </article>
+          </div>
+          <LeakageDirectionCue inline />
+        </>
       )}
 
       <p className={styles.finding}>

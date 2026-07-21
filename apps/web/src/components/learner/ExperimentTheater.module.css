@@ -96,6 +96,10 @@
   margin-top: 18px;
 }
 
+.verifiedContentReveal {
+  animation: verified-result-reveal 200ms ease-out both;
+}
+
 .dominantVisual {
   min-width: 0;
 }
@@ -168,9 +172,26 @@
   line-height: 1.45;
 }
 
-.comparison > div > span {
+.direction {
+  display: grid;
+  max-width: 150px;
+  justify-items: center;
+  gap: 5px;
   color: var(--aqua-bright);
-  font-size: 26px;
+  text-align: center;
+}
+
+.directionSymbol {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.directionLabel {
+  color: var(--theater-copy);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.3;
 }
 
 .finding {
@@ -248,7 +269,6 @@
   border: 1px solid var(--theater-line);
   border-radius: 12px;
   background: var(--theater-raised);
-  animation: reveal 180ms ease both;
 }
 
 .viewPanel > h3 {
@@ -266,10 +286,10 @@
   line-height: 1.6;
 }
 
-@keyframes reveal {
+@keyframes verified-result-reveal {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(6px);
   }
 
   to {
@@ -296,9 +316,8 @@
     grid-template-columns: 1fr;
   }
 
-  .comparison > div > span {
+  .direction {
     justify-self: center;
-    transform: rotate(90deg);
   }
 
   .viewTabs {
@@ -307,7 +326,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .viewPanel {
+  .verifiedContentReveal {
     animation: none;
   }
 }
