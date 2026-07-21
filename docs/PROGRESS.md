@@ -4720,3 +4720,37 @@ No safe-stop receipt, clean source, containment pass, exact image, refreshed
 release evidence, Cloudflare mutation, deployment, public qualification,
 learner outcome, Devpost submission, push, or merge is claimed. Release remains
 **NO-GO**.
+
+## Browser authority handoff — 2026-07-21T14:29:51Z
+
+Deadline: `2026-07-22T00:00:00Z`; **9 hours 30 minutes 9 seconds remained at
+this checkpoint**. Committed HEAD was
+`3b1ae9dc2a7161b76baa395b648d667576df231c` on
+`feat/learner-ux-v6.1`. The only visible worktree entry remained the preserved,
+untracked FUSE tombstone `scripts/.fuse_hidden0000a9600000801f`; it was not
+opened, changed, staged, hidden, ignored, renamed, overwritten, or deleted.
+
+### CloakBrowser check
+
+- The current process environment contains no `CLOAK_CDP_ENDPOINT`.
+- `codex mcp get playwright_safe` returned exit 0 and reported the
+  `playwright_safe` server **enabled**, using the registered
+  `/home/mysterious/.local/bin/playwright-mcp-cloak` launcher with a 45-second
+  startup timeout and 120-second tool timeout.
+- This already-running Codex session does not expose the registered
+  `playwright_safe` tool namespace. Per the repository browser protocol and the
+  installed Playwright skill, a fresh Codex/codex-safe session is required for
+  the MCP tools to be injected.
+- Regular Chrome, stock Chromium, direct Playwright Chromium, and the `@Chrome`
+  surface were not substituted and are not claimed as CloakBrowser evidence.
+- No page was opened, no journey was executed, and no screenshot, console,
+  network, accessibility, or performance result was produced in this check.
+
+### Resume point
+
+Start the next session from this repository through codex-safe, confirm that
+the `playwright_safe` browser tools are present, and then execute the local or
+exact-public matrix that the available release tuple permits. The separate
+clean-source, genuine-containment, exact-image, Cloudflare-authentication,
+deployment, submission, push, and merge gates remain unchanged and red. No
+deployment or publication claim is made.
