@@ -667,12 +667,13 @@ async function resetWithBrowserFailureObservation(
   return failures;
 }
 
-function expectWithinComprehensionBudget(
-  startedAt: number,
+async function expectWithinComprehensionBudget(
+  page: Page,
   maximumMs: number,
   label: string,
 ) {
-  expect(Date.now() - startedAt, label).toBeLessThanOrEqual(maximumMs);
+  const navigationElapsedMs = await page.evaluate(() => performance.now());
+  expect(navigationElapsedMs, label).toBeLessThanOrEqual(maximumMs);
 }
 
 function expectNoBrowserFailures(failures: BrowserFailureLog) {
@@ -711,7 +712,6 @@ async function expectBeliefBreakInFirstViewport(
   page: Page,
   surface: Locator,
   modeLabel: RegExp,
-  startedAt: number,
 ) {
   const mechanism = surface.getByRole("region", {
     name: "Verified sample belief-break mechanism",
@@ -799,6 +799,14 @@ async function expectBeliefBreakInFirstViewport(
 
   await expect(mechanism).toBeVisible();
   for (const stage of comprehensionStages) {
+    await Promise.all(
+      stage.required.map(({ locator }) => expect(locator).toBeVisible()),
+    );
+    await expectWithinComprehensionBudget(
+      page,
+      stage.budgetMs,
+      `Judge ${stage.label} must be inspectable within ${stage.budgetMs / 1_000} seconds`,
+    );
     for (const required of stage.required) {
       await expectEntirelyInFirstViewport(
         page,
@@ -806,15 +814,19 @@ async function expectBeliefBreakInFirstViewport(
         required.label,
       );
     }
-    expectWithinComprehensionBudget(
-      startedAt,
-      stage.budgetMs,
-      `Judge ${stage.label} must be inspectable within ${stage.budgetMs / 1_000} seconds`,
-    );
   }
 }
 
-async function captureBeliefBreakScreenshot(page: Page, fileName: string) {
+async function captureBeliefBreakScreenshot(
+  page: Page,
+  fileName: string,
+  options: {
+    performanceBudgetScope?:
+      "navigation-first-fold" | "post-seal-spa-observation";
+  } = {},
+) {
+  const performanceBudgetScope =
+    options.performanceBudgetScope ?? "navigation-first-fold";
   const configuredDirectory =
     process.env.COUNTERLAB_E2E_BELIEF_BREAK_EVIDENCE_DIR ??
     resolve(requiredRuntimeRoot(), "evidence", "belief-break");
@@ -823,7 +835,9 @@ async function captureBeliefBreakScreenshot(page: Page, fileName: string) {
   );
   await page.screenshot({ path: destination, fullPage: false });
   const performance = await snapshotBrowserPerformanceEvidence(page);
-  expectFirstFoldPerformanceBudgets(performance);
+  if (performanceBudgetScope === "navigation-first-fold") {
+    expectFirstFoldPerformanceBudgets(performance);
+  }
   const evidenceDestination = await ensureRuntimeParent(
     resolve(configuredDirectory, fileName.replace(/\.png$/u, ".json")),
   );
@@ -834,6 +848,10 @@ async function captureBeliefBreakScreenshot(page: Page, fileName: string) {
         browserAuthority: currentBrowserAuthorityLabel(),
         capturedAt: new Date().toISOString(),
         performance,
+        performanceBudget: {
+          enforced: performanceBudgetScope === "navigation-first-fold",
+          scope: performanceBudgetScope,
+        },
         screenshot: fileName,
       },
       null,
@@ -1322,9 +1340,38 @@ for (const viewport of beliefBreakViewports) {
   test(`${viewport.name} Landing keeps the unprimed Question and fair-test promise in the first viewport`, async ({
     page,
   }) => {
-    const navigationStartedAt = Date.now();
     await page.setViewportSize(viewport);
     const failures = await resetWithBrowserFailureObservation(page);
+
+    const heading = page.getByRole("heading", {
+      name: /What result are you trying to understand/i,
+    });
+    const artifactSafetySummary = page.getByText(
+      /Ask a question or attach a supported notebook.*never runs its cells/i,
+    );
+    const composer = page.getByLabel("Your question or claim");
+    const submit = page.getByRole("button", { name: /Test this claim/i });
+    const promptStarters = page.getByRole("group", {
+      name: /Prompt starters/i,
+    });
+    const preview = page.locator(
+      '[data-presentation="strip"][data-result-visibility="locked"]',
+    );
+    await Promise.all(
+      [
+        heading,
+        artifactSafetySummary,
+        composer,
+        submit,
+        promptStarters,
+        preview,
+      ].map((locator) => expect(locator).toBeVisible()),
+    );
+    await expectWithinComprehensionBudget(
+      page,
+      10_000,
+      "Landing Question and fair-test promise must become inspectable within ten seconds",
+    );
 
     const skipLink = page.getByRole("link", {
       name: /Skip to main content/i,
@@ -1332,7 +1379,6 @@ for (const viewport of beliefBreakViewports) {
     await skipLink.focus();
     await expect(skipLink).toBeFocused();
     await page.keyboard.press("Tab");
-    const composer = page.getByLabel("Your question or claim");
     await expect(composer).toBeFocused();
     await expectEntirelyInFirstViewport(
       page,
@@ -1341,20 +1387,15 @@ for (const viewport of beliefBreakViewports) {
     );
     await expectEntirelyInFirstViewport(
       page,
-      page.getByRole("heading", {
-        name: /What result are you trying to understand/i,
-      }),
+      heading,
       "Question-first heading",
     );
     await expectEntirelyInFirstViewport(
       page,
-      page.getByText(
-        /Ask a question or attach a supported notebook.*never runs its cells/i,
-      ),
+      artifactSafetySummary,
       "artifact safety summary",
     );
 
-    const submit = page.getByRole("button", { name: /Test this claim/i });
     await expect(submit).toBeDisabled();
     await expectEntirelyInFirstViewport(
       page,
@@ -1363,7 +1404,7 @@ for (const viewport of beliefBreakViewports) {
     );
     await expectEntirelyInFirstViewport(
       page,
-      page.getByRole("group", { name: /Prompt starters/i }),
+      promptStarters,
       "learner prompt starters",
     );
     if (viewport.width <= 620) {
@@ -1372,9 +1413,6 @@ for (const viewport of beliefBreakViewports) {
       expect(submitBox!.width).toBeGreaterThanOrEqual(130);
     }
 
-    const preview = page.locator(
-      '[data-presentation="strip"][data-result-visibility="locked"]',
-    );
     await expectEntirelyInFirstViewport(
       page,
       preview,
@@ -1395,11 +1433,6 @@ for (const viewport of beliefBreakViewports) {
         name: "Verified sample belief-break mechanism",
       }),
     ).toHaveCount(0);
-    expectWithinComprehensionBudget(
-      navigationStartedAt,
-      10_000,
-      "Landing Question and fair-test promise must become inspectable within ten seconds",
-    );
     await expectNoHorizontalOverflow(page);
     await captureBeliefBreakScreenshot(
       page,
@@ -1412,7 +1445,6 @@ for (const viewport of beliefBreakViewports) {
   test(`${viewport.name} Judge Mode shows the honest fixed-sample belief break in the first viewport`, async ({
     page,
   }) => {
-    const navigationStartedAt = Date.now();
     const failures = observeBrowserFailures(page);
     await installBrowserPerformanceEvidence(page);
     await page.setViewportSize(viewport);
@@ -1426,7 +1458,6 @@ for (const viewport of beliefBreakViewports) {
       page,
       preview,
       /Completed fixed sample.*not a live result/i,
-      navigationStartedAt,
     );
     await expect(
       preview.getByText(
@@ -1520,6 +1551,7 @@ for (const viewport of beliefBreakViewports) {
     await captureBeliefBreakScreenshot(
       page,
       `belief-break-sample-post-seal-${viewport.name}.png`,
+      { performanceBudgetScope: "post-seal-spa-observation" },
     );
     await page.waitForLoadState("networkidle");
     expectNoBrowserFailures(failures);
