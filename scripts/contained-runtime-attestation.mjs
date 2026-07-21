@@ -13,6 +13,7 @@ export const RUNTIME_POLICY_PATH =
 
 export const RUNTIME_HELPER_PATHS = Object.freeze({
   runtimeClient: "scripts/contained-runtime-client.mjs",
+  runtimeRequest: "scripts/contained-runtime-request.mjs",
   runtimeRun: "scripts/contained-runtime-run.mjs",
   rootlessSpec: "scripts/contained-rootless-spec.mjs",
   imageAuthority: "scripts/contained-image-authority.mjs",

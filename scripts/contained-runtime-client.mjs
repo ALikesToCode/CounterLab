@@ -13,6 +13,10 @@ import { isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { validateContainedRunControlReceipt } from "./contained-runtime-run.mjs";
+import {
+  AGGREGATE_TIMEOUT_QUALIFICATION_MODE,
+  createContainedRuntimeRequest,
+} from "./contained-runtime-request.mjs";
 
 const root = realpathSync(resolve(fileURLToPath(import.meta.url), "../.."));
 const argv = process.argv.slice(2);
@@ -91,11 +95,16 @@ if (command[0] === "login") {
   }
 }
 
-const request = `${JSON.stringify({
-  schemaVersion: "1",
-  args: command,
-  stdinBase64: stdin.toString("base64"),
-})}\n`;
+const request = `${JSON.stringify(
+  createContainedRuntimeRequest({
+    args: command,
+    qualificationMode:
+      controlReceiptPath === undefined
+        ? null
+        : AGGREGATE_TIMEOUT_QUALIFICATION_MODE,
+    stdin,
+  }),
+)}\n`;
 
 const response = await new Promise((accept, reject) => {
   const chunks = [];

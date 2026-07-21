@@ -24,6 +24,7 @@ import {
   probeContainedShimSocketDirectory,
 } from "./contained-containerd-config.mjs";
 import { createContainedRuntimeEnvironment } from "./contained-runtime-environment.mjs";
+import { parseContainedRuntimeRequest } from "./contained-runtime-request.mjs";
 import { verifyPersistedContainedRootlessSpec } from "./contained-rootless-spec.mjs";
 
 const root = realpathSync(resolve(fileURLToPath(import.meta.url), "../.."));
@@ -404,28 +405,10 @@ const server = createServer((socket) => {
   socket.on("end", () => {
     let response;
     try {
-      const request = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-      if (
-        request === null ||
-        typeof request !== "object" ||
-        request.schemaVersion !== "1" ||
-        !Array.isArray(request.args) ||
-        request.args.length === 0 ||
-        request.args.length > 128 ||
-        request.args.some(
-          (argument) =>
-            typeof argument !== "string" ||
-            argument.length === 0 ||
-            argument.length > 8_192,
-        ) ||
-        typeof request.stdinBase64 !== "string"
-      ) {
-        throw new Error("contained runtime request is invalid");
-      }
-      const stdin = Buffer.from(request.stdinBase64, "base64");
-      if (stdin.byteLength > 8_192) {
-        throw new Error("contained runtime input exceeded its bound");
-      }
+      const request = parseContainedRuntimeRequest(
+        JSON.parse(Buffer.concat(chunks).toString("utf8")),
+      );
+      const stdin = request.stdin;
       if (request.args[0] === "counterlab-drain") {
         const receipt = createDrainReceipt(request.args, stdin);
         response = {
@@ -474,6 +457,7 @@ const server = createServer((socket) => {
                 cwd: root,
                 environment,
                 installRoot,
+                qualificationMode: request.qualificationMode,
                 sessionRoot,
                 stdin,
               })
