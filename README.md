@@ -11,7 +11,7 @@ misconceptions in supported Jupyter notebooks. Its released Subject Packs cover
 entity leakage and class imbalance/metric choice; it is not a generic notebook
 copilot or an unrestricted code runner.
 
-**Live judge surface:** <https://counterlab.cserules.workers.dev>
+**Live judge surface:** <https://counterlab.cserules.workers.dev/judge>
 
 The v6.1 learner UX is implemented locally on
 `feat/learner-ux-v6.1`; it has not been pushed, deployed, or browser-qualified.
@@ -274,10 +274,10 @@ The current measured artifact is
 - random accuracy 0.984722, group accuracy 0.594444, ablation accuracy 0.673611;
 - group entity overlap 0;
 - canonical result hash
-  `2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0`;
-- 12/12 published critical mutations detected;
+  `a6ae7652e04e4d70196f991c63b8f7bcb3b76f8c4ab833d3ce2b626df0ab6c94`;
+- 14/14 published leakage critical mutations detected;
 - class-imbalance majority accuracy 0.989333 with 0 rare-class recall, and
-  12/12 imbalance mutations detected;
+  15/15 published imbalance mutations detected;
 - held-out intake/routing 10/10 and fixed full-loop completion 7/8; the
   Random Forest patch is explicitly outside the registered non-sample patch
   contract;
