@@ -5100,3 +5100,101 @@ No containment pass, new exact build, refreshed release evidence, registry
 promotion, Cloudflare mutation, public qualification, submission, push, or
 merge is claimed at this checkpoint. Release remains **NO-GO** until the
 remaining exact-tuple gates pass.
+
+## Delegated-runtime and Cloudflare preflight checkpoint — 2026-07-21T18:51:30Z
+
+Deadline: `2026-07-22T00:00:00Z`; **5 hours 8 minutes 30 seconds remained at
+this checkpoint**. HEAD is
+`7c0cbe21d53d32adf424cfeb815fa9b58c26fc07` on
+`feat/learner-ux-v6.1`.
+
+### Exact build and failed sentinel
+
+The attested `rt-prize721f` runtime built source
+`5209d06e2abd37d0265b67b058bece96d964c013` into an exact local tuple. The
+runner config digest is
+`sha256:30213170dd5aa69c233abf0d35ebe1febc6fc118f3182a482168039d22111398`
+and normalized manifest digest is
+`sha256:c93db90b55a02f094b1f225ace946377ccb7704fcfe95a88bda7f0eb37ca165c`.
+The adapter config digest is
+`sha256:30c88829c0d9757118ee67fa440cba8d0805c2847e7c9242097b3d343b52f15c`
+and manifest digest is
+`sha256:e2ff419cfe39c4b6cb48fd6d7c2f5dcd6f606950fdf3808280b01419996108c1`.
+
+The genuine sentinel for invocation
+`4a1c92f0421be9e8d99d7bed20bbf4b60f0e3e3a84ca9292e452f7feee26e0e9`
+failed closed before candidate creation. Containerd connected the shim, runc
+created no `init.pid`, and the observer emitted no draft or aggregate evidence.
+The finalization recorded `timeoutObserved: false`, `resultReleased: true`, and
+`cleanupVerified: false`; no timeout-cleanup or qualification receipt exists.
+
+A narrow read-only observation of the CounterLab-owned containerd process
+confirmed the cause: its cgroup namespace root exposed no controllers. A
+transient user scope with `Delegate=yes` exposed the required controller set.
+Fresh runtime `rt-prize721g`, launched inside that auto-collected scope, is
+attested and its owned containerd cgroup exposes exactly `cpu memory pids`.
+The previous build receipt is session-toolchain-bound, so it cannot be reused;
+the final clean source must be rebuilt in `rt-prize721g` before the renewed
+genuine sentinel.
+
+### Cloudflare preflight and authorized D1 cleanup
+
+- Wrangler authentication resolved to intended account
+  `9b0a1524e478000ec9b3ff2da6104d81`.
+- All five required Worker secret names are present. A new
+  `COUNTERLAB_ADMISSION_KEY` was generated and stored without printing or
+  persisting its value.
+- The secret update created Worker deployment
+  `4d768fdb-123c-42b5-b5a2-1517a0a12ccc`, version
+  `f13185ab-156e-40a4-b195-0c70b247ad0d`; this is a secret-triggered interim
+  deployment, not the qualified release.
+- Before the owner-authorized deletion, remote D1 was exported to the ignored,
+  repository-contained backup
+  `node_modules/.cache/counterlab-v6.1/releases/pre-delete-counterlab-d1-20260721.sql`.
+  Its size is `14,986,677` bytes and SHA-256 is
+  `68b933b62f1b10fd7569edf07b1d238bae4e62ac18b696391481664034bc7be8`.
+- Exactly eight legacy replay rows were deleted. The follow-up query returned
+  zero rows and one restored `replays_no_delete` trigger. No R2 object or other
+  D1 data was deleted.
+- The active Container remains version 35 on the old `7ba24f06...` image.
+  Migrations `0007`, `0008`, and `0009` remain pending for the qualified deploy.
+
+### Release-script repair
+
+Live Wrangler behavior showed that `secret list` must include
+`--name counterlab`; the unscoped command returned an empty list. Commit
+`7c0cbe2 fix(release): scope Worker secret preflight` fixes the fail-closed
+preflight and adds a regression. Verification: web Vitest **83 files, 703 tests
+passed**; TypeScript test formatting, shell syntax, Git whitespace, and a
+two-file secret scan passed.
+
+### Current ownership and next gates
+
+Another active worker owns eighteen learner UI/test modifications and two
+untracked Learning Director files. They remain unstaged and were not edited or
+overwritten by this release slice. The final source freeze waits for that work
+to be completed and reviewed.
+
+Remaining order:
+
+1. Integrate and commit the concurrent learner slice, then obtain a clean final
+   source commit `S`.
+2. Build `S` once in `rt-prize721g`, run one genuine sentinel, and require all
+   cgroup limits, negative controls, ancestry, timeout, cleanup, and result
+   withholding to pass together.
+3. Refresh and commit the exact SBOM, VEX, scientific-engine, license, health,
+   held-out, and generation-isolation evidence; qualify and promote only that
+   tuple.
+4. Run the complete release check and deploy the bounded maintenance Worker,
+   D1 migrations, Container rollout, final Worker, and automatic production
+   smoke.
+5. Run the public CloakBrowser desktop/mobile, authority, failure, reconnect,
+   transfer, patch, Capsule, accessibility, console/network, and Web Vitals
+   matrix.
+6. Finish non-video submission evidence, keep learner impact `NO_DATA`, push
+   the feature branch, fast-forward `main`, and push `main`. The owner records
+   the final public video.
+
+No aggregate-containment pass, qualified tuple, evidence refresh, registry
+promotion, final deployment, public browser qualification, submission, push,
+or merge is claimed. Release remains **NO-GO**.
