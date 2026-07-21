@@ -13,6 +13,7 @@ export const RUNTIME_POLICY_PATH =
 
 export const RUNTIME_HELPER_PATHS = Object.freeze({
   cgroupEvidence: "scripts/contained-cgroup-evidence.mjs",
+  qualifiedRootlessReceipt: "scripts/contained-qualified-rootless-receipt.mjs",
   runtimeClient: "scripts/contained-runtime-client.mjs",
   runtimeRequest: "scripts/contained-runtime-request.mjs",
   runtimeRun: "scripts/contained-runtime-run.mjs",
