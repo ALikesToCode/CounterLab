@@ -1,10 +1,5 @@
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { randomBytes } from "node:crypto";
+import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -73,7 +68,7 @@ function baseReceipt() {
   });
 }
 
-function aggregateEvidence() {
+function aggregateEvidence(bindings = observerBindings) {
   const memberPids = [100, 101];
   return hashed({
     schemaVersion: "1",
@@ -90,7 +85,7 @@ function aggregateEvidence() {
     invocationId,
     finalContainerId,
     sanitizedSpecSha256,
-    runtimeAttestationSha256: observerBindings.runtimeAttestationSha256,
+    runtimeAttestationSha256: bindings.runtimeAttestationSha256,
     observedLimits: {
       memoryMaxBytes: intendedAggregateLimits.memoryBytes,
       memorySwapMaxBytes: intendedAggregateLimits.memoryBytes,
@@ -129,21 +124,20 @@ function aggregateEvidence() {
     },
     cleanup: { cgroupAbsentAfterTimeout: true },
     observer: {
-      runtimeSessionId: observerBindings.runtimeSessionId,
-      driverCliSha256: observerBindings.driverCliSha256,
-      driverModuleSha256: observerBindings.driverModuleSha256,
+      runtimeSessionId: bindings.runtimeSessionId,
+      driverCliSha256: bindings.driverCliSha256,
+      driverModuleSha256: bindings.driverModuleSha256,
     },
     observedAt: "2026-07-20T12:00:00.000Z",
   });
 }
 
 function fixture() {
-  const parent = resolve(
-    root,
-    "node_modules/.cache/counterlab-v6.1/tmp/qualified-receipt-store",
-  );
+  const runtimeSessionId = `rt-store-${randomBytes(4).toString("hex")}`;
+  const parent = resolve(root, ".rt");
   mkdirSync(parent, { recursive: true, mode: 0o700 });
-  const sessionRoot = mkdtempSync(resolve(parent, "rt-store-"));
+  const sessionRoot = resolve(parent, runtimeSessionId);
+  mkdirSync(sessionRoot, { mode: 0o700 });
   const runRoot = resolve(sessionRoot, "run");
   const specRoot = resolve(runRoot, "rootless-specs");
   mkdirSync(specRoot, { recursive: true, mode: 0o700 });
@@ -153,19 +147,31 @@ function fixture() {
   return {
     baseReceiptFileSha256: sha256CgroupBytes(source),
     baseReceiptPath,
+    observerBindings: { ...observerBindings, runtimeSessionId },
     sessionRoot,
+  };
+}
+
+function dependencies(input: ReturnType<typeof fixture>) {
+  return {
+    now: () => Date.parse("2026-07-20T12:01:00.000Z"),
+    resolveObserverBindings: () => input.observerBindings,
   };
 }
 
 describe("qualified rootless receipt store", () => {
   it("creates and verifies one distinct qualified receipt", () => {
     const input = fixture();
-    const persisted = persistQualifiedContainedRootlessReceipt({
-      ...input,
-      aggregateLimitEvidence: aggregateEvidence(),
-      finalContainerId,
-      observerBindings,
-    });
+    const persisted = persistQualifiedContainedRootlessReceipt(
+      {
+        baseReceiptFileSha256: input.baseReceiptFileSha256,
+        baseReceiptPath: input.baseReceiptPath,
+        sessionRoot: input.sessionRoot,
+        aggregateLimitEvidence: aggregateEvidence(input.observerBindings),
+        finalContainerId,
+      },
+      dependencies(input),
+    );
 
     expect(persisted.qualifiedReceiptPath).toBe(
       resolve(
@@ -177,34 +183,45 @@ describe("qualified rootless receipt store", () => {
       `${JSON.stringify(baseReceipt(), null, 2)}\n`,
     );
     expect(() =>
-      verifyQualifiedContainedRootlessReceipt({
-        ...input,
-        finalContainerId,
-        observerBindings,
-        qualifiedReceiptFileSha256: persisted.qualifiedReceiptFileSha256,
-        qualifiedReceiptPath: persisted.qualifiedReceiptPath,
-      }),
+      verifyQualifiedContainedRootlessReceipt(
+        {
+          baseReceiptFileSha256: input.baseReceiptFileSha256,
+          baseReceiptPath: input.baseReceiptPath,
+          sessionRoot: input.sessionRoot,
+          finalContainerId,
+          qualifiedReceiptFileSha256: persisted.qualifiedReceiptFileSha256,
+          qualifiedReceiptPath: persisted.qualifiedReceiptPath,
+        },
+        dependencies(input),
+      ),
     ).not.toThrow();
     expect(() =>
-      persistQualifiedContainedRootlessReceipt({
-        ...input,
-        aggregateLimitEvidence: aggregateEvidence(),
-        finalContainerId,
-        observerBindings,
-      }),
+      persistQualifiedContainedRootlessReceipt(
+        {
+          baseReceiptFileSha256: input.baseReceiptFileSha256,
+          baseReceiptPath: input.baseReceiptPath,
+          sessionRoot: input.sessionRoot,
+          aggregateLimitEvidence: aggregateEvidence(input.observerBindings),
+          finalContainerId,
+        },
+        dependencies(input),
+      ),
     ).toThrow(/already exists/u);
   });
 
   it("rejects path, hash, and symbolic-link drift", () => {
     const wrongHash = fixture();
     expect(() =>
-      persistQualifiedContainedRootlessReceipt({
-        ...wrongHash,
-        aggregateLimitEvidence: aggregateEvidence(),
-        baseReceiptFileSha256: "0".repeat(64),
-        finalContainerId,
-        observerBindings,
-      }),
+      persistQualifiedContainedRootlessReceipt(
+        {
+          baseReceiptPath: wrongHash.baseReceiptPath,
+          sessionRoot: wrongHash.sessionRoot,
+          aggregateLimitEvidence: aggregateEvidence(wrongHash.observerBindings),
+          baseReceiptFileSha256: "0".repeat(64),
+          finalContainerId,
+        },
+        dependencies(wrongHash),
+      ),
     ).toThrow(/base receipt/u);
 
     const linked = fixture();
@@ -214,13 +231,57 @@ describe("qualified rootless receipt store", () => {
     );
     symlinkSync(linked.baseReceiptPath, linkedPath);
     expect(() =>
-      persistQualifiedContainedRootlessReceipt({
-        ...linked,
-        aggregateLimitEvidence: aggregateEvidence(),
-        baseReceiptPath: linkedPath,
-        finalContainerId,
-        observerBindings,
-      }),
+      persistQualifiedContainedRootlessReceipt(
+        {
+          baseReceiptFileSha256: linked.baseReceiptFileSha256,
+          sessionRoot: linked.sessionRoot,
+          aggregateLimitEvidence: aggregateEvidence(linked.observerBindings),
+          baseReceiptPath: linkedPath,
+          finalContainerId,
+        },
+        dependencies(linked),
+      ),
     ).toThrow(/path/u);
+  });
+
+  it("rejects stale evidence and a resolver bound to another session", () => {
+    const stale = fixture();
+    expect(() =>
+      persistQualifiedContainedRootlessReceipt(
+        {
+          baseReceiptFileSha256: stale.baseReceiptFileSha256,
+          baseReceiptPath: stale.baseReceiptPath,
+          sessionRoot: stale.sessionRoot,
+          aggregateLimitEvidence: aggregateEvidence(stale.observerBindings),
+          finalContainerId,
+        },
+        {
+          ...dependencies(stale),
+          now: () => Date.parse("2026-07-20T12:06:00.001Z"),
+        },
+      ),
+    ).toThrow(/stale/u);
+
+    const mismatched = fixture();
+    expect(() =>
+      persistQualifiedContainedRootlessReceipt(
+        {
+          baseReceiptFileSha256: mismatched.baseReceiptFileSha256,
+          baseReceiptPath: mismatched.baseReceiptPath,
+          sessionRoot: mismatched.sessionRoot,
+          aggregateLimitEvidence: aggregateEvidence(
+            mismatched.observerBindings,
+          ),
+          finalContainerId,
+        },
+        {
+          ...dependencies(mismatched),
+          resolveObserverBindings: () => ({
+            ...mismatched.observerBindings,
+            runtimeSessionId: "rt-v61-other1",
+          }),
+        },
+      ),
+    ).toThrow(/path input/u);
   });
 });

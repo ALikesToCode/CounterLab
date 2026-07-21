@@ -3,7 +3,11 @@ export interface QualifiedRootlessReceiptStoreBinding {
   baseReceiptPath: string;
   finalContainerId: string;
   sessionRoot: string;
-  observerBindings: {
+}
+
+interface QualifiedReceiptStoreDependencies {
+  now?: () => number;
+  resolveObserverBindings?: (input: { sessionRoot: string }) => {
     runtimeAttestationSha256: string;
     runtimeSessionId: string;
     driverCliSha256: string;
@@ -15,6 +19,7 @@ export function persistQualifiedContainedRootlessReceipt(
   input: {
     aggregateLimitEvidence: unknown;
   } & QualifiedRootlessReceiptStoreBinding,
+  dependencies?: QualifiedReceiptStoreDependencies,
 ): {
   qualifiedReceipt: Record<string, unknown>;
   qualifiedReceiptFileSha256: string;
@@ -27,4 +32,5 @@ export function verifyQualifiedContainedRootlessReceipt(
     qualifiedReceiptFileSha256: string;
     qualifiedReceiptPath: string;
   },
+  dependencies?: QualifiedReceiptStoreDependencies,
 ): Record<string, unknown>;

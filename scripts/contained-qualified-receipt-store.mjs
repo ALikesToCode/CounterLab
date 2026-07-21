@@ -3,6 +3,7 @@ import { isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { sha256CgroupBytes } from "./contained-cgroup-evidence.mjs";
+import { resolveContainedCgroupObserverBindings } from "./contained-cgroup-observer-bindings.mjs";
 import { createQualifiedContainedRootlessReceipt } from "./contained-qualified-rootless-receipt.mjs";
 
 const repositoryRoot = realpathSync(
@@ -11,6 +12,7 @@ const repositoryRoot = realpathSync(
 const containerIdPattern = /^[a-f0-9]{64}$/u;
 const sha256Pattern = /^[a-f0-9]{64}$/u;
 const maximumReceiptBytes = 1_048_576;
+const maximumObservationAgeMs = 5 * 60_000;
 
 function contained(root, candidate) {
   const fromRoot = relative(root, candidate);
@@ -26,7 +28,7 @@ function privateDirectory(path, label) {
     !metadata.isDirectory() ||
     realpathSync(path) !== path ||
     metadata.uid !== process.getuid() ||
-    (metadata.mode & 0o077) !== 0
+    (metadata.mode & 0o777) !== 0o700
   ) {
     throw new Error(`qualified rootless receipt ${label} is invalid`);
   }
@@ -49,14 +51,17 @@ function privateFile(path, label) {
   }
 }
 
-function receiptPaths({ sessionRoot, finalContainerId }) {
+function receiptPaths({ sessionRoot, finalContainerId, runtimeSessionId }) {
   if (
     !isAbsolute(sessionRoot) ||
     !contained(repositoryRoot, sessionRoot) ||
-    !containerIdPattern.test(finalContainerId ?? "")
+    !containerIdPattern.test(finalContainerId ?? "") ||
+    !/^rt-[a-z0-9][a-z0-9-]{7,13}$/u.test(runtimeSessionId ?? "") ||
+    sessionRoot !== resolve(repositoryRoot, ".rt", runtimeSessionId)
   ) {
     throw new Error("qualified rootless receipt path input is invalid");
   }
+  privateDirectory(resolve(repositoryRoot, ".rt"), "runtime root");
   privateDirectory(sessionRoot, "session root");
   const runRoot = resolve(sessionRoot, "run");
   const specRoot = resolve(runRoot, "rootless-specs");
@@ -82,12 +87,17 @@ function readBaseReceipt({
   baseReceiptFileSha256,
   baseReceiptPath,
   finalContainerId,
+  observerBindings,
   sessionRoot,
 }) {
   if (!sha256Pattern.test(baseReceiptFileSha256 ?? "")) {
     throw new Error("qualified rootless base receipt hash is invalid");
   }
-  const expected = receiptPaths({ sessionRoot, finalContainerId });
+  const expected = receiptPaths({
+    sessionRoot,
+    finalContainerId,
+    runtimeSessionId: observerBindings.runtimeSessionId,
+  });
   if (baseReceiptPath !== expected.baseReceiptPath) {
     throw new Error("qualified rootless receipt base path changed");
   }
@@ -110,12 +120,35 @@ function readBaseReceipt({
   return { expected, receipt };
 }
 
-export function persistQualifiedContainedRootlessReceipt(input) {
-  const { expected, receipt: baseReceipt } = readBaseReceipt(input);
+export function persistQualifiedContainedRootlessReceipt(
+  input,
+  {
+    now = () => Date.now(),
+    resolveObserverBindings = resolveContainedCgroupObserverBindings,
+  } = {},
+) {
+  const observerBindings = resolveObserverBindings({
+    sessionRoot: input.sessionRoot,
+  });
+  const observedAt = Date.parse(input.aggregateLimitEvidence?.observedAt);
+  const currentTime = now();
+  if (
+    !Number.isFinite(currentTime) ||
+    !Number.isFinite(observedAt) ||
+    new Date(observedAt).toISOString() !==
+      input.aggregateLimitEvidence?.observedAt ||
+    Math.abs(currentTime - observedAt) > maximumObservationAgeMs
+  ) {
+    throw new Error("qualified rootless receipt observation is stale");
+  }
+  const { expected, receipt: baseReceipt } = readBaseReceipt({
+    ...input,
+    observerBindings,
+  });
   const qualifiedReceipt = createQualifiedContainedRootlessReceipt({
     aggregateLimitEvidence: input.aggregateLimitEvidence,
     baseReceipt,
-    observerBindings: input.observerBindings,
+    observerBindings,
   });
   const source = `${JSON.stringify(qualifiedReceipt, null, 2)}\n`;
   try {
@@ -141,8 +174,17 @@ export function persistQualifiedContainedRootlessReceipt(input) {
   };
 }
 
-export function verifyQualifiedContainedRootlessReceipt(input) {
-  const { expected, receipt: baseReceipt } = readBaseReceipt(input);
+export function verifyQualifiedContainedRootlessReceipt(
+  input,
+  { resolveObserverBindings = resolveContainedCgroupObserverBindings } = {},
+) {
+  const observerBindings = resolveObserverBindings({
+    sessionRoot: input.sessionRoot,
+  });
+  const { expected, receipt: baseReceipt } = readBaseReceipt({
+    ...input,
+    observerBindings,
+  });
   if (
     input.qualifiedReceiptPath !== expected.qualifiedReceiptPath ||
     !sha256Pattern.test(input.qualifiedReceiptFileSha256 ?? "")
@@ -165,7 +207,7 @@ export function verifyQualifiedContainedRootlessReceipt(input) {
   const expectedReceipt = createQualifiedContainedRootlessReceipt({
     aggregateLimitEvidence: qualifiedReceipt.aggregateLimitEvidence,
     baseReceipt,
-    observerBindings: input.observerBindings,
+    observerBindings,
   });
   const expectedSource = `${JSON.stringify(expectedReceipt, null, 2)}\n`;
   if (!source.equals(Buffer.from(expectedSource))) {
