@@ -12,12 +12,31 @@ CounterLab — A scientific debugger for beliefs
 
 Ask like chat. Prove it like science.
 
+## Submission fields
+
+- **Category:** Education
+- **Primary audience:** ML learners and instructors who need to test what a
+  notebook result actually supports
+- **Live judge URL:** <https://counterlab.cserules.workers.dev/judge>
+- **License:** MIT
+- **Repository URL:** **PENDING** anonymous-access verification; do not paste a
+  private or 404 URL
+- **Public video URL:** **PENDING** capture from the final qualified release
+- **Codex `/feedback` Session ID:** **PENDING** owner-supplied primary build
+  thread ID
+- **Exact release receipt:** **PENDING** final source/Container/Worker
+  qualification
+- **Ready-to-use notebook fixtures:**
+  `fixtures/notebooks/customer_churn_leakage.ipynb` and
+  `fixtures/notebooks/fraud_class_imbalance.ipynb`
+
 ## Short description
 
-CounterLab turns a learner's supported notebook claim into two competing
-models, an immutable Prediction, the smallest verified discriminating Test, a
-signed or integrity-hashed Boundary Map, deterministic transfer, and a minimal
-repair unlocked only after transfer passes.
+CounterLab helps ML learners and instructors test what a supported notebook
+result actually means. It turns the learner's claim into two competing models,
+an immutable Prediction, the smallest verified discriminating Test, a signed
+or integrity-hashed Boundary Map, deterministic transfer, and a minimal repair
+unlocked only after transfer passes.
 
 CounterLab is evidence-first learning for notebook users: seal a Prediction,
 change one condition, and let fixed evidence—not AI prose—release the bounded
@@ -50,6 +69,34 @@ The learner journey is one stable sequence:
 The Evidence Verdict is exactly `SUPPORTS`, `INCONCLUSIVE`, or `REJECTED`.
 CounterLab never labels the learner wrong and releases no result from a rejected
 test.
+
+## What we built during Build Week
+
+The build-week implementation turned the earlier evidence engine into one
+learner-first, source-bound release candidate:
+
+- a chat-first Question composer and one six-stage progress model;
+- immutable Prediction, evidence story, Model Duel, Fair Test Builder,
+  Experiment Theater, Boundary Hunt, visual transfer, Repair preview, and
+  bounded completion;
+- a ten-second Judge preview bound to checked-in fixed sample evidence and a
+  one-click integrity-verified Sample Proof Capsule;
+- recoverable reject/insufficient-evidence paths, supported-artifact gating,
+  pre-Prediction result-leak regressions, stored proof-event hydration, and
+  capability-link lifecycle handling;
+- source/image/release identity contracts, exact-image isolation sentinels,
+  negative release controls, and fail-closed public readiness; and
+- keyboard, responsive, reduced-motion, interaction-evidence, replay, and
+  download coverage without adding learner names, raw free text, or notebook
+  content to analytics.
+
+Codex accelerated repository exploration, test construction, bounded repairs,
+release-safety review, and repeated regression runs during the build. Those
+engineering contributions are separate from **Runtime Codex inside the
+product**, which may propose only schema-valid plans and repairs. Human
+decisions fixed the product thesis, learner authority, supported Subject Packs,
+scientific invariants, privacy boundary, release claims, and every final
+integration decision.
 
 ## What is technically distinct
 
