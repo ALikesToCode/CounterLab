@@ -12,6 +12,7 @@ export const RUNTIME_POLICY_PATH =
   "services/runner/src/counterlab_runner/contained-runtime-policy.json";
 
 export const RUNTIME_HELPER_PATHS = Object.freeze({
+  cgroupControlHelper: "scripts/contained-cgroup-control-helper.mjs",
   cgroupEvidence: "scripts/contained-cgroup-evidence.mjs",
   qualifiedRootlessReceiptStore:
     "scripts/contained-qualified-receipt-store.mjs",
