@@ -69,6 +69,7 @@ export interface RunnerJobRepository {
     job: RunnerJob,
     expectedVersion: number,
     callback: RunnerCallback,
+    terminalEvent?: PublicCompilerEvent,
   ): Promise<void>;
 }
 
@@ -136,14 +137,6 @@ function callbackStableIdentity(
     stateVersion: callback.stateVersion,
     outputHashes: callback.outputHashes,
     occurredAt: callback.occurredAt,
-  };
-}
-
-function callbackEvidenceIdentity(callback: RunnerCallback): unknown {
-  return {
-    ...callbackStableIdentity(callback),
-    status: callback.status,
-    error: callback.error ?? null,
     operationalMetrics: callback.operationalMetrics ?? null,
   };
 }
@@ -152,18 +145,30 @@ async function callbacksShareRunnerOrigin(
   stored: RunnerCallback,
   incoming: RunnerCallback,
 ): Promise<boolean> {
-  if (stored.finalEventCursor < incoming.finalEventCursor) return false;
-  if (stored.status === incoming.status) {
+  return (await hashCanonical(stored)) === (await hashCanonical(incoming));
+}
+
+async function callbackCanSettleClaim(
+  claimed: RunnerCallback,
+  settled: RunnerCallback,
+): Promise<boolean> {
+  if (settled.finalEventCursor < claimed.finalEventCursor) return false;
+  if (
+    (await hashCanonical(callbackStableIdentity(claimed))) !==
+    (await hashCanonical(callbackStableIdentity(settled)))
+  ) {
+    return false;
+  }
+  if (claimed.status === settled.status) {
     return (
-      (await hashCanonical(callbackEvidenceIdentity(stored))) ===
-      (await hashCanonical(callbackEvidenceIdentity(incoming)))
+      (await hashCanonical(claimed.error ?? null)) ===
+      (await hashCanonical(settled.error ?? null))
     );
   }
   return (
-    incoming.status === "VERIFIED" &&
-    stored.status === "REJECTED" &&
-    (await hashCanonical(callbackStableIdentity(stored))) ===
-      (await hashCanonical(callbackStableIdentity(incoming)))
+    claimed.status === "VERIFIED" &&
+    settled.status === "REJECTED" &&
+    settled.error !== undefined
   );
 }
 
@@ -190,7 +195,6 @@ const REUSABLE_STARTED_JOB_STATUSES = new Set<RunnerJobStatus>([
   "REPAIRING",
 ]);
 const START_CONFLICT_RETRY_LIMIT = 3;
-const MUTATION_CLAIM_TTL_MS = 60_000;
 const CALLBACK_SETTLEMENT_GRACE_MS = 60_000;
 
 function jobDeadline(job: RunnerJob): number {
@@ -205,10 +209,7 @@ function isOutputWriteClaimExpired(
 ): boolean {
   const timestamp = Date.parse(claimedAt);
   if (!Number.isFinite(timestamp)) return true;
-  return (
-    now.getTime() >=
-    Math.min(timestamp + MUTATION_CLAIM_TTL_MS, jobDeadline(job))
-  );
+  return now.getTime() >= jobDeadline(job);
 }
 
 function callbackSettlementDeadline(job: RunnerJob): number {
@@ -222,12 +223,7 @@ function isCallbackClaimExpired(
 ): boolean {
   const timestamp = Date.parse(claimedAt);
   if (!Number.isFinite(timestamp)) return true;
-  const runnerDeadline = jobDeadline(job);
-  const claimDeadline =
-    timestamp >= runnerDeadline
-      ? callbackSettlementDeadline(job)
-      : Math.min(timestamp + MUTATION_CLAIM_TTL_MS, runnerDeadline);
-  return now.getTime() >= claimDeadline;
+  return now.getTime() >= callbackSettlementDeadline(job);
 }
 
 function jobDeadlineReached(job: RunnerJob, now: Date): boolean {
@@ -790,6 +786,27 @@ export class RunnerJobService {
     throw new ConcurrentRunnerJobUpdateError(jobId);
   }
 
+  async assertOutputWriteClaim(
+    jobId: string,
+    claim: RunnerOutputWriteClaimToken,
+  ): Promise<void> {
+    const current = await this.getJob(jobId);
+    if (
+      current.outputWriteClaim === undefined ||
+      current.outputWriteClaim.ownerId !== claim.ownerId ||
+      current.outputWriteClaim.generatedPath !== claim.generatedPath ||
+      isOutputWriteClaimExpired(
+        current,
+        current.outputWriteClaim.claimedAt,
+        this.clock.now(),
+      )
+    ) {
+      throw new RunnerCallbackStateError(
+        `Runner output claim does not authorize writing ${claim.generatedPath}`,
+      );
+    }
+  }
+
   async claimCallback(
     callback: unknown,
     ownerId: string,
@@ -837,7 +854,6 @@ export class RunnerJobService {
     const recovering =
       current.callbackRecovery?.idempotencyKey === parsed.idempotencyKey &&
       current.callbackRecovery.callbackHash === callbackHash;
-    const recoveringExpiredClaim = matchingClaim && callbackClaimExpired;
     if (now.getTime() >= callbackSettlementDeadline(current)) {
       throw new RunnerCallbackStateError(
         `Runner callback cannot claim job ${current.jobId} after its settlement deadline`,
@@ -851,7 +867,7 @@ export class RunnerJobService {
     if (
       current.eventCursor !== parsed.finalEventCursor &&
       !(
-        (recovering || recoveringExpiredClaim) &&
+        recovering &&
         current.eventCursor > parsed.finalEventCursor
       )
     ) {
@@ -954,35 +970,76 @@ export class RunnerJobService {
     throw new ConcurrentRunnerJobUpdateError(jobId);
   }
 
+  async assertCallbackClaim(
+    jobId: string,
+    claim: RunnerCallbackClaimToken,
+  ): Promise<void> {
+    const current = await this.getJob(jobId);
+    if (
+      current.callbackClaim === undefined ||
+      current.callbackClaim.ownerId !== claim.ownerId ||
+      current.callbackClaim.callbackHash !== claim.callbackHash ||
+      isCallbackClaimExpired(
+        current,
+        current.callbackClaim.claimedAt,
+        this.clock.now(),
+      )
+    ) {
+      throw new RunnerCallbackStateError(
+        `Runner callback claim does not authorize mutation for ${jobId}`,
+      );
+    }
+  }
+
   async recordCallback(
     callback: unknown,
-    suppliedClaim?: RunnerCallbackClaimToken,
+    options: {
+      claim?: RunnerCallbackClaimToken;
+      claimedCallback?: unknown;
+      terminalEvent?: unknown;
+    } = {},
   ): Promise<{ duplicate: boolean; job: RunnerJob }> {
     const parsed = RunnerCallbackSchema.parse(callback);
+    const claimedCallback = RunnerCallbackSchema.parse(
+      options.claimedCallback ?? parsed,
+    );
     const existing = await this.repository.findCallback(parsed.idempotencyKey);
     if (existing !== undefined) {
-      if (!(await callbacksShareRunnerOrigin(existing, parsed))) {
+      const settledJob = await this.getJob(parsed.jobId);
+      if (
+        !(await callbacksShareRunnerOrigin(existing, claimedCallback)) ||
+        !(await callbackCanSettleClaim(claimedCallback, parsed)) ||
+        parsed.status !== settledJob.status ||
+        parsed.finalEventCursor !== settledJob.eventCursor ||
+        (await hashCanonical(parsed.outputHashes)) !==
+          (await hashCanonical(settledJob.outputHashes)) ||
+        (await hashCanonical(parsed.error ?? null)) !==
+          (await hashCanonical(settledJob.error ?? null))
+      ) {
         throw new RunnerCallbackConflictError(parsed.idempotencyKey);
       }
-      return { duplicate: true, job: await this.getJob(parsed.jobId) };
+      return { duplicate: true, job: settledJob };
     }
 
-    let claim = suppliedClaim;
+    let claim = options.claim;
     if (claim === undefined) {
       const claimed = await this.claimCallback(
-        parsed,
-        `record-callback:${parsed.callbackId}`,
+        claimedCallback,
+        `record-callback:${claimedCallback.callbackId}`,
       );
       if (claimed.duplicate) return claimed;
       claim = claimed.claim;
     }
 
     const current = await this.getJob(parsed.jobId);
+    const claimedCallbackHash = await hashCanonical(claimedCallback);
     if (
       current.callbackClaim === undefined ||
       current.callbackClaim.ownerId !== claim.ownerId ||
       current.callbackClaim.callbackHash !== claim.callbackHash ||
-      current.callbackClaim.idempotencyKey !== parsed.idempotencyKey
+      current.callbackClaim.idempotencyKey !== parsed.idempotencyKey ||
+      claim.callbackHash !== claimedCallbackHash ||
+      !(await callbackCanSettleClaim(claimedCallback, parsed))
     ) {
       throw new RunnerCallbackStateError(
         `Runner callback claim does not authorize completion for ${parsed.jobId}`,
@@ -1006,10 +1063,25 @@ export class RunnerJobService {
         `Callback state version ${parsed.stateVersion} does not match job state version ${current.stateVersion}`,
       );
     }
-    if (current.eventCursor !== parsed.finalEventCursor) {
+    const terminalEvent =
+      options.terminalEvent === undefined
+        ? undefined
+        : PublicCompilerEventSchema.parse(options.terminalEvent);
+    const expectedFinalCursor =
+      current.eventCursor + (terminalEvent === undefined ? 0 : 1);
+    if (
+      terminalEvent !== undefined &&
+      (terminalEvent.jobId !== parsed.jobId ||
+        terminalEvent.cursor !== expectedFinalCursor)
+    ) {
+      throw new RunnerCallbackStateError(
+        `Terminal authority event does not close runner job ${parsed.jobId}`,
+      );
+    }
+    if (expectedFinalCursor !== parsed.finalEventCursor) {
       throw new RunnerEventCursorError(
         current.jobId,
-        current.eventCursor,
+        expectedFinalCursor,
         parsed.finalEventCursor,
       );
     }
@@ -1033,10 +1105,16 @@ export class RunnerJobService {
       jobVersion: current.jobVersion + 1,
       updatedAt: completedAt.toISOString(),
       completedAt: completedAt.toISOString(),
+      eventCursor: expectedFinalCursor,
       outputHashes: parsed.outputHashes,
       ...(parsed.error === undefined ? {} : { error: parsed.error }),
     });
-    await this.repository.complete(next, current.jobVersion, parsed);
+    await this.repository.complete(
+      next,
+      current.jobVersion,
+      claimedCallback,
+      terminalEvent,
+    );
     return { duplicate: false, job: structuredClone(next) };
   }
 }

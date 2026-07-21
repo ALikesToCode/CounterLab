@@ -297,9 +297,14 @@ export class D1RunnerJobRepository implements RunnerJobRepository {
     job: RunnerJob,
     expectedVersion: number,
     callback: RunnerCallback,
+    terminalEvent?: PublicCompilerEvent,
   ): Promise<void> {
     const parsedJob = RunnerJobSchema.parse(job);
     const parsedCallback = RunnerCallbackSchema.parse(callback);
+    const parsedTerminalEvent =
+      terminalEvent === undefined
+        ? undefined
+        : PublicCompilerEventSchema.parse(terminalEvent);
     const receiptInsert = this.database
       .prepare(
         `INSERT INTO runner_callback_receipts
@@ -313,19 +318,48 @@ export class D1RunnerJobRepository implements RunnerJobRepository {
         parsedCallback.callbackId,
         parsedCallback.jobId,
         JSON.stringify(parsedCallback),
-        parsedCallback.occurredAt,
+        parsedJob.completedAt ?? parsedJob.updatedAt,
         parsedJob.jobId,
         expectedVersion,
       );
+    const eventInsert =
+      parsedTerminalEvent === undefined
+        ? undefined
+        : this.database
+            .prepare(
+              `INSERT INTO runner_public_events
+                (event_id, job_id, cursor, kind, event_json, occurred_at)
+               SELECT ?, ?, ?, ?, ?, ?
+               FROM runner_jobs
+               WHERE id = ? AND version = ?`,
+            )
+            .bind(
+              parsedTerminalEvent.eventId,
+              parsedTerminalEvent.jobId,
+              parsedTerminalEvent.cursor,
+              parsedTerminalEvent.kind,
+              JSON.stringify(parsedTerminalEvent),
+              parsedTerminalEvent.at,
+              parsedJob.jobId,
+              expectedVersion,
+            );
     const jobUpdate = this.database
       .prepare(
         `UPDATE runner_jobs
          SET status = ?, version = ?, event_cursor = ?, job_json = ?, updated_at = ?
          WHERE id = ? AND version = ?
-           AND EXISTS (
-             SELECT 1 FROM runner_callback_receipts
-             WHERE idempotency_key = ? AND job_id = ?
-           )`,
+            AND EXISTS (
+              SELECT 1 FROM runner_callback_receipts
+              WHERE idempotency_key = ? AND job_id = ?
+            )
+            ${
+              parsedTerminalEvent === undefined
+                ? ""
+                : `AND EXISTS (
+                     SELECT 1 FROM runner_public_events
+                     WHERE event_id = ? AND job_id = ?
+                   )`
+            }`,
       )
       .bind(
         parsedJob.status,
@@ -337,12 +371,17 @@ export class D1RunnerJobRepository implements RunnerJobRepository {
         expectedVersion,
         parsedCallback.idempotencyKey,
         parsedJob.jobId,
+        ...(parsedTerminalEvent === undefined
+          ? []
+          : [parsedTerminalEvent.eventId, parsedJob.jobId]),
       );
-    const results = (await this.database.batch([
+    const statements = [
       receiptInsert,
+      ...(eventInsert === undefined ? [] : [eventInsert]),
       jobUpdate,
-    ])) as D1Changes[];
-    if (results[0]?.meta?.changes !== 1 || results[1]?.meta?.changes !== 1) {
+    ];
+    const results = (await this.database.batch(statements)) as D1Changes[];
+    if (results.some((result) => result.meta?.changes !== 1)) {
       throw new ConcurrentRunnerJobUpdateError(parsedJob.jobId);
     }
   }

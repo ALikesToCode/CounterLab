@@ -415,6 +415,104 @@ class ConflictSessionRepository extends MemorySessionRepository {
   }
 }
 
+class InterruptibleSessionRepository extends MemorySessionRepository {
+  private interruptedEventKind: EvidenceEvent["kind"] | undefined;
+
+  interruptNext(eventKind: EvidenceEvent["kind"]): void {
+    this.interruptedEventKind = eventKind;
+  }
+
+  override async save(
+    session: CounterLabSession,
+    expectedVersion: number,
+    event: EvidenceEvent,
+  ): Promise<void> {
+    if (event.kind === this.interruptedEventKind) {
+      this.interruptedEventKind = undefined;
+      throw new Error(`simulated ${event.kind} interruption`);
+    }
+    await super.save(session, expectedVersion, event);
+  }
+}
+
+class ConcurrentProofSessionRepository extends InterruptibleSessionRepository {
+  private readonly races = new Map<
+    EvidenceEvent["kind"],
+    { arrivals: number; wait: Promise<void>; release: () => void }
+  >();
+  private pausedFind:
+    | {
+        state: CounterLabSession["state"];
+        reached: () => void;
+        wait: Promise<void>;
+      }
+    | undefined;
+
+  pauseNextFindAtState(state: CounterLabSession["state"]): {
+    reached: Promise<void>;
+    release: () => void;
+  } {
+    let reached!: () => void;
+    let release!: () => void;
+    const reachedPromise = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    const wait = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.pausedFind = { state, reached, wait };
+    return { reached: reachedPromise, release };
+  }
+
+  override async find(
+    sessionId: string,
+  ): Promise<CounterLabSession | undefined> {
+    const session = await super.find(sessionId);
+    const paused = this.pausedFind;
+    if (paused !== undefined && session?.state === paused.state) {
+      this.pausedFind = undefined;
+      paused.reached();
+      await paused.wait;
+    }
+    return session;
+  }
+
+  raceNext(...eventKinds: EvidenceEvent["kind"][]): void {
+    for (const eventKind of eventKinds) {
+      let release!: () => void;
+      const wait = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      this.races.set(eventKind, { arrivals: 0, wait, release });
+    }
+  }
+
+  override async save(
+    session: CounterLabSession,
+    expectedVersion: number,
+    event: EvidenceEvent,
+  ): Promise<void> {
+    const race = this.races.get(event.kind);
+    if (race !== undefined) {
+      race.arrivals += 1;
+      if (race.arrivals === 2) {
+        this.races.delete(event.kind);
+        race.release();
+      } else {
+        await race.wait;
+      }
+    }
+    try {
+      await super.save(session, expectedVersion, event);
+    } catch (error) {
+      if (error instanceof Error && error.message === "stale test session write") {
+        throw new ConcurrentD1SessionUpdateError(session.id);
+      }
+      throw error;
+    }
+  }
+}
+
 class MemoryRunnerJobRepository implements RunnerJobRepository {
   private readonly jobs = new Map<string, RunnerJob>();
   private readonly events = new Map<string, PublicCompilerEvent[]>();
@@ -587,8 +685,14 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
     job: RunnerJob,
     expectedVersion: number,
     callback: RunnerCallback,
+    terminalEvent?: PublicCompilerEvent,
   ): Promise<void> {
     await this.save(job, expectedVersion);
+    if (terminalEvent !== undefined) {
+      const events = await this.listEvents(job.jobId, 0);
+      events.push(structuredClone(terminalEvent));
+      this.events.set(job.jobId, events);
+    }
     this.callbacks.set(callback.idempotencyKey, structuredClone(callback));
   }
 }
@@ -613,6 +717,22 @@ class InterruptibleRunnerJobRepository extends MemoryRunnerJobRepository {
       }
     }
     await super.appendEvent(job, expectedVersion, event);
+  }
+
+  override async complete(
+    job: RunnerJob,
+    expectedVersion: number,
+    callback: RunnerCallback,
+    terminalEvent?: PublicCompilerEvent,
+  ): Promise<void> {
+    if (this.authorityAppendsUntilFailure !== undefined) {
+      this.authorityAppendsUntilFailure -= 1;
+      if (this.authorityAppendsUntilFailure === 0) {
+        this.authorityAppendsUntilFailure = undefined;
+        throw new Error("simulated authority event interruption");
+      }
+    }
+    await super.complete(job, expectedVersion, callback, terminalEvent);
   }
 }
 
@@ -1177,8 +1297,9 @@ function learningDirectorClarificationResult(): Response {
 
 async function preparedScientificHostedRunner(
   runnerJobs: MemoryRunnerJobRepository = new MemoryRunnerJobRepository(),
+  sessionRepository: MemorySessionRepository = new MemorySessionRepository(),
 ) {
-  const harness = await sessionHarness("live");
+  const harness = await sessionHarness("live", sessionRepository);
   const storedArtifact = await harness.artifactStore.find(
     "artifact_uploaded_not_sample",
   );
@@ -8270,8 +8391,12 @@ describe("Cloudflare Worker API", () => {
     });
   });
 
-  it("dispatches a live v5 patch from frozen experiment, verdict, and transfer authority", async () => {
-    const harness = await preparedScientificHostedRunner();
+  it("resumes native proof issuance after a verified v5 patch callback is interrupted", async () => {
+    const sessionRepository = new ConcurrentProofSessionRepository();
+    const harness = await preparedScientificHostedRunner(
+      new MemoryRunnerJobRepository(),
+      sessionRepository,
+    );
     const run = await completeScientificCompileAndQueueRun(harness);
     const runJobId = run.dispatch.job.jobId;
     expect(
@@ -8640,7 +8765,8 @@ describe("Cloudflare Worker API", () => {
       COUNTERLAB_SIGNING_KEY: capsuleSigningKey,
       COUNTERLAB_SIGNING_KEY_ID: "capsule-test-key-v2",
     } as unknown as Env & Record<string, string>;
-    const callback = await harness.app.request(
+    sessionRepository.interruptNext("reasoning_diff_v2.issued");
+    const interruptedCallback = await harness.app.request(
       `/api/runner/jobs/${patchDispatch.job.jobId}/callback`,
       {
         method: "POST",
@@ -8652,12 +8778,72 @@ describe("Cloudflare Worker API", () => {
       },
       capsuleSigningEnv,
     );
-    expect(callback.status).toBe(200);
+    expect(interruptedCallback.status).toBe(500);
+    await expect(
+      harness.runnerJobs.find(patchDispatch.job.jobId),
+    ).resolves.toMatchObject({ status: "VERIFIED" });
+    await expect(
+      harness.sessionRepository.find(bundle.sessionId),
+    ).resolves.toMatchObject({ state: "PATCH_VERIFIED" });
+
+    const requestDuplicateCallback = () =>
+      harness.app.request(
+        `/api/runner/jobs/${patchDispatch.job.jobId}/callback`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            ...patchAuthorization,
+          },
+          body: JSON.stringify(callbackBody),
+        },
+        capsuleSigningEnv,
+      );
+    const pausedFind = sessionRepository.pauseNextFindAtState("PATCH_VERIFIED");
+    const lateCallbackPromise = requestDuplicateCallback();
+    await pausedFind.reached;
+    sessionRepository.raceNext(
+      "reasoning_diff_v2.issued",
+      "proof_capsule.issued",
+    );
+    let callback: Response;
+    let concurrentCallback: Response;
+    try {
+      [callback, concurrentCallback] = await Promise.all([
+        requestDuplicateCallback(),
+        requestDuplicateCallback(),
+      ]);
+    } finally {
+      pausedFind.release();
+    }
+    const lateCallback = await lateCallbackPromise;
+    const duplicateResponses = await Promise.all([
+      callback.clone().text(),
+      concurrentCallback.clone().text(),
+      lateCallback.clone().text(),
+    ]);
+    expect(
+      [callback.status, concurrentCallback.status, lateCallback.status],
+      duplicateResponses.join("\n"),
+    ).toEqual([200, 200, 200]);
     const callbackPayload = (await callback.json()) as {
       data: { session: Record<string, unknown> };
     };
+    await expect(concurrentCallback.json()).resolves.toMatchObject({
+      data: {
+        duplicate: true,
+        session: { state: "PROOF_CAPSULE_ISSUED" },
+      },
+    });
+    await expect(lateCallback.json()).resolves.toMatchObject({
+      data: {
+        duplicate: true,
+        session: { state: "PROOF_CAPSULE_ISSUED" },
+      },
+    });
     expect(callbackPayload).toMatchObject({
       data: {
+        duplicate: true,
         runnerJob: { status: "VERIFIED" },
         session: {
           state: "PROOF_CAPSULE_ISSUED",
@@ -8678,7 +8864,7 @@ describe("Cloudflare Worker API", () => {
             },
           },
         },
-        verification: { status: "VERIFIED" },
+        verification: null,
       },
     });
     expect(callbackPayload.data.session).not.toHaveProperty("beliefTest");

@@ -405,17 +405,51 @@ describe("D1RunnerJobRepository", () => {
       stateVersion: 4,
       status: "VERIFIED" as const,
       outputHashes: ["c".repeat(64)],
-      finalEventCursor: 1,
+      finalEventCursor: 2,
       occurredAt: "2026-07-15T00:00:04.000Z",
     };
-    await expect(service.recordCallback(callback)).resolves.toMatchObject({
-      duplicate: false,
-      job: { status: "VERIFIED", jobVersion: 6 },
+    const claimedCallback = { ...callback, finalEventCursor: 1 };
+    const claimed = await service.claimCallback(
+      claimedCallback,
+      "d1_callback_request",
+    );
+    if (claimed.duplicate) throw new Error("callback claim was duplicated");
+    const completed = await service.recordCallback(callback, {
+      claim: claimed.claim,
+      claimedCallback,
+      terminalEvent: {
+        schemaVersion: "1",
+        eventId: "authority_job_live_1_2",
+        jobId: streamed.jobId,
+        cursor: 2,
+        kind: "result.ready",
+        resultHash: "c".repeat(64),
+        at: "2026-07-15T00:00:04.000Z",
+      },
     });
-    await expect(service.recordCallback(callback)).resolves.toMatchObject({
+    expect(completed).toMatchObject({
+      duplicate: false,
+      job: { status: "VERIFIED", jobVersion: 6, eventCursor: 2 },
+    });
+    const receipt = database.sqlite
+      .prepare(
+        "SELECT callback_json, received_at FROM runner_callback_receipts WHERE idempotency_key = ?",
+      )
+      .get(callback.idempotencyKey) as {
+      callback_json: string;
+      received_at: string;
+    };
+    expect(JSON.parse(receipt.callback_json)).toEqual(claimedCallback);
+    expect(receipt.received_at).toBe(completed.job.completedAt);
+    await expect(
+      service.recordCallback(callback, { claimedCallback }),
+    ).resolves.toMatchObject({
       duplicate: true,
       job: { status: "VERIFIED" },
     });
+    await expect(service.listEvents(streamed.jobId, 1)).resolves.toEqual([
+      expect.objectContaining({ cursor: 2, kind: "result.ready" }),
+    ]);
     await expect(
       service.transition(streamed.jobId, streamed.jobVersion, "REPAIRING"),
     ).rejects.toThrow(/changed during update|terminal/i);
@@ -467,6 +501,106 @@ describe("D1RunnerJobRepository", () => {
     ).resolves.toEqual([
       expect.objectContaining({ kind: "job.failed", cursor: 1 }),
     ]);
+    database.sqlite.close();
+  });
+
+  it("rolls back the callback receipt when its atomic terminal event cannot persist", async () => {
+    const database = new SqliteD1Database();
+    database.migrate();
+    const repository = new D1RunnerJobRepository(
+      database as unknown as D1Database,
+    );
+    const service = new RunnerJobService(repository, {
+      now: () => new Date("2026-07-15T00:00:05.000Z"),
+    });
+    const queued = await service.createJob({
+      jobId: "job_atomic_rollback",
+      kind: "LAB_RUN",
+      sessionId: "session_live_1",
+      artifactId: "artifact_live_1",
+      artifactManifestHash: "a".repeat(64),
+      conceptPack: { id: "entity_leakage", version: "2.0.0" },
+      inputHashes: ["b".repeat(64)],
+      stateVersion: 4,
+      maxAttempts: 3,
+      timeoutSeconds: 90,
+    });
+    const starting = await service.transition(
+      queued.jobId,
+      queued.jobVersion,
+      "STARTING",
+      { runnerIdentity: "runner-test" },
+    );
+    const running = await service.transition(
+      starting.jobId,
+      starting.jobVersion,
+      "RUNNING",
+    );
+    const streamed = await service.appendEvent(
+      running.jobId,
+      running.jobVersion,
+      {
+        schemaVersion: "1",
+        eventId: "event_that_terminal_insert_reuses",
+        jobId: running.jobId,
+        cursor: 1,
+        kind: "job.started",
+        at: "2026-07-15T00:00:05.000Z",
+      },
+    );
+    const claimedCallback = {
+      schemaVersion: "1" as const,
+      callbackId: "callback_atomic_rollback",
+      idempotencyKey: "job_atomic_rollback:verified:1",
+      jobId: running.jobId,
+      stateVersion: 4,
+      status: "VERIFIED" as const,
+      outputHashes: ["c".repeat(64)],
+      finalEventCursor: 1,
+      occurredAt: "2026-07-15T00:00:05.000Z",
+    };
+    const claimed = await service.claimCallback(
+      claimedCallback,
+      "d1_atomic_rollback_request",
+    );
+    if (claimed.duplicate) throw new Error("callback claim was duplicated");
+
+    await expect(
+      service.recordCallback(
+        { ...claimedCallback, finalEventCursor: 2 },
+        {
+          claim: claimed.claim,
+          claimedCallback,
+          terminalEvent: {
+            schemaVersion: "1",
+            eventId: "event_that_terminal_insert_reuses",
+            jobId: streamed.jobId,
+            cursor: 2,
+            kind: "result.ready",
+            resultHash: "c".repeat(64),
+            at: "2026-07-15T00:00:05.000Z",
+          },
+        },
+      ),
+    ).rejects.toThrow();
+
+    const receiptCount = database.sqlite
+      .prepare(
+        "SELECT COUNT(*) AS count FROM runner_callback_receipts WHERE job_id = ?",
+      )
+      .get(running.jobId) as { count: number };
+    const eventCount = database.sqlite
+      .prepare(
+        "SELECT COUNT(*) AS count FROM runner_public_events WHERE job_id = ?",
+      )
+      .get(running.jobId) as { count: number };
+    expect(receiptCount.count).toBe(0);
+    expect(eventCount.count).toBe(1);
+    await expect(service.getJob(running.jobId)).resolves.toMatchObject({
+      status: "RUNNING",
+      eventCursor: 1,
+      callbackClaim: { ownerId: "d1_atomic_rollback_request" },
+    });
     database.sqlite.close();
   });
 });

@@ -866,15 +866,32 @@ function runnerObjectStore(
   context: Context<AppBindings>,
   options: ApiOptions,
 ): RunnerObjectStore {
-  if (options.runnerObjectStore !== undefined) return options.runnerObjectStore;
-  if (context.env?.ARTIFACTS === undefined) {
-    throw new ApiInputError(
-      "RUNNER_STORAGE_UNAVAILABLE",
-      "Private runner storage is not configured",
-      503,
-    );
-  }
-  return new R2RunnerObjectStore(context.env.ARTIFACTS);
+  const store =
+    options.runnerObjectStore ??
+    (() => {
+      if (context.env?.ARTIFACTS === undefined) {
+        throw new ApiInputError(
+          "RUNNER_STORAGE_UNAVAILABLE",
+          "Private runner storage is not configured",
+          503,
+        );
+      }
+      return new R2RunnerObjectStore(context.env.ARTIFACTS);
+    })();
+  const callbackClaim = context.get("runnerCallbackClaim");
+  if (callbackClaim === undefined) return store;
+  return {
+    get: (key) => store.get(key),
+    put: async (key, body, contentType) => {
+      const jobs = runnerJobService(context, options);
+      await jobs.assertCallbackClaim(
+        callbackClaim.jobId,
+        callbackClaim.claim,
+      );
+      await store.put(key, body, contentType);
+      await jobs.assertCallbackClaim(callbackClaim.jobId, callbackClaim.claim);
+    },
+  };
 }
 
 function proofCapsuleReplays(
@@ -2506,18 +2523,16 @@ async function reconstructBoundaryMapAuthority(input: {
   }
 
   const report = verifyBoundaryMap(rawResult, expected);
-  await Promise.all([
-    persistScientificAuthority(
-      input.store,
-      `${authorityPrefix}boundary-map-expectation.json`,
-      expected,
-    ),
-    persistScientificAuthority(
-      input.store,
-      `${authorityPrefix}boundary-map-verification.json`,
-      report,
-    ),
-  ]);
+  await persistScientificAuthority(
+    input.store,
+    `${authorityPrefix}boundary-map-expectation.json`,
+    expected,
+  );
+  await persistScientificAuthority(
+    input.store,
+    `${authorityPrefix}boundary-map-verification.json`,
+    report,
+  );
   if (report.status !== "VERIFIED") {
     return {
       bundle,
@@ -2823,24 +2838,21 @@ async function reconstructScientificRunAuthority(input: {
     }),
   );
   const authorityPrefix = `runner-authority/${input.job.jobId}/`;
-  const [technicalReportHash, epistemicReportHash, evidenceVerdictHash] =
-    await Promise.all([
-      persistScientificAuthority(
-        input.store,
-        `${authorityPrefix}technical-verification.json`,
-        report.technicalReport,
-      ),
-      persistScientificAuthority(
-        input.store,
-        `${authorityPrefix}epistemic-verification.json`,
-        report,
-      ),
-      persistScientificAuthority(
-        input.store,
-        `${authorityPrefix}evidence-verdict.json`,
-        report.verdict,
-      ),
-    ]);
+  const technicalReportHash = await persistScientificAuthority(
+    input.store,
+    `${authorityPrefix}technical-verification.json`,
+    report.technicalReport,
+  );
+  const epistemicReportHash = await persistScientificAuthority(
+    input.store,
+    `${authorityPrefix}epistemic-verification.json`,
+    report,
+  );
+  const evidenceVerdictHash = await persistScientificAuthority(
+    input.store,
+    `${authorityPrefix}evidence-verdict.json`,
+    report.verdict,
+  );
   if (technicalReportHash !== report.technicalReportHash) {
     throw new ApiInputError(
       "SCIENTIFIC_AUTHORITY_DERIVATION_MISMATCH",
@@ -3414,7 +3426,7 @@ async function finalizeNativeProofV5(input: {
   signingKey?: string;
   signingKeyId?: string;
 }): Promise<CounterLabSession> {
-  let session = input.session;
+  let session = await input.service.getSession(input.session.id);
   if (
     session.state !== "PATCH_VERIFIED" &&
     session.state !== "REASONING_DIFF_ISSUED" &&
@@ -3444,10 +3456,23 @@ async function finalizeNativeProofV5(input: {
       boundaryMap: authority.artifacts.boundaryMap,
       patchPlan: authority.artifacts.patchPlan,
     });
-    session = await input.service.issueReasoningDiffV2(
-      session.id,
-      reasoningDiff,
-    );
+    try {
+      session = await input.service.issueReasoningDiffV2(
+        session.id,
+        reasoningDiff,
+      );
+    } catch (error) {
+      session = await input.service.getSession(session.id);
+      if (
+        (session.state !== "REASONING_DIFF_ISSUED" &&
+          session.state !== "PROOF_CAPSULE_ISSUED") ||
+        session.reasoningDiffV2 === undefined ||
+        (await hashCanonical(session.reasoningDiffV2)) !==
+          (await hashCanonical(reasoningDiff))
+      ) {
+        throw error;
+      }
+    }
   }
 
   if (session.state === "REASONING_DIFF_ISSUED") {
@@ -3482,10 +3507,22 @@ async function finalizeNativeProofV5(input: {
         ? {}
         : { signingKeyId: input.signingKeyId }),
     });
-    session = await input.service.issueProofCapsuleV2(
-      session.id,
-      capsule.reference,
-    );
+    try {
+      session = await input.service.issueProofCapsuleV2(
+        session.id,
+        capsule.reference,
+      );
+    } catch (error) {
+      session = await input.service.getSession(session.id);
+      if (
+        session.state !== "PROOF_CAPSULE_ISSUED" ||
+        session.proofCapsule === undefined ||
+        (await hashCanonical(session.proofCapsule)) !==
+          (await hashCanonical(capsule.reference))
+      ) {
+        throw error;
+      }
+    }
   }
 
   if (session.state === "PROOF_CAPSULE_ISSUED") {
@@ -3783,7 +3820,10 @@ async function appendScientificAuthorityEvents(input: {
   callbackClaim?: RunnerCallbackClaimToken | undefined;
   authorityAt: string;
   report: EpistemicVerificationReport;
-}): Promise<number> {
+}): Promise<{
+  finalEventCursor: number;
+  terminalEvent?: PublicCompilerEvent;
+}> {
   const expected = scientificAuthorityEvents({
     jobId: input.job.jobId,
     runnerCursor: input.callback.finalEventCursor,
@@ -3819,8 +3859,10 @@ async function appendScientificAuthorityEvents(input: {
       409,
     );
   }
+  const missing = expected.slice(existing.length);
+  const terminalEvent = missing.at(-1);
   let updated = current;
-  for (const event of expected.slice(existing.length)) {
+  for (const event of missing.slice(0, -1)) {
     updated = await input.jobs.appendEvent(
       input.job.jobId,
       updated.jobVersion,
@@ -3828,7 +3870,10 @@ async function appendScientificAuthorityEvents(input: {
       input.callbackClaim,
     );
   }
-  return updated.eventCursor;
+  return {
+    finalEventCursor: input.callback.finalEventCursor + expected.length,
+    ...(terminalEvent === undefined ? {} : { terminalEvent }),
+  };
 }
 
 async function appendInteractiveAuthorityEvents(input: {
@@ -3839,7 +3884,10 @@ async function appendInteractiveAuthorityEvents(input: {
   authorityAt: string;
   invariantCount: number;
   resultHash: string;
-}): Promise<number> {
+}): Promise<{
+  finalEventCursor: number;
+  terminalEvent?: PublicCompilerEvent;
+}> {
   const expected = [
     PublicCompilerEventSchema.parse({
       schemaVersion: "1",
@@ -3889,7 +3937,9 @@ async function appendInteractiveAuthorityEvents(input: {
       409,
     );
   }
-  for (const event of expected.slice(existing.length)) {
+  const missing = expected.slice(existing.length);
+  const terminalEvent = missing.at(-1);
+  for (const event of missing.slice(0, -1)) {
     current = await input.jobs.appendEvent(
       input.job.jobId,
       current.jobVersion,
@@ -3897,7 +3947,10 @@ async function appendInteractiveAuthorityEvents(input: {
       input.callbackClaim,
     );
   }
-  return current.eventCursor;
+  return {
+    finalEventCursor: input.callback.finalEventCursor + expected.length,
+    ...(terminalEvent === undefined ? {} : { terminalEvent }),
+  };
 }
 
 async function appendBoundaryAuthorityEvents(input: {
@@ -3907,7 +3960,10 @@ async function appendBoundaryAuthorityEvents(input: {
   callbackClaim?: RunnerCallbackClaimToken | undefined;
   authorityAt: string;
   report: BoundaryMapVerificationReportV1;
-}): Promise<number> {
+}): Promise<{
+  finalEventCursor: number;
+  terminalEvent?: PublicCompilerEvent;
+}> {
   const eventBase = (offset: number) => ({
     schemaVersion: "1" as const,
     eventId: `authority_${input.job.jobId}_${input.callback.finalEventCursor + offset}`,
@@ -3973,7 +4029,9 @@ async function appendBoundaryAuthorityEvents(input: {
       409,
     );
   }
-  for (const event of expected.slice(existing.length)) {
+  const missing = expected.slice(existing.length);
+  const terminalEvent = missing.at(-1);
+  for (const event of missing.slice(0, -1)) {
     current = await input.jobs.appendEvent(
       input.job.jobId,
       current.jobVersion,
@@ -3981,7 +4039,10 @@ async function appendBoundaryAuthorityEvents(input: {
       input.callbackClaim,
     );
   }
-  return current.eventCursor;
+  return {
+    finalEventCursor: input.callback.finalEventCursor + expected.length,
+    ...(terminalEvent === undefined ? {} : { terminalEvent }),
+  };
 }
 
 function authorityEventPayload(event: PublicCompilerEvent) {
@@ -6298,11 +6359,13 @@ export function createApi(options: ApiOptions = {}) {
         : generatedPath.endsWith(".ipynb")
           ? "application/x-ipynb+json; charset=utf-8"
           : "text/markdown; charset=utf-8";
+      await jobs.assertOutputWriteClaim(jobId, outputClaim.claim);
       await runnerObjectStore(context, options).put(
         `${claims.outputPrefix}${generatedPath}`,
         body,
         contentType,
       );
+      await jobs.assertOutputWriteClaim(jobId, outputClaim.claim);
       return context.json(
         jsonSuccess({ path: generatedPath, sha256: await sha256Text(body) }),
         201,
@@ -7145,11 +7208,41 @@ export function createApi(options: ApiOptions = {}) {
       currentSession.boundaryMapAuthority?.jobId === jobId ||
       currentSession.patchAuthority?.jobId === jobId;
     if (claimedCallback.duplicate && callbackAlreadyProjected) {
+      let duplicateSession = currentSession;
+      if (
+        job.kind === "PATCH_COMPILE" &&
+        currentSession.patchAuthority?.jobId === jobId &&
+        (currentSession.state === "PATCH_VERIFIED" ||
+          currentSession.state === "REASONING_DIFF_ISSUED" ||
+          currentSession.state === "PROOF_CAPSULE_ISSUED")
+      ) {
+        const artifact = await artifacts(context, options).find(job.artifactId);
+        if (artifact === undefined) {
+          throw new ApiInputError(
+            "PROOF_AUTHORITY_MISSING",
+            "The source Artifact Manifest is unavailable for native proof issuance",
+            409,
+          );
+        }
+        duplicateSession = await finalizeNativeProofV5({
+          service,
+          jobs,
+          store: runnerObjectStore(context, options),
+          session: currentSession,
+          manifest: artifact.manifest,
+          ...(context.env?.COUNTERLAB_SIGNING_KEY === undefined
+            ? {}
+            : { signingKey: context.env.COUNTERLAB_SIGNING_KEY }),
+          ...(context.env?.COUNTERLAB_SIGNING_KEY_ID === undefined
+            ? {}
+            : { signingKeyId: context.env.COUNTERLAB_SIGNING_KEY_ID }),
+        });
+      }
       return context.json(
         jsonSuccess({
           duplicate: true as const,
           runnerJob: job,
-          session: await statePayload(context, currentSession, options),
+          session: await statePayload(context, duplicateSession, options),
           verification: null,
         }),
       );
@@ -7182,6 +7275,7 @@ export function createApi(options: ApiOptions = {}) {
     let scientificPatch = false;
     let scientificPatchAuthority: HostedPatchAuthorityRefV5 | null = null;
     let terminalCallback: RunnerCallback = callback;
+    let terminalAuthorityEvent: PublicCompilerEvent | undefined;
     if (callback.status === "VERIFIED" && job.kind === "LAB_COMPILE") {
       const artifact = await artifacts(context, options).find(job.artifactId);
       const inputObject = await runnerObjectStore(context, options).get(
@@ -7379,7 +7473,7 @@ export function createApi(options: ApiOptions = {}) {
                 },
               };
             }
-            const finalEventCursor = await appendBoundaryAuthorityEvents({
+            const authorityEvents = await appendBoundaryAuthorityEvents({
               jobs,
               job: scientificRunJob,
               callback,
@@ -7387,7 +7481,11 @@ export function createApi(options: ApiOptions = {}) {
               authorityAt: requestNow(options).toISOString(),
               report: boundaryMapAuthority.report,
             });
-            terminalCallback = { ...terminalCallback, finalEventCursor };
+            terminalCallback = {
+              ...terminalCallback,
+              finalEventCursor: authorityEvents.finalEventCursor,
+            };
+            terminalAuthorityEvent = authorityEvents.terminalEvent;
           } catch (error) {
             if (!(error instanceof ApiInputError)) throw error;
             terminalCallback = {
@@ -7422,7 +7520,7 @@ export function createApi(options: ApiOptions = {}) {
             interactiveRun = true;
             verification = scientificInteractiveAuthority.report;
             verifiedResult = scientificInteractiveAuthority.result;
-            const finalEventCursor = await appendInteractiveAuthorityEvents({
+            const authorityEvents = await appendInteractiveAuthorityEvents({
               jobs,
               job: scientificRunJob,
               callback,
@@ -7432,7 +7530,11 @@ export function createApi(options: ApiOptions = {}) {
                 scientificInteractiveAuthority.report.invariantCount,
               resultHash: scientificInteractiveAuthority.result.resultHash,
             });
-            terminalCallback = { ...terminalCallback, finalEventCursor };
+            terminalCallback = {
+              ...terminalCallback,
+              finalEventCursor: authorityEvents.finalEventCursor,
+            };
+            terminalAuthorityEvent = authorityEvents.terminalEvent;
           } catch (error) {
             if (error instanceof ResultVerificationError) {
               verification = error.report;
@@ -7503,7 +7605,7 @@ export function createApi(options: ApiOptions = {}) {
                 },
               };
             }
-            const finalEventCursor = await appendScientificAuthorityEvents({
+            const authorityEvents = await appendScientificAuthorityEvents({
               jobs,
               job: scientificRunJob,
               callback,
@@ -7511,7 +7613,11 @@ export function createApi(options: ApiOptions = {}) {
               authorityAt: requestNow(options).toISOString(),
               report: epistemicAuthority.report,
             });
-            terminalCallback = { ...terminalCallback, finalEventCursor };
+            terminalCallback = {
+              ...terminalCallback,
+              finalEventCursor: authorityEvents.finalEventCursor,
+            };
+            terminalAuthorityEvent = authorityEvents.terminalEvent;
           } catch (error) {
             if (!(error instanceof ApiInputError)) throw error;
             terminalCallback = {
@@ -7757,37 +7863,35 @@ export function createApi(options: ApiOptions = {}) {
                 409,
               );
             }
-            await Promise.all([
-              persistRunnerAuthorityBytes({
-                store,
-                key: `${authorityPrefix}patch-plan.json`,
-                body: planObject.body,
-                contentType: "application/json",
-              }),
-              persistRunnerAuthorityBytes({
-                store,
-                key: `${authorityPrefix}public-rationale.md`,
-                body: rationaleObject.body,
-                contentType: "text/markdown; charset=utf-8",
-              }),
-              persistRunnerAuthorityBytes({
-                store,
-                key: `${authorityPrefix}patch-result.json`,
-                body: resultObject.body,
-                contentType: "application/json",
-              }),
-              persistRunnerAuthorityBytes({
-                store,
-                key: `${authorityPrefix}patched-notebook.ipynb`,
-                body: notebookObject.body,
-                contentType: "application/x-ipynb+json; charset=utf-8",
-              }),
-              persistScientificAuthority(
-                store,
-                `${authorityPrefix}patch-plan-verification.json`,
-                verification,
-              ),
-            ]);
+            await persistRunnerAuthorityBytes({
+              store,
+              key: `${authorityPrefix}patch-plan.json`,
+              body: planObject.body,
+              contentType: "application/json",
+            });
+            await persistRunnerAuthorityBytes({
+              store,
+              key: `${authorityPrefix}public-rationale.md`,
+              body: rationaleObject.body,
+              contentType: "text/markdown; charset=utf-8",
+            });
+            await persistRunnerAuthorityBytes({
+              store,
+              key: `${authorityPrefix}patch-result.json`,
+              body: resultObject.body,
+              contentType: "application/json",
+            });
+            await persistRunnerAuthorityBytes({
+              store,
+              key: `${authorityPrefix}patched-notebook.ipynb`,
+              body: notebookObject.body,
+              contentType: "application/x-ipynb+json; charset=utf-8",
+            });
+            await persistScientificAuthority(
+              store,
+              `${authorityPrefix}patch-plan-verification.json`,
+              verification,
+            );
             patchResult = parsedPatch;
             scientificPatch = true;
             scientificPatchAuthority = {
@@ -8005,10 +8109,13 @@ export function createApi(options: ApiOptions = {}) {
       }
     }
 
-    const completed = await jobs.recordCallback(
-      terminalCallback,
-      callbackClaim,
-    );
+    const completed = await jobs.recordCallback(terminalCallback, {
+      ...(callbackClaim === undefined ? {} : { claim: callbackClaim }),
+      claimedCallback: callback,
+      ...(terminalAuthorityEvent === undefined
+        ? {}
+        : { terminalEvent: terminalAuthorityEvent }),
+    });
     context.set("runnerCallbackClaim", undefined);
     await releaseAdmissionBestEffort(
       context,

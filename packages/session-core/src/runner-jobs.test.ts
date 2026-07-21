@@ -151,8 +151,14 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
     job: RunnerJob,
     expectedVersion: number,
     callback: RunnerCallback,
+    terminalEvent?: PublicCompilerEvent,
   ): Promise<void> {
     await this.save(job, expectedVersion);
+    if (terminalEvent !== undefined) {
+      const events = this.events.get(job.jobId) ?? [];
+      events.push(structuredClone(terminalEvent));
+      this.events.set(job.jobId, events);
+    }
     this.callbacks.set(callback.idempotencyKey, structuredClone(callback));
   }
 }
@@ -536,12 +542,123 @@ describe("RunnerJobService", () => {
       }),
     ).rejects.toBeInstanceOf(RunnerCallbackConflictError);
     await expect(
+      harness.service.recordCallback({
+        ...callback,
+        finalEventCursor: callback.finalEventCursor + 1,
+      }),
+    ).rejects.toBeInstanceOf(RunnerCallbackConflictError);
+    await expect(
+      harness.service.recordCallback({
+        ...callback,
+        status: "REJECTED",
+        error: {
+          code: "MUTATED_DUPLICATE",
+          message: "The duplicate callback changed status.",
+          retryable: false,
+        },
+      }),
+    ).rejects.toBeInstanceOf(RunnerCallbackConflictError);
+    await expect(
       harness.service.transition(
         first.job.jobId,
         first.job.jobVersion,
         "RUNNING",
       ),
     ).rejects.toThrow(/terminal/i);
+  });
+
+  it("binds settlement to the claimed payload and commits its final authority event", async () => {
+    const harness = service();
+    const queued = await harness.service.createJob(jobInput());
+    const starting = await harness.service.transition(
+      queued.jobId,
+      queued.jobVersion,
+      "STARTING",
+      { runnerIdentity: "runner-container-test" },
+    );
+    const running = await harness.service.transition(
+      starting.jobId,
+      starting.jobVersion,
+      "RUNNING",
+    );
+    const callback: RunnerCallback = {
+      schemaVersion: "1",
+      callbackId: "callback_bound_payload",
+      idempotencyKey: "job_live_1:verified:bound-payload",
+      jobId: running.jobId,
+      stateVersion: running.stateVersion,
+      status: "VERIFIED",
+      outputHashes: [HASH_C],
+      finalEventCursor: 0,
+      occurredAt: "2026-07-15T00:00:05.000Z",
+    };
+    const claimed = await harness.service.claimCallback(
+      callback,
+      "request_bound_payload",
+    );
+    if (claimed.duplicate) throw new Error("callback claim was duplicated");
+    const completion = {
+      claim: claimed.claim,
+      claimedCallback: callback,
+    };
+    const error = {
+      code: "CALLBACK_MUTATION_REJECTED",
+      message: "The settled callback did not match its claim.",
+      retryable: false,
+    };
+
+    for (const mutation of [
+      { ...callback, callbackId: "callback_changed" },
+      { ...callback, outputHashes: [HASH_B] },
+      {
+        ...callback,
+        status: "FAILED" as const,
+        error,
+      },
+      {
+        ...callback,
+        operationalMetrics: {
+          compilerDurationMs: 1,
+          verifierDurationMs: 2,
+          kernelDurationMs: 3,
+          patchDurationMs: 0,
+          repairAttempts: 0,
+          planTokenUsage: {
+            inputTokens: 1,
+            cachedInputTokens: 0,
+            outputTokens: 1,
+            reasoningOutputTokens: 0,
+            totalTokens: 2,
+          },
+        },
+      },
+    ]) {
+      await expect(
+        harness.service.recordCallback(mutation, completion),
+      ).rejects.toBeInstanceOf(RunnerCallbackStateError);
+    }
+
+    const resultReady: PublicCompilerEvent = {
+      schemaVersion: "1",
+      eventId: "authority_job_live_1_1",
+      jobId: running.jobId,
+      cursor: 1,
+      kind: "result.ready",
+      resultHash: HASH_C,
+      at: "2026-07-15T00:00:06.000Z",
+    };
+    await expect(
+      harness.service.recordCallback(
+        { ...callback, finalEventCursor: 1 },
+        { ...completion, terminalEvent: resultReady },
+      ),
+    ).resolves.toMatchObject({
+      duplicate: false,
+      job: { status: "VERIFIED", eventCursor: 1 },
+    });
+    await expect(harness.service.listEvents(running.jobId)).resolves.toEqual([
+      resultReady,
+    ]);
   });
 
   it("rejects a callback after cancellation without changing the terminal job", async () => {
@@ -706,7 +823,7 @@ describe("RunnerJobService", () => {
     expect(cancelled).not.toHaveProperty("callbackClaim");
   });
 
-  it("recovers an abandoned callback claim after the bounded job timeout", async () => {
+  it("keeps one callback processor exclusive through the settlement deadline", async () => {
     const repository = new MemoryRunnerJobRepository();
     let now = new Date("2026-07-15T00:00:00.000Z");
     const jobs = new RunnerJobService(repository, { now: () => now });
@@ -733,29 +850,35 @@ describe("RunnerJobService", () => {
       finalEventCursor: running.eventCursor,
       occurredAt: "2026-07-15T00:00:05.000Z",
     };
-    await jobs.claimCallback(callback, "request_before_worker_crash");
+    const claimed = await jobs.claimCallback(
+      callback,
+      "request_before_worker_crash",
+    );
+    if (claimed.duplicate) throw new Error("callback claim was duplicated");
 
     now = new Date("2026-07-15T00:01:01.000Z");
-    const recovered = await jobs.claimCallback(
-      callback,
-      "request_after_worker_crash",
-    );
-    expect(recovered).toMatchObject({
-      duplicate: false,
-      job: { callbackClaim: { ownerId: "request_after_worker_crash" } },
-    });
-    if (recovered.duplicate)
-      throw new Error("stale callback was not reclaimed");
-    now = new Date("2026-07-15T00:01:30.000Z");
-    await expect(jobs.cancelJob(running.jobId)).resolves.toMatchObject({
-      status: "CANCELLED",
-      callbackRecovery: {
-        idempotencyKey: callback.idempotencyKey,
+    await expect(
+      jobs.claimCallback(callback, "request_before_job_deadline"),
+    ).rejects.toThrow(/already being processed/u);
+
+    now = new Date("2026-07-15T00:01:31.000Z");
+    await expect(
+      jobs.claimCallback(callback, "request_after_worker_crash"),
+    ).rejects.toThrow(/already being processed/u);
+    await expect(
+      jobs.recordCallback(callback, {
+        claim: claimed.claim,
+        claimedCallback: callback,
+      }),
+    ).resolves.toMatchObject({
+      job: {
+        status: "VERIFIED",
+        completedAt: "2026-07-15T00:01:31.000Z",
       },
     });
   });
 
-  it("recovers the same expired callback after its authority event advanced the cursor", async () => {
+  it("recovers an explicitly released callback after its authority event advanced the cursor", async () => {
     const repository = new MemoryRunnerJobRepository();
     let now = new Date("2026-07-15T00:00:00.000Z");
     const jobs = new RunnerJobService(repository, { now: () => now });
@@ -803,15 +926,16 @@ describe("RunnerJobService", () => {
       },
       firstClaim.claim,
     );
+    await jobs.releaseCallbackClaim(callback.jobId, firstClaim.claim);
 
-    now = new Date("2026-07-15T00:01:01.000Z");
+    now = new Date("2026-07-15T00:01:31.000Z");
     await expect(
       jobs.appendEvent(
         firstClaim.job.jobId,
         (await jobs.getJob(firstClaim.job.jobId)).jobVersion,
         {
           schemaVersion: "1",
-          eventId: "event_with_expired_claim",
+          eventId: "event_with_released_claim",
           jobId: firstClaim.job.jobId,
           cursor: 2,
           kind: "verifier.verified",
@@ -833,7 +957,7 @@ describe("RunnerJobService", () => {
     });
   });
 
-  it("settles only a matching crashed callback inside the fixed post-deadline window", async () => {
+  it("settles only a matching released callback inside the fixed post-deadline window", async () => {
     const repository = new MemoryRunnerJobRepository();
     let now = new Date("2026-07-15T00:00:00.000Z");
     const jobs = new RunnerJobService(repository, { now: () => now });
@@ -861,7 +985,12 @@ describe("RunnerJobService", () => {
       occurredAt: "2026-07-15T00:01:29.000Z",
     };
     now = new Date("2026-07-15T00:01:29.000Z");
-    await jobs.claimCallback(callback, "request_before_deadline_crash");
+    const initialClaim = await jobs.claimCallback(
+      callback,
+      "request_before_deadline_release",
+    );
+    if (initialClaim.duplicate) throw new Error("callback claim was duplicated");
+    await jobs.releaseCallbackClaim(callback.jobId, initialClaim.claim);
 
     now = new Date("2026-07-15T00:01:31.000Z");
     await expect(
@@ -880,7 +1009,10 @@ describe("RunnerJobService", () => {
     if (recovered.duplicate)
       throw new Error("callback recovery was duplicated");
     await expect(
-      jobs.recordCallback(callback, recovered.claim),
+      jobs.recordCallback(callback, {
+        claim: recovered.claim,
+        claimedCallback: callback,
+      }),
     ).resolves.toMatchObject({
       duplicate: false,
       job: {
@@ -925,9 +1057,12 @@ describe("RunnerJobService", () => {
     if (claimed.duplicate) throw new Error("callback claim was duplicated");
 
     now = new Date("2026-07-15T00:02:31.000Z");
-    await expect(jobs.recordCallback(callback, claimed.claim)).rejects.toThrow(
-      /claim deadline/u,
-    );
+    await expect(
+      jobs.recordCallback(callback, {
+        claim: claimed.claim,
+        claimedCallback: callback,
+      }),
+    ).rejects.toThrow(/claim deadline/u);
     await expect(jobs.expireIfTimedOut(running.jobId)).resolves.toMatchObject({
       status: "TIMED_OUT",
     });
@@ -977,6 +1112,51 @@ describe("RunnerJobService", () => {
         "request_after_deadline",
       ),
     ).rejects.toThrow(/terminal job|deadline/u);
+  });
+
+  it("keeps an output write fenced until the job deadline", async () => {
+    const repository = new MemoryRunnerJobRepository();
+    let now = new Date("2026-07-15T00:00:00.000Z");
+    const jobs = new RunnerJobService(repository, { now: () => now });
+    const queued = await jobs.createJob(jobInput());
+    const starting = await jobs.transition(
+      queued.jobId,
+      queued.jobVersion,
+      "STARTING",
+      { runnerIdentity: "runner-container-test" },
+    );
+    const running = await jobs.transition(
+      starting.jobId,
+      starting.jobVersion,
+      "RUNNING",
+    );
+    const output = await jobs.claimOutputWrite(
+      running.jobId,
+      running.jobVersion,
+      "request_long_output_write",
+      "experiment-ir.json",
+    );
+
+    now = new Date("2026-07-15T00:01:01.000Z");
+    await expect(
+      jobs.assertOutputWriteClaim(output.job.jobId, output.claim),
+    ).resolves.toBeUndefined();
+    await expect(
+      jobs.claimOutputWrite(
+        output.job.jobId,
+        output.job.jobVersion,
+        "request_competing_output_write",
+        "experiment-ir.json",
+      ),
+    ).rejects.toThrow(/active output-write claim/u);
+
+    now = new Date("2026-07-15T00:01:30.000Z");
+    await expect(
+      jobs.assertOutputWriteClaim(output.job.jobId, output.claim),
+    ).rejects.toThrow(/does not authorize/u);
+    await expect(
+      jobs.expireIfTimedOut(output.job.jobId),
+    ).resolves.toMatchObject({ status: "TIMED_OUT" });
   });
 
   it("requires an atomic terminal event to match the failed job error", async () => {
