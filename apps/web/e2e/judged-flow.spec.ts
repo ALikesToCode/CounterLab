@@ -1527,7 +1527,7 @@ for (const viewport of beliefBreakViewports) {
 }
 
 test("Judge Mode distinguishes every authority path", async ({ page }) => {
-  const healthResponse = await page.request.get("/api/health");
+  const healthResponse = await page.request.get("/api/health?readiness=probe");
   expect(healthResponse.ok()).toBe(true);
   const health = (await healthResponse.json()) as {
     data?: {
@@ -1555,7 +1555,8 @@ test("Judge Mode distinguishes every authority path", async ({ page }) => {
       name: /see a verified belief break in ten seconds/i,
     }),
   ).toBeVisible();
-  await expect(page.getByText("Sample lesson")).toBeVisible();
+  await page.getByRole("button", { name: /Check live readiness/i }).click();
+  await expect(page.getByText("Sample lesson", { exact: true })).toBeVisible();
   await expect(page.getByText("Live notebook analysis")).toBeVisible();
   await expect(
     page.getByText("Verified replay", { exact: true }),
@@ -1567,7 +1568,10 @@ test("Judge Mode distinguishes every authority path", async ({ page }) => {
     );
   } else {
     await expect(
-      page.getByText(/live authority is unavailable/i),
+      page.getByRole("status").filter({
+        hasText:
+          /live authority (?:is|remains) unavailable|live authority did not pass the latest readiness check/i,
+      }),
     ).toBeVisible();
     await expect(page.getByRole("link", { name: /run live/i })).toHaveCount(0);
   }
@@ -1614,7 +1618,12 @@ test("the first visit explains the lesson before asking for technical knowledge"
     }),
   ).toBeVisible();
   await expect(
-    page.getByText(/No account needed.*never run the cells/i),
+    page.getByText(/reads the evidence and never runs its cells/i),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      /No account needed.*Sample, live, and replay stay clearly labelled/i,
+    ),
   ).toBeVisible();
   await expect(page.getByLabel("Your question or claim")).toBeInViewport();
   await expect(page.getByLabel("Attach notebook")).toBeVisible();
@@ -1819,7 +1828,9 @@ test("the lesson keeps one learner decision in focus at a time", async ({
   await page.getByRole("button", { name: /Check transfer/i }).click();
 
   await expect(
-    page.getByRole("heading", { name: /You applied the rule correctly/i }),
+    page.getByRole("heading", {
+      name: /This fixed forecasting transfer passed/i,
+    }),
   ).toBeVisible();
   expect(await page.evaluate(() => window.scrollY)).toBeLessThan(24);
   await expect(
@@ -1831,7 +1842,10 @@ test("the lesson keeps one learner decision in focus at a time", async ({
   expect(await page.evaluate(() => window.scrollY)).toBeLessThan(24);
   await expect(page.locator("pre.diff")).not.toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Download proof record", exact: true }),
+    page.getByRole("button", {
+      name: "Download repaired notebook",
+      exact: true,
+    }),
   ).toBeVisible();
 });
 
@@ -1983,7 +1997,9 @@ test("refresh restores the current lesson and the committed prediction", async (
   ).toBeVisible();
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: /You applied the rule correctly/i }),
+    page.getByRole("heading", {
+      name: /This fixed forecasting transfer passed/i,
+    }),
   ).toBeVisible();
   await page.getByRole("button", { name: /Verify notebook patch/i }).click();
   await waitForSamplePatch(page);
@@ -2073,9 +2089,11 @@ test("local hints and Theater views never request a model or new result", async 
     "true",
   );
   await expect(
-    page.getByRole("img", {
-      name: /Verified accuracy comparison.*familiar rows.*new customers/i,
-    }),
+    page
+      .locator('[data-trusted-visual-id="verified_sample_belief_break_v1"]')
+      .getByRole("region", {
+        name: "Verified sample belief-break mechanism",
+      }),
   ).toBeVisible();
 
   const hint = page.getByLabel("Contextual help");
@@ -2136,8 +2154,19 @@ test("Replay remains visibly labelled and read-only after refresh", async ({
 }) => {
   await reset(page);
   await page.getByRole("button", { name: /Watch verified replay/i }).click();
-  const replayBanner = page.getByLabel("Legacy replay status");
+  const replayBanner = page.getByLabel("Replay status");
   await expect(replayBanner).toContainText(
+    "Verified replay · read-only stored evidence",
+  );
+  await expect(
+    page.getByRole("heading", { name: /Replay verified session/i }),
+  ).toBeVisible();
+  const continueReplay = page.getByRole("button", {
+    name: /Continue replay/i,
+  });
+  await expect(continueReplay).toBeVisible();
+  await continueReplay.click();
+  await expect(page.getByLabel("Legacy replay status")).toContainText(
     "Verified replay · read-only stored evidence",
   );
   await expect(
@@ -2148,9 +2177,7 @@ test("Replay remains visibly labelled and read-only after refresh", async ({
   await expect(
     page.getByRole("table", { name: /Stored fixed-kernel comparison/i }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /Continue replay/i }),
-  ).toHaveCount(0);
+  await expect(continueReplay).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: /Show me what happened/i }),
   ).toHaveCount(0);
@@ -2169,7 +2196,7 @@ test("Replay remains visibly labelled and read-only after refresh", async ({
 test("missing live capabilities are stated without claiming a model call", async ({
   page,
 }) => {
-  await page.route("**/api/health", async (route) => {
+  await page.route("**/api/health*", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -2202,7 +2229,7 @@ test("missing live capabilities are stated without claiming a model call", async
 test("configured reasoning cannot start without a qualified hosted runner", async ({
   page,
 }) => {
-  await page.route("**/api/health", async (route) => {
+  await page.route("**/api/health*", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -2241,7 +2268,7 @@ test("configured reasoning cannot start without a qualified hosted runner", asyn
 test("partial generation isolation cannot expose live notebook upload", async ({
   page,
 }) => {
-  await page.route("**/api/health", async (route) => {
+  await page.route("**/api/health*", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -2380,9 +2407,11 @@ test("the judged path is keyboard operable with reduced motion", async ({
     page.getByText(/Interpretation recorded locally/i),
   ).toBeVisible();
 
-  const comparison = page.getByRole("img", {
-    name: /Verified accuracy comparison.*familiar rows.*new customers/i,
-  });
+  const comparison = page
+    .locator('[data-trusted-visual-id="verified_sample_belief_break_v1"]')
+    .getByRole("region", {
+      name: "Verified sample belief-break mechanism",
+    });
   await expect(comparison).toBeVisible();
   const observeTab = page.getByRole("tab", { name: /Observe/i });
   await observeTab.focus();
@@ -2391,7 +2420,7 @@ test("the judged path is keyboard operable with reduced motion", async ({
   await page.keyboard.press("ArrowRight");
   await expect(page.getByRole("tab", { name: /Boundary/i })).toBeFocused();
   await expect(page.getByRole("tabpanel")).toContainText(
-    /Verified sample boundary/i,
+    /Verified sample exploration/i,
   );
   await page.getByRole("button", { name: /Reveal the map/i }).click();
   await expect(
