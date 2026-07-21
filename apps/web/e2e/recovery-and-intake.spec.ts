@@ -29,6 +29,12 @@ const readyHealth = {
       workerEvidenceCommit: "a".repeat(40),
       runnerSourceCommit: "b".repeat(40),
       runnerImageDigest: `sha256:${"c".repeat(64)}`,
+      generationIsolationEvidenceSha256: "5".repeat(64),
+      generationIsolationProbeSha256: "6".repeat(64),
+      releaseCheckGenerationIsolationEvidenceSha256: "7".repeat(64),
+      releaseCheckGenerationIsolationProbeSha256: "6".repeat(64),
+      releaseCheckGenerationIsolationVerifiedAt:
+        "2026-07-19T05:31:00.000+05:30",
       timeoutCleanupReceiptSha256: "d".repeat(64),
       aggregateLimitEvidenceSha256: "9".repeat(64),
       runtimePolicySha256: "e".repeat(64),

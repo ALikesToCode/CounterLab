@@ -93,6 +93,13 @@ const ReleaseIdentitySchema = z
         workerEvidenceCommit: z.string().regex(/^[a-f0-9]{40}$/),
         runnerSourceCommit: z.string().regex(/^[a-f0-9]{40}$/),
         runnerImageDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+        generationIsolationEvidenceSha256: Sha256Digest,
+        generationIsolationProbeSha256: Sha256Digest,
+        releaseCheckGenerationIsolationEvidenceSha256: Sha256Digest,
+        releaseCheckGenerationIsolationProbeSha256: Sha256Digest,
+        releaseCheckGenerationIsolationVerifiedAt: z.iso.datetime({
+          offset: true,
+        }),
         timeoutCleanupReceiptSha256: z.string().regex(/^[a-f0-9]{64}$/),
         aggregateLimitEvidenceSha256: z.string().regex(/^[a-f0-9]{64}$/),
         runtimePolicySha256: z.string().regex(/^[a-f0-9]{64}$/),
@@ -118,6 +125,17 @@ const ReleaseIdentitySchema = z
         code: "custom",
         path: ["clientPublicAssetCount"],
         message: "public client asset count exceeds the full deploy tree",
+      });
+    }
+    if (
+      release.status === "bound" &&
+      release.releaseCheckGenerationIsolationProbeSha256 !==
+        release.generationIsolationProbeSha256
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["releaseCheckGenerationIsolationProbeSha256"],
+        message: "release-check isolation probe does not match the deployment",
       });
     }
   });
