@@ -5019,3 +5019,84 @@ No containment pass, new exact image, refreshed evidence, registry promotion,
 Cloudflare deployment, public browser qualification, learner outcome, Devpost
 submission, push, or merge is claimed at this checkpoint. Release remains
 **NO-GO**.
+
+## Delegated-cgroup leaf repair checkpoint — 2026-07-21T17:58:52Z
+
+Deadline: `2026-07-22T00:00:00Z`; **6 hours 1 minute 8 seconds remained at
+this checkpoint**. Source HEAD is
+`b804f48b0c84e955af0632dffa3b096ba1eada2c` on
+`feat/learner-ux-v6.1`, three commits ahead of its remote tracking ref. The
+worktree was clean immediately after the independent runtime repair commit.
+
+### Second genuine sentinel result
+
+A fresh attested contained runtime built the exact runner and adapter from
+source `2cc2b2db3c7eba3b2d64458b8bb1de0fce7d5b28`. The runner config digest was
+`sha256:b1c98ff610ac580450d81e59a5d6bae8a344bcc8442268c192c5a6728df5fc64`
+and the normalized manifest digest was
+`sha256:fd24191626b4195a323743bba7abeaae44fdfa8335109ad32788e0605b91dea0`.
+The single genuine aggregate-containment invocation armed its independent
+observer but failed closed before the candidate started. A non-qualifying
+observer-disabled diagnostic recovered the exact runtime error: runc could
+not create `counterlab-v6.1/<invocation>` because the unmanaged intermediate
+cgroup did not expose the delegated controllers. No aggregate evidence or
+qualified receipt was issued, and the `2cc2b2d` image is permanently
+ineligible for release.
+
+### Minimal repair committed
+
+Commit `b804f48 fix(runtime): use delegated cgroup leaf` places every
+invocation directly below RootlessKit's delegated cgroup-v2 namespace root as
+`counterlab-v6.1-<invocationId>`. The OCI spec, direct `ctr` command, observer
+manifest, observer filesystem root, aggregate evidence, TypeScript timeout
+receipt, and Python timeout validator now agree on that one source-bound leaf.
+The former nested path and foreign paths fail closed. No resource limit,
+negative control, result-release rule, or verifier authority was weakened.
+
+Verification after the final diff:
+
+- contained-runtime Vitest: **17 files, 121 tests passed**;
+- focused runner Pytest with a repository-contained temporary root:
+  **38 tests passed**;
+- root TypeScript: passed;
+- scoped Prettier and Python compilation: passed;
+- Git whitespace: passed;
+- secret scan: passed across the **15 changed files**;
+- independent read-only review: no blocking defect or authority regression.
+
+The first Python invocation used pytest's default external temporary root and
+correctly produced ten `run_root_outside_repository` failures. The same suite
+then passed with `TMPDIR` contained under CounterLab. Those initial failures
+were a harness-safety signal, not suppressed product failures.
+
+### Remaining exact release chain
+
+1. Commit this factual checkpoint and use the resulting clean commit as the
+   new exact source `S4`.
+2. Retire the stale held runtime, start and attest a fresh contained runtime,
+   and build one runner/adapter tuple from `S4`.
+3. Run one genuine aggregate sentinel and require the direct leaf, all five
+   process limits, memory/PID/CPU negative controls, membership, freshness,
+   cleanup, and result withholding to pass together.
+4. Refresh and commit only the exact source/image-bound SBOM, VEX,
+   scientific-engine, license, health, held-out, mutation, Sample Capsule, and
+   qualification evidence.
+5. Verify the repository-contained Wrangler identity, five required secret
+   names, zero legacy replay rows, and the active recovery targets. OAuth state
+   is present and currently valid, but live account identity is not yet
+   claimed.
+6. Qualify and registry-promote only the exact tuple, run the complete release
+   check, deploy the bounded D1/Container/Worker sequence, and require the
+   automatic production smoke to pass.
+7. Execute the complete public CloakBrowser matrix and re-audit every public
+   P0/P1 against the exact deployed tuple.
+8. Learner-study evidence is no longer a release blocker and remains honestly
+   `NO_DATA`. Submission metadata is `student`, country `India`; the owner will
+   provide the public video after deployment.
+9. Complete the remaining submission receipts, push the reviewed feature
+   branch, fast-forward it into `main`, verify, and push `main`.
+
+No containment pass, new exact build, refreshed release evidence, registry
+promotion, Cloudflare mutation, public qualification, submission, push, or
+merge is claimed at this checkpoint. Release remains **NO-GO** until the
+remaining exact-tuple gates pass.
