@@ -81,10 +81,8 @@ export function JudgeModeView({
             See a verified belief break in ten seconds.
           </h1>
           <p className={styles.lede}>
-            Seal a Prediction, change one condition, and let fixed evidence—not
-            AI prose—release the bounded result. CounterLab turns the
-            learner&apos;s notebook claim into a checkable Question → Prediction
-            → Test → Boundary → Apply → Repair record.
+            Seal a Prediction. Change one condition. Fixed evidence—not AI
+            prose—releases one bounded result.
           </p>
         </div>
 
@@ -94,25 +92,28 @@ export function JudgeModeView({
         >
           <header>
             <span>Completed fixed sample · not a live result</span>
-            <b>Hashes checked before values</b>
+            <b>Integrity checked</b>
           </header>
           <blockquote>
             “This score proves the model works for customers it has never seen.”
           </blockquote>
-          <p className={styles.previewAuthority}>
-            Approved fixed sample framing. No GPT-5.6, Codex, or runner call
-            occurs in this preview.
-          </p>
+          <div className={styles.previewMeta}>
+            <p className={styles.previewAuthority}>
+              Approved fixed sample framing. No GPT-5.6, Codex, or runner call
+              occurs here.
+            </p>
+            <a
+              className={styles.previewProofLink}
+              href="#sample-evidence"
+              aria-label="Inspect verified sample proof"
+              onClick={() =>
+                setSampleEvidenceInspectionRequest((request) => request + 1)
+              }
+            >
+              Inspect proof
+            </a>
+          </div>
           <VerifiedBeliefBreakMechanism presentation="compact" />
-          <a
-            className={styles.previewProofLink}
-            href="#sample-evidence"
-            onClick={() =>
-              setSampleEvidenceInspectionRequest((request) => request + 1)
-            }
-          >
-            Inspect verified sample proof
-          </a>
         </aside>
 
         <div className={styles.heroAfter}>

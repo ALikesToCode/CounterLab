@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -52,6 +52,54 @@ const isolatedHealth: CapabilityHealth = {
 describe("JudgeModeView", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("keeps the tightened first fold learner-facing with proof one action away", async () => {
+    render(
+      <JudgeModeView
+        health={isolatedHealth}
+        healthPending={false}
+        healthError={null}
+        onRetryHealth={vi.fn()}
+        onStartSample={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Seal a Prediction. Change one condition. Fixed evidence—not AI prose—releases one bounded result.",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.queryByText(/Question → Prediction → Test/u),
+    ).not.toBeInTheDocument();
+
+    const proof = screen.getByRole("complementary", {
+      name: /ten second fixed sample preview/i,
+    });
+    expect(proof).toHaveTextContent(
+      /completed fixed sample.*not a live result/i,
+    );
+    expect(within(proof).getByText("Integrity checked")).toBeVisible();
+    expect(proof).toHaveTextContent(
+      /This score proves the model works for customers it has never seen/i,
+    );
+    expect(proof).not.toHaveTextContent(/\b[a-f0-9]{64}\b/iu);
+
+    const proofLink = within(proof).getByRole("link", {
+      name: /inspect verified sample proof/i,
+    });
+    const mechanism = within(proof).getByRole("region", {
+      name: /verified sample belief-break mechanism/i,
+    });
+    expect(
+      proofLink.compareDocumentPosition(mechanism) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+    expect(await within(mechanism).findByText("98.5%")).toBeVisible();
+    expect(within(mechanism).getByText("59.4%")).toBeVisible();
+    expect(within(mechanism).getByText("Boundary consequence")).toBeVisible();
+    expect(within(mechanism).getByText("Learner benefit")).toBeVisible();
   });
 
   it("distinguishes sample, live, and legacy replay authority", async () => {
