@@ -18,7 +18,10 @@ import type {
 import { z } from "zod";
 
 import {
+  ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES,
   CloakBrowserRawRunSchema,
+  PublicationReleaseBindingSchema,
+  REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID,
   REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID,
   REQUIRED_CLOAK_JOURNEY_IDS,
   REQUIRED_CLOAK_VIEWPORTS,
@@ -30,7 +33,7 @@ export const JOURNEY_OBSERVATION_ATTACHMENT =
 
 const PageObservationSchema = z
   .object({
-    schemaVersion: z.literal("2"),
+    schemaVersion: z.literal("3"),
     authority: z.enum(["CLOAK_CDP_ENDPOINT", "stock-chromium-design-review"]),
     viewport: z
       .object({
@@ -39,8 +42,14 @@ const PageObservationSchema = z
       })
       .strict(),
     consoleErrors: z.number().int().nonnegative(),
+    expectedRequestFailures: z
+      .array(z.enum(ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES))
+      .max(ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES.length),
     expectedFailedRequests: z.number().int().nonnegative(),
     failedRequests: z.number().int().nonnegative(),
+    observedRequestFailures: z
+      .array(z.enum(ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES))
+      .max(ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES.length),
     observedFailedRequests: z.number().int().nonnegative(),
     expectedRequestFailuresMatched: z.boolean(),
     browserVersion: z.string().trim().min(1).max(128),
@@ -58,8 +67,10 @@ export interface CapturedJourney {
   assertionCount: number;
   viewport: string;
   consoleErrors: number;
+  expectedRequestFailures: readonly (typeof ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES)[number][];
   expectedFailedRequests: number;
   failedRequests: number;
+  observedRequestFailures: readonly (typeof ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES)[number][];
   observedFailedRequests: number;
   browserVersion: string;
   browserAuthority:
@@ -76,6 +87,7 @@ interface BuildRawRunInput {
   journeys: readonly CapturedJourney[];
   playwrightStatus: FullResult["status"];
   qualificationRequested: boolean;
+  release: z.infer<typeof PublicationReleaseBindingSchema> | null;
   rootErrors?: number;
   startedAt: string;
 }
@@ -85,16 +97,16 @@ interface QualificationReporterOptions {
   baseUrl: string;
   outputFile: string;
   qualificationRequested: boolean;
+  releaseBinding: z.infer<typeof PublicationReleaseBindingSchema> | null;
   repositoryRoot: string;
   runtimeRoot: string;
 }
 
 const expectedProductionOrigin =
   "https://counterlab.cserules.workers.dev" as const;
-const allowedExpectedRequestFailures = new Set([
-  "POST /api/artifacts",
-  "POST /api/live/sessions",
-]);
+const allowedExpectedRequestFailures: ReadonlySet<string> = new Set(
+  ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES,
+);
 
 export function summarizeRequestFailures(
   observed: readonly string[],
@@ -103,6 +115,7 @@ export function summarizeRequestFailures(
   expectedCount: number;
   matched: boolean;
   observedCount: number;
+  observedRequestFailures: readonly (typeof ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES)[number][];
   unexpectedCount: number;
 } {
   const expectedValid =
@@ -120,6 +133,12 @@ export function summarizeRequestFailures(
       observed.length === expected.length &&
       remaining.length === 0,
     observedCount: observed.length,
+    observedRequestFailures: observed.filter(
+      (
+        failure,
+      ): failure is (typeof ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES)[number] =>
+        allowedExpectedRequestFailures.has(failure),
+    ),
     unexpectedCount: remaining.length,
   };
 }
@@ -223,6 +242,8 @@ export function buildCloakBrowserRawRun(input: BuildRawRunInput) {
     input.qualificationRequested &&
     input.authority === "CLOAKBROWSER" &&
     input.baseUrl === expectedProductionOrigin &&
+    input.release !== null &&
+    input.release.productionOrigin === input.baseUrl &&
     input.playwrightStatus === "passed" &&
     (input.rootErrors ?? 0) === 0 &&
     exactJourneyRegistry(input.journeys) &&
@@ -235,6 +256,16 @@ export function buildCloakBrowserRawRun(input: BuildRawRunInput) {
         journey.durationMs > 0 &&
         journey.assertionCount > 0 &&
         journey.consoleErrors === 0 &&
+        JSON.stringify(journey.expectedRequestFailures) ===
+          JSON.stringify(
+            REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[
+              journey.id as keyof typeof REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID
+            ],
+          ) &&
+        journey.expectedRequestFailures.length ===
+          journey.expectedFailedRequests &&
+        JSON.stringify(journey.observedRequestFailures) ===
+          JSON.stringify(journey.expectedRequestFailures) &&
         journey.observedFailedRequests === journey.expectedFailedRequests &&
         journey.failedRequests === 0 &&
         journey.browserVersion.trim() !== "" &&
@@ -245,7 +276,7 @@ export function buildCloakBrowserRawRun(input: BuildRawRunInput) {
     new Set(input.journeys.map((journey) => journey.browserVersion)).size === 1;
 
   return CloakBrowserRawRunSchema.parse({
-    schemaVersion: "2",
+    schemaVersion: "3",
     kind: "cloakbrowser-raw-run",
     status: input.qualificationRequested
       ? exactCleanRun
@@ -255,6 +286,7 @@ export function buildCloakBrowserRawRun(input: BuildRawRunInput) {
     authority: input.authority,
     qualificationRequested: input.qualificationRequested,
     baseUrl: input.baseUrl,
+    release: input.release,
     startedAt: input.startedAt,
     completedAt: input.completedAt,
     playwrightVersion: "1.61.1",
@@ -329,8 +361,10 @@ export default class CounterLabQualificationReporter implements Reporter {
           ? "0x0"
           : `${observation.viewport.width}x${observation.viewport.height}`,
       consoleErrors: observation?.consoleErrors ?? 1,
+      expectedRequestFailures: observation?.expectedRequestFailures ?? [],
       expectedFailedRequests: observation?.expectedFailedRequests ?? 0,
       failedRequests: observation?.failedRequests ?? 1,
+      observedRequestFailures: observation?.observedRequestFailures ?? [],
       observedFailedRequests: observation?.observedFailedRequests ?? 1,
       browserVersion: observation?.browserVersion ?? "unavailable",
       browserAuthority: observation?.authority ?? "unavailable",
@@ -356,6 +390,7 @@ export default class CounterLabQualificationReporter implements Reporter {
         journeys: this.capturedJourneys,
         playwrightStatus: result.status,
         qualificationRequested: this.options.qualificationRequested,
+        release: this.options.releaseBinding,
         rootErrors: this.rootErrors,
         startedAt: this.startedAt,
       });

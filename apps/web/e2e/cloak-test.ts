@@ -216,12 +216,15 @@ export const test = base.extend<CounterLabAutomaticFixtures>({
       await testInfo.attach(JOURNEY_OBSERVATION_ATTACHMENT, {
         body: Buffer.from(
           JSON.stringify({
-            schemaVersion: "2",
+            schemaVersion: "3",
             authority: currentBrowserAuthorityLabel(),
             viewport: viewport ?? { width: 0, height: 0 },
             consoleErrors,
+            expectedRequestFailures,
             expectedFailedRequests: requestFailureSummary.expectedCount,
             failedRequests: requestFailureSummary.unexpectedCount,
+            observedRequestFailures:
+              requestFailureSummary.observedRequestFailures,
             observedFailedRequests: requestFailureSummary.observedCount,
             expectedRequestFailuresMatched: requestFailureSummary.matched,
             browserVersion,

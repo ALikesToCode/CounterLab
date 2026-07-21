@@ -4,7 +4,9 @@ import { resolve } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import {
+  containedDirectory,
   containedInputFile,
+  containedNewOutputDirectory,
   containedNewOutputFile,
   parseStrictNameValueArgs,
 } from "./repository-cli-paths.js";
@@ -72,6 +74,29 @@ describe("repository-contained release CLI paths", () => {
         root,
         resolve(symlinkParent, "output.json"),
         "test output",
+      ),
+    ).rejects.toThrow(/contains a symlink/u);
+  });
+
+  it("creates only a new physical directory beneath the repository", async () => {
+    const output = resolve(stage, `new-directory-${Date.now()}`);
+    await expect(
+      containedNewOutputDirectory(root, output, "test directory"),
+    ).resolves.toBe(output);
+    await expect(
+      containedNewOutputDirectory(root, output, "test directory"),
+    ).rejects.toThrow(/already exists/u);
+    await expect(
+      containedDirectory(root, output, "test directory"),
+    ).resolves.toBe(output);
+    await expect(
+      containedNewOutputDirectory(root, "../outside", "test directory"),
+    ).rejects.toThrow(/escapes the repository/u);
+    await expect(
+      containedNewOutputDirectory(
+        root,
+        resolve(stage, "symlink-parent", "new-directory"),
+        "test directory",
       ),
     ).rejects.toThrow(/contains a symlink/u);
   });

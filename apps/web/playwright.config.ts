@@ -1,10 +1,23 @@
 import { defineConfig } from "@playwright/test";
-import { existsSync, lstatSync, realpathSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  closeSync,
+  constants,
+  existsSync,
+  fstatSync,
+  lstatSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+} from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { resolveBrowserAuthority } from "./e2e/browser-authority";
+import { DeploymentReceiptV7Schema } from "../../packages/scientific-engine-registry/src/index.js";
+import { PublicationReleaseBindingSchema } from "../../scripts/submission-publication-evidence.js";
 
 const repositoryRoot = realpathSync(resolve(import.meta.dirname, "../.."));
+const maximumDeploymentReceiptBytes = 5 * 1_024 * 1_024;
 const runtimeParent = resolve(import.meta.dirname, "test-results/runtime");
 const configuredRuntimeRoot = process.env.COUNTERLAB_E2E_RUNTIME_ROOT;
 if (configuredRuntimeRoot !== undefined && !isAbsolute(configuredRuntimeRoot)) {
@@ -118,6 +131,67 @@ if (
     "CloakBrowser qualification requires the exact public CounterLab origin",
   );
 }
+const deploymentReceiptSetting = process.env.COUNTERLAB_E2E_DEPLOYMENT_RECEIPT;
+let qualificationReleaseBinding: ReturnType<
+  typeof PublicationReleaseBindingSchema.parse
+> | null = null;
+if (qualificationRequested) {
+  if (
+    deploymentReceiptSetting === undefined ||
+    deploymentReceiptSetting.trim() === ""
+  ) {
+    throw new Error(
+      "CloakBrowser qualification requires COUNTERLAB_E2E_DEPLOYMENT_RECEIPT",
+    );
+  }
+  const requestedReceipt = resolve(repositoryRoot, deploymentReceiptSetting);
+  if (!isContained(repositoryRoot, requestedReceipt, false)) {
+    throw new Error("CloakBrowser deployment receipt escaped the repository");
+  }
+  assertNoSymlinkTraversal(requestedReceipt, "CloakBrowser deployment receipt");
+  const physicalReceipt = realpathSync(requestedReceipt);
+  if (
+    !isContained(repositoryRoot, physicalReceipt, false) ||
+    !lstatSync(physicalReceipt).isFile()
+  ) {
+    throw new Error(
+      "CloakBrowser deployment receipt must be a physical repository file",
+    );
+  }
+  const receiptDescriptor = openSync(
+    physicalReceipt,
+    constants.O_RDONLY | constants.O_NOFOLLOW,
+  );
+  let deploymentBytes: Buffer;
+  try {
+    const metadata = fstatSync(receiptDescriptor);
+    if (!metadata.isFile() || metadata.size > maximumDeploymentReceiptBytes) {
+      throw new Error(
+        "CloakBrowser deployment receipt is not a bounded regular file",
+      );
+    }
+    deploymentBytes = readFileSync(receiptDescriptor);
+  } finally {
+    closeSync(receiptDescriptor);
+  }
+  const deployment = DeploymentReceiptV7Schema.parse(
+    JSON.parse(deploymentBytes.toString("utf8")) as unknown,
+  );
+  qualificationReleaseBinding = PublicationReleaseBindingSchema.parse({
+    deploymentReceiptSha256: createHash("sha256")
+      .update(deploymentBytes)
+      .digest("hex"),
+    productionOrigin: deployment.productionOrigin,
+    workerEvidenceCommit: deployment.workerEvidenceCommit,
+    runnerSourceCommit: deployment.runnerSourceCommit,
+    containerImageDigest: deployment.containerImageDigest,
+    workerVersionId: deployment.workerVersionId,
+  });
+} else if (deploymentReceiptSetting !== undefined) {
+  throw new Error(
+    "COUNTERLAB_E2E_DEPLOYMENT_RECEIPT is allowed only for qualification",
+  );
+}
 
 export default defineConfig({
   testDir: "./e2e",
@@ -139,6 +213,7 @@ export default defineConfig({
         baseUrl: baseURL,
         outputFile: qualificationRunFile,
         qualificationRequested,
+        releaseBinding: qualificationReleaseBinding,
         repositoryRoot,
         runtimeRoot,
       },

@@ -1,4 +1,4 @@
-import { lstat, realpath } from "node:fs/promises";
+import { lstat, mkdir, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 function isContained(root: string, candidate: string): boolean {
@@ -66,6 +66,24 @@ export async function containedInputFile(
   return physical;
 }
 
+export async function containedDirectory(
+  root: string,
+  requested: string,
+  label: string,
+): Promise<string> {
+  const candidate = resolve(root, requested);
+  if (!isContained(root, candidate) || candidate === root) {
+    throw new Error(`${label} escapes the repository`);
+  }
+  await assertNoSymlinkComponents(root, candidate, label);
+  const physical = await realpath(candidate);
+  const metadata = await lstat(physical);
+  if (!isContained(root, physical) || !metadata.isDirectory()) {
+    throw new Error(`${label} is not a repository directory`);
+  }
+  return physical;
+}
+
 export async function containedNewOutputFile(
   root: string,
   requested: string,
@@ -89,4 +107,36 @@ export async function containedNewOutputFile(
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
   return candidate;
+}
+
+export async function containedNewOutputDirectory(
+  root: string,
+  requested: string,
+  label: string,
+): Promise<string> {
+  const candidate = resolve(root, requested);
+  if (!isContained(root, candidate) || candidate === root) {
+    throw new Error(`${label} escapes the repository`);
+  }
+  const parent = resolve(candidate, "..");
+  await assertNoSymlinkComponents(root, parent, `${label} parent`);
+  const physicalParent = await realpath(parent);
+  const parentMetadata = await lstat(physicalParent);
+  if (!isContained(root, physicalParent) || !parentMetadata.isDirectory()) {
+    throw new Error(`${label} parent is not a repository directory`);
+  }
+  try {
+    await lstat(candidate);
+    throw new Error(`${label} already exists; refusing to replace it`);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  await mkdir(candidate, { mode: 0o700 });
+  await assertNoSymlinkComponents(root, candidate, label);
+  const physical = await realpath(candidate);
+  const metadata = await lstat(physical);
+  if (!isContained(root, physical) || !metadata.isDirectory()) {
+    throw new Error(`${label} is not a repository directory`);
+  }
+  return physical;
 }

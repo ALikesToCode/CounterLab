@@ -1,6 +1,9 @@
+import { createHash } from "node:crypto";
 import { inflateSync } from "node:zlib";
 
 import { z } from "zod";
+
+import { canonicalJson } from "../packages/session-core/src/index.js";
 
 const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);
 const GitCommitSchema = z.string().regex(/^[a-f0-9]{40}$/u);
@@ -27,6 +30,10 @@ const PublicationPrivacySchema = z
     containsPersonalData: z.literal(false),
   })
   .strict();
+
+function canonicalSha256(value: unknown): string {
+  return createHash("sha256").update(canonicalJson(value)).digest("hex");
+}
 
 const baseReceiptShape = {
   schemaVersion: z.literal("1"),
@@ -140,16 +147,156 @@ export const REQUIRED_CLOAK_MANUAL_EVIDENCE_KEYS = [
   "webVitals",
 ] as const;
 
+export const REQUIRED_CLOAK_MANUAL_CRITERIA = {
+  keyboard: [
+    "keyboardJourneyCompleted",
+    "visibleFocusObserved",
+    "focusRestored",
+  ],
+  screenReaderNames: ["landmarksNamed", "controlsNamed", "asyncStatesNamed"],
+  reducedMotion: ["reducedMotionApplied", "motionParityObserved"],
+  noHorizontalOverflow: [
+    "allRequiredViewportsChecked",
+    "documentOverflowAbsent",
+    "bodyOverflowAbsent",
+  ],
+  zoom200: ["zoomApplied", "contentOperable", "noClipping"],
+  longContent: ["longContentInjected", "contentReadable", "controlsReachable"],
+  narrowVisualizations: [
+    "visualFitsViewport",
+    "exactTableAvailable",
+    "nonColorMeaning",
+  ],
+  touchTargets: ["interactiveTargetsMeasured", "minimum44Px"],
+  consoleAndNetwork: [
+    "consoleErrorsZero",
+    "pageErrorsZero",
+    "unexpectedRequestsZero",
+  ],
+  webVitals: ["lcpMeasured", "clsMeasured", "inpMeasured"],
+} as const satisfies Record<
+  (typeof REQUIRED_CLOAK_MANUAL_EVIDENCE_KEYS)[number],
+  readonly string[]
+>;
+
+const ManualCriterionSchema = z
+  .object({
+    id: z.string().regex(/^[a-z][a-zA-Z0-9.-]{0,63}$/u),
+    status: z.literal("PASSED"),
+    observationCount: z.number().int().positive(),
+  })
+  .strict();
+
+export const CloakManualObservationArtifactSchema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    kind: z.literal("cloakbrowser-manual-observation"),
+    status: z.literal("OBSERVED_PASS"),
+    authority: z.literal("HUMAN_OBSERVATION"),
+    browserAuthority: z.literal("CLOAKBROWSER"),
+    check: z.enum(REQUIRED_CLOAK_MANUAL_EVIDENCE_KEYS),
+    baseUrl: z.literal("https://counterlab.cserules.workers.dev"),
+    release: PublicationReleaseBindingSchema,
+    rawRunCanonicalSha256: Sha256Schema,
+    browserVersion: z.string().trim().min(1).max(128),
+    observedAt: z.iso.datetime({ offset: true }),
+    observationCount: z.number().int().positive(),
+    criteria: z.array(ManualCriterionSchema).min(1).max(64),
+    webVitals: z
+      .object({
+        status: z.literal("measured"),
+        lcpMs: z.number().nonnegative().max(2_500),
+        cls: z.number().nonnegative().max(0.1),
+        inpMs: z.number().nonnegative().max(200),
+      })
+      .strict()
+      .nullable(),
+    privacy: PublicationPrivacySchema,
+  })
+  .strict()
+  .superRefine((artifact, context) => {
+    const criterionIds = artifact.criteria.map((criterion) => criterion.id);
+    if (new Set(criterionIds).size !== criterionIds.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["criteria"],
+        message: "manual observation criteria must be unique",
+      });
+    }
+    if (
+      JSON.stringify(criterionIds) !==
+      JSON.stringify(REQUIRED_CLOAK_MANUAL_CRITERIA[artifact.check])
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["criteria"],
+        message: "manual observation criteria do not match the required check",
+      });
+    }
+    if (
+      artifact.observationCount !==
+      artifact.criteria.reduce(
+        (total, criterion) => total + criterion.observationCount,
+        0,
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["observationCount"],
+        message: "manual observation count must equal its criteria total",
+      });
+    }
+    if ((artifact.check === "webVitals") !== (artifact.webVitals !== null)) {
+      context.addIssue({
+        code: "custom",
+        path: ["webVitals"],
+        message: "measured Web Vitals belong only to the webVitals check",
+      });
+    }
+  });
+
 export const CloakManualEvidenceReceiptSchema = z
   .object({
     ...baseReceiptShape,
+    schemaVersion: z.literal("2"),
     kind: z.literal("cloakbrowser-manual-evidence"),
-    authority: z.literal("CLOAKBROWSER"),
+    authority: z.literal("HUMAN_OBSERVATION"),
+    browserAuthority: z.literal("CLOAKBROWSER"),
     check: z.enum(REQUIRED_CLOAK_MANUAL_EVIDENCE_KEYS),
     observationCount: z.number().int().positive(),
     artifactSha256: Sha256Schema,
+    artifact: CloakManualObservationArtifactSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((receipt, context) => {
+    if (
+      receipt.artifact.check !== receipt.check ||
+      receipt.artifact.observationCount !== receipt.observationCount ||
+      canonicalJson(receipt.artifact.release) !== canonicalJson(receipt.release)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["artifact"],
+        message: "manual observation identity does not match its receipt",
+      });
+    }
+    if (canonicalSha256(receipt.artifact) !== receipt.artifactSha256) {
+      context.addIssue({
+        code: "custom",
+        path: ["artifactSha256"],
+        message: "manual observation hash does not match its artifact",
+      });
+    }
+    if (
+      Date.parse(receipt.artifact.observedAt) > Date.parse(receipt.checkedAt)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["checkedAt"],
+        message: "manual observation must precede receipt issuance",
+      });
+    }
+  });
 
 export const REQUIRED_CLOAK_VIEWPORTS = [
   "375x812",
@@ -207,6 +354,12 @@ export const REQUIRED_CLOAK_JOURNEY_IDS = [
 export type RequiredCloakJourneyId =
   (typeof REQUIRED_CLOAK_JOURNEY_IDS)[number];
 export type RequiredCloakViewport = (typeof REQUIRED_CLOAK_VIEWPORTS)[number];
+export const ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES = [
+  "POST /api/artifacts",
+  "POST /api/live/sessions",
+] as const;
+export type AllowedCloakExpectedRequestFailure =
+  (typeof ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES)[number];
 
 const cloakJourneyViewportOverrides: Partial<
   Record<RequiredCloakJourneyId, RequiredCloakViewport>
@@ -243,6 +396,28 @@ export const REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID = Object.freeze(
       cloakJourneyViewportOverrides[id] ?? "1440x900",
     ]),
   ) as Record<RequiredCloakJourneyId, RequiredCloakViewport>,
+);
+
+const cloakExpectedRequestFailureOverrides: Partial<
+  Record<RequiredCloakJourneyId, readonly AllowedCloakExpectedRequestFailure[]>
+> = {
+  "recovery-and-intake::an interrupted upload accepts the same file on retry": [
+    "POST /api/artifacts",
+  ],
+  "recovery-and-intake::a lost private-session response retries without re-uploading":
+    ["POST /api/live/sessions"],
+};
+
+export const REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID = Object.freeze(
+  Object.fromEntries(
+    REQUIRED_CLOAK_JOURNEY_IDS.map((id) => [
+      id,
+      Object.freeze([...(cloakExpectedRequestFailureOverrides[id] ?? [])]),
+    ]),
+  ) as Record<
+    RequiredCloakJourneyId,
+    readonly AllowedCloakExpectedRequestFailure[]
+  >,
 );
 
 function addCloakJourneyIssues(
@@ -307,8 +482,14 @@ export const CloakBrowserRawJourneySchema = z
     assertionCount: z.number().int().nonnegative(),
     viewport: z.string().regex(/^\d+x\d+$/u),
     consoleErrors: z.number().int().nonnegative(),
+    expectedRequestFailures: z
+      .array(z.enum(ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES))
+      .max(ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES.length),
     expectedFailedRequests: z.number().int().nonnegative(),
     failedRequests: z.number().int().nonnegative(),
+    observedRequestFailures: z
+      .array(z.enum(ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES))
+      .max(ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES.length),
     observedFailedRequests: z.number().int().nonnegative(),
     browserVersion: z.string().trim().min(1).max(128),
     browserAuthority: z.enum([
@@ -322,12 +503,13 @@ export const CloakBrowserRawJourneySchema = z
 
 export const CloakBrowserRawRunSchema = z
   .object({
-    schemaVersion: z.literal("2"),
+    schemaVersion: z.literal("3"),
     kind: z.literal("cloakbrowser-raw-run"),
     status: z.enum(["PASSED", "FAILED", "NON_QUALIFYING"]),
     authority: z.enum(["CLOAKBROWSER", "STOCK_CHROMIUM_DESIGN_REVIEW"]),
     qualificationRequested: z.boolean(),
     baseUrl: z.string().trim().min(1).max(2_048),
+    release: PublicationReleaseBindingSchema.nullable(),
     startedAt: z.iso.datetime({ offset: true }),
     completedAt: z.iso.datetime({ offset: true }),
     playwrightVersion: z.literal("1.61.1"),
@@ -347,11 +529,65 @@ export const CloakBrowserRawRunSchema = z
         message: "raw run completion must not precede its start",
       });
     }
+    const identifiers = run.journeys.map((journey) => journey.id);
+    const exactRegistry =
+      JSON.stringify(identifiers) ===
+      JSON.stringify(REQUIRED_CLOAK_JOURNEY_IDS);
+    const exactCleanRun =
+      run.authority === "CLOAKBROWSER" &&
+      run.qualificationRequested &&
+      run.baseUrl === "https://counterlab.cserules.workers.dev" &&
+      run.release !== null &&
+      run.release.productionOrigin === run.baseUrl &&
+      run.playwrightStatus === "passed" &&
+      run.rootErrors === 0 &&
+      exactRegistry &&
+      run.journeys.every(
+        (journey) =>
+          journey.status === "passed" &&
+          journey.expectedStatus === "passed" &&
+          journey.attempt === 0 &&
+          journey.durationMs > 0 &&
+          journey.assertionCount > 0 &&
+          journey.consoleErrors === 0 &&
+          journey.expectedFailedRequests ===
+            journey.expectedRequestFailures.length &&
+          JSON.stringify(journey.expectedRequestFailures) ===
+            JSON.stringify(
+              REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[
+                journey.id as RequiredCloakJourneyId
+              ],
+            ) &&
+          journey.failedRequests === 0 &&
+          JSON.stringify(journey.observedRequestFailures) ===
+            JSON.stringify(journey.expectedRequestFailures) &&
+          journey.observedFailedRequests === journey.expectedFailedRequests &&
+          journey.browserAuthority === "CLOAK_CDP_ENDPOINT" &&
+          journey.browserVersion !== "unavailable" &&
+          journey.telemetryValid &&
+          REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID[
+            journey.id as RequiredCloakJourneyId
+          ] === journey.viewport,
+      ) &&
+      new Set(run.journeys.map((journey) => journey.browserVersion)).size === 1;
+    const expectedStatus = run.qualificationRequested
+      ? exactCleanRun
+        ? "PASSED"
+        : "FAILED"
+      : "NON_QUALIFYING";
+    if (run.status !== expectedStatus) {
+      context.addIssue({
+        code: "custom",
+        path: ["status"],
+        message:
+          "raw run status does not match its independently checked evidence",
+      });
+    }
   });
 
 export const CloakBrowserExecutionReportSchema = z
   .object({
-    schemaVersion: z.literal("1"),
+    schemaVersion: z.literal("2"),
     kind: z.literal("cloakbrowser-execution-report"),
     status: z.literal("PASSED"),
     checkedAt: z.iso.datetime({ offset: true }),
@@ -361,6 +597,8 @@ export const CloakBrowserExecutionReportSchema = z
     privacy: PublicationPrivacySchema,
     browserVersion: z.string().trim().min(1).max(128),
     playwrightVersion: z.literal("1.61.1"),
+    rawRunCanonicalSha256: Sha256Schema,
+    rawRun: CloakBrowserRawRunSchema,
     journeys: z.array(CloakJourneySchema).length(40),
     failures: z.literal(0),
     skips: z.literal(0),
@@ -371,6 +609,46 @@ export const CloakBrowserExecutionReportSchema = z
   .strict()
   .superRefine((report, context) => {
     addCloakJourneyIssues(report.journeys, context);
+    if (canonicalSha256(report.rawRun) !== report.rawRunCanonicalSha256) {
+      context.addIssue({
+        code: "custom",
+        path: ["rawRunCanonicalSha256"],
+        message: "raw run hash does not match its embedded evidence",
+      });
+    }
+    if (
+      report.rawRun.status !== "PASSED" ||
+      report.rawRun.authority !== "CLOAKBROWSER" ||
+      !report.rawRun.qualificationRequested ||
+      report.rawRun.baseUrl !== report.baseUrl ||
+      canonicalJson(report.rawRun.release) !== canonicalJson(report.release) ||
+      report.rawRun.playwrightVersion !== report.playwrightVersion ||
+      report.rawRun.journeys[0]?.browserVersion !== report.browserVersion ||
+      Date.parse(report.rawRun.completedAt) > Date.parse(report.checkedAt)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["rawRun"],
+        message: "raw run does not match its execution report",
+      });
+    }
+    for (const [index, journey] of report.journeys.entries()) {
+      const raw = report.rawRun.journeys[index];
+      if (
+        raw === undefined ||
+        raw.id !== journey.id ||
+        raw.status !== "passed" ||
+        raw.attempt !== journey.attempt ||
+        raw.durationMs !== journey.durationMs ||
+        raw.viewport !== journey.viewport
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["journeys", index],
+          message: "journey does not match its embedded raw run",
+        });
+      }
+    }
   });
 
 const ManualEvidenceSchema = z

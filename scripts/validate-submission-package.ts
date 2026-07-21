@@ -1706,20 +1706,64 @@ function assertPublicationEvidence(
       "CloakBrowser execution report",
       issues,
     );
+    assertPreSubmissionTimestamp(
+      browserReport.rawRun.startedAt,
+      submission,
+      now,
+      notBefore,
+      "CloakBrowser raw run start",
+      issues,
+    );
+    assertPreSubmissionTimestamp(
+      browserReport.rawRun.completedAt,
+      submission,
+      now,
+      notBefore,
+      "CloakBrowser raw run completion",
+      issues,
+    );
     for (const journey of browserReport.journeys) {
       const verified = verifiedJourneyEvidence.get(journey.id);
+      const rawJourney = browserReport.rawRun.journeys.find(
+        (entry) => entry.id === journey.id,
+      );
       if (
         verified === undefined ||
+        rawJourney === undefined ||
         verified.reference.sha256 !== journey.evidenceSha256 ||
         verified.receipt.viewport !== journey.viewport ||
         verified.receipt.journeyStatus !== journey.status ||
         verified.receipt.attempt !== journey.attempt ||
         verified.receipt.durationMs !== journey.durationMs ||
+        verified.receipt.assertionCount !== rawJourney.assertionCount ||
         Date.parse(verified.receipt.checkedAt) >
           Date.parse(browserReport.checkedAt)
       ) {
         issues.push(
           `CloakBrowser journey ${journey.id} does not match its report`,
+        );
+      }
+    }
+    for (const key of REQUIRED_CLOAK_MANUAL_EVIDENCE_KEYS) {
+      const verified = verifiedManualEvidence.get(key);
+      if (verified === undefined) continue;
+      const artifact = verified.receipt.artifact;
+      assertPreSubmissionTimestamp(
+        artifact.observedAt,
+        submission,
+        now,
+        notBefore,
+        `CloakBrowser manual observation ${key}`,
+        issues,
+      );
+      if (
+        artifact.baseUrl !== browserReport.baseUrl ||
+        artifact.rawRunCanonicalSha256 !==
+          browserReport.rawRunCanonicalSha256 ||
+        artifact.browserVersion !== browserReport.browserVersion
+      ) {
+        issues.push(
+          `CloakBrowser manual evidence ${key} does not match its raw run`,
         );
       }
     }
@@ -1785,6 +1829,8 @@ function assertPublicationEvidence(
       issues,
     );
     const manifest = submission.browserQualification;
+    const observedWebVitals =
+      verifiedManualEvidence.get("webVitals")?.receipt.artifact.webVitals;
     if (
       browser.authority !== manifest.authority ||
       browser.exactReleaseBound !== manifest.exactReleaseBound ||
@@ -1799,7 +1845,13 @@ function assertPublicationEvidence(
       browser.playwrightReportSha256 !== browserReportReference.sha256 ||
       browser.browserEvidenceIndexSha256 !== browserIndexReference.sha256 ||
       verifiedJourneyEvidence.size !== browser.journeyCount ||
-      verifiedManualEvidence.size !== REQUIRED_CLOAK_MANUAL_EVIDENCE_KEYS.length
+      verifiedManualEvidence.size !==
+        REQUIRED_CLOAK_MANUAL_EVIDENCE_KEYS.length ||
+      observedWebVitals === undefined ||
+      observedWebVitals === null ||
+      observedWebVitals.lcpMs !== browser.webVitals.lcpMs ||
+      observedWebVitals.cls !== browser.webVitals.cls ||
+      observedWebVitals.inpMs !== browser.webVitals.inpMs
     ) {
       issues.push("CloakBrowser receipt does not match the package");
     }

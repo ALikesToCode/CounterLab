@@ -9,9 +9,13 @@ import { RELEASE_CHECK_IDS } from "../packages/scientific-engine-registry/src/sc
 import { canonicalJson } from "../packages/session-core/src/index.js";
 import { createGenerationIsolationEvidence } from "./generation-isolation-evidence.js";
 import {
+  REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID,
+  REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID,
   REQUIRED_CLOAK_JOURNEY_IDS,
+  REQUIRED_CLOAK_MANUAL_CRITERIA,
   REQUIRED_CLOAK_MANUAL_EVIDENCE_KEYS,
 } from "./submission-publication-evidence.js";
+import { buildCloakBrowserQualification } from "./finalize-cloakbrowser-qualification.js";
 import {
   SubmissionPackageSchema,
   type EvidenceReader,
@@ -524,135 +528,113 @@ async function readyPackage(
       contentCaptured: false,
     }),
   );
-  const browserViewports = [
-    "375x812",
-    "390x844",
-    "768x1024",
-    "1280x720",
-    "1366x768",
-    "1440x900",
-    "1920x1080",
-  ] as const;
   const browserVersion = "CloakBrowser Chromium 140.0.0.0";
-  const journeyEvidence = REQUIRED_CLOAK_JOURNEY_IDS.map((id, index) => {
-    const viewport = browserViewports[index % browserViewports.length]!;
-    const durationMs = 1_000 + index;
-    const sequence = String(index + 1).padStart(2, "0");
-    const evidenceReference = addEvidence(
-      `${evidenceRoot}/cloakbrowser-journeys/${sequence}.json`,
-      bytes({
-        ...receiptBase,
-        kind: "cloakbrowser-journey-evidence",
-        authority: "CLOAKBROWSER",
-        id,
-        viewport,
-        journeyStatus: "PASSED",
-        attempt: 0,
-        durationMs,
-        assertionCount: 3,
-        consoleErrors: 0,
-        failedRequests: 0,
-      }),
-    );
-    return {
+  const rawRun = {
+    schemaVersion: "3",
+    kind: "cloakbrowser-raw-run",
+    status: "PASSED",
+    authority: "CLOAKBROWSER",
+    qualificationRequested: true,
+    baseUrl: receipt.productionOrigin,
+    release: publicationRelease,
+    startedAt: "2026-07-21T09:56:00.000Z",
+    completedAt: "2026-07-21T09:58:00.000Z",
+    playwrightVersion: "1.61.1",
+    playwrightStatus: "passed",
+    rootErrors: 0,
+    journeys: REQUIRED_CLOAK_JOURNEY_IDS.map((id, index) => ({
       id,
-      evidence: evidenceReference,
-      journey: {
-        id,
-        status: "PASSED",
-        attempt: 0,
-        durationMs,
-        viewport,
-        evidenceSha256: evidenceReference.sha256,
-      },
-    };
-  });
-  const journeys = journeyEvidence.map((entry) => entry.journey);
-  const browserReport = addEvidence(
-    `${evidenceRoot}/cloakbrowser-playwright-report.json`,
-    bytes({
+      status: "passed",
+      expectedStatus: "passed",
+      attempt: 0,
+      durationMs: 1_000 + index,
+      assertionCount: 3,
+      viewport: REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID[id],
+      consoleErrors: 0,
+      expectedRequestFailures:
+        REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[id],
+      expectedFailedRequests:
+        REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[id].length,
+      failedRequests: 0,
+      observedRequestFailures:
+        REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[id],
+      observedFailedRequests:
+        REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[id].length,
+      browserVersion,
+      browserAuthority: "CLOAK_CDP_ENDPOINT",
+      telemetryValid: true,
+    })),
+    privacy: publicationPrivacy,
+  } as const;
+  const rawRunCanonicalSha256 = hash(bytes(canonicalJson(rawRun)));
+  const browserBuild = buildCloakBrowserQualification({
+    checkedAt,
+    deployedAt: receipt.deployedAt,
+    release: publicationRelease,
+    rawRun,
+    manualManifest: {
       schemaVersion: "1",
-      kind: "cloakbrowser-execution-report",
-      status: "PASSED",
-      checkedAt,
-      authority: "CLOAKBROWSER",
+      kind: "cloakbrowser-manual-observation-manifest",
+      authority: "HUMAN_OBSERVATION",
+      browserAuthority: "CLOAKBROWSER",
       baseUrl: receipt.productionOrigin,
       release: publicationRelease,
-      privacy: publicationPrivacy,
+      rawRunCanonicalSha256,
       browserVersion,
-      playwrightVersion: "1.61.1",
-      journeys,
-      failures: 0,
-      skips: 0,
-      retries: 0,
-      consoleErrors: 0,
-      failedRequests: 0,
-    }),
-  );
-  const manualEvidenceEntries = REQUIRED_CLOAK_MANUAL_EVIDENCE_KEYS.map(
-    (check) => {
-      const evidenceReference = addEvidence(
-        `${evidenceRoot}/cloakbrowser-manual/${check}.json`,
-        bytes({
-          ...receiptBase,
-          kind: "cloakbrowser-manual-evidence",
-          authority: "CLOAKBROWSER",
-          check,
-          observationCount: 3,
-          artifactSha256: hash(bytes(`manual-artifact-${check}`)),
-        }),
-      );
-      return [check, evidenceReference] as const;
+      observations: REQUIRED_CLOAK_MANUAL_EVIDENCE_KEYS.map((check) => ({
+        schemaVersion: "1",
+        kind: "cloakbrowser-manual-observation",
+        status: "OBSERVED_PASS",
+        authority: "HUMAN_OBSERVATION",
+        browserAuthority: "CLOAKBROWSER",
+        check,
+        baseUrl: receipt.productionOrigin,
+        release: publicationRelease,
+        rawRunCanonicalSha256,
+        browserVersion,
+        observedAt: "2026-07-21T09:59:00.000Z",
+        observationCount: REQUIRED_CLOAK_MANUAL_CRITERIA[check].length,
+        criteria: REQUIRED_CLOAK_MANUAL_CRITERIA[check].map((id) => ({
+          id,
+          status: "PASSED",
+          observationCount: 1,
+        })),
+        webVitals:
+          check === "webVitals"
+            ? { status: "measured", lcpMs: 1_200, cls: 0.02, inpMs: 90 }
+            : null,
+        privacy: publicationPrivacy,
+      })),
+      privacy: publicationPrivacy,
     },
-  );
-  const manualEvidenceReferences = Object.fromEntries(manualEvidenceEntries);
-  const manualEvidence = Object.fromEntries(
-    manualEvidenceEntries.map(([check, evidenceReference]) => [
-      check,
-      { status: "PASSED", evidenceSha256: evidenceReference.sha256 },
+  });
+  const browserFileReferences = new Map(
+    browserBuild.files.map((file) => [
+      file.relativePath,
+      addEvidence(`${evidenceRoot}/${file.relativePath}`, file.bytes),
     ]),
   );
-  const browserEvidenceIndex = addEvidence(
-    `${evidenceRoot}/cloakbrowser-evidence-index.json`,
-    bytes({
-      ...receiptBase,
-      kind: "cloakbrowser-evidence-index",
-      executionReportSha256: browserReport.sha256,
-      manual: manualEvidence,
-    }),
+  const journeyEvidence = REQUIRED_CLOAK_JOURNEY_IDS.map((id, index) => ({
+    id,
+    evidence: browserFileReferences.get(
+      `cloakbrowser-journeys/${String(index + 1).padStart(2, "0")}.json`,
+    )!,
+  }));
+  const browserReport = browserFileReferences.get(
+    "cloakbrowser-playwright-report.json",
+  )!;
+  const manualEvidenceReferences = Object.fromEntries(
+    REQUIRED_CLOAK_MANUAL_EVIDENCE_KEYS.map((check) => [
+      check,
+      browserFileReferences.get(`cloakbrowser-manual/${check}.json`)!,
+    ]),
   );
-  const browserEvidence = addEvidence(
-    `${evidenceRoot}/cloakbrowser-qualification.json`,
-    bytes({
-      ...receiptBase,
-      kind: "cloakbrowser-qualification",
-      authority: "CLOAKBROWSER",
-      baseUrl: receipt.productionOrigin,
-      exactReleaseBound: true,
-      journeyCount: 40,
-      viewports: browserViewports,
-      browserVersion,
-      playwrightVersion: "1.61.1",
-      playwrightReportSha256: browserReport.sha256,
-      browserEvidenceIndexSha256: browserEvidenceIndex.sha256,
-      journeys,
-      desktopComplete: true,
-      mobileComplete: true,
-      keyboardComplete: true,
-      screenReaderNamesComplete: true,
-      reducedMotionComplete: true,
-      noHorizontalOverflow: true,
-      zoom200Complete: true,
-      longContentComplete: true,
-      narrowVisualizationsComplete: true,
-      touchTargetsComplete: true,
-      requiredSkips: 0,
-      failures: 0,
-      consoleErrors: 0,
-      failedRequests: 0,
-      webVitals: { lcpMs: 1_200, cls: 0.02, inpMs: 90 },
-    }),
-  );
+  const browserEvidenceIndex = browserFileReferences.get(
+    "cloakbrowser-evidence-index.json",
+  )!;
+  const browserEvidence = browserFileReferences.get(
+    "cloakbrowser-qualification.json",
+  )!;
   const publicLinkEvidence = addEvidence(
     `${evidenceRoot}/public-link-audit.json`,
     bytes({
@@ -774,10 +756,7 @@ async function readyPackage(
       failedRequests: 0,
       playwrightReport: browserReport,
       evidenceIndex: browserEvidenceIndex,
-      journeyEvidence: journeyEvidence.map(({ id, evidence }) => ({
-        id,
-        evidence,
-      })),
+      journeyEvidence,
       manualEvidence: manualEvidenceReferences,
       evidence: browserEvidence,
     },
@@ -797,6 +776,129 @@ async function readyPackage(
       return content;
     },
   };
+}
+
+type ReadyFixture = Awaited<ReturnType<typeof readyPackage>>;
+
+function replaceEvidenceValue(
+  fixture: ReadyFixture,
+  path: string,
+  value: unknown,
+) {
+  const content = bytes(value);
+  fixture.evidence.set(path, content);
+  return reference(path, content);
+}
+
+function replaceManualEvidence(
+  fixture: ReadyFixture,
+  key: (typeof REQUIRED_CLOAK_MANUAL_EVIDENCE_KEYS)[number],
+  mutateArtifact: (artifact: Record<string, unknown>) => void,
+): void {
+  const manualReference =
+    fixture.ready.browserQualification.manualEvidence[key]!;
+  const manual = JSON.parse(
+    new TextDecoder().decode(fixture.evidence.get(manualReference.path)!),
+  ) as {
+    artifact: Record<string, unknown>;
+    artifactSha256: string;
+  };
+  mutateArtifact(manual.artifact);
+  manual.artifactSha256 = hash(bytes(canonicalJson(manual.artifact)));
+  const nextManualReference = replaceEvidenceValue(
+    fixture,
+    manualReference.path,
+    manual,
+  );
+  fixture.ready.browserQualification.manualEvidence[key] = nextManualReference;
+
+  const indexReference = fixture.ready.browserQualification.evidenceIndex!;
+  const index = JSON.parse(
+    new TextDecoder().decode(fixture.evidence.get(indexReference.path)!),
+  ) as { manual: Record<string, { evidenceSha256: string }> };
+  index.manual[key]!.evidenceSha256 = nextManualReference.sha256;
+  const nextIndexReference = replaceEvidenceValue(
+    fixture,
+    indexReference.path,
+    index,
+  );
+  fixture.ready.browserQualification.evidenceIndex = nextIndexReference;
+
+  const qualificationReference = fixture.ready.browserQualification.evidence!;
+  const qualification = JSON.parse(
+    new TextDecoder().decode(
+      fixture.evidence.get(qualificationReference.path)!,
+    ),
+  ) as { browserEvidenceIndexSha256: string };
+  qualification.browserEvidenceIndexSha256 = nextIndexReference.sha256;
+  fixture.ready.browserQualification.evidence = replaceEvidenceValue(
+    fixture,
+    qualificationReference.path,
+    qualification,
+  );
+}
+
+function replaceJourneyAssertionCount(
+  fixture: ReadyFixture,
+  index: number,
+  assertionCount: number,
+): void {
+  const journeyEntry =
+    fixture.ready.browserQualification.journeyEvidence[index]!;
+  const journeyReference = journeyEntry.evidence;
+  const journeyReceipt = JSON.parse(
+    new TextDecoder().decode(fixture.evidence.get(journeyReference.path)!),
+  ) as { assertionCount: number };
+  journeyReceipt.assertionCount = assertionCount;
+  const nextJourneyReference = replaceEvidenceValue(
+    fixture,
+    journeyReference.path,
+    journeyReceipt,
+  );
+  journeyEntry.evidence = nextJourneyReference;
+
+  const reportReference = fixture.ready.browserQualification.playwrightReport!;
+  const report = JSON.parse(
+    new TextDecoder().decode(fixture.evidence.get(reportReference.path)!),
+  ) as { journeys: Array<{ evidenceSha256: string }> };
+  report.journeys[index]!.evidenceSha256 = nextJourneyReference.sha256;
+  const nextReportReference = replaceEvidenceValue(
+    fixture,
+    reportReference.path,
+    report,
+  );
+  fixture.ready.browserQualification.playwrightReport = nextReportReference;
+
+  const indexReference = fixture.ready.browserQualification.evidenceIndex!;
+  const evidenceIndex = JSON.parse(
+    new TextDecoder().decode(fixture.evidence.get(indexReference.path)!),
+  ) as { executionReportSha256: string };
+  evidenceIndex.executionReportSha256 = nextReportReference.sha256;
+  const nextIndexReference = replaceEvidenceValue(
+    fixture,
+    indexReference.path,
+    evidenceIndex,
+  );
+  fixture.ready.browserQualification.evidenceIndex = nextIndexReference;
+
+  const qualificationReference = fixture.ready.browserQualification.evidence!;
+  const qualification = JSON.parse(
+    new TextDecoder().decode(
+      fixture.evidence.get(qualificationReference.path)!,
+    ),
+  ) as {
+    browserEvidenceIndexSha256: string;
+    journeys: Array<{ evidenceSha256: string }>;
+    playwrightReportSha256: string;
+  };
+  qualification.playwrightReportSha256 = nextReportReference.sha256;
+  qualification.browserEvidenceIndexSha256 = nextIndexReference.sha256;
+  qualification.journeys[index]!.evidenceSha256 = nextJourneyReference.sha256;
+  fixture.ready.browserQualification.evidence = replaceEvidenceValue(
+    fixture,
+    qualificationReference.path,
+    qualification,
+  );
 }
 
 async function submittedPackage() {
@@ -1129,6 +1231,62 @@ describe("submission package validator", () => {
     ).rejects.toMatchObject({
       issues: expect.arrayContaining([
         "CloakBrowser qualification evidence is invalid",
+      ]),
+    });
+  });
+
+  it("rejects manual observations bound to a different raw browser run", async () => {
+    const fixture = await readyPackage();
+    replaceManualEvidence(fixture, "keyboard", (artifact) => {
+      artifact.browserVersion = "CloakBrowser Chromium 141.0.0.0";
+    });
+
+    await expect(
+      validateSubmissionPackage(fixture.ready, "ready", fixture.reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        "CloakBrowser manual evidence keyboard does not match its raw run",
+      ]),
+    });
+  });
+
+  it("rejects qualification Web Vitals that drift from manual observation", async () => {
+    const fixture = await readyPackage();
+    replaceManualEvidence(fixture, "webVitals", (artifact) => {
+      artifact.webVitals = {
+        status: "measured",
+        lcpMs: 1_300,
+        cls: 0.02,
+        inpMs: 90,
+      };
+    });
+
+    await expect(
+      validateSubmissionPackage(fixture.ready, "ready", fixture.reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        "CloakBrowser receipt does not match the package",
+      ]),
+    });
+  });
+
+  it("rejects journey assertion counts that drift from the raw run", async () => {
+    const fixture = await readyPackage();
+    replaceJourneyAssertionCount(fixture, 0, 99);
+
+    await expect(
+      validateSubmissionPackage(fixture.ready, "ready", fixture.reader, {
+        now: new Date("2026-07-21T12:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        expect.stringMatching(
+          /^CloakBrowser journey .* does not match its report$/u,
+        ),
       ]),
     });
   });
