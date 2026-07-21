@@ -69,7 +69,7 @@ def _rootless(control: dict[str, object], build: dict[str, object]) -> dict[str,
     sanitized_spec_sha256 = "a" * 64
     member_pids = [100, 101]
     aggregate_payload: dict[str, object] = {
-        "schemaVersion": "1",
+        "schemaVersion": "2",
         "status": "OBSERVED",
         "authority": "linux-cgroup-v2",
         "cgroupVersion": 2,
@@ -83,6 +83,7 @@ def _rootless(control: dict[str, object], build: dict[str, object]) -> dict[str,
         ).hexdigest(),
         "invocationId": invocation_id,
         "finalContainerId": final_container_id,
+        "finalizationPayloadSha256": "7" * 64,
         "sanitizedSpecSha256": sanitized_spec_sha256,
         "runtimeAttestationSha256": "6" * 64,
         "observedLimits": {

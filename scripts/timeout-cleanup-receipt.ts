@@ -37,7 +37,7 @@ const AggregateLimitIntentSchema = z.strictObject({
 
 const AggregateLimitEvidenceSchema = z
   .strictObject({
-    schemaVersion: z.literal("1"),
+    schemaVersion: z.literal("2"),
     status: z.literal("OBSERVED"),
     authority: z.literal("linux-cgroup-v2"),
     cgroupVersion: z.literal(2),
@@ -46,6 +46,7 @@ const AggregateLimitEvidenceSchema = z
     cgroupIdentity: Sha256Schema,
     invocationId: Sha256Schema,
     finalContainerId: Sha256Schema,
+    finalizationPayloadSha256: Sha256Schema,
     sanitizedSpecSha256: Sha256Schema,
     runtimeAttestationSha256: Sha256Schema,
     observedLimits: z.strictObject({
@@ -139,8 +140,8 @@ const AggregateLimitEvidenceSchema = z
       });
     }
     if (
-      evidence.negativeControls.memory.oomKillAfter <=
-        evidence.negativeControls.memory.oomKillBefore ||
+      evidence.negativeControls.memory.oomKillAfter !==
+        evidence.negativeControls.memory.oomKillBefore + 1 ||
       evidence.negativeControls.processes.maxEventsAfter <=
         evidence.negativeControls.processes.maxEventsBefore ||
       evidence.negativeControls.cpu.nrThrottledAfter <=
@@ -151,7 +152,7 @@ const AggregateLimitEvidenceSchema = z
       context.addIssue({
         code: "custom",
         path: ["negativeControls"],
-        message: "aggregate negative-control counters must increase",
+        message: "aggregate negative-control counters are invalid",
       });
     }
     const { receiptPayloadSha256, ...payload } = evidence;

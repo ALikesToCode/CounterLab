@@ -198,9 +198,9 @@ function expectedEvidence(manifest) {
   };
 }
 
-function evidencePayload(manifest, observation) {
+function evidencePayload(manifest, observation, finalization) {
   return {
-    schemaVersion: "1",
+    schemaVersion: "2",
     status: "OBSERVED",
     authority: "linux-cgroup-v2",
     cgroupVersion: 2,
@@ -209,6 +209,8 @@ function evidencePayload(manifest, observation) {
     cgroupIdentity: manifest.cgroupIdentity,
     invocationId: manifest.invocationId,
     finalContainerId: manifest.finalContainerId,
+    finalizationPayloadSha256:
+      finalization?.receiptPayloadSha256 ?? "0".repeat(64),
     sanitizedSpecSha256: manifest.sanitizedSpecSha256,
     runtimeAttestationSha256: manifest.runtimeAttestationSha256,
     observedLimits: observation.observedLimits,
@@ -602,8 +604,14 @@ export async function observeContainedCgroup(manifest, adapter) {
     throw new Error("contained cgroup observer finalization draft changed");
   }
   await adapter.waitForCgroupAbsent();
+  const completedObservation = {
+    ...observation,
+    observedAt: adapter.now().toISOString(),
+  };
   return validateContainedCgroupEvidence(
-    hashedArtifact(evidencePayload(manifest, observation)),
+    hashedArtifact(
+      evidencePayload(manifest, completedObservation, finalization),
+    ),
     expectedEvidence(manifest),
   );
 }

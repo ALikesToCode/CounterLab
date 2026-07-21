@@ -17,6 +17,7 @@ const topLevelKeys = [
   "cgroupVersion",
   "cleanup",
   "finalContainerId",
+  "finalizationPayloadSha256",
   "invocationId",
   "membership",
   "negativeControls",
@@ -203,7 +204,7 @@ export function validateContainedCgroupEvidence(value, expectedValue) {
     : new Set();
   const { receiptPayloadSha256, ...payload } = evidence;
   if (
-    evidence.schemaVersion !== "1" ||
+    evidence.schemaVersion !== "2" ||
     evidence.status !== "OBSERVED" ||
     evidence.authority !== "linux-cgroup-v2" ||
     evidence.cgroupVersion !== 2 ||
@@ -211,6 +212,7 @@ export function validateContainedCgroupEvidence(value, expectedValue) {
     evidence.finalContainerId !== expected.finalContainerId ||
     evidence.sanitizedSpecSha256 !== expected.sanitizedSpecSha256 ||
     evidence.runtimeAttestationSha256 !== expected.runtimeAttestationSha256 ||
+    !sha256(evidence.finalizationPayloadSha256) ||
     evidence.cgroupId !== `counterlab-v6.1-${expected.invocationId}` ||
     evidence.cgroupPath !== `counterlab-v6.1/${expected.invocationId}` ||
     evidence.cgroupIdentity !== createContainedCgroupIdentity(expected) ||

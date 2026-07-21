@@ -20,7 +20,7 @@ const intendedAggregateLimits = {
 function evidence() {
   const memberPids = [100, 101];
   const payload = {
-    schemaVersion: "1",
+    schemaVersion: "2",
     status: "OBSERVED",
     authority: "linux-cgroup-v2",
     cgroupVersion: 2,
@@ -33,6 +33,7 @@ function evidence() {
     }),
     invocationId,
     finalContainerId,
+    finalizationPayloadSha256: "f".repeat(64),
     sanitizedSpecSha256,
     runtimeAttestationSha256: "4".repeat(64),
     observedLimits: {

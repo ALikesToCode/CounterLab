@@ -87,9 +87,13 @@ function adapter(overrides: Record<string, unknown> = {}) {
   };
   const controls: Array<Record<string, unknown>> = [];
   const drafts: Array<Record<string, unknown>> = [];
+  const finalizations: Array<
+    ReturnType<typeof createContainedCgroupObserverFinalization>
+  > = [];
   return {
     controls,
     drafts,
+    finalizations,
     now: () => now,
     waitForCgroup: async () => undefined,
     readCgroupFile(name: string) {
@@ -127,16 +131,22 @@ function adapter(overrides: Record<string, unknown> = {}) {
     async publishDraft(draft: Record<string, unknown>) {
       drafts.push(draft);
     },
-    waitForFinalization: async () =>
-      createContainedCgroupObserverFinalization(manifest(), {
-        cleanup: verifiedCleanup,
-        cleanupVerified: true,
-        decisionAt: now,
-        observerDraftPayloadSha256: latestDraftHash(drafts),
-        resultReleased: false,
-        status: "FINALIZE",
-        timeoutObserved: true,
-      }),
+    waitForFinalization: async () => {
+      const finalization = createContainedCgroupObserverFinalization(
+        manifest(),
+        {
+          cleanup: verifiedCleanup,
+          cleanupVerified: true,
+          decisionAt: now,
+          observerDraftPayloadSha256: latestDraftHash(drafts),
+          resultReleased: false,
+          status: "FINALIZE",
+          timeoutObserved: true,
+        },
+      );
+      finalizations.push(finalization);
+      return finalization;
+    },
     waitForCgroupAbsent: async () => undefined,
     ...overrides,
   };
@@ -174,6 +184,10 @@ describe("contained cgroup observer", () => {
       { mode: "memory", requestedBytes: 576 * 1024 * 1024 },
     ]);
     expect(fake.drafts).toHaveLength(1);
+    expect(fake.finalizations).toHaveLength(1);
+    expect(evidence.finalizationPayloadSha256).toBe(
+      fake.finalizations.at(0)?.receiptPayloadSha256,
+    );
     expect(() =>
       validateContainedCgroupObserverDraft(fake.drafts[0], input),
     ).not.toThrow();

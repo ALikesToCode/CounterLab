@@ -457,6 +457,7 @@ def _validate_aggregate_limit_evidence(
         "cgroupIdentity",
         "invocationId",
         "finalContainerId",
+        "finalizationPayloadSha256",
         "sanitizedSpecSha256",
         "runtimeAttestationSha256",
         "observedLimits",
@@ -509,12 +510,13 @@ def _validate_aggregate_limit_evidence(
     cpu_control = controls.get("cpu")
     member_pids = membership.get("memberPids")
     if (
-        value.get("schemaVersion") != "1"
+        value.get("schemaVersion") != "2"
         or value.get("status") != "OBSERVED"
         or value.get("authority") != "linux-cgroup-v2"
         or value.get("cgroupVersion") != 2
         or value.get("invocationId") != invocation_id
         or value.get("finalContainerId") != final_container_id
+        or not _SHA256.fullmatch(str(value.get("finalizationPayloadSha256", "")))
         or value.get("cgroupId") != f"counterlab-v6.1-{invocation_id}"
         or value.get("cgroupPath") != f"counterlab-v6.1/{invocation_id}"
         or value.get("sanitizedSpecSha256") != sanitized_spec_sha256

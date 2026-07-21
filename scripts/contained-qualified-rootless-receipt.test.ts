@@ -66,7 +66,7 @@ function baseReceipt() {
 function aggregateEvidence() {
   const memberPids = [100, 101];
   return hashed({
-    schemaVersion: "1",
+    schemaVersion: "2",
     status: "OBSERVED",
     authority: "linux-cgroup-v2",
     cgroupVersion: 2,
@@ -79,6 +79,7 @@ function aggregateEvidence() {
     }),
     invocationId,
     finalContainerId,
+    finalizationPayloadSha256: "f".repeat(64),
     sanitizedSpecSha256,
     runtimeAttestationSha256: observerBindings.runtimeAttestationSha256,
     observedLimits: {

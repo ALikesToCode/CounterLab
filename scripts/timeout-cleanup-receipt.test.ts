@@ -26,7 +26,7 @@ function aggregateLimitEvidence() {
   const sanitizedSpecSha256 = "5".repeat(64);
   const memberPids = [100, 101];
   const payload = {
-    schemaVersion: "1" as const,
+    schemaVersion: "2" as const,
     status: "OBSERVED" as const,
     authority: "linux-cgroup-v2" as const,
     cgroupVersion: 2 as const,
@@ -37,6 +37,7 @@ function aggregateLimitEvidence() {
     ),
     invocationId,
     finalContainerId,
+    finalizationPayloadSha256: "f".repeat(64),
     sanitizedSpecSha256,
     runtimeAttestationSha256: "6".repeat(64),
     observedLimits: {
@@ -159,5 +160,18 @@ describe("timeout cleanup aggregate resource authority", () => {
         limitMode: QUALIFIED_AGGREGATE_LIMIT_MODE,
       }),
     ).toThrow();
+
+    const ambiguousOom = aggregateLimitEvidence();
+    ambiguousOom.negativeControls.memory.oomKillAfter = 2;
+    const { receiptPayloadSha256: _ignored, ...payload } = ambiguousOom;
+    ambiguousOom.receiptPayloadSha256 = sha256(canonicalJson(payload));
+    expect(() =>
+      assertQualifiedAggregateRuntimeLimits({
+        ...aggregateInput(),
+        aggregateLimitEvidence: ambiguousOom,
+        aggregateLimitIntentEnforced: true,
+        limitMode: QUALIFIED_AGGREGATE_LIMIT_MODE,
+      }),
+    ).toThrow(/negative-control/u);
   });
 });
