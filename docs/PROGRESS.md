@@ -4658,3 +4658,65 @@ Chrome is no longer the blocker: genuine CloakBrowser local rendering is green
 for every locally executable journey. Release remains **NO-GO** for the clean
 source, constitution-compatible sentinel operations, exact image/evidence,
 Cloudflare deployment, public qualification, and submission gates.
+
+## Historical runtime recovery checkpoint — 2026-07-21T14:13:42Z
+
+Deadline: `2026-07-22T00:00:00Z`; **9 hours 46 minutes 18 seconds remained at
+this checkpoint**. Committed HEAD is
+`6ee595416792c1630f44037c12a005ac5f33c267` on
+`feat/learner-ux-v6.1`. The only visible worktree entry is still the preserved,
+untracked FUSE tombstone `scripts/.fuse_hidden0000a9600000801f`; it was not
+opened, changed, staged, hidden, ignored, renamed, overwritten, or deleted.
+
+### Completed and committed
+
+| Commit | Result | Exact verification |
+| --- | --- | --- |
+| `6ee5954 fix(runtime): recover preserved contained session safely` | Added a one-target maintenance helper for the historical `rt-release721` runtime. It validates the exact attestation, historical Git bundle, current unchanged stop primitives, eight installed toolchain hashes, supervisor identity, empty drain receipt, post-drain admission closure, child exits, and endpoint closure. It emits only `historical-recovery-receipt.json` with `RECOVERY_STOPPED`, `qualificationEligible: false`, and `releaseQualification: false`. | Focused recovery and supervisor tests **20/20 passed**; root TypeScript, Node syntax, Prettier, whitespace, and a three-file secret scan passed. Independent review confirmed **8/8** installed binaries matched and no release consumer reads the recovery receipt. |
+
+### Actual recovery result
+
+- Exact target preflight passed for attestation
+  `2f12fe8f9db649f0564238a4569da9e98f5b8e31f085daec14f93538ba9d4569`.
+  The canonical current verifier separately rejected the historical
+  18-helper manifest, as required; the compatibility path did not relax it.
+- The committed helper acquired its repository-contained lock and failed
+  closed on its first supervisor connection with `ECONNREFUSED`. It did not
+  issue a drain command, request child shutdown, send a signal, or write a
+  recovery receipt.
+- A subsequent read-only probe of the exact runtime-command, BuildKit proxy,
+  and supervisor sockets returned `ECONNREFUSED` for all three. This supports
+  only the bounded statement that those endpoints are closed. It does not
+  provide a supervisor-issued safe-stop receipt or prove process identity via
+  `/proc`.
+- The helper left the repository-contained maintenance lock at
+  `.rt/rt-release721/historical-recovery.lock`. That ignored file is not
+  release evidence. The historical session remains preserved.
+- Accepted maintenance limitation: lock contention is not cryptographic
+  same-UID caller authentication. This is not carried into release authority.
+
+### Remaining gates in dependency order
+
+1. The FUSE-owning process must release the tombstone naturally. A clean
+   source `S` still cannot be claimed; do not delete, hide, ignore, stage,
+   rename, overwrite, or inspect the tombstone.
+2. Obtain an explicit constitution-compatible authorization for the genuine
+   aggregate-cgroup sentinel operations, or keep the sentinel gate red. No
+   `/proc`, `/sys`, cgroup membership, or OOM-score operation was performed.
+3. Reverify repository-contained Wrangler authentication, then—only after a
+   clean source and lawful sentinel exist—build and qualify one exact image and
+   refresh the source/image-bound evidence once.
+4. Deploy only the qualified tuple, prove public identity/readiness, and run
+   all **40** public CloakBrowser journeys plus the ten manual checks. Local
+   source-level Cloak evidence remains **34 passed, 6 exact skips, 0 failed**;
+   public qualifying execution remains **0 journeys**.
+5. Keep learner evidence `NO_DATA` unless real consented observations occur;
+   complete exact-release screenshots/video, logged-out links, repository and
+   `/feedback` evidence, Devpost publication, and a submission receipt.
+6. Push the feature branch and fast-forward-only merge and push `main` only
+   after the release and submission gates are factual.
+
+No safe-stop receipt, clean source, containment pass, exact image, refreshed
+release evidence, Cloudflare mutation, deployment, public qualification,
+learner outcome, Devpost submission, push, or merge is claimed. Release remains
+**NO-GO**.
