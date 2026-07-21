@@ -162,6 +162,20 @@ export const CapabilityHealthSchema = z
 
 export type CapabilityHealth = z.infer<typeof CapabilityHealthSchema>;
 
+export function isExactLiveAuthorityReady(
+  health: CapabilityHealth | null,
+): boolean {
+  return (
+    health?.readiness === "ready" &&
+    health.liveGpt === "configured" &&
+    health.liveCodex === "configured" &&
+    health.liveKernel === "configured" &&
+    health.sandbox === "credential-and-privilege-boundary" &&
+    health.generationFilesystemReadIsolation === "OS_ENFORCED" &&
+    health.release?.status === "bound"
+  );
+}
+
 const ApiErrorEnvelopeSchema = z
   .object({
     ok: z.literal(false),

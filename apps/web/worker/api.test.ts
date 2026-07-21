@@ -175,6 +175,10 @@ class MemorySessionRepository implements SessionRepository {
     this.sessions.set(session.id, structuredClone(session));
   }
 
+  sessionCountForTest(): number {
+    return this.sessions.size;
+  }
+
   close(): void {}
 }
 
@@ -3026,8 +3030,14 @@ describe("Cloudflare Worker API", () => {
           artifactCapability: secondBody.data.ownerCapability,
         }),
       });
-      expect(firstSession.status).toBe(201);
-      expect(secondSession.status).toBe(201);
+      expect(firstSession.status).toBe(503);
+      expect(secondSession.status).toBe(503);
+      await expect(firstSession.json()).resolves.toMatchObject({
+        error: { code: "LIVE_AUTHORITY_NOT_READY" },
+      });
+      await expect(secondSession.json()).resolves.toMatchObject({
+        error: { code: "LIVE_AUTHORITY_NOT_READY" },
+      });
     });
 
     it("canonicalizes an empty browser MIME type before binding the upload", async () => {
@@ -4226,6 +4236,99 @@ describe("Cloudflare Worker API", () => {
       ok: false,
       error: { code: "REPLAY_SESSION_UNAVAILABLE" },
     });
+  });
+
+  it("refuses a supported live session when hosted release readiness is unqualified", async () => {
+    const sessionRepository = new MemorySessionRepository();
+    const artifactStore = new MemoryArtifactStore();
+    const app = createApi({
+      sessionRepository,
+      artifactStore,
+      runnerJobRepository: new MemoryRunnerJobRepository(),
+      runnerObjectStore: new MemoryRunnerObjectStore(),
+      runnerDispatcher: new CapturingRunnerDispatcher(),
+      runnerSigningPrivateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
+      admissionControl: new CapturingAdmissionControl(),
+      admissionHmacKey: "admission-test-key-with-sufficient-entropy",
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_unqualified_live`,
+    });
+    const sampleResponse = await app.request("/api/artifacts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sample: true }),
+    });
+    const sampleBody = (await sampleResponse.json()) as {
+      data: ArtifactManifest;
+    };
+    const uploaded = await saveUploadedArtifact(
+      artifactStore,
+      sampleBody.data.artifactId,
+    );
+
+    const response = await postJson(app, "/api/live/sessions", {
+      artifactId: uploaded.artifactId,
+    });
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: "LIVE_AUTHORITY_NOT_READY",
+        retryable: true,
+      },
+    });
+    expect(sessionRepository.sessionCountForTest()).toBe(0);
+
+    const workerEvidenceCommit = "a".repeat(40);
+    const readyResponse = await app.request(
+      "/api/live/sessions",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ artifactId: uploaded.artifactId }),
+      },
+      {
+        OPENAI_API_KEY: "configured-server-key",
+        COUNTERLAB_WORKER_EVIDENCE_COMMIT: workerEvidenceCommit,
+        COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
+        COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+        COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "5".repeat(64),
+        COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(64),
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256:
+          "7".repeat(64),
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(
+          64,
+        ),
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT:
+          "2026-07-19T05:31:00.000+05:30",
+        COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256: "d".repeat(64),
+        COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256: "9".repeat(64),
+        COUNTERLAB_RUNTIME_POLICY_SHA256: "e".repeat(64),
+        COUNTERLAB_PROOF_DEPENDENCY_MANIFEST_SHA256: "f".repeat(64),
+        COUNTERLAB_WORKER_ARTIFACT_CLASSIFICATION: "PROCESS_BOUND_PARTIAL",
+        COUNTERLAB_WORKER_ARTIFACT_MANIFEST_SHA256: "1".repeat(64),
+        COUNTERLAB_WORKER_BUNDLE_SHA256: "2".repeat(64),
+        COUNTERLAB_CLIENT_ASSETS_SHA256: "3".repeat(64),
+        COUNTERLAB_CLIENT_ASSET_COUNT: "27",
+        COUNTERLAB_CLIENT_PUBLIC_ASSETS_SHA256: "4".repeat(64),
+        COUNTERLAB_CLIENT_PUBLIC_ASSET_COUNT: "25",
+        COUNTERLAB_VITE_VERSION: "8.1.4",
+        COUNTERLAB_WRANGLER_VERSION: "4.110.0",
+        CF_VERSION_METADATA: {
+          id: "11111111-2222-3333-4444-555555555555",
+          tag: `git-${workerEvidenceCommit}`,
+          timestamp: "2026-07-19T00:00:00.000Z",
+        },
+      } as unknown as Env,
+    );
+    expect(readyResponse.status).toBe(201);
+    await expect(readyResponse.json()).resolves.toMatchObject({
+      data: {
+        artifactId: uploaded.artifactId,
+        mode: { kind: "live_notebook" },
+      },
+    });
+    expect(sessionRepository.sessionCountForTest()).toBe(1);
   });
 
   it("stores strict learner interactions outside session and evidence authority", async () => {

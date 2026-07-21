@@ -4314,6 +4314,20 @@ export function createApi(options: ApiOptions = {}) {
     activeReadinessProbe = probe;
     return probe;
   };
+  const requireExactLiveReleaseReadiness = async (
+    context: Context<AppBindings>,
+  ) => {
+    if (!admissionEnabled(options)) return;
+    const snapshot = await observeReadiness(context);
+    if (!snapshot.ready || snapshot.release.status !== "bound") {
+      throw new ApiInputError(
+        "LIVE_AUTHORITY_NOT_READY",
+        "The exact released live runtime is not ready. Your supported notebook remains available for retry; no live investigation was created.",
+        503,
+        true,
+      );
+    }
+  };
 
   app.get("/ready", async (context) => {
     const snapshot = await observeReadiness(context);
@@ -4791,6 +4805,7 @@ export function createApi(options: ApiOptions = {}) {
         422,
       );
     }
+    await requireExactLiveReleaseReadiness(context);
     const session = await sessionService(context, options).createSession({
       artifactId: input.artifactId,
       mode: { kind: "live_notebook" },

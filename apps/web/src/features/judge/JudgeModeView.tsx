@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import type { CapabilityHealth } from "../../api";
+import { isExactLiveAuthorityReady, type CapabilityHealth } from "../../api";
 import { VerifiedBeliefBreakMechanism } from "../../components/learner/VerifiedBeliefBreakTheater";
 import { verifiedReplay } from "../../sampleReplayMetadata";
 import styles from "./JudgeModeView.module.css";
@@ -15,18 +15,6 @@ const learnerStages = [
   ["06", "Repair", "Unlock the smallest verified notebook correction."],
 ] as const;
 
-function liveAuthorityReady(health: CapabilityHealth | null): boolean {
-  return (
-    health?.readiness === "ready" &&
-    health.liveGpt === "configured" &&
-    health.liveCodex === "configured" &&
-    health.liveKernel === "configured" &&
-    health.sandbox === "credential-and-privilege-boundary" &&
-    health.generationFilesystemReadIsolation === "OS_ENFORCED" &&
-    health.release?.status === "bound"
-  );
-}
-
 export function JudgeModeView({
   health,
   healthPending,
@@ -40,7 +28,7 @@ export function JudgeModeView({
   onRetryHealth: () => void;
   onStartSample: () => void;
 }) {
-  const liveReady = liveAuthorityReady(health);
+  const liveReady = isExactLiveAuthorityReady(health);
   const release = health?.release?.status === "bound" ? health.release : null;
   const generationIsolationBoundary =
     release !== null &&

@@ -19,6 +19,7 @@ import {
   ApiClientError,
   counterLabApi,
   getSessionBeliefAuthority,
+  isExactLiveAuthorityReady,
   type ArtifactView,
   type BeliefAnalysisPreview,
   type BeliefTest,
@@ -4090,13 +4091,7 @@ function LiveSetup({
   busy: boolean;
 }) {
   const configured = health?.liveGpt === "configured";
-  const runnerConfigured =
-    health?.readiness === "ready" &&
-    health?.liveCodex === "configured" &&
-    health.liveKernel === "configured" &&
-    health.sandbox === "credential-and-privilege-boundary" &&
-    health.generationFilesystemReadIsolation === "OS_ENFORCED" &&
-    health.release?.status === "bound";
+  const runnerConfigured = isExactLiveAuthorityReady(health);
   return (
     <main className="workspace shell narrow" id="main-content" tabIndex={-1}>
       <div className="screen-intro">
@@ -5366,22 +5361,26 @@ export function App() {
     stage,
   ]);
 
-  const checkLiveCapabilities = async (probeReadiness: boolean) => {
+  const checkLiveCapabilities = async (
+    probeReadiness: boolean,
+  ): Promise<CapabilityHealth | null> => {
     const generation = userRequestGeneration.current;
     setCheckingLiveHealth(true);
     setLiveHealthError(null);
     setLiveHealth(null);
     try {
       const health = await counterLabApi.getHealth({ probeReadiness });
-      if (userRequestGeneration.current !== generation) return;
+      if (userRequestGeneration.current !== generation) return null;
       setLiveHealth(health);
+      return health;
     } catch (caught) {
-      if (userRequestGeneration.current !== generation) return;
+      if (userRequestGeneration.current !== generation) return null;
       setLiveHealthError(
         caught instanceof ApiClientError
           ? "CounterLab could not verify the capability response."
           : "CounterLab could not reach the capability service.",
       );
+      return null;
     } finally {
       if (userRequestGeneration.current === generation) {
         setCheckingLiveHealth(false);
@@ -5581,6 +5580,19 @@ export function App() {
       }
       await createLiveArtifactSession(uploaded, request);
     });
+  };
+
+  const uploadNotebookAfterReadiness = (file: File) => {
+    setJudgeMode(false);
+    setMode("live");
+    setStage("live-setup");
+    setError(null);
+    window.localStorage.setItem(storageKeys.mode, "live");
+    void (async () => {
+      const health = await checkLiveCapabilities(true);
+      if (!isExactLiveAuthorityReady(health)) return;
+      uploadNotebook(file);
+    })();
   };
 
   const retryLiveSessionSetup = () => {
@@ -5951,11 +5963,7 @@ export function App() {
         <Landing
           claim={claim}
           updateClaim={updateClaim}
-          attachNotebook={(file) => {
-            setMode("live");
-            window.localStorage.setItem(storageKeys.mode, "live");
-            uploadNotebook(file);
-          }}
+          attachNotebook={uploadNotebookAfterReadiness}
           testClaim={() => {
             window.localStorage.setItem(storageKeys.claim, claim);
             setJudgeMode(false);
@@ -5968,20 +5976,16 @@ export function App() {
             setStage("question-path");
           }}
           chooseMode={chooseMode}
-          busy={busy}
+          busy={busy || checkingLiveHealth}
           recentSessions={recentWorkSessions}
         />
       )}
       {stage === "question-path" && mode === "live" && (
         <ClaimPathChooser
           claim={claim}
-          busy={busy}
+          busy={busy || checkingLiveHealth}
           onStartSample={() => chooseMode("instant")}
-          onAttachNotebook={(file) => {
-            setMode("live");
-            window.localStorage.setItem(storageKeys.mode, "live");
-            uploadNotebook(file);
-          }}
+          onAttachNotebook={uploadNotebookAfterReadiness}
           onCheckLiveTools={() => chooseMode("live")}
           onBack={() => {
             window.history.replaceState({}, "", "/");

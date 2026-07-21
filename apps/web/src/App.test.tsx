@@ -1272,6 +1272,72 @@ describe("CounterLab judged flow", () => {
     expect(document.body).not.toHaveTextContent(question);
   });
 
+  it("checks exact live readiness before the evidence chooser sends a notebook", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi();
+    render(<App />);
+
+    await user.type(
+      screen.getByRole("textbox", { name: /your question or claim/i }),
+      "Will this score hold for new customers?",
+    );
+    await user.click(screen.getByRole("button", { name: /test this claim/i }));
+    await user.upload(
+      screen.getByLabelText(/attach a supported notebook/i),
+      new File(["{}"], uploadedArtifact.fileName, {
+        type: "application/json",
+      }),
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: /test my notebook/i }),
+    ).toBeInTheDocument();
+    expect(
+      fetcher.mock.calls.filter(
+        ([path]) => String(path) === "/api/health?readiness=probe",
+      ),
+    ).toHaveLength(1);
+    expect(
+      fetcher.mock.calls.some(([path]) => String(path) === "/api/artifacts"),
+    ).toBe(false);
+    expect(
+      fetcher.mock.calls.some(
+        ([path]) => String(path) === "/api/live/sessions",
+      ),
+    ).toBe(false);
+  });
+
+  it("uploads from the evidence chooser only after exact live readiness passes", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi({ liveGpt: "configured", runner: "configured" });
+    render(<App />);
+
+    await user.type(
+      screen.getByRole("textbox", { name: /your question or claim/i }),
+      "Will this score hold for new customers?",
+    );
+    await user.click(screen.getByRole("button", { name: /test this claim/i }));
+    await user.upload(
+      screen.getByLabelText(/attach a supported notebook/i),
+      new File(["{}"], uploadedArtifact.fileName, {
+        type: "application/json",
+      }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /what do you think the score means/i,
+      }),
+    ).toBeInTheDocument();
+    const requestedPaths = fetcher.mock.calls.map(([path]) => String(path));
+    expect(requestedPaths.indexOf("/api/health?readiness=probe")).toBeLessThan(
+      requestedPaths.indexOf("/api/artifacts"),
+    );
+    expect(requestedPaths.indexOf("/api/artifacts")).toBeLessThan(
+      requestedPaths.indexOf("/api/live/sessions"),
+    );
+  });
+
   it("restores a saved question on the refresh-safe new investigation route", async () => {
     const question = "Does this result generalize beyond familiar rows?";
     window.localStorage.setItem("counterlab.claim", question);
@@ -1498,7 +1564,7 @@ describe("CounterLab judged flow", () => {
 
   it("accepts a notebook from the question-first landing without running it", async () => {
     const user = userEvent.setup();
-    const fetcher = installApi();
+    const fetcher = installApi({ liveGpt: "configured", runner: "configured" });
     render(<App />);
 
     await user.upload(
