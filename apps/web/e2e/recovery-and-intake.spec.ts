@@ -382,7 +382,11 @@ test("a supported live upload creates one source-bound session", async ({
 
 test("an interrupted upload accepts the same file on retry", async ({
   page,
-}) => {
+}, testInfo) => {
+  testInfo.annotations.push({
+    type: "counterlab-expected-request-failures",
+    description: "1",
+  });
   let uploadAttempts = 0;
   await page.route("**/api/artifacts", async (route) => {
     if (route.request().method() !== "POST") {
@@ -415,7 +419,11 @@ test("an interrupted upload accepts the same file on retry", async ({
 
 test("a lost private-session response retries without re-uploading", async ({
   page,
-}) => {
+}, testInfo) => {
+  testInfo.annotations.push({
+    type: "counterlab-expected-request-failures",
+    description: "1",
+  });
   let uploadRequests = 0;
   let sessionCreationAttempts = 0;
   page.on("request", (request) => {

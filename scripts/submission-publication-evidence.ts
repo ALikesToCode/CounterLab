@@ -151,7 +151,7 @@ export const CloakManualEvidenceReceiptSchema = z
   })
   .strict();
 
-const REQUIRED_CLOAK_VIEWPORTS = [
+export const REQUIRED_CLOAK_VIEWPORTS = [
   "375x812",
   "390x844",
   "768x1024",
@@ -249,6 +249,53 @@ function addCloakJourneyIssues(
     });
   }
 }
+
+export const CloakBrowserRawJourneySchema = z
+  .object({
+    id: z.string().trim().min(1).max(512),
+    status: z.enum(["passed", "failed", "timedOut", "skipped", "interrupted"]),
+    expectedStatus: z.enum([
+      "passed",
+      "failed",
+      "timedOut",
+      "skipped",
+      "interrupted",
+    ]),
+    attempt: z.number().int().nonnegative(),
+    durationMs: z.number().int().nonnegative(),
+    assertionCount: z.number().int().nonnegative(),
+    viewport: z.string().regex(/^\d+x\d+$/u),
+    consoleErrors: z.number().int().nonnegative(),
+    failedRequests: z.number().int().nonnegative(),
+    browserVersion: z.string().trim().min(1).max(128),
+    browserAuthority: z.enum([
+      "CLOAK_CDP_ENDPOINT",
+      "stock-chromium-design-review",
+      "unavailable",
+    ]),
+    telemetryValid: z.boolean(),
+  })
+  .strict();
+
+export const CloakBrowserRawRunSchema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    kind: z.literal("cloakbrowser-raw-run"),
+    status: z.enum(["PASSED", "FAILED", "NON_QUALIFYING"]),
+    authority: z.enum(["CLOAKBROWSER", "STOCK_CHROMIUM_DESIGN_REVIEW"]),
+    qualificationRequested: z.boolean(),
+    baseUrl: z.string().trim().min(1).max(2_048),
+    startedAt: z.iso.datetime({ offset: true }),
+    completedAt: z.iso.datetime({ offset: true }),
+    playwrightVersion: z.literal("1.61.1"),
+    playwrightStatus: z.enum(["passed", "failed", "timedout", "interrupted"]),
+    rootErrors: z.number().int().nonnegative(),
+    // Preserve at most the initial run plus one retry per registered journey
+    // so a failed qualification still leaves a bounded diagnostic receipt.
+    journeys: z.array(CloakBrowserRawJourneySchema).max(80),
+    privacy: PublicationPrivacySchema,
+  })
+  .strict();
 
 export const CloakBrowserExecutionReportSchema = z
   .object({

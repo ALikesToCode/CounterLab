@@ -9,6 +9,7 @@ import {
   currentBrowserAuthorityLabel,
   resolveBrowserAuthority,
 } from "./browser-authority";
+import { JOURNEY_OBSERVATION_ATTACHMENT } from "./qualification-reporter";
 
 export { currentBrowserAuthorityLabel };
 
@@ -101,7 +102,11 @@ function validatedCloakEndpoint(configured: string): string {
   return endpoint.toString();
 }
 
-export const test = base.extend({
+type CounterLabAutomaticFixtures = {
+  counterlabJourneyObservation: void;
+};
+
+export const test = base.extend<CounterLabAutomaticFixtures>({
   browser: [
     async ({ playwright }, use) => {
       const authority = resolveBrowserAuthority(process.env);
@@ -167,6 +172,60 @@ export const test = base.extend({
       }
     },
     { scope: "worker" },
+  ],
+  counterlabJourneyObservation: [
+    async ({ page }, use, testInfo) => {
+      let consoleErrors = 0;
+      let failedRequests = 0;
+      page.on("console", (message) => {
+        if (message.type() === "error") consoleErrors += 1;
+      });
+      page.on("pageerror", () => {
+        consoleErrors += 1;
+      });
+      page.on("requestfailed", () => {
+        failedRequests += 1;
+      });
+      const browserVersion =
+        page.context().browser()?.version().trim() || "unavailable";
+
+      await use();
+
+      const expectedFailureAnnotations = testInfo.annotations.filter(
+        (annotation) =>
+          annotation.type === "counterlab-expected-request-failures",
+      );
+      const expectedRequestFailures = Number.parseInt(
+        expectedFailureAnnotations[0]?.description ?? "0",
+        10,
+      );
+      const expectedRequestFailuresValid =
+        expectedFailureAnnotations.length <= 1 &&
+        Number.isSafeInteger(expectedRequestFailures) &&
+        expectedRequestFailures >= 0;
+      const viewport = page.viewportSize();
+      await testInfo.attach(JOURNEY_OBSERVATION_ATTACHMENT, {
+        body: Buffer.from(
+          JSON.stringify({
+            schemaVersion: "1",
+            authority: currentBrowserAuthorityLabel(),
+            viewport: viewport ?? { width: 0, height: 0 },
+            consoleErrors,
+            failedRequests: Math.max(
+              0,
+              failedRequests -
+                (expectedRequestFailuresValid ? expectedRequestFailures : 0),
+            ),
+            expectedRequestFailuresMatched:
+              expectedRequestFailuresValid &&
+              failedRequests === expectedRequestFailures,
+            browserVersion,
+          }),
+        ),
+        contentType: "application/json",
+      });
+    },
+    { auto: true },
   ],
 });
 

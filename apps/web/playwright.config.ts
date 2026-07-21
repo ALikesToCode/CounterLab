@@ -49,8 +49,13 @@ assertNoSymlinkTraversal(runtimeRoot, "COUNTERLAB_E2E_RUNTIME_ROOT");
 
 const outputDir = join(runtimeRoot, "playwright-output");
 const resultsFile = join(runtimeRoot, "evidence/results.json");
+const qualificationRunFile = join(
+  runtimeRoot,
+  "evidence/cloakbrowser-raw-run.json",
+);
 assertNoSymlinkTraversal(outputDir, "Playwright output directory");
 assertNoSymlinkTraversal(resultsFile, "Playwright results file");
+assertNoSymlinkTraversal(qualificationRunFile, "CloakBrowser raw run evidence");
 
 const browserAuthority = resolveBrowserAuthority(process.env);
 
@@ -93,6 +98,26 @@ const staticDesignReview =
 const localAdmissionKey =
   process.env.COUNTERLAB_ADMISSION_KEY?.trim() ||
   ["counterlab", "local", "e2e", "admission", "only", "000000"].join("-");
+const qualificationSetting = process.env.COUNTERLAB_BROWSER_QUALIFICATION;
+if (
+  qualificationSetting !== undefined &&
+  qualificationSetting !== "true" &&
+  qualificationSetting !== "false"
+) {
+  throw new Error(
+    "COUNTERLAB_BROWSER_QUALIFICATION must be exactly true or false",
+  );
+}
+const qualificationRequested = qualificationSetting === "true";
+if (
+  qualificationRequested &&
+  (browserAuthority.kind !== "cloak" ||
+    remoteBaseURL !== "https://counterlab.cserules.workers.dev")
+) {
+  throw new Error(
+    "CloakBrowser qualification requires the exact public CounterLab origin",
+  );
+}
 
 export default defineConfig({
   testDir: "./e2e",
@@ -101,7 +126,23 @@ export default defineConfig({
   forbidOnly: true,
   retries: process.env.CI ? 1 : 0,
   outputDir,
-  reporter: [["line"], ["json", { outputFile: resultsFile }]],
+  reporter: [
+    ["line"],
+    ["json", { outputFile: resultsFile }],
+    [
+      "./e2e/qualification-reporter.ts",
+      {
+        authority:
+          browserAuthority.kind === "cloak"
+            ? "CLOAKBROWSER"
+            : "STOCK_CHROMIUM_DESIGN_REVIEW",
+        baseUrl: baseURL,
+        outputFile: qualificationRunFile,
+        qualificationRequested,
+        runtimeRoot,
+      },
+    ],
+  ],
   use: {
     baseURL,
     browserName: "chromium",
