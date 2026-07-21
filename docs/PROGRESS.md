@@ -12,23 +12,23 @@ pass is never presented as a browser or production pass.
 ### Current checkpoint
 
 - **Branch:** `feat/learner-ux-v6.1`
-- **Latest product and release-safety checkpoint:**
-  `8e33154b2b130fbdb635cf7a91ed75dc9357741f`. The worktree contains only the
-  preserved, untracked `scripts/.fuse_hidden0000a9600000801f` before this
-  documentation-only ledger update. The branch is one local commit ahead of
-  `origin/feat/learner-ux-v6.1`. In addition to the prompt-first learner flow,
-  source-covered P0/P1 mechanisms, exact runtime contracts, and stored Proof
-  Bundle validation, the branch now has a strict fail-closed submission chain:
-  immutable evidence bytes, qualified-runner -> release-check -> deployment ->
-  production-smoke bindings, typed publication receipts, exact browser journey
-  and manual evidence references, structural PNG decoding, canonical public
-  link checks, and submitted-state verification. Focused submission validation
-  passes **34/34 tests**; repository TypeScript, scoped Prettier, Git whitespace,
-  the four-file secret scan, and the real checked-in `DRAFT` preflight pass.
-  The latest complete web run remains **79 files and 626/626 tests**. These
-  local results do not constitute a real cgroup sentinel, refreshed scientific
-  evidence, CloakBrowser execution, Cloudflare deployment, learner observation,
-  Devpost publication, or a submission receipt.
+- **Latest committed checkpoint:**
+  `eee333a9522a8efad8134fa543137c8f4691860e`; latest product and release-safety
+  code checkpoint `8e33154b2b130fbdb635cf7a91ed75dc9357741f`. Before this ledger update, the
+  branch is two commits ahead of `origin/feat/learner-ux-v6.1` and the worktree
+  contains only the preserved, untracked
+  `scripts/.fuse_hidden0000a9600000801f`. Fresh verification on this tip passes
+  web Vitest **79 files and 626/626 tests**, repository/web/Worker/E2E strict
+  TypeScript, the production build, Python behavior **331/331** when its one
+  localhost test receives loopback permission, leakage mutations **14/14**,
+  imbalance mutations **19/19**, held-out and generated Sample fixture checks,
+  repository-wide Prettier, Git whitespace, and a 31-file built-artifact secret
+  scan. Root Vitest is **750 passed, 3 stale exact-image/scientific-evidence
+  failures, 2 skipped**. A fresh explicit stock-Chromium design review is **35
+  passed, 5 exact-public/live skips, 0 failed across 40 tests in 3.9 minutes**.
+  These local results do not constitute a real cgroup sentinel, refreshed
+  scientific evidence, CloakBrowser execution, Cloudflare deployment, learner
+  observation, Devpost publication, or a submission receipt.
 - **Earlier product checkpoint:**
   `5259a495948a68024702ba5239bf8057d1785f08`. The owner partitioned the
   preserved integration delta into nine commits and fast-forwarded both
@@ -3920,3 +3920,94 @@ The release remains **NO-GO**. The validator is ready to reject invented or
 misbound publication evidence; the evidence itself must now be produced by a
 clean exact-image qualification, qualified deployment, public CloakBrowser
 run, and real submission workflow.
+
+## Fresh deterministic and browser checkpoint — 2026-07-21T07:56:31Z
+
+Deadline: `2026-07-22T00:00:00Z`; **16 hours 3 minutes 29 seconds remained at
+this checkpoint**. Committed HEAD is
+`eee333a9522a8efad8134fa543137c8f4691860e`, two commits ahead of the remote
+feature branch before this documentation-only update. The only worktree entry
+is the preserved, unstaged FUSE tombstone; all test/build output is ignored and
+repository-contained.
+
+### Fresh exact results
+
+- Web Vitest: **79 files, 626/626 passed**.
+- Capability-enabled root Vitest: **71 files total; 69 passed, 2 failed; 750
+  passed, 3 failed, 2 skipped**. The three persistent failures are precisely
+  the stale exact-image reachability/VEX and scientific integrity bindings.
+  Twenty-four sandbox-only socket/process/namespace failures from an initial
+  restricted run disappeared under the required host capabilities.
+- Python kernel, runner, and release-tooling matrix: **330/331 passed** in the
+  restricted run; the sole localhost kernel-service test then passed **1/1**
+  with loopback permission. No Python behavior remains failing.
+- Repository, web, Worker, and E2E strict TypeScript: **passed**.
+- Production build: **passed**. Worker **1,867.21 kB / 360.17 kB gzip**; main
+  client **449.21 kB / 129.19 kB gzip**; CSS **201.41 kB / 34.82 kB gzip**.
+  Built artifacts passed a **31-file** secret scan.
+- Critical mutations: leakage **14/14** and imbalance **19/19 detected**.
+- Held-out: intake/routing **10/10**, fixed full-loop completion **7/8**, and
+  tracked evidence matched.
+- Sample Boundary: verified **25 cells**, result hash
+  `c948d25fef6ab5f5f33322dde2025557f0704f01bff2bde48ee93149066ccbd3`.
+- Sample Proof Capsule: verified root
+  `e45cf88f1bbdd470723f83def9550d47ac272f7c5aaf8554bec52c2a34f9856b`,
+  **94,236 bytes**.
+- Repository-wide Prettier and Git whitespace: **passed**.
+- Fresh local stock-browser matrix: **35 passed, 5 exact-public/live skips, 0
+  failed across 40 tests in 3.9 minutes**. The JSON report records expected 35,
+  skipped 5, unexpected 0, flaky 0, errors 0. Evidence is retained under
+  `apps/web/test-results/runtime/full-stock-20260721-2/` and explicitly labels
+  browser authority `stock-chromium-design-review`.
+- First-fold stock measurements: Landing desktop LCP **1,208 ms**, CLS **0**;
+  Landing mobile LCP **1,348 ms**, CLS **0.0027**; Judge desktop LCP **2,428
+  ms**, CLS **0.0008**; Judge mobile LCP **2,284 ms**, CLS **0.0214**. These are
+  warm local measurements, not public Web Vitals.
+
+### Blocker movement
+
+- **Clean source now has a reviewed path, not a completed gate.** A linked
+  worktree at an ignored descendant of `.cache/counterlab-release-worktrees/`
+  can check out exact HEAD without copying or hiding the primary FUSE entry.
+  It must bootstrap its own repository-contained pnpm graph, copied Python
+  interpreter, pinned runtime toolchain, and fresh contained runtime. At least
+  20 GB should be reserved. The worktree has not been created because the real
+  cgroup authority remains blocked and a premature bootstrap would not advance
+  the release.
+- **Scientific failures are fully mapped.** The canonical repair is one full
+  `refresh-source-bound-scientific-evidence.sh` execution from a new build
+  receipt v4, exact OCI image/manifest digest, active contained runtime, pinned
+  Syft/Grype inputs, and genuine exact-image reachability probe. A partial
+  source-only binding refresh is prohibited.
+- **Contained Cloudflare auth remains red.** `wrangler whoami --json` returned
+  `{"loggedIn":false}`. A fresh repository-contained OAuth flow started and
+  timed out waiting for consent; it stored no usable credential and performed
+  no cloud mutation. Configured account ID
+  `9b0a1524e478000ec9b3ff2da6104d81` remains configuration, not authenticated
+  identity evidence.
+- **Real cgroup sentinel remains blocked by explicit filesystem authority.** It
+  needs read-only `/sys/fs/cgroup` and owned test-process
+  `/proc/<pid>/stat` observations. No such reads were attempted under the
+  current constitution; no aggregate containment pass is claimed.
+- **CloakBrowser remains unavailable.** Qualifying public execution is still
+  **0 journeys**. The fresh stock run cannot close this gate.
+
+### Next executable sequence
+
+1. Receive explicit read-only sentinel authority and complete a new contained
+   Wrangler OAuth window.
+2. Create the reviewed in-repository linked release worktree at exact HEAD;
+   bootstrap and verify its independent contained dependencies/runtime.
+3. Build one exact image, run the genuine sentinel and negative controls,
+   refresh all release evidence once, review the allowlisted delta, and commit
+   evidence independently.
+4. Rerun the complete deterministic release check; all three stale-binding
+   tests must become green from genuine evidence.
+5. Preflight CloakBrowser, qualify and deploy only the exact tuple, execute
+   production smoke and all public browser/manual accessibility journeys.
+6. Finalize exact-tuple screenshots/video/repository/feedback/Devpost evidence,
+   retain `NO_DATA` unless real consented learner rows exist, then push and
+   fast-forward-only merge `main`.
+
+The release remains **NO-GO** at the real-sentinel, authentication,
+exact-image, CloakBrowser, deployment, and submission gates.
