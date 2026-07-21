@@ -917,10 +917,24 @@ async function startInstant(page: Page) {
   ).toBeVisible();
 }
 
+function waitForPostResponse(page: Page, routeSuffix: string) {
+  return page.waitForResponse((response) => {
+    const request = response.request();
+    return (
+      request.method() === "POST" &&
+      new URL(response.url()).pathname.endsWith(routeSuffix)
+    );
+  });
+}
+
 async function commitAndOpenResult(page: Page) {
   await page.getByLabel(/Remain near 98%/i).check();
+  const compileFinished = waitForPostResponse(page, "/lab/compile");
   await page.getByRole("button", { name: /Seal my prediction/i }).click();
+  expect((await compileFinished).ok()).toBe(true);
+  const runFinished = waitForPostResponse(page, "/lab/run");
   await page.getByRole("button", { name: /Run the fair test/i }).click();
+  expect((await runFinished).ok()).toBe(true);
   await expect(
     page.getByRole("heading", { name: /Compare the verified result/i }),
   ).toBeVisible();
@@ -939,6 +953,7 @@ async function authorResultInterpretation(page: Page) {
   ).toBeVisible();
   await expect(page.getByRole("tab", { name: /Explore/i })).toBeEnabled();
   await expect(page.getByRole("tab", { name: /Boundary/i })).toBeEnabled();
+  await page.waitForLoadState("networkidle");
 }
 
 async function selectLeakageTransferEvidence(page: Page) {
@@ -2004,12 +2019,17 @@ test("refresh restores the current lesson and the committed prediction", async (
   ).toBeVisible();
   await page.getByLabel(/Fall materially/i).check();
   await page.getByLabel(/Confidence/i).fill("88");
+  const compileFinished = waitForPostResponse(page, "/lab/compile");
   await page.getByRole("button", { name: /Seal my prediction/i }).click();
+  expect((await compileFinished).ok()).toBe(true);
+  await page.waitForLoadState("networkidle");
   await page.reload();
   await expect(
     page.getByRole("heading", { name: /The fair test is ready/i }),
   ).toBeVisible();
+  const runFinished = waitForPostResponse(page, "/lab/run");
   await page.getByRole("button", { name: /Run the fair test/i }).click();
+  expect((await runFinished).ok()).toBe(true);
   await expect(
     page.getByRole("heading", { name: /Compare the verified result/i }),
   ).toBeVisible();
