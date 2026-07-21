@@ -4754,3 +4754,80 @@ exact-public matrix that the available release tuple permits. The separate
 clean-source, genuine-containment, exact-image, Cloudflare-authentication,
 deployment, submission, push, and merge gates remain unchanged and red. No
 deployment or publication claim is made.
+
+## First-fold authority and proof-state checkpoint — 2026-07-21T15:51:01Z
+
+Deadline: `2026-07-22T00:00:00Z`; **8 hours 8 minutes 59 seconds remained at
+this checkpoint**. Committed HEAD is
+`71f9ef26f5ff1162513050f257c7270eec0ce135` on
+`feat/learner-ux-v6.1`. The earlier FUSE tombstone is no longer present in
+`git status`. The only worktree entry is the preserved untracked
+`counterlab-exact-source-landing-1440x900.png`; it has not been changed,
+staged, hidden, renamed, overwritten, or deleted. The tree is therefore not
+yet a clean source freeze.
+
+### Completed and committed
+
+| Commit | Result | Exact verification |
+| --- | --- | --- |
+| `ce772eb fix(learner): clarify first-fold hierarchy` | Removed mobile prompt overflow, replaced the oversized heading focus box with a visible underline, added first-screen belief-debugger positioning, and raised Boundary payoff contrast. | Focused web tests **109/109 passed**; web TypeScript, Prettier, whitespace, and local CloakBrowser desktop/mobile checks passed. |
+| `ca40ad3 feat(learner): expose first-fold method and authority` | Added the three-stage 20-second method strip, immediate Sample/Judge CTA hierarchy, and truthful GPT-5.6, Runtime Codex, fixed-kernel, and frozen-verifier role strip. The normal learner landing remains value-free before Prediction. | Focused web tests **92/92 passed**; web TypeScript and formatting passed; local CloakBrowser checks at `390x844` and `1440x900` reported zero console warnings. |
+| `12f3cf6 feat(learner): label explanation authority` | Model Duel now distinguishes `Your input`, reviewed fixed Subject Pack framing, and genuine opt-in `AI-suggested draft` output. Sample framing is not mislabelled as a model call. | Component tests **4/4 passed**; web TypeScript, Prettier, and whitespace passed. |
+| `9e07849 feat(learner): clarify verified result direction` | Added non-colour increase/decrease/neutral meaning and a 200 ms verified-only result reveal. Reduced motion removes the reveal, and no timer or pre-verification result path was added. | Component tests **19/19 passed**; selected App integration and accessibility tests passed; web TypeScript, Prettier, and whitespace passed. |
+| `dabc058 fix(learner): align artifact and proof state labels` | Sample, live, and replay artifact copy now matches actual provenance; Sample result disclosure has a distinct CTA; proof chips derive from session/mode/load state; mismatched modes fail closed and withhold evidence and counts. | App, Project Sidebar, and Proof Console tests **87/87 passed**; complete web/Worker TypeScript and formatting passed. |
+| `71f9ef2 feat(learner): show live test authority phases` | Live compile now presents `Generated planning`, `Fixed testing`, and `Verified result` from the real `LAB_COMPILE`/`LAB_RUN` job kind and `result.ready` event. Runtime Codex proposes only; fixed kernels own values; the frozen verifier controls release. | Component plus selected App integration tests **5/5 passed** with **73 skipped** outside the selection; complete web/Worker TypeScript and formatting passed. |
+| `cb25d90 fix(learner): prevent mobile proof bar overlap` | At narrow widths, proof authority chips occupy a dedicated row, the redundant event count is hidden, and the mobile command control clears the taller bar. | Accessibility and Proof Console tests **15/15 passed**. Fresh CloakBrowser at `390x844` measured a `76px` bar, all three chips inside its `351px` context row, document `scrollWidth === clientWidth`, and zero current-page console warnings or errors. |
+
+### Architecture and review evidence
+
+- The Lab Scene audit found that the current verified renderer must not be
+  reused on landing with placeholder provenance. The safe release path keeps
+  the value-free `LockedBeliefBreakPreview`, uses real job state for compile
+  phases, and leaves `VerifiedLabScenePanel` behind the fixed-result gate.
+- The repository-local code-review graph is current at `71f9ef2`: **543
+  files, 5,725 nodes, 97,052 edges, and six languages**. The incremental
+  review covered 31 changed files and 64 changed functions/classes with a
+  **0.60** overall risk score.
+- Read-only local CloakBrowser QA passed landing and Judge Mode at `390x844`
+  and `1440x900`, How proof works navigation/focus, keyboard focus, and the
+  fixed Sample path through sealed Prediction and verified reveal. No landing
+  `98.5%` or `59.4%` value leak appeared; observed non-static requests returned
+  `200` or `201`; current-page console warnings and errors were zero. The
+  initial mobile proof-bar collision was repaired and reverified in `cb25d90`.
+  These checks remain local and non-qualifying.
+- `gpt-realtime-2.1` and `gpt-realtime-whisper` remain deferred. Adding
+  browser audio would require a new ephemeral-secret endpoint, consent,
+  privacy, WebRTC, accessibility, and failure-mode work; it is outside the
+  release-critical voice cut and cannot replace GPT-5.6 Responses authority.
+
+### Active dependency chain
+
+1. Complete the current local CloakBrowser regression on this exact HEAD and
+   repair any rendered failure. Local evidence is not public qualification.
+2. Resolve the preserved untracked screenshot without deleting or
+   overwriting it implicitly, then freeze one genuinely clean source commit
+   `S`.
+3. Run the genuine aggregate-containment sentinel only if its required cgroup
+   and owned-process observations are lawful under the repository
+   constitution. No pass is currently claimed.
+4. Build one exact runner image for `S`; regenerate source/image-bound SBOM,
+   VEX, scientific-engine, license, health, held-out, mutation, and
+   qualification evidence; review and commit the evidence as `E`.
+5. Reverify Wrangler identity, release only the qualified tuple, expose exact
+   source/image/Worker identity publicly, and run public health and production
+   smoke.
+6. Execute the full public CloakBrowser sample, replay, supported live,
+   unsupported, malformed, refusal, transfer fail/pass, patch, Capsule,
+   refresh/reconnect, history, deep-link, accessibility, console/network, and
+   Web Vitals matrix.
+7. Keep learner evidence `NO_DATA` unless real consented participants are
+   observed. Complete the exact-release video, public repository and link
+   checks, `/feedback` Session ID, Devpost fields, submission receipt, and
+   public slug without fabricating any missing item.
+8. Push the reviewed feature branch, then merge and push `main` only after the
+   exact public release and submission evidence are factual.
+
+No new live model call, runner image, aggregate-containment pass, refreshed
+release evidence, Cloudflare deployment, public journey, learner outcome,
+Devpost submission, push, or merge is claimed at this checkpoint. Release
+remains **NO-GO** until those gates close.
