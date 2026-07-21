@@ -310,6 +310,7 @@ const RUNNER_JOB_TOKEN_GRACE_SECONDS = 120;
 const MAX_RUNNER_JOB_TOKEN_TTL_SECONDS = 900;
 const MAX_SESSION_RUNNER_HISTORY_JOBS = 32;
 const MAX_SESSION_COMPILER_HISTORY_EVENTS = 512;
+const MAX_EVIDENCE_SNAPSHOT_ATTEMPTS = 4;
 
 const JsonObjectSchema = z.record(z.string(), z.unknown());
 const HostedPlanLineageSchema = z
@@ -8142,7 +8143,11 @@ export function createApi(options: ApiOptions = {}) {
     const service = sessionService(context, options);
     const jobs = runnerJobService(context, options);
     const sessionId = context.req.param("sessionId");
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    for (
+      let attempt = 0;
+      attempt < MAX_EVIDENCE_SNAPSHOT_ATTEMPTS;
+      attempt += 1
+    ) {
       const sessionBefore = await service.getSession(sessionId);
       requireStoredSampleClaimScope(sessionBefore);
       const jobsBefore = await jobs.listForSession(sessionId);

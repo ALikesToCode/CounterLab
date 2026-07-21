@@ -420,6 +420,7 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
   private readonly events = new Map<string, PublicCompilerEvent[]>();
   private readonly callbacks = new Map<string, RunnerCallback>();
   private mutateHistoryAtSnapshotEnd = false;
+  private historySnapshotMutationsRemaining = 0;
   private historyReads = 0;
 
   async create(job: RunnerJob): Promise<void> {
@@ -479,7 +480,11 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
 
   async findForSession(sessionId: string): Promise<RunnerJob[]> {
     this.historyReads += 1;
-    if (this.mutateHistoryAtSnapshotEnd && this.historyReads % 2 === 0) {
+    if (
+      this.historyReads % 2 === 0 &&
+      (this.mutateHistoryAtSnapshotEnd ||
+        this.historySnapshotMutationsRemaining > 0)
+    ) {
       const current = [...this.jobs.values()].find(
         (job) => job.sessionId === sessionId,
       );
@@ -489,6 +494,9 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
           jobVersion: current.jobVersion + 1,
           updatedAt: new Date(Date.parse(current.updatedAt) + 1).toISOString(),
         });
+        if (this.historySnapshotMutationsRemaining > 0) {
+          this.historySnapshotMutationsRemaining -= 1;
+        }
       }
     }
     return structuredClone(
@@ -498,6 +506,11 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
 
   mutateEveryHistorySnapshotEnd(): void {
     this.mutateHistoryAtSnapshotEnd = true;
+    this.historyReads = 0;
+  }
+
+  mutateHistorySnapshotEnds(times: number): void {
+    this.historySnapshotMutationsRemaining = times;
     this.historyReads = 0;
   }
 
@@ -11757,6 +11770,58 @@ describe("Cloudflare Worker API", () => {
         code: "EVIDENCE_SNAPSHOT_BUSY",
         status: 503,
         retryable: true,
+      },
+    });
+  });
+
+  it("returns a complete verified snapshot after two bounded history changes", async () => {
+    const { app, artifactId, sessionId, runnerJobs } =
+      await sessionHarness("sample");
+    const route = `/api/sessions/${sessionId}`;
+    await postJson(app, `${route}/belief-test`, {
+      learnerClaim: SAMPLE_LEAKAGE_QUESTION,
+    });
+    await postJson(app, `${route}/belief-test/confirm`, { action: "confirm" });
+    await postJson(app, `${route}/prediction`, {
+      choice: "Accuracy remains near 98%",
+      confidence: 72,
+    });
+    await postJson(app, `${route}/lab/compile`);
+    await runnerJobs.create(
+      RunnerJobSchema.parse({
+        schemaVersion: "1",
+        jobId: "job_bounded_snapshot_race",
+        kind: "LAB_COMPILE",
+        status: "QUEUED",
+        sessionId,
+        artifactId,
+        artifactManifestHash: "a".repeat(64),
+        conceptPack: { id: "entity_leakage", version: "2.0.0" },
+        inputHashes: ["b".repeat(64)],
+        stateVersion: 6,
+        jobVersion: 1,
+        createdAt: "2026-07-14T10:01:00.000Z",
+        updatedAt: "2026-07-14T10:01:00.000Z",
+        attempt: 0,
+        maxAttempts: 2,
+        runnerIdentity: null,
+        timeoutSeconds: 90,
+        outputHashes: [],
+        eventCursor: 0,
+      }),
+    );
+    runnerJobs.mutateHistorySnapshotEnds(2);
+
+    const response = await app.request(`${route}/events`);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        events: [{}, {}, {}, {}, {}, { kind: "lab.verified" }],
+        integrity: {
+          status: "VERIFIED",
+          eventCount: 6,
+          eventChainHead: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        },
       },
     });
   });
