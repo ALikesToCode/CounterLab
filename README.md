@@ -14,9 +14,18 @@ copilot or an unrestricted code runner.
 **Live judge surface:** <https://counterlab.cserules.workers.dev/judge>
 
 The v6.1 learner UX is implemented locally on
-`feat/learner-ux-v6.1`; it has not been pushed, deployed, or browser-qualified.
-The public URL represents its separately recorded deployment and must not be
-treated as running this branch.
+`feat/learner-ux-v6.1` and has current local CloakBrowser evidence. It has not
+yet been pushed, deployed, or qualified as one exact public source/image/Worker
+tuple. The public URL represents its separately recorded historical deployment
+and must not be treated as running this branch.
+
+The first screen states the operating contract directly: CounterLab is a
+**belief debugger, not a tutor or notebook linter**. Its visible sequence is
+`State claim → lock Prediction → controlled test runs → result passes
+verification`. GPT-5.6 proposes a bounded belief frame, Runtime Codex compiles
+an allowlisted experiment plan, fixed kernels compute values, and the frozen
+verifier decides whether evidence may be released. No live call begins on the
+landing screen.
 
 ## Learner journey
 
@@ -24,7 +33,8 @@ CounterLab presents one six-stage path while preserving the existing scientific
 state machine and authority gates:
 
 1. **Question** — state a claim or attach a supported notebook. Sample prompts
-   are optional, and Judge Mode remains a secondary route.
+   are optional. **Start verified sample** and **Judge Mode** are the first
+   visible cold-user paths; claim testing remains available immediately below.
 2. **Prediction** — review exact notebook evidence and the sanitized packet,
    confirm that the two-model comparison captures the learner's view, then seal
    an immutable categorical prediction and confidence.
@@ -48,11 +58,11 @@ local verification record is in
 
 ## Judge Mode
 
-| Path            | Mode            | Meaning                                                                                                                                                         | Secrets required                           |
-| --------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| Verified sample | `sample`        | Bundled approved leakage lesson evidence; clearly labelled, credential-free, and separate from live authority                                                   | No                                         |
-| Live notebook   | `live_notebook` | Artifact-specific GPT analyst plus the authenticated Container runner, typed bounded artifacts, fixed scorer/kernel, frozen verifier, and copied-notebook patch | Server-side model and runner configuration |
-| Verified replay | `replay`        | Read-only reconstruction of stored events and payloads; persistently labelled and unable to make a new model call                                               | No                                         |
+| Path            | Session mode      | GPT-5.6 / Runtime Codex                                                                            | Numerical source                                                 | Mutability                                                                                          | May claim                                                                  | Must not claim                                                                                   |
+| --------------- | ----------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Verified sample | `sample_lesson`   | No live call; reviewed Subject Pack framing                                                        | Integrity-checked bundled fixed-kernel fixture                   | Learner inputs may advance a new Sample session; the verified fixture is immutable                  | The scoped fixed Sample demonstrates the recorded mechanism                | A live run, artifact-specific analysis, or newly calculated browser result                       |
+| Live notebook   | `live_notebook`   | Server-side calls may occur only after supported upload, packet approval, and capability admission | Fixed scorer, kernel, and frozen verifier bound to that artifact | Explicit persisted state transitions; original upload remains read-only and patching targets a copy | The bounded artifact-specific result and provenance that actually occurred | Authority when capability is absent, an unsupported notebook result, or a Sample/Replay fallback |
+| Verified replay | `verified_replay` | No new model or compiler call                                                                      | Stored validated events and signed or integrity-bound payloads   | Read-only                                                                                           | A reconstruction of the specific recorded verified session                 | A current rerun, a new configuration, or live capability                                         |
 
 Sample is not live and cannot enter a live session. Replay does not make a new
 model call or borrow sample authority. The rejected compiler run authorized no
@@ -61,6 +71,14 @@ fixed kernel hash. The v6.1 pass adds one interactive leakage Boundary Hunt
 backed by a versioned, precomputed fixed-kernel fixture. It does not add an
 arbitrary sample configuration matrix, and the browser never computes a
 substitute authoritative result.
+
+Visible source labels preserve that separation: learner-authored framing is
+`Your input`; reviewed fixed framing is `Reviewed Subject Pack draft`;
+`AI-suggested draft` appears only with genuine model provenance. During a live
+test, `Generated planning`, `Fixed testing`, and `Verified result` are derived
+from the real runner job kind and result-ready evidence. Artifact surfaces say
+`Bundled sample artifact`, `Uploaded notebook`, or `Replay artifact`; a
+route/session mode mismatch withholds proof instead of guessing.
 
 ## Supported notebook contract
 
@@ -151,6 +169,28 @@ The complete authority matrix is in
 [docs/AUTHORITY_BOUNDARIES.md](docs/AUTHORITY_BOUNDARIES.md).
 
 ## Architecture
+
+Evidence release follows one bounded authority chain:
+
+```text
+Question / supported artifact
+          │
+          ▼
+sanitized packet ──► GPT-5.6 proposal
+          │
+          ▼
+Runtime Codex typed plan ──► fixed candidate scorer
+          │
+          ▼
+fixed kernel result ──► frozen verifier
+          │
+          ▼
+verified UI + Boundary Map + Proof Capsule
+```
+
+The proposal and presentation layers never supply numerical truth. A result
+cannot cross the final boundary until the learner has sealed a Prediction and
+the fixed evidence has passed verification.
 
 ```text
 Vite React Studio
@@ -296,7 +336,10 @@ Map, fixed transfer, patch lock, copied-notebook repair, Reasoning Diff v2,
 Proof Capsule v2, resumable six-stage learner navigation, and privacy-safe
 interaction evidence. Historical production evidence separately covers the
 legacy sample/replay and hosted leakage/imbalance paths identified above. The
-v6.1 CloakBrowser journey is specified but has not been executed.
+v6.1 landing, Judge, proof-navigation, keyboard, and fixed-Sample journeys have
+been executed locally with CloakBrowser at mobile and desktop sizes. Those
+mutable-development checks are non-qualifying; the full matrix against one
+exact public release is still pending.
 
 Failed honestly: the first live Codex run used an unsupported SDK argument; two
 repairs then left an unexpected `__pycache__`, so that run remained rejected and
