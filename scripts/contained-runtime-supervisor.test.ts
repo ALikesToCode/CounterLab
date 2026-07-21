@@ -108,6 +108,31 @@ describe("contained runtime supervisor protocol", () => {
     );
   });
 
+  it("starts BuildKit before the final delegated-cgroup evacuation", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "scripts/contained-runtime-supervisor.mjs"),
+      "utf8",
+    );
+    const buildkitLaunch = source.indexOf("const buildkitRootlesskit = spawn(");
+    const buildkitReady = source.indexOf(
+      "await waitForInitialSocket(",
+      buildkitLaunch,
+    );
+    const containerdLaunch = source.indexOf(
+      "const containerdRootlesskit = spawn(",
+    );
+
+    expect(buildkitLaunch).toBeGreaterThan(0);
+    expect(buildkitReady).toBeGreaterThan(buildkitLaunch);
+    expect(containerdLaunch).toBeGreaterThan(buildkitReady);
+    expect(
+      source.slice(
+        containerdLaunch,
+        source.indexOf("closeSync(containerdLog)"),
+      ),
+    ).toContain('"--evacuate-cgroup2=containerd"');
+  });
+
   it("accepts only exact hash-bound status, drain, and shutdown requests", () => {
     expect(
       parseSupervisorRequest(

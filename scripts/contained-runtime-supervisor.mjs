@@ -85,27 +85,24 @@ function openPrivateLog(name) {
   return openSync(resolve(sessionRoot, "logs", name), "a", 0o600);
 }
 
-const containerdLog = openPrivateLog("containerd.log");
-const containerdRootlesskit = spawn(
-  resolve(binRoot, "rootlesskit"),
-  [
-    `--state-dir=${resolve(runRoot, "containerd-rootless")}`,
-    "--net=host",
-    "--pidns",
-    "--cgroupns",
-    "--evacuate-cgroup2=containerd",
-    process.execPath,
-    resolve(root, "scripts/contained-runtime-server.mjs"),
-    "--session-id",
-    sessionId,
-  ],
-  {
-    cwd: root,
-    env: environment,
-    stdio: ["ignore", containerdLog, containerdLog],
-  },
-);
-closeSync(containerdLog);
+function socketReady(path) {
+  try {
+    return statSync(path).isSocket();
+  } catch {
+    return false;
+  }
+}
+
+async function waitForInitialSocket(path, child, label) {
+  for (let attempt = 0; attempt < 300; attempt += 1) {
+    if (socketReady(path)) return;
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(`${label} exited during launch`);
+    }
+    await new Promise((accept) => setTimeout(accept, 100));
+  }
+  throw new Error(`${label} socket did not become ready`);
+}
 
 const buildkitLog = openPrivateLog("buildkitd.log");
 const buildkitRootlesskit = spawn(
@@ -138,6 +135,33 @@ const buildkitRootlesskit = spawn(
   },
 );
 closeSync(buildkitLog);
+await waitForInitialSocket(
+  buildkitInnerSocket,
+  buildkitRootlesskit,
+  "contained BuildKit",
+);
+
+const containerdLog = openPrivateLog("containerd.log");
+const containerdRootlesskit = spawn(
+  resolve(binRoot, "rootlesskit"),
+  [
+    `--state-dir=${resolve(runRoot, "containerd-rootless")}`,
+    "--net=host",
+    "--pidns",
+    "--cgroupns",
+    "--evacuate-cgroup2=containerd",
+    process.execPath,
+    resolve(root, "scripts/contained-runtime-server.mjs"),
+    "--session-id",
+    sessionId,
+  ],
+  {
+    cwd: root,
+    env: environment,
+    stdio: ["ignore", containerdLog, containerdLog],
+  },
+);
+closeSync(containerdLog);
 
 const children = { containerdRootlesskit, buildkitRootlesskit };
 let state = "STARTING";
@@ -160,14 +184,6 @@ function childPids() {
     throw new Error("runtime supervisor child handle has no valid PID");
   }
   return values;
-}
-
-function socketReady(path) {
-  try {
-    return statSync(path).isSocket();
-  } catch {
-    return false;
-  }
 }
 
 async function waitForSockets(paths) {
