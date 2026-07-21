@@ -84,6 +84,30 @@ describe("contained runtime supervisor protocol", () => {
     );
   });
 
+  it("requests delegated PID and cgroup namespaces for containerd", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "scripts/contained-runtime-supervisor.mjs"),
+      "utf8",
+    );
+    const launch = source.slice(
+      source.indexOf("const containerdRootlesskit = spawn("),
+      source.indexOf("closeSync(containerdLog)"),
+    );
+
+    expect(launch).toContain('"--pidns"');
+    expect(launch).toContain('"--cgroupns"');
+    expect(launch).toContain('"--evacuate-cgroup2=containerd"');
+    expect(launch.indexOf('"--pidns"')).toBeLessThan(
+      launch.indexOf("scripts/contained-runtime-server.mjs"),
+    );
+    expect(launch.indexOf('"--cgroupns"')).toBeLessThan(
+      launch.indexOf("scripts/contained-runtime-server.mjs"),
+    );
+    expect(launch.indexOf('"--evacuate-cgroup2=containerd"')).toBeLessThan(
+      launch.indexOf("scripts/contained-runtime-server.mjs"),
+    );
+  });
+
   it("accepts only exact hash-bound status, drain, and shutdown requests", () => {
     expect(
       parseSupervisorRequest(

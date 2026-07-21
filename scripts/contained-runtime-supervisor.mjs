@@ -91,6 +91,9 @@ const containerdRootlesskit = spawn(
   [
     `--state-dir=${resolve(runRoot, "containerd-rootless")}`,
     "--net=host",
+    "--pidns",
+    "--cgroupns",
+    "--evacuate-cgroup2=containerd",
     process.execPath,
     resolve(root, "scripts/contained-runtime-server.mjs"),
     "--session-id",
