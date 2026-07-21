@@ -132,7 +132,10 @@ NORMALIZED_OCI_TAR="${BUILD_DIR}/runner.oci.tar"
 NORMALIZATION_REPORT="${BUILD_DIR}/normalization-report.json"
 BUILD_METADATA="${BUILD_DIR}/build-metadata.json"
 ADAPTER_RAW_OCI_TAR="${BUILD_DIR}/adapter.raw.oci.tar"
-ADAPTER_OCI_LAYOUT="${BUILD_DIR}/adapter-oci-layout"
+ADAPTER_RAW_OCI_LAYOUT="${BUILD_DIR}/adapter-oci-layout-raw"
+ADAPTER_OCI_LAYOUT="${BUILD_DIR}/adapter-oci-layout-normalized"
+ADAPTER_OCI_TAR="${BUILD_DIR}/adapter.oci.tar"
+ADAPTER_NORMALIZATION_REPORT="${BUILD_DIR}/adapter-normalization-report.json"
 ADAPTER_OCI_REPORT="${BUILD_DIR}/adapter-oci-report.json"
 ADAPTER_BUILD_METADATA="${BUILD_DIR}/adapter-build-metadata.json"
 BUILDCTL="$(repo_path "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1/bin/buildctl")"
@@ -378,7 +381,7 @@ ADAPTER_DOCKERFILE_SHA256="$(sha256sum "${ARCHIVE_ROOT}/services/runner/Dockerfi
   exit 2
 }
 
-"${ROOT_DIR}/.venv/bin/python" - "${ROOT_DIR}" "${ADAPTER_RAW_OCI_TAR}" "${ADAPTER_OCI_LAYOUT}" <<'PY'
+"${ROOT_DIR}/.venv/bin/python" - "${ROOT_DIR}" "${ADAPTER_RAW_OCI_TAR}" "${ADAPTER_RAW_OCI_LAYOUT}" <<'PY'
 from pathlib import Path, PurePosixPath
 import sys
 import tarfile
@@ -401,6 +404,15 @@ with tarfile.open(archive, mode="r:") as source:
             raise SystemExit(f"adapter OCI member has an unsafe type: {member.name}")
     source.extractall(destination, filter="data")
 PY
+
+"${ROOT_DIR}/.venv/bin/python" scripts/normalize_runner_oci.py \
+  --repo-root "${ROOT_DIR}" \
+  --source-layout "${ADAPTER_RAW_OCI_LAYOUT}" \
+  --output-layout "${ADAPTER_OCI_LAYOUT}" \
+  --report "${ADAPTER_NORMALIZATION_REPORT}" \
+  --profile adapter
+tar -C "${ADAPTER_OCI_LAYOUT}" -cf "${ADAPTER_OCI_TAR}" \
+  oci-layout index.json blobs
 
 node - "${ADAPTER_OCI_LAYOUT}" "${ADAPTER_OCI_REPORT}" "${SOURCE_COMMIT}" "${SOURCE_TREE_SHA256}" <<'NODE'
 const { createHash } = require("node:crypto");
@@ -465,8 +477,8 @@ writeFileSync(
 );
 NODE
 
-ADAPTER_OCI_ARCHIVE="$(realpath --relative-to="${ROOT_DIR}" "${ADAPTER_RAW_OCI_TAR}")"
-ADAPTER_OCI_ARCHIVE_SHA256="$(sha256sum "${ADAPTER_RAW_OCI_TAR}" | cut -d ' ' -f 1)"
+ADAPTER_OCI_ARCHIVE="$(realpath --relative-to="${ROOT_DIR}" "${ADAPTER_OCI_TAR}")"
+ADAPTER_OCI_ARCHIVE_SHA256="$(sha256sum "${ADAPTER_OCI_TAR}" | cut -d ' ' -f 1)"
 
 node -e '
   const fs = require("node:fs");

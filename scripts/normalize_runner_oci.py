@@ -23,6 +23,7 @@ from typing import Any, BinaryIO, Mapping, Sequence
 
 
 POLICY_VERSION = "counterlab-runner-nonroot-v3"
+ADAPTER_POLICY_VERSION = "counterlab-adapter-nonroot-v1"
 RUNNER_UID = 10001
 RUNNER_GID = 10001
 
@@ -96,9 +97,24 @@ def _mode_for(member: tarfile.TarInfo, *, directory: int, regular: int) -> int:
 
 
 def _normalized_identity(
-    member: tarfile.TarInfo,
+    member: tarfile.TarInfo, *, profile: str = "runner"
 ) -> tuple[int, int, int, str, str] | None:
     path = _clean_member_path(member.name)
+
+    if profile == "adapter":
+        if path in {"opt", "opt/counterlab", "workspace", "fixtures"}:
+            return (0, 0, 0o555, "root", "root")
+        if path == "opt/counterlab/harness.py":
+            return (0, 0, 0o555, "root", "root")
+        if path == "opt/counterlab/counterlab_sdk.py":
+            return (0, 0, 0o444, "root", "root")
+        if path == "output":
+            return (0, 0, 0o755, "root", "root")
+        if path == "tmp":
+            return (0, 0, 0o1777, "root", "root")
+        return None
+    if profile != "runner":
+        raise ValueError(f"Unknown OCI normalization profile: {profile}")
 
     if _under(path, "app"):
         return (
@@ -221,8 +237,8 @@ def _normalized_identity(
     return None
 
 
-def _apply_policy(member: tarfile.TarInfo) -> bool:
-    normalized = _normalized_identity(member)
+def _apply_policy(member: tarfile.TarInfo, *, profile: str = "runner") -> bool:
+    normalized = _normalized_identity(member, profile=profile)
     if normalized is None:
         return False
     uid, gid, mode, uname, gname = normalized
@@ -252,14 +268,14 @@ def _apply_policy(member: tarfile.TarInfo) -> bool:
 
 
 def _copy_normalized_tar(
-    source: tarfile.TarFile, target: tarfile.TarFile
+    source: tarfile.TarFile, target: tarfile.TarFile, *, profile: str = "runner"
 ) -> tuple[int, tuple[str, ...]]:
     changed = 0
     samples: list[str] = []
     for original in source:
         member = copy.copy(original)
         member.pax_headers = dict(original.pax_headers)
-        if _apply_policy(member):
+        if _apply_policy(member, profile=profile):
             changed += 1
             if len(samples) < 24:
                 samples.append(_clean_member_path(member.name))
@@ -268,7 +284,9 @@ def _copy_normalized_tar(
     return changed, tuple(samples)
 
 
-def rewrite_layer_bytes(value: bytes) -> tuple[bytes, LayerRewrite]:
+def rewrite_layer_bytes(
+    value: bytes, *, profile: str = "runner"
+) -> tuple[bytes, LayerRewrite]:
     source_buffer = io.BytesIO(value)
     compressed_output = io.BytesIO()
     with tarfile.open(fileobj=source_buffer, mode="r:gz") as source:
@@ -283,7 +301,9 @@ def rewrite_layer_bytes(value: bytes) -> tuple[bytes, LayerRewrite]:
             with tarfile.open(
                 fileobj=digesting, mode="w|", format=tarfile.PAX_FORMAT
             ) as target:
-                changed, samples = _copy_normalized_tar(source, target)
+                changed, samples = _copy_normalized_tar(
+                    source, target, profile=profile
+                )
             diff_id = f"sha256:{digesting.hexdigest}"
     output = compressed_output.getvalue()
     return output, LayerRewrite(
@@ -295,17 +315,19 @@ def rewrite_layer_bytes(value: bytes) -> tuple[bytes, LayerRewrite]:
     )
 
 
-def _layer_needs_rewrite(path: Path) -> bool:
+def _layer_needs_rewrite(path: Path, *, profile: str) -> bool:
     with tarfile.open(path, mode="r:gz") as source:
         for original in source:
             member = copy.copy(original)
             member.pax_headers = dict(original.pax_headers)
-            if _apply_policy(member):
+            if _apply_policy(member, profile=profile):
                 return True
     return False
 
 
-def _rewrite_layer_file(source_path: Path, temporary_path: Path) -> LayerRewrite:
+def _rewrite_layer_file(
+    source_path: Path, temporary_path: Path, *, profile: str
+) -> LayerRewrite:
     with source_path.open("rb") as raw_source, tarfile.open(
         fileobj=raw_source, mode="r:gz"
     ) as source, temporary_path.open("xb") as raw_target:
@@ -320,7 +342,9 @@ def _rewrite_layer_file(source_path: Path, temporary_path: Path) -> LayerRewrite
             with tarfile.open(
                 fileobj=digesting, mode="w|", format=tarfile.PAX_FORMAT
             ) as target:
-                changed, samples = _copy_normalized_tar(source, target)
+                changed, samples = _copy_normalized_tar(
+                    source, target, profile=profile
+                )
             diff_id = f"sha256:{digesting.hexdigest}"
     return LayerRewrite(
         compressed_sha256=_sha256_file(temporary_path),
@@ -363,7 +387,12 @@ def _write_blob(directory: Path, value: bytes) -> tuple[str, int]:
 
 
 def normalize_layout(
-    *, repo_root: Path, source_layout: Path, output_layout: Path, report_path: Path
+    *,
+    repo_root: Path,
+    source_layout: Path,
+    output_layout: Path,
+    report_path: Path,
+    profile: str = "runner",
 ) -> dict[str, Any]:
     root = repo_root.resolve(strict=True)
     source = source_layout.resolve(strict=True)
@@ -397,8 +426,13 @@ def normalize_layout(
     diff_ids = config.get("rootfs", {}).get("diff_ids")
     if not isinstance(diff_ids, list) or len(diff_ids) != len(layers):
         raise ValueError("Runner OCI rootfs diff_ids do not match its layers")
-    if config.get("config", {}).get("User") != "10001:10001":
-        raise ValueError("Runner OCI config must declare user 10001:10001")
+    expected_user = "10001:10001" if profile == "runner" else "65532:65532"
+    if profile not in {"runner", "adapter"}:
+        raise ValueError(f"Unknown OCI normalization profile: {profile}")
+    if config.get("config", {}).get("User") != expected_user:
+        raise ValueError(
+            f"{profile.title()} OCI config must declare user {expected_user}"
+        )
 
     output_layout.mkdir()
     blob_directory = output_layout / "blobs" / "sha256"
@@ -414,7 +448,7 @@ def normalize_layout(
         if layer.get("mediaType") != "application/vnd.oci.image.layer.v1.tar+gzip":
             raise ValueError("Runner OCI normalization requires gzip OCI layers")
         layer_path = _source_blob(source, layer)
-        if not _layer_needs_rewrite(layer_path):
+        if not _layer_needs_rewrite(layer_path, profile=profile):
             digest = _digest_value(layer)
             shutil.copyfile(layer_path, blob_directory / digest)
             updated_layers.append(dict(layer))
@@ -425,7 +459,7 @@ def normalize_layout(
             continue
 
         temporary = blob_directory / f"normalized-layer-{index_value}.tar.gz"
-        rewrite = _rewrite_layer_file(layer_path, temporary)
+        rewrite = _rewrite_layer_file(layer_path, temporary, profile=profile)
         final_path = blob_directory / rewrite.compressed_sha256
         if final_path.exists():
             raise ValueError("Normalized layer digest unexpectedly already exists")
@@ -469,7 +503,9 @@ def normalize_layout(
 
     report = {
         "schemaVersion": "1",
-        "policyVersion": POLICY_VERSION,
+        "policyVersion": (
+            POLICY_VERSION if profile == "runner" else ADAPTER_POLICY_VERSION
+        ),
         "status": "NORMALIZED",
         "sourceManifestDigest": manifest_descriptor["digest"],
         "normalizedManifestDigest": f"sha256:{manifest_digest}",
@@ -489,12 +525,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--source-layout", type=Path, required=True)
     parser.add_argument("--output-layout", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
+    parser.add_argument(
+        "--profile", choices=("runner", "adapter"), default="runner"
+    )
     args = parser.parse_args(argv)
     report = normalize_layout(
         repo_root=args.repo_root,
         source_layout=args.source_layout,
         output_layout=args.output_layout,
         report_path=args.report,
+        profile=args.profile,
     )
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0

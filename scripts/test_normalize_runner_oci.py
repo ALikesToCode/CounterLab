@@ -138,3 +138,49 @@ def test_rewrite_is_deterministic() -> None:
 
     assert first == second
     assert first_report == second_report
+
+
+def test_adapter_profile_repairs_only_bounded_nonroot_paths() -> None:
+    output = io.BytesIO()
+    with gzip.GzipFile(
+        filename="", mode="wb", fileobj=output, mtime=0
+    ) as compressed:
+        with tarfile.open(
+            fileobj=compressed, mode="w|", format=tarfile.PAX_FORMAT
+        ) as archive:
+            for name, kind, body in (
+                ("opt/", tarfile.DIRTYPE, b""),
+                ("opt/counterlab/", tarfile.DIRTYPE, b""),
+                ("opt/counterlab/harness.py", tarfile.REGTYPE, b"harness"),
+                (
+                    "opt/counterlab/counterlab_sdk.py",
+                    tarfile.REGTYPE,
+                    b"sdk",
+                ),
+                ("workspace/", tarfile.DIRTYPE, b""),
+                ("fixtures/", tarfile.DIRTYPE, b""),
+                ("output/", tarfile.DIRTYPE, b""),
+                ("tmp/", tarfile.DIRTYPE, b""),
+                ("unrelated", tarfile.REGTYPE, b"unchanged"),
+            ):
+                member = tarfile.TarInfo(name)
+                member.type = kind
+                member.mode = 0o700
+                member.uid = 0
+                member.gid = 0
+                member.size = len(body)
+                archive.addfile(member, io.BytesIO(body) if body else None)
+
+    normalized, report = rewrite_layer_bytes(output.getvalue(), profile="adapter")
+    members = _members(normalized)
+
+    assert report.changed_entries == 8
+    assert members["opt"].mode == 0o555
+    assert members["opt/counterlab"].mode == 0o555
+    assert members["opt/counterlab/harness.py"].mode == 0o555
+    assert members["opt/counterlab/counterlab_sdk.py"].mode == 0o444
+    assert members["workspace"].mode == 0o555
+    assert members["fixtures"].mode == 0o555
+    assert members["output"].mode == 0o755
+    assert members["tmp"].mode == 0o1777
+    assert members["unrelated"].mode == 0o700
