@@ -702,6 +702,7 @@ assert_release_authority() {
 }
 
 "${WRANGLER}" secret list \
+  --name counterlab \
   --config "${RELEASE_CONFIG}" \
   --format json >"${RELEASE_DIR}/secret-names.json"
 node - "${RELEASE_DIR}/secret-names.json" <<'NODE'

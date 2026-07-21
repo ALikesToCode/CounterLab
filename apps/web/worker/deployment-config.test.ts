@@ -489,6 +489,10 @@ describe("Cloudflare static asset routing", () => {
     );
     const account = script.indexOf('"${WRANGLER}" whoami --json');
     const secretList = script.indexOf('"${WRANGLER}" secret list');
+    const secretValidation = script.indexOf(
+      'node - "${RELEASE_DIR}/secret-names.json"',
+      secretList,
+    );
     expect(finalSecretScan).toBeGreaterThan(build);
     expect(manifest).toBeGreaterThan(finalSecretScan);
     expect(script.slice(manifest, dryRun)).toContain(
@@ -500,6 +504,9 @@ describe("Cloudflare static asset routing", () => {
     expect(strictDryRun).toBeGreaterThan(dryRun);
     expect(account).toBeGreaterThan(strictDryRun);
     expect(secretList).toBeGreaterThan(account);
+    expect(script.slice(secretList, secretValidation)).toContain(
+      "--name counterlab",
+    );
 
     const maintenance = script.indexOf("MAINTENANCE_TAG=");
     const migration = script.indexOf('"${WRANGLER}" d1 migrations apply DB');
