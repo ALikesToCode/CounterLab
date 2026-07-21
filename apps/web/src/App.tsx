@@ -554,6 +554,13 @@ const storageKeys = {
   activeRunnerJobKind: "counterlab.activeRunnerJobKind",
 } as const;
 
+function activateSessionRoute(sessionId: string): void {
+  const path = `/session/${encodeURIComponent(sessionId)}`;
+  if (window.location.pathname !== path) {
+    window.history.pushState({}, "", path);
+  }
+}
+
 function SkipLink() {
   return (
     <a className="skip-link" href="#main-content">
@@ -5434,14 +5441,15 @@ export function App() {
         sampleId: "leakage-01",
       });
       request.assertCurrent();
-      setArtifact(sample);
-      setSession(created);
       window.localStorage.setItem(storageKeys.sessionId, created.sessionId);
       window.localStorage.setItem(storageKeys.claim, SAMPLE_LEAKAGE_QUESTION);
       window.localStorage.setItem(
         storageKeys.claimSessionId,
         created.sessionId,
       );
+      activateSessionRoute(created.sessionId);
+      setArtifact(sample);
+      setSession(created);
       setStage("claim");
     });
   };
@@ -5539,7 +5547,6 @@ export function App() {
       artifactId: uploaded.artifactId,
     });
     request.assertCurrent();
-    setSession(created);
     window.localStorage.setItem(storageKeys.sessionId, created.sessionId);
     if (claim.trim().length > 0) {
       window.localStorage.setItem(storageKeys.claim, claim);
@@ -5548,6 +5555,8 @@ export function App() {
         created.sessionId,
       );
     }
+    activateSessionRoute(created.sessionId);
+    setSession(created);
     setStage("claim");
   };
 
@@ -5587,21 +5596,6 @@ export function App() {
       request.assertCurrent();
       const restartedClaim =
         sessionBeliefPresentation(restarted)?.claim ?? sourceClaim;
-      setSession(restarted);
-      setMode(presentationMode(restarted.mode));
-      setClaim(restartedClaim);
-      setConfirmed(
-        restarted.state !== "INGESTED" &&
-          restarted.state !== "BELIEF_TEST_PROPOSED",
-      );
-      setPrediction(
-        restarted.prediction === undefined
-          ? null
-          : predictionChoiceFromReceipt(restarted.prediction.choice),
-      );
-      setConfidence(restarted.prediction?.confidence ?? 72);
-      setAnalysisPreview(null);
-      setSensitiveContentApproved(false);
       try {
         window.localStorage.setItem(storageKeys.sessionId, restarted.sessionId);
         window.localStorage.setItem(
@@ -5622,6 +5616,22 @@ export function App() {
         // The reconciled server session remains authoritative when this
         // browser blocks optional local recovery storage.
       }
+      activateSessionRoute(restarted.sessionId);
+      setSession(restarted);
+      setMode(presentationMode(restarted.mode));
+      setClaim(restartedClaim);
+      setConfirmed(
+        restarted.state !== "INGESTED" &&
+          restarted.state !== "BELIEF_TEST_PROPOSED",
+      );
+      setPrediction(
+        restarted.prediction === undefined
+          ? null
+          : predictionChoiceFromReceipt(restarted.prediction.choice),
+      );
+      setConfidence(restarted.prediction?.confidence ?? 72);
+      setAnalysisPreview(null);
+      setSensitiveContentApproved(false);
       setStage(restoredStageForSession(restarted));
     });
   };

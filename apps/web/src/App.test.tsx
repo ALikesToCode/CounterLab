@@ -1503,6 +1503,41 @@ describe("CounterLab judged flow", () => {
     expect(story.getByText(/sha-256/i)).toBeInTheDocument();
   });
 
+  it("installs the sample session route before exposing the Question stage", async () => {
+    const user = userEvent.setup();
+    const originalPushState = window.history.pushState.bind(window.history);
+    const questionVisibilityAtSessionActivation: boolean[] = [];
+    const pushStateSpy = vi
+      .spyOn(window.history, "pushState")
+      .mockImplementation((data, unused, url) => {
+        if (String(url).startsWith("/session/")) {
+          questionVisibilityAtSessionActivation.push(
+            screen.queryByRole("heading", {
+              name: /what do you think the score means/i,
+            }) !== null,
+          );
+        }
+        originalPushState(data, unused, url);
+      });
+
+    try {
+      render(<App />);
+      await user.click(
+        screen.getByRole("button", { name: /try verified sample/i }),
+      );
+
+      expect(
+        await screen.findByRole("heading", {
+          name: /what do you think the score means/i,
+        }),
+      ).toBeInTheDocument();
+      expect(window.location.pathname).toBe("/session/session_ui");
+      expect(questionVisibilityAtSessionActivation).toEqual([false]);
+    } finally {
+      pushStateSpy.mockRestore();
+    }
+  });
+
   it("opens one deterministic stage hint and records only its fixed identity", async () => {
     const user = userEvent.setup();
     const fetcher = installApi();

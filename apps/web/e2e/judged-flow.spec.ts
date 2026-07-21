@@ -1907,6 +1907,9 @@ test("refresh restores the question and confirmed Prediction phases", async ({
 }) => {
   await reset(page);
   await page.getByRole("button", { name: /Try verified sample/i }).click();
+  await expect(
+    page.getByRole("heading", { name: /What do you think the score means/i }),
+  ).toBeVisible();
   await page.reload();
   await expect(
     page.getByRole("heading", { name: /What do you think the score means/i }),
