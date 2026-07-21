@@ -924,7 +924,7 @@ kbd {
   }
 
   .studio-frame.proof-open .studio-canvas {
-    padding-bottom: calc(342px + env(safe-area-inset-bottom));
+    padding-bottom: calc(382px + env(safe-area-inset-bottom));
   }
 
   .console-events li {
@@ -936,7 +936,42 @@ kbd {
   }
 
   .proof-console-handle {
+    display: grid;
+    min-height: 76px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 10px;
     padding-inline: 11px;
+    text-align: left;
+  }
+
+  .proof-console-handle > span:first-child {
+    min-width: 0;
+  }
+
+  .proof-console-context {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .proof-console-context em {
+    min-height: 22px;
+    padding: 3px 6px;
+    font-size: 11px;
+  }
+
+  .proof-console-handle > strong {
+    display: none;
+  }
+
+  .proof-console-handle kbd {
+    grid-column: 2;
+    grid-row: 1;
+    margin-left: 0;
+  }
+
+  .studio-mobile-command {
+    bottom: calc(86px + env(safe-area-inset-bottom));
   }
 
   .proof-console-content {

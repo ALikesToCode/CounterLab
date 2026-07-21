@@ -14,6 +14,7 @@ const theaterStyles = stylesheet("./VerifiedBeliefBreakTheater.module.css");
 const deferredStyles = stylesheet("./DeferredVerifiedBeliefBreak.module.css");
 const judgeStyles = stylesheet("../../features/judge/JudgeModeView.module.css");
 const globalStyles = stylesheet("../../styles.css");
+const studioStyles = stylesheet("../../styles/studio.css");
 const questionComposerStyles = stylesheet("./QuestionComposer.module.css");
 
 function colorToken(name: string): string {
@@ -123,6 +124,18 @@ describe("learner-facing responsive style safeguards", () => {
       ".landing-intro > h1:focus-visible {\n  outline: 0;\n  text-decoration: underline;",
     );
     expect(globalStyles).toContain("text-decoration-color: var(--focus-ring)");
+  });
+
+  it("stacks proof authority state below its handle label on narrow screens", () => {
+    expect(studioStyles).toContain(
+      ".proof-console-handle {\n    display: grid;\n    min-height: 76px;\n    grid-template-columns: minmax(0, 1fr) auto;",
+    );
+    expect(studioStyles).toContain(
+      ".proof-console-context {\n    grid-column: 1 / -1;\n    flex-wrap: wrap;",
+    );
+    expect(studioStyles).toContain(
+      ".proof-console-handle > strong {\n    display: none;",
+    );
   });
 
   it("keeps the composer dominant in one centered responsive column", () => {
