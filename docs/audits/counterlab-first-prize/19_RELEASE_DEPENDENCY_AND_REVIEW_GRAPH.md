@@ -322,3 +322,28 @@ push and fast-forward merge.
   to `main`?
 
 Any `no`, unknown, or unavailable answer keeps the corresponding gate open.
+
+## Browser evidence graph addendum — `a6f6d8d`
+
+```mermaid
+flowchart LR
+  Registry["Exact 40 journey registry"] --> Fixture["Automatic Playwright fixture"]
+  Viewports["7 ID-bound viewports"] --> Fixture
+  Cloak["Loopback Cloak CDP authority"] --> Fixture
+  Fixture --> Raw["Schema-v2 raw run"]
+  INP["Privacy-safe measured INP"] --> Manual["10 explicit manual evidence inputs"]
+  Raw --> Finalizer["Release-bound finalizer — open"]
+  Manual --> Finalizer
+  Deploy["Exact deployment receipt — open"] --> Finalizer
+  Finalizer --> Receipts["40 journey receipts + report + index + qualification"]
+  Receipts --> PublicRun["Exact public Cloak execution — open"]
+  PublicRun --> Submission["Submission evidence — open"]
+```
+
+Committed source now fails closed on stock authority, non-loopback CDP,
+wrong public origin, ID or viewport drift, retries/skips, fixture-only
+assertions, telemetry mismatch, reversed chronology, unexpected browser
+failures, symlink traversal, and evidence overwrite. This closes the browser
+instrumentation source gaps identified at `7e25a09`; it does **not** close the
+finalizer, live Cloak execution, exact release, deployment, or submission
+nodes. Current qualifying journey count remains **0**.

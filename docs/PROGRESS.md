@@ -4183,3 +4183,57 @@ evidence, contained Cloudflare authentication, active CloakBrowser
 qualification, deployment, submission, and final merge. The proof and
 live-session source-authority regressions are closed by reviewed commits, not
 by production claims.
+
+## Browser qualification instrumentation checkpoint — 2026-07-21T09:56:03Z
+
+Deadline: `2026-07-22T00:00:00Z`; **14 hours 3 minutes 57 seconds remained at
+this checkpoint**. Committed HEAD is
+`a6f6d8d223a69d330f70966489234ee7a67a6fe2`, fourteen commits ahead of
+`origin/feat/learner-ux-v6.1`. The only worktree entry is the preserved,
+unstaged FUSE tombstone `scripts/.fuse_hidden0000a9600000801f`; it remains
+untouched.
+
+### Completed and committed
+
+| Commit | Result | Exact verification |
+| --- | --- | --- |
+| `3e75281 test(browser): cover release viewport matrix` | The 40-journey registry now exercises all seven required desktop, tablet, and mobile viewports. | E2E TypeScript passed; Playwright static collection reported exactly **40 tests in 3 files**. |
+| `3db3e52 test(browser): capture privacy-safe INP evidence` | Browser performance evidence now groups Event Timing entries by interaction, records no target/text/URL data, and fails closed after 10,000 interactions. | Focused performance tests **13/13 passed**; web and E2E TypeScript passed. |
+| `8a68bdd test(browser): open tablet navigation before audit` | The 768x1024 journey opens the intentionally collapsed Modes navigation before asserting secondary actions. | Stock-Chrome design-review smoke **1/1 passed**. |
+| `adea1c9 test(browser): emit fail-closed journey evidence` | A custom reporter records an exact, privacy-safe raw run and rejects wrong authority/origin, missing or duplicate IDs, skips, retries, zero assertions, telemetry gaps, browser errors, request failures, and incomplete viewport coverage. | Reporter tests **14/14 passed**; submission validator **34/34 passed**; web/E2E TypeScript, formatting, whitespace, and secret scan passed. |
+| `a6f6d8d test(browser): bind qualification telemetry` | Follow-up review binds intentional failures to exact method/path pairs, preserves observed/expected/unexpected counts, binds each journey to its primary viewport, rejects non-loopback CDP authority, excludes fixture assertions, checks chronology, and refuses symlink traversal or evidence overwrite. | Browser tests **24/24 passed**; submission validator **34/34 passed**; containment tests **3/3 passed**; web/E2E TypeScript and 40-test collection passed. |
+
+One real stock-Chrome reporter integration smoke passed **1/1** at 768x1024
+and emitted a schema-v2 `NON_QUALIFYING` receipt with 14 learner assertions,
+zero console errors, zero failed requests, and the explicit stock authority.
+It is design evidence only. Two intentional network-failure journeys were then
+executed against an incompletely initialized local D1 instance: **0/2 passed**
+because the `artifacts` table was absent. The reporter nevertheless recorded
+the first exact `POST /api/artifacts` abort and failed closed when the second
+expected `POST /api/live/sessions` abort never occurred. This is not counted as
+a product or browser-qualification pass.
+
+### Still open, in dependency order
+
+1. Finish and test the release-bound browser finalizer: raw-run hash binding,
+   40 journey receipts, ten explicit manual evidence records, measured
+   LCP/CLS/INP, evidence index, final qualification receipt, and package
+   references.
+2. Resolve the FUSE handle without deleting or altering the tombstone; freeze
+   a clean source commit and run the real aggregate-containment sentinel.
+3. Build one exact image, regenerate all source/image evidence, and pass the
+   complete deterministic release gate without stale bindings.
+4. Authenticate the repository-contained Wrangler state and preflight a fresh
+   Cloak-enabled Codex session before any cloud mutation.
+5. Deploy only the qualified tuple, prove public identity, run all 40 public
+   Cloak journeys plus the ten manual/accessibility/performance checks, and
+   preserve exact evidence.
+6. Finalize repository, screenshots, video, feedback, public links, and
+   Devpost. Learner impact remains honestly `NO_DATA` until real consented
+   observations exist.
+7. Push the feature branch, capture the submission receipt, then fast-forward
+   and push `main` only after all upstream gates are factual.
+
+Release remains **NO-GO** at clean source, real containment, exact image,
+contained Wrangler authentication, qualifying CloakBrowser execution,
+deployment, publication, submission, and final merge.
