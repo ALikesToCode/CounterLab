@@ -24,6 +24,7 @@ test-results/
 docs/a/
 docs/audits/**/browser-state/
 docs/audits/**/evidence/browser-tmp/
+docs/audits/counterlab-first-prize/evidence/video-preview-*.png
 data/*.sqlite*
 data/uploads/
 data/generated/
