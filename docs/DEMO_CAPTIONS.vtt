@@ -7,10 +7,10 @@ CounterLab is for ML learners and instructors. This fixed sample changes one var
 CounterLab begins with the Question. It treats notebook evidence as untrusted data, never runs a cell, and sends no raw rows, notebook file, or local path.
 
 00:27.000 --> 00:43.000
-GPT-5.6 proposes these competing explanations from only the approved sanitized packet. It cannot run the notebook or decide the result. The learner seals an immutable Prediction before any experimental value appears.
+GPT-5.6 proposes these competing explanations from only the approved sanitized packet. It cannot run the notebook or decide the result. The learner seals an immutable Prediction before any experimental value appears in this live session.
 
 00:43.000 --> 00:58.000
-Runtime Codex proposes only bounded operation IDs. The fixed scorer selects the test, and the frozen verifier decides whether the fixed kernel may release evidence.
+Runtime Codex composes registered operation IDs into bounded plans. The fixed scorer selects the test, and the frozen verifier decides whether the fixed kernel may release evidence.
 
 00:58.000 --> 01:18.000
 The numbers come from the fixed kernel. GPT-5.6 and Codex may explain or propose, but neither computes or verifies them.

@@ -15,13 +15,16 @@ Ask like chat. Prove it like science.
 ## Submission fields
 
 - **Category:** Education
+- **Submitter type:** **PENDING** owner confirmation in the official form
+- **Country:** **PENDING** owner confirmation in the official form
 - **Primary audience:** ML learners and instructors who need to test what a
   notebook result actually supports
 - **Live judge URL:** <https://counterlab.cserules.workers.dev/judge>
 - **License:** MIT
-- **Repository URL:** **PENDING** anonymous-access verification; do not paste a
-  private or 404 URL
-- **Public video URL:** **PENDING** capture from the final qualified release
+- **Repository URL:** <https://github.com/ALikesToCode/CounterLab>;
+  **PENDING** anonymous-access verification
+- **Public YouTube video URL:** **PENDING** capture from the final qualified
+  release
 - **Codex `/feedback` Session ID:** **PENDING** owner-supplied primary build
   thread ID
 - **Exact release receipt:** **PENDING** final source/Container/Worker
@@ -79,8 +82,9 @@ learner-first, source-bound release candidate:
 - immutable Prediction, evidence story, Model Duel, Fair Test Builder,
   Experiment Theater, Boundary Hunt, visual transfer, Repair preview, and
   bounded completion;
-- a ten-second Judge preview bound to checked-in fixed sample evidence and a
-  one-click integrity-verified Sample Proof Capsule;
+- an automated ten-second first-viewport inspectability preview bound to
+  checked-in fixed sample evidence and a one-click integrity-verified Sample
+  Proof Capsule; this is not a learner-comprehension measurement;
 - recoverable reject/insufficient-evidence paths, supported-artifact gating,
   pre-Prediction result-leak regressions, stored proof-event hydration, and
   capability-link lifecycle handling;
@@ -189,10 +193,11 @@ claim should be copied into the submission until a measured study exists.
 1. Open <https://counterlab.cserules.workers.dev/judge> and confirm the public
    build identifier matches the exact production receipt linked by the final
    release evidence.
-2. Choose **Start sample** for the credential-free six-stage learner loop. In
-   Boundary, make one classification or reveal/skip the map before Apply unlocks.
-3. Choose **Watch verified replay** to inspect the persistent read-only label and
-   genuine reject/repair history without a new model call.
+2. Choose **Open disclosed walkthrough** for the credential-free six-stage
+   learner loop. In Boundary, make one classification or reveal/skip the map
+   before Apply unlocks.
+3. Choose **Watch replay** to inspect the persistent read-only label and genuine
+   reject/repair history without a new model call.
 4. Choose **Run live** only when Judge Mode reports deployed live authority.
    Upload a supported notebook, approve the exact outbound packet, and follow
    reconnect, transfer, repaired-copy download, and Proof Capsule export.
@@ -200,9 +205,11 @@ claim should be copied into the submission until a measured study exists.
    schema-v7 deployment receipt for the exact commit, Worker version, Container
    digest, asset hashes, and smoke outcomes. If those identifiers do not agree,
    treat live qualification as not proven.
-6. Run the repository-contained verification commands documented in `README.md`
-   for local reproduction. Historical replay evidence remains visibly distinct
-   from the exact deployed release.
+6. Use the [MIT-licensed CounterLab repository](https://github.com/ALikesToCode/CounterLab)
+   and run the repository-contained verification commands documented in
+   `README.md` for local reproduction. Historical replay evidence remains
+   visibly distinct from the exact deployed release. If anonymous repository
+   access is not verified, omit these instructions from the submitted entry.
 
 ## Submission consistency rule
 

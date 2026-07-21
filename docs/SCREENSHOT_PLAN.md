@@ -1,12 +1,51 @@
 # Screenshot plan
 
-Status: planned, not captured for the v6.1 local pass. The required
-`CLOAK_CDP_ENDPOINT` was unavailable, and stock Chromium is forbidden. Do not
-reuse historical screenshots as evidence of this source tree.
+Status: planned, not captured for the final release. The required
+`CLOAK_CDP_ENDPOINT` is unavailable. Stock Chromium may produce explicitly
+labelled design-review artifacts, but it cannot qualify or supply the final
+submission images. Do not reuse historical screenshots as evidence of the
+frozen release.
 
 Capture the current commit through CloakBrowser at 1440 × 900 and 390 × 844.
 Add a 1280 × 720 overflow check even if it is not a submission image. Use real
 product state and omit browser chrome where the submission permits.
+
+## Curated Devpost package
+
+Create exactly four primary assets plus one thumbnail from the same qualified
+public tuple:
+
+1. `01-judge-belief-break-1440x900.png` — the primary Judge image: learner
+   claim, persistent Fixed sample label, one changed evaluation unit, held
+   controls, 98.5% familiar rows, 59.4% unseen customers, Boundary consequence,
+   and learner benefit in the first viewport.
+2. `02-live-prediction-and-authority-1440x900.png` — supported live notebook
+   evidence, approved privacy packet, equal-weight models, sealed Prediction,
+   and truthful GPT-5.6/Codex/kernel/verifier provenance. Capture only after a
+   genuine live call and exact release binding.
+3. `03-theater-boundary-1440x900.png` — pinned Prediction, one verified result,
+   controlled variables, Boundary Hunt/full-map handoff, non-colour symbols,
+   and the exact-value table.
+4. `04-transfer-repair-proof-1440x900.png` — deterministic transfer outcome,
+   minimal repair preview, copied-notebook download, Reasoning Diff, and Proof
+   Capsule action.
+5. `thumbnail-judge-belief-break.png` — a legible crop derived from asset 1;
+   do not introduce different values, claims, or release identity.
+
+Store final images under
+`docs/submission-assets/<deployment-receipt-id>/`. Beside every PNG, write a
+same-basename JSON sidecar containing: source commit, runner image digest,
+Worker version, deployment ID, deployment receipt hash, public URL and route,
+viewport, capture timestamp, browser authority, PNG SHA-256, console errors,
+and failed requests. A missing or mismatched field keeps the asset out of the
+submission.
+
+Capture desktop and mobile variants for qualification even when only the five
+curated files are uploaded. The 390 × 844 Judge capture must prove that the
+claim, comparison, Boundary consequence, and learner benefit remain visible
+without horizontal overflow.
+
+## Audit coverage matrix
 
 1. **Question-first landing** — “What result are you trying to understand?”,
    the claim field, notebook attachment, sample prompt chips, support sentence,

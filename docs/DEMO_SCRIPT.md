@@ -1,10 +1,12 @@
 # 2:45 demo voiceover and shot list
 
-Record **Live notebook analysis** only after the exact source has passed the
-Container smoke. A bundled sample is frozen, not a substitute live run. Keep
-**Verified replay** open as a disclosed backup and never present it as a new
-model call. Use [DEMO_CAPTIONS.vtt](DEMO_CAPTIONS.vtt) word for word so the
-spoken roles, on-screen labels, and captions agree.
+Record **Live notebook analysis** only after the exact source commit, runner
+image digest, Worker version, deployment ID, qualification receipt, and
+release-check receipt agree and that deployed tuple passes production smoke. A
+bundled sample is frozen, not a substitute live run. Keep **Verified replay**
+open as a disclosed backup and never present it as a new model call. Use
+[DEMO_CAPTIONS.vtt](DEMO_CAPTIONS.vtt) word for word so the spoken roles,
+on-screen labels, and captions agree.
 
 ## 0:00–0:12 — The belief break
 
@@ -28,7 +30,7 @@ weight. Confirm that the first captures the learner's meaning. Choose “Remain
 near 98%,” set confidence, and seal it. Say: “GPT-5.6 proposes these competing
 explanations from only the approved sanitized packet. It cannot run the
 notebook or decide the result. The learner seals an immutable Prediction before
-any experimental value appears.”
+any experimental value appears in this live session.”
 
 ## 0:43–0:58 — Runtime Codex and Fair Test Builder
 
@@ -36,9 +38,9 @@ Show what changes, what stays fixed, and why whole-customer holdout matches
 deployment. If this exact live compile is genuinely rejected and repaired, show
 the learner-language explanation and optionally open Evidence & proof for the
 sanitized counterexample. If it passes first try, say so. Never stage a failure.
-Say: “Runtime Codex proposes only bounded operation IDs. The fixed scorer
-selects the test, and the frozen verifier decides whether the fixed kernel may
-release evidence.”
+Say: “Runtime Codex composes registered operation IDs into bounded plans. The
+fixed scorer selects the test, and the frozen verifier decides whether the
+fixed kernel may release evidence.”
 
 ## 0:58–1:18 — Experiment Theater
 
@@ -74,11 +76,12 @@ transfer passes, and CounterLab patches only a copy.”
 
 ## 2:10–2:30 — Completion and proof
 
-Show: “You completed one verified entity-leakage loop: this fixed task separated
-performance on familiar rows from performance on new entities. It does not
-establish mastery.” Then open Evidence & proof for the Reasoning Diff and Proof
-Capsule. Say: “The Reasoning Diff is for the learner. The Proof Capsule binds
-the machine-readable evidence, versions, limitations, and event chain.”
+Show: “You completed one verified entity-leakage loop.” Then show “good on
+familiar rows” was compared with “performance on new entities in this fixed
+task,” followed by “Fixed transfer task passed” and the one-task/no-mastery
+limitation. Open Evidence & proof for the Reasoning Diff and Proof Capsule.
+Say: “The Reasoning Diff is for the learner. The Proof Capsule binds the
+machine-readable evidence, versions, limitations, and event chain.”
 
 ## 2:30–2:45 — Build truth and close
 
