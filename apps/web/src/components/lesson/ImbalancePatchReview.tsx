@@ -68,9 +68,9 @@ export function ImbalancePatchReview({
   const [busy, setBusy] = useState(session.state === "PATCH_COMPILING");
   const [error, setError] = useState<string | null>(null);
   const completionFocused = useRef(false);
+  const nativeAuthority = session.beliefSpec !== undefined;
   const repairAllowed =
-    session.mode.kind !== "live_notebook" ||
-    session.evidenceVerdict?.kind === "SUPPORTS";
+    !nativeAuthority || session.evidenceVerdict?.kind === "SUPPORTS";
 
   useEffect(() => {
     if (patch === null) {
@@ -91,11 +91,15 @@ export function ImbalancePatchReview({
       sessionId: session.sessionId,
       jobId,
       jobKind: "PATCH_COMPILE",
-      terminalStates: ["PROOF_CAPSULE_ISSUED", "PATCH_REJECTED"],
+      terminalStates: [
+        nativeAuthority ? "PROOF_CAPSULE_ISSUED" : "REASONING_DIFF_ISSUED",
+        "PATCH_REJECTED",
+      ],
       onSession: updateSession,
     });
     if (
-      completed.state !== "PROOF_CAPSULE_ISSUED" ||
+      completed.state !==
+        (nativeAuthority ? "PROOF_CAPSULE_ISSUED" : "REASONING_DIFF_ISSUED") ||
       completed.patchResult === undefined
     ) {
       throw new ApiClientError({
@@ -284,7 +288,7 @@ export function ImbalancePatchReview({
       );
     }
     if (
-      session.mode.kind === "live_notebook" &&
+      nativeAuthority &&
       (session.state !== "PROOF_CAPSULE_ISSUED" ||
         session.reasoningDiffV2 === undefined ||
         session.proofCapsule === undefined)

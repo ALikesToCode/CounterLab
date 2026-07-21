@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SessionView } from "../../api";
 import { replayFixture } from "../replay/ProofCapsuleReplayView.fixture";
+import { createDefaultProofBoundSessionFixture } from "../../test-fixtures/proofBundle";
 import { ImbalancePatchReview } from "./ImbalancePatchReview";
 
 const api = vi.hoisted(() => ({
@@ -70,6 +71,8 @@ describe("ImbalancePatchReview", () => {
       mode: { kind: "live_notebook" },
       transferResult: { outcome: "PASSED" },
       evidenceVerdict: replay.evidenceVerdict,
+      beliefSpec: replay.beliefSpec,
+      prediction: replay.prediction,
     } as SessionView;
     const compiling = {
       ...transferSession,
@@ -184,6 +187,32 @@ describe("ImbalancePatchReview", () => {
         },
       ),
     );
+  });
+
+  it("preserves a completed legacy live Proof Bundle without a v5 verdict", () => {
+    const legacySession = {
+      ...createDefaultProofBoundSessionFixture(),
+      mode: { kind: "live_notebook" },
+    } as SessionView;
+
+    render(
+      <ImbalancePatchReview session={legacySession} updateSession={vi.fn()} />,
+    );
+
+    expect(
+      screen.getByRole("heading", {
+        name: /completed one verified rare-event loop/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /download repaired notebook/i }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /download proof record/i }),
+    ).toBeEnabled();
+    expect(
+      screen.queryByRole("heading", { name: /repair remains locked/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("offers explicit replay publication for a completed live Proof Capsule", async () => {
@@ -421,6 +450,8 @@ describe("ImbalancePatchReview", () => {
       mode: { kind: "live_notebook" },
       transferResult: replay.transferResult,
       patchResult: replay.patchResult,
+      beliefSpec: replay.beliefSpec,
+      prediction: replay.prediction,
       evidenceVerdict: {
         schemaVersion: "1",
         kind: "INCONCLUSIVE",
@@ -460,6 +491,8 @@ describe("ImbalancePatchReview", () => {
       transferResult: replay.transferResult,
       patchResult: replay.patchResult,
       evidenceVerdict: replay.evidenceVerdict,
+      beliefSpec: replay.beliefSpec,
+      prediction: replay.prediction,
       reasoningDiffV2: replay.reasoningDiff,
     } as SessionView;
     const completedSession = {
