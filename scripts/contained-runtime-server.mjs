@@ -9,6 +9,7 @@ import {
   readFileSync,
   readdirSync,
   realpathSync,
+  statfsSync,
   statSync,
 } from "node:fs";
 import { createServer } from "node:net";
@@ -20,10 +21,13 @@ import {
   executeContainedRun,
 } from "./contained-runtime-run.mjs";
 import {
+  CONTAINED_RUNTIME_SNAPSHOTTER,
   createContainedContainerdConfig,
   probeContainedShimSocketDirectory,
 } from "./contained-containerd-config.mjs";
 import { createContainedRuntimeEnvironment } from "./contained-runtime-environment.mjs";
+import { createContainedRuntimeLinearizer } from "./contained-runtime-linearizer.mjs";
+import { parseContainedRuntimeRequest } from "./contained-runtime-request.mjs";
 import { verifyPersistedContainedRootlessSpec } from "./contained-rootless-spec.mjs";
 
 const root = realpathSync(resolve(fileURLToPath(import.meta.url), "../.."));
@@ -45,11 +49,20 @@ const installRoot = resolve(
 const binRoot = resolve(installRoot, "bin");
 const runtimeWrapperRoot = resolve(root, "scripts/runtime-bin");
 const runcWrapper = resolve(runtimeWrapperRoot, "runc");
+const fuseMountWrapper = resolve(runtimeWrapperRoot, "mount.fuse3");
 const runcBinary = resolve(binRoot, "runc");
 const runcStateRoot = resolve(sessionRoot, "run/runc");
 const containerdSocket = resolve(sessionRoot, "run/containerd.sock");
 const commandSocket = resolve(sessionRoot, "run/runtime-command.sock");
 const clientFifoRoot = resolve(sessionRoot, "run/client-fifo");
+const snapshotterSocket = resolve(sessionRoot, "run/inner/fuse-overlayfs.sock");
+const snapshotterRoot = resolve(sessionRoot, "data/fuse-overlayfs");
+const rootlessSpecRoot = resolve(sessionRoot, "run/rootless-specs");
+const tmpfsMagic = 0x01021994;
+
+// RootlessKit's private copy-up mount may normalize the mountpoint mode.
+// Restore the exact private state-root mode before admitting runc.
+chmodSync(runcStateRoot, 0o700);
 
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
@@ -67,11 +80,13 @@ function sha256(value) {
 }
 
 const runcWrapperMetadata = statSync(runcWrapper);
+const fuseMountWrapperMetadata = statSync(fuseMountWrapper);
 const runtimeWrapperMetadata = statSync(runtimeWrapperRoot);
 const runcStateMetadata = statSync(runcStateRoot);
 const runtimeWrapperEntries = readdirSync(runtimeWrapperRoot).sort();
 if (
-  JSON.stringify(runtimeWrapperEntries) !== JSON.stringify(["runc"]) ||
+  JSON.stringify(runtimeWrapperEntries) !==
+    JSON.stringify(["mount.fuse3", "runc"]) ||
   !runtimeWrapperMetadata.isDirectory() ||
   runtimeWrapperMetadata.uid !== process.getuid() ||
   (runtimeWrapperMetadata.mode & 0o022) !== 0 ||
@@ -81,6 +96,12 @@ if (
   runcWrapperMetadata.uid !== process.getuid() ||
   (runcWrapperMetadata.mode & 0o100) === 0 ||
   (runcWrapperMetadata.mode & 0o022) !== 0 ||
+  lstatSync(fuseMountWrapper).isSymbolicLink() ||
+  realpathSync(fuseMountWrapper) !== fuseMountWrapper ||
+  !fuseMountWrapperMetadata.isFile() ||
+  fuseMountWrapperMetadata.uid !== process.getuid() ||
+  (fuseMountWrapperMetadata.mode & 0o100) === 0 ||
+  (fuseMountWrapperMetadata.mode & 0o022) !== 0 ||
   realpathSync(runcStateRoot) !== runcStateRoot ||
   !runcStateMetadata.isDirectory() ||
   runcStateMetadata.uid !== process.getuid() ||
@@ -107,6 +128,7 @@ const environment = createContainedRuntimeEnvironment({
 let runtimeState = "ACTIVE";
 let drainAttestationSha256;
 let drainReceipt;
+const requestLinearizer = createContainedRuntimeLinearizer();
 
 function lines(value) {
   return String(value ?? "")
@@ -213,7 +235,14 @@ function createDrainReceipt(args, stdin) {
   );
   const snapshots = spawnSync(
     ctr,
-    [...base, "snapshots", "--snapshotter", "native", "list", "--quiet"],
+    [
+      ...base,
+      "snapshots",
+      "--snapshotter",
+      CONTAINED_RUNTIME_SNAPSHOTTER,
+      "list",
+      "--quiet",
+    ],
     options,
   );
   const images = spawnSync(
@@ -277,7 +306,7 @@ function createDrainReceipt(args, stdin) {
             ...base,
             "snapshots",
             "--snapshotter",
-            "native",
+            CONTAINED_RUNTIME_SNAPSHOTTER,
             "info",
             snapshotIdentity,
           ],
@@ -335,8 +364,90 @@ const shimSocketBinding = createContainedContainerdConfig({
   configPath: resolve(sessionRoot, "config/containerd.toml"),
   repositoryRoot: root,
   shimSocketRoot: root,
+  snapshotterSocket,
 });
 await probeContainedShimSocketDirectory(shimSocketBinding);
+
+const snapshotterBinary = resolve(binRoot, "containerd-fuse-overlayfs-grpc");
+const fuseOverlayfsBinary = resolve(binRoot, "fuse-overlayfs");
+const snapshotterRootFilesystem = statfsSync(snapshotterRoot);
+const rootlessSpecFilesystem = statfsSync(rootlessSpecRoot);
+const runcStateFilesystem = statfsSync(runcStateRoot);
+if (
+  snapshotterRootFilesystem.type !== tmpfsMagic ||
+  rootlessSpecFilesystem.type !== tmpfsMagic ||
+  runcStateFilesystem.type !== tmpfsMagic
+) {
+  throw new Error("contained runtime private backing filesystem is invalid");
+}
+chmodSync(snapshotterRoot, 0o700);
+chmodSync(rootlessSpecRoot, 0o700);
+const snapshotterRootMetadata = statSync(snapshotterRoot);
+const rootlessSpecMetadata = statSync(rootlessSpecRoot);
+for (const [path, label] of [
+  [snapshotterBinary, "snapshotter"],
+  [fuseOverlayfsBinary, "fuse-overlayfs"],
+]) {
+  const metadata = lstatSync(path);
+  if (
+    metadata.isSymbolicLink() ||
+    !metadata.isFile() ||
+    metadata.uid !== process.getuid() ||
+    (metadata.mode & 0o100) === 0 ||
+    (metadata.mode & 0o022) !== 0 ||
+    realpathSync(path) !== path
+  ) {
+    throw new Error(`contained ${label} binary is invalid`);
+  }
+}
+if (
+  !snapshotterRootMetadata.isDirectory() ||
+  snapshotterRootMetadata.uid !== process.getuid() ||
+  (snapshotterRootMetadata.mode & 0o777) !== 0o700 ||
+  !rootlessSpecMetadata.isDirectory() ||
+  rootlessSpecMetadata.uid !== process.getuid() ||
+  (rootlessSpecMetadata.mode & 0o777) !== 0o700
+) {
+  throw new Error("contained snapshotter root is invalid");
+}
+
+const snapshotter = spawn(
+  snapshotterBinary,
+  [snapshotterSocket, snapshotterRoot],
+  {
+    cwd: root,
+    env: environment,
+    stdio: ["ignore", "inherit", "inherit"],
+  },
+);
+
+await new Promise((accept, reject) => {
+  let attempts = 0;
+  const timer = setInterval(() => {
+    attempts += 1;
+    try {
+      if (statSync(snapshotterSocket).isSocket()) {
+        clearInterval(timer);
+        accept();
+        return;
+      }
+    } catch {
+      // The snapshotter is still starting.
+    }
+    if (attempts >= 300) {
+      clearInterval(timer);
+      reject(new Error("contained snapshotter socket did not become ready"));
+    }
+  }, 100);
+  snapshotter.once("exit", (code, signal) => {
+    clearInterval(timer);
+    reject(
+      new Error(
+        `contained snapshotter exited during startup (${String(code ?? signal)})`,
+      ),
+    );
+  });
+});
 
 const containerd = spawn(
   resolve(binRoot, "containerd"),
@@ -387,7 +498,7 @@ await new Promise((accept, reject) => {
   });
 });
 
-const server = createServer((socket) => {
+const server = createServer({ allowHalfOpen: true }, (socket) => {
   const chunks = [];
   let total = 0;
   socket.setTimeout(1_800_000);
@@ -402,136 +513,129 @@ const server = createServer((socket) => {
   socket.on("timeout", () => socket.destroy());
   socket.on("error", () => undefined);
   socket.on("end", () => {
-    let response;
-    try {
-      const request = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-      if (
-        request === null ||
-        typeof request !== "object" ||
-        request.schemaVersion !== "1" ||
-        !Array.isArray(request.args) ||
-        request.args.length === 0 ||
-        request.args.length > 128 ||
-        request.args.some(
-          (argument) =>
-            typeof argument !== "string" ||
-            argument.length === 0 ||
-            argument.length > 8_192,
-        ) ||
-        typeof request.stdinBase64 !== "string"
-      ) {
-        throw new Error("contained runtime request is invalid");
-      }
-      const stdin = Buffer.from(request.stdinBase64, "base64");
-      if (stdin.byteLength > 8_192) {
-        throw new Error("contained runtime input exceeded its bound");
-      }
-      if (request.args[0] === "counterlab-drain") {
-        const receipt = createDrainReceipt(request.args, stdin);
-        response = {
-          schemaVersion: "1",
-          exitCode: 0,
-          stdoutBase64: Buffer.from(
-            `${canonicalJson(receipt)}\n`,
-            "utf8",
-          ).toString("base64"),
-          stderrBase64: "",
-        };
-      } else {
-        if (runtimeState !== "ACTIVE") {
-          throw new Error(
-            runtimeState === "DRAINED"
-              ? "contained runtime is drained"
-              : "contained runtime is draining",
-          );
-        }
-        const validation = spawnSync(
-          process.execPath,
-          [
-            resolve(root, "scripts/validate-contained-runtime-command.mjs"),
-            ...request.args,
-          ],
-          {
-            cwd: root,
-            env: environment,
-            encoding: "utf8",
-            stdio: ["ignore", "pipe", "pipe"],
-            timeout: 10_000,
-          },
+    void requestLinearizer.run(async () => {
+      let response;
+      try {
+        const request = parseContainedRuntimeRequest(
+          JSON.parse(Buffer.concat(chunks).toString("utf8")),
         );
-        if (validation.status !== 0) {
-          throw new Error(
-            "contained runtime command failed independent validation",
+        const stdin = request.stdin;
+        if (request.args[0] === "counterlab-drain") {
+          let receipt;
+          try {
+            receipt = createDrainReceipt(request.args, stdin);
+          } catch (error) {
+            if (runtimeState === "DRAINING" && drainReceipt === undefined) {
+              runtimeState = "ACTIVE";
+            }
+            throw error;
+          }
+          response = {
+            schemaVersion: "1",
+            exitCode: 0,
+            stdoutBase64: Buffer.from(
+              `${canonicalJson(receipt)}\n`,
+              "utf8",
+            ).toString("base64"),
+            stderrBase64: "",
+          };
+        } else {
+          if (runtimeState !== "ACTIVE") {
+            throw new Error(
+              runtimeState === "DRAINED"
+                ? "contained runtime is drained"
+                : "contained runtime is draining",
+            );
+          }
+          const validation = spawnSync(
+            process.execPath,
+            [
+              resolve(root, "scripts/validate-contained-runtime-command.mjs"),
+              ...request.args,
+            ],
+            {
+              cwd: root,
+              env: environment,
+              encoding: "utf8",
+              stdio: ["ignore", "pipe", "pipe"],
+              timeout: 10_000,
+            },
           );
-        }
-        const result =
-          request.args[0] === "run"
-            ? executeContainedRun({
-                args: request.args,
-                binRoot,
-                clientFifoRoot,
-                containerdSocket,
-                cwd: root,
-                environment,
-                installRoot,
-                sessionRoot,
-                stdin,
-              })
-            : spawnSync(
-                resolve(binRoot, "nerdctl"),
-                [
-                  "--address",
+          if (validation.status !== 0) {
+            throw new Error(
+              "contained runtime command failed independent validation",
+            );
+          }
+          const result =
+            request.args[0] === "run"
+              ? await executeContainedRun({
+                  args: request.args,
+                  binRoot,
+                  clientFifoRoot,
                   containerdSocket,
-                  "--namespace",
-                  "counterlab-v6.1",
-                  "--snapshotter",
-                  "native",
-                  "--data-root",
-                  resolve(sessionRoot, "data/nerdctl"),
-                  "--cgroup-manager",
-                  "cgroupfs",
-                  "--cni-path",
-                  resolve(installRoot, "libexec/cni"),
-                  "--cni-netconfpath",
-                  resolve(sessionRoot, "config/cni"),
-                  "--hosts-dir",
-                  resolve(sessionRoot, "config/certs.d"),
-                  "--experimental=false",
-                  ...request.args,
-                ],
-                {
                   cwd: root,
-                  env: environment,
-                  input: stdin,
-                  encoding: null,
-                  stdio: ["pipe", "pipe", "pipe"],
-                  timeout: 1_800_000,
-                  maxBuffer: 32 * 1024 * 1024,
-                },
-              );
+                  environment,
+                  installRoot,
+                  qualificationMode: request.qualificationMode,
+                  sessionRoot,
+                  stdin,
+                })
+              : spawnSync(
+                  resolve(binRoot, "nerdctl"),
+                  [
+                    "--address",
+                    containerdSocket,
+                    "--namespace",
+                    "counterlab-v6.1",
+                    "--snapshotter",
+                    CONTAINED_RUNTIME_SNAPSHOTTER,
+                    "--data-root",
+                    resolve(sessionRoot, "data/nerdctl"),
+                    "--cgroup-manager",
+                    "cgroupfs",
+                    "--cni-path",
+                    resolve(installRoot, "libexec/cni"),
+                    "--cni-netconfpath",
+                    resolve(sessionRoot, "config/cni"),
+                    "--hosts-dir",
+                    resolve(sessionRoot, "config/certs.d"),
+                    "--experimental=false",
+                    ...request.args,
+                  ],
+                  {
+                    cwd: root,
+                    env: environment,
+                    input: stdin,
+                    encoding: null,
+                    stdio: ["pipe", "pipe", "pipe"],
+                    timeout: 1_800_000,
+                    maxBuffer: 32 * 1024 * 1024,
+                  },
+                );
+          response = {
+            schemaVersion: "1",
+            exitCode: result.status ?? 1,
+            stdoutBase64: Buffer.from(result.stdout ?? "").toString("base64"),
+            stderrBase64: Buffer.from(result.stderr ?? "").toString("base64"),
+            ...(result.controlReceipt === undefined
+              ? {}
+              : { runControlReceipt: result.controlReceipt }),
+          };
+        }
+      } catch (error) {
         response = {
           schemaVersion: "1",
-          exitCode: result.status ?? 1,
-          stdoutBase64: Buffer.from(result.stdout ?? "").toString("base64"),
-          stderrBase64: Buffer.from(result.stderr ?? "").toString("base64"),
-          ...(result.controlReceipt === undefined
-            ? {}
-            : { runControlReceipt: result.controlReceipt }),
+          exitCode: 1,
+          stdoutBase64: "",
+          stderrBase64: Buffer.from(
+            error instanceof Error
+              ? `${error.message}\n`
+              : "contained runtime failure\n",
+          ).toString("base64"),
         };
       }
-    } catch (error) {
-      response = {
-        schemaVersion: "1",
-        exitCode: 1,
-        stdoutBase64: "",
-        stderrBase64: Buffer.from(
-          error instanceof Error
-            ? `${error.message}\n`
-            : "contained runtime failure\n",
-        ).toString("base64"),
-      };
-    }
-    socket.end(JSON.stringify(response));
+      socket.end(JSON.stringify(response));
+    });
   });
 });
 
@@ -546,11 +650,21 @@ await new Promise((accept, reject) => {
 const shutdown = () => {
   server.close();
   containerd.kill("SIGTERM");
+  snapshotter.kill("SIGTERM");
 };
 process.once("SIGINT", shutdown);
 process.once("SIGTERM", shutdown);
 containerd.once("exit", (code) => {
+  if (snapshotter.exitCode === null && snapshotter.signalCode === null) {
+    snapshotter.kill("SIGTERM");
+  }
   server.close(() => {
     process.exitCode = code ?? 1;
   });
+});
+snapshotter.once("exit", (code) => {
+  if (containerd.exitCode === null && containerd.signalCode === null) {
+    containerd.kill("SIGTERM");
+    process.exitCode = code ?? 1;
+  }
 });

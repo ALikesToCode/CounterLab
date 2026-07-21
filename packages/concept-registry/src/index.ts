@@ -143,6 +143,11 @@ export interface ConceptPackDefinition {
       scope: string;
       learnerFacingClaims: readonly string[];
     };
+    learningDirectorPresentation: {
+      scaffoldIds: readonly string[];
+      sceneRecipeIds: readonly string[];
+      boundaryViewIds: readonly string[];
+    };
   };
   verifierContract: {
     id: string;
@@ -1012,6 +1017,11 @@ const leakagePack = deepFreeze({
       scope: "unseen customers in the documented fixture",
       learnerFacingClaims: [leakageApprovedClaims[1]],
     },
+    learningDirectorPresentation: {
+      scaffoldIds: ["compare-splits", "hold-controls-fixed"],
+      sceneRecipeIds: ["entity-overlap-stage"],
+      boundaryViewIds: ["test-fraction-by-repeat-rate"],
+    },
   },
   verifierContract: {
     id: "leakage-plan-verifier-v2",
@@ -1129,6 +1139,11 @@ const imbalancePack = deepFreeze({
     defaultPresentation: {
       scope: "rare-event detection in the documented fixture",
       learnerFacingClaims: [imbalanceApprovedClaims[1]],
+    },
+    learningDirectorPresentation: {
+      scaffoldIds: ["compare-metrics", "hold-operating-point-fixed"],
+      sceneRecipeIds: ["confusion-matrix-stage"],
+      boundaryViewIds: ["threshold-by-prevalence"],
     },
   },
   verifierContract: {

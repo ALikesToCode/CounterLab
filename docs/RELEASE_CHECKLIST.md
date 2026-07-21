@@ -296,6 +296,13 @@ after the final source freeze.
 - [x] Playwright collection fails closed without CloakBrowser. Rerun and execute
       the complete final statically collected suite after source freeze; a
       static count is not rendered-browser evidence.
+- [x] Release-bound browser evidence finalization is source-complete at
+      `0ee8934`: schema-v3 raw evidence binds the exact deployed tuple and
+      journey telemetry; 40 journey receipts, ten `HUMAN_OBSERVATION` receipts,
+      the execution report, index, and qualification receipt are cross-bound;
+      bounded no-follow inputs, ignored staging, exclusive reservation, staged
+      hash verification, and no-replacement behavior are independently tested.
+      Public CloakBrowser execution remains 0 journeys and is not checked off.
 - [ ] Regenerate current scientific integrity bindings, source/image-bound
       engine evidence, and the normalized pnpm 11.13.1 production Node SBOM
       after the final source freeze. Current generated evidence is deliberately
@@ -320,15 +327,17 @@ after the final source freeze.
       requires two distinct fixed-result Metric bindings. Source-owned oracle,
       renderer, mutation, signed-binding, and Subject Pack scopes are covered;
       production and rendered-browser proof remain open.
-- [x] Dirty-tree broad verification: web Vitest 72/72 files and 558/558 tests;
-      root Vitest 615/642 across 52/58 files with 27 classified
+- [x] Dirty-tree broad verification: web Vitest 80/80 files and 656/656 tests;
+      root Vitest 740 passed, 27 failed, and 2 skipped across 67/73 files, with
+      the same 27 classified
       capability/stale-evidence failures; kernel Pytest 220/221 with one denied
       localhost-socket test; runner Pytest 75/75; repository, web, and Worker
       TypeScript passed; production build passed. The deterministic Sample
       Boundary and fixed Sample Proof Capsule checks pass, focused sample
       authority/UI tests pass 18/18, the repository secret scan passes across
-      1,384 files, and whitespace passes. Final scoped changed-file Prettier is
-      still pending. These are not frozen-release results.
+      1,384 files, and whitespace passes. Final scoped browser-finalizer
+      Prettier, 11-file secret scan, and whitespace checks pass. These are not
+      frozen-release results.
 - [x] Private patch/Capsule downloads now use authenticated fetch, strict byte
       and filename validation, bounded timeouts, browser-save initiation after
       validation, failure-without-telemetry semantics, and duplicate-action
@@ -340,7 +349,38 @@ after the final source freeze.
       015/016/017/048. Every item still needs exact public acceptance evidence.
       CL-023 remains partial because landing withholds result values while Judge
       shows the full fixed break and rendered comprehension is unmeasured.
-      CL-001, CL-006 (`NO_DATA`), and CL-024 remain open.
+      CL-024's bounded inquiry/presentation core is source-implemented with four
+      tools, three turns, and one persisted clarification. Signed-outcome
+      explanation and production/CloakBrowser execution remain open, so CL-024
+      is still partial. CL-001 and CL-006 (`NO_DATA`) remain open.
+- [x] Learning Director source gates: strict tools/output, registered references,
+      stateless continuation, `store:false`, hashed safety identifier, compact
+      provenance without provider response IDs, one optional clarification,
+      fixed UI labels, approval-envelope/Belief-Spec/Subject-Pack binding, edit
+      invalidation, and fail-open deterministic continuation pass focused and
+      full web tests. Production invocation remains unverified.
+- [x] Callback/privacy hardening: complete-field privacy inventory precedes the
+      64-field projection; Unicode canonical alias variants apply before
+      truncation; callback claims race cancellation before R2/verifier work;
+      cancelled callbacks perform zero object-store reads/writes in the
+      regression. Generated-output writes have an exact owner/path claim,
+      abandoned claims expire only after the bounded job deadline, and terminal
+      dispatch failure plus its evidence event commit atomically. Worker-owned
+      result, interactive, and Boundary Map authority events require the exact
+      active callback claim; ordinary event appends remain fenced. The complete
+      Worker API passes 110/110.
+- [x] Current dirty-tree learner source verification: App tests pass 87/87; the
+      API/repair/Boundary slice passes 57/57; complete web Vitest passes 84/84
+      files and 723/723 tests; repository, web client, generated Worker binding,
+      and Worker TypeScript pass; the production Vite/Worker build passes;
+      kernel Pytest passes 222/222; and the scientific vulnerability edge/unit
+      slice passes 16/16.
+- [ ] Current repository-wide gate: root TypeScript now passes. Root Vitest
+      reports 787 passed, 36 failed, and 2 skipped; every failure is confined to
+      two stale submission/scientific release-evidence files. Root Prettier is
+      blocked only by two unrelated untracked files, while targeted formatting
+      and `git diff --check` pass. Do not refresh source-bound evidence hashes
+      until the final clean source freezes.
 - [ ] Freeze one clean source commit, build one exact runner image, run startup,
       timeout-cleanup, no-secret, refusal, held-out, and negative-control gates,
       and issue one qualified receipt.
@@ -348,7 +388,7 @@ after the final source freeze.
       no normal-home credential read is permitted.
 - [ ] Deploy the exact qualified Container/Worker tuple and bind the active
       version to the release source, image, Worker, client, and receipt domains.
-- [ ] Execute production smoke plus all 31 CloakBrowser journeys, including
+- [ ] Execute production smoke plus all 40 CloakBrowser journeys, including
       desktop/mobile sample, replay, supported live, malformed/unsupported,
       refusal, transfer fail/pass, patch, Capsule, refresh/reconnect,
       back/forward, accessibility, console/network, and Web Vitals checks.
@@ -357,3 +397,9 @@ after the final source freeze.
       the qualified deployed tuple.
 - [ ] Review and commit each logical slice with the configured user identity,
       then fast-forward merge `feat/learner-ux-v6.1` into `main`.
+- [x] Preserve historical qualified v4/release-check v2/deployment v4 receipt
+      semantics and introduce strict v5/v3/v5 contracts for `OS_ENFORCED`
+      generation-filesystem isolation.
+- [ ] Persist and hash-bind the exact-image generation-isolation sentinel,
+      require its exact probe hash from the production runner, and propagate it
+      through new receipt versions without rewriting v5/v3/v5.

@@ -11,8 +11,8 @@ import {
 import styles from "./QuestionComposer.module.css";
 
 export const defaultSamplePrompts = [
-  "Why did my model score highly but fail on new customers?",
-  "Could repeated customers make my test score look better than it is?",
+  "Does this evaluation match how the model will be used?",
+  "Could the headline score hide an important failure case?",
 ] as const;
 
 export type QuestionComposerProps = {
@@ -129,7 +129,7 @@ export function QuestionComposer({
             disabled={busy || value.trim().length === 0}
           >
             <span className={styles.submitText}>
-              {busy ? "Preparing test…" : "Test this claim"}
+              {busy ? "Working…" : "Test this claim"}
             </span>
             <span aria-hidden="true">→</span>
           </button>

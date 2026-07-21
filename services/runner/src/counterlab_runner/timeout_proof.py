@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -11,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from .docker import (
+    CONTAINED_PROCESS_ADDRESS_SPACE_BYTES,
     CONTAINED_RUNTIME_POLICY_SHA256,
     DockerAdapterExecutor,
     DockerExecutionError,
@@ -26,6 +28,7 @@ _DIGEST = re.compile(r"^sha256:[a-f0-9]{64}$")
 _SOURCE_COMMIT = re.compile(r"^[a-f0-9]{40}$")
 _SESSION_ID = re.compile(r"^rt-[a-z0-9][a-z0-9-]{7,13}$")
 _QUALIFIED_AGGREGATE_LIMIT_MODE = "container-cgroup-and-process-rlimit"
+_AGGREGATE_TIMEOUT_QUALIFICATION_MODE = "aggregate-timeout-proof-v1"
 _BUILD_KEYS = {
     "schemaVersion",
     "status",
@@ -56,31 +59,34 @@ _BUILD_KEYS = {
     "buildkitConfigSha256",
     "builtAt",
 }
-_CONTROL_KEYS = {
-    "schemaVersion",
-    "status",
-    "timeoutKind",
-    "runtimePolicySha256",
-    "invocationId",
-    "finalContainerId",
-    "commandSha256",
-    "rootlessReceiptFileSha256",
-    "rootlessReceiptPayloadSha256",
-    "timeoutObserved",
-    "candidateWallSeconds",
-    "elapsedMs",
-    "cleanupReserveMs",
-    "taskAbsent",
-    "containerAbsent",
-    "snapshotAbsent",
-    "invocationAliasAbsent",
-    "imageRootfsAbsent",
-    "persistedAuthorityVerified",
-    "readOnlyMountsUnchanged",
-    "imageRootfsUnchanged",
-    "resultReleased",
-    "receiptPayloadSha256",
-}
+_CONTROL_V2_KEYS = frozenset(
+    {
+        "schemaVersion",
+        "status",
+        "timeoutKind",
+        "runtimePolicySha256",
+        "invocationId",
+        "finalContainerId",
+        "commandSha256",
+        "rootlessReceiptFileSha256",
+        "rootlessReceiptPayloadSha256",
+        "timeoutObserved",
+        "candidateWallSeconds",
+        "elapsedMs",
+        "cleanupReserveMs",
+        "taskAbsent",
+        "containerAbsent",
+        "snapshotAbsent",
+        "invocationAliasAbsent",
+        "imageRootfsAbsent",
+        "persistedAuthorityVerified",
+        "readOnlyMountsUnchanged",
+        "imageRootfsUnchanged",
+        "resultReleased",
+        "receiptPayloadSha256",
+    }
+)
+_CONTROL_V3_KEYS = _CONTROL_V2_KEYS | {"qualificationMode"}
 _ATTESTATION_KEYS = {
     "schemaVersion",
     "status",
@@ -146,8 +152,16 @@ _CLEANUP_FIELDS = (
     "readOnlyMountsUnchanged",
     "imageRootfsUnchanged",
 )
-_TIMEOUT_PUBLIC_TEST = """import time
+def _timeout_public_test(address_space_bytes: int) -> str:
+    if not _safe_integer(address_space_bytes, positive=True):
+        raise RuntimeError("timeout address-space expectation is invalid")
+    return f"""import resource
+import time
 
+expected = ({address_space_bytes}, {address_space_bytes})
+observed = resource.getrlimit(resource.RLIMIT_AS)
+if observed != expected:
+    raise AssertionError(f"address-space limit mismatch: {{observed!r}}")
 time.sleep(5)
 raise AssertionError("timeout cleanup sentinel unexpectedly survived")
 """
@@ -302,11 +316,24 @@ def validate_control_receipt(
     expected_wall_seconds: int = 1,
     expected_runtime_policy_sha256: str = CONTAINED_RUNTIME_POLICY_SHA256,
 ) -> dict[str, Any]:
-    if not isinstance(value, dict) or set(value) != _CONTROL_KEYS:
+    if not isinstance(value, dict):
+        raise RuntimeError("timeout control receipt shape is invalid")
+    schema_version = value.get("schemaVersion")
+    if schema_version == "2":
+        expected_keys = _CONTROL_V2_KEYS
+    elif schema_version == "3":
+        expected_keys = _CONTROL_V3_KEYS
+    else:
+        raise RuntimeError("timeout control receipt shape is invalid")
+    if set(value) != expected_keys:
         raise RuntimeError("timeout control receipt shape is invalid")
     payload = {key: entry for key, entry in value.items() if key != "receiptPayloadSha256"}
     if (
-        value.get("schemaVersion") != "2"
+        (
+            schema_version == "3"
+            and value.get("qualificationMode")
+            != _AGGREGATE_TIMEOUT_QUALIFICATION_MODE
+        )
         or value.get("status") != "TIMED_OUT_CLEAN"
         or value.get("timeoutKind") != "WALL_CLOCK"
         or value.get("runtimePolicySha256")
@@ -318,10 +345,14 @@ def validate_control_receipt(
         or not _SHA256.fullmatch(str(value.get("rootlessReceiptPayloadSha256", "")))
         or value.get("timeoutObserved") is not True
         or value.get("candidateWallSeconds") != expected_wall_seconds
+        or not isinstance(value.get("candidateWallSeconds"), int)
+        or isinstance(value.get("candidateWallSeconds"), bool)
         or not isinstance(value.get("elapsedMs"), int)
+        or isinstance(value.get("elapsedMs"), bool)
         or value["elapsedMs"] < 1
         or value["elapsedMs"] > 600_000
         or not isinstance(value.get("cleanupReserveMs"), int)
+        or isinstance(value.get("cleanupReserveMs"), bool)
         or value["cleanupReserveMs"] < 1
         or any(value.get(field) is not True for field in _CLEANUP_FIELDS)
         or value.get("resultReleased") is not False
@@ -331,6 +362,20 @@ def validate_control_receipt(
     ):
         raise RuntimeError("timeout control receipt is not clean and bound")
     return value
+
+
+def _rootless_receipt_name(control: dict[str, Any]) -> str:
+    if control.get("schemaVersion") == "2":
+        suffix = "receipt.json"
+    elif (
+        control.get("schemaVersion") == "3"
+        and control.get("qualificationMode")
+        == _AGGREGATE_TIMEOUT_QUALIFICATION_MODE
+    ):
+        suffix = "qualified-receipt.json"
+    else:
+        raise RuntimeError("timeout control receipt qualification is invalid")
+    return f"{control['finalContainerId']}.{suffix}"
 
 
 def validate_rootless_receipt(
@@ -399,23 +444,41 @@ def validate_rootless_receipt(
         or authority.get("sourceTreeSha256") != build["sourceTreeSha256"]
         or authority.get("configDigest") != build["adapterImageDigest"]
         or authority.get("manifestDigest") != build["adapterManifestDigest"]
-        or not _validate_enforced_rlimits(value.get("enforcedRlimits"))
+        or not _validate_enforced_rlimits(
+            value.get("enforcedRlimits"), value.get("intendedAggregateLimits")
+        )
     ):
         raise RuntimeError("rootless receipt authority is invalid")
     return value
 
 
-def _validate_enforced_rlimits(value: object) -> bool:
+def _validate_enforced_rlimits(value: object, intended: object) -> bool:
     required = {
         "RLIMIT_AS",
-        "RLIMIT_CORE",
         "RLIMIT_CPU",
         "RLIMIT_FSIZE",
+        "RLIMIT_NOFILE",
         "RLIMIT_NPROC",
     }
-    if not isinstance(value, list) or len(value) != len(required):
+    if (
+        not isinstance(intended, dict)
+        or set(intended) != {"cpuCount", "maxProcesses", "memoryBytes"}
+        or not isinstance(intended.get("cpuCount"), (int, float))
+        or isinstance(intended.get("cpuCount"), bool)
+        or not math.isfinite(intended["cpuCount"])
+        or not 0.25 <= intended["cpuCount"] <= 2
+        or not _safe_integer(intended.get("maxProcesses"), positive=True)
+        or not 1 <= intended["maxProcesses"] <= 32
+        or not _safe_integer(intended.get("memoryBytes"), positive=True)
+        or not 64 * 1024 * 1024
+        <= intended["memoryBytes"]
+        <= 1024 * 1024 * 1024
+        or not isinstance(value, list)
+        or len(value) != len(required)
+    ):
         return False
     observed: set[str] = set()
+    by_type: dict[str, int] = {}
     for entry in value:
         if (
             not isinstance(entry, dict)
@@ -427,7 +490,15 @@ def _validate_enforced_rlimits(value: object) -> bool:
         ):
             return False
         observed.add(entry["type"])
-    return observed == required
+        by_type[entry["type"]] = entry["soft"]
+    return (
+        observed == required
+        and by_type["RLIMIT_AS"] == CONTAINED_PROCESS_ADDRESS_SPACE_BYTES
+        and by_type["RLIMIT_NPROC"] == intended["maxProcesses"]
+        and by_type["RLIMIT_NOFILE"] == 64
+        and 1 <= by_type["RLIMIT_CPU"] <= 300
+        and 1 <= by_type["RLIMIT_FSIZE"] <= 1_048_576
+    )
 
 
 def _safe_integer(value: object, *, positive: bool = False) -> bool:
@@ -457,6 +528,7 @@ def _validate_aggregate_limit_evidence(
         "cgroupIdentity",
         "invocationId",
         "finalContainerId",
+        "finalizationPayloadSha256",
         "sanitizedSpecSha256",
         "runtimeAttestationSha256",
         "observedLimits",
@@ -509,14 +581,15 @@ def _validate_aggregate_limit_evidence(
     cpu_control = controls.get("cpu")
     member_pids = membership.get("memberPids")
     if (
-        value.get("schemaVersion") != "1"
+        value.get("schemaVersion") != "2"
         or value.get("status") != "OBSERVED"
         or value.get("authority") != "linux-cgroup-v2"
         or value.get("cgroupVersion") != 2
         or value.get("invocationId") != invocation_id
         or value.get("finalContainerId") != final_container_id
+        or not _SHA256.fullmatch(str(value.get("finalizationPayloadSha256", "")))
         or value.get("cgroupId") != f"counterlab-v6.1-{invocation_id}"
-        or value.get("cgroupPath") != f"counterlab-v6.1/{invocation_id}"
+        or value.get("cgroupPath") != f"counterlab-v6.1-{invocation_id}"
         or value.get("sanitizedSpecSha256") != sanitized_spec_sha256
         or not _SHA256.fullmatch(str(value.get("sanitizedSpecSha256", "")))
         or not _SHA256.fullmatch(str(value.get("runtimeAttestationSha256", "")))
@@ -579,7 +652,8 @@ def _validate_aggregate_limit_evidence(
             for field in ("requestedBytes", "oomKillBefore", "oomKillAfter")
         )
         or memory_control.get("requestedBytes") <= intended["memoryBytes"]
-        or memory_control.get("oomKillAfter") <= memory_control.get("oomKillBefore")
+        or memory_control.get("oomKillAfter")
+        != memory_control.get("oomKillBefore") + 1
         or memory_control.get("enforced") is not True
         or not all(
             _safe_integer(
@@ -809,6 +883,9 @@ def run_timeout_cleanup_proof(
     if not isinstance(limits, dict):
         raise RuntimeError("fixed timeout plan has no resource limits")
     limits["wallSeconds"] = 1
+    memory_mb = limits.get("memoryMb")
+    if not _safe_integer(memory_mb, positive=True):
+        raise RuntimeError("fixed timeout plan has no memory limit")
     _write_new(
         workspace / "experiment-plan.json",
         f"{json.dumps(plan, indent=2, sort_keys=True)}\n",
@@ -817,7 +894,10 @@ def run_timeout_cleanup_proof(
         encoding="utf-8"
     )
     _write_new(workspace / "artifact-adapter.py", adapter_source)
-    _write_new(workspace / "public_tests.py", _TIMEOUT_PUBLIC_TEST)
+    _write_new(
+        workspace / "public_tests.py",
+        _timeout_public_test(CONTAINED_PROCESS_ADDRESS_SPACE_BYTES),
+    )
     artifacts = validate_generated_workspace(workspace, generated_root)
 
     run_root = work / "runs"
@@ -883,7 +963,7 @@ def run_timeout_cleanup_proof(
         or _sha256_file(rootless_path) != expected_rootless_sha256
     ):
         raise RuntimeError("timeout proof exception receipt hashes changed")
-    if rootless_path.name != f"{control['finalContainerId']}.receipt.json":
+    if rootless_path.name != _rootless_receipt_name(control):
         raise RuntimeError("timeout control and rootless receipt IDs disagree")
     if _sha256_file(rootless_path) != control["rootlessReceiptFileSha256"]:
         raise RuntimeError("rootless receipt file hash changed")

@@ -17,6 +17,31 @@ export type ReflectionClauseSelection = Readonly<{
 
 type ClauseKey = keyof ReflectionClauseSelection;
 
+export function isMeaningfulLearnerText(value: string): boolean {
+  const normalized = value.trim().toLocaleLowerCase();
+  if (
+    ["not sure", "i don't know", "i do not know", "no idea", "idk"].includes(
+      normalized.replace(/[.!?]+$/u, ""),
+    )
+  ) {
+    return false;
+  }
+  const words = value.match(/\p{L}[\p{L}\p{N}'-]*/gu) ?? [];
+  const distinctWords = new Set(words.map((word) => word.toLocaleLowerCase()));
+  const letterNumberCharacters = [...normalized].filter((character) =>
+    /[\p{L}\p{N}]/u.test(character),
+  );
+  const continuousScriptStatement =
+    words.length === 1 &&
+    letterNumberCharacters.length >= 8 &&
+    new Set(letterNumberCharacters).size >= 3;
+  return (
+    normalized.length >= 12 &&
+    ((words.length >= 3 && distinctWords.size >= 2) ||
+      continuousScriptStatement)
+  );
+}
+
 function withoutTerminalPunctuation(value: string): string {
   return value.trim().replace(/[.,;:!?]+$/u, "");
 }
@@ -68,6 +93,7 @@ export function ReflectionBuilder({
   onAuthoringModeChange?: (mode: "clauses" | "free_text") => void;
 }) {
   const instanceId = useId();
+  const revisionStatusId = `${instanceId}-revision-status`;
   const [mode, setMode] = useState<"clauses" | "free_text">("clauses");
   const [selection, setSelection] = useState<ReflectionClauseSelection>(() => ({
     whenId: initialSelection?.whenId ?? "",
@@ -222,6 +248,7 @@ export function ReflectionBuilder({
           maxLength={4_000}
           value={value}
           disabled={disabled}
+          aria-describedby={revisionStatusId}
           placeholder={placeholder}
           onChange={(event) => {
             const nextRevision = event.target.value;
@@ -230,6 +257,18 @@ export function ReflectionBuilder({
           }}
         />
       </label>
+      <p
+        id={revisionStatusId}
+        className={styles.freeNote}
+        role="status"
+        aria-live="polite"
+      >
+        {value.trim().length === 0
+          ? "Write a specific condition, action, and evidence-based reason."
+          : isMeaningfulLearnerText(value)
+            ? "This rule is specific enough to continue, and you can still revise it."
+            : "Add a specific condition, action, or reason before continuing."}
+      </p>
     </section>
   );
 }

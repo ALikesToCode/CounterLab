@@ -6,6 +6,7 @@ import {
   readFileSync,
   readdirSync,
   realpathSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -21,6 +22,7 @@ import {
   containedRunPlan,
   executeContainedRun,
   validateContainedImageRootfsSnapshot,
+  validateContainedRunnerRootfsPermissions,
   validateContainedRunControlReceipt,
 } from "./contained-runtime-run.mjs";
 import {
@@ -40,10 +42,12 @@ import {
 } from "./contained-rootless-spec.mjs";
 import {
   CONTAINERD_SHIM_SOCKET_DIR_MAX_LENGTH,
+  CONTAINED_RUNTIME_SNAPSHOTTER,
   createContainedContainerdConfig,
   renderContainedContainerdConfig,
 } from "./contained-containerd-config.mjs";
 import { createContainedRuntimeEnvironment } from "./contained-runtime-environment.mjs";
+import { AGGREGATE_TIMEOUT_QUALIFICATION_MODE } from "./contained-runtime-request.mjs";
 
 const root = process.cwd();
 const validator = resolve(
@@ -102,7 +106,7 @@ function startupCommand(): string[] {
     "--memory-swap=1024m",
     "--cpus=2.0",
     "--ulimit=cpu=300:300",
-    "--ulimit=as=1073741824:1073741824",
+    "--ulimit=as=2147483648:2147483648",
     "--ulimit=fsize=1048576:1048576",
     "--ulimit=nofile=64:64",
     "--ulimit=nproc=32:32",
@@ -140,7 +144,7 @@ function scientificRuntimeCommand(): string[] {
     "--memory-swap=1024m",
     "--cpus=2.0",
     "--ulimit=cpu=300:300",
-    "--ulimit=as=1073741824:1073741824",
+    "--ulimit=as=2147483648:2147483648",
     "--ulimit=fsize=1048576:1048576",
     "--ulimit=nofile=64:64",
     "--ulimit=nproc=32:32",
@@ -186,7 +190,7 @@ function reachabilityCommand(): string[] {
     "--memory-swap=1024m",
     "--cpus=2.0",
     "--ulimit=cpu=300:300",
-    "--ulimit=as=1073741824:1073741824",
+    "--ulimit=as=2147483648:2147483648",
     "--ulimit=fsize=1048576:1048576",
     "--ulimit=nofile=64:64",
     "--ulimit=nproc=32:32",
@@ -234,7 +238,7 @@ function boundedAdapterCommand(): string[] {
     "--memory-swap=512m",
     "--cpus=1.0",
     "--ulimit=cpu=20:20",
-    "--ulimit=as=536870912:536870912",
+    "--ulimit=as=2147483648:2147483648",
     "--ulimit=fsize=262144:262144",
     "--ulimit=nofile=64:64",
     "--ulimit=nproc=16:16",
@@ -552,8 +556,8 @@ function rootlessSpec(
     `--hosts-dir=[${resolve(expected.sessionRoot, "config/certs.d")}]`,
     "--n=counterlab-v6.1",
     "--namespace=counterlab-v6.1",
-    "--snapshotter=native",
-    "--storage-driver=native",
+    `--snapshotter=${CONTAINED_RUNTIME_SNAPSHOTTER}`,
+    `--storage-driver=${CONTAINED_RUNTIME_SNAPSHOTTER}`,
     "internal",
     "oci-hook",
   ];
@@ -587,7 +591,9 @@ function rootlessSpec(
       env: [...authority.process.env, `HOSTNAME=${containerId.slice(0, 12)}`],
       cwd: authority.process.cwd,
       capabilities: {},
-      rlimits: expected.rlimits,
+      // Model the exact raw nerdctl spec; RLIMIT_AS is injected only after
+      // this staging document passes the contained-runtime policy.
+      rlimits: expected.rlimits.filter((entry) => entry.type !== "RLIMIT_AS"),
       noNewPrivileges: true,
     },
     root: { path: "rootfs", readonly: true },
@@ -742,7 +748,7 @@ function containerMetadata(
     Labels: labels,
     Runtime: { Name: "io.containerd.runc.v2" },
     SnapshotKey: containerId,
-    Snapshotter: "native",
+    Snapshotter: CONTAINED_RUNTIME_SNAPSHOTTER,
   });
 }
 
@@ -778,9 +784,215 @@ function absentInspectionResponses() {
   return [successful(), missing(), missing()];
 }
 
+function qualifiedRuntimeHarness() {
+  const sessionRoot = resolve(root, ".rt/rt-validator-qualified");
+  const installRoot = resolve(
+    root,
+    "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
+  );
+  const command = boundedAdapterCommand();
+  const plan = containedRunPlan({
+    args: command,
+    binRoot: resolve(installRoot, "bin"),
+    clientFifoRoot: resolve(sessionRoot, "run/client-fifo"),
+    containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+    installRoot,
+    invocationId,
+    sessionRoot,
+  });
+  const fixture = imageFixture(command);
+  const stagingContainerId = "d".repeat(64);
+  let finalContainerId = "";
+  const alias = plan.imageAlias;
+  const imageRootfsPath = resolve(
+    sessionRoot,
+    `run/rootless-specs/${invocationId}.image-rootfs`,
+  );
+  const events: string[] = [];
+  const commandTimeouts: { create?: number; run?: number } = {};
+  let aliasPresent = false;
+  let imageRootfsMounted = false;
+  let stagingPresent = true;
+  let taskPresent = false;
+  let containerPresent = false;
+  let baseSpecSha256 = "";
+
+  writeFileSync(resolve(output, "public-tests.stdout"), "", { mode: 0o600 });
+  writeFileSync(resolve(output, "public-tests.stderr"), "", { mode: 0o600 });
+
+  const fakeSpawn = (
+    _program: string,
+    args: string[],
+    _options: { timeout: number },
+  ) => {
+    const joined = args.join(" ");
+    if (joined.includes("image inspect docker.io/library/counterlab-adapter")) {
+      return successful(fixture.targetSource);
+    }
+    if (joined.includes(`content get ${fixture.manifestDigest}`)) {
+      return successful(fixture.manifestSource);
+    }
+    if (joined.includes(`content get ${fixture.configDigest}`)) {
+      return successful(fixture.configSource);
+    }
+    if (joined.includes(`images inspect ${alias}`)) {
+      return aliasPresent ? successful("{}") : missing();
+    }
+    if (joined.includes(`image inspect ${alias}`)) {
+      return successful(aliasMetadata(alias, fixture));
+    }
+    if (joined.includes("images tag")) {
+      aliasPresent = true;
+      return successful();
+    }
+    if (joined.includes(`images remove ${alias}`)) {
+      events.push("alias-cleaned");
+      aliasPresent = false;
+      return successful();
+    }
+    if (joined.includes("images mount")) {
+      imageRootfsMounted = true;
+      return successful(
+        `${fixture.authority.rootfsChainId}\n${imageRootfsPath}\n`,
+      );
+    }
+    if (joined.includes("images unmount")) {
+      events.push("rootfs-cleaned");
+      imageRootfsMounted = false;
+      return successful(`${imageRootfsPath}\n`);
+    }
+    if (joined.includes(" create ")) {
+      commandTimeouts.create = _options.timeout;
+      return successful(`${stagingContainerId}\n`);
+    }
+    if (args.includes("--spec")) {
+      return successful(
+        rootlessSpec(stagingContainerId, plan.expected, fixture.authority),
+      );
+    }
+    if (joined.includes("containers info")) {
+      const id = args.at(-1);
+      if (id === stagingContainerId) {
+        return stagingPresent
+          ? successful(containerMetadata(stagingContainerId, alias))
+          : missing();
+      }
+      if (id === finalContainerId) {
+        return containerPresent
+          ? successful(
+              configContainerMetadata(finalContainerId, baseSpecSha256),
+            )
+          : missing();
+      }
+      return missing();
+    }
+    if (joined.includes("tasks list")) {
+      return successful(taskPresent ? `${finalContainerId}\n` : "");
+    }
+    if (joined.includes("snapshots") && joined.includes(" diff ")) {
+      return successful("stable-rootfs-diff");
+    }
+    if (joined.includes("snapshots") && joined.includes(" info ")) {
+      const id = args.at(-1);
+      if (id === imageRootfsPath) {
+        return imageRootfsMounted
+          ? successful(
+              imageRootfsSnapshotMetadata(
+                imageRootfsPath,
+                fixture.authority.rootfsChainId,
+              ),
+            )
+          : missing();
+      }
+      return missing();
+    }
+    if (joined.includes(" rm --force ")) {
+      stagingPresent = false;
+      return successful();
+    }
+    if (joined.includes(" run ")) {
+      commandTimeouts.run = _options.timeout;
+      events.push("candidate-started");
+      taskPresent = true;
+      containerPresent = true;
+      const label = args.find((entry) =>
+        entry.startsWith("io.counterlab.runtime.base-spec-sha256="),
+      );
+      baseSpecSha256 = label!.split("=", 2)[1]!;
+      const timeoutError = Object.assign(new Error("candidate timed out"), {
+        code: "ETIMEDOUT",
+      });
+      return {
+        status: null,
+        stdout: Buffer.alloc(0),
+        stderr: Buffer.alloc(0),
+        error: timeoutError,
+      };
+    }
+    if (joined.includes("tasks delete")) {
+      events.push("task-cleaned");
+      taskPresent = false;
+      return successful();
+    }
+    if (joined.includes("containers delete")) {
+      events.push("container-cleaned");
+      containerPresent = false;
+      return successful();
+    }
+    throw new Error(`unexpected mock command: ${joined}`);
+  };
+
+  return {
+    context: {
+      args: command,
+      binRoot: resolve(installRoot, "bin"),
+      clientFifoRoot: resolve(sessionRoot, "run/client-fifo"),
+      containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+      cwd: root,
+      environment: process.env,
+      installRoot,
+      qualificationMode: AGGREGATE_TIMEOUT_QUALIFICATION_MODE,
+      sessionRoot,
+      stdin: Buffer.alloc(0),
+    },
+    commandTimeouts,
+    events,
+    fakeSpawn,
+    get finalContainerId() {
+      return finalContainerId;
+    },
+    imageRootfsPath,
+    persistSpec: ({
+      finalContainerId: persistedFinalContainerId,
+      receipt,
+      sessionRoot: persistedSessionRoot,
+    }: {
+      finalContainerId: string;
+      receipt: Record<string, unknown>;
+      sessionRoot: string;
+    }) => {
+      finalContainerId = persistedFinalContainerId;
+      return {
+        configFileSha256: String(receipt.configFileSha256),
+        configPath: resolve(
+          persistedSessionRoot,
+          `run/rootless-specs/${finalContainerId}.config.json`,
+        ),
+        imageRootfsPath,
+        receiptFileSha256: "4".repeat(64),
+        receiptPath: resolve(
+          persistedSessionRoot,
+          `run/rootless-specs/${finalContainerId}.receipt.json`,
+        ),
+      };
+    },
+  };
+}
+
 describe("contained runtime command policy", () => {
   it("renders a bounded containerd shim manager configuration", () => {
-    const config = renderContainedContainerdConfig(root);
+    const snapshotterSocket = resolve(root, ".rt/runtime-snapshotter.sock");
+    const config = renderContainedContainerdConfig(root, snapshotterSocket);
 
     expect(root.length).toBeLessThanOrEqual(
       CONTAINERD_SHIM_SOCKET_DIR_MAX_LENGTH,
@@ -789,11 +1001,21 @@ describe("contained runtime command policy", () => {
     expect(config).toContain("imports = []");
     expect(config).toContain("[plugins.'io.containerd.shim.v1.manager']");
     expect(config).toContain(`socket_dir = '${root}'`);
+    expect(config).toContain(
+      `[proxy_plugins.'${CONTAINED_RUNTIME_SNAPSHOTTER}']`,
+    );
+    expect(config).toContain(`address = '${snapshotterSocket}'`);
+    expect(config).toContain(
+      `snapshotter = "${CONTAINED_RUNTIME_SNAPSHOTTER}"`,
+    );
     expect(config).toContain("'io.containerd.grpc.v1.cri'");
     expect(config).toContain("'io.containerd.nri.v1.nri'");
     expect(() =>
-      renderContainedContainerdConfig(resolve(root, "shim-sockets")),
-    ).toThrow(/directory is invalid/u);
+      renderContainedContainerdConfig(
+        resolve(root, "shim-sockets"),
+        snapshotterSocket,
+      ),
+    ).toThrow(/socket configuration is invalid/u);
   });
 
   it("configures the full Linux shim socket path in the repository", () => {
@@ -807,12 +1029,32 @@ describe("contained runtime command policy", () => {
       configPath: resolve(fixtureRoot, "containerd.toml"),
       repositoryRoot: root,
       shimSocketRoot: root,
+      snapshotterSocket: resolve(fixtureRoot, "fuse-overlayfs.sock"),
     });
     expect(binding.shimSocketDirectory.length).toBeLessThanOrEqual(42);
     expect(realpathSync(binding.shimSocketDirectory)).toBe(realpathSync(root));
     expect(
       readFileSync(resolve(fixtureRoot, "containerd.toml"), "utf8"),
     ).toContain(`socket_dir = '${binding.shimSocketDirectory}'`);
+  });
+
+  it("characterizes a distinct shim host root as rejected", () => {
+    const fixtureParent = resolve(
+      root,
+      "node_modules/.cache/counterlab-v6.1/tmp/containerd-config-tests",
+    );
+    mkdirSync(fixtureParent, { recursive: true, mode: 0o700 });
+    const sourceRoot = mkdtempSync(resolve(fixtureParent, "source-"));
+    const shimHostRoot = mkdtempSync(resolve(fixtureParent, "host-"));
+
+    expect(() =>
+      createContainedContainerdConfig({
+        configPath: resolve(sourceRoot, "containerd.toml"),
+        repositoryRoot: sourceRoot,
+        shimSocketRoot: shimHostRoot,
+        snapshotterSocket: resolve(sourceRoot, "fuse-overlayfs.sock"),
+      }),
+    ).toThrow(/configuration escaped the repository/u);
   });
 
   beforeAll(() => {
@@ -834,7 +1076,7 @@ describe("contained runtime command policy", () => {
     symlinkSync(logTarget, runcLogSymlink);
   });
 
-  it("accepts only a self-hashed clean timeout control receipt", () => {
+  it("accepts only self-hashed timeout controls with exact v2 or qualified v3 shape", () => {
     const payload = {
       schemaVersion: "2",
       status: "TIMED_OUT_CLEAN",
@@ -867,6 +1109,32 @@ describe("contained runtime command policy", () => {
     };
 
     expect(validateContainedRunControlReceipt(receipt)).toEqual(receipt);
+    const qualifiedPayload = {
+      ...payload,
+      schemaVersion: "3",
+      qualificationMode: AGGREGATE_TIMEOUT_QUALIFICATION_MODE,
+    } as const;
+    const qualifiedReceipt = {
+      ...qualifiedPayload,
+      receiptPayloadSha256: createHash("sha256")
+        .update(canonicalJson(qualifiedPayload))
+        .digest("hex"),
+    };
+    expect(validateContainedRunControlReceipt(qualifiedReceipt)).toEqual(
+      qualifiedReceipt,
+    );
+    expect(() =>
+      validateContainedRunControlReceipt({
+        ...qualifiedReceipt,
+        qualificationMode: "unknown",
+      }),
+    ).toThrow(/qualification|binding/u);
+    expect(() =>
+      validateContainedRunControlReceipt({
+        ...receipt,
+        qualificationMode: AGGREGATE_TIMEOUT_QUALIFICATION_MODE,
+      }),
+    ).toThrow(/shape/u);
     expect(() =>
       validateContainedRunControlReceipt({
         ...receipt,
@@ -883,6 +1151,229 @@ describe("contained runtime command policy", () => {
       }),
     ).toThrow(/status/u);
   });
+
+  it("rejects an unknown qualification mode before invoking the runtime", async () => {
+    let spawned = false;
+    const result = await executeContainedRun(
+      {
+        args: startupCommand(),
+        binRoot: resolve(root, "node_modules/.cache/unused/bin"),
+        clientFifoRoot: resolve(root, ".rt/unused/client-fifo"),
+        containerdSocket: resolve(root, ".rt/unused/containerd.sock"),
+        cwd: root,
+        environment: process.env,
+        installRoot: resolve(root, "node_modules/.cache/unused"),
+        qualificationMode: "unknown" as never,
+        sessionRoot: resolve(root, ".rt/unused"),
+        stdin: Buffer.alloc(0),
+      },
+      () => {
+        spawned = true;
+        throw new Error("invalid qualification mode must not reach spawn");
+      },
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr.toString("utf8")).toContain(
+      "qualification mode is invalid",
+    );
+    expect(spawned).toBe(false);
+  });
+
+  it("reserves the candidate wall-clock limit for the candidate process", async () => {
+    const harness = qualifiedRuntimeHarness();
+    const rootfsModes: number[] = [];
+    const coordinator = {
+      async begin(input: { finalContainerId: string; invocationId: string }) {
+        return input;
+      },
+      async waitForDraft() {
+        return { receiptPayloadSha256: "6".repeat(64) };
+      },
+      async complete() {
+        return {
+          qualificationArtifacts: {},
+          qualifiedReceipt: {},
+          qualifiedReceiptFileSha256: "7".repeat(64),
+          qualifiedReceiptPath: resolve(
+            harness.context.sessionRoot,
+            `run/rootless-specs/${harness.finalContainerId}.qualified-receipt.json`,
+          ),
+          qualifiedReceiptPayloadSha256: "8".repeat(64),
+        };
+      },
+    };
+
+    await executeContainedRun(
+      harness.context,
+      harness.fakeSpawn,
+      harness.persistSpec,
+      () => undefined,
+      () => invocationId,
+      undefined,
+      coordinator,
+      () => undefined,
+      (_plan, _path, mode) => rootfsModes.push(mode),
+    );
+
+    expect(harness.commandTimeouts.create).toBeGreaterThan(20_000);
+    expect(harness.commandTimeouts.run).toBe(20_000);
+    expect(rootfsModes).toEqual([0o755, 0o755, 0o700]);
+  });
+
+  it("binds a clean timed-out run to the aggregate-qualified receipt", async () => {
+    const harness = qualifiedRuntimeHarness();
+    let completionOutcome: unknown;
+    const qualifiedReceiptFileSha256 = "7".repeat(64);
+    const qualifiedReceiptPayloadSha256 = "8".repeat(64);
+    const coordinator = {
+      async begin(input: { finalContainerId: string; invocationId: string }) {
+        harness.events.push("qualification-ready");
+        expect(input).toMatchObject({
+          finalContainerId: harness.finalContainerId,
+          invocationId,
+        });
+        return {
+          finalContainerId: input.finalContainerId,
+          invocationId: input.invocationId,
+        };
+      },
+      async waitForDraft() {
+        harness.events.push("qualification-draft");
+        return { receiptPayloadSha256: "6".repeat(64) };
+      },
+      async complete(_handle: unknown, outcome: unknown) {
+        harness.events.push("qualification-complete");
+        completionOutcome = outcome;
+        return {
+          qualificationArtifacts: {},
+          qualifiedReceipt: {},
+          qualifiedReceiptFileSha256,
+          qualifiedReceiptPath: resolve(
+            harness.context.sessionRoot,
+            `run/rootless-specs/${harness.finalContainerId}.qualified-receipt.json`,
+          ),
+          qualifiedReceiptPayloadSha256,
+        };
+      },
+    };
+
+    const result = await executeContainedRun(
+      harness.context,
+      harness.fakeSpawn,
+      harness.persistSpec,
+      () => undefined,
+      () => invocationId,
+      undefined,
+      coordinator,
+      () => undefined,
+      () => undefined,
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toHaveLength(0);
+    expect(
+      result.controlReceipt,
+      JSON.stringify({
+        events: harness.events,
+        stderr: result.stderr.toString("utf8"),
+      }),
+    ).toMatchObject({
+      schemaVersion: "3",
+      qualificationMode: AGGREGATE_TIMEOUT_QUALIFICATION_MODE,
+      status: "TIMED_OUT_CLEAN",
+      timeoutObserved: true,
+      resultReleased: false,
+      rootlessReceiptFileSha256: qualifiedReceiptFileSha256,
+      rootlessReceiptPayloadSha256: qualifiedReceiptPayloadSha256,
+    });
+    expect(completionOutcome).toEqual({
+      cleanup: {
+        taskAbsent: true,
+        containerAbsent: true,
+        snapshotAbsent: true,
+        invocationAliasAbsent: true,
+        imageRootfsAbsent: true,
+        persistedAuthorityVerified: true,
+        readOnlyMountsUnchanged: true,
+        imageRootfsUnchanged: true,
+      },
+      resultReleased: false,
+      runtimeFailed: false,
+      timeoutObserved: true,
+    });
+    expect(harness.events).toEqual([
+      "qualification-ready",
+      "candidate-started",
+      "qualification-draft",
+      "task-cleaned",
+      "container-cleaned",
+      "rootfs-cleaned",
+      "alias-cleaned",
+      "qualification-complete",
+    ]);
+    expect(() =>
+      validateContainedRunControlReceipt(result.controlReceipt),
+    ).not.toThrow();
+  });
+
+  it.each(["begin", "draft", "complete"] as const)(
+    "fails closed when aggregate qualification %s fails",
+    async (failurePoint) => {
+      const harness = qualifiedRuntimeHarness();
+      const coordinator = {
+        async begin() {
+          harness.events.push("qualification-ready");
+          if (failurePoint === "begin") throw new Error("begin failed");
+          return {
+            finalContainerId: harness.finalContainerId,
+            invocationId,
+          };
+        },
+        async waitForDraft() {
+          harness.events.push("qualification-draft");
+          if (failurePoint === "draft") throw new Error("draft failed");
+          return { receiptPayloadSha256: "6".repeat(64) };
+        },
+        async complete() {
+          harness.events.push("qualification-complete");
+          throw new Error("completion failed");
+        },
+      };
+
+      const result = await executeContainedRun(
+        harness.context,
+        harness.fakeSpawn,
+        harness.persistSpec,
+        () => undefined,
+        () => invocationId,
+        undefined,
+        coordinator,
+        () => undefined,
+        () => undefined,
+      );
+
+      expect(result.status).toBe(1);
+      expect(result.stdout).toHaveLength(0);
+      expect(result.controlReceipt).toBeUndefined();
+      expect(result.stderr.toString("utf8")).toMatch(
+        failurePoint === "begin"
+          ? /qualification readiness failed/u
+          : /aggregate qualification failed/u,
+      );
+      if (failurePoint === "begin") {
+        expect(harness.events).toEqual([
+          "qualification-ready",
+          "rootfs-cleaned",
+          "alias-cleaned",
+        ]);
+        expect(harness.events).not.toContain("candidate-started");
+      } else {
+        expect(harness.events).toContain("candidate-started");
+        expect(harness.events.at(-1)).toBe("qualification-complete");
+      }
+    },
+  );
 
   it("maps only the pinned runc state root into the runtime session", () => {
     const environment = {
@@ -967,7 +1458,24 @@ describe("contained runtime command policy", () => {
   });
 
   it("uses one exact wrapper and scrubs inherited runtime injection", () => {
-    expect(readdirSync(runtimeWrapperRoot).sort()).toEqual(["runc"]);
+    expect(readdirSync(runtimeWrapperRoot).sort()).toEqual([
+      "mount.fuse3",
+      "runc",
+    ]);
+    const fuseMountWrapper = readFileSync(
+      resolve(runtimeWrapperRoot, "mount.fuse3"),
+      "utf8",
+    );
+    expect(fuseMountWrapper).toContain('OPTIONS=("allow_other")');
+    expect(fuseMountWrapper).toContain(
+      "rootless-tools/install-v2.3.1/bin/fuse-overlayfs",
+    );
+    expect(fuseMountWrapper).toContain(
+      '"${MOUNT_MODE}" == "containerd" || "${MOUNT_MODE}" == "unpack"',
+    );
+    expect(fuseMountWrapper).toContain(
+      "UPPER_SEEN == 0 && WORK_SEEN == 0 && READ_ONLY_SEEN == 0",
+    );
 
     const environment = createContainedRuntimeEnvironment({
       auth: resolve(root, ".rt/rt-runc-test/auth"),
@@ -1103,7 +1611,25 @@ describe("contained runtime command policy", () => {
 
     expect(plan.create.args).toContain("create");
     expect(plan.create.args).not.toContain("run");
+    expect(plan.create.args).not.toContain("--ulimit=as=2147483648:2147483648");
+    expect(
+      plan.create.args.filter((argument) => argument.startsWith("--ulimit=")),
+    ).toHaveLength(4);
+    const createIndex = plan.create.args.indexOf("create");
+    const invocationLabelIndex = plan.create.args.indexOf("--label");
+    expect(
+      plan.create.args.slice(createIndex + 1, invocationLabelIndex),
+    ).toEqual(
+      startupCommand()
+        .slice(1, -1)
+        .filter((argument) => argument !== "--ulimit=as=2147483648:2147483648"),
+    );
     expect(plan.start.program).toBe(resolve(installRoot, "bin/ctr"));
+    const cgroupIndex = plan.start.args.indexOf("--cgroup");
+    expect(plan.start.args[cgroupIndex + 1]).toBe(
+      `counterlab-v6.1-${invocationId}`,
+    );
+    expect(plan.start.args[cgroupIndex + 1]).not.toContain("/");
     expect(plan.start.args).toEqual(
       expect.arrayContaining([
         "run",
@@ -1111,11 +1637,15 @@ describe("contained runtime command policy", () => {
         "--fifo-dir",
         clientFifoRoot,
         "--cgroup",
-        "",
+        `counterlab-v6.1-${invocationId}`,
         "--platform",
         "linux/amd64",
       ]),
     );
+    expect(
+      plan.start.args.filter((argument) => argument === "--cgroup"),
+    ).toHaveLength(1);
+    expect(plan.start.args).not.toContain("");
     expect(plan.containerName).toBe("counterlab-startup-validator");
     expect(plan.start.args).not.toContain("counterlab-startup-validator");
     expect(plan.mountImageRootfs).toEqual({
@@ -1124,7 +1654,7 @@ describe("contained runtime command policy", () => {
         "images",
         "mount",
         "--snapshotter",
-        "native",
+        CONTAINED_RUNTIME_SNAPSHOTTER,
         "--platform",
         "linux/amd64",
         "--rw",
@@ -1136,13 +1666,83 @@ describe("contained runtime command policy", () => {
         "images",
         "unmount",
         "--snapshotter",
-        "native",
+        CONTAINED_RUNTIME_SNAPSHOTTER,
         "--rm",
       ]),
     });
     expect(plan.cleanupStaging.args.slice(-2)).toEqual(["rm", "--force"]);
     expect(plan.cleanupImageAlias.args.slice(-2)).toEqual(["images", "remove"]);
     expect(plan.expected.rlimits).toHaveLength(5);
+    const fullCommandAuthority = imageFixture(startupCommand()).authority;
+    const fullCommandSha256 = createHash("sha256")
+      .update(canonicalJson(startupCommand()))
+      .digest("hex");
+    const stagingCommandSha256 = createHash("sha256")
+      .update(
+        canonicalJson(
+          startupCommand().filter(
+            (argument) => argument !== "--ulimit=as=2147483648:2147483648",
+          ),
+        ),
+      )
+      .digest("hex");
+    expect(fullCommandAuthority.commandSha256).toBe(fullCommandSha256);
+    expect(fullCommandAuthority.commandSha256).not.toBe(stagingCommandSha256);
+    const splitUlimitCommand = startupCommand();
+    const addressSpaceIndex = splitUlimitCommand.indexOf(
+      "--ulimit=as=2147483648:2147483648",
+    );
+    splitUlimitCommand.splice(
+      addressSpaceIndex,
+      1,
+      "--ulimit",
+      "as=2147483648:2147483648",
+    );
+    const splitUlimitPlan = containedRunPlan({
+      args: splitUlimitCommand,
+      binRoot: resolve(installRoot, "bin"),
+      clientFifoRoot,
+      containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+      installRoot,
+      invocationId,
+      sessionRoot,
+    });
+    expect(splitUlimitPlan.create.args).not.toContain(
+      "as=2147483648:2147483648",
+    );
+    expect(splitUlimitPlan.expected.rlimits).toHaveLength(5);
+    const invalidAddressSpaceCommands = [
+      startupCommand().filter(
+        (argument) => argument !== "--ulimit=as=2147483648:2147483648",
+      ),
+      startupCommand().map((argument) =>
+        argument === "--ulimit=as=2147483648:2147483648"
+          ? "--ulimit=as=536870912:536870912"
+          : argument,
+      ),
+      (() => {
+        const command = startupCommand();
+        command.splice(
+          command.length - 1,
+          0,
+          "--ulimit=as=2147483648:2147483648",
+        );
+        return command;
+      })(),
+    ];
+    for (const args of invalidAddressSpaceCommands) {
+      expect(() =>
+        containedRunPlan({
+          args,
+          binRoot: resolve(installRoot, "bin"),
+          clientFifoRoot,
+          containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+          installRoot,
+          invocationId,
+          sessionRoot,
+        }),
+      ).toThrow(/resource intent|rlimit intent/u);
+    }
     expect(CONTAINED_RUNTIME_CONTROL_BUDGET_SECONDS).toBe(420);
     expect(CONTAINED_RUNTIME_CALLER_GRACE_SECONDS).toBe(5);
     expect(JSON.stringify(plan)).not.toContain("/run/containerd/fifo");
@@ -1175,13 +1775,130 @@ describe("contained runtime command policy", () => {
       containedRuntimeResourceAbsent({
         status: 1,
         stdout: Buffer.alloc(0),
-        stderr: Buffer.from("snapshotter native not found\n"),
+        stderr: Buffer.from("snapshotter fuse-overlayfs not found\n"),
       }),
     ).toBe(false);
     expect(containedRuntimeResourceAbsent(missing())).toBe(true);
   });
 
-  it("removes only unsupported cgroup fields from a bounded OCI spec", () => {
+  it("fails closed when the imported runner loses non-root executable modes", () => {
+    const safe = [
+      { path: "/", kind: "directory", mode: 0o755, uid: 0, gid: 0 },
+      { path: "/usr", kind: "directory", mode: 0o755, uid: 0, gid: 0 },
+      {
+        path: "/usr/local",
+        kind: "directory",
+        mode: 0o755,
+        uid: 0,
+        gid: 0,
+      },
+      {
+        path: "/usr/local/bin",
+        kind: "directory",
+        mode: 0o755,
+        uid: 0,
+        gid: 0,
+      },
+      {
+        path: "/usr/local/bin/node",
+        kind: "file",
+        mode: 0o555,
+        uid: 0,
+        gid: 0,
+      },
+      { path: "/usr/bin", kind: "directory", mode: 0o755, uid: 0, gid: 0 },
+      { path: "/usr/bin/bwrap", kind: "file", mode: 0o555, uid: 0, gid: 0 },
+      { path: "/usr/bin/setpriv", kind: "file", mode: 0o555, uid: 0, gid: 0 },
+      { path: "/usr/bin/bash", kind: "file", mode: 0o555, uid: 0, gid: 0 },
+      { path: "/usr/lib", kind: "directory", mode: 0o755, uid: 0, gid: 0 },
+      {
+        path: "/usr/lib64",
+        kind: "directory",
+        mode: 0o755,
+        uid: 0,
+        gid: 0,
+      },
+      {
+        path: "/usr/lib/x86_64-linux-gnu",
+        kind: "directory",
+        mode: 0o755,
+        uid: 0,
+        gid: 0,
+      },
+      {
+        path: "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
+        kind: "file",
+        mode: 0o755,
+        uid: 0,
+        gid: 0,
+      },
+      { path: "/app", kind: "directory", mode: 0o555, uid: 0, gid: 0 },
+      {
+        path: "/app/runner.mjs",
+        kind: "file",
+        mode: 0o555,
+        uid: 0,
+        gid: 0,
+      },
+      { path: "/etc", kind: "directory", mode: 0o755, uid: 0, gid: 0 },
+      { path: "/etc/passwd", kind: "file", mode: 0o444, uid: 0, gid: 0 },
+      { path: "/etc/group", kind: "file", mode: 0o444, uid: 0, gid: 0 },
+      { path: "/etc/hosts", kind: "file", mode: 0o644, uid: 0, gid: 0 },
+      { path: "/repo", kind: "directory", mode: 0o555, uid: 0, gid: 0 },
+      {
+        path: "/repo/scripts",
+        kind: "directory",
+        mode: 0o555,
+        uid: 0,
+        gid: 0,
+      },
+      {
+        path: "/repo/scripts/verify_scientific_runtime.py",
+        kind: "file",
+        mode: 0o444,
+        uid: 0,
+        gid: 0,
+      },
+      { path: "/dev/pts", kind: "directory", mode: 0o755, uid: 0, gid: 0 },
+      { path: "/dev/shm", kind: "directory", mode: 0o755, uid: 0, gid: 0 },
+      {
+        path: "/dev/mqueue",
+        kind: "directory",
+        mode: 0o755,
+        uid: 0,
+        gid: 0,
+      },
+      {
+        path: "/sys/fs/cgroup",
+        kind: "directory",
+        mode: 0o755,
+        uid: 0,
+        gid: 0,
+      },
+      {
+        path: "/counterlab-runtime",
+        kind: "directory",
+        mode: 0o755,
+        uid: 0,
+        gid: 0,
+      },
+    ];
+
+    expect(validateContainedRunnerRootfsPermissions(safe)).toEqual(safe);
+    expect(() =>
+      validateContainedRunnerRootfsPermissions(
+        safe.map((entry) =>
+          entry.path === "/usr/local/bin/node"
+            ? { ...entry, mode: 0o700, uid: 1000, gid: 1000 }
+            : entry,
+        ),
+      ),
+    ).toThrow(
+      "contained runner rootfs permissions are unsafe at /usr/local/bin/node: expected file 555 0:0, observed file 700 1000:1000",
+    );
+  });
+
+  it("retains bounded cgroup intent without claiming observed enforcement", () => {
     const sessionRoot = resolve(root, ".rt/rt-validator-spec");
     const installRoot = resolve(
       root,
@@ -1213,10 +1930,27 @@ describe("contained runtime command policy", () => {
       source,
     });
     const sanitized = JSON.parse(prepared.config);
+    const original = JSON.parse(source);
 
-    expect(sanitized.linux).not.toHaveProperty("cgroupsPath");
-    expect(sanitized.linux).not.toHaveProperty("resources");
-    expect(sanitized.process.rlimits).toEqual(plan.expected.rlimits);
+    expect(sanitized.linux.cgroupsPath).toBe(`counterlab-v6.1-${invocationId}`);
+    expect(sanitized.linux.cgroupsPath).not.toContain("/");
+    expect(sanitized.linux.resources).toEqual(original.linux.resources);
+    const canonicalBase = structuredClone(sanitized);
+    delete canonicalBase.annotations;
+    expect(prepared.receipt.baseSpecSha256).toBe(
+      createHash("sha256").update(canonicalJson(canonicalBase)).digest("hex"),
+    );
+    expect(prepared.receipt.sanitizedSpecSha256).toBe(
+      createHash("sha256").update(canonicalJson(sanitized)).digest("hex"),
+    );
+    expect(prepared.receipt.configFileSha256).toBe(
+      createHash("sha256").update(prepared.config).digest("hex"),
+    );
+    expect(sanitized.process.rlimits).toEqual(
+      [...plan.expected.rlimits].sort((left, right) =>
+        left.type.localeCompare(right.type),
+      ),
+    );
     expect(sanitized.process.noNewPrivileges).toBe(true);
     expect(sanitized.process.terminal).toBe(false);
     expect(sanitized.process.user.additionalGids).toEqual([]);
@@ -1281,13 +2015,11 @@ describe("contained runtime command policy", () => {
           `run/rootless-specs/${invocationId}.image-rootfs`,
         ),
         parentChainId: fixture.authority.rootfsChainId,
-        snapshotter: "native",
+        snapshotter: CONTAINED_RUNTIME_SNAPSHOTTER,
       },
       removedFields: [
         "hooks",
         "annotations",
-        "linux.cgroupsPath",
-        "linux.resources",
         "linux.sysctl",
         "linux.seccomp.restrictedTraceRule",
       ],
@@ -1295,6 +2027,78 @@ describe("contained runtime command policy", () => {
       finalContainerId: prepared.finalContainerId,
       removedMounts: ["/etc/hostname", "/etc/hosts", "/etc/resolv.conf"],
     });
+    expect(prepared.receipt.normalizedFields).toContain("linux.cgroupsPath");
+    expect(prepared.receipt.normalizedFields).toContain("process.rlimits");
+
+    const resourceMutations: Array<(spec: typeof original) => void> = [
+      (spec) => {
+        spec.linux.resources.memory.limit += 1;
+      },
+      (spec) => {
+        spec.linux.resources.memory.swap = -1;
+      },
+      (spec) => {
+        spec.linux.resources.pids.limit += 1;
+      },
+      (spec) => {
+        spec.linux.resources.cpu.quota -= 1;
+      },
+      (spec) => {
+        spec.linux.resources.devices[1].major = 2;
+      },
+      (spec) => {
+        spec.linux.resources.io = {};
+      },
+      (spec) => {
+        spec.linux.cgroupsPath = "/escaped";
+      },
+    ];
+    for (const mutate of resourceMutations) {
+      const changed = structuredClone(original);
+      mutate(changed);
+      expect(() =>
+        sanitizeContainedRootlessSpec({
+          containerId,
+          expected,
+          metadataSha256: "3".repeat(64),
+          source: JSON.stringify(changed),
+        }),
+      ).toThrow(/cgroup path|resource/u);
+    }
+
+    const rlimitMutations: Array<(spec: typeof original) => void> = [
+      (spec) => {
+        spec.process.rlimits.push({
+          type: "RLIMIT_AS",
+          soft: 2 * 1024 * 1024 * 1024,
+          hard: 2 * 1024 * 1024 * 1024,
+        });
+      },
+      (spec) => {
+        spec.process.rlimits[0].soft -= 1;
+      },
+      (spec) => {
+        spec.process.rlimits.pop();
+      },
+      (spec) => {
+        spec.process.rlimits.push(structuredClone(spec.process.rlimits[0]));
+      },
+      (spec) => {
+        spec.process.rlimits.push({ type: "RLIMIT_RSS", soft: 1, hard: 1 });
+      },
+    ];
+    for (const mutate of rlimitMutations) {
+      const changed = structuredClone(original);
+      mutate(changed);
+      expect(() =>
+        sanitizeContainedRootlessSpec({
+          containerId,
+          expected,
+          metadataSha256: "3".repeat(64),
+          source: JSON.stringify(changed),
+        }),
+      ).toThrow(/rlimit/u);
+    }
 
     const missingHookSource = JSON.parse(source);
     missingHookSource.hooks = null;
@@ -2024,13 +2828,123 @@ describe("contained runtime command policy", () => {
       metadataSha256: "9".repeat(64),
       source: rootlessSpec("8".repeat(64), plan.expected, fixture.authority),
     });
-    const persisted = persistContainedRootlessSpec({
-      config: prepared.config,
-      finalContainerId: prepared.finalContainerId,
-      internalMounts: prepared.internalMounts,
-      receipt: prepared.receipt,
-      sessionRoot,
-    });
+    type MutableResourceReceipt = typeof prepared.receipt & {
+      baseSpecSha256: string;
+      commandSha256: string;
+      configFileSha256: string;
+      enforcedRlimits: Array<{ type: string; soft: number; hard: number }>;
+      finalContainerId: string;
+      internalMountManifestSha256: string;
+      intendedAggregateLimits: {
+        cpuCount: number;
+        maxProcesses: number;
+        memoryBytes: number;
+      };
+      invocationId: string;
+      normalizedFields: string[];
+      readOnlyMountManifestSha256: string;
+      receiptPayloadSha256: string;
+      sanitizedSpecSha256: string;
+      stagingContainerId: string;
+    };
+    const receiptMutations: Array<(receipt: MutableResourceReceipt) => void> = [
+      (receipt) => {
+        const addressSpace = receipt.enforcedRlimits.find(
+          (entry) => entry.type === "RLIMIT_AS",
+        );
+        if (addressSpace === undefined) throw new Error("missing test rlimit");
+        addressSpace.soft -= 1;
+        addressSpace.hard -= 1;
+      },
+      (receipt) => {
+        receipt.intendedAggregateLimits.memoryBytes = 2 * 1024 * 1024 * 1024;
+      },
+      (receipt) => {
+        receipt.normalizedFields = receipt.normalizedFields.filter(
+          (field) => field !== "process.rlimits",
+        );
+      },
+    ];
+    for (const mutate of receiptMutations) {
+      const invalid = structuredClone(
+        prepared.receipt,
+      ) as MutableResourceReceipt;
+      mutate(invalid);
+      expect(() =>
+        persistContainedRootlessSpec({
+          config: prepared.config,
+          finalContainerId: prepared.finalContainerId,
+          internalMounts: prepared.internalMounts,
+          receipt: invalid,
+          sessionRoot,
+        }),
+      ).toThrow(/resource|rlimit/u);
+    }
+    const semanticallyChangedConfig = JSON.parse(prepared.config) as {
+      annotations: Record<string, string>;
+      process: {
+        rlimits: Array<{ type: string; soft: number; hard: number }>;
+      };
+    } & Record<string, unknown>;
+    const changedAddressSpace = semanticallyChangedConfig.process.rlimits.find(
+      (entry) => entry.type === "RLIMIT_AS",
+    );
+    if (changedAddressSpace === undefined)
+      throw new Error("missing test rlimit");
+    changedAddressSpace.soft -= 1;
+    changedAddressSpace.hard -= 1;
+    const { annotations: _annotations, ...changedBaseConfig } =
+      semanticallyChangedConfig;
+    const changedBaseSpecSha256 = createHash("sha256")
+      .update(canonicalJson(changedBaseConfig))
+      .digest("hex");
+    semanticallyChangedConfig.annotations[
+      "io.counterlab.runtime.base-spec-sha256"
+    ] = changedBaseSpecSha256;
+    const changedSanitizedSpecSha256 = createHash("sha256")
+      .update(canonicalJson(semanticallyChangedConfig))
+      .digest("hex");
+    const changedConfigSource = `${JSON.stringify(semanticallyChangedConfig, null, 2)}\n`;
+    const changedReceipt = structuredClone(
+      prepared.receipt,
+    ) as MutableResourceReceipt;
+    changedReceipt.baseSpecSha256 = changedBaseSpecSha256;
+    changedReceipt.sanitizedSpecSha256 = changedSanitizedSpecSha256;
+    changedReceipt.configFileSha256 = createHash("sha256")
+      .update(changedConfigSource)
+      .digest("hex");
+    changedReceipt.finalContainerId = createHash("sha256")
+      .update(
+        `counterlab-rootless-v4\0${changedReceipt.invocationId}\0${changedReceipt.stagingContainerId}\0${changedReceipt.sanitizedSpecSha256}\0${changedReceipt.commandSha256}\0${changedReceipt.internalMountManifestSha256}\0${changedReceipt.readOnlyMountManifestSha256}`,
+      )
+      .digest("hex");
+    const { receiptPayloadSha256: _receiptHash, ...changedReceiptPayload } =
+      changedReceipt;
+    changedReceipt.receiptPayloadSha256 = createHash("sha256")
+      .update(canonicalJson(changedReceiptPayload))
+      .digest("hex");
+    expect(() =>
+      persistContainedRootlessSpec({
+        config: changedConfigSource,
+        finalContainerId: changedReceipt.finalContainerId,
+        internalMounts: prepared.internalMounts,
+        receipt: changedReceipt,
+        sessionRoot,
+      }),
+    ).toThrow(/rlimit/u);
+    const previousUmask = process.umask(0o077);
+    let persisted: ReturnType<typeof persistContainedRootlessSpec>;
+    try {
+      persisted = persistContainedRootlessSpec({
+        config: prepared.config,
+        finalContainerId: prepared.finalContainerId,
+        internalMounts: prepared.internalMounts,
+        receipt: prepared.receipt,
+        sessionRoot,
+      });
+    } finally {
+      process.umask(previousUmask);
+    }
     const binding = {
       ...persisted,
       finalContainerId: prepared.finalContainerId,
@@ -2049,6 +2963,7 @@ describe("contained runtime command policy", () => {
       )
       .map((mount) => mount.source);
     expect(internalSources).toEqual([]);
+    expect(statSync(persisted.imageRootfsPath).mode & 0o777).toBe(0o700);
     expect(() => verifyPersistedContainedRootlessSpec(binding)).not.toThrow();
     expect(() =>
       verifyPersistedContainedRootlessSpec({
@@ -2062,7 +2977,7 @@ describe("contained runtime command policy", () => {
     );
   });
 
-  it("fails closed when owned final cleanup fails", () => {
+  it("fails closed when owned final cleanup fails", async () => {
     const sessionRoot = resolve(root, ".rt/rt-validator-cleanup");
     const installRoot = resolve(
       root,
@@ -2151,7 +3066,7 @@ describe("contained runtime command policy", () => {
               memoryBytes: 1024 * 1024 * 1024,
               rlimits: [
                 { type: "RLIMIT_CPU", soft: 300, hard: 300 },
-                { type: "RLIMIT_AS", soft: 1073741824, hard: 1073741824 },
+                { type: "RLIMIT_AS", soft: 2147483648, hard: 2147483648 },
                 { type: "RLIMIT_FSIZE", soft: 1048576, hard: 1048576 },
                 { type: "RLIMIT_NOFILE", soft: 64, hard: 64 },
                 { type: "RLIMIT_NPROC", soft: 32, hard: 32 },
@@ -2229,7 +3144,18 @@ describe("contained runtime command policy", () => {
       throw new Error(`unexpected mock command: ${joined}`);
     };
 
-    const result = executeContainedRun(
+    const qualificationCoordinator = {
+      begin: () => {
+        throw new Error("normal mode must not start qualification");
+      },
+      waitForDraft: () => {
+        throw new Error("normal mode must not wait for qualification");
+      },
+      complete: () => {
+        throw new Error("normal mode must not complete qualification");
+      },
+    };
+    const result = await executeContainedRun(
       {
         args: command,
         binRoot: resolve(installRoot, "bin"),
@@ -2238,6 +3164,7 @@ describe("contained runtime command policy", () => {
         cwd: root,
         environment: process.env,
         installRoot,
+        qualificationMode: null,
         sessionRoot,
         stdin: Buffer.alloc(0),
       },
@@ -2257,6 +3184,10 @@ describe("contained runtime command policy", () => {
       }),
       () => undefined,
       () => invocationId,
+      undefined,
+      qualificationCoordinator,
+      () => undefined,
+      () => undefined,
     );
 
     expect(result.status).toBe(1);
@@ -2279,7 +3210,7 @@ describe("contained runtime command policy", () => {
     expect(startCall).toEqual(
       expect.arrayContaining([
         "--cgroup",
-        "",
+        `counterlab-v6.1-${invocationId}`,
         "--label",
         `io.counterlab.runtime.invocation=${invocationId}`,
       ]),
@@ -2296,7 +3227,7 @@ describe("contained runtime command policy", () => {
     ).toBe(false);
   });
 
-  it("rejects an invalid generated container ID without deleting by name", () => {
+  it("rejects an invalid generated container ID without deleting by name", async () => {
     const sessionRoot = resolve(root, ".rt/rt-validator-id");
     const installRoot = resolve(
       root,
@@ -2307,7 +3238,7 @@ describe("contained runtime command policy", () => {
     const alias = `docker.io/library/counterlab-runtime-invocation:${invocationId}`;
     const calls: string[][] = [];
     let aliasPresent = false;
-    const result = executeContainedRun(
+    const result = await executeContainedRun(
       {
         args: command,
         binRoot: resolve(installRoot, "bin"),
@@ -2316,6 +3247,7 @@ describe("contained runtime command policy", () => {
         cwd: root,
         environment: process.env,
         installRoot,
+        qualificationMode: null,
         sessionRoot,
         stdin: Buffer.alloc(0),
       },
@@ -2456,6 +3388,10 @@ describe("contained runtime command policy", () => {
       resolve(root, "scripts/build-source-bound-runner.sh"),
       "utf8",
     );
+    const adapterDockerfile = readFileSync(
+      resolve(root, "services/runner/Dockerfile"),
+      "utf8",
+    );
 
     expect(dockerIgnore).toContain("!services/runner/Dockerfile");
     expect(dockerIgnore).toContain("!services/runner/image");
@@ -2465,6 +3401,18 @@ describe("contained runtime command policy", () => {
     );
     expect(sourceBuild).not.toContain(
       'tar -C "${NORMALIZED_OCI_LAYOUT}" -cf "${NORMALIZED_OCI_TAR}" .',
+    );
+    // Restricted rootless build filesystems can collapse explicit modes to
+    // 0700. Keep the read-only adapter rootfs traversable by its declared
+    // non-root user even when that occurs.
+    expect(adapterDockerfile).toContain(
+      "chown 65532:65532 /opt /opt/counterlab /workspace /fixtures /output /tmp",
+    );
+    expect(adapterDockerfile).toContain(
+      "COPY --chown=65532:65532 --chmod=0444 concept-packs/leakage/public/counterlab_sdk.py",
+    );
+    expect(adapterDockerfile).toContain(
+      "COPY --chown=65532:65532 --chmod=0555 services/runner/image/harness.py",
     );
   });
 
@@ -2550,7 +3498,12 @@ describe("contained runtime command policy", () => {
       "[[plugins.'io.containerd.transfer.v1.local'.unpack_config]]",
     );
     expect(containerdConfigWriter).toContain('platform = "linux/amd64"');
-    expect(containerdConfigWriter).toContain('snapshotter = "native"');
+    expect(containerdConfigWriter).toContain(
+      'CONTAINED_RUNTIME_SNAPSHOTTER = "fuse-overlayfs"',
+    );
+    expect(containerdConfigWriter).toContain(
+      'snapshotter = "${CONTAINED_RUNTIME_SNAPSHOTTER}"',
+    );
     expect(containerdConfigWriter).toContain(
       "[plugins.'io.containerd.shim.v1.manager']",
     );

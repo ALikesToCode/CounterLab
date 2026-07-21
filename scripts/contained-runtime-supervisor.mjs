@@ -59,6 +59,7 @@ const buildkitProxySocket = resolve(runRoot, "buildkitd.sock");
 const buildkitInnerSocket = resolve(innerRunRoot, "buildkitd.sock");
 const runtimeCommandSocket = resolve(runRoot, "runtime-command.sock");
 const containerdSocket = resolve(runRoot, "containerd.sock");
+const runcStateRoot = resolve(runRoot, "runc");
 const containerdRootlesskitApi = resolve(
   runRoot,
   "containerd-rootless/api.sock",
@@ -72,7 +73,7 @@ const environment = createContainedRuntimeEnvironment({
   buildkitSocket: buildkitProxySocket,
   home: resolve(sessionRoot, "home"),
   runcBinary: resolve(binRoot, "runc"),
-  runcStateRoot: resolve(runRoot, "runc"),
+  runcStateRoot,
   runtimeWrapperRoot: resolve(root, "scripts/runtime-bin"),
   tmp: resolve(sessionRoot, "tmp"),
   xdgCache: resolve(sessionRoot, "xdg-cache"),
@@ -85,24 +86,24 @@ function openPrivateLog(name) {
   return openSync(resolve(sessionRoot, "logs", name), "a", 0o600);
 }
 
-const containerdLog = openPrivateLog("containerd.log");
-const containerdRootlesskit = spawn(
-  resolve(binRoot, "rootlesskit"),
-  [
-    `--state-dir=${resolve(runRoot, "containerd-rootless")}`,
-    "--net=host",
-    process.execPath,
-    resolve(root, "scripts/contained-runtime-server.mjs"),
-    "--session-id",
-    sessionId,
-  ],
-  {
-    cwd: root,
-    env: environment,
-    stdio: ["ignore", containerdLog, containerdLog],
-  },
-);
-closeSync(containerdLog);
+function socketReady(path) {
+  try {
+    return statSync(path).isSocket();
+  } catch {
+    return false;
+  }
+}
+
+async function waitForInitialSocket(path, child, label) {
+  for (let attempt = 0; attempt < 300; attempt += 1) {
+    if (socketReady(path)) return;
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(`${label} exited during launch`);
+    }
+    await new Promise((accept) => setTimeout(accept, 100));
+  }
+  throw new Error(`${label} socket did not become ready`);
+}
 
 const buildkitLog = openPrivateLog("buildkitd.log");
 const buildkitRootlesskit = spawn(
@@ -135,6 +136,38 @@ const buildkitRootlesskit = spawn(
   },
 );
 closeSync(buildkitLog);
+await waitForInitialSocket(
+  buildkitInnerSocket,
+  buildkitRootlesskit,
+  "contained BuildKit",
+);
+
+const containerdLog = openPrivateLog("containerd.log");
+const snapshotterRoot = resolve(sessionRoot, "data/fuse-overlayfs");
+const rootlessSpecRoot = resolve(runRoot, "rootless-specs");
+const containerdRootlesskit = spawn(
+  resolve(binRoot, "rootlesskit"),
+  [
+    `--state-dir=${resolve(runRoot, "containerd-rootless")}`,
+    "--net=host",
+    `--copy-up=${snapshotterRoot}`,
+    `--copy-up=${rootlessSpecRoot}`,
+    `--copy-up=${runcStateRoot}`,
+    "--pidns",
+    "--cgroupns",
+    "--evacuate-cgroup2=containerd",
+    process.execPath,
+    resolve(root, "scripts/contained-runtime-server.mjs"),
+    "--session-id",
+    sessionId,
+  ],
+  {
+    cwd: root,
+    env: environment,
+    stdio: ["ignore", containerdLog, containerdLog],
+  },
+);
+closeSync(containerdLog);
 
 const children = { containerdRootlesskit, buildkitRootlesskit };
 let state = "STARTING";
@@ -157,14 +190,6 @@ function childPids() {
     throw new Error("runtime supervisor child handle has no valid PID");
   }
   return values;
-}
-
-function socketReady(path) {
-  try {
-    return statSync(path).isSocket();
-  } catch {
-    return false;
-  }
 }
 
 async function waitForSockets(paths) {
@@ -332,7 +357,7 @@ async function handleRequest(request) {
   throw new Error("runtime supervisor action is invalid");
 }
 
-const controlServer = createServer((socket) => {
+const controlServer = createServer({ allowHalfOpen: true }, (socket) => {
   const chunks = [];
   let total = 0;
   socket.setTimeout(35_000);

@@ -32,7 +32,14 @@ const job: RunnerJob = {
 };
 const runnerImageDigest = `sha256:${"c".repeat(64)}`;
 const runnerSourceCommit = "b".repeat(40);
-const runnerReleaseIdentity = { runnerSourceCommit, runnerImageDigest };
+const generationIsolationEvidenceSha256 = "d".repeat(64);
+const generationIsolationProbeSha256 = "e".repeat(64);
+const runnerReleaseIdentity = {
+  runnerSourceCommit,
+  runnerImageDigest,
+  generationIsolationEvidenceSha256,
+  generationIsolationProbeSha256,
+};
 
 describe("HttpRunnerDispatcher", () => {
   it("starts and probes the digest-bound Container readiness instance", async () => {
@@ -41,8 +48,11 @@ describe("HttpRunnerDispatcher", () => {
       JSON.stringify({
         status: "ready",
         service: "counterlab-hosted-runner",
+        generationFilesystemReadIsolation: "OS_ENFORCED",
         runnerSourceCommit,
         runnerImageDigest,
+        generationIsolationEvidenceSha256,
+        generationIsolationProbeSha256,
       }),
       { status: 200, headers: { "content-type": "application/json" } },
     );
@@ -56,7 +66,7 @@ describe("HttpRunnerDispatcher", () => {
 
     await expect(dispatcher.ready()).resolves.toBe(true);
     expect(getByName).toHaveBeenCalledWith(
-      `counterlab-readiness-${"c".repeat(64)}`,
+      `counterlab-readiness-${generationIsolationEvidenceSha256}`,
     );
     expect(startAndWaitForPorts).toHaveBeenCalledWith({
       ports: [8080],
@@ -83,6 +93,9 @@ describe("HttpRunnerDispatcher", () => {
     ["invalid response", "schema"],
     ["stale source identity", "source"],
     ["stale image identity", "image"],
+    ["stale isolation evidence identity", "evidence"],
+    ["stale isolation probe identity", "probe"],
+    ["partial filesystem isolation", "isolation"],
   ])("fails Container readiness closed on %s", async (_label, failure) => {
     const startAndWaitForPorts = vi.fn(async () => {
       if (failure === "startup") throw new Error("image did not start");
@@ -97,10 +110,18 @@ describe("HttpRunnerDispatcher", () => {
         status: "ready",
         service:
           failure === "schema" ? "wrong-runner" : "counterlab-hosted-runner",
+        generationFilesystemReadIsolation:
+          failure === "isolation" ? "PARTIAL" : "OS_ENFORCED",
         runnerSourceCommit:
           failure === "source" ? "d".repeat(40) : runnerSourceCommit,
         runnerImageDigest:
           failure === "image" ? `sha256:${"e".repeat(64)}` : runnerImageDigest,
+        generationIsolationEvidenceSha256:
+          failure === "evidence"
+            ? "f".repeat(64)
+            : generationIsolationEvidenceSha256,
+        generationIsolationProbeSha256:
+          failure === "probe" ? "f".repeat(64) : generationIsolationProbeSha256,
       };
       return new Response(JSON.stringify(payload), { status: 200 });
     });
@@ -116,11 +137,22 @@ describe("HttpRunnerDispatcher", () => {
   it.each([
     [
       "invalid source commit",
-      { runnerSourceCommit: "main", runnerImageDigest },
+      { ...runnerReleaseIdentity, runnerSourceCommit: "main" },
     ],
     [
       "invalid image digest",
-      { runnerSourceCommit, runnerImageDigest: "counterlab-runner:latest" },
+      {
+        ...runnerReleaseIdentity,
+        runnerImageDigest: "counterlab-runner:latest",
+      },
+    ],
+    [
+      "invalid isolation evidence hash",
+      { ...runnerReleaseIdentity, generationIsolationEvidenceSha256: "short" },
+    ],
+    [
+      "invalid isolation probe hash",
+      { ...runnerReleaseIdentity, generationIsolationProbeSha256: "short" },
     ],
   ])("rejects %s before acquiring a Container", (_label, identity) => {
     const getByName = vi.fn();
@@ -321,8 +353,11 @@ describe("HttpRunnerDispatcher", () => {
             JSON.stringify({
               status: "ready",
               service: "counterlab-hosted-runner",
+              generationFilesystemReadIsolation: "OS_ENFORCED",
               runnerSourceCommit,
               runnerImageDigest,
+              generationIsolationEvidenceSha256,
+              generationIsolationProbeSha256,
             }),
             { status: 200 },
           ),
@@ -395,28 +430,60 @@ describe("HttpRunnerDispatcher", () => {
   });
 
   it.each([
-    ["stale source", "d".repeat(40), runnerImageDigest],
-    ["stale image", runnerSourceCommit, `sha256:${"e".repeat(64)}`],
-  ])("fails HTTP readiness closed for %s", async (_label, source, image) => {
-    const dispatcher = new HttpRunnerDispatcher({
-      baseURL: "https://runner.example.test",
-      releaseIdentity: runnerReleaseIdentity,
-      fetch: vi.fn<typeof fetch>(
-        async () =>
-          new Response(
-            JSON.stringify({
-              status: "ready",
-              service: "counterlab-hosted-runner",
-              runnerSourceCommit: source,
-              runnerImageDigest: image,
-            }),
-            { status: 200 },
-          ),
-      ),
-    });
+    [
+      "stale source",
+      "d".repeat(40),
+      runnerImageDigest,
+      generationIsolationEvidenceSha256,
+      generationIsolationProbeSha256,
+    ],
+    [
+      "stale image",
+      runnerSourceCommit,
+      `sha256:${"e".repeat(64)}`,
+      generationIsolationEvidenceSha256,
+      generationIsolationProbeSha256,
+    ],
+    [
+      "stale isolation evidence",
+      runnerSourceCommit,
+      runnerImageDigest,
+      "f".repeat(64),
+      generationIsolationProbeSha256,
+    ],
+    [
+      "stale isolation probe",
+      runnerSourceCommit,
+      runnerImageDigest,
+      generationIsolationEvidenceSha256,
+      "f".repeat(64),
+    ],
+  ])(
+    "fails HTTP readiness closed for %s",
+    async (_label, source, image, evidence, probe) => {
+      const dispatcher = new HttpRunnerDispatcher({
+        baseURL: "https://runner.example.test",
+        releaseIdentity: runnerReleaseIdentity,
+        fetch: vi.fn<typeof fetch>(
+          async () =>
+            new Response(
+              JSON.stringify({
+                status: "ready",
+                service: "counterlab-hosted-runner",
+                generationFilesystemReadIsolation: "OS_ENFORCED",
+                runnerSourceCommit: source,
+                runnerImageDigest: image,
+                generationIsolationEvidenceSha256: evidence,
+                generationIsolationProbeSha256: probe,
+              }),
+              { status: 200 },
+            ),
+        ),
+      });
 
-    await expect(dispatcher.ready()).resolves.toBe(false);
-  });
+      await expect(dispatcher.ready()).resolves.toBe(false);
+    },
+  );
 
   it("requires an exact expected identity for an HTTP runner", () => {
     expect(
@@ -426,6 +493,8 @@ describe("HttpRunnerDispatcher", () => {
           releaseIdentity: {
             runnerSourceCommit: "main",
             runnerImageDigest,
+            generationIsolationEvidenceSha256,
+            generationIsolationProbeSha256,
           },
         }),
     ).toThrow(/source commit must be exact/i);

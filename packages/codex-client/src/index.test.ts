@@ -1102,6 +1102,7 @@ describe("AppServerCodexCompiler stdio transport", () => {
     const work = await mkdtemp(join(tmpdir(), "counterlab-codex-cancel-"));
     const pidFile = join(work, "app-server.pid");
     let processId: number | undefined;
+    let disposedAfterExit = false;
     try {
       const compiler = new AppServerCodexCompiler({
         command: process.execPath,
@@ -1111,7 +1112,23 @@ describe("AppServerCodexCompiler stdio transport", () => {
           `--ignore-sigterm=${pidFile}`,
         ],
         timeoutMs: 5_000,
-        ...unisolatedTestProcess,
+        launchBoundary: {
+          async health() {
+            return { available: true as const };
+          },
+          async prepare(request) {
+            return {
+              command: request.command,
+              args: request.args,
+              environment: request.environment,
+              protocolCwd: request.hostCwd,
+              async dispose() {
+                expect(() => process.kill(processId!, 0)).toThrow();
+                disposedAfterExit = true;
+              },
+            };
+          },
+        },
       });
       const controller = new AbortController();
       const compilation = collect(
@@ -1125,8 +1142,8 @@ describe("AppServerCodexCompiler stdio transport", () => {
         name: "CompilerSetupError",
         code: "CODEX_CANCELLED",
       });
-      await new Promise((resolve) => setTimeout(resolve, 350));
       expect(() => process.kill(processId!, 0)).toThrow();
+      expect(disposedAfterExit).toBe(true);
     } finally {
       if (processId !== undefined) {
         try {

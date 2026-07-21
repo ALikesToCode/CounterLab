@@ -26,12 +26,19 @@ export function SampleBoundaryExperience({
   const [revealedBoundaryHash, setRevealedBoundaryHash] = useState<
     string | null
   >(null);
+  const [huntSkipped, setHuntSkipped] = useState(false);
   const mapRevealed = revealedBoundaryHash === resultHash;
 
   const revealMap = useCallback(() => {
+    if (revealedBoundaryHash === resultHash) return;
     setRevealedBoundaryHash(resultHash);
     onReveal?.();
-  }, [onReveal, resultHash]);
+  }, [onReveal, resultHash, revealedBoundaryHash]);
+
+  const skipHunt = useCallback(() => {
+    setHuntSkipped(true);
+    revealMap();
+  }, [revealMap]);
 
   useEffect(() => {
     if (revealedBoundaryHash !== resultHash) return;
@@ -79,19 +86,32 @@ export function SampleBoundaryExperience({
       </aside>
 
       <div className={styles.presentation}>
+        {huntSkipped ? (
+          <section className="revision panel" role="status">
+            <strong>Map revealed without a Boundary classification.</strong>
+            <p>Apply stays locked until you identify a changing condition.</p>
+            <button
+              className="button button-quiet"
+              type="button"
+              onClick={() => setHuntSkipped(false)}
+            >
+              Return to the Boundary hunt
+            </button>
+          </section>
+        ) : (
+          <BoundaryHunt
+            boundary={huntDataFor(boundary)}
+            onRevealMap={revealMap}
+            onSkip={skipHunt}
+            {...(onClassify === undefined ? {} : { onClassify })}
+          />
+        )}
         {mapRevealed ? (
           <BoundaryMapBlock
             boundary={boundary}
             {...(prediction === undefined ? {} : { prediction })}
           />
-        ) : (
-          <BoundaryHunt
-            boundary={huntDataFor(boundary)}
-            onRevealMap={revealMap}
-            onSkip={revealMap}
-            {...(onClassify === undefined ? {} : { onClassify })}
-          />
-        )}
+        ) : null}
       </div>
     </section>
   );

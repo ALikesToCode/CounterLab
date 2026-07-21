@@ -44,6 +44,12 @@ describe("ImbalanceTransferLesson", () => {
       screen.getByRole("button", { name: /try it on defects/i }),
     ).toBeDisabled();
     fireEvent.change(screen.getByLabelText(/revised mental model/i), {
+      target: { value: "xxxxxxxxxxxxxxxxxxxx" },
+    });
+    expect(
+      screen.getByRole("button", { name: /try it on defects/i }),
+    ).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/revised mental model/i), {
       target: {
         value:
           "For rare events, compare a majority baseline and class-specific errors before trusting accuracy.",
@@ -95,7 +101,7 @@ describe("ImbalanceTransferLesson", () => {
     );
   });
 
-  it("requires a direct learner edit after clause drafting without grading prose", () => {
+  it("accepts completed evidence-linked clauses as meaningful learner input", () => {
     render(
       <ImbalanceTransferLesson
         sessionId="session_1"
@@ -120,17 +126,6 @@ describe("ImbalanceTransferLesson", () => {
     );
     expect(
       screen.getByRole("button", { name: /try it on defects/i }),
-    ).toBeDisabled();
-
-    fireEvent.change(screen.getByLabelText(/revised mental model/i), {
-      target: {
-        value:
-          "When deployment prevalence changes, I should compare against the majority baseline because accuracy can hide missed rare events. I will check the confusion counts.",
-      },
-    });
-
-    expect(
-      screen.getByRole("button", { name: /try it on defects/i }),
     ).toBeEnabled();
 
     fireEvent.change(screen.getByLabelText(/choose the action/i), {
@@ -138,11 +133,11 @@ describe("ImbalanceTransferLesson", () => {
     });
     expect(
       screen.getByRole("button", { name: /try it on defects/i }),
-    ).toBeDisabled();
+    ).toBeEnabled();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("carries a learner-authored result interpretation into the revision step", () => {
+  it("shows an earlier interpretation without treating it as a completed revision", () => {
     render(
       <ImbalanceTransferLesson
         sessionId="session_1"
@@ -152,12 +147,13 @@ describe("ImbalanceTransferLesson", () => {
       />,
     );
 
-    expect(screen.getByLabelText(/revised mental model/i)).toHaveValue(
+    expect(screen.getByRole("note")).toHaveTextContent(
       "I notice that overall accuracy and rare-event recall tell different stories.",
     );
+    expect(screen.getByLabelText(/revised mental model/i)).toHaveValue("");
     expect(
       screen.getByRole("button", { name: /try it on defects/i }),
-    ).toBeEnabled();
+    ).toBeDisabled();
   });
 
   it("keeps repair locked after the fixed evaluator rejects the transfer", () => {

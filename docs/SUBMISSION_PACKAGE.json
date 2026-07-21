@@ -1,0 +1,128 @@
+{
+  "schemaVersion": "1",
+  "submissionState": "DRAFT",
+  "competition": {
+    "hackathonId": "30223",
+    "projectId": "1330312",
+    "category": "Education",
+    "deadline": "2026-07-22T00:00:00Z",
+    "submitterType": null,
+    "country": null
+  },
+  "copy": {
+    "title": "CounterLab — A scientific debugger for beliefs",
+    "tagline": "Ask like chat. Prove it like science.",
+    "audience": "ML learners and instructors who need to test what a notebook result actually supports",
+    "devpostCopy": {
+      "path": "docs/DEVPOST_COPY.md",
+      "sha256": "c1d3822f0d35b163255e14b0052e9c6430d798c7614119ae21e0a0a727ff0357"
+    },
+    "readme": {
+      "path": "README.md",
+      "sha256": "b39cd4573e3f1413fcd59fca9e466f43f77488faba582d2f308c22c8ffaba46a"
+    },
+    "license": {
+      "identifier": "MIT",
+      "evidence": {
+        "path": "LICENSE",
+        "sha256": "4280a28f28fccb8e7653bbd5ecf70470d4a269849b13e60a6d490204cd476cd1"
+      }
+    }
+  },
+  "publicProduct": {
+    "judgeUrl": "https://counterlab.cserules.workers.dev/judge",
+    "freeTestPath": "/judge",
+    "capabilityManifest": {
+      "path": "docs/RELEASE_CAPABILITY_MANIFEST.json",
+      "sha256": "42c81b7df4b449cce0848c62949cd680031d1fbdd7d83c3ed6151e689db0211c"
+    }
+  },
+  "release": {
+    "workerEvidenceCommit": null,
+    "runnerSourceCommit": null,
+    "containerImageDigest": null,
+    "workerVersionId": null,
+    "qualifiedRunnerReceipt": null,
+    "releaseCheckReceipt": null,
+    "deploymentReceipt": null,
+    "productionSmoke": null
+  },
+  "repository": {
+    "url": "https://github.com/ALikesToCode/CounterLab",
+    "accessMode": "UNVERIFIED",
+    "accessEvidence": null,
+    "privateJudgeAddresses": []
+  },
+  "video": {
+    "publicUrl": null,
+    "durationSeconds": null,
+    "audioPresent": false,
+    "codexRoleCovered": false,
+    "gpt56RoleCovered": false,
+    "script": {
+      "path": "docs/DEMO_SCRIPT.md",
+      "sha256": "ba17a7cedbf386a4e6eb1481e623a656e9b39ea00be4cc9ef586aad8af35f17b"
+    },
+    "captions": {
+      "path": "docs/DEMO_CAPTIONS.vtt",
+      "sha256": "01af76f23a4c30bf0fe3f65108d19aff11aa2d84e6af35001338dc0c5776a9fd"
+    },
+    "verificationEvidence": null
+  },
+  "feedback": {
+    "sessionId": null,
+    "evidence": null
+  },
+  "browserQualification": {
+    "authority": "STOCK_DESIGN_REVIEW",
+    "exactReleaseBound": false,
+    "desktopComplete": false,
+    "mobileComplete": false,
+    "requiredSkips": 8,
+    "failures": 0,
+    "totalConsoleErrors": 2,
+    "expectedHttpResourceConsoleErrors": 2,
+    "unexpectedConsoleErrors": 0,
+    "expectedHttpErrorResponses": 2,
+    "observedHttpErrorResponses": 2,
+    "unexpectedHttpErrorResponses": 0,
+    "unexpectedFailedRequests": 0,
+    "playwrightReport": null,
+    "evidenceIndex": null,
+    "journeyEvidence": [],
+    "manualEvidence": {
+      "keyboard": null,
+      "screenReaderNames": null,
+      "reducedMotion": null,
+      "noHorizontalOverflow": null,
+      "zoom200": null,
+      "longContent": null,
+      "narrowVisualizations": null,
+      "touchTargets": null,
+      "consoleAndNetwork": null,
+      "webVitals": null
+    },
+    "evidence": null
+  },
+  "assets": [],
+  "impact": {
+    "status": "NO_DATA",
+    "aggregate": {
+      "path": "docs/LEARNER_PILOT_RESULTS.json",
+      "sha256": "6f1e4b63a7a0214d5f10d9052faa623ed9cbf64ae8e01f430844c01c092cd035"
+    },
+    "qualifiedReleaseReceiptSha256": null
+  },
+  "publicLinkAudit": {
+    "loggedOut": false,
+    "checkedAt": null,
+    "evidence": null
+  },
+  "officialSubmission": {
+    "state": "NOT_SUBMITTED",
+    "publicSlug": null,
+    "submittedAt": null,
+    "receipt": null,
+    "postSubmitLoggedOutEvidence": null
+  }
+}

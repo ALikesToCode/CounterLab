@@ -30,31 +30,36 @@ _MAX_DIAGNOSTIC_BYTES = 4_000
 _SHA256 = re.compile(r"^[a-f0-9]{64}$")
 _CONTAINED_RUNTIME_SESSION_ID = re.compile(r"^rt-[a-z0-9][a-z0-9-]{7,13}$")
 _CONTAINED_RUNTIME_SUBPROCESS_ENVIRONMENT = {"PATH": "/usr/bin:/bin"}
-_CONTROL_RECEIPT_KEYS = {
-    "schemaVersion",
-    "status",
-    "timeoutKind",
-    "runtimePolicySha256",
-    "invocationId",
-    "finalContainerId",
-    "commandSha256",
-    "rootlessReceiptFileSha256",
-    "rootlessReceiptPayloadSha256",
-    "timeoutObserved",
-    "candidateWallSeconds",
-    "elapsedMs",
-    "cleanupReserveMs",
-    "taskAbsent",
-    "containerAbsent",
-    "snapshotAbsent",
-    "invocationAliasAbsent",
-    "imageRootfsAbsent",
-    "persistedAuthorityVerified",
-    "readOnlyMountsUnchanged",
-    "imageRootfsUnchanged",
-    "resultReleased",
-    "receiptPayloadSha256",
-}
+_AGGREGATE_TIMEOUT_QUALIFICATION_MODE = "aggregate-timeout-proof-v1"
+CONTAINED_PROCESS_ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024
+_CONTROL_RECEIPT_V2_KEYS = frozenset(
+    {
+        "schemaVersion",
+        "status",
+        "timeoutKind",
+        "runtimePolicySha256",
+        "invocationId",
+        "finalContainerId",
+        "commandSha256",
+        "rootlessReceiptFileSha256",
+        "rootlessReceiptPayloadSha256",
+        "timeoutObserved",
+        "candidateWallSeconds",
+        "elapsedMs",
+        "cleanupReserveMs",
+        "taskAbsent",
+        "containerAbsent",
+        "snapshotAbsent",
+        "invocationAliasAbsent",
+        "imageRootfsAbsent",
+        "persistedAuthorityVerified",
+        "readOnlyMountsUnchanged",
+        "imageRootfsUnchanged",
+        "resultReleased",
+        "receiptPayloadSha256",
+    }
+)
+_CONTROL_RECEIPT_V3_KEYS = _CONTROL_RECEIPT_V2_KEYS | {"qualificationMode"}
 _CONTROL_CLEANUP_FIELDS = (
     "taskAbsent",
     "containerAbsent",
@@ -273,7 +278,16 @@ def _validate_contained_runtime_control_receipt(
         value = json.loads(control_bytes)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise DockerExecutionError("runtime_control_invalid") from exc
-    if not isinstance(value, dict) or set(value) != _CONTROL_RECEIPT_KEYS:
+    if not isinstance(value, dict):
+        raise DockerExecutionError("runtime_control_invalid")
+    schema_version = value.get("schemaVersion")
+    if schema_version == "2":
+        expected_keys = _CONTROL_RECEIPT_V2_KEYS
+    elif schema_version == "3":
+        expected_keys = _CONTROL_RECEIPT_V3_KEYS
+    else:
+        raise DockerExecutionError("runtime_control_invalid")
+    if set(value) != expected_keys:
         raise DockerExecutionError("runtime_control_invalid")
     payload = {
         key: entry for key, entry in value.items() if key != "receiptPayloadSha256"
@@ -282,15 +296,21 @@ def _validate_contained_runtime_control_receipt(
         value.get("resultReleased") is False
     )
     if (
-        value.get("schemaVersion") != "2"
+        (
+            schema_version == "3"
+            and value.get("qualificationMode")
+            != _AGGREGATE_TIMEOUT_QUALIFICATION_MODE
+        )
         or value.get("status") not in {"TIMED_OUT_CLEAN", "TIMED_OUT_UNCLEAN"}
         or value.get("timeoutKind") != "WALL_CLOCK"
         or value.get("runtimePolicySha256") != CONTAINED_RUNTIME_POLICY_SHA256
         or not isinstance(value.get("candidateWallSeconds"), int)
+        or isinstance(value.get("candidateWallSeconds"), bool)
         or value["candidateWallSeconds"] != expected_wall_seconds
         or value.get("cleanupReserveMs")
         != int(_CONTAINED_RUNTIME_POLICY["cleanupReserveMs"])
         or not isinstance(value.get("elapsedMs"), int)
+        or isinstance(value.get("elapsedMs"), bool)
         or value["elapsedMs"] < 1
         or value["elapsedMs"] > 600_000
         or value.get("timeoutObserved") is not True
@@ -314,7 +334,11 @@ def _validate_contained_runtime_control_receipt(
         / ".rt"
         / session_id
         / "run/rootless-specs"
-        / f"{value['finalContainerId']}.receipt.json",
+        / (
+            f"{value['finalContainerId']}.qualified-receipt.json"
+            if schema_version == "3"
+            else f"{value['finalContainerId']}.receipt.json"
+        ),
         label="rootless_receipt",
         must_exist=True,
     )
@@ -381,6 +405,7 @@ def build_docker_command(
     """Build a list-form Docker command with no inherited credentials."""
 
     memory_bytes = limits.memory_mb * 1024 * 1024
+    address_space_bytes = max(memory_bytes, CONTAINED_PROCESS_ADDRESS_SPACE_BYTES)
     return (
         docker_bin,
         "run",
@@ -398,7 +423,7 @@ def build_docker_command(
         f"--memory-swap={limits.memory_mb}m",
         f"--cpus={limits.cpu_count}",
         f"--ulimit=cpu={limits.wall_seconds}:{limits.wall_seconds}",
-        f"--ulimit=as={memory_bytes}:{memory_bytes}",
+        f"--ulimit=as={address_space_bytes}:{address_space_bytes}",
         f"--ulimit=fsize={limits.max_output_bytes}:{limits.max_output_bytes}",
         "--ulimit=nofile=64:64",
         f"--ulimit=nproc={limits.max_processes}:{limits.max_processes}",

@@ -15,6 +15,7 @@ import {
   ReasoningDiffV2Schema,
 } from "@counterlab/contracts";
 import { createHash } from "node:crypto";
+import type { Request } from "@playwright/test";
 import { lstat, readFile, realpath, writeFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 
@@ -25,11 +26,14 @@ import {
   snapshotBrowserPerformanceEvidence,
   type BrowserPerformanceEvidence,
 } from "./performance-evidence";
+import { privateSessionHeaders } from "./private-session";
 
 const claim =
   "The 98 percent random split accuracy proves this model generalizes to customers it has never seen.";
 const revision =
   "When rows repeat an entity, hold out whole entities and remove identity-derived features before claiming generalization.";
+const prePredictionResultLanguage =
+  /59\.4%|\bdeceptive\b|\bfairer test\b|\bverified result\b|\bevidence verdict\b|\bsupported hypothesis\b|\bthe fix\b|\bremove customer(?:_| )id\b|\bkeep each customer's rows together\b|\bproves?\b/i;
 const imbalanceNotebookPath = new URL(
   "../../../fixtures/notebooks/fraud_class_imbalance.ipynb",
   import.meta.url,
@@ -150,9 +154,11 @@ async function writeLiveSmokeEvidence(
   if (sessionId === null) {
     throw new Error("Live smoke evidence requires a persisted session ID");
   }
+  const ownerHeaders = await privateSessionHeaders(page, sessionId);
 
   const completedSessionResponse = await page.request.get(
     `/api/sessions/${encodeURIComponent(sessionId)}`,
+    { headers: ownerHeaders },
   );
   expect(completedSessionResponse.ok()).toBe(true);
   const completedSessionPayload = (await completedSessionResponse.json()) as {
@@ -270,7 +276,7 @@ async function writeLiveSmokeEvidence(
 
   const duplicatePublicationResponse = await page.request.post(
     `/api/sessions/${encodeURIComponent(sessionId)}/replays`,
-    { data: {} },
+    { data: {}, headers: ownerHeaders },
   );
   expect(duplicatePublicationResponse.status()).toBe(200);
   const duplicatePublicationPayload =
@@ -285,6 +291,7 @@ async function writeLiveSmokeEvidence(
 
   const activeStatusResponse = await page.request.get(
     `/api/sessions/${encodeURIComponent(sessionId)}/replays/status`,
+    { headers: ownerHeaders },
   );
   expect(activeStatusResponse.ok()).toBe(true);
   const activeStatusPayload = (await activeStatusResponse.json()) as {
@@ -509,6 +516,7 @@ async function writeLiveSmokeEvidence(
 
   const revokedStatusResponse = await page.request.get(
     `/api/sessions/${encodeURIComponent(sessionId)}/replays/status`,
+    { headers: ownerHeaders },
   );
   expect(revokedStatusResponse.ok()).toBe(true);
   await expect(revokedStatusResponse.json()).resolves.toMatchObject({
@@ -520,7 +528,7 @@ async function writeLiveSmokeEvidence(
 
   const duplicateRevocationResponse = await page.request.post(
     `/api/sessions/${encodeURIComponent(sessionId)}/replays/revoke`,
-    { data: {} },
+    { data: {}, headers: ownerHeaders },
   );
   expect(duplicateRevocationResponse.status()).toBe(200);
   await expect(duplicateRevocationResponse.json()).resolves.toMatchObject({
@@ -529,7 +537,7 @@ async function writeLiveSmokeEvidence(
 
   const republishRevokedResponse = await page.request.post(
     `/api/sessions/${encodeURIComponent(sessionId)}/replays`,
-    { data: {} },
+    { data: {}, headers: ownerHeaders },
   );
   expect(republishRevokedResponse.status()).toBe(409);
   await expect(republishRevokedResponse.json()).resolves.toMatchObject({
@@ -660,12 +668,13 @@ async function resetWithBrowserFailureObservation(
   return failures;
 }
 
-function expectWithinComprehensionBudget(
-  startedAt: number,
+async function expectWithinComprehensionBudget(
+  page: Page,
   maximumMs: number,
   label: string,
 ) {
-  expect(Date.now() - startedAt, label).toBeLessThanOrEqual(maximumMs);
+  const navigationElapsedMs = await page.evaluate(() => performance.now());
+  expect(navigationElapsedMs, label).toBeLessThanOrEqual(maximumMs);
 }
 
 function expectNoBrowserFailures(failures: BrowserFailureLog) {
@@ -704,7 +713,6 @@ async function expectBeliefBreakInFirstViewport(
   page: Page,
   surface: Locator,
   modeLabel: RegExp,
-  startedAt: number,
 ) {
   const mechanism = surface.getByRole("region", {
     name: "Verified sample belief-break mechanism",
@@ -792,6 +800,14 @@ async function expectBeliefBreakInFirstViewport(
 
   await expect(mechanism).toBeVisible();
   for (const stage of comprehensionStages) {
+    await Promise.all(
+      stage.required.map(({ locator }) => expect(locator).toBeVisible()),
+    );
+    await expectWithinComprehensionBudget(
+      page,
+      stage.budgetMs,
+      `Judge ${stage.label} must be inspectable within ${stage.budgetMs / 1_000} seconds`,
+    );
     for (const required of stage.required) {
       await expectEntirelyInFirstViewport(
         page,
@@ -799,15 +815,19 @@ async function expectBeliefBreakInFirstViewport(
         required.label,
       );
     }
-    expectWithinComprehensionBudget(
-      startedAt,
-      stage.budgetMs,
-      `Judge ${stage.label} must be inspectable within ${stage.budgetMs / 1_000} seconds`,
-    );
   }
 }
 
-async function captureBeliefBreakScreenshot(page: Page, fileName: string) {
+async function captureBeliefBreakScreenshot(
+  page: Page,
+  fileName: string,
+  options: {
+    performanceBudgetScope?:
+      "navigation-first-fold" | "post-seal-spa-observation";
+  } = {},
+) {
+  const performanceBudgetScope =
+    options.performanceBudgetScope ?? "navigation-first-fold";
   const configuredDirectory =
     process.env.COUNTERLAB_E2E_BELIEF_BREAK_EVIDENCE_DIR ??
     resolve(requiredRuntimeRoot(), "evidence", "belief-break");
@@ -816,7 +836,9 @@ async function captureBeliefBreakScreenshot(page: Page, fileName: string) {
   );
   await page.screenshot({ path: destination, fullPage: false });
   const performance = await snapshotBrowserPerformanceEvidence(page);
-  expectFirstFoldPerformanceBudgets(performance);
+  if (performanceBudgetScope === "navigation-first-fold") {
+    expectFirstFoldPerformanceBudgets(performance);
+  }
   const evidenceDestination = await ensureRuntimeParent(
     resolve(configuredDirectory, fileName.replace(/\.png$/u, ".json")),
   );
@@ -827,6 +849,10 @@ async function captureBeliefBreakScreenshot(page: Page, fileName: string) {
         browserAuthority: currentBrowserAuthorityLabel(),
         capturedAt: new Date().toISOString(),
         performance,
+        performanceBudget: {
+          enforced: performanceBudgetScope === "navigation-first-fold",
+          scope: performanceBudgetScope,
+        },
         screenshot: fileName,
       },
       null,
@@ -892,10 +918,50 @@ async function startInstant(page: Page) {
   ).toBeVisible();
 }
 
+function waitForPostResponse(page: Page, routeSuffix: string) {
+  return page.waitForResponse((response) => {
+    const request = response.request();
+    return (
+      request.method() === "POST" &&
+      new URL(response.url()).pathname.endsWith(routeSuffix)
+    );
+  });
+}
+
+function trackNetworkQuiescence(page: Page): () => Promise<void> {
+  const active = new Set<Request>();
+  page.on("request", (request) => active.add(request));
+  page.on("requestfinished", (request) => active.delete(request));
+  page.on("requestfailed", (request) => active.delete(request));
+
+  return async () => {
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      if (active.size === 0) {
+        await page.waitForTimeout(500);
+        if (active.size === 0) return;
+      } else {
+        await page.waitForTimeout(50);
+      }
+    }
+    throw new Error(
+      `Browser network did not become quiescent (${active.size} request(s) remain)`,
+    );
+  };
+}
+
 async function commitAndOpenResult(page: Page) {
   await page.getByLabel(/Remain near 98%/i).check();
+  const compileFinished = waitForPostResponse(page, "/lab/compile");
   await page.getByRole("button", { name: /Seal my prediction/i }).click();
-  await page.getByRole("button", { name: /Run the fair test/i }).click();
+  expect((await compileFinished).ok()).toBe(true);
+  const runFinished = waitForPostResponse(page, "/lab/run");
+  await page
+    .getByRole("button", {
+      name: /Run the fair test|Reveal verified sample result/i,
+    })
+    .click();
+  expect((await runFinished).ok()).toBe(true);
   await expect(
     page.getByRole("heading", { name: /Compare the verified result/i }),
   ).toBeVisible();
@@ -914,6 +980,7 @@ async function authorResultInterpretation(page: Page) {
   ).toBeVisible();
   await expect(page.getByRole("tab", { name: /Explore/i })).toBeEnabled();
   await expect(page.getByRole("tab", { name: /Boundary/i })).toBeEnabled();
+  await page.waitForLoadState("networkidle");
 }
 
 async function selectLeakageTransferEvidence(page: Page) {
@@ -1315,9 +1382,42 @@ for (const viewport of beliefBreakViewports) {
   test(`${viewport.name} Landing keeps the unprimed Question and fair-test promise in the first viewport`, async ({
     page,
   }) => {
-    const navigationStartedAt = Date.now();
     await page.setViewportSize(viewport);
     const failures = await resetWithBrowserFailureObservation(page);
+
+    const heading = page.getByRole("heading", {
+      name: /What result are you trying to understand/i,
+    });
+    const artifactSafetySummary = page.getByText(
+      /Ask a question or attach a supported notebook.*never runs its cells/i,
+    );
+    const audienceDifference = page.getByText(
+      /Built for ML learners: seal a Prediction, then let one controlled test answer—not AI prose/i,
+    );
+    const composer = page.getByLabel("Your question or claim");
+    const submit = page.getByRole("button", { name: /Test this claim/i });
+    const promptStarters = page.getByRole("group", {
+      name: /Prompt starters/i,
+    });
+    const preview = page.locator(
+      '[data-presentation="strip"][data-result-visibility="locked"]',
+    );
+    await Promise.all(
+      [
+        heading,
+        artifactSafetySummary,
+        audienceDifference,
+        composer,
+        submit,
+        promptStarters,
+        preview,
+      ].map((locator) => expect(locator).toBeVisible()),
+    );
+    await expectWithinComprehensionBudget(
+      page,
+      10_000,
+      "Landing Question and fair-test promise must become inspectable within ten seconds",
+    );
 
     const skipLink = page.getByRole("link", {
       name: /Skip to main content/i,
@@ -1325,7 +1425,6 @@ for (const viewport of beliefBreakViewports) {
     await skipLink.focus();
     await expect(skipLink).toBeFocused();
     await page.keyboard.press("Tab");
-    const composer = page.getByLabel("Your question or claim");
     await expect(composer).toBeFocused();
     await expectEntirelyInFirstViewport(
       page,
@@ -1334,37 +1433,52 @@ for (const viewport of beliefBreakViewports) {
     );
     await expectEntirelyInFirstViewport(
       page,
-      page.getByText(
-        /For learners testing whether a notebook result means what they think it means/i,
-      ),
-      "learner audience statement",
+      heading,
+      "Question-first heading",
+    );
+    await expectEntirelyInFirstViewport(
+      page,
+      artifactSafetySummary,
+      "artifact safety summary",
     );
 
-    const preview = page.getByRole("complementary", {
-      name: /One changed variable.*Everything else held fixed/i,
-    });
+    await expect(submit).toBeDisabled();
+    await expectEntirelyInFirstViewport(
+      page,
+      submit,
+      "primary Question action",
+    );
+    await expectEntirelyInFirstViewport(
+      page,
+      promptStarters,
+      "learner prompt starters",
+    );
+    if (viewport.width <= 620) {
+      const submitBox = await submit.boundingBox();
+      expect(submitBox, "mobile primary Question action bounds").not.toBeNull();
+      expect(submitBox!.width).toBeGreaterThanOrEqual(130);
+    }
+
     await expectEntirelyInFirstViewport(
       page,
       preview,
       "pre-Prediction fair-test promise",
     );
+    await expect(preview).toContainText(/Result locked until Prediction/i);
     await expect(preview).toContainText(
-      /Result hidden until your Prediction is sealed/i,
+      /Familiar rows.*change who counts as new.*Unseen customers/i,
     );
     await expect(preview).toContainText(
-      /Name the claim.*Lock your expectation.*Change one thing/i,
+      /Same model, features, preprocessing, sample size, metric, and seed/i,
     );
-    await expect(page.locator("body")).not.toContainText("59.4%");
+    await expect(page.locator("body")).not.toContainText(
+      prePredictionResultLanguage,
+    );
     await expect(
       page.getByRole("region", {
         name: "Verified sample belief-break mechanism",
       }),
     ).toHaveCount(0);
-    expectWithinComprehensionBudget(
-      navigationStartedAt,
-      10_000,
-      "Landing Question and fair-test promise must become inspectable within ten seconds",
-    );
     await expectNoHorizontalOverflow(page);
     await captureBeliefBreakScreenshot(
       page,
@@ -1377,7 +1491,6 @@ for (const viewport of beliefBreakViewports) {
   test(`${viewport.name} Judge Mode shows the honest fixed-sample belief break in the first viewport`, async ({
     page,
   }) => {
-    const navigationStartedAt = Date.now();
     const failures = observeBrowserFailures(page);
     await installBrowserPerformanceEvidence(page);
     await page.setViewportSize(viewport);
@@ -1391,7 +1504,6 @@ for (const viewport of beliefBreakViewports) {
       page,
       preview,
       /Completed fixed sample.*not a live result/i,
-      navigationStartedAt,
     );
     await expect(
       preview.getByText(
@@ -1459,7 +1571,11 @@ for (const viewport of beliefBreakViewports) {
     await expect(
       page.getByRole("heading", { name: /The fair test is ready/i }),
     ).toBeVisible();
-    await page.getByRole("button", { name: /Run the fair test/i }).click();
+    await page
+      .getByRole("button", {
+        name: /Run the fair test|Reveal verified sample result/i,
+      })
+      .click();
     await expect(
       page.getByRole("heading", { name: /Compare the verified result/i }),
     ).toBeVisible();
@@ -1485,6 +1601,7 @@ for (const viewport of beliefBreakViewports) {
     await captureBeliefBreakScreenshot(
       page,
       `belief-break-sample-post-seal-${viewport.name}.png`,
+      { performanceBudgetScope: "post-seal-spa-observation" },
     );
     await page.waitForLoadState("networkidle");
     expectNoBrowserFailures(failures);
@@ -1492,7 +1609,7 @@ for (const viewport of beliefBreakViewports) {
 }
 
 test("Judge Mode distinguishes every authority path", async ({ page }) => {
-  const healthResponse = await page.request.get("/api/health");
+  const healthResponse = await page.request.get("/api/health?readiness=probe");
   expect(healthResponse.ok()).toBe(true);
   const health = (await healthResponse.json()) as {
     data?: {
@@ -1511,7 +1628,7 @@ test("Judge Mode distinguishes every authority path", async ({ page }) => {
     health.data.liveCodex === "configured" &&
     health.data.liveKernel === "configured" &&
     health.data.sandbox === "credential-and-privilege-boundary" &&
-    health.data.generationFilesystemReadIsolation === "PARTIAL" &&
+    health.data.generationFilesystemReadIsolation === "OS_ENFORCED" &&
     health.data.release?.status === "bound";
   await page.goto("/judge");
   await expect(page).toHaveURL(/\/judge$/);
@@ -1520,7 +1637,8 @@ test("Judge Mode distinguishes every authority path", async ({ page }) => {
       name: /see a verified belief break in ten seconds/i,
     }),
   ).toBeVisible();
-  await expect(page.getByText("Sample lesson")).toBeVisible();
+  await page.getByRole("button", { name: /Check live readiness/i }).click();
+  await expect(page.getByText("Sample lesson", { exact: true })).toBeVisible();
   await expect(page.getByText("Live notebook analysis")).toBeVisible();
   await expect(
     page.getByText("Verified replay", { exact: true }),
@@ -1532,7 +1650,10 @@ test("Judge Mode distinguishes every authority path", async ({ page }) => {
     );
   } else {
     await expect(
-      page.getByText(/live authority is unavailable/i),
+      page.getByRole("status").filter({
+        hasText:
+          /live authority (?:is|remains) unavailable|live authority did not pass the latest readiness check/i,
+      }),
     ).toBeVisible();
     await expect(page.getByRole("link", { name: /run live/i })).toHaveCount(0);
   }
@@ -1572,14 +1693,22 @@ test("Judge Mode distinguishes every authority path", async ({ page }) => {
 test("the first visit explains the lesson before asking for technical knowledge", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  expect(page.viewportSize()).toEqual({ width: 768, height: 1024 });
   await reset(page);
+  await revealLandingNavigation(page);
   await expect(
     page.getByRole("heading", {
       name: "What result are you trying to understand?",
     }),
   ).toBeVisible();
   await expect(
-    page.getByText(/No account needed.*never run the cells/i),
+    page.getByText(/reads the evidence and never runs its cells/i),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      /No account needed.*Sample, live, and replay stay clearly labelled/i,
+    ),
   ).toBeVisible();
   await expect(page.getByLabel("Your question or claim")).toBeInViewport();
   await expect(page.getByLabel("Attach notebook")).toBeVisible();
@@ -1612,7 +1741,7 @@ test("the first visit explains the lesson before asking for technical knowledge"
 });
 
 for (const viewport of [
-  { name: "wide desktop", width: 1440, height: 900 },
+  { name: "wide desktop", width: 1920, height: 1080 },
   { name: "compact desktop", width: 1280, height: 720 },
   { name: "mobile", width: 390, height: 844 },
 ] as const) {
@@ -1620,6 +1749,10 @@ for (const viewport of [
     page,
   }) => {
     await page.setViewportSize(viewport);
+    expect(page.viewportSize()).toEqual({
+      width: viewport.width,
+      height: viewport.height,
+    });
     await reset(page);
     await revealLandingNavigation(page);
 
@@ -1753,6 +1886,8 @@ test("Try Instantly persists the verified learning loop and exports a valid proo
 test("the lesson keeps one learner decision in focus at a time", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  expect(page.viewportSize()).toEqual({ width: 1366, height: 768 });
   await startInstant(page);
   await commitAndOpenResult(page);
 
@@ -1784,7 +1919,9 @@ test("the lesson keeps one learner decision in focus at a time", async ({
   await page.getByRole("button", { name: /Check transfer/i }).click();
 
   await expect(
-    page.getByRole("heading", { name: /You applied the rule correctly/i }),
+    page.getByRole("heading", {
+      name: /This fixed forecasting transfer passed/i,
+    }),
   ).toBeVisible();
   expect(await page.evaluate(() => window.scrollY)).toBeLessThan(24);
   await expect(
@@ -1796,7 +1933,10 @@ test("the lesson keeps one learner decision in focus at a time", async ({
   expect(await page.evaluate(() => window.scrollY)).toBeLessThan(24);
   await expect(page.locator("pre.diff")).not.toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Download proof record", exact: true }),
+    page.getByRole("button", {
+      name: "Download repaired notebook",
+      exact: true,
+    }),
   ).toBeVisible();
 });
 
@@ -1808,8 +1948,11 @@ test("prediction is immutable and results do not exist before commitment", async
     window.localStorage.getItem("counterlab.sessionId"),
   );
   expect(sessionId).not.toBeNull();
+  const ownerHeaders = await privateSessionHeaders(page, sessionId!);
 
-  const before = await page.request.get(`/api/sessions/${sessionId}`);
+  const before = await page.request.get(`/api/sessions/${sessionId}`, {
+    headers: ownerHeaders,
+  });
   expect(before.ok()).toBe(true);
   expect((await before.json()).data.verifiedResult).toBeUndefined();
 
@@ -1824,12 +1967,15 @@ test("prediction is immutable and results do not exist before commitment", async
     `/api/sessions/${sessionId}/prediction`,
     {
       data: { choice: "Accuracy remains near 98%", confidence: 100 },
+      headers: ownerHeaders,
     },
   );
   expect(overwrite.status()).toBe(409);
   expect((await overwrite.json()).error.code).toBe("ILLEGAL_TRANSITION");
 
-  const committed = await page.request.get(`/api/sessions/${sessionId}`);
+  const committed = await page.request.get(`/api/sessions/${sessionId}`, {
+    headers: ownerHeaders,
+  });
   expect(committed.ok()).toBe(true);
   const committedPayload = await committed.json();
   expect(committedPayload.data.prediction.confidence).toBe(88);
@@ -1864,23 +2010,39 @@ test("the fixed sample keeps approved framing and can return home", async ({
 test("refresh restores the question and confirmed Prediction phases", async ({
   page,
 }) => {
+  const waitForNetworkQuiescence = trackNetworkQuiescence(page);
   await reset(page);
+  const sampleSessionCreated = waitForPostResponse(
+    page,
+    "/api/sample/sessions",
+  );
   await page.getByRole("button", { name: /Try verified sample/i }).click();
+  expect((await sampleSessionCreated).ok()).toBe(true);
+  await expect(
+    page.getByRole("heading", { name: /What do you think the score means/i }),
+  ).toBeVisible();
+  await waitForNetworkQuiescence();
   await page.reload();
   await expect(
     page.getByRole("heading", { name: /What do you think the score means/i }),
   ).toBeVisible();
 
+  const beliefProposed = waitForPostResponse(page, "/belief-test");
   await page.getByRole("button", { name: /Compare two explanations/i }).click();
+  expect((await beliefProposed).ok()).toBe(true);
+  await waitForNetworkQuiescence();
   await page.reload();
   await expect(
     page.getByRole("heading", {
       name: /Does your current explanation capture what you mean/i,
     }),
   ).toBeVisible();
+  const beliefConfirmed = waitForPostResponse(page, "/belief-test/confirm");
   await page
     .getByRole("button", { name: /Yes, this captures my view/i })
     .click();
+  expect((await beliefConfirmed).ok()).toBe(true);
+  await waitForNetworkQuiescence();
   await page.reload();
   await expect(
     page.getByRole("heading", {
@@ -1892,7 +2054,11 @@ test("refresh restores the question and confirmed Prediction phases", async ({
 test("refresh restores the current lesson and the committed prediction", async ({
   page,
 }) => {
+  const waitForNetworkQuiescence = trackNetworkQuiescence(page);
+  const beliefConfirmed = waitForPostResponse(page, "/belief-test/confirm");
   await startInstant(page);
+  expect((await beliefConfirmed).ok()).toBe(true);
+  await waitForNetworkQuiescence();
   await page.reload();
   await expect(
     page.getByRole("heading", {
@@ -1901,17 +2067,27 @@ test("refresh restores the current lesson and the committed prediction", async (
   ).toBeVisible();
   await page.getByLabel(/Fall materially/i).check();
   await page.getByLabel(/Confidence/i).fill("88");
+  const compileFinished = waitForPostResponse(page, "/lab/compile");
   await page.getByRole("button", { name: /Seal my prediction/i }).click();
+  expect((await compileFinished).ok()).toBe(true);
+  await waitForNetworkQuiescence();
   await page.reload();
   await expect(
     page.getByRole("heading", { name: /The fair test is ready/i }),
   ).toBeVisible();
-  await page.getByRole("button", { name: /Run the fair test/i }).click();
+  const runFinished = waitForPostResponse(page, "/lab/run");
+  await page
+    .getByRole("button", {
+      name: /Run the fair test|Reveal verified sample result/i,
+    })
+    .click();
+  expect((await runFinished).ok()).toBe(true);
   await expect(
     page.getByRole("heading", { name: /Compare the verified result/i }),
   ).toBeVisible();
   await authorResultInterpretation(page);
 
+  await waitForNetworkQuiescence();
   await page.reload();
 
   await expect(
@@ -1925,7 +2101,10 @@ test("refresh restores the current lesson and the committed prediction", async (
   ).toBeVisible();
   await authorResultInterpretation(page);
 
+  const revisionRecorded = waitForPostResponse(page, "/revision");
   await recordRevision(page);
+  expect((await revisionRecorded).ok()).toBe(true);
+  await waitForNetworkQuiescence();
   await page.reload();
   await expect(
     page.getByRole("heading", { name: /Try your rule on forecasting/i }),
@@ -1933,16 +2112,24 @@ test("refresh restores the current lesson and the committed prediction", async (
   await page.getByLabel(/Time-ordered holdout/i).check();
   await page.getByLabel(/Centered rolling target/i).check();
   await selectLeakageTransferEvidence(page);
+  const transferEvaluated = waitForPostResponse(page, "/transfer");
   await page.getByRole("button", { name: /Check transfer/i }).click();
+  expect((await transferEvaluated).ok()).toBe(true);
   await expect(
     page.locator(".eyebrow", { hasText: "Transfer passed" }),
   ).toBeVisible();
+  await waitForNetworkQuiescence();
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: /You applied the rule correctly/i }),
+    page.getByRole("heading", {
+      name: /This fixed forecasting transfer passed/i,
+    }),
   ).toBeVisible();
+  const patchStarted = waitForPostResponse(page, "/patch/compile");
   await page.getByRole("button", { name: /Verify notebook patch/i }).click();
+  expect((await patchStarted).ok()).toBe(true);
   await waitForSamplePatch(page);
+  await waitForNetworkQuiescence();
   await page.reload();
   await expect(
     page.getByRole("heading", {
@@ -1953,7 +2140,11 @@ test("refresh restores the current lesson and the committed prediction", async (
 
 test("a rejected test releases no result and remains recoverable after refresh", async ({
   page,
-}) => {
+}, testInfo) => {
+  testInfo.annotations.push({
+    type: "counterlab-expected-http-errors",
+    description: "409 POST /api/sessions/:sessionId/lab/compile",
+  });
   await page.route("**/api/sessions/*/lab/compile", async (route) => {
     await route.fulfill({
       status: 409,
@@ -1985,7 +2176,10 @@ test("a rejected test releases no result and remains recoverable after refresh",
   const sessionId = await page.evaluate(() =>
     window.localStorage.getItem("counterlab.sessionId"),
   );
-  const stored = await page.request.get(`/api/sessions/${sessionId}`);
+  expect(sessionId).not.toBeNull();
+  const stored = await page.request.get(`/api/sessions/${sessionId}`, {
+    headers: await privateSessionHeaders(page, sessionId!),
+  });
   expect(stored.ok()).toBe(true);
   expect((await stored.json()).data.verifiedResult).toBeUndefined();
 
@@ -2026,9 +2220,11 @@ test("local hints and Theater views never request a model or new result", async 
     "true",
   );
   await expect(
-    page.getByRole("img", {
-      name: /Verified accuracy comparison.*familiar rows.*new customers/i,
-    }),
+    page
+      .locator('[data-trusted-visual-id="verified_sample_belief_break_v1"]')
+      .getByRole("region", {
+        name: "Verified sample belief-break mechanism",
+      }),
   ).toBeVisible();
 
   const hint = page.getByLabel("Contextual help");
@@ -2089,8 +2285,19 @@ test("Replay remains visibly labelled and read-only after refresh", async ({
 }) => {
   await reset(page);
   await page.getByRole("button", { name: /Watch verified replay/i }).click();
-  const replayBanner = page.getByLabel("Legacy replay status");
+  const replayBanner = page.getByLabel("Replay status");
   await expect(replayBanner).toContainText(
+    "Verified replay · read-only stored evidence",
+  );
+  await expect(
+    page.getByRole("heading", { name: /Replay verified session/i }),
+  ).toBeVisible();
+  const continueReplay = page.getByRole("button", {
+    name: /Continue replay/i,
+  });
+  await expect(continueReplay).toBeVisible();
+  await continueReplay.click();
+  await expect(page.getByLabel("Legacy replay status")).toContainText(
     "Verified replay · read-only stored evidence",
   );
   await expect(
@@ -2101,9 +2308,7 @@ test("Replay remains visibly labelled and read-only after refresh", async ({
   await expect(
     page.getByRole("table", { name: /Stored fixed-kernel comparison/i }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /Continue replay/i }),
-  ).toHaveCount(0);
+  await expect(continueReplay).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: /Show me what happened/i }),
   ).toHaveCount(0);
@@ -2122,7 +2327,7 @@ test("Replay remains visibly labelled and read-only after refresh", async ({
 test("missing live capabilities are stated without claiming a model call", async ({
   page,
 }) => {
-  await page.route("**/api/health", async (route) => {
+  await page.route("**/api/health*", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -2155,7 +2360,7 @@ test("missing live capabilities are stated without claiming a model call", async
 test("configured reasoning cannot start without a qualified hosted runner", async ({
   page,
 }) => {
-  await page.route("**/api/health", async (route) => {
+  await page.route("**/api/health*", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -2184,11 +2389,43 @@ test("configured reasoning cannot start without a qualified hosted runner", asyn
     page.getByText(/qualified hosted runner is needed/i),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Continue with my notebook/i }),
+    page.getByLabel(/Attach a supported notebook/i),
   ).not.toBeVisible();
   await expect(page.locator("body")).not.toContainText(
     /OPENAI|GPT-|https?:\/\//i,
   );
+});
+
+test("partial generation isolation cannot expose live notebook upload", async ({
+  page,
+}) => {
+  await page.route("**/api/health*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          platform: "cloudflare-workers",
+          sample: "available",
+          replay: "available",
+          liveGpt: "configured",
+          liveCodex: "configured",
+          liveKernel: "configured",
+          readiness: "ready",
+          sandbox: "credential-and-privilege-boundary",
+          generationFilesystemReadIsolation: "PARTIAL",
+          requestId: "e2e-health-partial-isolation",
+        },
+      }),
+    });
+  });
+
+  await openLiveSetup(page);
+  await expect(
+    page.getByText(/generation filesystem read isolation is partial/i),
+  ).toBeVisible();
+  await expect(page.locator('input[type="file"]')).toHaveCount(0);
 });
 
 test("unsupported notebooks are parsed without execution and cannot advance", async ({
@@ -2285,7 +2522,11 @@ test("the judged path is keyboard operable with reduced motion", async ({
   await expect(
     page.getByRole("heading", { name: /The fair test is ready/i }),
   ).toBeVisible();
-  await page.getByRole("button", { name: /Run the fair test/i }).focus();
+  await page
+    .getByRole("button", {
+      name: /Run the fair test|Reveal verified sample result/i,
+    })
+    .focus();
   await page.keyboard.press("Enter");
   await expect(
     page.getByRole("heading", { name: /Compare the verified result/i }),
@@ -2301,9 +2542,11 @@ test("the judged path is keyboard operable with reduced motion", async ({
     page.getByText(/Interpretation recorded locally/i),
   ).toBeVisible();
 
-  const comparison = page.getByRole("img", {
-    name: /Verified accuracy comparison.*familiar rows.*new customers/i,
-  });
+  const comparison = page
+    .locator('[data-trusted-visual-id="verified_sample_belief_break_v1"]')
+    .getByRole("region", {
+      name: "Verified sample belief-break mechanism",
+    });
   await expect(comparison).toBeVisible();
   const observeTab = page.getByRole("tab", { name: /Observe/i });
   await observeTab.focus();
@@ -2312,7 +2555,7 @@ test("the judged path is keyboard operable with reduced motion", async ({
   await page.keyboard.press("ArrowRight");
   await expect(page.getByRole("tab", { name: /Boundary/i })).toBeFocused();
   await expect(page.getByRole("tabpanel")).toContainText(
-    /Verified sample boundary/i,
+    /Verified sample exploration/i,
   );
   await page.getByRole("button", { name: /Reveal the map/i }).click();
   await expect(
@@ -2382,7 +2625,7 @@ test("a configured hosted runner completes an untouched leakage notebook", async
     liveCodex: "configured",
     liveKernel: "configured",
     sandbox: "credential-and-privilege-boundary",
-    generationFilesystemReadIsolation: "PARTIAL",
+    generationFilesystemReadIsolation: "OS_ENFORCED",
     release: { status: "bound" },
   });
 
@@ -2391,10 +2634,8 @@ test("a configured hosted runner completes an untouched leakage notebook", async
     page.getByText(/Hosted notebook runner is ready/i),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: /Continue with my notebook/i })
-    .click();
-
-  await page.locator('input[type="file"]').setInputFiles(leakageNotebookPath);
+    .getByLabel(/Attach a supported notebook/i)
+    .setInputFiles(leakageNotebookPath);
   await expect(
     page.getByText(/leakage-rows-pipeline.ipynb/i).first(),
   ).toBeVisible();
@@ -2621,7 +2862,7 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
     liveCodex: "configured",
     liveKernel: "configured",
     sandbox: "credential-and-privilege-boundary",
-    generationFilesystemReadIsolation: "PARTIAL",
+    generationFilesystemReadIsolation: "OS_ENFORCED",
     release: { status: "bound" },
   });
 
@@ -2633,10 +2874,8 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
     page.getByText(/Hosted notebook runner is ready/i),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: /Continue with my notebook/i })
-    .click();
-
-  await page.locator('input[type="file"]').setInputFiles(imbalanceNotebookPath);
+    .getByLabel(/Attach a supported notebook/i)
+    .setInputFiles(imbalanceNotebookPath);
   await expect(
     page.getByText(/fraud_class_imbalance.ipynb/i).first(),
   ).toBeVisible();
@@ -2700,10 +2939,10 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
       "When positive cases are rare, compare against the majority baseline and choose class-specific metrics and a threshold that match deployment cost.",
     );
   await page.getByRole("button", { name: /Try it on defects/i }).click();
-  await page.getByLabel(/Lower threshold based on missed-defect cost/i).check();
-  await page.getByLabel(/Missing a defect is the costly error/i).check();
-  await page.getByLabel(/Confusion matrix shows misses/i).check();
-  await page.getByLabel(/Prevalence changes precision/i).check();
+  await page.getByLabel(/Reject the accuracy-only conclusion/i).check();
+  await page.getByLabel(/Defect recall and PR-AUC/i).check();
+  await page.getByLabel(/zero true positives/i).check();
+  await page.getByLabel(/Defects are only 1%/i).check();
   await page.getByRole("button", { name: /Check transfer/i }).click();
   await expect(page.locator(".imbalance-transfer-pass .eyebrow")).toHaveText(
     "Transfer passed",

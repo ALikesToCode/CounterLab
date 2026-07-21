@@ -1,15 +1,20 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import type { StudioContext } from "../components/studio/types";
+import { createDefaultProofBoundSessionFixture } from "../test-fixtures/proofBundle";
 import { CounterLabStudio } from "./CounterLabStudio";
 
-const context = {
+const context: StudioContext = {
   mode: "live" as const,
   stage: "live-compile" as const,
   artifact: null,
   session: null,
   events: [],
 };
+
+const legacyProofSession = createDefaultProofBoundSessionFixture();
+const legacyProofBundle = legacyProofSession.proofBundle;
 
 describe("CounterLabStudio", () => {
   it("closes proof after compile when it was opened automatically", () => {
@@ -132,6 +137,34 @@ describe("CounterLabStudio", () => {
     expect(tools).toHaveFocus();
   });
 
+  it("disables new analysis while the current request is in flight", () => {
+    const newAnalysis = vi.fn();
+    render(
+      <CounterLabStudio
+        context={context}
+        actions={{
+          newAnalysis,
+          newAnalysisDisabled: true,
+          showEvidence: vi.fn(),
+          startOver: vi.fn(),
+          openRecent: vi.fn(),
+        }}
+      >
+        <main>Pending request</main>
+      </CounterLabStudio>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /project & evidence/i }),
+    );
+    const newAnalysisButton = screen.getByRole("button", {
+      name: /new analysis/i,
+    });
+    expect(newAnalysisButton).toBeDisabled();
+    fireEvent.click(newAnalysisButton);
+    expect(newAnalysis).not.toHaveBeenCalled();
+  });
+
   it("opens the keyboard command palette without hiding visible controls", () => {
     const analyze = vi.fn();
     render(
@@ -182,6 +215,139 @@ describe("CounterLabStudio", () => {
       "aria-selected",
       "true",
     );
+  });
+
+  it("shows recorded legacy Proof Bundle details in their evidence tabs", () => {
+    render(
+      <CounterLabStudio
+        context={{
+          ...context,
+          mode: "instant",
+          session: legacyProofSession,
+        }}
+        actions={{
+          newAnalysis: vi.fn(),
+          showEvidence: vi.fn(),
+          startOver: vi.fn(),
+          openRecent: vi.fn(),
+        }}
+      >
+        <main>Completed sample</main>
+      </CounterLabStudio>,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Tests" }));
+    expect(screen.getByText("3 passed · 0 failed")).toBeInTheDocument();
+    expect(screen.getByText("Public test report SHA-256")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Verifier" }));
+    expect(screen.getByText("zero_group_overlap")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Diff" }));
+    expect(screen.getByText("Changed notebook cells: 3")).toBeInTheDocument();
+    expect(screen.getByText(/cell-3-before\.py/iu)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Plan" }));
+    expect(screen.getByText("Recorded experiment plan")).toBeInTheDocument();
+    expect(screen.getByText("customer_group_split")).toBeInTheDocument();
+    expect(screen.getByText("Generated adapter SHA-256")).toBeInTheDocument();
+  });
+
+  it("never labels rejected legacy proof records as verified", () => {
+    if (legacyProofBundle.schemaVersion !== "1") {
+      throw new Error("legacy proof test fixture changed schema");
+    }
+    const rejectedProofBundle = {
+      ...legacyProofBundle,
+      externalVerifier: {
+        ...legacyProofBundle.externalVerifier,
+        status: "REJECTED" as const,
+      },
+      patchResult: {
+        ...legacyProofBundle.patchResult,
+        status: "REJECTED" as const,
+        verification: {
+          ...legacyProofBundle.patchResult.verification,
+          passed: false,
+        },
+      },
+    };
+    const rejectedProofSession = {
+      ...legacyProofSession,
+      patchResult: rejectedProofBundle.patchResult,
+      proofBundle: rejectedProofBundle,
+    };
+    render(
+      <CounterLabStudio
+        context={{
+          ...context,
+          mode: "instant",
+          session: rejectedProofSession,
+        }}
+        actions={{
+          newAnalysis: vi.fn(),
+          showEvidence: vi.fn(),
+          startOver: vi.fn(),
+          openRecent: vi.fn(),
+        }}
+      >
+        <main>Rejected proof record</main>
+      </CounterLabStudio>,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Diff" }));
+    expect(screen.getByText("Rejected patch record")).toBeInTheDocument();
+    expect(screen.getByLabelText("Recorded patch diff")).toHaveAttribute(
+      "tabindex",
+      "0",
+    );
+    expect(screen.queryByText("Verified patch")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Verifier" }));
+    expect(
+      screen.getByText("Named invariants recorded before rejection"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Accepted named invariants"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("requires both verified status and a passing patch report", () => {
+    const inconsistentProofBundle = {
+      ...legacyProofBundle,
+      patchResult: {
+        ...legacyProofBundle.patchResult,
+        verification: {
+          ...legacyProofBundle.patchResult.verification,
+          passed: false,
+        },
+      },
+    };
+    render(
+      <CounterLabStudio
+        context={{
+          ...context,
+          mode: "instant",
+          session: {
+            ...legacyProofSession,
+            patchResult: inconsistentProofBundle.patchResult,
+            proofBundle: inconsistentProofBundle,
+          },
+        }}
+        actions={{
+          newAnalysis: vi.fn(),
+          showEvidence: vi.fn(),
+          startOver: vi.fn(),
+          openRecent: vi.fn(),
+        }}
+      >
+        <main>Inconsistent proof record</main>
+      </CounterLabStudio>,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Diff" }));
+    expect(screen.getByText("Unverified patch record")).toBeInTheDocument();
+    expect(screen.queryByText("Verified patch")).not.toBeInTheDocument();
   });
 
   it("exposes private-session revocation only on demand in provenance", () => {

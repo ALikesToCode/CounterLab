@@ -11,12 +11,21 @@ misconceptions in supported Jupyter notebooks. Its released Subject Packs cover
 entity leakage and class imbalance/metric choice; it is not a generic notebook
 copilot or an unrestricted code runner.
 
-**Live judge surface:** <https://counterlab.cserules.workers.dev>
+**Live judge surface:** <https://counterlab.cserules.workers.dev/judge>
 
 The v6.1 learner UX is implemented locally on
-`feat/learner-ux-v6.1`; it has not been pushed, deployed, or browser-qualified.
-The public URL represents its separately recorded deployment and must not be
-treated as running this branch.
+`feat/learner-ux-v6.1` and has current local CloakBrowser evidence. It has not
+yet been pushed, deployed, or qualified as one exact public source/image/Worker
+tuple. The public URL represents its separately recorded historical deployment
+and must not be treated as running this branch.
+
+The first screen states the operating contract directly: CounterLab is a
+**belief debugger, not a tutor or notebook linter**. Its visible sequence is
+`State claim → lock Prediction → controlled test runs → result passes
+verification`. GPT-5.6 proposes a bounded belief frame, Runtime Codex compiles
+an allowlisted experiment plan, fixed kernels compute values, and the frozen
+verifier decides whether evidence may be released. No live call begins on the
+landing screen.
 
 ## Learner journey
 
@@ -24,7 +33,8 @@ CounterLab presents one six-stage path while preserving the existing scientific
 state machine and authority gates:
 
 1. **Question** — state a claim or attach a supported notebook. Sample prompts
-   are optional, and Judge Mode remains a secondary route.
+   are optional. **Start verified sample** and **Judge Mode** are the first
+   visible cold-user paths; claim testing remains available immediately below.
 2. **Prediction** — review exact notebook evidence and the sanitized packet,
    confirm that the two-model comparison captures the learner's view, then seal
    an immutable categorical prediction and confidence.
@@ -48,11 +58,11 @@ local verification record is in
 
 ## Judge Mode
 
-| Path            | Mode            | Meaning                                                                                                                                                         | Secrets required                           |
-| --------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| Verified sample | `sample`        | Bundled approved leakage lesson evidence; clearly labelled, credential-free, and separate from live authority                                                   | No                                         |
-| Live notebook   | `live_notebook` | Artifact-specific GPT analyst plus the authenticated Container runner, typed bounded artifacts, fixed scorer/kernel, frozen verifier, and copied-notebook patch | Server-side model and runner configuration |
-| Verified replay | `replay`        | Read-only reconstruction of stored events and payloads; persistently labelled and unable to make a new model call                                               | No                                         |
+| Path            | Session mode      | GPT-5.6 / Runtime Codex                                                                            | Numerical source                                                 | Mutability                                                                                          | May claim                                                                  | Must not claim                                                                                   |
+| --------------- | ----------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Verified sample | `sample_lesson`   | No live call; reviewed Subject Pack framing                                                        | Integrity-checked bundled fixed-kernel fixture                   | Learner inputs may advance a new Sample session; the verified fixture is immutable                  | The scoped fixed Sample demonstrates the recorded mechanism                | A live run, artifact-specific analysis, or newly calculated browser result                       |
+| Live notebook   | `live_notebook`   | Server-side calls may occur only after supported upload, packet approval, and capability admission | Fixed scorer, kernel, and frozen verifier bound to that artifact | Explicit persisted state transitions; original upload remains read-only and patching targets a copy | The bounded artifact-specific result and provenance that actually occurred | Authority when capability is absent, an unsupported notebook result, or a Sample/Replay fallback |
+| Verified replay | `verified_replay` | No new model or compiler call                                                                      | Stored validated events and signed or integrity-bound payloads   | Read-only                                                                                           | A reconstruction of the specific recorded verified session                 | A current rerun, a new configuration, or live capability                                         |
 
 Sample is not live and cannot enter a live session. Replay does not make a new
 model call or borrow sample authority. The rejected compiler run authorized no
@@ -61,6 +71,14 @@ fixed kernel hash. The v6.1 pass adds one interactive leakage Boundary Hunt
 backed by a versioned, precomputed fixed-kernel fixture. It does not add an
 arbitrary sample configuration matrix, and the browser never computes a
 substitute authoritative result.
+
+Visible source labels preserve that separation: learner-authored framing is
+`Your input`; reviewed fixed framing is `Reviewed Subject Pack draft`;
+`AI-suggested draft` appears only with genuine model provenance. During a live
+test, `Generated planning`, `Fixed testing`, and `Verified result` are derived
+from the real runner job kind and result-ready evidence. Artifact surfaces say
+`Bundled sample artifact`, `Uploaded notebook`, or `Replay artifact`; a
+route/session mode mismatch withholds proof instead of guessing.
 
 ## Supported notebook contract
 
@@ -86,15 +104,36 @@ The server defaults to `OPENAI_MODEL=gpt-5.6` and
 safety identifier, and resolves every evidence reference locally. Invalid,
 unsupported, or unresolved output cannot advance state.
 
+For supported live Belief Specs, the current source then runs a bounded
+Learning Director over the same approved evidence. It may make at most four
+read-only tool calls across three stateless Responses turns, ask at most one
+optional fixed-choice clarification, and select only registered presentation
+scaffolds, scene recipes, Boundary views, and candidate references. The fixed
+question and answer labels are local UI copy; the model cannot author them or
+veto learner-owned Belief Spec confirmation. Invalid Director output is omitted
+while the deterministic learner flow remains available. It uses `store: false`
+and the same hashed safety identifier. CounterLab persists only the validated
+decision, tool hashes/durations, configured model and prompt identifiers, and
+token totals; it does not persist provider response IDs or private reasoning.
+The Learning Director cannot select the final experiment, compute values,
+verify evidence, grade transfer, unlock Repair, or issue proof.
+
 `OPENAI_BASE_URL` optionally selects a compatible Responses API endpoint. It is
 server-only and may be configured as an HTTPS host root, a `/v1` base, or the
 full `/v1/responses` endpoint; CounterLab normalizes all three to the SDK base
 and never returns the endpoint in health, events, evidence, or browser state.
 
-Before a live call, Studio shows the exact sanitized packet: concept routing,
-claim, schema summary, support state, and bounded evidence excerpts. The learner
-must approve that packet; sensitive-looking excerpts require a second explicit
-confirmation. Editing the claim or artifact invalidates the approval.
+Before a live call, Studio shows the exact sanitized packet envelope for both
+the Belief Analyst and Learning Director: concept routing, claim, schema
+summary, support state, bounded evidence excerpts, Subject Pack version, and
+registered candidate references. One approval hash binds that envelope to the
+resulting Belief Spec and any persisted presentation decision. Privacy
+inventory covers every declared schema field before the visible 64-field cap;
+declared-sensitive names and common identifier patterns are normalized and
+redacted before truncation. The learner must approve that packet;
+sensitive-looking or suppressed fields require a second explicit confirmation.
+Editing the claim or artifact invalidates the approval. This remains heuristic
+redaction, not a guarantee of complete de-identification.
 
 ### Runtime Codex generates
 
@@ -152,12 +191,34 @@ The complete authority matrix is in
 
 ## Architecture
 
+Evidence release follows one bounded authority chain:
+
+```text
+Question / supported artifact
+          │
+          ▼
+sanitized packet ──► GPT-5.6 Belief Spec + bounded presentation plan
+          │
+          ▼
+Runtime Codex typed plan ──► fixed candidate scorer
+          │
+          ▼
+fixed kernel result ──► frozen verifier
+          │
+          ▼
+verified UI + Boundary Map + Proof Capsule
+```
+
+The proposal and presentation layers never supply numerical truth. A result
+cannot cross the final boundary until the learner has sealed a Prediction and
+the fixed evidence has passed verification.
+
 ```text
 Vite React Studio
     │ typed requests + reconnectable public events
 Cloudflare Worker ── D1 sessions/jobs/event chain
     │              └─ R2 private inputs/artifacts/results/patches/proofs
-    ├─ Responses API (optional live analyst)
+    ├─ Responses API (optional live analyst + Learning Director)
     ├─ stored sample/replay path
     └─ Container-backed Durable Object
           ├─ Codex App Server over stdio JSONL
@@ -189,6 +250,14 @@ visible React controls.
 Required for local reproduction: Node 22+, pnpm 11.13.1, Python 3.12+, and the
 locked dependencies. A Docker-compatible engine is required for local
 Cloudflare Container development and for the advanced local adapter proof.
+
+The two ready-to-use supported notebook fixtures are:
+
+- `fixtures/notebooks/customer_churn_leakage.ipynb`
+- `fixtures/notebooks/fraud_class_imbalance.ipynb`
+
+Use them for the entity-leakage and class-imbalance live paths respectively;
+do not treat them as evidence that arbitrary notebooks are supported.
 
 ```bash
 cp .env.example .env.local
@@ -266,10 +335,10 @@ The current measured artifact is
 - random accuracy 0.984722, group accuracy 0.594444, ablation accuracy 0.673611;
 - group entity overlap 0;
 - canonical result hash
-  `2501654264b9aa85b39fca944e585ff9b04263b83e182bc186d1f16464fee3b0`;
-- 12/12 published critical mutations detected;
+  `a6ae7652e04e4d70196f991c63b8f7bcb3b76f8c4ab833d3ce2b626df0ab6c94`;
+- 14/14 published leakage critical mutations detected;
 - class-imbalance majority accuracy 0.989333 with 0 rare-class recall, and
-  12/12 imbalance mutations detected;
+  15/15 published imbalance mutations detected;
 - held-out intake/routing 10/10 and fixed full-loop completion 7/8; the
   Random Forest patch is explicitly outside the registered non-sample patch
   contract;
@@ -288,7 +357,10 @@ Map, fixed transfer, patch lock, copied-notebook repair, Reasoning Diff v2,
 Proof Capsule v2, resumable six-stage learner navigation, and privacy-safe
 interaction evidence. Historical production evidence separately covers the
 legacy sample/replay and hosted leakage/imbalance paths identified above. The
-v6.1 CloakBrowser journey is specified but has not been executed.
+v6.1 landing, Judge, proof-navigation, keyboard, and fixed-Sample journeys have
+been executed locally with CloakBrowser at mobile and desktop sizes. Those
+mutable-development checks are non-qualifying; the full matrix against one
+exact public release is still pending.
 
 Failed honestly: the first live Codex run used an unsupported SDK argument; two
 repairs then left an unexpected `__pycache__`, so that run remained rejected and
@@ -310,20 +382,30 @@ The recorded local host App Server replay could inspect global skill files
 outside its generation directory, so that replay remains labelled `PARTIAL`.
 The hosted source-free Plan path is separate: credentials are staged only for
 App Server initialization and revoked before the generated turn; generated
-child commands receive neither model credentials nor signing authority. The
-Container launch uses a fixed non-root UID, `setpriv --no-new-privs`, and write
-constraints, but it has no
-mount namespace or filesystem read allowlist. Hosted filesystem generation
-read isolation is explicitly `PARTIAL`; formal sandbox proof is not claimed.
+child commands receive neither model credentials nor signing authority. Current
+source refuses a live launch unless the exact runner reports a pinned
+Bubblewrap boundary with an allowlisted runtime mount set, a writable
+generation workspace, missing repository/held-out/verifier paths, a fixed
+non-root UID, and `no-new-privs`. That is source-level admission logic, not production evidence:
+until a newly built exact image passes the sentinel and release qualification,
+hosted live authority remains unavailable and no `OS_ENFORCED` deployment claim
+is made.
 See [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
 
 ## How Codex accelerated the build
 
-Codex helped implement and test the monorepo, then CounterLab used Codex itself
-as a bounded runtime compiler. The real rejected trace exposed two product
-contract defects: incomplete public SDK documentation and transient bytecode in
-an exact-file workspace. The public contract was strengthened; a separate later
-run verified successfully.
+Build-time Codex helped map the monorepo, turn audit findings into focused
+regressions, implement bounded UI and release slices, triage cross-language
+failures, review authority drift, and keep the evidence documents synchronized
+with executed checks. Changes were integrated as small independently reviewed
+commits; a source test, deployment receipt, model call, or learner result was
+never treated as successful without direct evidence.
+
+That engineering role is separate from Runtime Codex inside CounterLab. Runtime
+Codex acts only as a bounded Plan compiler. The real rejected trace exposed two
+product-contract defects: incomplete public SDK documentation and transient
+bytecode in an exact-file workspace. The public contract was strengthened; a
+separate later run verified successfully.
 
 Human decisions remained the product thesis, learner authority, concept scope,
 fixture parameters, evidence contracts, verifier invariants, transfer design,

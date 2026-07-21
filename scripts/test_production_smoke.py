@@ -41,6 +41,14 @@ def _deployment_identity(**overrides: object) -> dict[str, object]:
         "aggregate_limit_evidence_sha256": "9" * 64,
         "runtime_policy_sha256": "c" * 64,
         "proof_dependency_manifest_sha256": "d" * 64,
+        "generation_isolation_evidence_sha256": "5" * 64,
+        "generation_isolation_probe_sha256": "6" * 64,
+        "generation_isolation_verified_at": "2026-07-15T11:59:00Z",
+        "release_check_generation_isolation_evidence_sha256": "7" * 64,
+        "release_check_generation_isolation_probe_sha256": "6" * 64,
+        "release_check_generation_isolation_verified_at": (
+            "2026-07-15T11:59:30Z"
+        ),
         "worker_artifact_classification": "PROCESS_BOUND_PARTIAL",
         "worker_artifact_manifest_sha256": "1" * 64,
         "worker_bundle_sha256": "2" * 64,
@@ -118,7 +126,12 @@ def _control_plane_validator_source(kind: str) -> str:
         '"${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" '
         '"${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" '
         '"${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" '
-        '"${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" <<\'PY\'\n'
+        '"${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" '
+        '"${GENERATION_ISOLATION_EVIDENCE_SHA256}" '
+        '"${GENERATION_ISOLATION_PROBE_SHA256}" '
+        '"${RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256}" '
+        '"${RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256}" '
+        '"${RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT}" <<\'PY\'\n'
     )
     start = script.index(marker) + len(marker)
     return script[start : script.index("\nPY\n", start)]
@@ -146,11 +159,19 @@ def _deployment_receipt() -> dict[str, object]:
     runner = "b" * 40
     digest = "sha256:" + "c" * 64
     return {
-        "schemaVersion": "4",
+        "schemaVersion": "7",
         "status": "DEPLOYED",
         "workerName": "counterlab",
         "productionOrigin": "https://counterlab.cserules.workers.dev",
-        "generationFilesystemReadIsolation": "PARTIAL",
+        "generationFilesystemReadIsolation": "OS_ENFORCED",
+        "generationIsolationEvidenceSha256": "6" * 64,
+        "generationIsolationProbeSha256": "7" * 64,
+        "generationIsolationVerifiedAt": "2026-07-18T23:58:00.000Z",
+        "releaseCheckGenerationIsolationEvidenceSha256": "8" * 64,
+        "releaseCheckGenerationIsolationProbeSha256": "7" * 64,
+        "releaseCheckGenerationIsolationVerifiedAt": (
+            "2026-07-18T23:58:30.000Z"
+        ),
         "workerEvidenceCommit": worker,
         "runnerSourceCommit": runner,
         "qualifiedRunnerReceiptSha256": "1" * 64,
@@ -189,7 +210,7 @@ def _deployment_receipt() -> dict[str, object]:
         "workerVersionSha256": "a" * 64,
         "containerStatusSha256": "b" * 64,
         "deployedAt": "2026-07-19T00:00:00.000Z",
-        "verifierVersion": "counterlab-deployment-v4",
+        "verifierVersion": "counterlab-deployment-v7",
     }
 
 
@@ -214,6 +235,34 @@ def test_deployment_receipt_parser_accepts_only_the_exact_release_tuple() -> Non
         assert identity["receiptType"] == "deployment-receipt"
         assert identity["receipt"] == receipt
         assert identity["receiptSha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
+
+        historical_v6 = json.loads(json.dumps(receipt))
+        historical_v6["schemaVersion"] = "6"
+        historical_v6["verifierVersion"] = "counterlab-deployment-v6"
+        for field in (
+            "releaseCheckGenerationIsolationEvidenceSha256",
+            "releaseCheckGenerationIsolationProbeSha256",
+            "releaseCheckGenerationIsolationVerifiedAt",
+        ):
+            historical_v6.pop(field)
+        path.write_text(json.dumps(historical_v6), encoding="utf-8")
+        parsed_v6 = _parse_deployment_identity(path)
+        assert parsed_v6.returncode == 0, parsed_v6.stderr
+        assert json.loads(parsed_v6.stdout)["receipt"]["schemaVersion"] == "6"
+
+        historical_v5 = json.loads(json.dumps(historical_v6))
+        historical_v5["schemaVersion"] = "5"
+        historical_v5["verifierVersion"] = "counterlab-deployment-v5"
+        for field in (
+            "generationIsolationEvidenceSha256",
+            "generationIsolationProbeSha256",
+            "generationIsolationVerifiedAt",
+        ):
+            historical_v5.pop(field)
+        path.write_text(json.dumps(historical_v5), encoding="utf-8")
+        parsed_v5 = _parse_deployment_identity(path)
+        assert parsed_v5.returncode == 0, parsed_v5.stderr
+        assert json.loads(parsed_v5.stdout)["receipt"]["schemaVersion"] == "5"
 
         receipt["unexpected"] = True
         path.write_text(json.dumps(receipt), encoding="utf-8")
@@ -265,6 +314,11 @@ def test_control_plane_validators_bind_exact_release_and_maintenance_state() -> 
     public_asset_count = 25
     vite_version = "8.1.4"
     wrangler_version = "4.110.0"
+    generation_isolation_evidence = "5" * 64
+    generation_isolation_probe = "6" * 64
+    release_check_isolation_evidence = "7" * 64
+    release_check_isolation_probe = generation_isolation_probe
+    release_check_isolation_verified_at = "2026-07-15T11:59:30Z"
     release = {
         "status": "bound",
         "workerVersionId": version,
@@ -272,6 +326,17 @@ def test_control_plane_validators_bind_exact_release_and_maintenance_state() -> 
         "workerEvidenceCommit": worker,
         "runnerSourceCommit": runner,
         "runnerImageDigest": digest,
+        "generationIsolationEvidenceSha256": generation_isolation_evidence,
+        "generationIsolationProbeSha256": generation_isolation_probe,
+        "releaseCheckGenerationIsolationEvidenceSha256": (
+            release_check_isolation_evidence
+        ),
+        "releaseCheckGenerationIsolationProbeSha256": (
+            release_check_isolation_probe
+        ),
+        "releaseCheckGenerationIsolationVerifiedAt": (
+            release_check_isolation_verified_at
+        ),
         "timeoutCleanupReceiptSha256": timeout_receipt,
         "aggregateLimitEvidenceSha256": aggregate_limit_evidence,
         "runtimePolicySha256": runtime_policy,
@@ -288,6 +353,7 @@ def test_control_plane_validators_bind_exact_release_and_maintenance_state() -> 
     }
     ready = {
         "status": "ready",
+        "service": "counterlab-control-plane",
         "checks": {
             key: True
             for key in (
@@ -314,10 +380,11 @@ def test_control_plane_validators_bind_exact_release_and_maintenance_state() -> 
             "liveCodex": "configured",
             "liveKernel": "configured",
             "sandbox": "credential-and-privilege-boundary",
-            "generationFilesystemReadIsolation": "PARTIAL",
-            "readiness": "not-checked",
+            "generationFilesystemReadIsolation": "OS_ENFORCED",
+            "readiness": "ready",
             "maintenance": False,
             "release": release,
+            "requestId": "request-test-1",
         },
     }
 
@@ -347,6 +414,11 @@ def test_control_plane_validators_bind_exact_release_and_maintenance_state() -> 
                 str(public_asset_count),
                 vite_version,
                 wrangler_version,
+                generation_isolation_evidence,
+                generation_isolation_probe,
+                release_check_isolation_evidence,
+                release_check_isolation_probe,
+                release_check_isolation_verified_at,
             ],
             check=False,
             capture_output=True,
@@ -385,6 +457,11 @@ def test_control_plane_validators_bind_exact_release_and_maintenance_state() -> 
                 "clientPublicAssetCount",
                 "viteVersion",
                 "wranglerVersion",
+                "generationIsolationEvidenceSha256",
+                "generationIsolationProbeSha256",
+                "releaseCheckGenerationIsolationEvidenceSha256",
+                "releaseCheckGenerationIsolationProbeSha256",
+                "releaseCheckGenerationIsolationVerifiedAt",
             ):
                 tampered = json.loads(json.dumps(payload))
                 tampered_release = (
@@ -399,6 +476,31 @@ def test_control_plane_validators_bind_exact_release_and_maintenance_state() -> 
                 rejected = run_validator(kind, path)
                 assert rejected.returncode != 0
                 assert "release identity does not match" in rejected.stderr
+
+            for scope in ("top", "release"):
+                expanded = json.loads(json.dumps(payload))
+                if scope == "top":
+                    expanded["unexpected"] = True
+                elif kind == "ready":
+                    expanded["release"]["unexpected"] = True
+                else:
+                    expanded["data"]["release"]["unexpected"] = True
+                path.write_text(json.dumps(expanded), encoding="utf-8")
+                rejected = run_validator(kind, path)
+                assert rejected.returncode != 0
+
+            if kind == "ready":
+                expanded = json.loads(json.dumps(payload))
+                expanded["checks"]["unexpected"] = True
+                path.write_text(json.dumps(expanded), encoding="utf-8")
+                rejected = run_validator(kind, path)
+                assert rejected.returncode != 0
+            else:
+                expanded = json.loads(json.dumps(payload))
+                expanded["data"]["unexpected"] = True
+                path.write_text(json.dumps(expanded), encoding="utf-8")
+                rejected = run_validator(kind, path)
+                assert rejected.returncode != 0
 
             maintenance = json.loads(json.dumps(payload))
             if kind == "ready":
@@ -503,7 +605,7 @@ def test_smoke_report_is_atomic_idempotent_and_secret_free() -> None:
             **_deployment_identity(),
         )
         assert initialized["status"] == "RUNNING"
-        assert initialized["schemaVersion"] == "4"
+        assert initialized["schemaVersion"] == "6"
         assert initialized["baseUrl"] == "https://counterlab.example.test"
         assert initialized["stages"] == []
 
@@ -528,7 +630,7 @@ def test_smoke_report_is_atomic_idempotent_and_secret_free() -> None:
         }
 
 
-def test_smoke_report_versions_preserve_v2_v3_and_require_v4_artifact_bindings() -> None:
+def test_smoke_report_versions_preserve_v2_through_v5_and_require_v6_fresh_isolation() -> None:
     with tempfile.TemporaryDirectory() as destination:
         path = pathlib.Path(destination) / "production-smoke.json"
         current = initialize_report(
@@ -537,7 +639,19 @@ def test_smoke_report_versions_preserve_v2_v3_and_require_v4_artifact_bindings()
             started_at="2026-07-15T12:00:00Z",
             **_deployment_identity(),
         )
-        assert current["schemaVersion"] == "4"
+        assert current["schemaVersion"] == "6"
+
+        v6_fields = (
+            "releaseCheckGenerationIsolationEvidenceSha256",
+            "releaseCheckGenerationIsolationProbeSha256",
+            "releaseCheckGenerationIsolationVerifiedAt",
+        )
+
+        v5_fields = (
+            "generationIsolationEvidenceSha256",
+            "generationIsolationProbeSha256",
+            "generationIsolationVerifiedAt",
+        )
 
         v4_fields = (
             "aggregateLimitEvidenceSha256",
@@ -552,7 +666,19 @@ def test_smoke_report_versions_preserve_v2_v3_and_require_v4_artifact_bindings()
             "wranglerVersion",
         )
 
-        historical_v3 = json.loads(json.dumps(current))
+        historical_v5 = json.loads(json.dumps(current))
+        historical_v5["schemaVersion"] = "5"
+        for field in v6_fields:
+            historical_v5["deployment"].pop(field)
+        assert validate_report(historical_v5)["schemaVersion"] == "5"
+
+        historical_v4 = json.loads(json.dumps(historical_v5))
+        historical_v4["schemaVersion"] = "4"
+        for field in v5_fields:
+            historical_v4["deployment"].pop(field)
+        assert validate_report(historical_v4)["schemaVersion"] == "4"
+
+        historical_v3 = json.loads(json.dumps(historical_v4))
         historical_v3["schemaVersion"] = "3"
         for field in v4_fields:
             historical_v3["deployment"].pop(field)
@@ -573,6 +699,11 @@ def test_smoke_report_versions_preserve_v2_v3_and_require_v4_artifact_bindings()
         with pytest.raises(ValueError, match="deployment metadata"):
             validate_report(expanded_v2)
 
+        expanded_v4 = json.loads(json.dumps(current))
+        expanded_v4["schemaVersion"] = "4"
+        with pytest.raises(ValueError, match="deployment metadata"):
+            validate_report(expanded_v4)
+
         incomplete_v3 = json.loads(json.dumps(historical_v3))
         incomplete_v3["deployment"].pop("runtimePolicySha256")
         with pytest.raises(ValueError, match="deployment metadata"):
@@ -583,10 +714,57 @@ def test_smoke_report_versions_preserve_v2_v3_and_require_v4_artifact_bindings()
         with pytest.raises(ValueError, match="proofDependencyManifestSha256"):
             validate_report(malformed_v3)
 
-        invalid_v4 = json.loads(json.dumps(current))
-        invalid_v4["deployment"]["clientPublicAssetCount"] = 28
+        malformed_v5_hash = json.loads(json.dumps(historical_v5))
+        malformed_v5_hash["deployment"]["generationIsolationProbeSha256"] = "short"
+        with pytest.raises(ValueError, match="generationIsolationProbeSha256"):
+            validate_report(malformed_v5_hash)
+
+        malformed_v5_time = json.loads(json.dumps(historical_v5))
+        malformed_v5_time["deployment"]["generationIsolationVerifiedAt"] = "yesterday"
+        with pytest.raises(ValueError, match="generationIsolationVerifiedAt"):
+            validate_report(malformed_v5_time)
+
+        invalid_v5 = json.loads(json.dumps(historical_v5))
+        invalid_v5["deployment"]["clientPublicAssetCount"] = 28
         with pytest.raises(ValueError, match="asset counts"):
-            validate_report(invalid_v4)
+            validate_report(invalid_v5)
+
+        malformed_v6_hash = json.loads(json.dumps(current))
+        malformed_v6_hash["deployment"][
+            "releaseCheckGenerationIsolationEvidenceSha256"
+        ] = "short"
+        with pytest.raises(
+            ValueError,
+            match="releaseCheckGenerationIsolationEvidenceSha256",
+        ):
+            validate_report(malformed_v6_hash)
+
+        mismatched_v6_probe = json.loads(json.dumps(current))
+        mismatched_v6_probe["deployment"][
+            "releaseCheckGenerationIsolationProbeSha256"
+        ] = "0" * 64
+        with pytest.raises(ValueError, match="does not match qualification"):
+            validate_report(mismatched_v6_probe)
+
+        for verified_at, message in (
+            ("2026-07-15T12:00:01Z", "follows smoke startedAt"),
+            ("2026-07-14T11:59:59Z", "stale"),
+            ("2026-07-15T11:58:59Z", "precedes qualification"),
+            ("yesterday", "releaseCheckGenerationIsolationVerifiedAt"),
+        ):
+            invalid_time = json.loads(json.dumps(current))
+            invalid_time["deployment"][
+                "releaseCheckGenerationIsolationVerifiedAt"
+            ] = verified_at
+            with pytest.raises(ValueError, match=message):
+                validate_report(invalid_time)
+
+        future_qualification = json.loads(json.dumps(current))
+        future_qualification["deployment"][
+            "generationIsolationVerifiedAt"
+        ] = "2026-07-15T12:00:01Z"
+        with pytest.raises(ValueError, match="follows smoke startedAt"):
+            validate_report(future_qualification)
 
 
 def test_smoke_report_rejects_conflicts_secrets_and_credential_urls() -> None:

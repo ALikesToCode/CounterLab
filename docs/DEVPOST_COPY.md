@@ -12,12 +12,34 @@ CounterLab — A scientific debugger for beliefs
 
 Ask like chat. Prove it like science.
 
+## Submission fields
+
+- **Category:** Education
+- **Submitter type:** Student
+- **Country:** India
+- **Primary audience:** ML learners and instructors who need to test what a
+  notebook result actually supports
+- **Live judge URL:** <https://counterlab.cserules.workers.dev/judge>
+- **License:** MIT
+- **Repository URL:** <https://github.com/ALikesToCode/CounterLab>;
+  **PENDING** anonymous-access verification
+- **Public YouTube video URL:** **PENDING** capture from the final qualified
+  release
+- **Codex `/feedback` Session ID:** **PENDING** owner-supplied primary build
+  thread ID
+- **Exact release receipt:** **PENDING** final source/Container/Worker
+  qualification
+- **Ready-to-use notebook fixtures:**
+  `fixtures/notebooks/customer_churn_leakage.ipynb` and
+  `fixtures/notebooks/fraud_class_imbalance.ipynb`
+
 ## Short description
 
-CounterLab turns a learner's supported notebook claim into two competing
-models, an immutable Prediction, the smallest verified discriminating Test, a
-signed or integrity-hashed Boundary Map, deterministic transfer, and a minimal
-repair unlocked only after transfer passes.
+CounterLab helps ML learners and instructors test what a supported notebook
+result actually means. It turns the learner's claim into two competing models,
+an immutable Prediction, the smallest verified discriminating Test, a signed
+or integrity-hashed Boundary Map, deterministic transfer, and a minimal repair
+unlocked only after transfer passes.
 
 CounterLab is evidence-first learning for notebook users: seal a Prediction,
 change one condition, and let fixed evidence—not AI prose—release the bounded
@@ -51,6 +73,35 @@ The Evidence Verdict is exactly `SUPPORTS`, `INCONCLUSIVE`, or `REJECTED`.
 CounterLab never labels the learner wrong and releases no result from a rejected
 test.
 
+## What we built during Build Week
+
+The build-week implementation turned the earlier evidence engine into one
+learner-first, source-bound release candidate:
+
+- a chat-first Question composer and one six-stage progress model;
+- immutable Prediction, evidence story, Model Duel, Fair Test Builder,
+  Experiment Theater, Boundary Hunt, visual transfer, Repair preview, and
+  bounded completion;
+- an automated ten-second first-viewport inspectability preview bound to
+  checked-in fixed sample evidence and a one-click integrity-verified Sample
+  Proof Capsule; this is not a learner-comprehension measurement;
+- recoverable reject/insufficient-evidence paths, supported-artifact gating,
+  pre-Prediction result-leak regressions, stored proof-event hydration, and
+  capability-link lifecycle handling;
+- source/image/release identity contracts, exact-image isolation sentinels,
+  negative release controls, and fail-closed public readiness; and
+- keyboard, responsive, reduced-motion, interaction-evidence, replay, and
+  download coverage without adding learner names, raw free text, or notebook
+  content to analytics.
+
+Codex accelerated repository exploration, test construction, bounded repairs,
+release-safety review, and repeated regression runs during the build. Those
+engineering contributions are separate from **Runtime Codex inside the
+product**, which may propose only schema-valid plans and repairs. Human
+decisions fixed the product thesis, learner authority, supported Subject Packs,
+scientific invariants, privacy boundary, release claims, and every final
+integration decision.
+
 ## What is technically distinct
 
 CounterLab separates authority instead of asking one model to propose, compute,
@@ -59,6 +110,10 @@ and approve its own answer:
 - **GPT-5.6 reasoning analyst** proposes an evidence-linked Belief Spec from the
   learner-approved sanitized packet. It cannot run cells or produce result
   authority.
+- **GPT-5.6 Learning Director** may inspect four read-only approved-evidence and
+  Subject Pack registries, ask one fixed-choice clarification, and select only
+  registered presentation IDs. It cannot select the final experiment, compute,
+  verify, grade, unlock Repair, or issue proof.
 - **Runtime Codex compiler** emits a bounded Discrimination Contract,
   CounterLab Experiment IR, scene description, rationale, or separate Patch
   Plan. It can compose registered operation IDs but cannot author hosted code,
@@ -114,10 +169,11 @@ never executes uploaded cells, and sends only the learner-approved sanitized
 packet to the reasoning analyst. Raw rows, the notebook file, secrets, and
 local paths are excluded.
 
-Hosted Runtime Codex uses a credential-and-privilege launch boundary with a
-fixed non-root UID, `setpriv --no-new-privs`, and source-free typed plans. It
-has no mount namespace or filesystem read allowlist,
-so filesystem generation read isolation is explicitly `PARTIAL`. Fixed scoring,
+Hosted Runtime Codex is admitted only when the exact runner proves a pinned
+Bubblewrap boundary with a fixed non-root UID, `no-new-privs`, an allowlisted
+runtime mount set, a writable generation workspace, and missing repository,
+held-out, verifier, and unrelated-job paths. If that exact-image sentinel or
+release binding is absent, Judge Mode keeps Live unavailable. Fixed scoring,
 execution, and verification remain independent of generated output.
 
 ## Evidence modes
@@ -141,20 +197,23 @@ claim should be copied into the submission until a measured study exists.
 1. Open <https://counterlab.cserules.workers.dev/judge> and confirm the public
    build identifier matches the exact production receipt linked by the final
    release evidence.
-2. Choose **Start sample** for the credential-free six-stage learner loop. In
-   Boundary, make one classification or reveal/skip the map before Apply unlocks.
-3. Choose **Watch verified replay** to inspect the persistent read-only label and
-   genuine reject/repair history without a new model call.
+2. Choose **Open disclosed walkthrough** for the credential-free six-stage
+   learner loop. In Boundary, make one classification or reveal/skip the map
+   before Apply unlocks.
+3. Choose **Watch replay** to inspect the persistent read-only label and genuine
+   reject/repair history without a new model call.
 4. Choose **Run live** only when Judge Mode reports deployed live authority.
    Upload a supported notebook, approve the exact outbound packet, and follow
    reconnect, transfer, repaired-copy download, and Proof Capsule export.
 5. Inspect `docs/RELEASE_CHECKLIST.md`, `docs/PRODUCTION_SMOKE.json`, and the
-   schema-v4 deployment receipt for the exact commit, Worker version, Container
+   schema-v7 deployment receipt for the exact commit, Worker version, Container
    digest, asset hashes, and smoke outcomes. If those identifiers do not agree,
    treat live qualification as not proven.
-6. Run the repository-contained verification commands documented in `README.md`
-   for local reproduction. Historical replay evidence remains visibly distinct
-   from the exact deployed release.
+6. Use the [MIT-licensed CounterLab repository](https://github.com/ALikesToCode/CounterLab)
+   and run the repository-contained verification commands documented in
+   `README.md` for local reproduction. Historical replay evidence remains
+   visibly distinct from the exact deployed release. If anonymous repository
+   access is not verified, omit these instructions from the submitted entry.
 
 ## Submission consistency rule
 

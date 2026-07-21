@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   type ValidatedSampleProofCapsuleV1,
@@ -69,11 +69,14 @@ function HashValue({ value }: { value: string }) {
 export function SampleEvidencePack({
   verifyCapsule = verifyCheckedInSampleProofCapsule,
   createDownload = createVerifiedDownload,
+  inspectionRequest = 0,
 }: {
   verifyCapsule?: () => Promise<ValidatedSampleProofCapsuleV1>;
   createDownload?: (bytes: Uint8Array) => VerifiedDownload;
+  inspectionRequest?: number;
 }) {
   const [state, setState] = useState<CapsuleState>({ status: "checking" });
+  const inspectionRef = useRef<HTMLDetailsElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -101,6 +104,14 @@ export function SampleEvidencePack({
       revokeDownload?.();
     };
   }, [createDownload, verifyCapsule]);
+
+  useEffect(() => {
+    if (inspectionRequest < 1 || state.status !== "ready") return;
+    const inspection = inspectionRef.current;
+    if (inspection === null) return;
+    inspection.open = true;
+    inspection.querySelector("summary")?.focus({ preventScroll: true });
+  }, [inspectionRequest, state.status]);
 
   return (
     <section
@@ -133,7 +144,7 @@ export function SampleEvidencePack({
             <span aria-hidden="true">✓</span> Capsule bytes match the checked-in
             reference; fixed sample authority bindings resolve
           </p>
-          <details>
+          <details ref={inspectionRef}>
             <summary>Inspect Sample Proof Capsule</summary>
             <h3>Authority</h3>
             <dl>

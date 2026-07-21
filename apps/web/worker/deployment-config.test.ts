@@ -3,11 +3,13 @@ import { existsSync, readdirSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
+import { RELEASE_CHECK_IDS } from "../../../packages/scientific-engine-registry/src/index";
 
 import {
   bindFrozenWorkerRelease,
-  qualifiedDeployConfig,
+  qualifiedDeployConfig as generateQualifiedDeployConfig,
 } from "../../../scripts/prepare-qualified-deploy";
+import { createGenerationIsolationEvidence } from "../../../scripts/generation-isolation-evidence";
 
 function productionDeployConfig() {
   return {
@@ -141,6 +143,141 @@ function timeoutQualification(sourceCommit: string) {
   } as const;
 }
 
+function generationIsolationQualification(input: {
+  sourceCommit: string;
+  sourceTreeSha256: string;
+  localImageTag: string;
+  localImageDigest: string;
+  verifiedAt?: string;
+}) {
+  const probePayload = {
+    schemaVersion: "1",
+    probeVersion: "counterlab-generation-isolation-v1",
+    service: "counterlab-hosted-runner",
+    probe: "non-root-startup",
+    checks: [
+      "entrypoint",
+      "non-root-user",
+      "immutable-paths",
+      "codex",
+      "python",
+      "bubblewrap",
+      "bubblewrap-read-isolation",
+      "setpriv",
+      "writable-roots",
+    ],
+    generationFilesystemReadIsolation: "OS_ENFORCED",
+    bubblewrapVersion: "0.11.0",
+    bubblewrap: {
+      forbiddenHostPathsHidden: true,
+      parentEnvironmentHidden: true,
+      workspaceVisible: true,
+      workspaceWritable: true,
+    },
+  } as const;
+  const probeSha256 =
+    "700cc58bedc163846e3854415170f49f55da9fd3ba316cc4967747d5268199dc";
+  const result = createGenerationIsolationEvidence({
+    ...input,
+    imageUser: "10001:10001",
+    verifiedAt: input.verifiedAt ?? "2026-07-16T16:18:00.000Z",
+    startupProbe: {
+      status: "ready",
+      service: "counterlab-hosted-runner",
+      probe: "non-root-startup",
+      checks: probePayload.checks,
+      generationFilesystemReadIsolation: "OS_ENFORCED",
+      generationIsolationProbe: probePayload,
+      generationIsolationProbeSha256: probeSha256,
+    },
+  });
+  return {
+    generationIsolationEvidence: result.evidence,
+    generationIsolationEvidenceSha256: result.evidenceSha256,
+    generationIsolationProbeSha256: result.probeSha256,
+    generationIsolationVerifiedAt: result.evidence.verifiedAt,
+  } as const;
+}
+
+function releaseCheckReceiptFor(qualified: {
+  evidenceCommit: string;
+  sourceCommit: string;
+  sourceTreeSha256: string;
+  qualifiedAt: string;
+  localImageTag: string;
+  localImageDigest: string;
+  adapterImageTag: string;
+  adapterImageDigest: string;
+  registryDigest: string;
+  runtimeToolchainSha256: string;
+  runtimePolicySha256: string;
+  proofDependencyManifestSha256: string;
+  aggregateLimitEvidenceSha256: string;
+  runtimeAdapterSha256: string;
+  generationIsolationEvidenceSha256: string;
+  generationIsolationProbeSha256: string;
+  generationIsolationVerifiedAt: string;
+}) {
+  const fresh = generationIsolationQualification({
+    sourceCommit: qualified.sourceCommit,
+    sourceTreeSha256: qualified.sourceTreeSha256,
+    localImageTag: qualified.localImageTag,
+    localImageDigest: qualified.localImageDigest,
+    verifiedAt: "2026-07-16T16:30:30.000Z",
+  });
+  return {
+    schemaVersion: "5",
+    status: "PASSED",
+    generationFilesystemReadIsolation: "OS_ENFORCED",
+    generationIsolationEvidenceSha256:
+      qualified.generationIsolationEvidenceSha256,
+    generationIsolationProbeSha256: qualified.generationIsolationProbeSha256,
+    generationIsolationVerifiedAt: qualified.generationIsolationVerifiedAt,
+    releaseCheckGenerationIsolationEvidence: fresh.generationIsolationEvidence,
+    releaseCheckGenerationIsolationEvidenceSha256:
+      fresh.generationIsolationEvidenceSha256,
+    releaseCheckGenerationIsolationProbeSha256:
+      fresh.generationIsolationProbeSha256,
+    releaseCheckGenerationIsolationVerifiedAt:
+      fresh.generationIsolationVerifiedAt,
+    evidenceCommit: qualified.evidenceCommit,
+    sourceCommit: qualified.sourceCommit,
+    qualifiedRunnerReceiptSha256: "2".repeat(64),
+    qualifiedAt: qualified.qualifiedAt,
+    runnerImageTag: qualified.localImageTag,
+    runnerImageDigest: qualified.localImageDigest,
+    adapterImageTag: qualified.adapterImageTag,
+    adapterImageDigest: qualified.adapterImageDigest,
+    registryDigest: qualified.registryDigest,
+    runtimeToolchainSha256: qualified.runtimeToolchainSha256,
+    runtimePolicySha256: qualified.runtimePolicySha256,
+    proofDependencyManifestSha256: qualified.proofDependencyManifestSha256,
+    aggregateLimitEvidenceSha256: qualified.aggregateLimitEvidenceSha256,
+    runtimeAdapterSha256: qualified.runtimeAdapterSha256,
+    checks: RELEASE_CHECK_IDS.map((id) => ({ id, status: "PASSED" as const })),
+    checkedAt: "2026-07-16T16:31:00.000Z",
+    verifierVersion: "counterlab-release-check-v5",
+  } as const;
+}
+
+function qualifiedDeployConfig(
+  input: Omit<
+    Parameters<typeof generateQualifiedDeployConfig>[0],
+    "releaseCheckReceipt"
+  > & {
+    releaseCheckReceipt?: unknown;
+  },
+) {
+  return generateQualifiedDeployConfig({
+    ...input,
+    releaseCheckReceipt:
+      input.releaseCheckReceipt ??
+      releaseCheckReceiptFor(
+        input.receipt as Parameters<typeof releaseCheckReceiptFor>[0],
+      ),
+  });
+}
+
 function luminance(color: string): number {
   const channels = [1, 3, 5].map((offset) =>
     Number.parseInt(color.slice(offset, offset + 2), 16),
@@ -219,6 +356,7 @@ describe("Cloudflare static asset routing", () => {
 
     expect(verifyIndex).toBeGreaterThan(0);
     expect(buildIndex).toBeGreaterThan(verifyIndex);
+    expect(script).toContain('--expected-image-digest "${LOCAL_IMAGE_DIGEST}"');
   });
 
   it("gates deployment on immutable authority, migrations, secrets, and 100 percent traffic", () => {
@@ -252,6 +390,18 @@ describe("Cloudflare static asset routing", () => {
     expect(script).toContain("--containers-rollout immediate");
     expect(script).toContain("deployments status");
     expect(script).toContain("scripts/create-deployment-receipt.ts");
+    expect(script).toContain("release-check-identity");
+    expect(script).toContain(
+      "Release-check receipt bytes changed after identity validation.",
+    );
+    expect(script).toContain(
+      "RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256",
+    );
+    expect(script).toContain("RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT");
+    expect(script).toContain(
+      'exactKeys(payload, ["status", "service", "checks", "maintenance", "release"])',
+    );
+    expect(script).toContain('exactKeys(payload, ["ok", "data"])');
     expect(receiptVerifier).toContain("active.percentage !== 100");
     expect(script).toContain("deployment-receipt.json");
     expect(script).not.toContain("--containers-rollout gradual");
@@ -299,12 +449,10 @@ describe("Cloudflare static asset routing", () => {
     expect(script.slice(finalDeploy, finalReadiness)).toContain(
       "--containers-rollout none",
     );
-    expect(script).toContain(
-      "data.release.workerVersionId !== expectedVersion",
-    );
-    expect(script).toContain(
-      "payload.release.workerVersionId !== expectedVersion",
-    );
+    expect(script.match(/workerVersionId: expectedVersion/gu)).toHaveLength(2);
+    expect(
+      script.match(/releaseCheckGenerationIsolationEvidenceSha256:/gu),
+    ).toHaveLength(2);
     expect(script).toContain(
       'rollback "${recovery_version}" \\\n      --config "${RECOVERY_CONFIG}"',
     );
@@ -341,6 +489,10 @@ describe("Cloudflare static asset routing", () => {
     );
     const account = script.indexOf('"${WRANGLER}" whoami --json');
     const secretList = script.indexOf('"${WRANGLER}" secret list');
+    const secretValidation = script.indexOf(
+      'node - "${RELEASE_DIR}/secret-names.json"',
+      secretList,
+    );
     expect(finalSecretScan).toBeGreaterThan(build);
     expect(manifest).toBeGreaterThan(finalSecretScan);
     expect(script.slice(manifest, dryRun)).toContain(
@@ -352,6 +504,9 @@ describe("Cloudflare static asset routing", () => {
     expect(strictDryRun).toBeGreaterThan(dryRun);
     expect(account).toBeGreaterThan(strictDryRun);
     expect(secretList).toBeGreaterThan(account);
+    expect(script.slice(secretList, secretValidation)).toContain(
+      "--name counterlab",
+    );
 
     const maintenance = script.indexOf("MAINTENANCE_TAG=");
     const migration = script.indexOf('"${WRANGLER}" d1 migrations apply DB');
@@ -401,6 +556,12 @@ describe("Cloudflare static asset routing", () => {
       "qualification output already exists; refusing to replace it",
     );
     expect(script).toContain("assertCurrentGrypeReleaseEvidenceBinding");
+    expect(script).toContain("input.expectedConfigDigest");
+    expect(script).toContain('"--expected-image-digest"');
+    expect(script).toContain("buildReceipt.localImageDigest");
+    expect(script).toContain(
+      '"qualified local image digest is unavailable for promotion"',
+    );
     expect(script).toContain('flag: "wx"');
     expect(
       script.match(
@@ -515,6 +676,25 @@ describe("Cloudflare static asset routing", () => {
     expect(dockerfile).toContain("/repo/requirements.runner.lock.txt");
     expect(dockerfile).toContain("chmod -R a=rX /repo");
     expect(dockerfile).toContain("chmod 0555 /usr/local/bin/node");
+    expect(dockerfile).toContain(
+      "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
+    );
+    expect(dockerfile).toContain("/out/runtime-rootfs/dev/pts");
+    expect(dockerfile).toContain("/out/runtime-rootfs/sys/fs/cgroup");
+    expect(dockerfile).toContain("/out/runtime-rootfs/counterlab-runtime");
+    expect(dockerfile).toContain("/out/runtime-rootfs/etc/hosts");
+    // BuildKit bind-mounts /etc/hosts read-only during RUN instructions. The
+    // copied placeholder is normalized to root:root 0644 in the final OCI
+    // archive, so the Dockerfile must not attempt to mutate the mounted path.
+    expect(dockerfile).not.toContain("chmod 0644 /etc/hosts");
+    expect(dockerfile).not.toMatch(/chown root:root[\s\S]*?\/etc\/hosts/);
+    expect(dockerfile).toContain("bubblewrap=0.11.0-2+deb13u1");
+    expect(dockerfile).toContain(
+      'test "$(/usr/bin/bwrap --version)" = "bubblewrap 0.11.0"',
+    );
+    expect(dockerfile.indexOf("bubblewrap=0.11.0-2+deb13u1")).toBeLessThan(
+      dockerfile.indexOf("USER 10001:10001"),
+    );
     expect(dockerfile.indexOf("chmod 0555 /usr/local/bin/node")).toBeLessThan(
       dockerfile.indexOf("USER 10001:10001"),
     );
@@ -539,7 +719,21 @@ describe("Cloudflare static asset routing", () => {
     expect(probe).toContain("COUNTERLAB_RUNNER_STARTUP_PROBE=1");
     expect(probe).not.toContain("--user");
     expect(probe).not.toContain("--entrypoint");
-    expect(probe).toContain('"${IMAGE}"');
+    expect(probe).toContain('"${IMAGE_DIGEST}"');
+    expect(
+      verifier.match(/"\$\{IMAGE_DIGEST\}"/gu)?.length,
+    ).toBeGreaterThanOrEqual(2);
+    expect(verifier).toContain("--generation-isolation-report");
+    expect(verifier).toContain("--expected-image-digest");
+    expect(verifier).toContain(
+      '"${IMAGE_DIGEST}" != "${EXPECTED_IMAGE_DIGEST}"',
+    );
+    expect(verifier).toContain(
+      '{{index .Config.Labels "io.counterlab.source-tree-sha256"}}',
+    );
+    expect(verifier).toContain(
+      "node --import tsx scripts/generation-isolation-evidence.ts",
+    );
   });
 
   it("generates a deploy config from a source-bound qualified image receipt", () => {
@@ -547,14 +741,21 @@ describe("Cloudflare static asset routing", () => {
     const evidenceCommit = "2".repeat(40);
     const image = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
     const receipt = {
-      schemaVersion: "4",
+      schemaVersion: "6",
       status: "VERIFIED",
+      generationFilesystemReadIsolation: "OS_ENFORCED",
       sourceCommit,
       sourceArchiveSha256: "b".repeat(64),
       sourceTreeSha256: "c".repeat(64),
       dockerfileSha256: "d".repeat(64),
       localImageTag: `counterlab-runner:git-${sourceCommit}`,
       localImageDigest: `sha256:${"e".repeat(64)}`,
+      ...generationIsolationQualification({
+        sourceCommit,
+        sourceTreeSha256: "c".repeat(64),
+        localImageTag: `counterlab-runner:git-${sourceCommit}`,
+        localImageDigest: `sha256:${"e".repeat(64)}`,
+      }),
       ociRevision: sourceCommit,
       ociSourceTreeSha256: "c".repeat(64),
       engineAuthorityHash: "f".repeat(64),
@@ -580,9 +781,17 @@ describe("Cloudflare static asset routing", () => {
       registryDigest: `sha256:${"3".repeat(64)}`,
       registryResolvedAt: "2026-07-16T16:20:00.000Z",
       qualifiedAt: "2026-07-16T16:30:00.000Z",
-      verifierVersion: "counterlab-release-v4",
+      verifierVersion: "counterlab-release-v6",
     };
+    const releaseCheckReceipt = releaseCheckReceiptFor(receipt);
     const observation = {
+      generationFilesystemReadIsolation: "OS_ENFORCED" as const,
+      ...generationIsolationQualification({
+        sourceCommit,
+        sourceTreeSha256: receipt.sourceTreeSha256,
+        localImageTag: receipt.localImageTag,
+        localImageDigest: receipt.localImageDigest,
+      }),
       sourceCommit,
       sourceArchiveSha256: receipt.sourceArchiveSha256,
       sourceTreeSha256: receipt.sourceTreeSha256,
@@ -620,6 +829,7 @@ describe("Cloudflare static asset routing", () => {
     const generated = qualifiedDeployConfig({
       config: productionDeployConfig(),
       receipt,
+      releaseCheckReceipt,
       image,
       observation,
     });
@@ -647,8 +857,33 @@ describe("Cloudflare static asset routing", () => {
         COUNTERLAB_RUNTIME_POLICY_SHA256: receipt.runtimePolicySha256,
         COUNTERLAB_PROOF_DEPENDENCY_MANIFEST_SHA256:
           receipt.proofDependencyManifestSha256,
+        COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256:
+          receipt.generationIsolationEvidenceSha256,
+        COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256:
+          receipt.generationIsolationProbeSha256,
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256:
+          releaseCheckReceipt.releaseCheckGenerationIsolationEvidenceSha256,
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256:
+          releaseCheckReceipt.releaseCheckGenerationIsolationProbeSha256,
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT:
+          releaseCheckReceipt.releaseCheckGenerationIsolationVerifiedAt,
       }),
     );
+    expect(() =>
+      qualifiedDeployConfig({
+        config: productionDeployConfig(),
+        receipt,
+        releaseCheckReceipt: {
+          ...releaseCheckReceipt,
+          releaseCheckGenerationIsolationEvidence: {
+            ...releaseCheckReceipt.releaseCheckGenerationIsolationEvidence,
+            sourceTreeSha256: "0".repeat(64),
+          },
+        },
+        image,
+        observation,
+      }),
+    ).toThrow(/evidence hash mismatch/u);
     const generatedFromVite = qualifiedDeployConfig({
       config: viteGeneratedDeployConfig(),
       receipt,
@@ -760,6 +995,19 @@ describe("Cloudflare static asset routing", () => {
         observation,
       }),
     ).toThrow(/runtime policy/u);
+    for (const [field, label] of [
+      ["generationIsolationEvidenceSha256", /generation isolation evidence/u],
+      ["generationIsolationProbeSha256", /generation isolation probe/u],
+    ] as const) {
+      expect(() =>
+        qualifiedDeployConfig({
+          config: productionDeployConfig(),
+          receipt,
+          image,
+          observation: { ...observation, [field]: "0".repeat(64) },
+        }),
+      ).toThrow(label);
+    }
     expect(() =>
       qualifiedDeployConfig({
         config: productionDeployConfig(),
@@ -789,14 +1037,21 @@ describe("Cloudflare static asset routing", () => {
     const evidenceCommit = "2".repeat(40);
     const image = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
     const receipt = {
-      schemaVersion: "4",
+      schemaVersion: "6",
       status: "VERIFIED",
+      generationFilesystemReadIsolation: "OS_ENFORCED",
       sourceCommit,
       sourceArchiveSha256: "b".repeat(64),
       sourceTreeSha256: "c".repeat(64),
       dockerfileSha256: "d".repeat(64),
       localImageTag: `counterlab-runner:git-${sourceCommit}`,
       localImageDigest: `sha256:${"e".repeat(64)}`,
+      ...generationIsolationQualification({
+        sourceCommit,
+        sourceTreeSha256: "c".repeat(64),
+        localImageTag: `counterlab-runner:git-${sourceCommit}`,
+        localImageDigest: `sha256:${"e".repeat(64)}`,
+      }),
       ociRevision: sourceCommit,
       ociSourceTreeSha256: "c".repeat(64),
       engineAuthorityHash: "f".repeat(64),
@@ -822,8 +1077,9 @@ describe("Cloudflare static asset routing", () => {
       registryDigest: `sha256:${"3".repeat(64)}`,
       registryResolvedAt: "2026-07-16T16:20:00.000Z",
       qualifiedAt: "2026-07-16T16:30:00.000Z",
-      verifierVersion: "counterlab-release-v4",
+      verifierVersion: "counterlab-release-v6",
     };
+    const releaseCheckReceipt = releaseCheckReceiptFor(receipt);
     const config = productionDeployConfig();
     config.durable_objects.bindings = [
       { name: "RUNNER", class_name: "CounterLabRunner" },
@@ -833,8 +1089,16 @@ describe("Cloudflare static asset routing", () => {
       qualifiedDeployConfig({
         config,
         receipt,
+        releaseCheckReceipt,
         image,
         observation: {
+          generationFilesystemReadIsolation: "OS_ENFORCED",
+          ...generationIsolationQualification({
+            sourceCommit,
+            sourceTreeSha256: receipt.sourceTreeSha256,
+            localImageTag: receipt.localImageTag,
+            localImageDigest: receipt.localImageDigest,
+          }),
           sourceCommit,
           sourceArchiveSha256: receipt.sourceArchiveSha256,
           sourceTreeSha256: receipt.sourceTreeSha256,
@@ -877,14 +1141,21 @@ describe("Cloudflare static asset routing", () => {
     const sourceCommit = "a".repeat(40);
     const image = `registry.cloudflare.com/account-1/counterlab-runner:git-${sourceCommit}`;
     const receipt = {
-      schemaVersion: "4",
+      schemaVersion: "6",
       status: "VERIFIED",
+      generationFilesystemReadIsolation: "OS_ENFORCED",
       sourceCommit,
       sourceArchiveSha256: "b".repeat(64),
       sourceTreeSha256: "c".repeat(64),
       dockerfileSha256: "d".repeat(64),
       localImageTag: `counterlab-runner:git-${sourceCommit}`,
       localImageDigest: `sha256:${"e".repeat(64)}`,
+      ...generationIsolationQualification({
+        sourceCommit,
+        sourceTreeSha256: "c".repeat(64),
+        localImageTag: `counterlab-runner:git-${sourceCommit}`,
+        localImageDigest: `sha256:${"e".repeat(64)}`,
+      }),
       ociRevision: sourceCommit,
       ociSourceTreeSha256: "c".repeat(64),
       engineAuthorityHash: "f".repeat(64),
@@ -910,8 +1181,9 @@ describe("Cloudflare static asset routing", () => {
       registryDigest: `sha256:${"3".repeat(64)}`,
       registryResolvedAt: "2026-07-16T15:55:00.000Z",
       qualifiedAt: "2026-07-16T16:30:00.000Z",
-      verifierVersion: "counterlab-release-v4",
+      verifierVersion: "counterlab-release-v6",
     };
+    const releaseCheckReceipt = releaseCheckReceiptFor(receipt);
 
     expect(() =>
       qualifiedDeployConfig({
@@ -920,8 +1192,16 @@ describe("Cloudflare static asset routing", () => {
           containers: [{ class_name: "CounterLabRunner" }],
         },
         receipt,
+        releaseCheckReceipt,
         image,
         observation: {
+          generationFilesystemReadIsolation: "OS_ENFORCED",
+          ...generationIsolationQualification({
+            sourceCommit,
+            sourceTreeSha256: receipt.sourceTreeSha256,
+            localImageTag: receipt.localImageTag,
+            localImageDigest: receipt.localImageDigest,
+          }),
           sourceCommit,
           sourceArchiveSha256: "9".repeat(64),
           sourceTreeSha256: receipt.sourceTreeSha256,

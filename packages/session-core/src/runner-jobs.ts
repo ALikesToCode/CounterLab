@@ -55,6 +55,11 @@ export interface RunnerJobRepository {
     expectedVersion: number,
     event: PublicCompilerEvent,
   ): Promise<void>;
+  appendTerminalEvent(
+    job: RunnerJob,
+    expectedVersion: number,
+    event: PublicCompilerEvent,
+  ): Promise<void>;
   listEvents(
     jobId: string,
     afterCursor: number,
@@ -110,6 +115,58 @@ export type RunnerJobTransitionPatch = {
   error?: RunnerJobError;
 };
 
+export type RunnerCallbackClaimToken = {
+  ownerId: string;
+  callbackHash: string;
+};
+
+export type RunnerOutputWriteClaimToken = {
+  ownerId: string;
+  generatedPath: string;
+};
+
+function callbackStableIdentity(
+  callback: RunnerCallback,
+): Record<string, unknown> {
+  return {
+    schemaVersion: callback.schemaVersion,
+    callbackId: callback.callbackId,
+    idempotencyKey: callback.idempotencyKey,
+    jobId: callback.jobId,
+    stateVersion: callback.stateVersion,
+    outputHashes: callback.outputHashes,
+    occurredAt: callback.occurredAt,
+  };
+}
+
+function callbackEvidenceIdentity(callback: RunnerCallback): unknown {
+  return {
+    ...callbackStableIdentity(callback),
+    status: callback.status,
+    error: callback.error ?? null,
+    operationalMetrics: callback.operationalMetrics ?? null,
+  };
+}
+
+async function callbacksShareRunnerOrigin(
+  stored: RunnerCallback,
+  incoming: RunnerCallback,
+): Promise<boolean> {
+  if (stored.finalEventCursor < incoming.finalEventCursor) return false;
+  if (stored.status === incoming.status) {
+    return (
+      (await hashCanonical(callbackEvidenceIdentity(stored))) ===
+      (await hashCanonical(callbackEvidenceIdentity(incoming)))
+    );
+  }
+  return (
+    incoming.status === "VERIFIED" &&
+    stored.status === "REJECTED" &&
+    (await hashCanonical(callbackStableIdentity(stored))) ===
+      (await hashCanonical(callbackStableIdentity(incoming)))
+  );
+}
+
 type RunnerClock = { now(): Date };
 
 const DEFAULT_CLOCK: RunnerClock = { now: () => new Date() };
@@ -133,6 +190,49 @@ const REUSABLE_STARTED_JOB_STATUSES = new Set<RunnerJobStatus>([
   "REPAIRING",
 ]);
 const START_CONFLICT_RETRY_LIMIT = 3;
+const MUTATION_CLAIM_TTL_MS = 60_000;
+const CALLBACK_SETTLEMENT_GRACE_MS = 60_000;
+
+function jobDeadline(job: RunnerJob): number {
+  const deadlineBase = Date.parse(job.startedAt ?? job.createdAt);
+  return deadlineBase + job.timeoutSeconds * 1_000;
+}
+
+function isOutputWriteClaimExpired(
+  job: RunnerJob,
+  claimedAt: string,
+  now: Date,
+): boolean {
+  const timestamp = Date.parse(claimedAt);
+  if (!Number.isFinite(timestamp)) return true;
+  return (
+    now.getTime() >=
+    Math.min(timestamp + MUTATION_CLAIM_TTL_MS, jobDeadline(job))
+  );
+}
+
+function callbackSettlementDeadline(job: RunnerJob): number {
+  return jobDeadline(job) + CALLBACK_SETTLEMENT_GRACE_MS;
+}
+
+function isCallbackClaimExpired(
+  job: RunnerJob,
+  claimedAt: string,
+  now: Date,
+): boolean {
+  const timestamp = Date.parse(claimedAt);
+  if (!Number.isFinite(timestamp)) return true;
+  const runnerDeadline = jobDeadline(job);
+  const claimDeadline =
+    timestamp >= runnerDeadline
+      ? callbackSettlementDeadline(job)
+      : Math.min(timestamp + MUTATION_CLAIM_TTL_MS, runnerDeadline);
+  return now.getTime() >= claimDeadline;
+}
+
+function jobDeadlineReached(job: RunnerJob, now: Date): boolean {
+  return now.getTime() >= jobDeadline(job);
+}
 
 export class RunnerJobService {
   private readonly clock: RunnerClock;
@@ -295,9 +395,15 @@ export class RunnerJobService {
   async expireIfTimedOut(jobId: string): Promise<RunnerJob> {
     const current = await this.getJob(jobId);
     if (TERMINAL_JOB_STATUSES.has(current.status)) return current;
-    const deadlineBase = Date.parse(current.startedAt ?? current.createdAt);
-    const deadline = deadlineBase + current.timeoutSeconds * 1_000;
-    if (this.clock.now().getTime() < deadline) return current;
+    const now = this.clock.now();
+    if (!jobDeadlineReached(current, now)) return current;
+    if (
+      (current.callbackClaim !== undefined ||
+        current.callbackRecovery !== undefined) &&
+      now.getTime() < callbackSettlementDeadline(current)
+    ) {
+      return current;
+    }
     return this.transition(current.jobId, current.jobVersion, "TIMED_OUT", {
       runnerIdentity: current.runnerIdentity ?? "control-plane-timeout",
       error: {
@@ -385,11 +491,71 @@ export class RunnerJobService {
     if (current.jobVersion !== expectedVersion) {
       throw new ConcurrentRunnerJobUpdateError(jobId);
     }
+    const now = this.clock.now();
+    const callbackClaimExpired =
+      current.callbackClaim !== undefined &&
+      isCallbackClaimExpired(current, current.callbackClaim.claimedAt, now);
+    const outputWriteClaimExpired =
+      current.outputWriteClaim !== undefined &&
+      isOutputWriteClaimExpired(
+        current,
+        current.outputWriteClaim.claimedAt,
+        now,
+      );
+    if (
+      to === "TIMED_OUT" &&
+      (current.callbackClaim !== undefined ||
+        current.callbackRecovery !== undefined) &&
+      now.getTime() < callbackSettlementDeadline(current)
+    ) {
+      throw new RunnerCallbackStateError(
+        `Runner job ${jobId} is inside its bounded callback settlement window`,
+      );
+    }
+    if (
+      current.callbackClaim !== undefined &&
+      !callbackClaimExpired &&
+      (to === "CANCELLED" || to === "TIMED_OUT")
+    ) {
+      throw new RunnerCallbackStateError(
+        `Runner job ${jobId} has an active callback claim`,
+      );
+    }
+    if (
+      current.outputWriteClaim !== undefined &&
+      !outputWriteClaimExpired &&
+      (to === "CANCELLED" || to === "TIMED_OUT")
+    ) {
+      throw new RunnerCallbackStateError(
+        `Runner job ${jobId} has an active output-write claim`,
+      );
+    }
     assertRunnerJobTransition(current.status, to);
-    const timestamp = this.clock.now().toISOString();
+    let transitionable = current;
+    if (callbackClaimExpired && current.callbackClaim !== undefined) {
+      const callbackClaim = current.callbackClaim;
+      const { callbackClaim: _callbackClaim, ...released } = transitionable;
+      transitionable = RunnerJobSchema.parse({
+        ...released,
+        callbackRecovery: {
+          idempotencyKey: callbackClaim.idempotencyKey,
+          callbackHash: callbackClaim.callbackHash,
+          releasedAt: now.toISOString(),
+        },
+      });
+    }
+    if (
+      outputWriteClaimExpired &&
+      transitionable.outputWriteClaim !== undefined
+    ) {
+      const { outputWriteClaim: _outputWriteClaim, ...released } =
+        transitionable;
+      transitionable = RunnerJobSchema.parse(released);
+    }
+    const timestamp = now.toISOString();
     const terminal = TERMINAL_JOB_STATUSES.has(to);
     const next = RunnerJobSchema.parse({
-      ...current,
+      ...transitionable,
       status: to,
       jobVersion: current.jobVersion + 1,
       updatedAt: timestamp,
@@ -415,6 +581,7 @@ export class RunnerJobService {
     jobId: string,
     expectedVersion: number,
     event: unknown,
+    callbackClaim?: RunnerCallbackClaimToken,
   ): Promise<RunnerJob> {
     const parsed = PublicCompilerEventSchema.parse(event);
     const current = await this.getJob(jobId);
@@ -424,6 +591,30 @@ export class RunnerJobService {
     if (parsed.jobId !== jobId) {
       throw new RunnerCallbackStateError(
         `Compiler event job ${parsed.jobId} does not match ${jobId}`,
+      );
+    }
+    if (TERMINAL_JOB_STATUSES.has(current.status)) {
+      throw new RunnerCallbackStateError(
+        `Runner job ${jobId} cannot append events after terminal status ${current.status}`,
+      );
+    }
+    const callbackClaimAuthorized =
+      current.callbackClaim !== undefined &&
+      callbackClaim !== undefined &&
+      !isCallbackClaimExpired(
+        current,
+        current.callbackClaim.claimedAt,
+        this.clock.now(),
+      ) &&
+      current.callbackClaim.ownerId === callbackClaim.ownerId &&
+      current.callbackClaim.callbackHash === callbackClaim.callbackHash;
+    if (
+      ((current.callbackClaim !== undefined || callbackClaim !== undefined) &&
+        !callbackClaimAuthorized) ||
+      current.outputWriteClaim !== undefined
+    ) {
+      throw new RunnerCallbackStateError(
+        `Runner job ${jobId} cannot append events while a terminal mutation is claimed`,
       );
     }
     const expectedCursor = current.eventCursor + 1;
@@ -440,6 +631,59 @@ export class RunnerJobService {
     return structuredClone(next);
   }
 
+  async failJobWithEvent(
+    jobId: string,
+    expectedVersion: number,
+    patch: Required<Pick<RunnerJobTransitionPatch, "runnerIdentity" | "error">>,
+    event: unknown,
+  ): Promise<RunnerJob> {
+    const parsed = PublicCompilerEventSchema.parse(event);
+    const current = await this.getJob(jobId);
+    if (current.jobVersion !== expectedVersion) {
+      throw new ConcurrentRunnerJobUpdateError(jobId);
+    }
+    if (parsed.jobId !== jobId) {
+      throw new RunnerCallbackStateError(
+        `Compiler event job ${parsed.jobId} does not match ${jobId}`,
+      );
+    }
+    if (
+      parsed.kind !== "job.failed" ||
+      parsed.code !== patch.error.code ||
+      parsed.message !== patch.error.message
+    ) {
+      throw new RunnerCallbackStateError(
+        `Runner job ${jobId} failure event must match the terminal error`,
+      );
+    }
+    if (
+      current.callbackClaim !== undefined ||
+      current.outputWriteClaim !== undefined
+    ) {
+      throw new RunnerCallbackStateError(
+        `Runner job ${jobId} cannot fail while a terminal mutation is claimed`,
+      );
+    }
+    assertRunnerJobTransition(current.status, "FAILED");
+    const expectedCursor = current.eventCursor + 1;
+    if (parsed.cursor !== expectedCursor) {
+      throw new RunnerEventCursorError(jobId, expectedCursor, parsed.cursor);
+    }
+    const timestamp = this.clock.now().toISOString();
+    const next = RunnerJobSchema.parse({
+      ...current,
+      status: "FAILED",
+      runnerIdentity: patch.runnerIdentity,
+      error: patch.error,
+      eventCursor: parsed.cursor,
+      jobVersion: current.jobVersion + 1,
+      updatedAt: timestamp,
+      completedAt: timestamp,
+    });
+    await this.repository.appendTerminalEvent(next, current.jobVersion, parsed);
+    return structuredClone(next);
+  }
+
   async listEvents(
     jobId: string,
     afterCursor = 0,
@@ -453,19 +697,310 @@ export class RunnerJobService {
     );
   }
 
-  async recordCallback(
+  async claimOutputWrite(
+    jobId: string,
+    expectedVersion: number,
+    ownerId: string,
+    generatedPath: string,
+  ): Promise<{ job: RunnerJob; claim: RunnerOutputWriteClaimToken }> {
+    if (ownerId.trim().length === 0 || ownerId.length > 200) {
+      throw new RunnerCallbackStateError(
+        "Runner output claim owner must be a bounded opaque identifier",
+      );
+    }
+    if (generatedPath.trim().length === 0 || generatedPath.length > 200) {
+      throw new RunnerCallbackStateError(
+        "Runner output claim path must be bounded",
+      );
+    }
+    const current = await this.getJob(jobId);
+    if (current.jobVersion !== expectedVersion) {
+      throw new ConcurrentRunnerJobUpdateError(jobId);
+    }
+    if (current.status !== "RUNNING" && current.status !== "REPAIRING") {
+      throw new RunnerCallbackStateError(
+        `Runner job ${jobId} cannot accept output from ${current.status}`,
+      );
+    }
+    const now = this.clock.now();
+    if (jobDeadlineReached(current, now)) {
+      throw new RunnerCallbackStateError(
+        `Runner job ${jobId} cannot claim an output write after its deadline`,
+      );
+    }
+    if (current.callbackClaim !== undefined) {
+      throw new RunnerCallbackStateError(
+        `Runner job ${jobId} has an active callback claim`,
+      );
+    }
+    const existingExpired =
+      current.outputWriteClaim !== undefined &&
+      isOutputWriteClaimExpired(
+        current,
+        current.outputWriteClaim.claimedAt,
+        now,
+      );
+    if (current.outputWriteClaim !== undefined && !existingExpired) {
+      throw new RunnerCallbackStateError(
+        `Runner job ${jobId} has an active output-write claim`,
+      );
+    }
+    const claim = { ownerId, generatedPath };
+    const { outputWriteClaim: _outputWriteClaim, ...claimable } = current;
+    const next = RunnerJobSchema.parse({
+      ...claimable,
+      outputWriteClaim: {
+        ...claim,
+        claimedAt: now.toISOString(),
+      },
+      jobVersion: current.jobVersion + 1,
+      updatedAt: now.toISOString(),
+    });
+    await this.repository.save(next, current.jobVersion);
+    return { job: structuredClone(next), claim };
+  }
+
+  async releaseOutputWriteClaim(
+    jobId: string,
+    claim: RunnerOutputWriteClaimToken,
+  ): Promise<void> {
+    for (let attempt = 0; attempt < START_CONFLICT_RETRY_LIMIT; attempt += 1) {
+      const current = await this.getJob(jobId);
+      if (
+        current.outputWriteClaim === undefined ||
+        current.outputWriteClaim.ownerId !== claim.ownerId ||
+        current.outputWriteClaim.generatedPath !== claim.generatedPath
+      ) {
+        return;
+      }
+      const { outputWriteClaim: _outputWriteClaim, ...released } = current;
+      const timestamp = this.clock.now().toISOString();
+      const next = RunnerJobSchema.parse({
+        ...released,
+        jobVersion: current.jobVersion + 1,
+        updatedAt: timestamp,
+      });
+      try {
+        await this.repository.save(next, current.jobVersion);
+        return;
+      } catch (error) {
+        if (!(error instanceof ConcurrentRunnerJobUpdateError)) throw error;
+      }
+    }
+    throw new ConcurrentRunnerJobUpdateError(jobId);
+  }
+
+  async claimCallback(
     callback: unknown,
-  ): Promise<{ duplicate: boolean; job: RunnerJob }> {
+    ownerId: string,
+  ): Promise<
+    | { duplicate: true; job: RunnerJob }
+    | {
+        duplicate: false;
+        job: RunnerJob;
+        claim: RunnerCallbackClaimToken;
+      }
+  > {
     const parsed = RunnerCallbackSchema.parse(callback);
+    if (ownerId.trim().length === 0 || ownerId.length > 200) {
+      throw new RunnerCallbackStateError(
+        "Runner callback claim owner must be a bounded opaque identifier",
+      );
+    }
     const existing = await this.repository.findCallback(parsed.idempotencyKey);
     if (existing !== undefined) {
-      if ((await hashCanonical(existing)) !== (await hashCanonical(parsed))) {
+      if (!(await callbacksShareRunnerOrigin(existing, parsed))) {
         throw new RunnerCallbackConflictError(parsed.idempotencyKey);
       }
       return { duplicate: true, job: await this.getJob(parsed.jobId) };
     }
 
     const current = await this.getJob(parsed.jobId);
+    if (TERMINAL_JOB_STATUSES.has(current.status)) {
+      throw new RunnerCallbackStateError(
+        `Runner callback cannot claim terminal job ${current.jobId} with status ${current.status}`,
+      );
+    }
+    if (current.stateVersion !== parsed.stateVersion) {
+      throw new RunnerCallbackStateError(
+        `Callback state version ${parsed.stateVersion} does not match job state version ${current.stateVersion}`,
+      );
+    }
+    const callbackHash = await hashCanonical(parsed);
+    const now = this.clock.now();
+    const callbackClaimExpired =
+      current.callbackClaim !== undefined &&
+      isCallbackClaimExpired(current, current.callbackClaim.claimedAt, now);
+    const matchingClaim =
+      current.callbackClaim?.idempotencyKey === parsed.idempotencyKey &&
+      current.callbackClaim.callbackHash === callbackHash;
+    const recovering =
+      current.callbackRecovery?.idempotencyKey === parsed.idempotencyKey &&
+      current.callbackRecovery.callbackHash === callbackHash;
+    const recoveringExpiredClaim = matchingClaim && callbackClaimExpired;
+    if (now.getTime() >= callbackSettlementDeadline(current)) {
+      throw new RunnerCallbackStateError(
+        `Runner callback cannot claim job ${current.jobId} after its settlement deadline`,
+      );
+    }
+    if (jobDeadlineReached(current, now) && !recovering && !matchingClaim) {
+      throw new RunnerCallbackStateError(
+        `A new runner callback cannot claim job ${current.jobId} after its deadline`,
+      );
+    }
+    if (
+      current.eventCursor !== parsed.finalEventCursor &&
+      !(
+        (recovering || recoveringExpiredClaim) &&
+        current.eventCursor > parsed.finalEventCursor
+      )
+    ) {
+      throw new RunnerEventCursorError(
+        current.jobId,
+        current.eventCursor,
+        parsed.finalEventCursor,
+      );
+    }
+    try {
+      assertRunnerJobTransition(current.status, parsed.status);
+    } catch (error) {
+      throw new RunnerCallbackStateError(
+        error instanceof Error
+          ? error.message
+          : `Runner callback cannot transition job ${current.jobId} from ${current.status}`,
+      );
+    }
+    if (current.callbackClaim !== undefined) {
+      if (!matchingClaim) {
+        throw new RunnerCallbackConflictError(parsed.idempotencyKey);
+      }
+      if (!callbackClaimExpired) {
+        throw new RunnerCallbackStateError(
+          `Runner callback ${parsed.idempotencyKey} is already being processed`,
+        );
+      }
+    }
+    const outputWriteClaimExpired =
+      current.outputWriteClaim !== undefined &&
+      isOutputWriteClaimExpired(
+        current,
+        current.outputWriteClaim.claimedAt,
+        now,
+      );
+    if (current.outputWriteClaim !== undefined && !outputWriteClaimExpired) {
+      throw new RunnerCallbackStateError(
+        `Runner callback ${parsed.idempotencyKey} cannot overtake an active output write`,
+      );
+    }
+    let claimable = current;
+    if (callbackClaimExpired && claimable.callbackClaim !== undefined) {
+      const { callbackClaim: _callbackClaim, ...released } = claimable;
+      claimable = RunnerJobSchema.parse(released);
+    }
+    if (outputWriteClaimExpired && claimable.outputWriteClaim !== undefined) {
+      const { outputWriteClaim: _outputWriteClaim, ...released } = claimable;
+      claimable = RunnerJobSchema.parse(released);
+    }
+    const timestamp = now.toISOString();
+    const claim = { ownerId, callbackHash };
+    const { callbackRecovery: _callbackRecovery, ...withoutRecovery } =
+      claimable;
+    const next = RunnerJobSchema.parse({
+      ...withoutRecovery,
+      callbackClaim: {
+        idempotencyKey: parsed.idempotencyKey,
+        callbackHash,
+        ownerId,
+        claimedAt: timestamp,
+      },
+      jobVersion: current.jobVersion + 1,
+      updatedAt: timestamp,
+    });
+    await this.repository.save(next, current.jobVersion);
+    return { duplicate: false, job: structuredClone(next), claim };
+  }
+
+  async releaseCallbackClaim(
+    jobId: string,
+    claim: RunnerCallbackClaimToken,
+  ): Promise<void> {
+    for (let attempt = 0; attempt < START_CONFLICT_RETRY_LIMIT; attempt += 1) {
+      const current = await this.getJob(jobId);
+      if (
+        current.callbackClaim === undefined ||
+        current.callbackClaim.ownerId !== claim.ownerId ||
+        current.callbackClaim.callbackHash !== claim.callbackHash
+      ) {
+        return;
+      }
+      const { callbackClaim: _callbackClaim, ...released } = current;
+      const next = RunnerJobSchema.parse({
+        ...released,
+        callbackRecovery: {
+          idempotencyKey: current.callbackClaim.idempotencyKey,
+          callbackHash: current.callbackClaim.callbackHash,
+          releasedAt: this.clock.now().toISOString(),
+        },
+        jobVersion: current.jobVersion + 1,
+        updatedAt: this.clock.now().toISOString(),
+      });
+      try {
+        await this.repository.save(next, current.jobVersion);
+        return;
+      } catch (error) {
+        if (!(error instanceof ConcurrentRunnerJobUpdateError)) throw error;
+      }
+    }
+    throw new ConcurrentRunnerJobUpdateError(jobId);
+  }
+
+  async recordCallback(
+    callback: unknown,
+    suppliedClaim?: RunnerCallbackClaimToken,
+  ): Promise<{ duplicate: boolean; job: RunnerJob }> {
+    const parsed = RunnerCallbackSchema.parse(callback);
+    const existing = await this.repository.findCallback(parsed.idempotencyKey);
+    if (existing !== undefined) {
+      if (!(await callbacksShareRunnerOrigin(existing, parsed))) {
+        throw new RunnerCallbackConflictError(parsed.idempotencyKey);
+      }
+      return { duplicate: true, job: await this.getJob(parsed.jobId) };
+    }
+
+    let claim = suppliedClaim;
+    if (claim === undefined) {
+      const claimed = await this.claimCallback(
+        parsed,
+        `record-callback:${parsed.callbackId}`,
+      );
+      if (claimed.duplicate) return claimed;
+      claim = claimed.claim;
+    }
+
+    const current = await this.getJob(parsed.jobId);
+    if (
+      current.callbackClaim === undefined ||
+      current.callbackClaim.ownerId !== claim.ownerId ||
+      current.callbackClaim.callbackHash !== claim.callbackHash ||
+      current.callbackClaim.idempotencyKey !== parsed.idempotencyKey
+    ) {
+      throw new RunnerCallbackStateError(
+        `Runner callback claim does not authorize completion for ${parsed.jobId}`,
+      );
+    }
+    const completedAt = this.clock.now();
+    if (
+      isCallbackClaimExpired(
+        current,
+        current.callbackClaim.claimedAt,
+        completedAt,
+      ) ||
+      completedAt.getTime() >= callbackSettlementDeadline(current)
+    ) {
+      throw new RunnerCallbackStateError(
+        `Runner callback cannot complete job ${parsed.jobId} after its claim deadline`,
+      );
+    }
     if (current.stateVersion !== parsed.stateVersion) {
       throw new RunnerCallbackStateError(
         `Callback state version ${parsed.stateVersion} does not match job state version ${current.stateVersion}`,
@@ -487,12 +1022,17 @@ export class RunnerJobService {
           : `Runner callback cannot transition job ${current.jobId} from ${current.status}`,
       );
     }
+    const {
+      callbackClaim: _callbackClaim,
+      callbackRecovery: _callbackRecovery,
+      ...completing
+    } = current;
     const next = RunnerJobSchema.parse({
-      ...current,
+      ...completing,
       status: parsed.status,
       jobVersion: current.jobVersion + 1,
-      updatedAt: parsed.occurredAt,
-      completedAt: parsed.occurredAt,
+      updatedAt: completedAt.toISOString(),
+      completedAt: completedAt.toISOString(),
       outputHashes: parsed.outputHashes,
       ...(parsed.error === undefined ? {} : { error: parsed.error }),
     });

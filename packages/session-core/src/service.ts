@@ -5,6 +5,7 @@ import {
   HostedVerifiedResultSetV2Schema,
   HostedPatchAuthorityRefV5Schema,
   HostedResultAuthorityRefV5Schema,
+  LearningDirectorSessionStateSchema,
   PatchResultSchema,
   PredictionContractSchema,
   PrePredictionBeliefSpecV2Schema,
@@ -17,6 +18,7 @@ import {
   VerifiedOperationSummaryV1Schema,
   VerifiedResultSetSchema,
   type BeliefSpecV2,
+  type LearningDirectorSessionState,
 } from "@counterlab/contracts";
 
 import {
@@ -219,6 +221,157 @@ export class SessionService {
     );
   }
 
+  async recordLearningDirector(
+    sessionId: string,
+    state: LearningDirectorSessionState,
+    input: { clarificationAnswerHash?: string } = {},
+  ): Promise<CounterLabSession> {
+    const current = await this.requireSession(sessionId);
+    if (
+      current.mode.kind !== "live_notebook" ||
+      current.state !== "BELIEF_TEST_PROPOSED" ||
+      current.beliefSpec === undefined ||
+      current.beliefTest !== undefined
+    ) {
+      throw new SessionInputError(
+        "The Learning Director requires a proposed live Belief Spec",
+      );
+    }
+    const parsed = LearningDirectorSessionStateSchema.parse(state);
+    if (
+      parsed.decision.status === "READY" &&
+      parsed.decision.plan.concept !== current.beliefSpec.concept
+    ) {
+      throw new SessionInputError(
+        "The Learning Director plan concept must match the Belief Spec",
+      );
+    }
+    if (parsed.beliefSpecHash !== (await hashCanonical(current.beliefSpec))) {
+      throw new SessionInputError(
+        "The Learning Director decision must bind to the current Belief Spec",
+      );
+    }
+    if (
+      current.learningDirector !== undefined &&
+      parsed.approvedPacketHash !== current.learningDirector.approvedPacketHash
+    ) {
+      throw new SessionInputError(
+        "The Learning Director cannot change its approved outbound packet",
+      );
+    }
+    if (
+      current.learningDirector !== undefined &&
+      parsed.subjectPackVersion !== current.learningDirector.subjectPackVersion
+    ) {
+      throw new SessionInputError(
+        "The Learning Director cannot change its Subject Pack version",
+      );
+    }
+    if (current.learningDirector?.decision.status === "READY") {
+      throw new SessionInputError(
+        "The Learning Director plan is already fixed",
+      );
+    }
+    if (
+      current.learningDirector?.clarificationUsed === true &&
+      parsed.decision.status !== "READY"
+    ) {
+      throw new SessionInputError(
+        "The Learning Director cannot request a second clarification",
+      );
+    }
+    if (
+      current.learningDirector?.clarificationUsed === true &&
+      !parsed.clarificationUsed
+    ) {
+      throw new SessionInputError(
+        "The Learning Director clarification budget cannot be reset",
+      );
+    }
+    const clarificationAnswerHash = input.clarificationAnswerHash;
+    if (
+      clarificationAnswerHash !== undefined &&
+      !/^[a-f0-9]{64}$/u.test(clarificationAnswerHash)
+    ) {
+      throw new SessionInputError(
+        "clarificationAnswerHash must be a lowercase SHA-256 digest",
+      );
+    }
+    if (current.learningDirector === undefined) {
+      if (parsed.decision.status === "READY" && parsed.clarificationUsed) {
+        throw new SessionInputError(
+          "An initial Learning Director plan cannot claim a clarification was used",
+        );
+      }
+      if (clarificationAnswerHash !== undefined) {
+        throw new SessionInputError(
+          "A Learning Director answer requires a pending clarification",
+        );
+      }
+    } else if (
+      current.learningDirector.decision.status === "CLARIFICATION_REQUIRED"
+    ) {
+      if (parsed.decision.status !== "READY") {
+        throw new SessionInputError(
+          "A Learning Director clarification can only resolve to a ready plan",
+        );
+      }
+      if (clarificationAnswerHash === undefined) {
+        throw new SessionInputError(
+          "A Learning Director clarification answer is required",
+        );
+      }
+      const allowedAnswerHashes = await Promise.all(
+        current.learningDirector.decision.choices.map((choice) =>
+          hashCanonical(choice),
+        ),
+      );
+      if (!allowedAnswerHashes.includes(clarificationAnswerHash)) {
+        throw new SessionInputError(
+          "The Learning Director clarification answer must match an offered choice",
+        );
+      }
+    }
+    const stateHash = await hashCanonical(parsed);
+    return this.revise(
+      current,
+      { learningDirector: parsed },
+      {
+        actor: "gpt-5.6",
+        kind:
+          parsed.decision.status === "READY"
+            ? "learning_director.ready"
+            : "learning_director.clarification_requested",
+        payload: {
+          schemaVersion: parsed.schemaVersion,
+          beliefSpecHash: parsed.beliefSpecHash,
+          approvedPacketHash: parsed.approvedPacketHash,
+          subjectPackVersion: parsed.subjectPackVersion,
+          status: parsed.decision.status,
+          clarificationUsed: parsed.clarificationUsed,
+          turns: parsed.provenance.turns,
+          toolTrace: parsed.provenance.toolTrace,
+          ...(parsed.decision.status === "READY"
+            ? {
+                primaryEmphasis: parsed.decision.plan.primaryEmphasis,
+                sceneRecipeId: parsed.decision.plan.sceneRecipeId,
+                boundaryViewId: parsed.decision.plan.boundaryViewId,
+              }
+            : {}),
+        },
+        modelId: parsed.provenance.modelId,
+        promptHash: parsed.provenance.promptHash,
+        inputHashes: [
+          await hashCanonical(current.beliefSpec),
+          ...(clarificationAnswerHash === undefined
+            ? []
+            : [clarificationAnswerHash]),
+        ],
+        outputHashes: [stateHash],
+      },
+    );
+  }
+
   async editBeliefTest(
     sessionId: string,
     beliefTest: unknown,
@@ -283,7 +436,7 @@ export class SessionService {
     });
     return this.revise(
       current,
-      { beliefSpec: parsed },
+      { beliefSpec: parsed, learningDirector: undefined },
       {
         actor: "learner",
         kind: "belief_spec.edited",
@@ -330,7 +483,7 @@ export class SessionService {
     });
     return this.revise(
       current,
-      { beliefSpec: selected },
+      { beliefSpec: selected, learningDirector: undefined },
       {
         actor: "learner",
         kind: "belief_spec.alternative_selected",
@@ -358,12 +511,23 @@ export class SessionService {
               ...withoutSelectedAlternative(current.beliefSpec),
               learnerDecision: "CONFIRMED",
             });
+    const clearPendingDirector =
+      current.learningDirector?.decision.status === "CLARIFICATION_REQUIRED";
+    const confirmationInputHashes = [await hashCanonical(beliefAuthority)];
+    if (clearPendingDirector && current.learningDirector !== undefined) {
+      confirmationInputHashes.push(
+        await hashCanonical(current.learningDirector),
+      );
+    }
     return this.transitionFrom(
       current,
       "BELIEF_TEST_CONFIRMED",
-      confirmedBeliefSpec === undefined
-        ? {}
-        : { beliefSpec: confirmedBeliefSpec },
+      {
+        ...(confirmedBeliefSpec === undefined
+          ? {}
+          : { beliefSpec: confirmedBeliefSpec }),
+        ...(clearPendingDirector ? { learningDirector: undefined } : {}),
+      },
       {
         actor: "learner",
         kind:
@@ -373,8 +537,13 @@ export class SessionService {
         payload:
           confirmedBeliefSpec === undefined
             ? { beliefTestId: getObjectString(beliefAuthority, "id") }
-            : { beliefSpecId: getObjectString(beliefAuthority, "id") },
-        inputHashes: [await hashCanonical(beliefAuthority)],
+            : {
+                beliefSpecId: getObjectString(beliefAuthority, "id"),
+                ...(clearPendingDirector
+                  ? { learningDirectorDisposition: "SKIPPED" }
+                  : {}),
+              },
+        inputHashes: confirmationInputHashes,
         ...(confirmedBeliefSpec === undefined
           ? {}
           : { outputHashes: [await hashCanonical(confirmedBeliefSpec)] }),

@@ -9,6 +9,36 @@ import {
   qualifiedContainerImage,
   selectQualifiedContainer,
 } from "./create-deployment-receipt";
+import { createGenerationIsolationEvidence } from "./generation-isolation-evidence";
+
+const generationIsolationProbePayload = {
+  schemaVersion: "1",
+  probeVersion: "counterlab-generation-isolation-v1",
+  service: "counterlab-hosted-runner",
+  probe: "non-root-startup",
+  checks: [
+    "entrypoint",
+    "non-root-user",
+    "immutable-paths",
+    "codex",
+    "python",
+    "bubblewrap",
+    "bubblewrap-read-isolation",
+    "setpriv",
+    "writable-roots",
+  ],
+  generationFilesystemReadIsolation: "OS_ENFORCED",
+  bubblewrapVersion: "0.11.0",
+  bubblewrap: {
+    forbiddenHostPathsHidden: true,
+    parentEnvironmentHidden: true,
+    workspaceVisible: true,
+    workspaceWritable: true,
+  },
+} as const;
+
+const generationIsolationProbeSha256 =
+  "700cc58bedc163846e3854415170f49f55da9fd3ba316cc4967747d5268199dc";
 
 describe("deployment receipt frozen dry-run projection", () => {
   const workerBundleSha256 = "a".repeat(64);
@@ -97,6 +127,11 @@ describe("deployment receipt Worker identity", () => {
     workerEvidenceCommit: "a".repeat(40),
     runnerSourceCommit: "b".repeat(40),
     runnerImageDigest: `sha256:${"c".repeat(64)}`,
+    generationIsolationEvidenceSha256: "5".repeat(64),
+    generationIsolationProbeSha256: "6".repeat(64),
+    releaseCheckGenerationIsolationEvidenceSha256: "7".repeat(64),
+    releaseCheckGenerationIsolationProbeSha256: "6".repeat(64),
+    releaseCheckGenerationIsolationVerifiedAt: "2026-07-19T00:02:00.000Z",
     timeoutCleanupReceiptSha256: "d".repeat(64),
     aggregateLimitEvidenceSha256: "9".repeat(64),
     runtimePolicySha256: "e".repeat(64),
@@ -115,6 +150,26 @@ describe("deployment receipt Worker identity", () => {
     ["COUNTERLAB_WORKER_EVIDENCE_COMMIT", expected.workerEvidenceCommit],
     ["COUNTERLAB_RUNNER_SOURCE_COMMIT", expected.runnerSourceCommit],
     ["COUNTERLAB_RUNNER_IMAGE_DIGEST", expected.runnerImageDigest],
+    [
+      "COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256",
+      expected.generationIsolationEvidenceSha256,
+    ],
+    [
+      "COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256",
+      expected.generationIsolationProbeSha256,
+    ],
+    [
+      "COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256",
+      expected.releaseCheckGenerationIsolationEvidenceSha256,
+    ],
+    [
+      "COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256",
+      expected.releaseCheckGenerationIsolationProbeSha256,
+    ],
+    [
+      "COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT",
+      expected.releaseCheckGenerationIsolationVerifiedAt,
+    ],
     [
       "COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256",
       expected.timeoutCleanupReceiptSha256,
@@ -152,13 +207,18 @@ describe("deployment receipt Worker identity", () => {
     ["COUNTERLAB_MAINTENANCE_MODE", "false"],
   ].map(([name, text]) => ({ name, text, type: "plain_text" }));
 
-  it("requires direct active bindings for both qualification hashes", () => {
+  it("requires direct active bindings for qualification and release-check evidence", () => {
     expect(() =>
       assertActiveWorkerReleaseBindings(bindings, expected),
     ).not.toThrow();
 
     for (const name of [
       "COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256",
+      "COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256",
+      "COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256",
+      "COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256",
+      "COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256",
+      "COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT",
       "COUNTERLAB_RUNTIME_POLICY_SHA256",
       "COUNTERLAB_PROOF_DEPENDENCY_MANIFEST_SHA256",
       "COUNTERLAB_WORKER_ARTIFACT_MANIFEST_SHA256",
@@ -189,13 +249,31 @@ describe("deployment receipt Worker identity", () => {
       ).toThrow(new RegExp(name, "u"));
     }
   });
+
+  it("rejects duplicate release bindings even when one value matches", () => {
+    expect(() =>
+      assertActiveWorkerReleaseBindings(
+        [
+          ...bindings,
+          {
+            name: "COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256",
+            text: expected.releaseCheckGenerationIsolationEvidenceSha256,
+            type: "plain_text",
+          },
+        ],
+        expected,
+      ),
+    ).toThrow(/COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256/u);
+  });
 });
 
 describe("deployment receipt qualification binding", () => {
   const qualifiedReceiptBytes = Buffer.from("qualified-receipt\n");
   const qualified = {
+    generationFilesystemReadIsolation: "OS_ENFORCED",
     evidenceCommit: "a".repeat(40),
     sourceCommit: "b".repeat(40),
+    sourceTreeSha256: "8".repeat(64),
     registryDigest: `sha256:${"c".repeat(64)}`,
     qualifiedAt: "2026-07-19T00:01:00.000Z",
     localImageTag: `counterlab-runner:git-${"b".repeat(40)}`,
@@ -207,8 +285,30 @@ describe("deployment receipt qualification binding", () => {
     proofDependencyManifestSha256: "3".repeat(64),
     runtimeAdapterSha256: "4".repeat(64),
     aggregateLimitEvidenceSha256: "5".repeat(64),
+    generationIsolationEvidenceSha256: "6".repeat(64),
+    generationIsolationProbeSha256,
+    generationIsolationVerifiedAt: "2026-07-19T00:00:30.000Z",
   } as const;
+  const freshIsolation = createGenerationIsolationEvidence({
+    sourceCommit: qualified.sourceCommit,
+    sourceTreeSha256: qualified.sourceTreeSha256,
+    localImageTag: qualified.localImageTag,
+    localImageDigest: qualified.localImageDigest,
+    imageUser: "10001:10001",
+    verifiedAt: "2026-07-19T00:02:00.000Z",
+    startupProbe: {
+      status: "ready",
+      service: "counterlab-hosted-runner",
+      probe: "non-root-startup",
+      checks: generationIsolationProbePayload.checks,
+      generationFilesystemReadIsolation: "OS_ENFORCED",
+      generationIsolationProbe: generationIsolationProbePayload,
+      generationIsolationProbeSha256,
+    },
+  });
   const releaseCheck = {
+    generationFilesystemReadIsolation:
+      qualified.generationFilesystemReadIsolation,
     evidenceCommit: qualified.evidenceCommit,
     sourceCommit: qualified.sourceCommit,
     qualifiedRunnerReceiptSha256: createHash("sha256")
@@ -225,6 +325,16 @@ describe("deployment receipt qualification binding", () => {
     proofDependencyManifestSha256: qualified.proofDependencyManifestSha256,
     runtimeAdapterSha256: qualified.runtimeAdapterSha256,
     aggregateLimitEvidenceSha256: qualified.aggregateLimitEvidenceSha256,
+    generationIsolationEvidenceSha256:
+      qualified.generationIsolationEvidenceSha256,
+    generationIsolationProbeSha256: qualified.generationIsolationProbeSha256,
+    generationIsolationVerifiedAt: qualified.generationIsolationVerifiedAt,
+    releaseCheckGenerationIsolationEvidence: freshIsolation.evidence,
+    releaseCheckGenerationIsolationEvidenceSha256:
+      freshIsolation.evidenceSha256,
+    releaseCheckGenerationIsolationProbeSha256: freshIsolation.probeSha256,
+    releaseCheckGenerationIsolationVerifiedAt:
+      freshIsolation.evidence.verifiedAt,
   } as const;
   const common = {
     qualified,
@@ -244,6 +354,21 @@ describe("deployment receipt qualification binding", () => {
       ["aggregateLimitEvidenceSha256", /aggregate limit evidence/u],
       ["runtimePolicySha256", /runtime policy/u],
       ["proofDependencyManifestSha256", /proof dependency manifest/u],
+      ["generationIsolationEvidenceSha256", /generation isolation evidence/u],
+      ["generationIsolationProbeSha256", /generation isolation probe/u],
+      ["generationIsolationVerifiedAt", /generation isolation verification/u],
+      [
+        "releaseCheckGenerationIsolationEvidenceSha256",
+        /Generation-isolation evidence hash mismatch/u,
+      ],
+      [
+        "releaseCheckGenerationIsolationProbeSha256",
+        /release-check generation isolation probe|probeSha256 binding mismatch/u,
+      ],
+      [
+        "releaseCheckGenerationIsolationVerifiedAt",
+        /Generation-isolation verifiedAt binding mismatch/u,
+      ],
     ] as const) {
       expect(() =>
         assertDeploymentReceiptBindings({

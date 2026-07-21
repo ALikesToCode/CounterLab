@@ -66,6 +66,28 @@ describe("SampleBoundaryPanel", () => {
     );
   });
 
+  it("completes only after an explicit changing-condition classification", async () => {
+    const onComplete = vi.fn();
+    verifier.mockResolvedValue({
+      boundary: { report: { status: "VERIFIED" } },
+    });
+    render(
+      <SampleBoundaryPanel sessionId="session-1" onComplete={onComplete} />,
+    );
+    await screen.findByText("Verified Boundary rendered");
+
+    const props = experience.mock.lastCall?.[0] as {
+      onReveal?: () => void;
+      onClassify: (classification: string) => void;
+    };
+    props.onReveal?.();
+    props.onClassify("CONCLUSION_STABLE");
+    expect(onComplete).not.toHaveBeenCalled();
+
+    props.onClassify("CONCLUSION_CHANGES");
+    expect(onComplete).toHaveBeenCalledOnce();
+  });
+
   it("does not render after an in-flight verification resolves post-unmount", async () => {
     let resolveVerification: ((value: unknown) => void) | undefined;
     verifier.mockReturnValue(

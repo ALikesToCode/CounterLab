@@ -35,7 +35,10 @@ import {
   createEvidenceEvent,
   hashCanonical,
 } from "@counterlab/session-core";
-import { validateProofBundle } from "@counterlab/proof-bundle";
+import {
+  createProofBundle,
+  validateProofBundle,
+} from "@counterlab/proof-bundle";
 import {
   validatePublicReplayProjectionV1,
   validateProofCapsulePayloadAuthorityV2,
@@ -166,6 +169,14 @@ class MemorySessionRepository implements SessionRepository {
     events: readonly EvidenceEvent[],
   ): void {
     this.eventLog.set(sessionId, structuredClone([...events]));
+  }
+
+  replaceSessionForIntegrityTest(session: CounterLabSession): void {
+    this.sessions.set(session.id, structuredClone(session));
+  }
+
+  sessionCountForTest(): number {
+    return this.sessions.size;
   }
 
   close(): void {}
@@ -409,6 +420,7 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
   private readonly events = new Map<string, PublicCompilerEvent[]>();
   private readonly callbacks = new Map<string, RunnerCallback>();
   private mutateHistoryAtSnapshotEnd = false;
+  private historySnapshotMutationsRemaining = 0;
   private historyReads = 0;
 
   async create(job: RunnerJob): Promise<void> {
@@ -468,7 +480,11 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
 
   async findForSession(sessionId: string): Promise<RunnerJob[]> {
     this.historyReads += 1;
-    if (this.mutateHistoryAtSnapshotEnd && this.historyReads % 2 === 0) {
+    if (
+      this.historyReads % 2 === 0 &&
+      (this.mutateHistoryAtSnapshotEnd ||
+        this.historySnapshotMutationsRemaining > 0)
+    ) {
       const current = [...this.jobs.values()].find(
         (job) => job.sessionId === sessionId,
       );
@@ -478,6 +494,9 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
           jobVersion: current.jobVersion + 1,
           updatedAt: new Date(Date.parse(current.updatedAt) + 1).toISOString(),
         });
+        if (this.historySnapshotMutationsRemaining > 0) {
+          this.historySnapshotMutationsRemaining -= 1;
+        }
       }
     }
     return structuredClone(
@@ -487,6 +506,11 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
 
   mutateEveryHistorySnapshotEnd(): void {
     this.mutateHistoryAtSnapshotEnd = true;
+    this.historyReads = 0;
+  }
+
+  mutateHistorySnapshotEnds(times: number): void {
+    this.historySnapshotMutationsRemaining = times;
     this.historyReads = 0;
   }
 
@@ -524,6 +548,14 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
     const events = this.events.get(job.jobId) ?? [];
     events.push(structuredClone(event));
     this.events.set(job.jobId, events);
+  }
+
+  async appendTerminalEvent(
+    job: RunnerJob,
+    expectedVersion: number,
+    event: PublicCompilerEvent,
+  ): Promise<void> {
+    await this.appendEvent(job, expectedVersion, event);
   }
 
   async listEvents(
@@ -911,8 +943,19 @@ async function liveBeliefInput(
   );
   expect(preview.status).toBe(200);
   const body = (await preview.json()) as {
-    data: { previewHash: string; requiresSensitiveApproval: boolean };
+    data: {
+      previewHash: string;
+      requiresSensitiveApproval: boolean;
+      sanitizedContent: Record<string, unknown>;
+      learningDirectorPacket: Record<string, unknown>;
+    };
   };
+  expect(body.data.previewHash).toBe(
+    await hashCanonical({
+      beliefAnalyst: body.data.sanitizedContent,
+      learningDirector: body.data.learningDirectorPacket,
+    }),
+  );
   return {
     learnerClaim,
     previewHash: body.data.previewHash,
@@ -1061,6 +1104,77 @@ function structuredResponsesResult(output: unknown): Response {
   );
 }
 
+function learningDirectorToolResult(
+  concept: "entity_leakage" | "class_imbalance",
+): Response {
+  const functionCall = (name: string, index: number) => ({
+    id: `function_call_${index}`,
+    type: "function_call",
+    status: "completed",
+    call_id: `call_${index}`,
+    name,
+    arguments: JSON.stringify({ concept }),
+  });
+  return new Response(
+    JSON.stringify({
+      id: "resp_learning_director_tools",
+      object: "response",
+      status: "completed",
+      model: "configured-model",
+      output: [
+        functionCall("get_subject_pack_capabilities", 1),
+        functionCall("list_trusted_scene_recipes", 2),
+        functionCall("list_verified_boundary_views", 3),
+      ],
+    }),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
+
+function learningDirectorReadyResult(
+  concept: "entity_leakage" | "class_imbalance",
+): Response {
+  const leakage = concept === "entity_leakage";
+  return structuredResponsesResult({
+    decision: {
+      status: "READY",
+      plan: {
+        concept,
+        introductionStages: [
+          "Question",
+          "Prediction",
+          "Test",
+          "Boundary",
+          "Apply",
+        ],
+        primaryEmphasis: "Boundary",
+        scaffoldIds: [leakage ? "compare-splits" : "compare-metrics"],
+        candidateExperimentIds: [
+          leakage ? "group-holdout" : "threshold-and-majority-baseline",
+        ],
+        sceneRecipeId: leakage
+          ? "entity-overlap-stage"
+          : "confusion-matrix-stage",
+        boundaryViewId: leakage
+          ? "test-fraction-by-repeat-rate"
+          : "threshold-by-prevalence",
+        evidenceHashes: [],
+        nonClaims: ["bounded-claim-only", "no-mastery-claim"],
+      },
+    },
+  });
+}
+
+function learningDirectorClarificationResult(): Response {
+  return structuredResponsesResult({
+    decision: {
+      status: "CLARIFICATION_REQUIRED",
+      questionId: "learning-emphasis",
+      choices: ["controls-first", "boundary-first"],
+    },
+  });
+}
+
 async function preparedScientificHostedRunner(
   runnerJobs: MemoryRunnerJobRepository = new MemoryRunnerJobRepository(),
 ) {
@@ -1088,7 +1202,9 @@ async function preparedScientificHostedRunner(
     .spyOn(globalThis, "fetch")
     .mockResolvedValueOnce(
       structuredResponsesResult(liveBeliefSpecWire(artifact.manifest)),
-    );
+    )
+    .mockResolvedValueOnce(learningDirectorToolResult("entity_leakage"))
+    .mockResolvedValueOnce(learningDirectorReadyResult("entity_leakage"));
   try {
     const proposed = await harness.app.request(
       `/api/sessions/${harness.sessionId}/belief-test`,
@@ -1216,7 +1332,9 @@ async function preparedScientificImbalanceHostedRunner(
     .spyOn(globalThis, "fetch")
     .mockResolvedValueOnce(
       structuredResponsesResult(liveImbalanceBeliefSpecWire(artifact)),
-    );
+    )
+    .mockResolvedValueOnce(learningDirectorToolResult("class_imbalance"))
+    .mockResolvedValueOnce(learningDirectorReadyResult("class_imbalance"));
   try {
     const proposed = await intakeApp.request(
       `/api/sessions/${sessionId}/belief-test`,
@@ -3019,8 +3137,14 @@ describe("Cloudflare Worker API", () => {
           artifactCapability: secondBody.data.ownerCapability,
         }),
       });
-      expect(firstSession.status).toBe(201);
-      expect(secondSession.status).toBe(201);
+      expect(firstSession.status).toBe(503);
+      expect(secondSession.status).toBe(503);
+      await expect(firstSession.json()).resolves.toMatchObject({
+        error: { code: "LIVE_AUTHORITY_NOT_READY" },
+      });
+      await expect(secondSession.json()).resolves.toMatchObject({
+        error: { code: "LIVE_AUTHORITY_NOT_READY" },
+      });
     });
 
     it("canonicalizes an empty browser MIME type before binding the upload", async () => {
@@ -4221,6 +4345,99 @@ describe("Cloudflare Worker API", () => {
     });
   });
 
+  it("refuses a supported live session when hosted release readiness is unqualified", async () => {
+    const sessionRepository = new MemorySessionRepository();
+    const artifactStore = new MemoryArtifactStore();
+    const app = createApi({
+      sessionRepository,
+      artifactStore,
+      runnerJobRepository: new MemoryRunnerJobRepository(),
+      runnerObjectStore: new MemoryRunnerObjectStore(),
+      runnerDispatcher: new CapturingRunnerDispatcher(),
+      runnerSigningPrivateKey: TEST_RUNNER_SIGNING_PRIVATE_KEY,
+      admissionControl: new CapturingAdmissionControl(),
+      admissionHmacKey: "admission-test-key-with-sufficient-entropy",
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_unqualified_live`,
+    });
+    const sampleResponse = await app.request("/api/artifacts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sample: true }),
+    });
+    const sampleBody = (await sampleResponse.json()) as {
+      data: ArtifactManifest;
+    };
+    const uploaded = await saveUploadedArtifact(
+      artifactStore,
+      sampleBody.data.artifactId,
+    );
+
+    const response = await postJson(app, "/api/live/sessions", {
+      artifactId: uploaded.artifactId,
+    });
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: "LIVE_AUTHORITY_NOT_READY",
+        retryable: true,
+      },
+    });
+    expect(sessionRepository.sessionCountForTest()).toBe(0);
+
+    const workerEvidenceCommit = "a".repeat(40);
+    const readyResponse = await app.request(
+      "/api/live/sessions",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ artifactId: uploaded.artifactId }),
+      },
+      {
+        OPENAI_API_KEY: "configured-server-key",
+        COUNTERLAB_WORKER_EVIDENCE_COMMIT: workerEvidenceCommit,
+        COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
+        COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+        COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "5".repeat(64),
+        COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(64),
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256:
+          "7".repeat(64),
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(
+          64,
+        ),
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT:
+          "2026-07-19T05:31:00.000+05:30",
+        COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256: "d".repeat(64),
+        COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256: "9".repeat(64),
+        COUNTERLAB_RUNTIME_POLICY_SHA256: "e".repeat(64),
+        COUNTERLAB_PROOF_DEPENDENCY_MANIFEST_SHA256: "f".repeat(64),
+        COUNTERLAB_WORKER_ARTIFACT_CLASSIFICATION: "PROCESS_BOUND_PARTIAL",
+        COUNTERLAB_WORKER_ARTIFACT_MANIFEST_SHA256: "1".repeat(64),
+        COUNTERLAB_WORKER_BUNDLE_SHA256: "2".repeat(64),
+        COUNTERLAB_CLIENT_ASSETS_SHA256: "3".repeat(64),
+        COUNTERLAB_CLIENT_ASSET_COUNT: "27",
+        COUNTERLAB_CLIENT_PUBLIC_ASSETS_SHA256: "4".repeat(64),
+        COUNTERLAB_CLIENT_PUBLIC_ASSET_COUNT: "25",
+        COUNTERLAB_VITE_VERSION: "8.1.4",
+        COUNTERLAB_WRANGLER_VERSION: "4.110.0",
+        CF_VERSION_METADATA: {
+          id: "11111111-2222-3333-4444-555555555555",
+          tag: `git-${workerEvidenceCommit}`,
+          timestamp: "2026-07-19T00:00:00.000Z",
+        },
+      } as unknown as Env,
+    );
+    expect(readyResponse.status).toBe(201);
+    await expect(readyResponse.json()).resolves.toMatchObject({
+      data: {
+        artifactId: uploaded.artifactId,
+        mode: { kind: "live_notebook" },
+      },
+    });
+    expect(sessionRepository.sessionCountForTest()).toBe(1);
+  });
+
   it("stores strict learner interactions outside session and evidence authority", async () => {
     const harness = await sessionHarness("sample");
     const interactions = new MemoryLearnerInteractionRepository();
@@ -4905,9 +5122,22 @@ describe("Cloudflare Worker API", () => {
     const patchCallbackBody = (await callback.json()) as {
       data: { verification?: unknown; session: unknown };
     };
-    expect({ status: callback.status }).toEqual({
-      status: 200,
-    });
+    const completedSession = await harness.sessionRepository.find(
+      harness.sessionId,
+    );
+    const completedEvents = await harness.sessionRepository.listEvents(
+      harness.sessionId,
+    );
+    const completedBundleHash =
+      completedSession?.proofBundle === undefined
+        ? undefined
+        : await hashCanonical(completedSession.proofBundle);
+    expect(
+      completedEvents
+        .filter((event) => event.kind === "reasoning_diff.issued")
+        .map((event) => event.outputHashes.includes(completedBundleHash ?? "")),
+    ).toEqual([true]);
+    expect(callback.status, JSON.stringify(patchCallbackBody)).toBe(200);
     expect(patchCallbackBody.data.verification).toMatchObject({
       status: "VERIFIED",
     });
@@ -6376,6 +6606,219 @@ describe("Cloudflare Worker API", () => {
     expect(download.headers.get("x-content-type-options")).toBe("nosniff");
     expect(download.headers.get("cache-control")).toBe("private, no-store");
     await expect(download.text()).resolves.toBe(patchedNotebookText);
+
+    const restored = await app.request(`/api/sessions/${sessionId}`);
+    expect(restored.status).toBe(200);
+    await expect(restored.json()).resolves.toMatchObject({
+      data: {
+        sessionId,
+        state: "REASONING_DIFF_ISSUED",
+        proofBundle: { sessionId, schemaVersion: "2" },
+      },
+    });
+    const proofDownload = await app.request(
+      `/api/sessions/${sessionId}/proof-bundle`,
+    );
+    expect(proofDownload.status).toBe(200);
+
+    const proofSigningKey =
+      "counterlab-test-proof-signing-key-with-sufficient-entropy";
+    const proofSigningEnv = {
+      COUNTERLAB_SIGNING_KEY: proofSigningKey,
+    } as unknown as Env & Record<string, string>;
+    for (const path of [
+      `/api/sessions/${sessionId}`,
+      `/api/sessions/${sessionId}/proof-bundle`,
+    ]) {
+      const historicalUnsigned = await app.request(
+        path,
+        undefined,
+        proofSigningEnv,
+      );
+      expect(historicalUnsigned.status).toBe(200);
+      const historicalPayload = (await historicalUnsigned.json()) as {
+        data: {
+          integrity?: { mode: string };
+          proofBundle?: { integrity: { mode: string } };
+        };
+      };
+      expect(
+        historicalPayload.data.proofBundle?.integrity ??
+          historicalPayload.data.integrity,
+      ).toMatchObject({ mode: "integrity-hashed" });
+    }
+
+    const storedProofSession = await harness.sessionRepository.find(sessionId);
+    if (storedProofSession?.proofBundle === undefined) {
+      throw new Error("hosted proof bundle was not persisted");
+    }
+    const replaceIssuedProofBundle = async (
+      proofBundle: NonNullable<CounterLabSession["proofBundle"]>,
+    ) => {
+      const events = await harness.sessionRepository.listEvents(sessionId);
+      const issuanceIndex = events.findIndex(
+        (event) => event.kind === "reasoning_diff.issued",
+      );
+      if (issuanceIndex !== events.length - 1) {
+        throw new Error("Proof Bundle issuance must be the final test event");
+      }
+      const issuance = events[issuanceIndex];
+      if (issuance === undefined || issuance.outputHashes.length < 2) {
+        throw new Error("Proof Bundle issuance hash is unavailable");
+      }
+      const outputHashes = [...issuance.outputHashes];
+      outputHashes[outputHashes.length - 1] = await hashCanonical(proofBundle);
+      const { eventHash: _eventHash, ...unsignedIssuance } = issuance;
+      const reboundIssuance = { ...unsignedIssuance, outputHashes };
+      events[issuanceIndex] = {
+        ...reboundIssuance,
+        eventHash: await hashCanonical(reboundIssuance),
+      };
+      storedProofSession.proofBundle = structuredClone(proofBundle);
+      harness.sessionRepository.replaceEventsForIntegrityTest(
+        sessionId,
+        events,
+      );
+      harness.sessionRepository.replaceSessionForIntegrityTest(
+        storedProofSession,
+      );
+    };
+    const { integrity: _integrity, ...proofDraft } =
+      storedProofSession.proofBundle;
+    const signedProofBundle = createProofBundle(proofDraft, {
+      signingKey: proofSigningKey,
+      scientificEngineSnapshotHash: scientificEngineSnapshotValue.authorityHash,
+    });
+    await replaceIssuedProofBundle(signedProofBundle);
+    for (const path of [
+      `/api/sessions/${sessionId}`,
+      `/api/sessions/${sessionId}/proof-bundle`,
+    ]) {
+      const missingKey = await app.request(path);
+      expect(missingKey.status).toBe(503);
+      await expect(missingKey.json()).resolves.toMatchObject({
+        error: { code: "PROOF_SIGNING_KEY_REQUIRED" },
+      });
+      const wrongKey = await app.request(path, undefined, {
+        ...proofSigningEnv,
+        COUNTERLAB_SIGNING_KEY: "wrong-proof-signing-key",
+      } as unknown as Env & Record<string, string>);
+      expect(wrongKey.status).toBe(409);
+      await expect(wrongKey.json()).resolves.toMatchObject({
+        error: { code: "PROOF_BUNDLE_INVALID" },
+      });
+      expect((await app.request(path, undefined, proofSigningEnv)).status).toBe(
+        200,
+      );
+      const blankKey = await app.request(path, undefined, {
+        COUNTERLAB_SIGNING_KEY: "   ",
+      } as unknown as Env & Record<string, string>);
+      expect(blankKey.status).toBe(503);
+      await expect(blankKey.json()).resolves.toMatchObject({
+        error: { code: "PROOF_SIGNING_KEY_REQUIRED" },
+      });
+    }
+
+    if (signedProofBundle.integrity.mode !== "hmac-signed") {
+      throw new Error("hosted proof test did not create a signed bundle");
+    }
+    storedProofSession.proofBundle = {
+      ...signedProofBundle,
+      integrity: {
+        mode: "integrity-hashed",
+        algorithm: "sha256",
+        contentHash: signedProofBundle.integrity.contentHash,
+        eventChainHead: signedProofBundle.integrity.eventChainHead,
+      },
+    };
+    harness.sessionRepository.replaceSessionForIntegrityTest(
+      storedProofSession,
+    );
+    for (const path of [
+      `/api/sessions/${sessionId}`,
+      `/api/sessions/${sessionId}/proof-bundle`,
+    ]) {
+      for (const env of [undefined, proofSigningEnv]) {
+        const downgraded = await app.request(path, undefined, env);
+        expect(downgraded.status).toBe(409);
+        await expect(downgraded.json()).resolves.toMatchObject({
+          error: { code: "PROOF_BUNDLE_INVALID" },
+        });
+      }
+    }
+
+    storedProofSession.proofBundle = structuredClone(signedProofBundle);
+    storedProofSession.artifactId = "artifact_substituted_after_persistence";
+    harness.sessionRepository.replaceSessionForIntegrityTest(
+      storedProofSession,
+    );
+    for (const path of [
+      `/api/sessions/${sessionId}`,
+      `/api/sessions/${sessionId}/proof-bundle`,
+    ]) {
+      const substituted = await app.request(path, undefined, proofSigningEnv);
+      expect(substituted.status).toBe(409);
+      await expect(substituted.json()).resolves.toMatchObject({
+        error: { code: "PROOF_BUNDLE_INVALID" },
+      });
+    }
+
+    storedProofSession.artifactId = uploaded.artifactId;
+    storedProofSession.proofBundle.versions.model =
+      "tampered-after-persistence";
+    harness.sessionRepository.replaceSessionForIntegrityTest(
+      storedProofSession,
+    );
+    for (const path of [
+      `/api/sessions/${sessionId}`,
+      `/api/sessions/${sessionId}/proof-bundle`,
+    ]) {
+      const tampered = await app.request(path, undefined, proofSigningEnv);
+      expect(tampered.status).toBe(409);
+      await expect(tampered.json()).resolves.toMatchObject({
+        error: { code: "PROOF_BUNDLE_INVALID" },
+      });
+    }
+
+    storedProofSession.proofBundle = structuredClone(signedProofBundle);
+    harness.sessionRepository.replaceSessionForIntegrityTest(
+      storedProofSession,
+    );
+    const issuanceEvents =
+      await harness.sessionRepository.listEvents(sessionId);
+    const issuanceIndex = issuanceEvents.findIndex(
+      (event) => event.kind === "reasoning_diff.issued",
+    );
+    const issuance = issuanceEvents[issuanceIndex];
+    if (issuance === undefined) {
+      throw new Error("Proof Bundle issuance event is unavailable");
+    }
+    const { eventHash: _issuanceHash, ...unsignedIssuance } = issuance;
+    const mismatchedIssuance = {
+      ...unsignedIssuance,
+      outputHashes: [
+        ...unsignedIssuance.outputHashes.slice(0, -1),
+        "f".repeat(64),
+      ],
+    };
+    issuanceEvents[issuanceIndex] = {
+      ...mismatchedIssuance,
+      eventHash: await hashCanonical(mismatchedIssuance),
+    };
+    harness.sessionRepository.replaceEventsForIntegrityTest(
+      sessionId,
+      issuanceEvents,
+    );
+    for (const path of [
+      `/api/sessions/${sessionId}`,
+      `/api/sessions/${sessionId}/proof-bundle`,
+    ]) {
+      const detached = await app.request(path, undefined, proofSigningEnv);
+      expect(detached.status).toBe(409);
+      await expect(detached.json()).resolves.toMatchObject({
+        error: { code: "PROOF_BUNDLE_INVALID" },
+      });
+    }
   });
 
   it("budgets a v5 compiler job through two bounded repairs and scopes its token past the deadline", async () => {
@@ -7094,6 +7537,15 @@ describe("Cloudflare Worker API", () => {
       },
     );
     expect(revised.status).toBe(200);
+    const sessionBeforeDuplicate = await harness.sessionRepository.find(
+      harness.bundle.sessionId,
+    );
+    const objectsBeforeDuplicate = structuredClone([
+      ...harness.runnerObjects.objects.entries(),
+    ]);
+    const eventsBeforeDuplicate = await harness.runnerJobs.listEvents(jobId, 0);
+    const objectGet = vi.spyOn(harness.runnerObjects, "get");
+    const objectPut = vi.spyOn(harness.runnerObjects, "put");
     const duplicate = await postJson(
       harness.app,
       `/api/runner/jobs/${jobId}/callback`,
@@ -7108,7 +7560,17 @@ describe("Cloudflare Worker API", () => {
         session: { state: "REVISION_RECORDED" },
       },
     });
-    expect(await harness.runnerJobs.listEvents(jobId, 0)).toHaveLength(4);
+    expect(objectGet).not.toHaveBeenCalled();
+    expect(objectPut).not.toHaveBeenCalled();
+    expect([...harness.runnerObjects.objects.entries()]).toEqual(
+      objectsBeforeDuplicate,
+    );
+    expect(await harness.runnerJobs.listEvents(jobId, 0)).toEqual(
+      eventsBeforeDuplicate,
+    );
+    expect(
+      await harness.sessionRepository.find(harness.bundle.sessionId),
+    ).toEqual(sessionBeforeDuplicate);
 
     const transfer = await postJson(
       harness.app,
@@ -10412,7 +10874,10 @@ describe("Cloudflare Worker API", () => {
     );
     await expect(probedHealth.json()).resolves.toMatchObject({
       ok: true,
-      data: { readiness: "ready" },
+      data: {
+        readiness: "ready",
+        generationFilesystemReadIsolation: "OS_ENFORCED",
+      },
     });
   });
 
@@ -10443,6 +10908,7 @@ describe("Cloudflare Worker API", () => {
         liveCodex: "configured",
         liveKernel: "configured",
         readiness: "not-ready",
+        generationFilesystemReadIsolation: "PARTIAL",
       },
     });
   });
@@ -10489,6 +10955,16 @@ describe("Cloudflare Worker API", () => {
       COUNTERLAB_WORKER_EVIDENCE_COMMIT: workerEvidenceCommit,
       COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
       COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+      COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "5".repeat(64),
+      COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(64),
+      COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256: "7".repeat(
+        64,
+      ),
+      COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(
+        64,
+      ),
+      COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT:
+        "2026-07-19T05:31:00.000+05:30",
       COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256: "d".repeat(64),
       COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256: "9".repeat(64),
       COUNTERLAB_RUNTIME_POLICY_SHA256: "e".repeat(64),
@@ -10509,36 +10985,51 @@ describe("Cloudflare Worker API", () => {
       },
     } as unknown as Env);
 
-    await expect(response.json()).resolves.toMatchObject({
-      data: {
-        release: {
-          status: "bound",
-          workerVersionId,
-          workerVersionTag: `git-${workerEvidenceCommit}`,
-          workerEvidenceCommit,
-          runnerSourceCommit: "b".repeat(40),
-          runnerImageDigest: `sha256:${"c".repeat(64)}`,
-          timeoutCleanupReceiptSha256: "d".repeat(64),
-          aggregateLimitEvidenceSha256: "9".repeat(64),
-          runtimePolicySha256: "e".repeat(64),
-          proofDependencyManifestSha256: "f".repeat(64),
-          workerArtifactClassification: "PROCESS_BOUND_PARTIAL",
-          workerArtifactManifestSha256: "1".repeat(64),
-          workerBundleSha256: "2".repeat(64),
-          clientAssetsSha256: "3".repeat(64),
-          clientAssetCount: 27,
-          clientPublicAssetsSha256: "4".repeat(64),
-          clientPublicAssetCount: 25,
-          viteVersion: "8.1.4",
-          wranglerVersion: "4.110.0",
-        },
-      },
+    const releaseHealth = (await response.json()) as {
+      data: { release: unknown };
+    };
+    expect(releaseHealth.data.release).toEqual({
+      status: "bound",
+      workerVersionId,
+      workerVersionTag: `git-${workerEvidenceCommit}`,
+      workerEvidenceCommit,
+      runnerSourceCommit: "b".repeat(40),
+      runnerImageDigest: `sha256:${"c".repeat(64)}`,
+      generationIsolationEvidenceSha256: "5".repeat(64),
+      generationIsolationProbeSha256: "6".repeat(64),
+      releaseCheckGenerationIsolationEvidenceSha256: "7".repeat(64),
+      releaseCheckGenerationIsolationProbeSha256: "6".repeat(64),
+      releaseCheckGenerationIsolationVerifiedAt:
+        "2026-07-19T05:31:00.000+05:30",
+      timeoutCleanupReceiptSha256: "d".repeat(64),
+      aggregateLimitEvidenceSha256: "9".repeat(64),
+      runtimePolicySha256: "e".repeat(64),
+      proofDependencyManifestSha256: "f".repeat(64),
+      workerArtifactClassification: "PROCESS_BOUND_PARTIAL",
+      workerArtifactManifestSha256: "1".repeat(64),
+      workerBundleSha256: "2".repeat(64),
+      clientAssetsSha256: "3".repeat(64),
+      clientAssetCount: 27,
+      clientPublicAssetsSha256: "4".repeat(64),
+      clientPublicAssetCount: 25,
+      viteVersion: "8.1.4",
+      wranglerVersion: "4.110.0",
     });
 
     const mismatchedTag = await api.request("/api/health", undefined, {
       COUNTERLAB_WORKER_EVIDENCE_COMMIT: workerEvidenceCommit,
       COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
       COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+      COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "5".repeat(64),
+      COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(64),
+      COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256: "7".repeat(
+        64,
+      ),
+      COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(
+        64,
+      ),
+      COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT:
+        "2026-07-19T05:31:00.000+05:30",
       COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256: "d".repeat(64),
       COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256: "9".repeat(64),
       COUNTERLAB_RUNTIME_POLICY_SHA256: "e".repeat(64),
@@ -10579,6 +11070,33 @@ describe("Cloudflare Worker API", () => {
     for (const invalidQualificationBinding of [
       { COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256: undefined },
       { COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256: "0".repeat(63) },
+      { COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: undefined },
+      { COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "0".repeat(63) },
+      { COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: undefined },
+      { COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "0".repeat(63) },
+      {
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256:
+          undefined,
+      },
+      {
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256:
+          "0".repeat(63),
+      },
+      {
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256: undefined,
+      },
+      {
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256: "0".repeat(
+          64,
+        ),
+      },
+      {
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT: undefined,
+      },
+      {
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT:
+          "not-a-timestamp",
+      },
       { COUNTERLAB_RUNTIME_POLICY_SHA256: undefined },
       { COUNTERLAB_RUNTIME_POLICY_SHA256: "0".repeat(63) },
       { COUNTERLAB_PROOF_DEPENDENCY_MANIFEST_SHA256: undefined },
@@ -10606,6 +11124,15 @@ describe("Cloudflare Worker API", () => {
         COUNTERLAB_WORKER_EVIDENCE_COMMIT: workerEvidenceCommit,
         COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
         COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+        COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "5".repeat(64),
+        COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(64),
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256:
+          "7".repeat(64),
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(
+          64,
+        ),
+        COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT:
+          "2026-07-19T05:31:00.000+05:30",
         COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256: "d".repeat(64),
         COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256: "9".repeat(64),
         COUNTERLAB_RUNTIME_POLICY_SHA256: "e".repeat(64),
@@ -10676,6 +11203,8 @@ describe("Cloudflare Worker API", () => {
     });
     expect(harness.dispatcher.cancelled).toHaveLength(1);
 
+    const objectGet = vi.spyOn(harness.runnerObjects, "get");
+    const objectPut = vi.spyOn(harness.runnerObjects, "put");
     const lateCallback = await postJson(
       harness.app,
       `/api/runner/jobs/${firstBody.data.runnerJob.jobId}/callback`,
@@ -10685,15 +11214,10 @@ describe("Cloudflare Worker API", () => {
         idempotencyKey: "callback-after-start-over",
         jobId: firstBody.data.runnerJob.jobId,
         stateVersion: harness.dispatch.job.stateVersion,
-        status: "FAILED",
-        outputHashes: [],
+        status: "VERIFIED",
+        outputHashes: ["a".repeat(64)],
         finalEventCursor: 0,
         occurredAt: "2026-07-14T10:00:01.000Z",
-        error: {
-          code: "LATE_RUNNER_CALLBACK",
-          message: "Late completion after browser reset",
-          retryable: false,
-        },
       },
       { authorization: `Bearer ${harness.dispatch.token}` },
     );
@@ -10706,6 +11230,8 @@ describe("Cloudflare Worker API", () => {
       firstBody.data.runnerJob.jobId,
     );
     expect(afterLateCallback).toMatchObject({ status: "CANCELLED" });
+    expect(objectGet).not.toHaveBeenCalled();
+    expect(objectPut).not.toHaveBeenCalled();
   });
 
   it("acquires one opaque runner lease and releases it on cancellation", async () => {
@@ -10926,6 +11452,8 @@ describe("Cloudflare Worker API", () => {
       COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY: TEST_RUNNER_SIGNING_PRIVATE_KEY,
       COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
       COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+      COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "5".repeat(64),
+      COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(64),
     } as unknown as Env & Record<string, string>);
 
     expect(response.status).toBe(200);
@@ -10943,6 +11471,8 @@ describe("Cloudflare Worker API", () => {
       COUNTERLAB_RUNNER_BASE_URL: "http://127.0.0.1:8788",
       COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
       COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+      COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "5".repeat(64),
+      COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "6".repeat(64),
     } as unknown as Env & Record<string, string>);
     await expect(unsigned.json()).resolves.toMatchObject({
       data: { liveCodex: "local-runner-required" },
@@ -11356,6 +11886,58 @@ describe("Cloudflare Worker API", () => {
     });
   });
 
+  it("returns a complete verified snapshot after two bounded history changes", async () => {
+    const { app, artifactId, sessionId, runnerJobs } =
+      await sessionHarness("sample");
+    const route = `/api/sessions/${sessionId}`;
+    await postJson(app, `${route}/belief-test`, {
+      learnerClaim: SAMPLE_LEAKAGE_QUESTION,
+    });
+    await postJson(app, `${route}/belief-test/confirm`, { action: "confirm" });
+    await postJson(app, `${route}/prediction`, {
+      choice: "Accuracy remains near 98%",
+      confidence: 72,
+    });
+    await postJson(app, `${route}/lab/compile`);
+    await runnerJobs.create(
+      RunnerJobSchema.parse({
+        schemaVersion: "1",
+        jobId: "job_bounded_snapshot_race",
+        kind: "LAB_COMPILE",
+        status: "QUEUED",
+        sessionId,
+        artifactId,
+        artifactManifestHash: "a".repeat(64),
+        conceptPack: { id: "entity_leakage", version: "2.0.0" },
+        inputHashes: ["b".repeat(64)],
+        stateVersion: 6,
+        jobVersion: 1,
+        createdAt: "2026-07-14T10:01:00.000Z",
+        updatedAt: "2026-07-14T10:01:00.000Z",
+        attempt: 0,
+        maxAttempts: 2,
+        runnerIdentity: null,
+        timeoutSeconds: 90,
+        outputHashes: [],
+        eventCursor: 0,
+      }),
+    );
+    runnerJobs.mutateHistorySnapshotEnds(2);
+
+    const response = await app.request(`${route}/events`);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        events: [{}, {}, {}, {}, {}, { kind: "lab.verified" }],
+        integrity: {
+          status: "VERIFIED",
+          eventCount: 6,
+          eventChainHead: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        },
+      },
+    });
+  });
+
   it("returns LIVE_UNAVAILABLE without advancing a live session when the key is missing", async () => {
     const { app, sessionId, sessionRepository } = await sessionHarness("live");
     const learnerClaim =
@@ -11456,7 +12038,9 @@ describe("Cloudflare Worker API", () => {
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
         structuredResponsesResult(liveBeliefSpecWire(artifact.manifest)),
-      );
+      )
+      .mockResolvedValueOnce(learningDirectorToolResult("entity_leakage"))
+      .mockResolvedValueOnce(learningDirectorReadyResult("entity_leakage"));
 
     try {
       const response = await app.request(
@@ -11481,6 +12065,17 @@ describe("Cloudflare Worker API", () => {
           concept: "entity_leakage",
           claim: learnerClaim,
           learnerDecision: "UNDECIDED",
+        },
+        learningDirector: {
+          schemaVersion: "1",
+          clarificationUsed: false,
+          decision: {
+            status: "READY",
+            plan: {
+              primaryEmphasis: "Boundary",
+              sceneRecipeId: "entity-overlap-stage",
+            },
+          },
         },
       });
       expect(body.data).not.toHaveProperty("beliefTest");
@@ -11624,6 +12219,163 @@ describe("Cloudflare Worker API", () => {
           }),
         ]),
       );
+    } finally {
+      upstream.mockRestore();
+    }
+  });
+
+  it("keeps learner confirmation available when the optional Director response is invalid", async () => {
+    const { app, sessionId, artifactStore } = await sessionHarness("live");
+    const artifact = await artifactStore.find("artifact_uploaded_not_sample");
+    if (artifact === undefined) throw new Error("live artifact is missing");
+    const learnerClaim =
+      "The notebook accuracy proves generalization to new customers.";
+    const beliefInput = await liveBeliefInput(app, sessionId, learnerClaim);
+    const upstream = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        structuredResponsesResult(liveBeliefSpecWire(artifact.manifest)),
+      )
+      .mockResolvedValueOnce(learningDirectorToolResult("entity_leakage"))
+      .mockResolvedValueOnce(
+        structuredResponsesResult({
+          decision: {
+            status: "CLARIFICATION_REQUIRED",
+            question: "The verified result proves leakage; continue?",
+            choices: ["controls-first", "boundary-first"],
+          },
+        }),
+      );
+
+    try {
+      const proposed = await app.request(
+        `/api/sessions/${sessionId}/belief-test`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(beliefInput),
+        },
+        {
+          OPENAI_API_KEY: "server-only-key",
+          OPENAI_MODEL: "configured-model",
+        } as unknown as Env & Record<string, string>,
+      );
+      expect(proposed.status).toBe(200);
+      const proposedBody = (await proposed.json()) as {
+        data: Record<string, unknown>;
+      };
+      expect(proposedBody).toMatchObject({
+        data: {
+          state: "BELIEF_TEST_PROPOSED",
+          beliefSpec: { claim: learnerClaim },
+        },
+      });
+      expect(proposedBody.data).not.toHaveProperty("learningDirector");
+
+      const confirmation = await postJson(
+        app,
+        `/api/sessions/${sessionId}/belief-test/confirm`,
+        { action: "confirm" },
+      );
+      expect(confirmation.status).toBe(200);
+      await expect(confirmation.json()).resolves.toMatchObject({
+        data: { state: "BELIEF_TEST_CONFIRMED" },
+      });
+    } finally {
+      upstream.mockRestore();
+    }
+  });
+
+  it("allows one bounded Learning Director clarification before belief confirmation", async () => {
+    const { app, sessionId, sessionRepository, artifactStore } =
+      await sessionHarness("live");
+    const artifact = await artifactStore.find("artifact_uploaded_not_sample");
+    if (artifact === undefined) throw new Error("live artifact is missing");
+    const learnerClaim =
+      "The notebook accuracy proves generalization to new customers.";
+    const beliefInput = await liveBeliefInput(app, sessionId, learnerClaim);
+    const upstream = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        structuredResponsesResult(liveBeliefSpecWire(artifact.manifest)),
+      )
+      .mockResolvedValueOnce(learningDirectorToolResult("entity_leakage"))
+      .mockResolvedValueOnce(learningDirectorClarificationResult())
+      .mockResolvedValueOnce(learningDirectorToolResult("entity_leakage"))
+      .mockResolvedValueOnce(learningDirectorReadyResult("entity_leakage"));
+    const env = {
+      OPENAI_API_KEY: "server-only-key",
+      OPENAI_MODEL: "configured-model",
+    } as unknown as Env & Record<string, string>;
+
+    try {
+      const proposed = await app.request(
+        `/api/sessions/${sessionId}/belief-test`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(beliefInput),
+        },
+        env,
+      );
+      expect(proposed.status).toBe(200);
+      await expect(proposed.json()).resolves.toMatchObject({
+        data: {
+          learningDirector: {
+            clarificationUsed: true,
+            decision: {
+              status: "CLARIFICATION_REQUIRED",
+              choices: ["controls-first", "boundary-first"],
+            },
+          },
+        },
+      });
+
+      const answered = await app.request(
+        `/api/sessions/${sessionId}/learning-director`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ answer: "controls-first" }),
+        },
+        env,
+      );
+      expect(answered.status).toBe(200);
+      await expect(answered.json()).resolves.toMatchObject({
+        data: {
+          learningDirector: {
+            clarificationUsed: true,
+            decision: { status: "READY" },
+          },
+        },
+      });
+
+      const secondAnswer = await app.request(
+        `/api/sessions/${sessionId}/learning-director`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ answer: "boundary-first" }),
+        },
+        env,
+      );
+      expect(secondAnswer.status).toBe(409);
+      const confirmation = await postJson(
+        app,
+        `/api/sessions/${sessionId}/belief-test/confirm`,
+        { action: "confirm" },
+      );
+      expect(confirmation.status).toBe(200);
+      expect(upstream).toHaveBeenCalledTimes(5);
+      expect(
+        (await sessionRepository.listEvents(sessionId)).map(({ kind }) => kind),
+      ).toEqual([
+        "session.created",
+        "belief_spec.proposed",
+        "learning_director.clarification_requested",
+        "learning_director.ready",
+        "belief_spec.confirmed",
+      ]);
     } finally {
       upstream.mockRestore();
     }

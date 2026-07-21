@@ -6,6 +6,8 @@ export type RunnerContainerSecretBindings = {
   COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY?: string;
   COUNTERLAB_RUNNER_SOURCE_COMMIT?: string;
   COUNTERLAB_RUNNER_IMAGE_DIGEST?: string;
+  COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256?: string;
+  COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256?: string;
 };
 
 export function createRunnerContainerEnvVars(
@@ -25,7 +27,9 @@ export function createRunnerContainerEnvVars(
     PORT: "8080",
     COUNTERLAB_RUNNER_WORK_ROOT: "/tmp/counterlab-jobs",
     COUNTERLAB_CODEX_HOME_ROOT: "/tmp/counterlab-codex",
+    COUNTERLAB_CODEX_ROOT: "/opt/codex",
     COUNTERLAB_CODEX_EXECUTABLE: "/usr/local/bin/codex",
+    COUNTERLAB_BWRAP_EXECUTABLE: "/usr/bin/bwrap",
     COUNTERLAB_SETPRIV_EXECUTABLE: "/usr/bin/setpriv",
     COUNTERLAB_PYTHON_EXECUTABLE: "/opt/counterlab-venv/bin/python",
     COUNTERLAB_CODEX_UID: "10001",
@@ -35,5 +39,9 @@ export function createRunnerContainerEnvVars(
       bindings.COUNTERLAB_RUNNER_SOURCE_COMMIT ?? "",
     COUNTERLAB_RUNNER_IMAGE_DIGEST:
       bindings.COUNTERLAB_RUNNER_IMAGE_DIGEST ?? "",
+    COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256:
+      bindings.COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256 ?? "",
+    COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256:
+      bindings.COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256 ?? "",
   };
 }

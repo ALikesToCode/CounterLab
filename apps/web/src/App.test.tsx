@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  ArtifactManifestSchema,
   migrateBeliefTestV1ToV2,
   VerifiedResultSetSchema,
   type EvidenceEvent,
@@ -11,7 +12,7 @@ import {
 import imbalanceResultText from "../../../fixtures/held-out/imbalance_epistemic_competing_v2.json?raw";
 import { SAMPLE_LEAKAGE_QUESTION } from "../shared/sample-authority";
 
-import { App } from "./App";
+import { App, notebookEvidenceReferences } from "./App";
 import { SessionViewSchema } from "./api";
 import {
   publicReplayFixture,
@@ -21,6 +22,9 @@ import { activeRunnerRegistryKey } from "./features/learner/activeRunnerRegistry
 import { requireBundledSampleResult, sampleArtifact } from "./sample";
 
 const sampleResult = requireBundledSampleResult();
+const PRE_PREDICTION_RESULT_LANGUAGE =
+  /59\.4%|\bdeceptive\b|\bfairer test\b|\bverified result\b|\bevidence verdict\b|\bsupported hypothesis\b|\bthe fix\b|\bremove customer(?:_| )id\b|\bkeep each customer's rows together\b|\bproves?\b/i;
+const LANDING_FIXED_SAMPLE_VALUES = /98\.5%|59\.4%/i;
 
 const verifiedImbalanceResult = VerifiedResultSetSchema.parse(
   JSON.parse(imbalanceResultText),
@@ -165,6 +169,7 @@ const livePreview = {
       },
     ],
   },
+  learningDirectorPacket: {},
 };
 
 const sensitiveLivePreview = {
@@ -201,6 +206,41 @@ const liveResult = {
       operationByRun[run.id as keyof typeof operationByRun] ??
       "leakage.random_row_split",
   })),
+};
+
+const epistemicReportHash = "9".repeat(64);
+const evidenceVerdictBase = {
+  schemaVersion: "1" as const,
+  irHash: "8".repeat(64),
+  technicalReportHash: "7".repeat(64),
+  verifierVersion: "epistemic-verifier-v1",
+};
+const supportingEvidenceVerdict = {
+  ...evidenceVerdictBase,
+  kind: "SUPPORTS" as const,
+  hypothesisId: "competing" as const,
+  scope: "unseen customers in this supplied notebook",
+  resultHash: liveResult.resultHash,
+};
+const supportingImbalanceEvidenceVerdict = {
+  ...evidenceVerdictBase,
+  kind: "SUPPORTS" as const,
+  hypothesisId: "competing" as const,
+  scope: "rare events in this supplied notebook",
+  resultHash: verifiedImbalanceResult.resultHash,
+};
+const inconclusiveEvidenceVerdict = {
+  ...evidenceVerdictBase,
+  kind: "INCONCLUSIVE" as const,
+  reasonCode: "OBSERVED_GAP_WITHIN_TOLERANCE" as const,
+  scope: "unseen customers in this supplied notebook",
+  resultHash: liveResult.resultHash,
+};
+const rejectedEvidenceVerdict = {
+  ...evidenceVerdictBase,
+  kind: "REJECTED" as const,
+  findingIds: ["result_binding_mismatch"],
+  resultReleased: false as const,
 };
 
 const liveLabSceneView = {
@@ -418,6 +458,7 @@ function installApi(
   options: {
     liveGpt?: "configured" | "server-key-required";
     runner?: "configured" | "local-runner-required";
+    generationIsolation?: "PARTIAL" | "OS_ENFORCED";
     rejectLiveBelief?: boolean;
     cancelOffline?: boolean;
     beliefTest?: typeof liveBeliefTest | typeof imbalanceBeliefTest;
@@ -451,6 +492,7 @@ function installApi(
     restartSessionExtra?: Record<string, unknown>;
     omitRestoredPrediction?: boolean;
     replay?: ReturnType<typeof publicReplayFixture>;
+    replayFailure?: boolean;
     eventsHandler?: (
       sessionId: string,
       requestIndex: number,
@@ -491,7 +533,9 @@ function installApi(
             options.runner === "configured"
               ? "credential-and-privilege-boundary"
               : "local-runner-required",
-          generationFilesystemReadIsolation: "PARTIAL",
+          generationFilesystemReadIsolation:
+            options.generationIsolation ??
+            (options.runner === "configured" ? "OS_ENFORCED" : "PARTIAL"),
           ...(options.runner === "configured"
             ? {
                 release: {
@@ -501,6 +545,12 @@ function installApi(
                   workerEvidenceCommit: "a".repeat(40),
                   runnerSourceCommit: "b".repeat(40),
                   runnerImageDigest: `sha256:${"c".repeat(64)}`,
+                  generationIsolationEvidenceSha256: "5".repeat(64),
+                  generationIsolationProbeSha256: "6".repeat(64),
+                  releaseCheckGenerationIsolationEvidenceSha256: "7".repeat(64),
+                  releaseCheckGenerationIsolationProbeSha256: "6".repeat(64),
+                  releaseCheckGenerationIsolationVerifiedAt:
+                    "2026-07-19T05:31:00.000+05:30",
                   timeoutCleanupReceiptSha256: "d".repeat(64),
                   aggregateLimitEvidenceSha256: "9".repeat(64),
                   runtimePolicySha256: "e".repeat(64),
@@ -607,6 +657,23 @@ function installApi(
         activeArtifactId = uploadedArtifact.artifactId;
         const restoredExtra = options.restoredSessionExtra ?? {};
         const restoredState = options.restoredSessionState ?? "LAB_COMPILING";
+        const restoredResult = restoredExtra.verifiedResult as
+          { resultHash?: unknown } | undefined;
+        const inferredV2Evidence =
+          restoredExtra.beliefSpec !== undefined &&
+          typeof restoredResult?.resultHash === "string" &&
+          restoredExtra.evidenceVerdict === undefined
+            ? {
+                evidenceVerdict: {
+                  ...evidenceVerdictBase,
+                  kind: "SUPPORTS" as const,
+                  hypothesisId: "competing" as const,
+                  scope: "The restored fixture's bounded evaluation scope.",
+                  resultHash: restoredResult.resultHash,
+                },
+                epistemicReportHash,
+              }
+            : {};
         const restoredStateRequiresPrediction = ![
           "INGESTED",
           "INSUFFICIENT_EVIDENCE",
@@ -628,6 +695,7 @@ function installApi(
             ...(activePrediction === null
               ? {}
               : { prediction: activePrediction }),
+            ...inferredV2Evidence,
             ...restoredExtra,
           }),
         );
@@ -882,6 +950,7 @@ function installApi(
         );
       }
       if (path.startsWith("/api/replays/")) {
+        if (options.replayFailure) throw new TypeError("network unavailable");
         const replayId = decodeURIComponent(path.slice("/api/replays/".length));
         if (options.replay?.replayId === replayId) {
           return response(options.replay);
@@ -1013,6 +1082,38 @@ async function openSampleModelDuel(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("CounterLab judged flow", () => {
+  it("assigns distinct evidence identities to metrics from one output", () => {
+    const outputHash = "d".repeat(64);
+    const references = notebookEvidenceReferences(
+      ArtifactManifestSchema.parse({
+        ...uploadedArtifact,
+        cells: [
+          {
+            index: 1,
+            type: "code",
+            sourceSha256: "b".repeat(64),
+            sourceExcerpt: "accuracy and roc_auc",
+            executionCount: 1,
+            outputHashes: [outputHash],
+            symbols: [],
+            metricCandidates: [
+              { name: "accuracy", value: 0.98, outputIndex: 0 },
+              { name: "roc_auc", value: 0.97, outputIndex: 0 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    expect(references.map(({ id }) => id)).toEqual([
+      `${outputHash}-0-accuracy`,
+      `${outputHash}-0-roc_auc`,
+    ]);
+    expect(new Set(references.map(({ id }) => id)).size).toBe(
+      references.length,
+    );
+  });
+
   it("keeps Judge Mode on its own refresh-safe route", async () => {
     const user = userEvent.setup();
     const fetcher = installApi({
@@ -1027,7 +1128,7 @@ describe("CounterLab judged flow", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: /see a verified belief break in ten seconds/i,
+        name: /inspect a verified belief break from question to proof/i,
       }),
     ).toBeInTheDocument();
     expect(window.location.pathname).toBe("/judge");
@@ -1070,17 +1171,35 @@ describe("CounterLab judged flow", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        /for learners testing whether a notebook result means what they think it means/i,
+        /counterlab is a belief debugger—not a tutor or notebook linter/i,
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        /evidence-first learning.*seal a Prediction.*fixed evidence.*not AI prose/i,
+        /attach a supported notebook.*reads the evidence and never runs its cells.*seal a prediction.*one controlled test answer—not ai prose/i,
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /skip to main content/i }),
     ).toHaveAttribute("href", "#main-content");
+    const fastPaths = screen.getByLabelText(
+      /fastest ways to see counterlab work/i,
+    );
+    const skipLink = screen.getByRole("link", {
+      name: /skip to main content/i,
+    });
+    skipLink.focus();
+    expect(skipLink).toHaveFocus();
+    await user.tab();
+    expect(
+      within(fastPaths).getByRole("button", {
+        name: /^start verified sample/i,
+      }),
+    ).toHaveFocus();
+    await user.tab();
+    expect(
+      within(fastPaths).getByRole("link", { name: /judge mode/i }),
+    ).toHaveFocus();
     await user.tab();
     expect(
       screen.getByRole("textbox", { name: /your question or claim/i }),
@@ -1090,14 +1209,23 @@ describe("CounterLab judged flow", () => {
       screen.getByRole("button", { name: /try verified sample/i }),
     ).toBeEnabled();
     expect(
-      screen.getByRole("button", { name: /start verified sample lesson/i }),
+      screen.getByRole("button", { name: /^start verified sample/i }),
     ).toBeEnabled();
     expect(
       screen.getByRole("button", { name: /watch verified replay/i }),
     ).toBeEnabled();
-    expect(screen.getByRole("link", { name: /judge mode/i })).toHaveAttribute(
-      "href",
-      "/judge",
+    expect(
+      within(fastPaths).getByRole("link", { name: /judge mode/i }),
+    ).toHaveAttribute("href", "/judge");
+    expect(
+      screen.getByLabelText(/how the opening sequence works/i),
+    ).toHaveTextContent(
+      /state claim.*lock prediction.*controlled test runs.*result passes verification/i,
+    );
+    expect(
+      screen.getByLabelText(/authority roles for a live notebook run/i),
+    ).toHaveTextContent(
+      /gpt-5\.6.*runtime codex.*fixed kernel.*frozen verifier/i,
     );
     expect(screen.getByText(/no account needed/i)).toBeInTheDocument();
     expect(
@@ -1107,7 +1235,7 @@ describe("CounterLab judged flow", () => {
       screen.getByText(/fixed kernels calculate the result/i),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/read the evidence and never run the cells/i),
+      screen.getByText(/reads the evidence and never runs its cells/i),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("navigation", {
@@ -1123,21 +1251,16 @@ describe("CounterLab judged flow", () => {
     expect(
       screen.getByRole("button", { name: /test this claim/i }),
     ).toBeDisabled();
-    expect(
-      screen.getByText(/result hidden until your Prediction is sealed/i),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /name the claim.*lock your expectation.*change one thing/i,
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByLabelText(/fair-test mechanism with result locked/i),
-    ).toHaveTextContent(/familiar-row test.*unseen-entity test/i);
-    expect(document.body).not.toHaveTextContent(/98\.5%|59\.4%/i);
-    expect(
-      screen.getByLabelText(/fair-test mechanism with result locked/i),
-    ).toHaveAttribute("data-result-visibility", "locked");
+    const lockedPreview = screen.getByLabelText(
+      /fair-test preview with result locked/i,
+    );
+    expect(lockedPreview).toHaveTextContent(
+      /familiar rows.*change who counts as new.*unseen customers/i,
+    );
+    expect(lockedPreview).toHaveAttribute("data-presentation", "strip");
+    expect(lockedPreview).toHaveAttribute("data-result-visibility", "locked");
+    expect(document.body).not.toHaveTextContent(LANDING_FIXED_SAMPLE_VALUES);
+    expect(document.body).not.toHaveTextContent(PRE_PREDICTION_RESULT_LANGUAGE);
     const proofSummary = screen.getByText("Evidence & proof");
     await user.click(screen.getByRole("link", { name: /how proof works/i }));
     expect(proofSummary.closest("details")).toHaveAttribute("open");
@@ -1148,7 +1271,7 @@ describe("CounterLab judged flow", () => {
     );
     await user.click(
       screen.getByRole("button", {
-        name: /why did my model score highly but fail/i,
+        name: /does this evaluation match how the model will be used/i,
       }),
     );
     expect(
@@ -1214,6 +1337,15 @@ describe("CounterLab judged flow", () => {
     ).toBeInTheDocument();
     expect(screen.queryByLabelText(/your claim/i)).not.toBeInTheDocument();
     expect(screen.getByText(SAMPLE_LEAKAGE_QUESTION)).toBeInTheDocument();
+    expect(screen.getByLabelText(/saved original question/i)).toHaveTextContent(
+      question,
+    );
+    expect(window.localStorage.getItem("counterlab.sampleOriginQuestion")).toBe(
+      question,
+    );
+    expect(
+      window.localStorage.getItem("counterlab.sampleOriginSessionId"),
+    ).toBe("session_ui");
     expect(
       screen.getByText(/does not analyze or sign a custom claim/i),
     ).toBeInTheDocument();
@@ -1229,7 +1361,108 @@ describe("CounterLab judged flow", () => {
     expect(
       screen.getByText(/pre-authored for this fixed sample/i),
     ).toBeInTheDocument();
-    expect(document.body).not.toHaveTextContent(question);
+    expect(screen.getByLabelText(/saved original question/i)).toHaveTextContent(
+      /does not claim to answer or sign your original question/i,
+    );
+    expect(screen.getByText(question)).toBeInTheDocument();
+  });
+
+  it("does not attribute an origin question to a different sample session", async () => {
+    window.history.replaceState({}, "", "/session/session_ui");
+    window.localStorage.setItem(
+      "counterlab.sampleOriginQuestion",
+      "Will an older score hold for another population?",
+    );
+    window.localStorage.setItem(
+      "counterlab.sampleOriginSessionId",
+      "different-session",
+    );
+    installApi({
+      restoredSessionState: "INGESTED",
+      restoredSessionExtra: {
+        mode: { kind: "sample_lesson", sampleId: "leakage-01" },
+      },
+    });
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /what do you think the score means/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/saved original question/i),
+    ).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(
+      "Will an older score hold for another population?",
+    );
+  });
+
+  it("checks exact live readiness before the evidence chooser sends a notebook", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi();
+    render(<App />);
+
+    await user.type(
+      screen.getByRole("textbox", { name: /your question or claim/i }),
+      "Will this score hold for new customers?",
+    );
+    await user.click(screen.getByRole("button", { name: /test this claim/i }));
+    await user.upload(
+      screen.getByLabelText(/attach a supported notebook/i),
+      new File(["{}"], uploadedArtifact.fileName, {
+        type: "application/json",
+      }),
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: /test my notebook/i }),
+    ).toBeInTheDocument();
+    expect(
+      fetcher.mock.calls.filter(
+        ([path]) => String(path) === "/api/health?readiness=probe",
+      ),
+    ).toHaveLength(1);
+    expect(
+      fetcher.mock.calls.some(([path]) => String(path) === "/api/artifacts"),
+    ).toBe(false);
+    expect(
+      fetcher.mock.calls.some(
+        ([path]) => String(path) === "/api/live/sessions",
+      ),
+    ).toBe(false);
+  });
+
+  it("uploads from the evidence chooser only after exact live readiness passes", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi({ liveGpt: "configured", runner: "configured" });
+    render(<App />);
+
+    await user.type(
+      screen.getByRole("textbox", { name: /your question or claim/i }),
+      "Will this score hold for new customers?",
+    );
+    await user.click(screen.getByRole("button", { name: /test this claim/i }));
+    await user.upload(
+      screen.getByLabelText(/attach a supported notebook/i),
+      new File(["{}"], uploadedArtifact.fileName, {
+        type: "application/json",
+      }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /what do you think the score means/i,
+      }),
+    ).toBeInTheDocument();
+    const requestedPaths = fetcher.mock.calls.map(([path]) => String(path));
+    expect(requestedPaths.indexOf("/api/health?readiness=probe")).toBeLessThan(
+      requestedPaths.indexOf("/api/artifacts"),
+    );
+    expect(requestedPaths.indexOf("/api/artifacts")).toBeLessThan(
+      requestedPaths.indexOf("/api/live/sessions"),
+    );
   });
 
   it("restores a saved question on the refresh-safe new investigation route", async () => {
@@ -1273,6 +1506,28 @@ describe("CounterLab judged flow", () => {
       await screen.findByText(/hosted notebook runner is ready/i),
     ).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(/local runner required/i);
+  });
+
+  it("keeps live notebook upload disabled when generation read isolation is partial", async () => {
+    const user = userEvent.setup();
+    installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      generationIsolation: "PARTIAL",
+    });
+    render(<App />);
+
+    await openLiveSetup(user);
+
+    expect(
+      await screen.findByText(/qualified hosted runner is needed/i),
+    ).toBeInTheDocument();
+    expect(document.body).toHaveTextContent(
+      /generation filesystem read isolation is partial.*not accepted as live authority/i,
+    );
+    expect(
+      screen.queryByLabelText(/attach a supported notebook/i),
+    ).not.toBeInTheDocument();
   });
 
   it("does not continue live setup until a supported notebook has been uploaded", async () => {
@@ -1436,7 +1691,7 @@ describe("CounterLab judged flow", () => {
 
   it("accepts a notebook from the question-first landing without running it", async () => {
     const user = userEvent.setup();
-    const fetcher = installApi();
+    const fetcher = installApi({ liveGpt: "configured", runner: "configured" });
     render(<App />);
 
     await user.upload(
@@ -1483,6 +1738,41 @@ describe("CounterLab judged flow", () => {
     expect(story.getByText(/score shown in the notebook/i)).toBeInTheDocument();
     await user.click(story.getByText(/full evidence and integrity/i));
     expect(story.getByText(/sha-256/i)).toBeInTheDocument();
+  });
+
+  it("installs the sample session route before exposing the Question stage", async () => {
+    const user = userEvent.setup();
+    const originalPushState = window.history.pushState.bind(window.history);
+    const questionVisibilityAtSessionActivation: boolean[] = [];
+    const pushStateSpy = vi
+      .spyOn(window.history, "pushState")
+      .mockImplementation((data, unused, url) => {
+        if (String(url).startsWith("/session/")) {
+          questionVisibilityAtSessionActivation.push(
+            screen.queryByRole("heading", {
+              name: /what do you think the score means/i,
+            }) !== null,
+          );
+        }
+        originalPushState(data, unused, url);
+      });
+
+    try {
+      render(<App />);
+      await user.click(
+        screen.getByRole("button", { name: /try verified sample/i }),
+      );
+
+      expect(
+        await screen.findByRole("heading", {
+          name: /what do you think the score means/i,
+        }),
+      ).toBeInTheDocument();
+      expect(window.location.pathname).toBe("/session/session_ui");
+      expect(questionVisibilityAtSessionActivation).toEqual([false]);
+    } finally {
+      pushStateSpy.mockRestore();
+    }
   });
 
   it("opens one deterministic stage hint and records only its fixed identity", async () => {
@@ -1649,15 +1939,11 @@ describe("CounterLab judged flow", () => {
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/partly remembers customers it already saw/i),
+      screen.getByText(liveBeliefTest.competingHypothesis.statement),
     ).toBeInTheDocument();
-    expect(document.body).not.toHaveTextContent(/live competing hypothesis/i);
     expect(
-      screen.getByText(/notebook schema selected as evidence/i),
+      screen.getByText(/the claim targets unseen customers/i),
     ).toBeInTheDocument();
-    expect(document.body).not.toHaveTextContent(
-      /the claim targets unseen customers/i,
-    );
     expect(
       screen.getByText(/customer_id identifies the evaluation boundary/i),
     ).toBeInTheDocument();
@@ -1751,7 +2037,7 @@ describe("CounterLab judged flow", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: /this session could not be restored/i,
+        name: /this session could not be loaded/i,
       }),
     ).toBeInTheDocument();
     expect(
@@ -1792,13 +2078,14 @@ describe("CounterLab judged flow", () => {
 
   it("restores focus when reviewing a completed imbalance stage", async () => {
     const user = userEvent.setup();
-    const replay = replayFixture("class_imbalance");
     installApi({
       restoredSessionState: "EXPERIMENT_COMPLETED",
       restoredSessionExtra: {
-        beliefSpec: replay.beliefSpec,
-        prediction: replay.prediction,
+        beliefSpec: liveImbalanceBeliefSpec,
+        prediction: committedImbalancePrediction,
         verifiedResult: verifiedImbalanceResult,
+        evidenceVerdict: supportingImbalanceEvidenceVerdict,
+        epistemicReportHash,
       },
     });
     window.history.replaceState({}, "", "/session/session_ui");
@@ -2110,7 +2397,7 @@ describe("CounterLab judged flow", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders only closed Subject Pack framing before Prediction", async () => {
+  it("renders the exact reviewed Belief Spec before Prediction", async () => {
     const modelAuthoredSentinel = "A bespoke analyst phrase for cohort omega.";
     const proposed = {
       ...liveBeliefSpec,
@@ -2143,15 +2430,104 @@ describe("CounterLab judged flow", () => {
         name: /does your current explanation capture what you mean/i,
       }),
     ).toBeInTheDocument();
-    expect(document.body).not.toHaveTextContent(/bespoke analyst/i);
+    expect(screen.getByText(modelAuthoredSentinel)).toBeInTheDocument();
     expect(
-      screen.getByText(
-        /The model learned a useful pattern that will work for new customers/i,
+      screen.getByText("Bespoke analyst condition omega."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText("Bespoke analyst limitation omega."),
+    ).toHaveLength(2);
+    expect(screen.getAllByText("AI-suggested draft")).toHaveLength(2);
+    expect(
+      screen.getByText("Bespoke analyst alternative omega."),
+    ).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(
+      /The model learned a useful pattern that will work for new customers/i,
+    );
+  });
+
+  it("keeps optional Director setup from surviving Belief Spec confirmation", async () => {
+    const user = userEvent.setup();
+    installApi({
+      restoredSessionState: "BELIEF_TEST_PROPOSED",
+      restoredSessionExtra: {
+        beliefSpec: liveBeliefSpec,
+        learningDirector: {
+          schemaVersion: "1",
+          beliefSpecHash: "a".repeat(64),
+          approvedPacketHash: "b".repeat(64),
+          subjectPackVersion: "2.1.0",
+          clarificationUsed: true,
+          decision: {
+            status: "CLARIFICATION_REQUIRED",
+            questionId: "learning-emphasis",
+            choices: ["controls-first", "boundary-first"],
+          },
+          provenance: {
+            modelId: "gpt-5.6",
+            promptHash: "c".repeat(64),
+            turns: 1,
+            toolTrace: [
+              {
+                toolName: "get_subject_pack_capabilities",
+                argsHash: "d".repeat(64),
+                outputHash: "e".repeat(64),
+                durationMs: 1,
+              },
+            ],
+          },
+        },
+      },
+    });
+    window.history.replaceState({}, "", "/session/session_ui");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /which part should the introduction foreground/i,
+      }),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: /yes, this captures my view/i }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /seal what you expect before the result appears/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", {
+        name: /which part should the introduction foreground/i,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows a neutral question prompt before notebook concept routing", async () => {
+    const user = userEvent.setup();
+    installApi({ liveGpt: "configured", runner: "configured" });
+    render(<App />);
+
+    await openLiveSetup(user);
+    await user.upload(
+      await screen.findByLabelText(/attach a supported notebook/i),
+      new File(["{}"], uploadedArtifact.fileName, {
+        type: "application/json",
+      }),
+    );
+
+    expect(
+      await screen.findByText(
+        /write one bounded claim about what the reported result supports/i,
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Pre-result explanation wording comes from/i),
+      screen.getByText(/because the notebook reported this result/i),
     ).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(
+      /completely new customers|rare fraud|minority class/i,
+    );
   });
 
   it.each([
@@ -2176,10 +2552,7 @@ describe("CounterLab judged flow", () => {
       };
       window.localStorage.setItem("counterlab.sessionId", "session_ui");
       window.localStorage.setItem("counterlab.claim", learnerClaim);
-      window.localStorage.setItem(
-        "counterlab.claimSessionId",
-        "session_ui",
-      );
+      window.localStorage.setItem("counterlab.claimSessionId", "session_ui");
       window.localStorage.setItem("counterlab.mode", "live");
       window.history.replaceState({}, "", "/session/session_ui");
       const fetcher = installApi({
@@ -2326,6 +2699,12 @@ describe("CounterLab judged flow", () => {
     );
 
     render(<App />);
+    const planningPhase = (
+      await screen.findByText(/Generated planning · In progress/i)
+    ).closest("li");
+    expect(planningPhase).toHaveAttribute("data-state", "active");
+    expect(screen.getByText(/Fixed testing · Waiting/i)).toBeInTheDocument();
+    expect(screen.getByText(/Verified result · Waiting/i)).toBeInTheDocument();
     await user.click(
       await screen.findByRole("button", { name: /cancel this test/i }),
     );
@@ -2335,6 +2714,9 @@ describe("CounterLab judged flow", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(/cancelled this test before it could release a result/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Generated planning · Stopped safely/i),
     ).toBeInTheDocument();
     expect(
       fetcher.mock.calls.some(
@@ -2392,7 +2774,7 @@ describe("CounterLab judged flow", () => {
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
     await screen.findByRole("heading", {
-      name: /see a verified belief break in ten seconds/i,
+      name: /inspect a verified belief break from question to proof/i,
     });
     await act(async () => {
       pending.resolve(cancellationResponse);
@@ -2505,7 +2887,7 @@ describe("CounterLab judged flow", () => {
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
     await screen.findByRole("heading", {
-      name: /see a verified belief break in ten seconds/i,
+      name: /inspect a verified belief break from question to proof/i,
     });
     await act(async () => {
       pending.resolve(cancellationResponse);
@@ -2515,7 +2897,7 @@ describe("CounterLab judged flow", () => {
     expect(window.location.pathname).toBe("/judge");
     expect(
       screen.getByRole("heading", {
-        name: /see a verified belief break in ten seconds/i,
+        name: /inspect a verified belief break from question to proof/i,
       }),
     ).toBeInTheDocument();
   });
@@ -2627,11 +3009,20 @@ describe("CounterLab judged flow", () => {
     ).toBeInTheDocument();
   });
 
-  it("opens a shareable session route without depending on local mode storage", async () => {
+  it("hydrates a private session route without flashing the landing page", async () => {
     installApi({ restoredSessionState: "INGESTED" });
     window.history.pushState({}, "", "/session/session_ui");
 
     render(<App />);
+
+    expect(
+      screen.getByRole("heading", { name: /opening this investigation/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", {
+        name: /what result are you trying to understand/i,
+      }),
+    ).not.toBeInTheDocument();
 
     expect(
       await screen.findByRole("heading", {
@@ -2639,6 +3030,104 @@ describe("CounterLab judged flow", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getByText(/live notebook analysis/i)).toBeInTheDocument();
+  });
+
+  it("clears private session state before opening a new analysis", async () => {
+    const user = userEvent.setup();
+    installApi({ restoredSessionState: "INGESTED" });
+    window.history.replaceState({}, "", "/session/session_ui");
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+
+    render(<App />);
+    await screen.findByRole("heading", {
+      name: /what do you think the score means/i,
+    });
+    await user.click(
+      screen.getByRole("button", { name: /project & evidence/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /new analysis/i }));
+
+    expect(
+      await screen.findByRole("heading", { name: /test my notebook/i }),
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/new");
+    expect(window.localStorage.getItem("counterlab.sessionId")).toBeNull();
+    expect(document.body).not.toHaveTextContent(uploadedArtifact.fileName);
+  });
+
+  it("continues to a new analysis after cancelling registered live work", async () => {
+    const user = userEvent.setup();
+    installApi({ restoredSessionState: "INGESTED" });
+    window.history.replaceState({}, "", "/session/session_ui");
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem(
+      "counterlab.activeRunnerJob.session_ui",
+      JSON.stringify({
+        schemaVersion: "1",
+        sessionId: "session_ui",
+        jobId: liveRunnerJob.jobId,
+        kind: liveRunnerJob.kind,
+      }),
+    );
+
+    render(<App />);
+    await screen.findByRole("heading", {
+      name: /what do you think the score means/i,
+    });
+    await user.click(
+      screen.getByRole("button", { name: /project & evidence/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /new analysis/i }));
+    expect(
+      screen.getByRole("heading", { name: /stop live work and start over/i }),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: /stop jobs and start over/i }),
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: /test my notebook/i }),
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/new");
+  });
+
+  it("detaches private UI but retains active-job recovery when history returns home", async () => {
+    installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      stallRunner: true,
+    });
+    window.history.replaceState({}, "", "/session/session_ui");
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem(
+      "counterlab.activeRunnerJob.session_ui",
+      JSON.stringify({
+        schemaVersion: "1",
+        sessionId: "session_ui",
+        jobId: liveRunnerJob.jobId,
+        kind: liveRunnerJob.kind,
+      }),
+    );
+
+    render(<App />);
+    await screen.findByRole("button", { name: /cancel this test/i });
+    act(() => {
+      window.history.pushState({}, "", "/");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /what result are you trying to understand/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /live test is still registered/i,
+    );
+    expect(document.body).not.toHaveTextContent(uploadedArtifact.fileName);
+    expect(
+      window.localStorage.getItem("counterlab.activeRunnerJob.session_ui"),
+    ).not.toBeNull();
   });
 
   it("hydrates restored session evidence from the canonical private endpoint", async () => {
@@ -2676,6 +3165,8 @@ describe("CounterLab judged flow", () => {
         beliefSpec: liveBeliefSpec,
         prediction: committedPrediction,
         verifiedResult: liveResult,
+        evidenceVerdict: supportingEvidenceVerdict,
+        epistemicReportHash,
       },
       eventsHandler: () =>
         response({
@@ -2869,6 +3360,8 @@ describe("CounterLab judged flow", () => {
         beliefSpec: liveBeliefSpec,
         prediction: committedPrediction,
         verifiedResult: liveResult,
+        evidenceVerdict: supportingEvidenceVerdict,
+        epistemicReportHash,
       },
     });
     window.history.replaceState({}, "", "/proof/session_ui");
@@ -2902,7 +3395,7 @@ describe("CounterLab judged flow", () => {
     ).toBe(false);
   });
 
-  it("restores exact claim evidence with closed framing after a live session refresh", async () => {
+  it("restores the exact reviewed Belief Spec and evidence after refresh", async () => {
     installApi({
       restoredSessionState: "BELIEF_TEST_PROPOSED",
       restoredSessionExtra: { beliefSpec: liveBeliefSpec },
@@ -2914,29 +3407,93 @@ describe("CounterLab judged flow", () => {
     render(<App />);
 
     expect(
-      await screen.findByText(
-        /The model learned a useful pattern that will work for new customers/i,
-      ),
+      await screen.findByText(liveBeliefSpec.hypotheses[0].statement),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/The model partly remembers customers it already saw/i),
+      screen.getByText(liveBeliefSpec.hypotheses[1].statement),
     ).toBeInTheDocument();
-    expect(document.body).not.toHaveTextContent(
-      liveBeliefSpec.hypotheses[0].statement,
-    );
-    expect(document.body).not.toHaveTextContent(
-      liveBeliefSpec.hypotheses[1].statement,
-    );
     expect(
-      screen.getByText(/notebook schema selected as evidence/i),
+      screen.getByText(liveBeliefSpec.evidenceRefs[0]!.relevance),
     ).toBeInTheDocument();
-    expect(document.body).not.toHaveTextContent(
-      liveBeliefSpec.evidenceRefs[0]!.relevance,
-    );
+    expect(
+      screen.getByText(liveBeliefSpec.evidenceRefs[0]!.excerpt),
+    ).toBeInTheDocument();
     expect(screen.getByText(liveBeliefSpec.claim)).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(
       /customer_id encoded|98\.5% accuracy/i,
     );
+  });
+
+  it("does not rerun a restored epistemically rejected test", async () => {
+    const fetcher = installApi({
+      restoredSessionState: "LAB_VERIFIED",
+      restoredSessionExtra: {
+        beliefSpec: liveBeliefSpec,
+        prediction: committedPrediction,
+        evidenceVerdict: rejectedEvidenceVerdict,
+        epistemicReportHash,
+      },
+    });
+    window.history.replaceState({}, "", "/session/session_ui");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /experimental result was withheld/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/result binding mismatch/i)).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/98\.5%|59\.4%/i);
+    expect(
+      fetcher.mock.calls.some(([path]) => String(path).endsWith("/lab/run")),
+    ).toBe(false);
+  });
+
+  it("shows an inconclusive result without unlocking repair", async () => {
+    installApi({
+      restoredSessionState: "TRANSFER_PASSED",
+      restoredSessionExtra: {
+        beliefSpec: liveBeliefSpec,
+        prediction: committedPrediction,
+        verifiedResult: liveResult,
+        evidenceVerdict: inconclusiveEvidenceVerdict,
+        epistemicReportHash,
+        revision:
+          "Evaluation must match deployment timing and use exact code evidence.",
+        transferResult: {
+          ...failedLeakageTransfer,
+          id: "transfer_passed_ui",
+          outcome: "PASSED",
+          selectedStrategy: "time_ordered_holdout",
+          identifiedRisks: ["centered_window_reads_future"],
+          evidenceChoices: [
+            "center_true_uses_later_targets",
+            "random_split_mixes_dates",
+          ],
+          checks: failedLeakageTransfer.checks.map((check) => ({
+            ...check,
+            passed: true,
+          })),
+        },
+      },
+    });
+    window.history.replaceState({}, "", "/session/session_ui");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /fixed forecasting transfer passed/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/evidence verdict · inconclusive/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/repair remains locked/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /verify notebook patch/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("restores the immutable Prediction Seal after refresh", async () => {
@@ -2946,6 +3503,8 @@ describe("CounterLab judged flow", () => {
         beliefSpec: liveBeliefSpec,
         prediction: committedPrediction,
         verifiedResult: liveResult,
+        evidenceVerdict: supportingEvidenceVerdict,
+        epistemicReportHash,
       },
     });
     window.localStorage.setItem("counterlab.sessionId", "session_ui");
@@ -2973,6 +3532,8 @@ describe("CounterLab judged flow", () => {
         beliefSpec: liveBeliefSpec,
         prediction: committedPrediction,
         verifiedResult: liveResult,
+        evidenceVerdict: supportingEvidenceVerdict,
+        epistemicReportHash,
         revision:
           "Evaluation must match deployment timing and use exact code evidence.",
         transferResult: failedLeakageTransfer,
@@ -3044,6 +3605,8 @@ describe("CounterLab judged flow", () => {
         beliefSpec: liveImbalanceBeliefSpec,
         prediction: committedImbalancePrediction,
         verifiedResult: verifiedImbalanceResult,
+        evidenceVerdict: supportingImbalanceEvidenceVerdict,
+        epistemicReportHash,
         revision:
           "Overall accuracy needs minority-sensitive metrics and direct rare-class evidence.",
         transferResult: failedImbalanceTransfer,
@@ -3147,12 +3710,11 @@ describe("CounterLab judged flow", () => {
     );
 
     expect(
-      (
-        await screen.findAllByText(
-          /overall accuracy obscures rare-case behavior/i,
-        )
-      ).length,
-    ).toBeGreaterThan(0);
+      await screen.findByText(imbalanceBeliefTest.currentHypothesis.statement),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(imbalanceBeliefTest.competingHypothesis.statement),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(/same predictions with overall and class-specific/i),
     ).toBeInTheDocument();
@@ -3215,7 +3777,7 @@ describe("CounterLab judged flow", () => {
       screen.getByRole("heading", { name: /the fair test is ready/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /run the fair test/i }),
+      screen.getByRole("button", { name: /reveal verified sample result/i }),
     ).toBeEnabled();
     expect(screen.queryByText(/new customers 59\.4%/i)).not.toBeInTheDocument();
   });
@@ -3251,7 +3813,7 @@ describe("CounterLab judged flow", () => {
     expect(document.body).not.toHaveTextContent(/new customers 59\.4%/i);
 
     await user.click(
-      screen.getByRole("button", { name: /run the fair test/i }),
+      screen.getByRole("button", { name: /reveal verified sample result/i }),
     );
 
     expect(
@@ -3288,8 +3850,15 @@ describe("CounterLab judged flow", () => {
     ).toHaveValue("");
     expect(document.body).not.toHaveTextContent(/98\.5% became 59\.4%/i);
 
+    const interpretation = screen.getByRole("textbox", {
+      name: /what do you notice/i,
+    });
+    await user.type(interpretation, "xxxxxxxxxxxxxxxxxxxx");
+    expect(exploreTab).toBeDisabled();
+    expect(boundaryTab).toBeDisabled();
+    await user.clear(interpretation);
     await user.type(
-      screen.getByRole("textbox", { name: /what do you notice/i }),
+      interpretation,
       "The result changes when the evaluation boundary changes.",
     );
     expect(document.body).toHaveTextContent(
@@ -3327,14 +3896,44 @@ describe("CounterLab judged flow", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getByText(/integrity-hashed/i)).toBeInTheDocument();
+    expect(applyTab).toBeDisabled();
+    expect(
+      window.localStorage.getItem(
+        "counterlab.sampleBoundaryClassifiedSessionId",
+      ),
+    ).toBeNull();
+
+    await user.click(
+      screen.getByRole("radio", {
+        name: /test fraction 10%.*observations per customer 2 observations/i,
+      }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /check this condition/i }),
+    );
     expect(applyTab).toBeEnabled();
     expect(
-      window.localStorage.getItem("counterlab.sampleBoundarySessionId"),
+      window.localStorage.getItem(
+        "counterlab.sampleBoundaryClassifiedSessionId",
+      ),
     ).toBe("session_ui");
 
     await user.click(applyTab);
-    expect(screen.getByLabelText(/your revised mental model/i)).toHaveValue(
-      "The result changes when the evaluation boundary changes.",
+    expect(screen.getByLabelText(/your revised mental model/i)).toHaveValue("");
+    expect(
+      screen.getByRole("button", { name: /try the rule on a new problem/i }),
+    ).toBeDisabled();
+    await user.selectOptions(
+      screen.getByLabelText(/choose the condition/i),
+      "repeated-entity",
+    );
+    await user.selectOptions(
+      screen.getByLabelText(/choose the action/i),
+      "whole-entities",
+    );
+    await user.selectOptions(
+      screen.getByLabelText(/choose the evidence-based reason/i),
+      "identity-overlap",
     );
     expect(
       screen.getByRole("button", { name: /try the rule on a new problem/i }),
@@ -3352,6 +3951,9 @@ describe("CounterLab judged flow", () => {
     expect(
       (await screen.findAllByText(/verified replay/i)).length,
     ).toBeGreaterThan(0);
+    expect(
+      screen.queryByRole("button", { name: /start|run.*test|new analysis/i }),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /continue replay/i }));
     expect(
@@ -3373,6 +3975,12 @@ describe("CounterLab judged flow", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /check my answer/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /return to counterlab home/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /start|run.*test|new analysis/i }),
     ).not.toBeInTheDocument();
     expect(
       fetcher.mock.calls.every(([, init]) =>
@@ -3411,6 +4019,59 @@ describe("CounterLab judged flow", () => {
         ([path]) => String(path) === "/api/replays/leakage-01",
       ),
     ).toBe(false);
+  });
+
+  it("returns to an honest chooser when a replay cannot be loaded", async () => {
+    const user = userEvent.setup();
+    installApi({ replayFailure: true });
+    render(<App />);
+
+    await user.click(
+      screen.getByRole("button", { name: /watch verified replay/i }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /could not reach the api/i,
+    );
+    expect(
+      screen.getByRole("heading", {
+        name: /what result are you trying to understand/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /opening this replay/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("canonicalizes a stored replay session route to its read-only replay URL", async () => {
+    const replayId = "replay:stored.session";
+    window.history.replaceState({}, "", "/session/session_ui");
+    const fetcher = installApi({
+      restoredSessionState: "INGESTED",
+      restoredSessionExtra: {
+        mode: { kind: "verified_replay", replayId },
+      },
+    });
+
+    render(<App />);
+
+    expect(
+      (await screen.findAllByText(replayId, { exact: true })).length,
+    ).toBeGreaterThan(0);
+    expect(window.location.pathname).toBe(
+      `/replay/${encodeURIComponent(replayId)}`,
+    );
+    expect(
+      fetcher.mock.calls.some(
+        ([path]) => String(path) === "/api/sessions/session_ui/artifact",
+      ),
+    ).toBe(false);
+    expect(
+      fetcher.mock.calls.some(
+        ([path]) =>
+          String(path) === `/api/replays/${encodeURIComponent(replayId)}`,
+      ),
+    ).toBe(true);
   });
 
   it("lets an explicit session URL override stale replay storage", async () => {
@@ -3786,7 +4447,7 @@ describe("CounterLab judged flow", () => {
     ).toBe(false);
 
     await user.click(
-      screen.getByRole("button", { name: /start new analysis/i }),
+      screen.getByRole("button", { name: /return to counterlab home/i }),
     );
     expect(window.location.pathname).toBe("/");
     expect(
@@ -3817,6 +4478,151 @@ describe("CounterLab judged flow", () => {
     );
     expect(screen.queryByLabelText(/replay status/i)).not.toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(/verified replay/i);
+  });
+
+  it("ignores a direct replay load after the learner returns home", async () => {
+    window.history.replaceState({}, "", "/replay/leakage-01");
+    const normalFetch = installApi();
+    const replayResponse = await normalFetch("/api/replays/leakage-01");
+    const pending = deferredResponse();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>((input, init) =>
+        String(input) === "/api/replays/leakage-01"
+          ? pending.promise
+          : normalFetch(input, init),
+      ),
+    );
+    const user = userEvent.setup();
+
+    render(<App />);
+    await user.click(
+      await screen.findByRole("button", {
+        name: /return to counterlab home/i,
+      }),
+    );
+    await act(async () => {
+      pending.resolve(replayResponse);
+      await pending.promise;
+    });
+
+    expect(window.location.pathname).toBe("/");
+    expect(
+      screen.getByRole("heading", {
+        name: /what result are you trying to understand/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Replay status")).not.toBeInTheDocument();
+  });
+
+  it("treats a 404 session as inaccessible private work and offers durable recovery actions", async () => {
+    window.history.replaceState({}, "", "/session/missing-session");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () =>
+        errorResponse("SESSION_NOT_FOUND", "Session was not found", 404),
+      ),
+    );
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /this private session could not be opened/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /does not reveal whether an inaccessible address exists/i,
+    );
+    expect(screen.getByRole("button", { name: "Back" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /go to counterlab home/i }),
+    ).toBeEnabled();
+  });
+
+  it("keeps browser recovery metadata when private-session access is denied", async () => {
+    window.history.replaceState({}, "", "/session/private-session");
+    window.localStorage.setItem(
+      "counterlab.recentWork.v1",
+      JSON.stringify({
+        schemaVersion: "1",
+        records: [
+          {
+            id: "private-session",
+            mode: "live",
+            status: "BELIEF_TEST_PROPOSED",
+            updatedAt: "2026-07-19T01:00:00.000Z",
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () =>
+        errorResponse(
+          "SESSION_ACCESS_DENIED",
+          "Private session access was not provided",
+          404,
+        ),
+      ),
+    );
+
+    render(<App />);
+
+    const recentWork = (
+      await screen.findByRole("heading", {
+        name: /recent work from this browser/i,
+      })
+    ).closest("section");
+    expect(recentWork).not.toBeNull();
+    const privateSession = within(recentWork!).getByRole("button", {
+      name: /live notebook session/i,
+    });
+    expect(privateSession).toBeEnabled();
+    expect(privateSession).toHaveTextContent(/explanation ready to review/i);
+    expect(window.localStorage.getItem("counterlab.recentWork.v1")).toContain(
+      "private-session",
+    );
+  });
+
+  it("does not misreport a non-404 proof failure as missing", async () => {
+    window.history.replaceState({}, "", "/proof/session-unavailable");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () =>
+        errorResponse(
+          "SESSION_STORE_UNAVAILABLE",
+          "Session storage is unavailable",
+          503,
+        ),
+      ),
+    );
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /this proof could not be loaded/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("alert")).not.toHaveTextContent(
+      /proof was not found/i,
+    );
+    expect(screen.getByRole("button", { name: "Back" })).toBeEnabled();
+  });
+
+  it("gives an unknown route a distinct not-found recovery surface", async () => {
+    window.history.replaceState({}, "", "/not-a-counterlab-route");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /we couldn't find that counterlab page/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back" })).toBeEnabled();
+    expect(window.location.pathname).toBe("/not-a-counterlab-route");
   });
 
   it("does not misreport a replay integrity failure as a missing link", async () => {

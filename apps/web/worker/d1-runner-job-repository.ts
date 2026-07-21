@@ -197,6 +197,22 @@ export class D1RunnerJobRepository implements RunnerJobRepository {
     expectedVersion: number,
     event: PublicCompilerEvent,
   ): Promise<void> {
+    await this.persistEventAndJob(job, expectedVersion, event);
+  }
+
+  async appendTerminalEvent(
+    job: RunnerJob,
+    expectedVersion: number,
+    event: PublicCompilerEvent,
+  ): Promise<void> {
+    await this.persistEventAndJob(job, expectedVersion, event);
+  }
+
+  private async persistEventAndJob(
+    job: RunnerJob,
+    expectedVersion: number,
+    event: PublicCompilerEvent,
+  ): Promise<void> {
     const parsedJob = RunnerJobSchema.parse(job);
     const parsedEvent = PublicCompilerEventSchema.parse(event);
     const eventInsert = this.database

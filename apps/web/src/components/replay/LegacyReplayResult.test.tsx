@@ -150,13 +150,7 @@ describe("LegacyReplayResult", () => {
   it("labels legacy evidence as read-only and exposes its stored provenance", () => {
     const replay = legacyReplayFixture();
 
-    render(
-      <LegacyReplayResult
-        replay={replay}
-        onStartSample={vi.fn()}
-        onStartOver={vi.fn()}
-      />,
-    );
+    render(<LegacyReplayResult replay={replay} onStartOver={vi.fn()} />);
 
     expect(
       screen.getByRole("complementary", { name: "Legacy replay status" }),
@@ -188,17 +182,16 @@ describe("LegacyReplayResult", () => {
   it("renders only stored comparison values and integrity metadata", () => {
     const replay = legacyReplayFixture();
 
-    render(
-      <LegacyReplayResult
-        replay={replay}
-        onStartSample={vi.fn()}
-        onStartOver={vi.fn()}
-      />,
-    );
+    render(<LegacyReplayResult replay={replay} onStartOver={vi.fn()} />);
 
     const table = screen.getByRole("table", {
       name: /stored fixed-kernel comparison/i,
     });
+    expect(
+      screen.getByRole("region", {
+        name: "Stored fixed-kernel comparison values",
+      }),
+    ).toHaveAttribute("tabindex", "0");
     expect(within(table).getByText("Random Rows")).toBeInTheDocument();
     expect(within(table).getByText("Whole Customers")).toBeInTheDocument();
     expect(within(table).getByText("96.0%")).toBeInTheDocument();
@@ -215,26 +208,22 @@ describe("LegacyReplayResult", () => {
 
   it("offers only safe exits and never exposes mutable or authoritative controls", async () => {
     const user = userEvent.setup();
-    const onStartSample = vi.fn();
     const onStartOver = vi.fn();
 
     render(
       <LegacyReplayResult
         replay={legacyReplayFixture()}
-        onStartSample={onStartSample}
         onStartOver={onStartOver}
       />,
     );
 
     const actions = screen.getByRole("group", { name: "Replay exit actions" });
-    expect(within(actions).getAllByRole("button")).toHaveLength(2);
+    expect(within(actions).getAllByRole("button")).toHaveLength(1);
     await user.click(
-      within(actions).getByRole("button", { name: "Start verified sample" }),
+      within(actions).getByRole("button", {
+        name: "Return to CounterLab home",
+      }),
     );
-    await user.click(
-      within(actions).getByRole("button", { name: "Start over" }),
-    );
-    expect(onStartSample).toHaveBeenCalledOnce();
     expect(onStartOver).toHaveBeenCalledOnce();
 
     for (const forbiddenAction of [
@@ -244,6 +233,8 @@ describe("LegacyReplayResult", () => {
       /apply patch/i,
       /download repaired/i,
       /download proof/i,
+      /start/i,
+      /run.*test/i,
     ]) {
       expect(
         screen.queryByRole("button", { name: forbiddenAction }),

@@ -134,12 +134,18 @@ process.stdout.write(identity.receiptSha256);
 RELEASE_RECEIPT_DIR="${CACHE_ROOT}/releases"
 RELEASE_RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 RELEASE_CHECK_RECEIPT="${COUNTERLAB_RELEASE_CHECK_RECEIPT_OUTPUT:-${RELEASE_RECEIPT_DIR}/release-check-${EVIDENCE_COMMIT}-${RELEASE_RUN_ID}.json}"
+GENERATION_ISOLATION_REPORT="${RELEASE_RECEIPT_DIR}/generation-isolation-release-check-${SOURCE_COMMIT}-${RELEASE_RUN_ID}.json"
+mkdir -p "${RELEASE_RECEIPT_DIR}"
 case "${RELEASE_CHECK_RECEIPT}" in
   /*) ;;
   *) RELEASE_CHECK_RECEIPT="${ROOT_DIR}/${RELEASE_CHECK_RECEIPT#./}" ;;
 esac
-node scripts/assert-contained-path.mjs "${RELEASE_RECEIPT_DIR}" "${RELEASE_CHECK_RECEIPT}"
-[[ ! -e "${RELEASE_CHECK_RECEIPT}" && ! -L "${RELEASE_CHECK_RECEIPT}" ]] || {
+node scripts/assert-contained-path.mjs \
+  "${RELEASE_RECEIPT_DIR}" \
+  "${RELEASE_CHECK_RECEIPT}" \
+  "${GENERATION_ISOLATION_REPORT}"
+[[ ! -e "${RELEASE_CHECK_RECEIPT}" && ! -L "${RELEASE_CHECK_RECEIPT}" && \
+   ! -e "${GENERATION_ISOLATION_REPORT}" && ! -L "${GENERATION_ISOLATION_REPORT}" ]] || {
   echo "Release-check receipt output already exists; refusing to overwrite it." >&2
   exit 2
 }
@@ -160,7 +166,10 @@ bash scripts/run-mutations.sh leakage
 bash scripts/run-mutations.sh imbalance
 "${PNPM}" run held-out:check
 COUNTERLAB_SANDBOX_IMAGE="${ADAPTER_IMAGE}" bash scripts/sandbox-smoke.sh
-bash scripts/verify-scientific-engines.sh --image "${ENGINE_IMAGE}"
+bash scripts/verify-scientific-engines.sh \
+  --image "${ENGINE_IMAGE}" \
+  --expected-image-digest "${EXPECTED_IMAGE_DIGEST}" \
+  --generation-isolation-report "${GENERATION_ISOLATION_REPORT}"
 "${PNPM}" --filter @counterlab/web build
 .venv/bin/python scripts/secret-scan.py \
   apps/web/dist/counterlab/index.js \
@@ -176,11 +185,11 @@ if [[ -n "$(git status --porcelain=v1 --untracked-files=all)" ]]; then
   exit 2
 fi
 
-mkdir -p "${RELEASE_RECEIPT_DIR}"
 node scripts/assert-contained-path.mjs "${RELEASE_RECEIPT_DIR}" "${RELEASE_CHECK_RECEIPT}"
 node --import tsx scripts/release-check-receipt.ts \
   --qualified "${RECEIPT}" \
   --runtime-adapter "${RUNTIME_ADAPTER}" \
+  --generation-isolation-report "${GENERATION_ISOLATION_REPORT}" \
   --output "${RELEASE_CHECK_RECEIPT}"
 
 echo "Release checks passed. No repository secret pattern was detected."

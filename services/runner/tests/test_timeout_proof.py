@@ -30,9 +30,9 @@ def _hash(value: object) -> str:
     return hashlib.sha256(_canonical(value).encode()).hexdigest()
 
 
-def _control() -> dict[str, object]:
+def _control(schema_version: str = "2") -> dict[str, object]:
     payload: dict[str, object] = {
-        "schemaVersion": "2",
+        "schemaVersion": schema_version,
         "status": "TIMED_OUT_CLEAN",
         "timeoutKind": "WALL_CLOCK",
         "runtimePolicySha256": CONTAINED_RUNTIME_POLICY_SHA256,
@@ -55,6 +55,8 @@ def _control() -> dict[str, object]:
         "imageRootfsUnchanged": True,
         "resultReleased": False,
     }
+    if schema_version == "3":
+        payload["qualificationMode"] = "aggregate-timeout-proof-v1"
     return {**payload, "receiptPayloadSha256": _hash(payload)}
 
 
@@ -69,12 +71,12 @@ def _rootless(control: dict[str, object], build: dict[str, object]) -> dict[str,
     sanitized_spec_sha256 = "a" * 64
     member_pids = [100, 101]
     aggregate_payload: dict[str, object] = {
-        "schemaVersion": "1",
+        "schemaVersion": "2",
         "status": "OBSERVED",
         "authority": "linux-cgroup-v2",
         "cgroupVersion": 2,
         "cgroupId": f"counterlab-v6.1-{invocation_id}",
-        "cgroupPath": f"counterlab-v6.1/{invocation_id}",
+        "cgroupPath": f"counterlab-v6.1-{invocation_id}",
         "cgroupIdentity": hashlib.sha256(
             (
                 "counterlab-cgroup-v2\0"
@@ -83,6 +85,7 @@ def _rootless(control: dict[str, object], build: dict[str, object]) -> dict[str,
         ).hexdigest(),
         "invocationId": invocation_id,
         "finalContainerId": final_container_id,
+        "finalizationPayloadSha256": "7" * 64,
         "sanitizedSpecSha256": sanitized_spec_sha256,
         "runtimeAttestationSha256": "6" * 64,
         "observedLimits": {
@@ -168,14 +171,19 @@ def _rootless(control: dict[str, object], build: dict[str, object]) -> dict[str,
         "removedMounts": [],
         "intendedAggregateLimits": intended_limits,
         "enforcedRlimits": [
-            {"type": name, "soft": 1, "hard": 1}
-            for name in (
-                "RLIMIT_AS",
-                "RLIMIT_CORE",
-                "RLIMIT_CPU",
-                "RLIMIT_FSIZE",
-                "RLIMIT_NPROC",
-            )
+            {
+                "type": "RLIMIT_AS",
+                "soft": timeout_proof_module.CONTAINED_PROCESS_ADDRESS_SPACE_BYTES,
+                "hard": timeout_proof_module.CONTAINED_PROCESS_ADDRESS_SPACE_BYTES,
+            },
+            {"type": "RLIMIT_CPU", "soft": 20, "hard": 20},
+            {"type": "RLIMIT_FSIZE", "soft": 262_144, "hard": 262_144},
+            {"type": "RLIMIT_NOFILE", "soft": 64, "hard": 64},
+            {
+                "type": "RLIMIT_NPROC",
+                "soft": intended_limits["maxProcesses"],
+                "hard": intended_limits["maxProcesses"],
+            },
         ],
         "aggregateLimitEvidence": aggregate_evidence,
     }
@@ -221,6 +229,92 @@ def test_control_receipt_rejects_result_release_and_hash_mutation() -> None:
         validate_control_receipt({**control, "receiptPayloadSha256": "f" * 64})
 
 
+def test_control_receipt_accepts_only_exact_v2_and_qualified_v3_shapes() -> None:
+    assert validate_control_receipt(_control("2"))["schemaVersion"] == "2"
+    assert validate_control_receipt(_control("3"))["schemaVersion"] == "3"
+
+    for mutated in (
+        {**_control("2"), "qualificationMode": "aggregate-timeout-proof-v1"},
+        {
+            key: value
+            for key, value in _control("3").items()
+            if key != "qualificationMode"
+        },
+        {**_control("3"), "qualificationMode": "unknown"},
+        {**_control("2"), "schemaVersion": []},
+        {**_control("2"), "candidateWallSeconds": True},
+    ):
+        payload = {
+            key: value
+            for key, value in mutated.items()
+            if key != "receiptPayloadSha256"
+        }
+        mutated["receiptPayloadSha256"] = _hash(payload)
+        with pytest.raises(RuntimeError, match="shape|not clean"):
+            validate_control_receipt(mutated)
+
+
+def test_control_schema_selects_the_exact_rootless_receipt_name() -> None:
+    assert timeout_proof_module._rootless_receipt_name(_control("2")) == (
+        f"{'2' * 64}.receipt.json"
+    )
+    assert timeout_proof_module._rootless_receipt_name(_control("3")) == (
+        f"{'2' * 64}.qualified-receipt.json"
+    )
+    with pytest.raises(RuntimeError, match="qualification"):
+        timeout_proof_module._rootless_receipt_name(
+            {**_control("3"), "qualificationMode": "unknown"}
+        )
+
+
+def test_rootless_rlimit_validator_matches_the_runtime_contract() -> None:
+    intended = {
+        "cpuCount": 1,
+        "maxProcesses": 16,
+        "memoryBytes": 512 * 1024 * 1024,
+    }
+    runtime_limits = [
+        {
+            "type": "RLIMIT_AS",
+            "soft": timeout_proof_module.CONTAINED_PROCESS_ADDRESS_SPACE_BYTES,
+            "hard": timeout_proof_module.CONTAINED_PROCESS_ADDRESS_SPACE_BYTES,
+        },
+        {"type": "RLIMIT_CPU", "soft": 20, "hard": 20},
+        {"type": "RLIMIT_FSIZE", "soft": 262_144, "hard": 262_144},
+        {"type": "RLIMIT_NOFILE", "soft": 64, "hard": 64},
+        {
+            "type": "RLIMIT_NPROC",
+            "soft": intended["maxProcesses"],
+            "hard": intended["maxProcesses"],
+        },
+    ]
+
+    assert timeout_proof_module._validate_enforced_rlimits(runtime_limits, intended)
+    assert not timeout_proof_module._validate_enforced_rlimits(
+        [
+            {**entry, "type": "RLIMIT_CORE"}
+            if entry["type"] == "RLIMIT_NOFILE"
+            else entry
+            for entry in runtime_limits
+        ],
+        intended,
+    )
+    for limit_type in ("RLIMIT_AS", "RLIMIT_NPROC"):
+        changed = json.loads(json.dumps(runtime_limits))
+        entry = next(item for item in changed if item["type"] == limit_type)
+        entry["soft"] -= 1
+        entry["hard"] -= 1
+        assert not timeout_proof_module._validate_enforced_rlimits(changed, intended)
+
+
+def test_timeout_candidate_observes_the_exact_address_space_limit() -> None:
+    source = timeout_proof_module._timeout_public_test(512 * 1024 * 1024)
+    assert "resource.getrlimit(resource.RLIMIT_AS)" in source
+    assert "expected = (536870912, 536870912)" in source
+    with pytest.raises(RuntimeError, match="address-space"):
+        timeout_proof_module._timeout_public_test(0)
+
+
 def test_rootless_receipt_binds_control_and_exact_adapter_authority() -> None:
     control = _control()
     build = {
@@ -232,6 +326,35 @@ def test_rootless_receipt_binds_control_and_exact_adapter_authority() -> None:
     rootless = _rootless(control, build)
 
     assert validate_rootless_receipt(rootless, control=control, build=build) == rootless
+    for limit_type in ("RLIMIT_AS", "RLIMIT_NPROC"):
+        changed_control = _control()
+        changed = _rootless(changed_control, build)
+        limit = next(
+            entry
+            for entry in changed["enforcedRlimits"]
+            if entry["type"] == limit_type
+        )
+        limit["soft"] -= 1
+        limit["hard"] -= 1
+        changed_payload = {
+            key: value
+            for key, value in changed.items()
+            if key != "receiptPayloadSha256"
+        }
+        changed["receiptPayloadSha256"] = _hash(changed_payload)
+        changed_control["rootlessReceiptPayloadSha256"] = changed[
+            "receiptPayloadSha256"
+        ]
+        changed_control_payload = {
+            key: value
+            for key, value in changed_control.items()
+            if key != "receiptPayloadSha256"
+        }
+        changed_control["receiptPayloadSha256"] = _hash(changed_control_payload)
+        with pytest.raises(RuntimeError, match="authority"):
+            validate_rootless_receipt(
+                changed, control=changed_control, build=build
+            )
     with pytest.raises(RuntimeError, match="authority"):
         validate_rootless_receipt(
             rootless,
@@ -274,7 +397,15 @@ def test_rootless_receipt_binds_control_and_exact_adapter_authority() -> None:
     broken_counter = json.loads(json.dumps(rootless))
     broken_counter["aggregateLimitEvidence"]["negativeControls"]["memory"][
         "oomKillAfter"
-    ] = 0
+    ] = 2
+    evidence_payload = {
+        key: value
+        for key, value in broken_counter["aggregateLimitEvidence"].items()
+        if key != "receiptPayloadSha256"
+    }
+    broken_counter["aggregateLimitEvidence"]["receiptPayloadSha256"] = _hash(
+        evidence_payload
+    )
     payload = {
         key: value
         for key, value in broken_counter.items()
@@ -286,6 +417,41 @@ def test_rootless_receipt_binds_control_and_exact_adapter_authority() -> None:
     ]
     with pytest.raises(RuntimeError, match="aggregate limit evidence"):
         validate_rootless_receipt(broken_counter, control=control, build=build)
+
+    nested_control = _control()
+    nested_path = _rootless(nested_control, build)
+    nested_path["aggregateLimitEvidence"]["cgroupPath"] = (
+        f"counterlab-v6.1/{nested_control['invocationId']}"
+    )
+    nested_evidence_payload = {
+        key: value
+        for key, value in nested_path["aggregateLimitEvidence"].items()
+        if key != "receiptPayloadSha256"
+    }
+    nested_path["aggregateLimitEvidence"]["receiptPayloadSha256"] = _hash(
+        nested_evidence_payload
+    )
+    nested_payload = {
+        key: value
+        for key, value in nested_path.items()
+        if key != "receiptPayloadSha256"
+    }
+    nested_path["receiptPayloadSha256"] = _hash(nested_payload)
+    nested_control["rootlessReceiptPayloadSha256"] = nested_path[
+        "receiptPayloadSha256"
+    ]
+    nested_control_payload = {
+        key: value
+        for key, value in nested_control.items()
+        if key != "receiptPayloadSha256"
+    }
+    nested_control["receiptPayloadSha256"] = _hash(nested_control_payload)
+    with pytest.raises(RuntimeError, match="aggregate limit evidence"):
+        validate_rootless_receipt(
+            nested_path,
+            control=nested_control,
+            build=build,
+        )
 
 
 def test_exactly_one_new_rootless_receipt_is_required(tmp_path: Path) -> None:

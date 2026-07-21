@@ -7,6 +7,7 @@ import { replayFixture } from "../replay/ProofCapsuleReplayView.fixture";
 import { ImbalancePatchReview } from "./ImbalancePatchReview";
 
 const api = vi.hoisted(() => ({
+  getSession: vi.fn(),
   compilePatch: vi.fn(),
   getProofBundle: vi.fn(),
   downloadPatch: vi.fn(),
@@ -61,12 +62,14 @@ describe("ImbalancePatchReview", () => {
   });
 
   it("compiles after transfer and presents the verified artifact-specific diff", async () => {
+    const replay = replayFixture("class_imbalance");
     const updateSession = vi.fn();
     const transferSession = {
-      sessionId: "session_1",
+      sessionId: replay.sourceSessionId,
       state: "TRANSFER_PASSED",
       mode: { kind: "live_notebook" },
       transferResult: { outcome: "PASSED" },
+      evidenceVerdict: replay.evidenceVerdict,
     } as SessionView;
     const compiling = {
       ...transferSession,
@@ -106,15 +109,20 @@ describe("ImbalancePatchReview", () => {
           },
         },
       },
+      reasoningDiffV2: replay.reasoningDiff,
+      proofCapsule: replay.proofCapsule,
+      beliefSpec: replay.beliefSpec,
+      prediction: replay.prediction,
+      revision: replay.revision.statement,
     } as SessionView;
     api.compilePatch.mockResolvedValue(compiling);
     runner.waitForJob.mockResolvedValue(completed);
     api.getProofBundle.mockResolvedValue({
-      sessionId: "session_1",
+      sessionId: replay.sourceSessionId,
       replayId: null,
     });
 
-    render(
+    const view = render(
       <ImbalancePatchReview
         session={transferSession}
         updateSession={updateSession}
@@ -127,17 +135,18 @@ describe("ImbalancePatchReview", () => {
     await waitFor(() =>
       expect(runner.waitForJob).toHaveBeenCalledWith(
         expect.objectContaining({
-          sessionId: "session_1",
+          sessionId: replay.sourceSessionId,
           jobId: "job_patch_1",
           terminalStates: ["PROOF_CAPSULE_ISSUED", "PATCH_REJECTED"],
         }),
       ),
     );
-    expect(
-      await screen.findByRole("heading", {
-        name: /your notebook copy passed the repair checks/i,
-      }),
-    ).toBeInTheDocument();
+    view.rerender(
+      <ImbalancePatchReview
+        session={completed}
+        updateSession={updateSession}
+      />,
+    );
     await waitFor(() =>
       expect(
         screen.getByRole("heading", {
@@ -146,13 +155,20 @@ describe("ImbalancePatchReview", () => {
       ).toHaveFocus(),
     );
     expect(
+      screen.queryByText(/finalizing the authoritative evidence record/i),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Evidence & proof"));
+    expect(
+      await screen.findByRole("heading", { name: /detailed reasoning diff/i }),
+    ).toBeInTheDocument();
+    expect(
       screen.getByText(/confusion matrix and PR-AUC/i),
     ).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: /download repaired notebook/i }),
     );
     await waitFor(() =>
-      expect(api.downloadPatch).toHaveBeenCalledWith("session_1"),
+      expect(api.downloadPatch).toHaveBeenCalledWith(replay.sourceSessionId),
     );
     expect(saveAuthenticatedDownload).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -160,10 +176,13 @@ describe("ImbalancePatchReview", () => {
       }),
     );
     await waitFor(() =>
-      expect(recordLearnerInteraction).toHaveBeenCalledWith("session_1", {
-        kind: "patch.downloaded",
-        stage: "repair",
-      }),
+      expect(recordLearnerInteraction).toHaveBeenCalledWith(
+        replay.sourceSessionId,
+        {
+          kind: "patch.downloaded",
+          stage: "repair",
+        },
+      ),
     );
   });
 
@@ -198,6 +217,7 @@ describe("ImbalancePatchReview", () => {
       beliefSpec: replay.beliefSpec,
       prediction: replay.prediction,
       revision: replay.revision.statement,
+      evidenceVerdict: replay.evidenceVerdict,
     } as SessionView;
 
     render(
@@ -259,26 +279,22 @@ describe("ImbalancePatchReview", () => {
   });
 
   it("records no download interaction when authenticated bytes cannot be retrieved", async () => {
+    const replay = replayFixture("class_imbalance");
     api.downloadPatch.mockRejectedValue(
       new Error("The private notebook download is unavailable."),
     );
     const completedSession = {
-      sessionId: "session_1",
+      sessionId: replay.sourceSessionId,
       state: "PROOF_CAPSULE_ISSUED",
       mode: { kind: "live_notebook" },
-      transferResult: { outcome: "PASSED" },
-      patchResult: {
-        status: "VERIFIED",
-        modifiedCells: [3],
-        sourceArtifactHash: "a".repeat(64),
-        patchedArtifactHash: "b".repeat(64),
-        diff: "- accuracy only\n+ confusion matrix",
-        verification: {
-          passed: true,
-          invariants: ["MINORITY_METRICS_RECOMPUTED"],
-          unchangedCellHashes: ["c".repeat(64)],
-        },
-      },
+      transferResult: replay.transferResult,
+      patchResult: replay.patchResult,
+      reasoningDiffV2: replay.reasoningDiff,
+      proofCapsule: replay.proofCapsule,
+      beliefSpec: replay.beliefSpec,
+      prediction: replay.prediction,
+      revision: replay.revision.statement,
+      evidenceVerdict: replay.evidenceVerdict,
     } as SessionView;
 
     render(
@@ -296,7 +312,7 @@ describe("ImbalancePatchReview", () => {
     );
     expect(saveAuthenticatedDownload).not.toHaveBeenCalled();
     expect(recordLearnerInteraction).not.toHaveBeenCalledWith(
-      "session_1",
+      replay.sourceSessionId,
       expect.objectContaining({ kind: "patch.downloaded" }),
     );
   });
@@ -317,6 +333,7 @@ describe("ImbalancePatchReview", () => {
       beliefSpec: replay.beliefSpec,
       prediction: replay.prediction,
       revision: replay.revision.statement,
+      evidenceVerdict: replay.evidenceVerdict,
     } as SessionView;
 
     render(
@@ -340,24 +357,20 @@ describe("ImbalancePatchReview", () => {
   });
 
   it("does not keep download controls busy while best-effort telemetry is pending", async () => {
+    const replay = replayFixture("class_imbalance");
     recordLearnerInteraction.mockReturnValue(new Promise(() => undefined));
     const completedSession = {
-      sessionId: "session_1",
+      sessionId: replay.sourceSessionId,
       state: "PROOF_CAPSULE_ISSUED",
       mode: { kind: "live_notebook" },
-      transferResult: { outcome: "PASSED" },
-      patchResult: {
-        status: "VERIFIED",
-        modifiedCells: [3],
-        sourceArtifactHash: "a".repeat(64),
-        patchedArtifactHash: "b".repeat(64),
-        diff: "- accuracy only\n+ confusion matrix",
-        verification: {
-          passed: true,
-          invariants: ["MINORITY_METRICS_RECOMPUTED"],
-          unchangedCellHashes: ["c".repeat(64)],
-        },
-      },
+      transferResult: replay.transferResult,
+      patchResult: replay.patchResult,
+      reasoningDiffV2: replay.reasoningDiff,
+      proofCapsule: replay.proofCapsule,
+      beliefSpec: replay.beliefSpec,
+      prediction: replay.prediction,
+      revision: replay.revision.statement,
+      evidenceVerdict: replay.evidenceVerdict,
     } as SessionView;
 
     render(
@@ -398,5 +411,80 @@ describe("ImbalancePatchReview", () => {
       screen.queryByRole("button", { name: /publish read-only replay/i }),
     ).not.toBeInTheDocument();
     expect(api.publishReplay).not.toHaveBeenCalled();
+  });
+
+  it("withholds a persisted live patch when the Evidence Verdict is inconclusive", () => {
+    const replay = replayFixture("class_imbalance");
+    const inconclusiveSession = {
+      sessionId: replay.sourceSessionId,
+      state: "PROOF_CAPSULE_ISSUED",
+      mode: { kind: "live_notebook" },
+      transferResult: replay.transferResult,
+      patchResult: replay.patchResult,
+      evidenceVerdict: {
+        schemaVersion: "1",
+        kind: "INCONCLUSIVE",
+        reasonCode: "SUPPORTED_PATTERNS_OVERLAP",
+        scope: "The fixed result does not separate the hypotheses.",
+        resultHash: replay.verifiedResult.resultHash,
+        irHash: replay.evidenceVerdict.irHash,
+        technicalReportHash: replay.evidenceVerdict.technicalReportHash,
+        verifierVersion: replay.evidenceVerdict.verifierVersion,
+      },
+    } as SessionView;
+
+    render(
+      <ImbalancePatchReview
+        session={inconclusiveSession}
+        updateSession={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: /repair remains locked/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /download repaired notebook/i }),
+    ).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(replay.patchResult.diff);
+  });
+
+  it("offers an authenticated retry when native proof finalization is incomplete", async () => {
+    const user = userEvent.setup();
+    const replay = replayFixture("class_imbalance");
+    const updateSession = vi.fn();
+    const partialSession = {
+      sessionId: replay.sourceSessionId,
+      state: "REASONING_DIFF_ISSUED",
+      mode: { kind: "live_notebook" },
+      transferResult: replay.transferResult,
+      patchResult: replay.patchResult,
+      evidenceVerdict: replay.evidenceVerdict,
+      reasoningDiffV2: replay.reasoningDiff,
+    } as SessionView;
+    const completedSession = {
+      ...partialSession,
+      state: "PROOF_CAPSULE_ISSUED",
+      proofCapsule: replay.proofCapsule,
+    } as SessionView;
+    api.getSession.mockResolvedValue(completedSession);
+
+    render(
+      <ImbalancePatchReview
+        session={partialSession}
+        updateSession={updateSession}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", {
+        name: /finalizing the authoritative evidence record/i,
+      }),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: /check proof finalization/i }),
+    );
+    expect(api.getSession).toHaveBeenCalledWith(replay.sourceSessionId);
+    expect(updateSession).toHaveBeenCalledWith(completedSession);
   });
 });

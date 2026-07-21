@@ -17,6 +17,8 @@ describe("runner Container environment", () => {
       COUNTERLAB_RUNNER_SIGNING_PRIVATE_KEY: signingKeys.privateKey,
       COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
       COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+      COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "d".repeat(64),
+      COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "e".repeat(64),
     });
 
     expect(environment).toEqual({
@@ -27,7 +29,9 @@ describe("runner Container environment", () => {
       PORT: "8080",
       COUNTERLAB_RUNNER_WORK_ROOT: "/tmp/counterlab-jobs",
       COUNTERLAB_CODEX_HOME_ROOT: "/tmp/counterlab-codex",
+      COUNTERLAB_CODEX_ROOT: "/opt/codex",
       COUNTERLAB_CODEX_EXECUTABLE: "/usr/local/bin/codex",
+      COUNTERLAB_BWRAP_EXECUTABLE: "/usr/bin/bwrap",
       COUNTERLAB_SETPRIV_EXECUTABLE: "/usr/bin/setpriv",
       COUNTERLAB_PYTHON_EXECUTABLE: "/opt/counterlab-venv/bin/python",
       COUNTERLAB_CODEX_UID: "10001",
@@ -35,6 +39,8 @@ describe("runner Container environment", () => {
       COUNTERLAB_RUNNER_ONE_SHOT: "1",
       COUNTERLAB_RUNNER_SOURCE_COMMIT: "b".repeat(40),
       COUNTERLAB_RUNNER_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+      COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256: "d".repeat(64),
+      COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256: "e".repeat(64),
     });
   });
 

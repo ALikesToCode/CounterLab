@@ -22,6 +22,7 @@ describe("qualified release evidence-only delta", () => {
   it("rejects authority schemas, runtime policy, and undeclared evidence files", () => {
     for (const path of [
       "scientific-engines/schemas/qualified-runner-release-v4.schema.json",
+      "scientific-engines/schemas/qualified-runner-release-v5.schema.json",
       "services/runner/src/counterlab_runner/contained-runtime-policy.json",
       "scientific-engines/fixtures/validation/unreviewed.json",
       "scripts/qualify-runner-release.ts",

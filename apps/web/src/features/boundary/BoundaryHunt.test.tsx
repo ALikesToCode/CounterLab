@@ -108,6 +108,12 @@ describe("BoundaryHunt", () => {
       "data-attempted",
       "true",
     );
+    expect(
+      screen.getByRole("button", { name: "Reveal the map" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Skip the hunt" }),
+    ).toBeDisabled();
     expect(fetcher).not.toHaveBeenCalled();
   });
 
@@ -125,6 +131,11 @@ describe("BoundaryHunt", () => {
     );
     expect(onRevealMap).not.toHaveBeenCalled();
     expect(screen.getByRole("status")).toHaveTextContent(/try one more/i);
+    const check = screen.getByRole("button", { name: "Check this condition" });
+    expect(check).toBeDisabled();
+    await user.click(check);
+    expect(onClassify).toHaveBeenCalledOnce();
+    expect(onRevealMap).not.toHaveBeenCalled();
 
     const secondCondition = screen.getByRole("radio", {
       name: /test fraction 30%.*repeated entities low/i,
@@ -144,16 +155,47 @@ describe("BoundaryHunt", () => {
       "data-attempted",
       "true",
     );
+    expect(check).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Reveal the map" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Skip the hunt" }),
+    ).toBeDisabled();
+
+    const changingCondition = screen.getByRole("radio", {
+      name: /test fraction 30%.*repeated entities high/i,
+    });
+    await user.click(changingCondition);
+    expect(check).toBeEnabled();
+    await user.click(check);
+    expect(onClassify).toHaveBeenNthCalledWith(3, "CONCLUSION_CHANGES");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /you found a changing condition/i,
+    );
   });
 
   it("supports an explicit reveal without selecting or classifying a cell", async () => {
     const user = userEvent.setup();
-    const { onRevealMap } = renderHunt();
+    const { onRevealMap, onClassify } = renderHunt();
 
     await user.click(screen.getByRole("button", { name: "Reveal the map" }));
 
     expect(onRevealMap).toHaveBeenCalledOnce();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("radio", {
+        name: /test fraction 30%.*repeated entities high/i,
+      }),
+    );
+    const checkButton = screen.getByRole("button", {
+      name: "Check this condition",
+    });
+    expect(checkButton).toBeEnabled();
+    await user.click(checkButton);
+    expect(onClassify).toHaveBeenCalledWith("CONCLUSION_CHANGES");
+    expect(onRevealMap).toHaveBeenCalledOnce();
   });
 
   it("lets the learner skip through the dedicated callback", async () => {

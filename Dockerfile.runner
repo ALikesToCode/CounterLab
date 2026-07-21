@@ -43,6 +43,14 @@ RUN pnpm install --frozen-lockfile --filter @counterlab/hosted-runner... \
     && node --check /out/runner.mjs \
     && mkdir -p /out/codex \
     && cp -a /build/node_modules/.pnpm/@openai+codex@0.144.4-linux-x64/node_modules/@openai/codex/vendor/x86_64-unknown-linux-musl/. /out/codex/ \
+    && mkdir -p \
+        /out/runtime-rootfs/dev/pts \
+        /out/runtime-rootfs/dev/shm \
+        /out/runtime-rootfs/dev/mqueue \
+        /out/runtime-rootfs/sys/fs/cgroup \
+        /out/runtime-rootfs/counterlab-runtime \
+        /out/runtime-rootfs/etc \
+    && touch /out/runtime-rootfs/etc/hosts \
     && chmod -R a+rX /out
 
 FROM python:3.13-slim-trixie@sha256:bffeb7bd6a85767587059c6ba23e1e9122078e3aa3fa836099171b9bb5a9bb00
@@ -69,8 +77,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 COPY --from=node-builder /usr/local/bin/node /usr/local/bin/node
 
-RUN chmod 0555 /usr/local/bin/node \
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends bubblewrap=0.11.0-2+deb13u1 \
+    && chmod 0555 /usr/local/bin/node \
     && test -x /usr/local/bin/node \
+    && test "$(/usr/bin/bwrap --version)" = "bubblewrap 0.11.0" \
+    && test -x /usr/bin/bwrap \
     && test -x /usr/sbin/groupadd \
     && test -x /usr/sbin/useradd \
     && test -x /usr/bin/setpriv \
@@ -86,6 +98,7 @@ COPY fixtures/public/fraud_rare_event.csv ./fixtures/public/fraud_rare_event.csv
 COPY --from=python-builder /wheelhouse/ /opt/counterlab-wheelhouse/
 COPY --from=node-builder /out/runner.mjs /app/runner.mjs
 COPY --from=node-builder /out/codex/ /opt/codex/
+COPY --from=node-builder /out/runtime-rootfs/ /
 
 RUN chmod -R a+rX /opt/codex \
     && ln -s /opt/codex/bin/codex /usr/local/bin/codex \
@@ -104,6 +117,26 @@ RUN chmod -R a+rX /opt/codex \
     && chown -R root:root /app \
     && chmod -R a=rX /app \
     && chmod 555 /app/runner.mjs \
+    && chown root:root \
+        /usr/lib \
+        /usr/lib64 \
+        /usr/lib/x86_64-linux-gnu \
+        /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 \
+        /dev/pts \
+        /dev/shm \
+        /dev/mqueue \
+        /sys/fs/cgroup \
+        /counterlab-runtime \
+    && chmod 0755 \
+        /usr/lib \
+        /usr/lib64 \
+        /usr/lib/x86_64-linux-gnu \
+        /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 \
+        /dev/pts \
+        /dev/shm \
+        /dev/mqueue \
+        /sys/fs/cgroup \
+        /counterlab-runtime \
     && chown -R counterlab-codex:counterlab-codex /work/jobs /run/counterlab-codex \
     && chmod 700 /work/jobs /run/counterlab-codex
 

@@ -37,3 +37,6 @@ dist/
 *.tsbuildinfo
 .wrangler/
 apps/web/worker-configuration.d.ts
+apps/web/.vitest-app-baseline.json
+devpost-01-landing-1440x900.png
+docs/submission-assets/public-2026-07-22/

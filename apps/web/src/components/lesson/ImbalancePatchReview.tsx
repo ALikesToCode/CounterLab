@@ -51,9 +51,11 @@ function eventTitle(kind: string): string {
 export function ImbalancePatchReview({
   session,
   updateSession,
+  onNextCase,
 }: {
   session: SessionView;
   updateSession: (session: SessionView) => void;
+  onNextCase?: () => void;
 }) {
   const runner = useRunnerEvents();
   const [patch, setPatch] = useState<PatchResult | null>(
@@ -66,6 +68,9 @@ export function ImbalancePatchReview({
   const [busy, setBusy] = useState(session.state === "PATCH_COMPILING");
   const [error, setError] = useState<string | null>(null);
   const completionFocused = useRef(false);
+  const repairAllowed =
+    session.mode.kind !== "live_notebook" ||
+    session.evidenceVerdict?.kind === "SUPPORTS";
 
   useEffect(() => {
     if (patch === null) {
@@ -73,9 +78,13 @@ export function ImbalancePatchReview({
       return;
     }
     if (completionFocused.current) return;
+    const completionTitle = document.getElementById(
+      "imbalance-completion-title",
+    );
+    if (completionTitle === null) return;
+    completionTitle.focus();
     completionFocused.current = true;
-    document.getElementById("imbalance-completion-title")?.focus();
-  }, [patch]);
+  }, [patch, session.proofCapsule, session.reasoningDiffV2, session.state]);
 
   const finishJob = async (jobId: string) => {
     const completed = await runner.waitForJob({
@@ -110,6 +119,12 @@ export function ImbalancePatchReview({
   };
 
   const compile = async () => {
+    if (!repairAllowed) {
+      setError(
+        "Repair remains locked because the verified experiment was inconclusive.",
+      );
+      return;
+    }
     setBusy(true);
     setError(null);
     runner.clear();
@@ -227,7 +242,78 @@ export function ImbalancePatchReview({
     exportProof();
   };
 
+  const checkProofFinalization = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const refreshed = await counterLabApi.getSession(session.sessionId);
+      updateSession(refreshed);
+      setPatch(refreshed.patchResult ?? patch);
+      setProof(refreshed.proofBundle ?? null);
+      if (
+        refreshed.state !== "PROOF_CAPSULE_ISSUED" ||
+        refreshed.reasoningDiffV2 === undefined ||
+        refreshed.proofCapsule === undefined
+      ) {
+        setError(
+          "Proof finalization is still pending. CounterLab has not released a completed proof record.",
+        );
+      }
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "CounterLab could not check proof finalization.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (patch !== null) {
+    if (!repairAllowed) {
+      return (
+        <section className="panel imbalance-patch-gate" role="status">
+          <p className="eyebrow gold">Result valid · Repair locked</p>
+          <h2>Repair remains locked.</h2>
+          <p>
+            A persisted patch cannot be released without a supporting Evidence
+            Verdict. The original notebook remains unchanged.
+          </p>
+        </section>
+      );
+    }
+    if (
+      session.mode.kind === "live_notebook" &&
+      (session.state !== "PROOF_CAPSULE_ISSUED" ||
+        session.reasoningDiffV2 === undefined ||
+        session.proofCapsule === undefined)
+    ) {
+      return (
+        <section className="panel imbalance-patch-review" role="status">
+          <p className="eyebrow aqua">Repair verified · Proof pending</p>
+          <h2>Finalizing the authoritative evidence record.</h2>
+          <p>
+            The repaired copy passed its checks. CounterLab will not show a
+            completed Reasoning Diff or Proof Capsule until all native authority
+            bindings are present.
+          </p>
+          {error !== null && (
+            <p className="transfer-feedback fail" role="alert">
+              {error}
+            </p>
+          )}
+          <button
+            className="button button-secondary"
+            type="button"
+            disabled={busy}
+            onClick={() => void checkProofFinalization()}
+          >
+            {busy ? "Checking proof finalization…" : "Check proof finalization"}
+          </button>
+        </section>
+      );
+    }
     const liveCompletionProof =
       session.mode.kind === "live_notebook" &&
       session.state === "PROOF_CAPSULE_ISSUED" &&
@@ -298,6 +384,15 @@ export function ImbalancePatchReview({
             disabled:
               busy || (session.proofCapsule === undefined && proof === null),
           }}
+          {...(onNextCase === undefined
+            ? {}
+            : {
+                nextCaseAction: {
+                  label: "Analyze another supported notebook",
+                  onActivate: onNextCase,
+                  disabled: busy,
+                },
+              })}
           evidenceAndProof={
             liveCompletionProof === null ? (
               <>
@@ -398,12 +493,15 @@ export function ImbalancePatchReview({
   return (
     <section className="panel imbalance-patch-gate" aria-live="polite">
       <div>
-        <p className="eyebrow gold">Transfer passed · Repair unlocked</p>
+        <p className="eyebrow gold">
+          Transfer passed ·{" "}
+          {repairAllowed ? "Repair unlocked" : "Repair locked"}
+        </p>
         <h2>Now repair the evidence, not just the headline.</h2>
         <p>
-          Codex may propose only a typed Patch Plan. Fixed code applies the
-          registered changes to a copy, then the external verifier checks the
-          cell scope, metrics, threshold, and deterministic hashes.
+          {repairAllowed
+            ? "Codex may propose only a typed Patch Plan. Fixed code applies the registered changes to a copy, then the external verifier checks the cell scope, metrics, threshold, and deterministic hashes."
+            : "The experiment was inconclusive. A passed transfer cannot authorize a repair without a supporting Evidence Verdict."}
         </p>
       </div>
       <ol className="patch-scope-list">
@@ -439,7 +537,9 @@ export function ImbalancePatchReview({
       <button
         className="button button-gold"
         type="button"
-        disabled={busy || session.transferResult?.outcome !== "PASSED"}
+        disabled={
+          busy || !repairAllowed || session.transferResult?.outcome !== "PASSED"
+        }
         onClick={() => void compile()}
       >
         {busy ? "Verifying repair…" : "Verify notebook repair"}

@@ -26,11 +26,22 @@ export function StartOverDialog({
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const keepWorkingRef = useRef<HTMLButtonElement>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    const previouslyFocused = document.activeElement as HTMLElement | null;
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
     keepWorkingRef.current?.focus();
+    return () => {
+      const previouslyFocused = previouslyFocusedRef.current;
+      if (previouslyFocused?.isConnected) previouslyFocused.focus();
+    };
+  }, []);
 
+  useEffect(() => {
+    if (busy) dialogRef.current?.focus();
+  }, [busy]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !busy) {
         event.preventDefault();
@@ -43,7 +54,11 @@ export function StartOverDialog({
           'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
         ) ?? [],
       );
-      if (focusable.length === 0) return;
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialogRef.current?.focus();
+        return;
+      }
       const first = focusable[0];
       const last = focusable.at(-1);
       if (first === undefined || last === undefined) return;
@@ -59,7 +74,6 @@ export function StartOverDialog({
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      previouslyFocused?.focus();
     };
   }, [busy, onKeepWorking]);
 
@@ -70,8 +84,10 @@ export function StartOverDialog({
         className={styles.dialog}
         role="dialog"
         aria-modal="true"
+        aria-busy={busy}
         aria-labelledby="start-over-title"
         aria-describedby="start-over-description"
+        tabIndex={-1}
       >
         <p className={styles.eyebrow}>Live work is still running</p>
         <h2 id="start-over-title">Stop live work and start over?</h2>

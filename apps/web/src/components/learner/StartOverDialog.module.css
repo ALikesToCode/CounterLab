@@ -61,7 +61,7 @@
   overflow-wrap: anywhere;
   color: var(--muted, #5c6674);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.8rem;
+  font-size: 0.8125rem;
 }
 
 .actions {

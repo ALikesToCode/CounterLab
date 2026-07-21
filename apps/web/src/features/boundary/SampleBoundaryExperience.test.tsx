@@ -217,11 +217,13 @@ describe("SampleBoundaryExperience", () => {
 
   it("reveals the exact existing map directly and restores focus to its heading", async () => {
     const user = userEvent.setup();
+    const onClassify = vi.fn();
     render(
       <SampleBoundaryExperience
         boundary={boundaryFixture()}
         integrityVerified={true}
         prediction="The score stays high."
+        onClassify={onClassify}
       />,
     );
 
@@ -245,6 +247,15 @@ describe("SampleBoundaryExperience", () => {
         screen.getByRole("heading", { name: "Where does the result change?" }),
       ).toHaveFocus(),
     );
+    await user.click(
+      screen.getByRole("radio", {
+        name: /test fraction 20%.*observations per customer 4 observations/i,
+      }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Check this condition" }),
+    );
+    expect(onClassify).toHaveBeenCalledWith("CONCLUSION_CHANGES");
   });
 
   it("reveals after two stable attempts and reports both classifications", async () => {
@@ -310,6 +321,14 @@ describe("SampleBoundaryExperience", () => {
     ).toBeInTheDocument();
     expect(onClassify).not.toHaveBeenCalled();
     expect(onReveal).toHaveBeenCalledOnce();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /apply stays locked until you identify a changing condition/i,
+    );
+    expect(
+      screen.queryByRole("heading", {
+        name: /can you find a condition where the conclusion changes/i,
+      }),
+    ).not.toBeInTheDocument();
   });
 
   it("refuses to label or render an integrity-unverified sample", () => {

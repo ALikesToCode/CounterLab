@@ -197,11 +197,21 @@ describe("BoundaryMapBlock", () => {
       }),
     ).toHaveFocus();
     fireEvent.keyDown(document.activeElement as Element, { key: "ArrowDown" });
+    const selected = screen.getByRole("button", {
+      name: /test fraction 40%.*4 observations.*material gap/i,
+    });
+    expect(selected).toHaveAttribute("aria-pressed", "true");
+    expect(selected).toHaveAttribute("tabindex", "0");
     expect(
-      screen.getByRole("button", {
-        name: /test fraction 40%.*4 observations.*material gap/i,
-      }),
-    ).toHaveAttribute("aria-selected", "true");
+      screen
+        .getAllByRole("button")
+        .filter((button) => button.hasAttribute("aria-selected")),
+    ).toHaveLength(0);
+    expect(
+      screen
+        .getAllByRole("button")
+        .filter((button) => button.getAttribute("aria-pressed") === "true"),
+    ).toHaveLength(1);
     expect(screen.getAllByText("39.0 percentage points")).toHaveLength(2);
   });
 

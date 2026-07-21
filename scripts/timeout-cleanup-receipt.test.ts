@@ -5,8 +5,11 @@ import { describe, expect, it } from "vitest";
 import { canonicalJson } from "../packages/session-core/src/index.js";
 
 import {
+  TIMEOUT_PROCESS_ADDRESS_SPACE_BYTES,
   QUALIFIED_AGGREGATE_LIMIT_MODE,
+  TIMEOUT_ROOTLESS_RLIMIT_TYPES,
   assertQualifiedAggregateRuntimeLimits,
+  assertRootlessRlimitBindings,
 } from "./timeout-cleanup-receipt.js";
 
 const invocationId = "1".repeat(64);
@@ -25,17 +28,18 @@ function aggregateLimitEvidence() {
   const sanitizedSpecSha256 = "5".repeat(64);
   const memberPids = [100, 101];
   const payload = {
-    schemaVersion: "1" as const,
+    schemaVersion: "2" as const,
     status: "OBSERVED" as const,
     authority: "linux-cgroup-v2" as const,
     cgroupVersion: 2 as const,
     cgroupId: `counterlab-v6.1-${invocationId}`,
-    cgroupPath: `counterlab-v6.1/${invocationId}`,
+    cgroupPath: `counterlab-v6.1-${invocationId}`,
     cgroupIdentity: sha256(
       `counterlab-cgroup-v2\0${invocationId}\0${finalContainerId}\0${sanitizedSpecSha256}`,
     ),
     invocationId,
     finalContainerId,
+    finalizationPayloadSha256: "f".repeat(64),
     sanitizedSpecSha256,
     runtimeAttestationSha256: "6".repeat(64),
     observedLimits: {
@@ -98,6 +102,65 @@ function aggregateInput() {
 }
 
 describe("timeout cleanup aggregate resource authority", () => {
+  it("matches the five rlimits emitted by the contained runtime", () => {
+    expect(TIMEOUT_ROOTLESS_RLIMIT_TYPES).toEqual([
+      "RLIMIT_AS",
+      "RLIMIT_CPU",
+      "RLIMIT_FSIZE",
+      "RLIMIT_NOFILE",
+      "RLIMIT_NPROC",
+    ]);
+    expect(TIMEOUT_ROOTLESS_RLIMIT_TYPES).not.toContain("RLIMIT_CORE");
+  });
+
+  it("cross-binds process limits to aggregate memory and process intent", () => {
+    const enforcedRlimits = [
+      {
+        type: "RLIMIT_AS" as const,
+        soft: TIMEOUT_PROCESS_ADDRESS_SPACE_BYTES,
+        hard: TIMEOUT_PROCESS_ADDRESS_SPACE_BYTES,
+      },
+      { type: "RLIMIT_CPU" as const, soft: 20, hard: 20 },
+      { type: "RLIMIT_FSIZE" as const, soft: 262_144, hard: 262_144 },
+      { type: "RLIMIT_NOFILE" as const, soft: 64, hard: 64 },
+      {
+        type: "RLIMIT_NPROC" as const,
+        soft: intendedAggregateLimits.maxProcesses,
+        hard: intendedAggregateLimits.maxProcesses,
+      },
+    ];
+    expect(() =>
+      assertRootlessRlimitBindings({
+        intendedAggregateLimits,
+        enforcedRlimits,
+      }),
+    ).not.toThrow();
+
+    for (const mutate of [
+      (limits: typeof enforcedRlimits) => {
+        const limit = limits.find((entry) => entry.type === "RLIMIT_AS");
+        if (limit === undefined) throw new Error("missing test rlimit");
+        limit.soft -= 1;
+        limit.hard -= 1;
+      },
+      (limits: typeof enforcedRlimits) => {
+        const limit = limits.find((entry) => entry.type === "RLIMIT_NPROC");
+        if (limit === undefined) throw new Error("missing test rlimit");
+        limit.soft -= 1;
+        limit.hard -= 1;
+      },
+    ]) {
+      const changed = structuredClone(enforcedRlimits);
+      mutate(changed);
+      expect(() =>
+        assertRootlessRlimitBindings({
+          intendedAggregateLimits,
+          enforcedRlimits: changed,
+        }),
+      ).toThrow(/bind aggregate intent/u);
+    }
+  });
+
   it("rejects process-only or merely declared aggregate limits", () => {
     expect(() =>
       assertQualifiedAggregateRuntimeLimits({
@@ -147,5 +210,31 @@ describe("timeout cleanup aggregate resource authority", () => {
         limitMode: QUALIFIED_AGGREGATE_LIMIT_MODE,
       }),
     ).toThrow();
+
+    const nestedPath = aggregateLimitEvidence();
+    nestedPath.cgroupPath = `counterlab-v6.1/${invocationId}`;
+    const { receiptPayloadSha256: _nestedHash, ...nestedPayload } = nestedPath;
+    nestedPath.receiptPayloadSha256 = sha256(canonicalJson(nestedPayload));
+    expect(() =>
+      assertQualifiedAggregateRuntimeLimits({
+        ...aggregateInput(),
+        aggregateLimitEvidence: nestedPath,
+        aggregateLimitIntentEnforced: true,
+        limitMode: QUALIFIED_AGGREGATE_LIMIT_MODE,
+      }),
+    ).toThrow();
+
+    const ambiguousOom = aggregateLimitEvidence();
+    ambiguousOom.negativeControls.memory.oomKillAfter = 2;
+    const { receiptPayloadSha256: _ignored, ...payload } = ambiguousOom;
+    ambiguousOom.receiptPayloadSha256 = sha256(canonicalJson(payload));
+    expect(() =>
+      assertQualifiedAggregateRuntimeLimits({
+        ...aggregateInput(),
+        aggregateLimitEvidence: ambiguousOom,
+        aggregateLimitIntentEnforced: true,
+        limitMode: QUALIFIED_AGGREGATE_LIMIT_MODE,
+      }),
+    ).toThrow(/negative-control/u);
   });
 });

@@ -3,7 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
-import { migrateBeliefTestV1ToV2 } from "@counterlab/contracts";
+import {
+  migrateBeliefTestV1ToV2,
+  type LearningDirectorSessionState,
+} from "@counterlab/contracts";
 import { verifyEvidenceChain } from "../../proof-bundle/src/index.js";
 
 import {
@@ -504,6 +507,295 @@ describe("SessionService state machine", () => {
     repository.close();
   });
 
+  it("persists one presentation-only Learning Director clarification before confirmation", async () => {
+    const { service, repository } = memoryService();
+    await service.createSession({
+      id: "session-1",
+      artifactId: "artifact-1",
+      mode: { kind: "live_notebook" },
+    });
+    const beliefSpec = migrateBeliefTestV1ToV2(beliefTest);
+    await service.proposeBeliefSpecV2("session-1", beliefSpec);
+    const binding = {
+      beliefSpecHash: await hashCanonical(beliefSpec),
+      approvedPacketHash: "e".repeat(64),
+      subjectPackVersion: "2.1.0",
+    };
+    const provenance = {
+      modelId: "gpt-5.6",
+      promptHash: "a".repeat(64),
+      turns: 2,
+      toolTrace: [
+        {
+          toolName: "get_subject_pack_capabilities" as const,
+          argsHash: "b".repeat(64),
+          outputHash: "c".repeat(64),
+          durationMs: 1,
+        },
+      ],
+    };
+    await service.recordLearningDirector("session-1", {
+      schemaVersion: "1",
+      ...binding,
+      clarificationUsed: true,
+      decision: {
+        status: "CLARIFICATION_REQUIRED",
+        questionId: "learning-emphasis",
+        choices: ["controls-first", "boundary-first"],
+      },
+      provenance,
+    });
+
+    await expect(
+      service.recordLearningDirector("session-1", {
+        schemaVersion: "1",
+        ...binding,
+        subjectPackVersion: "2.2.0",
+        clarificationUsed: true,
+        decision: {
+          status: "READY",
+          plan: {
+            concept: "entity_leakage",
+            introductionStages: ["Prediction", "Test", "Boundary", "Apply"],
+            primaryEmphasis: "Boundary",
+            scaffoldIds: ["compare-splits"],
+            candidateExperimentIds: ["group-holdout"],
+            sceneRecipeId: "entity-overlap-stage",
+            boundaryViewId: "test-fraction-by-repeat-rate",
+            evidenceHashes: [],
+            nonClaims: ["bounded-claim-only"],
+          },
+        },
+        provenance,
+      }),
+    ).rejects.toThrow(/Subject Pack version/u);
+
+    await expect(
+      service.recordLearningDirector("session-1", {
+        schemaVersion: "1",
+        ...binding,
+        clarificationUsed: true,
+        decision: {
+          status: "CLARIFICATION_REQUIRED",
+          questionId: "learning-emphasis",
+          choices: ["comparison-first", "apply-first"],
+        },
+        provenance,
+      }),
+    ).rejects.toThrow(/second clarification/u);
+
+    const readyAfterClarification: LearningDirectorSessionState = {
+      schemaVersion: "1",
+      ...binding,
+      clarificationUsed: true,
+      decision: {
+        status: "READY",
+        plan: {
+          concept: "entity_leakage",
+          introductionStages: [
+            "Question",
+            "Prediction",
+            "Test",
+            "Boundary",
+            "Apply",
+          ],
+          primaryEmphasis: "Boundary",
+          scaffoldIds: ["compare-splits"],
+          candidateExperimentIds: ["group-holdout"],
+          sceneRecipeId: "entity-overlap-stage",
+          boundaryViewId: "test-fraction-by-repeat-rate",
+          evidenceHashes: [],
+          nonClaims: ["bounded-claim-only", "no-mastery-claim"],
+        },
+      },
+      provenance,
+    };
+    await expect(
+      service.recordLearningDirector("session-1", readyAfterClarification),
+    ).rejects.toThrow(/answer is required/u);
+    await expect(
+      service.recordLearningDirector("session-1", readyAfterClarification, {
+        clarificationAnswerHash: await hashCanonical("apply-first"),
+      }),
+    ).rejects.toThrow(/offered choice/u);
+
+    await service.recordLearningDirector("session-1", readyAfterClarification, {
+      clarificationAnswerHash: await hashCanonical("boundary-first"),
+    });
+    await service.confirmBeliefTest("session-1");
+
+    expect(
+      (await service.getSession("session-1")).learningDirector,
+    ).toMatchObject({
+      clarificationUsed: true,
+      decision: { status: "READY" },
+    });
+    expect(
+      (await service.listEvents("session-1")).map(({ kind }) => kind),
+    ).toEqual([
+      "session.created",
+      "belief_spec.proposed",
+      "learning_director.clarification_requested",
+      "learning_director.ready",
+      "belief_spec.confirmed",
+    ]);
+    repository.close();
+  });
+
+  it("rejects Learning Director state outside a live notebook session", async () => {
+    const { service, repository } = memoryService();
+    await service.createSession({
+      id: "sample-session",
+      artifactId: "sample-artifact",
+      mode: { kind: "sample_lesson", sampleId: "leakage" },
+    });
+    const beliefSpec = migrateBeliefTestV1ToV2(beliefTest);
+    await service.proposeBeliefSpecV2("sample-session", beliefSpec);
+
+    await expect(
+      service.recordLearningDirector("sample-session", {
+        schemaVersion: "1",
+        beliefSpecHash: await hashCanonical(beliefSpec),
+        approvedPacketHash: "e".repeat(64),
+        subjectPackVersion: "2.1.0",
+        clarificationUsed: false,
+        decision: {
+          status: "READY",
+          plan: {
+            concept: "entity_leakage",
+            introductionStages: ["Prediction", "Test", "Boundary", "Apply"],
+            primaryEmphasis: "Boundary",
+            scaffoldIds: ["compare-splits"],
+            candidateExperimentIds: ["group-holdout"],
+            sceneRecipeId: "entity-overlap-stage",
+            boundaryViewId: "test-fraction-by-repeat-rate",
+            evidenceHashes: [],
+            nonClaims: ["bounded-claim-only"],
+          },
+        },
+        provenance: {
+          modelId: "gpt-5.6",
+          promptHash: "a".repeat(64),
+          turns: 1,
+          toolTrace: [
+            {
+              toolName: "get_subject_pack_capabilities",
+              argsHash: "b".repeat(64),
+              outputHash: "c".repeat(64),
+              durationMs: 1,
+            },
+          ],
+        },
+      }),
+    ).rejects.toThrow(/proposed live Belief Spec/u);
+    expect(
+      (await service.getSession("sample-session")).learningDirector,
+    ).toBeUndefined();
+    repository.close();
+  });
+
+  it("keeps Belief Spec confirmation learner-owned while clarification is pending", async () => {
+    const { service, repository } = memoryService();
+    await service.createSession({
+      id: "session-1",
+      artifactId: "artifact-1",
+      mode: { kind: "live_notebook" },
+    });
+    const beliefSpec = migrateBeliefTestV1ToV2(beliefTest);
+    await service.proposeBeliefSpecV2("session-1", beliefSpec);
+    await service.recordLearningDirector("session-1", {
+      schemaVersion: "1",
+      beliefSpecHash: await hashCanonical(beliefSpec),
+      approvedPacketHash: "e".repeat(64),
+      subjectPackVersion: "2.1.0",
+      clarificationUsed: true,
+      decision: {
+        status: "CLARIFICATION_REQUIRED",
+        questionId: "learning-emphasis",
+        choices: ["controls-first", "boundary-first"],
+      },
+      provenance: {
+        modelId: "gpt-5.6",
+        promptHash: "a".repeat(64),
+        turns: 1,
+        toolTrace: [
+          {
+            toolName: "get_subject_pack_capabilities",
+            argsHash: "b".repeat(64),
+            outputHash: "c".repeat(64),
+            durationMs: 1,
+          },
+        ],
+      },
+    });
+
+    await expect(service.confirmBeliefTest("session-1")).resolves.toMatchObject(
+      { state: "BELIEF_TEST_CONFIRMED", learningDirector: undefined },
+    );
+    expect(
+      (await service.getSession("session-1")).learningDirector,
+    ).toBeUndefined();
+    const confirmation = (await service.listEvents("session-1")).at(-1);
+    expect(confirmation).toMatchObject({
+      kind: "belief_spec.confirmed",
+      payload: { learningDirectorDisposition: "SKIPPED" },
+      inputHashes: [
+        await hashCanonical(beliefSpec),
+        expect.stringMatching(/^[a-f0-9]{64}$/u),
+      ],
+    });
+    repository.close();
+  });
+
+  it("rejects an initial ready Director plan that invents clarification use", async () => {
+    const { service, repository } = memoryService();
+    await service.createSession({
+      id: "session-1",
+      artifactId: "artifact-1",
+      mode: { kind: "live_notebook" },
+    });
+    const beliefSpec = migrateBeliefTestV1ToV2(beliefTest);
+    await service.proposeBeliefSpecV2("session-1", beliefSpec);
+
+    await expect(
+      service.recordLearningDirector("session-1", {
+        schemaVersion: "1",
+        beliefSpecHash: await hashCanonical(beliefSpec),
+        approvedPacketHash: "e".repeat(64),
+        subjectPackVersion: "2.1.0",
+        clarificationUsed: true,
+        decision: {
+          status: "READY",
+          plan: {
+            concept: "entity_leakage",
+            introductionStages: ["Prediction", "Test", "Boundary", "Apply"],
+            primaryEmphasis: "Boundary",
+            scaffoldIds: ["compare-splits"],
+            candidateExperimentIds: ["group-holdout"],
+            sceneRecipeId: "entity-overlap-stage",
+            boundaryViewId: "test-fraction-by-repeat-rate",
+            evidenceHashes: [],
+            nonClaims: ["bounded-claim-only"],
+          },
+        },
+        provenance: {
+          modelId: "gpt-5.6",
+          promptHash: "a".repeat(64),
+          turns: 1,
+          toolTrace: [
+            {
+              toolName: "get_subject_pack_capabilities",
+              argsHash: "b".repeat(64),
+              outputHash: "c".repeat(64),
+              durationMs: 1,
+            },
+          ],
+        },
+      }),
+    ).rejects.toThrow(/cannot claim a clarification/u);
+    repository.close();
+  });
+
   it("does not let a v2 edit change belief identity or concept", async () => {
     const { service, repository } = memoryService();
     await service.createSession({
@@ -513,6 +805,40 @@ describe("SessionService state machine", () => {
     });
     const beliefSpec = migrateBeliefTestV1ToV2(beliefTest);
     await service.proposeBeliefSpecV2("session-1", beliefSpec);
+    await service.recordLearningDirector("session-1", {
+      schemaVersion: "1",
+      beliefSpecHash: await hashCanonical(beliefSpec),
+      approvedPacketHash: "e".repeat(64),
+      subjectPackVersion: "2.1.0",
+      clarificationUsed: false,
+      decision: {
+        status: "READY",
+        plan: {
+          concept: "entity_leakage",
+          introductionStages: ["Prediction", "Test", "Boundary", "Apply"],
+          primaryEmphasis: "Boundary",
+          scaffoldIds: ["compare-splits"],
+          candidateExperimentIds: ["group-holdout"],
+          sceneRecipeId: "entity-overlap-stage",
+          boundaryViewId: "test-fraction-by-repeat-rate",
+          evidenceHashes: [],
+          nonClaims: ["bounded-claim-only"],
+        },
+      },
+      provenance: {
+        modelId: "gpt-5.6",
+        promptHash: "a".repeat(64),
+        turns: 1,
+        toolTrace: [
+          {
+            toolName: "get_subject_pack_capabilities",
+            argsHash: "b".repeat(64),
+            outputHash: "c".repeat(64),
+            durationMs: 1,
+          },
+        ],
+      },
+    });
 
     await expect(
       service.editBeliefSpecV2("session-1", {
@@ -539,6 +865,9 @@ describe("SessionService state machine", () => {
       claim: "Edited claim with the same scientific scope.",
       learnerDecision: "EDITED",
     });
+    expect(
+      (await service.getSession("session-1")).learningDirector,
+    ).toBeUndefined();
     await service.confirmBeliefTest("session-1");
     expect((await service.getSession("session-1")).beliefSpec).toMatchObject({
       learnerDecision: "CONFIRMED",

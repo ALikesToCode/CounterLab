@@ -1,0 +1,356 @@
+{
+  "$id": "https://counterlab.dev/schemas/release-check-receipt-v5.schema.json",
+  "title": "CounterLab release-check receipt v5",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "5"
+    },
+    "status": {
+      "type": "string",
+      "const": "PASSED"
+    },
+    "evidenceCommit": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "sourceCommit": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "qualifiedRunnerReceiptSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "qualifiedAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+    },
+    "runnerImageTag": {
+      "type": "string",
+      "pattern": "^counterlab-runner:git-[a-f0-9]{40}$"
+    },
+    "runnerImageDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "adapterImageTag": {
+      "type": "string",
+      "pattern": "^counterlab-adapter:git-[a-f0-9]{40}$"
+    },
+    "adapterImageDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "registryDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "runtimeToolchainSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "runtimePolicySha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "proofDependencyManifestSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "aggregateLimitEvidenceSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "runtimeAdapterSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "checks": {
+      "minItems": 11,
+      "maxItems": 11,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "test-all",
+              "leakage-mutations",
+              "imbalance-mutations",
+              "held-out",
+              "adapter-sandbox-smoke",
+              "scientific-engines",
+              "web-build",
+              "achieved-metrics",
+              "reproduce-leakage",
+              "replay-patch",
+              "secret-scan"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "const": "PASSED"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "checkedAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+    },
+    "verifierVersion": {
+      "type": "string",
+      "const": "counterlab-release-check-v5"
+    },
+    "generationFilesystemReadIsolation": {
+      "type": "string",
+      "const": "OS_ENFORCED"
+    },
+    "generationIsolationEvidenceSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "generationIsolationProbeSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "generationIsolationVerifiedAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+    },
+    "releaseCheckGenerationIsolationEvidence": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "const": "1"
+        },
+        "status": {
+          "type": "string",
+          "const": "VERIFIED"
+        },
+        "generationFilesystemReadIsolation": {
+          "type": "string",
+          "const": "OS_ENFORCED"
+        },
+        "sourceCommit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "sourceTreeSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "localImageTag": {
+          "type": "string",
+          "pattern": "^counterlab-runner:git-[a-f0-9]{40}$"
+        },
+        "localImageDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "imageUser": {
+          "type": "string",
+          "const": "10001:10001"
+        },
+        "mountPolicyVersion": {
+          "type": "string",
+          "const": "counterlab-bwrap-mount-policy-v1"
+        },
+        "probePayload": {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "type": "string",
+              "const": "1"
+            },
+            "probeVersion": {
+              "type": "string",
+              "const": "counterlab-generation-isolation-v1"
+            },
+            "service": {
+              "type": "string",
+              "const": "counterlab-hosted-runner"
+            },
+            "probe": {
+              "type": "string",
+              "const": "non-root-startup"
+            },
+            "checks": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "string",
+                  "const": "entrypoint"
+                },
+                {
+                  "type": "string",
+                  "const": "non-root-user"
+                },
+                {
+                  "type": "string",
+                  "const": "immutable-paths"
+                },
+                {
+                  "type": "string",
+                  "const": "codex"
+                },
+                {
+                  "type": "string",
+                  "const": "python"
+                },
+                {
+                  "type": "string",
+                  "const": "bubblewrap"
+                },
+                {
+                  "type": "string",
+                  "const": "bubblewrap-read-isolation"
+                },
+                {
+                  "type": "string",
+                  "const": "setpriv"
+                },
+                {
+                  "type": "string",
+                  "const": "writable-roots"
+                }
+              ]
+            },
+            "generationFilesystemReadIsolation": {
+              "type": "string",
+              "const": "OS_ENFORCED"
+            },
+            "bubblewrapVersion": {
+              "type": "string",
+              "const": "0.11.0"
+            },
+            "bubblewrap": {
+              "type": "object",
+              "properties": {
+                "forbiddenHostPathsHidden": {
+                  "type": "boolean",
+                  "const": true
+                },
+                "parentEnvironmentHidden": {
+                  "type": "boolean",
+                  "const": true
+                },
+                "workspaceVisible": {
+                  "type": "boolean",
+                  "const": true
+                },
+                "workspaceWritable": {
+                  "type": "boolean",
+                  "const": true
+                }
+              },
+              "required": [
+                "forbiddenHostPathsHidden",
+                "parentEnvironmentHidden",
+                "workspaceVisible",
+                "workspaceWritable"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "probeVersion",
+            "service",
+            "probe",
+            "checks",
+            "generationFilesystemReadIsolation",
+            "bubblewrapVersion",
+            "bubblewrap"
+          ],
+          "additionalProperties": false
+        },
+        "probePayloadSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "verifiedAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+        },
+        "verifierVersion": {
+          "type": "string",
+          "const": "counterlab-generation-isolation-evidence-v1"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "status",
+        "generationFilesystemReadIsolation",
+        "sourceCommit",
+        "sourceTreeSha256",
+        "localImageTag",
+        "localImageDigest",
+        "imageUser",
+        "mountPolicyVersion",
+        "probePayload",
+        "probePayloadSha256",
+        "verifiedAt",
+        "verifierVersion"
+      ],
+      "additionalProperties": false
+    },
+    "releaseCheckGenerationIsolationEvidenceSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "releaseCheckGenerationIsolationProbeSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "releaseCheckGenerationIsolationVerifiedAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "status",
+    "evidenceCommit",
+    "sourceCommit",
+    "qualifiedRunnerReceiptSha256",
+    "qualifiedAt",
+    "runnerImageTag",
+    "runnerImageDigest",
+    "adapterImageTag",
+    "adapterImageDigest",
+    "registryDigest",
+    "runtimeToolchainSha256",
+    "runtimePolicySha256",
+    "proofDependencyManifestSha256",
+    "aggregateLimitEvidenceSha256",
+    "runtimeAdapterSha256",
+    "checks",
+    "checkedAt",
+    "verifierVersion",
+    "generationFilesystemReadIsolation",
+    "generationIsolationEvidenceSha256",
+    "generationIsolationProbeSha256",
+    "generationIsolationVerifiedAt",
+    "releaseCheckGenerationIsolationEvidence",
+    "releaseCheckGenerationIsolationEvidenceSha256",
+    "releaseCheckGenerationIsolationProbeSha256",
+    "releaseCheckGenerationIsolationVerifiedAt"
+  ],
+  "additionalProperties": false
+}

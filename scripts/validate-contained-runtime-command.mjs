@@ -336,7 +336,7 @@ function validateRun(runArgs) {
       options.get("--cpus")?.[0] !== "2.0" ||
       !sameValues(options.get("--ulimit") ?? [], [
         "cpu=300:300",
-        "as=1073741824:1073741824",
+        "as=2147483648:2147483648",
         "fsize=1048576:1048576",
         "nofile=64:64",
         "nproc=32:32",
@@ -395,7 +395,7 @@ function validateRun(runArgs) {
       options.get("--cpus")?.[0] !== "2.0" ||
       !sameValues(options.get("--ulimit") ?? [], [
         "cpu=300:300",
-        "as=1073741824:1073741824",
+        "as=2147483648:2147483648",
         "fsize=1048576:1048576",
         "nofile=64:64",
         "nproc=32:32",
@@ -489,7 +489,7 @@ function validateRun(runArgs) {
       options.get("--cpus")?.[0] !== "2.0" ||
       !sameValues(options.get("--ulimit") ?? [], [
         "cpu=300:300",
-        "as=1073741824:1073741824",
+        "as=2147483648:2147483648",
         "fsize=1048576:1048576",
         "nofile=64:64",
         "nproc=32:32",
@@ -592,7 +592,7 @@ function validateRun(runArgs) {
       memory !== memorySwap ||
       (ulimits.get("cpu") ?? 0) < 1 ||
       (ulimits.get("cpu") ?? 0) > 60 ||
-      ulimits.get("as") !== memoryMegabytes * 1024 * 1024 ||
+      ulimits.get("as") !== 2 * 1024 * 1024 * 1024 ||
       (ulimits.get("fsize") ?? 0) < 1 ||
       (ulimits.get("fsize") ?? 0) > 1_048_576 ||
       ulimits.get("nofile") !== 64 ||

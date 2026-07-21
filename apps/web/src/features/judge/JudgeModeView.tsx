@@ -1,4 +1,6 @@
-import type { CapabilityHealth } from "../../api";
+import { useState } from "react";
+
+import { isExactLiveAuthorityReady, type CapabilityHealth } from "../../api";
 import { VerifiedBeliefBreakMechanism } from "../../components/learner/VerifiedBeliefBreakTheater";
 import { verifiedReplay } from "../../sampleReplayMetadata";
 import styles from "./JudgeModeView.module.css";
@@ -13,18 +15,6 @@ const learnerStages = [
   ["06", "Repair", "Unlock the smallest verified notebook correction."],
 ] as const;
 
-function liveAuthorityReady(health: CapabilityHealth | null): boolean {
-  return (
-    health?.readiness === "ready" &&
-    health.liveGpt === "configured" &&
-    health.liveCodex === "configured" &&
-    health.liveKernel === "configured" &&
-    health.sandbox === "credential-and-privilege-boundary" &&
-    health.generationFilesystemReadIsolation === "PARTIAL" &&
-    health.release?.status === "bound"
-  );
-}
-
 export function JudgeModeView({
   health,
   healthPending,
@@ -38,8 +28,18 @@ export function JudgeModeView({
   onRetryHealth: () => void;
   onStartSample: () => void;
 }) {
-  const liveReady = liveAuthorityReady(health);
+  const liveReady = isExactLiveAuthorityReady(health);
   const release = health?.release?.status === "bound" ? health.release : null;
+  const generationIsolationBoundary =
+    release !== null &&
+    health?.generationFilesystemReadIsolation === "OS_ENFORCED"
+      ? "Filesystem generation read isolation is OS-enforced for the exact released live runtime."
+      : release !== null &&
+          health?.generationFilesystemReadIsolation === "PARTIAL"
+        ? "Filesystem generation read isolation is explicitly PARTIAL, so live authority remains unavailable."
+        : "No exact released filesystem generation read-isolation status is available, so live authority remains unproven.";
+  const [sampleEvidenceInspectionRequest, setSampleEvidenceInspectionRequest] =
+    useState(0);
 
   return (
     <main className={styles.page} id="main-content" tabIndex={-1}>
@@ -66,35 +66,42 @@ export function JudgeModeView({
             Evidence-first learning for notebook users
           </p>
           <h1 id="judge-title" tabIndex={-1}>
-            See a verified belief break in ten seconds.
+            Inspect a verified belief break from question to proof.
           </h1>
           <p className={styles.lede}>
-            Seal a Prediction, change one condition, and let fixed evidence—not
-            AI prose—release the bounded result. CounterLab turns the
-            learner&apos;s notebook claim into a checkable Question → Prediction
-            → Test → Boundary → Apply → Repair record.
+            Seal a Prediction. Change one condition. Fixed evidence—not AI
+            prose—releases one bounded result.
           </p>
         </div>
 
         <aside
           className={styles.twentySecondProof}
-          aria-label="Ten second fixed sample preview"
+          aria-label="Fixed sample preview"
         >
           <header>
             <span>Completed fixed sample · not a live result</span>
-            <b>Hashes checked before values</b>
+            <b>Integrity checked</b>
           </header>
           <blockquote>
             “This score proves the model works for customers it has never seen.”
           </blockquote>
-          <p className={styles.previewAuthority}>
-            Approved fixed sample framing. No GPT-5.6, Codex, or runner call
-            occurs in this preview.
-          </p>
+          <div className={styles.previewMeta}>
+            <p className={styles.previewAuthority}>
+              A belief debugger—not a tutor or notebook linter. Fixed sample; no
+              GPT-5.6, Codex, or runner call occurs here.
+            </p>
+            <a
+              className={styles.previewProofLink}
+              href="#sample-evidence"
+              aria-label="Inspect verified sample proof"
+              onClick={() =>
+                setSampleEvidenceInspectionRequest((request) => request + 1)
+              }
+            >
+              Inspect proof
+            </a>
+          </div>
           <VerifiedBeliefBreakMechanism presentation="compact" />
-          <a className={styles.previewProofLink} href="#sample-evidence">
-            Inspect exact values and integrity
-          </a>
         </aside>
 
         <div className={styles.heroAfter}>
@@ -211,9 +218,11 @@ export function JudgeModeView({
                   ? "Exact runner readiness was observed; model credentials are exercised only by a live run"
                   : healthError !== null
                     ? "Live authority is unavailable; readiness could not be checked"
-                    : health?.readiness === "not-checked"
-                      ? "Live readiness has not been checked"
-                      : "Live authority did not pass the latest readiness check"}
+                    : health?.generationFilesystemReadIsolation === "PARTIAL"
+                      ? "Generation filesystem read isolation is partial, so live authority remains unavailable"
+                      : health?.readiness === "not-checked"
+                        ? "Live readiness has not been checked"
+                        : "Live authority did not pass the latest readiness check"}
             </div>
             {liveReady ? (
               <a href="/new">
@@ -339,7 +348,7 @@ export function JudgeModeView({
         </div>
       </section>
 
-      <SampleEvidencePack />
+      <SampleEvidencePack inspectionRequest={sampleEvidenceInspectionRequest} />
 
       <section className={styles.methodSection} aria-labelledby="method-title">
         <div className={styles.methodIntro}>
@@ -389,8 +398,8 @@ export function JudgeModeView({
             packages, arbitrary code execution, unsupported patch shapes, and
             insufficient evidence. A Proof Capsule proves integrity and scoped
             verification—not global mastery or formal sandbox security. The
-            hosted Codex launch has a credential-and-privilege boundary;
-            filesystem generation read isolation is explicitly PARTIAL.
+            hosted Codex launch has a credential-and-privilege boundary.{" "}
+            {generationIsolationBoundary}
           </p>
           <section
             className={styles.releaseIdentity}
@@ -508,12 +517,14 @@ export function JudgeModeView({
         aria-labelledby="reproduce-title"
       >
         <div>
-          <p>Reproduce locally</p>
-          <h2 id="reproduce-title">The demo has commands, not hand-waving.</h2>
+          <p>Source &amp; license</p>
+          <h2 id="reproduce-title">Source reproduction is gated.</h2>
         </div>
-        <pre aria-label="CounterLab reproduction commands">
-          <code>{`./scripts/test-all.sh\n./scripts/run-mutations.sh leakage\n./scripts/reproduce-session.sh leakage-01\n./scripts/replay-patch.sh leakage-01`}</code>
-        </pre>
+        <p className={styles.reproductionGate}>
+          Local reproduction commands are withheld until the repository and MIT
+          License are anonymously accessible. CounterLab will not present
+          unactionable source instructions as public evidence.
+        </p>
       </section>
 
       <footer className={styles.footer}>

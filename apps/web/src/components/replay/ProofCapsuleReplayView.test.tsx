@@ -105,6 +105,22 @@ describe("ProofCapsuleReplayView", () => {
     expect(screen.queryByText(/run fair test/i)).not.toBeInTheDocument();
   });
 
+  it("labels its optional exit as home navigation rather than a new run", () => {
+    render(
+      <ProofCapsuleReplayView
+        replay={publicReplayFixture("entity_leakage")}
+        onStartOver={() => undefined}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Return to CounterLab home" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /start|run.*test|new analysis/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders leakage authority without exposing private downloads or identifiers", () => {
     const replay = publicReplayFixture("entity_leakage");
     render(<ProofCapsuleReplayView replay={replay} />);

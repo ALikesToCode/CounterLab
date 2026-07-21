@@ -1,10 +1,23 @@
 import { defineConfig } from "@playwright/test";
-import { existsSync, lstatSync, realpathSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  closeSync,
+  constants,
+  existsSync,
+  fstatSync,
+  lstatSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+} from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { resolveBrowserAuthority } from "./e2e/browser-authority";
+import { DeploymentReceiptV7Schema } from "../../packages/scientific-engine-registry/src/index.js";
+import { PublicationReleaseBindingSchema } from "../../scripts/submission-publication-evidence.js";
 
 const repositoryRoot = realpathSync(resolve(import.meta.dirname, "../.."));
+const maximumDeploymentReceiptBytes = 5 * 1_024 * 1_024;
 const runtimeParent = resolve(import.meta.dirname, "test-results/runtime");
 const configuredRuntimeRoot = process.env.COUNTERLAB_E2E_RUNTIME_ROOT;
 if (configuredRuntimeRoot !== undefined && !isAbsolute(configuredRuntimeRoot)) {
@@ -49,8 +62,13 @@ assertNoSymlinkTraversal(runtimeRoot, "COUNTERLAB_E2E_RUNTIME_ROOT");
 
 const outputDir = join(runtimeRoot, "playwright-output");
 const resultsFile = join(runtimeRoot, "evidence/results.json");
+const qualificationRunFile = join(
+  runtimeRoot,
+  "evidence/cloakbrowser-raw-run.json",
+);
 assertNoSymlinkTraversal(outputDir, "Playwright output directory");
 assertNoSymlinkTraversal(resultsFile, "Playwright results file");
+assertNoSymlinkTraversal(qualificationRunFile, "CloakBrowser raw run evidence");
 
 const browserAuthority = resolveBrowserAuthority(process.env);
 
@@ -90,6 +108,90 @@ const baseURL = remoteBaseURL ?? `http://127.0.0.1:${port}`;
 const staticDesignReview =
   browserAuthority.kind === "stock-chromium-design-review" &&
   process.env.COUNTERLAB_E2E_STATIC_CLIENT === "true";
+const localAdmissionKey =
+  process.env.COUNTERLAB_ADMISSION_KEY?.trim() ||
+  ["counterlab", "local", "e2e", "admission", "only", "000000"].join("-");
+const qualificationSetting = process.env.COUNTERLAB_BROWSER_QUALIFICATION;
+if (
+  qualificationSetting !== undefined &&
+  qualificationSetting !== "true" &&
+  qualificationSetting !== "false"
+) {
+  throw new Error(
+    "COUNTERLAB_BROWSER_QUALIFICATION must be exactly true or false",
+  );
+}
+const qualificationRequested = qualificationSetting === "true";
+if (
+  qualificationRequested &&
+  (browserAuthority.kind !== "cloak" ||
+    remoteBaseURL !== "https://counterlab.cserules.workers.dev")
+) {
+  throw new Error(
+    "CloakBrowser qualification requires the exact public CounterLab origin",
+  );
+}
+const deploymentReceiptSetting = process.env.COUNTERLAB_E2E_DEPLOYMENT_RECEIPT;
+let qualificationReleaseBinding: ReturnType<
+  typeof PublicationReleaseBindingSchema.parse
+> | null = null;
+if (qualificationRequested) {
+  if (
+    deploymentReceiptSetting === undefined ||
+    deploymentReceiptSetting.trim() === ""
+  ) {
+    throw new Error(
+      "CloakBrowser qualification requires COUNTERLAB_E2E_DEPLOYMENT_RECEIPT",
+    );
+  }
+  const requestedReceipt = resolve(repositoryRoot, deploymentReceiptSetting);
+  if (!isContained(repositoryRoot, requestedReceipt, false)) {
+    throw new Error("CloakBrowser deployment receipt escaped the repository");
+  }
+  assertNoSymlinkTraversal(requestedReceipt, "CloakBrowser deployment receipt");
+  const physicalReceipt = realpathSync(requestedReceipt);
+  if (
+    !isContained(repositoryRoot, physicalReceipt, false) ||
+    !lstatSync(physicalReceipt).isFile()
+  ) {
+    throw new Error(
+      "CloakBrowser deployment receipt must be a physical repository file",
+    );
+  }
+  const receiptDescriptor = openSync(
+    physicalReceipt,
+    constants.O_RDONLY | constants.O_NOFOLLOW,
+  );
+  let deploymentBytes: Buffer;
+  try {
+    const metadata = fstatSync(receiptDescriptor);
+    if (!metadata.isFile() || metadata.size > maximumDeploymentReceiptBytes) {
+      throw new Error(
+        "CloakBrowser deployment receipt is not a bounded regular file",
+      );
+    }
+    deploymentBytes = readFileSync(receiptDescriptor);
+  } finally {
+    closeSync(receiptDescriptor);
+  }
+  const deployment = DeploymentReceiptV7Schema.parse(
+    JSON.parse(deploymentBytes.toString("utf8")) as unknown,
+  );
+  qualificationReleaseBinding = PublicationReleaseBindingSchema.parse({
+    deploymentReceiptSha256: createHash("sha256")
+      .update(deploymentBytes)
+      .digest("hex"),
+    productionOrigin: deployment.productionOrigin,
+    workerEvidenceCommit: deployment.workerEvidenceCommit,
+    runnerSourceCommit: deployment.runnerSourceCommit,
+    containerImageDigest: deployment.containerImageDigest,
+    workerVersionId: deployment.workerVersionId,
+  });
+} else if (deploymentReceiptSetting !== undefined) {
+  throw new Error(
+    "COUNTERLAB_E2E_DEPLOYMENT_RECEIPT is allowed only for qualification",
+  );
+}
 
 export default defineConfig({
   testDir: "./e2e",
@@ -98,7 +200,25 @@ export default defineConfig({
   forbidOnly: true,
   retries: process.env.CI ? 1 : 0,
   outputDir,
-  reporter: [["line"], ["json", { outputFile: resultsFile }]],
+  reporter: [
+    ["line"],
+    ["json", { outputFile: resultsFile }],
+    [
+      "./e2e/qualification-reporter.ts",
+      {
+        authority:
+          browserAuthority.kind === "cloak"
+            ? "CLOAKBROWSER"
+            : "STOCK_CHROMIUM_DESIGN_REVIEW",
+        baseUrl: baseURL,
+        outputFile: qualificationRunFile,
+        qualificationRequested,
+        releaseBinding: qualificationReleaseBinding,
+        repositoryRoot,
+        runtimeRoot,
+      },
+    ],
+  ],
   use: {
     baseURL,
     browserName: "chromium",
@@ -129,6 +249,13 @@ export default defineConfig({
             ? "node ../../scripts/serve-built-client.mjs"
             : `./node_modules/.bin/vite --host 127.0.0.1 --port ${port}`,
           cwd: import.meta.dirname,
+          ...(staticDesignReview
+            ? {}
+            : {
+                env: {
+                  COUNTERLAB_ADMISSION_KEY: localAdmissionKey,
+                },
+              }),
           url: baseURL,
           reuseExistingServer: false,
           timeout: 120_000,

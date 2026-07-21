@@ -15,6 +15,7 @@ import {
   type HostedPatchAuthorityRefV5,
   type HostedResultAuthorityRefV5,
   type HostedVerifiedResultSetV2,
+  type LearningDirectorSessionState,
   type PatchResult,
   type PredictionContract,
   type ProofBundle,
@@ -59,6 +60,7 @@ export interface CounterLabSession {
   updatedAt: string;
   beliefTest?: BeliefTest;
   beliefSpec?: BeliefSpecV2;
+  learningDirector?: LearningDirectorSessionState | undefined;
   prediction?: PredictionContract;
   labVerification?: unknown;
   verifiedResult?: VerifiedResultSet;

@@ -39,6 +39,9 @@ describe("ModelDuel", () => {
     expect(currentCard).toHaveAttribute("data-model-weight", "equal");
     expect(alternativeCard).toHaveAttribute("data-model-weight", "equal");
     expect(currentCard.className).toBe(alternativeCard.className);
+    expect(currentCard).toHaveTextContent("Reviewed Subject Pack draft");
+    expect(alternativeCard).toHaveTextContent("Reviewed Subject Pack draft");
+    expect(alternativeCard).not.toHaveTextContent("AI-suggested draft");
     expect(screen.getByText(current.prediction)).toBeInTheDocument();
     expect(screen.getByText(alternative.prediction)).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(/correct|incorrect/i);
@@ -46,6 +49,29 @@ describe("ModelDuel", () => {
     await user.click(currentCard.querySelector("summary") as HTMLElement);
     expect(screen.getByText(current.conditions[0]!)).toBeInTheDocument();
     expect(screen.getByText(current.nonClaims[0]!)).toBeInTheDocument();
+  });
+
+  it("labels genuine model-authored framing only when the caller declares it", () => {
+    render(
+      <ModelDuel
+        current={current}
+        alternative={alternative}
+        currentSource="ai_suggested"
+        alternativeSource="ai_suggested"
+        onConfirm={vi.fn()}
+        onEdit={vi.fn()}
+        onInsufficientEvidence={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByLabelText("Alternative CounterLab will test"),
+    ).toHaveTextContent("AI-suggested draft");
+    expect(screen.getByLabelText("Your current explanation")).toHaveTextContent(
+      "AI-suggested draft",
+    );
+    expect(screen.queryByText("Reviewed Subject Pack draft")).toBeNull();
   });
 
   it("routes confirmation, editing, and tertiary decisions through callbacks", async () => {
@@ -86,6 +112,35 @@ describe("ModelDuel", () => {
     expect(edit).toHaveBeenCalledOnce();
     expect(insufficient).toHaveBeenCalledOnce();
     expect(reject).toHaveBeenCalledOnce();
+  });
+
+  it("disables competing learner decisions while a request is in flight", async () => {
+    const user = userEvent.setup();
+    const confirm = vi.fn();
+    render(
+      <ModelDuel
+        current={current}
+        alternative={alternative}
+        disabled
+        onConfirm={confirm}
+        onEdit={vi.fn()}
+        onInsufficientEvidence={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Yes, this captures my view" }),
+    );
+    expect(confirm).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "Edit my explanation" }),
+    ).toBeDisabled();
+    await user.click(screen.getByText("More ways to respond"));
+    expect(
+      screen.getByRole("button", { name: "Not enough evidence" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reject" })).toBeDisabled();
   });
 
   it("collapses confirmed models behind an accessible review control", async () => {

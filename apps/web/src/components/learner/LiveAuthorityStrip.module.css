@@ -1,0 +1,133 @@
+.strip {
+  width: 100%;
+  min-width: 0;
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  border: 1px solid color-mix(in srgb, var(--aqua) 28%, var(--line));
+  border-radius: 14px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--aqua) 5%, var(--paper));
+  font-family: var(--sans);
+}
+
+.heading {
+  display: flex;
+  min-width: 152px;
+  align-items: center;
+  gap: 9px;
+}
+
+.badge {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--aqua) 42%, var(--line));
+  border-radius: 999px;
+  color: var(--aqua-bright);
+  background: var(--aqua-soft);
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.heading p {
+  margin: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.heading strong {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.heading p > span {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.authorities {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+}
+
+.authorities > div {
+  min-width: 0;
+  padding: 2px 12px;
+  border-left: 1px solid var(--line);
+}
+
+.authorities dt,
+.authorities dd {
+  margin: 0;
+}
+
+.authorities dt {
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+.authorities dd {
+  margin-top: 2px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+@media (max-width: 880px) {
+  .strip {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .heading {
+    min-width: 0;
+  }
+
+  .authorities > div:first-child {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .strip {
+    padding: 12px;
+  }
+
+  .heading {
+    align-items: flex-start;
+  }
+
+  .authorities {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 0;
+  }
+
+  .authorities > div {
+    padding: 0 9px;
+  }
+
+  .authorities > div:nth-child(odd) {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .strip,
+  .strip * {
+    transition: none;
+  }
+}

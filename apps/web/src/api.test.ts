@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   CANONICAL_JSON_PROFILE,
+  canonicalJsonV1,
   migrateBeliefTestV1ToV2,
   type ArtifactManifest,
   type BeliefTest,
@@ -9,7 +10,11 @@ import {
 } from "@counterlab/contracts";
 
 import { ApiClientError, CounterLabApiClient, SessionViewSchema } from "./api";
-import { publicReplayFixture } from "./components/replay/ProofCapsuleReplayView.fixture";
+import {
+  publicReplayFixture,
+  replayFixture,
+} from "./components/replay/ProofCapsuleReplayView.fixture";
+import { createDefaultProofBoundSessionFixture } from "./test-fixtures/proofBundle";
 import rawSampleResult from "../../../fixtures/public/leakage_verified_result.json";
 
 const digest = (character: string) => character.repeat(64);
@@ -233,26 +238,6 @@ const reasoningDiffV2 = {
   issuedAt: "2026-07-14T10:05:00.000Z",
 };
 
-const publicProofCapsule = {
-  schemaVersion: "2" as const,
-  capsuleId: "capsule_1",
-  sessionId: session.sessionId,
-  mode: "live_notebook" as const,
-  replayId: null,
-  mediaType: "application/vnd.counterlab.capsule+json" as const,
-  canonicalProfile: CANONICAL_JSON_PROFILE,
-  rootHash: digest("e"),
-  bytesHash: digest("f"),
-  byteLength: 4_096,
-  reasoningDiffHash: digest("a"),
-  eventChainHead: digest("b"),
-  createdAt: "2026-07-14T10:06:00.000Z",
-  integrity: {
-    mode: "integrity-hashed" as const,
-    algorithm: "sha256" as const,
-  },
-};
-
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
     status,
@@ -260,7 +245,158 @@ function jsonResponse(payload: unknown, status = 200): Response {
   });
 }
 
+function proofBoundSession() {
+  return createDefaultProofBoundSessionFixture();
+}
+
+async function canonicalHash(value: unknown): Promise<string> {
+  const bytes = new TextEncoder().encode(canonicalJsonV1(value));
+  const digestBytes = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digestBytes)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function nativeProofSession() {
+  const replay = replayFixture("entity_leakage");
+  const evidenceVerdictHash = await canonicalHash(replay.evidenceVerdict);
+  const {
+    integrity: _receiptIntegrity,
+    receiptHash: _receiptHash,
+    ...storedReceiptContent
+  } = replay.boundary.receipt;
+  const receiptContent = {
+    ...storedReceiptContent,
+    evidenceVerdictHash,
+  };
+  const receiptIntegrity = {
+    mode: "integrity-hashed" as const,
+    algorithm: "sha256" as const,
+    contentHash: await canonicalHash(receiptContent),
+  };
+  const receipt = {
+    ...receiptContent,
+    integrity: receiptIntegrity,
+    receiptHash: await canonicalHash({
+      ...receiptContent,
+      integrity: receiptIntegrity,
+    }),
+  };
+  const boundaryMapAuthority = {
+    jobId: "job_boundary_live_1",
+    sweepId: replay.boundary.result.sweepId,
+    resultHash: replay.boundary.result.resultHash,
+    verificationReportHash: replay.boundary.report.reportHash,
+    receipt,
+    cellCount: replay.boundary.result.cells.length,
+  };
+  const reasoningDiff = {
+    ...replay.reasoningDiff,
+    authority: {
+      ...replay.reasoningDiff.authority,
+      artifactManifestHash: replay.boundary.result.artifactManifestHash,
+      beliefSpecHash: await canonicalHash(replay.beliefSpec),
+      predictionHash: await canonicalHash(replay.prediction),
+      experimentIrHash: replay.evidenceVerdict.irHash,
+      authoritativeResultHash: replay.verifiedResult.resultHash,
+      evidenceVerdictHash,
+      boundaryMapHash: boundaryMapAuthority.resultHash,
+      boundaryReceiptHash: boundaryMapAuthority.receipt.receiptHash,
+      transferResultHash: replay.transferResult.resultHash,
+      patchResultHash: replay.patchResult.resultHash,
+      patchedArtifactHash: replay.patchResult.patchedArtifactHash,
+    },
+  };
+
+  return {
+    sessionId: replay.sourceSessionId,
+    artifactId: replay.artifactManifest.artifactId,
+    mode: { kind: "live_notebook" as const },
+    state: "PROOF_CAPSULE_ISSUED" as const,
+    version: 18,
+    createdAt: "2026-07-16T12:40:00.000Z",
+    updatedAt: "2026-07-16T13:00:00.000Z",
+    beliefSpec: replay.beliefSpec,
+    prediction: replay.prediction,
+    verifiedResult: replay.verifiedResult,
+    evidenceVerdict: replay.evidenceVerdict,
+    epistemicReportHash: reasoningDiff.authority.epistemicReportHash,
+    boundaryMapAuthority,
+    transferResult: replay.transferResult,
+    patchResult: replay.patchResult,
+    revision: replay.revision.statement,
+    reasoningDiffV2: reasoningDiff,
+    proofCapsule: {
+      ...replay.proofCapsule,
+      reasoningDiffHash: await canonicalHash(reasoningDiff),
+    },
+  };
+}
+
 describe("CounterLabApiClient", () => {
+  it("binds a Proof Bundle to its outer session authority", async () => {
+    const valid = proofBoundSession();
+    expect(SessionViewSchema.parse(valid)).toMatchObject({
+      sessionId: session.sessionId,
+      proofBundle: { bundleId: "bundle_1" },
+    });
+
+    expect(() =>
+      SessionViewSchema.parse({
+        ...valid,
+        proofBundle: { ...valid.proofBundle, sessionId: "session_other" },
+      }),
+    ).toThrow(/different session/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...valid,
+        proofBundle: {
+          ...valid.proofBundle,
+          artifactManifest: {
+            ...valid.proofBundle.artifactManifest,
+            artifactId: "artifact_other",
+          },
+        },
+      }),
+    ).toThrow(/different artifact/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...valid,
+        mode: { kind: "sample_lesson", sampleId: "sample_other" },
+      }),
+    ).toThrow(/selected lesson/i);
+    expect(() =>
+      SessionViewSchema.parse({ ...valid, state: "PATCH_VERIFIED" }),
+    ).toThrow(/before Reasoning Diff/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...valid,
+        prediction: { ...valid.prediction, immutableHash: digest("0") },
+      }),
+    ).toThrow(/prediction authority/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...valid,
+        verifiedResult: {
+          ...valid.verifiedResult,
+          resultHash: digest("0"),
+        },
+      }),
+    ).toThrow(/verifiedResult authority/i);
+
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({
+        ok: true,
+        data: { ...valid.proofBundle, sessionId: "session_other" },
+      }),
+    );
+    await expect(
+      new CounterLabApiClient({ fetch: fetcher }).getProofBundle(
+        session.sessionId,
+      ),
+    ).rejects.toMatchObject({ code: "PROOF_BUNDLE_LINEAGE_INVALID" });
+  });
+
   it("rejects a session result that has no immutable Prediction", async () => {
     const verifiedResult = VerifiedResultSetSchema.parse(rawSampleResult);
     const malformedSession = {
@@ -302,12 +438,23 @@ describe("CounterLabApiClient", () => {
 
   it("accepts Worker-owned v5 evidence authority in resumable session responses", async () => {
     const beliefSpec = migrateBeliefTestV1ToV2(beliefTest);
+    const verifiedResult = VerifiedResultSetSchema.parse(rawSampleResult);
+    const prediction = {
+      schemaVersion: "1" as const,
+      id: "prediction_1",
+      sessionId: session.sessionId,
+      beliefTestId: beliefSpec.id,
+      choice: "Group-holdout accuracy falls.",
+      confidence: 80,
+      committedAt: "2026-07-14T10:02:00.000Z",
+      immutableHash: digest("8"),
+    };
     const evidenceVerdict = {
       schemaVersion: "1" as const,
       kind: "SUPPORTS" as const,
       hypothesisId: "competing" as const,
       scope: "unseen customers in the documented fixture",
-      resultHash: digest("e"),
+      resultHash: verifiedResult.resultHash,
       irHash: digest("f"),
       technicalReportHash: digest("1"),
       verifierVersion: "epistemic-verifier-v1",
@@ -317,6 +464,8 @@ describe("CounterLabApiClient", () => {
       state: "EXPERIMENT_COMPLETED" as const,
       version: 7,
       beliefSpec,
+      prediction,
+      verifiedResult,
       evidenceVerdict,
       epistemicReportHash: digest("2"),
     };
@@ -345,33 +494,144 @@ describe("CounterLabApiClient", () => {
         epistemicReportHash: digest("2"),
       }),
     ).toThrow(/Belief Spec v2/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...v5Session,
+        evidenceVerdict: {
+          ...evidenceVerdict,
+          resultHash: digest("0"),
+        },
+      }),
+    ).toThrow(/verdict result.*verified result/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...v5Session,
+        verifiedResult: undefined,
+      }),
+    ).toThrow(/supporting or inconclusive verdict requires a verified result/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...v5Session,
+        verifiedResult: undefined,
+        evidenceVerdict: {
+          schemaVersion: "1",
+          kind: "REJECTED",
+          findingIds: ["result_binding_mismatch"],
+          resultReleased: false,
+          irHash: digest("f"),
+          technicalReportHash: digest("1"),
+          verifierVersion: "epistemic-verifier-v1",
+        },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      SessionViewSchema.parse({
+        ...v5Session,
+        evidenceVerdict: {
+          schemaVersion: "1",
+          kind: "REJECTED",
+          findingIds: ["result_binding_mismatch"],
+          resultReleased: false,
+          irHash: digest("f"),
+          technicalReportHash: digest("1"),
+          verifierVersion: "epistemic-verifier-v1",
+        },
+      }),
+    ).toThrow(/rejected verdict cannot release a verified result/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...v5Session,
+        evidenceVerdict: undefined,
+        epistemicReportHash: undefined,
+      }),
+    ).toThrow(/Belief Spec v2 result requires an evidence verdict/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...v5Session,
+        state: "PATCH_VERIFIED",
+        patchResult: {
+          ...proofBoundSession().patchResult,
+          sessionId: v5Session.sessionId,
+        },
+        evidenceVerdict: undefined,
+        epistemicReportHash: undefined,
+      }),
+    ).toThrow(/Belief Spec v2 repair requires a supporting evidence verdict/i);
   });
 
-  it("accepts only browser-safe native proof authority in a resumable session", () => {
-    const nativeSession = {
-      ...session,
-      mode: { kind: "live_notebook" as const },
-      state: "PROOF_CAPSULE_ISSUED" as const,
-      version: 18,
-      boundaryMapAuthority: boundaryAuthority,
-      reasoningDiffV2,
-      proofCapsule: publicProofCapsule,
-    };
+  it("accepts only browser-safe, cross-bound native proof authority", async () => {
+    const completed = proofBoundSession();
+    const nativeSession = await nativeProofSession();
 
     expect(SessionViewSchema.parse(nativeSession)).toMatchObject({
-      boundaryMapAuthority: { resultHash: boundaryReceipt.resultHash },
+      boundaryMapAuthority: {
+        resultHash: nativeSession.boundaryMapAuthority.resultHash,
+      },
       reasoningDiffV2: { schemaVersion: "2" },
-      proofCapsule: { capsuleId: "capsule_1" },
+      proofCapsule: { capsuleId: nativeSession.proofCapsule.capsuleId },
     });
     expect(() =>
       SessionViewSchema.parse({
         ...nativeSession,
+        verifiedResult: completed.verifiedResult,
+        evidenceVerdict: {
+          ...nativeSession.evidenceVerdict,
+          resultHash: completed.verifiedResult.resultHash,
+        },
+      }),
+    ).toThrow(/native Proof Capsule requires a hosted v2 result/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...nativeSession,
+        boundaryMapAuthority: {
+          ...nativeSession.boundaryMapAuthority,
+          receipt: {
+            ...nativeSession.boundaryMapAuthority.receipt,
+            authoritativeResultHash: digest("0"),
+          },
+        },
+      }),
+    ).toThrow(/native proof authority does not match the session/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...nativeSession,
         proofCapsule: {
-          ...publicProofCapsule,
-          objectKey: `proof-capsules/session_1/${publicProofCapsule.bytesHash}.counterlab`,
+          ...nativeSession.proofCapsule,
+          objectKey: `proof-capsules/session_1/${nativeSession.proofCapsule.bytesHash}.counterlab`,
         },
       }),
     ).toThrow(/unrecognized key/i);
+
+    const validFetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({ ok: true, data: nativeSession }),
+    );
+    await expect(
+      new CounterLabApiClient({ fetch: validFetcher }).getSession(
+        nativeSession.sessionId,
+      ),
+    ).resolves.toMatchObject({
+      proofCapsule: {
+        reasoningDiffHash: nativeSession.proofCapsule.reasoningDiffHash,
+      },
+    });
+
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({
+        ok: true,
+        data: {
+          ...nativeSession,
+          proofCapsule: {
+            ...nativeSession.proofCapsule,
+            reasoningDiffHash: digest("0"),
+          },
+        },
+      }),
+    );
+    await expect(
+      new CounterLabApiClient({ fetch: fetcher }).getSession(
+        nativeSession.sessionId,
+      ),
+    ).rejects.toMatchObject({ code: "NATIVE_PROOF_LINEAGE_INVALID" });
   });
 
   it("retrieves strict Boundary authority and both Reasoning Diff versions", async () => {
@@ -624,6 +884,12 @@ describe("CounterLabApiClient", () => {
         workerEvidenceCommit: "a".repeat(40),
         runnerSourceCommit: "b".repeat(40),
         runnerImageDigest: `sha256:${"c".repeat(64)}`,
+        generationIsolationEvidenceSha256: "5".repeat(64),
+        generationIsolationProbeSha256: "6".repeat(64),
+        releaseCheckGenerationIsolationEvidenceSha256: "7".repeat(64),
+        releaseCheckGenerationIsolationProbeSha256: "6".repeat(64),
+        releaseCheckGenerationIsolationVerifiedAt:
+          "2026-07-19T05:31:00.000+05:30",
         timeoutCleanupReceiptSha256: "d".repeat(64),
         aggregateLimitEvidenceSha256: "9".repeat(64),
         runtimePolicySha256: "e".repeat(64),
@@ -660,6 +926,49 @@ describe("CounterLabApiClient", () => {
       "/api/health?readiness=probe",
       expect.objectContaining({ method: "GET" }),
     );
+
+    const mismatchedProbeClient = new CounterLabApiClient({
+      fetch: vi.fn<typeof fetch>(async () =>
+        jsonResponse({
+          ok: true,
+          data: {
+            ...health,
+            release: {
+              ...health.release,
+              releaseCheckGenerationIsolationProbeSha256: "8".repeat(64),
+            },
+          },
+        }),
+      ),
+    });
+    await expect(mismatchedProbeClient.getHealth()).rejects.toMatchObject({
+      code: "INVALID_API_RESPONSE",
+    });
+  });
+
+  it("accepts an explicitly OS-enforced generation isolation claim", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({
+        ok: true,
+        data: {
+          platform: "cloudflare-workers",
+          sample: "available",
+          replay: "available",
+          liveGpt: "configured",
+          liveCodex: "configured",
+          liveKernel: "configured",
+          readiness: "ready",
+          sandbox: "credential-and-privilege-boundary",
+          generationFilesystemReadIsolation: "OS_ENFORCED",
+          requestId: "request_isolated",
+        },
+      }),
+    );
+    const client = new CounterLabApiClient({ fetch: fetcher });
+
+    await expect(client.getHealth()).resolves.toMatchObject({
+      generationFilesystemReadIsolation: "OS_ENFORCED",
+    });
   });
 
   it("rejects health responses that claim configured means available", async () => {

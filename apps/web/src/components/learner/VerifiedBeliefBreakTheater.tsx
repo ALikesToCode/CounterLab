@@ -6,6 +6,7 @@ import {
 } from "../../features/boundary/sampleBoundaryFixture";
 import { bundledSampleEvidence, type VerifiedRun } from "../../sample";
 import sampleResultBytes from "../../../../../fixtures/public/leakage_verified_result.json?raw";
+import { LockedBeliefBreakEvidence } from "./LockedBeliefBreakPreview";
 import styles from "./VerifiedBeliefBreakTheater.module.css";
 
 const MODE_LABEL = "Verified sample exploration";
@@ -191,6 +192,20 @@ function MechanismDiagram({
   );
 }
 
+function LeakageDirectionCue({ inline = false }: { inline?: boolean }) {
+  return (
+    <span
+      className={inline ? styles.resultDirection : styles.previewTransition}
+      role="note"
+      aria-label="Downward change: accuracy is lower on unseen customers."
+      data-direction="decrease"
+    >
+      <span aria-hidden="true">↓</span>
+      <small aria-hidden="true">Lower on unseen customers</small>
+    </span>
+  );
+}
+
 function PreviewComparison({
   randomRows,
   wholeCustomers,
@@ -309,10 +324,7 @@ function PreviewComparison({
           </small>
         </div>
 
-        <div className={styles.previewTransition} aria-hidden="true">
-          <span>→</span>
-          <small>same model</small>
-        </div>
+        <LeakageDirectionCue />
 
         <div className={styles.previewScoreState}>
           <span>New-customer test</span>
@@ -365,10 +377,7 @@ function FoldEvidence({ evidence }: { evidence: VerifiedBeliefBreakEvidence }) {
             <strong>{asPercent(randomRows.metrics.accuracy)}</strong>
             <small>{randomRows.entityOverlap.count} customers overlap</small>
           </div>
-          <div className={styles.previewTransition} aria-hidden="true">
-            <span>→</span>
-            <small>same model</small>
-          </div>
+          <LeakageDirectionCue />
           <div className={styles.previewScoreState}>
             <span>New-customer test</span>
             <strong>{asPercent(wholeCustomers.metrics.accuracy)}</strong>
@@ -410,75 +419,6 @@ function FoldEvidence({ evidence }: { evidence: VerifiedBeliefBreakEvidence }) {
   );
 }
 
-function LockedFoldEvidence() {
-  return (
-    <div
-      className={`${styles.verifiedEvidence} ${styles.previewEvidence} ${styles.foldEvidence}`}
-      data-motion="none"
-    >
-      <figure className={styles.foldComparison}>
-        <figcaption>
-          <span>Fair-test mechanism</span>
-          <strong>Result locked until Prediction</strong>
-        </figcaption>
-
-        <div
-          className={styles.foldCausalRow}
-          role="group"
-          aria-label="Changed variable: evaluation unit. The fair test compares familiar-row evaluation with whole-entity holdout. The model, features, preprocessing, sample sizes, metric, and seed stay fixed. Result values remain hidden until Prediction is sealed."
-        >
-          <span>Familiar rows · identities may repeat</span>
-          <b>Evaluation unit</b>
-          <span>Unseen entities · identities stay apart</span>
-        </div>
-
-        <div
-          className={styles.previewScoreShift}
-          role="group"
-          aria-label="The familiar-row and unseen-entity scores are hidden until the learner seals a Prediction."
-        >
-          <div className={styles.previewScoreState}>
-            <span>Familiar-row test</span>
-            <strong aria-label="result hidden">—</strong>
-            <small>identity may cross the split</small>
-          </div>
-          <div className={styles.previewTransition} aria-hidden="true">
-            <span>→</span>
-            <small>same model</small>
-          </div>
-          <div className={styles.previewScoreState}>
-            <span>Unseen-entity test</span>
-            <strong aria-label="result hidden">—</strong>
-            <small>test identities stay new</small>
-          </div>
-        </div>
-
-        <p className={styles.previewControlNote}>
-          <span aria-hidden="true">✓</span>
-          Model, features, preprocessing, sample sizes, metric, and seed stay
-          fixed.
-        </p>
-      </figure>
-
-      <p className={styles.foldFinding}>
-        Seal what you expect before CounterLab reveals whether the conclusion
-        stays similar when only the evaluation unit changes.
-      </p>
-
-      <dl className={styles.foldTakeaway}>
-        <div>
-          <dt>Boundary question</dt>
-          <dd>Where does the conclusion change or stop applying?</dd>
-        </div>
-        <div>
-          <dt>Learner action</dt>
-          <dd>Predict first, then let verified evidence answer.</dd>
-        </div>
-      </dl>
-    </div>
-  );
-}
-
 function VerifiedEvidence({
   evidence,
   presentation,
@@ -510,30 +450,33 @@ function VerifiedEvidence({
       )}
 
       {isPreview ? null : (
-        <div
-          className={styles.resultPair}
-          role="group"
-          aria-label={`Customer overlap falls from ${randomRows.entityOverlap.count} to ${wholeCustomers.entityOverlap.count}; accuracy falls from ${asPercent(randomRows.metrics.accuracy)} to ${asPercent(wholeCustomers.metrics.accuracy)}.`}
-        >
-          <article aria-label="Customer overlap comparison">
-            <span>Overlapping customers</span>
-            <div>
-              <strong>{randomRows.entityOverlap.count}</strong>
-              <span aria-hidden="true">→</span>
-              <strong>{wholeCustomers.entityOverlap.count}</strong>
-            </div>
-            <small>familiar identities → unseen identities</small>
-          </article>
-          <article aria-label="Accuracy comparison">
-            <span>Accuracy</span>
-            <div>
-              <strong>{asPercent(randomRows.metrics.accuracy)}</strong>
-              <span aria-hidden="true">→</span>
-              <strong>{asPercent(wholeCustomers.metrics.accuracy)}</strong>
-            </div>
-            <small>random rows → whole-customer holdout</small>
-          </article>
-        </div>
+        <>
+          <div
+            className={styles.resultPair}
+            role="group"
+            aria-label={`Customer overlap falls from ${randomRows.entityOverlap.count} to ${wholeCustomers.entityOverlap.count}; accuracy falls from ${asPercent(randomRows.metrics.accuracy)} to ${asPercent(wholeCustomers.metrics.accuracy)}.`}
+          >
+            <article aria-label="Customer overlap comparison">
+              <span>Overlapping customers</span>
+              <div>
+                <strong>{randomRows.entityOverlap.count}</strong>
+                <span aria-hidden="true">→</span>
+                <strong>{wholeCustomers.entityOverlap.count}</strong>
+              </div>
+              <small>familiar identities → unseen identities</small>
+            </article>
+            <article aria-label="Accuracy comparison">
+              <span>Accuracy</span>
+              <div>
+                <strong>{asPercent(randomRows.metrics.accuracy)}</strong>
+                <span aria-hidden="true">↓</span>
+                <strong>{asPercent(wholeCustomers.metrics.accuracy)}</strong>
+              </div>
+              <small>random rows → whole-customer holdout</small>
+            </article>
+          </div>
+          <LeakageDirectionCue inline />
+        </>
       )}
 
       <p className={styles.finding}>
@@ -752,7 +695,7 @@ export function VerifiedBeliefBreakMechanism({
           className={`${styles.mechanismBody} ${presentation !== "full" ? styles.previewBody : ""} ${presentation === "compact" ? styles.compactBody : ""}`}
           data-layout={presentation !== "full" ? "stable-preview" : "flow"}
         >
-          <LockedFoldEvidence />
+          <LockedBeliefBreakEvidence />
         </div>
       ) : (
         <IntegrityBoundMechanism

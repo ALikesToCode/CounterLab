@@ -42,11 +42,11 @@ describe("QuestionComposer", () => {
 
     await user.click(
       screen.getByRole("button", {
-        name: "Why did my model score highly but fail on new customers?",
+        name: "Does this evaluation match how the model will be used?",
       }),
     );
     expect(input).toHaveValue(
-      "Why did my model score highly but fail on new customers?",
+      "Does this evaluation match how the model will be used?",
     );
     expect(input).toHaveFocus();
     expect(
@@ -178,11 +178,9 @@ describe("QuestionComposer", () => {
     const fileInput = screen.getByLabelText("Attach notebook");
     expect(fileInput).toBeDisabled();
     expect(fileInput.closest("label")).toHaveAttribute("aria-disabled", "true");
-    expect(
-      screen.getByRole("button", { name: "Preparing test…" }),
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Working…" })).toBeDisabled();
     for (const starter of screen.getAllByRole("button", {
-      name: /fail on new customers|repeated customers make my test score/u,
+      name: /evaluation match how the model will be used|headline score hide an important failure case/u,
     })) {
       expect(starter).toBeDisabled();
     }

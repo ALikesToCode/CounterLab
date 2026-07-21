@@ -54,6 +54,9 @@ describe("VerifiedBeliefBreakTheater", () => {
         name: /changed variable: evaluation unit/i,
       }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("note", { name: /downward change/i }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Boundary consequence")).not.toBeInTheDocument();
     expect(screen.queryByText("Learner benefit")).not.toBeInTheDocument();
   });
@@ -88,6 +91,15 @@ describe("VerifiedBeliefBreakTheater", () => {
 
     expect(theater.querySelectorAll("figure")).toHaveLength(1);
     expect(comparison).toHaveAccessibleName(/98.5% to 59.4%/i);
+    const direction = within(theater).getByRole("note", {
+      name: /downward change.*lower on unseen customers/i,
+    });
+    expect(direction).toHaveAttribute("data-direction", "decrease");
+    expect(direction).toHaveTextContent("↓");
+    expect(direction).toHaveTextContent("Lower on unseen customers");
+    expect(
+      theater.querySelector('[data-motion="verified-only"]'),
+    ).toBeInTheDocument();
     expect(within(theater).getByText("Fixed-kernel evidence")).toBeVisible();
     expect(
       within(theater).getByText("Only the evaluation unit changed"),

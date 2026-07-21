@@ -189,11 +189,14 @@ process.stdout.write(identity.receipt[field]);
 EVIDENCE_COMMIT="$(qualified_identity_value evidenceCommit)"
 SOURCE_COMMIT="$(qualified_identity_value sourceCommit)"
 LOCAL_IMAGE="$(qualified_identity_value localImageTag)"
+LOCAL_IMAGE_DIGEST="$(qualified_identity_value localImageDigest)"
 REGISTRY_DIGEST="$(qualified_identity_value registryDigest)"
 TIMEOUT_CLEANUP_RECEIPT_SHA256="$(qualified_identity_value timeoutCleanupReceiptSha256)"
 AGGREGATE_LIMIT_EVIDENCE_SHA256="$(qualified_identity_value aggregateLimitEvidenceSha256)"
 RUNTIME_POLICY_SHA256="$(qualified_identity_value runtimePolicySha256)"
 PROOF_DEPENDENCY_MANIFEST_SHA256="$(qualified_identity_value proofDependencyManifestSha256)"
+GENERATION_ISOLATION_EVIDENCE_SHA256="$(qualified_identity_value generationIsolationEvidenceSha256)"
+GENERATION_ISOLATION_PROBE_SHA256="$(qualified_identity_value generationIsolationProbeSha256)"
 QUALIFIED_RECEIPT_SHA256="$(
   node -e '
 const identity = JSON.parse(process.argv[1]);
@@ -207,7 +210,45 @@ process.stdout.write(identity.receiptSha256);
   echo "Qualified receipt bytes changed after identity validation." >&2
   exit 2
 }
-RELEASE_CHECK_RECEIPT_SHA256="$(sha256sum "${RELEASE_CHECK_RECEIPT}" | cut -d ' ' -f 1)"
+RELEASE_CHECK_IDENTITY_JSON="$(
+  node --import tsx scripts/release-check-receipt.ts \
+    release-check-identity \
+    --release-check "${RELEASE_CHECK_RECEIPT}"
+)"
+release_check_identity_value() {
+  local field="$1"
+  node -e '
+const [raw, field] = process.argv.slice(1);
+const identity = JSON.parse(raw);
+const outerFields = ["identitySchemaVersion", "receipt", "receiptSha256", "receiptType"];
+if (
+  Object.keys(identity).sort().join("\n") !== outerFields.sort().join("\n") ||
+  identity.identitySchemaVersion !== "1" ||
+  identity.receiptType !== "release-check-receipt" ||
+  !/^[a-f0-9]{64}$/.test(identity.receiptSha256)
+) throw new Error("release-check identity envelope is invalid");
+if (!Object.hasOwn(identity.receipt, field) || typeof identity.receipt[field] !== "string") {
+  throw new Error(`release-check identity field is unavailable: ${field}`);
+}
+process.stdout.write(identity.receipt[field]);
+' "${RELEASE_CHECK_IDENTITY_JSON}" "${field}"
+}
+RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256="$(release_check_identity_value releaseCheckGenerationIsolationEvidenceSha256)"
+RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256="$(release_check_identity_value releaseCheckGenerationIsolationProbeSha256)"
+RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT="$(release_check_identity_value releaseCheckGenerationIsolationVerifiedAt)"
+RELEASE_CHECK_RECEIPT_SHA256="$(
+  node -e '
+const identity = JSON.parse(process.argv[1]);
+if (identity?.identitySchemaVersion !== "1" || !/^[a-f0-9]{64}$/.test(identity?.receiptSha256)) {
+  throw new Error("release-check receipt byte hash is unavailable");
+}
+process.stdout.write(identity.receiptSha256);
+' "${RELEASE_CHECK_IDENTITY_JSON}"
+)"
+[[ "$(sha256sum "${RELEASE_CHECK_RECEIPT}" | cut -d ' ' -f 1)" == "${RELEASE_CHECK_RECEIPT_SHA256}" ]] || {
+  echo "Release-check receipt bytes changed after identity validation." >&2
+  exit 2
+}
 CONTAINER_APPLICATION_NAME="counterlab-counterlabrunner"
 QUALIFIED_CONTAINER_IMAGE="${IMAGE%:git-*}@${REGISTRY_DIGEST}"
 WORKER_TAG="git-${EVIDENCE_COMMIT}"
@@ -228,7 +269,9 @@ CLIENT_DIR="$(repo_path "apps/web/dist/client")"
 WORKER_ARTIFACT_MANIFEST="${RELEASE_DIR}/frozen-worker-release.json"
 mkdir -p "${RELEASE_DIR}"
 
-./scripts/verify-scientific-engines.sh --image "${LOCAL_IMAGE}"
+./scripts/verify-scientific-engines.sh \
+  --image "${LOCAL_IMAGE}" \
+  --expected-image-digest "${LOCAL_IMAGE_DIGEST}"
 
 "${PNPM}" --filter @counterlab/web build
 [[ -f "apps/web/dist/client/_headers" ]] || {
@@ -409,31 +452,64 @@ wait_for_maintenance_health() {
     if "${CURL_BIN}" --silent --show-error --fail-with-body \
       --connect-timeout 10 --max-time 20 \
       --output "${candidate}" "${PRODUCTION_ORIGIN}/api/health" &&
-      node - "${candidate}" "${EVIDENCE_COMMIT}" "${SOURCE_COMMIT}" "${REGISTRY_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" "${expected_version}" <<'NODE'
+      node - "${candidate}" "${EVIDENCE_COMMIT}" "${SOURCE_COMMIT}" "${REGISTRY_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" "${expected_version}" "${GENERATION_ISOLATION_EVIDENCE_SHA256}" "${GENERATION_ISOLATION_PROBE_SHA256}" "${RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256}" "${RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256}" "${RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT}" <<'NODE'
 const fs = require("node:fs");
-const [path, evidenceCommit, sourceCommit, digest, timeoutReceipt, aggregateEvidence, runtimePolicy, proofManifest, artifactClassification, artifactManifest, workerBundle, clientAssets, clientAssetCount, publicAssets, publicAssetCount, viteVersion, wranglerVersion, expectedVersion] = process.argv.slice(2);
+const [path, evidenceCommit, sourceCommit, digest, timeoutReceipt, aggregateEvidence, runtimePolicy, proofManifest, artifactClassification, artifactManifest, workerBundle, clientAssets, clientAssetCount, publicAssets, publicAssetCount, viteVersion, wranglerVersion, expectedVersion, isolationEvidence, isolationProbe, releaseCheckIsolationEvidence, releaseCheckIsolationProbe, releaseCheckIsolationVerifiedAt] = process.argv.slice(2);
 const payload = JSON.parse(fs.readFileSync(path, "utf8"));
 const data = payload?.ok === true ? payload.data : undefined;
+const exactKeys = (value, keys) =>
+  value !== null && typeof value === "object" && !Array.isArray(value) &&
+  JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());
+const expectedRelease = {
+  status: "bound",
+  workerVersionId: expectedVersion,
+  workerVersionTag: `git-${evidenceCommit}`,
+  workerEvidenceCommit: evidenceCommit,
+  runnerSourceCommit: sourceCommit,
+  runnerImageDigest: digest,
+  generationIsolationEvidenceSha256: isolationEvidence,
+  generationIsolationProbeSha256: isolationProbe,
+  releaseCheckGenerationIsolationEvidenceSha256: releaseCheckIsolationEvidence,
+  releaseCheckGenerationIsolationProbeSha256: releaseCheckIsolationProbe,
+  releaseCheckGenerationIsolationVerifiedAt: releaseCheckIsolationVerifiedAt,
+  timeoutCleanupReceiptSha256: timeoutReceipt,
+  aggregateLimitEvidenceSha256: aggregateEvidence,
+  runtimePolicySha256: runtimePolicy,
+  proofDependencyManifestSha256: proofManifest,
+  workerArtifactClassification: artifactClassification,
+  workerArtifactManifestSha256: artifactManifest,
+  workerBundleSha256: workerBundle,
+  clientAssetsSha256: clientAssets,
+  clientAssetCount: Number(clientAssetCount),
+  clientPublicAssetsSha256: publicAssets,
+  clientPublicAssetCount: Number(publicAssetCount),
+  viteVersion,
+  wranglerVersion,
+};
+const expectedData = {
+  platform: "cloudflare-workers",
+  sample: "available",
+  replay: "available",
+  liveGpt: "configured",
+  liveCodex: "configured",
+  liveKernel: "configured",
+  maintenance: true,
+  readiness: "not-checked",
+  release: expectedRelease,
+  sandbox: "credential-and-privilege-boundary",
+  generationFilesystemReadIsolation: "PARTIAL",
+};
 if (
-  data?.maintenance !== true ||
-  data?.release?.status !== "bound" ||
-  data.release.workerVersionId !== expectedVersion ||
-  data.release.workerEvidenceCommit !== evidenceCommit ||
-  data.release.runnerSourceCommit !== sourceCommit ||
-  data.release.runnerImageDigest !== digest ||
-  data.release.timeoutCleanupReceiptSha256 !== timeoutReceipt ||
-  data.release.aggregateLimitEvidenceSha256 !== aggregateEvidence ||
-  data.release.runtimePolicySha256 !== runtimePolicy ||
-  data.release.proofDependencyManifestSha256 !== proofManifest ||
-  data.release.workerArtifactClassification !== artifactClassification ||
-  data.release.workerArtifactManifestSha256 !== artifactManifest ||
-  data.release.workerBundleSha256 !== workerBundle ||
-  data.release.clientAssetsSha256 !== clientAssets ||
-  data.release.clientAssetCount !== Number(clientAssetCount) ||
-  data.release.clientPublicAssetsSha256 !== publicAssets ||
-  data.release.clientPublicAssetCount !== Number(publicAssetCount) ||
-  data.release.viteVersion !== viteVersion ||
-  data.release.wranglerVersion !== wranglerVersion
+  !exactKeys(payload, ["ok", "data"]) ||
+  !exactKeys(data, [...Object.keys(expectedData), "requestId"]) ||
+  !exactKeys(data?.release, Object.keys(expectedRelease)) ||
+  typeof data?.requestId !== "string" ||
+  data.requestId.length === 0 ||
+  Object.entries(expectedData).some(([key, value]) =>
+    key === "release"
+      ? Object.entries(expectedRelease).some(([releaseKey, releaseValue]) => data.release?.[releaseKey] !== releaseValue)
+      : data?.[key] !== value,
+  )
 ) process.exit(1);
 NODE
     then
@@ -459,31 +535,58 @@ wait_for_final_readiness() {
     if "${CURL_BIN}" --silent --show-error --fail-with-body \
       --connect-timeout 10 --max-time 20 \
       --output "${candidate}" "${PRODUCTION_ORIGIN}/ready" &&
-      node - "${candidate}" "${EVIDENCE_COMMIT}" "${SOURCE_COMMIT}" "${REGISTRY_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" "${expected_version}" <<'NODE'
+      node - "${candidate}" "${EVIDENCE_COMMIT}" "${SOURCE_COMMIT}" "${REGISTRY_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" "${expected_version}" "${GENERATION_ISOLATION_EVIDENCE_SHA256}" "${GENERATION_ISOLATION_PROBE_SHA256}" "${RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256}" "${RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256}" "${RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT}" <<'NODE'
 const fs = require("node:fs");
-const [path, evidenceCommit, sourceCommit, digest, timeoutReceipt, aggregateEvidence, runtimePolicy, proofManifest, artifactClassification, artifactManifest, workerBundle, clientAssets, clientAssetCount, publicAssets, publicAssetCount, viteVersion, wranglerVersion, expectedVersion] = process.argv.slice(2);
+const [path, evidenceCommit, sourceCommit, digest, timeoutReceipt, aggregateEvidence, runtimePolicy, proofManifest, artifactClassification, artifactManifest, workerBundle, clientAssets, clientAssetCount, publicAssets, publicAssetCount, viteVersion, wranglerVersion, expectedVersion, isolationEvidence, isolationProbe, releaseCheckIsolationEvidence, releaseCheckIsolationProbe, releaseCheckIsolationVerifiedAt] = process.argv.slice(2);
 const payload = JSON.parse(fs.readFileSync(path, "utf8"));
+const exactKeys = (value, keys) =>
+  value !== null && typeof value === "object" && !Array.isArray(value) &&
+  JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());
+const expectedChecks = {
+  admission: true,
+  analyst: true,
+  maintenance: true,
+  persistence: true,
+  privateStorage: true,
+  releaseIdentity: true,
+  runner: true,
+  signing: true,
+};
+const expectedRelease = {
+  status: "bound",
+  workerVersionId: expectedVersion,
+  workerVersionTag: `git-${evidenceCommit}`,
+  workerEvidenceCommit: evidenceCommit,
+  runnerSourceCommit: sourceCommit,
+  runnerImageDigest: digest,
+  generationIsolationEvidenceSha256: isolationEvidence,
+  generationIsolationProbeSha256: isolationProbe,
+  releaseCheckGenerationIsolationEvidenceSha256: releaseCheckIsolationEvidence,
+  releaseCheckGenerationIsolationProbeSha256: releaseCheckIsolationProbe,
+  releaseCheckGenerationIsolationVerifiedAt: releaseCheckIsolationVerifiedAt,
+  timeoutCleanupReceiptSha256: timeoutReceipt,
+  aggregateLimitEvidenceSha256: aggregateEvidence,
+  runtimePolicySha256: runtimePolicy,
+  proofDependencyManifestSha256: proofManifest,
+  workerArtifactClassification: artifactClassification,
+  workerArtifactManifestSha256: artifactManifest,
+  workerBundleSha256: workerBundle,
+  clientAssetsSha256: clientAssets,
+  clientAssetCount: Number(clientAssetCount),
+  clientPublicAssetsSha256: publicAssets,
+  clientPublicAssetCount: Number(publicAssetCount),
+  viteVersion,
+  wranglerVersion,
+};
 if (
-  payload?.status !== "ready" ||
-  payload?.maintenance !== false ||
-  payload?.release?.status !== "bound" ||
-  payload.release.workerVersionId !== expectedVersion ||
-  payload.release.workerEvidenceCommit !== evidenceCommit ||
-  payload.release.runnerSourceCommit !== sourceCommit ||
-  payload.release.runnerImageDigest !== digest ||
-  payload.release.timeoutCleanupReceiptSha256 !== timeoutReceipt ||
-  payload.release.aggregateLimitEvidenceSha256 !== aggregateEvidence ||
-  payload.release.runtimePolicySha256 !== runtimePolicy ||
-  payload.release.proofDependencyManifestSha256 !== proofManifest ||
-  payload.release.workerArtifactClassification !== artifactClassification ||
-  payload.release.workerArtifactManifestSha256 !== artifactManifest ||
-  payload.release.workerBundleSha256 !== workerBundle ||
-  payload.release.clientAssetsSha256 !== clientAssets ||
-  payload.release.clientAssetCount !== Number(clientAssetCount) ||
-  payload.release.clientPublicAssetsSha256 !== publicAssets ||
-  payload.release.clientPublicAssetCount !== Number(publicAssetCount) ||
-  payload.release.viteVersion !== viteVersion ||
-  payload.release.wranglerVersion !== wranglerVersion
+  !exactKeys(payload, ["status", "service", "checks", "maintenance", "release"]) ||
+  payload.status !== "ready" ||
+  payload.service !== "counterlab-control-plane" ||
+  payload.maintenance !== false ||
+  !exactKeys(payload.checks, Object.keys(expectedChecks)) ||
+  Object.entries(expectedChecks).some(([key, value]) => payload.checks?.[key] !== value) ||
+  !exactKeys(payload.release, Object.keys(expectedRelease)) ||
+  Object.entries(expectedRelease).some(([key, value]) => payload.release?.[key] !== value)
 ) process.exit(1);
 NODE
     then
@@ -599,6 +702,7 @@ assert_release_authority() {
 }
 
 "${WRANGLER}" secret list \
+  --name counterlab \
   --config "${RELEASE_CONFIG}" \
   --format json >"${RELEASE_DIR}/secret-names.json"
 node - "${RELEASE_DIR}/secret-names.json" <<'NODE'

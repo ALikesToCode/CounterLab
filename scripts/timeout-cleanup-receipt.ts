@@ -37,15 +37,16 @@ const AggregateLimitIntentSchema = z.strictObject({
 
 const AggregateLimitEvidenceSchema = z
   .strictObject({
-    schemaVersion: z.literal("1"),
+    schemaVersion: z.literal("2"),
     status: z.literal("OBSERVED"),
     authority: z.literal("linux-cgroup-v2"),
     cgroupVersion: z.literal(2),
     cgroupId: z.string().regex(/^counterlab-v6\.1-[a-f0-9]{64}$/),
-    cgroupPath: z.string().regex(/^counterlab-v6\.1\/[a-f0-9]{64}$/),
+    cgroupPath: z.string().regex(/^counterlab-v6\.1-[a-f0-9]{64}$/),
     cgroupIdentity: Sha256Schema,
     invocationId: Sha256Schema,
     finalContainerId: Sha256Schema,
+    finalizationPayloadSha256: Sha256Schema,
     sanitizedSpecSha256: Sha256Schema,
     runtimeAttestationSha256: Sha256Schema,
     observedLimits: z.strictObject({
@@ -98,7 +99,7 @@ const AggregateLimitEvidenceSchema = z
   .superRefine((evidence, context) => {
     if (
       evidence.cgroupId !== `counterlab-v6.1-${evidence.invocationId}` ||
-      evidence.cgroupPath !== `counterlab-v6.1/${evidence.invocationId}` ||
+      evidence.cgroupPath !== `counterlab-v6.1-${evidence.invocationId}` ||
       evidence.cgroupIdentity !==
         sha256(
           `counterlab-cgroup-v2\0${evidence.invocationId}\0${evidence.finalContainerId}\0${evidence.sanitizedSpecSha256}`,
@@ -139,8 +140,8 @@ const AggregateLimitEvidenceSchema = z
       });
     }
     if (
-      evidence.negativeControls.memory.oomKillAfter <=
-        evidence.negativeControls.memory.oomKillBefore ||
+      evidence.negativeControls.memory.oomKillAfter !==
+        evidence.negativeControls.memory.oomKillBefore + 1 ||
       evidence.negativeControls.processes.maxEventsAfter <=
         evidence.negativeControls.processes.maxEventsBefore ||
       evidence.negativeControls.cpu.nrThrottledAfter <=
@@ -151,7 +152,7 @@ const AggregateLimitEvidenceSchema = z
       context.addIssue({
         code: "custom",
         path: ["negativeControls"],
-        message: "aggregate negative-control counters must increase",
+        message: "aggregate negative-control counters are invalid",
       });
     }
     const { receiptPayloadSha256, ...payload } = evidence;
@@ -164,21 +165,54 @@ const AggregateLimitEvidenceSchema = z
     }
   });
 
+export const TIMEOUT_ROOTLESS_RLIMIT_TYPES = [
+  "RLIMIT_AS",
+  "RLIMIT_CPU",
+  "RLIMIT_FSIZE",
+  "RLIMIT_NOFILE",
+  "RLIMIT_NPROC",
+] as const;
+
+export const TIMEOUT_PROCESS_ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024;
+
 const RlimitSchema = z
   .strictObject({
-    type: z.enum([
-      "RLIMIT_AS",
-      "RLIMIT_CORE",
-      "RLIMIT_CPU",
-      "RLIMIT_FSIZE",
-      "RLIMIT_NPROC",
-    ]),
+    type: z.enum(TIMEOUT_ROOTLESS_RLIMIT_TYPES),
     soft: PositiveSafeIntegerSchema,
     hard: PositiveSafeIntegerSchema,
   })
   .refine((limit) => limit.soft === limit.hard, {
     message: "process rlimit soft and hard values must match",
   });
+
+export function assertRootlessRlimitBindings(input: {
+  intendedAggregateLimits: unknown;
+  enforcedRlimits: unknown;
+}): void {
+  const intent = AggregateLimitIntentSchema.parse(
+    input.intendedAggregateLimits,
+  );
+  const limits = z
+    .array(RlimitSchema)
+    .length(5)
+    .refine(
+      (entries) => new Set(entries.map((entry) => entry.type)).size === 5,
+      { message: "all qualified process rlimits must be present once" },
+    )
+    .parse(input.enforcedRlimits);
+  const byType = new Map(limits.map((limit) => [limit.type, limit.soft]));
+  if (
+    byType.get("RLIMIT_AS") !== TIMEOUT_PROCESS_ADDRESS_SPACE_BYTES ||
+    byType.get("RLIMIT_NPROC") !== intent.maxProcesses ||
+    byType.get("RLIMIT_NOFILE") !== 64 ||
+    (byType.get("RLIMIT_CPU") ?? 0) < 1 ||
+    (byType.get("RLIMIT_CPU") ?? 0) > 300 ||
+    (byType.get("RLIMIT_FSIZE") ?? 0) < 1 ||
+    (byType.get("RLIMIT_FSIZE") ?? 0) > 1_048_576
+  ) {
+    throw new Error("qualified process rlimits do not bind aggregate intent");
+  }
+}
 
 const TimeoutRootlessReceiptSchema = z
   .strictObject({
@@ -236,6 +270,15 @@ const TimeoutRootlessReceiptSchema = z
         path: ["aggregateLimitEvidence"],
         message:
           "aggregate enforcement claims require observed aggregate evidence",
+      });
+    }
+    try {
+      assertRootlessRlimitBindings(receipt);
+    } catch {
+      context.addIssue({
+        code: "custom",
+        path: ["enforcedRlimits"],
+        message: "qualified process rlimits do not bind aggregate intent",
       });
     }
   });

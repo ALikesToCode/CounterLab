@@ -55,6 +55,17 @@ function drainReceipt() {
 }
 
 describe("contained runtime supervisor protocol", () => {
+  it("keeps the response side open after a client finishes its request", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "scripts/contained-runtime-supervisor.mjs"),
+      "utf8",
+    );
+
+    expect(source).toContain(
+      "const controlServer = createServer({ allowHalfOpen: true }, (socket) => {",
+    );
+  });
+
   it("keeps a failed owned-child shutdown retryable", () => {
     const source = readFileSync(
       resolve(process.cwd(), "scripts/contained-runtime-supervisor.mjs"),
@@ -71,6 +82,69 @@ describe("contained runtime supervisor protocol", () => {
     expect(shutdownBranch.indexOf('state = "DRAINED"')).toBeGreaterThan(
       shutdownBranch.indexOf("await shutdownOwnedChildren()"),
     );
+  });
+
+  it("requests delegated PID and cgroup namespaces for containerd", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "scripts/contained-runtime-supervisor.mjs"),
+      "utf8",
+    );
+    const launch = source.slice(
+      source.indexOf("const containerdRootlesskit = spawn("),
+      source.indexOf("closeSync(containerdLog)"),
+    );
+
+    expect(launch).toContain('"--pidns"');
+    expect(launch).toContain('"--cgroupns"');
+    expect(launch).toContain('"--evacuate-cgroup2=containerd"');
+    expect(launch).toContain("`--copy-up=${snapshotterRoot}`");
+    expect(launch).toContain("`--copy-up=${rootlessSpecRoot}`");
+    expect(launch.indexOf("`--copy-up=${snapshotterRoot}`")).toBeLessThan(
+      launch.indexOf("scripts/contained-runtime-server.mjs"),
+    );
+    expect(launch.indexOf("`--copy-up=${rootlessSpecRoot}`")).toBeLessThan(
+      launch.indexOf("scripts/contained-runtime-server.mjs"),
+    );
+    expect(launch.indexOf('"--pidns"')).toBeLessThan(
+      launch.indexOf("scripts/contained-runtime-server.mjs"),
+    );
+    expect(launch.indexOf('"--cgroupns"')).toBeLessThan(
+      launch.indexOf("scripts/contained-runtime-server.mjs"),
+    );
+    expect(launch.indexOf('"--evacuate-cgroup2=containerd"')).toBeLessThan(
+      launch.indexOf("scripts/contained-runtime-server.mjs"),
+    );
+  });
+
+  it("starts BuildKit before the final delegated-cgroup evacuation", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "scripts/contained-runtime-supervisor.mjs"),
+      "utf8",
+    );
+    const buildkitLaunch = source.indexOf("const buildkitRootlesskit = spawn(");
+    const buildkitReady = source.indexOf(
+      "await waitForInitialSocket(",
+      buildkitLaunch,
+    );
+    const containerdLaunch = source.indexOf(
+      "const containerdRootlesskit = spawn(",
+    );
+
+    expect(buildkitLaunch).toBeGreaterThan(0);
+    expect(buildkitReady).toBeGreaterThan(buildkitLaunch);
+    expect(containerdLaunch).toBeGreaterThan(buildkitReady);
+    expect(
+      source.slice(
+        containerdLaunch,
+        source.indexOf("closeSync(containerdLog)"),
+      ),
+    ).toContain('"--evacuate-cgroup2=containerd"');
+    expect(
+      source.slice(
+        containerdLaunch,
+        source.indexOf("closeSync(containerdLog)"),
+      ),
+    ).toContain("`--copy-up=${runcStateRoot}`");
   });
 
   it("accepts only exact hash-bound status, drain, and shutdown requests", () => {

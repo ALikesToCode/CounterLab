@@ -12,7 +12,16 @@ export const RUNTIME_POLICY_PATH =
   "services/runner/src/counterlab_runner/contained-runtime-policy.json";
 
 export const RUNTIME_HELPER_PATHS = Object.freeze({
+  cgroupControlHelper: "scripts/contained-cgroup-control-helper.mjs",
+  cgroupEvidence: "scripts/contained-cgroup-evidence.mjs",
+  cgroupObserverBindings: "scripts/contained-cgroup-observer-bindings.mjs",
+  cgroupObserver: "scripts/contained-cgroup-observer.mjs",
+  cgroupObserverProtocol: "scripts/contained-cgroup-observer-protocol.mjs",
+  qualifiedRootlessReceiptStore:
+    "scripts/contained-qualified-receipt-store.mjs",
+  qualifiedRootlessReceipt: "scripts/contained-qualified-rootless-receipt.mjs",
   runtimeClient: "scripts/contained-runtime-client.mjs",
+  runtimeRequest: "scripts/contained-runtime-request.mjs",
   runtimeRun: "scripts/contained-runtime-run.mjs",
   rootlessSpec: "scripts/contained-rootless-spec.mjs",
   imageAuthority: "scripts/contained-image-authority.mjs",
@@ -21,6 +30,7 @@ export const RUNTIME_HELPER_PATHS = Object.freeze({
   attestationWriter: "scripts/write-contained-runtime-attestation.mjs",
   runtimeSupervisor: "scripts/contained-runtime-supervisor.mjs",
   supervisorProtocol: "scripts/contained-runtime-supervisor-protocol.mjs",
+  fuseMountWrapper: "scripts/runtime-bin/mount.fuse3",
   runcWrapper: "scripts/runtime-bin/runc",
   containerdConfigWriter: "scripts/contained-containerd-config.mjs",
   runtimeServer: "scripts/contained-runtime-server.mjs",
@@ -73,6 +83,19 @@ export function createPublicContainedRuntimeAttestation({
   attestation,
   componentSha256,
 }) {
+  const publicComponentNames = [
+    "buildctl",
+    "buildkitd",
+    "containerd",
+    "containerd-shim-runc-v2",
+    "ctr",
+    "nerdctl",
+    "rootlesskit",
+    "runc",
+  ];
+  const publicComponentSha256 = Object.fromEntries(
+    publicComponentNames.map((name) => [name, componentSha256[name]]),
+  );
   return {
     schemaVersion: "2",
     status: "VERIFIED",
@@ -83,7 +106,7 @@ export function createPublicContainedRuntimeAttestation({
     adapterSha256: attestation.adapterSha256,
     runtimePolicySha256: attestation.runtimePolicySha256,
     proofDependencyManifestSha256: attestation.proofDependencyManifestSha256,
-    componentSha256,
+    componentSha256: publicComponentSha256,
     fileSha256: {
       containerdConfig: attestation.fileSha256.containerdConfig,
       buildkitConfig: attestation.fileSha256.buildkitConfig,

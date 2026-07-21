@@ -1,3 +1,6 @@
+import type { ContainedCgroupQualificationCoordinator } from "./contained-cgroup-qualification-coordinator.mjs";
+import type { ContainedRuntimeQualificationMode } from "./contained-runtime-request.mjs";
+
 export interface ContainedRuntimeCommand {
   program: string;
   args: string[];
@@ -56,6 +59,7 @@ export type ContainedRuntimeRunContext = Omit<
 > & {
   cwd: string;
   environment: NodeJS.ProcessEnv;
+  qualificationMode: ContainedRuntimeQualificationMode;
   stdin: Buffer;
 };
 
@@ -66,8 +70,7 @@ export interface ContainedRuntimeSpawnResult {
   error?: Error & { code?: string };
 }
 
-export interface ContainedRunControlReceipt {
-  schemaVersion: "2";
+interface ContainedRunControlReceiptBase {
   status: "TIMED_OUT_CLEAN" | "TIMED_OUT_UNCLEAN";
   timeoutKind: "WALL_CLOCK";
   runtimePolicySha256: string;
@@ -91,6 +94,15 @@ export interface ContainedRunControlReceipt {
   resultReleased: boolean;
   receiptPayloadSha256: string;
 }
+
+export type ContainedRunControlReceipt =
+  | (ContainedRunControlReceiptBase & {
+      schemaVersion: "2";
+    })
+  | (ContainedRunControlReceiptBase & {
+      schemaVersion: "3";
+      qualificationMode: "aggregate-timeout-proof-v1";
+    });
 
 export type ContainedRuntimeSpawn = (
   program: string,
@@ -119,6 +131,10 @@ export declare function validateContainedImageRootfsSnapshot(
   imageRootfsPath: string,
   expectedParentChainId: string,
 ): Record<string, unknown>;
+
+export declare function validateContainedRunnerRootfsPermissions(
+  entries: unknown,
+): unknown[];
 
 export declare function validateContainedRunControlReceipt(
   value: unknown,
@@ -161,9 +177,19 @@ export declare function executeContainedRun(
   }) => void,
   createInvocationId?: () => string,
   now?: () => number,
-): {
+  qualificationCoordinator?: ContainedCgroupQualificationCoordinator,
+  verifyRunnerRootfs?: (
+    plan: ContainedRuntimeRunPlan,
+    imageRootfsPath: string,
+  ) => void,
+  setRootfsMountpointMode?: (
+    plan: ContainedRuntimeRunPlan,
+    imageRootfsPath: string,
+    mode: 0o700 | 0o755,
+  ) => void,
+): Promise<{
   status: number;
   stdout: Buffer;
   stderr: Buffer;
   controlReceipt?: ContainedRunControlReceipt;
-};
+}>;

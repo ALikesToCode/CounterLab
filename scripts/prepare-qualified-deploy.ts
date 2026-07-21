@@ -9,10 +9,17 @@ import { z } from "zod";
 
 import {
   ContainedRuntimeAttestationSchema,
-  QualifiedRunnerReleaseSchema,
+  type GenerationIsolationEvidenceV1,
 } from "../packages/scientific-engine-registry/src/index.js";
 import { canonicalJson } from "../packages/session-core/src/index.js";
-import { assertReleaseCheckBinding } from "./release-check-receipt.js";
+import {
+  parseQualifiedRunnerReleaseV6,
+  verifyGenerationIsolationEvidence,
+} from "./generation-isolation-evidence.js";
+import {
+  assertReleaseCheckBinding,
+  parseReleaseCheckReceiptV5,
+} from "./release-check-receipt.js";
 import {
   containedRuntimeAdapterArguments,
   requireContainedRuntimeSessionId,
@@ -68,6 +75,11 @@ export type RunnerReleaseObservation = {
 };
 
 export type QualifiedReleaseObservation = RunnerReleaseObservation & {
+  generationFilesystemReadIsolation: "OS_ENFORCED";
+  generationIsolationEvidence: GenerationIsolationEvidenceV1;
+  generationIsolationEvidenceSha256: string;
+  generationIsolationProbeSha256: string;
+  generationIsolationVerifiedAt: string;
   limitMode: "container-cgroup-and-process-rlimit";
   aggregateLimitIntentEnforced: true;
   aggregateLimitEvidenceSha256: string;
@@ -266,6 +278,18 @@ function assertQualifiedObservation(
       "qualified source commit is not an ancestor of the evidence commit",
     );
   }
+  verifyGenerationIsolationEvidence({
+    evidence: observation.generationIsolationEvidence,
+    evidenceSha256: observation.generationIsolationEvidenceSha256,
+    expected: {
+      sourceCommit: observation.sourceCommit,
+      sourceTreeSha256: observation.sourceTreeSha256,
+      localImageTag: observation.localImageTag,
+      localImageDigest: observation.localImageDigest,
+      probeSha256: observation.generationIsolationProbeSha256,
+      verifiedAt: observation.generationIsolationVerifiedAt,
+    },
+  });
   assertEvidenceOnlyReleaseDelta(observation.changedPaths);
 }
 
@@ -606,7 +630,7 @@ export async function collectQualifiedReleaseObservation(input: {
   root: string;
   receipt: unknown;
 }): Promise<QualifiedReleaseObservation> {
-  const receipt = QualifiedRunnerReleaseSchema.parse(input.receipt);
+  const receipt = parseQualifiedRunnerReleaseV6(input.receipt);
   const runtimeAdapter = process.env.COUNTERLAB_DOCKER_BIN;
   if (runtimeAdapter === undefined || runtimeAdapter.trim().length === 0) {
     throw new Error(
@@ -648,6 +672,13 @@ export async function collectQualifiedReleaseObservation(input: {
   return {
     ...observation,
     ...timeout,
+    generationFilesystemReadIsolation:
+      receipt.generationFilesystemReadIsolation,
+    generationIsolationEvidence: receipt.generationIsolationEvidence,
+    generationIsolationEvidenceSha256:
+      receipt.generationIsolationEvidenceSha256,
+    generationIsolationProbeSha256: receipt.generationIsolationProbeSha256,
+    generationIsolationVerifiedAt: receipt.generationIsolationVerifiedAt,
   };
 }
 
@@ -656,9 +687,16 @@ export function createQualifiedRunnerRelease(
   qualifiedAt = new Date().toISOString(),
 ): unknown {
   assertQualifiedObservation(observation);
-  return QualifiedRunnerReleaseSchema.parse({
-    schemaVersion: "4",
+  return parseQualifiedRunnerReleaseV6({
+    schemaVersion: "6",
     status: "VERIFIED",
+    generationFilesystemReadIsolation:
+      observation.generationFilesystemReadIsolation,
+    generationIsolationEvidence: observation.generationIsolationEvidence,
+    generationIsolationEvidenceSha256:
+      observation.generationIsolationEvidenceSha256,
+    generationIsolationProbeSha256: observation.generationIsolationProbeSha256,
+    generationIsolationVerifiedAt: observation.generationIsolationVerifiedAt,
     sourceCommit: observation.sourceCommit,
     sourceArchiveSha256: observation.sourceArchiveSha256,
     sourceTreeSha256: observation.sourceTreeSha256,
@@ -699,7 +737,7 @@ export function createQualifiedRunnerRelease(
     registryDigest: observation.registryDigest,
     registryResolvedAt: observation.registryResolvedAt,
     qualifiedAt,
-    verifierVersion: "counterlab-release-v4",
+    verifierVersion: "counterlab-release-v6",
   });
 }
 
@@ -1074,11 +1112,25 @@ function assertProductionBindings(config: Record<string, unknown>): void {
 export function qualifiedDeployConfig(input: {
   config: unknown;
   receipt: unknown;
+  releaseCheckReceipt: unknown;
   image: string;
   observation: QualifiedReleaseObservation;
 }): Record<string, unknown> {
   const config = canonicalReleaseConfig(input.config);
-  const receipt = QualifiedRunnerReleaseSchema.parse(input.receipt);
+  const receipt = parseQualifiedRunnerReleaseV6(input.receipt);
+  const releaseCheck = parseReleaseCheckReceiptV5(input.releaseCheckReceipt);
+  verifyGenerationIsolationEvidence({
+    evidence: releaseCheck.releaseCheckGenerationIsolationEvidence,
+    evidenceSha256: releaseCheck.releaseCheckGenerationIsolationEvidenceSha256,
+    expected: {
+      sourceCommit: receipt.sourceCommit,
+      sourceTreeSha256: receipt.sourceTreeSha256,
+      localImageTag: receipt.localImageTag,
+      localImageDigest: receipt.localImageDigest,
+      probeSha256: receipt.generationIsolationProbeSha256,
+      verifiedAt: releaseCheck.releaseCheckGenerationIsolationVerifiedAt,
+    },
+  });
   const comparisons: Array<[string, string, string]> = [
     ["source commit", receipt.sourceCommit, input.observation.sourceCommit],
     [
@@ -1226,6 +1278,46 @@ export function qualifiedDeployConfig(input: {
       receipt.timeoutVerifiedAt,
       input.observation.timeoutVerifiedAt,
     ],
+    [
+      "generation isolation evidence",
+      receipt.generationIsolationEvidenceSha256,
+      input.observation.generationIsolationEvidenceSha256,
+    ],
+    [
+      "generation isolation probe",
+      receipt.generationIsolationProbeSha256,
+      input.observation.generationIsolationProbeSha256,
+    ],
+    [
+      "generation isolation verification time",
+      receipt.generationIsolationVerifiedAt,
+      input.observation.generationIsolationVerifiedAt,
+    ],
+    [
+      "release-check evidence commit",
+      releaseCheck.evidenceCommit,
+      receipt.evidenceCommit,
+    ],
+    [
+      "release-check source commit",
+      releaseCheck.sourceCommit,
+      receipt.sourceCommit,
+    ],
+    [
+      "release-check qualification isolation evidence",
+      releaseCheck.generationIsolationEvidenceSha256,
+      receipt.generationIsolationEvidenceSha256,
+    ],
+    [
+      "release-check qualification isolation probe",
+      releaseCheck.generationIsolationProbeSha256,
+      receipt.generationIsolationProbeSha256,
+    ],
+    [
+      "release-check isolation probe",
+      releaseCheck.releaseCheckGenerationIsolationProbeSha256,
+      receipt.generationIsolationProbeSha256,
+    ],
     ["registry image", receipt.registryImage, input.observation.registryImage],
     [
       "registry digest",
@@ -1333,6 +1425,16 @@ export function qualifiedDeployConfig(input: {
     COUNTERLAB_WORKER_EVIDENCE_COMMIT: receipt.evidenceCommit,
     COUNTERLAB_RUNNER_SOURCE_COMMIT: receipt.sourceCommit,
     COUNTERLAB_RUNNER_IMAGE_DIGEST: receipt.registryDigest,
+    COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256:
+      receipt.generationIsolationEvidenceSha256,
+    COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256:
+      receipt.generationIsolationProbeSha256,
+    COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256:
+      releaseCheck.releaseCheckGenerationIsolationEvidenceSha256,
+    COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256:
+      releaseCheck.releaseCheckGenerationIsolationProbeSha256,
+    COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT:
+      releaseCheck.releaseCheckGenerationIsolationVerifiedAt,
     COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256:
       receipt.timeoutCleanupReceiptSha256,
     COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256:
@@ -1439,6 +1541,7 @@ async function main(): Promise<void> {
     qualifiedDeployConfig({
       config: JSON.parse(configText) as unknown,
       receipt,
+      releaseCheckReceipt: JSON.parse(releaseCheckReceiptText) as unknown,
       image: args.image,
       observation,
     }),

@@ -105,6 +105,54 @@ async function expectReadOnlyReplay(page: Page): Promise<void> {
       name: /Continue replay|Show me what happened|Run fair test|Lock my answer|Check my answer|Verify notebook patch/i,
     }),
   ).toHaveCount(0);
+
+  if (await legacyHeading.isVisible()) {
+    const tableRegion = page.getByRole("region", {
+      name: "Stored fixed-kernel comparison values",
+    });
+    await expect(tableRegion).toBeVisible();
+    const dimensions = await tableRegion.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+    }));
+    expect(dimensions.scrollWidth).toBeGreaterThan(dimensions.clientWidth);
+    await tableRegion.evaluate((element) => {
+      element.scrollLeft = 0;
+    });
+    await tableRegion.focus();
+    await expect(tableRegion).toBeFocused();
+    await tableRegion.press("ArrowRight");
+    await expect
+      .poll(() => tableRegion.evaluate((element) => element.scrollLeft))
+      .toBeGreaterThan(0);
+    const finalValue = page.getByRole("cell").last();
+    await finalValue.scrollIntoViewIfNeeded();
+    await expect(finalValue).toBeVisible();
+  }
+}
+
+async function enterReadOnlyReplay(page: Page): Promise<void> {
+  const replayStatus = page.getByRole("complementary", {
+    name: "Replay status",
+  });
+  const finalReplayStatus = page
+    .getByRole("complementary", { name: "Legacy replay status" })
+    .or(page.getByRole("complementary", { name: "Verified replay mode" }));
+  await expect(replayStatus.or(finalReplayStatus)).toBeVisible({
+    timeout: 30_000,
+  });
+
+  if (await replayStatus.isVisible()) {
+    await expect(replayStatus).toContainText(
+      "Verified replay · read-only stored evidence",
+    );
+    await expect(
+      page.getByRole("heading", { name: /Replay verified session/i }),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: /Continue replay/i }).click();
+  }
+  await expectReadOnlyReplay(page);
 }
 
 async function readRootOverflow(page: Page): Promise<OverflowReading> {
@@ -194,7 +242,7 @@ test.describe("public mobile replay routing", () => {
     expect(response!.request().redirectedFrom()).toBeNull();
     expectConfiguredPublicOrigin(response!.url());
     await expect(page).toHaveURL(new RegExp(`${replayPath}$`, "u"));
-    await expectReadOnlyReplay(page);
+    await enterReadOnlyReplay(page);
     await page.waitForLoadState("networkidle");
 
     await page.reload({ waitUntil: "domcontentloaded" });
@@ -249,10 +297,10 @@ test.describe("public mobile replay routing", () => {
     await expect(replayLink).toHaveAttribute("href", replayPath);
     await replayLink.click();
     await expect(page).toHaveURL(new RegExp(`${replayPath}$`, "u"));
-    await expectReadOnlyReplay(page);
+    await enterReadOnlyReplay(page);
     await page.waitForLoadState("networkidle");
 
-    await page.goBack({ waitUntil: "domcontentloaded" });
+    await page.goBack({ waitUntil: "commit" });
     await expect(page).toHaveURL(/\/judge$/u);
     await expect(
       page.getByRole("heading", {
@@ -261,7 +309,7 @@ test.describe("public mobile replay routing", () => {
     ).toBeVisible();
     await page.waitForLoadState("networkidle");
 
-    await page.goForward({ waitUntil: "domcontentloaded" });
+    await page.goForward({ waitUntil: "commit" });
     await expect(page).toHaveURL(new RegExp(`${replayPath}$`, "u"));
     await expectReadOnlyReplay(page);
     const overflow = await readRootOverflow(page);

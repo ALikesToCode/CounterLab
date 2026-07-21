@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CODEX_ATTEMPT_TIMEOUT_MS,
   createHostedRunnerServer,
+  verifiedHostedRunnerReleaseIdentity,
   type HostedRunnerServerOptions,
 } from "./server.js";
 
@@ -36,6 +37,7 @@ async function start(
   releaseIdentity?: HostedRunnerServerOptions["releaseIdentity"],
 ) {
   const server = createHostedRunnerServer({
+    generationFilesystemReadIsolation: "OS_ENFORCED",
     authorizeToken,
     processJob,
     ...(onJobSettled === undefined ? {} : { onJobSettled }),
@@ -107,9 +109,13 @@ describe("hosted runner HTTP service", () => {
     const processJob = vi.fn(async () => undefined);
     const runnerSourceCommit = "b".repeat(40);
     const runnerImageDigest = `sha256:${"c".repeat(64)}`;
+    const generationIsolationEvidenceSha256 = "d".repeat(64);
+    const generationIsolationProbeSha256 = "e".repeat(64);
     const baseUrl = await start(processJob, undefined, undefined, {
       runnerSourceCommit,
       runnerImageDigest,
+      generationIsolationEvidenceSha256,
+      generationIsolationProbeSha256,
     });
 
     const ready = await fetch(`${baseUrl}/ready`);
@@ -117,8 +123,11 @@ describe("hosted runner HTTP service", () => {
     await expect(ready.json()).resolves.toEqual({
       status: "ready",
       service: "counterlab-hosted-runner",
+      generationFilesystemReadIsolation: "OS_ENFORCED",
       runnerSourceCommit,
       runnerImageDigest,
+      generationIsolationEvidenceSha256,
+      generationIsolationProbeSha256,
     });
 
     const accepted = await fetch(`${baseUrl}/jobs`, {
@@ -145,6 +154,38 @@ describe("hosted runner HTTP service", () => {
       controlPlaneUrl: "https://counterlab.example.test",
       signal: expect.any(AbortSignal),
     });
+  });
+
+  it("fails release identity closed on partial or stale isolation evidence", () => {
+    const exact = {
+      runnerSourceCommit: "b".repeat(40),
+      runnerImageDigest: `sha256:${"c".repeat(64)}`,
+      generationIsolationEvidenceSha256: "d".repeat(64),
+      generationIsolationProbeSha256: "e".repeat(64),
+    };
+    expect(verifiedHostedRunnerReleaseIdentity(exact, "e".repeat(64))).toEqual(
+      exact,
+    );
+    expect(
+      verifiedHostedRunnerReleaseIdentity(
+        {
+          runnerSourceCommit: "",
+          runnerImageDigest: "",
+          generationIsolationEvidenceSha256: "",
+          generationIsolationProbeSha256: "",
+        },
+        "e".repeat(64),
+      ),
+    ).toBeUndefined();
+    expect(() =>
+      verifiedHostedRunnerReleaseIdentity(
+        { ...exact, generationIsolationEvidenceSha256: "" },
+        "e".repeat(64),
+      ),
+    ).toThrow(/exact source commit/u);
+    expect(() =>
+      verifiedHostedRunnerReleaseIdentity(exact, "f".repeat(64)),
+    ).toThrow(/startup probe/u);
   });
 
   it("signals one-shot lifecycle cleanup only after the accepted job settles", async () => {

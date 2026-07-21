@@ -1,5 +1,10 @@
 # Submission readiness
 
+> **Historical audit snapshot:** This file records the submission state
+> observed on 2026-07-18. It is not current readiness evidence. Use
+> `docs/PROGRESS.md`, `docs/DEVPOST_COPY.md`, `docs/SUBMISSION_PACKAGE.json`,
+> and `docs/RELEASE_CHECKLIST.md` for current truth.
+
 ## Stage One verdict
 
 **FAIL at audit time.** Devpost project `1330312` remained `Untitled` in `submission_pre_draft`, with empty description and no tagline, video URL, public slug, website URL, or submitted timestamp. The official submission deadline is `2026-07-22T00:00:00Z` (Tuesday July 21, 5:00 PM PT).

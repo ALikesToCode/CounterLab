@@ -14,7 +14,13 @@ const theaterStyles = stylesheet("./VerifiedBeliefBreakTheater.module.css");
 const deferredStyles = stylesheet("./DeferredVerifiedBeliefBreak.module.css");
 const judgeStyles = stylesheet("../../features/judge/JudgeModeView.module.css");
 const globalStyles = stylesheet("../../styles.css");
+const studioStyles = stylesheet("../../styles/studio.css");
 const questionComposerStyles = stylesheet("./QuestionComposer.module.css");
+const startOverStyles = stylesheet("./StartOverDialog.module.css");
+const boundaryMapStyles = stylesheet(
+  "../generative-ui/BoundaryMapBlock.module.css",
+);
+const reasoningDiffStyles = stylesheet("../proof/ReasoningDiffView.module.css");
 
 function colorToken(name: string): string {
   const match = globalStyles.match(new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6})`));
@@ -105,22 +111,66 @@ describe("learner-facing responsive style safeguards", () => {
 
   it("contains horizontal overflow and removes hover motion when requested", () => {
     expect(judgeStyles).toContain("overflow-x: clip");
+    expect(globalStyles).toContain(
+      ".landing-question-first {\n  color-scheme: dark;\n  min-height: 100svh;\n  overflow-x: clip;",
+    );
+    expect(questionComposerStyles).not.toContain("overflow-x: auto");
+    expect(questionComposerStyles).toContain(
+      ".promptGroup > div {\n    width: 100%;\n    max-width: 100%;\n    display: grid;",
+    );
     expect(judgeStyles).toContain("transition: none !important");
     expect(judgeStyles).toContain("transform: none");
     expect(theaterStyles).toContain("@media (prefers-reduced-motion: reduce)");
     expect(theaterStyles).toContain("animation: none");
   });
 
-  it("keeps the composer dominant and collapses the landing before fixed tracks overflow", () => {
+  it("keeps programmatic landing-heading focus visible without boxing the headline", () => {
     expect(globalStyles).toContain(
+      ".landing-intro > h1:focus-visible {\n  outline: 0;\n  text-decoration: underline;",
+    );
+    expect(globalStyles).toContain("text-decoration-color: var(--focus-ring)");
+  });
+
+  it("stacks proof authority state below its handle label on narrow screens", () => {
+    expect(studioStyles).toContain(
+      ".proof-console-handle {\n    display: grid;\n    min-height: var(--proof-console-handle-height);\n    grid-template-columns: minmax(0, 1fr) auto;",
+    );
+    expect(studioStyles).toContain(
+      ".proof-console-context {\n    grid-column: 1 / -1;\n    flex-wrap: wrap;",
+    );
+    expect(studioStyles).toContain(
+      ".proof-console-handle > strong {\n    display: none;",
+    );
+    expect(studioStyles).toContain("--proof-console-handle-height: 52px");
+    expect(studioStyles).toContain(
+      "--proof-console-body-height: min(290px, 40dvh)",
+    );
+    expect(studioStyles).toContain("grid-template-rows: auto minmax(0, 1fr)");
+    expect(studioStyles).toContain("max-width: none");
+    expect(studioStyles).not.toContain("height: 236px");
+  });
+
+  it("keeps proof values readable and technical secondary text at 13px", () => {
+    expect(reasoningDiffStyles).toContain("overflow-wrap: anywhere");
+    expect(reasoningDiffStyles).not.toContain("text-overflow: ellipsis");
+    expect(reasoningDiffStyles).not.toContain("white-space: nowrap");
+    expect(reasoningDiffStyles).toContain("font: 13px/1.4 var(--mono)");
+    expect(startOverStyles).toContain("font-size: 0.8125rem");
+    expect(boundaryMapStyles).toContain("font: 13px/1.4 var(--mono)");
+    expect(boundaryMapStyles).toContain("font-size: 13px");
+    expect(studioStyles).not.toContain("font-size: 11px");
+  });
+
+  it("keeps the composer dominant in one centered responsive column", () => {
+    expect(globalStyles).not.toContain(
       "grid-template-columns: minmax(520px, 1.08fr) minmax(480px, 0.92fr)",
     );
     expect(globalStyles).toContain("@media (max-width: 1240px)");
     expect(globalStyles).toContain(
-      ".question-first-layout {\n  width: 100%;\n  max-width: 1220px;\n  min-width: 0;",
+      ".question-first-layout {\n  width: 100%;\n  max-width: 820px;\n  min-width: 0;",
     );
     expect(globalStyles).toContain(
-      ".question-first-layout {\n    width: 100%;\n    max-width: 780px;\n    min-width: 0;",
+      ".question-first-layout {\n    width: 100%;\n    max-width: 820px;\n    min-width: 0;",
     );
     expect(questionComposerStyles).toContain(
       ".composer {\n  width: 100%;\n  max-width: 780px;\n  min-width: 0;",
@@ -128,11 +178,15 @@ describe("learner-facing responsive style safeguards", () => {
     expect(questionComposerStyles).toContain(
       ".promptGroup {\n  width: 100%;\n  max-width: 640px;\n  min-width: 0;",
     );
-    expect(globalStyles).toContain(
-      ".landing-belief-break blockquote {\n    display: none;",
+    expect(globalStyles).toContain("grid-template-columns: minmax(0, 1fr)");
+    expect(questionComposerStyles).toContain(
+      ".form {\n    min-height: 122px;\n    padding-bottom: 58px;",
     );
     expect(questionComposerStyles).toContain(
-      "@media (max-width: 560px) {\n  .promptGroup {\n    display: none;",
+      ".submitText {\n    position: static;",
+    );
+    expect(questionComposerStyles).not.toContain(
+      ".promptGroup {\n    display: none;",
     );
   });
 });

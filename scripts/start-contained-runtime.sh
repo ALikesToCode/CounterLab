@@ -40,11 +40,13 @@ SESSION_ROOT="${SESSION_PARENT}/${SESSION_ID}"
 BIN_ROOT="${INSTALL_ROOT}/bin"
 CONTAINERD_ROOTLESSKIT_API="${SESSION_ROOT}/run/containerd-rootless/api.sock"
 CONTAINERD_SOCKET="${SESSION_ROOT}/run/containerd.sock"
+SNAPSHOTTER_SOCKET="${SESSION_ROOT}/run/inner/fuse-overlayfs.sock"
 RUNTIME_COMMAND_SOCKET="${SESSION_ROOT}/run/runtime-command.sock"
 BUILDKIT_SOCKET="${SESSION_ROOT}/run/buildkitd.sock"
 BUILDKIT_INNER_SOCKET="${SESSION_ROOT}/run/inner/buildkitd.sock"
 BUILDKIT_OTEL_SOCKET="${SESSION_ROOT}/run/inner/buildkit-otel.sock"
 RUNC_STATE_ROOT="${SESSION_ROOT}/run/runc"
+ROOTLESS_SPEC_ROOT="${SESSION_ROOT}/run/rootless-specs"
 SUPERVISOR_SOCKET="${SESSION_ROOT}/run/runtime-supervisor.sock"
 SUPERVISOR_READY="${SESSION_ROOT}/run/runtime-supervisor-ready.json"
 CONTAINERD_CONFIG="${SESSION_ROOT}/config/containerd.toml"
@@ -71,12 +73,14 @@ mkdir -p \
   "${SESSION_ROOT}/config/cni" \
   "${SESSION_ROOT}/data/buildkit" \
   "${SESSION_ROOT}/data/containerd" \
+  "${SESSION_ROOT}/data/fuse-overlayfs" \
   "${SESSION_ROOT}/data/nerdctl" \
   "${SESSION_ROOT}/home" \
   "${SESSION_ROOT}/logs" \
   "${SESSION_ROOT}/run" \
   "${SESSION_ROOT}/run/client-fifo" \
   "${SESSION_ROOT}/run/inner" \
+  "${ROOTLESS_SPEC_ROOT}" \
   "${RUNC_STATE_ROOT}" \
   "${SESSION_ROOT}/state/containerd" \
   "${SESSION_ROOT}/tmp" \
@@ -88,11 +92,13 @@ chmod 700 \
   "${SESSION_ROOT}/auth" \
   "${SESSION_ROOT}/config" \
   "${SESSION_ROOT}/data" \
+  "${SESSION_ROOT}/data/fuse-overlayfs" \
   "${SESSION_ROOT}/home" \
   "${SESSION_ROOT}/logs" \
   "${SESSION_ROOT}/run" \
   "${SESSION_ROOT}/run/client-fifo" \
   "${SESSION_ROOT}/run/inner" \
+  "${ROOTLESS_SPEC_ROOT}" \
   "${RUNC_STATE_ROOT}" \
   "${SESSION_ROOT}/state" \
   "${SESSION_ROOT}/tmp" \
@@ -141,7 +147,7 @@ nohup node "${ROOT_DIR}/scripts/contained-runtime-supervisor.mjs" \
 SUPERVISOR_PID=$!
 
 for _ in {1..300}; do
-  if [[ -S "${CONTAINERD_ROOTLESSKIT_API}" && -S "${CONTAINERD_SOCKET}" && -S "${RUNTIME_COMMAND_SOCKET}" && -S "${BUILDKIT_SOCKET}" && -S "${BUILDKIT_INNER_SOCKET}" && -S "${SUPERVISOR_SOCKET}" && -f "${SUPERVISOR_READY}" ]]; then
+  if [[ -S "${CONTAINERD_ROOTLESSKIT_API}" && -S "${CONTAINERD_SOCKET}" && -S "${SNAPSHOTTER_SOCKET}" && -S "${RUNTIME_COMMAND_SOCKET}" && -S "${BUILDKIT_SOCKET}" && -S "${BUILDKIT_INNER_SOCKET}" && -S "${SUPERVISOR_SOCKET}" && -f "${SUPERVISOR_READY}" ]]; then
     break
   fi
   if ! SUPERVISOR_LIVENESS="$(kill -0 "${SUPERVISOR_PID}" 2>&1)"; then
@@ -150,7 +156,7 @@ for _ in {1..300}; do
   fi
   sleep 0.1
 done
-[[ -S "${CONTAINERD_ROOTLESSKIT_API}" && -S "${CONTAINERD_SOCKET}" && -S "${RUNTIME_COMMAND_SOCKET}" && -S "${BUILDKIT_SOCKET}" && -S "${BUILDKIT_INNER_SOCKET}" && -S "${SUPERVISOR_SOCKET}" && -f "${SUPERVISOR_READY}" ]] || {
+[[ -S "${CONTAINERD_ROOTLESSKIT_API}" && -S "${CONTAINERD_SOCKET}" && -S "${SNAPSHOTTER_SOCKET}" && -S "${RUNTIME_COMMAND_SOCKET}" && -S "${BUILDKIT_SOCKET}" && -S "${BUILDKIT_INNER_SOCKET}" && -S "${SUPERVISOR_SOCKET}" && -f "${SUPERVISOR_READY}" ]] || {
   echo "Contained runtime sockets did not become ready; retained logs are inside ${SESSION_ROOT}." >&2
   exit 1
 }

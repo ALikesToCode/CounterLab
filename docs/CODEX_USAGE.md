@@ -1,8 +1,18 @@
-# Runtime Codex usage
+# Codex usage: build-time and runtime
 
 CounterLab uses Codex as a bounded Plan compiler. Codex proposes how to compose
 registered experiments or repairs; it never owns numeric truth, learner transfer
 scoring, or final verification.
+
+## Build-time Codex
+
+Codex also accelerated the build as an engineering collaborator: repository
+mapping, focused test construction, bounded implementation slices, regression
+triage, release-safety review, and documentation reconciliation. Those
+build-time contributions do not grant Runtime Codex any additional product
+authority. Humans fixed the product thesis, learner and model authority,
+supported Subject Packs, scientific invariants, privacy boundary, acceptance
+criteria, and final integration decisions.
 
 ## Product modes
 
@@ -37,9 +47,11 @@ Codex receives only the approved Belief Spec, sanitized Artifact Manifest,
 resolved evidence, selected Subject Pack capabilities/schema, resource limits,
 and permitted outputs in its request packet. That packet excludes notebook
 bytes, raw rows, secrets, hidden verifier source, mutation implementations,
-held-out fixtures, R2/D1 credentials, and unrelated files. This input-minimizing
-contract does not claim the hosted process is OS-unable to read every runtime
-file; hosted filesystem generation read isolation is `PARTIAL`.
+held-out fixtures, R2/D1 credentials, and unrelated files. The historical
+recorded replay used an input-minimizing process boundary with `PARTIAL`
+filesystem read isolation. Current source admits hosted Live only when the
+exact runner proves `OS_ENFORCED` generation read isolation; source logic is not
+production evidence until that exact image is qualified and deployed.
 
 ### Outputs
 
@@ -92,11 +104,13 @@ model-authored Python, and it does not require nested Docker. Missing binding,
 credential, timeout, or process capability is a typed failure—not replay or
 sample success.
 
-The hosted Codex launcher stages and revokes credentials, uses a fixed non-root
-UID plus `setpriv --no-new-privs`, and constrains writes. It does not provide a
-mount namespace or filesystem read allowlist, so hosted filesystem generation
-read isolation is `PARTIAL`.
-Source-free plans still have no numerical or verification authority.
+The hosted Codex launcher stages and revokes credentials and requires an exact
+image sentinel for a fixed non-root UID, `no-new-privs`, a pinned Bubblewrap
+boundary, an allowlisted runtime mount set, a writable generation workspace,
+and missing repository, held-out, verifier, and unrelated-job paths. Judge Mode
+keeps Live unavailable unless that exact `OS_ENFORCED` result is bound to the
+public release. Source-free plans still have no numerical or verification
+authority.
 
 ## Advanced local adapter proof
 

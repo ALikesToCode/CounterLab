@@ -12,6 +12,8 @@ import {
   LearnerInteractionInputSchema,
   LearnerInteractionReceiptSchema,
   LearnerInteractionRecordSchema,
+  LearningDirectorClarificationChoiceIdSchema,
+  LearningDirectorSessionStateSchema,
   LeakageTransferSubmissionSchema,
   PatchPlanV1Schema,
   PatchResultSchema,
@@ -73,8 +75,10 @@ import {
 import {
   ApprovedSampleBeliefAnalyst,
   BeliefAnalystError,
+  LearningDirectorError,
   buildSanitizedAnalystContext,
   createLiveBeliefAnalystFromEnv,
+  createLiveLearningDirectorFromEnv,
   requireApplicableClaim,
 } from "@counterlab/belief-analyst";
 import {
@@ -116,6 +120,7 @@ import {
   getSessionBeliefAuthority,
   hashCanonical,
   resolveSessionEvidenceAuthority,
+  type RunnerCallbackClaimToken,
   type RunnerJobRepository,
   type CounterLabSession,
   type SessionRepository,
@@ -127,13 +132,17 @@ import {
   validateProofCapsulePayloadAuthorityV2,
   validateProofCapsuleV2,
 } from "@counterlab/proof-capsule";
-import { verifyEvidenceChain } from "@counterlab/proof-bundle";
+import {
+  validateProofBundle,
+  verifyEvidenceChain,
+} from "@counterlab/proof-bundle";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { z, ZodError } from "zod";
 
 import samplePatchedNotebookText from "../../../fixtures/public/leakage_sample_patch_v1/customer_churn_leakage.patched.ipynb?raw";
 import samplePatchKernelResult from "../../../fixtures/public/leakage_sample_patch_v1/patch-kernel-result.json";
+import scientificEngineSnapshotValue from "../../../scientific-engines/snapshot-hash.json";
 import replayPatchKernelResult from "../../../replays/leakage-01/patch-kernel-result.json";
 import compilerReplaySummary from "../../../replays/leakage-01/compiler/replay-summary.json";
 import replayVerifiedResult from "../../../replays/leakage-01/compiler/verified-live-run/verified-result.json";
@@ -243,6 +252,11 @@ type WorkerBindings = Omit<Env, "COUNTERLAB_MAINTENANCE_MODE"> & {
   COUNTERLAB_WORKER_EVIDENCE_COMMIT?: string;
   COUNTERLAB_RUNNER_SOURCE_COMMIT?: string;
   COUNTERLAB_RUNNER_IMAGE_DIGEST?: string;
+  COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256?: string;
+  COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256?: string;
+  COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256?: string;
+  COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256?: string;
+  COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT?: string;
   COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256?: string;
   COUNTERLAB_AGGREGATE_LIMIT_EVIDENCE_SHA256?: string;
   COUNTERLAB_RUNTIME_POLICY_SHA256?: string;
@@ -269,6 +283,8 @@ type AppBindings = {
   Bindings: WorkerBindings;
   Variables: {
     requestId: string;
+    runnerCallbackClaim:
+      { jobId: string; claim: RunnerCallbackClaimToken } | undefined;
   };
 };
 
@@ -301,6 +317,7 @@ const RUNNER_JOB_TOKEN_GRACE_SECONDS = 120;
 const MAX_RUNNER_JOB_TOKEN_TTL_SECONDS = 900;
 const MAX_SESSION_RUNNER_HISTORY_JOBS = 32;
 const MAX_SESSION_COMPILER_HISTORY_EVENTS = 512;
+const MAX_EVIDENCE_SNAPSHOT_ATTEMPTS = 4;
 
 const JsonObjectSchema = z.record(z.string(), z.unknown());
 const HostedPlanLineageSchema = z
@@ -367,6 +384,9 @@ const ConfirmationSchema = z.union([
     })
     .strict(),
 ]);
+const LearningDirectorAnswerSchema = z
+  .object({ answer: LearningDirectorClarificationChoiceIdSchema })
+  .strict();
 const PredictionRequestSchema = z
   .object({
     choice: z.string().trim().min(1).max(300),
@@ -972,9 +992,15 @@ function runnerDispatcher(
     context.env?.COUNTERLAB_RUNNER_SOURCE_COMMIT?.trim() ?? "";
   const runnerImageDigest =
     context.env?.COUNTERLAB_RUNNER_IMAGE_DIGEST?.trim() ?? "";
+  const generationIsolationEvidenceSha256 =
+    context.env?.COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256?.trim() ?? "";
+  const generationIsolationProbeSha256 =
+    context.env?.COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256?.trim() ?? "";
   const exactRunnerIdentity =
     /^[a-f0-9]{40}$/u.test(runnerSourceCommit) &&
-    /^sha256:[a-f0-9]{64}$/u.test(runnerImageDigest);
+    /^sha256:[a-f0-9]{64}$/u.test(runnerImageDigest) &&
+    /^[a-f0-9]{64}$/u.test(generationIsolationEvidenceSha256) &&
+    /^[a-f0-9]{64}$/u.test(generationIsolationProbeSha256);
   const processRunnerURL = context.env?.COUNTERLAB_RUNNER_BASE_URL?.trim();
   if (
     processRunnerURL !== undefined &&
@@ -984,7 +1010,12 @@ function runnerDispatcher(
     try {
       return new HttpRunnerDispatcher({
         baseURL: processRunnerURL,
-        releaseIdentity: { runnerSourceCommit, runnerImageDigest },
+        releaseIdentity: {
+          runnerSourceCommit,
+          runnerImageDigest,
+          generationIsolationEvidenceSha256,
+          generationIsolationProbeSha256,
+        },
       });
     } catch {
       return undefined;
@@ -996,7 +1027,12 @@ function runnerDispatcher(
     ? new CloudflareContainerRunnerDispatcher(
         context.env.RUNNER,
         createRunnerContainerEnvVars(context.env),
-        { runnerSourceCommit, runnerImageDigest },
+        {
+          runnerSourceCommit,
+          runnerImageDigest,
+          generationIsolationEvidenceSha256,
+          generationIsolationProbeSha256,
+        },
       )
     : undefined;
 }
@@ -1048,6 +1084,11 @@ function releaseIdentity(context: Context<AppBindings>):
       workerEvidenceCommit: string;
       runnerSourceCommit: string;
       runnerImageDigest: string;
+      generationIsolationEvidenceSha256: string;
+      generationIsolationProbeSha256: string;
+      releaseCheckGenerationIsolationEvidenceSha256: string;
+      releaseCheckGenerationIsolationProbeSha256: string;
+      releaseCheckGenerationIsolationVerifiedAt: string;
       timeoutCleanupReceiptSha256: string;
       aggregateLimitEvidenceSha256: string;
       runtimePolicySha256: string;
@@ -1067,6 +1108,19 @@ function releaseIdentity(context: Context<AppBindings>):
     context.env?.COUNTERLAB_WORKER_EVIDENCE_COMMIT ?? "";
   const runnerSourceCommit = context.env?.COUNTERLAB_RUNNER_SOURCE_COMMIT ?? "";
   const runnerImageDigest = context.env?.COUNTERLAB_RUNNER_IMAGE_DIGEST ?? "";
+  const generationIsolationEvidenceSha256 =
+    context.env?.COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256 ?? "";
+  const generationIsolationProbeSha256 =
+    context.env?.COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256 ?? "";
+  const releaseCheckGenerationIsolationEvidenceSha256 =
+    context.env
+      ?.COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256 ?? "";
+  const releaseCheckGenerationIsolationProbeSha256 =
+    context.env?.COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256 ??
+    "";
+  const releaseCheckGenerationIsolationVerifiedAt =
+    context.env?.COUNTERLAB_RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT ??
+    "";
   const timeoutCleanupReceiptSha256 =
     context.env?.COUNTERLAB_TIMEOUT_CLEANUP_RECEIPT_SHA256 ?? "";
   const aggregateLimitEvidenceSha256 =
@@ -1099,6 +1153,15 @@ function releaseIdentity(context: Context<AppBindings>):
     !/^[a-f0-9]{40}$/u.test(workerEvidenceCommit) ||
     !/^[a-f0-9]{40}$/u.test(runnerSourceCommit) ||
     !/^sha256:[a-f0-9]{64}$/u.test(runnerImageDigest) ||
+    !/^[a-f0-9]{64}$/u.test(generationIsolationEvidenceSha256) ||
+    !/^[a-f0-9]{64}$/u.test(generationIsolationProbeSha256) ||
+    !/^[a-f0-9]{64}$/u.test(releaseCheckGenerationIsolationEvidenceSha256) ||
+    releaseCheckGenerationIsolationProbeSha256 !==
+      generationIsolationProbeSha256 ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u.test(
+      releaseCheckGenerationIsolationVerifiedAt,
+    ) ||
+    !Number.isFinite(Date.parse(releaseCheckGenerationIsolationVerifiedAt)) ||
     !/^[a-f0-9]{64}$/u.test(timeoutCleanupReceiptSha256) ||
     !/^[a-f0-9]{64}$/u.test(aggregateLimitEvidenceSha256) ||
     !/^[a-f0-9]{64}$/u.test(runtimePolicySha256) ||
@@ -1126,6 +1189,11 @@ function releaseIdentity(context: Context<AppBindings>):
     workerEvidenceCommit,
     runnerSourceCommit,
     runnerImageDigest,
+    generationIsolationEvidenceSha256,
+    generationIsolationProbeSha256,
+    releaseCheckGenerationIsolationEvidenceSha256,
+    releaseCheckGenerationIsolationProbeSha256,
+    releaseCheckGenerationIsolationVerifiedAt,
     timeoutCleanupReceiptSha256,
     aggregateLimitEvidenceSha256,
     runtimePolicySha256,
@@ -1604,22 +1672,24 @@ async function dispatchRecoverableRunnerJob(input: {
       retryable: true,
     } as const;
     try {
-      const failed = await input.jobs.transition(
+      await input.jobs.failJobWithEvent(
         dispatchJob.jobId,
         dispatchJob.jobVersion,
-        "FAILED",
-        { runnerIdentity: input.dispatcher.identity, error: failure },
+        {
+          runnerIdentity: input.dispatcher.identity,
+          error: failure,
+        },
+        {
+          schemaVersion: "1",
+          eventId: requestId(input.options, "compiler_event"),
+          jobId: dispatchJob.jobId,
+          cursor: dispatchJob.eventCursor + 1,
+          at: requestNow(input.options).toISOString(),
+          kind: "job.failed",
+          code: failure.code,
+          message: failure.message,
+        },
       );
-      await input.jobs.appendEvent(failed.jobId, failed.jobVersion, {
-        schemaVersion: "1",
-        eventId: requestId(input.options, "compiler_event"),
-        jobId: failed.jobId,
-        cursor: failed.eventCursor + 1,
-        at: requestNow(input.options).toISOString(),
-        kind: "job.failed",
-        code: failure.code,
-        message: failure.message,
-      });
     } catch (stateError) {
       if (!(stateError instanceof ConcurrentRunnerJobUpdateError)) {
         console.error("CounterLab could not persist runner dispatch failure", {
@@ -3710,6 +3780,7 @@ async function appendScientificAuthorityEvents(input: {
   jobs: RunnerJobService;
   job: RunnerJob;
   callback: RunnerCallback;
+  callbackClaim?: RunnerCallbackClaimToken | undefined;
   authorityAt: string;
   report: EpistemicVerificationReport;
 }): Promise<number> {
@@ -3754,6 +3825,7 @@ async function appendScientificAuthorityEvents(input: {
       input.job.jobId,
       updated.jobVersion,
       event,
+      input.callbackClaim,
     );
   }
   return updated.eventCursor;
@@ -3763,6 +3835,7 @@ async function appendInteractiveAuthorityEvents(input: {
   jobs: RunnerJobService;
   job: RunnerJob;
   callback: RunnerCallback;
+  callbackClaim?: RunnerCallbackClaimToken | undefined;
   authorityAt: string;
   invariantCount: number;
   resultHash: string;
@@ -3821,6 +3894,7 @@ async function appendInteractiveAuthorityEvents(input: {
       input.job.jobId,
       current.jobVersion,
       event,
+      input.callbackClaim,
     );
   }
   return current.eventCursor;
@@ -3830,6 +3904,7 @@ async function appendBoundaryAuthorityEvents(input: {
   jobs: RunnerJobService;
   job: RunnerJob;
   callback: RunnerCallback;
+  callbackClaim?: RunnerCallbackClaimToken | undefined;
   authorityAt: string;
   report: BoundaryMapVerificationReportV1;
 }): Promise<number> {
@@ -3903,6 +3978,7 @@ async function appendBoundaryAuthorityEvents(input: {
       input.job.jobId,
       current.jobVersion,
       event,
+      input.callbackClaim,
     );
   }
   return current.eventCursor;
@@ -4087,13 +4163,147 @@ function requireStoredSampleClaimScope(
   }
 }
 
+async function requireStoredProofBundleIntegrity(
+  session: Awaited<ReturnType<SessionService["getSession"]>>,
+  service: SessionService,
+  signingKey: string | undefined,
+): Promise<void> {
+  if (session.proofBundle === undefined) return;
+
+  try {
+    const chain = verifyEvidenceChain(await service.listEvents(session.id));
+    const proofBundleHash = await hashCanonical(session.proofBundle);
+    const issuanceEvents = chain.events.filter(
+      (event) => event.kind === "reasoning_diff.issued",
+    );
+    if (
+      chain.sessionId !== session.id ||
+      issuanceEvents.length !== 1 ||
+      !issuanceEvents[0]?.outputHashes.includes(proofBundleHash)
+    ) {
+      throw new Error(
+        "stored Proof Bundle is not bound to its issuance evidence",
+      );
+    }
+  } catch {
+    throw new ApiInputError(
+      "PROOF_BUNDLE_INVALID",
+      "The stored Proof Bundle failed integrity or lineage validation",
+      409,
+    );
+  }
+
+  const usableSigningKey =
+    signingKey === undefined || signingKey.trim().length === 0
+      ? undefined
+      : signingKey;
+  if (
+    session.proofBundle.integrity.mode === "hmac-signed" &&
+    usableSigningKey === undefined
+  ) {
+    throw new ApiInputError(
+      "PROOF_SIGNING_KEY_REQUIRED",
+      "The signing key for the stored Proof Bundle is unavailable",
+      503,
+    );
+  }
+  try {
+    const proofBundle = validateProofBundle(session.proofBundle, {
+      ...(session.proofBundle.schemaVersion === "2"
+        ? {
+            scientificEngineSnapshotHash:
+              scientificEngineSnapshotValue.authorityHash,
+          }
+        : {}),
+      ...(session.proofBundle.integrity.mode === "hmac-signed" &&
+      usableSigningKey !== undefined
+        ? { signingKey: usableSigningKey }
+        : {}),
+    });
+    const modeMatches =
+      proofBundle.schemaVersion === "2"
+        ? session.mode.kind === "live_notebook"
+        : session.mode.kind !== "sample_lesson" ||
+          proofBundle.replayId === session.mode.sampleId;
+    if (
+      proofBundle.sessionId !== session.id ||
+      proofBundle.artifactManifest.artifactId !== session.artifactId ||
+      !modeMatches ||
+      (session.state !== "REASONING_DIFF_ISSUED" &&
+        session.state !== "PROOF_CAPSULE_ISSUED") ||
+      session.prediction?.immutableHash !==
+        proofBundle.predictionContract.immutableHash ||
+      session.verifiedResult?.resultHash !==
+        proofBundle.verifiedResultSet.resultHash ||
+      session.transferResult?.resultHash !==
+        proofBundle.transferResult.resultHash ||
+      session.patchResult?.resultHash !== proofBundle.patchResult.resultHash ||
+      session.reasoningDiff?.id !== proofBundle.reasoningDiff.id
+    ) {
+      throw new Error("stored Proof Bundle does not match its outer session");
+    }
+  } catch {
+    throw new ApiInputError(
+      "PROOF_BUNDLE_INVALID",
+      "The stored Proof Bundle failed integrity or lineage validation",
+      409,
+    );
+  }
+}
+
 function isFile(value: string | File | null): value is File {
   return value !== null && typeof value !== "string";
 }
 
-function statePayload(
-  session: Awaited<ReturnType<SessionService["getSession"]>>,
+function learningDirectorRegistries(concept: BeliefSpecV2["concept"]) {
+  const pack = getConceptPack(concept);
+  return {
+    [concept]: pack.scientificMethod.learningDirectorPresentation,
+  };
+}
+
+function learningDirectorPacket(
+  sanitizedContent: ReturnType<typeof buildSanitizedAnalystContext>,
+  clarificationAlreadyUsed: boolean,
+  answer?: string,
 ) {
+  const seenHashes = new Set<string>();
+  const approvedEvidence = sanitizedContent.evidence.flatMap((evidence) => {
+    if (seenHashes.has(evidence.sourceHash)) return [];
+    seenHashes.add(evidence.sourceHash);
+    return [{ hash: evidence.sourceHash, excerpt: evidence.sourceExcerpt }];
+  });
+  return {
+    concept: sanitizedContent.concept,
+    subjectPackVersion: sanitizedContent.conceptPack.version,
+    approvedEvidence,
+    candidateExperimentIds: [
+      ...sanitizedContent.conceptPack.candidateExperimentIds,
+    ],
+    clarificationAlreadyUsed,
+    ...(answer === undefined ? {} : { answer }),
+  };
+}
+
+function approvedLiveReasoningPackets(
+  sanitizedContent: ReturnType<typeof buildSanitizedAnalystContext>,
+) {
+  return {
+    beliefAnalyst: sanitizedContent,
+    learningDirector: learningDirectorPacket(sanitizedContent, false),
+  };
+}
+
+async function statePayload(
+  context: Context<AppBindings>,
+  session: Awaited<ReturnType<SessionService["getSession"]>>,
+  options: ApiOptions,
+) {
+  await requireStoredProofBundleIntegrity(
+    session,
+    sessionService(context, options),
+    context.env?.COUNTERLAB_SIGNING_KEY,
+  );
   const publicProofCapsule =
     session.proofCapsule === undefined
       ? undefined
@@ -4114,6 +4324,9 @@ function statePayload(
     ...(session.beliefSpec === undefined
       ? {}
       : { beliefSpec: session.beliefSpec }),
+    ...(session.learningDirector === undefined
+      ? {}
+      : { learningDirector: session.learningDirector }),
     ...(session.prediction === undefined
       ? {}
       : { prediction: session.prediction }),
@@ -4161,6 +4374,20 @@ export function createApi(options: ApiOptions = {}) {
     });
     activeReadinessProbe = probe;
     return probe;
+  };
+  const requireExactLiveReleaseReadiness = async (
+    context: Context<AppBindings>,
+  ) => {
+    if (!admissionEnabled(options)) return;
+    const snapshot = await observeReadiness(context);
+    if (!snapshot.ready || snapshot.release.status !== "bound") {
+      throw new ApiInputError(
+        "LIVE_AUTHORITY_NOT_READY",
+        "The exact released live runtime is not ready. Your supported notebook remains available for retry; no live investigation was created.",
+        503,
+        true,
+      );
+    }
   };
 
   app.get("/ready", async (context) => {
@@ -4254,7 +4481,10 @@ export function createApi(options: ApiOptions = {}) {
           runner === "configured"
             ? ("credential-and-privilege-boundary" as const)
             : ("local-runner-required" as const),
-        generationFilesystemReadIsolation: "PARTIAL" as const,
+        generationFilesystemReadIsolation:
+          readiness?.checks.runner === true
+            ? ("OS_ENFORCED" as const)
+            : ("PARTIAL" as const),
         requestId: context.get("requestId"),
       }),
     );
@@ -4599,7 +4829,7 @@ export function createApi(options: ApiOptions = {}) {
     }
     return context.json(
       jsonSuccess({
-        ...statePayload(session),
+        ...(await statePayload(context, session, options)),
         ...(ownerCapability === undefined ? {} : { ownerCapability }),
       }),
       201,
@@ -4636,6 +4866,7 @@ export function createApi(options: ApiOptions = {}) {
         422,
       );
     }
+    await requireExactLiveReleaseReadiness(context);
     const session = await sessionService(context, options).createSession({
       artifactId: input.artifactId,
       mode: { kind: "live_notebook" },
@@ -4651,7 +4882,7 @@ export function createApi(options: ApiOptions = {}) {
     }
     return context.json(
       jsonSuccess({
-        ...statePayload(session),
+        ...(await statePayload(context, session, options)),
         ...(ownerCapability === undefined ? {} : { ownerCapability }),
       }),
       201,
@@ -4672,7 +4903,9 @@ export function createApi(options: ApiOptions = {}) {
       context.req.param("sessionId"),
     );
     requireStoredSampleClaimScope(session);
-    return context.json(jsonSuccess(statePayload(session)));
+    return context.json(
+      jsonSuccess(await statePayload(context, session, options)),
+    );
   });
 
   app.get("/api/sessions/:sessionId/artifact", async (context) => {
@@ -4830,7 +5063,7 @@ export function createApi(options: ApiOptions = {}) {
     }
     return context.json(
       jsonSuccess({
-        ...statePayload(restarted),
+        ...(await statePayload(context, restarted, options)),
         ...(ownerCapability === undefined ? {} : { ownerCapability }),
       }),
       created ? 201 : 200,
@@ -4934,15 +5167,18 @@ export function createApi(options: ApiOptions = {}) {
       manifest: artifact.manifest,
       concept: routing.concept,
     });
+    const outboundPackets = approvedLiveReasoningPackets(sanitizedContent);
     return context.json(
       jsonSuccess({
         schemaVersion: "1" as const,
         concept: routing.concept,
         conceptTitle: getConceptPack(routing.concept).title,
-        previewHash: await hashCanonical(sanitizedContent),
+        previewHash: await hashCanonical(outboundPackets),
         requiresSensitiveApproval:
+          sanitizedContent.privacy.suppressedFieldCount > 0 ||
           sanitizedContent.privacy.redactions.length > 0,
         sanitizedContent,
+        learningDirectorPacket: outboundPackets.learningDirector,
       }),
     );
   });
@@ -5037,7 +5273,9 @@ export function createApi(options: ApiOptions = {}) {
         insufficient,
         { actor: "system", modelId: "concept-router-v1" },
       );
-      return context.json(jsonSuccess(statePayload(proposed)));
+      return context.json(
+        jsonSuccess(await statePayload(context, proposed, options)),
+      );
     }
 
     if (session.mode.kind === "live_notebook") {
@@ -5048,7 +5286,8 @@ export function createApi(options: ApiOptions = {}) {
         manifest: artifact.manifest,
         concept: routing.concept,
       });
-      const expectedPreviewHash = await hashCanonical(sanitizedContent);
+      const outboundPackets = approvedLiveReasoningPackets(sanitizedContent);
+      const expectedPreviewHash = await hashCanonical(outboundPackets);
       if (input.previewHash !== expectedPreviewHash) {
         throw new ApiInputError(
           "SANITIZED_PREVIEW_REQUIRED",
@@ -5057,6 +5296,7 @@ export function createApi(options: ApiOptions = {}) {
         );
       }
       const containsSensitiveRedaction =
+        sanitizedContent.privacy.suppressedFieldCount > 0 ||
         sanitizedContent.privacy.redactions.length > 0;
       if (
         containsSensitiveRedaction &&
@@ -5107,7 +5347,7 @@ export function createApi(options: ApiOptions = {}) {
           manifest: artifact.manifest,
           concept: routing.concept,
         });
-        const proposed = await service.proposeBeliefSpecV2(
+        let proposed = await service.proposeBeliefSpecV2(
           session.id,
           result.beliefSpec,
           {
@@ -5116,7 +5356,44 @@ export function createApi(options: ApiOptions = {}) {
             promptHash: result.provenance.promptHash,
           },
         );
-        return context.json(jsonSuccess(statePayload(proposed)));
+        if (result.beliefSpec.supportState === "SUPPORTED") {
+          try {
+            const directorResult = await createLiveLearningDirectorFromEnv(
+              {
+                OPENAI_API_KEY: context.env?.OPENAI_API_KEY,
+                OPENAI_BASE_URL: context.env?.OPENAI_BASE_URL,
+                OPENAI_MODEL: context.env?.OPENAI_MODEL,
+                OPENAI_REASONING_EFFORT: context.env?.OPENAI_REASONING_EFFORT,
+                OPENAI_TIMEOUT_MS: context.env?.OPENAI_TIMEOUT_MS,
+              },
+              {
+                registries: learningDirectorRegistries(
+                  result.beliefSpec.concept,
+                ),
+                sessionId: session.id,
+              },
+            ).decide(outboundPackets.learningDirector);
+            proposed = await service.recordLearningDirector(
+              session.id,
+              LearningDirectorSessionStateSchema.parse({
+                schemaVersion: "1",
+                beliefSpecHash: await hashCanonical(result.beliefSpec),
+                approvedPacketHash: expectedPreviewHash,
+                subjectPackVersion:
+                  outboundPackets.learningDirector.subjectPackVersion,
+                clarificationUsed:
+                  directorResult.decision.status === "CLARIFICATION_REQUIRED",
+                decision: directorResult.decision,
+                provenance: directorResult.provenance,
+              }),
+            );
+          } catch (error) {
+            if (!(error instanceof LearningDirectorError)) throw error;
+          }
+        }
+        return context.json(
+          jsonSuccess(await statePayload(context, proposed, options)),
+        );
       } finally {
         await releaseAdmissionBestEffort(
           context,
@@ -5145,7 +5422,117 @@ export function createApi(options: ApiOptions = {}) {
       actor: "system",
       modelId: result.provenance.approvalId,
     });
-    return context.json(jsonSuccess(statePayload(proposed)));
+    return context.json(
+      jsonSuccess(await statePayload(context, proposed, options)),
+    );
+  });
+
+  app.post("/api/sessions/:sessionId/learning-director", async (context) => {
+    const input = LearningDirectorAnswerSchema.parse(await readJson(context));
+    const service = sessionService(context, options);
+    const sessionId = context.req.param("sessionId");
+    const current = await service.getSession(sessionId);
+    requireMutableSession(current);
+    const directorState = current.learningDirector;
+    if (
+      current.state !== "BELIEF_TEST_PROPOSED" ||
+      current.mode.kind !== "live_notebook" ||
+      current.beliefSpec === undefined ||
+      directorState?.decision.status !== "CLARIFICATION_REQUIRED"
+    ) {
+      throw new ApiInputError(
+        "LEARNING_DIRECTOR_NOT_AWAITING_ANSWER",
+        "This investigation is not awaiting a Learning Director clarification",
+        409,
+      );
+    }
+    if (!directorState.decision.choices.includes(input.answer)) {
+      throw new ApiInputError(
+        "LEARNING_DIRECTOR_ANSWER_INVALID",
+        "Choose one of the fixed clarification answers",
+        400,
+      );
+    }
+    const artifact = await artifacts(context, options).find(current.artifactId);
+    if (artifact === undefined) {
+      throw new ApiInputError(
+        "ARTIFACT_NOT_FOUND",
+        "Session artifact was not found",
+        404,
+      );
+    }
+    const sanitizedContent = buildSanitizedAnalystContext({
+      sessionId,
+      learnerClaim: current.beliefSpec.claim,
+      manifest: artifact.manifest,
+      concept: current.beliefSpec.concept,
+    });
+    const approvedPackets = approvedLiveReasoningPackets(sanitizedContent);
+    if (
+      (await hashCanonical(approvedPackets)) !==
+      directorState.approvedPacketHash
+    ) {
+      throw new ApiInputError(
+        "LEARNING_DIRECTOR_PACKET_CHANGED",
+        "The approved Learning Director packet no longer matches this investigation",
+        409,
+      );
+    }
+
+    const answerHash = await hashCanonical(input.answer);
+    const operationKey = `${sessionId}:director:${answerHash}`;
+    const admission = await admitOperation(context, options, {
+      kind: "analyst",
+      sessionId,
+      operationKey,
+    });
+    if (admission.leaseStatus === "already-active") {
+      throw new ApiInputError(
+        "ANALYST_IN_PROGRESS",
+        "This Learning Director answer is already being processed",
+        409,
+        true,
+        1,
+      );
+    }
+    try {
+      const result = await createLiveLearningDirectorFromEnv(
+        {
+          OPENAI_API_KEY: context.env?.OPENAI_API_KEY,
+          OPENAI_BASE_URL: context.env?.OPENAI_BASE_URL,
+          OPENAI_MODEL: context.env?.OPENAI_MODEL,
+          OPENAI_REASONING_EFFORT: context.env?.OPENAI_REASONING_EFFORT,
+          OPENAI_TIMEOUT_MS: context.env?.OPENAI_TIMEOUT_MS,
+        },
+        {
+          registries: learningDirectorRegistries(current.beliefSpec.concept),
+          sessionId,
+        },
+      ).decide(learningDirectorPacket(sanitizedContent, true, input.answer));
+      const updated = await service.recordLearningDirector(
+        sessionId,
+        LearningDirectorSessionStateSchema.parse({
+          schemaVersion: "1",
+          beliefSpecHash: directorState.beliefSpecHash,
+          approvedPacketHash: directorState.approvedPacketHash,
+          subjectPackVersion: directorState.subjectPackVersion,
+          clarificationUsed: true,
+          decision: result.decision,
+          provenance: result.provenance,
+        }),
+        { clarificationAnswerHash: answerHash },
+      );
+      return context.json(
+        jsonSuccess(await statePayload(context, updated, options)),
+      );
+    } finally {
+      await releaseAdmissionBestEffort(
+        context,
+        options,
+        "analyst",
+        operationKey,
+      );
+    }
   });
 
   app.post("/api/sessions/:sessionId/belief-test/confirm", async (context) => {
@@ -5156,7 +5543,13 @@ export function createApi(options: ApiOptions = {}) {
     requireMutableSession(current);
     if (input.action === "confirm") {
       return context.json(
-        jsonSuccess(statePayload(await service.confirmBeliefTest(sessionId))),
+        jsonSuccess(
+          await statePayload(
+            context,
+            await service.confirmBeliefTest(sessionId),
+            options,
+          ),
+        ),
       );
     }
     if (input.action === "edit") {
@@ -5168,8 +5561,10 @@ export function createApi(options: ApiOptions = {}) {
         }
         return context.json(
           jsonSuccess(
-            statePayload(
+            await statePayload(
+              context,
               await service.editBeliefSpecV2(sessionId, input.beliefSpec),
+              options,
             ),
           ),
         );
@@ -5181,8 +5576,10 @@ export function createApi(options: ApiOptions = {}) {
       }
       return context.json(
         jsonSuccess(
-          statePayload(
+          await statePayload(
+            context,
             await service.editBeliefTest(sessionId, input.beliefTest),
+            options,
           ),
         ),
       );
@@ -5190,14 +5587,20 @@ export function createApi(options: ApiOptions = {}) {
     if (input.action === "reject") {
       return context.json(
         jsonSuccess(
-          statePayload(await service.rejectBeliefTest(sessionId, input.reason)),
+          await statePayload(
+            context,
+            await service.rejectBeliefTest(sessionId, input.reason),
+            options,
+          ),
         ),
       );
     }
     return context.json(
       jsonSuccess(
-        statePayload(
+        await statePayload(
+          context,
           await service.markInsufficientEvidence(sessionId, input.reason),
+          options,
         ),
       ),
     );
@@ -5234,7 +5637,11 @@ export function createApi(options: ApiOptions = {}) {
     };
     return context.json(
       jsonSuccess(
-        statePayload(await service.commitPrediction(sessionId, prediction)),
+        await statePayload(
+          context,
+          await service.commitPrediction(sessionId, prediction),
+          options,
+        ),
       ),
       201,
     );
@@ -5402,7 +5809,7 @@ export function createApi(options: ApiOptions = {}) {
         });
         return context.json(
           jsonSuccess({
-            ...statePayload(current),
+            ...(await statePayload(context, current, options)),
             runnerJob,
             reused: true as const,
           }),
@@ -5537,7 +5944,7 @@ export function createApi(options: ApiOptions = {}) {
       });
       return context.json(
         jsonSuccess({
-          ...statePayload(started),
+          ...(await statePayload(context, started, options)),
           runnerJob: starting,
           ...(claimed.reused ? { reused: true as const } : {}),
         }),
@@ -5561,7 +5968,9 @@ export function createApi(options: ApiOptions = {}) {
       [...sampleAuthority.evidenceHashes],
       sampleAuthority.operationSummary,
     );
-    return context.json(jsonSuccess(statePayload(verified)));
+    return context.json(
+      jsonSuccess(await statePayload(context, verified, options)),
+    );
   });
 
   app.get("/api/runner/jobs/:jobId/input", async (context) => {
@@ -5792,6 +6201,7 @@ export function createApi(options: ApiOptions = {}) {
   app.put("/api/runner/jobs/:jobId/outputs/:generatedPath", async (context) => {
     const jobId = context.req.param("jobId");
     const { claims, job } = await authorizeRunner(context, options, jobId);
+    const jobs = runnerJobService(context, options);
     if (job.status !== "RUNNING" && job.status !== "REPAIRING") {
       throw new ApiInputError(
         "RUNNER_JOB_NOT_ACTIVE",
@@ -5870,24 +6280,36 @@ export function createApi(options: ApiOptions = {}) {
         403,
       );
     }
-    const body = await readBoundedText(
-      context,
-      generatedPath.endsWith(".ipynb") ? maxNotebookBytes(context) : 1_048_576,
+    const outputClaim = await jobs.claimOutputWrite(
+      jobId,
+      job.jobVersion,
+      context.get("requestId"),
+      generatedPath,
     );
-    const contentType = generatedPath.endsWith(".json")
-      ? "application/json"
-      : generatedPath.endsWith(".ipynb")
-        ? "application/x-ipynb+json; charset=utf-8"
-        : "text/markdown; charset=utf-8";
-    await runnerObjectStore(context, options).put(
-      `${claims.outputPrefix}${generatedPath}`,
-      body,
-      contentType,
-    );
-    return context.json(
-      jsonSuccess({ path: generatedPath, sha256: await sha256Text(body) }),
-      201,
-    );
+    try {
+      const body = await readBoundedText(
+        context,
+        generatedPath.endsWith(".ipynb")
+          ? maxNotebookBytes(context)
+          : 1_048_576,
+      );
+      const contentType = generatedPath.endsWith(".json")
+        ? "application/json"
+        : generatedPath.endsWith(".ipynb")
+          ? "application/x-ipynb+json; charset=utf-8"
+          : "text/markdown; charset=utf-8";
+      await runnerObjectStore(context, options).put(
+        `${claims.outputPrefix}${generatedPath}`,
+        body,
+        contentType,
+      );
+      return context.json(
+        jsonSuccess({ path: generatedPath, sha256: await sha256Text(body) }),
+        201,
+      );
+    } finally {
+      await jobs.releaseOutputWriteClaim(jobId, outputClaim.claim);
+    }
   });
 
   app.post("/api/runner/jobs/:jobId/resume", async (context) => {
@@ -6591,7 +7013,7 @@ export function createApi(options: ApiOptions = {}) {
       const projectedSession = await projectCancellation();
       return context.json(
         jsonSuccess({
-          ...statePayload(projectedSession),
+          ...(await statePayload(context, projectedSession, options)),
           runnerJob: job,
           reused: true as const,
           runnerAcknowledged: true,
@@ -6660,7 +7082,7 @@ export function createApi(options: ApiOptions = {}) {
     }
     return context.json(
       jsonSuccess({
-        ...statePayload(updatedSession),
+        ...(await statePayload(context, updatedSession, options)),
         runnerJob: cancelled,
         reused: false as const,
         runnerAcknowledged,
@@ -6671,7 +7093,7 @@ export function createApi(options: ApiOptions = {}) {
   app.post("/api/runner/jobs/:jobId/callback", async (context) => {
     const jobId = context.req.param("jobId");
     const callbackPath = `/api/runner/jobs/${jobId}/callback`;
-    const { claims, job } = await authorizeRunner(
+    const { claims } = await authorizeRunner(
       context,
       options,
       jobId,
@@ -6685,6 +7107,18 @@ export function createApi(options: ApiOptions = {}) {
         403,
       );
     }
+    const jobs = runnerJobService(context, options);
+    const claimedCallback = await jobs.claimCallback(
+      callback,
+      context.get("requestId"),
+    );
+    const job = claimedCallback.job;
+    const callbackClaim = claimedCallback.duplicate
+      ? undefined
+      : claimedCallback.claim;
+    if (callbackClaim !== undefined) {
+      context.set("runnerCallbackClaim", { jobId, claim: callbackClaim });
+    }
     const service = sessionService(context, options);
     const currentSession = await service.getSession(job.sessionId);
     if (
@@ -6695,6 +7129,29 @@ export function createApi(options: ApiOptions = {}) {
         "RUNNER_CALLBACK_SESSION_MISMATCH",
         "Runner callback does not match a live artifact session",
         409,
+      );
+    }
+    const storedLabAuthority = HostedExperimentLineageV5Schema.safeParse(
+      currentSession.labVerification,
+    );
+    const storedPlanAuthority = HostedPlanLineageSchema.safeParse(
+      currentSession.labVerification,
+    );
+    const callbackAlreadyProjected =
+      (storedLabAuthority.success && storedLabAuthority.data.jobId === jobId) ||
+      (storedPlanAuthority.success &&
+        storedPlanAuthority.data.jobId === jobId) ||
+      currentSession.resultAuthority?.jobId === jobId ||
+      currentSession.boundaryMapAuthority?.jobId === jobId ||
+      currentSession.patchAuthority?.jobId === jobId;
+    if (claimedCallback.duplicate && callbackAlreadyProjected) {
+      return context.json(
+        jsonSuccess({
+          duplicate: true as const,
+          runnerJob: job,
+          session: await statePayload(context, currentSession, options),
+          verification: null,
+        }),
       );
     }
 
@@ -6926,6 +7383,7 @@ export function createApi(options: ApiOptions = {}) {
               jobs,
               job: scientificRunJob,
               callback,
+              callbackClaim,
               authorityAt: requestNow(options).toISOString(),
               report: boundaryMapAuthority.report,
             });
@@ -6968,6 +7426,7 @@ export function createApi(options: ApiOptions = {}) {
               jobs,
               job: scientificRunJob,
               callback,
+              callbackClaim,
               authorityAt: requestNow(options).toISOString(),
               invariantCount:
                 scientificInteractiveAuthority.report.invariantCount,
@@ -7048,6 +7507,7 @@ export function createApi(options: ApiOptions = {}) {
               jobs,
               job: scientificRunJob,
               callback,
+              callbackClaim,
               authorityAt: requestNow(options).toISOString(),
               report: epistemicAuthority.report,
             });
@@ -7545,9 +8005,11 @@ export function createApi(options: ApiOptions = {}) {
       }
     }
 
-    const completed = await runnerJobService(context, options).recordCallback(
+    const completed = await jobs.recordCallback(
       terminalCallback,
+      callbackClaim,
     );
+    context.set("runnerCallbackClaim", undefined);
     await releaseAdmissionBestEffort(
       context,
       options,
@@ -7932,7 +8394,7 @@ export function createApi(options: ApiOptions = {}) {
       jsonSuccess({
         duplicate: completed.duplicate,
         runnerJob: completed.job,
-        session: statePayload(updatedSession),
+        session: await statePayload(context, updatedSession, options),
         verification,
       }),
     );
@@ -7942,7 +8404,11 @@ export function createApi(options: ApiOptions = {}) {
     const service = sessionService(context, options);
     const jobs = runnerJobService(context, options);
     const sessionId = context.req.param("sessionId");
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    for (
+      let attempt = 0;
+      attempt < MAX_EVIDENCE_SNAPSHOT_ATTEMPTS;
+      attempt += 1
+    ) {
       const sessionBefore = await service.getSession(sessionId);
       requireStoredSampleClaimScope(sessionBefore);
       const jobsBefore = await jobs.listForSession(sessionId);
@@ -8198,7 +8664,7 @@ export function createApi(options: ApiOptions = {}) {
           });
           return context.json(
             jsonSuccess({
-              ...statePayload(current),
+              ...(await statePayload(context, current, options)),
               runnerJob,
               reused: true as const,
             }),
@@ -8275,7 +8741,7 @@ export function createApi(options: ApiOptions = {}) {
         });
         return context.json(
           jsonSuccess({
-            ...statePayload(current),
+            ...(await statePayload(context, current, options)),
             runnerJob: starting,
             ...(claimed.reused ? { reused: true as const } : {}),
           }),
@@ -8417,7 +8883,7 @@ export function createApi(options: ApiOptions = {}) {
       });
       return context.json(
         jsonSuccess({
-          ...statePayload(current),
+          ...(await statePayload(context, current, options)),
           runnerJob: starting,
           ...(claimed.reused ? { reused: true as const } : {}),
         }),
@@ -8436,7 +8902,9 @@ export function createApi(options: ApiOptions = {}) {
       sessionId,
       sampleResult,
     );
-    return context.json(jsonSuccess(statePayload(completed)));
+    return context.json(
+      jsonSuccess(await statePayload(context, completed, options)),
+    );
   });
 
   app.post("/api/sessions/:sessionId/boundary/run", async (context) => {
@@ -8596,7 +9064,7 @@ export function createApi(options: ApiOptions = {}) {
       });
       return context.json(
         jsonSuccess({
-          ...statePayload(current),
+          ...(await statePayload(context, current, options)),
           runnerJob,
           reused: true as const,
         }),
@@ -8649,7 +9117,7 @@ export function createApi(options: ApiOptions = {}) {
     });
     return context.json(
       jsonSuccess({
-        ...statePayload(current),
+        ...(await statePayload(context, current, options)),
         runnerJob: starting,
         ...(claimed.reused ? { reused: true as const } : {}),
       }),
@@ -8881,7 +9349,7 @@ export function createApi(options: ApiOptions = {}) {
       });
       return context.json(
         jsonSuccess({
-          ...statePayload(current),
+          ...(await statePayload(context, current, options)),
           runnerJob: starting,
           selectedRunId: derived.selectedRunId,
           configurationHash,
@@ -9154,7 +9622,7 @@ export function createApi(options: ApiOptions = {}) {
     });
     return context.json(
       jsonSuccess({
-        ...statePayload(current),
+        ...(await statePayload(context, current, options)),
         runnerJob: starting,
         selectedRunId,
         configurationHash,
@@ -9442,7 +9910,9 @@ export function createApi(options: ApiOptions = {}) {
     const sessionId = context.req.param("sessionId");
     requireMutableSession(await service.getSession(sessionId));
     const updated = await service.recordRevision(sessionId, revision);
-    return context.json(jsonSuccess(statePayload(updated)));
+    return context.json(
+      jsonSuccess(await statePayload(context, updated, options)),
+    );
   });
 
   app.post("/api/sessions/:sessionId/transfer", async (context) => {
@@ -9515,7 +9985,9 @@ export function createApi(options: ApiOptions = {}) {
     const evaluatedAt = (options.now?.() ?? new Date()).toISOString();
     const result = await evaluateSubmission(evaluatedAt);
     const updated = await service.recordTransferResult(sessionId, result);
-    return context.json(jsonSuccess(statePayload(updated)));
+    return context.json(
+      jsonSuccess(await statePayload(context, updated, options)),
+    );
   });
 
   app.post("/api/sessions/:sessionId/patch/compile", async (context) => {
@@ -9712,7 +10184,7 @@ export function createApi(options: ApiOptions = {}) {
           });
           return context.json(
             jsonSuccess({
-              ...statePayload(current),
+              ...(await statePayload(context, current, options)),
               runnerJob,
               reused: true as const,
             }),
@@ -9797,7 +10269,7 @@ export function createApi(options: ApiOptions = {}) {
         });
         return context.json(
           jsonSuccess({
-            ...statePayload(started),
+            ...(await statePayload(context, started, options)),
             runnerJob: starting,
             ...(claimed.reused ? { reused: true as const } : {}),
           }),
@@ -9895,7 +10367,7 @@ export function createApi(options: ApiOptions = {}) {
         });
         return context.json(
           jsonSuccess({
-            ...statePayload(current),
+            ...(await statePayload(context, current, options)),
             runnerJob,
             reused: true as const,
           }),
@@ -9975,7 +10447,7 @@ export function createApi(options: ApiOptions = {}) {
       });
       return context.json(
         jsonSuccess({
-          ...statePayload(started),
+          ...(await statePayload(context, started, options)),
           runnerJob: starting,
           ...(claimed.reused ? { reused: true as const } : {}),
         }),
@@ -10044,7 +10516,7 @@ export function createApi(options: ApiOptions = {}) {
     const updated = await service.verifyPatch(sessionId, patchResult);
     return context.json(
       jsonSuccess({
-        ...statePayload(updated),
+        ...(await statePayload(context, updated, options)),
         patch: patchResult,
         kernelVerification: samplePatchKernelResult,
       }),
@@ -10121,9 +10593,8 @@ export function createApi(options: ApiOptions = {}) {
   });
 
   app.get("/api/sessions/:sessionId/proof-bundle", async (context) => {
-    const session = await sessionService(context, options).getSession(
-      context.req.param("sessionId"),
-    );
+    const service = sessionService(context, options);
+    const session = await service.getSession(context.req.param("sessionId"));
     requireStoredSampleClaimScope(session);
     if (session.proofBundle === undefined) {
       throw new ApiInputError(
@@ -10132,6 +10603,11 @@ export function createApi(options: ApiOptions = {}) {
         409,
       );
     }
+    await requireStoredProofBundleIntegrity(
+      session,
+      service,
+      context.env?.COUNTERLAB_SIGNING_KEY,
+    );
     context.header(
       "content-disposition",
       `attachment; filename="counterlab-${session.id}-proof-bundle.json"`,
@@ -10420,7 +10896,19 @@ export function createApi(options: ApiOptions = {}) {
     ),
   );
 
-  app.onError((error, context) => {
+  app.onError(async (error, context) => {
+    const callbackClaim = context.get("runnerCallbackClaim");
+    if (callbackClaim !== undefined) {
+      context.set("runnerCallbackClaim", undefined);
+      try {
+        await runnerJobService(context, options).releaseCallbackClaim(
+          callbackClaim.jobId,
+          callbackClaim.claim,
+        );
+      } catch {
+        // Preserve the request error; the persisted claim remains observable.
+      }
+    }
     if (error instanceof ApiInputError) {
       if (error.retryAfterSeconds !== undefined) {
         context.header("retry-after", String(error.retryAfterSeconds));
@@ -10526,6 +11014,25 @@ export function createApi(options: ApiOptions = {}) {
         : error.message;
       return context.json(jsonError(error.code, message, status), {
         status: status as 400,
+      });
+    }
+    if (error instanceof LearningDirectorError) {
+      const status =
+        error.code === "INVALID_INPUT" ||
+        error.code === "INVALID_RESPONSE" ||
+        error.code === "UNREGISTERED_REFERENCE" ||
+        error.code === "CLARIFICATION_ALREADY_USED" ||
+        error.code === "TOOLS_REQUIRED" ||
+        error.code === "TOOL_CALL_LIMIT" ||
+        error.code === "TURN_LIMIT" ||
+        error.code === "DUPLICATE_TOOL_CALL_ID" ||
+        error.code === "UNKNOWN_TOOL" ||
+        error.code === "MALFORMED_TOOL_CALL" ||
+        error.code === "TOOL_ARGUMENT_REJECTED"
+          ? 422
+          : 503;
+      return context.json(jsonError(error.code, error.message, status), {
+        status: status as 422,
       });
     }
     console.error("CounterLab Worker request failed", {
