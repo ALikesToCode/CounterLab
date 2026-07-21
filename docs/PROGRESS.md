@@ -4628,17 +4628,19 @@ changed, staged, hidden, ignored, renamed, overwritten, or deleted.
 
 ### Current release gates and next actions
 
-1. **Cloudflare identity:** a new Wrangler `4.110.0` repository-contained OAuth
-   callback is active and awaiting owner approval. The preceding contained
-   `wrangler whoami --json` returned exit 1 with `{"loggedIn":false}`. No cloud
-   mutation has occurred.
+1. **Cloudflare identity:** Wrangler `4.110.0` remains unauthenticated in the
+   repository-contained environment. `wrangler whoami --json` returned exit 1
+   with `{"loggedIn":false}`, and two fresh OAuth callback windows expired
+   without a returned authorization code. No cloud mutation has occurred.
 2. **Clean source:** blocked by the preserved FUSE tombstone. No current clean
    source `S` exists. The owning process must release it naturally; do not
    inspect, delete, hide, ignore, stage, rename, or overwrite it.
-3. **Real aggregate containment:** not run. The genuine sentinel requires a
-   narrowly scoped read-only observation of `/sys/fs/cgroup` and the owned test
-   processes' `/proc/<pid>/stat`; the current constitution forbids those
-   reads. No containment pass is claimed.
+3. **Real aggregate containment:** not run. The genuine sentinel requires
+   delegated `/sys/fs/cgroup` control reads, owned `/proc/<pid>/stat` reads, an
+   owned-helper membership write to delegated `cgroup.procs`, and a
+   helper-local `/proc/self/oom_score_adj` write. The current constitution
+   forbids those operations; read-only permission would be insufficient. No
+   containment pass is claimed.
 4. **Exact image and evidence:** not run for this HEAD. The stale
    source/image scientific bindings remain red until one exact image, genuine
    sentinel, and complete evidence refresh are produced together.
@@ -4654,5 +4656,5 @@ changed, staged, hidden, ignored, renamed, overwritten, or deleted.
 
 Chrome is no longer the blocker: genuine CloakBrowser local rendering is green
 for every locally executable journey. Release remains **NO-GO** for the clean
-source, constitution-compatible containment observation, exact image/evidence,
+source, constitution-compatible sentinel operations, exact image/evidence,
 Cloudflare deployment, public qualification, and submission gates.
