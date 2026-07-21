@@ -561,7 +561,8 @@ describe("scientific v5 candidate verification", () => {
       label: "an invented result claim in the scene title",
       mutate: (scene: LabSceneV2) => ({
         ...scene,
-        title: "The repeated-identity explanation won after accuracy collapsed.",
+        title:
+          "The repeated-identity explanation won after accuracy collapsed.",
       }),
     },
     {

@@ -222,16 +222,14 @@ describe("TrustedLabSceneRenderer", () => {
       <TrustedLabSceneRenderer
         scene={scene()}
         verifiedSceneHash={sceneHash}
-        signedResult={
-          signedResult({
-            integrity: {
-              mode: "hmac-signed",
-              contentHash: resultHash,
-              signature: digest("f"),
-              keyId: "counterlab-result-v1",
-            },
-          } as unknown as Partial<TrustedLabSceneResultEnvelope>)
-        }
+        signedResult={signedResult({
+          integrity: {
+            mode: "hmac-signed",
+            contentHash: resultHash,
+            signature: digest("f"),
+            keyId: "counterlab-result-v1",
+          },
+        } as unknown as Partial<TrustedLabSceneResultEnvelope>)}
       />,
     );
     expect(screen.getByRole("alert")).toBeVisible();
