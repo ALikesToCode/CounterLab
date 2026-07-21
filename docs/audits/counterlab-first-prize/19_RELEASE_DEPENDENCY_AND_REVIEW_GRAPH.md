@@ -1,10 +1,10 @@
 # Release dependency and review graph
 
-- Checkpoint: `2026-07-21T03:07:00Z`
+- Checkpoint: `2026-07-21T04:26:26Z`
 - Branch: `feat/learner-ux-v6.1`
-- Committed HEAD: `e4dc33eb44962b972c0157e5ecb4ed9760c16ee4`
+- Committed HEAD: `f5155e0cb19fec74330e1d3df9ab0bce0feca52b`
 - Deadline: `2026-07-22T00:00:00Z`
-- Time remaining at this checkpoint: **20 hours 53 minutes**
+- Time remaining at this checkpoint: **19 hours 33 minutes 34 seconds**
 
 ## Purpose and evidence boundary
 
@@ -22,6 +22,12 @@ worktree will reject this state.
 No current deployment, rendered CloakBrowser journey, learner outcome, video,
 Devpost submission, branch push, or merge is claimed here.
 
+The complete local `stock-chromium-design-review` matrix now passes every
+locally executable journey: **35 passed, 5 intentionally skipped, 0 failed in
+2.7 minutes**. The five skips are the two exact-public mobile replay journeys,
+one exact-public asset scan, and two qualified hosted-runner journeys. This is
+useful source/design evidence; it is not public or CloakBrowser qualification.
+
 ## Release dependency graph
 
 ```mermaid
@@ -37,7 +43,7 @@ flowchart TD
   I["Release check<br/>receipt v5 + deterministic full gate<br/>NOT RUN"]
   J["Cloudflare deployment<br/>maintenance + D1 + Container + Worker<br/>NOT RUN"]
   K["Public identity and smoke<br/>deployment receipt v7 + /ready + health + live loops<br/>NOT RUN"]
-  L["CloakBrowser qualification<br/>40 journeys + manual accessibility/performance matrix<br/>0 rendered journeys"]
+  L["Browser qualification<br/>local stock 35 pass / 5 public-live skips<br/>public CloakBrowser: 0 journeys"]
   M["Submission package<br/>public app + repo + video + feedback + honest NO_DATA<br/>EXTERNALLY UNVERIFIED"]
   N["Git publication<br/>push feature -> verify remote -> fast-forward main -> push main<br/>NOT RUN"]
 
@@ -68,7 +74,7 @@ flowchart TD
 | Release check             | Clean `E`, qualified receipt, exact local images and runtime                                                               | Release-check receipt v5 after formatting, tests, mutations, held-out, sandbox, scientific, build, reproduction, patch replay, and secret gates                                   | **Not run**                                                                                                                                       | Any failure blocks deployment                                                                                                |
 | Cloudflare deployment     | Qualified receipt, release-check receipt, registry image, required secrets, recovery target, working CloakBrowser endpoint | Exact maintenance/final Worker versions, D1 migration log, exact Container digest, deployment receipt v7                                                                          | **Not run**                                                                                                                                       | Stop before mutation when preflight is red; after mutation, automated Worker recovery does not reverse D1 or Container state |
 | Public identity and smoke | Active exact Worker/Container tuple                                                                                        | `/ready`, `/api/health?readiness=probe`, Worker 100% traffic, Container identity, public asset scan, Sample, Replay, leakage and imbalance live evidence, Capsule/replay evidence | **Not run**                                                                                                                                       | Source, image, Worker, client, receipt, or capability mismatch is a release failure                                          |
-| CloakBrowser              | Exact public tuple and injected `CLOAK_CDP_ENDPOINT`                                                                       | All 40 current tests plus responsive, keyboard, screen-reader, 200% zoom, reduced-motion, console/network, downloads, reconnect, and Web Vitals evidence                          | **40 statically collected; 0 rendered**                                                                                                           | Stock Chromium is design-review evidence only and cannot close this gate                                                     |
+| CloakBrowser              | Exact public tuple and injected `CLOAK_CDP_ENDPOINT`                                                                       | All 40 current tests plus responsive, keyboard, screen-reader, 200% zoom, reduced-motion, console/network, downloads, reconnect, and Web Vitals evidence                          | Local stock design review: **35 passed, 5 public/live skips, 0 failed**; public CloakBrowser: **0 journeys**                                      | Stock Chromium is design-review evidence only and cannot close this gate                                                     |
 | Devpost and impact        | Qualified public tuple, public repo/video/feedback links, factual copy                                                     | Logged-out link audit, public video from exact tuple, Devpost receipt, real consented learner aggregates or explicit `NO_DATA`                                                    | **Externally unverified; learner evidence remains `NO_DATA`**                                                                                     | Never infer a submission or learner result                                                                                   |
 | Push and merge            | Every ship gate factual and final source reviewed                                                                          | Verified feature remote tip, fast-forward-only `main`, verified main remote tip                                                                                                   | **Not run**                                                                                                                                       | Do not push or merge a `NO-GO` release                                                                                       |
 
@@ -86,7 +92,7 @@ flowchart LR
   subgraph Verification["Pre-release verification"]
     T1["Vitest + TypeScript"]
     T2["Pytest + cross-runtime parity"]
-    T3["Playwright source + static collection"]
+    T3["Playwright source + local stock matrix"]
     Q1["Independent review"]
   end
 
@@ -147,8 +153,10 @@ Reported verification for the integrated aggregate slice is:
 - complete runner Pytest with both required source roots: **82/82 passed**;
 - repository, web client, generated Worker, and Worker TypeScript: **passed**;
 - E2E strict TypeScript: **passed**;
-- Playwright static collection: **40 tests in 3 files**, with no browser
-  launched;
+- Complete local stock-browser matrix: **40 tests in 3 files**, **35 passed,
+  5 intentionally skipped, 0 failed in 2.7 minutes**. The public replay,
+  public asset, and real hosted-runner cases remain deferred to the exact
+  release tuple;
 - scoped Prettier, Python compilation, Node syntax, Git whitespace, and secret
   scans: **passed**;
 - independent runtime integration review: **GO** after the implementation

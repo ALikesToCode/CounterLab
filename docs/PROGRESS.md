@@ -3681,3 +3681,20 @@ release qualification.
    verification, and submission receipt remain externally unverified.
 7. Push the feature branch and fast-forward `main` only after the ship gates
    above are factual; neither publication action has occurred.
+
+## Complete local browser-matrix checkpoint — 2026-07-21T04:26:26Z
+
+- The complete Playwright collection executed against fresh repository-local
+  D1 state under explicit `stock-chromium-design-review` authority: **40 tests
+  in 3 files, 35 passed, 5 intentionally skipped, 0 failed in 2.7 minutes**.
+- The five skips are exact and expected at this gate: two public mobile replay
+  journeys require `COUNTERLAB_E2E_BASE_URL`, one public asset scan requires a
+  frozen release manifest and public origin, and two untouched supported live
+  journeys require `COUNTERLAB_E2E_LIVE=1` with a genuinely qualified analyst
+  and hosted runner.
+- All local Sample, Replay, intake, recovery, refresh/history, authority,
+  responsive, keyboard, reduced-motion, transfer, patch-lock, first-fold,
+  console/network, and no-result-before-Prediction journeys passed.
+- This closes the local stock-browser regression gate only. It does not close
+  the exact-public, hosted-live, CloakBrowser, real screen-reader, deployment,
+  or submission gates.
