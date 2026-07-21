@@ -44,6 +44,7 @@ import {
   renderContainedContainerdConfig,
 } from "./contained-containerd-config.mjs";
 import { createContainedRuntimeEnvironment } from "./contained-runtime-environment.mjs";
+import { AGGREGATE_TIMEOUT_QUALIFICATION_MODE } from "./contained-runtime-request.mjs";
 
 const root = process.cwd();
 const validator = resolve(
@@ -778,6 +779,207 @@ function absentInspectionResponses() {
   return [successful(), missing(), missing()];
 }
 
+function qualifiedRuntimeHarness() {
+  const sessionRoot = resolve(root, ".rt/rt-validator-qualified");
+  const installRoot = resolve(
+    root,
+    "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
+  );
+  const command = boundedAdapterCommand();
+  const plan = containedRunPlan({
+    args: command,
+    binRoot: resolve(installRoot, "bin"),
+    clientFifoRoot: resolve(sessionRoot, "run/client-fifo"),
+    containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+    installRoot,
+    invocationId,
+    sessionRoot,
+  });
+  const fixture = imageFixture(command);
+  const stagingContainerId = "d".repeat(64);
+  let finalContainerId = "";
+  const alias = plan.imageAlias;
+  const imageRootfsPath = resolve(
+    sessionRoot,
+    `run/rootless-specs/${invocationId}.image-rootfs`,
+  );
+  const events: string[] = [];
+  let aliasPresent = false;
+  let imageRootfsMounted = false;
+  let stagingPresent = true;
+  let taskPresent = false;
+  let containerPresent = false;
+  let baseSpecSha256 = "";
+
+  writeFileSync(resolve(output, "public-tests.stdout"), "", { mode: 0o600 });
+  writeFileSync(resolve(output, "public-tests.stderr"), "", { mode: 0o600 });
+
+  const fakeSpawn = (
+    _program: string,
+    args: string[],
+    _options: { timeout: number },
+  ) => {
+    const joined = args.join(" ");
+    if (joined.includes("image inspect docker.io/library/counterlab-adapter")) {
+      return successful(fixture.targetSource);
+    }
+    if (joined.includes(`content get ${fixture.manifestDigest}`)) {
+      return successful(fixture.manifestSource);
+    }
+    if (joined.includes(`content get ${fixture.configDigest}`)) {
+      return successful(fixture.configSource);
+    }
+    if (joined.includes(`images inspect ${alias}`)) {
+      return aliasPresent ? successful("{}") : missing();
+    }
+    if (joined.includes(`image inspect ${alias}`)) {
+      return successful(aliasMetadata(alias, fixture));
+    }
+    if (joined.includes("images tag")) {
+      aliasPresent = true;
+      return successful();
+    }
+    if (joined.includes(`images remove ${alias}`)) {
+      events.push("alias-cleaned");
+      aliasPresent = false;
+      return successful();
+    }
+    if (joined.includes("images mount")) {
+      imageRootfsMounted = true;
+      return successful(
+        `${fixture.authority.rootfsChainId}\n${imageRootfsPath}\n`,
+      );
+    }
+    if (joined.includes("images unmount")) {
+      events.push("rootfs-cleaned");
+      imageRootfsMounted = false;
+      return successful(`${imageRootfsPath}\n`);
+    }
+    if (joined.includes(" create ")) {
+      return successful(`${stagingContainerId}\n`);
+    }
+    if (args.includes("--spec")) {
+      return successful(
+        rootlessSpec(stagingContainerId, plan.expected, fixture.authority),
+      );
+    }
+    if (joined.includes("containers info")) {
+      const id = args.at(-1);
+      if (id === stagingContainerId) {
+        return stagingPresent
+          ? successful(containerMetadata(stagingContainerId, alias))
+          : missing();
+      }
+      if (id === finalContainerId) {
+        return containerPresent
+          ? successful(
+              configContainerMetadata(finalContainerId, baseSpecSha256),
+            )
+          : missing();
+      }
+      return missing();
+    }
+    if (joined.includes("tasks list")) {
+      return successful(taskPresent ? `${finalContainerId}\n` : "");
+    }
+    if (joined.includes("snapshots") && joined.includes(" diff ")) {
+      return successful("stable-rootfs-diff");
+    }
+    if (joined.includes("snapshots") && joined.includes(" info ")) {
+      const id = args.at(-1);
+      if (id === imageRootfsPath) {
+        return imageRootfsMounted
+          ? successful(
+              imageRootfsSnapshotMetadata(
+                imageRootfsPath,
+                fixture.authority.rootfsChainId,
+              ),
+            )
+          : missing();
+      }
+      return missing();
+    }
+    if (joined.includes(" rm --force ")) {
+      stagingPresent = false;
+      return successful();
+    }
+    if (joined.includes(" run ")) {
+      events.push("candidate-started");
+      taskPresent = true;
+      containerPresent = true;
+      const label = args.find((entry) =>
+        entry.startsWith("io.counterlab.runtime.base-spec-sha256="),
+      );
+      baseSpecSha256 = label!.split("=", 2)[1]!;
+      const timeoutError = Object.assign(new Error("candidate timed out"), {
+        code: "ETIMEDOUT",
+      });
+      return {
+        status: null,
+        stdout: Buffer.alloc(0),
+        stderr: Buffer.alloc(0),
+        error: timeoutError,
+      };
+    }
+    if (joined.includes("tasks delete")) {
+      events.push("task-cleaned");
+      taskPresent = false;
+      return successful();
+    }
+    if (joined.includes("containers delete")) {
+      events.push("container-cleaned");
+      containerPresent = false;
+      return successful();
+    }
+    throw new Error(`unexpected mock command: ${joined}`);
+  };
+
+  return {
+    context: {
+      args: command,
+      binRoot: resolve(installRoot, "bin"),
+      clientFifoRoot: resolve(sessionRoot, "run/client-fifo"),
+      containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+      cwd: root,
+      environment: process.env,
+      installRoot,
+      qualificationMode: AGGREGATE_TIMEOUT_QUALIFICATION_MODE,
+      sessionRoot,
+      stdin: Buffer.alloc(0),
+    },
+    events,
+    fakeSpawn,
+    get finalContainerId() {
+      return finalContainerId;
+    },
+    imageRootfsPath,
+    persistSpec: ({
+      finalContainerId: persistedFinalContainerId,
+      receipt,
+      sessionRoot: persistedSessionRoot,
+    }: {
+      finalContainerId: string;
+      receipt: Record<string, unknown>;
+      sessionRoot: string;
+    }) => {
+      finalContainerId = persistedFinalContainerId;
+      return {
+        configFileSha256: String(receipt.configFileSha256),
+        configPath: resolve(
+          persistedSessionRoot,
+          `run/rootless-specs/${finalContainerId}.config.json`,
+        ),
+        imageRootfsPath,
+        receiptFileSha256: "4".repeat(64),
+        receiptPath: resolve(
+          persistedSessionRoot,
+          `run/rootless-specs/${finalContainerId}.receipt.json`,
+        ),
+      };
+    },
+  };
+}
+
 describe("contained runtime command policy", () => {
   it("renders a bounded containerd shim manager configuration", () => {
     const config = renderContainedContainerdConfig(root);
@@ -834,7 +1036,7 @@ describe("contained runtime command policy", () => {
     symlinkSync(logTarget, runcLogSymlink);
   });
 
-  it("accepts only a self-hashed clean timeout control receipt", () => {
+  it("accepts only self-hashed timeout controls with exact v2 or qualified v3 shape", () => {
     const payload = {
       schemaVersion: "2",
       status: "TIMED_OUT_CLEAN",
@@ -867,6 +1069,32 @@ describe("contained runtime command policy", () => {
     };
 
     expect(validateContainedRunControlReceipt(receipt)).toEqual(receipt);
+    const qualifiedPayload = {
+      ...payload,
+      schemaVersion: "3",
+      qualificationMode: AGGREGATE_TIMEOUT_QUALIFICATION_MODE,
+    } as const;
+    const qualifiedReceipt = {
+      ...qualifiedPayload,
+      receiptPayloadSha256: createHash("sha256")
+        .update(canonicalJson(qualifiedPayload))
+        .digest("hex"),
+    };
+    expect(validateContainedRunControlReceipt(qualifiedReceipt)).toEqual(
+      qualifiedReceipt,
+    );
+    expect(() =>
+      validateContainedRunControlReceipt({
+        ...qualifiedReceipt,
+        qualificationMode: "unknown",
+      }),
+    ).toThrow(/qualification|binding/u);
+    expect(() =>
+      validateContainedRunControlReceipt({
+        ...receipt,
+        qualificationMode: AGGREGATE_TIMEOUT_QUALIFICATION_MODE,
+      }),
+    ).toThrow(/shape/u);
     expect(() =>
       validateContainedRunControlReceipt({
         ...receipt,
@@ -883,6 +1111,184 @@ describe("contained runtime command policy", () => {
       }),
     ).toThrow(/status/u);
   });
+
+  it("rejects an unknown qualification mode before invoking the runtime", async () => {
+    let spawned = false;
+    const result = await executeContainedRun(
+      {
+        args: startupCommand(),
+        binRoot: resolve(root, "node_modules/.cache/unused/bin"),
+        clientFifoRoot: resolve(root, ".rt/unused/client-fifo"),
+        containerdSocket: resolve(root, ".rt/unused/containerd.sock"),
+        cwd: root,
+        environment: process.env,
+        installRoot: resolve(root, "node_modules/.cache/unused"),
+        qualificationMode: "unknown" as never,
+        sessionRoot: resolve(root, ".rt/unused"),
+        stdin: Buffer.alloc(0),
+      },
+      () => {
+        spawned = true;
+        throw new Error("invalid qualification mode must not reach spawn");
+      },
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr.toString("utf8")).toContain(
+      "qualification mode is invalid",
+    );
+    expect(spawned).toBe(false);
+  });
+
+  it("binds a clean timed-out run to the aggregate-qualified receipt", async () => {
+    const harness = qualifiedRuntimeHarness();
+    let completionOutcome: unknown;
+    const qualifiedReceiptFileSha256 = "7".repeat(64);
+    const qualifiedReceiptPayloadSha256 = "8".repeat(64);
+    const coordinator = {
+      async begin(input: { finalContainerId: string; invocationId: string }) {
+        harness.events.push("qualification-ready");
+        expect(input).toMatchObject({
+          finalContainerId: harness.finalContainerId,
+          invocationId,
+        });
+        return {
+          finalContainerId: input.finalContainerId,
+          invocationId: input.invocationId,
+        };
+      },
+      async waitForDraft() {
+        harness.events.push("qualification-draft");
+        return { receiptPayloadSha256: "6".repeat(64) };
+      },
+      async complete(_handle: unknown, outcome: unknown) {
+        harness.events.push("qualification-complete");
+        completionOutcome = outcome;
+        return {
+          qualificationArtifacts: {},
+          qualifiedReceipt: {},
+          qualifiedReceiptFileSha256,
+          qualifiedReceiptPath: resolve(
+            harness.context.sessionRoot,
+            `run/rootless-specs/${harness.finalContainerId}.qualified-receipt.json`,
+          ),
+          qualifiedReceiptPayloadSha256,
+        };
+      },
+    };
+
+    const result = await executeContainedRun(
+      harness.context,
+      harness.fakeSpawn,
+      harness.persistSpec,
+      () => undefined,
+      () => invocationId,
+      undefined,
+      coordinator,
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toHaveLength(0);
+    expect(
+      result.controlReceipt,
+      JSON.stringify({
+        events: harness.events,
+        stderr: result.stderr.toString("utf8"),
+      }),
+    ).toMatchObject({
+      schemaVersion: "3",
+      qualificationMode: AGGREGATE_TIMEOUT_QUALIFICATION_MODE,
+      status: "TIMED_OUT_CLEAN",
+      timeoutObserved: true,
+      resultReleased: false,
+      rootlessReceiptFileSha256: qualifiedReceiptFileSha256,
+      rootlessReceiptPayloadSha256: qualifiedReceiptPayloadSha256,
+    });
+    expect(completionOutcome).toEqual({
+      cleanup: {
+        taskAbsent: true,
+        containerAbsent: true,
+        snapshotAbsent: true,
+        invocationAliasAbsent: true,
+        imageRootfsAbsent: true,
+        persistedAuthorityVerified: true,
+        readOnlyMountsUnchanged: true,
+        imageRootfsUnchanged: true,
+      },
+      resultReleased: false,
+      runtimeFailed: false,
+      timeoutObserved: true,
+    });
+    expect(harness.events).toEqual([
+      "qualification-ready",
+      "candidate-started",
+      "qualification-draft",
+      "task-cleaned",
+      "container-cleaned",
+      "rootfs-cleaned",
+      "alias-cleaned",
+      "qualification-complete",
+    ]);
+    expect(() =>
+      validateContainedRunControlReceipt(result.controlReceipt),
+    ).not.toThrow();
+  });
+
+  it.each(["begin", "draft", "complete"] as const)(
+    "fails closed when aggregate qualification %s fails",
+    async (failurePoint) => {
+      const harness = qualifiedRuntimeHarness();
+      const coordinator = {
+        async begin() {
+          harness.events.push("qualification-ready");
+          if (failurePoint === "begin") throw new Error("begin failed");
+          return {
+            finalContainerId: harness.finalContainerId,
+            invocationId,
+          };
+        },
+        async waitForDraft() {
+          harness.events.push("qualification-draft");
+          if (failurePoint === "draft") throw new Error("draft failed");
+          return { receiptPayloadSha256: "6".repeat(64) };
+        },
+        async complete() {
+          harness.events.push("qualification-complete");
+          throw new Error("completion failed");
+        },
+      };
+
+      const result = await executeContainedRun(
+        harness.context,
+        harness.fakeSpawn,
+        harness.persistSpec,
+        () => undefined,
+        () => invocationId,
+        undefined,
+        coordinator,
+      );
+
+      expect(result.status).toBe(1);
+      expect(result.stdout).toHaveLength(0);
+      expect(result.controlReceipt).toBeUndefined();
+      expect(result.stderr.toString("utf8")).toMatch(
+        failurePoint === "begin"
+          ? /qualification readiness failed/u
+          : /aggregate qualification failed/u,
+      );
+      if (failurePoint === "begin") {
+        expect(harness.events).toEqual([
+          "qualification-ready",
+          "rootfs-cleaned",
+          "alias-cleaned",
+        ]);
+        expect(harness.events).not.toContain("candidate-started");
+      } else {
+        expect(harness.events).toContain("candidate-started");
+        expect(harness.events.at(-1)).toBe("qualification-complete");
+      }
+    },
+  );
 
   it("maps only the pinned runc state root into the runtime session", () => {
     const environment = {
@@ -2113,7 +2519,7 @@ describe("contained runtime command policy", () => {
     );
   });
 
-  it("fails closed when owned final cleanup fails", () => {
+  it("fails closed when owned final cleanup fails", async () => {
     const sessionRoot = resolve(root, ".rt/rt-validator-cleanup");
     const installRoot = resolve(
       root,
@@ -2280,7 +2686,18 @@ describe("contained runtime command policy", () => {
       throw new Error(`unexpected mock command: ${joined}`);
     };
 
-    const result = executeContainedRun(
+    const qualificationCoordinator = {
+      begin: () => {
+        throw new Error("normal mode must not start qualification");
+      },
+      waitForDraft: () => {
+        throw new Error("normal mode must not wait for qualification");
+      },
+      complete: () => {
+        throw new Error("normal mode must not complete qualification");
+      },
+    };
+    const result = await executeContainedRun(
       {
         args: command,
         binRoot: resolve(installRoot, "bin"),
@@ -2289,6 +2706,7 @@ describe("contained runtime command policy", () => {
         cwd: root,
         environment: process.env,
         installRoot,
+        qualificationMode: null,
         sessionRoot,
         stdin: Buffer.alloc(0),
       },
@@ -2308,6 +2726,8 @@ describe("contained runtime command policy", () => {
       }),
       () => undefined,
       () => invocationId,
+      undefined,
+      qualificationCoordinator,
     );
 
     expect(result.status).toBe(1);
@@ -2347,7 +2767,7 @@ describe("contained runtime command policy", () => {
     ).toBe(false);
   });
 
-  it("rejects an invalid generated container ID without deleting by name", () => {
+  it("rejects an invalid generated container ID without deleting by name", async () => {
     const sessionRoot = resolve(root, ".rt/rt-validator-id");
     const installRoot = resolve(
       root,
@@ -2358,7 +2778,7 @@ describe("contained runtime command policy", () => {
     const alias = `docker.io/library/counterlab-runtime-invocation:${invocationId}`;
     const calls: string[][] = [];
     let aliasPresent = false;
-    const result = executeContainedRun(
+    const result = await executeContainedRun(
       {
         args: command,
         binRoot: resolve(installRoot, "bin"),
@@ -2367,6 +2787,7 @@ describe("contained runtime command policy", () => {
         cwd: root,
         environment: process.env,
         installRoot,
+        qualificationMode: null,
         sessionRoot,
         stdin: Buffer.alloc(0),
       },

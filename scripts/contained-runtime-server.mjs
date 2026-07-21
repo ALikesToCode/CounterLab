@@ -24,6 +24,7 @@ import {
   probeContainedShimSocketDirectory,
 } from "./contained-containerd-config.mjs";
 import { createContainedRuntimeEnvironment } from "./contained-runtime-environment.mjs";
+import { createContainedRuntimeLinearizer } from "./contained-runtime-linearizer.mjs";
 import { parseContainedRuntimeRequest } from "./contained-runtime-request.mjs";
 import { verifyPersistedContainedRootlessSpec } from "./contained-rootless-spec.mjs";
 
@@ -108,6 +109,7 @@ const environment = createContainedRuntimeEnvironment({
 let runtimeState = "ACTIVE";
 let drainAttestationSha256;
 let drainReceipt;
+const requestLinearizer = createContainedRuntimeLinearizer();
 
 function lines(value) {
   return String(value ?? "")
@@ -403,119 +405,129 @@ const server = createServer((socket) => {
   socket.on("timeout", () => socket.destroy());
   socket.on("error", () => undefined);
   socket.on("end", () => {
-    let response;
-    try {
-      const request = parseContainedRuntimeRequest(
-        JSON.parse(Buffer.concat(chunks).toString("utf8")),
-      );
-      const stdin = request.stdin;
-      if (request.args[0] === "counterlab-drain") {
-        const receipt = createDrainReceipt(request.args, stdin);
-        response = {
-          schemaVersion: "1",
-          exitCode: 0,
-          stdoutBase64: Buffer.from(
-            `${canonicalJson(receipt)}\n`,
-            "utf8",
-          ).toString("base64"),
-          stderrBase64: "",
-        };
-      } else {
-        if (runtimeState !== "ACTIVE") {
-          throw new Error(
-            runtimeState === "DRAINED"
-              ? "contained runtime is drained"
-              : "contained runtime is draining",
-          );
-        }
-        const validation = spawnSync(
-          process.execPath,
-          [
-            resolve(root, "scripts/validate-contained-runtime-command.mjs"),
-            ...request.args,
-          ],
-          {
-            cwd: root,
-            env: environment,
-            encoding: "utf8",
-            stdio: ["ignore", "pipe", "pipe"],
-            timeout: 10_000,
-          },
+    void requestLinearizer.run(async () => {
+      let response;
+      try {
+        const request = parseContainedRuntimeRequest(
+          JSON.parse(Buffer.concat(chunks).toString("utf8")),
         );
-        if (validation.status !== 0) {
-          throw new Error(
-            "contained runtime command failed independent validation",
+        const stdin = request.stdin;
+        if (request.args[0] === "counterlab-drain") {
+          let receipt;
+          try {
+            receipt = createDrainReceipt(request.args, stdin);
+          } catch (error) {
+            if (runtimeState === "DRAINING" && drainReceipt === undefined) {
+              runtimeState = "ACTIVE";
+            }
+            throw error;
+          }
+          response = {
+            schemaVersion: "1",
+            exitCode: 0,
+            stdoutBase64: Buffer.from(
+              `${canonicalJson(receipt)}\n`,
+              "utf8",
+            ).toString("base64"),
+            stderrBase64: "",
+          };
+        } else {
+          if (runtimeState !== "ACTIVE") {
+            throw new Error(
+              runtimeState === "DRAINED"
+                ? "contained runtime is drained"
+                : "contained runtime is draining",
+            );
+          }
+          const validation = spawnSync(
+            process.execPath,
+            [
+              resolve(root, "scripts/validate-contained-runtime-command.mjs"),
+              ...request.args,
+            ],
+            {
+              cwd: root,
+              env: environment,
+              encoding: "utf8",
+              stdio: ["ignore", "pipe", "pipe"],
+              timeout: 10_000,
+            },
           );
-        }
-        const result =
-          request.args[0] === "run"
-            ? executeContainedRun({
-                args: request.args,
-                binRoot,
-                clientFifoRoot,
-                containerdSocket,
-                cwd: root,
-                environment,
-                installRoot,
-                qualificationMode: request.qualificationMode,
-                sessionRoot,
-                stdin,
-              })
-            : spawnSync(
-                resolve(binRoot, "nerdctl"),
-                [
-                  "--address",
+          if (validation.status !== 0) {
+            throw new Error(
+              "contained runtime command failed independent validation",
+            );
+          }
+          const result =
+            request.args[0] === "run"
+              ? await executeContainedRun({
+                  args: request.args,
+                  binRoot,
+                  clientFifoRoot,
                   containerdSocket,
-                  "--namespace",
-                  "counterlab-v6.1",
-                  "--snapshotter",
-                  "native",
-                  "--data-root",
-                  resolve(sessionRoot, "data/nerdctl"),
-                  "--cgroup-manager",
-                  "cgroupfs",
-                  "--cni-path",
-                  resolve(installRoot, "libexec/cni"),
-                  "--cni-netconfpath",
-                  resolve(sessionRoot, "config/cni"),
-                  "--hosts-dir",
-                  resolve(sessionRoot, "config/certs.d"),
-                  "--experimental=false",
-                  ...request.args,
-                ],
-                {
                   cwd: root,
-                  env: environment,
-                  input: stdin,
-                  encoding: null,
-                  stdio: ["pipe", "pipe", "pipe"],
-                  timeout: 1_800_000,
-                  maxBuffer: 32 * 1024 * 1024,
-                },
-              );
+                  environment,
+                  installRoot,
+                  qualificationMode: request.qualificationMode,
+                  sessionRoot,
+                  stdin,
+                })
+              : spawnSync(
+                  resolve(binRoot, "nerdctl"),
+                  [
+                    "--address",
+                    containerdSocket,
+                    "--namespace",
+                    "counterlab-v6.1",
+                    "--snapshotter",
+                    "native",
+                    "--data-root",
+                    resolve(sessionRoot, "data/nerdctl"),
+                    "--cgroup-manager",
+                    "cgroupfs",
+                    "--cni-path",
+                    resolve(installRoot, "libexec/cni"),
+                    "--cni-netconfpath",
+                    resolve(sessionRoot, "config/cni"),
+                    "--hosts-dir",
+                    resolve(sessionRoot, "config/certs.d"),
+                    "--experimental=false",
+                    ...request.args,
+                  ],
+                  {
+                    cwd: root,
+                    env: environment,
+                    input: stdin,
+                    encoding: null,
+                    stdio: ["pipe", "pipe", "pipe"],
+                    timeout: 1_800_000,
+                    maxBuffer: 32 * 1024 * 1024,
+                  },
+                );
+          response = {
+            schemaVersion: "1",
+            exitCode: result.status ?? 1,
+            stdoutBase64: Buffer.from(result.stdout ?? "").toString("base64"),
+            stderrBase64: Buffer.from(result.stderr ?? "").toString("base64"),
+            ...(result.controlReceipt === undefined
+              ? {}
+              : { runControlReceipt: result.controlReceipt }),
+          };
+        }
+      } catch (error) {
         response = {
           schemaVersion: "1",
-          exitCode: result.status ?? 1,
-          stdoutBase64: Buffer.from(result.stdout ?? "").toString("base64"),
-          stderrBase64: Buffer.from(result.stderr ?? "").toString("base64"),
-          ...(result.controlReceipt === undefined
-            ? {}
-            : { runControlReceipt: result.controlReceipt }),
+          exitCode: 1,
+          stdoutBase64: "",
+          stderrBase64: Buffer.from(
+            error instanceof Error
+              ? `${error.message}\n`
+              : "contained runtime failure\n",
+          ).toString("base64"),
         };
       }
-    } catch (error) {
-      response = {
-        schemaVersion: "1",
-        exitCode: 1,
-        stdoutBase64: "",
-        stderrBase64: Buffer.from(
-          error instanceof Error
-            ? `${error.message}\n`
-            : "contained runtime failure\n",
-        ).toString("base64"),
-      };
-    }
-    socket.end(JSON.stringify(response));
+      socket.end(JSON.stringify(response));
+    });
   });
 });
 

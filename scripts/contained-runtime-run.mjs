@@ -13,6 +13,7 @@ import { isAbsolute, relative, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 
+import { containedCgroupQualificationCoordinator } from "./contained-cgroup-qualification-coordinator.mjs";
 import {
   persistContainedRootlessSpec,
   sanitizeContainedRootlessSpec,
@@ -28,6 +29,7 @@ import {
   validateContainedImageAliasTarget,
   verifyContainedReadOnlyMounts,
 } from "./contained-image-authority.mjs";
+import { AGGREGATE_TIMEOUT_QUALIFICATION_MODE } from "./contained-runtime-request.mjs";
 
 const repositoryRoot = realpathSync(
   resolve(fileURLToPath(import.meta.url), "../.."),
@@ -99,7 +101,7 @@ function canonicalJson(value) {
   return JSON.stringify(value);
 }
 
-const runControlReceiptKeys = [
+const runControlReceiptV2Keys = [
   "candidateWallSeconds",
   "cleanupReserveMs",
   "commandSha256",
@@ -124,14 +126,24 @@ const runControlReceiptKeys = [
   "timeoutKind",
   "runtimePolicySha256",
 ];
+const runControlReceiptV3Keys = [
+  ...runControlReceiptV2Keys,
+  "qualificationMode",
+];
 
 export function validateContainedRunControlReceipt(value) {
   if (
     value === null ||
     typeof value !== "object" ||
     Array.isArray(value) ||
-    JSON.stringify(Object.keys(value).sort()) !==
-      JSON.stringify([...runControlReceiptKeys].sort())
+    !(
+      (value.schemaVersion === "2" &&
+        JSON.stringify(Object.keys(value).sort()) ===
+          JSON.stringify([...runControlReceiptV2Keys].sort())) ||
+      (value.schemaVersion === "3" &&
+        JSON.stringify(Object.keys(value).sort()) ===
+          JSON.stringify([...runControlReceiptV3Keys].sort()))
+    )
   ) {
     throw new Error("contained runtime control receipt shape is invalid");
   }
@@ -148,7 +160,9 @@ export function validateContainedRunControlReceipt(value) {
     "timeoutObserved",
   ];
   if (
-    value.schemaVersion !== "2" ||
+    !["2", "3"].includes(value.schemaVersion) ||
+    (value.schemaVersion === "3" &&
+      value.qualificationMode !== AGGREGATE_TIMEOUT_QUALIFICATION_MODE) ||
     !["TIMED_OUT_CLEAN", "TIMED_OUT_UNCLEAN"].includes(value.status) ||
     !invocationIdPattern.test(value.invocationId ?? "") ||
     !containerIdPattern.test(value.finalContainerId ?? "") ||
@@ -988,14 +1002,23 @@ function resultWasReleased(plan, started) {
   );
 }
 
-export function executeContainedRun(
+export async function executeContainedRun(
   context,
   spawn = spawnSync,
   persistSpec = persistContainedRootlessSpec,
   verifySpec = verifyPersistedContainedRootlessSpec,
   createInvocationId = () => randomBytes(32).toString("hex"),
   now = () => performance.now(),
+  qualificationCoordinator = containedCgroupQualificationCoordinator,
 ) {
+  if (
+    context.qualificationMode !== null &&
+    context.qualificationMode !== AGGREGATE_TIMEOUT_QUALIFICATION_MODE
+  ) {
+    return failedResult("contained runtime qualification mode is invalid");
+  }
+  const qualificationRequested =
+    context.qualificationMode === AGGREGATE_TIMEOUT_QUALIFICATION_MODE;
   const startedAtMs = now();
   const invocationId = createInvocationId();
   if (!invocationIdPattern.test(invocationId)) {
@@ -1408,6 +1431,26 @@ export function executeContainedRun(
     );
   }
 
+  let qualificationHandle;
+  if (qualificationRequested) {
+    try {
+      qualificationHandle = await qualificationCoordinator.begin({
+        baseReceiptFileSha256: persisted.receiptFileSha256,
+        baseReceiptPath: persisted.receiptPath,
+        baseReceiptPayloadSha256: prepared.receipt.receiptPayloadSha256,
+        finalContainerId: prepared.finalContainerId,
+        intendedAggregateLimits: prepared.receipt.intendedAggregateLimits,
+        invocationId,
+        sanitizedSpecSha256: prepared.receipt.sanitizedSpecSha256,
+        sessionRoot: context.sessionRoot,
+      });
+    } catch {
+      return finish(
+        failedResult("contained runtime qualification readiness failed"),
+      );
+    }
+  }
+
   const candidateStartedAt = now();
   const started = executeSpawn(
     plan.start.program,
@@ -1424,6 +1467,14 @@ export function executeContainedRun(
     { ...runtimeOptions, input: context.stdin },
   );
   const timeoutObserved = started.error?.code === "ETIMEDOUT";
+  let qualificationDraftFailed = false;
+  if (qualificationRequested) {
+    try {
+      await qualificationCoordinator.waitForDraft(qualificationHandle);
+    } catch {
+      qualificationDraftFailed = true;
+    }
+  }
   let imageRootfsUnchanged = true;
   try {
     const afterSha256 = snapshotDiffSha256(
@@ -1548,6 +1599,68 @@ export function executeContainedRun(
       rootfsCleaned.diagnostics,
     ),
   });
+  if (qualificationRequested) {
+    let resultReleased = true;
+    try {
+      resultReleased = resultWasReleased(plan, started);
+    } catch {
+      resultReleased = true;
+    }
+    const taskAbsent = cleaned.state.valid && !cleaned.state.taskPresent;
+    const containerAbsent =
+      cleaned.state.valid && !cleaned.state.containerPresent;
+    const snapshotAbsent =
+      cleaned.state.valid && !cleaned.state.snapshotPresent;
+    let qualified;
+    try {
+      qualified = await qualificationCoordinator.complete(qualificationHandle, {
+        cleanup: {
+          taskAbsent,
+          containerAbsent,
+          snapshotAbsent,
+          invocationAliasAbsent: lastAliasCleanup.absent === true,
+          imageRootfsAbsent: lastRootfsCleanup.absent === true,
+          persistedAuthorityVerified: persistedAfterRun,
+          readOnlyMountsUnchanged: readOnlyMountsAfterRun,
+          imageRootfsUnchanged,
+        },
+        resultReleased,
+        runtimeFailed: qualificationDraftFailed,
+        timeoutObserved,
+      });
+    } catch {
+      return failedResult("contained runtime aggregate qualification failed");
+    }
+    const controlPayload = {
+      schemaVersion: "3",
+      qualificationMode: AGGREGATE_TIMEOUT_QUALIFICATION_MODE,
+      status: "TIMED_OUT_CLEAN",
+      timeoutKind: "WALL_CLOCK",
+      runtimePolicySha256: CONTAINED_RUNTIME_POLICY_SHA256,
+      invocationId,
+      finalContainerId: prepared.finalContainerId,
+      commandSha256: imageAuthority.commandSha256,
+      rootlessReceiptFileSha256: qualified.qualifiedReceiptFileSha256,
+      rootlessReceiptPayloadSha256: qualified.qualifiedReceiptPayloadSha256,
+      timeoutObserved: true,
+      candidateWallSeconds: cpuLimit,
+      elapsedMs: Math.max(1, Math.floor(now() - candidateStartedAt)),
+      cleanupReserveMs,
+      taskAbsent,
+      containerAbsent,
+      snapshotAbsent,
+      invocationAliasAbsent: lastAliasCleanup.absent === true,
+      imageRootfsAbsent: lastRootfsCleanup.absent === true,
+      persistedAuthorityVerified: persistedAfterRun,
+      readOnlyMountsUnchanged: readOnlyMountsAfterRun,
+      imageRootfsUnchanged,
+      resultReleased,
+    };
+    return {
+      ...finished,
+      controlReceipt: createRunControlReceipt(controlPayload),
+    };
+  }
   if (!timeoutObserved || plan.outputDirectory === undefined) return finished;
 
   let resultReleased = true;
