@@ -1,10 +1,11 @@
 # Screenshot plan
 
-Status: planned, not captured for the final release. The required
-`CLOAK_CDP_ENDPOINT` is unavailable. Stock Chromium may produce explicitly
-labelled design-review artifacts, but it cannot qualify or supply the final
-submission images. Do not reuse historical screenshots as evidence of the
-frozen release.
+Status: planned, not captured for the final release. Repository-contained
+CloakBrowser is available and passes the current local journey matrix, but no
+exact public release endpoint and deployment receipt exist yet. Local
+CloakBrowser and stock-Chromium design-review artifacts cannot qualify or
+supply the final submission images. Do not reuse historical or local
+screenshots as evidence of the frozen public release.
 
 Capture the current commit through CloakBrowser at 1440 × 900 and 390 × 844.
 Add a 1280 × 720 overflow check even if it is not a submission image. Use real
