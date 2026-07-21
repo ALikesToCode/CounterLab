@@ -27,6 +27,12 @@ const supportedRlimits = new Set([
   "RLIMIT_NOFILE",
   "RLIMIT_NPROC",
 ]);
+const nerdctlCreateRlimits = new Set([
+  "RLIMIT_CPU",
+  "RLIMIT_FSIZE",
+  "RLIMIT_NOFILE",
+  "RLIMIT_NPROC",
+]);
 const invocationIdPattern = /^[a-f0-9]{64}$/;
 const maskedPaths = new Set([
   "/proc/acpi",
@@ -385,6 +391,52 @@ function assertExpectedRlimits(expectedRlimits) {
     }
     observed.add(value.type);
   }
+}
+
+function validateReceiptResourceBindings(receipt) {
+  const aggregate = object(
+    receipt?.intendedAggregateLimits,
+    "receipt aggregate resource intent",
+  );
+  assertKnownKeys(
+    aggregate,
+    new Set(["cpuCount", "maxProcesses", "memoryBytes"]),
+    "receipt aggregate resource fields",
+  );
+  if (
+    Object.keys(aggregate).length !== 3 ||
+    !Number.isFinite(aggregate.cpuCount) ||
+    aggregate.cpuCount < 0.25 ||
+    aggregate.cpuCount > 2 ||
+    !Number.isSafeInteger(aggregate.maxProcesses) ||
+    aggregate.maxProcesses < 1 ||
+    aggregate.maxProcesses > 32 ||
+    !Number.isSafeInteger(aggregate.memoryBytes) ||
+    aggregate.memoryBytes < 64 * 1024 * 1024 ||
+    aggregate.memoryBytes > 1024 * 1024 * 1024
+  ) {
+    throw new Error(
+      "contained rootless OCI receipt resource intent is invalid",
+    );
+  }
+  assertExpectedRlimits(receipt?.enforcedRlimits);
+  const byType = new Map(
+    receipt.enforcedRlimits.map((entry) => [entry.type, entry.soft]),
+  );
+  if (
+    byType.get("RLIMIT_AS") !== aggregate.memoryBytes ||
+    byType.get("RLIMIT_NPROC") !== aggregate.maxProcesses ||
+    byType.get("RLIMIT_NOFILE") !== 64 ||
+    (byType.get("RLIMIT_CPU") ?? 0) < 1 ||
+    (byType.get("RLIMIT_CPU") ?? 0) > 300 ||
+    (byType.get("RLIMIT_FSIZE") ?? 0) < 1 ||
+    (byType.get("RLIMIT_FSIZE") ?? 0) > 1_048_576 ||
+    !Array.isArray(receipt?.normalizedFields) ||
+    !receipt.normalizedFields.includes("process.rlimits")
+  ) {
+    throw new Error("contained rootless OCI receipt rlimit binding changed");
+  }
+  return receipt.enforcedRlimits;
 }
 
 function assertResourceIntent(linux, expected) {
@@ -1045,7 +1097,7 @@ function assertNerdctlAnnotations(parsed, expected, containerId) {
   assertNerdctlMountAnnotations(annotations, expected);
 }
 
-function assertProcess(processSpec, expected, hostname) {
+function assertProcess(processSpec, expected, hostname, expectedRlimits) {
   assertKnownKeys(
     processSpec,
     new Set([
@@ -1114,7 +1166,7 @@ function assertProcess(processSpec, expected, hostname) {
     );
   }
   assertEmptyCapabilities(processSpec);
-  assertRlimits(processSpec, expected.rlimits);
+  assertRlimits(processSpec, expectedRlimits);
 }
 
 function assertPathPolicy(linux) {
@@ -1409,8 +1461,16 @@ export function sanitizeContainedRootlessSpec({
   const linux = object(parsed.linux, "Linux section");
   const hasNerdctlHooks = assertNerdctlHooks(parsed, expected);
   assertFilesystemShape(parsed, expected);
-  assertProcess(processSpec, expected, parsed.hostname);
   assertResourceIntent(linux, expected);
+  const sourceRlimits = expected.rlimits.filter((entry) =>
+    nerdctlCreateRlimits.has(entry.type),
+  );
+  if (sourceRlimits.length !== nerdctlCreateRlimits.size) {
+    throw new Error(
+      "contained rootless OCI staging rlimit intent is incomplete",
+    );
+  }
+  assertProcess(processSpec, expected, parsed.hostname, sourceRlimits);
   assertNamespaces(linux);
   const linuxNormalization = assertLinuxSecurity(linux);
 
@@ -1428,6 +1488,19 @@ export function sanitizeContainedRootlessSpec({
   processSpec.terminal = false;
   processSpec.user.additionalGids = [];
   processSpec.env = [...expected.imageAuthority.process.env];
+  const addressSpaceLimit = expected.rlimits.find(
+    (entry) => entry.type === "RLIMIT_AS",
+  );
+  if (addressSpaceLimit === undefined) {
+    throw new Error("contained rootless OCI address-space limit is missing");
+  }
+  // Preserve nerdctl's four validated limits and add only RLIMIT_AS, which
+  // its Docker-compatible ulimit parser cannot express.
+  processSpec.rlimits = [
+    ...processSpec.rlimits.map((entry) => ({ ...entry })),
+    { ...addressSpaceLimit },
+  ].sort((left, right) => left.type.localeCompare(right.type));
+  assertRlimits(processSpec, expected.rlimits);
   processSpec.capabilities = {
     ambient: [],
     bounding: [],
@@ -1535,6 +1608,7 @@ export function sanitizeContainedRootlessSpec({
       "process.terminal",
       "process.user.additionalGids",
       "process.env.HOSTNAME",
+      "process.rlimits",
       "process.capabilities",
       "root.path",
     ],
@@ -1895,6 +1969,19 @@ function assertConfigInternalMountsRemoved(config) {
   }
 }
 
+function assertConfigRlimits(config, receipt) {
+  let parsed;
+  try {
+    parsed = object(JSON.parse(config), "persisted config");
+  } catch (error) {
+    throw new Error("contained rootless OCI persisted config is invalid", {
+      cause: error,
+    });
+  }
+  const processSpec = object(parsed.process, "persisted process");
+  assertRlimits(processSpec, validateReceiptResourceBindings(receipt));
+}
+
 function assertConfigImageRootfs(config, specRoot, receipt) {
   const binding = object(receipt?.imageRootfs, "image rootfs binding");
   const imageAuthority = object(receipt?.imageAuthority, "image authority");
@@ -2009,6 +2096,7 @@ export function persistContainedRootlessSpec({
   const assetRoot = internalMountAssetRoot(specRoot, receipt.invocationId);
   const imageRootfsPath = assertConfigImageRootfs(config, specRoot, receipt);
   assertConfigRuntimeAnnotations(config, receipt);
+  assertConfigRlimits(config, receipt);
   assertConfigInternalMountsRemoved(config);
   mkdirSync(imageRootfsPath, { mode: 0o700 });
   assertPrivateDirectory(imageRootfsPath, "image rootfs mount point", 0o700);
@@ -2161,6 +2249,7 @@ export function verifyPersistedContainedRootlessSpec({
   }
   assertConfigImageRootfs(config.toString("utf8"), specRoot, receipt);
   assertConfigRuntimeAnnotations(config.toString("utf8"), receipt);
+  assertConfigRlimits(config.toString("utf8"), receipt);
   assertConfigInternalMountsRemoved(config.toString("utf8"));
   validateReadOnlyMountManifest(receipt);
   assertReceiptFinalIdentity(receipt);

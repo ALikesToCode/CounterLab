@@ -171,14 +171,19 @@ def _rootless(control: dict[str, object], build: dict[str, object]) -> dict[str,
         "removedMounts": [],
         "intendedAggregateLimits": intended_limits,
         "enforcedRlimits": [
-            {"type": name, "soft": 1, "hard": 1}
-            for name in (
-                "RLIMIT_AS",
-                "RLIMIT_CPU",
-                "RLIMIT_FSIZE",
-                "RLIMIT_NOFILE",
-                "RLIMIT_NPROC",
-            )
+            {
+                "type": "RLIMIT_AS",
+                "soft": intended_limits["memoryBytes"],
+                "hard": intended_limits["memoryBytes"],
+            },
+            {"type": "RLIMIT_CPU", "soft": 20, "hard": 20},
+            {"type": "RLIMIT_FSIZE", "soft": 262_144, "hard": 262_144},
+            {"type": "RLIMIT_NOFILE", "soft": 64, "hard": 64},
+            {
+                "type": "RLIMIT_NPROC",
+                "soft": intended_limits["maxProcesses"],
+                "hard": intended_limits["maxProcesses"],
+            },
         ],
         "aggregateLimitEvidence": aggregate_evidence,
     }
@@ -263,26 +268,51 @@ def test_control_schema_selects_the_exact_rootless_receipt_name() -> None:
 
 
 def test_rootless_rlimit_validator_matches_the_runtime_contract() -> None:
+    intended = {
+        "cpuCount": 1,
+        "maxProcesses": 16,
+        "memoryBytes": 512 * 1024 * 1024,
+    }
     runtime_limits = [
-        {"type": name, "soft": 1, "hard": 1}
-        for name in (
-            "RLIMIT_AS",
-            "RLIMIT_CPU",
-            "RLIMIT_FSIZE",
-            "RLIMIT_NOFILE",
-            "RLIMIT_NPROC",
-        )
+        {
+            "type": "RLIMIT_AS",
+            "soft": intended["memoryBytes"],
+            "hard": intended["memoryBytes"],
+        },
+        {"type": "RLIMIT_CPU", "soft": 20, "hard": 20},
+        {"type": "RLIMIT_FSIZE", "soft": 262_144, "hard": 262_144},
+        {"type": "RLIMIT_NOFILE", "soft": 64, "hard": 64},
+        {
+            "type": "RLIMIT_NPROC",
+            "soft": intended["maxProcesses"],
+            "hard": intended["maxProcesses"],
+        },
     ]
 
-    assert timeout_proof_module._validate_enforced_rlimits(runtime_limits)
+    assert timeout_proof_module._validate_enforced_rlimits(runtime_limits, intended)
     assert not timeout_proof_module._validate_enforced_rlimits(
         [
             {**entry, "type": "RLIMIT_CORE"}
             if entry["type"] == "RLIMIT_NOFILE"
             else entry
             for entry in runtime_limits
-        ]
+        ],
+        intended,
     )
+    for limit_type in ("RLIMIT_AS", "RLIMIT_NPROC"):
+        changed = json.loads(json.dumps(runtime_limits))
+        entry = next(item for item in changed if item["type"] == limit_type)
+        entry["soft"] -= 1
+        entry["hard"] -= 1
+        assert not timeout_proof_module._validate_enforced_rlimits(changed, intended)
+
+
+def test_timeout_candidate_observes_the_exact_address_space_limit() -> None:
+    source = timeout_proof_module._timeout_public_test(512 * 1024 * 1024)
+    assert "resource.getrlimit(resource.RLIMIT_AS)" in source
+    assert "expected = (536870912, 536870912)" in source
+    with pytest.raises(RuntimeError, match="address-space"):
+        timeout_proof_module._timeout_public_test(0)
 
 
 def test_rootless_receipt_binds_control_and_exact_adapter_authority() -> None:
@@ -296,6 +326,35 @@ def test_rootless_receipt_binds_control_and_exact_adapter_authority() -> None:
     rootless = _rootless(control, build)
 
     assert validate_rootless_receipt(rootless, control=control, build=build) == rootless
+    for limit_type in ("RLIMIT_AS", "RLIMIT_NPROC"):
+        changed_control = _control()
+        changed = _rootless(changed_control, build)
+        limit = next(
+            entry
+            for entry in changed["enforcedRlimits"]
+            if entry["type"] == limit_type
+        )
+        limit["soft"] -= 1
+        limit["hard"] -= 1
+        changed_payload = {
+            key: value
+            for key, value in changed.items()
+            if key != "receiptPayloadSha256"
+        }
+        changed["receiptPayloadSha256"] = _hash(changed_payload)
+        changed_control["rootlessReceiptPayloadSha256"] = changed[
+            "receiptPayloadSha256"
+        ]
+        changed_control_payload = {
+            key: value
+            for key, value in changed_control.items()
+            if key != "receiptPayloadSha256"
+        }
+        changed_control["receiptPayloadSha256"] = _hash(changed_control_payload)
+        with pytest.raises(RuntimeError, match="authority"):
+            validate_rootless_receipt(
+                changed, control=changed_control, build=build
+            )
     with pytest.raises(RuntimeError, match="authority"):
         validate_rootless_receipt(
             rootless,

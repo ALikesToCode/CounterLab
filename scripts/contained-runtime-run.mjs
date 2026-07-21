@@ -292,6 +292,38 @@ function resourceIntent(args) {
   return { cpuCount, maxProcesses, memoryBytes, rlimits };
 }
 
+function nerdctlCreateOptions(args, imageArgumentIndex) {
+  // nerdctl 2.3.1 rejects Docker's `as` spelling. The sanitized OCI spec
+  // injects the already-validated RLIMIT_AS before direct ctr execution.
+  const options = [];
+  let omittedAddressSpaceLimit = 0;
+  for (let index = 1; index < imageArgumentIndex; index += 1) {
+    const argument = args[index];
+    if (argument === "--ulimit") {
+      const value = args[index + 1];
+      if (typeof value !== "string" || index + 1 >= imageArgumentIndex) {
+        throw new Error("contained runtime ulimit option is invalid");
+      }
+      if (value.startsWith("as=")) {
+        omittedAddressSpaceLimit += 1;
+      } else {
+        options.push(argument, value);
+      }
+      index += 1;
+      continue;
+    }
+    if (argument.startsWith("--ulimit=as=")) {
+      omittedAddressSpaceLimit += 1;
+      continue;
+    }
+    options.push(argument);
+  }
+  if (omittedAddressSpaceLimit !== 1) {
+    throw new Error("contained runtime address-space limit is invalid");
+  }
+  return options;
+}
+
 function contained(parent, candidate) {
   const fromParent = relative(parent, candidate);
   return (
@@ -380,6 +412,7 @@ export function containedRunPlan({
     containerName,
     sessionRoot,
   };
+  const createOptions = nerdctlCreateOptions(args, commandImageIndex);
   const ctrGlobalArgs = [
     "--address",
     containerdSocket,
@@ -465,7 +498,7 @@ export function containedRunPlan({
       args: [
         ...nerdctlGlobalArgs,
         "create",
-        ...args.slice(1, commandImageIndex),
+        ...createOptions,
         "--label",
         invocationLabel,
         imageAlias,

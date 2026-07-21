@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -150,8 +151,16 @@ _CLEANUP_FIELDS = (
     "readOnlyMountsUnchanged",
     "imageRootfsUnchanged",
 )
-_TIMEOUT_PUBLIC_TEST = """import time
+def _timeout_public_test(address_space_bytes: int) -> str:
+    if not _safe_integer(address_space_bytes, positive=True):
+        raise RuntimeError("timeout address-space expectation is invalid")
+    return f"""import resource
+import time
 
+expected = ({address_space_bytes}, {address_space_bytes})
+observed = resource.getrlimit(resource.RLIMIT_AS)
+if observed != expected:
+    raise AssertionError(f"address-space limit mismatch: {{observed!r}}")
 time.sleep(5)
 raise AssertionError("timeout cleanup sentinel unexpectedly survived")
 """
@@ -434,13 +443,15 @@ def validate_rootless_receipt(
         or authority.get("sourceTreeSha256") != build["sourceTreeSha256"]
         or authority.get("configDigest") != build["adapterImageDigest"]
         or authority.get("manifestDigest") != build["adapterManifestDigest"]
-        or not _validate_enforced_rlimits(value.get("enforcedRlimits"))
+        or not _validate_enforced_rlimits(
+            value.get("enforcedRlimits"), value.get("intendedAggregateLimits")
+        )
     ):
         raise RuntimeError("rootless receipt authority is invalid")
     return value
 
 
-def _validate_enforced_rlimits(value: object) -> bool:
+def _validate_enforced_rlimits(value: object, intended: object) -> bool:
     required = {
         "RLIMIT_AS",
         "RLIMIT_CPU",
@@ -448,9 +459,25 @@ def _validate_enforced_rlimits(value: object) -> bool:
         "RLIMIT_NOFILE",
         "RLIMIT_NPROC",
     }
-    if not isinstance(value, list) or len(value) != len(required):
+    if (
+        not isinstance(intended, dict)
+        or set(intended) != {"cpuCount", "maxProcesses", "memoryBytes"}
+        or not isinstance(intended.get("cpuCount"), (int, float))
+        or isinstance(intended.get("cpuCount"), bool)
+        or not math.isfinite(intended["cpuCount"])
+        or not 0.25 <= intended["cpuCount"] <= 2
+        or not _safe_integer(intended.get("maxProcesses"), positive=True)
+        or not 1 <= intended["maxProcesses"] <= 32
+        or not _safe_integer(intended.get("memoryBytes"), positive=True)
+        or not 64 * 1024 * 1024
+        <= intended["memoryBytes"]
+        <= 1024 * 1024 * 1024
+        or not isinstance(value, list)
+        or len(value) != len(required)
+    ):
         return False
     observed: set[str] = set()
+    by_type: dict[str, int] = {}
     for entry in value:
         if (
             not isinstance(entry, dict)
@@ -462,7 +489,15 @@ def _validate_enforced_rlimits(value: object) -> bool:
         ):
             return False
         observed.add(entry["type"])
-    return observed == required
+        by_type[entry["type"]] = entry["soft"]
+    return (
+        observed == required
+        and by_type["RLIMIT_AS"] == intended["memoryBytes"]
+        and by_type["RLIMIT_NPROC"] == intended["maxProcesses"]
+        and by_type["RLIMIT_NOFILE"] == 64
+        and 1 <= by_type["RLIMIT_CPU"] <= 300
+        and 1 <= by_type["RLIMIT_FSIZE"] <= 1_048_576
+    )
 
 
 def _safe_integer(value: object, *, positive: bool = False) -> bool:
@@ -847,6 +882,9 @@ def run_timeout_cleanup_proof(
     if not isinstance(limits, dict):
         raise RuntimeError("fixed timeout plan has no resource limits")
     limits["wallSeconds"] = 1
+    memory_mb = limits.get("memoryMb")
+    if not _safe_integer(memory_mb, positive=True):
+        raise RuntimeError("fixed timeout plan has no memory limit")
     _write_new(
         workspace / "experiment-plan.json",
         f"{json.dumps(plan, indent=2, sort_keys=True)}\n",
@@ -855,7 +893,10 @@ def run_timeout_cleanup_proof(
         encoding="utf-8"
     )
     _write_new(workspace / "artifact-adapter.py", adapter_source)
-    _write_new(workspace / "public_tests.py", _TIMEOUT_PUBLIC_TEST)
+    _write_new(
+        workspace / "public_tests.py",
+        _timeout_public_test(memory_mb * 1024 * 1024),
+    )
     artifacts = validate_generated_workspace(workspace, generated_root)
 
     run_root = work / "runs"

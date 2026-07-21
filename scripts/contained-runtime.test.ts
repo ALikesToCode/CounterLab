@@ -588,7 +588,9 @@ function rootlessSpec(
       env: [...authority.process.env, `HOSTNAME=${containerId.slice(0, 12)}`],
       cwd: authority.process.cwd,
       capabilities: {},
-      rlimits: expected.rlimits,
+      // Model the exact raw nerdctl spec; RLIMIT_AS is injected only after
+      // this staging document passes the contained-runtime policy.
+      rlimits: expected.rlimits.filter((entry) => entry.type !== "RLIMIT_AS"),
       noNewPrivileges: true,
     },
     root: { path: "rootfs", readonly: true },
@@ -1527,6 +1529,19 @@ describe("contained runtime command policy", () => {
 
     expect(plan.create.args).toContain("create");
     expect(plan.create.args).not.toContain("run");
+    expect(plan.create.args).not.toContain("--ulimit=as=1073741824:1073741824");
+    expect(
+      plan.create.args.filter((argument) => argument.startsWith("--ulimit=")),
+    ).toHaveLength(4);
+    const createIndex = plan.create.args.indexOf("create");
+    const invocationLabelIndex = plan.create.args.indexOf("--label");
+    expect(
+      plan.create.args.slice(createIndex + 1, invocationLabelIndex),
+    ).toEqual(
+      startupCommand()
+        .slice(1, -1)
+        .filter((argument) => argument !== "--ulimit=as=1073741824:1073741824"),
+    );
     expect(plan.start.program).toBe(resolve(installRoot, "bin/ctr"));
     expect(plan.start.args).toEqual(
       expect.arrayContaining([
@@ -1571,6 +1586,76 @@ describe("contained runtime command policy", () => {
     expect(plan.cleanupStaging.args.slice(-2)).toEqual(["rm", "--force"]);
     expect(plan.cleanupImageAlias.args.slice(-2)).toEqual(["images", "remove"]);
     expect(plan.expected.rlimits).toHaveLength(5);
+    const fullCommandAuthority = imageFixture(startupCommand()).authority;
+    const fullCommandSha256 = createHash("sha256")
+      .update(canonicalJson(startupCommand()))
+      .digest("hex");
+    const stagingCommandSha256 = createHash("sha256")
+      .update(
+        canonicalJson(
+          startupCommand().filter(
+            (argument) => argument !== "--ulimit=as=1073741824:1073741824",
+          ),
+        ),
+      )
+      .digest("hex");
+    expect(fullCommandAuthority.commandSha256).toBe(fullCommandSha256);
+    expect(fullCommandAuthority.commandSha256).not.toBe(stagingCommandSha256);
+    const splitUlimitCommand = startupCommand();
+    const addressSpaceIndex = splitUlimitCommand.indexOf(
+      "--ulimit=as=1073741824:1073741824",
+    );
+    splitUlimitCommand.splice(
+      addressSpaceIndex,
+      1,
+      "--ulimit",
+      "as=1073741824:1073741824",
+    );
+    const splitUlimitPlan = containedRunPlan({
+      args: splitUlimitCommand,
+      binRoot: resolve(installRoot, "bin"),
+      clientFifoRoot,
+      containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+      installRoot,
+      invocationId,
+      sessionRoot,
+    });
+    expect(splitUlimitPlan.create.args).not.toContain(
+      "as=1073741824:1073741824",
+    );
+    expect(splitUlimitPlan.expected.rlimits).toHaveLength(5);
+    const invalidAddressSpaceCommands = [
+      startupCommand().filter(
+        (argument) => argument !== "--ulimit=as=1073741824:1073741824",
+      ),
+      startupCommand().map((argument) =>
+        argument === "--ulimit=as=1073741824:1073741824"
+          ? "--ulimit=as=536870912:536870912"
+          : argument,
+      ),
+      (() => {
+        const command = startupCommand();
+        command.splice(
+          command.length - 1,
+          0,
+          "--ulimit=as=1073741824:1073741824",
+        );
+        return command;
+      })(),
+    ];
+    for (const args of invalidAddressSpaceCommands) {
+      expect(() =>
+        containedRunPlan({
+          args,
+          binRoot: resolve(installRoot, "bin"),
+          clientFifoRoot,
+          containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+          installRoot,
+          invocationId,
+          sessionRoot,
+        }),
+      ).toThrow(/resource intent|rlimit intent/u);
+    }
     expect(CONTAINED_RUNTIME_CONTROL_BUDGET_SECONDS).toBe(420);
     expect(CONTAINED_RUNTIME_CALLER_GRACE_SECONDS).toBe(5);
     expect(JSON.stringify(plan)).not.toContain("/run/containerd/fifo");
@@ -1656,7 +1741,11 @@ describe("contained runtime command policy", () => {
     expect(prepared.receipt.configFileSha256).toBe(
       createHash("sha256").update(prepared.config).digest("hex"),
     );
-    expect(sanitized.process.rlimits).toEqual(plan.expected.rlimits);
+    expect(sanitized.process.rlimits).toEqual(
+      [...plan.expected.rlimits].sort((left, right) =>
+        left.type.localeCompare(right.type),
+      ),
+    );
     expect(sanitized.process.noNewPrivileges).toBe(true);
     expect(sanitized.process.terminal).toBe(false);
     expect(sanitized.process.user.additionalGids).toEqual([]);
@@ -1734,6 +1823,7 @@ describe("contained runtime command policy", () => {
       removedMounts: ["/etc/hostname", "/etc/hosts", "/etc/resolv.conf"],
     });
     expect(prepared.receipt.normalizedFields).toContain("linux.cgroupsPath");
+    expect(prepared.receipt.normalizedFields).toContain("process.rlimits");
 
     const resourceMutations: Array<(spec: typeof original) => void> = [
       (spec) => {
@@ -1769,6 +1859,40 @@ describe("contained runtime command policy", () => {
           source: JSON.stringify(changed),
         }),
       ).toThrow(/cgroup path|resource/u);
+    }
+
+    const rlimitMutations: Array<(spec: typeof original) => void> = [
+      (spec) => {
+        spec.process.rlimits.push({
+          type: "RLIMIT_AS",
+          soft: plan.expected.memoryBytes,
+          hard: plan.expected.memoryBytes,
+        });
+      },
+      (spec) => {
+        spec.process.rlimits[0].soft -= 1;
+      },
+      (spec) => {
+        spec.process.rlimits.pop();
+      },
+      (spec) => {
+        spec.process.rlimits.push(structuredClone(spec.process.rlimits[0]));
+      },
+      (spec) => {
+        spec.process.rlimits.push({ type: "RLIMIT_RSS", soft: 1, hard: 1 });
+      },
+    ];
+    for (const mutate of rlimitMutations) {
+      const changed = structuredClone(original);
+      mutate(changed);
+      expect(() =>
+        sanitizeContainedRootlessSpec({
+          containerId,
+          expected,
+          metadataSha256: "3".repeat(64),
+          source: JSON.stringify(changed),
+        }),
+      ).toThrow(/rlimit/u);
     }
 
     const missingHookSource = JSON.parse(source);
@@ -2499,6 +2623,110 @@ describe("contained runtime command policy", () => {
       metadataSha256: "9".repeat(64),
       source: rootlessSpec("8".repeat(64), plan.expected, fixture.authority),
     });
+    type MutableResourceReceipt = typeof prepared.receipt & {
+      baseSpecSha256: string;
+      commandSha256: string;
+      configFileSha256: string;
+      enforcedRlimits: Array<{ type: string; soft: number; hard: number }>;
+      finalContainerId: string;
+      internalMountManifestSha256: string;
+      intendedAggregateLimits: {
+        cpuCount: number;
+        maxProcesses: number;
+        memoryBytes: number;
+      };
+      invocationId: string;
+      normalizedFields: string[];
+      readOnlyMountManifestSha256: string;
+      receiptPayloadSha256: string;
+      sanitizedSpecSha256: string;
+      stagingContainerId: string;
+    };
+    const receiptMutations: Array<(receipt: MutableResourceReceipt) => void> = [
+      (receipt) => {
+        const addressSpace = receipt.enforcedRlimits.find(
+          (entry) => entry.type === "RLIMIT_AS",
+        );
+        if (addressSpace === undefined) throw new Error("missing test rlimit");
+        addressSpace.soft -= 1;
+        addressSpace.hard -= 1;
+      },
+      (receipt) => {
+        receipt.intendedAggregateLimits.memoryBytes -= 1;
+      },
+      (receipt) => {
+        receipt.normalizedFields = receipt.normalizedFields.filter(
+          (field) => field !== "process.rlimits",
+        );
+      },
+    ];
+    for (const mutate of receiptMutations) {
+      const invalid = structuredClone(
+        prepared.receipt,
+      ) as MutableResourceReceipt;
+      mutate(invalid);
+      expect(() =>
+        persistContainedRootlessSpec({
+          config: prepared.config,
+          finalContainerId: prepared.finalContainerId,
+          internalMounts: prepared.internalMounts,
+          receipt: invalid,
+          sessionRoot,
+        }),
+      ).toThrow(/resource|rlimit/u);
+    }
+    const semanticallyChangedConfig = JSON.parse(prepared.config) as {
+      annotations: Record<string, string>;
+      process: {
+        rlimits: Array<{ type: string; soft: number; hard: number }>;
+      };
+    } & Record<string, unknown>;
+    const changedAddressSpace = semanticallyChangedConfig.process.rlimits.find(
+      (entry) => entry.type === "RLIMIT_AS",
+    );
+    if (changedAddressSpace === undefined)
+      throw new Error("missing test rlimit");
+    changedAddressSpace.soft -= 1;
+    changedAddressSpace.hard -= 1;
+    const { annotations: _annotations, ...changedBaseConfig } =
+      semanticallyChangedConfig;
+    const changedBaseSpecSha256 = createHash("sha256")
+      .update(canonicalJson(changedBaseConfig))
+      .digest("hex");
+    semanticallyChangedConfig.annotations[
+      "io.counterlab.runtime.base-spec-sha256"
+    ] = changedBaseSpecSha256;
+    const changedSanitizedSpecSha256 = createHash("sha256")
+      .update(canonicalJson(semanticallyChangedConfig))
+      .digest("hex");
+    const changedConfigSource = `${JSON.stringify(semanticallyChangedConfig, null, 2)}\n`;
+    const changedReceipt = structuredClone(
+      prepared.receipt,
+    ) as MutableResourceReceipt;
+    changedReceipt.baseSpecSha256 = changedBaseSpecSha256;
+    changedReceipt.sanitizedSpecSha256 = changedSanitizedSpecSha256;
+    changedReceipt.configFileSha256 = createHash("sha256")
+      .update(changedConfigSource)
+      .digest("hex");
+    changedReceipt.finalContainerId = createHash("sha256")
+      .update(
+        `counterlab-rootless-v4\0${changedReceipt.invocationId}\0${changedReceipt.stagingContainerId}\0${changedReceipt.sanitizedSpecSha256}\0${changedReceipt.commandSha256}\0${changedReceipt.internalMountManifestSha256}\0${changedReceipt.readOnlyMountManifestSha256}`,
+      )
+      .digest("hex");
+    const { receiptPayloadSha256: _receiptHash, ...changedReceiptPayload } =
+      changedReceipt;
+    changedReceipt.receiptPayloadSha256 = createHash("sha256")
+      .update(canonicalJson(changedReceiptPayload))
+      .digest("hex");
+    expect(() =>
+      persistContainedRootlessSpec({
+        config: changedConfigSource,
+        finalContainerId: changedReceipt.finalContainerId,
+        internalMounts: prepared.internalMounts,
+        receipt: changedReceipt,
+        sessionRoot,
+      }),
+    ).toThrow(/rlimit/u);
     const persisted = persistContainedRootlessSpec({
       config: prepared.config,
       finalContainerId: prepared.finalContainerId,

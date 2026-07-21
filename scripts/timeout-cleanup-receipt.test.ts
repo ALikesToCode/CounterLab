@@ -8,6 +8,7 @@ import {
   QUALIFIED_AGGREGATE_LIMIT_MODE,
   TIMEOUT_ROOTLESS_RLIMIT_TYPES,
   assertQualifiedAggregateRuntimeLimits,
+  assertRootlessRlimitBindings,
 } from "./timeout-cleanup-receipt.js";
 
 const invocationId = "1".repeat(64);
@@ -109,6 +110,54 @@ describe("timeout cleanup aggregate resource authority", () => {
       "RLIMIT_NPROC",
     ]);
     expect(TIMEOUT_ROOTLESS_RLIMIT_TYPES).not.toContain("RLIMIT_CORE");
+  });
+
+  it("cross-binds process limits to aggregate memory and process intent", () => {
+    const enforcedRlimits = [
+      {
+        type: "RLIMIT_AS" as const,
+        soft: intendedAggregateLimits.memoryBytes,
+        hard: intendedAggregateLimits.memoryBytes,
+      },
+      { type: "RLIMIT_CPU" as const, soft: 20, hard: 20 },
+      { type: "RLIMIT_FSIZE" as const, soft: 262_144, hard: 262_144 },
+      { type: "RLIMIT_NOFILE" as const, soft: 64, hard: 64 },
+      {
+        type: "RLIMIT_NPROC" as const,
+        soft: intendedAggregateLimits.maxProcesses,
+        hard: intendedAggregateLimits.maxProcesses,
+      },
+    ];
+    expect(() =>
+      assertRootlessRlimitBindings({
+        intendedAggregateLimits,
+        enforcedRlimits,
+      }),
+    ).not.toThrow();
+
+    for (const mutate of [
+      (limits: typeof enforcedRlimits) => {
+        const limit = limits.find((entry) => entry.type === "RLIMIT_AS");
+        if (limit === undefined) throw new Error("missing test rlimit");
+        limit.soft -= 1;
+        limit.hard -= 1;
+      },
+      (limits: typeof enforcedRlimits) => {
+        const limit = limits.find((entry) => entry.type === "RLIMIT_NPROC");
+        if (limit === undefined) throw new Error("missing test rlimit");
+        limit.soft -= 1;
+        limit.hard -= 1;
+      },
+    ]) {
+      const changed = structuredClone(enforcedRlimits);
+      mutate(changed);
+      expect(() =>
+        assertRootlessRlimitBindings({
+          intendedAggregateLimits,
+          enforcedRlimits: changed,
+        }),
+      ).toThrow(/bind aggregate intent/u);
+    }
   });
 
   it("rejects process-only or merely declared aggregate limits", () => {

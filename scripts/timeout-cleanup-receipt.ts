@@ -183,6 +183,35 @@ const RlimitSchema = z
     message: "process rlimit soft and hard values must match",
   });
 
+export function assertRootlessRlimitBindings(input: {
+  intendedAggregateLimits: unknown;
+  enforcedRlimits: unknown;
+}): void {
+  const intent = AggregateLimitIntentSchema.parse(
+    input.intendedAggregateLimits,
+  );
+  const limits = z
+    .array(RlimitSchema)
+    .length(5)
+    .refine(
+      (entries) => new Set(entries.map((entry) => entry.type)).size === 5,
+      { message: "all qualified process rlimits must be present once" },
+    )
+    .parse(input.enforcedRlimits);
+  const byType = new Map(limits.map((limit) => [limit.type, limit.soft]));
+  if (
+    byType.get("RLIMIT_AS") !== intent.memoryBytes ||
+    byType.get("RLIMIT_NPROC") !== intent.maxProcesses ||
+    byType.get("RLIMIT_NOFILE") !== 64 ||
+    (byType.get("RLIMIT_CPU") ?? 0) < 1 ||
+    (byType.get("RLIMIT_CPU") ?? 0) > 300 ||
+    (byType.get("RLIMIT_FSIZE") ?? 0) < 1 ||
+    (byType.get("RLIMIT_FSIZE") ?? 0) > 1_048_576
+  ) {
+    throw new Error("qualified process rlimits do not bind aggregate intent");
+  }
+}
+
 const TimeoutRootlessReceiptSchema = z
   .strictObject({
     schemaVersion: z.literal("4"),
@@ -239,6 +268,15 @@ const TimeoutRootlessReceiptSchema = z
         path: ["aggregateLimitEvidence"],
         message:
           "aggregate enforcement claims require observed aggregate evidence",
+      });
+    }
+    try {
+      assertRootlessRlimitBindings(receipt);
+    } catch {
+      context.addIssue({
+        code: "custom",
+        path: ["enforcedRlimits"],
+        message: "qualified process rlimits do not bind aggregate intent",
       });
     }
   });
