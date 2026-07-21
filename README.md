@@ -190,6 +190,14 @@ Required for local reproduction: Node 22+, pnpm 11.13.1, Python 3.12+, and the
 locked dependencies. A Docker-compatible engine is required for local
 Cloudflare Container development and for the advanced local adapter proof.
 
+The two ready-to-use supported notebook fixtures are:
+
+- `fixtures/notebooks/customer_churn_leakage.ipynb`
+- `fixtures/notebooks/fraud_class_imbalance.ipynb`
+
+Use them for the entity-leakage and class-imbalance live paths respectively;
+do not treat them as evidence that arbitrary notebooks are supported.
+
 ```bash
 cp .env.example .env.local
 ./scripts/clean-demo.sh
@@ -322,11 +330,18 @@ See [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
 
 ## How Codex accelerated the build
 
-Codex helped implement and test the monorepo, then CounterLab used Codex itself
-as a bounded runtime compiler. The real rejected trace exposed two product
-contract defects: incomplete public SDK documentation and transient bytecode in
-an exact-file workspace. The public contract was strengthened; a separate later
-run verified successfully.
+Build-time Codex helped map the monorepo, turn audit findings into focused
+regressions, implement bounded UI and release slices, triage cross-language
+failures, review authority drift, and keep the evidence documents synchronized
+with executed checks. Changes were integrated as small independently reviewed
+commits; a source test, deployment receipt, model call, or learner result was
+never treated as successful without direct evidence.
+
+That engineering role is separate from Runtime Codex inside CounterLab. Runtime
+Codex acts only as a bounded Plan compiler. The real rejected trace exposed two
+product-contract defects: incomplete public SDK documentation and transient
+bytecode in an exact-file workspace. The public contract was strengthened; a
+separate later run verified successfully.
 
 Human decisions remained the product thesis, learner authority, concept scope,
 fixture parameters, evidence contracts, verifier invariants, transfer design,
