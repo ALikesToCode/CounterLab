@@ -162,12 +162,12 @@ function ProofBundleEvidence({
             ...proofBundle.experimentPlan.interventions.map((run) => run.runId),
           ];
     return (
-      <section className="proof-bundle-evidence" aria-label="Validated plan">
-        <h3>Validated plan</h3>
-        <p>
-          Registered run identifiers from the session&apos;s validated Proof
-          Bundle.
-        </p>
+      <section
+        className="proof-bundle-evidence"
+        aria-label="Recorded experiment plan"
+      >
+        <h3>Recorded experiment plan</h3>
+        <p>Registered run identifiers recorded in the session Proof Bundle.</p>
         <ul>
           {operationIds.map((operationId) => (
             <li key={operationId}>
@@ -201,9 +201,17 @@ function ProofBundleEvidence({
   }
 
   if (tab === "Diff") {
+    const patchStatus = proofBundle.patchResult.status;
+    const patchVerified =
+      patchStatus === "VERIFIED" && proofBundle.patchResult.verification.passed;
+    const patchHeading = patchVerified
+      ? "Verified patch"
+      : patchStatus === "REJECTED"
+        ? "Rejected patch record"
+        : "Unverified patch record";
     return (
-      <section className="proof-bundle-evidence" aria-label="Verified patch">
-        <h3>Verified patch</h3>
+      <section className="proof-bundle-evidence" aria-label={patchHeading}>
+        <h3>{patchHeading}</h3>
         <p>
           Changed notebook cells:{" "}
           {proofBundle.patchResult.modifiedCells.join(", ")}
@@ -213,7 +221,7 @@ function ProofBundleEvidence({
           {proofBundle.patchResult.verification.invariants.length} named
           invariants
         </p>
-        <pre>
+        <pre tabIndex={0} aria-label="Recorded patch diff">
           <code>{proofBundle.patchResult.diff}</code>
         </pre>
       </section>
@@ -242,13 +250,22 @@ function ProofBundleEvidence({
 
   if (tab === "Verifier") {
     if (proofBundle.schemaVersion === "1") {
+      const verifierStatus = proofBundle.externalVerifier.status;
+      const invariantLabel =
+        verifierStatus === "VERIFIED"
+          ? "Accepted named invariants"
+          : verifierStatus === "PARTIAL"
+            ? "Named invariants recorded before partial verification"
+            : verifierStatus === "REJECTED"
+              ? "Named invariants recorded before rejection"
+              : "Named invariants recorded without verification";
       return (
         <section
           className="proof-bundle-evidence"
           aria-label="External verifier"
         >
           <h3>External verifier · {proofBundle.externalVerifier.status}</h3>
-          <p>Accepted named invariants</p>
+          <p>{invariantLabel}</p>
           <ul>
             {proofBundle.externalVerifier.verifiedInvariants.map(
               (invariant) => (

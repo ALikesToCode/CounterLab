@@ -190,12 +190,20 @@ const sessionViewShape = {
 
 function requireExclusiveBeliefAuthority(
   value: {
+    sessionId: string;
+    artifactId: string;
+    mode: z.infer<typeof SessionModeSchema>;
+    state: SessionState;
     beliefTest?: unknown;
     beliefSpec?: unknown;
-    prediction?: unknown;
-    verifiedResult?: unknown;
+    prediction?: PredictionContract | undefined;
+    verifiedResult?: VerifiedResultSet | undefined;
     evidenceVerdict?: unknown;
     epistemicReportHash?: unknown;
+    transferResult?: TransferResult | undefined;
+    patchResult?: PatchResult | undefined;
+    reasoningDiff?: ReasoningDiff | undefined;
+    proofBundle?: ProofBundle | undefined;
   },
   context: z.RefinementCtx,
 ): void {
@@ -229,6 +237,93 @@ function requireExclusiveBeliefAuthority(
       message: "a verified result requires an immutable Prediction",
       path: ["prediction"],
     });
+  }
+  if (value.proofBundle !== undefined) {
+    const proofBundle = value.proofBundle;
+    if (value.proofBundle.sessionId !== value.sessionId) {
+      context.addIssue({
+        code: "custom",
+        message: "the Proof Bundle belongs to a different session",
+        path: ["proofBundle", "sessionId"],
+      });
+    }
+    if (proofBundle.artifactManifest.artifactId !== value.artifactId) {
+      context.addIssue({
+        code: "custom",
+        message: "the Proof Bundle belongs to a different artifact",
+        path: ["proofBundle", "artifactManifest", "artifactId"],
+      });
+    }
+    if (
+      value.proofBundle.schemaVersion === "2" &&
+      value.mode.kind !== "live_notebook"
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "a live Proof Bundle requires live notebook mode",
+        path: ["proofBundle", "sessionMode"],
+      });
+    }
+    if (
+      value.proofBundle.schemaVersion === "1" &&
+      value.mode.kind === "sample_lesson" &&
+      value.proofBundle.replayId !== value.mode.sampleId
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "the sample Proof Bundle does not match the selected lesson",
+        path: ["proofBundle", "replayId"],
+      });
+    }
+    if (
+      value.state !== "REASONING_DIFF_ISSUED" &&
+      value.state !== "PROOF_CAPSULE_ISSUED"
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "a Proof Bundle cannot be exposed before Reasoning Diff",
+        path: ["proofBundle"],
+      });
+    }
+    const authorityBindings = [
+      [
+        "prediction",
+        value.prediction?.immutableHash,
+        proofBundle.predictionContract.immutableHash,
+      ],
+      [
+        "verifiedResult",
+        value.verifiedResult?.resultHash,
+        proofBundle.verifiedResultSet.resultHash,
+      ],
+      [
+        "transferResult",
+        value.transferResult?.resultHash,
+        proofBundle.transferResult.resultHash,
+      ],
+      [
+        "patchResult",
+        value.patchResult?.resultHash,
+        proofBundle.patchResult.resultHash,
+      ],
+      ["reasoningDiff", value.reasoningDiff?.id, proofBundle.reasoningDiff.id],
+    ] as const;
+    for (const [
+      field,
+      sessionAuthority,
+      bundleAuthority,
+    ] of authorityBindings) {
+      if (
+        sessionAuthority === undefined ||
+        sessionAuthority !== bundleAuthority
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: `the Proof Bundle ${field} authority does not match the session`,
+          path: ["proofBundle", field],
+        });
+      }
+    }
   }
 }
 
@@ -1360,7 +1455,16 @@ export class CounterLabApiClient {
     return this.request(
       `/api/sessions/${encodedId(sessionId)}/proof-bundle`,
       ProofBundleSchema,
-    );
+    ).then((proofBundle) => {
+      if (proofBundle.sessionId !== sessionId) {
+        throw new ApiClientError({
+          code: "PROOF_BUNDLE_LINEAGE_INVALID",
+          message: "The Proof Bundle belongs to a different session",
+          status: 0,
+        });
+      }
+      return proofBundle;
+    });
   }
 
   async getReplay(replayId: string): Promise<VerifiedReplay> {

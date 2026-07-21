@@ -10,6 +10,7 @@ import {
 
 import { ApiClientError, CounterLabApiClient, SessionViewSchema } from "./api";
 import { publicReplayFixture } from "./components/replay/ProofCapsuleReplayView.fixture";
+import { createDefaultProofBoundSessionFixture } from "./test-fixtures/proofBundle";
 import rawSampleResult from "../../../fixtures/public/leakage_verified_result.json";
 
 const digest = (character: string) => character.repeat(64);
@@ -260,7 +261,74 @@ function jsonResponse(payload: unknown, status = 200): Response {
   });
 }
 
+function proofBoundSession() {
+  return createDefaultProofBoundSessionFixture();
+}
+
 describe("CounterLabApiClient", () => {
+  it("binds a Proof Bundle to its outer session authority", async () => {
+    const valid = proofBoundSession();
+    expect(SessionViewSchema.parse(valid)).toMatchObject({
+      sessionId: session.sessionId,
+      proofBundle: { bundleId: "bundle_1" },
+    });
+
+    expect(() =>
+      SessionViewSchema.parse({
+        ...valid,
+        proofBundle: { ...valid.proofBundle, sessionId: "session_other" },
+      }),
+    ).toThrow(/different session/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...valid,
+        proofBundle: {
+          ...valid.proofBundle,
+          artifactManifest: {
+            ...valid.proofBundle.artifactManifest,
+            artifactId: "artifact_other",
+          },
+        },
+      }),
+    ).toThrow(/different artifact/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...valid,
+        mode: { kind: "sample_lesson", sampleId: "sample_other" },
+      }),
+    ).toThrow(/selected lesson/i);
+    expect(() =>
+      SessionViewSchema.parse({ ...valid, state: "PATCH_VERIFIED" }),
+    ).toThrow(/before Reasoning Diff/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...valid,
+        prediction: { ...valid.prediction, immutableHash: digest("0") },
+      }),
+    ).toThrow(/prediction authority/i);
+    expect(() =>
+      SessionViewSchema.parse({
+        ...valid,
+        verifiedResult: {
+          ...valid.verifiedResult,
+          resultHash: digest("0"),
+        },
+      }),
+    ).toThrow(/verifiedResult authority/i);
+
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({
+        ok: true,
+        data: { ...valid.proofBundle, sessionId: "session_other" },
+      }),
+    );
+    await expect(
+      new CounterLabApiClient({ fetch: fetcher }).getProofBundle(
+        session.sessionId,
+      ),
+    ).rejects.toMatchObject({ code: "PROOF_BUNDLE_LINEAGE_INVALID" });
+  });
+
   it("rejects a session result that has no immutable Prediction", async () => {
     const verifiedResult = VerifiedResultSetSchema.parse(rawSampleResult);
     const malformedSession = {
