@@ -4562,3 +4562,97 @@ mutation, deployment, public qualification, learner outcome, Devpost
 submission, push, or merge is claimed. Release remains **NO-GO** at the clean
 source, containment, exact-image/evidence, Cloudflare, public-browser, and
 submission gates.
+
+## Full local Cloak and deterministic verification checkpoint — 2026-07-21T13:11:46Z
+
+Deadline: `2026-07-22T00:00:00Z`; **10 hours 48 minutes 14 seconds remained at
+this checkpoint**. Committed HEAD is
+`29ea8c3b4527c2c03a1ab5cb8a07fafa1f877779` on
+`feat/learner-ux-v6.1`, 26 commits ahead of
+`origin/feat/learner-ux-v6.1` and 108 commits ahead of local `main`, with no
+reverse divergence. The only worktree entry is the preserved, untracked FUSE
+tombstone `scripts/.fuse_hidden0000a9600000801f`. It has not been read,
+changed, staged, hidden, ignored, renamed, overwritten, or deleted.
+
+### Completed and committed
+
+| Commit | Result | Exact verification |
+| --- | --- | --- |
+| `29ea8c3 fix(replay): make evidence table keyboard reachable` | Direct legacy and Proof Capsule replay variants remain accepted as labelled read-only final states. The exact-value table is a named, focusable region that supports keyboard horizontal scrolling without widening the root document. | Component tests **3/3 passed**; E2E TypeScript and production build passed; fresh CloakBrowser replay accessibility run **2/2 passed** with **45** and **51** assertions and zero unexpected console, page, request, unsafe-request, or HTTP telemetry. Independent re-review found no P0/P1. |
+
+### Full local CloakBrowser result
+
+- Immutable raw evidence at
+  `apps/web/test-results/runtime/cloak-local-full-v7/evidence/cloakbrowser-raw-run.json`
+  records **40 tests: 34 passed, 6 exact public/live skips, 0 failed** in
+  approximately 1.3 minutes. Every executed journey records zero unexpected
+  console, HTTP, request, page, or unsafe-request failures.
+- Fresh post-review accessibility evidence at
+  `apps/web/test-results/runtime/cloak-replay-accessibility-v8/evidence/cloakbrowser-raw-run.json`
+  records **2/2 passed** on CloakBrowser Chromium `146.0.7680.177`.
+- These runs use the current local Worker and are explicitly
+  **NON_QUALIFYING** for release. They prove source-level browser behavior but
+  do not substitute for an exact public deployment receipt. Current qualifying
+  public execution remains **0 journeys**.
+
+### Deterministic verification completed
+
+- Web Vitest: **80 files, 674/674 tests passed**.
+- Python kernel, runner, and release tests: **331/331 passed**.
+- Leakage mutations: **14/14 detected**; imbalance mutations: **19/19
+  detected**.
+- Held-out intake/routing: **10/10 passed** and tracked evidence matched;
+  patch-eligible completion: **7/7 verified**; legacy supported completion:
+  **7/8**, with the eighth case the expected RandomForest contract refusal.
+- Sample Boundary fixture: passed with **25 cells**. Sample Proof Capsule:
+  passed with integrity root
+  `e45cf88f1bbdd470723f83def9550d47ac272f7c5aaf8554bec52c2a34f9856b`
+  and size **94,236 bytes**.
+- Achieved-metrics checks passed for leakage **14/14** and imbalance **15/15**;
+  the scientific import allowlist reported **0 findings**.
+- Non-release scientific TypeScript: **11 files, 146/146 passed**. The wider
+  scientific TypeScript suite remains **18/20 files, 239/242 passed** because
+  three registry tests correctly reject stale source/image evidence.
+- Full root Vitest in the restricted sandbox: **73 files; 67 passed, 6
+  failed; 771 tests; 742 passed, 27 failed, 2 skipped**. The three loopback and
+  child-process files were then rerun with their required capabilities and
+  passed **49/49**. The read-isolation test was not rerun because the current
+  repository constitution forbids the external filesystem observation it
+  requires. The remaining scientific registry failures are the expected stale
+  exact-source/image bindings.
+- Repository, web, Worker, and E2E TypeScript passed. Full Prettier, Git
+  whitespace, the 1,460-file repository secret scan, and the production build
+  passed.
+- Production output: Worker **1,868.97 kB / 360.53 kB gzip**; main client
+  **449.90 kB / 129.30 kB gzip**; CSS **201.45 kB / 34.83 kB gzip**.
+
+### Current release gates and next actions
+
+1. **Cloudflare identity:** a new Wrangler `4.110.0` repository-contained OAuth
+   callback is active and awaiting owner approval. The preceding contained
+   `wrangler whoami --json` returned exit 1 with `{"loggedIn":false}`. No cloud
+   mutation has occurred.
+2. **Clean source:** blocked by the preserved FUSE tombstone. No current clean
+   source `S` exists. The owning process must release it naturally; do not
+   inspect, delete, hide, ignore, stage, rename, or overwrite it.
+3. **Real aggregate containment:** not run. The genuine sentinel requires a
+   narrowly scoped read-only observation of `/sys/fs/cgroup` and the owned test
+   processes' `/proc/<pid>/stat`; the current constitution forbids those
+   reads. No containment pass is claimed.
+4. **Exact image and evidence:** not run for this HEAD. The stale
+   source/image scientific bindings remain red until one exact image, genuine
+   sentinel, and complete evidence refresh are produced together.
+5. **Deployment and public browser qualification:** not run. After the exact
+   tuple qualifies, deploy only that tuple, prove public source/image/Worker
+   identity, run production smoke, and rerun all 40 journeys without the six
+   local-only skips.
+6. **Submission, impact, and publication:** learner evidence remains
+   `NO_DATA`; exact-release video, Devpost submission receipt, push, and merge
+   remain not run. Push the reviewed feature branch only after the release
+   tuple is frozen; fast-forward-only merge and push `main` only after public
+   qualification and submission evidence are factual.
+
+Chrome is no longer the blocker: genuine CloakBrowser local rendering is green
+for every locally executable journey. Release remains **NO-GO** for the clean
+source, constitution-compatible containment observation, exact image/evidence,
+Cloudflare deployment, public qualification, and submission gates.
