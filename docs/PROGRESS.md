@@ -3698,3 +3698,92 @@ release qualification.
 - This closes the local stock-browser regression gate only. It does not close
   the exact-public, hosted-live, CloakBrowser, real screen-reader, deployment,
   or submission gates.
+
+## Deterministic gate and submission checkpoint — 2026-07-21T04:47:19Z
+
+Deadline: `2026-07-22T00:00:00Z`; **19 hours 12 minutes 41 seconds remained at
+this checkpoint**. The feature branch is at committed HEAD
+`1aefd208ecbf3a05c1708d1b3242864a2ae837e8`. The only worktree entry besides
+this progress update is the preserved, unstaged FUSE tombstone.
+
+### Completed and committed
+
+- `9229c8e style(tests): normalize scientific UI fixtures` repairs the only two
+  repository-wide Prettier drifts without behavior changes; focused tests pass
+  **25/25** for the scientific candidate and **9/9** for the trusted renderer.
+- `6a92e06 docs(readme): reconcile judge link and evidence` points the Judge URL
+  to `/judge` and aligns the published kernel hash and mutation counts with
+  `docs/ACHIEVED_METRICS.json`.
+- `1aefd20 docs(submission): align fields demo and screenshot evidence` adds the
+  missing administrative placeholders, current Judge controls, public YouTube
+  field, repository/license rule, exact-tuple video gate, precise Runtime Codex
+  role, current completion shot, synchronized captions, and a four-image plus
+  thumbnail package with per-asset provenance sidecars.
+
+### Current exact deterministic results
+
+- Complete local Playwright matrix: **35 passed, 5 exact-public/live skips,
+  0 failed** across **40 tests in 3 files**.
+- Web Vitest: **79 files, 622/622 passed**.
+- Root Vitest: **70 files, 716 passed, 3 failed, 2 skipped**. All three failures
+  are the documented stale scientific-release bindings; no other test failed.
+- Kernel and runner Pytest: **304/304 passed**. Release tooling Pytest:
+  **27/27 passed**.
+- Repository, web client, Worker, and E2E strict TypeScript: **passed**. Worker
+  runtime types regenerated successfully through Wrangler 4.110.0.
+- Production build: **passed**. Main client **447.43 kB / 128.75 kB gzip**,
+  CSS **200.63 kB / 34.69 kB gzip**, Worker
+  **1,863.39 kB / 359.59 kB gzip**.
+- Critical mutations: leakage **14/14**, imbalance **19/19**. Tracked achieved
+  metrics check passed for its published **14/14** and **15/15** benchmark
+  scopes.
+- Held-out intake/routing **10/10**; fixed full-loop completion **7/8**; tracked
+  evidence matched. Patch replay passed with zero group overlap.
+- Sample Boundary and Sample Proof Capsule deterministic checks: **passed**.
+  Contract schemas and release-capability manifest regenerated with no drift.
+- Repository secret scan: **passed across 1,450 files**. Built client/Worker
+  secret scan: **passed across 31 files**. Repository-wide Prettier and Git
+  whitespace: **passed**.
+- Independent P0/P1 source re-audit: **13 focused files, 359/359 tests passed**.
+
+### Explicit red and blocked gates
+
+- Scientific binding check remains red across 10 generated binding files;
+  registry verification reports 14 stale source/vulnerability findings after
+  current source changes. These must be regenerated once from the frozen exact
+  image; no test or hash was weakened.
+- Contained Wrangler `whoami --json` returned `{"loggedIn":false}`. No
+  repository-contained Cloudflare token or account ID is present. Global home
+  login state is outside the permitted filesystem boundary and was not read.
+- The real aggregate-cgroup sentinel remains constitutionally blocked because
+  its required `/sys/fs/cgroup` and owned `/proc/<pid>/stat` reads are outside
+  the repository-only boundary. The preserved FUSE entry also keeps the main
+  physical worktree unclean.
+- CloakBrowser remains unavailable; qualifying exact-public and real hosted-live
+  journeys remain unexecuted. Learner impact remains `NO_DATA`.
+
+### Ordered work left
+
+1. Finish the two remaining locally actionable source gaps: render named
+   verified Sample proof details from validated Capsule fields (`MB-005`) and
+   add a concise learner-audience/differentiation sentence to Landing
+   (`MB-014`), with focused tests and separate commits.
+2. Add a fail-closed submission-package metadata validator and mark the old
+   submission-readiness audit clearly historical. Verify anonymous repository
+   access without claiming it prematurely.
+3. Resolve repository-contained Wrangler authentication and the clean-source /
+   real-sentinel authority blockers.
+4. Freeze exact source `S`; build one runner image; execute genuine containment
+   and negative controls; regenerate SBOM, VEX, scientific evidence, Sample
+   Capsule, and evidence commit `E`; then rerun the complete release gate.
+5. Deploy only the qualified source/image tuple. Record exact Worker version,
+   deployment ID, Container digest, migrations, public identity, and complete
+   sample/replay/live production smoke.
+6. Run every public desktop/mobile, accessibility, reconnect, download,
+   console/network, and Web Vitals journey through CloakBrowser. Capture the
+   five provenance-bound submission assets from that exact tuple.
+7. Keep learner evidence `NO_DATA` unless consented observations occur; obtain
+   the public video, `/feedback` ID, Devpost slug and `submitted_at`, and verify
+   every link logged out.
+8. Push and verify the feature branch, then fast-forward-only merge and push
+   `main` after every ship gate above is factual. No push or merge has occurred.
