@@ -66,7 +66,7 @@ export function JudgeModeView({
             Evidence-first learning for notebook users
           </p>
           <h1 id="judge-title" tabIndex={-1}>
-            See a verified belief break in ten seconds.
+            Inspect a verified belief break from question to proof.
           </h1>
           <p className={styles.lede}>
             Seal a Prediction. Change one condition. Fixed evidence—not AI
@@ -76,7 +76,7 @@ export function JudgeModeView({
 
         <aside
           className={styles.twentySecondProof}
-          aria-label="Ten second fixed sample preview"
+          aria-label="Fixed sample preview"
         >
           <header>
             <span>Completed fixed sample · not a live result</span>

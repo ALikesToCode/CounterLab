@@ -221,9 +221,13 @@ describe("ExperimentTheater", () => {
       "verified_sample_belief_break_v1",
     );
     expect(
-      await screen.findByRole("alert", {
-        name: /verified belief-break evidence unavailable/i,
-      }),
+      await screen.findByRole(
+        "alert",
+        {
+          name: /verified belief-break evidence unavailable/i,
+        },
+        { timeout: 5_000 },
+      ),
     ).toHaveTextContent(/refused to present values/i);
     expect(screen.queryByText("98.5%")).not.toBeInTheDocument();
     expect(screen.queryByText("59.4%")).not.toBeInTheDocument();

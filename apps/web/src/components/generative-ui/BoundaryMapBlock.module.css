@@ -73,7 +73,7 @@
 
 .integrity span {
   color: var(--aqua);
-  font: 12px/1.4 var(--mono);
+  font: 13px/1.4 var(--mono);
   letter-spacing: 0;
   text-transform: none;
 }
@@ -187,7 +187,7 @@
   outline-offset: 2px;
 }
 
-.grid button[aria-selected="true"] {
+.grid button[aria-pressed="true"] {
   border-color: var(--line-strong);
   box-shadow: 0 0 0 2px white inset;
 }
@@ -198,7 +198,7 @@
 }
 
 .grid button > small {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 760;
   font-variant-numeric: tabular-nums;
 }

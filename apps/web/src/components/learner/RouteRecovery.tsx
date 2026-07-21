@@ -6,11 +6,14 @@ import styles from "./RouteRecovery.module.css";
 export type RouteRecoveryReason =
   | "unknown-route"
   | "missing-session"
+  | "session-unavailable"
   | "missing-proof"
+  | "proof-unavailable"
   | "proof-not-ready"
   | "missing-replay"
   | "unverified-replay"
-  | "missing-artifact";
+  | "missing-artifact"
+  | "artifact-unavailable";
 
 export type RouteRecoveryRecentSession = Readonly<{
   id: string;
@@ -25,6 +28,7 @@ export type RouteRecoveryProps = Readonly<{
   reason: RouteRecoveryReason;
   attemptedPath: string;
   onRetry: () => void;
+  onBack: () => void;
   onHome: () => void;
   recentSessions?: readonly RouteRecoveryRecentSession[];
 }>;
@@ -47,15 +51,27 @@ const recoveryCopy: Readonly<
     retryLabel: "Retry this address",
   },
   "missing-session": {
+    eyebrow: "Private session not available",
+    title: "This private session could not be opened.",
+    body: "Private work requires the browser capability that created it. CounterLab intentionally does not reveal whether an inaccessible address exists, and it never substitutes sample evidence. Publish a verified replay when you need a shareable link.",
+    retryLabel: "Retry session",
+  },
+  "session-unavailable": {
     eyebrow: "Session unavailable",
-    title: "This session could not be restored.",
-    body: "The link may be old or incomplete. CounterLab did not open another session or substitute sample evidence.",
+    title: "This session could not be loaded.",
+    body: "CounterLab could not confirm the session right now. It did not call the session missing or substitute other evidence.",
     retryLabel: "Retry session",
   },
   "missing-proof": {
+    eyebrow: "Private proof not available",
+    title: "This private proof could not be opened.",
+    body: "Private proof requires the browser capability that created its session. CounterLab intentionally does not reveal whether an inaccessible address exists and never substitutes proof from another mode. Publish a verified replay when you need a shareable link.",
+    retryLabel: "Retry proof",
+  },
+  "proof-unavailable": {
     eyebrow: "Proof unavailable",
-    title: "This proof could not be found.",
-    body: "No Proof Capsule was found for this address. CounterLab did not substitute proof from a sample, replay, or different session.",
+    title: "This proof could not be loaded.",
+    body: "CounterLab could not confirm this proof right now. It did not call the proof missing or substitute another proof.",
     retryLabel: "Retry proof",
   },
   "proof-not-ready": {
@@ -77,9 +93,15 @@ const recoveryCopy: Readonly<
     retryLabel: "Retry verification",
   },
   "missing-artifact": {
+    eyebrow: "Evidence not found",
+    title: "This session's notebook evidence was not found.",
+    body: "The session exists, but no sanitized artifact record exists at this address. No result or proof was displayed without that evidence.",
+    retryLabel: "Retry evidence",
+  },
+  "artifact-unavailable": {
     eyebrow: "Evidence unavailable",
-    title: "This session's notebook evidence could not be restored.",
-    body: "The session exists, but its sanitized artifact record is unavailable. No result or proof was displayed without that evidence.",
+    title: "This session's notebook evidence could not be loaded.",
+    body: "CounterLab could not confirm the sanitized artifact record right now. It did not call the evidence missing or display a result without it.",
     retryLabel: "Retry evidence",
   },
 };
@@ -88,12 +110,12 @@ const modeLabels: Readonly<Record<RouteRecoveryRecentSession["mode"], string>> =
   {
     instant: "Verified sample",
     live: "Live notebook",
-    replay: "Verified replay",
+    replay: "Stored replay",
   };
 
 export const RouteRecovery = forwardRef<HTMLHeadingElement, RouteRecoveryProps>(
   function RouteRecovery(
-    { reason, attemptedPath, onRetry, onHome, recentSessions = [] },
+    { reason, attemptedPath, onRetry, onBack, onHome, recentSessions = [] },
     headingRef,
   ) {
     const instanceId = useId();
@@ -139,6 +161,9 @@ export const RouteRecovery = forwardRef<HTMLHeadingElement, RouteRecoveryProps>(
           >
             {copy.retryLabel}
           </button>
+          <button className={styles.homeAction} type="button" onClick={onBack}>
+            Back
+          </button>
           <button className={styles.homeAction} type="button" onClick={onHome}>
             Go to CounterLab home
           </button>
@@ -148,9 +173,7 @@ export const RouteRecovery = forwardRef<HTMLHeadingElement, RouteRecoveryProps>(
           <section className={styles.recent} aria-labelledby={recentTitleId}>
             <div className={styles.recentHeading}>
               <h2 id={recentTitleId}>Recent work from this browser</h2>
-              <p>
-                Open a different saved session without changing this address.
-              </p>
+              <p>Open a different saved session at its recorded address.</p>
             </div>
             <ul>
               {visibleRecentSessions.map((session) => (

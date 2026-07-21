@@ -7,7 +7,7 @@ describe("LearnerThesisStrip", () => {
   it("explains the opening sequence as three fixed learner stages", () => {
     render(<LearnerThesisStrip />);
 
-    const strip = screen.getByLabelText("What happens in 20 seconds");
+    const strip = screen.getByLabelText("How the opening sequence works");
     const sequence = within(strip).getByRole("list", {
       name: "CounterLab opening sequence",
     });

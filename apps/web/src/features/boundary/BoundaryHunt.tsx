@@ -75,10 +75,9 @@ export function BoundaryHunt({
   const instructionsId = useId();
   const titleRef = useRef<HTMLHeadingElement>(null);
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
-  const [lastAttemptedCellId, setLastAttemptedCellId] = useState<string | null>(
-    null,
+  const [attemptedCellIds, setAttemptedCellIds] = useState<readonly string[]>(
+    [],
   );
-  const [attemptCount, setAttemptCount] = useState(0);
   const [outcome, setOutcome] = useState<AttemptOutcome | null>(null);
   const [revealRequested, setRevealRequested] = useState(false);
 
@@ -96,16 +95,20 @@ export function BoundaryHunt({
     const selectedCell = boundary.cells.find(
       (cell) => cell.cellId === selectedCellId,
     );
-    if (selectedCell === undefined) return;
+    if (
+      selectedCell === undefined ||
+      attemptedCellIds.includes(selectedCell.cellId) ||
+      outcome === "SUCCESS"
+    )
+      return;
 
-    const nextAttemptCount = attemptCount + 1;
+    const nextAttemptedCellIds = [...attemptedCellIds, selectedCell.cellId];
     const successful =
       selectedCell.expectedClassification === "CONCLUSION_CHANGES";
 
     onClassify?.(successful ? "CONCLUSION_CHANGES" : "CONCLUSION_STABLE");
 
-    setAttemptCount(nextAttemptCount);
-    setLastAttemptedCellId(selectedCell.cellId);
+    setAttemptedCellIds(nextAttemptedCellIds);
 
     if (successful) {
       setOutcome("SUCCESS");
@@ -113,7 +116,7 @@ export function BoundaryHunt({
       return;
     }
 
-    if (nextAttemptCount >= 2) {
+    if (nextAttemptedCellIds.length >= 2) {
       setOutcome("MAP_READY");
       requestReveal();
       return;
@@ -152,7 +155,7 @@ export function BoundaryHunt({
               coordinateLabel(boundary, coordinate),
             );
             const selected = selectedCellId === cell.cellId;
-            const attempted = lastAttemptedCellId === cell.cellId;
+            const attempted = attemptedCellIds.includes(cell.cellId);
             const reference = boundary.referenceCellId === cell.cellId;
 
             return (
@@ -197,7 +200,11 @@ export function BoundaryHunt({
         <button
           className={styles.primaryAction}
           type="button"
-          disabled={selectedCellId === null || revealRequested}
+          disabled={
+            selectedCellId === null ||
+            attemptedCellIds.includes(selectedCellId) ||
+            outcome === "SUCCESS"
+          }
           onClick={checkCondition}
         >
           Check this condition
@@ -210,7 +217,12 @@ export function BoundaryHunt({
         >
           Reveal the map
         </button>
-        <button className={styles.skipAction} type="button" onClick={onSkip}>
+        <button
+          className={styles.skipAction}
+          type="button"
+          disabled={revealRequested}
+          onClick={onSkip}
+        >
           Skip the hunt
         </button>
       </div>
@@ -232,6 +244,7 @@ export function BoundaryHunt({
                 conclusion stable.
               </strong>
               <p>Two conditions are enough—the full verified map is ready.</p>
+              <p>You can still classify a changing condition to continue.</p>
             </>
           ) : (
             <>

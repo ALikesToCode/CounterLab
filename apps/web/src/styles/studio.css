@@ -1,5 +1,7 @@
 .studio-frame {
   --studio-left: 0px;
+  --proof-console-handle-height: 52px;
+  --proof-console-body-height: min(290px, 40dvh);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-height: calc(100vh - 82px);
@@ -7,12 +9,17 @@
 }
 
 .studio-frame.proof-open .studio-canvas {
-  padding-bottom: calc(342px + env(safe-area-inset-bottom));
+  padding-bottom: calc(
+    var(--proof-console-handle-height) + var(--proof-console-body-height) +
+      env(safe-area-inset-bottom)
+  );
 }
 
 .studio-canvas {
   min-width: 0;
-  padding-bottom: calc(52px + env(safe-area-inset-bottom));
+  padding-bottom: calc(
+    var(--proof-console-handle-height) + env(safe-area-inset-bottom)
+  );
   background: var(--night);
 }
 
@@ -422,6 +429,7 @@ kbd {
   right: 0;
   bottom: 0;
   left: var(--studio-left);
+  max-width: none;
   border-top: 1px solid var(--line);
   background: rgba(10, 10, 10, 0.96);
   box-shadow: 0 -14px 36px rgba(0, 0, 0, 0.2);
@@ -432,7 +440,7 @@ kbd {
 .proof-console-handle {
   display: flex;
   width: 100%;
-  min-height: 52px;
+  min-height: var(--proof-console-handle-height);
   align-items: center;
   gap: 12px;
   padding: 9px 20px;
@@ -460,7 +468,7 @@ kbd {
 .proof-console-handle > strong {
   color: var(--ink-soft);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -500,7 +508,9 @@ kbd {
 }
 
 .proof-console-body {
-  height: 290px;
+  display: grid;
+  height: var(--proof-console-body-height);
+  grid-template-rows: auto minmax(0, 1fr);
   border-top: 1px solid var(--line);
   background: var(--paper);
 }
@@ -538,7 +548,8 @@ kbd {
 }
 
 .proof-console-content {
-  height: 236px;
+  height: auto;
+  min-height: 0;
   overflow: auto;
   padding: 12px 16px;
 }
@@ -908,6 +919,7 @@ kbd {
 
 @media (max-width: 620px) {
   .studio-frame {
+    --proof-console-handle-height: 76px;
     min-height: calc(100vh - 108px);
   }
 
@@ -917,14 +929,6 @@ kbd {
 
   .studio-utility-bar {
     width: min(100% - 28px, 1120px);
-  }
-
-  .proof-console-body {
-    height: 290px;
-  }
-
-  .studio-frame.proof-open .studio-canvas {
-    padding-bottom: calc(382px + env(safe-area-inset-bottom));
   }
 
   .console-events li {
@@ -937,7 +941,7 @@ kbd {
 
   .proof-console-handle {
     display: grid;
-    min-height: 76px;
+    min-height: var(--proof-console-handle-height);
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 6px 10px;
     padding-inline: 11px;
@@ -957,7 +961,7 @@ kbd {
   .proof-console-context em {
     min-height: 22px;
     padding: 3px 6px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .proof-console-handle > strong {
@@ -971,11 +975,9 @@ kbd {
   }
 
   .studio-mobile-command {
-    bottom: calc(86px + env(safe-area-inset-bottom));
-  }
-
-  .proof-console-content {
-    height: 236px;
+    bottom: calc(
+      var(--proof-console-handle-height) + 10px + env(safe-area-inset-bottom)
+    );
   }
 
   .proof-bundle-evidence dl > div {

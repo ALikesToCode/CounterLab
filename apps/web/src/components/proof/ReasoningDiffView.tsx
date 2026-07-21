@@ -71,7 +71,7 @@ function PatchEvidence({ patch }: { patch: PatchResult }) {
   return (
     <details className={styles.patchDetails}>
       <summary>Review the verified notebook-cell diff</summary>
-      <pre aria-label="Verified notebook cell diff">
+      <pre aria-label="Verified notebook cell diff" tabIndex={0}>
         <code>{patch.diff}</code>
       </pre>
       <ul aria-label="Patch verifier properties">

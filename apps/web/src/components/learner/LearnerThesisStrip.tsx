@@ -19,11 +19,11 @@ export function LearnerThesisStrip() {
   return (
     <section
       className={styles.strip}
-      aria-label="What happens in 20 seconds"
+      aria-label="How the opening sequence works"
       data-motion="none"
     >
       <div className={styles.intro}>
-        <span className={styles.eyebrow}>What happens in 20 seconds</span>
+        <span className={styles.eyebrow}>How the opening sequence works</span>
         <p>
           State claim → lock Prediction → controlled test runs → result passes
           verification.

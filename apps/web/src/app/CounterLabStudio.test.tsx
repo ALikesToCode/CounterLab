@@ -137,6 +137,34 @@ describe("CounterLabStudio", () => {
     expect(tools).toHaveFocus();
   });
 
+  it("disables new analysis while the current request is in flight", () => {
+    const newAnalysis = vi.fn();
+    render(
+      <CounterLabStudio
+        context={context}
+        actions={{
+          newAnalysis,
+          newAnalysisDisabled: true,
+          showEvidence: vi.fn(),
+          startOver: vi.fn(),
+          openRecent: vi.fn(),
+        }}
+      >
+        <main>Pending request</main>
+      </CounterLabStudio>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /project & evidence/i }),
+    );
+    const newAnalysisButton = screen.getByRole("button", {
+      name: /new analysis/i,
+    });
+    expect(newAnalysisButton).toBeDisabled();
+    fireEvent.click(newAnalysisButton);
+    expect(newAnalysis).not.toHaveBeenCalled();
+  });
+
   it("opens the keyboard command palette without hiding visible controls", () => {
     const analyze = vi.fn();
     render(

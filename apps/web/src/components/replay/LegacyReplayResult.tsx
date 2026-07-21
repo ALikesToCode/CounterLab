@@ -10,7 +10,6 @@ export type LegacyVerifiedReplay = Exclude<
 
 export interface LegacyReplayResultProps {
   replay: LegacyVerifiedReplay;
-  onStartSample: () => void;
   onStartOver: () => void;
 }
 
@@ -168,7 +167,6 @@ function StoredResultTable({ replay }: { replay: LegacyVerifiedReplay }) {
 
 export function LegacyReplayResult({
   replay,
-  onStartSample,
   onStartOver,
 }: LegacyReplayResultProps) {
   const titleId = useId();
@@ -311,7 +309,7 @@ export function LegacyReplayResult({
           <p>
             This legacy record predates Proof Capsule v2. It cannot record your
             choices, verify a new transfer, unlock a repair, apply a patch, or
-            provide a new proof download. Start a verified sample for an
+            provide a new proof download. Return home to choose a separate
             interactive learning path.
           </p>
         </aside>
@@ -324,16 +322,9 @@ export function LegacyReplayResult({
           <button
             className={styles.primaryAction}
             type="button"
-            onClick={onStartSample}
-          >
-            Start verified sample
-          </button>
-          <button
-            className={styles.secondaryAction}
-            type="button"
             onClick={onStartOver}
           >
-            Start over
+            Return to CounterLab home
           </button>
         </div>
       </div>

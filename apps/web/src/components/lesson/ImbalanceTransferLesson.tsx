@@ -11,7 +11,10 @@ import {
   type CostMatrixCopy,
   type CostTransferChoice,
 } from "../learner/CostTransfer";
-import { ReflectionBuilder } from "../learner/ReflectionBuilder";
+import {
+  isMeaningfulLearnerText,
+  ReflectionBuilder,
+} from "../learner/ReflectionBuilder";
 import { recordLearnerInteraction } from "../../features/learner/interactionEvidence";
 
 export type ImbalanceTransferDecision =
@@ -146,6 +149,7 @@ export function ImbalanceTransferLesson({
   initialMetricChoice,
   initialEvidenceChoices,
   transferOutcome,
+  repairAllowed = true,
   updateSession,
 }: {
   sessionId: string;
@@ -156,14 +160,11 @@ export function ImbalanceTransferLesson({
   initialMetricChoice?: ImbalanceTransferMetric;
   initialEvidenceChoices?: readonly ImbalanceTransferEvidence[];
   transferOutcome?: "PASSED" | "FAILED";
+  repairAllowed?: boolean;
   updateSession: (session: SessionView) => void;
 }) {
-  const [revisionDraft, setRevisionDraft] = useState(
-    revision ?? initialInterpretation ?? "",
-  );
-  const [revisionAuthored, setRevisionAuthored] = useState(
-    (revision ?? initialInterpretation ?? "").trim().length >= 20,
-  );
+  const [revisionDraft, setRevisionDraft] = useState(revision ?? "");
+  const [revisionAuthored, setRevisionAuthored] = useState(false);
   const [revisionMode, setRevisionMode] = useState<"clauses" | "free_text">(
     "clauses",
   );
@@ -180,6 +181,13 @@ export function ImbalanceTransferLesson({
   const [error, setError] = useState<string | null>(null);
 
   const recordRevision = async () => {
+    if (
+      !revisionAuthored ||
+      !isMeaningfulLearnerText(revisionDraft) ||
+      revisionDraft.trim().length < 20
+    ) {
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -235,12 +243,18 @@ export function ImbalanceTransferLesson({
   if (transferOutcome === "PASSED" || state === "TRANSFER_PASSED") {
     return (
       <section className="transfer-pass panel imbalance-transfer-pass">
-        <p className="eyebrow aqua">Transfer passed</p>
+        <p className="eyebrow aqua">
+          Transfer passed ·{" "}
+          {repairAllowed ? "Repair unlocked" : "Repair locked"}
+        </p>
         <h2>This fixed manufacturing transfer passed.</h2>
         <p>
           Your submitted choices matched the fixed evaluator for rare-class cost
           and deployment prevalence. This records one task outcome; it does not
-          establish mastery. The patch gate is now unlocked.
+          establish mastery.{" "}
+          {repairAllowed
+            ? "The repair gate is now unlocked."
+            : "The experiment was inconclusive, so Repair remains locked."}
         </p>
       </section>
     );
@@ -249,13 +263,22 @@ export function ImbalanceTransferLesson({
   if (revision === undefined) {
     return (
       <section className="revision panel imbalance-revision">
+        {initialInterpretation === undefined ? null : (
+          <aside role="note">
+            <strong>Your earlier observation</strong>
+            <p>{initialInterpretation}</p>
+            <p>Now write a separate rule you could reuse in another case.</p>
+          </aside>
+        )}
         <ReflectionBuilder
           value={revisionDraft}
           onRevisionChange={setRevisionDraft}
           onLearnerEdit={(nextRevision) =>
-            setRevisionAuthored(nextRevision.trim().length >= 20)
+            setRevisionAuthored(isMeaningfulLearnerText(nextRevision))
           }
-          onGeneratedRevision={() => setRevisionAuthored(false)}
+          onGeneratedRevision={(nextRevision) =>
+            setRevisionAuthored(isMeaningfulLearnerText(nextRevision))
+          }
           whenOptions={reflectionWhen}
           actionOptions={reflectionActions}
           becauseOptions={reflectionReasons}
@@ -272,7 +295,10 @@ export function ImbalanceTransferLesson({
           className="button button-primary"
           type="button"
           disabled={
-            !revisionAuthored || revisionDraft.trim().length < 20 || busy
+            !revisionAuthored ||
+            !isMeaningfulLearnerText(revisionDraft) ||
+            revisionDraft.trim().length < 20 ||
+            busy
           }
           onClick={() => void recordRevision()}
         >

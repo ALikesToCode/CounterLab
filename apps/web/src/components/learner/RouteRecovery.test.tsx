@@ -11,14 +11,22 @@ import {
 
 const reasons = [
   ["unknown-route", "alert", "We couldn't find that CounterLab page."],
-  ["missing-session", "alert", "This session could not be restored."],
-  ["missing-proof", "alert", "This proof could not be found."],
+  ["missing-session", "alert", "This private session could not be opened."],
+  ["session-unavailable", "alert", "This session could not be loaded."],
+  ["missing-proof", "alert", "This private proof could not be opened."],
+  ["proof-unavailable", "alert", "This proof could not be loaded."],
   ["proof-not-ready", "status", "This proof is not ready yet."],
   ["missing-replay", "alert", "This replay was not found."],
+  ["unverified-replay", "alert", "This replay could not be verified."],
   [
     "missing-artifact",
     "alert",
-    "This session's notebook evidence could not be restored.",
+    "This session's notebook evidence was not found.",
+  ],
+  [
+    "artifact-unavailable",
+    "alert",
+    "This session's notebook evidence could not be loaded.",
   ],
 ] as const satisfies readonly (readonly [
   RouteRecoveryReason,
@@ -35,6 +43,7 @@ describe("RouteRecovery", () => {
           reason={reason}
           attemptedPath={`/broken/${reason}`}
           onRetry={vi.fn()}
+          onBack={vi.fn()}
           onHome={vi.fn()}
         />,
       );
@@ -53,6 +62,7 @@ describe("RouteRecovery", () => {
         reason="missing-session"
         attemptedPath="/session/missing"
         onRetry={vi.fn()}
+        onBack={vi.fn()}
         onHome={vi.fn()}
       />,
     );
@@ -69,6 +79,7 @@ describe("RouteRecovery", () => {
         reason="proof-not-ready"
         attemptedPath="/proof/session-one"
         onRetry={vi.fn()}
+        onBack={vi.fn()}
         onHome={vi.fn()}
       />,
     );
@@ -79,15 +90,37 @@ describe("RouteRecovery", () => {
     expect(screen.getByRole("button", { name: "Check again" })).toBeEnabled();
   });
 
-  it("invokes retry and home through native keyboard controls", async () => {
+  it("explains browser-bound private access without revealing existence", () => {
+    render(
+      <RouteRecovery
+        reason="missing-session"
+        attemptedPath="/session/private"
+        onRetry={vi.fn()}
+        onBack={vi.fn()}
+        onHome={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /requires the browser capability that created it/i,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /does not reveal whether an inaccessible address exists/i,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(/verified replay/i);
+  });
+
+  it("invokes retry, back, and home through native keyboard controls", async () => {
     const user = userEvent.setup();
     const retry = vi.fn();
+    const back = vi.fn();
     const home = vi.fn();
     render(
       <RouteRecovery
         reason="missing-replay"
         attemptedPath="/replay/missing"
         onRetry={retry}
+        onBack={back}
         onHome={home}
       />,
     );
@@ -96,7 +129,13 @@ describe("RouteRecovery", () => {
     retryButton.focus();
     await user.keyboard("{Enter}");
     expect(retry).toHaveBeenCalledOnce();
+    expect(back).not.toHaveBeenCalled();
     expect(home).not.toHaveBeenCalled();
+
+    const backButton = screen.getByRole("button", { name: "Back" });
+    backButton.focus();
+    await user.keyboard("{Enter}");
+    expect(back).toHaveBeenCalledOnce();
 
     const homeButton = screen.getByRole("button", {
       name: "Go to CounterLab home",
@@ -144,6 +183,7 @@ describe("RouteRecovery", () => {
         reason="missing-session"
         attemptedPath="/session/missing"
         onRetry={vi.fn()}
+        onBack={vi.fn()}
         onHome={vi.fn()}
         recentSessions={recentSessions}
       />,
@@ -156,7 +196,7 @@ describe("RouteRecovery", () => {
     expect(within(recent!).getAllByRole("button")).toHaveLength(3);
     expect(recent).toHaveTextContent("Live notebook · Test preparing");
     expect(recent).toHaveTextContent("Verified sample · Result ready");
-    expect(recent).toHaveTextContent("Verified replay · Proof Capsule ready");
+    expect(recent).toHaveTextContent("Stored replay · Proof Capsule ready");
     expect(recent).not.toHaveTextContent(
       /LAB_COMPILING|EXPERIMENT_COMPLETED|PROOF_CAPSULE_ISSUED/,
     );
@@ -176,6 +216,7 @@ describe("RouteRecovery", () => {
         reason="missing-session"
         attemptedPath="/session/missing"
         onRetry={vi.fn()}
+        onBack={vi.fn()}
         onHome={vi.fn()}
         recentSessions={[
           {

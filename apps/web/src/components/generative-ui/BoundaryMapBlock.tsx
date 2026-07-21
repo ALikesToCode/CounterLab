@@ -227,7 +227,7 @@ export function BoundaryMapBlock({
                           className={styles[`tone${Math.min(index, 2)}`]}
                           type="button"
                           aria-label={`${columnAxis.label} ${columnPoint.label}; ${rowAxis.label} ${rowPoint.label}; ${classification?.label ?? cell.classificationId}; ${observable.label} ${observable.value}`}
-                          aria-selected={selected}
+                          aria-pressed={selected}
                           tabIndex={selected ? 0 : -1}
                           onClick={() => selectCell(cell)}
                           onKeyDown={(event) =>

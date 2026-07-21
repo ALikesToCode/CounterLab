@@ -11,7 +11,7 @@ export type DuelModel = Readonly<{
 
 export type ModelDuelDraftSource = "subject_pack" | "ai_suggested";
 
-const ALTERNATIVE_SOURCE_LABELS: Record<ModelDuelDraftSource, string> = {
+const DRAFT_SOURCE_LABELS: Record<ModelDuelDraftSource, string> = {
   subject_pack: "Reviewed Subject Pack draft",
   ai_suggested: "AI-suggested draft",
 };
@@ -35,7 +35,7 @@ function ModelCard({
       <p className={styles.sourceLabel}>{sourceLabel}</p>
       <p className={styles.modelStatement}>{model.statement}</p>
       <p className={styles.prediction}>
-        <strong>Predicts</strong>
+        <strong>Subject Pack test pattern</strong>
         {model.prediction}
       </p>
       <details className={styles.scope}>
@@ -71,6 +71,8 @@ export function ModelDuel({
   onInsufficientEvidence,
   onReject,
   confirmed = false,
+  disabled = false,
+  currentSource = "subject_pack",
   alternativeSource = "subject_pack",
 }: {
   current: DuelModel;
@@ -80,6 +82,8 @@ export function ModelDuel({
   onInsufficientEvidence: () => void;
   onReject: () => void;
   confirmed?: boolean;
+  disabled?: boolean;
+  currentSource?: ModelDuelDraftSource;
   alternativeSource?: ModelDuelDraftSource;
 }) {
   const titleId = useId();
@@ -88,7 +92,7 @@ export function ModelDuel({
       <ModelCard
         label="Your current explanation"
         model={current}
-        sourceLabel="Your input"
+        sourceLabel={DRAFT_SOURCE_LABELS[currentSource]}
       />
       <span className={styles.versus} aria-hidden="true">
         versus
@@ -96,7 +100,7 @@ export function ModelDuel({
       <ModelCard
         label="Alternative CounterLab will test"
         model={alternative}
-        sourceLabel={ALTERNATIVE_SOURCE_LABELS[alternativeSource]}
+        sourceLabel={DRAFT_SOURCE_LABELS[alternativeSource]}
       />
     </div>
   );
@@ -134,11 +138,17 @@ export function ModelDuel({
             <button
               className={styles.primary}
               type="button"
+              disabled={disabled}
               onClick={onConfirm}
             >
               Yes, this captures my view
             </button>
-            <button className={styles.secondary} type="button" onClick={onEdit}>
+            <button
+              className={styles.secondary}
+              type="button"
+              disabled={disabled}
+              onClick={onEdit}
+            >
               Edit my explanation
             </button>
           </div>
@@ -146,10 +156,14 @@ export function ModelDuel({
           <details className={styles.tertiary}>
             <summary>More ways to respond</summary>
             <div>
-              <button type="button" onClick={onInsufficientEvidence}>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={onInsufficientEvidence}
+              >
                 Not enough evidence
               </button>
-              <button type="button" onClick={onReject}>
+              <button type="button" disabled={disabled} onClick={onReject}>
                 Reject
               </button>
             </div>

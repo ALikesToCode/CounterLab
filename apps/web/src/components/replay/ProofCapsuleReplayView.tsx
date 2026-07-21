@@ -487,7 +487,7 @@ export function ProofCapsuleReplayView({
             type="button"
             onClick={onStartOver}
           >
-            Start new analysis
+            Return to CounterLab home
           </button>
         )}
       </aside>

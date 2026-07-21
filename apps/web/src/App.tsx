@@ -48,7 +48,11 @@ import { LearnerCompletion } from "./components/learner/LearnerCompletion";
 import { LearnerCoach } from "./components/learner/LearnerCoach";
 import { NeedAHint } from "./components/learner/NeedAHint";
 import { LearnerProgress } from "./components/learner/LearnerProgress";
-import { ReflectionBuilder } from "./components/learner/ReflectionBuilder";
+import { LearningDirectorPanel } from "./components/learner/LearningDirectorPanel";
+import {
+  isMeaningfulLearnerText,
+  ReflectionBuilder,
+} from "./components/learner/ReflectionBuilder";
 import { RepairPreview } from "./components/learner/RepairPreview";
 import {
   RouteRecovery,
@@ -397,12 +401,34 @@ function sessionProofReady(session: SessionView | null): boolean {
   if (session.mode.kind === "live_notebook") {
     return (
       session.state === "PROOF_CAPSULE_ISSUED" &&
+      session.beliefSpec !== undefined &&
+      session.prediction !== undefined &&
+      session.verifiedResult !== undefined &&
+      session.evidenceVerdict?.kind === "SUPPORTS" &&
+      session.epistemicReportHash !== undefined &&
+      session.boundaryMapAuthority !== undefined &&
+      session.revision !== undefined &&
+      session.transferResult?.outcome === "PASSED" &&
+      session.patchResult?.status === "VERIFIED" &&
+      session.reasoningDiffV2 !== undefined &&
       session.proofCapsule !== undefined
     );
   }
   return (
     session.mode.kind === "sample_lesson" && session.proofBundle !== undefined
   );
+}
+
+function sessionEvidencePermitsRepair(session: SessionView | null): boolean {
+  return (
+    session === null ||
+    session.mode.kind !== "live_notebook" ||
+    session.evidenceVerdict?.kind === "SUPPORTS"
+  );
+}
+
+function humanizeAuthorityToken(value: string): string {
+  return value.replaceAll("_", " ").toLowerCase();
 }
 
 function beliefResponseClosed(session: SessionView | null): boolean {
@@ -582,7 +608,10 @@ const storageKeys = {
   replayIntro: "counterlab.replayIntro",
   replayTransferState: "counterlab.replayTransferState",
   replayRevision: "counterlab.replayRevision",
-  sampleBoundarySessionId: "counterlab.sampleBoundarySessionId",
+  sampleOriginQuestion: "counterlab.sampleOriginQuestion",
+  sampleOriginSessionId: "counterlab.sampleOriginSessionId",
+  sampleBoundaryClassifiedSessionId:
+    "counterlab.sampleBoundaryClassifiedSessionId",
   activeRunnerJobId: "counterlab.activeRunnerJobId",
   activeRunnerJobKind: "counterlab.activeRunnerJobKind",
 } as const;
@@ -1071,7 +1100,7 @@ function Header({
         </span>
       </div>
       <button className="start-over-control" type="button" onClick={restart}>
-        Start over
+        {mode === "replay" ? "Return home" : "Start over"}
       </button>
     </header>
   );
@@ -1114,7 +1143,6 @@ function Landing({
   }, [railOpen]);
   const startSample = () => {
     setRailOpen(false);
-    updateClaim("");
     chooseMode("instant");
   };
   const openReplay = () => {
@@ -1365,12 +1393,20 @@ function ClaimScreen({
       <div className="screen-intro">
         <p className="eyebrow">Question · Your idea</p>
         <h1>What do you think the score means?</h1>
-        <p>Write one sentence about who you think this model will work for.</p>
+        <p>
+          {isSample
+            ? "Write one sentence about who you think this model will work for."
+            : "Write one bounded claim about what the reported result supports."}
+        </p>
       </div>
 
       <LearnerCoach
-        next="say what you believe the score tells us."
-        why="A high score is a result, but the notebook evidence does not yet show whether it generalizes to completely new customers."
+        next="say what you believe the reported result tells us."
+        why={
+          isSample
+            ? "A high score is a result, but the notebook evidence does not yet show whether it generalizes to completely new customers."
+            : "A reported metric is evidence, but CounterLab must first identify the supported evaluation pattern before choosing a fair test."
+        }
       />
 
       {requiresFreshSession && (
@@ -1483,7 +1519,7 @@ function ClaimScreen({
             <p>
               {isSample
                 ? SAMPLE_LEAKAGE_QUESTION
-                : "“Because the notebook scored highly, I think the model…”"}
+                : "“Because the notebook reported this result, I think…”"}
             </p>
           </div>
           {isSample ? (
@@ -1504,7 +1540,7 @@ function ClaimScreen({
                 type="button"
                 onClick={() =>
                   updateClaim(
-                    "I think the high score means the model will work for completely new customers.",
+                    "I think the reported result means the model will work on new data that matches its intended use.",
                   )
                 }
               >
@@ -1514,7 +1550,7 @@ function ClaimScreen({
                 id="learner-claim"
                 value={claim}
                 onChange={(event) => updateClaim(event.target.value)}
-                placeholder="I think this score means the model will work for…"
+                placeholder="I think this reported result supports…"
                 rows={7}
               />
             </>
@@ -1565,7 +1601,12 @@ function ClaimScreen({
                 </span>
               </div>
               <PrivacyPacketSummary
-                packet={{ exactPacket: analysisPreview.sanitizedContent }}
+                packet={{
+                  exactPacket: {
+                    beliefAnalyst: analysisPreview.sanitizedContent,
+                    learningDirector: analysisPreview.learningDirectorPacket,
+                  },
+                }}
               />
               {analysisPreview.requiresSensitiveApproval && (
                 <label className="sensitive-approval">
@@ -1616,6 +1657,9 @@ function BeliefScreen({
   claim,
   belief,
   fixedSampleFraming,
+  learningDirector,
+  directorBusy,
+  answerDirector,
   notebookScore,
   confirmed,
   confirm,
@@ -1630,6 +1674,12 @@ function BeliefScreen({
   claim: string;
   belief?: BeliefPresentation | undefined;
   fixedSampleFraming: boolean;
+  learningDirector?: SessionView["learningDirector"] | undefined;
+  directorBusy: boolean;
+  answerDirector: (
+    answer:
+      "comparison-first" | "controls-first" | "boundary-first" | "apply-first",
+  ) => void;
   notebookScore: PredictionDisplay;
   confirmed: boolean;
   confirm: () => void;
@@ -1688,20 +1738,29 @@ function BeliefScreen({
           alternativesAndLimits:
             "Class balance and temporal drift remain open alternatives. This bounded comparison does not establish production performance or causality.",
         };
-  // Before Prediction, learner-facing hypotheses come only from this closed
-  // Subject Pack framing. Model-authored prose remains evidence, never UI
-  // authority for a retrospective verdict, result value, or repair directive.
   const currentModel: DuelModel = {
-    statement: copy.currentHypothesis,
-    prediction: copy.currentPrediction,
-    conditions: [copy.conditions],
-    nonClaims: [copy.currentNonClaim],
+    statement: belief?.current.statement ?? copy.currentHypothesis,
+    prediction: belief?.current.predictedOutcome ?? copy.currentPrediction,
+    conditions:
+      belief?.current.conditions.length === 0 || belief === undefined
+        ? [copy.conditions]
+        : belief.current.conditions,
+    nonClaims:
+      belief?.current.nonClaims.length === 0 || belief === undefined
+        ? [copy.currentNonClaim]
+        : belief.current.nonClaims,
   };
   const alternativeModel: DuelModel = {
-    statement: copy.competingHypothesis,
-    prediction: copy.competingPrediction,
-    conditions: [copy.conditions],
-    nonClaims: [copy.competingNonClaim],
+    statement: belief?.competing.statement ?? copy.competingHypothesis,
+    prediction: belief?.competing.predictedOutcome ?? copy.competingPrediction,
+    conditions:
+      belief?.competing.conditions.length === 0 || belief === undefined
+        ? [copy.conditions]
+        : belief.competing.conditions,
+    nonClaims:
+      belief?.competing.nonClaims.length === 0 || belief === undefined
+        ? [copy.competingNonClaim]
+        : belief.competing.nonClaims,
   };
   const predictionOptions = predictionOptionsFor(belief?.concept);
 
@@ -1740,10 +1799,21 @@ function BeliefScreen({
         </section>
       )}
 
+      {!confirmed && learningDirector !== undefined && (
+        <LearningDirectorPanel
+          state={learningDirector}
+          busy={directorBusy}
+          onAnswer={answerDirector}
+        />
+      )}
+
       <ModelDuel
         current={currentModel}
         alternative={alternativeModel}
+        currentSource={fixedSampleFraming ? "subject_pack" : "ai_suggested"}
+        alternativeSource={fixedSampleFraming ? "subject_pack" : "ai_suggested"}
         confirmed={confirmed}
+        disabled={directorBusy}
         onConfirm={confirm}
         onEdit={editClaim}
         onInsufficientEvidence={() => stop("insufficient")}
@@ -1767,7 +1837,7 @@ function BeliefScreen({
                 </span>
               </>
             ) : (
-              belief.evidenceRefs.slice(0, 3).map((evidence) => (
+              belief.evidenceRefs.map((evidence) => (
                 <span className="evidence-chip" key={evidence.hash}>
                   {evidence.cellIndex === undefined
                     ? evidence.kind
@@ -1776,15 +1846,7 @@ function BeliefScreen({
                           ? " · source"
                           : ` · output ${evidence.outputIndex}`
                       }`}{" "}
-                  <strong>
-                    {evidence.kind === "metric"
-                      ? "Notebook-reported metric selected as evidence."
-                      : evidence.kind === "code"
-                        ? "Notebook evaluation source selected as evidence."
-                        : evidence.kind === "schema"
-                          ? "Notebook schema selected as evidence."
-                          : "Resolved notebook evidence selected for this comparison."}
-                  </strong>
+                  <strong>{evidence.relevance}</strong>
                   <small>{evidence.excerpt}</small>
                 </span>
               ))
@@ -1799,11 +1861,30 @@ function BeliefScreen({
             </div>
             <details>
               <summary>Alternatives, limitations, and uncertainty</summary>
-              <p>{copy.alternativesAndLimits}</p>
+              {belief?.alternatives.length ? (
+                <ul>
+                  {belief.alternatives.map((alternative) => (
+                    <li key={alternative.label}>
+                      <strong>{alternative.label}:</strong>{" "}
+                      {alternative.rationale}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>{copy.alternativesAndLimits}</p>
+              )}
+              {belief?.limitations.length ? (
+                <ul>
+                  {belief.limitations.map((limitation) => (
+                    <li key={limitation}>{limitation}</li>
+                  ))}
+                </ul>
+              ) : null}
               <p>
-                Pre-result explanation wording comes from the reviewed Subject
-                Pack. Model proposals cannot supply result, verdict, or repair
-                copy on this screen.
+                The hypothesis statements, conditions, limits, and references
+                above are the reviewed Belief Spec. The displayed test patterns
+                come from the fixed Subject Pack; no result, verdict, or repair
+                is available before your Prediction is sealed.
               </p>
             </details>
           </section>
@@ -1978,6 +2059,92 @@ function BuildScreen({
           },
         ]}
       />
+    </main>
+  );
+}
+
+function EvidenceVerdictNotice({ session }: { session: SessionView | null }) {
+  const verdict = session?.evidenceVerdict;
+  if (verdict === undefined) return null;
+
+  if (verdict.kind === "SUPPORTS") {
+    const hypothesis = session?.beliefSpec?.hypotheses.find(
+      (candidate) => candidate.id === verdict.hypothesisId,
+    );
+    return (
+      <section
+        className="evidence-verdict panel supports"
+        aria-label="Evidence Verdict: SUPPORTS"
+      >
+        <p className="eyebrow aqua">Evidence Verdict · SUPPORTS</p>
+        <h2>
+          {hypothesis?.statement ??
+            `Supported hypothesis: ${verdict.hypothesisId}`}
+        </h2>
+        <p>
+          The verified result matched this hypothesis&apos;s declared decisive
+          pattern within the bounded scope: {verdict.scope}
+        </p>
+      </section>
+    );
+  }
+
+  if (verdict.kind === "INCONCLUSIVE") {
+    return (
+      <section
+        className="evidence-verdict panel inconclusive"
+        aria-label="Evidence Verdict: INCONCLUSIVE"
+      >
+        <p className="eyebrow gold">Evidence Verdict · INCONCLUSIVE</p>
+        <h2>The valid test did not separate the two explanations.</h2>
+        <p>
+          The recorded reason was {humanizeAuthorityToken(verdict.reasonCode)}.
+          The result remains available for Boundary and Apply within this scope:{" "}
+          {verdict.scope}
+        </p>
+        <p>
+          CounterLab will not force a winner or unlock Repair from inconclusive
+          evidence.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      className="evidence-verdict panel rejected"
+      aria-label="Evidence Verdict: REJECTED"
+    >
+      <p className="eyebrow">Evidence Verdict · REJECTED</p>
+      <h2>The proposed evidence was not released as authoritative.</h2>
+      <p>
+        Verifier findings:{" "}
+        {verdict.findingIds.map(humanizeAuthorityToken).join(", ")}.
+      </p>
+    </section>
+  );
+}
+
+function RejectedEvidenceScreen({ session }: { session: SessionView }) {
+  return (
+    <main
+      className="workspace shell narrow"
+      id="main-content"
+      tabIndex={-1}
+      role="alert"
+    >
+      <div className="screen-intro compact">
+        <p className="eyebrow">Test · Result withheld</p>
+        <h1 id="lesson-phase-title" tabIndex={-1}>
+          The experimental result was withheld.
+        </h1>
+        <p>
+          The epistemic verifier rejected this evidence. CounterLab preserved
+          the findings but released no numerical result, Boundary Map, repair,
+          or proof claim.
+        </p>
+      </div>
+      <EvidenceVerdictNotice session={session} />
     </main>
   );
 }
@@ -2721,7 +2888,7 @@ function ResultInterpretationPrompt({
   onChange: (value: string) => void;
   disabled?: boolean;
 }) {
-  const ready = value.trim().length >= 20;
+  const ready = isMeaningfulLearnerText(value);
   const descriptionId = `${id}-description`;
   return (
     <section
@@ -2744,7 +2911,7 @@ function ResultInterpretationPrompt({
       <small id={descriptionId} aria-live="polite">
         {ready
           ? "Interpretation recorded locally. Explore and Boundary are now available."
-          : "Write at least 20 characters before CounterLab reveals its reading or opens the next view."}
+          : "Write a brief observation in your own words before CounterLab reveals its reading or opens the next view."}
       </small>
     </section>
   );
@@ -2758,6 +2925,7 @@ function LeakageRealityScreen({
   artifact,
   updateSession,
   recordCompilerEvents,
+  startNewAnalysis,
 }: {
   claim: string;
   prediction: PredictionChoice;
@@ -2769,36 +2937,42 @@ function LeakageRealityScreen({
     sessionId: string,
     events: readonly PublicCompilerEvent[],
   ) => void;
+  startNewAnalysis: () => void;
 }) {
   const random = resultRun(result, "random_row_split");
   const group = resultRun(result, "customer_group_split");
+  const [resultInterpretation, setResultInterpretation] = useState("");
   const [revision, setRevision] = useState(
     session === null
       ? (window.localStorage.getItem(storageKeys.replayRevision) ?? "")
       : (session.revision ?? ""),
   );
-  const [revisionAuthored, setRevisionAuthored] = useState(
-    revision.trim().length >= 20,
-  );
+  const [revisionAuthored, setRevisionAuthored] = useState(false);
   const interpretationComplete =
     session === null ||
     session.mode.kind === "verified_replay" ||
     session?.revision !== undefined ||
-    (revisionAuthored && revision.trim().length >= 20);
+    isMeaningfulLearnerText(resultInterpretation);
+  const revisionReady =
+    revisionAuthored &&
+    isMeaningfulLearnerText(revision) &&
+    revision.trim().length >= 20;
   const [revisionMode, setRevisionMode] = useState<"clauses" | "free_text">(
     "clauses",
   );
-  const initialTransferState: TransferState = session?.patchResult
-    ? "patched"
-    : session?.transferResult?.outcome === "PASSED"
-      ? "passed"
-      : session?.transferResult?.outcome === "FAILED"
-        ? "failed"
-        : session?.revision
-          ? "ready"
-          : session === null
-            ? storedReplayTransferState()
-            : "locked";
+  const repairPermitted = sessionEvidencePermitsRepair(session);
+  const initialTransferState: TransferState =
+    session?.patchResult && repairPermitted
+      ? "patched"
+      : session?.transferResult?.outcome === "PASSED"
+        ? "passed"
+        : session?.transferResult?.outcome === "FAILED"
+          ? "failed"
+          : session?.revision
+            ? "ready"
+            : session === null
+              ? storedReplayTransferState()
+              : "locked";
   const [transferState, setTransferState] =
     useState<TransferState>(initialTransferState);
   const [splitChoice, setSplitChoice] = useState<LeakageTransferSplit>(() => {
@@ -2835,8 +3009,9 @@ function LeakageRealityScreen({
   const [sampleBoundaryComplete, setSampleBoundaryComplete] = useState(
     sampleSessionId === null ||
       session?.revision !== undefined ||
-      window.localStorage.getItem(storageKeys.sampleBoundarySessionId) ===
-        sampleSessionId,
+      window.localStorage.getItem(
+        storageKeys.sampleBoundaryClassifiedSessionId,
+      ) === sampleSessionId,
   );
   const [patchJob, setPatchJob] = useState<RunnerJob | null>(null);
   const patchRunner = useRunnerEvents();
@@ -2929,6 +3104,7 @@ function LeakageRealityScreen({
   }, [session?.sessionId]);
 
   const recordRevision = () => {
+    if (!revisionReady) return;
     if (session === null) {
       setTransferState("ready");
       return;
@@ -2985,6 +3161,12 @@ function LeakageRealityScreen({
   };
 
   const compilePatch = () => {
+    if (!repairPermitted) {
+      setActionError(
+        "Repair remains locked because this valid experiment did not support either declared hypothesis.",
+      );
+      return;
+    }
     if (session === null) {
       setTransferState("patched");
       return;
@@ -3185,6 +3367,32 @@ function LeakageRealityScreen({
   }
 
   if (transferState === "patched") {
+    if (session?.mode.kind === "live_notebook" && !sessionProofReady(session)) {
+      return (
+        <main
+          className="workspace shell reality lesson-phase"
+          id="main-content"
+          tabIndex={-1}
+          role="status"
+        >
+          <div className="screen-intro compact">
+            <p className="eyebrow aqua">Repair verified · Proof pending</p>
+            <h1 id="lesson-phase-title" tabIndex={-1}>
+              Finalizing the authoritative evidence record.
+            </h1>
+            <p>
+              The repaired copy passed its checks, but CounterLab will not show
+              a Reasoning Diff or completed Proof Capsule until every native
+              authority binding is present.
+            </p>
+          </div>
+          <RepairPreview
+            changed={leakageRepairChanges}
+            preserved={leakageRepairPreserves}
+          />
+        </main>
+      );
+    }
     const liveCompletionProof =
       session?.mode.kind === "live_notebook" &&
       session.state === "PROOF_CAPSULE_ISSUED" &&
@@ -3256,6 +3464,11 @@ function LeakageRealityScreen({
                   disabled: actionBusy,
                 }),
           }}
+          nextCaseAction={{
+            label: "Analyze another supported notebook",
+            onActivate: startNewAnalysis,
+            disabled: actionBusy,
+          }}
           evidenceAndProof={
             liveCompletionProof === null ? (
               <>
@@ -3306,8 +3519,8 @@ function LeakageRealityScreen({
           <section className="reasoning-diff panel">
             <div className="panel-title final-title">
               <div>
-                <p className="eyebrow purple">Reasoning Diff</p>
-                <h2>Your learning, before and after</h2>
+                <p className="eyebrow purple">Lesson recap</p>
+                <h2>Your recorded lesson, before and after</h2>
                 <p>
                   One view of what changed in your idea, evidence, and code.
                 </p>
@@ -3333,11 +3546,7 @@ function LeakageRealityScreen({
                 </button>
               </div>
             </div>
-            <div
-              className="diff-table"
-              role="table"
-              aria-label="Reasoning Diff"
-            >
+            <div className="diff-table" role="table" aria-label="Lesson recap">
               <div className="diff-row diff-head" role="row">
                 <span>Dimension</span>
                 <span>Before</span>
@@ -3403,6 +3612,35 @@ function LeakageRealityScreen({
   }
 
   if (transferState === "passed") {
+    if (!repairPermitted) {
+      return (
+        <main
+          className="workspace shell reality lesson-phase transfer-passed-phase"
+          id="main-content"
+          tabIndex={-1}
+        >
+          <div className="screen-intro compact">
+            <p className="eyebrow gold">Transfer passed · Repair locked</p>
+            <h1 id="lesson-phase-title" tabIndex={-1}>
+              This fixed forecasting transfer passed.
+            </h1>
+            <p>
+              Your transfer choices matched the fixed evaluator. The original
+              experiment remains inconclusive, so it cannot authorize a repair.
+            </p>
+          </div>
+          <EvidenceVerdictNotice session={session} />
+          <section className="lock-notice" role="note">
+            <Mark name="lock" />
+            <strong>Repair remains locked</strong>
+            <span>
+              A passed transfer records one application task; it does not turn
+              inconclusive evidence into support for either hypothesis.
+            </span>
+          </section>
+        </main>
+      );
+    }
     return (
       <main
         className="workspace shell reality lesson-phase transfer-passed-phase"
@@ -3484,6 +3722,8 @@ function LeakageRealityScreen({
             that matches what will be available when a real prediction is made.
           </p>
         </div>
+
+        <EvidenceVerdictNotice session={session} />
 
         <section
           className="lesson-recap"
@@ -3642,11 +3882,8 @@ function LeakageRealityScreen({
             session.revision === undefined ? (
               <ResultInterpretationPrompt
                 id="leakage-result-interpretation"
-                value={revision}
-                onChange={(nextRevision) => {
-                  setRevision(nextRevision);
-                  setRevisionAuthored(nextRevision.trim().length >= 20);
-                }}
+                value={resultInterpretation}
+                onChange={setResultInterpretation}
                 disabled={actionBusy}
               />
             ) : null}
@@ -3698,7 +3935,7 @@ function LeakageRealityScreen({
                 prediction={predictionSummary}
                 onComplete={() => {
                   window.localStorage.setItem(
-                    storageKeys.sampleBoundarySessionId,
+                    storageKeys.sampleBoundaryClassifiedSessionId,
                     session.sessionId,
                   );
                   setSampleBoundaryComplete(true);
@@ -3727,9 +3964,11 @@ function LeakageRealityScreen({
               value={revision}
               onRevisionChange={setRevision}
               onLearnerEdit={(nextRevision) =>
-                setRevisionAuthored(nextRevision.trim().length >= 20)
+                setRevisionAuthored(isMeaningfulLearnerText(nextRevision))
               }
-              onGeneratedRevision={() => setRevisionAuthored(false)}
+              onGeneratedRevision={(nextRevision) =>
+                setRevisionAuthored(isMeaningfulLearnerText(nextRevision))
+              }
               whenOptions={leakageReflectionWhen}
               actionOptions={leakageReflectionActions}
               becauseOptions={leakageReflectionReasons}
@@ -3744,9 +3983,7 @@ function LeakageRealityScreen({
             <button
               className="button button-primary"
               type="button"
-              disabled={
-                !revisionAuthored || revision.trim().length < 20 || actionBusy
-              }
+              disabled={!revisionReady || actionBusy}
               onClick={recordRevision}
             >
               Try the rule on a new problem <Mark name="arrow" />
@@ -3777,6 +4014,7 @@ function LeakageRealityScreen({
             : `The verified test found a ${accuracyGapPoints.toFixed(1)}-point gap for new customers. The four views change presentation only; fixed evidence remains the authority.`
         }
       />
+      <EvidenceVerdictNotice session={session} />
       <ExperimentTheater
         key={session?.sessionId ?? result.resultHash}
         prediction={predictionSummary}
@@ -3793,12 +4031,14 @@ function ImbalanceRealityScreen({
   result,
   session,
   updateSession,
+  startNewAnalysis,
 }: {
   claim: string;
   prediction: PredictionChoice;
   result: ImbalanceVerifiedResultSet;
   session: SessionView | null;
   updateSession: (session: SessionView) => void;
+  startNewAnalysis: () => void;
 }) {
   const [resultInterpretation, setResultInterpretation] = useState(
     session?.revision ?? "",
@@ -3807,7 +4047,8 @@ function ImbalanceRealityScreen({
     session === null ||
     session.mode.kind === "verified_replay" ||
     session?.revision !== undefined ||
-    resultInterpretation.trim().length >= 20;
+    isMeaningfulLearnerText(resultInterpretation);
+  const repairPermitted = sessionEvidencePermitsRepair(session);
   const majority = result.runs.find(
     (run) => run.operation === "imbalance.majority_baseline",
   );
@@ -4003,11 +4244,12 @@ function ImbalanceRealityScreen({
                 <LazyImbalanceTransferLesson
                   sessionId={session.sessionId}
                   state={session.state}
+                  repairAllowed={repairPermitted}
                   {...(session.revision === undefined
                     ? {}
                     : { revision: session.revision })}
                   {...(session.revision === undefined &&
-                  resultInterpretation.trim().length >= 20
+                  isMeaningfulLearnerText(resultInterpretation)
                     ? { initialInterpretation: resultInterpretation }
                     : {})}
                   {...(session.transferResult === undefined
@@ -4025,18 +4267,20 @@ function ImbalanceRealityScreen({
                   updateSession={updateSession}
                 />
               </Suspense>
-              {session.transferResult?.outcome === "PASSED" && (
-                <Suspense
-                  fallback={
-                    <DeferredPanelFallback label="Loading repair review…" />
-                  }
-                >
-                  <LazyImbalancePatchReview
-                    session={session}
-                    updateSession={updateSession}
-                  />
-                </Suspense>
-              )}
+              {session.transferResult?.outcome === "PASSED" &&
+                repairPermitted && (
+                  <Suspense
+                    fallback={
+                      <DeferredPanelFallback label="Loading repair review…" />
+                    }
+                  >
+                    <LazyImbalancePatchReview
+                      session={session}
+                      updateSession={updateSession}
+                      onNextCase={startNewAnalysis}
+                    />
+                  </Suspense>
+                )}
               {session.revision !== undefined && (
                 <section className="revision panel">
                   <p className="eyebrow">Saved revision</p>
@@ -4071,6 +4315,7 @@ function ImbalanceRealityScreen({
             : `The majority baseline is ${percent.format(majority.metrics.accuracy)} accurate with ${percent.format(majority.metrics.recall)} rare-class recall. The four views change presentation only; fixed evidence remains the authority.`
         }
       />
+      <EvidenceVerdictNotice session={session} />
       <ExperimentTheater
         key={session?.sessionId ?? result.resultHash}
         prediction={predictionSummary}
@@ -4092,6 +4337,7 @@ function RealityScreen(props: {
     sessionId: string,
     events: readonly PublicCompilerEvent[],
   ) => void;
+  startNewAnalysis: () => void;
 }) {
   if (props.result.concept === "class_imbalance") {
     return (
@@ -4101,6 +4347,7 @@ function RealityScreen(props: {
         result={props.result as ImbalanceVerifiedResultSet}
         session={props.session}
         updateSession={props.updateSession}
+        startNewAnalysis={props.startNewAnalysis}
       />
     );
   }
@@ -4471,6 +4718,18 @@ export function App() {
   const [mode, setMode] = useState<Mode | null>(null);
   const [stage, setStage] = useState<Stage>("landing");
   const [claim, setClaim] = useState("");
+  const [sampleOriginQuestion, setSampleOriginQuestion] = useState<
+    string | null
+  >(() => {
+    const route = parseStudioLocation(window.location.pathname);
+    const routeSessionId =
+      route.kind === "session" || route.kind === "proof" ? route.id : null;
+    return routeSessionId !== null &&
+      window.localStorage.getItem(storageKeys.sampleOriginSessionId) ===
+        routeSessionId
+      ? window.localStorage.getItem(storageKeys.sampleOriginQuestion)
+      : null;
+  });
   const [confirmed, setConfirmed] = useState(false);
   const [prediction, setPrediction] = useState<PredictionChoice | null>(null);
   const [confidence, setConfidence] = useState(72);
@@ -4499,6 +4758,7 @@ export function App() {
     status: Exclude<ProofEventLoadStatus, "idle">;
   } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pendingMessage, setPendingMessage] = useState("Completing this step…");
   const [error, setError] = useState<string | null>(null);
   const [liveHealth, setLiveHealth] = useState<CapabilityHealth | null>(null);
   const [liveHealthError, setLiveHealthError] = useState<string | null>(null);
@@ -4507,6 +4767,7 @@ export function App() {
   const [restartRequest, setRestartRequest] = useState<{
     sessionId: string;
     jobs: ActiveRunnerRecord[];
+    destination: "home" | "new-analysis";
   } | null>(null);
   const [restartBusy, setRestartBusy] = useState(false);
   const [analysisPreview, setAnalysisPreview] =
@@ -4665,6 +4926,7 @@ export function App() {
 
   const withRequest = async (
     operation: (request: { assertCurrent: () => void }) => Promise<void>,
+    message = "Completing this step…",
   ) => {
     const generation = userRequestGeneration.current + 1;
     userRequestGeneration.current = generation;
@@ -4676,6 +4938,7 @@ export function App() {
         );
       }
     };
+    setPendingMessage(message);
     setBusy(true);
     setError(null);
     try {
@@ -4725,6 +4988,11 @@ export function App() {
     const sessionId = startingSession.sessionId;
     let current: SessionView & { runnerJob?: RunnerJob | undefined } =
       startingSession;
+    if (current.evidenceVerdict?.kind === "REJECTED") {
+      setSession(current);
+      setStage("reality");
+      return;
+    }
     setStage("live-compile");
 
     if (
@@ -4785,6 +5053,13 @@ export function App() {
       });
     }
 
+    if (current.evidenceVerdict?.kind === "REJECTED") {
+      forgetRunnerJob(sessionId);
+      setSession(current);
+      setStage("reality");
+      return;
+    }
+
     if (
       current.state === "LAB_VERIFIED" &&
       current.verifiedResult === undefined
@@ -4824,6 +5099,13 @@ export function App() {
       request.assertCurrent();
     }
 
+    if (current.evidenceVerdict?.kind === "REJECTED") {
+      forgetRunnerJob(sessionId);
+      setSession(current);
+      setStage("reality");
+      return;
+    }
+
     if (
       current.state !== "EXPERIMENT_COMPLETED" ||
       current.verifiedResult === undefined
@@ -4848,7 +5130,7 @@ export function App() {
       request.assertCurrent();
       setSession(restored);
       await advanceLiveLab(restored, request);
-    });
+    }, "Reconnecting to the verified test…");
   };
 
   const cancelLiveLab = () => {
@@ -4882,17 +5164,12 @@ export function App() {
       });
   };
 
-  const resetJourney = (notice?: string) => {
+  const clearVisibleInvestigation = () => {
     userRequestGeneration.current += 1;
-    Object.values(storageKeys).forEach((key) =>
-      window.localStorage.removeItem(key),
-    );
-    clearAllActiveRunnerCheckpoints(window.localStorage);
-    window.history.replaceState({}, "", "/");
-    setJudgeMode(false);
-    setMode(null);
-    setStage("landing");
+    proofEventRequestGeneration.current += 1;
+    runner.clear();
     setClaim("");
+    setSampleOriginQuestion(null);
     setConfirmed(false);
     setPrediction(null);
     setConfidence(72);
@@ -4902,8 +5179,12 @@ export function App() {
     setActiveReplay(null);
     setArtifact(null);
     setSession(null);
-    setError(notice ?? null);
+    setStoredProofSnapshot(null);
+    setProofEventRequest(null);
+    setTransientCompilerEvents(null);
+    setError(null);
     setBusy(false);
+    setPendingMessage("Completing this step…");
     setCancellingRunner(false);
     setAnalysisPreview(null);
     setSensitiveContentApproved(false);
@@ -4911,8 +5192,30 @@ export function App() {
     setRouteRecovery(null);
     setRestartRequest(null);
     setRestartBusy(false);
+  };
+
+  const resetJourney = (notice?: string) => {
+    clearVisibleInvestigation();
+    Object.values(storageKeys).forEach((key) =>
+      window.localStorage.removeItem(key),
+    );
+    clearAllActiveRunnerCheckpoints(window.localStorage);
+    window.history.replaceState({}, "", "/");
+    setJudgeMode(false);
+    setMode(null);
+    setStage("landing");
+    setError(notice ?? null);
     setRouteHydrated(true);
-    runner.clear();
+  };
+
+  const enterNewAnalysis = () => {
+    resetJourney();
+    window.history.replaceState({}, "", "/new");
+    window.localStorage.setItem(storageKeys.mode, "live");
+    setMode("live");
+    setStage("live-setup");
+    setRouteHydrated(true);
+    void checkLiveCapabilities(true);
   };
 
   const restart = () => {
@@ -4922,7 +5225,7 @@ export function App() {
     if (sessionId !== null) {
       const jobs = knownActiveRunnerJobs(sessionId);
       if (jobs.length > 0) {
-        setRestartRequest({ sessionId, jobs });
+        setRestartRequest({ sessionId, jobs, destination: "home" });
         return;
       }
     }
@@ -4946,7 +5249,7 @@ export function App() {
       resetJourney(
         "Private session access was revoked. Stored immutable evidence was not deleted.",
       );
-    });
+    }, "Revoking this browser's private access…");
   };
 
   const dismissRestart = useCallback(() => {
@@ -5005,11 +5308,15 @@ export function App() {
         unresolved += 1;
       }
     }
-    resetJourney(
-      unresolved === 0
-        ? undefined
-        : `CounterLab returned home, but could not confirm cancellation for ${unresolved} live ${unresolved === 1 ? "job" : "jobs"}. The ${unresolved === 1 ? "job remains" : "jobs remain"} registered for recovery; no result was authorized by leaving the page.`,
-    );
+    if (unresolved === 0 && request.destination === "new-analysis") {
+      enterNewAnalysis();
+    } else {
+      resetJourney(
+        unresolved === 0
+          ? undefined
+          : `CounterLab returned home, but could not confirm cancellation for ${unresolved} live ${unresolved === 1 ? "job" : "jobs"}. The ${unresolved === 1 ? "job remains" : "jobs remain"} registered for recovery; no result was authorized by leaving the page.`,
+      );
+    }
   };
 
   useEffect(() => {
@@ -5155,12 +5462,30 @@ export function App() {
     setJudgeMode(false);
 
     if (route.kind === "landing") {
+      const storedSessionId =
+        session?.sessionId ??
+        window.localStorage.getItem(storageKeys.sessionId);
+      if (
+        storedSessionId !== null &&
+        knownActiveRunnerJobs(storedSessionId).length > 0
+      ) {
+        clearVisibleInvestigation();
+        setMode(null);
+        setStage("landing");
+        setError(
+          "The live test is still registered in this browser. Reopen it from Recent work to monitor or cancel it.",
+        );
+        setRouteHydrated(true);
+        return;
+      }
       restart();
       return;
     }
 
     if (route.kind === "replay") {
       const replayId = route.id;
+      const requestGeneration = userRequestGeneration.current + 1;
+      userRequestGeneration.current = requestGeneration;
       runner.clear();
       setMode("replay");
       setActiveReplayId(replayId);
@@ -5183,7 +5508,8 @@ export function App() {
       void counterLabApi
         .getReplay(replayId)
         .then((loaded) => {
-          if (!active) return;
+          if (!active || userRequestGeneration.current !== requestGeneration)
+            return;
           setActiveReplay(loaded);
           if ("projectionKind" in loaded) {
             setReplayIntro(false);
@@ -5191,10 +5517,13 @@ export function App() {
           }
         })
         .catch((caught: unknown) => {
-          if (active) {
+          if (active && userRequestGeneration.current === requestGeneration) {
             const missing =
               caught instanceof ApiClientError && caught.status === 404;
-            if (missing) {
+            if (
+              caught instanceof ApiClientError &&
+              caught.code === "REPLAY_NOT_FOUND"
+            ) {
               removeRecentWork(replayId, "replay", window.localStorage);
             }
             setError(null);
@@ -5206,7 +5535,8 @@ export function App() {
           }
         })
         .finally(() => {
-          if (active) setBusy(false);
+          if (active && userRequestGeneration.current === requestGeneration)
+            setBusy(false);
         });
       return () => {
         active = false;
@@ -5218,9 +5548,9 @@ export function App() {
     setReplayIntro(false);
 
     if (route.kind === "new") {
-      runner.clear();
       const storedClaim =
         window.localStorage.getItem(storageKeys.claim)?.trim() ?? "";
+      clearVisibleInvestigation();
       setMode("live");
       setClaim(storedClaim);
       setStage(storedClaim.length > 0 ? "question-path" : "live-setup");
@@ -5250,17 +5580,38 @@ export function App() {
           restored = await counterLabApi.getSession(sessionId);
         } catch (caught) {
           if (active) {
-            if (caught instanceof ApiClientError && caught.status === 404) {
+            const missing =
+              caught instanceof ApiClientError && caught.status === 404;
+            if (
+              caught instanceof ApiClientError &&
+              caught.code === "SESSION_NOT_FOUND"
+            ) {
               removeRecentWork(sessionId, "live", window.localStorage);
               removeRecentWork(sessionId, "instant", window.localStorage);
             }
             setRouteHydrated(false);
             setRouteRecovery({
               reason:
-                route.kind === "proof" ? "missing-proof" : "missing-session",
+                route.kind === "proof"
+                  ? missing
+                    ? "missing-proof"
+                    : "proof-unavailable"
+                  : missing
+                    ? "missing-session"
+                    : "session-unavailable",
               attemptedPath,
             });
           }
+          return;
+        }
+        if (restored.mode.kind === "verified_replay") {
+          window.history.replaceState(
+            {},
+            "",
+            `/replay/${encodeURIComponent(restored.mode.replayId)}`,
+          );
+          setRouteHydrated(false);
+          setLocationRevision((current) => current + 1);
           return;
         }
         let restoredArtifact: ArtifactView;
@@ -5270,7 +5621,12 @@ export function App() {
           );
         } catch (caught) {
           if (active) {
-            if (caught instanceof ApiClientError && caught.status === 404) {
+            const missing =
+              caught instanceof ApiClientError && caught.status === 404;
+            if (
+              caught instanceof ApiClientError &&
+              caught.code === "ARTIFACT_NOT_FOUND"
+            ) {
               removeRecentWork(
                 restored.sessionId,
                 presentationMode(restored.mode),
@@ -5278,11 +5634,21 @@ export function App() {
               );
             }
             setRouteHydrated(false);
-            setRouteRecovery({ reason: "missing-artifact", attemptedPath });
+            setRouteRecovery({
+              reason: missing ? "missing-artifact" : "artifact-unavailable",
+              attemptedPath,
+            });
           }
           return;
         }
         if (!active) return;
+        setSampleOriginQuestion(
+          restored.mode.kind === "sample_lesson" &&
+            window.localStorage.getItem(storageKeys.sampleOriginSessionId) ===
+              restored.sessionId
+            ? window.localStorage.getItem(storageKeys.sampleOriginQuestion)
+            : null,
+        );
         const restoredBelief = sessionBeliefPresentation(restored);
         setClaim(
           restoredBelief?.claim ??
@@ -5341,6 +5707,10 @@ export function App() {
           restored.state === "LAB_REJECTED" ||
           restored.state === "LAB_VERIFIED"
         ) {
+          if (restored.evidenceVerdict?.kind === "REJECTED") {
+            setStage("reality");
+            return;
+          }
           if (
             restored.mode.kind === "live_notebook" &&
             restored.verifiedResult === undefined
@@ -5375,6 +5745,10 @@ export function App() {
   }, [locationRevision]);
 
   useLayoutEffect(() => {
+    const ordinaryStageFocus =
+      document.getElementById("lesson-phase-title") === null
+        ? "main-content"
+        : "lesson-phase-title";
     resetViewport(
       judgeMode
         ? "judge-title"
@@ -5384,7 +5758,7 @@ export function App() {
             ? "landing-title"
             : stage === "question-path"
               ? "claim-path-title"
-              : undefined,
+              : ordinaryStageFocus,
     );
   }, [judgeMode, reviewStep, stage]);
 
@@ -5454,9 +5828,32 @@ export function App() {
     setAnalysisPreview(null);
     setSensitiveContentApproved(false);
     window.localStorage.setItem(storageKeys.mode, nextMode);
+    let sampleQuestionToBind: string | null = null;
     if (nextMode === "instant") {
+      const enteredQuestion = claim.trim();
+      const originQuestion =
+        enteredQuestion.length > 0 &&
+        enteredQuestion !== SAMPLE_LEAKAGE_QUESTION
+          ? enteredQuestion
+          : sampleOriginQuestion;
+      sampleQuestionToBind = originQuestion;
+      setSampleOriginQuestion(originQuestion);
+      if (originQuestion === null) {
+        window.localStorage.removeItem(storageKeys.sampleOriginQuestion);
+        window.localStorage.removeItem(storageKeys.sampleOriginSessionId);
+      } else {
+        window.localStorage.setItem(
+          storageKeys.sampleOriginQuestion,
+          originQuestion,
+        );
+        window.localStorage.removeItem(storageKeys.sampleOriginSessionId);
+      }
       setClaim(SAMPLE_LEAKAGE_QUESTION);
       window.localStorage.setItem(storageKeys.claim, SAMPLE_LEAKAGE_QUESTION);
+    } else {
+      setSampleOriginQuestion(null);
+      window.localStorage.removeItem(storageKeys.sampleOriginQuestion);
+      window.localStorage.removeItem(storageKeys.sampleOriginSessionId);
     }
     if (nextMode === "live") {
       setStage("live-setup");
@@ -5479,7 +5876,7 @@ export function App() {
         window.localStorage.removeItem(storageKeys.replayRevision);
         setReplayIntro(true);
         setStage("build");
-      });
+      }, "Opening the verified replay…");
       return;
     }
     void withRequest(async (request) => {
@@ -5495,11 +5892,35 @@ export function App() {
         storageKeys.claimSessionId,
         created.sessionId,
       );
+      if (sampleQuestionToBind !== null) {
+        window.localStorage.setItem(
+          storageKeys.sampleOriginSessionId,
+          created.sessionId,
+        );
+      }
       activateSessionRoute(created.sessionId);
       setArtifact(sample);
       setSession(created);
       setStage("claim");
-    });
+    }, "Opening the verified sample…");
+  };
+
+  const startNewAnalysis = () => {
+    if (busy || restartBusy) return;
+    const sessionId =
+      session?.sessionId ?? window.localStorage.getItem(storageKeys.sessionId);
+    if (sessionId !== null) {
+      const jobs = knownActiveRunnerJobs(sessionId);
+      if (jobs.length > 0) {
+        setRestartRequest({
+          sessionId,
+          jobs,
+          destination: "new-analysis",
+        });
+        return;
+      }
+    }
+    enterNewAnalysis();
   };
 
   const review = (step: ReviewStep) => {
@@ -5536,7 +5957,7 @@ export function App() {
         kind: "patch.downloaded",
         stage: "repair",
       });
-    }).finally(() => {
+    }, "Retrieving the verified notebook copy…").finally(() => {
       downloadRequestInFlight.current = false;
     });
   };
@@ -5561,7 +5982,7 @@ export function App() {
           kind: "proof_capsule.downloaded",
           stage: "repair",
         });
-      }).finally(() => {
+      }, "Retrieving the Proof Capsule…").finally(() => {
         downloadRequestInFlight.current = false;
       });
       return;
@@ -5579,7 +6000,7 @@ export function App() {
       anchor.download = `counterlab-${session.sessionId}-proof-bundle.json`;
       anchor.click();
       URL.revokeObjectURL(url);
-    }).finally(() => {
+    }, "Retrieving the proof record…").finally(() => {
       downloadRequestInFlight.current = false;
     });
   };
@@ -5628,7 +6049,7 @@ export function App() {
         return;
       }
       await createLiveArtifactSession(uploaded, request);
-    });
+    }, "Uploading and checking notebook support…");
   };
 
   const uploadNotebookAfterReadiness = (file: File) => {
@@ -5646,7 +6067,10 @@ export function App() {
 
   const retryLiveSessionSetup = () => {
     if (artifact?.support.status !== "SUPPORTED" || session !== null) return;
-    void withRequest((request) => createLiveArtifactSession(artifact, request));
+    void withRequest(
+      (request) => createLiveArtifactSession(artifact, request),
+      "Creating the private investigation…",
+    );
   };
 
   const restartClosedBeliefResponse = () => {
@@ -5673,6 +6097,15 @@ export function App() {
           window.localStorage.removeItem(storageKeys.claim);
           window.localStorage.removeItem(storageKeys.claimSessionId);
         }
+        if (
+          restarted.mode.kind === "sample_lesson" &&
+          sampleOriginQuestion !== null
+        ) {
+          window.localStorage.setItem(
+            storageKeys.sampleOriginSessionId,
+            restarted.sessionId,
+          );
+        }
       } catch {
         // The reconciled server session remains authoritative when this
         // browser blocks optional local recovery storage.
@@ -5694,7 +6127,7 @@ export function App() {
       setAnalysisPreview(null);
       setSensitiveContentApproved(false);
       setStage(restoredStageForSession(restarted));
-    });
+    }, "Starting a fresh investigation…");
   };
 
   const proposeBeliefTest = () => {
@@ -5703,39 +6136,47 @@ export function App() {
       session.mode.kind === "sample_lesson" ? SAMPLE_LEAKAGE_QUESTION : claim;
     window.localStorage.setItem(storageKeys.claim, submittedClaim);
     window.localStorage.setItem(storageKeys.claimSessionId, session.sessionId);
-    void withRequest(async (request) => {
-      if (mode === "live" && analysisPreview === null) {
-        const preview = await counterLabApi.previewBeliefAnalysis(
+    void withRequest(
+      async (request) => {
+        if (mode === "live" && analysisPreview === null) {
+          const preview = await counterLabApi.previewBeliefAnalysis(
+            session.sessionId,
+            claim,
+          );
+          request.assertCurrent();
+          setAnalysisPreview(preview);
+          setSensitiveContentApproved(false);
+          return;
+        }
+        const updated = await counterLabApi.proposeBeliefTest(
           session.sessionId,
-          claim,
+          {
+            learnerClaim: submittedClaim,
+            ...(analysisPreview === null
+              ? {}
+              : {
+                  previewHash: analysisPreview.previewHash,
+                  sensitiveContentApproved:
+                    analysisPreview.requiresSensitiveApproval
+                      ? sensitiveContentApproved
+                      : false,
+                }),
+          },
         );
         request.assertCurrent();
-        setAnalysisPreview(preview);
+        setSession(updated);
+        const authoritativeClaim =
+          sessionBeliefPresentation(updated)?.claim ?? submittedClaim;
+        setClaim(authoritativeClaim);
+        window.localStorage.setItem(storageKeys.claim, authoritativeClaim);
+        setAnalysisPreview(null);
         setSensitiveContentApproved(false);
-        return;
-      }
-      const updated = await counterLabApi.proposeBeliefTest(session.sessionId, {
-        learnerClaim: submittedClaim,
-        ...(analysisPreview === null
-          ? {}
-          : {
-              previewHash: analysisPreview.previewHash,
-              sensitiveContentApproved:
-                analysisPreview.requiresSensitiveApproval
-                  ? sensitiveContentApproved
-                  : false,
-            }),
-      });
-      request.assertCurrent();
-      setSession(updated);
-      const authoritativeClaim =
-        sessionBeliefPresentation(updated)?.claim ?? submittedClaim;
-      setClaim(authoritativeClaim);
-      window.localStorage.setItem(storageKeys.claim, authoritativeClaim);
-      setAnalysisPreview(null);
-      setSensitiveContentApproved(false);
-      setStage("belief");
-    });
+        setStage("belief");
+      },
+      mode === "live" && analysisPreview === null
+        ? "Preparing the sanitized evidence preview…"
+        : "Proposing two evidence-bound explanations…",
+    );
   };
 
   const updateClaim = (nextClaim: string) => {
@@ -5745,13 +6186,34 @@ export function App() {
   };
 
   const confirmBeliefTest = () => {
-    if (session === null) return;
+    if (session === null || busy) return;
     void withRequest(async (request) => {
       const updated = await counterLabApi.confirmBeliefTest(session.sessionId);
       request.assertCurrent();
       setSession(updated);
       setConfirmed(true);
-    });
+    }, "Confirming the reviewed explanation…");
+  };
+
+  const answerLearningDirector = (
+    answer:
+      "comparison-first" | "controls-first" | "boundary-first" | "apply-first",
+  ) => {
+    if (
+      session === null ||
+      session.state !== "BELIEF_TEST_PROPOSED" ||
+      confirmed ||
+      busy
+    )
+      return;
+    void withRequest(async (request) => {
+      const updated = await counterLabApi.respondToLearningDirector(
+        session.sessionId,
+        answer,
+      );
+      request.assertCurrent();
+      setSession(updated);
+    }, "Saving your learning emphasis…");
   };
 
   const stopBeliefTest = (reason: "rejected" | "insufficient") => {
@@ -5776,7 +6238,7 @@ export function App() {
       setAnalysisPreview(null);
       setSensitiveContentApproved(false);
       setStage("claim");
-    });
+    }, "Recording your response…");
   };
 
   const commitPrediction = () => {
@@ -5822,7 +6284,7 @@ export function App() {
       request.assertCurrent();
       setSession(compiled);
       setStage("build");
-    });
+    }, "Locking your Prediction and preparing the fair test…");
   };
 
   const openResult = () => {
@@ -5834,6 +6296,10 @@ export function App() {
         return;
       }
       window.localStorage.setItem(storageKeys.replayStage, "reality");
+      setStage("reality");
+      return;
+    }
+    if (session.evidenceVerdict?.kind === "REJECTED") {
       setStage("reality");
       return;
     }
@@ -5854,7 +6320,7 @@ export function App() {
       }
       setSession(completed);
       setStage("reality");
-    });
+    }, "Running the verified fair test…");
   };
 
   const continueReplay = () => {
@@ -5877,7 +6343,7 @@ export function App() {
         recent.mode === "instant"
           ? "Verified sample session"
           : recent.mode === "replay"
-            ? "Verified replay"
+            ? "Stored replay"
             : "Live notebook session",
       mode: recent.mode,
       status: recent.status,
@@ -5911,9 +6377,58 @@ export function App() {
           reason={routeRecovery.reason}
           attemptedPath={routeRecovery.attemptedPath}
           onRetry={retryRouteRecovery}
+          onBack={() => window.history.back()}
           onHome={restart}
           recentSessions={routeRecoveryRecentSessions}
         />
+      </div>
+    );
+  }
+
+  const pendingLocation = parseStudioLocation(window.location.pathname);
+  const pendingLocationCarriesAuthority =
+    session !== null ||
+    activeReplay !== null ||
+    artifact !== null ||
+    analysisPreview !== null ||
+    claim.trim().length > 0 ||
+    stage !== "landing" ||
+    pendingLocation.kind === "session" ||
+    pendingLocation.kind === "proof" ||
+    pendingLocation.kind === "replay";
+  if (!routeHydrated && pendingLocationCarriesAuthority) {
+    const restoringPrivateWork =
+      pendingLocation.kind === "session" || pendingLocation.kind === "proof";
+    return (
+      <div className="app-frame stage-landing">
+        <SkipLink />
+        <main
+          className="workspace shell narrow deferred-surface-fallback"
+          id="main-content"
+          tabIndex={-1}
+          role="status"
+          aria-live="polite"
+        >
+          <p className="eyebrow">
+            {restoringPrivateWork
+              ? "Restoring private work"
+              : pendingLocation.kind === "replay"
+                ? "Checking stored evidence"
+                : "Opening CounterLab"}
+          </p>
+          <h1>
+            {restoringPrivateWork
+              ? "Opening this investigation…"
+              : pendingLocation.kind === "replay"
+                ? "Opening this replay…"
+                : "Preparing this page…"}
+          </h1>
+          <p>
+            {restoringPrivateWork
+              ? "Private sessions require the browser capability that created them. CounterLab is checking access before rendering any learner state."
+              : "CounterLab is resolving this address before rendering session, replay, or proof state."}
+          </p>
+        </main>
       </div>
     );
   }
@@ -5931,6 +6446,36 @@ export function App() {
           onStartSample={() => chooseMode("instant")}
         />
       </Suspense>
+    );
+  }
+
+  if (replay && activeReplay === null && busy) {
+    return (
+      <div className="app-frame stage-build hosted-replay-frame">
+        <SkipLink />
+        <main
+          className="workspace shell narrow"
+          id="main-content"
+          tabIndex={-1}
+          aria-live="polite"
+        >
+          <div className="screen-intro">
+            <p className="eyebrow">Checking stored evidence</p>
+            <h1>Opening this replay…</h1>
+            <p>
+              CounterLab will label it verified only after the stored payload
+              passes its strict replay contract.
+            </p>
+          </div>
+          <button
+            className="button button-quiet"
+            type="button"
+            onClick={restart}
+          >
+            Return to CounterLab home
+          </button>
+        </main>
+      </div>
     );
   }
 
@@ -5959,18 +6504,70 @@ export function App() {
     );
   }
 
+  if (legacyReplay !== null && replayIntro) {
+    return (
+      <div className="app-frame stage-build hosted-replay-frame">
+        <SkipLink />
+        <ReplayBanner replay={legacyReplay} />
+        <main
+          className="workspace shell narrow"
+          id="main-content"
+          tabIndex={-1}
+        >
+          <div className="screen-intro">
+            <p className="eyebrow">Stored evidence chain</p>
+            <h1>Replay verified session</h1>
+            <p>
+              This path reconstructs recorded events and computed payloads. It
+              is not a live model run.
+            </p>
+          </div>
+          <section className="setup-card panel">
+            <dl className="provenance-list">
+              <div>
+                <dt>Replay</dt>
+                <dd>{legacyReplay.replayId}</dd>
+              </div>
+              <div>
+                <dt>Model</dt>
+                <dd>{legacyReplay.modelId}</dd>
+              </div>
+              <div>
+                <dt>Verifier</dt>
+                <dd>{legacyReplay.verifierVersion}</dd>
+              </div>
+              <div>
+                <dt>Commit</dt>
+                <dd>{legacyReplay.templateCommit}</dd>
+              </div>
+            </dl>
+          </section>
+          <div className="form-footer">
+            <button
+              className="button button-primary"
+              type="button"
+              onClick={continueReplay}
+            >
+              Continue replay <Mark name="arrow" />
+            </button>
+            <button
+              className="button button-quiet"
+              type="button"
+              onClick={restart}
+            >
+              Return to CounterLab home
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   if (legacyReplay !== null && !replayIntro) {
     return (
       <div className="app-frame stage-reality hosted-replay-frame">
         <SkipLink />
-        <LegacyReplayResult
-          replay={legacyReplay}
-          onStartSample={() => {
-            restart();
-            chooseMode("instant");
-          }}
-          onStartOver={restart}
-        />
+        <LegacyReplayResult replay={legacyReplay} onStartOver={restart} />
         <footer className="footer shell">
           <span>
             <strong>CounterLab</strong> · verified replay
@@ -6005,7 +6602,7 @@ export function App() {
       )}
       {busy && (
         <div className="api-progress" role="status">
-          Recording evidence…
+          {pendingMessage}
         </div>
       )}
       {stage === "landing" && (
@@ -6066,10 +6663,8 @@ export function App() {
               proofEventStatus,
             }}
             actions={{
-              newAnalysis: () => {
-                setClaim("");
-                chooseMode("live");
-              },
+              newAnalysis: startNewAnalysis,
+              newAnalysisDisabled: busy || restartBusy,
               showEvidence: () => review("question"),
               ...(stage === "belief" && confirmed && prediction !== null
                 ? { lockPrediction: commitPrediction }
@@ -6124,6 +6719,26 @@ export function App() {
                 />
               </div>
             )}
+            {reviewStep === null &&
+              session?.mode.kind === "sample_lesson" &&
+              sampleOriginQuestion !== null && (
+                <aside
+                  className="shell learner-stage-hint"
+                  aria-label="Saved original question"
+                >
+                  <div className="claim-quote">
+                    <span>Saved outside sample proof</span>
+                    <div>
+                      <blockquote>{sampleOriginQuestion}</blockquote>
+                      <small>
+                        CounterLab preserved your wording. This fixed lesson
+                        investigates its approved sample question instead; it
+                        does not claim to answer or sign your original question.
+                      </small>
+                    </div>
+                  </div>
+                </aside>
+              )}
             {reviewStep === null && stage === "claim" && artifact !== null && (
               <ClaimScreen
                 artifact={artifact}
@@ -6183,6 +6798,9 @@ export function App() {
                   claim={effectiveClaim}
                   belief={belief}
                   fixedSampleFraming={mode === "instant"}
+                  learningDirector={session?.learningDirector}
+                  directorBusy={busy}
+                  answerDirector={answerLearningDirector}
                   notebookScore={notebookScoreDisplay(artifact)}
                   confirmed={confirmed}
                   confirm={confirmBeliefTest}
@@ -6195,104 +6813,28 @@ export function App() {
                   stop={stopBeliefTest}
                 />
               )}
-            {reviewStep === null &&
-              stage === "build" &&
-              mode !== null &&
-              (replay && activeReplay === null ? (
-                <main
-                  className="workspace shell narrow"
-                  id="main-content"
-                  tabIndex={-1}
-                  aria-live="polite"
-                >
-                  <div className="screen-intro">
-                    <p className="eyebrow">Checking stored evidence</p>
-                    <h1>Opening this replay…</h1>
-                    <p>
-                      CounterLab will label it verified only after the stored
-                      payload passes its strict replay contract.
-                    </p>
-                  </div>
-                </main>
-              ) : replayIntro && activeReplay !== null ? (
-                <main
-                  className="workspace shell narrow"
-                  id="main-content"
-                  tabIndex={-1}
-                >
-                  <div className="screen-intro">
-                    <p className="eyebrow">Stored evidence chain</p>
-                    <h1>Replay verified session</h1>
-                    <p>
-                      This path reconstructs recorded events and computed
-                      payloads. It is not a live model run.
-                    </p>
-                  </div>
-                  <section className="setup-card panel">
-                    <dl className="provenance-list">
-                      <div>
-                        <dt>Replay</dt>
-                        <dd>{activeReplay.replayId}</dd>
-                      </div>
-                      {!("projectionKind" in activeReplay) ? (
-                        <>
-                          <div>
-                            <dt>Model</dt>
-                            <dd>{activeReplay.modelId}</dd>
-                          </div>
-                          <div>
-                            <dt>Verifier</dt>
-                            <dd>{activeReplay.verifierVersion}</dd>
-                          </div>
-                          <div>
-                            <dt>Commit</dt>
-                            <dd>{activeReplay.templateCommit}</dd>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div>
-                            <dt>Subject Pack</dt>
-                            <dd>{activeReplay.concept.replaceAll("_", " ")}</dd>
-                          </div>
-                          <div>
-                            <dt>Privacy</dt>
-                            <dd>{activeReplay.privacy.profile}</dd>
-                          </div>
-                          <div>
-                            <dt>Root hash</dt>
-                            <dd>
-                              {activeReplay.authority.sourceCapsuleRootHash}
-                            </dd>
-                          </div>
-                        </>
-                      )}
-                    </dl>
-                  </section>
-                  <button
-                    className="button button-primary"
-                    type="button"
-                    onClick={continueReplay}
-                  >
-                    Continue replay <Mark name="arrow" />
-                  </button>
-                </main>
-              ) : (
-                <BuildScreen
-                  mode={mode}
-                  resultReady={verifiedResult !== undefined}
-                  notebookScore={notebookScoreDisplay(artifact)}
-                  concept={belief?.concept}
-                  predictionChoice={prediction}
-                  sealedCategoricalChoice={
-                    session?.prediction?.choice ?? prediction
-                  }
-                  confidence={session?.prediction?.confidence ?? confidence}
-                  openResult={openResult}
-                />
-              ))}
+            {reviewStep === null && stage === "build" && mode !== null && (
+              <BuildScreen
+                mode={mode}
+                resultReady={verifiedResult !== undefined}
+                notebookScore={notebookScoreDisplay(artifact)}
+                concept={belief?.concept}
+                predictionChoice={prediction}
+                sealedCategoricalChoice={
+                  session?.prediction?.choice ?? prediction
+                }
+                confidence={session?.prediction?.confidence ?? confidence}
+                openResult={openResult}
+              />
+            )}
             {reviewStep === null &&
               stage === "reality" &&
+              session?.evidenceVerdict?.kind === "REJECTED" && (
+                <RejectedEvidenceScreen session={session} />
+              )}
+            {reviewStep === null &&
+              stage === "reality" &&
+              session?.evidenceVerdict?.kind !== "REJECTED" &&
               verifiedResult !== undefined &&
               prediction !== null && (
                 <RealityScreen
@@ -6303,10 +6845,12 @@ export function App() {
                   artifact={artifact}
                   updateSession={setSession}
                   recordCompilerEvents={recordTransientCompilerEvents}
+                  startNewAnalysis={startNewAnalysis}
                 />
               )}
             {reviewStep === null &&
               stage === "reality" &&
+              session?.evidenceVerdict?.kind !== "REJECTED" &&
               (verifiedResult === undefined || prediction === null) && (
                 <main
                   className="workspace shell narrow"

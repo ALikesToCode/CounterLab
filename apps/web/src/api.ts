@@ -12,6 +12,8 @@ import {
   InteractiveLeakageRunRequestSchema,
   LearnerInteractionInputSchema,
   LearnerInteractionReceiptSchema,
+  LearningDirectorClarificationChoiceIdSchema,
+  LearningDirectorSessionStateSchema,
   PatchResultSchema,
   PredictionContractSchema,
   ProofBundleSchema,
@@ -28,6 +30,7 @@ import {
   SessionStateSchema,
   TransferSubmissionSchema,
   TransferResultSchema,
+  HostedVerifiedResultSetV2Schema,
   VerifiedResultSetSchema,
   apiSuccessSchema,
   canonicalJsonV1,
@@ -206,6 +209,7 @@ const sessionViewShape = {
   updatedAt: z.iso.datetime({ offset: true }),
   beliefTest: BeliefTestSchema.optional(),
   beliefSpec: BeliefSpecV2Schema.optional(),
+  learningDirector: LearningDirectorSessionStateSchema.optional(),
   prediction: PredictionContractSchema.optional(),
   verifiedResult: VerifiedResultSetSchema.optional(),
   evidenceVerdict: EvidenceVerdictSchema.optional(),
@@ -226,16 +230,20 @@ function requireExclusiveBeliefAuthority(
     artifactId: string;
     mode: z.infer<typeof SessionModeSchema>;
     state: SessionState;
-    beliefTest?: unknown;
-    beliefSpec?: unknown;
+    beliefTest?: BeliefTest | undefined;
+    beliefSpec?: BeliefSpecV2 | undefined;
     prediction?: PredictionContract | undefined;
     verifiedResult?: VerifiedResultSet | undefined;
-    evidenceVerdict?: unknown;
-    epistemicReportHash?: unknown;
+    evidenceVerdict?: z.infer<typeof EvidenceVerdictSchema> | undefined;
+    epistemicReportHash?: string | undefined;
+    boundaryMapAuthority?: BoundaryMapAuthorityRefV1 | undefined;
     transferResult?: TransferResult | undefined;
     patchResult?: PatchResult | undefined;
+    revision?: string | undefined;
     reasoningDiff?: ReasoningDiff | undefined;
     proofBundle?: ProofBundle | undefined;
+    reasoningDiffV2?: ReasoningDiffV2 | undefined;
+    proofCapsule?: PublicProofCapsuleRefV2 | undefined;
   },
   context: z.RefinementCtx,
 ): void {
@@ -263,12 +271,174 @@ function requireExclusiveBeliefAuthority(
       path: ["evidenceVerdict"],
     });
   }
+  if (
+    value.beliefSpec !== undefined &&
+    value.verifiedResult !== undefined &&
+    value.evidenceVerdict === undefined
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "a Belief Spec v2 result requires an evidence verdict",
+      path: ["evidenceVerdict"],
+    });
+  }
+  if (
+    value.evidenceVerdict?.kind !== undefined &&
+    value.evidenceVerdict.kind !== "REJECTED"
+  ) {
+    if (value.verifiedResult === undefined) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "a supporting or inconclusive verdict requires a verified result",
+        path: ["verifiedResult"],
+      });
+    } else if (
+      value.evidenceVerdict.resultHash !== value.verifiedResult.resultHash
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "the verdict result does not match the verified result",
+        path: ["evidenceVerdict", "resultHash"],
+      });
+    }
+  }
+  if (
+    value.evidenceVerdict?.kind === "REJECTED" &&
+    value.verifiedResult !== undefined
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "a rejected verdict cannot release a verified result",
+      path: ["verifiedResult"],
+    });
+  }
   if (value.verifiedResult !== undefined && value.prediction === undefined) {
     context.addIssue({
       code: "custom",
       message: "a verified result requires an immutable Prediction",
       path: ["prediction"],
     });
+  }
+  if (
+    value.patchResult !== undefined &&
+    value.beliefSpec !== undefined &&
+    value.evidenceVerdict?.kind !== "SUPPORTS"
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "a Belief Spec v2 repair requires a supporting evidence verdict",
+      path: ["patchResult"],
+    });
+  }
+  if (
+    value.reasoningDiffV2 !== undefined &&
+    value.reasoningDiffV2.sessionId !== value.sessionId
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "the Reasoning Diff belongs to a different session",
+      path: ["reasoningDiffV2", "sessionId"],
+    });
+  }
+  if (value.proofCapsule !== undefined) {
+    const hostedResult = HostedVerifiedResultSetV2Schema.safeParse(
+      value.verifiedResult,
+    );
+    if (value.proofCapsule.sessionId !== value.sessionId) {
+      context.addIssue({
+        code: "custom",
+        message: "the Proof Capsule belongs to a different session",
+        path: ["proofCapsule", "sessionId"],
+      });
+    }
+    if (!hostedResult.success) {
+      context.addIssue({
+        code: "custom",
+        message: "a native Proof Capsule requires a hosted v2 result",
+        path: ["verifiedResult"],
+      });
+    }
+    const nativeProofReady =
+      value.mode.kind === "live_notebook" &&
+      value.state === "PROOF_CAPSULE_ISSUED" &&
+      value.beliefSpec !== undefined &&
+      value.prediction !== undefined &&
+      hostedResult.success &&
+      value.evidenceVerdict?.kind === "SUPPORTS" &&
+      value.epistemicReportHash !== undefined &&
+      value.boundaryMapAuthority !== undefined &&
+      value.revision !== undefined &&
+      value.transferResult?.outcome === "PASSED" &&
+      value.patchResult?.status === "VERIFIED" &&
+      value.reasoningDiffV2 !== undefined;
+    if (!nativeProofReady) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "a native Proof Capsule requires complete supporting session authority",
+        path: ["proofCapsule"],
+      });
+    } else if (
+      hostedResult.success &&
+      value.beliefSpec !== undefined &&
+      value.evidenceVerdict?.kind === "SUPPORTS" &&
+      value.epistemicReportHash !== undefined &&
+      value.boundaryMapAuthority !== undefined &&
+      value.transferResult?.outcome === "PASSED" &&
+      value.patchResult?.status === "VERIFIED" &&
+      value.reasoningDiffV2 !== undefined &&
+      hostedResult.data.sessionId !== value.sessionId
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "the native proof authority does not match the session",
+        path: ["verifiedResult", "sessionId"],
+      });
+    } else if (
+      hostedResult.success &&
+      value.beliefSpec !== undefined &&
+      value.evidenceVerdict?.kind === "SUPPORTS" &&
+      value.epistemicReportHash !== undefined &&
+      value.boundaryMapAuthority !== undefined &&
+      value.transferResult?.outcome === "PASSED" &&
+      value.patchResult?.status === "VERIFIED" &&
+      value.reasoningDiffV2 !== undefined &&
+      (hostedResult.data.concept !== value.beliefSpec.concept ||
+        value.reasoningDiffV2.concept !== hostedResult.data.concept ||
+        value.boundaryMapAuthority.receipt.sessionId !== value.sessionId ||
+        value.transferResult.sessionId !== value.sessionId ||
+        value.patchResult.sessionId !== value.sessionId ||
+        value.proofCapsule.createdAt !== value.reasoningDiffV2.issuedAt ||
+        value.reasoningDiffV2.authority.authoritativeResultHash !==
+          hostedResult.data.resultHash ||
+        value.reasoningDiffV2.authority.experimentIrHash !==
+          value.evidenceVerdict.irHash ||
+        value.reasoningDiffV2.authority.epistemicReportHash !==
+          value.epistemicReportHash ||
+        value.reasoningDiffV2.authority.boundaryMapHash !==
+          value.boundaryMapAuthority.resultHash ||
+        value.reasoningDiffV2.authority.boundaryReceiptHash !==
+          value.boundaryMapAuthority.receipt.receiptHash ||
+        value.reasoningDiffV2.authority.transferResultHash !==
+          value.transferResult.resultHash ||
+        value.reasoningDiffV2.authority.patchResultHash !==
+          value.patchResult.resultHash ||
+        value.reasoningDiffV2.authority.patchedArtifactHash !==
+          value.patchResult.patchedArtifactHash ||
+        value.reasoningDiffV2.authority.evidenceVerdictHash !==
+          value.boundaryMapAuthority.receipt.evidenceVerdictHash ||
+        value.boundaryMapAuthority.receipt.authoritativeResultHash !==
+          hostedResult.data.resultHash ||
+        value.boundaryMapAuthority.receipt.experimentIrHash !==
+          value.evidenceVerdict.irHash)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "the native proof authority does not match the session",
+        path: ["proofCapsule"],
+      });
+    }
   }
   if (value.proofBundle !== undefined) {
     const proofBundle = value.proofBundle;
@@ -828,6 +998,7 @@ const BeliefAnalysisPreviewSchema = z
     previewHash: Sha256Digest,
     requiresSensitiveApproval: z.boolean(),
     sanitizedContent: z.record(z.string(), z.unknown()),
+    learningDirectorPacket: z.record(z.string(), z.unknown()),
   })
   .strict();
 
@@ -847,6 +1018,9 @@ const BeliefResponseInputSchema = z.union([
     })
     .strict(),
 ]);
+const LearningDirectorAnswerInputSchema = z
+  .object({ answer: LearningDirectorClarificationChoiceIdSchema })
+  .strict();
 
 const PredictionInputSchema = z
   .object({
@@ -959,6 +1133,64 @@ function validatedInput<T extends z.ZodType>(
     });
   }
   return parsed.data;
+}
+
+async function canonicalSha256(value: unknown): Promise<string> {
+  if (globalThis.crypto?.subtle === undefined) {
+    throw new ApiClientError({
+      code: "NATIVE_PROOF_INTEGRITY_UNAVAILABLE",
+      message: "This browser cannot verify native proof authority hashes",
+      status: 0,
+    });
+  }
+  const digest = await globalThis.crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(canonicalJsonV1(value)),
+  );
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function validateNativeProofLineage(
+  value: unknown,
+  status: number,
+): Promise<void> {
+  if (value === null || typeof value !== "object") return;
+  const session = value as Partial<SessionView>;
+  if (session.proofCapsule === undefined) return;
+  if (
+    session.beliefSpec === undefined ||
+    session.prediction === undefined ||
+    session.evidenceVerdict === undefined ||
+    session.reasoningDiffV2 === undefined
+  ) {
+    return;
+  }
+  const [
+    beliefSpecHash,
+    predictionHash,
+    evidenceVerdictHash,
+    reasoningDiffHash,
+  ] = await Promise.all([
+    canonicalSha256(session.beliefSpec),
+    canonicalSha256(session.prediction),
+    canonicalSha256(session.evidenceVerdict),
+    canonicalSha256(session.reasoningDiffV2),
+  ]);
+  if (
+    session.reasoningDiffV2.authority.beliefSpecHash !== beliefSpecHash ||
+    session.reasoningDiffV2.authority.predictionHash !== predictionHash ||
+    session.reasoningDiffV2.authority.evidenceVerdictHash !==
+      evidenceVerdictHash ||
+    session.proofCapsule.reasoningDiffHash !== reasoningDiffHash
+  ) {
+    throw new ApiClientError({
+      code: "NATIVE_PROOF_LINEAGE_INVALID",
+      message: "The native proof hashes do not match the session authority",
+      status,
+    });
+  }
 }
 
 async function validatePublicReplayContent(
@@ -1251,6 +1483,22 @@ export class CounterLabApiClient {
       {
         method: "POST",
         body: JSON.stringify(validatedInput(BeliefResponseInputSchema, input)),
+      },
+    );
+  }
+
+  respondToLearningDirector(
+    sessionId: string,
+    answer: string,
+  ): Promise<SessionView> {
+    return this.request(
+      `/api/sessions/${encodedId(sessionId)}/learning-director`,
+      SessionViewSchema,
+      {
+        method: "POST",
+        body: JSON.stringify(
+          validatedInput(LearningDirectorAnswerInputSchema, { answer }),
+        ),
       },
     );
   }
@@ -1868,6 +2116,7 @@ export class CounterLabApiClient {
         status: response.status,
       });
     }
+    await validateNativeProofLineage(parsed.data.data, response.status);
     return parsed.data.data;
   }
 }

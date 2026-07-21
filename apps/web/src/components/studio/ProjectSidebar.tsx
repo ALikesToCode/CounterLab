@@ -4,6 +4,7 @@ export function ProjectSidebar({
   context,
   recentProjects,
   onNewAnalysis,
+  newAnalysisDisabled = false,
   onShowEvidence,
   onOpenRecent,
   onOpenCommands,
@@ -12,6 +13,7 @@ export function ProjectSidebar({
   context: StudioContext;
   recentProjects: readonly RecentProject[];
   onNewAnalysis: () => void;
+  newAnalysisDisabled?: boolean;
   onShowEvidence: () => void;
   onOpenRecent: (project: RecentProject) => void;
   onOpenCommands: () => void;
@@ -85,6 +87,7 @@ export function ProjectSidebar({
       <button
         className="studio-new-button"
         type="button"
+        disabled={newAnalysisDisabled}
         onClick={onNewAnalysis}
       >
         <span aria-hidden="true">＋</span> New analysis

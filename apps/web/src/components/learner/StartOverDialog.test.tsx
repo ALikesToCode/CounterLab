@@ -31,6 +31,16 @@ describe("StartOverDialog", () => {
     expect(screen.getByText("runner_job_1")).toBeVisible();
     expect(screen.getByRole("button", { name: /keep working/i })).toHaveFocus();
 
+    const keepWorking = screen.getByRole("button", { name: /keep working/i });
+    const confirm = screen.getByRole("button", {
+      name: /stop jobs and start over/i,
+    });
+    confirm.focus();
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(keepWorking).toHaveFocus();
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(confirm).toHaveFocus();
+
     fireEvent.click(
       screen.getByRole("button", { name: /stop jobs and start over/i }),
     );
@@ -64,5 +74,39 @@ describe("StartOverDialog", () => {
     expect(
       screen.getByRole("button", { name: /stopping live work/i }),
     ).toBeDisabled();
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-busy", "true");
+    expect(dialog).toHaveFocus();
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(dialog).toHaveFocus();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onKeepWorking).toHaveBeenCalledOnce();
+  });
+
+  it("restores focus to the opener only when the dialog unmounts", () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    const view = render(
+      <StartOverDialog
+        jobs={jobs}
+        busy={false}
+        onKeepWorking={vi.fn()}
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    view.rerender(
+      <StartOverDialog
+        jobs={jobs}
+        busy
+        onKeepWorking={vi.fn()}
+        onConfirm={vi.fn()}
+      />,
+    );
+    expect(opener).not.toHaveFocus();
+    view.unmount();
+    expect(opener).toHaveFocus();
+    opener.remove();
   });
 });

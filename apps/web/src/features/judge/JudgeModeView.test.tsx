@@ -80,7 +80,7 @@ describe("JudgeModeView", () => {
     ).not.toBeInTheDocument();
 
     const proof = screen.getByRole("complementary", {
-      name: /ten second fixed sample preview/i,
+      name: /fixed sample preview/i,
     });
     expect(proof).toHaveTextContent(
       /completed fixed sample.*not a live result/i,
@@ -120,11 +120,11 @@ describe("JudgeModeView", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: /see a verified belief break in ten seconds/i,
+        name: /inspect a verified belief break from question to proof/i,
       }),
     ).toBeInTheDocument();
     const proof = screen.getByRole("complementary", {
-      name: /ten second fixed sample preview/i,
+      name: /fixed sample preview/i,
     });
     expect(proof).toHaveTextContent(
       /a belief debugger—not a tutor or notebook linter/i,

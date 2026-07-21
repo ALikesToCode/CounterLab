@@ -244,6 +244,7 @@
 .primaryAction:focus-visible,
 .capsuleAction:focus-visible,
 .patchDetails summary:focus-visible,
+.patchDetails pre:focus-visible,
 .proof summary:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
@@ -385,12 +386,11 @@
 }
 
 .proofBody dd {
-  overflow: hidden;
   margin: 3px 0 0;
   color: var(--ink);
-  font: 12px/1.4 var(--mono);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font: 13px/1.4 var(--mono);
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .proofBody ul {

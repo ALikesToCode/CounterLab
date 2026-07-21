@@ -12,6 +12,7 @@ import type {
 
 export type StudioActions = {
   newAnalysis: () => void;
+  newAnalysisDisabled?: boolean;
   showEvidence: () => void;
   lockPrediction?: () => void;
   runFairTest?: () => void;
@@ -148,6 +149,7 @@ export function CounterLabStudio({
         label: "Analyze notebook",
         hint: "Start a new live notebook session.",
         shortcut: "N",
+        disabled: actions.newAnalysisDisabled ?? false,
         run: actions.newAnalysis,
       },
       {
@@ -226,6 +228,7 @@ export function CounterLabStudio({
             context={context}
             recentProjects={recentProjects}
             onNewAnalysis={() => runFromProjectTools(actions.newAnalysis)}
+            newAnalysisDisabled={actions.newAnalysisDisabled ?? false}
             onShowEvidence={() => runFromProjectTools(actions.showEvidence)}
             onOpenRecent={(project) =>
               runFromProjectTools(() => actions.openRecent(project))

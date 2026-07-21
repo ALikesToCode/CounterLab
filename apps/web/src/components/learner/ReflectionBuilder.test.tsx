@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  isMeaningfulLearnerText,
   ReflectionBuilder,
   type EvidenceLinkedClauseOption,
 } from "./ReflectionBuilder";
@@ -87,6 +88,20 @@ function ControlledReflection({
 }
 
 describe("ReflectionBuilder", () => {
+  it("distinguishes a brief learner statement from character-count filler", () => {
+    expect(isMeaningfulLearnerText("xxxxxxxxxxxxxxxxxxxx")).toBe(false);
+    expect(isMeaningfulLearnerText("word word word word")).toBe(false);
+    expect(isMeaningfulLearnerText("Not sure")).toBe(false);
+    expect(
+      isMeaningfulLearnerText(
+        "I would hold out whole customers before trusting this score.",
+      ),
+    ).toBe(true);
+    expect(isMeaningfulLearnerText("当实体重复时应按实体划分数据集")).toBe(
+      true,
+    );
+  });
+
   it("starts unanswered and requires an explicit learner choice", () => {
     render(<ControlledReflection />);
 
@@ -96,6 +111,9 @@ describe("ReflectionBuilder", () => {
       screen.getByLabelText(/choose the evidence-based reason/i),
     ).toHaveValue("");
     expect(screen.getByLabelText("Editable final sentence")).toHaveValue("");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /specific condition, action, and evidence-based reason/i,
+    );
   });
 
   it("builds one editable revision string from evidence-linked clauses", async () => {
@@ -247,7 +265,9 @@ describe("ReflectionBuilder", () => {
     expect(onRevision).toHaveBeenLastCalledWith(
       "I will keep deployment groups separate and explain why.",
     );
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /specific enough to continue/i,
+    );
     expect(
       screen
         .getByRole("heading", {

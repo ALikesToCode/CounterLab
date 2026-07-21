@@ -62,13 +62,13 @@ export function SampleBoundaryPanel({
       boundary={boundary}
       integrityVerified={true}
       {...(prediction === undefined ? {} : { prediction })}
-      onReveal={onComplete}
       onClassify={(classification) => {
         void recordLearnerInteraction(sessionId, {
           kind: "boundary_hunt.classified",
           stage: "boundary",
           classification,
         });
+        if (classification === "CONCLUSION_CHANGES") onComplete();
       }}
     />
   );

@@ -1672,6 +1672,37 @@ thead th {
   border-left: 4px solid var(--aqua);
 }
 
+.evidence-verdict {
+  margin-block: 20px;
+  border-left: 4px solid var(--line-strong);
+}
+
+.evidence-verdict h2 {
+  margin: 6px 0 10px;
+  font-size: clamp(20px, 3vw, 28px);
+}
+
+.evidence-verdict p:not(.eyebrow) {
+  margin: 8px 0 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+}
+
+.evidence-verdict.supports {
+  border-left-color: var(--aqua);
+  background: var(--aqua-soft);
+}
+
+.evidence-verdict.inconclusive {
+  border-left-color: var(--gold);
+  background: var(--gold-soft);
+}
+
+.evidence-verdict.rejected {
+  border-left-color: var(--red);
+  background: var(--red-soft);
+}
+
 .diff {
   margin: 25px 0 16px;
   padding: 20px;

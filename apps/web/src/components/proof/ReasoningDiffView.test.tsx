@@ -206,6 +206,9 @@ describe("ReasoningDiffView", () => {
     expect(
       screen.queryByRole("button", { name: /publish read-only replay/i }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Verified notebook cell diff"),
+    ).toHaveAttribute("tabindex", "0");
   });
 
   it("embeds technical evidence without duplicating completion downloads or disclosures", () => {
