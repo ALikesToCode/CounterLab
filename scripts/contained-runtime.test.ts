@@ -1111,7 +1111,7 @@ describe("contained runtime command policy", () => {
         "--fifo-dir",
         clientFifoRoot,
         "--cgroup",
-        "",
+        `counterlab-v6.1/${invocationId}`,
         "--platform",
         "linux/amd64",
       ]),
@@ -1181,7 +1181,7 @@ describe("contained runtime command policy", () => {
     expect(containedRuntimeResourceAbsent(missing())).toBe(true);
   });
 
-  it("removes only unsupported cgroup fields from a bounded OCI spec", () => {
+  it("retains bounded cgroup intent without claiming observed enforcement", () => {
     const sessionRoot = resolve(root, ".rt/rt-validator-spec");
     const installRoot = resolve(
       root,
@@ -1213,9 +1213,10 @@ describe("contained runtime command policy", () => {
       source,
     });
     const sanitized = JSON.parse(prepared.config);
+    const original = JSON.parse(source);
 
-    expect(sanitized.linux).not.toHaveProperty("cgroupsPath");
-    expect(sanitized.linux).not.toHaveProperty("resources");
+    expect(sanitized.linux.cgroupsPath).toBe(`counterlab-v6.1/${invocationId}`);
+    expect(sanitized.linux.resources).toEqual(original.linux.resources);
     expect(sanitized.process.rlimits).toEqual(plan.expected.rlimits);
     expect(sanitized.process.noNewPrivileges).toBe(true);
     expect(sanitized.process.terminal).toBe(false);
@@ -1286,8 +1287,6 @@ describe("contained runtime command policy", () => {
       removedFields: [
         "hooks",
         "annotations",
-        "linux.cgroupsPath",
-        "linux.resources",
         "linux.sysctl",
         "linux.seccomp.restrictedTraceRule",
       ],
@@ -1295,6 +1294,7 @@ describe("contained runtime command policy", () => {
       finalContainerId: prepared.finalContainerId,
       removedMounts: ["/etc/hostname", "/etc/hosts", "/etc/resolv.conf"],
     });
+    expect(prepared.receipt.normalizedFields).toContain("linux.cgroupsPath");
 
     const missingHookSource = JSON.parse(source);
     missingHookSource.hooks = null;
@@ -2279,7 +2279,7 @@ describe("contained runtime command policy", () => {
     expect(startCall).toEqual(
       expect.arrayContaining([
         "--cgroup",
-        "",
+        `counterlab-v6.1/${invocationId}`,
         "--label",
         `io.counterlab.runtime.invocation=${invocationId}`,
       ]),

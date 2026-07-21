@@ -1447,14 +1447,13 @@ export function sanitizeContainedRootlessSpec({
   );
   if (hasNerdctlHooks) delete parsed.hooks;
   delete parsed.annotations;
-  delete linux.cgroupsPath;
-  delete linux.resources;
+  linux.cgroupsPath = `${namespace}/${expected.invocationId}`;
   delete linux.sysctl;
   if (
-    Object.hasOwn(linux, "cgroupsPath") ||
-    Object.hasOwn(linux, "resources")
+    linux.cgroupsPath !== `${namespace}/${expected.invocationId}` ||
+    !Object.hasOwn(linux, "resources")
   ) {
-    throw new Error("contained rootless OCI spec cgroup removal failed");
+    throw new Error("contained rootless OCI spec cgroup normalization failed");
   }
   const baseSpecSha256 = sha256(canonicalJson(parsed));
   const runtimeAnnotations = {
@@ -1527,13 +1526,12 @@ export function sanitizeContainedRootlessSpec({
     removedFields: [
       ...(hasNerdctlHooks ? ["hooks"] : []),
       "annotations",
-      "linux.cgroupsPath",
-      "linux.resources",
       "linux.sysctl",
       "linux.seccomp.restrictedTraceRule",
     ],
     normalizedFields: [
       "annotations",
+      "linux.cgroupsPath",
       "process.terminal",
       "process.user.additionalGids",
       "process.env.HOSTNAME",
