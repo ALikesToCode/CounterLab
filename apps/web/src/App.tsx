@@ -84,6 +84,8 @@ import {
 import { PrivacyPacketSummary } from "./components/learner/PrivacyPacketSummary";
 import { QuestionComposer } from "./components/learner/QuestionComposer";
 import { LockedBeliefBreakPreview } from "./components/learner/LockedBeliefBreakPreview";
+import { LearnerThesisStrip } from "./components/learner/LearnerThesisStrip";
+import { LiveAuthorityStrip } from "./components/learner/LiveAuthorityStrip";
 import {
   currentLearnerStage,
   learnerSessionStatusLabel,
@@ -1112,6 +1114,18 @@ function Landing({
               </p>
             </div>
 
+            <div
+              className="landing-entry-actions"
+              aria-label="Fastest ways to see CounterLab work"
+            >
+              <button type="button" disabled={busy} onClick={startSample}>
+                Start verified sample <span aria-hidden="true">→</span>
+              </button>
+              <a href="/judge">
+                Judge Mode <span aria-hidden="true">↗</span>
+              </a>
+            </div>
+
             <QuestionComposer
               value={claim}
               onChange={updateClaim}
@@ -1121,14 +1135,8 @@ function Landing({
               busy={busy}
             />
 
-            <button
-              className="landing-mobile-sample"
-              type="button"
-              disabled={busy}
-              onClick={startSample}
-            >
-              Start verified sample lesson <span aria-hidden="true">→</span>
-            </button>
+            <LearnerThesisStrip />
+            <LiveAuthorityStrip />
           </section>
 
           <aside

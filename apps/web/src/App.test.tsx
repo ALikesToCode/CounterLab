@@ -1126,6 +1126,19 @@ describe("CounterLab judged flow", () => {
     expect(
       screen.getByRole("link", { name: /skip to main content/i }),
     ).toHaveAttribute("href", "#main-content");
+    const fastPaths = screen.getByLabelText(
+      /fastest ways to see counterlab work/i,
+    );
+    await user.tab();
+    expect(
+      within(fastPaths).getByRole("button", {
+        name: /^start verified sample/i,
+      }),
+    ).toHaveFocus();
+    await user.tab();
+    expect(
+      within(fastPaths).getByRole("link", { name: /judge mode/i }),
+    ).toHaveFocus();
     await user.tab();
     expect(
       screen.getByRole("textbox", { name: /your question or claim/i }),
@@ -1135,14 +1148,23 @@ describe("CounterLab judged flow", () => {
       screen.getByRole("button", { name: /try verified sample/i }),
     ).toBeEnabled();
     expect(
-      screen.getByRole("button", { name: /start verified sample lesson/i }),
+      screen.getByRole("button", { name: /^start verified sample/i }),
     ).toBeEnabled();
     expect(
       screen.getByRole("button", { name: /watch verified replay/i }),
     ).toBeEnabled();
-    expect(screen.getByRole("link", { name: /judge mode/i })).toHaveAttribute(
-      "href",
-      "/judge",
+    expect(
+      within(fastPaths).getByRole("link", { name: /judge mode/i }),
+    ).toHaveAttribute("href", "/judge");
+    expect(
+      screen.getByLabelText(/what happens in 20 seconds/i),
+    ).toHaveTextContent(
+      /state claim.*lock prediction.*controlled test runs.*result passes verification/i,
+    );
+    expect(
+      screen.getByLabelText(/authority roles for a live notebook run/i),
+    ).toHaveTextContent(
+      /gpt-5\.6.*runtime codex.*fixed kernel.*frozen verifier/i,
     );
     expect(screen.getByText(/no account needed/i)).toBeInTheDocument();
     expect(

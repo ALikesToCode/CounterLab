@@ -1,0 +1,148 @@
+.strip {
+  width: 100%;
+  min-width: 0;
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: minmax(170px, 0.72fr) minmax(0, 2fr);
+  align-items: center;
+  gap: 18px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--paper-raised) 70%, var(--paper));
+  font-family: var(--sans);
+}
+
+.intro {
+  min-width: 0;
+}
+
+.eyebrow {
+  display: block;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+.intro p {
+  margin: 3px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.stages {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  list-style: none;
+}
+
+.stages li {
+  position: relative;
+  min-width: 0;
+  padding: 10px 10px 10px 34px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+}
+
+.stages li:not(:last-child)::after {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: -10px;
+  width: 10px;
+  border-top: 1px solid var(--line-strong);
+  content: "";
+}
+
+.index {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--aqua) 42%, var(--line));
+  border-radius: 50%;
+  color: var(--aqua-bright);
+  background: var(--aqua-soft);
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1;
+}
+
+.stageCopy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stageCopy strong {
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+.stageCopy > span {
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+@media (max-width: 760px) {
+  .strip {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 520px) {
+  .strip {
+    padding: 12px;
+  }
+
+  .stages {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .stages li:not(:last-child)::after {
+    top: 50%;
+    right: -7px;
+    bottom: auto;
+    left: auto;
+    width: 7px;
+    height: 0;
+    border-top: 1px solid var(--line-strong);
+    border-left: 0;
+  }
+
+  .stages li {
+    padding: 9px 7px;
+  }
+
+  .index {
+    position: static;
+    margin-bottom: 6px;
+  }
+
+  .stageCopy strong,
+  .stageCopy > span {
+    font-size: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .strip,
+  .strip * {
+    transition: none;
+  }
+}
