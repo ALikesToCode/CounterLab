@@ -30,9 +30,9 @@ def _hash(value: object) -> str:
     return hashlib.sha256(_canonical(value).encode()).hexdigest()
 
 
-def _control() -> dict[str, object]:
+def _control(schema_version: str = "2") -> dict[str, object]:
     payload: dict[str, object] = {
-        "schemaVersion": "2",
+        "schemaVersion": schema_version,
         "status": "TIMED_OUT_CLEAN",
         "timeoutKind": "WALL_CLOCK",
         "runtimePolicySha256": CONTAINED_RUNTIME_POLICY_SHA256,
@@ -55,6 +55,8 @@ def _control() -> dict[str, object]:
         "imageRootfsUnchanged": True,
         "resultReleased": False,
     }
+    if schema_version == "3":
+        payload["qualificationMode"] = "aggregate-timeout-proof-v1"
     return {**payload, "receiptPayloadSha256": _hash(payload)}
 
 
@@ -220,6 +222,44 @@ def test_control_receipt_rejects_result_release_and_hash_mutation() -> None:
         validate_control_receipt({**control, "resultReleased": True})
     with pytest.raises(RuntimeError, match="not clean"):
         validate_control_receipt({**control, "receiptPayloadSha256": "f" * 64})
+
+
+def test_control_receipt_accepts_only_exact_v2_and_qualified_v3_shapes() -> None:
+    assert validate_control_receipt(_control("2"))["schemaVersion"] == "2"
+    assert validate_control_receipt(_control("3"))["schemaVersion"] == "3"
+
+    for mutated in (
+        {**_control("2"), "qualificationMode": "aggregate-timeout-proof-v1"},
+        {
+            key: value
+            for key, value in _control("3").items()
+            if key != "qualificationMode"
+        },
+        {**_control("3"), "qualificationMode": "unknown"},
+        {**_control("2"), "schemaVersion": []},
+        {**_control("2"), "candidateWallSeconds": True},
+    ):
+        payload = {
+            key: value
+            for key, value in mutated.items()
+            if key != "receiptPayloadSha256"
+        }
+        mutated["receiptPayloadSha256"] = _hash(payload)
+        with pytest.raises(RuntimeError, match="shape|not clean"):
+            validate_control_receipt(mutated)
+
+
+def test_control_schema_selects_the_exact_rootless_receipt_name() -> None:
+    assert timeout_proof_module._rootless_receipt_name(_control("2")) == (
+        f"{'2' * 64}.receipt.json"
+    )
+    assert timeout_proof_module._rootless_receipt_name(_control("3")) == (
+        f"{'2' * 64}.qualified-receipt.json"
+    )
+    with pytest.raises(RuntimeError, match="qualification"):
+        timeout_proof_module._rootless_receipt_name(
+            {**_control("3"), "qualificationMode": "unknown"}
+        )
 
 
 def test_rootless_rlimit_validator_matches_the_runtime_contract() -> None:

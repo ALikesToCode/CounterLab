@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import stat
@@ -36,6 +37,47 @@ def _artifacts(workspace: Path, limits: RunnerLimits) -> SimpleNamespace:
         adapter_source="def build_experiment():\n    return None\n",
         public_tests_source="assert True\n",
     )
+
+
+def _canonical_hash(value: object) -> str:
+    source = json.dumps(
+        value,
+        ensure_ascii=False,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(source.encode()).hexdigest()
+
+
+def _runtime_control_receipt(schema_version: str) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "schemaVersion": schema_version,
+        "status": "TIMED_OUT_CLEAN",
+        "timeoutKind": "WALL_CLOCK",
+        "runtimePolicySha256": docker_module.CONTAINED_RUNTIME_POLICY_SHA256,
+        "invocationId": "1" * 64,
+        "finalContainerId": "2" * 64,
+        "commandSha256": "3" * 64,
+        "rootlessReceiptFileSha256": hashlib.sha256(b"{}\n").hexdigest(),
+        "rootlessReceiptPayloadSha256": "4" * 64,
+        "timeoutObserved": True,
+        "candidateWallSeconds": 1,
+        "elapsedMs": 1_001,
+        "cleanupReserveMs": 120_000,
+        "taskAbsent": True,
+        "containerAbsent": True,
+        "snapshotAbsent": True,
+        "invocationAliasAbsent": True,
+        "imageRootfsAbsent": True,
+        "persistedAuthorityVerified": True,
+        "readOnlyMountsUnchanged": True,
+        "imageRootfsUnchanged": True,
+        "resultReleased": False,
+    }
+    if schema_version == "3":
+        payload["qualificationMode"] = "aggregate-timeout-proof-v1"
+    return {**payload, "receiptPayloadSha256": _canonical_hash(payload)}
 
 
 def test_docker_command_applies_fixed_isolation_and_only_public_mounts(
@@ -177,6 +219,78 @@ def test_trusted_repository_root_rejects_relative_and_nested_callers(
         require_trusted_repository_root(Path("."))
     with pytest.raises(ValueError, match="trusted physical checkout"):
         require_trusted_repository_root(nested)
+
+
+@pytest.mark.parametrize(
+    ("schema_version", "rootless_suffix"),
+    [("2", ".receipt.json"), ("3", ".qualified-receipt.json")],
+)
+def test_runtime_control_receipt_binds_schema_to_exact_rootless_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    schema_version: str,
+    rootless_suffix: str,
+) -> None:
+    session_id = "rt-entry123"
+    receipt = _runtime_control_receipt(schema_version)
+    rootless_root = tmp_path / ".rt" / session_id / "run/rootless-specs"
+    rootless_root.mkdir(parents=True)
+    rootless_path = rootless_root / f"{'2' * 64}{rootless_suffix}"
+    rootless_path.write_text("{}\n", encoding="utf-8")
+    control_path = tmp_path / f"control-v{schema_version}.json"
+    control_path.write_text(json.dumps(receipt), encoding="utf-8")
+    monkeypatch.setattr(
+        docker_module,
+        "_trusted_repository_root",
+        lambda: tmp_path.resolve(strict=True),
+    )
+
+    value, _, observed_rootless_path, observed_rootless_sha256 = (
+        docker_module._validate_contained_runtime_control_receipt(
+            control_path,
+            session_id=session_id,
+            expected_wall_seconds=1,
+        )
+    )
+
+    assert value == receipt
+    assert observed_rootless_path == rootless_path
+    assert observed_rootless_sha256 == receipt["rootlessReceiptFileSha256"]
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        {"qualificationMode": "unknown"},
+        {"candidateWallSeconds": True},
+    ],
+)
+def test_runtime_control_receipt_rejects_invalid_v3_fields(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: dict[str, object],
+) -> None:
+    receipt = {**_runtime_control_receipt("3"), **mutation}
+    payload = {
+        key: value
+        for key, value in receipt.items()
+        if key != "receiptPayloadSha256"
+    }
+    receipt["receiptPayloadSha256"] = _canonical_hash(payload)
+    control_path = tmp_path / "control-v3.json"
+    control_path.write_text(json.dumps(receipt), encoding="utf-8")
+    monkeypatch.setattr(
+        docker_module,
+        "_trusted_repository_root",
+        lambda: tmp_path.resolve(strict=True),
+    )
+
+    with pytest.raises(DockerExecutionError, match="runtime_control_invalid"):
+        docker_module._validate_contained_runtime_control_receipt(
+            control_path,
+            session_id="rt-entry123",
+            expected_wall_seconds=1,
+        )
 
 
 def test_execution_snapshot_is_the_exact_validated_read_only_source(

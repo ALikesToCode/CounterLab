@@ -26,6 +26,7 @@ _DIGEST = re.compile(r"^sha256:[a-f0-9]{64}$")
 _SOURCE_COMMIT = re.compile(r"^[a-f0-9]{40}$")
 _SESSION_ID = re.compile(r"^rt-[a-z0-9][a-z0-9-]{7,13}$")
 _QUALIFIED_AGGREGATE_LIMIT_MODE = "container-cgroup-and-process-rlimit"
+_AGGREGATE_TIMEOUT_QUALIFICATION_MODE = "aggregate-timeout-proof-v1"
 _BUILD_KEYS = {
     "schemaVersion",
     "status",
@@ -56,31 +57,34 @@ _BUILD_KEYS = {
     "buildkitConfigSha256",
     "builtAt",
 }
-_CONTROL_KEYS = {
-    "schemaVersion",
-    "status",
-    "timeoutKind",
-    "runtimePolicySha256",
-    "invocationId",
-    "finalContainerId",
-    "commandSha256",
-    "rootlessReceiptFileSha256",
-    "rootlessReceiptPayloadSha256",
-    "timeoutObserved",
-    "candidateWallSeconds",
-    "elapsedMs",
-    "cleanupReserveMs",
-    "taskAbsent",
-    "containerAbsent",
-    "snapshotAbsent",
-    "invocationAliasAbsent",
-    "imageRootfsAbsent",
-    "persistedAuthorityVerified",
-    "readOnlyMountsUnchanged",
-    "imageRootfsUnchanged",
-    "resultReleased",
-    "receiptPayloadSha256",
-}
+_CONTROL_V2_KEYS = frozenset(
+    {
+        "schemaVersion",
+        "status",
+        "timeoutKind",
+        "runtimePolicySha256",
+        "invocationId",
+        "finalContainerId",
+        "commandSha256",
+        "rootlessReceiptFileSha256",
+        "rootlessReceiptPayloadSha256",
+        "timeoutObserved",
+        "candidateWallSeconds",
+        "elapsedMs",
+        "cleanupReserveMs",
+        "taskAbsent",
+        "containerAbsent",
+        "snapshotAbsent",
+        "invocationAliasAbsent",
+        "imageRootfsAbsent",
+        "persistedAuthorityVerified",
+        "readOnlyMountsUnchanged",
+        "imageRootfsUnchanged",
+        "resultReleased",
+        "receiptPayloadSha256",
+    }
+)
+_CONTROL_V3_KEYS = _CONTROL_V2_KEYS | {"qualificationMode"}
 _ATTESTATION_KEYS = {
     "schemaVersion",
     "status",
@@ -302,11 +306,24 @@ def validate_control_receipt(
     expected_wall_seconds: int = 1,
     expected_runtime_policy_sha256: str = CONTAINED_RUNTIME_POLICY_SHA256,
 ) -> dict[str, Any]:
-    if not isinstance(value, dict) or set(value) != _CONTROL_KEYS:
+    if not isinstance(value, dict):
+        raise RuntimeError("timeout control receipt shape is invalid")
+    schema_version = value.get("schemaVersion")
+    if schema_version == "2":
+        expected_keys = _CONTROL_V2_KEYS
+    elif schema_version == "3":
+        expected_keys = _CONTROL_V3_KEYS
+    else:
+        raise RuntimeError("timeout control receipt shape is invalid")
+    if set(value) != expected_keys:
         raise RuntimeError("timeout control receipt shape is invalid")
     payload = {key: entry for key, entry in value.items() if key != "receiptPayloadSha256"}
     if (
-        value.get("schemaVersion") != "2"
+        (
+            schema_version == "3"
+            and value.get("qualificationMode")
+            != _AGGREGATE_TIMEOUT_QUALIFICATION_MODE
+        )
         or value.get("status") != "TIMED_OUT_CLEAN"
         or value.get("timeoutKind") != "WALL_CLOCK"
         or value.get("runtimePolicySha256")
@@ -318,10 +335,14 @@ def validate_control_receipt(
         or not _SHA256.fullmatch(str(value.get("rootlessReceiptPayloadSha256", "")))
         or value.get("timeoutObserved") is not True
         or value.get("candidateWallSeconds") != expected_wall_seconds
+        or not isinstance(value.get("candidateWallSeconds"), int)
+        or isinstance(value.get("candidateWallSeconds"), bool)
         or not isinstance(value.get("elapsedMs"), int)
+        or isinstance(value.get("elapsedMs"), bool)
         or value["elapsedMs"] < 1
         or value["elapsedMs"] > 600_000
         or not isinstance(value.get("cleanupReserveMs"), int)
+        or isinstance(value.get("cleanupReserveMs"), bool)
         or value["cleanupReserveMs"] < 1
         or any(value.get(field) is not True for field in _CLEANUP_FIELDS)
         or value.get("resultReleased") is not False
@@ -331,6 +352,20 @@ def validate_control_receipt(
     ):
         raise RuntimeError("timeout control receipt is not clean and bound")
     return value
+
+
+def _rootless_receipt_name(control: dict[str, Any]) -> str:
+    if control.get("schemaVersion") == "2":
+        suffix = "receipt.json"
+    elif (
+        control.get("schemaVersion") == "3"
+        and control.get("qualificationMode")
+        == _AGGREGATE_TIMEOUT_QUALIFICATION_MODE
+    ):
+        suffix = "qualified-receipt.json"
+    else:
+        raise RuntimeError("timeout control receipt qualification is invalid")
+    return f"{control['finalContainerId']}.{suffix}"
 
 
 def validate_rootless_receipt(
@@ -886,7 +921,7 @@ def run_timeout_cleanup_proof(
         or _sha256_file(rootless_path) != expected_rootless_sha256
     ):
         raise RuntimeError("timeout proof exception receipt hashes changed")
-    if rootless_path.name != f"{control['finalContainerId']}.receipt.json":
+    if rootless_path.name != _rootless_receipt_name(control):
         raise RuntimeError("timeout control and rootless receipt IDs disagree")
     if _sha256_file(rootless_path) != control["rootlessReceiptFileSha256"]:
         raise RuntimeError("rootless receipt file hash changed")
