@@ -15,16 +15,30 @@ interface QualifiedReceiptStoreDependencies {
   };
 }
 
+interface QualifiedReceiptObservationArtifacts {
+  evidence: Record<string, unknown>;
+  evidenceFileSha256: string;
+  evidencePath: string;
+  finalizationFileSha256: string;
+  finalizationPath: string;
+  finalizationPayloadSha256: string;
+  manifestFileSha256: string;
+  manifestPath: string;
+  observerDraftFileSha256: string;
+  observerDraftPath: string;
+  observerReadyFileSha256: string;
+  observerReadyPath: string;
+}
+
 export function persistQualifiedContainedRootlessReceipt(
-  input: {
-    aggregateLimitEvidence: unknown;
-  } & QualifiedRootlessReceiptStoreBinding,
+  input: QualifiedRootlessReceiptStoreBinding,
   dependencies?: QualifiedReceiptStoreDependencies,
 ): {
   qualifiedReceipt: Record<string, unknown>;
   qualifiedReceiptFileSha256: string;
   qualifiedReceiptPath: string;
   qualifiedReceiptPayloadSha256: string;
+  qualificationArtifacts: QualifiedReceiptObservationArtifacts;
 };
 
 export function verifyQualifiedContainedRootlessReceipt(

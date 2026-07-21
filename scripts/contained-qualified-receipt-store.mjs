@@ -2,8 +2,21 @@ import { lstatSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { sha256CgroupBytes } from "./contained-cgroup-evidence.mjs";
+import {
+  canonicalCgroupJson,
+  sha256CgroupBytes,
+  validateContainedCgroupEvidence,
+} from "./contained-cgroup-evidence.mjs";
 import { resolveContainedCgroupObserverBindings } from "./contained-cgroup-observer-bindings.mjs";
+import {
+  validateContainedCgroupObserverDraft,
+  validateContainedCgroupObserverReady,
+} from "./contained-cgroup-observer.mjs";
+import {
+  containedCgroupQualificationPaths,
+  validateContainedCgroupObserverFinalization,
+  validateContainedCgroupObserverManifest,
+} from "./contained-cgroup-observer-protocol.mjs";
 import { createQualifiedContainedRootlessReceipt } from "./contained-qualified-rootless-receipt.mjs";
 
 const repositoryRoot = realpathSync(
@@ -49,6 +62,29 @@ function privateFile(path, label) {
   ) {
     throw new Error(`qualified rootless receipt ${label} is invalid`);
   }
+}
+
+function lstatOrAbsent(path) {
+  try {
+    return lstatSync(path);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+function readArtifact(path, label) {
+  privateFile(path, label);
+  const source = readFileSync(path);
+  let value;
+  try {
+    value = JSON.parse(source.toString("utf8"));
+  } catch (error) {
+    throw new Error(`qualified rootless receipt ${label} JSON is invalid`, {
+      cause: error,
+    });
+  }
+  return { source, value };
 }
 
 function receiptPaths({ sessionRoot, finalContainerId, runtimeSessionId }) {
@@ -117,7 +153,170 @@ function readBaseReceipt({
   if (receipt?.finalContainerId !== finalContainerId) {
     throw new Error("qualified rootless base receipt identity changed");
   }
-  return { expected, receipt };
+  return { expected, receipt, source };
+}
+
+function exactTimestamp(value, label) {
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed) || new Date(parsed).toISOString() !== value) {
+    throw new Error(`qualified rootless receipt ${label} is invalid`);
+  }
+  return parsed;
+}
+
+function readObservationChain({
+  baseReceipt,
+  baseReceiptSource,
+  currentTime,
+  enforceFreshness,
+  observerBindings,
+  sessionRoot,
+}) {
+  const paths = containedCgroupQualificationPaths({
+    repositoryRoot,
+    runtimeSessionId: observerBindings.runtimeSessionId,
+    invocationId: baseReceipt.invocationId,
+  });
+  privateDirectory(paths.qualificationRoot, "qualification root");
+  privateDirectory(paths.invocationRoot, "qualification invocation root");
+  if (lstatOrAbsent(paths.failurePath) !== null) {
+    throw new Error("qualified rootless receipt observation failed");
+  }
+
+  const manifestArtifact = readArtifact(paths.manifestPath, "manifest");
+  const manifestRequestedAt = exactTimestamp(
+    manifestArtifact.value?.requestedAt,
+    "manifest timestamp",
+  );
+  const manifest = validateContainedCgroupObserverManifest(
+    manifestArtifact.value,
+    { observedAtMs: manifestRequestedAt },
+  );
+  const expectedBaseReceiptPath = `.rt/${observerBindings.runtimeSessionId}/run/rootless-specs/${baseReceipt.finalContainerId}.receipt.json`;
+  if (
+    manifest.baseReceiptPath !== expectedBaseReceiptPath ||
+    manifest.baseReceiptFileSha256 !== sha256CgroupBytes(baseReceiptSource) ||
+    manifest.baseReceiptPayloadSha256 !== baseReceipt.receiptPayloadSha256 ||
+    manifest.finalContainerId !== baseReceipt.finalContainerId ||
+    manifest.invocationId !== baseReceipt.invocationId ||
+    manifest.sanitizedSpecSha256 !== baseReceipt.sanitizedSpecSha256 ||
+    canonicalCgroupJson(manifest.intendedAggregateLimits) !==
+      canonicalCgroupJson(baseReceipt.intendedAggregateLimits) ||
+    Object.entries(observerBindings).some(
+      ([name, value]) => manifest[name] !== value,
+    ) ||
+    paths.sessionRoot !== sessionRoot
+  ) {
+    throw new Error("qualified rootless receipt manifest binding changed");
+  }
+
+  const readyArtifact = readArtifact(paths.observerReadyPath, "observer ready");
+  const ready = validateContainedCgroupObserverReady(
+    readyArtifact.value,
+    manifest,
+  );
+  const draftArtifact = readArtifact(paths.observerDraftPath, "observer draft");
+  const draft = validateContainedCgroupObserverDraft(
+    draftArtifact.value,
+    manifest,
+  );
+  const finalizationArtifact = readArtifact(
+    paths.finalizationPath,
+    "finalization",
+  );
+  const finalizationDecisionAt = exactTimestamp(
+    finalizationArtifact.value?.decisionAt,
+    "finalization timestamp",
+  );
+  const finalization = validateContainedCgroupObserverFinalization(
+    finalizationArtifact.value,
+    manifest,
+    { observedAtMs: finalizationDecisionAt },
+  );
+  if (
+    finalization.status !== "FINALIZE" ||
+    finalization.observerDraftPayloadSha256 !== draft.receiptPayloadSha256
+  ) {
+    throw new Error("qualified rootless receipt finalization did not qualify");
+  }
+
+  const evidenceArtifact = readArtifact(
+    paths.evidencePath,
+    "aggregate evidence",
+  );
+  const evidence = validateContainedCgroupEvidence(evidenceArtifact.value, {
+    invocationId: baseReceipt.invocationId,
+    finalContainerId: baseReceipt.finalContainerId,
+    sanitizedSpecSha256: baseReceipt.sanitizedSpecSha256,
+    intendedAggregateLimits: baseReceipt.intendedAggregateLimits,
+    ...observerBindings,
+  });
+  const armedAt = exactTimestamp(ready.armedAt, "observer ready timestamp");
+  const draftObservedAt = exactTimestamp(
+    draft.observedAt,
+    "observer draft timestamp",
+  );
+  const evidenceObservedAt = exactTimestamp(
+    evidence.observedAt,
+    "aggregate evidence timestamp",
+  );
+  if (
+    evidence.finalizationPayloadSha256 !== finalization.receiptPayloadSha256 ||
+    canonicalCgroupJson(evidence.observedLimits) !==
+      canonicalCgroupJson(draft.observedLimits) ||
+    canonicalCgroupJson(evidence.membership) !==
+      canonicalCgroupJson(draft.membership) ||
+    canonicalCgroupJson(evidence.negativeControls) !==
+      canonicalCgroupJson(draft.negativeControls) ||
+    manifestRequestedAt > armedAt ||
+    armedAt > draftObservedAt ||
+    draftObservedAt > finalizationDecisionAt ||
+    finalizationDecisionAt > evidenceObservedAt ||
+    evidenceObservedAt - manifestRequestedAt > maximumObservationAgeMs
+  ) {
+    throw new Error("qualified rootless receipt observation chain changed");
+  }
+  if (
+    enforceFreshness &&
+    (!Number.isFinite(currentTime) ||
+      evidenceObservedAt > currentTime ||
+      currentTime - evidenceObservedAt > maximumObservationAgeMs)
+  ) {
+    throw new Error("qualified rootless receipt observation is stale");
+  }
+  if (lstatOrAbsent(paths.failurePath) !== null) {
+    throw new Error("qualified rootless receipt terminal artifacts conflict");
+  }
+  return {
+    evidence,
+    evidenceFileSha256: sha256CgroupBytes(evidenceArtifact.source),
+    evidencePath: paths.evidencePath,
+    finalizationFileSha256: sha256CgroupBytes(finalizationArtifact.source),
+    finalizationPath: paths.finalizationPath,
+    finalizationPayloadSha256: finalization.receiptPayloadSha256,
+    manifestFileSha256: sha256CgroupBytes(manifestArtifact.source),
+    manifestPath: paths.manifestPath,
+    observerDraftFileSha256: sha256CgroupBytes(draftArtifact.source),
+    observerDraftPath: paths.observerDraftPath,
+    observerReadyFileSha256: sha256CgroupBytes(readyArtifact.source),
+    observerReadyPath: paths.observerReadyPath,
+  };
+}
+
+function observationArtifactIdentity(observation) {
+  return canonicalCgroupJson({
+    evidenceFileSha256: observation.evidenceFileSha256,
+    evidencePath: observation.evidencePath,
+    finalizationFileSha256: observation.finalizationFileSha256,
+    finalizationPath: observation.finalizationPath,
+    finalizationPayloadSha256: observation.finalizationPayloadSha256,
+    manifestFileSha256: observation.manifestFileSha256,
+    manifestPath: observation.manifestPath,
+    observerDraftFileSha256: observation.observerDraftFileSha256,
+    observerDraftPath: observation.observerDraftPath,
+    observerReadyFileSha256: observation.observerReadyFileSha256,
+    observerReadyPath: observation.observerReadyPath,
+  });
 }
 
 export function persistQualifiedContainedRootlessReceipt(
@@ -127,26 +326,45 @@ export function persistQualifiedContainedRootlessReceipt(
     resolveObserverBindings = resolveContainedCgroupObserverBindings,
   } = {},
 ) {
+  if (Object.hasOwn(input, "aggregateLimitEvidence")) {
+    throw new Error("qualified rootless receipt caller evidence is forbidden");
+  }
   const observerBindings = resolveObserverBindings({
     sessionRoot: input.sessionRoot,
   });
-  const observedAt = Date.parse(input.aggregateLimitEvidence?.observedAt);
   const currentTime = now();
-  if (
-    !Number.isFinite(currentTime) ||
-    !Number.isFinite(observedAt) ||
-    new Date(observedAt).toISOString() !==
-      input.aggregateLimitEvidence?.observedAt ||
-    Math.abs(currentTime - observedAt) > maximumObservationAgeMs
-  ) {
-    throw new Error("qualified rootless receipt observation is stale");
-  }
-  const { expected, receipt: baseReceipt } = readBaseReceipt({
+  const {
+    expected,
+    receipt: baseReceipt,
+    source: baseReceiptSource,
+  } = readBaseReceipt({
     ...input,
     observerBindings,
   });
+  const initialObservation = readObservationChain({
+    baseReceipt,
+    baseReceiptSource,
+    currentTime,
+    enforceFreshness: true,
+    observerBindings,
+    sessionRoot: input.sessionRoot,
+  });
+  const observation = readObservationChain({
+    baseReceipt,
+    baseReceiptSource,
+    currentTime: now(),
+    enforceFreshness: true,
+    observerBindings,
+    sessionRoot: input.sessionRoot,
+  });
+  if (
+    observationArtifactIdentity(initialObservation) !==
+    observationArtifactIdentity(observation)
+  ) {
+    throw new Error("qualified rootless receipt terminal artifacts changed");
+  }
   const qualifiedReceipt = createQualifiedContainedRootlessReceipt({
-    aggregateLimitEvidence: input.aggregateLimitEvidence,
+    aggregateLimitEvidence: observation.evidence,
     baseReceipt,
     observerBindings,
   });
@@ -171,6 +389,7 @@ export function persistQualifiedContainedRootlessReceipt(
     qualifiedReceiptFileSha256: sha256CgroupBytes(source),
     qualifiedReceiptPath: expected.qualifiedReceiptPath,
     qualifiedReceiptPayloadSha256: qualifiedReceipt.receiptPayloadSha256,
+    qualificationArtifacts: observation,
   };
 }
 
@@ -181,7 +400,11 @@ export function verifyQualifiedContainedRootlessReceipt(
   const observerBindings = resolveObserverBindings({
     sessionRoot: input.sessionRoot,
   });
-  const { expected, receipt: baseReceipt } = readBaseReceipt({
+  const {
+    expected,
+    receipt: baseReceipt,
+    source: baseReceiptSource,
+  } = readBaseReceipt({
     ...input,
     observerBindings,
   });
@@ -204,8 +427,15 @@ export function verifyQualifiedContainedRootlessReceipt(
       cause: error,
     });
   }
+  const observation = readObservationChain({
+    baseReceipt,
+    baseReceiptSource,
+    enforceFreshness: false,
+    observerBindings,
+    sessionRoot: input.sessionRoot,
+  });
   const expectedReceipt = createQualifiedContainedRootlessReceipt({
-    aggregateLimitEvidence: qualifiedReceipt.aggregateLimitEvidence,
+    aggregateLimitEvidence: observation.evidence,
     baseReceipt,
     observerBindings,
   });
