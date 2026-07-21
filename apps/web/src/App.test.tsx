@@ -1115,12 +1115,12 @@ describe("CounterLab judged flow", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        /ask a question or attach a supported notebook.*reads the evidence and never runs its cells/i,
+        /counterlab is a belief debugger—not a tutor or notebook linter/i,
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        /built for ml learners: seal a prediction, then let one controlled test answer—not ai prose/i,
+        /attach a supported notebook.*reads the evidence and never runs its cells.*seal a prediction.*one controlled test answer—not ai prose/i,
       ),
     ).toBeInTheDocument();
     expect(

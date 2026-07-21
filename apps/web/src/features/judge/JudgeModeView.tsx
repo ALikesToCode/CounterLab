@@ -87,8 +87,8 @@ export function JudgeModeView({
           </blockquote>
           <div className={styles.previewMeta}>
             <p className={styles.previewAuthority}>
-              Approved fixed sample framing. No GPT-5.6, Codex, or runner call
-              occurs here.
+              A belief debugger—not a tutor or notebook linter. Fixed sample; no
+              GPT-5.6, Codex, or runner call occurs here.
             </p>
             <a
               className={styles.previewProofLink}

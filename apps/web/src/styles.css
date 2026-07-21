@@ -6402,6 +6402,7 @@ body {
 .landing-question-first {
   color-scheme: dark;
   min-height: 100svh;
+  overflow-x: clip;
   padding: 0;
   display: grid;
   grid-template-columns: 64px minmax(0, 1fr);
@@ -6664,8 +6665,11 @@ body {
 }
 
 .landing-intro > h1:focus-visible {
-  outline: 3px solid var(--focus-ring);
-  outline-offset: 6px;
+  outline: 0;
+  text-decoration: underline;
+  text-decoration-color: var(--focus-ring);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 7px;
 }
 
 .landing-belief-break {

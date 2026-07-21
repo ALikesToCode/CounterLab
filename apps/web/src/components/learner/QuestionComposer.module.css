@@ -234,9 +234,7 @@
 
   .promptGroup {
     margin-top: 8px;
-    overflow-x: auto;
-    overscroll-behavior-inline: contain;
-    scrollbar-width: thin;
+    overflow: visible;
   }
 
   .promptGroup > span {
@@ -252,16 +250,16 @@
   }
 
   .promptGroup > div {
-    width: max-content;
-    max-width: none;
-    display: flex;
+    width: 100%;
+    max-width: 100%;
+    display: grid;
     gap: 6px;
   }
 
   .promptGroup button {
-    width: auto;
-    min-width: max-content;
-    max-width: 310px;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
     padding-inline: 10px;
     border: 1px solid var(--line);
     border-radius: 10px;

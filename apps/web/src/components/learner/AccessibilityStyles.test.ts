@@ -105,10 +105,24 @@ describe("learner-facing responsive style safeguards", () => {
 
   it("contains horizontal overflow and removes hover motion when requested", () => {
     expect(judgeStyles).toContain("overflow-x: clip");
+    expect(globalStyles).toContain(
+      ".landing-question-first {\n  color-scheme: dark;\n  min-height: 100svh;\n  overflow-x: clip;",
+    );
+    expect(questionComposerStyles).not.toContain("overflow-x: auto");
+    expect(questionComposerStyles).toContain(
+      ".promptGroup > div {\n    width: 100%;\n    max-width: 100%;\n    display: grid;",
+    );
     expect(judgeStyles).toContain("transition: none !important");
     expect(judgeStyles).toContain("transform: none");
     expect(theaterStyles).toContain("@media (prefers-reduced-motion: reduce)");
     expect(theaterStyles).toContain("animation: none");
+  });
+
+  it("keeps programmatic landing-heading focus visible without boxing the headline", () => {
+    expect(globalStyles).toContain(
+      ".landing-intro > h1:focus-visible {\n  outline: 0;\n  text-decoration: underline;",
+    );
+    expect(globalStyles).toContain("text-decoration-color: var(--focus-ring)");
   });
 
   it("keeps the composer dominant in one centered responsive column", () => {

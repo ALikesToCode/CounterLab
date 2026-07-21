@@ -1105,10 +1105,10 @@ function Landing({
                 What result are you trying to understand?
               </h1>
               <p className="landing-trust-summary">
-                Ask a question or attach a supported notebook. CounterLab reads
-                the evidence and never runs its cells. Built for ML learners:
-                seal a Prediction, then let one controlled test answer—not AI
-                prose.
+                CounterLab is a belief debugger—not a tutor or notebook linter.
+                Ask a question or attach a supported notebook; it reads the
+                evidence and never runs its cells. Seal a Prediction, then let
+                one controlled test answer—not AI prose.
               </p>
             </div>
 

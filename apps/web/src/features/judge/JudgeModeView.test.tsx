@@ -127,6 +127,9 @@ describe("JudgeModeView", () => {
       name: /ten second fixed sample preview/i,
     });
     expect(proof).toHaveTextContent(
+      /a belief debugger—not a tutor or notebook linter/i,
+    );
+    expect(proof).toHaveTextContent(
       /completed fixed sample.*not a live result/i,
     );
     expect(proof).toHaveTextContent(
