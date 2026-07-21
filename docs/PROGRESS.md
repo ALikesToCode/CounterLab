@@ -4831,3 +4831,112 @@ No new live model call, runner image, aggregate-containment pass, refreshed
 release evidence, Cloudflare deployment, public journey, learner outcome,
 Devpost submission, push, or merge is claimed at this checkpoint. Release
 remains **NO-GO** until those gates close.
+
+## Exact-image containment repair checkpoint — 2026-07-21T17:00:20Z
+
+Deadline: `2026-07-22T00:00:00Z`; **6 hours 59 minutes 40 seconds remained at
+this checkpoint**. The owner explicitly approved removal of only
+`counterlab-exact-source-landing-1440x900.png`; that file was removed without
+touching any other path. Source commit
+`0d2fa32f045cd47fb8ba17ad6f6717a8c65102d2` was then genuinely clean.
+
+### Historical exact build and failed sentinel
+
+The repository-contained builder produced exact OCI artifacts from clean
+source `0d2fa32…`:
+
+- runner config digest:
+  `sha256:d5de7d3ec73ce73db46ae1bfb1714a8dd532e831011ae27a3232236d03acc37c`;
+- runner manifest digest:
+  `sha256:11b8f06b70dadf33f704057886393969e5f145ca71f14614927d75fe846dd060`;
+- adapter config digest:
+  `sha256:b4f31e258b5841b45c72e600f025c276fa684beb668adee02395ad69ba8c39ec`;
+- adapter manifest digest:
+  `sha256:0c4aacca6b3acc92e2a45e2bde0b313a1019161bbe7cef5b80cf8d7a6a15203d`;
+- build receipt:
+  `node_modules/.cache/counterlab-v6.1/releases/runner-build-0d2fa32f045cd47fb8ba17ad6f6717a8c65102d2.json`.
+
+The owner-authorized genuine timeout/aggregate-containment command was invoked
+once. Pinned nerdctl `2.3.1` rejected Docker ulimit type `as` during staging
+container creation. The attempt failed before OCI inspection and before the
+aggregate qualification coordinator began. Therefore the cgroup observer did
+not start, no `/sys/fs/cgroup` control or CounterLab-owned `/proc/<pid>/stat`
+was read, no helper was moved into a cgroup, no negative control ran, no result
+was released, and no timeout, control, aggregate-authority, or qualified-runner
+receipt was issued. This is a clean **FAIL**, not a partial containment pass.
+
+### Fail-closed repair committed
+
+Commit `f7a1b55 fix(runtime): preserve address-space limit through nerdctl`
+repairs only the incompatible staging boundary:
+
+- the authoritative request and command hash still contain all five exact
+  process limits;
+- only the unsupported address-space option is omitted from temporary nerdctl
+  staging;
+- the raw staging OCI spec must contain exactly the other four validated
+  limits;
+- CounterLab injects only the prevalidated `RLIMIT_AS` value into the
+  sanitized OCI spec before canonical hashing, persistence, and direct `ctr`
+  execution;
+- persisted config and receipt validation independently cross-bind
+  `RLIMIT_AS` to memory and `RLIMIT_NPROC` to the process limit in JavaScript,
+  TypeScript, and Python;
+- the fixed timeout candidate now reads
+  `resource.getrlimit(resource.RLIMIT_AS)` and fails before sleeping unless the
+  real process limit equals the requested value;
+- malformed, missing, duplicate, changed, and extra source limits fail closed.
+
+Focused verification after the final diff:
+
+- runtime/release Vitest: **7 files, 76 tests passed**;
+- runner Pytest: **44 tests passed** across timeout proof, Docker runner, and
+  host pipeline;
+- root TypeScript: passed;
+- Prettier on all changed JS/TS files: passed;
+- Python compilation: passed;
+- Git whitespace check: passed;
+- secret scan: passed across the seven changed files.
+
+The code-review graph was refreshed at the pre-repair source with **543 files,
+5,726 nodes, and 97,066 edges**. Its change analysis rated the seven-file
+runtime delta at `0.55` risk. Independent standards and specification reviews
+found no blocking violation or scope creep. They required two additional
+regressions—proving the command hash covers the original five-limit request and
+proving a self-consistently rehashed config with a changed address-space limit
+fails semantically—and both now pass.
+
+### Remaining gates in dependency order
+
+1. Commit this factual progress checkpoint, freeze the resulting clean source
+   `S2`, start and attest a fresh repository-contained runtime, and build the
+   exact runner and adapter once from `S2`. The historical `0d2fa32…` image is
+   not eligible for the repaired release.
+2. Obtain renewed owner authorization for one genuine aggregate-containment
+   invocation, then require the candidate-side `RLIMIT_AS` observation plus
+   the memory-OOM, PID-denial, CPU-throttling, membership, freshness, cleanup,
+   and exclusive-authority checks to pass together.
+3. Refresh and review the source/image-bound SBOM, VEX, scientific-engine,
+   license, health, held-out, mutation, and negative-control evidence; commit
+   only the allowlisted generated evidence as `E`.
+4. Reverify the Cloudflare identity and required secret names, including
+   `COUNTERLAB_ADMISSION_KEY`; qualify and registry-promote only the `S2`/`E`
+   tuple; run the complete release check.
+5. Deploy only that exact Container and Worker tuple, apply the bounded D1
+   migrations, capture deployment receipt v7, and pass production smoke with
+   public release identity matching all receipts.
+6. Execute and finalize all **40** public CloakBrowser journeys plus the ten
+   manual accessibility/performance checks and exact-release screenshots.
+7. Keep learner evidence `NO_DATA`. The owner will create the video. Complete
+   the remaining non-video submission evidence; owner inputs still required
+   are submitter type, country, the primary Codex `/feedback` UUID, public
+   video metadata, and private-repository sharing if anonymous access remains
+   unavailable.
+8. Push the reviewed feature branch, fast-forward merge it to `main`, verify,
+   and push `main` only after the exact public tuple and submission evidence
+   are factual.
+
+No repaired image, containment pass, refreshed release evidence, registry
+promotion, Cloudflare deployment, public browser qualification, learner
+outcome, Devpost submission, push, or merge is claimed. Release remains
+**NO-GO**.
