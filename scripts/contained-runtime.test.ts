@@ -1017,6 +1017,24 @@ describe("contained runtime command policy", () => {
     ).toContain(`socket_dir = '${binding.shimSocketDirectory}'`);
   });
 
+  it("characterizes a distinct shim host root as rejected", () => {
+    const fixtureParent = resolve(
+      root,
+      "node_modules/.cache/counterlab-v6.1/tmp/containerd-config-tests",
+    );
+    mkdirSync(fixtureParent, { recursive: true, mode: 0o700 });
+    const sourceRoot = mkdtempSync(resolve(fixtureParent, "source-"));
+    const shimHostRoot = mkdtempSync(resolve(fixtureParent, "host-"));
+
+    expect(() =>
+      createContainedContainerdConfig({
+        configPath: resolve(sourceRoot, "containerd.toml"),
+        repositoryRoot: sourceRoot,
+        shimSocketRoot: shimHostRoot,
+      }),
+    ).toThrow(/configuration escaped the repository/u);
+  });
+
   beforeAll(() => {
     mkdirSync(workspace, { recursive: true, mode: 0o700 });
     mkdirSync(output, { recursive: true, mode: 0o700 });
