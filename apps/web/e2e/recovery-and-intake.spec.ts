@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "./cloak-test";
+import { privateSessionHeaders } from "./private-session";
 import { SAMPLE_LEAKAGE_QUESTION } from "../shared/sample-authority";
 
 const liveQuestion =
@@ -164,6 +165,9 @@ for (const response of [
     );
     const terminalResponse = await page.request.get(
       `/api/sessions/${encodeURIComponent(closedSessionId!)}`,
+      {
+        headers: await privateSessionHeaders(page, closedSessionId!),
+      },
     );
     expect(terminalResponse.ok()).toBe(true);
     expect((await terminalResponse.json()).data.state).toBe(

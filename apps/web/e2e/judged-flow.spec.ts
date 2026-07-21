@@ -25,6 +25,7 @@ import {
   snapshotBrowserPerformanceEvidence,
   type BrowserPerformanceEvidence,
 } from "./performance-evidence";
+import { privateSessionHeaders } from "./private-session";
 
 const claim =
   "The 98 percent random split accuracy proves this model generalizes to customers it has never seen.";
@@ -152,9 +153,11 @@ async function writeLiveSmokeEvidence(
   if (sessionId === null) {
     throw new Error("Live smoke evidence requires a persisted session ID");
   }
+  const ownerHeaders = await privateSessionHeaders(page, sessionId);
 
   const completedSessionResponse = await page.request.get(
     `/api/sessions/${encodeURIComponent(sessionId)}`,
+    { headers: ownerHeaders },
   );
   expect(completedSessionResponse.ok()).toBe(true);
   const completedSessionPayload = (await completedSessionResponse.json()) as {
@@ -272,7 +275,7 @@ async function writeLiveSmokeEvidence(
 
   const duplicatePublicationResponse = await page.request.post(
     `/api/sessions/${encodeURIComponent(sessionId)}/replays`,
-    { data: {} },
+    { data: {}, headers: ownerHeaders },
   );
   expect(duplicatePublicationResponse.status()).toBe(200);
   const duplicatePublicationPayload =
@@ -287,6 +290,7 @@ async function writeLiveSmokeEvidence(
 
   const activeStatusResponse = await page.request.get(
     `/api/sessions/${encodeURIComponent(sessionId)}/replays/status`,
+    { headers: ownerHeaders },
   );
   expect(activeStatusResponse.ok()).toBe(true);
   const activeStatusPayload = (await activeStatusResponse.json()) as {
@@ -511,6 +515,7 @@ async function writeLiveSmokeEvidence(
 
   const revokedStatusResponse = await page.request.get(
     `/api/sessions/${encodeURIComponent(sessionId)}/replays/status`,
+    { headers: ownerHeaders },
   );
   expect(revokedStatusResponse.ok()).toBe(true);
   await expect(revokedStatusResponse.json()).resolves.toMatchObject({
@@ -522,7 +527,7 @@ async function writeLiveSmokeEvidence(
 
   const duplicateRevocationResponse = await page.request.post(
     `/api/sessions/${encodeURIComponent(sessionId)}/replays/revoke`,
-    { data: {} },
+    { data: {}, headers: ownerHeaders },
   );
   expect(duplicateRevocationResponse.status()).toBe(200);
   await expect(duplicateRevocationResponse.json()).resolves.toMatchObject({
@@ -531,7 +536,7 @@ async function writeLiveSmokeEvidence(
 
   const republishRevokedResponse = await page.request.post(
     `/api/sessions/${encodeURIComponent(sessionId)}/replays`,
-    { data: {} },
+    { data: {}, headers: ownerHeaders },
   );
   expect(republishRevokedResponse.status()).toBe(409);
   await expect(republishRevokedResponse.json()).resolves.toMatchObject({
@@ -1838,8 +1843,11 @@ test("prediction is immutable and results do not exist before commitment", async
     window.localStorage.getItem("counterlab.sessionId"),
   );
   expect(sessionId).not.toBeNull();
+  const ownerHeaders = await privateSessionHeaders(page, sessionId!);
 
-  const before = await page.request.get(`/api/sessions/${sessionId}`);
+  const before = await page.request.get(`/api/sessions/${sessionId}`, {
+    headers: ownerHeaders,
+  });
   expect(before.ok()).toBe(true);
   expect((await before.json()).data.verifiedResult).toBeUndefined();
 
@@ -1854,12 +1862,15 @@ test("prediction is immutable and results do not exist before commitment", async
     `/api/sessions/${sessionId}/prediction`,
     {
       data: { choice: "Accuracy remains near 98%", confidence: 100 },
+      headers: ownerHeaders,
     },
   );
   expect(overwrite.status()).toBe(409);
   expect((await overwrite.json()).error.code).toBe("ILLEGAL_TRANSITION");
 
-  const committed = await page.request.get(`/api/sessions/${sessionId}`);
+  const committed = await page.request.get(`/api/sessions/${sessionId}`, {
+    headers: ownerHeaders,
+  });
   expect(committed.ok()).toBe(true);
   const committedPayload = await committed.json();
   expect(committedPayload.data.prediction.confidence).toBe(88);
@@ -2015,7 +2026,10 @@ test("a rejected test releases no result and remains recoverable after refresh",
   const sessionId = await page.evaluate(() =>
     window.localStorage.getItem("counterlab.sessionId"),
   );
-  const stored = await page.request.get(`/api/sessions/${sessionId}`);
+  expect(sessionId).not.toBeNull();
+  const stored = await page.request.get(`/api/sessions/${sessionId}`, {
+    headers: await privateSessionHeaders(page, sessionId!),
+  });
   expect(stored.ok()).toBe(true);
   expect((await stored.json()).data.verifiedResult).toBeUndefined();
 
