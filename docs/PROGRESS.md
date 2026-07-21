@@ -4483,3 +4483,82 @@ deployment receipt. The qualifying public count therefore remains **0**.
 No exact image, aggregate-containment pass, Cloudflare identity, deployment,
 public qualification, learner outcome, Devpost submission, push, or merge is
 claimed. Release remains **NO-GO** while those dependencies are red.
+
+## Focused CloakBrowser repair checkpoint — 2026-07-21T12:53:45Z
+
+Deadline: `2026-07-22T00:00:00Z`; **11 hours 6 minutes 15 seconds remained at
+this checkpoint**. Committed HEAD is
+`ccb876b9b3cbd3f7c9583efa6286968a0c62ec5f` on
+`feat/learner-ux-v6.1`. The visible worktree contains only the active,
+agent-owned CloakBrowser runtime `.runtime/` and the untouched FUSE tombstone
+`scripts/.fuse_hidden0000a9600000801f`. Neither is staged or tracked.
+
+### Completed and committed
+
+| Commit | Result | Exact verification |
+| --- | --- | --- |
+| `d7d23af fix(worker): stabilize evidence snapshots` | The evidence endpoint now permits four bounded coherent-snapshot attempts, covering the two legitimate Sample compile transitions while preserving every chain, session, compiler-history, cursor, cap, and stable-snapshot check. Perpetual mutation still fails closed with retryable `EVIDENCE_SNAPSHOT_BUSY`. | Worker API **108/108 passed**; focused race cases **2/2 passed**; Worker TypeScript, Prettier, whitespace, and scoped secret scan passed; independent review found no P0/P1. |
+| `ccb876b fix(replay): harden mobile read-only journey` | The mobile public-replay journey now follows the intentional labelled replay introduction before asserting the strict read-only result. Grid children may shrink around the horizontally scrollable exact-value table, eliminating root overflow. Browser history waits at navigation commit, which is correct for the SPA route. | App plus legacy replay components **77/77 passed**; E2E TypeScript, production build, Prettier, whitespace, and scoped secret scan passed. Fresh CloakBrowser replay run: **2/2 passed**, zero console/page/request errors, zero unsafe requests, and no root overflow. |
+
+### Focused rendered evidence
+
+- The rebuilt local Worker ran through Wrangler `4.110.0` with Containers
+  disabled, repository-contained D1/R2/Durable Object state, and a test-only
+  admission key. `/ready` truthfully reported admission and persistence ready
+  while analyst, runner, signing, and release identity remained unavailable.
+- The six original Sample/intake repair targets passed through CloakBrowser:
+  desktop and mobile post-seal Sample, Try Instantly, judged unsupported
+  notebook, malformed upload, and unsupported upload. Sample compile produced
+  no transient `/events` error; the malformed upload retained its intentional,
+  exactly correlated `422` response.
+- The first corrected replay run reached the actual UI and exposed two further
+  defects rather than hiding them: `696px` document overflow at a `390px`
+  viewport and a SPA back-navigation wait that incorrectly required a new
+  `DOMContentLoaded` event. Both were repaired.
+- Fresh immutable evidence at
+  `apps/web/test-results/runtime/cloak-replay-regression-v6/evidence/` records
+  both mobile replay journeys passing on CloakBrowser Chromium
+  `146.0.7680.177`. At `390x844`, document/body widths were `375px`; at
+  `375x812`, they were `360px`. Both journeys recorded zero console errors,
+  page errors, failed requests, unsafe requests, and unexpected HTTP errors.
+- The production build passed. Current emitted sizes are Worker `1,868.97 kB`
+  (`360.53 kB` gzip), main client `449.75 kB` (`129.28 kB` gzip), and client
+  CSS `201.45 kB` (`34.83 kB` gzip).
+
+These are real CloakBrowser local-Worker regressions, not a public
+qualification. The exact public qualifying count remains **0 journeys**.
+
+### Remaining dependency chain
+
+1. Run the complete 40-journey CloakBrowser matrix against this local build to
+   catch any further source-level regressions, then stop the Worker/browser and
+   move the agent-owned `.runtime/` into ignored repository cache state.
+2. The FUSE-owning process must release the tombstone naturally. Do not delete,
+   hide, ignore, stage, rename, overwrite, or inspect it. A clean source `S`
+   cannot be frozen while it remains.
+3. The aggregate containment sentinel requires narrowly scoped read-only
+   observation of `/sys/fs/cgroup` and owned `/proc/<pid>/stat`. The current
+   repository constitution forbids every external filesystem read, so this
+   gate cannot be run without an explicit constitution amendment. No
+   containment pass is claimed.
+4. After clean source and lawful containment observation exist, build one
+   exact runner image, run the genuine timeout/negative controls, refresh all
+   source/image-bound scientific, SBOM, VEX, license, health, and held-out
+   evidence once, review it, and commit evidence `E`.
+5. Verify repository-contained Wrangler authentication and the intended
+   account/secrets, qualify and deploy only the exact tuple, then prove public
+   release identity and capability readiness.
+6. Run all 40 journeys with qualification enabled against the exact public
+   origin and deployment receipt, followed by manual accessibility,
+   performance, download, reconnect, and Web Vitals evidence.
+7. Keep learner impact `NO_DATA` unless real consented observations occur.
+   Complete the exact-release video, logged-out repository/app/feedback/link
+   review, Devpost publication, and submission receipt.
+8. Push the feature branch, then fast-forward-only merge and push `main` only
+   when the upstream release and submission gates are factual.
+
+No exact image, aggregate-containment pass, Cloudflare identity, cloud
+mutation, deployment, public qualification, learner outcome, Devpost
+submission, push, or merge is claimed. Release remains **NO-GO** at the clean
+source, containment, exact-image/evidence, Cloudflare, public-browser, and
+submission gates.
