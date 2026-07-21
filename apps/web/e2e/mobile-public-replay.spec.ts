@@ -107,6 +107,22 @@ async function expectReadOnlyReplay(page: Page): Promise<void> {
   ).toHaveCount(0);
 }
 
+async function enterReadOnlyReplay(page: Page): Promise<void> {
+  const replayStatus = page.getByRole("complementary", {
+    name: "Replay status",
+  });
+  await expect(replayStatus).toBeVisible({ timeout: 30_000 });
+  await expect(replayStatus).toContainText(
+    "Verified replay · read-only stored evidence",
+  );
+  await expect(
+    page.getByRole("heading", { name: /Replay verified session/i }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: /Continue replay/i }).click();
+  await expectReadOnlyReplay(page);
+}
+
 async function readRootOverflow(page: Page): Promise<OverflowReading> {
   return page.evaluate(() => ({
     bodyScrollWidth: document.body.scrollWidth,
@@ -194,7 +210,7 @@ test.describe("public mobile replay routing", () => {
     expect(response!.request().redirectedFrom()).toBeNull();
     expectConfiguredPublicOrigin(response!.url());
     await expect(page).toHaveURL(new RegExp(`${replayPath}$`, "u"));
-    await expectReadOnlyReplay(page);
+    await enterReadOnlyReplay(page);
     await page.waitForLoadState("networkidle");
 
     await page.reload({ waitUntil: "domcontentloaded" });
@@ -249,10 +265,10 @@ test.describe("public mobile replay routing", () => {
     await expect(replayLink).toHaveAttribute("href", replayPath);
     await replayLink.click();
     await expect(page).toHaveURL(new RegExp(`${replayPath}$`, "u"));
-    await expectReadOnlyReplay(page);
+    await enterReadOnlyReplay(page);
     await page.waitForLoadState("networkidle");
 
-    await page.goBack({ waitUntil: "domcontentloaded" });
+    await page.goBack({ waitUntil: "commit" });
     await expect(page).toHaveURL(/\/judge$/u);
     await expect(
       page.getByRole("heading", {
@@ -261,7 +277,7 @@ test.describe("public mobile replay routing", () => {
     ).toBeVisible();
     await page.waitForLoadState("networkidle");
 
-    await page.goForward({ waitUntil: "domcontentloaded" });
+    await page.goForward({ waitUntil: "commit" });
     await expect(page).toHaveURL(new RegExp(`${replayPath}$`, "u"));
     await expectReadOnlyReplay(page);
     const overflow = await readRootOverflow(page);
