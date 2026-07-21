@@ -32,7 +32,7 @@ function aggregateLimitEvidence() {
     authority: "linux-cgroup-v2" as const,
     cgroupVersion: 2 as const,
     cgroupId: `counterlab-v6.1-${invocationId}`,
-    cgroupPath: `counterlab-v6.1/${invocationId}`,
+    cgroupPath: `counterlab-v6.1-${invocationId}`,
     cgroupIdentity: sha256(
       `counterlab-cgroup-v2\0${invocationId}\0${finalContainerId}\0${sanitizedSpecSha256}`,
     ),
@@ -205,6 +205,19 @@ describe("timeout cleanup aggregate resource authority", () => {
       assertQualifiedAggregateRuntimeLimits({
         ...aggregateInput(),
         aggregateLimitEvidence: evidence,
+        aggregateLimitIntentEnforced: true,
+        limitMode: QUALIFIED_AGGREGATE_LIMIT_MODE,
+      }),
+    ).toThrow();
+
+    const nestedPath = aggregateLimitEvidence();
+    nestedPath.cgroupPath = `counterlab-v6.1/${invocationId}`;
+    const { receiptPayloadSha256: _nestedHash, ...nestedPayload } = nestedPath;
+    nestedPath.receiptPayloadSha256 = sha256(canonicalJson(nestedPayload));
+    expect(() =>
+      assertQualifiedAggregateRuntimeLimits({
+        ...aggregateInput(),
+        aggregateLimitEvidence: nestedPath,
         aggregateLimitIntentEnforced: true,
         limitMode: QUALIFIED_AGGREGATE_LIMIT_MODE,
       }),

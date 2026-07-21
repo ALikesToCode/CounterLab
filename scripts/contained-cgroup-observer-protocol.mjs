@@ -128,7 +128,7 @@ export function validateContainedCgroupObserverManifest(
     !sha256Pattern.test(manifest.driverModuleSha256 ?? "") ||
     manifest.baseReceiptPath !== expectedReceiptPath ||
     manifest.cgroupId !== `counterlab-v6.1-${manifest.invocationId}` ||
-    manifest.cgroupPath !== `counterlab-v6.1/${manifest.invocationId}` ||
+    manifest.cgroupPath !== `counterlab-v6.1-${manifest.invocationId}` ||
     manifest.cgroupIdentity !== createContainedCgroupIdentity(manifest) ||
     !validTimestamp(manifest.requestedAt, observedAtMs) ||
     !sha256Pattern.test(receiptPayloadSha256 ?? "") ||
@@ -163,7 +163,7 @@ export function createContainedCgroupObserverManifest({
     invocationId,
     finalContainerId,
     cgroupId: `counterlab-v6.1-${invocationId}`,
-    cgroupPath: `counterlab-v6.1/${invocationId}`,
+    cgroupPath: `counterlab-v6.1-${invocationId}`,
     cgroupIdentity: createContainedCgroupIdentity({
       invocationId,
       finalContainerId,

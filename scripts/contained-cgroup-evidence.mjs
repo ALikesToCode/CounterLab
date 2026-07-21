@@ -214,7 +214,7 @@ export function validateContainedCgroupEvidence(value, expectedValue) {
     evidence.runtimeAttestationSha256 !== expected.runtimeAttestationSha256 ||
     !sha256(evidence.finalizationPayloadSha256) ||
     evidence.cgroupId !== `counterlab-v6.1-${expected.invocationId}` ||
-    evidence.cgroupPath !== `counterlab-v6.1/${expected.invocationId}` ||
+    evidence.cgroupPath !== `counterlab-v6.1-${expected.invocationId}` ||
     evidence.cgroupIdentity !== createContainedCgroupIdentity(expected) ||
     observed.memoryMaxBytes !== intended.memoryBytes ||
     ![0, intended.memoryBytes].includes(observed.memorySwapMaxBytes) ||

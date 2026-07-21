@@ -76,7 +76,7 @@ def _rootless(control: dict[str, object], build: dict[str, object]) -> dict[str,
         "authority": "linux-cgroup-v2",
         "cgroupVersion": 2,
         "cgroupId": f"counterlab-v6.1-{invocation_id}",
-        "cgroupPath": f"counterlab-v6.1/{invocation_id}",
+        "cgroupPath": f"counterlab-v6.1-{invocation_id}",
         "cgroupIdentity": hashlib.sha256(
             (
                 "counterlab-cgroup-v2\0"
@@ -417,6 +417,41 @@ def test_rootless_receipt_binds_control_and_exact_adapter_authority() -> None:
     ]
     with pytest.raises(RuntimeError, match="aggregate limit evidence"):
         validate_rootless_receipt(broken_counter, control=control, build=build)
+
+    nested_control = _control()
+    nested_path = _rootless(nested_control, build)
+    nested_path["aggregateLimitEvidence"]["cgroupPath"] = (
+        f"counterlab-v6.1/{nested_control['invocationId']}"
+    )
+    nested_evidence_payload = {
+        key: value
+        for key, value in nested_path["aggregateLimitEvidence"].items()
+        if key != "receiptPayloadSha256"
+    }
+    nested_path["aggregateLimitEvidence"]["receiptPayloadSha256"] = _hash(
+        nested_evidence_payload
+    )
+    nested_payload = {
+        key: value
+        for key, value in nested_path.items()
+        if key != "receiptPayloadSha256"
+    }
+    nested_path["receiptPayloadSha256"] = _hash(nested_payload)
+    nested_control["rootlessReceiptPayloadSha256"] = nested_path[
+        "receiptPayloadSha256"
+    ]
+    nested_control_payload = {
+        key: value
+        for key, value in nested_control.items()
+        if key != "receiptPayloadSha256"
+    }
+    nested_control["receiptPayloadSha256"] = _hash(nested_control_payload)
+    with pytest.raises(RuntimeError, match="aggregate limit evidence"):
+        validate_rootless_receipt(
+            nested_path,
+            control=nested_control,
+            build=build,
+        )
 
 
 def test_exactly_one_new_rootless_receipt_is_required(tmp_path: Path) -> None:

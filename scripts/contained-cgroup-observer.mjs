@@ -683,7 +683,7 @@ async function waitUntil(predicate, label, timeoutMs) {
 
 function actualCgroupAdapter(manifest, paths) {
   const cgroupRoot = resolve(cgroupFilesystemRoot, manifest.cgroupPath);
-  const cgroupParentRoot = resolve(cgroupFilesystemRoot, "counterlab-v6.1");
+  const cgroupParentRoot = cgroupFilesystemRoot;
   if (
     resolve(
       cgroupFilesystemRoot,

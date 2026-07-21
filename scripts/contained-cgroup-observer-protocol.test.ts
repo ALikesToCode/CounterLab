@@ -61,7 +61,7 @@ describe("contained cgroup observer protocol", () => {
     expect(value.baseReceiptPath).toBe(
       `.rt/${runtimeSessionId}/run/rootless-specs/${finalContainerId}.receipt.json`,
     );
-    expect(value.cgroupPath).toBe(`counterlab-v6.1/${invocationId}`);
+    expect(value.cgroupPath).toBe(`counterlab-v6.1-${invocationId}`);
     expect(value.receiptPayloadSha256).toMatch(/^[a-f0-9]{64}$/u);
   });
 
@@ -72,6 +72,9 @@ describe("contained cgroup observer protocol", () => {
       },
       (value) => {
         value.baseReceiptPath = ".rt/escaped/receipt.json";
+      },
+      (value) => {
+        value.cgroupPath = `counterlab-v6.1/${invocationId}`;
       },
       (value) => {
         value.intendedAggregateLimits.memoryBytes += 1;

@@ -42,7 +42,7 @@ const AggregateLimitEvidenceSchema = z
     authority: z.literal("linux-cgroup-v2"),
     cgroupVersion: z.literal(2),
     cgroupId: z.string().regex(/^counterlab-v6\.1-[a-f0-9]{64}$/),
-    cgroupPath: z.string().regex(/^counterlab-v6\.1\/[a-f0-9]{64}$/),
+    cgroupPath: z.string().regex(/^counterlab-v6\.1-[a-f0-9]{64}$/),
     cgroupIdentity: Sha256Schema,
     invocationId: Sha256Schema,
     finalContainerId: Sha256Schema,
@@ -99,7 +99,7 @@ const AggregateLimitEvidenceSchema = z
   .superRefine((evidence, context) => {
     if (
       evidence.cgroupId !== `counterlab-v6.1-${evidence.invocationId}` ||
-      evidence.cgroupPath !== `counterlab-v6.1/${evidence.invocationId}` ||
+      evidence.cgroupPath !== `counterlab-v6.1-${evidence.invocationId}` ||
       evidence.cgroupIdentity !==
         sha256(
           `counterlab-cgroup-v2\0${evidence.invocationId}\0${evidence.finalContainerId}\0${evidence.sanitizedSpecSha256}`,

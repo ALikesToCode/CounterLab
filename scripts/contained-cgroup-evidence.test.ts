@@ -25,7 +25,7 @@ function evidence() {
     authority: "linux-cgroup-v2",
     cgroupVersion: 2,
     cgroupId: `counterlab-v6.1-${invocationId}`,
-    cgroupPath: `counterlab-v6.1/${invocationId}`,
+    cgroupPath: `counterlab-v6.1-${invocationId}`,
     cgroupIdentity: createContainedCgroupIdentity({
       invocationId,
       finalContainerId,
@@ -112,7 +112,10 @@ describe("contained cgroup evidence", () => {
   it("rejects identity, limit, membership, counter, cleanup, and hash drift", () => {
     const mutations: Array<(value: ReturnType<typeof evidence>) => void> = [
       (value) => {
-        value.cgroupPath = "counterlab-v6.1/escaped";
+        value.cgroupPath = "counterlab-v6.1-escaped";
+      },
+      (value) => {
+        value.cgroupPath = `counterlab-v6.1/${invocationId}`;
       },
       (value) => {
         value.observedLimits.memoryMaxBytes += 1;
