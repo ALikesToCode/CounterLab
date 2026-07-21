@@ -506,6 +506,53 @@ kbd {
   padding: 12px 16px;
 }
 
+.proof-bundle-evidence {
+  display: grid;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  background: var(--paper-raised);
+}
+
+.proof-bundle-evidence h3,
+.proof-bundle-evidence h4,
+.proof-bundle-evidence p,
+.proof-bundle-evidence ul,
+.proof-bundle-evidence dl {
+  margin: 0;
+}
+
+.proof-bundle-evidence ul {
+  padding-inline-start: 1.25rem;
+}
+
+.proof-bundle-evidence dl {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.proof-bundle-evidence dl > div {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.35fr) minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.proof-bundle-evidence code {
+  overflow-wrap: anywhere;
+}
+
+.proof-bundle-evidence pre {
+  max-height: 14rem;
+  margin: 0;
+  overflow: auto;
+  padding: 0.75rem;
+  border-radius: 0.55rem;
+  background: var(--paper);
+  white-space: pre-wrap;
+}
+
 .generated-proof-sequence {
   display: grid;
   gap: 0.75rem;
@@ -857,6 +904,11 @@ kbd {
 
   .proof-console-content {
     height: 236px;
+  }
+
+  .proof-bundle-evidence dl > div {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
   }
 
   .command-palette footer span {

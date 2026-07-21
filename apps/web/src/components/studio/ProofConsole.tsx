@@ -1,6 +1,10 @@
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 
-import type { EvidenceEvent, PublicCompilerEvent } from "../../api";
+import type {
+  EvidenceEvent,
+  ProofBundle,
+  PublicCompilerEvent,
+} from "../../api";
 import { CapabilityLinkDisclosure } from "../learner/CapabilityLinkDisclosure";
 import { GeneratedProofView } from "./GeneratedProofView";
 import { ProvenanceLedger } from "./ProvenanceLedger";
@@ -133,6 +137,171 @@ function EvidenceEventList({ events }: { events: readonly EvidenceEvent[] }) {
   );
 }
 
+function proofBundleHasTab(
+  proofBundle: ProofBundle | undefined,
+  tab: ProofTab,
+): boolean {
+  if (proofBundle === undefined) return false;
+  if (tab === "Plan" || tab === "Diff" || tab === "Verifier") return true;
+  return tab === "Tests" && proofBundle.schemaVersion === "1";
+}
+
+function ProofBundleEvidence({
+  proofBundle,
+  tab,
+}: {
+  proofBundle: ProofBundle;
+  tab: ProofTab;
+}) {
+  if (tab === "Plan") {
+    const operationIds =
+      proofBundle.schemaVersion === "1"
+        ? proofBundle.experimentPlan.runs.map((run) => run.id)
+        : [
+            proofBundle.experimentPlan.baseline.runId,
+            ...proofBundle.experimentPlan.interventions.map((run) => run.runId),
+          ];
+    return (
+      <section className="proof-bundle-evidence" aria-label="Validated plan">
+        <h3>Validated plan</h3>
+        <p>
+          Registered run identifiers from the session&apos;s validated Proof
+          Bundle.
+        </p>
+        <ul>
+          {operationIds.map((operationId) => (
+            <li key={operationId}>
+              <code>{operationId}</code>
+            </li>
+          ))}
+        </ul>
+        {proofBundle.schemaVersion === "1" ? (
+          <dl>
+            <div>
+              <dt>Generated adapter SHA-256</dt>
+              <dd>
+                <code>{proofBundle.generatedAdapter.sha256}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Recorded source commit</dt>
+              <dd>
+                <code>{proofBundle.generatedAdapter.commitHash}</code>
+              </dd>
+            </div>
+          </dl>
+        ) : (
+          <p>
+            Plan verifier: {proofBundle.planVerification.status} ·{" "}
+            {proofBundle.planVerification.invariantCount} invariants
+          </p>
+        )}
+      </section>
+    );
+  }
+
+  if (tab === "Diff") {
+    return (
+      <section className="proof-bundle-evidence" aria-label="Verified patch">
+        <h3>Verified patch</h3>
+        <p>
+          Changed notebook cells:{" "}
+          {proofBundle.patchResult.modifiedCells.join(", ")}
+        </p>
+        <p>
+          Patch verification: {proofBundle.patchResult.status} ·{" "}
+          {proofBundle.patchResult.verification.invariants.length} named
+          invariants
+        </p>
+        <pre>
+          <code>{proofBundle.patchResult.diff}</code>
+        </pre>
+      </section>
+    );
+  }
+
+  if (tab === "Tests" && proofBundle.schemaVersion === "1") {
+    return (
+      <section className="proof-bundle-evidence" aria-label="Public tests">
+        <h3>Public tests</h3>
+        <p>
+          {proofBundle.publicTests.passed} passed ·{" "}
+          {proofBundle.publicTests.failed} failed
+        </p>
+        <dl>
+          <div>
+            <dt>Public test report SHA-256</dt>
+            <dd>
+              <code>{proofBundle.publicTests.reportHash}</code>
+            </dd>
+          </div>
+        </dl>
+      </section>
+    );
+  }
+
+  if (tab === "Verifier") {
+    if (proofBundle.schemaVersion === "1") {
+      return (
+        <section
+          className="proof-bundle-evidence"
+          aria-label="External verifier"
+        >
+          <h3>External verifier · {proofBundle.externalVerifier.status}</h3>
+          <p>Accepted named invariants</p>
+          <ul>
+            {proofBundle.externalVerifier.verifiedInvariants.map(
+              (invariant) => (
+                <li key={invariant}>
+                  <code>{invariant}</code>
+                </li>
+              ),
+            )}
+          </ul>
+          <p>
+            Mutation probes recorded:{" "}
+            {proofBundle.externalVerifier.mutations.length}
+          </p>
+          <dl>
+            <div>
+              <dt>External verifier report SHA-256</dt>
+              <dd>
+                <code>{proofBundle.externalVerifier.reportHash}</code>
+              </dd>
+            </div>
+          </dl>
+        </section>
+      );
+    }
+    const reports = [
+      ["Experiment plan", proofBundle.planVerification],
+      ["Patch plan", proofBundle.patchPlanVerification],
+    ] as const;
+    return (
+      <section className="proof-bundle-evidence" aria-label="Verifier reports">
+        <h3>Verifier reports</h3>
+        {reports.map(([label, report]) => (
+          <section key={label}>
+            <h4>
+              {label} · {report.status}
+            </h4>
+            <ul>
+              {report.invariants.map((invariant) => (
+                <li key={invariant.name}>
+                  <code>{invariant.name}</code> ·{" "}
+                  {invariant.passed ? "passed" : "rejected"}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </section>
+    );
+  }
+
+  return null;
+}
+
 function CompilerEventList({
   events,
   tab,
@@ -184,6 +353,7 @@ export function ProofConsole({
   const evidenceEvents = context.evidenceEvents ?? [];
   const proofEventIssues = context.proofEventIssues ?? [];
   const proofEventStatus = context.proofEventStatus ?? "idle";
+  const proofBundle = context.session?.proofBundle;
   const filteredCompilerEvents = compilerEventsForTab(
     context.events,
     activeTab,
@@ -193,7 +363,9 @@ export function ProofConsole({
     activeTab,
   );
   const hasTabEvents =
-    filteredEvidenceEvents.length > 0 || filteredCompilerEvents.length > 0;
+    filteredEvidenceEvents.length > 0 ||
+    filteredCompilerEvents.length > 0 ||
+    proofBundleHasTab(proofBundle, activeTab);
   const moveTab = (
     event: ReactKeyboardEvent<HTMLButtonElement>,
     index: number,
@@ -323,6 +495,13 @@ export function ProofConsole({
               </div>
             ) : (
               <>
+                {proofBundle !== undefined &&
+                proofBundleHasTab(proofBundle, activeTab) ? (
+                  <ProofBundleEvidence
+                    proofBundle={proofBundle}
+                    tab={activeTab}
+                  />
+                ) : null}
                 {filteredEvidenceEvents.length > 0 ? (
                   <EvidenceEventList events={filteredEvidenceEvents} />
                 ) : null}
