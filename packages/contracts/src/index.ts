@@ -1401,6 +1401,31 @@ export const RunnerJobSchema = z
     outputHashes: z.array(Sha256Schema),
     error: RunnerJobErrorSchema.optional(),
     eventCursor: z.number().int().nonnegative(),
+    callbackClaim: z
+      .object({
+        idempotencyKey: NonEmptyString,
+        callbackHash: Sha256Schema,
+        ownerId: NonEmptyString,
+        claimedAt: z.iso.datetime({ offset: true }),
+      })
+      .strict()
+      .optional(),
+    callbackRecovery: z
+      .object({
+        idempotencyKey: NonEmptyString,
+        callbackHash: Sha256Schema,
+        releasedAt: z.iso.datetime({ offset: true }),
+      })
+      .strict()
+      .optional(),
+    outputWriteClaim: z
+      .object({
+        ownerId: NonEmptyString,
+        generatedPath: NonEmptyString,
+        claimedAt: z.iso.datetime({ offset: true }),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((job, context) => {
@@ -1444,6 +1469,33 @@ export const RunnerJobSchema = z
         code: "custom",
         message: "a verified job requires output hashes",
         path: ["outputHashes"],
+      });
+    }
+    if (
+      terminalRunnerStatuses.has(job.status) &&
+      job.callbackClaim !== undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "a terminal job cannot retain a callback claim",
+        path: ["callbackClaim"],
+      });
+    }
+    if (
+      terminalRunnerStatuses.has(job.status) &&
+      job.outputWriteClaim !== undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "a terminal job cannot retain an output-write claim",
+        path: ["outputWriteClaim"],
+      });
+    }
+    if (job.callbackClaim !== undefined && job.outputWriteClaim !== undefined) {
+      context.addIssue({
+        code: "custom",
+        message: "callback and output-write claims are mutually exclusive",
+        path: ["outputWriteClaim"],
       });
     }
   });
@@ -2679,6 +2731,201 @@ export const EvidenceEventSchema = EvidenceEventUnsignedSchema.extend({
 }).strict();
 
 export type EvidenceEvent = z.infer<typeof EvidenceEventSchema>;
+
+const LearningDirectorIdSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(128)
+  .regex(/^[a-z0-9](?:[a-z0-9._/-]{0,126}[a-z0-9])?$/u);
+
+export const LearningDirectorStageSchema = z.enum([
+  "Question",
+  "Prediction",
+  "Test",
+  "Boundary",
+  "Apply",
+  "Repair",
+]);
+
+export const LearningDirectorNonClaimIdSchema = z.enum([
+  "bounded-claim-only",
+  "no-causal-claim",
+  "no-mastery-claim",
+  "no-production-guarantee",
+  "no-unverified-result",
+]);
+
+export const LearningDirectorClarificationChoiceIdSchema = z.enum([
+  "comparison-first",
+  "controls-first",
+  "boundary-first",
+  "apply-first",
+]);
+
+export const LearningDirectorToolNameSchema = z.enum([
+  "inspect_approved_evidence",
+  "get_subject_pack_capabilities",
+  "list_trusted_scene_recipes",
+  "list_verified_boundary_views",
+]);
+
+const LearningDirectorClarificationSchema = z
+  .object({
+    status: z.literal("CLARIFICATION_REQUIRED"),
+    questionId: z.literal("learning-emphasis"),
+    choices: z.array(LearningDirectorClarificationChoiceIdSchema).min(2).max(4),
+  })
+  .strict()
+  .refine((value) => new Set(value.choices).size === value.choices.length, {
+    message: "clarification choices must be unique",
+    path: ["choices"],
+  });
+
+export const LearningDirectorPlanSchema = z
+  .object({
+    concept: ConceptIdSchema,
+    introductionStages: z.array(LearningDirectorStageSchema).min(4).max(6),
+    primaryEmphasis: LearningDirectorStageSchema,
+    scaffoldIds: z.array(LearningDirectorIdSchema).min(1).max(4),
+    candidateExperimentIds: z.array(LearningDirectorIdSchema).min(1).max(4),
+    sceneRecipeId: LearningDirectorIdSchema,
+    boundaryViewId: LearningDirectorIdSchema,
+    evidenceHashes: z.array(Sha256Schema).max(4),
+    nonClaims: z.array(LearningDirectorNonClaimIdSchema).min(1).max(5),
+  })
+  .strict()
+  .superRefine((plan, context) => {
+    for (const [field, values] of [
+      ["introductionStages", plan.introductionStages],
+      ["scaffoldIds", plan.scaffoldIds],
+      ["candidateExperimentIds", plan.candidateExperimentIds],
+      ["evidenceHashes", plan.evidenceHashes],
+      ["nonClaims", plan.nonClaims],
+    ] as const) {
+      if (new Set(values).size !== values.length) {
+        context.addIssue({
+          code: "custom",
+          message: `${field} must not contain duplicates`,
+          path: [field],
+        });
+      }
+    }
+    const canonicalStages = LearningDirectorStageSchema.options;
+    const indexes = plan.introductionStages.map((stage) =>
+      canonicalStages.indexOf(stage),
+    );
+    if (
+      indexes.some(
+        (stageIndex, index) =>
+          index > 0 && stageIndex <= (indexes[index - 1] ?? -1),
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "introductionStages must follow the canonical journey order",
+        path: ["introductionStages"],
+      });
+    }
+    for (const requiredStage of [
+      "Prediction",
+      "Test",
+      "Boundary",
+      "Apply",
+    ] as const) {
+      if (!plan.introductionStages.includes(requiredStage)) {
+        context.addIssue({
+          code: "custom",
+          message: `introductionStages must include ${requiredStage}`,
+          path: ["introductionStages"],
+        });
+      }
+    }
+    if (!plan.introductionStages.includes(plan.primaryEmphasis)) {
+      context.addIssue({
+        code: "custom",
+        message: "primaryEmphasis must appear in introductionStages",
+        path: ["primaryEmphasis"],
+      });
+    }
+  });
+
+export const LearningDirectorDecisionSchema = z.discriminatedUnion("status", [
+  LearningDirectorClarificationSchema,
+  z
+    .object({
+      status: z.literal("READY"),
+      plan: LearningDirectorPlanSchema,
+    })
+    .strict(),
+]);
+
+export const LearningDirectorProvenanceSchema = z
+  .object({
+    modelId: NonEmptyString,
+    promptHash: Sha256Schema,
+    turns: z.number().int().min(1).max(3),
+    toolTrace: z
+      .array(
+        z
+          .object({
+            toolName: LearningDirectorToolNameSchema,
+            argsHash: Sha256Schema,
+            outputHash: Sha256Schema,
+            durationMs: z.number().int().nonnegative(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(4),
+    usageTotals: z
+      .object({
+        inputTokens: z.number().int().nonnegative().safe(),
+        outputTokens: z.number().int().nonnegative().safe(),
+        totalTokens: z.number().int().nonnegative().safe(),
+        cachedInputTokens: z.number().int().nonnegative().safe().optional(),
+        reasoningTokens: z.number().int().nonnegative().safe().optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+export const LearningDirectorSessionStateSchema = z
+  .object({
+    schemaVersion: z.literal("1"),
+    beliefSpecHash: Sha256Schema,
+    approvedPacketHash: Sha256Schema,
+    subjectPackVersion: NonEmptyString,
+    clarificationUsed: z.boolean(),
+    decision: LearningDirectorDecisionSchema,
+    provenance: LearningDirectorProvenanceSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      value.decision.status === "CLARIFICATION_REQUIRED" &&
+      !value.clarificationUsed
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "a persisted clarification must consume the one-question budget",
+        path: ["clarificationUsed"],
+      });
+    }
+  });
+
+export type LearningDirectorDecision = z.infer<
+  typeof LearningDirectorDecisionSchema
+>;
+export type LearningDirectorPlan = z.infer<typeof LearningDirectorPlanSchema>;
+export type LearningDirectorProvenance = z.infer<
+  typeof LearningDirectorProvenanceSchema
+>;
+export type LearningDirectorSessionState = z.infer<
+  typeof LearningDirectorSessionStateSchema
+>;
 
 export const LearnerStageSchema = z.enum([
   "question",

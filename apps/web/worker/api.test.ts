@@ -550,6 +550,14 @@ class MemoryRunnerJobRepository implements RunnerJobRepository {
     this.events.set(job.jobId, events);
   }
 
+  async appendTerminalEvent(
+    job: RunnerJob,
+    expectedVersion: number,
+    event: PublicCompilerEvent,
+  ): Promise<void> {
+    await this.appendEvent(job, expectedVersion, event);
+  }
+
   async listEvents(
     jobId: string,
     afterCursor: number,
@@ -935,8 +943,19 @@ async function liveBeliefInput(
   );
   expect(preview.status).toBe(200);
   const body = (await preview.json()) as {
-    data: { previewHash: string; requiresSensitiveApproval: boolean };
+    data: {
+      previewHash: string;
+      requiresSensitiveApproval: boolean;
+      sanitizedContent: Record<string, unknown>;
+      learningDirectorPacket: Record<string, unknown>;
+    };
   };
+  expect(body.data.previewHash).toBe(
+    await hashCanonical({
+      beliefAnalyst: body.data.sanitizedContent,
+      learningDirector: body.data.learningDirectorPacket,
+    }),
+  );
   return {
     learnerClaim,
     previewHash: body.data.previewHash,
@@ -1085,6 +1104,77 @@ function structuredResponsesResult(output: unknown): Response {
   );
 }
 
+function learningDirectorToolResult(
+  concept: "entity_leakage" | "class_imbalance",
+): Response {
+  const functionCall = (name: string, index: number) => ({
+    id: `function_call_${index}`,
+    type: "function_call",
+    status: "completed",
+    call_id: `call_${index}`,
+    name,
+    arguments: JSON.stringify({ concept }),
+  });
+  return new Response(
+    JSON.stringify({
+      id: "resp_learning_director_tools",
+      object: "response",
+      status: "completed",
+      model: "configured-model",
+      output: [
+        functionCall("get_subject_pack_capabilities", 1),
+        functionCall("list_trusted_scene_recipes", 2),
+        functionCall("list_verified_boundary_views", 3),
+      ],
+    }),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
+
+function learningDirectorReadyResult(
+  concept: "entity_leakage" | "class_imbalance",
+): Response {
+  const leakage = concept === "entity_leakage";
+  return structuredResponsesResult({
+    decision: {
+      status: "READY",
+      plan: {
+        concept,
+        introductionStages: [
+          "Question",
+          "Prediction",
+          "Test",
+          "Boundary",
+          "Apply",
+        ],
+        primaryEmphasis: "Boundary",
+        scaffoldIds: [leakage ? "compare-splits" : "compare-metrics"],
+        candidateExperimentIds: [
+          leakage ? "group-holdout" : "threshold-and-majority-baseline",
+        ],
+        sceneRecipeId: leakage
+          ? "entity-overlap-stage"
+          : "confusion-matrix-stage",
+        boundaryViewId: leakage
+          ? "test-fraction-by-repeat-rate"
+          : "threshold-by-prevalence",
+        evidenceHashes: [],
+        nonClaims: ["bounded-claim-only", "no-mastery-claim"],
+      },
+    },
+  });
+}
+
+function learningDirectorClarificationResult(): Response {
+  return structuredResponsesResult({
+    decision: {
+      status: "CLARIFICATION_REQUIRED",
+      questionId: "learning-emphasis",
+      choices: ["controls-first", "boundary-first"],
+    },
+  });
+}
+
 async function preparedScientificHostedRunner(
   runnerJobs: MemoryRunnerJobRepository = new MemoryRunnerJobRepository(),
 ) {
@@ -1112,7 +1202,9 @@ async function preparedScientificHostedRunner(
     .spyOn(globalThis, "fetch")
     .mockResolvedValueOnce(
       structuredResponsesResult(liveBeliefSpecWire(artifact.manifest)),
-    );
+    )
+    .mockResolvedValueOnce(learningDirectorToolResult("entity_leakage"))
+    .mockResolvedValueOnce(learningDirectorReadyResult("entity_leakage"));
   try {
     const proposed = await harness.app.request(
       `/api/sessions/${harness.sessionId}/belief-test`,
@@ -1240,7 +1332,9 @@ async function preparedScientificImbalanceHostedRunner(
     .spyOn(globalThis, "fetch")
     .mockResolvedValueOnce(
       structuredResponsesResult(liveImbalanceBeliefSpecWire(artifact)),
-    );
+    )
+    .mockResolvedValueOnce(learningDirectorToolResult("class_imbalance"))
+    .mockResolvedValueOnce(learningDirectorReadyResult("class_imbalance"));
   try {
     const proposed = await intakeApp.request(
       `/api/sessions/${sessionId}/belief-test`,
@@ -7443,6 +7537,15 @@ describe("Cloudflare Worker API", () => {
       },
     );
     expect(revised.status).toBe(200);
+    const sessionBeforeDuplicate = await harness.sessionRepository.find(
+      harness.bundle.sessionId,
+    );
+    const objectsBeforeDuplicate = structuredClone([
+      ...harness.runnerObjects.objects.entries(),
+    ]);
+    const eventsBeforeDuplicate = await harness.runnerJobs.listEvents(jobId, 0);
+    const objectGet = vi.spyOn(harness.runnerObjects, "get");
+    const objectPut = vi.spyOn(harness.runnerObjects, "put");
     const duplicate = await postJson(
       harness.app,
       `/api/runner/jobs/${jobId}/callback`,
@@ -7457,7 +7560,17 @@ describe("Cloudflare Worker API", () => {
         session: { state: "REVISION_RECORDED" },
       },
     });
-    expect(await harness.runnerJobs.listEvents(jobId, 0)).toHaveLength(4);
+    expect(objectGet).not.toHaveBeenCalled();
+    expect(objectPut).not.toHaveBeenCalled();
+    expect([...harness.runnerObjects.objects.entries()]).toEqual(
+      objectsBeforeDuplicate,
+    );
+    expect(await harness.runnerJobs.listEvents(jobId, 0)).toEqual(
+      eventsBeforeDuplicate,
+    );
+    expect(
+      await harness.sessionRepository.find(harness.bundle.sessionId),
+    ).toEqual(sessionBeforeDuplicate);
 
     const transfer = await postJson(
       harness.app,
@@ -11090,6 +11203,8 @@ describe("Cloudflare Worker API", () => {
     });
     expect(harness.dispatcher.cancelled).toHaveLength(1);
 
+    const objectGet = vi.spyOn(harness.runnerObjects, "get");
+    const objectPut = vi.spyOn(harness.runnerObjects, "put");
     const lateCallback = await postJson(
       harness.app,
       `/api/runner/jobs/${firstBody.data.runnerJob.jobId}/callback`,
@@ -11099,15 +11214,10 @@ describe("Cloudflare Worker API", () => {
         idempotencyKey: "callback-after-start-over",
         jobId: firstBody.data.runnerJob.jobId,
         stateVersion: harness.dispatch.job.stateVersion,
-        status: "FAILED",
-        outputHashes: [],
+        status: "VERIFIED",
+        outputHashes: ["a".repeat(64)],
         finalEventCursor: 0,
         occurredAt: "2026-07-14T10:00:01.000Z",
-        error: {
-          code: "LATE_RUNNER_CALLBACK",
-          message: "Late completion after browser reset",
-          retryable: false,
-        },
       },
       { authorization: `Bearer ${harness.dispatch.token}` },
     );
@@ -11120,6 +11230,8 @@ describe("Cloudflare Worker API", () => {
       firstBody.data.runnerJob.jobId,
     );
     expect(afterLateCallback).toMatchObject({ status: "CANCELLED" });
+    expect(objectGet).not.toHaveBeenCalled();
+    expect(objectPut).not.toHaveBeenCalled();
   });
 
   it("acquires one opaque runner lease and releases it on cancellation", async () => {
@@ -11926,7 +12038,9 @@ describe("Cloudflare Worker API", () => {
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
         structuredResponsesResult(liveBeliefSpecWire(artifact.manifest)),
-      );
+      )
+      .mockResolvedValueOnce(learningDirectorToolResult("entity_leakage"))
+      .mockResolvedValueOnce(learningDirectorReadyResult("entity_leakage"));
 
     try {
       const response = await app.request(
@@ -11951,6 +12065,17 @@ describe("Cloudflare Worker API", () => {
           concept: "entity_leakage",
           claim: learnerClaim,
           learnerDecision: "UNDECIDED",
+        },
+        learningDirector: {
+          schemaVersion: "1",
+          clarificationUsed: false,
+          decision: {
+            status: "READY",
+            plan: {
+              primaryEmphasis: "Boundary",
+              sceneRecipeId: "entity-overlap-stage",
+            },
+          },
         },
       });
       expect(body.data).not.toHaveProperty("beliefTest");
@@ -12094,6 +12219,163 @@ describe("Cloudflare Worker API", () => {
           }),
         ]),
       );
+    } finally {
+      upstream.mockRestore();
+    }
+  });
+
+  it("keeps learner confirmation available when the optional Director response is invalid", async () => {
+    const { app, sessionId, artifactStore } = await sessionHarness("live");
+    const artifact = await artifactStore.find("artifact_uploaded_not_sample");
+    if (artifact === undefined) throw new Error("live artifact is missing");
+    const learnerClaim =
+      "The notebook accuracy proves generalization to new customers.";
+    const beliefInput = await liveBeliefInput(app, sessionId, learnerClaim);
+    const upstream = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        structuredResponsesResult(liveBeliefSpecWire(artifact.manifest)),
+      )
+      .mockResolvedValueOnce(learningDirectorToolResult("entity_leakage"))
+      .mockResolvedValueOnce(
+        structuredResponsesResult({
+          decision: {
+            status: "CLARIFICATION_REQUIRED",
+            question: "The verified result proves leakage; continue?",
+            choices: ["controls-first", "boundary-first"],
+          },
+        }),
+      );
+
+    try {
+      const proposed = await app.request(
+        `/api/sessions/${sessionId}/belief-test`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(beliefInput),
+        },
+        {
+          OPENAI_API_KEY: "server-only-key",
+          OPENAI_MODEL: "configured-model",
+        } as unknown as Env & Record<string, string>,
+      );
+      expect(proposed.status).toBe(200);
+      const proposedBody = (await proposed.json()) as {
+        data: Record<string, unknown>;
+      };
+      expect(proposedBody).toMatchObject({
+        data: {
+          state: "BELIEF_TEST_PROPOSED",
+          beliefSpec: { claim: learnerClaim },
+        },
+      });
+      expect(proposedBody.data).not.toHaveProperty("learningDirector");
+
+      const confirmation = await postJson(
+        app,
+        `/api/sessions/${sessionId}/belief-test/confirm`,
+        { action: "confirm" },
+      );
+      expect(confirmation.status).toBe(200);
+      await expect(confirmation.json()).resolves.toMatchObject({
+        data: { state: "BELIEF_TEST_CONFIRMED" },
+      });
+    } finally {
+      upstream.mockRestore();
+    }
+  });
+
+  it("allows one bounded Learning Director clarification before belief confirmation", async () => {
+    const { app, sessionId, sessionRepository, artifactStore } =
+      await sessionHarness("live");
+    const artifact = await artifactStore.find("artifact_uploaded_not_sample");
+    if (artifact === undefined) throw new Error("live artifact is missing");
+    const learnerClaim =
+      "The notebook accuracy proves generalization to new customers.";
+    const beliefInput = await liveBeliefInput(app, sessionId, learnerClaim);
+    const upstream = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        structuredResponsesResult(liveBeliefSpecWire(artifact.manifest)),
+      )
+      .mockResolvedValueOnce(learningDirectorToolResult("entity_leakage"))
+      .mockResolvedValueOnce(learningDirectorClarificationResult())
+      .mockResolvedValueOnce(learningDirectorToolResult("entity_leakage"))
+      .mockResolvedValueOnce(learningDirectorReadyResult("entity_leakage"));
+    const env = {
+      OPENAI_API_KEY: "server-only-key",
+      OPENAI_MODEL: "configured-model",
+    } as unknown as Env & Record<string, string>;
+
+    try {
+      const proposed = await app.request(
+        `/api/sessions/${sessionId}/belief-test`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(beliefInput),
+        },
+        env,
+      );
+      expect(proposed.status).toBe(200);
+      await expect(proposed.json()).resolves.toMatchObject({
+        data: {
+          learningDirector: {
+            clarificationUsed: true,
+            decision: {
+              status: "CLARIFICATION_REQUIRED",
+              choices: ["controls-first", "boundary-first"],
+            },
+          },
+        },
+      });
+
+      const answered = await app.request(
+        `/api/sessions/${sessionId}/learning-director`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ answer: "controls-first" }),
+        },
+        env,
+      );
+      expect(answered.status).toBe(200);
+      await expect(answered.json()).resolves.toMatchObject({
+        data: {
+          learningDirector: {
+            clarificationUsed: true,
+            decision: { status: "READY" },
+          },
+        },
+      });
+
+      const secondAnswer = await app.request(
+        `/api/sessions/${sessionId}/learning-director`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ answer: "boundary-first" }),
+        },
+        env,
+      );
+      expect(secondAnswer.status).toBe(409);
+      const confirmation = await postJson(
+        app,
+        `/api/sessions/${sessionId}/belief-test/confirm`,
+        { action: "confirm" },
+      );
+      expect(confirmation.status).toBe(200);
+      expect(upstream).toHaveBeenCalledTimes(5);
+      expect(
+        (await sessionRepository.listEvents(sessionId)).map(({ kind }) => kind),
+      ).toEqual([
+        "session.created",
+        "belief_spec.proposed",
+        "learning_director.clarification_requested",
+        "learning_director.ready",
+        "belief_spec.confirmed",
+      ]);
     } finally {
       upstream.mockRestore();
     }

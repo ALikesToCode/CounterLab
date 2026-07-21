@@ -410,7 +410,7 @@ describe("D1RunnerJobRepository", () => {
     };
     await expect(service.recordCallback(callback)).resolves.toMatchObject({
       duplicate: false,
-      job: { status: "VERIFIED", jobVersion: 5 },
+      job: { status: "VERIFIED", jobVersion: 6 },
     });
     await expect(service.recordCallback(callback)).resolves.toMatchObject({
       duplicate: true,
@@ -419,6 +419,54 @@ describe("D1RunnerJobRepository", () => {
     await expect(
       service.transition(streamed.jobId, streamed.jobVersion, "REPAIRING"),
     ).rejects.toThrow(/changed during update|terminal/i);
+
+    const dispatchQueued = await service.createJob({
+      jobId: "job_dispatch_failure",
+      kind: "LAB_COMPILE",
+      sessionId: "session_live_1",
+      artifactId: "artifact_live_1",
+      artifactManifestHash: "a".repeat(64),
+      conceptPack: { id: "entity_leakage", version: "2.0.0" },
+      inputHashes: ["b".repeat(64)],
+      stateVersion: 4,
+      maxAttempts: 3,
+      timeoutSeconds: 90,
+    });
+    const dispatchStarting = await service.transition(
+      dispatchQueued.jobId,
+      dispatchQueued.jobVersion,
+      "STARTING",
+      { runnerIdentity: "runner-test" },
+    );
+    await expect(
+      service.failJobWithEvent(
+        dispatchStarting.jobId,
+        dispatchStarting.jobVersion,
+        {
+          runnerIdentity: "runner-test",
+          error: {
+            code: "RUNNER_DISPATCH_FAILED",
+            message: "The runner did not acknowledge dispatch.",
+            retryable: true,
+          },
+        },
+        {
+          schemaVersion: "1",
+          eventId: "dispatch_failed_event",
+          jobId: dispatchStarting.jobId,
+          cursor: 1,
+          kind: "job.failed",
+          code: "RUNNER_DISPATCH_FAILED",
+          message: "The runner did not acknowledge dispatch.",
+          at: "2026-07-15T00:00:08.000Z",
+        },
+      ),
+    ).resolves.toMatchObject({ status: "FAILED", eventCursor: 1 });
+    await expect(
+      service.listEvents(dispatchStarting.jobId, 0),
+    ).resolves.toEqual([
+      expect.objectContaining({ kind: "job.failed", cursor: 1 }),
+    ]);
     database.sqlite.close();
   });
 });

@@ -19,6 +19,15 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 
+import {
+  LearningDirectorController,
+  OpenAILearningDirectorTransport,
+  type LearningDirectorRegistries,
+  type LearningDirectorTransport,
+} from "./learning-director.js";
+
+export * from "./learning-director.js";
+
 export const APPROVED_LEAKAGE_SAMPLE_SHA256 =
   "d0e9f3238753f1ca55534446d83e36041590f31c607a011def3f1d0db3a5bbc9";
 
@@ -406,7 +415,7 @@ type SanitizedAnalystContext = {
     metricCandidates: ArtifactManifest["cells"][number]["metricCandidates"];
   }>;
   privacy: {
-    policyVersion: "outbound-privacy-v2";
+    policyVersion: "outbound-privacy-v3";
     suppressedFieldCount: number;
     redactions: Array<{
       category: "secret" | "path" | "identifier" | "sensitive_field";
@@ -452,8 +461,8 @@ export function deriveSafetyIdentifier(sessionId: string): string {
     .digest("hex");
 }
 
-function sanitizeText(value: string, maximum = MAX_EXCERPT_CHARACTERS): string {
-  const redacted = value
+function redactCommonSensitiveText(value: string): string {
+  return value
     .normalize("NFKC")
     .replace(/\bsk-[A-Za-z0-9_-]{10,}\b/g, "[REDACTED_SECRET]")
     .replace(
@@ -488,13 +497,137 @@ function sanitizeText(value: string, maximum = MAX_EXCERPT_CHARACTERS): string {
       /\b((?:account|customer|employee|patient|student|user)[_-]?id\s*[:=]\s*)(["'])[^"'\n]+\2/giu,
       "$1[REDACTED_IDENTIFIER]",
     );
-  return redacted.slice(0, maximum);
+}
+
+function sanitizeText(value: string, maximum = MAX_EXCERPT_CHARACTERS): string {
+  return redactCommonSensitiveText(value).slice(0, maximum);
 }
 
 const OUTBOUND_PUBLIC_PRIVACY_CLASSES = new Set(["feature", "target"]);
+const MAX_PRIVACY_FIELD_GROUPS = 512;
+const MAX_PRIVACY_FIELD_NAME_CHARACTERS = 256;
 
 function canExposeSchemaField(privacyClass: string): boolean {
   return OUTBOUND_PUBLIC_PRIVACY_CLASSES.has(privacyClass.trim().toLowerCase());
+}
+
+type FieldPrivacyInventory = {
+  aliasesByCanonicalName: ReadonlyMap<string, string>;
+  replacementEntries: readonly {
+    normalizedName: string;
+    alias: string;
+  }[];
+  suppressedFieldCount: number;
+};
+
+function canonicalFieldName(value: string): string {
+  return value.normalize("NFKC").toLocaleLowerCase("en-US");
+}
+
+function escapedRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function fieldNameVariants(value: string): string[] {
+  const normalized = value.normalize("NFKC");
+  return [
+    ...new Set(
+      [
+        normalized,
+        normalized.toLocaleLowerCase("en-US"),
+        normalized.toLocaleUpperCase("en-US"),
+      ].map((variant) => variant.normalize("NFKC")),
+    ),
+  ];
+}
+
+function fieldPrivacyInventory(
+  manifest: ArtifactManifest,
+): FieldPrivacyInventory {
+  const groups = new Map<
+    string,
+    {
+      normalizedName: string;
+      fields: ArtifactManifest["schemaSummary"]["fields"];
+      sensitive: boolean;
+    }
+  >();
+  for (const field of manifest.schemaSummary.fields) {
+    const normalizedName = field.name.normalize("NFKC");
+    if (normalizedName.length > MAX_PRIVACY_FIELD_NAME_CHARACTERS) {
+      throw new BeliefAnalystError(
+        "INVALID_INPUT",
+        "schema field names exceed the bounded outbound privacy policy",
+      );
+    }
+    const key = canonicalFieldName(normalizedName);
+    const existing = groups.get(key);
+    if (existing === undefined) {
+      groups.set(key, {
+        normalizedName,
+        fields: [field],
+        sensitive: !canExposeSchemaField(field.privacyClass),
+      });
+      continue;
+    }
+    existing.fields.push(field);
+    if (!canExposeSchemaField(field.privacyClass)) existing.sensitive = true;
+  }
+  if (groups.size > MAX_PRIVACY_FIELD_GROUPS) {
+    throw new BeliefAnalystError(
+      "INVALID_INPUT",
+      "schema fields exceed the bounded outbound privacy policy",
+    );
+  }
+
+  const aliasesByCanonicalName = new Map<string, string>();
+  const replacementEntries: Array<{ normalizedName: string; alias: string }> =
+    [];
+  let aliasIndex = 0;
+  let suppressedFieldCount = 0;
+  for (const [key, group] of groups) {
+    if (group.sensitive) {
+      aliasIndex += 1;
+      const alias = `[REDACTED_SENSITIVE_FIELD_${aliasIndex}]`;
+      aliasesByCanonicalName.set(key, alias);
+      for (const variant of fieldNameVariants(group.normalizedName)) {
+        replacementEntries.push({ normalizedName: variant, alias });
+      }
+      suppressedFieldCount += group.fields.length;
+    } else {
+      aliasesByCanonicalName.set(key, sanitizeText(group.normalizedName, 120));
+    }
+  }
+  replacementEntries.sort(
+    (left, right) => right.normalizedName.length - left.normalizedName.length,
+  );
+  return { aliasesByCanonicalName, replacementEntries, suppressedFieldCount };
+}
+
+function sanitizeWithFieldPrivacy(
+  value: string,
+  inventory: FieldPrivacyInventory,
+  maximum = MAX_EXCERPT_CHARACTERS,
+): string {
+  let safe = redactCommonSensitiveText(value);
+  if (inventory.replacementEntries.length > 0) {
+    const aliasByVariant = new Map(
+      inventory.replacementEntries.map(({ normalizedName, alias }) => [
+        canonicalFieldName(normalizedName),
+        alias,
+      ]),
+    );
+    const pattern = inventory.replacementEntries
+      .map(({ normalizedName }) => escapedRegex(normalizedName))
+      .join("|");
+    safe = safe.replace(new RegExp(pattern, "giu"), (match) => {
+      return (
+        aliasByVariant.get(canonicalFieldName(match)) ??
+        "[REDACTED_SENSITIVE_FIELD]"
+      );
+    });
+  }
+  return safe.slice(0, maximum);
 }
 
 function sanitizeArtifactText(
@@ -502,17 +635,11 @@ function sanitizeArtifactText(
   manifest: ArtifactManifest,
   maximum = MAX_EXCERPT_CHARACTERS,
 ): string {
-  let safe = sanitizeText(value, maximum);
-  let sensitiveFieldIndex = 0;
-  for (const field of manifest.schemaSummary.fields) {
-    if (!canExposeSchemaField(field.privacyClass)) {
-      sensitiveFieldIndex += 1;
-      safe = safe
-        .split(field.name)
-        .join(`[REDACTED_SENSITIVE_FIELD_${sensitiveFieldIndex}]`);
-    }
-  }
-  return safe;
+  return sanitizeWithFieldPrivacy(
+    value,
+    fieldPrivacyInventory(manifest),
+    maximum,
+  );
 }
 
 function validateAnalystInput(input: BeliefAnalystInput): ArtifactManifest {
@@ -554,28 +681,32 @@ export function buildSanitizedAnalystContext(
 ): SanitizedAnalystContext {
   const manifest = validateAnalystInput(input);
   const conceptPack = getConceptPack(input.concept);
-  const schemaFieldAliases = new Map<string, string>();
-  const sensitiveFieldAliases = new Map<string, string>();
-  let sensitiveFieldIndex = 0;
+  const privacyInventory = fieldPrivacyInventory(manifest);
   const schemaFields = manifest.schemaSummary.fields
     .slice(0, 64)
     .map((field) => {
-      if (canExposeSchemaField(field.privacyClass)) {
-        const safeName = sanitizeText(field.name, 120);
-        schemaFieldAliases.set(field.name, safeName);
+      const canonicalName = canonicalFieldName(field.name);
+      const safeName =
+        privacyInventory.aliasesByCanonicalName.get(canonicalName) ??
+        "[REDACTED_SCHEMA_FIELD]";
+      if (!safeName.startsWith("[REDACTED_SENSITIVE_FIELD_")) {
         return {
           name: safeName,
-          inferredType: sanitizeText(field.inferredType, 120),
+          inferredType: sanitizeWithFieldPrivacy(
+            field.inferredType,
+            privacyInventory,
+            120,
+          ),
           privacyClass: field.privacyClass.trim().toLowerCase(),
         };
       }
-      sensitiveFieldIndex += 1;
-      const alias = `[REDACTED_SENSITIVE_FIELD_${sensitiveFieldIndex}]`;
-      schemaFieldAliases.set(field.name, alias);
-      sensitiveFieldAliases.set(field.name, alias);
       return {
-        name: alias,
-        inferredType: sanitizeText(field.inferredType, 120),
+        name: safeName,
+        inferredType: sanitizeWithFieldPrivacy(
+          field.inferredType,
+          privacyInventory,
+          120,
+        ),
         privacyClass: "sensitive_identifier",
       };
     });
@@ -583,11 +714,7 @@ export function buildSanitizedAnalystContext(
     value: string,
     maximum = MAX_EXCERPT_CHARACTERS,
   ): string => {
-    let safe = sanitizeText(value, maximum);
-    for (const [fieldName, alias] of sensitiveFieldAliases) {
-      safe = safe.split(fieldName).join(alias);
-    }
-    return safe;
+    return sanitizeWithFieldPrivacy(value, privacyInventory, maximum);
   };
   const evidenceCells = manifest.cells
     .filter(
@@ -641,13 +768,15 @@ export function buildSanitizedAnalystContext(
         : { rowCount: manifest.schemaSummary.rowCount }),
       entityCandidates: manifest.schemaSummary.entityCandidates.map(
         (candidate, index) =>
-          schemaFieldAliases.get(candidate) ??
-          `[REDACTED_ENTITY_FIELD_${index + 1}]`,
+          privacyInventory.aliasesByCanonicalName.get(
+            canonicalFieldName(candidate),
+          ) ?? `[REDACTED_ENTITY_FIELD_${index + 1}]`,
       ),
       targetCandidates: manifest.schemaSummary.targetCandidates.map(
         (candidate, index) =>
-          schemaFieldAliases.get(candidate) ??
-          `[REDACTED_TARGET_FIELD_${index + 1}]`,
+          privacyInventory.aliasesByCanonicalName.get(
+            canonicalFieldName(candidate),
+          ) ?? `[REDACTED_TARGET_FIELD_${index + 1}]`,
       ),
       hash: schemaSummaryHash(manifest.schemaSummary),
     },
@@ -664,15 +793,19 @@ export function buildSanitizedAnalystContext(
   return {
     ...projected,
     privacy: {
-      policyVersion: "outbound-privacy-v2",
-      suppressedFieldCount: sensitiveFieldAliases.size,
+      policyVersion: "outbound-privacy-v3",
+      suppressedFieldCount: privacyInventory.suppressedFieldCount,
       redactions: [
         markerCounts("[REDACTED_SECRET]", "secret"),
         markerCounts("[REDACTED_PATH]", "path"),
         markerCounts("[REDACTED_IDENTIFIER]", "identifier"),
         {
           category: "sensitive_field" as const,
-          count: Array.from(sensitiveFieldAliases.values()).reduce(
+          count: Array.from(
+            new Set(
+              privacyInventory.replacementEntries.map(({ alias }) => alias),
+            ),
+          ).reduce(
             (count, marker) => count + serialized.split(marker).length - 1,
             0,
           ),
@@ -1488,5 +1621,49 @@ export function createLiveBeliefAnalystFromEnv(
     ...(overrides.transport === undefined
       ? {}
       : { transport: overrides.transport }),
+  });
+}
+
+export function createLiveLearningDirectorFromEnv(
+  env: Readonly<Record<string, string | undefined>>,
+  input: {
+    registries: LearningDirectorRegistries;
+    sessionId: string;
+  },
+  overrides: { transport?: LearningDirectorTransport } = {},
+): LearningDirectorController {
+  const apiKey = env.OPENAI_API_KEY?.trim();
+  if (
+    (apiKey === undefined || apiKey.length === 0) &&
+    overrides.transport === undefined
+  ) {
+    throw new BeliefAnalystError(
+      "LIVE_UNAVAILABLE",
+      "OPENAI_API_KEY is not configured",
+      { availableAlternatives: ["approved-sample", "verified-replay"] },
+    );
+  }
+  const configuredEffort = env.OPENAI_REASONING_EFFORT?.trim() || "medium";
+  if (!REASONING_EFFORTS.has(configuredEffort as ReasoningEffort)) {
+    throw new BeliefAnalystError(
+      "CONFIGURATION_ERROR",
+      `unsupported OPENAI_REASONING_EFFORT: ${configuredEffort}`,
+      { allowed: [...REASONING_EFFORTS] },
+    );
+  }
+  const baseURL = normalizeResponsesBaseURL(env.OPENAI_BASE_URL);
+  const transport =
+    overrides.transport ??
+    new OpenAILearningDirectorTransport({
+      apiKey: apiKey ?? "",
+      ...(baseURL === undefined ? {} : { baseURL }),
+      timeoutMs: normalizeResponsesTimeout(env.OPENAI_TIMEOUT_MS),
+    });
+  return new LearningDirectorController({
+    transport,
+    registries: input.registries,
+    model: env.OPENAI_MODEL?.trim() || "gpt-5.6",
+    reasoningEffort: configuredEffort as ReasoningEffort,
+    safetyIdentifier: deriveSafetyIdentifier(input.sessionId),
   });
 }

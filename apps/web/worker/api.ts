@@ -12,6 +12,8 @@ import {
   LearnerInteractionInputSchema,
   LearnerInteractionReceiptSchema,
   LearnerInteractionRecordSchema,
+  LearningDirectorClarificationChoiceIdSchema,
+  LearningDirectorSessionStateSchema,
   LeakageTransferSubmissionSchema,
   PatchPlanV1Schema,
   PatchResultSchema,
@@ -73,8 +75,10 @@ import {
 import {
   ApprovedSampleBeliefAnalyst,
   BeliefAnalystError,
+  LearningDirectorError,
   buildSanitizedAnalystContext,
   createLiveBeliefAnalystFromEnv,
+  createLiveLearningDirectorFromEnv,
   requireApplicableClaim,
 } from "@counterlab/belief-analyst";
 import {
@@ -116,6 +120,7 @@ import {
   getSessionBeliefAuthority,
   hashCanonical,
   resolveSessionEvidenceAuthority,
+  type RunnerCallbackClaimToken,
   type RunnerJobRepository,
   type CounterLabSession,
   type SessionRepository,
@@ -278,6 +283,8 @@ type AppBindings = {
   Bindings: WorkerBindings;
   Variables: {
     requestId: string;
+    runnerCallbackClaim:
+      { jobId: string; claim: RunnerCallbackClaimToken } | undefined;
   };
 };
 
@@ -377,6 +384,9 @@ const ConfirmationSchema = z.union([
     })
     .strict(),
 ]);
+const LearningDirectorAnswerSchema = z
+  .object({ answer: LearningDirectorClarificationChoiceIdSchema })
+  .strict();
 const PredictionRequestSchema = z
   .object({
     choice: z.string().trim().min(1).max(300),
@@ -1662,22 +1672,24 @@ async function dispatchRecoverableRunnerJob(input: {
       retryable: true,
     } as const;
     try {
-      const failed = await input.jobs.transition(
+      await input.jobs.failJobWithEvent(
         dispatchJob.jobId,
         dispatchJob.jobVersion,
-        "FAILED",
-        { runnerIdentity: input.dispatcher.identity, error: failure },
+        {
+          runnerIdentity: input.dispatcher.identity,
+          error: failure,
+        },
+        {
+          schemaVersion: "1",
+          eventId: requestId(input.options, "compiler_event"),
+          jobId: dispatchJob.jobId,
+          cursor: dispatchJob.eventCursor + 1,
+          at: requestNow(input.options).toISOString(),
+          kind: "job.failed",
+          code: failure.code,
+          message: failure.message,
+        },
       );
-      await input.jobs.appendEvent(failed.jobId, failed.jobVersion, {
-        schemaVersion: "1",
-        eventId: requestId(input.options, "compiler_event"),
-        jobId: failed.jobId,
-        cursor: failed.eventCursor + 1,
-        at: requestNow(input.options).toISOString(),
-        kind: "job.failed",
-        code: failure.code,
-        message: failure.message,
-      });
     } catch (stateError) {
       if (!(stateError instanceof ConcurrentRunnerJobUpdateError)) {
         console.error("CounterLab could not persist runner dispatch failure", {
@@ -3768,6 +3780,7 @@ async function appendScientificAuthorityEvents(input: {
   jobs: RunnerJobService;
   job: RunnerJob;
   callback: RunnerCallback;
+  callbackClaim?: RunnerCallbackClaimToken | undefined;
   authorityAt: string;
   report: EpistemicVerificationReport;
 }): Promise<number> {
@@ -3812,6 +3825,7 @@ async function appendScientificAuthorityEvents(input: {
       input.job.jobId,
       updated.jobVersion,
       event,
+      input.callbackClaim,
     );
   }
   return updated.eventCursor;
@@ -3821,6 +3835,7 @@ async function appendInteractiveAuthorityEvents(input: {
   jobs: RunnerJobService;
   job: RunnerJob;
   callback: RunnerCallback;
+  callbackClaim?: RunnerCallbackClaimToken | undefined;
   authorityAt: string;
   invariantCount: number;
   resultHash: string;
@@ -3879,6 +3894,7 @@ async function appendInteractiveAuthorityEvents(input: {
       input.job.jobId,
       current.jobVersion,
       event,
+      input.callbackClaim,
     );
   }
   return current.eventCursor;
@@ -3888,6 +3904,7 @@ async function appendBoundaryAuthorityEvents(input: {
   jobs: RunnerJobService;
   job: RunnerJob;
   callback: RunnerCallback;
+  callbackClaim?: RunnerCallbackClaimToken | undefined;
   authorityAt: string;
   report: BoundaryMapVerificationReportV1;
 }): Promise<number> {
@@ -3961,6 +3978,7 @@ async function appendBoundaryAuthorityEvents(input: {
       input.job.jobId,
       current.jobVersion,
       event,
+      input.callbackClaim,
     );
   }
   return current.eventCursor;
@@ -4237,6 +4255,45 @@ function isFile(value: string | File | null): value is File {
   return value !== null && typeof value !== "string";
 }
 
+function learningDirectorRegistries(concept: BeliefSpecV2["concept"]) {
+  const pack = getConceptPack(concept);
+  return {
+    [concept]: pack.scientificMethod.learningDirectorPresentation,
+  };
+}
+
+function learningDirectorPacket(
+  sanitizedContent: ReturnType<typeof buildSanitizedAnalystContext>,
+  clarificationAlreadyUsed: boolean,
+  answer?: string,
+) {
+  const seenHashes = new Set<string>();
+  const approvedEvidence = sanitizedContent.evidence.flatMap((evidence) => {
+    if (seenHashes.has(evidence.sourceHash)) return [];
+    seenHashes.add(evidence.sourceHash);
+    return [{ hash: evidence.sourceHash, excerpt: evidence.sourceExcerpt }];
+  });
+  return {
+    concept: sanitizedContent.concept,
+    subjectPackVersion: sanitizedContent.conceptPack.version,
+    approvedEvidence,
+    candidateExperimentIds: [
+      ...sanitizedContent.conceptPack.candidateExperimentIds,
+    ],
+    clarificationAlreadyUsed,
+    ...(answer === undefined ? {} : { answer }),
+  };
+}
+
+function approvedLiveReasoningPackets(
+  sanitizedContent: ReturnType<typeof buildSanitizedAnalystContext>,
+) {
+  return {
+    beliefAnalyst: sanitizedContent,
+    learningDirector: learningDirectorPacket(sanitizedContent, false),
+  };
+}
+
 async function statePayload(
   context: Context<AppBindings>,
   session: Awaited<ReturnType<SessionService["getSession"]>>,
@@ -4267,6 +4324,9 @@ async function statePayload(
     ...(session.beliefSpec === undefined
       ? {}
       : { beliefSpec: session.beliefSpec }),
+    ...(session.learningDirector === undefined
+      ? {}
+      : { learningDirector: session.learningDirector }),
     ...(session.prediction === undefined
       ? {}
       : { prediction: session.prediction }),
@@ -5107,15 +5167,18 @@ export function createApi(options: ApiOptions = {}) {
       manifest: artifact.manifest,
       concept: routing.concept,
     });
+    const outboundPackets = approvedLiveReasoningPackets(sanitizedContent);
     return context.json(
       jsonSuccess({
         schemaVersion: "1" as const,
         concept: routing.concept,
         conceptTitle: getConceptPack(routing.concept).title,
-        previewHash: await hashCanonical(sanitizedContent),
+        previewHash: await hashCanonical(outboundPackets),
         requiresSensitiveApproval:
+          sanitizedContent.privacy.suppressedFieldCount > 0 ||
           sanitizedContent.privacy.redactions.length > 0,
         sanitizedContent,
+        learningDirectorPacket: outboundPackets.learningDirector,
       }),
     );
   });
@@ -5223,7 +5286,8 @@ export function createApi(options: ApiOptions = {}) {
         manifest: artifact.manifest,
         concept: routing.concept,
       });
-      const expectedPreviewHash = await hashCanonical(sanitizedContent);
+      const outboundPackets = approvedLiveReasoningPackets(sanitizedContent);
+      const expectedPreviewHash = await hashCanonical(outboundPackets);
       if (input.previewHash !== expectedPreviewHash) {
         throw new ApiInputError(
           "SANITIZED_PREVIEW_REQUIRED",
@@ -5232,6 +5296,7 @@ export function createApi(options: ApiOptions = {}) {
         );
       }
       const containsSensitiveRedaction =
+        sanitizedContent.privacy.suppressedFieldCount > 0 ||
         sanitizedContent.privacy.redactions.length > 0;
       if (
         containsSensitiveRedaction &&
@@ -5282,7 +5347,7 @@ export function createApi(options: ApiOptions = {}) {
           manifest: artifact.manifest,
           concept: routing.concept,
         });
-        const proposed = await service.proposeBeliefSpecV2(
+        let proposed = await service.proposeBeliefSpecV2(
           session.id,
           result.beliefSpec,
           {
@@ -5291,6 +5356,41 @@ export function createApi(options: ApiOptions = {}) {
             promptHash: result.provenance.promptHash,
           },
         );
+        if (result.beliefSpec.supportState === "SUPPORTED") {
+          try {
+            const directorResult = await createLiveLearningDirectorFromEnv(
+              {
+                OPENAI_API_KEY: context.env?.OPENAI_API_KEY,
+                OPENAI_BASE_URL: context.env?.OPENAI_BASE_URL,
+                OPENAI_MODEL: context.env?.OPENAI_MODEL,
+                OPENAI_REASONING_EFFORT: context.env?.OPENAI_REASONING_EFFORT,
+                OPENAI_TIMEOUT_MS: context.env?.OPENAI_TIMEOUT_MS,
+              },
+              {
+                registries: learningDirectorRegistries(
+                  result.beliefSpec.concept,
+                ),
+                sessionId: session.id,
+              },
+            ).decide(outboundPackets.learningDirector);
+            proposed = await service.recordLearningDirector(
+              session.id,
+              LearningDirectorSessionStateSchema.parse({
+                schemaVersion: "1",
+                beliefSpecHash: await hashCanonical(result.beliefSpec),
+                approvedPacketHash: expectedPreviewHash,
+                subjectPackVersion:
+                  outboundPackets.learningDirector.subjectPackVersion,
+                clarificationUsed:
+                  directorResult.decision.status === "CLARIFICATION_REQUIRED",
+                decision: directorResult.decision,
+                provenance: directorResult.provenance,
+              }),
+            );
+          } catch (error) {
+            if (!(error instanceof LearningDirectorError)) throw error;
+          }
+        }
         return context.json(
           jsonSuccess(await statePayload(context, proposed, options)),
         );
@@ -5325,6 +5425,114 @@ export function createApi(options: ApiOptions = {}) {
     return context.json(
       jsonSuccess(await statePayload(context, proposed, options)),
     );
+  });
+
+  app.post("/api/sessions/:sessionId/learning-director", async (context) => {
+    const input = LearningDirectorAnswerSchema.parse(await readJson(context));
+    const service = sessionService(context, options);
+    const sessionId = context.req.param("sessionId");
+    const current = await service.getSession(sessionId);
+    requireMutableSession(current);
+    const directorState = current.learningDirector;
+    if (
+      current.state !== "BELIEF_TEST_PROPOSED" ||
+      current.mode.kind !== "live_notebook" ||
+      current.beliefSpec === undefined ||
+      directorState?.decision.status !== "CLARIFICATION_REQUIRED"
+    ) {
+      throw new ApiInputError(
+        "LEARNING_DIRECTOR_NOT_AWAITING_ANSWER",
+        "This investigation is not awaiting a Learning Director clarification",
+        409,
+      );
+    }
+    if (!directorState.decision.choices.includes(input.answer)) {
+      throw new ApiInputError(
+        "LEARNING_DIRECTOR_ANSWER_INVALID",
+        "Choose one of the fixed clarification answers",
+        400,
+      );
+    }
+    const artifact = await artifacts(context, options).find(current.artifactId);
+    if (artifact === undefined) {
+      throw new ApiInputError(
+        "ARTIFACT_NOT_FOUND",
+        "Session artifact was not found",
+        404,
+      );
+    }
+    const sanitizedContent = buildSanitizedAnalystContext({
+      sessionId,
+      learnerClaim: current.beliefSpec.claim,
+      manifest: artifact.manifest,
+      concept: current.beliefSpec.concept,
+    });
+    const approvedPackets = approvedLiveReasoningPackets(sanitizedContent);
+    if (
+      (await hashCanonical(approvedPackets)) !==
+      directorState.approvedPacketHash
+    ) {
+      throw new ApiInputError(
+        "LEARNING_DIRECTOR_PACKET_CHANGED",
+        "The approved Learning Director packet no longer matches this investigation",
+        409,
+      );
+    }
+
+    const answerHash = await hashCanonical(input.answer);
+    const operationKey = `${sessionId}:director:${answerHash}`;
+    const admission = await admitOperation(context, options, {
+      kind: "analyst",
+      sessionId,
+      operationKey,
+    });
+    if (admission.leaseStatus === "already-active") {
+      throw new ApiInputError(
+        "ANALYST_IN_PROGRESS",
+        "This Learning Director answer is already being processed",
+        409,
+        true,
+        1,
+      );
+    }
+    try {
+      const result = await createLiveLearningDirectorFromEnv(
+        {
+          OPENAI_API_KEY: context.env?.OPENAI_API_KEY,
+          OPENAI_BASE_URL: context.env?.OPENAI_BASE_URL,
+          OPENAI_MODEL: context.env?.OPENAI_MODEL,
+          OPENAI_REASONING_EFFORT: context.env?.OPENAI_REASONING_EFFORT,
+          OPENAI_TIMEOUT_MS: context.env?.OPENAI_TIMEOUT_MS,
+        },
+        {
+          registries: learningDirectorRegistries(current.beliefSpec.concept),
+          sessionId,
+        },
+      ).decide(learningDirectorPacket(sanitizedContent, true, input.answer));
+      const updated = await service.recordLearningDirector(
+        sessionId,
+        LearningDirectorSessionStateSchema.parse({
+          schemaVersion: "1",
+          beliefSpecHash: directorState.beliefSpecHash,
+          approvedPacketHash: directorState.approvedPacketHash,
+          subjectPackVersion: directorState.subjectPackVersion,
+          clarificationUsed: true,
+          decision: result.decision,
+          provenance: result.provenance,
+        }),
+        { clarificationAnswerHash: answerHash },
+      );
+      return context.json(
+        jsonSuccess(await statePayload(context, updated, options)),
+      );
+    } finally {
+      await releaseAdmissionBestEffort(
+        context,
+        options,
+        "analyst",
+        operationKey,
+      );
+    }
   });
 
   app.post("/api/sessions/:sessionId/belief-test/confirm", async (context) => {
@@ -5993,6 +6201,7 @@ export function createApi(options: ApiOptions = {}) {
   app.put("/api/runner/jobs/:jobId/outputs/:generatedPath", async (context) => {
     const jobId = context.req.param("jobId");
     const { claims, job } = await authorizeRunner(context, options, jobId);
+    const jobs = runnerJobService(context, options);
     if (job.status !== "RUNNING" && job.status !== "REPAIRING") {
       throw new ApiInputError(
         "RUNNER_JOB_NOT_ACTIVE",
@@ -6071,24 +6280,36 @@ export function createApi(options: ApiOptions = {}) {
         403,
       );
     }
-    const body = await readBoundedText(
-      context,
-      generatedPath.endsWith(".ipynb") ? maxNotebookBytes(context) : 1_048_576,
+    const outputClaim = await jobs.claimOutputWrite(
+      jobId,
+      job.jobVersion,
+      context.get("requestId"),
+      generatedPath,
     );
-    const contentType = generatedPath.endsWith(".json")
-      ? "application/json"
-      : generatedPath.endsWith(".ipynb")
-        ? "application/x-ipynb+json; charset=utf-8"
-        : "text/markdown; charset=utf-8";
-    await runnerObjectStore(context, options).put(
-      `${claims.outputPrefix}${generatedPath}`,
-      body,
-      contentType,
-    );
-    return context.json(
-      jsonSuccess({ path: generatedPath, sha256: await sha256Text(body) }),
-      201,
-    );
+    try {
+      const body = await readBoundedText(
+        context,
+        generatedPath.endsWith(".ipynb")
+          ? maxNotebookBytes(context)
+          : 1_048_576,
+      );
+      const contentType = generatedPath.endsWith(".json")
+        ? "application/json"
+        : generatedPath.endsWith(".ipynb")
+          ? "application/x-ipynb+json; charset=utf-8"
+          : "text/markdown; charset=utf-8";
+      await runnerObjectStore(context, options).put(
+        `${claims.outputPrefix}${generatedPath}`,
+        body,
+        contentType,
+      );
+      return context.json(
+        jsonSuccess({ path: generatedPath, sha256: await sha256Text(body) }),
+        201,
+      );
+    } finally {
+      await jobs.releaseOutputWriteClaim(jobId, outputClaim.claim);
+    }
   });
 
   app.post("/api/runner/jobs/:jobId/resume", async (context) => {
@@ -6872,7 +7093,7 @@ export function createApi(options: ApiOptions = {}) {
   app.post("/api/runner/jobs/:jobId/callback", async (context) => {
     const jobId = context.req.param("jobId");
     const callbackPath = `/api/runner/jobs/${jobId}/callback`;
-    const { claims, job } = await authorizeRunner(
+    const { claims } = await authorizeRunner(
       context,
       options,
       jobId,
@@ -6886,6 +7107,18 @@ export function createApi(options: ApiOptions = {}) {
         403,
       );
     }
+    const jobs = runnerJobService(context, options);
+    const claimedCallback = await jobs.claimCallback(
+      callback,
+      context.get("requestId"),
+    );
+    const job = claimedCallback.job;
+    const callbackClaim = claimedCallback.duplicate
+      ? undefined
+      : claimedCallback.claim;
+    if (callbackClaim !== undefined) {
+      context.set("runnerCallbackClaim", { jobId, claim: callbackClaim });
+    }
     const service = sessionService(context, options);
     const currentSession = await service.getSession(job.sessionId);
     if (
@@ -6896,6 +7129,29 @@ export function createApi(options: ApiOptions = {}) {
         "RUNNER_CALLBACK_SESSION_MISMATCH",
         "Runner callback does not match a live artifact session",
         409,
+      );
+    }
+    const storedLabAuthority = HostedExperimentLineageV5Schema.safeParse(
+      currentSession.labVerification,
+    );
+    const storedPlanAuthority = HostedPlanLineageSchema.safeParse(
+      currentSession.labVerification,
+    );
+    const callbackAlreadyProjected =
+      (storedLabAuthority.success && storedLabAuthority.data.jobId === jobId) ||
+      (storedPlanAuthority.success &&
+        storedPlanAuthority.data.jobId === jobId) ||
+      currentSession.resultAuthority?.jobId === jobId ||
+      currentSession.boundaryMapAuthority?.jobId === jobId ||
+      currentSession.patchAuthority?.jobId === jobId;
+    if (claimedCallback.duplicate && callbackAlreadyProjected) {
+      return context.json(
+        jsonSuccess({
+          duplicate: true as const,
+          runnerJob: job,
+          session: await statePayload(context, currentSession, options),
+          verification: null,
+        }),
       );
     }
 
@@ -7127,6 +7383,7 @@ export function createApi(options: ApiOptions = {}) {
               jobs,
               job: scientificRunJob,
               callback,
+              callbackClaim,
               authorityAt: requestNow(options).toISOString(),
               report: boundaryMapAuthority.report,
             });
@@ -7169,6 +7426,7 @@ export function createApi(options: ApiOptions = {}) {
               jobs,
               job: scientificRunJob,
               callback,
+              callbackClaim,
               authorityAt: requestNow(options).toISOString(),
               invariantCount:
                 scientificInteractiveAuthority.report.invariantCount,
@@ -7249,6 +7507,7 @@ export function createApi(options: ApiOptions = {}) {
               jobs,
               job: scientificRunJob,
               callback,
+              callbackClaim,
               authorityAt: requestNow(options).toISOString(),
               report: epistemicAuthority.report,
             });
@@ -7746,9 +8005,11 @@ export function createApi(options: ApiOptions = {}) {
       }
     }
 
-    const completed = await runnerJobService(context, options).recordCallback(
+    const completed = await jobs.recordCallback(
       terminalCallback,
+      callbackClaim,
     );
+    context.set("runnerCallbackClaim", undefined);
     await releaseAdmissionBestEffort(
       context,
       options,
@@ -10635,7 +10896,19 @@ export function createApi(options: ApiOptions = {}) {
     ),
   );
 
-  app.onError((error, context) => {
+  app.onError(async (error, context) => {
+    const callbackClaim = context.get("runnerCallbackClaim");
+    if (callbackClaim !== undefined) {
+      context.set("runnerCallbackClaim", undefined);
+      try {
+        await runnerJobService(context, options).releaseCallbackClaim(
+          callbackClaim.jobId,
+          callbackClaim.claim,
+        );
+      } catch {
+        // Preserve the request error; the persisted claim remains observable.
+      }
+    }
     if (error instanceof ApiInputError) {
       if (error.retryAfterSeconds !== undefined) {
         context.header("retry-after", String(error.retryAfterSeconds));
@@ -10741,6 +11014,25 @@ export function createApi(options: ApiOptions = {}) {
         : error.message;
       return context.json(jsonError(error.code, message, status), {
         status: status as 400,
+      });
+    }
+    if (error instanceof LearningDirectorError) {
+      const status =
+        error.code === "INVALID_INPUT" ||
+        error.code === "INVALID_RESPONSE" ||
+        error.code === "UNREGISTERED_REFERENCE" ||
+        error.code === "CLARIFICATION_ALREADY_USED" ||
+        error.code === "TOOLS_REQUIRED" ||
+        error.code === "TOOL_CALL_LIMIT" ||
+        error.code === "TURN_LIMIT" ||
+        error.code === "DUPLICATE_TOOL_CALL_ID" ||
+        error.code === "UNKNOWN_TOOL" ||
+        error.code === "MALFORMED_TOOL_CALL" ||
+        error.code === "TOOL_ARGUMENT_REJECTED"
+          ? 422
+          : 503;
+      return context.json(jsonError(error.code, error.message, status), {
+        status: status as 422,
       });
     }
     console.error("CounterLab Worker request failed", {

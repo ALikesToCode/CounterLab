@@ -550,7 +550,7 @@ describe("privacy-preserving analyst input", () => {
     expect(serialized).toContain("[REDACTED_SENSITIVE_FIELD_1]");
     expect(serialized).toContain("[REDACTED_SENSITIVE_FIELD_2]");
     expect(context.privacy).toMatchObject({
-      policyVersion: "outbound-privacy-v2",
+      policyVersion: "outbound-privacy-v3",
       suppressedFieldCount: 2,
     });
     expect(context.privacy.redactions).toContainEqual(
@@ -589,6 +589,88 @@ describe("privacy-preserving analyst input", () => {
     expect(context.privacy.redactions).toContainEqual(
       expect.objectContaining({ category: "identifier" }),
     );
+  });
+
+  it("discovers sensitive fields beyond the 64-field projection cap", () => {
+    const artifact = manifest();
+    artifact.schemaSummary.fields = [
+      ...Array.from({ length: 64 }, (_, index) => ({
+        name: `public_feature_${index}`,
+        inferredType: "number",
+        privacyClass: "feature",
+      })),
+      {
+        name: "SchoolRecordKey",
+        inferredType: "string",
+        privacyClass: "identifier",
+      },
+    ];
+    artifact.schemaSummary.entityCandidates = ["schoolrecordkey"];
+    artifact.schemaSummary.targetCandidates = [];
+    artifact.cells[0]!.sourceExcerpt = "schoolrecordkey = row.SCHOOLRECORDKEY";
+    artifact.cells[0]!.symbols = ["SchoolRecordKey"];
+
+    const context = buildSanitizedAnalystContext({
+      sessionId: "session_1",
+      learnerClaim: "Does SCHOOLRECORDKEY affect generalization?",
+      manifest: artifact,
+      concept: "entity_leakage",
+    });
+    const serialized = JSON.stringify(context);
+
+    expect(context.schemaSummary.fields).toHaveLength(64);
+    expect(context.privacy.suppressedFieldCount).toBe(1);
+    expect(serialized.toLocaleLowerCase()).not.toContain("schoolrecordkey");
+    expect(serialized).toContain("[REDACTED_SENSITIVE_FIELD_1]");
+  });
+
+  it("normalizes Unicode field aliases and redacts them before truncation", () => {
+    const artifact = manifest();
+    const fullWidthField = "ＳｃｈｏｏｌＲｅｃｏｒｄＫｅｙ";
+    artifact.schemaSummary.fields.push({
+      name: fullWidthField,
+      inferredType: "lookup for schoolrecordkey",
+      privacyClass: "identifier",
+    });
+    artifact.cells[0]!.sourceExcerpt = `${"x".repeat(690)} SCHOOLRECORDKEY`;
+    artifact.cells[0]!.symbols.push("schoolrecordkey");
+    artifact.cells[0]!.metricCandidates[0]!.name = "schoolrecordkey_accuracy";
+
+    const context = buildSanitizedAnalystContext({
+      sessionId: "session_1",
+      learnerClaim: "Does schoolrecordkey change generalization?",
+      manifest: artifact,
+      concept: "entity_leakage",
+    });
+    const serialized = JSON.stringify(context);
+
+    expect(serialized).not.toContain(fullWidthField);
+    expect(serialized.toLocaleLowerCase()).not.toContain("schoolrecordkey");
+    expect(context.evidence[0]!.sourceExcerpt.length).toBeLessThanOrEqual(700);
+    expect(context.privacy.suppressedFieldCount).toBe(2);
+  });
+
+  it("redacts multi-codepoint case variants of sensitive field names", () => {
+    const artifact = manifest();
+    artifact.schemaSummary.fields.push({
+      name: "İD",
+      inferredType: "string",
+      privacyClass: "identifier",
+    });
+    artifact.cells[0]!.sourceExcerpt = "i\u0307d = row.i\u0307d";
+    artifact.cells[0]!.symbols.push("i\u0307d");
+
+    const context = buildSanitizedAnalystContext({
+      sessionId: "session_1",
+      learnerClaim: "Does i\u0307d affect generalization?",
+      manifest: artifact,
+      concept: "entity_leakage",
+    });
+    const serialized = JSON.stringify(context);
+
+    expect(serialized).not.toContain("i\u0307d");
+    expect(serialized).not.toContain("İD");
+    expect(serialized).toContain("[REDACTED_SENSITIVE_FIELD_");
   });
 });
 
