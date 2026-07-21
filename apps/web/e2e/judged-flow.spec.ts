@@ -15,6 +15,7 @@ import {
   ReasoningDiffV2Schema,
 } from "@counterlab/contracts";
 import { createHash } from "node:crypto";
+import type { Request } from "@playwright/test";
 import { lstat, readFile, realpath, writeFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 
@@ -925,6 +926,28 @@ function waitForPostResponse(page: Page, routeSuffix: string) {
       new URL(response.url()).pathname.endsWith(routeSuffix)
     );
   });
+}
+
+function trackNetworkQuiescence(page: Page): () => Promise<void> {
+  const active = new Set<Request>();
+  page.on("request", (request) => active.add(request));
+  page.on("requestfinished", (request) => active.delete(request));
+  page.on("requestfailed", (request) => active.delete(request));
+
+  return async () => {
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      if (active.size === 0) {
+        await page.waitForTimeout(500);
+        if (active.size === 0) return;
+      } else {
+        await page.waitForTimeout(50);
+      }
+    }
+    throw new Error(
+      `Browser network did not become quiescent (${active.size} request(s) remain)`,
+    );
+  };
 }
 
 async function commitAndOpenResult(page: Page) {
@@ -1979,26 +2002,39 @@ test("the fixed sample keeps approved framing and can return home", async ({
 test("refresh restores the question and confirmed Prediction phases", async ({
   page,
 }) => {
+  const waitForNetworkQuiescence = trackNetworkQuiescence(page);
   await reset(page);
+  const sampleSessionCreated = waitForPostResponse(
+    page,
+    "/api/sample/sessions",
+  );
   await page.getByRole("button", { name: /Try verified sample/i }).click();
+  expect((await sampleSessionCreated).ok()).toBe(true);
   await expect(
     page.getByRole("heading", { name: /What do you think the score means/i }),
   ).toBeVisible();
+  await waitForNetworkQuiescence();
   await page.reload();
   await expect(
     page.getByRole("heading", { name: /What do you think the score means/i }),
   ).toBeVisible();
 
+  const beliefProposed = waitForPostResponse(page, "/belief-test");
   await page.getByRole("button", { name: /Compare two explanations/i }).click();
+  expect((await beliefProposed).ok()).toBe(true);
+  await waitForNetworkQuiescence();
   await page.reload();
   await expect(
     page.getByRole("heading", {
       name: /Does your current explanation capture what you mean/i,
     }),
   ).toBeVisible();
+  const beliefConfirmed = waitForPostResponse(page, "/belief-test/confirm");
   await page
     .getByRole("button", { name: /Yes, this captures my view/i })
     .click();
+  expect((await beliefConfirmed).ok()).toBe(true);
+  await waitForNetworkQuiescence();
   await page.reload();
   await expect(
     page.getByRole("heading", {
@@ -2010,7 +2046,11 @@ test("refresh restores the question and confirmed Prediction phases", async ({
 test("refresh restores the current lesson and the committed prediction", async ({
   page,
 }) => {
+  const waitForNetworkQuiescence = trackNetworkQuiescence(page);
+  const beliefConfirmed = waitForPostResponse(page, "/belief-test/confirm");
   await startInstant(page);
+  expect((await beliefConfirmed).ok()).toBe(true);
+  await waitForNetworkQuiescence();
   await page.reload();
   await expect(
     page.getByRole("heading", {
@@ -2022,7 +2062,7 @@ test("refresh restores the current lesson and the committed prediction", async (
   const compileFinished = waitForPostResponse(page, "/lab/compile");
   await page.getByRole("button", { name: /Seal my prediction/i }).click();
   expect((await compileFinished).ok()).toBe(true);
-  await page.waitForLoadState("networkidle");
+  await waitForNetworkQuiescence();
   await page.reload();
   await expect(
     page.getByRole("heading", { name: /The fair test is ready/i }),
@@ -2035,6 +2075,7 @@ test("refresh restores the current lesson and the committed prediction", async (
   ).toBeVisible();
   await authorResultInterpretation(page);
 
+  await waitForNetworkQuiescence();
   await page.reload();
 
   await expect(
@@ -2048,7 +2089,10 @@ test("refresh restores the current lesson and the committed prediction", async (
   ).toBeVisible();
   await authorResultInterpretation(page);
 
+  const revisionRecorded = waitForPostResponse(page, "/revision");
   await recordRevision(page);
+  expect((await revisionRecorded).ok()).toBe(true);
+  await waitForNetworkQuiescence();
   await page.reload();
   await expect(
     page.getByRole("heading", { name: /Try your rule on forecasting/i }),
@@ -2056,18 +2100,24 @@ test("refresh restores the current lesson and the committed prediction", async (
   await page.getByLabel(/Time-ordered holdout/i).check();
   await page.getByLabel(/Centered rolling target/i).check();
   await selectLeakageTransferEvidence(page);
+  const transferEvaluated = waitForPostResponse(page, "/transfer");
   await page.getByRole("button", { name: /Check transfer/i }).click();
+  expect((await transferEvaluated).ok()).toBe(true);
   await expect(
     page.locator(".eyebrow", { hasText: "Transfer passed" }),
   ).toBeVisible();
+  await waitForNetworkQuiescence();
   await page.reload();
   await expect(
     page.getByRole("heading", {
       name: /This fixed forecasting transfer passed/i,
     }),
   ).toBeVisible();
+  const patchStarted = waitForPostResponse(page, "/patch/compile");
   await page.getByRole("button", { name: /Verify notebook patch/i }).click();
+  expect((await patchStarted).ok()).toBe(true);
   await waitForSamplePatch(page);
+  await waitForNetworkQuiescence();
   await page.reload();
   await expect(
     page.getByRole("heading", {
@@ -2078,7 +2128,11 @@ test("refresh restores the current lesson and the committed prediction", async (
 
 test("a rejected test releases no result and remains recoverable after refresh", async ({
   page,
-}) => {
+}, testInfo) => {
+  testInfo.annotations.push({
+    type: "counterlab-expected-http-errors",
+    description: "409 POST /api/sessions/:sessionId/lab/compile",
+  });
   await page.route("**/api/sessions/*/lab/compile", async (route) => {
     await route.fulfill({
       status: 409,

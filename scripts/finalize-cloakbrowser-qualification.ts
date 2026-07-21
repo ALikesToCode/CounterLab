@@ -165,6 +165,37 @@ export function buildCloakBrowserQualification(input: {
   }
   const rawRunCanonicalSha256 = sha256(canonicalJson(rawRun));
   const browserVersion = rawRun.journeys[0]!.browserVersion;
+  const errorTotals = rawRun.journeys.reduce(
+    (aggregate, journey) => ({
+      totalConsoleErrors:
+        aggregate.totalConsoleErrors + journey.totalConsoleErrors,
+      expectedHttpResourceConsoleErrors:
+        aggregate.expectedHttpResourceConsoleErrors +
+        journey.expectedHttpResourceConsoleErrors,
+      unexpectedConsoleErrors:
+        aggregate.unexpectedConsoleErrors + journey.unexpectedConsoleErrors,
+      expectedHttpErrorResponses:
+        aggregate.expectedHttpErrorResponses +
+        journey.expectedHttpErrorResponses.length,
+      observedHttpErrorResponses:
+        aggregate.observedHttpErrorResponses +
+        journey.observedHttpErrorResponses.length,
+      unexpectedHttpErrorResponses:
+        aggregate.unexpectedHttpErrorResponses +
+        journey.unexpectedHttpErrorResponses,
+      unexpectedFailedRequests:
+        aggregate.unexpectedFailedRequests + journey.unexpectedFailedRequests,
+    }),
+    {
+      totalConsoleErrors: 0,
+      expectedHttpResourceConsoleErrors: 0,
+      unexpectedConsoleErrors: 0,
+      expectedHttpErrorResponses: 0,
+      observedHttpErrorResponses: 0,
+      unexpectedHttpErrorResponses: 0,
+      unexpectedFailedRequests: 0,
+    },
+  );
   if (
     manualManifest.baseUrl !== rawRun.baseUrl ||
     canonicalJson(manualManifest.release) !== canonicalJson(release) ||
@@ -204,8 +235,13 @@ export function buildCloakBrowserQualification(input: {
       attempt: 0,
       durationMs: raw.durationMs,
       assertionCount: raw.assertionCount,
-      consoleErrors: 0,
-      failedRequests: 0,
+      totalConsoleErrors: raw.totalConsoleErrors,
+      expectedHttpResourceConsoleErrors: raw.expectedHttpResourceConsoleErrors,
+      unexpectedConsoleErrors: raw.unexpectedConsoleErrors,
+      expectedHttpErrorResponses: raw.expectedHttpErrorResponses,
+      observedHttpErrorResponses: raw.observedHttpErrorResponses,
+      unexpectedHttpErrorResponses: raw.unexpectedHttpErrorResponses,
+      unexpectedFailedRequests: raw.unexpectedFailedRequests,
     });
     const file = generatedFile(
       `cloakbrowser-journeys/${String(index + 1).padStart(2, "0")}.json`,
@@ -223,7 +259,7 @@ export function buildCloakBrowserQualification(input: {
   });
 
   const executionReport = CloakBrowserExecutionReportSchema.parse({
-    schemaVersion: "2",
+    schemaVersion: "3",
     kind: "cloakbrowser-execution-report",
     status: "PASSED",
     checkedAt,
@@ -239,8 +275,7 @@ export function buildCloakBrowserQualification(input: {
     failures: 0,
     skips: 0,
     retries: 0,
-    consoleErrors: 0,
-    failedRequests: 0,
+    ...errorTotals,
   });
   const executionReportFile = generatedFile(
     "cloakbrowser-playwright-report.json",
@@ -318,8 +353,7 @@ export function buildCloakBrowserQualification(input: {
     touchTargetsComplete: true,
     requiredSkips: 0,
     failures: 0,
-    consoleErrors: 0,
-    failedRequests: 0,
+    ...errorTotals,
     webVitals: {
       lcpMs: webVitals.lcpMs,
       cls: webVitals.cls,

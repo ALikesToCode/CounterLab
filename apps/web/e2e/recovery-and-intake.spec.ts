@@ -281,7 +281,11 @@ test("live intake cannot continue without an uploaded supported artifact", async
 
 test("malformed live upload remains at intake and creates no session", async ({
   page,
-}) => {
+}, testInfo) => {
+  testInfo.annotations.push({
+    type: "counterlab-expected-http-errors",
+    description: "422 POST /api/artifacts",
+  });
   let sessionCreationRequests = 0;
   page.on("request", (request) => {
     if (isPostTo(request.url(), request.method(), "/api/live/sessions")) {

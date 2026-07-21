@@ -18,9 +18,11 @@ import type {
 import { z } from "zod";
 
 import {
+  ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS,
   ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES,
   CloakBrowserRawRunSchema,
   PublicationReleaseBindingSchema,
+  REQUIRED_CLOAK_EXPECTED_HTTP_ERRORS_BY_ID,
   REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID,
   REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID,
   REQUIRED_CLOAK_JOURNEY_IDS,
@@ -33,7 +35,7 @@ export const JOURNEY_OBSERVATION_ATTACHMENT =
 
 const PageObservationSchema = z
   .object({
-    schemaVersion: z.literal("3"),
+    schemaVersion: z.literal("4"),
     authority: z.enum(["CLOAK_CDP_ENDPOINT", "stock-chromium-design-review"]),
     viewport: z
       .object({
@@ -41,12 +43,22 @@ const PageObservationSchema = z
         height: z.number().int().positive().max(8_192),
       })
       .strict(),
-    consoleErrors: z.number().int().nonnegative(),
+    totalConsoleErrors: z.number().int().nonnegative(),
+    expectedHttpResourceConsoleErrors: z.number().int().nonnegative(),
+    unexpectedConsoleErrors: z.number().int().nonnegative(),
+    expectedHttpErrorResponses: z
+      .array(z.enum(ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS))
+      .max(ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS.length),
+    observedHttpErrorResponses: z
+      .array(z.enum(ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS))
+      .max(ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS.length),
+    unexpectedHttpErrorResponses: z.number().int().nonnegative(),
+    expectedHttpResponsesMatched: z.boolean(),
     expectedRequestFailures: z
       .array(z.enum(ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES))
       .max(ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES.length),
     expectedFailedRequests: z.number().int().nonnegative(),
-    failedRequests: z.number().int().nonnegative(),
+    unexpectedFailedRequests: z.number().int().nonnegative(),
     observedRequestFailures: z
       .array(z.enum(ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES))
       .max(ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES.length),
@@ -66,10 +78,15 @@ export interface CapturedJourney {
   durationMs: number;
   assertionCount: number;
   viewport: string;
-  consoleErrors: number;
+  totalConsoleErrors: number;
+  expectedHttpResourceConsoleErrors: number;
+  unexpectedConsoleErrors: number;
+  expectedHttpErrorResponses: readonly (typeof ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS)[number][];
+  observedHttpErrorResponses: readonly (typeof ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS)[number][];
+  unexpectedHttpErrorResponses: number;
   expectedRequestFailures: readonly (typeof ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES)[number][];
   expectedFailedRequests: number;
-  failedRequests: number;
+  unexpectedFailedRequests: number;
   observedRequestFailures: readonly (typeof ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES)[number][];
   observedFailedRequests: number;
   browserVersion: string;
@@ -107,6 +124,9 @@ const expectedProductionOrigin =
 const allowedExpectedRequestFailures: ReadonlySet<string> = new Set(
   ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES,
 );
+const allowedExpectedHttpErrors: ReadonlySet<string> = new Set(
+  ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS,
+);
 
 export function summarizeRequestFailures(
   observed: readonly string[],
@@ -140,6 +160,152 @@ export function summarizeRequestFailures(
         allowedExpectedRequestFailures.has(failure),
     ),
     unexpectedCount: remaining.length,
+  };
+}
+
+type AllowedExpectedHttpError =
+  (typeof ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS)[number];
+
+export interface ExpectedHttpErrorObservation {
+  signature: AllowedExpectedHttpError;
+  ephemeralCorrelationKey: string;
+}
+
+function normalizedExpectedHttpPath(pathname: string): string {
+  if (pathname === "/api/artifacts") return pathname;
+  if (/^\/api\/sessions\/[^/]+\/lab\/compile$/u.test(pathname)) {
+    return "/api/sessions/:sessionId/lab/compile";
+  }
+  return pathname;
+}
+
+export function classifyExpectedHttpErrorObservation(input: {
+  expectedOrigin: string;
+  method: string;
+  status: number;
+  url: string;
+}): ExpectedHttpErrorObservation | null {
+  let url: URL;
+  try {
+    url = new URL(input.url);
+  } catch {
+    return null;
+  }
+  if (
+    url.origin !== input.expectedOrigin ||
+    url.search !== "" ||
+    url.hash !== ""
+  ) {
+    return null;
+  }
+  const signature = `${input.status} ${input.method.toUpperCase()} ${normalizedExpectedHttpPath(url.pathname)}`;
+  if (!allowedExpectedHttpErrors.has(signature)) return null;
+  return {
+    signature: signature as AllowedExpectedHttpError,
+    ephemeralCorrelationKey: `${input.status} ${input.method.toUpperCase()} ${url.origin}${url.pathname}`,
+  };
+}
+
+export function classifyExpectedHttpError(input: {
+  expectedOrigin: string;
+  method: string;
+  status: number;
+  url: string;
+}): AllowedExpectedHttpError | null {
+  return classifyExpectedHttpErrorObservation(input)?.signature ?? null;
+}
+
+export function classifyExpectedHttpResourceConsoleObservation(input: {
+  expectedOrigin: string;
+  locationUrl: string;
+  text: string;
+}): ExpectedHttpErrorObservation | null {
+  const match =
+    /^Failed to load resource: the server responded with a status of (\d{3})(?:\s|$)/u.exec(
+      input.text,
+    );
+  if (match?.[1] === undefined) return null;
+  const status = Number.parseInt(match[1], 10);
+  for (const method of ["POST"] as const) {
+    const classified = classifyExpectedHttpErrorObservation({
+      expectedOrigin: input.expectedOrigin,
+      method,
+      status,
+      url: input.locationUrl,
+    });
+    if (classified !== null) return classified;
+  }
+  return null;
+}
+
+export function classifyExpectedHttpResourceConsoleError(input: {
+  expectedOrigin: string;
+  locationUrl: string;
+  text: string;
+}): AllowedExpectedHttpError | null {
+  return (
+    classifyExpectedHttpResourceConsoleObservation(input)?.signature ?? null
+  );
+}
+
+export function summarizeExpectedHttpErrors(
+  observed: readonly (AllowedExpectedHttpError | null)[],
+  expected: readonly string[],
+): {
+  expectedCount: number;
+  matched: boolean;
+  observedCount: number;
+  observedHttpErrorResponses: readonly AllowedExpectedHttpError[];
+  unexpectedCount: number;
+} {
+  const expectedValid =
+    expected.every((error) => allowedExpectedHttpErrors.has(error)) &&
+    new Set(expected).size === expected.length;
+  const remaining = [...observed];
+  for (const expectedError of expected) {
+    const index = remaining.indexOf(expectedError as AllowedExpectedHttpError);
+    if (index >= 0) remaining.splice(index, 1);
+  }
+  return {
+    expectedCount: expected.length,
+    matched:
+      expectedValid &&
+      observed.length === expected.length &&
+      remaining.length === 0,
+    observedCount: observed.length,
+    observedHttpErrorResponses: observed.filter(
+      (error): error is AllowedExpectedHttpError => error !== null,
+    ),
+    unexpectedCount: remaining.length,
+  };
+}
+
+export function summarizeExpectedHttpResourceConsoleErrors(
+  observed: readonly (ExpectedHttpErrorObservation | null)[],
+  matchedHttpErrors: readonly ExpectedHttpErrorObservation[],
+): {
+  expectedCount: number;
+  totalCount: number;
+  unexpectedCount: number;
+} {
+  const available = [...matchedHttpErrors];
+  let expectedCount = 0;
+  for (const error of observed) {
+    if (error === null) continue;
+    const index = available.findIndex(
+      (candidate) =>
+        candidate.ephemeralCorrelationKey === error.ephemeralCorrelationKey &&
+        candidate.signature === error.signature,
+    );
+    if (index >= 0) {
+      available.splice(index, 1);
+      expectedCount += 1;
+    }
+  }
+  return {
+    expectedCount,
+    totalCount: observed.length,
+    unexpectedCount: observed.length - expectedCount,
   };
 }
 
@@ -255,7 +421,16 @@ export function buildCloakBrowserRawRun(input: BuildRawRunInput) {
         journey.attempt === 0 &&
         journey.durationMs > 0 &&
         journey.assertionCount > 0 &&
-        journey.consoleErrors === 0 &&
+        journey.unexpectedConsoleErrors === 0 &&
+        JSON.stringify(journey.expectedHttpErrorResponses) ===
+          JSON.stringify(
+            REQUIRED_CLOAK_EXPECTED_HTTP_ERRORS_BY_ID[
+              journey.id as keyof typeof REQUIRED_CLOAK_EXPECTED_HTTP_ERRORS_BY_ID
+            ],
+          ) &&
+        JSON.stringify(journey.observedHttpErrorResponses) ===
+          JSON.stringify(journey.expectedHttpErrorResponses) &&
+        journey.unexpectedHttpErrorResponses === 0 &&
         JSON.stringify(journey.expectedRequestFailures) ===
           JSON.stringify(
             REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[
@@ -267,7 +442,7 @@ export function buildCloakBrowserRawRun(input: BuildRawRunInput) {
         JSON.stringify(journey.observedRequestFailures) ===
           JSON.stringify(journey.expectedRequestFailures) &&
         journey.observedFailedRequests === journey.expectedFailedRequests &&
-        journey.failedRequests === 0 &&
+        journey.unexpectedFailedRequests === 0 &&
         journey.browserVersion.trim() !== "" &&
         journey.browserVersion !== "unavailable" &&
         journey.browserAuthority === expectedJourneyAuthority &&
@@ -276,7 +451,7 @@ export function buildCloakBrowserRawRun(input: BuildRawRunInput) {
     new Set(input.journeys.map((journey) => journey.browserVersion)).size === 1;
 
   return CloakBrowserRawRunSchema.parse({
-    schemaVersion: "3",
+    schemaVersion: "4",
     kind: "cloakbrowser-raw-run",
     status: input.qualificationRequested
       ? exactCleanRun
@@ -360,16 +535,25 @@ export default class CounterLabQualificationReporter implements Reporter {
         observation === null
           ? "0x0"
           : `${observation.viewport.width}x${observation.viewport.height}`,
-      consoleErrors: observation?.consoleErrors ?? 1,
+      totalConsoleErrors: observation?.totalConsoleErrors ?? 0,
+      expectedHttpResourceConsoleErrors:
+        observation?.expectedHttpResourceConsoleErrors ?? 0,
+      unexpectedConsoleErrors: observation?.unexpectedConsoleErrors ?? 0,
+      expectedHttpErrorResponses: observation?.expectedHttpErrorResponses ?? [],
+      observedHttpErrorResponses: observation?.observedHttpErrorResponses ?? [],
+      unexpectedHttpErrorResponses:
+        observation?.unexpectedHttpErrorResponses ?? 0,
       expectedRequestFailures: observation?.expectedRequestFailures ?? [],
       expectedFailedRequests: observation?.expectedFailedRequests ?? 0,
-      failedRequests: observation?.failedRequests ?? 1,
+      unexpectedFailedRequests: observation?.unexpectedFailedRequests ?? 0,
       observedRequestFailures: observation?.observedRequestFailures ?? [],
-      observedFailedRequests: observation?.observedFailedRequests ?? 1,
+      observedFailedRequests: observation?.observedFailedRequests ?? 0,
       browserVersion: observation?.browserVersion ?? "unavailable",
       browserAuthority: observation?.authority ?? "unavailable",
       telemetryValid:
-        observation !== null && observation.expectedRequestFailuresMatched,
+        observation !== null &&
+        observation.expectedHttpResponsesMatched &&
+        observation.expectedRequestFailuresMatched,
     });
   }
 

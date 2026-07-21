@@ -9,6 +9,7 @@ import { RELEASE_CHECK_IDS } from "../packages/scientific-engine-registry/src/sc
 import { canonicalJson } from "../packages/session-core/src/index.js";
 import { createGenerationIsolationEvidence } from "./generation-isolation-evidence.js";
 import {
+  REQUIRED_CLOAK_EXPECTED_HTTP_ERRORS_BY_ID,
   REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID,
   REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID,
   REQUIRED_CLOAK_JOURNEY_IDS,
@@ -530,7 +531,7 @@ async function readyPackage(
   );
   const browserVersion = "CloakBrowser Chromium 140.0.0.0";
   const rawRun = {
-    schemaVersion: "3",
+    schemaVersion: "4",
     kind: "cloakbrowser-raw-run",
     status: "PASSED",
     authority: "CLOAKBROWSER",
@@ -542,28 +543,36 @@ async function readyPackage(
     playwrightVersion: "1.61.1",
     playwrightStatus: "passed",
     rootErrors: 0,
-    journeys: REQUIRED_CLOAK_JOURNEY_IDS.map((id, index) => ({
-      id,
-      status: "passed",
-      expectedStatus: "passed",
-      attempt: 0,
-      durationMs: 1_000 + index,
-      assertionCount: 3,
-      viewport: REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID[id],
-      consoleErrors: 0,
-      expectedRequestFailures:
-        REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[id],
-      expectedFailedRequests:
-        REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[id].length,
-      failedRequests: 0,
-      observedRequestFailures:
-        REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[id],
-      observedFailedRequests:
-        REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[id].length,
-      browserVersion,
-      browserAuthority: "CLOAK_CDP_ENDPOINT",
-      telemetryValid: true,
-    })),
+    journeys: REQUIRED_CLOAK_JOURNEY_IDS.map((id, index) => {
+      const expectedHttpErrors = REQUIRED_CLOAK_EXPECTED_HTTP_ERRORS_BY_ID[id];
+      return {
+        id,
+        status: "passed",
+        expectedStatus: "passed",
+        attempt: 0,
+        durationMs: 1_000 + index,
+        assertionCount: 3,
+        viewport: REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID[id],
+        totalConsoleErrors: expectedHttpErrors.length,
+        expectedHttpResourceConsoleErrors: expectedHttpErrors.length,
+        unexpectedConsoleErrors: 0,
+        expectedHttpErrorResponses: expectedHttpErrors,
+        observedHttpErrorResponses: expectedHttpErrors,
+        unexpectedHttpErrorResponses: 0,
+        expectedRequestFailures:
+          REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[id],
+        expectedFailedRequests:
+          REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[id].length,
+        unexpectedFailedRequests: 0,
+        observedRequestFailures:
+          REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[id],
+        observedFailedRequests:
+          REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[id].length,
+        browserVersion,
+        browserAuthority: "CLOAK_CDP_ENDPOINT",
+        telemetryValid: true,
+      };
+    }),
     privacy: publicationPrivacy,
   } as const;
   const rawRunCanonicalSha256 = hash(bytes(canonicalJson(rawRun)));
@@ -752,8 +761,19 @@ async function readyPackage(
       mobileComplete: true,
       requiredSkips: 0,
       failures: 0,
-      consoleErrors: 0,
-      failedRequests: 0,
+      totalConsoleErrors: browserBuild.qualification.totalConsoleErrors,
+      expectedHttpResourceConsoleErrors:
+        browserBuild.qualification.expectedHttpResourceConsoleErrors,
+      unexpectedConsoleErrors:
+        browserBuild.qualification.unexpectedConsoleErrors,
+      expectedHttpErrorResponses:
+        browserBuild.qualification.expectedHttpErrorResponses,
+      observedHttpErrorResponses:
+        browserBuild.qualification.observedHttpErrorResponses,
+      unexpectedHttpErrorResponses:
+        browserBuild.qualification.unexpectedHttpErrorResponses,
+      unexpectedFailedRequests:
+        browserBuild.qualification.unexpectedFailedRequests,
       playwrightReport: browserReport,
       evidenceIndex: browserEvidenceIndex,
       journeyEvidence,
@@ -1233,6 +1253,45 @@ describe("submission package validator", () => {
         "CloakBrowser qualification evidence is invalid",
       ]),
     });
+  });
+
+  it("rejects hidden or unexpected browser telemetry in the package", async () => {
+    const mutations: Array<(browser: Record<string, unknown>) => void> = [
+      (browser) => {
+        browser.totalConsoleErrors = 0;
+      },
+      (browser) => {
+        browser.observedHttpErrorResponses = 1;
+      },
+      (browser) => {
+        browser.unexpectedConsoleErrors = 1;
+      },
+      (browser) => {
+        browser.unexpectedHttpErrorResponses = 1;
+      },
+      (browser) => {
+        browser.unexpectedFailedRequests = 1;
+      },
+    ];
+
+    for (const mutate of mutations) {
+      const fixture = await readyPackage();
+      mutate(
+        fixture.ready.browserQualification as unknown as Record<
+          string,
+          unknown
+        >,
+      );
+      await expect(
+        validateSubmissionPackage(fixture.ready, "ready", fixture.reader, {
+          now: new Date("2026-07-21T12:00:00.000Z"),
+        }),
+      ).rejects.toMatchObject({
+        issues: expect.arrayContaining([
+          "browser qualification must be exact, complete CloakBrowser evidence",
+        ]),
+      });
+    }
   });
 
   it("rejects manual observations bound to a different raw browser run", async () => {

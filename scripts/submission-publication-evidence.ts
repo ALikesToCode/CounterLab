@@ -31,6 +31,13 @@ const PublicationPrivacySchema = z
   })
   .strict();
 
+export const ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS = [
+  "409 POST /api/sessions/:sessionId/lab/compile",
+  "422 POST /api/artifacts",
+] as const;
+export type AllowedCloakExpectedHttpError =
+  (typeof ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS)[number];
+
 function canonicalSha256(value: unknown): string {
   return createHash("sha256").update(canonicalJson(value)).digest("hex");
 }
@@ -129,10 +136,41 @@ export const CloakJourneyEvidenceReceiptSchema = z
     attempt: z.literal(0),
     durationMs: z.number().int().positive(),
     assertionCount: z.number().int().positive(),
-    consoleErrors: z.literal(0),
-    failedRequests: z.literal(0),
+    totalConsoleErrors: z.number().int().nonnegative(),
+    expectedHttpResourceConsoleErrors: z.number().int().nonnegative(),
+    unexpectedConsoleErrors: z.literal(0),
+    expectedHttpErrorResponses: z
+      .array(z.enum(ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS))
+      .max(ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS.length),
+    observedHttpErrorResponses: z
+      .array(z.enum(ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS))
+      .max(ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS.length),
+    unexpectedHttpErrorResponses: z.literal(0),
+    unexpectedFailedRequests: z.literal(0),
   })
-  .strict();
+  .strict()
+  .superRefine((journey, context) => {
+    if (
+      journey.totalConsoleErrors !==
+        journey.expectedHttpResourceConsoleErrors ||
+      JSON.stringify(journey.expectedHttpErrorResponses) !==
+        JSON.stringify(journey.observedHttpErrorResponses) ||
+      JSON.stringify(journey.expectedHttpErrorResponses) !==
+        JSON.stringify(
+          REQUIRED_CLOAK_EXPECTED_HTTP_ERRORS_BY_ID[
+            journey.id as RequiredCloakJourneyId
+          ],
+        ) ||
+      journey.expectedHttpResourceConsoleErrors >
+        journey.observedHttpErrorResponses.length
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["totalConsoleErrors"],
+        message: "journey error evidence does not reconcile",
+      });
+    }
+  });
 
 export const REQUIRED_CLOAK_MANUAL_EVIDENCE_KEYS = [
   "keyboard",
@@ -169,8 +207,9 @@ export const REQUIRED_CLOAK_MANUAL_CRITERIA = {
   ],
   touchTargets: ["interactiveTargetsMeasured", "minimum44Px"],
   consoleAndNetwork: [
-    "consoleErrorsZero",
+    "unexpectedConsoleErrorsZero",
     "pageErrorsZero",
+    "expectedHttpErrorsReconciled",
     "unexpectedRequestsZero",
   ],
   webVitals: ["lcpMeasured", "clsMeasured", "inpMeasured"],
@@ -420,6 +459,24 @@ export const REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID = Object.freeze(
   >,
 );
 
+const cloakExpectedHttpErrorOverrides: Partial<
+  Record<RequiredCloakJourneyId, readonly AllowedCloakExpectedHttpError[]>
+> = {
+  "judged-flow::a rejected test releases no result and remains recoverable after refresh":
+    ["409 POST /api/sessions/:sessionId/lab/compile"],
+  "recovery-and-intake::malformed live upload remains at intake and creates no session":
+    ["422 POST /api/artifacts"],
+};
+
+export const REQUIRED_CLOAK_EXPECTED_HTTP_ERRORS_BY_ID = Object.freeze(
+  Object.fromEntries(
+    REQUIRED_CLOAK_JOURNEY_IDS.map((id) => [
+      id,
+      Object.freeze([...(cloakExpectedHttpErrorOverrides[id] ?? [])]),
+    ]),
+  ) as Record<RequiredCloakJourneyId, readonly AllowedCloakExpectedHttpError[]>,
+);
+
 function addCloakJourneyIssues(
   journeys: readonly z.infer<typeof CloakJourneySchema>[],
   context: z.RefinementCtx,
@@ -481,12 +538,21 @@ export const CloakBrowserRawJourneySchema = z
     durationMs: z.number().int().nonnegative(),
     assertionCount: z.number().int().nonnegative(),
     viewport: z.string().regex(/^\d+x\d+$/u),
-    consoleErrors: z.number().int().nonnegative(),
+    totalConsoleErrors: z.number().int().nonnegative(),
+    expectedHttpResourceConsoleErrors: z.number().int().nonnegative(),
+    unexpectedConsoleErrors: z.number().int().nonnegative(),
+    expectedHttpErrorResponses: z
+      .array(z.enum(ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS))
+      .max(ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS.length),
+    observedHttpErrorResponses: z
+      .array(z.enum(ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS))
+      .max(ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS.length),
+    unexpectedHttpErrorResponses: z.number().int().nonnegative(),
     expectedRequestFailures: z
       .array(z.enum(ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES))
       .max(ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES.length),
     expectedFailedRequests: z.number().int().nonnegative(),
-    failedRequests: z.number().int().nonnegative(),
+    unexpectedFailedRequests: z.number().int().nonnegative(),
     observedRequestFailures: z
       .array(z.enum(ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES))
       .max(ALLOWED_CLOAK_EXPECTED_REQUEST_FAILURES.length),
@@ -499,11 +565,26 @@ export const CloakBrowserRawJourneySchema = z
     ]),
     telemetryValid: z.boolean(),
   })
-  .strict();
+  .strict()
+  .superRefine((journey, context) => {
+    if (
+      journey.totalConsoleErrors !==
+        journey.expectedHttpResourceConsoleErrors +
+          journey.unexpectedConsoleErrors ||
+      journey.expectedHttpResourceConsoleErrors >
+        journey.observedHttpErrorResponses.length
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["totalConsoleErrors"],
+        message: "console error counts do not match their attributed evidence",
+      });
+    }
+  });
 
 export const CloakBrowserRawRunSchema = z
   .object({
-    schemaVersion: z.literal("3"),
+    schemaVersion: z.literal("4"),
     kind: z.literal("cloakbrowser-raw-run"),
     status: z.enum(["PASSED", "FAILED", "NON_QUALIFYING"]),
     authority: z.enum(["CLOAKBROWSER", "STOCK_CHROMIUM_DESIGN_REVIEW"]),
@@ -549,7 +630,16 @@ export const CloakBrowserRawRunSchema = z
           journey.attempt === 0 &&
           journey.durationMs > 0 &&
           journey.assertionCount > 0 &&
-          journey.consoleErrors === 0 &&
+          journey.unexpectedConsoleErrors === 0 &&
+          JSON.stringify(journey.expectedHttpErrorResponses) ===
+            JSON.stringify(
+              REQUIRED_CLOAK_EXPECTED_HTTP_ERRORS_BY_ID[
+                journey.id as RequiredCloakJourneyId
+              ],
+            ) &&
+          JSON.stringify(journey.observedHttpErrorResponses) ===
+            JSON.stringify(journey.expectedHttpErrorResponses) &&
+          journey.unexpectedHttpErrorResponses === 0 &&
           journey.expectedFailedRequests ===
             journey.expectedRequestFailures.length &&
           JSON.stringify(journey.expectedRequestFailures) ===
@@ -558,7 +648,7 @@ export const CloakBrowserRawRunSchema = z
                 journey.id as RequiredCloakJourneyId
               ],
             ) &&
-          journey.failedRequests === 0 &&
+          journey.unexpectedFailedRequests === 0 &&
           JSON.stringify(journey.observedRequestFailures) ===
             JSON.stringify(journey.expectedRequestFailures) &&
           journey.observedFailedRequests === journey.expectedFailedRequests &&
@@ -587,7 +677,7 @@ export const CloakBrowserRawRunSchema = z
 
 export const CloakBrowserExecutionReportSchema = z
   .object({
-    schemaVersion: z.literal("2"),
+    schemaVersion: z.literal("3"),
     kind: z.literal("cloakbrowser-execution-report"),
     status: z.literal("PASSED"),
     checkedAt: z.iso.datetime({ offset: true }),
@@ -603,8 +693,13 @@ export const CloakBrowserExecutionReportSchema = z
     failures: z.literal(0),
     skips: z.literal(0),
     retries: z.literal(0),
-    consoleErrors: z.literal(0),
-    failedRequests: z.literal(0),
+    totalConsoleErrors: z.number().int().nonnegative(),
+    expectedHttpResourceConsoleErrors: z.number().int().nonnegative(),
+    unexpectedConsoleErrors: z.literal(0),
+    expectedHttpErrorResponses: z.number().int().nonnegative(),
+    observedHttpErrorResponses: z.number().int().nonnegative(),
+    unexpectedHttpErrorResponses: z.literal(0),
+    unexpectedFailedRequests: z.literal(0),
   })
   .strict()
   .superRefine((report, context) => {
@@ -630,6 +725,54 @@ export const CloakBrowserExecutionReportSchema = z
         code: "custom",
         path: ["rawRun"],
         message: "raw run does not match its execution report",
+      });
+    }
+    const totals = report.rawRun.journeys.reduce(
+      (aggregate, journey) => ({
+        totalConsoleErrors:
+          aggregate.totalConsoleErrors + journey.totalConsoleErrors,
+        expectedHttpResourceConsoleErrors:
+          aggregate.expectedHttpResourceConsoleErrors +
+          journey.expectedHttpResourceConsoleErrors,
+        unexpectedConsoleErrors:
+          aggregate.unexpectedConsoleErrors + journey.unexpectedConsoleErrors,
+        expectedHttpErrorResponses:
+          aggregate.expectedHttpErrorResponses +
+          journey.expectedHttpErrorResponses.length,
+        observedHttpErrorResponses:
+          aggregate.observedHttpErrorResponses +
+          journey.observedHttpErrorResponses.length,
+        unexpectedHttpErrorResponses:
+          aggregate.unexpectedHttpErrorResponses +
+          journey.unexpectedHttpErrorResponses,
+        unexpectedFailedRequests:
+          aggregate.unexpectedFailedRequests + journey.unexpectedFailedRequests,
+      }),
+      {
+        totalConsoleErrors: 0,
+        expectedHttpResourceConsoleErrors: 0,
+        unexpectedConsoleErrors: 0,
+        expectedHttpErrorResponses: 0,
+        observedHttpErrorResponses: 0,
+        unexpectedHttpErrorResponses: 0,
+        unexpectedFailedRequests: 0,
+      },
+    );
+    if (
+      report.totalConsoleErrors !== totals.totalConsoleErrors ||
+      report.expectedHttpResourceConsoleErrors !==
+        totals.expectedHttpResourceConsoleErrors ||
+      report.unexpectedConsoleErrors !== totals.unexpectedConsoleErrors ||
+      report.expectedHttpErrorResponses !== totals.expectedHttpErrorResponses ||
+      report.observedHttpErrorResponses !== totals.observedHttpErrorResponses ||
+      report.unexpectedHttpErrorResponses !==
+        totals.unexpectedHttpErrorResponses ||
+      report.unexpectedFailedRequests !== totals.unexpectedFailedRequests
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["totalConsoleErrors"],
+        message: "execution error totals do not match the raw journeys",
       });
     }
     for (const [index, journey] of report.journeys.entries()) {
@@ -718,8 +861,13 @@ export const CloakBrowserQualificationReceiptSchema = z
     touchTargetsComplete: z.literal(true),
     requiredSkips: z.literal(0),
     failures: z.literal(0),
-    consoleErrors: z.literal(0),
-    failedRequests: z.literal(0),
+    totalConsoleErrors: z.number().int().nonnegative(),
+    expectedHttpResourceConsoleErrors: z.number().int().nonnegative(),
+    unexpectedConsoleErrors: z.literal(0),
+    expectedHttpErrorResponses: z.number().int().nonnegative(),
+    observedHttpErrorResponses: z.number().int().nonnegative(),
+    unexpectedHttpErrorResponses: z.literal(0),
+    unexpectedFailedRequests: z.literal(0),
     webVitals: z
       .object({
         lcpMs: z.number().nonnegative().max(2_500),
@@ -738,6 +886,23 @@ export const CloakBrowserQualificationReceiptSchema = z
       });
     }
     addCloakJourneyIssues(receipt.journeys, context);
+    const requiredHttpErrorCount = Object.values(
+      REQUIRED_CLOAK_EXPECTED_HTTP_ERRORS_BY_ID,
+    ).reduce((count, errors) => count + errors.length, 0);
+    if (
+      receipt.totalConsoleErrors !==
+        receipt.expectedHttpResourceConsoleErrors ||
+      receipt.expectedHttpResourceConsoleErrors >
+        receipt.observedHttpErrorResponses ||
+      receipt.expectedHttpErrorResponses !== requiredHttpErrorCount ||
+      receipt.observedHttpErrorResponses !== receipt.expectedHttpErrorResponses
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["totalConsoleErrors"],
+        message: "qualification error totals do not reconcile",
+      });
+    }
   });
 
 const PublicLinkResultSchema = z

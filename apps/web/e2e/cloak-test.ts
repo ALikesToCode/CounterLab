@@ -11,11 +11,20 @@ import {
   validateCloakCdpEndpoint,
 } from "./browser-authority";
 import {
+  classifyExpectedHttpErrorObservation,
+  classifyExpectedHttpResourceConsoleObservation,
   JOURNEY_OBSERVATION_ATTACHMENT,
   journeyIdForParts,
+  summarizeExpectedHttpErrors,
+  summarizeExpectedHttpResourceConsoleErrors,
   summarizeRequestFailures,
+  type ExpectedHttpErrorObservation,
 } from "./qualification-reporter";
-import { REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID } from "../../../scripts/submission-publication-evidence";
+import {
+  ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS,
+  REQUIRED_CLOAK_EXPECTED_HTTP_ERRORS_BY_ID,
+  REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID,
+} from "../../../scripts/submission-publication-evidence";
 
 export { currentBrowserAuthorityLabel };
 
@@ -23,6 +32,19 @@ const repositoryRoot = realpathSync(
   fileURLToPath(new URL("../../..", import.meta.url)),
 );
 const runtimeParent = resolve(repositoryRoot, "apps/web/test-results/runtime");
+type AllowedExpectedHttpError =
+  (typeof ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS)[number];
+const allowedExpectedHttpErrors: ReadonlySet<string> = new Set(
+  ALLOWED_CLOAK_EXPECTED_HTTP_ERRORS,
+);
+
+function expectedBrowserOrigin(): string {
+  const configuredBaseUrl = process.env.COUNTERLAB_E2E_BASE_URL;
+  const baseUrl =
+    configuredBaseUrl ??
+    `http://127.0.0.1:${process.env.COUNTERLAB_E2E_PORT ?? "5173"}`;
+  return new URL(baseUrl).origin;
+}
 
 function assertNoSymlinkEscape(candidate: string, label: string): void {
   const relativePath = relative(repositoryRoot, candidate);
@@ -182,25 +204,77 @@ export const test = base.extend<CounterLabAutomaticFixtures>({
         .split("x")
         .map((part) => Number.parseInt(part, 10));
       await page.setViewportSize({ width: width!, height: height! });
-      let consoleErrors = 0;
+      const expectedOrigin = expectedBrowserOrigin();
+      const observedConsoleErrors: (ExpectedHttpErrorObservation | null)[] = [];
+      const observedHttpErrors: (ExpectedHttpErrorObservation | null)[] = [];
       const failedRequests: string[] = [];
       page.on("console", (message) => {
-        if (message.type() === "error") consoleErrors += 1;
+        if (message.type() !== "error") return;
+        observedConsoleErrors.push(
+          classifyExpectedHttpResourceConsoleObservation({
+            expectedOrigin,
+            locationUrl: message.location().url,
+            text: message.text(),
+          }),
+        );
       });
       page.on("pageerror", () => {
-        consoleErrors += 1;
+        observedConsoleErrors.push(null);
+      });
+      page.on("response", (response) => {
+        if (response.status() < 400) return;
+        observedHttpErrors.push(
+          classifyExpectedHttpErrorObservation({
+            expectedOrigin,
+            method: response.request().method(),
+            status: response.status(),
+            url: response.url(),
+          }),
+        );
       });
       page.on("requestfailed", (request) => {
-        const url = new URL(request.url());
-        failedRequests.push(
-          `${request.method().toUpperCase()} ${url.pathname}`,
-        );
+        try {
+          const url = new URL(request.url());
+          failedRequests.push(
+            `${request.method().toUpperCase()} ${url.pathname}`,
+          );
+        } catch {
+          failedRequests.push("UNPARSEABLE");
+        }
       });
       const browserVersion =
         page.context().browser()?.version().trim() || "unavailable";
 
       await use();
 
+      const expectedHttpAnnotations = testInfo.annotations.filter(
+        (annotation) => annotation.type === "counterlab-expected-http-errors",
+      );
+      const expectedHttpAnnotationValues = expectedHttpAnnotations.map(
+        (annotation) => annotation.description ?? "",
+      );
+      const expectedHttpErrorResponses = expectedHttpAnnotationValues.filter(
+        (value): value is AllowedExpectedHttpError =>
+          allowedExpectedHttpErrors.has(value),
+      );
+      const requiredHttpErrorResponses =
+        REQUIRED_CLOAK_EXPECTED_HTTP_ERRORS_BY_ID[
+          journeyId as keyof typeof REQUIRED_CLOAK_EXPECTED_HTTP_ERRORS_BY_ID
+        ];
+      const httpErrorSummary = summarizeExpectedHttpErrors(
+        observedHttpErrors.map((observation) => observation?.signature ?? null),
+        expectedHttpAnnotationValues,
+      );
+      const httpResourceConsoleSummary =
+        summarizeExpectedHttpResourceConsoleErrors(
+          observedConsoleErrors,
+          httpErrorSummary.matched
+            ? observedHttpErrors.filter(
+                (observation): observation is ExpectedHttpErrorObservation =>
+                  observation !== null,
+              )
+            : [],
+        );
       const expectedFailureAnnotations = testInfo.annotations.filter(
         (annotation) =>
           annotation.type === "counterlab-expected-request-failures",
@@ -216,13 +290,26 @@ export const test = base.extend<CounterLabAutomaticFixtures>({
       await testInfo.attach(JOURNEY_OBSERVATION_ATTACHMENT, {
         body: Buffer.from(
           JSON.stringify({
-            schemaVersion: "3",
+            schemaVersion: "4",
             authority: currentBrowserAuthorityLabel(),
             viewport: viewport ?? { width: 0, height: 0 },
-            consoleErrors,
+            totalConsoleErrors: httpResourceConsoleSummary.totalCount,
+            expectedHttpResourceConsoleErrors:
+              httpResourceConsoleSummary.expectedCount,
+            unexpectedConsoleErrors: httpResourceConsoleSummary.unexpectedCount,
+            expectedHttpErrorResponses,
+            observedHttpErrorResponses:
+              httpErrorSummary.observedHttpErrorResponses,
+            unexpectedHttpErrorResponses: httpErrorSummary.unexpectedCount,
+            expectedHttpResponsesMatched:
+              httpErrorSummary.matched &&
+              expectedHttpAnnotationValues.length ===
+                expectedHttpErrorResponses.length &&
+              JSON.stringify(expectedHttpErrorResponses) ===
+                JSON.stringify(requiredHttpErrorResponses),
             expectedRequestFailures,
             expectedFailedRequests: requestFailureSummary.expectedCount,
-            failedRequests: requestFailureSummary.unexpectedCount,
+            unexpectedFailedRequests: requestFailureSummary.unexpectedCount,
             observedRequestFailures:
               requestFailureSummary.observedRequestFailures,
             observedFailedRequests: requestFailureSummary.observedCount,

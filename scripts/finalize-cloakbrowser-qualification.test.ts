@@ -10,6 +10,7 @@ import {
   CloakBrowserExecutionReportSchema,
   CloakBrowserQualificationReceiptSchema,
   CloakManualEvidenceReceiptSchema,
+  REQUIRED_CLOAK_EXPECTED_HTTP_ERRORS_BY_ID,
   REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID,
   REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID,
   REQUIRED_CLOAK_JOURNEY_IDS,
@@ -100,7 +101,7 @@ async function pathExists(path: string): Promise<boolean> {
 
 function validRawRun() {
   return {
-    schemaVersion: "3",
+    schemaVersion: "4",
     kind: "cloakbrowser-raw-run",
     status: "PASSED",
     authority: "CLOAKBROWSER",
@@ -112,28 +113,36 @@ function validRawRun() {
     playwrightVersion: "1.61.1",
     playwrightStatus: "passed",
     rootErrors: 0,
-    journeys: REQUIRED_CLOAK_JOURNEY_IDS.map((id, index) => ({
-      id,
-      status: "passed",
-      expectedStatus: "passed",
-      attempt: 0,
-      durationMs: 1_000 + index,
-      assertionCount: 2,
-      viewport: REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID[id],
-      consoleErrors: 0,
-      expectedRequestFailures:
-        REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[id],
-      expectedFailedRequests:
-        REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[id].length,
-      failedRequests: 0,
-      observedRequestFailures:
-        REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[id],
-      observedFailedRequests:
-        REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[id].length,
-      browserVersion,
-      browserAuthority: "CLOAK_CDP_ENDPOINT",
-      telemetryValid: true,
-    })),
+    journeys: REQUIRED_CLOAK_JOURNEY_IDS.map((id, index) => {
+      const expectedHttpErrors = REQUIRED_CLOAK_EXPECTED_HTTP_ERRORS_BY_ID[id];
+      return {
+        id,
+        status: "passed",
+        expectedStatus: "passed",
+        attempt: 0,
+        durationMs: 1_000 + index,
+        assertionCount: 2,
+        viewport: REQUIRED_CLOAK_JOURNEY_VIEWPORT_BY_ID[id],
+        totalConsoleErrors: expectedHttpErrors.length,
+        expectedHttpResourceConsoleErrors: expectedHttpErrors.length,
+        unexpectedConsoleErrors: 0,
+        expectedHttpErrorResponses: expectedHttpErrors,
+        observedHttpErrorResponses: expectedHttpErrors,
+        unexpectedHttpErrorResponses: 0,
+        expectedRequestFailures:
+          REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[id],
+        expectedFailedRequests:
+          REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[id].length,
+        unexpectedFailedRequests: 0,
+        observedRequestFailures:
+          REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[id],
+        observedFailedRequests:
+          REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[id].length,
+        browserVersion,
+        browserAuthority: "CLOAK_CDP_ENDPOINT",
+        telemetryValid: true,
+      };
+    }),
     privacy: {
       containsSecrets: false,
       containsRawNotebook: false,
@@ -222,16 +231,37 @@ describe("CloakBrowser qualification finalizer", () => {
     expect(first.files.at(-1)?.relativePath).toBe(
       "cloakbrowser-qualification.json",
     );
-    expect(
-      CloakBrowserExecutionReportSchema.parse(
-        parseGenerated(first, "cloakbrowser-playwright-report.json"),
-      ).rawRun.status,
-    ).toBe("PASSED");
-    expect(
-      CloakBrowserQualificationReceiptSchema.parse(
-        parseGenerated(first, "cloakbrowser-qualification.json"),
-      ).webVitals,
-    ).toEqual({ lcpMs: 1_200, cls: 0.02, inpMs: 90 });
+    const report = CloakBrowserExecutionReportSchema.parse(
+      parseGenerated(first, "cloakbrowser-playwright-report.json"),
+    );
+    expect(report.rawRun.status).toBe("PASSED");
+    expect(report.schemaVersion).toBe("3");
+    expect(report).toMatchObject({
+      totalConsoleErrors: 2,
+      expectedHttpResourceConsoleErrors: 2,
+      unexpectedConsoleErrors: 0,
+      expectedHttpErrorResponses: 2,
+      observedHttpErrorResponses: 2,
+      unexpectedHttpErrorResponses: 0,
+      unexpectedFailedRequests: 0,
+    });
+    const qualification = CloakBrowserQualificationReceiptSchema.parse(
+      parseGenerated(first, "cloakbrowser-qualification.json"),
+    );
+    expect(qualification.webVitals).toEqual({
+      lcpMs: 1_200,
+      cls: 0.02,
+      inpMs: 90,
+    });
+    expect(qualification).toMatchObject({
+      totalConsoleErrors: 2,
+      expectedHttpResourceConsoleErrors: 2,
+      unexpectedConsoleErrors: 0,
+      expectedHttpErrorResponses: 2,
+      observedHttpErrorResponses: 2,
+      unexpectedHttpErrorResponses: 0,
+      unexpectedFailedRequests: 0,
+    });
     expect(
       CloakManualEvidenceReceiptSchema.parse(
         parseGenerated(first, "cloakbrowser-manual/webVitals.json"),
@@ -298,6 +328,53 @@ describe("CloakBrowser qualification finalizer", () => {
     ).toThrow(/status does not match/i);
   });
 
+  it("rejects missing, duplicate, and misattributed expected HTTP evidence", () => {
+    const missing = validRawRun();
+    const expectedIndex = missing.journeys.findIndex(
+      (journey) => journey.expectedHttpErrorResponses.length === 1,
+    );
+    missing.journeys[expectedIndex]!.observedHttpErrorResponses = [];
+    expect(() =>
+      buildCloakBrowserQualification({
+        checkedAt,
+        deployedAt,
+        manualManifest: validManualManifest(),
+        rawRun: missing,
+        release,
+      }),
+    ).toThrow();
+
+    const duplicate = validRawRun();
+    const duplicateJourney = duplicate.journeys[expectedIndex]!;
+    duplicateJourney.observedHttpErrorResponses = [
+      ...duplicateJourney.expectedHttpErrorResponses,
+      ...duplicateJourney.expectedHttpErrorResponses,
+    ];
+    expect(() =>
+      buildCloakBrowserQualification({
+        checkedAt,
+        deployedAt,
+        manualManifest: validManualManifest(),
+        rawRun: duplicate,
+        release,
+      }),
+    ).toThrow();
+
+    const misattributed = validRawRun();
+    misattributed.journeys[expectedIndex]!.expectedHttpResourceConsoleErrors =
+      2;
+    misattributed.journeys[expectedIndex]!.totalConsoleErrors = 2;
+    expect(() =>
+      buildCloakBrowserQualification({
+        checkedAt,
+        deployedAt,
+        manualManifest: validManualManifest(),
+        rawRun: misattributed,
+        release,
+      }),
+    ).toThrow(/console error counts/i);
+  });
+
   it("rejects observations before deployment or after finalization", () => {
     expect(() =>
       buildCloakBrowserQualification({
@@ -338,6 +415,24 @@ describe("CloakBrowser qualification finalizer", () => {
     expect(() => CloakBrowserExecutionReportSchema.parse(report)).toThrow(
       /hash does not match/i,
     );
+
+    const aggregate = parseGenerated(
+      built,
+      "cloakbrowser-playwright-report.json",
+    ) as Record<string, unknown>;
+    aggregate.totalConsoleErrors = 1;
+    expect(() => CloakBrowserExecutionReportSchema.parse(aggregate)).toThrow(
+      /error totals/i,
+    );
+
+    const qualification = parseGenerated(
+      built,
+      "cloakbrowser-qualification.json",
+    ) as Record<string, unknown>;
+    qualification.totalConsoleErrors = 1;
+    expect(() =>
+      CloakBrowserQualificationReceiptSchema.parse(qualification),
+    ).toThrow(/error totals/i);
 
     const manual = parseGenerated(
       built,

@@ -20,6 +20,7 @@ import {
   PostSubmitLinkAuditReceiptSchema,
   PublicationReleaseBindingSchema,
   PublicLinkAuditReceiptSchema,
+  REQUIRED_CLOAK_EXPECTED_HTTP_ERRORS_BY_ID,
   REQUIRED_CLOAK_MANUAL_EVIDENCE_KEYS,
   RepositoryAccessReceiptSchema,
   ScreenshotProvenanceReceiptSchema,
@@ -176,8 +177,13 @@ export const SubmissionPackageSchema = z
         mobileComplete: z.boolean(),
         requiredSkips: z.number().int().nonnegative(),
         failures: z.number().int().nonnegative(),
-        consoleErrors: z.number().int().nonnegative(),
-        failedRequests: z.number().int().nonnegative(),
+        totalConsoleErrors: z.number().int().nonnegative(),
+        expectedHttpResourceConsoleErrors: z.number().int().nonnegative(),
+        unexpectedConsoleErrors: z.number().int().nonnegative(),
+        expectedHttpErrorResponses: z.number().int().nonnegative(),
+        observedHttpErrorResponses: z.number().int().nonnegative(),
+        unexpectedHttpErrorResponses: z.number().int().nonnegative(),
+        unexpectedFailedRequests: z.number().int().nonnegative(),
         playwrightReport: NullableEvidence,
         evidenceIndex: NullableEvidence,
         journeyEvidence: z.array(BrowserJourneyEvidenceReferenceSchema).max(40),
@@ -705,6 +711,9 @@ function requireReadyFields(
     issues.push("video must include audio and both Codex and GPT-5.6 roles");
   }
   const browser = submission.browserQualification;
+  const requiredHttpErrorResponses = Object.values(
+    REQUIRED_CLOAK_EXPECTED_HTTP_ERRORS_BY_ID,
+  ).reduce((count, errors) => count + errors.length, 0);
   if (
     browser.authority !== "CLOAKBROWSER" ||
     !browser.exactReleaseBound ||
@@ -712,8 +721,14 @@ function requireReadyFields(
     !browser.mobileComplete ||
     browser.requiredSkips !== 0 ||
     browser.failures !== 0 ||
-    browser.consoleErrors !== 0 ||
-    browser.failedRequests !== 0
+    browser.totalConsoleErrors !== browser.expectedHttpResourceConsoleErrors ||
+    browser.expectedHttpResourceConsoleErrors >
+      browser.observedHttpErrorResponses ||
+    browser.unexpectedConsoleErrors !== 0 ||
+    browser.expectedHttpErrorResponses !== requiredHttpErrorResponses ||
+    browser.observedHttpErrorResponses !== requiredHttpErrorResponses ||
+    browser.unexpectedHttpErrorResponses !== 0 ||
+    browser.unexpectedFailedRequests !== 0
   ) {
     issues.push(
       "browser qualification must be exact, complete CloakBrowser evidence",
@@ -1838,8 +1853,17 @@ function assertPublicationEvidence(
       browser.mobileComplete !== manifest.mobileComplete ||
       browser.requiredSkips !== manifest.requiredSkips ||
       browser.failures !== manifest.failures ||
-      browser.consoleErrors !== manifest.consoleErrors ||
-      browser.failedRequests !== manifest.failedRequests ||
+      browser.totalConsoleErrors !== manifest.totalConsoleErrors ||
+      browser.expectedHttpResourceConsoleErrors !==
+        manifest.expectedHttpResourceConsoleErrors ||
+      browser.unexpectedConsoleErrors !== manifest.unexpectedConsoleErrors ||
+      browser.expectedHttpErrorResponses !==
+        manifest.expectedHttpErrorResponses ||
+      browser.observedHttpErrorResponses !==
+        manifest.observedHttpErrorResponses ||
+      browser.unexpectedHttpErrorResponses !==
+        manifest.unexpectedHttpErrorResponses ||
+      browser.unexpectedFailedRequests !== manifest.unexpectedFailedRequests ||
       browserReportReference === null ||
       browserIndexReference === null ||
       browser.playwrightReportSha256 !== browserReportReference.sha256 ||
@@ -1861,8 +1885,19 @@ function assertPublicationEvidence(
         browser.playwrightVersion !== browserReport.playwrightVersion ||
         browser.failures !== browserReport.failures ||
         browser.requiredSkips !== browserReport.skips ||
-        browser.consoleErrors !== browserReport.consoleErrors ||
-        browser.failedRequests !== browserReport.failedRequests ||
+        browser.totalConsoleErrors !== browserReport.totalConsoleErrors ||
+        browser.expectedHttpResourceConsoleErrors !==
+          browserReport.expectedHttpResourceConsoleErrors ||
+        browser.unexpectedConsoleErrors !==
+          browserReport.unexpectedConsoleErrors ||
+        browser.expectedHttpErrorResponses !==
+          browserReport.expectedHttpErrorResponses ||
+        browser.observedHttpErrorResponses !==
+          browserReport.observedHttpErrorResponses ||
+        browser.unexpectedHttpErrorResponses !==
+          browserReport.unexpectedHttpErrorResponses ||
+        browser.unexpectedFailedRequests !==
+          browserReport.unexpectedFailedRequests ||
         JSON.stringify(browser.journeys) !==
           JSON.stringify(browserReport.journeys) ||
         Date.parse(browserReport.checkedAt) > Date.parse(browser.checkedAt))
