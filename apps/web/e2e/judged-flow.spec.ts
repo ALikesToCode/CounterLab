@@ -1349,6 +1349,9 @@ for (const viewport of beliefBreakViewports) {
     const artifactSafetySummary = page.getByText(
       /Ask a question or attach a supported notebook.*never runs its cells/i,
     );
+    const audienceDifference = page.getByText(
+      /Built for ML learners: seal a Prediction, then let one controlled test answer—not AI prose/i,
+    );
     const composer = page.getByLabel("Your question or claim");
     const submit = page.getByRole("button", { name: /Test this claim/i });
     const promptStarters = page.getByRole("group", {
@@ -1361,6 +1364,7 @@ for (const viewport of beliefBreakViewports) {
       [
         heading,
         artifactSafetySummary,
+        audienceDifference,
         composer,
         submit,
         promptStarters,

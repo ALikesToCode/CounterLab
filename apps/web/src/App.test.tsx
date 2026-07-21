@@ -1113,6 +1113,11 @@ describe("CounterLab judged flow", () => {
       ),
     ).toBeInTheDocument();
     expect(
+      screen.getByText(
+        /built for ml learners: seal a prediction, then let one controlled test answer—not ai prose/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole("link", { name: /skip to main content/i }),
     ).toHaveAttribute("href", "#main-content");
     await user.tab();

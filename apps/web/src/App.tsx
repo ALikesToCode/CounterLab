@@ -1105,7 +1105,9 @@ function Landing({
               </h1>
               <p className="landing-trust-summary">
                 Ask a question or attach a supported notebook. CounterLab reads
-                the evidence and never runs its cells.
+                the evidence and never runs its cells. Built for ML learners:
+                seal a Prediction, then let one controlled test answer—not AI
+                prose.
               </p>
             </div>
 
