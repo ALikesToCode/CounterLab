@@ -2184,7 +2184,7 @@ test("configured reasoning cannot start without a qualified hosted runner", asyn
     page.getByText(/qualified hosted runner is needed/i),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Continue with my notebook/i }),
+    page.getByLabel(/Attach a supported notebook/i),
   ).not.toBeVisible();
   await expect(page.locator("body")).not.toContainText(
     /OPENAI|GPT-|https?:\/\//i,
@@ -2423,10 +2423,8 @@ test("a configured hosted runner completes an untouched leakage notebook", async
     page.getByText(/Hosted notebook runner is ready/i),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: /Continue with my notebook/i })
-    .click();
-
-  await page.locator('input[type="file"]').setInputFiles(leakageNotebookPath);
+    .getByLabel(/Attach a supported notebook/i)
+    .setInputFiles(leakageNotebookPath);
   await expect(
     page.getByText(/leakage-rows-pipeline.ipynb/i).first(),
   ).toBeVisible();
@@ -2665,10 +2663,8 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
     page.getByText(/Hosted notebook runner is ready/i),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: /Continue with my notebook/i })
-    .click();
-
-  await page.locator('input[type="file"]').setInputFiles(imbalanceNotebookPath);
+    .getByLabel(/Attach a supported notebook/i)
+    .setInputFiles(imbalanceNotebookPath);
   await expect(
     page.getByText(/fraud_class_imbalance.ipynb/i).first(),
   ).toBeVisible();
@@ -2732,10 +2728,10 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
       "When positive cases are rare, compare against the majority baseline and choose class-specific metrics and a threshold that match deployment cost.",
     );
   await page.getByRole("button", { name: /Try it on defects/i }).click();
-  await page.getByLabel(/Lower threshold based on missed-defect cost/i).check();
-  await page.getByLabel(/Missing a defect is the costly error/i).check();
-  await page.getByLabel(/Confusion matrix shows misses/i).check();
-  await page.getByLabel(/Prevalence changes precision/i).check();
+  await page.getByLabel(/Reject the accuracy-only conclusion/i).check();
+  await page.getByLabel(/Defect recall and PR-AUC/i).check();
+  await page.getByLabel(/zero true positives/i).check();
+  await page.getByLabel(/Defects are only 1%/i).check();
   await page.getByRole("button", { name: /Check transfer/i }).click();
   await expect(page.locator(".imbalance-transfer-pass .eyebrow")).toHaveText(
     "Transfer passed",
