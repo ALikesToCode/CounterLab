@@ -3598,3 +3598,86 @@ worktree entry besides this progress update is the preserved FUSE tombstone
    submission receipt remain externally unverified.
 6. The feature branch has not been pushed and has not been merged into `main`.
    Push and fast-forward merge remain downstream of factual release gates.
+
+## Browser-harness recovery checkpoint — 2026-07-21T04:20:55Z
+
+Deadline: `2026-07-22T00:00:00Z`; **19 hours 39 minutes 05 seconds remained at
+this checkpoint**. The feature branch is at committed HEAD `4f7bbda`; the only
+worktree entry besides this progress update is the preserved FUSE tombstone
+`scripts/.fuse_hidden0000a9600000801f`. It remains unread, unchanged, and
+unstaged.
+
+### Independently committed slices
+
+- `2986046 test(e2e): authorize private session assertions` sends the
+  browser-held owner capability on direct private-session E2E requests.
+- `e9529b0 test(e2e): await fresh recovery sessions` verifies that Reject and
+  Not enough evidence recovery creates a fresh session before resubmission.
+- `52b40ef fix(learner): activate session routes before render` persists the
+  session and route before exposing learner state, closing refresh and browser
+  history races.
+- `6142e5e test(e2e): align current learner journeys` updates stale accessible
+  names and route expectations without changing production authority.
+- `d184e5a test(e2e): configure local intake authority` supplies a clearly
+  local-only admission key to the local Playwright server and uses a distinct
+  supported live notebook fixture rather than sample evidence.
+- `cdbe153 fix(learner): distinguish notebook evidence keys` gives repeated
+  notebook evidence references stable unique React keys and adds unit/browser
+  console regression coverage.
+- `4f7bbda test(perf): scope first-fold browser budgets` measures current-page
+  visible readiness instead of harness setup time, checks required content in
+  parallel before geometry assertions, and records post-seal SPA metrics as
+  observation-only rather than mislabelling navigation LCP as post-interaction
+  qualification.
+
+### Exact verification in these slices
+
+- Full App integration suite before the evidence-key characterization:
+  **71/71 passed**; the added evidence-key unit test then passed **1/1**.
+- Recovery and route-regression browser runs: **2/2** and **1/1 passed**.
+- Updated learner-selector browser slices: **7/10 passed** on the first run;
+  the corrected three cases then passed **3/3**.
+- Intake browser matrix on fresh local D1 state: malformed/unsupported cases
+  **3/3 passed** and supported/retry cases **3/3 passed**.
+- Duplicate-key supported-upload browser regression: **1/1 passed** with no
+  React duplicate-key console error.
+- Desktop/mobile Landing, Judge first fold, and post-seal sample browser
+  matrix: **6/6 passed in 22.5 seconds**.
+- Current first-fold design-review metrics: Landing LCP **684–740 ms**, Judge
+  LCP **1,216–1,352 ms**, CLS **0–0.02145**, and TTFB **6.2–28.7 ms**.
+- E2E strict TypeScript, scoped Prettier, Git whitespace, and scoped secret
+  scans: **passed**.
+- A prior complete stock-browser run collected **40 tests** and produced
+  **10 passed, 25 failed, 5 skipped**. All 25 failures were classified as
+  harness authorization, stale selectors, route ordering, duplicate evidence
+  identity, or performance-scope problems. Targeted repairs now pass, but the
+  complete 40-test matrix has not yet been rerun, so it is not claimed green.
+
+All rendered checks in this checkpoint used explicitly labelled
+`stock-chromium-design-review` authority. They are useful implementation and
+visual-review evidence, but do not satisfy the required CloakBrowser public
+release qualification.
+
+### Current remaining gates
+
+1. Run the complete 40-test stock-browser matrix against fresh local D1 state,
+   repair any remaining product or harness failures, and record exact results.
+2. Run the final deterministic TypeScript, Vitest, Pytest, build, formatting,
+   secret, whitespace, mutation, and held-out gates at frozen source.
+3. Obtain a clean exact source `S`, execute the real aggregate-cgroup sentinel,
+   build one exact runner image, regenerate source/image-bound SBOM, VEX, and
+   scientific evidence, create evidence commit `E`, and qualify the tuple.
+   The preserved FUSE entry and the constitution's prohibition on required
+   `/sys` and `/proc` reads currently keep this chain fail-closed.
+4. Establish repository-contained Wrangler identity, deploy only the qualified
+   tuple, and verify exact public Worker/Container/source identity and complete
+   production smoke evidence.
+5. Run all public desktop/mobile, keyboard, screen-reader, reduced-motion,
+   reconnect, download, console/network, and Web Vitals journeys through an
+   injected CloakBrowser endpoint. This session still has no
+   `CLOAK_CDP_ENDPOINT`.
+6. Keep learner evidence as `NO_DATA` unless real consented observations occur.
+   Public repository/video/feedback alignment, Devpost publication, logged-out
+   verification, and submission receipt remain externally unverified.
+7. Push the feature branch and fast-forward `main` only after the ship gates
+   above are factual; neither publication action has occurred.
