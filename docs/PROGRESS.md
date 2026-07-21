@@ -4095,3 +4095,91 @@ staging, hiding, overwriting, or deleting it.
 
 The release remains **NO-GO** at clean-source, real-sentinel, exact-image,
 authentication, CloakBrowser, deployment, and submission gates.
+
+## Proof, live-readiness, and active-browser checkpoint — 2026-07-21T09:06:33Z
+
+Deadline: `2026-07-22T00:00:00Z`; **14 hours 53 minutes 27 seconds remained at
+this checkpoint**. Committed HEAD is
+`7e25a098b74d18b30d84a1bc80938ef1d94e95e9`, eight commits ahead of
+`origin/feat/learner-ux-v6.1`. The only worktree path is the preserved,
+unstaged FUSE tombstone `scripts/.fuse_hidden0000a9600000801f`; it remains
+unread, untouched, and untracked.
+
+### Completed and independently reviewed
+
+| Commit | Result | Exact verification |
+| --- | --- | --- |
+| `84ef49d fix(web): validate bound release isolation` | The public health contract now validates the exact bound source, Worker, client assets, runtime policy, and isolation evidence instead of accepting a partial release claim. | Focused Worker health test **1 passed, 40 skipped**; Worker TypeScript passed. |
+| `547cc0f fix(worker): preserve historical proof validation` | Complete stored Proof Bundles are anchored to exactly one issuance event before their persisted integrity mode is evaluated. Historical unsigned evidence survives later key configuration; signed evidence still fails closed on absent, blank, rotated, corrupted, detached, or downgraded authority. | Worker API **106/106 passed**; Proof Bundle package **12/12 passed**; Worker TypeScript, scoped Prettier, six-file secret scan, and Git whitespace passed. |
+| `7e25a09 fix(live): require exact release readiness` | Both learner notebook entry surfaces probe exact readiness before sending notebook bytes, and the Worker independently rechecks exact readiness immediately before live-session creation. Unqualified releases return retryable `LIVE_AUTHORITY_NOT_READY`; Sample and Replay remain separate. | App **74/74 passed**; Worker API **107/107 passed**; API/Judge **50/50 passed**; post-review focus **3/3 passed**; web and Worker TypeScript, scoped Prettier, six-file secret scan, Git whitespace, and production build passed. |
+
+The correct contained package path is now verified. Bare `pnpm` resolves to an
+external wrapper and fails with `[ERROR] unable to open database file`; it is
+not a product failure. `./scripts/run-contained-pnpm.sh` uses the repository's
+pinned pnpm **11.13.1** and built successfully: Worker **391 modules,
+1,868.90 kB / 360.50 kB gzip**; client **231 modules**, main chunk **449.75 kB
+/ 129.26 kB gzip**.
+
+Independent authority review found no justification for isolating the outer
+Codex App Server from provider egress: generated commands already receive
+`networkAccess:false`, while the outer bounded client requires provider access.
+The final exact image still needs a real negative command-egress probe. A
+behavioral Unix-socket half-close integration test remains a P1 improvement;
+the current regression is source-level, while the live `rt-mainrel04` response
+also proved the repaired path operationally.
+
+The operational code-review dependency graph is current in
+`docs/audits/counterlab-first-prize/19_RELEASE_DEPENDENCY_AND_REVIEW_GRAPH.md`.
+The last structural snapshot remains **531 files, 5,515 nodes, and 93,346
+edges**; the current branch delta remains **140 files**. Those structural counts
+are not relabelled as current-source output without rerunning their generator.
+
+### Browser and Cloudflare truth
+
+- `codex mcp get playwright_safe` now succeeds and reports the Cloak launcher
+  registered and enabled. This already-running session has no loaded
+  `playwright_safe` tool namespace or injected `CLOAK_CDP_ENDPOINT`; the
+  mandatory fresh-session qualification therefore remains **0 journeys**.
+  Stock Chromium is not substituted.
+- Browser-evidence review found three source gaps before qualification can emit
+  a schema-valid receipt: explicit coverage for `768x1024`, `1366x768`, and
+  `1920x1080`; INP collection; and a deterministic reporter for the 40 journey,
+  manual accessibility, evidence-index, and final qualification receipts.
+- Fresh contained `wrangler whoami --json` returned
+  `{"loggedIn":false}`. No Cloudflare mutation, migration, qualification, or
+  deployment occurred. Authentication outside the contained environment is
+  not claimed as release identity.
+
+### Exact remaining dependency order
+
+1. Add and test the missing CloakBrowser evidence instrumentation while keeping
+   all browser state repository-contained; restart Codex only when ready to run
+   the qualifying tool namespace.
+2. Resolve the pre-existing FUSE handle by its owner without deleting, hiding,
+   staging, or rewriting the tombstone; verify an empty physical-root tree.
+3. Establish constitution-compatible authority for the read-only real cgroup
+   and owned-process observation, freeze source `S`, build one exact image, and
+   execute the real aggregate sentinel and negative controls.
+4. Refresh SBOM, VEX, scientific-engine, license, health, held-out, Sample
+   Capsule, and all source/image bindings exactly once; commit only reviewed
+   evidence and rerun the full deterministic release gate.
+5. Authenticate the repository-contained Wrangler identity, qualify only that
+   tuple, deploy it once, and capture the exact Worker version, Container
+   digest, public identity, supported Sample/Replay/live journeys, reconnect,
+   patch, Capsule, and no-secret smoke receipts.
+6. In the fresh Cloak-enabled session, run all 40 public journeys, seven
+   viewports, keyboard/screen-reader/zoom/reduced-motion checks, console and
+   network assertions, downloads, history/reconnect, and Web Vitals including
+   INP.
+7. Produce screenshots and the public video only from that qualified tuple;
+   keep learner evidence `NO_DATA` unless real consented observations exist;
+   verify logged-out repository, app, feedback, video, and Devpost links; then
+   capture the submission receipt.
+8. Push the reviewed feature branch and fast-forward-only merge and push
+   `main` only after every upstream node is factual and green.
+
+Release remains **NO-GO** at clean source, real containment, exact image and
+evidence, contained Cloudflare authentication, active CloakBrowser
+qualification, deployment, submission, and final merge. The proof and
+live-session source-authority regressions are closed by reviewed commits, not
+by production claims.
