@@ -5435,3 +5435,49 @@ No exact image, refreshed evidence, Cloudflare mutation, production smoke,
 public browser qualification, push, merge, video, learner observation, or
 submission is claimed at this checkpoint. Release remains **NO-GO** until those
 gates occur.
+
+## Runtime portability and cross-session authority checkpoint — 2026-07-22T00:31:49Z
+
+### Completed and committed
+
+- `45b24cd` makes the contained-runtime OCI sanitizer accept only the narrow
+  safe bind shape emitted when a repository bind originates on FUSE or tmpfs,
+  then canonicalizes every requested bind to explicit `nodev,nosuid` options
+  before execution. Writable escalation, executable mounts, unknown flags,
+  value options, and unsafe propagation still fail closed.
+- `debf06d` prevents stale or mismatched restored-session state from releasing
+  Repair downloads or evidence actions. Opening a different stored session now
+  requires terminal confirmation for active runner jobs, clears the busy modal
+  before route hydration, and preserves recovery state when cancellation cannot
+  be confirmed.
+- The completed video script/transcript remains intentionally outside these
+  commits and is not claimed as release qualification evidence.
+
+### Verification actually run
+
+- Contained-runtime focused Vitest: **1 file, 44/44 passed**.
+- Studio route, command, and restart-dialog Vitest: **3 files, 115/115 passed**.
+- Repository TypeScript after the runtime change: **passed**.
+- Web TypeScript after the Studio change: **passed**.
+- Scoped Prettier and Git whitespace checks: **passed**.
+
+### Immediate remaining release order
+
+1. Finish the independent review of the four concurrently edited Boundary and
+   imbalance Repair files; accept or repair them in their own commit.
+2. Commit this factual progress checkpoint and confirm a clean working tree.
+3. Rebuild the runner from that exact clean source commit in the already
+   attested `rt-v61-0722c` runtime.
+4. Execute the real containment/timeout sentinel, refresh exact source/image
+   evidence, qualify the image, and run the complete release gate.
+5. Deploy only the qualified source/image/Worker tuple and run public
+   CloakBrowser sample, replay, supported live, refusal, transfer, Repair,
+   Proof Capsule, refresh, console/network, accessibility, and responsive
+   journeys.
+6. Push the feature branch, fast-forward `main`, and push `main` only after the
+   public release evidence is green.
+
+The public deployment has not yet been replaced by the current source. No exact
+runner image, refreshed scientific evidence, qualification receipt, Cloudflare
+deployment, production smoke, public live journey, push, or merge is claimed at
+this checkpoint. Release remains **NO-GO** until those gates occur.
