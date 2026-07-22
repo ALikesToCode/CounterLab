@@ -5654,3 +5654,79 @@ No exact `a7d2408` image, timeout receipt, refreshed scientific evidence,
 qualification receipt, Cloudflare deployment, production smoke, public
 qualification, push, merge, learner observation, or submission receipt is
 claimed at this checkpoint. Release remains **NO-GO**.
+
+## Prediction-recovery integration and deployment preflight — 2026-07-22T14:36:30Z
+
+### Completed and committed
+
+- Merged the finished `hotfix/video-prediction-recovery` history into
+  `feat/learner-ux-v6.1` as `5da8552` without merging `main`. The one
+  `App.test.tsx` conflict was resolved in favor of the feature branch's broader
+  recovery coverage, and the complete App suite passed **100/100** afterward.
+- Preserved the stronger client/Worker authority bindings added immediately
+  before the merge: response/session/artifact lineage, runner action purpose,
+  interactive configuration, terminal reconciliation, event-page job identity,
+  and content-addressed patched-artifact retrieval.
+- Committed the two tracked Prettier corrections independently as `996d609`;
+  the focused session-core suite passed **21/21**.
+- Repaired stale checked-in hashes for the current Devpost copy and README and
+  recorded the owner-supplied submitter facts (`Student`, `India`) in
+  `docs/SUBMISSION_PACKAGE.json` as `02a500e`. The focused submission validator
+  passed **38/38**, and honest draft preflight returned
+  `SUBMISSION_PACKAGE_DRAFT_VALID`. No video URL, feedback ID, publication, or
+  submission receipt was invented.
+
+### Verification actually run
+
+- Web Vitest: **85 files, 763/763 passed**.
+- Repository, web, and Worker TypeScript: **passed**.
+- Kernel Pytest with required loopback permission: **222/222 passed**.
+- Production build: **passed**. Worker **1,939.36 kB / 374.13 kB gzip**; main
+  client **497.88 kB / 139.83 kB gzip**; client CSS **209.58 kB / 36.17 kB
+  gzip**.
+- Repository secret scan: **passed across 1,480 files**.
+- Capability-dependent hosted-runner and Codex isolation suites: **4 files,
+  51/51 passed** with the already-authorized localhost/process permissions.
+- The broad root run currently reports **69 files passed, 6 failed; 770 tests
+  passed, 60 failed, 2 skipped**. Thirty-four submission failures were then
+  closed by `02a500e`. The remaining source/evidence integrity failures are
+  expected to stay red until the final exact image refresh; they are not
+  waived. The restricted-run localhost failures passed in the capability rerun.
+- Monolithic repository Prettier exhausted Node's 4 GiB heap after about 171
+  seconds. A bounded tracked-file pass identified only the two session-core
+  files now corrected in `996d609`; all other completed batches passed.
+
+### Cloud and release state
+
+- Repository-contained Wrangler **4.110.0** is authenticated to configured
+  account `9b0a1524e478000ec9b3ff2da6104d81`.
+- The active public deployment remains the earlier hotfix Worker version
+  `47a0f7cd-05f8-45c1-8b57-2f4d17240125` at 100%. It does not contain the
+  feature branch's new authority commits, so no current-source deployment is
+  claimed.
+- The canonical root is still dirty only because a concurrent OpenWiki agent
+  left an unstaged 10-line `AGENTS.md` block plus untracked
+  `.github/workflows/openwiki-update.yml` and `openwiki/INSTRUCTIONS.md`. A
+  read-only review found floating package installation, third-party credential
+  use, broad write permissions, missing referenced content, and other release
+  blockers. Those paths remain unstaged and untouched pending exact removal
+  approval; they must not enter the release.
+
+### Exact next actions
+
+1. Remove only the reviewed unsafe OpenWiki leftovers after exact owner
+   approval, then commit this factual checkpoint and freeze the clean source.
+2. Start one fresh canonical-root runtime, build the exact runner/adapter,
+   execute the genuine aggregate timeout proof and negative controls, and
+   refresh only the allowlisted source/image-bound scientific evidence.
+3. Commit the evidence independently, qualify and registry-promote the exact
+   tuple, run the full release gate, and deploy it through Wrangler.
+4. Run clean desktop/mobile CloakBrowser production journeys, console/network
+   checks, live/replay/sample separation, reconnect, transfer fail/pass, patch,
+   and Proof Capsule checks; then record exact evidence.
+5. Push only `feat/learner-ux-v6.1`. Do **not** merge `main` in this slice.
+
+No current-source image, timeout receipt, refreshed evidence, qualification,
+deployment, production smoke, public browser qualification, push, `main` merge,
+learner result, or submission receipt is claimed at this checkpoint. Release
+remains **NO-GO** until the remaining gates actually pass.
