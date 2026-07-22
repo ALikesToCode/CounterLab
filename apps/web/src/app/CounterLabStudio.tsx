@@ -13,7 +13,7 @@ import type {
 export type StudioActions = {
   newAnalysis: () => void;
   newAnalysisDisabled?: boolean;
-  showEvidence: () => void;
+  showEvidence?: () => void;
   lockPrediction?: () => void;
   runFairTest?: () => void;
   reviewPatch?: () => void;
@@ -157,7 +157,8 @@ export function CounterLabStudio({
         label: "Show evidence",
         hint: "Open the artifact and exact notebook cell references.",
         shortcut: "E",
-        run: actions.showEvidence,
+        disabled: actions.showEvidence === undefined,
+        run: actions.showEvidence ?? (() => undefined),
       },
       {
         id: "prediction",
@@ -229,7 +230,11 @@ export function CounterLabStudio({
             recentProjects={recentProjects}
             onNewAnalysis={() => runFromProjectTools(actions.newAnalysis)}
             newAnalysisDisabled={actions.newAnalysisDisabled ?? false}
-            onShowEvidence={() => runFromProjectTools(actions.showEvidence)}
+            onShowEvidence={() => {
+              if (actions.showEvidence !== undefined) {
+                runFromProjectTools(actions.showEvidence);
+              }
+            }}
             onOpenRecent={(project) =>
               runFromProjectTools(() => actions.openRecent(project))
             }

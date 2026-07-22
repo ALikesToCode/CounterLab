@@ -24,14 +24,30 @@ export function StartOverDialog({
   onKeepWorking: () => void;
   onConfirm: () => void;
 }) {
+  const backdropRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const keepWorkingRef = useRef<HTMLButtonElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
+    const backdrop = backdropRef.current;
+    const inertSiblings = Array.from(backdrop?.parentElement?.children ?? [])
+      .filter((element): element is HTMLElement => element !== backdrop)
+      .map((element) => ({ element, wasInert: element.hasAttribute("inert") }));
+    for (const { element } of inertSiblings) element.setAttribute("inert", "");
+    const containClick = (event: MouseEvent) => {
+      if (dialogRef.current?.contains(event.target as Node)) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    document.addEventListener("click", containClick, true);
     keepWorkingRef.current?.focus();
     return () => {
+      document.removeEventListener("click", containClick, true);
+      for (const { element, wasInert } of inertSiblings) {
+        if (!wasInert) element.removeAttribute("inert");
+      }
       const previouslyFocused = previouslyFocusedRef.current;
       if (previouslyFocused?.isConnected) previouslyFocused.focus();
     };
@@ -77,14 +93,14 @@ export function StartOverDialog({
       }
     };
 
-    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown, true);
     return () => {
-      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("keydown", handleKeyDown, true);
     };
   }, [busy, onKeepWorking]);
 
   return (
-    <div className={styles.backdrop}>
+    <div ref={backdropRef} className={styles.backdrop}>
       <div
         ref={dialogRef}
         className={styles.dialog}

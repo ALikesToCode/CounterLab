@@ -192,6 +192,26 @@ describe("CounterLabStudio", () => {
     ).toBeInTheDocument();
   });
 
+  it("disables the evidence command when no matching artifact is authorized", () => {
+    render(
+      <CounterLabStudio
+        context={context}
+        actions={{
+          newAnalysis: vi.fn(),
+          startOver: vi.fn(),
+          openRecent: vi.fn(),
+        }}
+      >
+        <main>Authority mismatch</main>
+      </CounterLabStudio>,
+    );
+
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    expect(
+      screen.getByRole("button", { name: /show evidence/i }),
+    ).toBeDisabled();
+  });
+
   it("supports arrow-key navigation across Evidence & proof tabs", () => {
     render(
       <CounterLabStudio

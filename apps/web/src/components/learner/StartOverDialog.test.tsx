@@ -42,10 +42,14 @@ describe("StartOverDialog", () => {
     expect(confirm).toHaveFocus();
 
     const outside = document.createElement("button");
+    const outsideAction = vi.fn();
+    outside.addEventListener("click", outsideAction);
     document.body.append(outside);
     outside.focus();
     fireEvent.keyDown(outside, { key: "Tab" });
     expect(keepWorking).toHaveFocus();
+    fireEvent.click(outside);
+    expect(outsideAction).not.toHaveBeenCalled();
     outside.remove();
 
     fireEvent.click(

@@ -3344,6 +3344,147 @@ describe("CounterLab judged flow", () => {
     ).not.toBeNull();
   });
 
+  it("requires active-job cancellation before opening another recent session", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      restoredSessionState: "INGESTED",
+    });
+    window.history.replaceState({}, "", "/session/session_ui");
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem(
+      "counterlab.activeRunnerJob.session_ui",
+      JSON.stringify({
+        schemaVersion: "1",
+        sessionId: "session_ui",
+        jobId: liveRunnerJob.jobId,
+        kind: liveRunnerJob.kind,
+      }),
+    );
+    window.localStorage.setItem(
+      "counterlab.recentProjects.v1",
+      JSON.stringify([
+        {
+          sessionId: "session_revision",
+          artifactId: uploadedArtifact.artifactId,
+          fileName: "older-notebook.ipynb",
+          mode: "live",
+          state: "INGESTED",
+          updatedAt: "2026-07-20T09:00:00.000Z",
+        },
+      ]),
+    );
+
+    render(<App />);
+    await screen.findByRole("heading", {
+      name: /what do you think the score means/i,
+    });
+    await user.click(
+      screen.getByRole("button", { name: /project & evidence/i }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /older-notebook\.ipynb/i }),
+    );
+
+    expect(
+      screen.getByRole("heading", { name: /stop live work and start over/i }),
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/session/session_ui");
+    await user.click(
+      screen.getByRole("button", { name: /stop jobs and start over/i }),
+    );
+
+    await vi.waitFor(() =>
+      expect(window.location.pathname).toBe("/session/session_revision"),
+    );
+    await vi.waitFor(() =>
+      expect(
+        fetcher.mock.calls.some(
+          ([path]) => String(path) === "/api/sessions/session_revision",
+        ),
+      ).toBe(true),
+    );
+    expect(
+      screen.queryByRole("heading", { name: /stop live work and start over/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      window.localStorage.getItem("counterlab.activeRunnerJob.session_ui"),
+    ).toBeNull();
+    expect(
+      window.sessionStorage.getItem(activeRunnerRegistryKey("session_ui")),
+    ).toBeNull();
+  });
+
+  it("keeps routed live work recoverable when cancellation cannot be confirmed", async () => {
+    const user = userEvent.setup();
+    const fetcher = installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      restoredSessionState: "INGESTED",
+      cancelOffline: true,
+    });
+    window.history.replaceState({}, "", "/session/session_ui");
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem(
+      "counterlab.activeRunnerJob.session_ui",
+      JSON.stringify({
+        schemaVersion: "1",
+        sessionId: "session_ui",
+        jobId: liveRunnerJob.jobId,
+        kind: liveRunnerJob.kind,
+      }),
+    );
+    window.localStorage.setItem(
+      "counterlab.recentProjects.v1",
+      JSON.stringify([
+        {
+          sessionId: "session_revision",
+          artifactId: uploadedArtifact.artifactId,
+          fileName: "older-notebook.ipynb",
+          mode: "live",
+          state: "INGESTED",
+          updatedAt: "2026-07-20T09:00:00.000Z",
+        },
+      ]),
+    );
+
+    render(<App />);
+    await screen.findByRole("heading", {
+      name: /what do you think the score means/i,
+    });
+    await user.click(
+      screen.getByRole("button", { name: /project & evidence/i }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /older-notebook\.ipynb/i }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /stop jobs and start over/i }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /what result are you trying to understand/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /could not confirm cancellation for 1 live job/i,
+    );
+    expect(window.location.pathname).toBe("/");
+    expect(
+      fetcher.mock.calls.some(
+        ([path]) => String(path) === "/api/sessions/session_revision",
+      ),
+    ).toBe(false);
+    expect(
+      screen.queryByRole("heading", { name: /stop live work and start over/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      window.localStorage.getItem("counterlab.activeRunnerJob.session_ui"),
+    ).not.toBeNull();
+  });
+
   it("hydrates restored session evidence from the canonical private endpoint", async () => {
     const user = userEvent.setup();
     const storedEvents = [

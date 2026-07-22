@@ -3015,6 +3015,22 @@ function LeakageRealityScreen({
   const [patch, setPatch] = useState<PatchResult | null>(
     session?.patchResult?.status === "VERIFIED" ? session.patchResult : null,
   );
+  const authorizedPatch =
+    session === null
+      ? patch
+      : session.patchResult?.status === "VERIFIED" && repairPermitted
+        ? session.patchResult
+        : null;
+  const renderedTransferState: TransferState =
+    transferState === "patched" && authorizedPatch === null
+      ? session?.transferResult?.outcome === "PASSED"
+        ? "passed"
+        : session?.transferResult?.outcome === "FAILED"
+          ? "failed"
+          : session?.revision === undefined
+            ? "locked"
+            : "ready"
+      : transferState;
   useEffect(() => {
     if (session === null) return;
     const verifiedPatch =
@@ -3063,7 +3079,7 @@ function LeakageRealityScreen({
 
   useLayoutEffect(() => {
     resetViewport("lesson-phase-title");
-  }, [transferState]);
+  }, [renderedTransferState]);
 
   useEffect(() => {
     if (session === null || patchRunner.events.length === 0) return;
@@ -3265,7 +3281,7 @@ function LeakageRealityScreen({
   };
 
   const downloadCompletionPatch = () => {
-    if (session === null || patch === null) return;
+    if (session === null || authorizedPatch === null) return;
     void runAction(async () => {
       saveAuthenticatedDownload(
         await counterLabApi.downloadPatch(session.sessionId),
@@ -3305,7 +3321,7 @@ function LeakageRealityScreen({
       </div>
     );
 
-  if (transferState === "patching") {
+  if (renderedTransferState === "patching") {
     return (
       <main
         className="workspace shell reality lesson-phase live-compiler"
@@ -3408,7 +3424,7 @@ function LeakageRealityScreen({
     );
   }
 
-  if (transferState === "patched") {
+  if (renderedTransferState === "patched") {
     if (session?.mode.kind === "live_notebook" && !sessionProofReady(session)) {
       return (
         <main
@@ -3443,12 +3459,12 @@ function LeakageRealityScreen({
       session.beliefSpec !== undefined &&
       session.prediction !== undefined &&
       session.revision !== undefined &&
-      patch !== null
+      authorizedPatch !== null
         ? {
             sessionId: session.sessionId,
             diff: session.reasoningDiffV2,
             capsule: session.proofCapsule,
-            patch,
+            patch: authorizedPatch,
             publicTextPreview: {
               claim: session.beliefSpec.claim,
               hypotheses: [
@@ -3485,7 +3501,8 @@ function LeakageRealityScreen({
           repairedNotebookAction={{
             label: "Download repaired notebook",
             onActivate: downloadCompletionPatch,
-            disabled: actionBusy || session === null || patch === null,
+            disabled:
+              actionBusy || session === null || authorizedPatch === null,
           }}
           proofCapsuleAction={{
             ...(session?.mode.kind === "live_notebook"
@@ -3568,16 +3585,17 @@ function LeakageRealityScreen({
                 </p>
               </div>
               <div className="completion-actions">
-                {session?.mode.kind === "live_notebook" && patch !== null && (
-                  <button
-                    className="button button-gold patch-download"
-                    type="button"
-                    disabled={actionBusy}
-                    onClick={downloadCompletionPatch}
-                  >
-                    Download verified notebook copy <Mark name="arrow" />
-                  </button>
-                )}
+                {session?.mode.kind === "live_notebook" &&
+                  authorizedPatch !== null && (
+                    <button
+                      className="button button-gold patch-download"
+                      type="button"
+                      disabled={actionBusy}
+                      onClick={downloadCompletionPatch}
+                    >
+                      Download verified notebook copy <Mark name="arrow" />
+                    </button>
+                  )}
                 <button
                   className="button button-quiet"
                   type="button"
@@ -3631,7 +3649,7 @@ function LeakageRealityScreen({
               </p>
               <pre className="diff" aria-label="Verified notebook cell diff">
                 <code>
-                  {patch?.diff ??
+                  {authorizedPatch?.diff ??
                     "Verified replay patch: random rows replaced with customer-group evaluation; customer identity removed."}
                 </code>
               </pre>
@@ -3653,7 +3671,7 @@ function LeakageRealityScreen({
     );
   }
 
-  if (transferState === "passed") {
+  if (renderedTransferState === "passed") {
     if (!repairPermitted) {
       return (
         <main
@@ -3747,7 +3765,7 @@ function LeakageRealityScreen({
     );
   }
 
-  if (transferState === "ready" || transferState === "failed") {
+  if (renderedTransferState === "ready" || renderedTransferState === "failed") {
     return (
       <main
         className="workspace shell reality lesson-phase transfer-phase"
@@ -3839,7 +3857,7 @@ function LeakageRealityScreen({
           >
             Check transfer
           </button>
-          {transferState === "failed" && (
+          {renderedTransferState === "failed" && (
             <div className="transfer-result rejected" role="status">
               <strong>Transfer not yet passed.</strong>
               <span>
@@ -4809,7 +4827,10 @@ export function App() {
   const [restartRequest, setRestartRequest] = useState<{
     sessionId: string;
     jobs: ActiveRunnerRecord[];
-    destination: "home" | "new-analysis";
+    destination:
+      | { kind: "home" }
+      | { kind: "new-analysis" }
+      | { kind: "route"; path: string };
   } | null>(null);
   const [restartBusy, setRestartBusy] = useState(false);
   const [analysisPreview, setAnalysisPreview] =
@@ -5298,6 +5319,33 @@ export function App() {
     void checkLiveCapabilities(true);
   };
 
+  const openStoredRoute = (path: string) => {
+    setRestartRequest(null);
+    setRestartBusy(false);
+    window.history.pushState({}, "", path);
+    setRouteRecovery(null);
+    setRouteHydrated(false);
+    setLocationRevision((current) => current + 1);
+  };
+
+  const requestStoredRoute = (path: string, targetId: string) => {
+    if (busy || cancellingRunner || restartBusy) return;
+    const currentSessionId =
+      session?.sessionId ?? window.localStorage.getItem(storageKeys.sessionId);
+    if (currentSessionId !== null && currentSessionId !== targetId) {
+      const jobs = knownActiveRunnerJobs(currentSessionId);
+      if (jobs.length > 0) {
+        setRestartRequest({
+          sessionId: currentSessionId,
+          jobs,
+          destination: { kind: "route", path },
+        });
+        return;
+      }
+    }
+    openStoredRoute(path);
+  };
+
   const restart = () => {
     if (restartBusy) return;
     const sessionId =
@@ -5305,7 +5353,11 @@ export function App() {
     if (sessionId !== null) {
       const jobs = knownActiveRunnerJobs(sessionId);
       if (jobs.length > 0) {
-        setRestartRequest({ sessionId, jobs, destination: "home" });
+        setRestartRequest({
+          sessionId,
+          jobs,
+          destination: { kind: "home" },
+        });
         return;
       }
     }
@@ -5399,8 +5451,11 @@ export function App() {
         unresolved += 1;
       }
     }
-    if (unresolved === 0 && request.destination === "new-analysis") {
+    if (unresolved === 0) forgetRunnerCheckpoint(request.sessionId);
+    if (unresolved === 0 && request.destination.kind === "new-analysis") {
       enterNewAnalysis();
+    } else if (unresolved === 0 && request.destination.kind === "route") {
+      openStoredRoute(request.destination.path);
     } else {
       resetJourney(
         unresolved === 0
@@ -6072,7 +6127,7 @@ export function App() {
         setRestartRequest({
           sessionId,
           jobs,
-          destination: "new-analysis",
+          destination: { kind: "new-analysis" },
         });
         return;
       }
@@ -6091,14 +6146,10 @@ export function App() {
   };
 
   const openRecentProject = (project: RecentProject) => {
-    window.localStorage.setItem(storageKeys.sessionId, project.sessionId);
-    window.localStorage.setItem(storageKeys.mode, project.mode);
-    window.history.pushState(
-      {},
-      "",
+    requestStoredRoute(
       `/session/${encodeURIComponent(project.sessionId)}`,
+      project.sessionId,
     );
-    window.location.reload();
   };
 
   const downloadCurrentPatch = () => {
@@ -6553,11 +6604,7 @@ export function App() {
       status: recent.status,
       disabled: busy,
       onOpen: () => {
-        if (busy) return;
-        window.history.pushState({}, "", recentWorkPath(recent));
-        setRouteRecovery(null);
-        setRouteHydrated(false);
-        setLocationRevision((current) => current + 1);
+        requestStoredRoute(recentWorkPath(recent), recent.id);
       },
     }),
   );
@@ -6787,6 +6834,18 @@ export function App() {
     );
   }
 
+  const expectedStudioSessionMode =
+    mode === "instant"
+      ? "sample_lesson"
+      : mode === "replay"
+        ? "verified_replay"
+        : "live_notebook";
+  const studioContextMatchesSession =
+    session === null ||
+    (session.mode.kind === expectedStudioSessionMode &&
+      (artifact === null || artifact.artifactId === session.artifactId));
+  const studioArtifact = studioContextMatchesSession ? artifact : null;
+
   return (
     <div className={`app-frame stage-${stage}`}>
       <SkipLink />
@@ -6863,7 +6922,7 @@ export function App() {
             context={{
               mode,
               stage: stage as StudioStage,
-              artifact,
+              artifact: studioArtifact,
               session,
               events: mergedProofEvents.compilerEvents,
               evidenceEvents: mergedProofEvents.evidenceEvents,
@@ -6873,7 +6932,9 @@ export function App() {
             actions={{
               newAnalysis: startNewAnalysis,
               newAnalysisDisabled: busy || cancellingRunner || restartBusy,
-              showEvidence: () => review("question"),
+              ...(studioContextMatchesSession
+                ? { showEvidence: () => review("question") }
+                : {}),
               ...(stage === "belief" &&
               confirmed &&
               prediction !== null &&
@@ -6906,7 +6967,7 @@ export function App() {
               <ReviewScreen
                 step={reviewStep}
                 claim={effectiveClaim}
-                artifact={artifact}
+                artifact={studioArtifact}
                 session={session}
                 {...(verifiedResult === undefined
                   ? {}
