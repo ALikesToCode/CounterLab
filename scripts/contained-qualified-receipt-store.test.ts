@@ -35,6 +35,7 @@ const intendedAggregateLimits = {
   memoryBytes: 512 * 1024 * 1024,
 };
 const observerBindings = {
+  cgroupParentPath: "containerd" as const,
   runtimeAttestationSha256: "4".repeat(64),
   runtimeSessionId: "rt-v61-test1",
   driverCliSha256: "5".repeat(64),

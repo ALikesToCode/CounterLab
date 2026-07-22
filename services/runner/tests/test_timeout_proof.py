@@ -328,6 +328,40 @@ def test_rootless_receipt_binds_control_and_exact_adapter_authority() -> None:
     rootless = _rootless(control, build)
 
     assert validate_rootless_receipt(rootless, control=control, build=build) == rootless
+    direct_control = _control()
+    direct = _rootless(direct_control, build)
+    direct["aggregateLimitEvidence"]["cgroupPath"] = (
+        f"counterlab-v6.1-{direct_control['invocationId']}"
+    )
+    direct_evidence_payload = {
+        key: value
+        for key, value in direct["aggregateLimitEvidence"].items()
+        if key != "receiptPayloadSha256"
+    }
+    direct["aggregateLimitEvidence"]["receiptPayloadSha256"] = _hash(
+        direct_evidence_payload
+    )
+    direct_payload = {
+        key: value for key, value in direct.items() if key != "receiptPayloadSha256"
+    }
+    direct["receiptPayloadSha256"] = _hash(direct_payload)
+    direct_control["rootlessReceiptPayloadSha256"] = direct[
+        "receiptPayloadSha256"
+    ]
+    direct_control_payload = {
+        key: value
+        for key, value in direct_control.items()
+        if key != "receiptPayloadSha256"
+    }
+    direct_control["receiptPayloadSha256"] = _hash(direct_control_payload)
+    assert (
+        validate_rootless_receipt(
+            direct,
+            control=direct_control,
+            build=build,
+        )
+        == direct
+    )
     for limit_type in ("RLIMIT_AS", "RLIMIT_NPROC"):
         changed_control = _control()
         changed = _rootless(changed_control, build)
@@ -423,7 +457,7 @@ def test_rootless_receipt_binds_control_and_exact_adapter_authority() -> None:
     nested_control = _control()
     nested_path = _rootless(nested_control, build)
     nested_path["aggregateLimitEvidence"]["cgroupPath"] = (
-        f"counterlab-v6.1/{nested_control['invocationId']}"
+        f"other/counterlab-v6.1-{nested_control['invocationId']}"
     )
     nested_evidence_payload = {
         key: value

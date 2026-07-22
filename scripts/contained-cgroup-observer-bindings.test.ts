@@ -10,7 +10,10 @@ import {
   createRuntimeToolchainFingerprint,
   sha256RuntimeBytes,
 } from "./contained-runtime-attestation.mjs";
-import { resolveContainedCgroupObserverBindings } from "./contained-cgroup-observer-bindings.mjs";
+import {
+  parseContainedCgroupParentPath,
+  resolveContainedCgroupObserverBindings,
+} from "./contained-cgroup-observer-bindings.mjs";
 
 const root = process.cwd();
 
@@ -75,6 +78,25 @@ function fixture() {
 }
 
 describe("contained cgroup observer bindings", () => {
+  it("binds only the two attested unified-cgroup namespace layouts", () => {
+    expect(parseContainedCgroupParentPath("0::/\n")).toBe("");
+    expect(parseContainedCgroupParentPath("0::/containerd\n")).toBe(
+      "containerd",
+    );
+
+    for (const source of [
+      "",
+      "0::/user.slice\n",
+      "0::/containerd/child\n",
+      "1:name=systemd:/\n",
+      "0::/\n0::/containerd\n",
+    ]) {
+      expect(() => parseContainedCgroupParentPath(source)).toThrow(
+        /cgroup namespace/u,
+      );
+    }
+  });
+
   it("derives proof-driver and public-attestation hashes from exact live bytes", () => {
     const input = fixture();
     const componentSha256 = Object.fromEntries(
@@ -89,9 +111,11 @@ describe("contained cgroup observer bindings", () => {
 
     expect(
       resolveContainedCgroupObserverBindings({
+        cgroupMembershipSource: "0::/\n",
         sessionRoot: input.sessionRoot,
       }),
     ).toEqual({
+      cgroupParentPath: "",
       driverCliSha256: sha256RuntimeBytes(
         readFileSync(
           resolve(root, "scripts/verify-contained-runtime-timeout.py"),
@@ -116,6 +140,7 @@ describe("contained cgroup observer bindings", () => {
     const wrongRoot = fixture();
     expect(() =>
       resolveContainedCgroupObserverBindings({
+        cgroupMembershipSource: "0::/\n",
         sessionRoot: resolve(wrongRoot.sessionRoot, "config"),
       }),
     ).toThrow(/session/u);
@@ -132,6 +157,7 @@ describe("contained cgroup observer bindings", () => {
     );
     expect(() =>
       resolveContainedCgroupObserverBindings({
+        cgroupMembershipSource: "0::/\n",
         sessionRoot: stale.sessionRoot,
       }),
     ).toThrow(/attestation binding/u);

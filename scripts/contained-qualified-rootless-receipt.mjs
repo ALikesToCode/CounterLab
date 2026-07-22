@@ -38,6 +38,7 @@ const rootlessReceiptKeys = [
 ];
 
 const observerBindingKeys = [
+  "cgroupParentPath",
   "driverCliSha256",
   "driverModuleSha256",
   "runtimeAttestationSha256",

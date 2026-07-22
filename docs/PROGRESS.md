@@ -5531,3 +5531,61 @@ No current exact-commit image, timeout receipt, refreshed release evidence,
 qualification receipt, Cloudflare deployment, production smoke, public browser
 qualification, push, merge, learner observation, or submission receipt is
 claimed here. Release remains **NO-GO** until those gates occur.
+
+## Runtime-topology-bound containment checkpoint — 2026-07-22T06:35:19Z
+
+### Completed in source and verified locally
+
+- The fresh exact build at `83399e3` reproduced the observer timeout even
+  after the aggregate sentinel created three stable cgroup members. A
+  same-namespace read-only observation proved the remaining defect: successful
+  RootlessKit evacuation exposes the delegated runtime cgroup as namespace
+  root, while a non-evacuated diagnostic runtime had exposed it beneath
+  `containerd`. A single hardcoded path was therefore incorrect in either
+  direction.
+- The observer now reads the unified hierarchy from `/proc/self/cgroup`,
+  accepts only the exact attested layouts `0::/` or `0::/containerd`, and binds
+  that parent into a version-2 observer manifest. Unknown, nested, duplicate,
+  multi-line, or legacy-controller layouts fail closed.
+- The manifest, observer, evidence validator, qualified rootless receipt,
+  TypeScript timeout receipt, and Python timeout verifier now carry one exact
+  topology binding. They never probe both paths or accept an unbound fallback.
+- The observer now identity-pins the immediate delegated parent as well as the
+  candidate cgroup, and direct-root versus nested evidence is accepted only
+  when its invocation binding and self-hash match.
+
+### Verification actually run
+
+- Characterization before implementation: **1 file, 3 tests, 2 failed and 1
+  passed**, proving the missing topology parser and binding.
+- Focused containment/receipt Vitest after repair: **8 files, 39/39 passed**.
+- Complete contained-runtime Vitest: **16 files, 120/120 passed**.
+- Complete runner Pytest with repository-contained temporary output: **83/83
+  passed**.
+- Focused Python timeout-proof validation: **10/10 passed**.
+- Repository and web TypeScript compilers: **passed**.
+- Git whitespace check: **passed**.
+
+### Immediate remaining release order
+
+1. Commit this independently reviewable runtime-topology repair and confirm a
+   clean source tree.
+2. Start one fresh attested contained runtime, create the required private
+   repository-contained fixture and temporary mounts, and build the exact
+   source-bound runner/adapter tuple once.
+3. Execute the genuine aggregate timeout sentinel. Continue only if the
+   manifest path, observed cgroup, negative controls, cleanup, and timeout
+   receipt all bind and pass.
+4. Refresh and commit only the allowlisted exact source/image-bound scientific,
+   SBOM, VEX, license, health, and held-out evidence; then qualify and promote
+   that exact tuple.
+5. Start a fresh `playwright_safe` CloakBrowser session, run the full release
+   gate, deploy through `deploy-qualified.sh`, and execute the public production
+   smoke plus the 40-journey browser matrix.
+6. Push the feature branch, fast-forward `main`, and push `main` only after the
+   deployed tuple and public journeys are directly evidenced.
+
+No refreshed scientific evidence, current-source qualification receipt,
+Cloudflare deployment, production smoke, public browser qualification, push,
+merge, learner observation, or submission receipt is claimed at this
+checkpoint. Release remains **NO-GO** until those gates occur.

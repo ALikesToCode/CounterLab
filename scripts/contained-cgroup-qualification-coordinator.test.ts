@@ -212,6 +212,7 @@ function fixture() {
       sessionRoot,
     },
     observerBindings: {
+      cgroupParentPath: "containerd",
       driverCliSha256: "c".repeat(64),
       driverModuleSha256: "d".repeat(64),
       runtimeAttestationSha256: "e".repeat(64),

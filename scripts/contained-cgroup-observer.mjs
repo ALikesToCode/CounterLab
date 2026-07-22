@@ -187,6 +187,7 @@ export function validateContainedCgroupObserverFailure(value, manifest) {
 
 function expectedEvidence(manifest) {
   return {
+    cgroupParentPath: manifest.cgroupParentPath,
     invocationId: manifest.invocationId,
     finalContainerId: manifest.finalContainerId,
     sanitizedSpecSha256: manifest.sanitizedSpecSha256,
@@ -683,12 +684,16 @@ async function waitUntil(predicate, label, timeoutMs) {
 
 function actualCgroupAdapter(manifest, paths) {
   const cgroupRoot = resolve(cgroupFilesystemRoot, manifest.cgroupPath);
-  const cgroupParentRoot = cgroupFilesystemRoot;
+  const cgroupParentRoot = resolve(
+    cgroupFilesystemRoot,
+    manifest.cgroupParentPath,
+  );
   if (
     resolve(
       cgroupFilesystemRoot,
       relative(cgroupFilesystemRoot, cgroupRoot),
     ) !== cgroupRoot ||
+    resolve(cgroupParentRoot, manifest.cgroupId) !== cgroupRoot ||
     statfsSync(cgroupFilesystemRoot).type !== cgroup2Magic
   ) {
     throw new Error("contained cgroup observer cgroup v2 root is invalid");

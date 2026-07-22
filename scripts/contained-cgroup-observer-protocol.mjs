@@ -39,6 +39,7 @@ const manifestKeys = [
   "baseReceiptPayloadSha256",
   "cgroupId",
   "cgroupIdentity",
+  "cgroupParentPath",
   "cgroupPath",
   "driverCliSha256",
   "driverModuleSha256",
@@ -115,7 +116,7 @@ export function validateContainedCgroupObserverManifest(
   const expectedReceiptPath = `.rt/${manifest.runtimeSessionId}/run/rootless-specs/${manifest.finalContainerId}.receipt.json`;
   const { receiptPayloadSha256, ...payload } = manifest;
   if (
-    manifest.schemaVersion !== "1" ||
+    manifest.schemaVersion !== "2" ||
     manifest.status !== "REQUESTED" ||
     manifest.qualificationMode !== AGGREGATE_TIMEOUT_QUALIFICATION_MODE ||
     !sessionPattern.test(manifest.runtimeSessionId ?? "") ||
@@ -129,7 +130,12 @@ export function validateContainedCgroupObserverManifest(
     !sha256Pattern.test(manifest.driverModuleSha256 ?? "") ||
     manifest.baseReceiptPath !== expectedReceiptPath ||
     manifest.cgroupId !== `counterlab-v6.1-${manifest.invocationId}` ||
-    manifest.cgroupPath !== createContainedCgroupPath(manifest.invocationId) ||
+    !["", "containerd"].includes(manifest.cgroupParentPath) ||
+    manifest.cgroupPath !==
+      createContainedCgroupPath(
+        manifest.invocationId,
+        manifest.cgroupParentPath,
+      ) ||
     manifest.cgroupIdentity !== createContainedCgroupIdentity(manifest) ||
     !validTimestamp(manifest.requestedAt, observedAtMs) ||
     !sha256Pattern.test(receiptPayloadSha256 ?? "") ||
@@ -157,14 +163,18 @@ export function createContainedCgroupObserverManifest({
     throw new Error("contained cgroup observer request time is invalid");
   }
   const payload = {
-    schemaVersion: "1",
+    schemaVersion: "2",
     status: "REQUESTED",
     qualificationMode: AGGREGATE_TIMEOUT_QUALIFICATION_MODE,
     runtimeSessionId: observerBindings?.runtimeSessionId,
     invocationId,
     finalContainerId,
     cgroupId: `counterlab-v6.1-${invocationId}`,
-    cgroupPath: createContainedCgroupPath(invocationId),
+    cgroupParentPath: observerBindings?.cgroupParentPath,
+    cgroupPath: createContainedCgroupPath(
+      invocationId,
+      observerBindings?.cgroupParentPath,
+    ),
     cgroupIdentity: createContainedCgroupIdentity({
       invocationId,
       finalContainerId,

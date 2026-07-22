@@ -7,6 +7,7 @@ export function createQualifiedContainedRootlessReceipt<
   aggregateLimitEvidence: TEvidence;
   baseReceipt: TReceipt;
   observerBindings: {
+    cgroupParentPath: "" | "containerd";
     runtimeAttestationSha256: string;
     runtimeSessionId: string;
     driverCliSha256: string;

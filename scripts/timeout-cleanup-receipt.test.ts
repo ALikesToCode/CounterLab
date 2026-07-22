@@ -188,6 +188,19 @@ describe("timeout cleanup aggregate resource authority", () => {
         limitMode: QUALIFIED_AGGREGATE_LIMIT_MODE,
       }),
     ).not.toThrow();
+
+    const direct = aggregateLimitEvidence();
+    direct.cgroupPath = `counterlab-v6.1-${invocationId}`;
+    const { receiptPayloadSha256: _nestedHash, ...directPayload } = direct;
+    direct.receiptPayloadSha256 = sha256(canonicalJson(directPayload));
+    expect(() =>
+      assertQualifiedAggregateRuntimeLimits({
+        ...aggregateInput(),
+        aggregateLimitEvidence: direct,
+        aggregateLimitIntentEnforced: true,
+        limitMode: QUALIFIED_AGGREGATE_LIMIT_MODE,
+      }),
+    ).not.toThrow();
   });
 
   it("rejects asserted aggregate limits without bound observations", () => {
@@ -212,7 +225,7 @@ describe("timeout cleanup aggregate resource authority", () => {
     ).toThrow();
 
     const nestedPath = aggregateLimitEvidence();
-    nestedPath.cgroupPath = `counterlab-v6.1-${invocationId}`;
+    nestedPath.cgroupPath = `other/counterlab-v6.1-${invocationId}`;
     const { receiptPayloadSha256: _nestedHash, ...nestedPayload } = nestedPath;
     nestedPath.receiptPayloadSha256 = sha256(canonicalJson(nestedPayload));
     expect(() =>

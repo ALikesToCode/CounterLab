@@ -7,9 +7,14 @@ export function createContainedCgroupIdentity(input: {
   finalContainerId: string;
   sanitizedSpecSha256: string;
 }): string;
+export function createContainedCgroupPath(
+  invocationId: string,
+  cgroupParentPath: "" | "containerd",
+): string;
 export function validateContainedCgroupEvidence<T>(
   value: T,
   expected: {
+    cgroupParentPath: "" | "containerd";
     invocationId: string;
     finalContainerId: string;
     sanitizedSpecSha256: string;

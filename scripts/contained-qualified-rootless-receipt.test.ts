@@ -20,6 +20,7 @@ const intendedAggregateLimits = {
   memoryBytes: 512 * 1024 * 1024,
 };
 const observerBindings = {
+  cgroupParentPath: "containerd" as const,
   runtimeAttestationSha256: "4".repeat(64),
   runtimeSessionId: "rt-v61-test1",
   driverCliSha256: "5".repeat(64),
@@ -63,7 +64,7 @@ function baseReceipt() {
   });
 }
 
-function aggregateEvidence() {
+function aggregateEvidence(cgroupParentPath: "" | "containerd" = "containerd") {
   const memberPids = [100, 101];
   return hashed({
     schemaVersion: "2",
@@ -71,7 +72,10 @@ function aggregateEvidence() {
     authority: "linux-cgroup-v2",
     cgroupVersion: 2,
     cgroupId: `counterlab-v6.1-${invocationId}`,
-    cgroupPath: `containerd/counterlab-v6.1-${invocationId}`,
+    cgroupPath:
+      cgroupParentPath === ""
+        ? `counterlab-v6.1-${invocationId}`
+        : `containerd/counterlab-v6.1-${invocationId}`,
     cgroupIdentity: createContainedCgroupIdentity({
       invocationId,
       finalContainerId,
@@ -147,6 +151,26 @@ describe("qualified contained rootless receipt", () => {
     expect(receiptPayloadSha256).toBe(
       sha256CgroupBytes(canonicalCgroupJson(payload)),
     );
+
+    const directBindings = {
+      ...observerBindings,
+      cgroupParentPath: "" as const,
+    };
+    const direct = createQualifiedContainedRootlessReceipt({
+      aggregateLimitEvidence: aggregateEvidence(""),
+      baseReceipt: baseReceipt(),
+      observerBindings: directBindings,
+    });
+    expect(direct.aggregateLimitEvidence.cgroupPath).toBe(
+      `counterlab-v6.1-${invocationId}`,
+    );
+    expect(() =>
+      createQualifiedContainedRootlessReceipt({
+        aggregateLimitEvidence: aggregateEvidence(),
+        baseReceipt: baseReceipt(),
+        observerBindings: directBindings,
+      }),
+    ).toThrow(/aggregate cgroup evidence/u);
   });
 
   it("rejects stale, already asserted, malformed, or unknown base receipts", () => {

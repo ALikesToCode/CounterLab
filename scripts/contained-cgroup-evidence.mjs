@@ -79,6 +79,7 @@ function validateExpected(value) {
     [
       "driverCliSha256",
       "driverModuleSha256",
+      "cgroupParentPath",
       "finalContainerId",
       "intendedAggregateLimits",
       "invocationId",
@@ -102,6 +103,7 @@ function validateExpected(value) {
     !sessionPattern.test(expected.runtimeSessionId ?? "") ||
     !sha256(expected.driverCliSha256) ||
     !sha256(expected.driverModuleSha256) ||
+    !["", "containerd"].includes(expected.cgroupParentPath) ||
     typeof intended.cpuCount !== "number" ||
     !Number.isFinite(intended.cpuCount) ||
     intended.cpuCount < 0.25 ||
@@ -134,11 +136,15 @@ export function createContainedCgroupIdentity({
   );
 }
 
-export function createContainedCgroupPath(invocationId) {
-  if (!invocationPattern.test(invocationId ?? "")) {
+export function createContainedCgroupPath(invocationId, cgroupParentPath) {
+  if (
+    !invocationPattern.test(invocationId ?? "") ||
+    !["", "containerd"].includes(cgroupParentPath)
+  ) {
     throw new Error("aggregate cgroup evidence path input is invalid");
   }
-  return `containerd/counterlab-v6.1-${invocationId}`;
+  const cgroupId = `counterlab-v6.1-${invocationId}`;
+  return cgroupParentPath === "" ? cgroupId : `${cgroupParentPath}/${cgroupId}`;
 }
 
 export function validateContainedCgroupEvidence(value, expectedValue) {
@@ -221,7 +227,11 @@ export function validateContainedCgroupEvidence(value, expectedValue) {
     evidence.runtimeAttestationSha256 !== expected.runtimeAttestationSha256 ||
     !sha256(evidence.finalizationPayloadSha256) ||
     evidence.cgroupId !== `counterlab-v6.1-${expected.invocationId}` ||
-    evidence.cgroupPath !== createContainedCgroupPath(expected.invocationId) ||
+    evidence.cgroupPath !==
+      createContainedCgroupPath(
+        expected.invocationId,
+        expected.cgroupParentPath,
+      ) ||
     evidence.cgroupIdentity !== createContainedCgroupIdentity(expected) ||
     observed.memoryMaxBytes !== intended.memoryBytes ||
     ![0, intended.memoryBytes].includes(observed.memorySwapMaxBytes) ||

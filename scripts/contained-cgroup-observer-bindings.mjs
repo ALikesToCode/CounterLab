@@ -87,8 +87,20 @@ function repositoryFile(path, label) {
   }
 }
 
-export function resolveContainedCgroupObserverBindings({ sessionRoot }) {
+export function parseContainedCgroupParentPath(source) {
+  if (source === "0::/\n") return "";
+  if (source === "0::/containerd\n") return "containerd";
+  throw new Error("contained cgroup observer cgroup namespace is invalid");
+}
+
+export function resolveContainedCgroupObserverBindings({
+  cgroupMembershipSource = readFileSync("/proc/self/cgroup", "utf8"),
+  sessionRoot,
+}) {
   const runtimeSessionId = exactRuntimeSessionRoot(sessionRoot);
+  const cgroupParentPath = parseContainedCgroupParentPath(
+    cgroupMembershipSource,
+  );
   const attestationPath = resolve(sessionRoot, "attestation.json");
   privateFile(attestationPath, "runtime attestation");
   let attestation;
@@ -164,6 +176,7 @@ export function resolveContainedCgroupObserverBindings({ sessionRoot }) {
     repositoryFile(path, label);
   }
   return Object.freeze({
+    cgroupParentPath,
     driverCliSha256: sha256RuntimeBytes(readFileSync(driverCliPath)),
     driverModuleSha256: sha256RuntimeBytes(readFileSync(driverModulePath)),
     runtimeAttestationSha256: sha256RuntimeBytes(

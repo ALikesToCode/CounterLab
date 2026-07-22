@@ -51,6 +51,7 @@ function manifest() {
     },
     invocationId,
     observerBindings: {
+      cgroupParentPath: "containerd",
       runtimeSessionId,
       runtimeAttestationSha256: "6".repeat(64),
       driverCliSha256: "7".repeat(64),
@@ -193,6 +194,7 @@ describe("contained cgroup observer", () => {
     ).not.toThrow();
     expect(() =>
       validateContainedCgroupEvidence(evidence, {
+        cgroupParentPath: input.cgroupParentPath,
         invocationId,
         finalContainerId,
         sanitizedSpecSha256,

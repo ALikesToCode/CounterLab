@@ -17,7 +17,7 @@ const intendedAggregateLimits = {
   memoryBytes: 512 * 1024 * 1024,
 };
 
-function evidence() {
+function evidence(cgroupParentPath: "" | "containerd" = "containerd") {
   const memberPids = [100, 101];
   const payload = {
     schemaVersion: "2",
@@ -25,7 +25,10 @@ function evidence() {
     authority: "linux-cgroup-v2",
     cgroupVersion: 2,
     cgroupId: `counterlab-v6.1-${invocationId}`,
-    cgroupPath: `containerd/counterlab-v6.1-${invocationId}`,
+    cgroupPath:
+      cgroupParentPath === ""
+        ? `counterlab-v6.1-${invocationId}`
+        : `containerd/counterlab-v6.1-${invocationId}`,
     cgroupIdentity: createContainedCgroupIdentity({
       invocationId,
       finalContainerId,
@@ -86,8 +89,9 @@ function evidence() {
   };
 }
 
-function expected() {
+function expected(cgroupParentPath: "" | "containerd" = "containerd") {
   return {
+    cgroupParentPath,
     invocationId,
     finalContainerId,
     sanitizedSpecSha256,
@@ -106,6 +110,9 @@ describe("contained cgroup evidence", () => {
     );
     expect(validateContainedCgroupEvidence(evidence(), expected())).toEqual(
       evidence(),
+    );
+    expect(validateContainedCgroupEvidence(evidence(""), expected(""))).toEqual(
+      evidence(""),
     );
   });
 

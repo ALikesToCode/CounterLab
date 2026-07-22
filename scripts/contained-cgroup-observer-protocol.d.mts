@@ -1,11 +1,12 @@
 export interface ContainedCgroupObserverManifest {
-  schemaVersion: "1";
+  schemaVersion: "2";
   status: "REQUESTED";
   qualificationMode: "aggregate-timeout-proof-v1";
   runtimeSessionId: string;
   invocationId: string;
   finalContainerId: string;
   cgroupId: string;
+  cgroupParentPath: "" | "containerd";
   cgroupPath: string;
   cgroupIdentity: string;
   sanitizedSpecSha256: string;
@@ -36,6 +37,7 @@ export function createContainedCgroupObserverManifest(input: {
   intendedAggregateLimits: ContainedCgroupObserverManifest["intendedAggregateLimits"];
   invocationId: string;
   observerBindings: {
+    cgroupParentPath: "" | "containerd";
     runtimeSessionId: string;
     runtimeAttestationSha256: string;
     driverCliSha256: string;

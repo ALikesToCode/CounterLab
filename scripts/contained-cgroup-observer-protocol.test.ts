@@ -27,7 +27,7 @@ const verifiedCleanup = {
   imageRootfsUnchanged: true,
 };
 
-function manifest() {
+function manifest(cgroupParentPath: "" | "containerd" = "containerd") {
   return createContainedCgroupObserverManifest({
     baseReceiptFileSha256: "4".repeat(64),
     baseReceiptPayloadSha256: "5".repeat(64),
@@ -39,6 +39,7 @@ function manifest() {
     },
     invocationId,
     observerBindings: {
+      cgroupParentPath,
       runtimeSessionId,
       runtimeAttestationSha256: "6".repeat(64),
       driverCliSha256: "7".repeat(64),
@@ -62,6 +63,7 @@ describe("contained cgroup observer protocol", () => {
       `.rt/${runtimeSessionId}/run/rootless-specs/${finalContainerId}.receipt.json`,
     );
     expect(value.cgroupPath).toBe(`containerd/counterlab-v6.1-${invocationId}`);
+    expect(manifest("").cgroupPath).toBe(`counterlab-v6.1-${invocationId}`);
     expect(value.receiptPayloadSha256).toMatch(/^[a-f0-9]{64}$/u);
   });
 
