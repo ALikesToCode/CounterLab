@@ -588,7 +588,7 @@ export function containedRunPlan({
         "--runc-root",
         resolve(sessionRoot, "run/runc"),
         "--cgroup",
-        `${namespace}-${invocationId}`,
+        `/${namespace}-${invocationId}`,
         "--platform",
         "linux/amd64",
       ],

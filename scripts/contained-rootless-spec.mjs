@@ -1536,13 +1536,13 @@ export function sanitizeContainedRootlessSpec({
   );
   if (hasNerdctlHooks) delete parsed.hooks;
   delete parsed.annotations;
-  // RootlessKit delegates the cgroup namespace root. Keep the authoritative
-  // invocation cgroup as one leaf so every controller is inherited directly
-  // from that delegated root rather than through an unmanaged intermediate.
-  linux.cgroupsPath = `${namespace}-${expected.invocationId}`;
+  // RootlessKit delegates the cgroup namespace root. Use an absolute leaf so
+  // runc and the independent observer resolve the same cgroup regardless of
+  // whether the runtime coordinator itself was evacuated to /containerd.
+  linux.cgroupsPath = `/${namespace}-${expected.invocationId}`;
   delete linux.sysctl;
   if (
-    linux.cgroupsPath !== `${namespace}-${expected.invocationId}` ||
+    linux.cgroupsPath !== `/${namespace}-${expected.invocationId}` ||
     !Object.hasOwn(linux, "resources")
   ) {
     throw new Error("contained rootless OCI spec cgroup normalization failed");

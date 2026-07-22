@@ -78,11 +78,9 @@ function fixture() {
 }
 
 describe("contained cgroup observer bindings", () => {
-  it("binds only the two attested unified-cgroup namespace layouts", () => {
+  it("maps both attested coordinator layouts to the qualified root leaf", () => {
     expect(parseContainedCgroupParentPath("0::/\n")).toBe("");
-    expect(parseContainedCgroupParentPath("0::/containerd\n")).toBe(
-      "containerd",
-    );
+    expect(parseContainedCgroupParentPath("0::/containerd\n")).toBe("");
 
     for (const source of [
       "",
@@ -134,6 +132,13 @@ describe("contained cgroup observer bindings", () => {
       ),
       runtimeSessionId: input.runtimeSessionId,
     });
+
+    expect(
+      resolveContainedCgroupObserverBindings({
+        cgroupMembershipSource: "0::/containerd\n",
+        sessionRoot: input.sessionRoot,
+      }).cgroupParentPath,
+    ).toBe("");
   });
 
   it("rejects a noncanonical session root and stale helper attestation", () => {

@@ -89,7 +89,10 @@ function repositoryFile(path, label) {
 
 export function parseContainedCgroupParentPath(source) {
   if (source === "0::/\n") return "";
-  if (source === "0::/containerd\n") return "containerd";
+  // The coordinator may be evacuated to /containerd, but the qualified task
+  // uses an absolute cgroup path at the namespace root. Its observer therefore
+  // always reads the root-level sibling, never a child of the coordinator.
+  if (source === "0::/containerd\n") return "";
   throw new Error("contained cgroup observer cgroup namespace is invalid");
 }
 

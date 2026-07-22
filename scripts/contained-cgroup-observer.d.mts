@@ -1,6 +1,8 @@
 import type { ContainedCgroupObserverManifest } from "./contained-cgroup-observer-protocol.mjs";
 import type { ContainedCgroupObserverFinalization } from "./contained-cgroup-observer-protocol.mjs";
 
+export const cgroupStartupTimeoutMs: 30_000;
+
 export function createContainedCgroupObserverReady(
   manifest: ContainedCgroupObserverManifest,
   options?: { armedAt?: Date; observerPid?: number },

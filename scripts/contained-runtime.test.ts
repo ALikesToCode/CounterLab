@@ -1627,9 +1627,9 @@ describe("contained runtime command policy", () => {
     expect(plan.start.program).toBe(resolve(installRoot, "bin/ctr"));
     const cgroupIndex = plan.start.args.indexOf("--cgroup");
     expect(plan.start.args[cgroupIndex + 1]).toBe(
-      `counterlab-v6.1-${invocationId}`,
+      `/counterlab-v6.1-${invocationId}`,
     );
-    expect(plan.start.args[cgroupIndex + 1]).not.toContain("/");
+    expect(plan.start.args[cgroupIndex + 1]).not.toContain("/containerd/");
     expect(plan.start.args).toEqual(
       expect.arrayContaining([
         "run",
@@ -1637,7 +1637,7 @@ describe("contained runtime command policy", () => {
         "--fifo-dir",
         clientFifoRoot,
         "--cgroup",
-        `counterlab-v6.1-${invocationId}`,
+        `/counterlab-v6.1-${invocationId}`,
         "--platform",
         "linux/amd64",
       ]),
@@ -1932,8 +1932,10 @@ describe("contained runtime command policy", () => {
     const sanitized = JSON.parse(prepared.config);
     const original = JSON.parse(source);
 
-    expect(sanitized.linux.cgroupsPath).toBe(`counterlab-v6.1-${invocationId}`);
-    expect(sanitized.linux.cgroupsPath).not.toContain("/");
+    expect(sanitized.linux.cgroupsPath).toBe(
+      `/counterlab-v6.1-${invocationId}`,
+    );
+    expect(sanitized.linux.cgroupsPath).not.toContain("/containerd/");
     expect(sanitized.linux.resources).toEqual(original.linux.resources);
     const canonicalBase = structuredClone(sanitized);
     delete canonicalBase.annotations;
@@ -3268,7 +3270,7 @@ describe("contained runtime command policy", () => {
     expect(startCall).toEqual(
       expect.arrayContaining([
         "--cgroup",
-        `counterlab-v6.1-${invocationId}`,
+        `/counterlab-v6.1-${invocationId}`,
         "--label",
         `io.counterlab.runtime.invocation=${invocationId}`,
       ]),
