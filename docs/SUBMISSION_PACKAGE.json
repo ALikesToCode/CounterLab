@@ -6,8 +6,8 @@
     "projectId": "1330312",
     "category": "Education",
     "deadline": "2026-07-22T00:00:00Z",
-    "submitterType": null,
-    "country": null
+    "submitterType": "Student",
+    "country": "India"
   },
   "copy": {
     "title": "CounterLab — A scientific debugger for beliefs",
@@ -15,11 +15,11 @@
     "audience": "ML learners and instructors who need to test what a notebook result actually supports",
     "devpostCopy": {
       "path": "docs/DEVPOST_COPY.md",
-      "sha256": "c1d3822f0d35b163255e14b0052e9c6430d798c7614119ae21e0a0a727ff0357"
+      "sha256": "960cdfc89439cf788e31dabfd5f2accebb7e4a5c3bf6c5ba6f27c844a3ddf2a3"
     },
     "readme": {
       "path": "README.md",
-      "sha256": "b39cd4573e3f1413fcd59fca9e466f43f77488faba582d2f308c22c8ffaba46a"
+      "sha256": "3e5ceb3c8e450d7ac73a899f29117c12f4f9aab41e8085b88d98ab546bbb232f"
     },
     "license": {
       "identifier": "MIT",
