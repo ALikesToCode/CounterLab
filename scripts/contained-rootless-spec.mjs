@@ -1549,13 +1549,15 @@ export function sanitizeContainedRootlessSpec({
   delete parsed.annotations;
   const runtimeUser = object(processSpec.user, "process user");
   const maximumLinuxId = 4_294_967_295;
+  const devptsGid = 5;
   if (
     !Number.isSafeInteger(runtimeUser.uid) ||
     runtimeUser.uid < 1 ||
     runtimeUser.uid > maximumLinuxId ||
     !Number.isSafeInteger(runtimeUser.gid) ||
     runtimeUser.gid < 1 ||
-    runtimeUser.gid > maximumLinuxId
+    runtimeUser.gid > maximumLinuxId ||
+    runtimeUser.gid === devptsGid
   ) {
     throw new Error("contained rootless OCI runtime user is invalid");
   }
@@ -1572,6 +1574,7 @@ export function sanitizeContainedRootlessSpec({
   ];
   linux.gidMappings = [
     { containerID: 0, hostID: 1, size: 1 },
+    { containerID: devptsGid, hostID: 2, size: 1 },
     { containerID: runtimeUser.gid, hostID: 0, size: 1 },
   ];
   // RootlessKit delegates the cgroup namespace root. Use an absolute leaf so

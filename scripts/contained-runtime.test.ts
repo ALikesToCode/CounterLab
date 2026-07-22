@@ -1943,6 +1943,7 @@ describe("contained runtime command policy", () => {
     ]);
     expect(sanitized.linux.gidMappings).toEqual([
       { containerID: 0, hostID: 1, size: 1 },
+      { containerID: 5, hostID: 2, size: 1 },
       { containerID: fixture.authority.process.gid, hostID: 0, size: 1 },
     ]);
     expect(sanitized.linux.resources).toEqual(original.linux.resources);
@@ -3509,6 +3510,10 @@ describe("contained runtime command policy", () => {
     // non-root user even when that occurs.
     expect(adapterDockerfile).toContain(
       "chown 65532:65532 /opt /opt/counterlab /workspace /fixtures /output /tmp",
+    );
+    expect(adapterDockerfile).toContain("touch /fixtures/customer_churn.csv");
+    expect(adapterDockerfile).toContain(
+      "chmod 0444 /fixtures/customer_churn.csv",
     );
     expect(adapterDockerfile).toContain(
       "COPY --chown=65532:65532 --chmod=0444 concept-packs/leakage/public/counterlab_sdk.py",

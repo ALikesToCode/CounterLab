@@ -15,8 +15,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/opt/counterlab
 
 RUN mkdir -p /opt/counterlab /workspace /fixtures /output /tmp \
+    && touch /fixtures/customer_churn.csv \
     && chown 65532:65532 /opt /opt/counterlab /workspace /fixtures /output /tmp \
+    && chown 65532:65532 /fixtures/customer_churn.csv \
     && chmod 0555 /opt/counterlab /workspace /fixtures \
+    && chmod 0444 /fixtures/customer_churn.csv \
     && chmod 0700 /output /tmp
 
 COPY --chown=65532:65532 --chmod=0444 concept-packs/leakage/public/counterlab_sdk.py /opt/counterlab/counterlab_sdk.py
