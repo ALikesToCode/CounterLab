@@ -86,6 +86,18 @@ const runnerJob = {
   artifactManifestHash: digest("b"),
   conceptPack: { id: "entity_leakage" as const, version: "1.0.0" },
   inputHashes: [digest("c")],
+  requestFingerprint: digest("d"),
+  requestIdentity: {
+    schemaVersion: "1" as const,
+    sessionId: session.sessionId,
+    mode: "live_notebook" as const,
+    purpose: "LAB_RUN_AUTHORITATIVE" as const,
+    artifactId: artifact.artifactId,
+    artifactManifestHash: digest("b"),
+    conceptPack: { id: "entity_leakage" as const, version: "1.0.0" },
+    authorityProfileHash: digest("e"),
+    authorityInputHashes: { artifactManifest: digest("b") },
+  },
   stateVersion: 8,
   jobVersion: 1,
   createdAt: "2026-07-14T10:02:00.000Z",
@@ -2089,9 +2101,14 @@ describe("CounterLabApiClient", () => {
       });
 
     await expect(
-      clientFor({ ...runnerJob, kind: "LAB_COMPILE" }).compileLab(
-        session.sessionId,
-      ),
+      clientFor({
+        ...runnerJob,
+        kind: "LAB_COMPILE",
+        requestIdentity: {
+          ...runnerJob.requestIdentity,
+          purpose: "LAB_COMPILE",
+        },
+      }).compileLab(session.sessionId),
     ).resolves.toMatchObject({
       runnerJob: { kind: "LAB_COMPILE", stateVersion: 8 },
     });
@@ -2107,6 +2124,22 @@ describe("CounterLabApiClient", () => {
     ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
     await expect(
       clientFor({ ...runnerJob, stateVersion: 7 }).runLab(session.sessionId),
+    ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
+    await expect(
+      clientFor({
+        ...runnerJob,
+        requestIdentity: {
+          ...runnerJob.requestIdentity,
+          purpose: "LAB_RUN_BOUNDARY",
+        },
+      }).runLab(session.sessionId),
+    ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
+    await expect(
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({ ok: true, data: liveSession }),
+        ),
+      }).runLab(session.sessionId),
     ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
 
     await expect(
@@ -2160,6 +2193,10 @@ describe("CounterLabApiClient", () => {
               ...runnerJob,
               jobId: "job_patch_1",
               kind: "PATCH_COMPILE",
+              requestIdentity: {
+                ...runnerJob.requestIdentity,
+                purpose: "PATCH_COMPILE",
+              },
               stateVersion: 12,
             },
           },
@@ -2179,6 +2216,45 @@ describe("CounterLabApiClient", () => {
     );
   });
 
+  it("binds interactive jobs to their returned configuration", async () => {
+    const liveSession = {
+      ...session,
+      mode: { kind: "live_notebook" as const },
+      state: "EXPERIMENT_COMPLETED" as const,
+      version: 8,
+    };
+    const client = new CounterLabApiClient({
+      fetch: vi.fn<typeof fetch>(async () =>
+        jsonResponse({
+          ok: true,
+          data: {
+            ...liveSession,
+            runnerJob: {
+              ...runnerJob,
+              requestIdentity: {
+                ...runnerJob.requestIdentity,
+                purpose: "LAB_RUN_INTERACTIVE",
+                configurationHash: digest("c"),
+              },
+            },
+            selectedRunId: "interactive_abc",
+            configurationHash: digest("d"),
+          },
+        }),
+      ),
+    });
+
+    await expect(
+      client.runInteractiveImbalance(session.sessionId, {
+        schemaVersion: "1",
+        concept: "class_imbalance",
+        threshold: 0.25,
+        prevalenceScenario: "rarer",
+        metricFocus: "recall",
+      }),
+    ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
+  });
+
   it("cross-binds queued patch jobs to patch authority", async () => {
     const queuedPatch = {
       ...session,
@@ -2189,6 +2265,10 @@ describe("CounterLabApiClient", () => {
         ...runnerJob,
         jobId: "job_patch_1",
         kind: "PATCH_COMPILE" as const,
+        requestIdentity: {
+          ...runnerJob.requestIdentity,
+          purpose: "PATCH_COMPILE" as const,
+        },
         stateVersion: 12,
       },
     };
@@ -2319,6 +2399,11 @@ describe("CounterLabApiClient", () => {
               runnerJob: {
                 ...runnerJob,
                 status: "STARTING",
+                requestIdentity: {
+                  ...runnerJob.requestIdentity,
+                  purpose: "LAB_RUN_INTERACTIVE",
+                  configurationHash: digest("d"),
+                },
                 stateVersion: liveSession.version,
                 jobVersion: 2,
                 attempt: 1,
@@ -2728,31 +2813,47 @@ describe("CounterLabApiClient", () => {
   });
 
   it("binds runner event streams to the requested job", async () => {
-    const fetcher = vi.fn<typeof fetch>(async () =>
-      jsonResponse({
-        ok: true,
-        data: {
-          events: [
-            {
-              schemaVersion: "1",
-              eventId: "compiler_event_other",
-              jobId: "job_other",
-              cursor: 1,
-              at: "2026-07-14T10:02:00.000Z",
-              kind: "job.started",
-            },
-          ],
-          nextCursor: 1,
-          terminal: false,
-        },
-      }),
-    );
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ok: true,
+          data: {
+            jobId: "job_1",
+            events: [
+              {
+                schemaVersion: "1",
+                eventId: "compiler_event_other",
+                jobId: "job_other",
+                cursor: 1,
+                at: "2026-07-14T10:02:00.000Z",
+                kind: "job.started",
+              },
+            ],
+            nextCursor: 1,
+            terminal: false,
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ok: true,
+          data: {
+            jobId: "job_other",
+            events: [],
+            nextCursor: 0,
+            terminal: true,
+            jobStatus: "VERIFIED",
+          },
+        }),
+      );
+    const client = new CounterLabApiClient({ fetch: fetcher });
 
     await expect(
-      new CounterLabApiClient({ fetch: fetcher }).listRunnerEvents(
-        "session_1",
-        "job_1",
-      ),
+      client.listRunnerEvents("session_1", "job_1"),
+    ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
+    await expect(
+      client.listRunnerEvents("session_1", "job_1"),
     ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
   });
 

@@ -58,6 +58,7 @@ import {
   type ReasoningDiff,
   type ReasoningDiffV2,
   type RunnerJob,
+  type RunnerRequestPurpose,
   type PublicCompilerEvent,
   type SessionState,
   type TransferResult,
@@ -989,6 +990,7 @@ export type ReasoningDiffResponse = z.infer<typeof ReasoningDiffResponseSchema>;
 
 const RunnerEventsResponseSchema = z
   .object({
+    jobId: NonEmptyString,
     events: z.array(PublicCompilerEventSchema),
     nextCursor: z.number().int().nonnegative(),
     terminal: z.boolean(),
@@ -1491,6 +1493,31 @@ function runnerStateVersionMatches(
     (runnerJob.status === "VERIFIED" &&
       runnerJob.stateVersion < responseVersion)
   );
+}
+
+function runnerlessLiveActionIsReconciled(
+  response: Pick<
+    SessionView,
+    "state" | "verifiedResult" | "boundaryMapAuthority"
+  >,
+  purpose: RunnerRequestPurpose | undefined,
+): boolean {
+  if (purpose === "LAB_COMPILE") {
+    return response.state === "LAB_VERIFIED";
+  }
+  if (purpose === "LAB_RUN_AUTHORITATIVE") {
+    return (
+      response.state === "EXPERIMENT_COMPLETED" &&
+      response.verifiedResult !== undefined
+    );
+  }
+  if (purpose === "LAB_RUN_BOUNDARY") {
+    return (
+      response.state === "EXPERIMENT_COMPLETED" &&
+      response.boundaryMapAuthority !== undefined
+    );
+  }
+  return false;
 }
 
 async function canonicalSha256(value: unknown): Promise<string> {
@@ -2126,6 +2153,8 @@ export class CounterLabApiClient {
     ).then((response) =>
       this.requireSessionResponseLineage(sessionId, response, {
         kind: "LAB_COMPILE",
+        purpose: "LAB_COMPILE",
+        requireForLive: true,
         bindStateVersion: true,
       }),
     );
@@ -2149,7 +2178,10 @@ export class CounterLabApiClient {
       `/api/sessions/${encodedId(sessionId)}/jobs/${encodedId(jobId)}/events?after=${after}`,
       RunnerEventsResponseSchema,
     ).then((response) => {
-      if (response.events.some((event) => event.jobId !== jobId)) {
+      if (
+        response.jobId !== jobId ||
+        response.events.some((event) => event.jobId !== jobId)
+      ) {
         throw this.sessionResponseLineageError(
           "The runner event stream does not match the requested job",
         );
@@ -2183,6 +2215,8 @@ export class CounterLabApiClient {
     ).then((response) =>
       this.requireSessionResponseLineage(sessionId, response, {
         kind: "LAB_RUN",
+        purpose: "LAB_RUN_AUTHORITATIVE",
+        requireForLive: true,
         bindStateVersion: true,
       }),
     );
@@ -2195,6 +2229,8 @@ export class CounterLabApiClient {
     ).then((response) =>
       this.requireSessionResponseLineage(sessionId, response, {
         kind: "LAB_RUN",
+        purpose: "LAB_RUN_BOUNDARY",
+        requireForLive: true,
         bindStateVersion: true,
       }),
     );
@@ -2237,18 +2273,20 @@ export class CounterLabApiClient {
     sessionId: string,
     input: InteractiveLeakageRunRequest,
   ): Promise<InteractiveRunResponse> {
+    const request = validatedInput(InteractiveLeakageRunRequestSchema, input);
     return this.requestRunnerAction(
       `/api/sessions/${encodedId(sessionId)}/lab/interactive`,
       InteractiveRunResponseSchema,
       {
         method: "POST",
-        body: JSON.stringify(
-          validatedInput(InteractiveLeakageRunRequestSchema, input),
-        ),
+        body: JSON.stringify(request),
       },
     ).then((response) =>
       this.requireSessionResponseLineage(sessionId, response, {
         kind: "LAB_RUN",
+        purpose: "LAB_RUN_INTERACTIVE",
+        requireForLive: true,
+        configurationHash: response.configurationHash,
         bindStateVersion: true,
       }),
     );
@@ -2258,18 +2296,20 @@ export class CounterLabApiClient {
     sessionId: string,
     input: InteractiveImbalanceRunRequest,
   ): Promise<InteractiveRunResponse> {
+    const request = validatedInput(InteractiveImbalanceRunRequestSchema, input);
     return this.requestRunnerAction(
       `/api/sessions/${encodedId(sessionId)}/lab/interactive`,
       InteractiveRunResponseSchema,
       {
         method: "POST",
-        body: JSON.stringify(
-          validatedInput(InteractiveImbalanceRunRequestSchema, input),
-        ),
+        body: JSON.stringify(request),
       },
     ).then((response) =>
       this.requireSessionResponseLineage(sessionId, response, {
         kind: "LAB_RUN",
+        purpose: "LAB_RUN_INTERACTIVE",
+        requireForLive: true,
+        configurationHash: response.configurationHash,
         bindStateVersion: true,
       }),
     );
@@ -2361,6 +2401,7 @@ export class CounterLabApiClient {
         (response.runnerJob.sessionId !== sessionId ||
           response.runnerJob.artifactId !== response.artifactId ||
           response.runnerJob.kind !== "PATCH_COMPILE" ||
+          response.runnerJob.requestIdentity?.purpose !== "PATCH_COMPILE" ||
           !runnerStateVersionMatches(response.version, response.runnerJob)))
     ) {
       throw new ApiClientError({
@@ -2510,7 +2551,11 @@ export class CounterLabApiClient {
     T extends {
       sessionId: string;
       artifactId: string;
+      mode: SessionView["mode"];
+      state: SessionState;
       version: number;
+      verifiedResult?: VerifiedResultSet | undefined;
+      boundaryMapAuthority?: BoundaryMapAuthorityRefV1 | undefined;
       runnerJob?: RunnerJob | undefined;
     },
   >(
@@ -2519,12 +2564,19 @@ export class CounterLabApiClient {
     expectedRunner: {
       jobId?: string;
       kind?: RunnerJob["kind"];
+      purpose?: RunnerRequestPurpose;
+      requireForLive?: boolean;
+      configurationHash?: string;
       bindStateVersion?: boolean;
     } = {},
   ): T {
     const runnerJob = response.runnerJob;
     if (
       response.sessionId !== sessionId ||
+      (response.mode.kind === "live_notebook" &&
+        expectedRunner.requireForLive === true &&
+        runnerJob === undefined &&
+        !runnerlessLiveActionIsReconciled(response, expectedRunner.purpose)) ||
       (runnerJob !== undefined &&
         (runnerJob.sessionId !== sessionId ||
           runnerJob.artifactId !== response.artifactId ||
@@ -2532,6 +2584,11 @@ export class CounterLabApiClient {
             runnerJob.jobId !== expectedRunner.jobId) ||
           (expectedRunner.kind !== undefined &&
             runnerJob.kind !== expectedRunner.kind) ||
+          (expectedRunner.purpose !== undefined &&
+            runnerJob.requestIdentity?.purpose !== expectedRunner.purpose) ||
+          (expectedRunner.configurationHash !== undefined &&
+            runnerJob.requestIdentity?.configurationHash !==
+              expectedRunner.configurationHash) ||
           (expectedRunner.bindStateVersion === true &&
             !runnerStateVersionMatches(response.version, runnerJob))))
     ) {

@@ -7011,6 +7011,7 @@ export function createApi(options: ApiOptions = {}) {
     const events = await jobs.listEvents(jobId, after);
     return context.json(
       jsonSuccess({
+        jobId,
         events,
         nextCursor: events.at(-1)?.cursor ?? after,
         jobStatus: job.status,

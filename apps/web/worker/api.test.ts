@@ -12,6 +12,7 @@ import {
   type HostedVerifiedResultSetV2,
   HostedVerifiedResultSetV2Schema,
   type LearnerInteractionRecord,
+  type PredictionContract,
   type PublicCompilerEvent,
   PublicReplayProjectionV1Schema,
   type RunnerCallback,
@@ -6046,6 +6047,7 @@ describe("Cloudflare Worker API", () => {
     expect(reconnected.status).toBe(200);
     await expect(reconnected.json()).resolves.toMatchObject({
       data: {
+        jobId: dispatch.job.jobId,
         events: [
           { cursor: 2, kind: "file.created" },
           { cursor: 3, kind: "verifier.verified" },
@@ -11532,6 +11534,7 @@ describe("Cloudflare Worker API", () => {
     expect(timedOut.status).toBe(200);
     await expect(timedOut.json()).resolves.toMatchObject({
       data: {
+        jobId: queued.data.runnerJob.jobId,
         jobStatus: "TIMED_OUT",
         terminal: true,
         jobError: { code: "RUNNER_JOB_TIMED_OUT" },
@@ -13052,20 +13055,31 @@ describe("Cloudflare Worker API", () => {
         })
       ).status,
     ).toBe(200);
-    expect(
-      (
-        await postJson(app, `${route}/prediction`, {
-          choice: "Accuracy remains near 98%",
-          confidence: 72,
-        })
-      ).status,
-    ).toBe(201);
+    const committedPrediction = await postJson(app, `${route}/prediction`, {
+      choice: "Accuracy remains near 98%",
+      confidence: 72,
+    });
+    expect(committedPrediction.status).toBe(201);
+    const committedPredictionBody = (await committedPrediction.json()) as {
+      data: { prediction: PredictionContract };
+    };
 
     const duplicatePrediction = await postJson(app, `${route}/prediction`, {
       choice: "Changed after commitment",
       confidence: 10,
     });
     expect(duplicatePrediction.status).toBe(409);
+    const restoredAfterDuplicate = await app.request(route);
+    expect(restoredAfterDuplicate.status).toBe(200);
+    await expect(restoredAfterDuplicate.json()).resolves.toMatchObject({
+      data: {
+        prediction: {
+          immutableHash: committedPredictionBody.data.prediction.immutableHash,
+          choice: "Accuracy remains near 98%",
+          confidence: 72,
+        },
+      },
+    });
 
     expect((await postJson(app, `${route}/lab/compile`)).status).toBe(200);
     expect((await postJson(app, `${route}/lab/run`)).status).toBe(200);

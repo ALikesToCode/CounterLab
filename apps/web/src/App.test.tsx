@@ -415,6 +415,18 @@ const liveRunnerJob = {
   artifactManifestHash: hashCanonicalJson(uploadedArtifact),
   conceptPack: { id: "entity_leakage" as const, version: "1.0.0" },
   inputHashes: ["b".repeat(64)],
+  requestFingerprint: "c".repeat(64),
+  requestIdentity: {
+    schemaVersion: "1" as const,
+    sessionId: "session_ui",
+    mode: "live_notebook" as const,
+    purpose: "LAB_COMPILE" as const,
+    artifactId: uploadedArtifact.artifactId,
+    artifactManifestHash: hashCanonicalJson(uploadedArtifact),
+    conceptPack: { id: "entity_leakage" as const, version: "1.0.0" },
+    authorityProfileHash: "d".repeat(64),
+    authorityInputHashes: { artifactManifest: "e".repeat(64) },
+  },
   stateVersion: 5,
   jobVersion: 2,
   createdAt: "2026-07-14T09:02:00.000Z",
@@ -791,6 +803,7 @@ function installApi(
       if (path.includes("/jobs/runner_job_ui/events?after=")) {
         if (options.failRunnerResume) {
           return response({
+            jobId: "runner_job_ui",
             events: [],
             nextCursor: 0,
             jobStatus: "FAILED",
@@ -803,6 +816,7 @@ function installApi(
           });
         }
         return response({
+          jobId: "runner_job_ui",
           events: [],
           nextCursor: 0,
           jobStatus: "STARTING",
