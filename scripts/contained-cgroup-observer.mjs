@@ -29,6 +29,7 @@ const repositoryRoot = realpathSync(
 const cgroupFilesystemRoot = "/sys/fs/cgroup";
 const cgroup2Magic = 0x63677270;
 const maximumArtifactBytes = 1_048_576;
+export const candidateMembershipTimeoutMs = 30_000;
 const allowedCgroupFiles = new Set([
   "cgroup.procs",
   "cpu.max",
@@ -1001,7 +1002,7 @@ function actualCgroupAdapter(manifest, paths) {
           }
         },
         "candidate membership",
-        10_000,
+        candidateMembershipTimeoutMs,
       );
     },
     readCgroupFile(name) {

@@ -6,6 +6,7 @@ import {
   validateContainedCgroupEvidence,
 } from "./contained-cgroup-evidence.mjs";
 import {
+  candidateMembershipTimeoutMs,
   createContainedCgroupObserverDraft,
   createContainedCgroupObserverFailure,
   createContainedCgroupObserverReady,
@@ -38,6 +39,10 @@ const verifiedCleanup = {
   readOnlyMountsUnchanged: true,
   imageRootfsUnchanged: true,
 };
+
+it("allows cold candidates to establish observed aggregate membership", () => {
+  expect(candidateMembershipTimeoutMs).toBe(30_000);
+});
 
 function manifest() {
   return createContainedCgroupObserverManifest({
