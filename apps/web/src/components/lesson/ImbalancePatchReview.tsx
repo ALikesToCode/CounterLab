@@ -87,6 +87,13 @@ export function ImbalancePatchReview({
   const nativeAuthority = session.beliefSpec !== undefined;
   const repairAllowed =
     !nativeAuthority || session.evidenceVerdict?.kind === "SUPPORTS";
+  const authorizedPatch =
+    patch !== null &&
+    session.patchResult?.status === "VERIFIED" &&
+    patch.sourceArtifactHash === session.patchResult.sourceArtifactHash &&
+    patch.patchedArtifactHash === session.patchResult.patchedArtifactHash
+      ? session.patchResult
+      : null;
 
   useEffect(() => {
     setPatch(
@@ -95,7 +102,11 @@ export function ImbalancePatchReview({
   }, [session.patchResult]);
 
   useEffect(() => {
-    if (patch === null) {
+    setProof(session.proofBundle ?? null);
+  }, [session.proofBundle]);
+
+  useEffect(() => {
+    if (authorizedPatch === null) {
       completionFocused.current = false;
       return;
     }
@@ -106,7 +117,12 @@ export function ImbalancePatchReview({
     if (completionTitle === null) return;
     completionTitle.focus();
     completionFocused.current = true;
-  }, [patch, session.proofCapsule, session.reasoningDiffV2, session.state]);
+  }, [
+    authorizedPatch,
+    session.proofCapsule,
+    session.reasoningDiffV2,
+    session.state,
+  ]);
 
   const finishJob = async (jobId: string) => {
     const completed = await runner.waitForJob({
@@ -220,7 +236,7 @@ export function ImbalancePatchReview({
   };
 
   const downloadPatch = () => {
-    if (patch === null) return;
+    if (authorizedPatch === null) return;
     setBusy(true);
     setError(null);
     void counterLabApi
@@ -296,7 +312,7 @@ export function ImbalancePatchReview({
     }
   };
 
-  if (patch !== null) {
+  if (authorizedPatch !== null) {
     if (!repairAllowed) {
       return (
         <section className="panel imbalance-patch-gate" role="status">
@@ -417,7 +433,7 @@ export function ImbalancePatchReview({
           evidenceAndProof={
             liveCompletionProof === null ? (
               <>
-                <p>Patched artifact {patch.patchedArtifactHash}</p>
+                <p>Patched artifact {authorizedPatch.patchedArtifactHash}</p>
                 <p>
                   The verified conclusion is bounded to the supported notebook,
                   fixed rare-event fixture, registered metrics, and transfer
@@ -429,7 +445,7 @@ export function ImbalancePatchReview({
                 presentation="completion-evidence"
                 diff={liveCompletionProof.diff}
                 capsule={liveCompletionProof.capsule}
-                patch={patch}
+                patch={authorizedPatch}
                 patchDownloadUrl={counterLabApi.patchDownloadUrl(
                   session.sessionId,
                 )}
@@ -483,15 +499,19 @@ export function ImbalancePatchReview({
           <div className="patch-integrity-grid">
             <div>
               <span>Changed cells</span>
-              <strong>{patch.modifiedCells.join(", ")}</strong>
+              <strong>{authorizedPatch.modifiedCells.join(", ")}</strong>
             </div>
             <div>
               <span>Unchanged cells proven</span>
-              <strong>{patch.verification.unchangedCellHashes.length}</strong>
+              <strong>
+                {authorizedPatch.verification.unchangedCellHashes.length}
+              </strong>
             </div>
             <div>
               <span>Patched hash</span>
-              <strong>{patch.patchedArtifactHash.slice(0, 12)}…</strong>
+              <strong>
+                {authorizedPatch.patchedArtifactHash.slice(0, 12)}…
+              </strong>
             </div>
           </div>
           <RepairPreview
@@ -499,10 +519,10 @@ export function ImbalancePatchReview({
             preserved={imbalanceRepairPreserves}
           />
           <pre className="diff" aria-label="Verified imbalance notebook diff">
-            <code>{patch.diff}</code>
+            <code>{authorizedPatch.diff}</code>
           </pre>
           <ul className="patch-invariants" aria-label="Patch verifier checks">
-            {patch.verification.invariants.map((invariant) => (
+            {authorizedPatch.verification.invariants.map((invariant) => (
               <li key={invariant}>{invariant.replaceAll("_", " ")}</li>
             ))}
           </ul>

@@ -282,6 +282,96 @@ describe("BoundaryStage", () => {
     expect(api.runBoundary).not.toHaveBeenCalled();
   });
 
+  it("retries a persisted Boundary read without dispatching another sweep", async () => {
+    api.getBoundary
+      .mockRejectedValueOnce(new Error("stored Boundary read unavailable"))
+      .mockResolvedValueOnce(boundaryResponse);
+    render(
+      <BoundaryStage
+        session={{
+          ...experimentCompleted,
+          state: "BOUNDARY_VERIFIED",
+          boundaryMapAuthority: authority,
+        }}
+        updateSession={vi.fn()}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("alert", {
+        name: "",
+      }),
+    ).toHaveTextContent(/stored Boundary read unavailable/i);
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /retry loading verified Boundary/i,
+      }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /can you find a condition where the conclusion changes/i,
+      }),
+    ).toBeInTheDocument();
+    expect(api.getBoundary).toHaveBeenCalledTimes(2);
+    expect(api.runBoundary).not.toHaveBeenCalled();
+  });
+
+  it("hides a rendered map in the same render that authority changes", async () => {
+    window.localStorage.setItem(
+      `counterlab.boundary-hunt.${authority.resultHash}`,
+      "revealed",
+    );
+    const nextAuthority = {
+      ...authority,
+      jobId: "job_boundary_2",
+      resultHash: digest("8"),
+      receipt: {
+        ...authority.receipt,
+        resultHash: digest("8"),
+        receiptHash: digest("9"),
+      },
+    };
+    const next = deferred<BoundaryResponse>();
+    api.getBoundary
+      .mockResolvedValueOnce(boundaryResponse)
+      .mockReturnValueOnce(next.promise);
+    const view = render(
+      <BoundaryStage
+        session={{
+          ...experimentCompleted,
+          state: "BOUNDARY_VERIFIED",
+          boundaryMapAuthority: authority,
+        }}
+        updateSession={vi.fn()}
+      />,
+    );
+    expect(await screen.findByTestId("boundary-map")).toHaveTextContent(
+      authority.resultHash,
+    );
+
+    view.rerender(
+      <BoundaryStage
+        session={{
+          ...experimentCompleted,
+          state: "BOUNDARY_VERIFIED",
+          boundaryMapAuthority: nextAuthority,
+        }}
+        updateSession={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId("boundary-map")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: /loading the verified Boundary Map/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /checking the stored receipt and result bindings/i,
+    );
+  });
+
   it("ignores an older Boundary response after the session authority changes", async () => {
     const first = deferred<BoundaryResponse>();
     const second = deferred<BoundaryResponse>();

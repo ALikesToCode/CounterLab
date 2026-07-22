@@ -82,9 +82,34 @@ export function BoundaryStage({
   const loadedReceiptHash = useRef<string | null>(null);
   const loadingReceiptHash = useRef<string | null>(null);
   const loadGeneration = useRef(0);
+  const activeRunAuthority = useRef<{
+    sessionId: string;
+    receiptHash: string;
+    resultHash: string;
+  } | null>(null);
+  const boundaryAuthority = session.boundaryMapAuthority;
+  const matchesSessionAuthority =
+    boundaryAuthority !== undefined &&
+    boundary !== null &&
+    boundary.receipt.receiptHash === boundaryAuthority.receipt.receiptHash &&
+    boundary.result.resultHash === boundaryAuthority.resultHash;
+  const matchesActiveRun =
+    boundaryAuthority === undefined &&
+    session.state === "EXPERIMENT_COMPLETED" &&
+    boundary !== null &&
+    activeRunAuthority.current?.sessionId === session.sessionId &&
+    activeRunAuthority.current.receiptHash === boundary.receipt.receiptHash &&
+    activeRunAuthority.current.resultHash === boundary.result.resultHash;
+  const visibleBoundary =
+    boundary !== null && (matchesSessionAuthority || matchesActiveRun)
+      ? boundary
+      : null;
 
   const loadBoundary = useCallback(
-    async (expectedAuthority: BoundaryMapAuthorityRefV1) => {
+    async (
+      expectedAuthority: BoundaryMapAuthorityRefV1,
+      source: "persisted" | "active-run" = "persisted",
+    ) => {
       const generation = loadGeneration.current + 1;
       loadGeneration.current = generation;
       loadingReceiptHash.current = expectedAuthority.receipt.receiptHash;
@@ -94,6 +119,14 @@ export function BoundaryStage({
           expectedAuthority,
         );
         if (loadGeneration.current !== generation) return null;
+        if (source === "active-run") {
+          activeRunAuthority.current = {
+            sessionId: session.sessionId,
+            receiptHash: response.receipt.receiptHash,
+            resultHash: response.result.resultHash,
+          };
+        }
+        setError(null);
         setBoundary(response);
         const alreadyRevealed = huntWasRevealed(response.result.resultHash);
         setRevealedBoundaryHash(
@@ -114,6 +147,13 @@ export function BoundaryStage({
           loadingReceiptHash.current = null;
         }
       }
+    },
+    [session.sessionId],
+  );
+
+  useEffect(
+    () => () => {
+      loadGeneration.current += 1;
     },
     [session.sessionId],
   );
@@ -143,7 +183,7 @@ export function BoundaryStage({
           });
         }
         updateSession(completed);
-        await loadBoundary(completed.boundaryMapAuthority);
+        await loadBoundary(completed.boundaryMapAuthority, "active-run");
         const localStorage = storage();
         if (localStorage !== undefined) {
           clearActiveRunnerCheckpoint(session.sessionId, jobId, localStorage);
@@ -196,7 +236,6 @@ export function BoundaryStage({
   };
 
   useEffect(() => {
-    const boundaryAuthority = session.boundaryMapAuthority;
     const receiptHash = boundaryAuthority?.receipt.receiptHash;
     if (boundaryAuthority === undefined) {
       loadGeneration.current += 1;
@@ -211,6 +250,7 @@ export function BoundaryStage({
       loadedReceiptHash.current !== receiptHash &&
       loadingReceiptHash.current !== receiptHash
     ) {
+      setError(null);
       setBoundary(null);
       setRevealedBoundaryHash(null);
       void loadBoundary(boundaryAuthority).catch((caught: unknown) => {
@@ -240,26 +280,26 @@ export function BoundaryStage({
   }, [
     finishJob,
     loadBoundary,
-    session.boundaryMapAuthority,
+    boundaryAuthority,
     session.sessionId,
     session.state,
   ]);
 
-  if (boundary !== null) {
+  if (visibleBoundary !== null) {
     if (
-      boundary.report.status === "VERIFIED" &&
-      revealedBoundaryHash !== boundary.result.resultHash
+      visibleBoundary.report.status === "VERIFIED" &&
+      revealedBoundaryHash !== visibleBoundary.result.resultHash
     ) {
       const revealMap = () => {
-        rememberRevealedHunt(boundary.result.resultHash);
-        setRevealedBoundaryHash(boundary.result.resultHash);
+        rememberRevealedHunt(visibleBoundary.result.resultHash);
+        setRevealedBoundaryHash(visibleBoundary.result.resultHash);
         window.requestAnimationFrame(() => {
           document.getElementById("boundary-map-title")?.focus();
         });
       };
       return (
         <BoundaryHunt
-          boundary={huntDataFor(boundary)}
+          boundary={huntDataFor(visibleBoundary)}
           onRevealMap={revealMap}
           onSkip={revealMap}
           onClassify={(classification) => {
@@ -274,7 +314,7 @@ export function BoundaryStage({
     }
     return (
       <BoundaryMapBlock
-        boundary={boundary}
+        boundary={visibleBoundary}
         {...(prediction === undefined ? {} : { prediction })}
       />
     );
@@ -282,7 +322,7 @@ export function BoundaryStage({
 
   if (busy) {
     return (
-      <section className={styles.stage} aria-live="polite">
+      <section className={styles.stage} role="status" aria-live="polite">
         <div className={styles.statusMark} aria-hidden="true" />
         <div>
           <span>Boundary · Computing with fixed code</span>
@@ -300,6 +340,22 @@ export function BoundaryStage({
               ))
             )}
           </ol>
+        </div>
+      </section>
+    );
+  }
+
+  if (boundaryAuthority !== undefined && error === null) {
+    return (
+      <section className={styles.stage} role="status" aria-live="polite">
+        <div className={styles.statusMark} aria-hidden="true" />
+        <div>
+          <span>Boundary · Verifying stored authority</span>
+          <h2>Loading the verified Boundary Map…</h2>
+          <p>
+            CounterLab is checking the stored receipt and result bindings before
+            showing any Boundary values.
+          </p>
         </div>
       </section>
     );
@@ -326,9 +382,26 @@ export function BoundaryStage({
         <button
           className="button button-primary"
           type="button"
-          onClick={() => void startBoundary()}
+          onClick={() => {
+            if (boundaryAuthority === undefined) {
+              void startBoundary();
+              return;
+            }
+            setError(null);
+            void loadBoundary(boundaryAuthority).catch((caught: unknown) => {
+              setError(
+                caught instanceof Error
+                  ? caught.message
+                  : "The persisted Boundary authority could not be loaded.",
+              );
+            });
+          }}
         >
-          {error === null ? "Map the boundary" : "Retry Boundary verification"}
+          {boundaryAuthority === undefined
+            ? error === null
+              ? "Map the boundary"
+              : "Retry Boundary verification"
+            : "Retry loading verified Boundary"}
         </button>
       </div>
     </section>

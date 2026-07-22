@@ -215,6 +215,35 @@ describe("ImbalancePatchReview", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("removes completed repair controls as soon as patch authority is revoked", () => {
+    const completed = {
+      ...createDefaultProofBoundSessionFixture(),
+      mode: { kind: "live_notebook" },
+    } as SessionView;
+    const view = render(
+      <ImbalancePatchReview session={completed} updateSession={vi.fn()} />,
+    );
+    expect(
+      screen.getByRole("button", { name: /download repaired notebook/i }),
+    ).toBeEnabled();
+
+    view.rerender(
+      <ImbalancePatchReview
+        session={{ ...completed, patchResult: undefined } as SessionView}
+        updateSession={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /download repaired notebook/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", {
+        name: /completed one verified rare-event loop/i,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   it("withholds legacy completion until its Reasoning Diff and Proof Bundle are issued", async () => {
     const user = userEvent.setup();
     const completedSession = {
@@ -265,6 +294,71 @@ describe("ImbalancePatchReview", () => {
         name: /completed one verified rare-event loop/i,
       }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /download proof record/i }),
+    ).toBeEnabled();
+  });
+
+  it("exports only the current legacy Proof Bundle and removes revoked proof", async () => {
+    const completed = {
+      ...createDefaultProofBoundSessionFixture(),
+      mode: { kind: "live_notebook" },
+    } as SessionView;
+    const replacement = {
+      ...completed,
+      proofBundle: {
+        ...completed.proofBundle!,
+        bundleId: "bundle_replacement",
+      },
+    } as SessionView;
+    const capturedParts: BlobPart[][] = [];
+    const OriginalBlob = globalThis.Blob;
+    const OriginalURL = globalThis.URL;
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => undefined);
+    vi.stubGlobal(
+      "Blob",
+      class {
+        constructor(parts: BlobPart[]) {
+          capturedParts.push(parts);
+        }
+      },
+    );
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn(() => "blob:counterlab-proof"),
+      revokeObjectURL: vi.fn(),
+    });
+
+    try {
+      const view = render(
+        <ImbalancePatchReview session={completed} updateSession={vi.fn()} />,
+      );
+      view.rerender(
+        <ImbalancePatchReview session={replacement} updateSession={vi.fn()} />,
+      );
+      await userEvent.click(
+        screen.getByRole("button", { name: /download proof record/i }),
+      );
+
+      expect(String(capturedParts.at(-1)?.[0])).toContain(
+        '"bundleId": "bundle_replacement"',
+      );
+
+      view.rerender(
+        <ImbalancePatchReview
+          session={{ ...replacement, proofBundle: undefined } as SessionView}
+          updateSession={vi.fn()}
+        />,
+      );
+      expect(
+        screen.queryByRole("button", { name: /download proof record/i }),
+      ).not.toBeInTheDocument();
+    } finally {
+      vi.stubGlobal("Blob", OriginalBlob);
+      vi.stubGlobal("URL", OriginalURL);
+      click.mockRestore();
+    }
   });
 
   it("offers explicit replay publication for a completed live Proof Capsule", async () => {
