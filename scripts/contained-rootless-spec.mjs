@@ -1561,11 +1561,19 @@ export function sanitizeContainedRootlessSpec({
   }
   // The repository may live on a filesystem that cannot persist POSIX mode
   // changes. Map the fixed non-root container identity to the already-rootless
-  // runtime owner so read-only bind inputs remain readable without granting an
-  // inner UID 0 mapping or widening their host permissions.
+  // runtime owner so read-only bind inputs remain readable without widening
+  // their host permissions. Runc also requires container ID 0 to be mapped to
+  // initialize the namespace; keep that ID isolated on the outer subordinate
+  // identity while the executed process remains the fixed non-root image user.
   linux.namespaces.push({ type: "user" });
-  linux.uidMappings = [{ containerID: runtimeUser.uid, hostID: 0, size: 1 }];
-  linux.gidMappings = [{ containerID: runtimeUser.gid, hostID: 0, size: 1 }];
+  linux.uidMappings = [
+    { containerID: 0, hostID: 1, size: 1 },
+    { containerID: runtimeUser.uid, hostID: 0, size: 1 },
+  ];
+  linux.gidMappings = [
+    { containerID: 0, hostID: 1, size: 1 },
+    { containerID: runtimeUser.gid, hostID: 0, size: 1 },
+  ];
   // RootlessKit delegates the cgroup namespace root. Use an absolute leaf so
   // runc and the independent observer resolve the same cgroup regardless of
   // whether the runtime coordinator itself was evacuated to /containerd.

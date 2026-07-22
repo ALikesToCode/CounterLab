@@ -1938,9 +1938,11 @@ describe("contained runtime command policy", () => {
     expect(sanitized.linux.cgroupsPath).not.toContain("/containerd/");
     expect(sanitized.linux.namespaces).toContainEqual({ type: "user" });
     expect(sanitized.linux.uidMappings).toEqual([
+      { containerID: 0, hostID: 1, size: 1 },
       { containerID: fixture.authority.process.uid, hostID: 0, size: 1 },
     ]);
     expect(sanitized.linux.gidMappings).toEqual([
+      { containerID: 0, hostID: 1, size: 1 },
       { containerID: fixture.authority.process.gid, hostID: 0, size: 1 },
     ]);
     expect(sanitized.linux.resources).toEqual(original.linux.resources);
