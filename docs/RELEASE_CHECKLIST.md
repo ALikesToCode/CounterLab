@@ -367,18 +367,27 @@ after the final source freeze.
       abandoned claims expire only after the bounded job deadline, and terminal
       dispatch failure plus its evidence event commit atomically. Worker-owned
       result, interactive, and Boundary Map authority events require the exact
-      active callback claim; ordinary event appends remain fenced. The complete
-      Worker API passes 110/110.
-- [x] Current learner source verification: App tests pass 98/98 in
-      two consecutive runs; the API/repair/Boundary authority slice passes
-      64/64; complete web Vitest passes 85/85 files and 750/750 tests;
-      repository, web-client, and Worker TypeScript pass; scoped Prettier and
-      `git diff --check` pass; the production Vite/Worker build passes; and
-      kernel Pytest passes 222/222. After the final authority hardening slice,
-      the 7-file lineage/focus/proof/Boundary run passes 282/282 and both web
-      and Worker strict TypeScript pass.
+      active callback claim; ordinary event appends remain fenced. New live
+      patch bytes use the verified patched-artifact hash as their object key, so
+      a delayed losing callback cannot overwrite the winning download. The old
+      session-wide key is read only as a hash-checked compatibility fallback.
+      The complete Worker API passes 110/110.
+- [x] Current focused learner source verification: App/API/Worker tests pass
+      3/3 files and 263/263 tests; App passes 100/100; the complete Worker API
+      passes 110/110; web-client and Worker TypeScript pass; and scoped
+      Prettier, `git diff --check`, and secret scans pass. Creation and restart
+      responses, runner action purpose/configuration, cancellation/event job
+      identity (including empty terminal pages), immutable Prediction recovery,
+      transient Boundary reads, and same-render patch authority have explicit
+      regressions.
+- [ ] Current post-integration broad verification: rerun complete web Vitest,
+      repository TypeScript, kernel Pytest, production build, formatting, and
+      repository secret scan after the hotfix branch is merged. The earlier
+      pre-repair web run passed 85/85 files and 762/762 tests, and the earlier
+      kernel run passed 222/222; those results are not substituted for this
+      final branch tip.
 - [ ] Current repository-wide gate: root TypeScript now passes. Root Vitest
-      reports 792 passed, 36 failed, and 2 skipped across 75 files; every failure
+      reports 794 passed, 36 failed, and 2 skipped across 75 files; every failure
       is confined to the two stale submission/scientific release-evidence
       suites. Do not refresh source-bound evidence hashes until the final clean
       source freezes.

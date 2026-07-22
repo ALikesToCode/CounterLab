@@ -1,5 +1,32 @@
 # Decisions
 
+## 2026-07-22 — Bind recovery responses and patch bytes to immutable authority
+
+- Snapshot schema-validated creation inputs before dispatch and compare delayed
+  responses only with that snapshot. Caller mutation after dispatch must not
+  change response lineage.
+- Derive restarted session identity from the exact source session and fixed
+  idempotency key, and require the returned artifact and mode to match the
+  source. Permit a reconciled restart to have progressed beyond `INGESTED`.
+- Cross-bind runner responses to their session, artifact, action kind, and
+  queued state version. Bind each run to its declared purpose
+  (`LAB_RUN_AUTHORITATIVE`, `LAB_RUN_BOUNDARY`, or `LAB_RUN_INTERACTIVE`) and
+  bind interactive jobs to the returned configuration hash. Cancellation and
+  event streams additionally resolve to the exact requested job ID, including
+  empty terminal event pages. A live action returns either that runner
+  authority or a purpose-specific terminal reconciliation state. Active jobs
+  require the current response version; a verified idempotent reuse may retain
+  an older origin version but never a future one.
+- Treat locally returned Boundary data and patch results as visible only while
+  their current session receipt or result hash still authorizes them. A React
+  effect is not an authority boundary because it runs after a render commits.
+- Store each new live patched notebook under its verified
+  `patchedArtifactHash`. A delayed callback may leave an unreferenced immutable
+  object, but it cannot overwrite the object selected by current session
+  authority. Keep the former session-wide key only as a hash-checked read
+  fallback for already-issued patches; this does not claim an atomic D1/R2
+  transaction.
+
 ## 2026-07-16 — Treat Proof Capsule structure and evidence authority separately
 
 - Use a canonical JSON envelope rather than a ZIP container: exact allowlisted

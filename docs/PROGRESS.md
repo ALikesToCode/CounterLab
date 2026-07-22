@@ -12,19 +12,32 @@ pass is never presented as a browser or production pass.
 ### Current checkpoint
 
 - **Branch:** `feat/learner-ux-v6.1`
-- **Current pre-release checkpoint:** learner-authority implementation commit
-  `b97946b` with its complete code/test slice committed independently. The
-  complete web suite passes **85 files, 750 tests**; the App suite passes
-  **98/98** in two consecutive runs; and the focused API/repair/Boundary
-  authority slice passes **64/64**.
-  Repository, web-client, and Worker strict TypeScript pass; the latest focused
-  lineage/focus/proof/Boundary run passes **7 files, 282 tests**; scoped Prettier
-  and `git diff --check` pass; the production Vite/Worker build passes; and
-  kernel Pytest passes **222/222**. Root Vitest reports **792 passed, 36 failed, 2
-  skipped** across 75 files. All 36 failures are confined to the two
-  source-bound submission/scientific-evidence suites, whose immutable hashes
-  intentionally remain stale until the final source commit is frozen and the
-  evidence is regenerated. No deployment, public browser, learner, model-call,
+- **Current pre-release checkpoint:** committed authority and patch hardening
+  through `fd5f0f2`. Session creation now compares responses
+  with immutable validated request snapshots; restart responses bind the exact
+  deterministic source-derived session ID, artifact, and mode; runner actions
+  bind job session, artifact, kind, queued state version, declared purpose, and
+  interactive configuration; cancellation and event reads bind the requested
+  job ID even for an empty terminal page. A live action without a job is
+  accepted only as a purpose-specific terminal reconciliation. Boundary and
+  patch views synchronously withhold stale local authority, and live patched
+  notebooks are written under the verified patched-artifact hash so a delayed
+  losing callback cannot overwrite the winning download. The historical
+  session-wide patch key remains a SHA-256-checked read-only compatibility
+  fallback.
+  The current focused App/API/Worker run passes **3 files, 263 tests**; App alone
+  passes **100/100**; the complete Worker API passes **110/110**; web-client and
+  Worker strict TypeScript pass; and scoped Prettier, `git diff --check`, and
+  secret scans pass. The earlier pre-repair complete web run passed **85 files,
+  762 tests** and kernel Pytest passed **222/222**; both broader gates will be
+  rerun after branch integration. The earlier root Vitest run reported **794
+  passed, 36 failed, 2 skipped** across 75 files. All 36 failures were confined
+  to the two source-bound
+  submission/scientific-evidence suites, whose immutable hashes intentionally
+  remain stale until the final source commit is frozen and the evidence is
+  regenerated. Unrelated OpenWiki/config worktree entries remain preserved,
+  failed security review for this release, and are outside the product slice.
+  No deployment, current-branch public browser, learner, model-call,
   exact-release qualification, or submission pass is inferred.
 - **Previous committed checkpoint:**
   `b37f7d962e53dbfd7f511746e97ba364fe465d34`, four commits ahead of
