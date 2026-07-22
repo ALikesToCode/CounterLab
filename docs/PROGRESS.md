@@ -5589,3 +5589,55 @@ No refreshed scientific evidence, current-source qualification receipt,
 Cloudflare deployment, production smoke, public browser qualification, push,
 merge, learner observation, or submission receipt is claimed at this
 checkpoint. Release remains **NO-GO** until those gates occur.
+
+## Exact-build ownership checkpoint — 2026-07-22T08:17:49Z
+
+### Completed
+
+- Committed the topology-bound observer, downstream receipt validation, tests,
+  declarations, and preceding progress evidence as `a7d2408` with no unrelated
+  paths staged.
+- Started a fresh verified CloakBrowser session through `playwright_safe`.
+  Against the pre-existing public deployment, a cold Sample progressed through
+  Question, explanation confirmation, immutable Prediction, refresh, and
+  completed-stage review without a duplicate Prediction POST. The captured
+  baseline had **0 console errors** and its restored-session API, artifact,
+  events, and interaction requests returned HTTP 200. This is comparison
+  evidence only; it does not qualify `a7d2408`.
+- Started canonical-root contained runtime `rt-v61-0722l`; its attestation
+  binds the newly committed observer and timeout-proof bytes.
+
+### Exact-build attempts that failed closed
+
+- A clean worktree under the release cache could not launch nested RootlessKit
+  because an outer map-root namespace presented UID 0 without a subuid range.
+- Joining the canonical runtime from that long worktree first exposed the
+  expected `/dev/fd` PID-namespace requirement, then the UNIX socket
+  address-length limit, and finally the source-root binding check. No build
+  receipt or image was produced.
+- A second clean worktree at short path `.rt/s` passed the socket-length check,
+  but its own contained runtime rejected the nested repository root as too long
+  for containerd shim sockets. The runtime stopped before admission. These
+  retained attempts are not release evidence and were not deleted.
+
+### Active ownership blocker and exact next action
+
+- The canonical worktree still contains concurrent, unstaged work owned by a
+  separate agent: modified `AGENTS.md` plus untracked
+  `.github/workflows/openwiki-update.yml`, `CLAUDE.md`, and `openwiki/`.
+  CounterLab's exact-build and qualification gates correctly reject these
+  non-evidence paths.
+- The lead has not staged, edited, inspected for integration, overwritten, or
+  removed those paths. Building manually around the clean-tree gate would
+  weaken provenance and is not allowed.
+- As soon as the owning agent commits or otherwise reaches a stable reviewed
+  handoff, the lead must review that new branch tip, commit any factual progress
+  update, start a fresh attested canonical-root runtime for that exact commit,
+  and continue with build, genuine timeout sentinel, evidence refresh,
+  qualification, release check, Wrangler deployment, public CloakBrowser QA,
+  push, and fast-forward merge.
+
+No exact `a7d2408` image, timeout receipt, refreshed scientific evidence,
+qualification receipt, Cloudflare deployment, production smoke, public
+qualification, push, merge, learner observation, or submission receipt is
+claimed at this checkpoint. Release remains **NO-GO**.
