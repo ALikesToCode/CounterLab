@@ -606,6 +606,9 @@ function assertNamespaces(linux) {
       throw new Error(`contained rootless OCI spec lost ${required} isolation`);
     }
   }
+  if (namespaceTypes.has("user")) {
+    throw new Error("contained rootless OCI staging user namespace changed");
+  }
 }
 
 function mountOptionState(options, label) {
@@ -1386,6 +1389,7 @@ function assertLinuxSecurity(linux) {
     new Set([
       "cgroupsPath",
       "devices",
+      "gidMappings",
       "maskedPaths",
       "namespaces",
       "readonlyPaths",
@@ -1393,6 +1397,7 @@ function assertLinuxSecurity(linux) {
       "rootfsPropagation",
       "seccomp",
       "sysctl",
+      "uidMappings",
     ]),
     "Linux fields",
   );
@@ -1469,6 +1474,12 @@ export function sanitizeContainedRootlessSpec({
   assertNerdctlAnnotations(parsed, expected, containerId);
   const processSpec = object(parsed.process, "process");
   const linux = object(parsed.linux, "Linux section");
+  if (
+    Object.hasOwn(linux, "uidMappings") ||
+    Object.hasOwn(linux, "gidMappings")
+  ) {
+    throw new Error("contained rootless OCI staging identity mappings changed");
+  }
   const hasNerdctlHooks = assertNerdctlHooks(parsed, expected);
   const requestedBindNormalizations = assertFilesystemShape(parsed, expected);
   assertResourceIntent(linux, expected);
@@ -1536,6 +1547,25 @@ export function sanitizeContainedRootlessSpec({
   );
   if (hasNerdctlHooks) delete parsed.hooks;
   delete parsed.annotations;
+  const runtimeUser = object(processSpec.user, "process user");
+  const maximumLinuxId = 4_294_967_295;
+  if (
+    !Number.isSafeInteger(runtimeUser.uid) ||
+    runtimeUser.uid < 1 ||
+    runtimeUser.uid > maximumLinuxId ||
+    !Number.isSafeInteger(runtimeUser.gid) ||
+    runtimeUser.gid < 1 ||
+    runtimeUser.gid > maximumLinuxId
+  ) {
+    throw new Error("contained rootless OCI runtime user is invalid");
+  }
+  // The repository may live on a filesystem that cannot persist POSIX mode
+  // changes. Map the fixed non-root container identity to the already-rootless
+  // runtime owner so read-only bind inputs remain readable without granting an
+  // inner UID 0 mapping or widening their host permissions.
+  linux.namespaces.push({ type: "user" });
+  linux.uidMappings = [{ containerID: runtimeUser.uid, hostID: 0, size: 1 }];
+  linux.gidMappings = [{ containerID: runtimeUser.gid, hostID: 0, size: 1 }];
   // RootlessKit delegates the cgroup namespace root. Use an absolute leaf so
   // runc and the independent observer resolve the same cgroup regardless of
   // whether the runtime coordinator itself was evacuated to /containerd.
@@ -1624,6 +1654,9 @@ export function sanitizeContainedRootlessSpec({
     normalizedFields: [
       "annotations",
       "linux.cgroupsPath",
+      "linux.gidMappings",
+      "linux.namespaces.user",
+      "linux.uidMappings",
       ...(requestedBindNormalizations.length > 0
         ? ["mounts.requestedBindSafetyOptions"]
         : []),

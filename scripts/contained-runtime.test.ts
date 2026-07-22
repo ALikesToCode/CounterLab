@@ -1936,6 +1936,13 @@ describe("contained runtime command policy", () => {
       `/counterlab-v6.1-${invocationId}`,
     );
     expect(sanitized.linux.cgroupsPath).not.toContain("/containerd/");
+    expect(sanitized.linux.namespaces).toContainEqual({ type: "user" });
+    expect(sanitized.linux.uidMappings).toEqual([
+      { containerID: fixture.authority.process.uid, hostID: 0, size: 1 },
+    ]);
+    expect(sanitized.linux.gidMappings).toEqual([
+      { containerID: fixture.authority.process.gid, hostID: 0, size: 1 },
+    ]);
     expect(sanitized.linux.resources).toEqual(original.linux.resources);
     const canonicalBase = structuredClone(sanitized);
     delete canonicalBase.annotations;
@@ -2030,6 +2037,11 @@ describe("contained runtime command policy", () => {
       removedMounts: ["/etc/hostname", "/etc/hosts", "/etc/resolv.conf"],
     });
     expect(prepared.receipt.normalizedFields).toContain("linux.cgroupsPath");
+    expect(prepared.receipt.normalizedFields).toContain("linux.uidMappings");
+    expect(prepared.receipt.normalizedFields).toContain("linux.gidMappings");
+    expect(prepared.receipt.normalizedFields).toContain(
+      "linux.namespaces.user",
+    );
     expect(prepared.receipt.normalizedFields).toContain("process.rlimits");
 
     const resourceMutations: Array<(spec: typeof original) => void> = [
@@ -2066,6 +2078,34 @@ describe("contained runtime command policy", () => {
           source: JSON.stringify(changed),
         }),
       ).toThrow(/cgroup path|resource/u);
+    }
+
+    const identityMappingMutations: Array<(spec: typeof original) => void> = [
+      (spec) => {
+        spec.linux.namespaces.push({ type: "user" });
+      },
+      (spec) => {
+        spec.linux.uidMappings = [
+          { containerID: fixture.authority.process.uid, hostID: 0, size: 1 },
+        ];
+      },
+      (spec) => {
+        spec.linux.gidMappings = [
+          { containerID: fixture.authority.process.gid, hostID: 0, size: 1 },
+        ];
+      },
+    ];
+    for (const mutate of identityMappingMutations) {
+      const changed = structuredClone(original);
+      mutate(changed);
+      expect(() =>
+        sanitizeContainedRootlessSpec({
+          containerId,
+          expected,
+          metadataSha256: "3".repeat(64),
+          source: JSON.stringify(changed),
+        }),
+      ).toThrow(/staging (?:user namespace|identity mappings) changed/u);
     }
 
     const rlimitMutations: Array<(spec: typeof original) => void> = [
