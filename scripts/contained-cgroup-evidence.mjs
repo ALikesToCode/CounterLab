@@ -134,6 +134,13 @@ export function createContainedCgroupIdentity({
   );
 }
 
+export function createContainedCgroupPath(invocationId) {
+  if (!invocationPattern.test(invocationId ?? "")) {
+    throw new Error("aggregate cgroup evidence path input is invalid");
+  }
+  return `containerd/counterlab-v6.1-${invocationId}`;
+}
+
 export function validateContainedCgroupEvidence(value, expectedValue) {
   const evidence = object(value, "top-level");
   exactKeys(evidence, topLevelKeys, "top-level");
@@ -214,7 +221,7 @@ export function validateContainedCgroupEvidence(value, expectedValue) {
     evidence.runtimeAttestationSha256 !== expected.runtimeAttestationSha256 ||
     !sha256(evidence.finalizationPayloadSha256) ||
     evidence.cgroupId !== `counterlab-v6.1-${expected.invocationId}` ||
-    evidence.cgroupPath !== `counterlab-v6.1-${expected.invocationId}` ||
+    evidence.cgroupPath !== createContainedCgroupPath(expected.invocationId) ||
     evidence.cgroupIdentity !== createContainedCgroupIdentity(expected) ||
     observed.memoryMaxBytes !== intended.memoryBytes ||
     ![0, intended.memoryBytes].includes(observed.memorySwapMaxBytes) ||

@@ -4,6 +4,7 @@ import { AGGREGATE_TIMEOUT_QUALIFICATION_MODE } from "./contained-runtime-reques
 import {
   canonicalCgroupJson,
   createContainedCgroupIdentity,
+  createContainedCgroupPath,
   sha256CgroupBytes,
 } from "./contained-cgroup-evidence.mjs";
 
@@ -128,7 +129,7 @@ export function validateContainedCgroupObserverManifest(
     !sha256Pattern.test(manifest.driverModuleSha256 ?? "") ||
     manifest.baseReceiptPath !== expectedReceiptPath ||
     manifest.cgroupId !== `counterlab-v6.1-${manifest.invocationId}` ||
-    manifest.cgroupPath !== `counterlab-v6.1-${manifest.invocationId}` ||
+    manifest.cgroupPath !== createContainedCgroupPath(manifest.invocationId) ||
     manifest.cgroupIdentity !== createContainedCgroupIdentity(manifest) ||
     !validTimestamp(manifest.requestedAt, observedAtMs) ||
     !sha256Pattern.test(receiptPayloadSha256 ?? "") ||
@@ -163,7 +164,7 @@ export function createContainedCgroupObserverManifest({
     invocationId,
     finalContainerId,
     cgroupId: `counterlab-v6.1-${invocationId}`,
-    cgroupPath: `counterlab-v6.1-${invocationId}`,
+    cgroupPath: createContainedCgroupPath(invocationId),
     cgroupIdentity: createContainedCgroupIdentity({
       invocationId,
       finalContainerId,

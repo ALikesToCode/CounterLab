@@ -71,7 +71,7 @@ function aggregateEvidence() {
     authority: "linux-cgroup-v2",
     cgroupVersion: 2,
     cgroupId: `counterlab-v6.1-${invocationId}`,
-    cgroupPath: `counterlab-v6.1-${invocationId}`,
+    cgroupPath: `containerd/counterlab-v6.1-${invocationId}`,
     cgroupIdentity: createContainedCgroupIdentity({
       invocationId,
       finalContainerId,

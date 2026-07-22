@@ -76,7 +76,7 @@ def _rootless(control: dict[str, object], build: dict[str, object]) -> dict[str,
         "authority": "linux-cgroup-v2",
         "cgroupVersion": 2,
         "cgroupId": f"counterlab-v6.1-{invocation_id}",
-        "cgroupPath": f"counterlab-v6.1-{invocation_id}",
+        "cgroupPath": f"containerd/counterlab-v6.1-{invocation_id}",
         "cgroupIdentity": hashlib.sha256(
             (
                 "counterlab-cgroup-v2\0"

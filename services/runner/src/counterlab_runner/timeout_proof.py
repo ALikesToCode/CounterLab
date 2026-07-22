@@ -589,7 +589,8 @@ def _validate_aggregate_limit_evidence(
         or value.get("finalContainerId") != final_container_id
         or not _SHA256.fullmatch(str(value.get("finalizationPayloadSha256", "")))
         or value.get("cgroupId") != f"counterlab-v6.1-{invocation_id}"
-        or value.get("cgroupPath") != f"counterlab-v6.1-{invocation_id}"
+        or value.get("cgroupPath")
+        != f"containerd/counterlab-v6.1-{invocation_id}"
         or value.get("sanitizedSpecSha256") != sanitized_spec_sha256
         or not _SHA256.fullmatch(str(value.get("sanitizedSpecSha256", "")))
         or not _SHA256.fullmatch(str(value.get("runtimeAttestationSha256", "")))
