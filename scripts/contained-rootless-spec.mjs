@@ -634,18 +634,20 @@ function mountOptionState(options, label) {
 }
 
 function assertRequestedBindOptions(optionState, requested) {
-  const expectedFlags = new Set(
-    requested.readonly
-      ? ["rbind", "ro", "rprivate", "nodev", "nosuid"]
-      : ["rbind", "rprivate", "nodev", "nosuid"],
+  const requiredFlags = new Set(
+    requested.readonly ? ["rbind", "ro", "rprivate"] : ["rbind", "rprivate"],
   );
+  const allowedFlags = new Set([...requiredFlags, "nodev", "nosuid"]);
   if (
-    optionState.flags.size !== expectedFlags.size ||
-    [...optionState.flags].some((flag) => !expectedFlags.has(flag)) ||
+    [...requiredFlags].some((flag) => !optionState.flags.has(flag)) ||
+    [...optionState.flags].some((flag) => !allowedFlags.has(flag)) ||
     optionState.values.size !== 0
   ) {
     throw new Error("contained rootless OCI spec requested bind mode changed");
   }
+  return requested.readonly
+    ? ["rbind", "ro", "rprivate", "nodev", "nosuid"]
+    : ["rbind", "rprivate", "nodev", "nosuid"];
 }
 
 function parseSize(value) {
@@ -763,6 +765,7 @@ function assertFilesystemShape(parsed, expected) {
     throw new Error("contained rootless OCI spec mounts are invalid");
   }
   const observedDestinations = new Set();
+  const requestedBindNormalizations = [];
   const requestedMounts = new Map(
     expected.imageAuthority.requestedMounts.map((entry) => [
       entry.destination,
@@ -838,7 +841,10 @@ function assertFilesystemShape(parsed, expected) {
         ) {
           throw new Error("contained rootless OCI spec requested bind changed");
         }
-        assertRequestedBindOptions(optionState, requested);
+        requestedBindNormalizations.push({
+          destination: mount.destination,
+          options: assertRequestedBindOptions(optionState, requested),
+        });
         requestedMounts.delete(mount.destination);
       } else if (!internal) {
         throw new Error("contained rootless OCI spec has an unrequested bind");
@@ -881,6 +887,7 @@ function assertFilesystemShape(parsed, expected) {
   ) {
     throw new Error("contained rootless OCI spec mount set is incomplete");
   }
+  return requestedBindNormalizations;
 }
 
 function annotationString(annotations, key) {
@@ -1463,7 +1470,7 @@ export function sanitizeContainedRootlessSpec({
   const processSpec = object(parsed.process, "process");
   const linux = object(parsed.linux, "Linux section");
   const hasNerdctlHooks = assertNerdctlHooks(parsed, expected);
-  assertFilesystemShape(parsed, expected);
+  const requestedBindNormalizations = assertFilesystemShape(parsed, expected);
   assertResourceIntent(linux, expected);
   const sourceRlimits = expected.rlimits.filter((entry) =>
     nerdctlCreateRlimits.has(entry.type),
@@ -1483,6 +1490,12 @@ export function sanitizeContainedRootlessSpec({
     containerId,
   );
   const originalCanonical = canonicalJson(parsed);
+  for (const normalization of requestedBindNormalizations) {
+    const mount = parsed.mounts.find(
+      (entry) => entry.destination === normalization.destination,
+    );
+    mount.options = [...normalization.options];
+  }
   const imageRootfsPath = containedImageRootfsPath(
     resolve(expected.sessionRoot, "run/rootless-specs"),
     expected.invocationId,
@@ -1611,6 +1624,9 @@ export function sanitizeContainedRootlessSpec({
     normalizedFields: [
       "annotations",
       "linux.cgroupsPath",
+      ...(requestedBindNormalizations.length > 0
+        ? ["mounts.requestedBindSafetyOptions"]
+        : []),
       "process.terminal",
       "process.user.additionalGids",
       "process.env.HOSTNAME",

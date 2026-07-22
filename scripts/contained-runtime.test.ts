@@ -2715,6 +2715,64 @@ describe("contained runtime command policy", () => {
     }
   });
 
+  it("normalizes omitted requested bind safety flags before execution", () => {
+    const sessionRoot = resolve(root, ".rt/rt-validator-bind-normalization");
+    const installRoot = resolve(
+      root,
+      "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
+    );
+    const command = boundedAdapterCommand();
+    const plan = containedRunPlan({
+      args: command,
+      binRoot: resolve(installRoot, "bin"),
+      clientFifoRoot: resolve(sessionRoot, "run/client-fifo"),
+      containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+      installRoot,
+      invocationId,
+      sessionRoot,
+    });
+    const fixture = imageFixture(command);
+    const containerId = "4".repeat(64);
+    const expected = {
+      ...plan.expected,
+      containerName: plan.containerName,
+      imageAuthority: fixture.authority,
+      invocationId,
+      sessionRoot,
+    };
+    const generated = JSON.parse(
+      rootlessSpec(containerId, plan.expected, fixture.authority),
+    );
+    for (const mount of generated.mounts) {
+      if (["/workspace", "/output"].includes(mount.destination)) {
+        mount.options = mount.options.filter(
+          (option: string) => !["nodev", "nosuid"].includes(option),
+        );
+      }
+    }
+
+    const prepared = sanitizeContainedRootlessSpec({
+      containerId,
+      expected,
+      metadataSha256: "7".repeat(64),
+      source: JSON.stringify(generated),
+    });
+    const sanitized = JSON.parse(prepared.config);
+    expect(
+      sanitized.mounts.find(
+        (mount: { destination: string }) => mount.destination === "/workspace",
+      ).options,
+    ).toEqual(["rbind", "ro", "rprivate", "nodev", "nosuid"]);
+    expect(
+      sanitized.mounts.find(
+        (mount: { destination: string }) => mount.destination === "/output",
+      ).options,
+    ).toEqual(["rbind", "rprivate", "nodev", "nosuid"]);
+    expect(prepared.receipt.normalizedFields).toContain(
+      "mounts.requestedBindSafetyOptions",
+    );
+  });
+
   it("accepts only the pinned default-writable --mount shape", () => {
     const sessionRoot = resolve(root, ".rt/rt-validator-writable-bind");
     const installRoot = resolve(
