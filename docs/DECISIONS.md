@@ -852,6 +852,13 @@ New sessions receive a separate 256-bit owner key.
 - Keep legacy Belief Test and replay compatibility explicit. Never fill missing
   live authority with sample or replay objects, and make test fixtures provide
   the same coherent authority expected from production responses.
+- Bind session, artifact, replay, runner-job, Boundary, transfer, and patch
+  responses to the exact requested resource and recompute canonical content
+  hashes before accepting them. Structurally valid coherent substitutions still
+  fail closed.
+- Withhold native Reasoning Diff authority until a Proof Capsule independently
+  binds its otherwise unverifiable hashes. Preserve the historical legacy proof
+  path only as explicit compatibility, never as native authority.
 - Revealing the fixed Sample Boundary Map does not count as the learner's
   classification, but it must not make classification impossible. Keep the map
   visible and allow a later verified-cell classification to unlock Apply.

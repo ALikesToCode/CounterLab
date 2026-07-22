@@ -369,18 +369,19 @@ after the final source freeze.
       result, interactive, and Boundary Map authority events require the exact
       active callback claim; ordinary event appends remain fenced. The complete
       Worker API passes 110/110.
-- [x] Current dirty-tree learner source verification: App tests pass 87/87; the
-      API/repair/Boundary slice passes 57/57; complete web Vitest passes 84/84
-      files and 723/723 tests; repository, web client, generated Worker binding,
-      and Worker TypeScript pass; the production Vite/Worker build passes;
-      kernel Pytest passes 222/222; and the scientific vulnerability edge/unit
-      slice passes 16/16.
+- [x] Current learner source verification: App tests pass 98/98 in
+      two consecutive runs; the API/repair/Boundary authority slice passes
+      64/64; complete web Vitest passes 85/85 files and 750/750 tests;
+      repository, web-client, and Worker TypeScript pass; scoped Prettier and
+      `git diff --check` pass; the production Vite/Worker build passes; and
+      kernel Pytest passes 222/222. After the final authority hardening slice,
+      the 7-file lineage/focus/proof/Boundary run passes 282/282 and both web
+      and Worker strict TypeScript pass.
 - [ ] Current repository-wide gate: root TypeScript now passes. Root Vitest
-      reports 787 passed, 36 failed, and 2 skipped; every failure is confined to
-      two stale submission/scientific release-evidence files. Root Prettier is
-      blocked only by two unrelated untracked files, while targeted formatting
-      and `git diff --check` pass. Do not refresh source-bound evidence hashes
-      until the final clean source freezes.
+      reports 792 passed, 36 failed, and 2 skipped across 75 files; every failure
+      is confined to the two stale submission/scientific release-evidence
+      suites. Do not refresh source-bound evidence hashes until the final clean
+      source freezes.
 - [ ] Freeze one clean source commit, build one exact runner image, run startup,
       timeout-cleanup, no-secret, refusal, held-out, and negative-control gates,
       and issue one qualified receipt.

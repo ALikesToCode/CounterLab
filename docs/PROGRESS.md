@@ -12,19 +12,20 @@ pass is never presented as a browser or production pass.
 ### Current checkpoint
 
 - **Branch:** `feat/learner-ux-v6.1`
-- **Current pre-release checkpoint:** authority commit `6006bcd` and learner UI
-  commit `ea352cb`, followed by release-hygiene commit `767d757`. The complete
-  web suite passes **84 files, 726 tests**; repository, web-client, generated
-  Worker-binding, and Worker strict TypeScript pass; the production Vite/Worker
-  build passes; focused Learning Director/session tests pass **75/75**; focused
-  Worker callback/D1 tests pass **115/115**; and the Boundary recovery slice
-  passes **19/19**. The repository secret scan passes across **1,513 files**.
-  Root Vitest still reports **787 passed, 36 failed, 2 skipped** because two
-  source-bound submission/scientific-evidence suites intentionally retain the
-  earlier immutable hashes until the final source commit is frozen and evidence
-  is regenerated. Stale local gallery and test-report artifacts remain on disk
-  but are ignored and are not release evidence. No deployment, public browser,
-  learner, model-call, or submission pass is inferred.
+- **Current pre-release checkpoint:** learner-authority implementation commit
+  `b97946b` with its complete code/test slice committed independently. The
+  complete web suite passes **85 files, 750 tests**; the App suite passes
+  **98/98** in two consecutive runs; and the focused API/repair/Boundary
+  authority slice passes **64/64**.
+  Repository, web-client, and Worker strict TypeScript pass; the latest focused
+  lineage/focus/proof/Boundary run passes **7 files, 282 tests**; scoped Prettier
+  and `git diff --check` pass; the production Vite/Worker build passes; and
+  kernel Pytest passes **222/222**. Root Vitest reports **792 passed, 36 failed, 2
+  skipped** across 75 files. All 36 failures are confined to the two
+  source-bound submission/scientific-evidence suites, whose immutable hashes
+  intentionally remain stale until the final source commit is frozen and the
+  evidence is regenerated. No deployment, public browser, learner, model-call,
+  exact-release qualification, or submission pass is inferred.
 - **Previous committed checkpoint:**
   `b37f7d962e53dbfd7f511746e97ba364fe465d34`, four commits ahead of
   `origin/feat/learner-ux-v6.1`. The only worktree entry is the preserved,
