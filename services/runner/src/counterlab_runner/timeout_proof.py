@@ -156,13 +156,29 @@ def _timeout_public_test(address_space_bytes: int) -> str:
     if not _safe_integer(address_space_bytes, positive=True):
         raise RuntimeError("timeout address-space expectation is invalid")
     return f"""import resource
+import subprocess
+import sys
 import time
 
 expected = ({address_space_bytes}, {address_space_bytes})
 observed = resource.getrlimit(resource.RLIMIT_AS)
 if observed != expected:
     raise AssertionError(f"address-space limit mismatch: {{observed!r}}")
-time.sleep(5)
+child = subprocess.Popen(
+    [sys.executable, "-c", "import time; time.sleep(30)"],
+    stdin=subprocess.DEVNULL,
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+)
+try:
+    time.sleep(5)
+finally:
+    child.terminate()
+    try:
+        child.wait(timeout=1)
+    except subprocess.TimeoutExpired:
+        child.kill()
+        child.wait(timeout=1)
 raise AssertionError("timeout cleanup sentinel unexpectedly survived")
 """
 
