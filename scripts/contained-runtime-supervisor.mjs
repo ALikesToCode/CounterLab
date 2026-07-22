@@ -153,7 +153,9 @@ const containerdRootlesskit = spawn(
     `--copy-up=${snapshotterRoot}`,
     `--copy-up=${rootlessSpecRoot}`,
     `--copy-up=${runcStateRoot}`,
-    "--pidns",
+    // The trusted cgroup observer must compare cgroup.procs with the same
+    // /proc PID namespace. Candidate containers still receive their own
+    // mandatory PID namespace in the sanitized OCI specification.
     "--cgroupns",
     "--evacuate-cgroup2=containerd",
     process.execPath,

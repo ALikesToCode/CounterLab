@@ -84,9 +84,13 @@ describe("contained runtime supervisor protocol", () => {
     );
   });
 
-  it("requests delegated PID and cgroup namespaces for containerd", () => {
+  it("keeps observer PIDs aligned while isolating every candidate PID namespace", () => {
     const source = readFileSync(
       resolve(process.cwd(), "scripts/contained-runtime-supervisor.mjs"),
+      "utf8",
+    );
+    const rootlessSpecSource = readFileSync(
+      resolve(process.cwd(), "scripts/contained-rootless-spec.mjs"),
       "utf8",
     );
     const launch = source.slice(
@@ -94,18 +98,18 @@ describe("contained runtime supervisor protocol", () => {
       source.indexOf("closeSync(containerdLog)"),
     );
 
-    expect(launch).toContain('"--pidns"');
+    expect(launch).not.toContain('"--pidns"');
     expect(launch).toContain('"--cgroupns"');
     expect(launch).toContain('"--evacuate-cgroup2=containerd"');
+    expect(rootlessSpecSource).toContain(
+      'for (const required of ["ipc", "mount", "network", "pid", "uts"])',
+    );
     expect(launch).toContain("`--copy-up=${snapshotterRoot}`");
     expect(launch).toContain("`--copy-up=${rootlessSpecRoot}`");
     expect(launch.indexOf("`--copy-up=${snapshotterRoot}`")).toBeLessThan(
       launch.indexOf("scripts/contained-runtime-server.mjs"),
     );
     expect(launch.indexOf("`--copy-up=${rootlessSpecRoot}`")).toBeLessThan(
-      launch.indexOf("scripts/contained-runtime-server.mjs"),
-    );
-    expect(launch.indexOf('"--pidns"')).toBeLessThan(
       launch.indexOf("scripts/contained-runtime-server.mjs"),
     );
     expect(launch.indexOf('"--cgroupns"')).toBeLessThan(
